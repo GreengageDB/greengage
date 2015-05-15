@@ -193,7 +193,6 @@ extern int	wal_keep_segments;
 extern int	max_slot_wal_keep_size_mb;
 extern int	XLOGbuffers;
 extern int	XLogArchiveTimeout;
-extern bool XLogArchiveMode;
 extern char *XLogArchiveCommand;
 extern bool EnableHotStandby;
 extern bool gp_keep_all_xlog;
@@ -201,6 +200,16 @@ extern bool gp_keep_all_xlog;
 extern bool fullPageWrites;
 extern bool wal_log_hints;
 extern bool log_checkpoints;
+
+
+/* Archive modes */
+typedef enum ArchiveMode
+{
+	ARCHIVE_MODE_OFF = 0,	/* disabled */
+	ARCHIVE_MODE_ON,		/* enabled while server is running normally */
+	ARCHIVE_MODE_ALWAYS		/* enabled always (even during recovery) */
+} ArchiveMode;
+extern int	XLogArchiveMode;
 
 /* WAL levels */
 typedef enum WalLevel
@@ -212,7 +221,8 @@ typedef enum WalLevel
 } WalLevel;
 extern int	wal_level;
 
-#define XLogArchivingActive()	(XLogArchiveMode && wal_level >= WAL_LEVEL_ARCHIVE)
+#define XLogArchivingActive() \
+	(XLogArchiveMode > ARCHIVE_MODE_OFF && wal_level >= WAL_LEVEL_ARCHIVE)
 #define XLogArchiveCommandSet() (XLogArchiveCommand[0] != '\0')
 /* Is WAL archiving status streaming enabled? */
 #define XLogArchivingStatusReportingActive() \

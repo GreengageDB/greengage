@@ -579,7 +579,7 @@ WalReceiverMain(void)
 			 * WAL archiving status update messages from the primary segment.
 			 */
 			XLogFileName(xlogfname, recvFileTLI, recvSegNo);
-			if (XLogArchivingStatusReportingActive())
+			if (XLogArchivingStatusReportingActive() || XLogArchiveMode == ARCHIVE_MODE_ALWAYS)
 				XLogArchiveNotify(xlogfname);
 			else
 				XLogArchiveForceDone(xlogfname);
@@ -1112,7 +1112,7 @@ XLogWalRcvClose(XLogRecPtr recptr)
 	 * The .ready files will be transitioned to .done files after receiving
 	 * WAL archiving status update messages from the primary segment.
 	 */
-	if (XLogArchivingStatusReportingActive())
+	if (XLogArchivingStatusReportingActive() || XLogArchiveMode == ARCHIVE_MODE_ALWAYS)
 		XLogArchiveNotify(xlogfname);
 	else
 		XLogArchiveForceDone(xlogfname);
