@@ -549,8 +549,7 @@ GpPolicyStore(Oid tbloid, const GpPolicy *policy)
 	gp_policy_tuple = heap_form_tuple(RelationGetDescr(gp_policy_rel), values, nulls);
 
 	/* Insert tuple into the relation */
-	simple_heap_insert(gp_policy_rel, gp_policy_tuple);
-	CatalogUpdateIndexes(gp_policy_rel, gp_policy_tuple);
+	CatalogTupleInsert(gp_policy_rel, gp_policy_tuple);
 
 	/*
 	 * Register the table as dependent on the operator classes used in the
@@ -666,16 +665,14 @@ GpPolicyReplace(Oid tbloid, const GpPolicy *policy)
 												 RelationGetDescr(gp_policy_rel),
 												 values, nulls, repl);
 
-		simple_heap_update(gp_policy_rel, &gp_policy_tuple->t_self, newtuple);
-		CatalogUpdateIndexes(gp_policy_rel, newtuple);
+		CatalogTupleUpdate(gp_policy_rel, &gp_policy_tuple->t_self, newtuple);
 
 		heap_freetuple(newtuple);
 	}
 	else
 	{
 		gp_policy_tuple = heap_form_tuple(gp_policy_rel->rd_att, values, nulls);
-		(void) simple_heap_insert(gp_policy_rel, gp_policy_tuple);
-		CatalogUpdateIndexes(gp_policy_rel, gp_policy_tuple);
+		(void) CatalogTupleInsert(gp_policy_rel, gp_policy_tuple);
 	}
 	systable_endscan(scan);
 

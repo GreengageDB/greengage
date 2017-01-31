@@ -34,8 +34,11 @@ extern CatalogIndexState CatalogOpenIndexes(Relation heapRel);
 extern void CatalogCloseIndexes(CatalogIndexState indstate);
 extern void CatalogIndexInsert(CatalogIndexState indstate,
 				   HeapTuple heapTuple);
-extern void CatalogUpdateIndexes(Relation heapRel, HeapTuple heapTuple);
+extern Oid CatalogTupleInsert(Relation heapRel, HeapTuple tup);
+extern void CatalogTupleUpdate(Relation heapRel, ItemPointer otid,
+				   HeapTuple tup);
 
+extern void CatalogTupleInsertFrozen(Relation heapRel, HeapTuple tup);
 
 /*
  * These macros are just to keep the C compiler from spitting up on the

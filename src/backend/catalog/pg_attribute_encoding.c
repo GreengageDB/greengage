@@ -59,8 +59,7 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, Datum attoptions)
 	tuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 
 	/* insert a new tuple */
-	simple_heap_insert(rel, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	CatalogTupleInsert(rel, tuple);
 
 	heap_freetuple(tuple);
 

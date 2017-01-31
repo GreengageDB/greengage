@@ -106,11 +106,8 @@ ConversionCreate(const char *conname, Oid connamespace,
 	tup = heap_form_tuple(tupDesc, values, nulls);
 
 	/* insert a new tuple */
-	oid = simple_heap_insert(rel, tup);
+	oid = CatalogTupleInsert(rel, tup);
 	Assert(OidIsValid(oid));
-
-	/* update the index if any */
-	CatalogUpdateIndexes(rel, tup);
 
 	myself.classId = ConversionRelationId;
 	myself.objectId = HeapTupleGetOid(tup);

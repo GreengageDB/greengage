@@ -258,15 +258,13 @@ AddUpdResqueueCapabilityEntryInternal(
 									  RelationGetDescr(resqueuecap_rel),
 									  values, isnull, new_record_repl);
 
-		simple_heap_update(resqueuecap_rel, &old_tuple->t_self, new_tuple);
-		CatalogUpdateIndexes(resqueuecap_rel, new_tuple);
+		CatalogTupleUpdate(resqueuecap_rel, &old_tuple->t_self, new_tuple);
 	}
 	else
 	{
 		new_tuple = heap_form_tuple(RelationGetDescr(resqueuecap_rel), values, isnull);
 
-		simple_heap_insert(resqueuecap_rel, new_tuple);
-		CatalogUpdateIndexes(resqueuecap_rel, new_tuple);
+		CatalogTupleInsert(resqueuecap_rel, new_tuple);
 	}
 
 	if (HeapTupleIsValid(old_tuple))
@@ -919,8 +917,7 @@ CreateQueue(CreateQueueStmt *stmt)
 	/*
 	 * Insert new record in the pg_resqueue table
 	 */
-	queueid = simple_heap_insert(pg_resqueue_rel, tuple);
-	CatalogUpdateIndexes(pg_resqueue_rel, tuple);
+	queueid = CatalogTupleInsert(pg_resqueue_rel, tuple);
 
 	/* process the remainder of the WITH (...) list items */
 	if (bWith)
@@ -1322,8 +1319,7 @@ AlterQueue(AlterQueueStmt *stmt)
 	new_tuple = heap_modify_tuple(tuple, pg_resqueue_dsc, new_record,
 									new_record_nulls, new_record_repl);
 
-	simple_heap_update(pg_resqueue_rel, &tuple->t_self, new_tuple);
-	CatalogUpdateIndexes(pg_resqueue_rel, new_tuple);
+	CatalogTupleUpdate(pg_resqueue_rel, &tuple->t_self, new_tuple);
 
 	systable_endscan(sscan);
 

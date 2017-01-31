@@ -748,15 +748,13 @@ static void MetaTrackAddUpdInternal(Oid			classid,
 		new_tuple = heap_modify_tuple(old_tuple, RelationGetDescr(rel),
 									  values,
 									  isnull, new_record_repl);
-		simple_heap_update(rel, &old_tuple->t_self, new_tuple);
-		CatalogUpdateIndexes(rel, new_tuple);
+		CatalogTupleUpdate(rel, &old_tuple->t_self, new_tuple);
 	}
 	else
 	{
 		new_tuple = heap_form_tuple(RelationGetDescr(rel), values, isnull);
 
-		simple_heap_insert(rel, new_tuple);
-		CatalogUpdateIndexes(rel, new_tuple);
+		CatalogTupleInsert(rel, new_tuple);
 	}
 
 	if (HeapTupleIsValid(old_tuple))
@@ -988,7 +986,13 @@ InsertPgAttributeTuple(Relation pg_attribute_rel,
 	if (indstate != NULL)
 		CatalogIndexInsert(indstate, tup);
 	else
-		CatalogUpdateIndexes(pg_attribute_rel, tup);
+	{
+		CatalogIndexState indstate;
+
+		indstate = CatalogOpenIndexes(pg_attribute_rel);
+		CatalogIndexInsert(indstate, tup);
+		CatalogCloseIndexes(indstate);
+	}
 
 	heap_freetuple(tup);
 }
@@ -1172,9 +1176,7 @@ InsertPgClassTuple(Relation pg_class_desc,
 	HeapTupleSetOid(tup, new_rel_oid);
 
 	/* finally insert the new tuple, update the indexes, and clean up */
-	simple_heap_insert(pg_class_desc, tup);
-
-	CatalogUpdateIndexes(pg_class_desc, tup);
+	CatalogTupleInsert(pg_class_desc, tup);
 
 	heap_freetuple(tup);
 }
@@ -2217,10 +2219,7 @@ RemoveAttributeById(Oid relid, AttrNumber attnum)
 				 "........pg.dropped.%d........", attnum);
 		namestrcpy(&(attStruct->attname), newattname);
 
-		simple_heap_update(attr_rel, &tuple->t_self, tuple);
-
-		/* keep the system catalog indexes current */
-		CatalogUpdateIndexes(attr_rel, tuple);
+		CatalogTupleUpdate(attr_rel, &tuple->t_self, tuple);
 	}
 
 	/*
@@ -2349,10 +2348,7 @@ RemoveAttrDefaultById(Oid attrdefId)
 
 	((Form_pg_attribute) GETSTRUCT(tuple))->atthasdef = false;
 
-	simple_heap_update(attr_rel, &tuple->t_self, tuple);
-
-	/* keep the system catalog indexes current */
-	CatalogUpdateIndexes(attr_rel, tuple);
+	CatalogTupleUpdate(attr_rel, &tuple->t_self, tuple);
 
 	/*
 	 * Our update of the pg_attribute row will force a relcache rebuild, so
@@ -2563,9 +2559,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 	adrel = heap_open(AttrDefaultRelationId, RowExclusiveLock);
 
 	tuple = heap_form_tuple(adrel->rd_att, values, nulls);
-	attrdefOid = simple_heap_insert(adrel, tuple);
-
-	CatalogUpdateIndexes(adrel, tuple);
+	attrdefOid = CatalogTupleInsert(adrel, tuple);
 
 	defobject.classId = AttrDefaultRelationId;
 	defobject.objectId = attrdefOid;
@@ -2595,9 +2589,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 	if (!attStruct->atthasdef)
 	{
 		attStruct->atthasdef = true;
-		simple_heap_update(attrrel, &atttup->t_self, atttup);
-		/* keep catalog indexes current */
-		CatalogUpdateIndexes(attrrel, atttup);
+		CatalogTupleUpdate(attrrel, &atttup->t_self, atttup);
 	}
 	heap_close(attrrel, RowExclusiveLock);
 	heap_freetuple(atttup);
@@ -3153,8 +3145,7 @@ MergeWithExistingConstraint(Relation rel, char *ccname, Node *expr,
 				Assert(is_local);
 				con->connoinherit = true;
 			}
-			simple_heap_update(conDesc, &tup->t_self, tup);
-			CatalogUpdateIndexes(conDesc, tup);
+			CatalogTupleUpdate(conDesc, &tup->t_self, tup);
 			break;
 		}
 	}
@@ -3194,10 +3185,7 @@ SetRelationNumChecks(Relation rel, int numchecks)
 	{
 		relStruct->relchecks = numchecks;
 
-		simple_heap_update(relrel, &reltup->t_self, reltup);
-
-		/* keep catalog indexes current */
-		CatalogUpdateIndexes(relrel, reltup);
+		CatalogTupleUpdate(relrel, &reltup->t_self, reltup);
 	}
 	else
 	{

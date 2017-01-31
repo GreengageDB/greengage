@@ -225,8 +225,7 @@ probeWalRepUpdateConfig(int16 dbid, int16 segindex, char role,
 		histvals[Anum_gp_configuration_history_desc-1] =
 				CStringGetTextDatum(desc);
 		histtuple = heap_form_tuple(RelationGetDescr(histrel), histvals, histnulls);
-		simple_heap_insert(histrel, histtuple);
-		CatalogUpdateIndexes(histrel, histtuple);
+		CatalogTupleInsert(histrel, histtuple);
 
 		SIMPLE_FAULT_INJECTOR("fts_update_config");
 
@@ -282,8 +281,7 @@ probeWalRepUpdateConfig(int16 dbid, int16 segindex, char role,
 
 		newtuple = heap_modify_tuple(configtuple, RelationGetDescr(configrel),
 									 configvals, confignulls, repls);
-		simple_heap_update(configrel, &configtuple->t_self, newtuple);
-		CatalogUpdateIndexes(configrel, newtuple);
+		CatalogTupleUpdate(configrel, &configtuple->t_self, newtuple);
 
 		systable_endscan(sscan);
 		pfree(newtuple);

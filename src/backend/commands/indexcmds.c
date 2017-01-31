@@ -170,8 +170,7 @@ cdb_sync_indcheckxmin_with_segments(Oid indexRelationId)
 		if (!indexForm->indcheckxmin)
 		{
 			indexForm->indcheckxmin = true;
-			simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-			CatalogUpdateIndexes(pg_index, indexTuple);
+			CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 		}
 
 		heap_freetuple(indexTuple);
@@ -2751,8 +2750,7 @@ IndexSetParentIndex(Relation partitionIdx, Oid parentOid)
 			tuple = heap_form_tuple(RelationGetDescr(pg_inherits),
 									values, isnull);
 
-			simple_heap_insert(pg_inherits, tuple);
-			CatalogUpdateIndexes(pg_inherits, tuple);
+			CatalogTupleInsert(pg_inherits, tuple);
 
 			fix_dependencies = true;
 		}

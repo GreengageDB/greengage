@@ -333,8 +333,7 @@ insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
 
 	/* Insert heap tuple. */
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
-	trigoid = simple_heap_insert(tgrel, tuple);
-	CatalogUpdateIndexes(tgrel, tuple);
+	trigoid = CatalogTupleInsert(tgrel, tuple);
 	heap_freetuple(tuple);
 
 	/* Depend on owner. */
@@ -452,8 +451,7 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
 	evtForm->evtenabled = tgenabled;
 
-	simple_heap_update(tgrel, &tup->t_self, tup);
-	CatalogUpdateIndexes(tgrel, tup);
+	CatalogTupleUpdate(tgrel, &tup->t_self, tup);
 
 	InvokeObjectPostAlterHook(EventTriggerRelationId,
 							  trigoid, 0);
@@ -546,8 +544,7 @@ AlterEventTriggerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 			 errhint("The owner of an event trigger must be a superuser.")));
 
 	form->evtowner = newOwnerId;
-	simple_heap_update(rel, &tup->t_self, tup);
-	CatalogUpdateIndexes(rel, tup);
+	CatalogTupleUpdate(rel, &tup->t_self, tup);
 
 	/* Update owner dependency reference */
 	changeDependencyOnOwner(EventTriggerRelationId,

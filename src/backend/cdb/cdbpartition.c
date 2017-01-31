@@ -1722,8 +1722,7 @@ add_partition(Partition *part)
 	tup = heap_form_tuple(RelationGetDescr(partrel), values, isnull);
 
 	/* Insert tuple into the relation */
-	part->partid = simple_heap_insert(partrel, tup);
-	CatalogUpdateIndexes(partrel, tup);
+	part->partid = CatalogTupleInsert(partrel, tup);
 
 	heap_close(partrel, NoLock);
 }
@@ -1792,8 +1791,7 @@ add_partition_rule(PartitionRule *rule)
 	tup = heap_form_tuple(RelationGetDescr(rulerel), values, isnull);
 
 	/* Insert tuple into the relation */
-	rule->parruleid = simple_heap_insert(rulerel, tup);
-	CatalogUpdateIndexes(rulerel, tup);
+	rule->parruleid = CatalogTupleInsert(rulerel, tup);
 
 	heap_close(rulerel, NoLock);
 }
@@ -2330,8 +2328,7 @@ parruleord_open_gap(Oid partid, int16 level, Oid parent, int16 ruleord,
 
 		closegap ? rule_desc->parruleord-- : rule_desc->parruleord++;
 
-		simple_heap_update(rel, &tuple->t_self, tuple);
-		CatalogUpdateIndexes(rel, tuple);
+		CatalogTupleUpdate(rel, &tuple->t_self, tuple);
 
 		heap_freetuple(tuple);
 	}
@@ -7330,8 +7327,7 @@ exchange_part_rule(Oid oldrelid, Oid newrelid)
 
 		((Form_pg_partition_rule) GETSTRUCT(tuple))->parchildrelid = newrelid;
 
-		simple_heap_update(catalogRelation, &tuple->t_self, tuple);
-		CatalogUpdateIndexes(catalogRelation, tuple);
+		CatalogTupleUpdate(catalogRelation, &tuple->t_self, tuple);
 
 		heap_freetuple(tuple);
 	}
@@ -7381,8 +7377,7 @@ exchange_permissions(Oid oldrelid, Oid newrelid)
 	replace_tuple = heap_modify_tuple(oldtuple,
 									  RelationGetDescr(rel),
 									  values, nulls, replaces);
-	simple_heap_update(rel, &oldtuple->t_self, replace_tuple);
-	CatalogUpdateIndexes(rel, replace_tuple);
+	CatalogTupleUpdate(rel, &oldtuple->t_self, replace_tuple);
 
 	/* XXX: Update the shared dependency ACL info */
 
@@ -7400,8 +7395,7 @@ exchange_permissions(Oid oldrelid, Oid newrelid)
 	replace_tuple = heap_modify_tuple(newtuple,
 									  RelationGetDescr(rel),
 									  values, nulls, replaces);
-	simple_heap_update(rel, &newtuple->t_self, replace_tuple);
-	CatalogUpdateIndexes(rel, replace_tuple);
+	CatalogTupleUpdate(rel, &newtuple->t_self, replace_tuple);
 
 	/* update shared dependency */
 
@@ -8685,8 +8679,7 @@ add_partition_encoding(Oid relid, Oid paroid, AttrNumber attnum, List *encoding)
 	tuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 
 	/* Insert tuple into the relation */
-	simple_heap_insert(rel, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	CatalogTupleInsert(rel, tuple);
 
 	heap_freetuple(tuple);
 

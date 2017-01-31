@@ -548,10 +548,7 @@ createdb(const CreatedbStmt *stmt)
 
 	HeapTupleSetOid(tuple, dboid);
 
-	simple_heap_insert(pg_database_rel, tuple);
-
-	/* Update indexes */
-	CatalogUpdateIndexes(pg_database_rel, tuple);
+	CatalogTupleInsert(pg_database_rel, tuple);
 
 	if (shouldDispatch)
 	{
@@ -1119,8 +1116,7 @@ RenameDatabase(const char *oldname, const char *newname)
 	if (!HeapTupleIsValid(newtup))
 		elog(ERROR, "cache lookup failed for database %u", db_id);
 	namestrcpy(&(((Form_pg_database) GETSTRUCT(newtup))->datname), newname);
-	simple_heap_update(rel, &newtup->t_self, newtup);
-	CatalogUpdateIndexes(rel, newtup);
+	CatalogTupleUpdate(rel, &newtup->t_self, newtup);
 
 	/* MPP-6929: metadata tracking */
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -1389,10 +1385,7 @@ movedb(const char *dbname, const char *tblspcname)
 		newtuple = heap_modify_tuple(oldtuple, RelationGetDescr(pgdbrel),
 									 new_record,
 									 new_record_nulls, new_record_repl);
-		simple_heap_update(pgdbrel, &oldtuple->t_self, newtuple);
-
-		/* Update indexes */
-		CatalogUpdateIndexes(pgdbrel, newtuple);
+		CatalogTupleUpdate(pgdbrel, &oldtuple->t_self, newtuple);
 
 		InvokeObjectPostAlterHook(DatabaseRelationId,
 								  HeapTupleGetOid(newtuple), 0);
@@ -1613,10 +1606,7 @@ AlterDatabase(AlterDatabaseStmt *stmt, bool isTopLevel)
 
 	newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel), new_record,
 								 new_record_nulls, new_record_repl);
-	simple_heap_update(rel, &tuple->t_self, newtuple);
-
-	/* Update indexes */
-	CatalogUpdateIndexes(rel, newtuple);
+	CatalogTupleUpdate(rel, &tuple->t_self, newtuple);
 
 	InvokeObjectPostAlterHook(DatabaseRelationId,
 							  HeapTupleGetOid(newtuple), 0);
@@ -1773,8 +1763,7 @@ AlterDatabaseOwner(const char *dbname, Oid newOwnerId)
 		}
 
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel), repl_val, repl_null, repl_repl);
-		simple_heap_update(rel, &newtuple->t_self, newtuple);
-		CatalogUpdateIndexes(rel, newtuple);
+		CatalogTupleUpdate(rel, &newtuple->t_self, newtuple);
 
 		heap_freetuple(newtuple);
 

@@ -435,8 +435,7 @@ StoreSingleInheritance(Oid relationId, Oid parentOid, int32 seqNumber)
 
 	tuple = heap_form_tuple(RelationGetDescr(inhRelation), values, nulls);
 
-	simple_heap_insert(inhRelation, tuple);
-	CatalogUpdateIndexes(inhRelation, tuple);
+	CatalogTupleInsert(inhRelation, tuple);
 
 	heap_freetuple(tuple);
 

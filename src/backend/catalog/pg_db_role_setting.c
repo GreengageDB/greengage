@@ -96,10 +96,7 @@ AlterSetting(Oid databaseid, Oid roleid, VariableSetStmt *setstmt)
 
 				newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
 											 repl_val, repl_null, repl_repl);
-				simple_heap_update(rel, &tuple->t_self, newtuple);
-
-				/* Update indexes */
-				CatalogUpdateIndexes(rel, newtuple);
+				CatalogTupleUpdate(rel, &tuple->t_self, newtuple);
 			}
 			else
 				simple_heap_delete(rel, &tuple->t_self);
@@ -137,10 +134,7 @@ AlterSetting(Oid databaseid, Oid roleid, VariableSetStmt *setstmt)
 
 			newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
 										 repl_val, repl_null, repl_repl);
-			simple_heap_update(rel, &tuple->t_self, newtuple);
-
-			/* Update indexes */
-			CatalogUpdateIndexes(rel, newtuple);
+			CatalogTupleUpdate(rel, &tuple->t_self, newtuple);
 		}
 		else
 			simple_heap_delete(rel, &tuple->t_self);
@@ -163,10 +157,7 @@ AlterSetting(Oid databaseid, Oid roleid, VariableSetStmt *setstmt)
 		values[Anum_pg_db_role_setting_setconfig - 1] = PointerGetDatum(a);
 		newtuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 
-		simple_heap_insert(rel, newtuple);
-
-		/* Update indexes */
-		CatalogUpdateIndexes(rel, newtuple);
+		CatalogTupleInsert(rel, newtuple);
 	}
 
 	InvokeObjectPostAlterHookArg(DbRoleSettingRelationId,

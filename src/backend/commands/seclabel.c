@@ -296,7 +296,7 @@ SetSharedSecurityLabel(const ObjectAddress *object,
 			replaces[Anum_pg_shseclabel_label - 1] = true;
 			newtup = heap_modify_tuple(oldtup, RelationGetDescr(pg_shseclabel),
 									   values, nulls, replaces);
-			simple_heap_update(pg_shseclabel, &oldtup->t_self, newtup);
+			CatalogTupleUpdate(pg_shseclabel, &oldtup->t_self, newtup);
 		}
 	}
 	systable_endscan(scan);
@@ -306,15 +306,11 @@ SetSharedSecurityLabel(const ObjectAddress *object,
 	{
 		newtup = heap_form_tuple(RelationGetDescr(pg_shseclabel),
 								 values, nulls);
-		simple_heap_insert(pg_shseclabel, newtup);
+		CatalogTupleInsert(pg_shseclabel, newtup);
 	}
 
-	/* Update indexes, if necessary */
 	if (newtup != NULL)
-	{
-		CatalogUpdateIndexes(pg_shseclabel, newtup);
 		heap_freetuple(newtup);
-	}
 
 	heap_close(pg_shseclabel, RowExclusiveLock);
 }
@@ -387,7 +383,7 @@ SetSecurityLabel(const ObjectAddress *object,
 			replaces[Anum_pg_seclabel_label - 1] = true;
 			newtup = heap_modify_tuple(oldtup, RelationGetDescr(pg_seclabel),
 									   values, nulls, replaces);
-			simple_heap_update(pg_seclabel, &oldtup->t_self, newtup);
+			CatalogTupleUpdate(pg_seclabel, &oldtup->t_self, newtup);
 		}
 	}
 	systable_endscan(scan);
@@ -397,15 +393,12 @@ SetSecurityLabel(const ObjectAddress *object,
 	{
 		newtup = heap_form_tuple(RelationGetDescr(pg_seclabel),
 								 values, nulls);
-		simple_heap_insert(pg_seclabel, newtup);
+		CatalogTupleInsert(pg_seclabel, newtup);
 	}
 
 	/* Update indexes, if necessary */
 	if (newtup != NULL)
-	{
-		CatalogUpdateIndexes(pg_seclabel, newtup);
 		heap_freetuple(newtup);
-	}
 
 	heap_close(pg_seclabel, RowExclusiveLock);
 }

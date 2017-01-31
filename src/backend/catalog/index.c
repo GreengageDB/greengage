@@ -716,10 +716,7 @@ UpdateIndexRelation(Oid indexoid,
 	/*
 	 * insert the tuple into the pg_index catalog
 	 */
-	simple_heap_insert(pg_index, tuple);
-
-	/* update the indexes on pg_index */
-	CatalogUpdateIndexes(pg_index, tuple);
+	CatalogTupleInsert(pg_index, tuple);
 
 	/*
 	 * close the relation and free the tuple
@@ -1482,8 +1479,7 @@ index_constraint_create(Relation heapRelation,
 
 		if (dirty)
 		{
-			simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-			CatalogUpdateIndexes(pg_index, indexTuple);
+			CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 			InvokeObjectPostAlterHookArg(IndexRelationId, indexRelationId, 0,
 										 InvalidOid, is_internal);
@@ -2411,8 +2407,7 @@ index_build(Relation heapRelation,
 		Assert(!indexForm->indcheckxmin);
 
 		indexForm->indcheckxmin = true;
-		simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-		CatalogUpdateIndexes(pg_index, indexTuple);
+		CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 		heap_freetuple(indexTuple);
 		heap_close(pg_index, RowExclusiveLock);
@@ -3994,8 +3989,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks)
 			indexForm->indisvalid = true;
 			indexForm->indisready = true;
 			indexForm->indislive = true;
-			simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-			CatalogUpdateIndexes(pg_index, indexTuple);
+			CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 			/*
 			 * Invalidate the relcache for the table, so that after we commit

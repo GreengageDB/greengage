@@ -271,8 +271,7 @@ add_segment_config(GpSegConfigEntry *i)
 	tuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 
 	/* insert a new tuple */
-	simple_heap_insert(rel, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	CatalogTupleInsert(rel, tuple);
 
 	heap_close(rel, NoLock);
 }
@@ -750,8 +749,7 @@ segment_config_activate_standby(int16 standby_dbid, int16 master_dbid)
 	((Form_gp_segment_configuration) GETSTRUCT(tuple))->role = GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 	((Form_gp_segment_configuration) GETSTRUCT(tuple))->preferred_role = GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY;
 
-	simple_heap_update(rel, &tuple->t_self, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	CatalogTupleUpdate(rel, &tuple->t_self, tuple);
 
 	systable_endscan(sscan);
 

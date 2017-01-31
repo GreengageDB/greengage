@@ -77,15 +77,13 @@ InsertInitialFastSequenceEntries(Oid objid)
 	/* Insert enrty for segfile 0 */
 	values[Anum_gp_fastsequence_objmod - 1] = Int64GetDatum(RESERVED_SEGNO);
 	tuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
-	simple_heap_insert(gp_fastsequence_rel, tuple);
-	CatalogUpdateIndexes(gp_fastsequence_rel, tuple);
+	CatalogTupleInsert(gp_fastsequence_rel, tuple);
 	heap_freetuple(tuple);
 
 	/* Insert entry for segfile 1 */
 	values[Anum_gp_fastsequence_objmod - 1] = Int64GetDatum(1);
 	tuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
-	simple_heap_insert(gp_fastsequence_rel, tuple);
-	CatalogUpdateIndexes(gp_fastsequence_rel, tuple);
+	CatalogTupleInsert(gp_fastsequence_rel, tuple);
 	heap_freetuple(tuple);
 
 	heap_close(gp_fastsequence_rel, RowExclusiveLock);
@@ -181,8 +179,7 @@ insert_or_update_fastsequence(Relation gp_fastsequence_rel,
 
 		newTuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
 
-		frozen_heap_insert(gp_fastsequence_rel, newTuple);
-		CatalogUpdateIndexes(gp_fastsequence_rel, newTuple);
+		CatalogTupleInsertFrozen(gp_fastsequence_rel, newTuple);
 
 		heap_freetuple(newTuple);
 	}
