@@ -749,7 +749,7 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 		HeapTuple	newtup;
 
 		newtup = heap_modify_tuple(tup, sdepDesc, values, nulls, replace);
-		CatalogTupleInsert(sdepRel, newtup);
+		CatalogTupleInsertWithInfo(sdepRel, newtup, indstate);
 
 		heap_freetuple(newtup);
 	}
