@@ -331,7 +331,7 @@ AppendOnlyVisimapStore_DeleteSegmentFile(
 										  NULL,
 										  &tid))
 	{
-		simple_heap_delete(visiMapStore->visimapRelation,
+		CatalogTupleDelete(visiMapStore->visimapRelation,
 						   &tid);
 	}
 	AppendOnlyVisimapStore_EndScan(visiMapStore, indexScan);

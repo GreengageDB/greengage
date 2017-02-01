@@ -211,6 +211,22 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 }
 
 /*
+ * CatalogTupleDelete - do heap and indexing work for deleting a catalog tuple
+ *
+ * Delete the tuple identified by tid in the specified catalog.
+ *
+ * With Postgres heaps, there is no index work to do at deletion time;
+ * cleanup will be done later by VACUUM.  However, callers of this function
+ * shouldn't have to know that; we'd like a uniform abstraction for all
+ * catalog tuple changes.  Hence, provide this currently-trivial wrapper.
+ */
+void
+CatalogTupleDelete(Relation heapRel, ItemPointer tid)
+{
+	simple_heap_delete(heapRel, tid);
+}
+
+/*
  * Greenplum: this interface is used to insert tuples into gp_fastsequence
  * and aoseg relations during an appendoptimized (row as well as column)
  * insert transaction.

@@ -309,7 +309,7 @@ remove_segment_config(int16 dbid)
 							   NULL, 1, &scankey);
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(rel, &tuple->t_self);
+		CatalogTupleDelete(rel, &tuple->t_self);
 		numDel++;
 	}
 	systable_endscan(sscan);
@@ -723,7 +723,7 @@ segment_config_activate_standby(int16 standby_dbid, int16 master_dbid)
 							   NULL, 1, &scankey);
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(rel, &tuple->t_self);
+		CatalogTupleDelete(rel, &tuple->t_self);
 		numDel++;
 	}
 	systable_endscan(sscan);

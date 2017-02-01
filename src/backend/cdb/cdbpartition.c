@@ -1897,7 +1897,7 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
 		return 2;
 	}
 
-	simple_heap_delete(part_rel, &tid);
+	CatalogTupleDelete(part_rel, &tid);
 
 	systable_endscan(sscan);
 
@@ -1916,7 +1916,7 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
 
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(part_rule_rel, &tuple->t_self);
+		CatalogTupleDelete(part_rule_rel, &tuple->t_self);
 	}
 
 	systable_endscan(sscan);
@@ -8713,7 +8713,7 @@ remove_partition_encoding_entry(Oid paroid, AttrNumber attnum)
 			if (ppe->parencattnum != attnum)
 				continue;
 		}
-		simple_heap_delete(rel, &tup->t_self);
+		CatalogTupleDelete(rel, &tup->t_self);
 	}
 
 	systable_endscan(sscan);

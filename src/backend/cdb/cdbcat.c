@@ -731,7 +731,7 @@ GpPolicyRemove(Oid tbloid)
 
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(gp_policy_rel, &tuple->t_self);
+		CatalogTupleDelete(gp_policy_rel, &tuple->t_self);
 	}
 
 	systable_endscan(sscan);

@@ -500,7 +500,7 @@ RemoveExtTableEntry(Oid relid)
 	 */
 	do
 	{
-		simple_heap_delete(pg_exttable_rel, &tuple->t_self);
+		CatalogTupleDelete(pg_exttable_rel, &tuple->t_self);
 	}
 	while (HeapTupleIsValid(tuple = systable_getnext(scan)));
 

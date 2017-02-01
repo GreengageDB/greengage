@@ -828,7 +828,7 @@ AppendOnlyBlockDirectory_DeleteSegmentFile(Relation aoRel,
 
 	while ((tuple = index_getnext(indexScan, ForwardScanDirection)) != NULL)
 	{
-		simple_heap_delete(blkdirRel,
+		CatalogTupleDelete(blkdirRel,
 						   &tuple->t_self);
 	}
 	index_endscan(indexScan);

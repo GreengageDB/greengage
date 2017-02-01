@@ -2764,7 +2764,7 @@ IndexSetParentIndex(Relation partitionIdx, Oid parentOid)
 			/*
 			 * There exists a pg_inherits row, which we want to clear; do so.
 			 */
-			simple_heap_delete(pg_inherits, &tuple->t_self);
+			CatalogTupleDelete(pg_inherits, &tuple->t_self);
 			fix_dependencies = true;
 		}
 		else

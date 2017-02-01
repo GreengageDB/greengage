@@ -245,7 +245,7 @@ shdepChangeDep(Relation sdepRel,
 	{
 		/* No new entry needed, so just delete existing entry if any */
 		if (oldtup)
-			simple_heap_delete(sdepRel, &oldtup->t_self);
+			CatalogTupleDelete(sdepRel, &oldtup->t_self);
 	}
 	else if (oldtup)
 	{
@@ -791,7 +791,7 @@ dropDatabaseDependencies(Oid databaseId)
 
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
-		simple_heap_delete(sdepRel, &tup->t_self);
+		CatalogTupleDelete(sdepRel, &tup->t_self);
 	}
 
 	systable_endscan(scan);
@@ -944,7 +944,7 @@ shdepDropDependency(Relation sdepRel,
 			continue;
 
 		/* OK, delete it */
-		simple_heap_delete(sdepRel, &tup->t_self);
+		CatalogTupleDelete(sdepRel, &tup->t_self);
 	}
 
 	systable_endscan(scan);

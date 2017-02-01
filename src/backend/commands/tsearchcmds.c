@@ -316,7 +316,7 @@ RemoveTSParserById(Oid prsId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for text search parser %u", prsId);
 
-	simple_heap_delete(relation, &tup->t_self);
+	CatalogTupleDelete(relation, &tup->t_self);
 
 	ReleaseSysCache(tup);
 
@@ -537,7 +537,7 @@ RemoveTSDictionaryById(Oid dictId)
 		elog(ERROR, "cache lookup failed for text search dictionary %u",
 			 dictId);
 
-	simple_heap_delete(relation, &tup->t_self);
+	CatalogTupleDelete(relation, &tup->t_self);
 
 	ReleaseSysCache(tup);
 
@@ -875,7 +875,7 @@ RemoveTSTemplateById(Oid tmplId)
 		elog(ERROR, "cache lookup failed for text search template %u",
 			 tmplId);
 
-	simple_heap_delete(relation, &tup->t_self);
+	CatalogTupleDelete(relation, &tup->t_self);
 
 	ReleaseSysCache(tup);
 
@@ -1188,7 +1188,7 @@ RemoveTSConfigurationById(Oid cfgId)
 		elog(ERROR, "cache lookup failed for text search dictionary %u",
 			 cfgId);
 
-	simple_heap_delete(relCfg, &tup->t_self);
+	CatalogTupleDelete(relCfg, &tup->t_self);
 
 	ReleaseSysCache(tup);
 
@@ -1207,7 +1207,7 @@ RemoveTSConfigurationById(Oid cfgId)
 
 	while (HeapTupleIsValid((tup = systable_getnext(scan))))
 	{
-		simple_heap_delete(relMap, &tup->t_self);
+		CatalogTupleDelete(relMap, &tup->t_self);
 	}
 
 	systable_endscan(scan);
@@ -1371,7 +1371,7 @@ MakeConfigurationMapping(AlterTSConfigurationStmt *stmt,
 
 			while (HeapTupleIsValid((maptup = systable_getnext(scan))))
 			{
-				simple_heap_delete(relMap, &maptup->t_self);
+				CatalogTupleDelete(relMap, &maptup->t_self);
 			}
 
 			systable_endscan(scan);
@@ -1524,7 +1524,7 @@ DropConfigurationMapping(AlterTSConfigurationStmt *stmt,
 
 		while (HeapTupleIsValid((maptup = systable_getnext(scan))))
 		{
-			simple_heap_delete(relMap, &maptup->t_self);
+			CatalogTupleDelete(relMap, &maptup->t_self);
 			found = true;
 		}
 

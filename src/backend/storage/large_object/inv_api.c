@@ -857,7 +857,7 @@ inv_truncate(LargeObjectDesc *obj_desc, int64 len)
 		if (olddata != NULL)
 		{
 			Assert(olddata->pageno > pageno);
-			simple_heap_delete(lo_heap_r, &oldtuple->t_self);
+			CatalogTupleDelete(lo_heap_r, &oldtuple->t_self);
 		}
 
 		/*
@@ -893,7 +893,7 @@ inv_truncate(LargeObjectDesc *obj_desc, int64 len)
 	{
 		while ((oldtuple = systable_getnext_ordered(sd, ForwardScanDirection)) != NULL)
 		{
-			simple_heap_delete(lo_heap_r, &oldtuple->t_self);
+			CatalogTupleDelete(lo_heap_r, &oldtuple->t_self);
 		}
 	}
 

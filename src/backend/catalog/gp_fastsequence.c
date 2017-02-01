@@ -326,7 +326,7 @@ RemoveFastSequenceEntry(Oid objid)
 
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(rel, &tuple->t_self);
+		CatalogTupleDelete(rel, &tuple->t_self);
 	}
 
 	systable_endscan(sscan);

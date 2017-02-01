@@ -479,7 +479,7 @@ DeleteInheritsTuple(Oid inhrelid, Oid inhparent)
 		parent = ((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhparent;
 		if (!OidIsValid(inhparent) || parent == inhparent)
 		{
-			simple_heap_delete(catalogRelation, &inheritsTuple->t_self);
+			CatalogTupleDelete(catalogRelation, &inheritsTuple->t_self);
 			found = true;
 		}
 	}
