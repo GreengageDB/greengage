@@ -100,11 +100,9 @@
 	(Adding an index requires a catversion.h update, while simply
 	adding/deleting caches only requires a recompile.)
 
-	Finally, any place your relation gets heap_insert() or heap_update()
-	calls, make sure there is a CatalogTupleInsert() or CatalogTupleUpdate()
-	or similar call.  The heap_* calls do not update indexes.
-
-	bjm 1999/11/22
+	Finally, any place your relation gets heap_insert() or
+	heap_update() calls, use CatalogTupleInsert() or CatalogTupleUpdate()
+	instead, which also update indexes.  The heap_* calls do not do that.
 
 *---------------------------------------------------------------------------
 */

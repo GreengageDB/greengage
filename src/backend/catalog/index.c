@@ -2145,8 +2145,8 @@ index_update_stats(Relation rel,
 	 * 1. In bootstrap mode, we have no choice --- UPDATE wouldn't work.
 	 *
 	 * 2. We could be reindexing pg_class itself, in which case we can't move
-	 * its pg_class row because CatalogUpdateIndexes might not know about all
-	 * the indexes yet (see reindex_relation).
+	 * its pg_class row because CatalogTupleInsert/CatalogTupleUpdate might
+	 * not know about all the indexes yet (see reindex_relation).
 	 *
 	 * 3. Because we execute CREATE INDEX with just share lock on the parent
 	 * rel (to allow concurrent index creations), an ordinary update could
