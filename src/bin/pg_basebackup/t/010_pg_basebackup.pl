@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Cwd;
 use TestLib;
-use Test::More tests => 33;
+use Test::More tests => 39;
 
 program_help_ok('pg_basebackup');
 program_version_ok('pg_basebackup');
@@ -95,9 +95,9 @@ SKIP: {
 
 	command_fails(
 		[ 'pg_basebackup', '-D', "$tempdir/backup1", '-Fp',
-		  '--target-gp-dbid', '-1'
+		  '--target-gp-dbid', '1'
 		],
-		'plain format with tablespaces fails without tablespace mapping');
+		'plain format with tablespaces fails without tablespace mapping and target-gp-dbid as the test server dbid');
 
 	command_ok(
 		[   'pg_basebackup',    '-D',
@@ -105,13 +105,13 @@ SKIP: {
 			'--target-gp-dbid', '1',
 			"-T$shorter_tempdir/tblspc1=$tempdir/tbackup/tblspc1" ],
 		'plain format with tablespaces succeeds with tablespace mapping');
-		ok(-d "$tempdir/tbackup/tblspc1", 'tablespace was relocated');
+		ok(-d "$tempdir/tbackup/tblspc1/1", 'tablespace was relocated');
 	opendir(my $dh, "$tempdir/pgdata/pg_tblspc") or die;
 	ok( (   grep
 			{
 				-l "$tempdir/backup1/pg_tblspc/$_"
 				  and readlink "$tempdir/backup1/pg_tblspc/$_" eq
-				  "$tempdir/tbackup/tblspc1"
+				  "$tempdir/tbackup/tblspc1/1"
 			  } readdir($dh)),
 		"tablespace symlink was updated");
 	closedir $dh;
@@ -129,6 +129,35 @@ SKIP: {
 	ok(-d "$tempdir/tbackup/tbl=spc2", 'tablespace with = sign was relocated');
 
 	psql 'postgres', "DROP TABLESPACE tblspc2;";
+
+
+	my $twenty_characters = '11111111112222222222';
+	my $longer_tempdir = "$tempdir/some_long_directory_path_$twenty_characters$twenty_characters$twenty_characters$twenty_characters$twenty_characters";
+	my $some_backup_dir = "$tempdir/backup_dir";
+	my $some_other_backup_dir = "$tempdir/other_backup_dir";
+
+	mkdir "$longer_tempdir";
+	mkdir "$some_backup_dir";
+	psql 'postgres', "CREATE TABLESPACE too_long_tablespace LOCATION '$longer_tempdir';";
+	command_warns_like([
+		'pg_basebackup',
+		'-D', "$some_backup_dir",
+		'--target-gp-dbid', '99'],
+				 qr/WARNING:  symbolic link ".*" target is too long and will not be added to the backup/,
+					   'basebackup with a tablespace that has a very long location should warn target is too long.');
+
+	mkdir "$some_other_backup_dir";
+	command_warns_like([
+		'pg_basebackup',
+		'-D', "$some_other_backup_dir",
+		'--target-gp-dbid', '99'],
+				 qr/The symbolic link with target ".*" is too long. Symlink targets with length greater than 100 characters would be truncated./,
+					   'basebackup with a tablespace that has a very long location should warn link not added to the backup.');
+
+	command_fails_like([
+		'ls', "$some_other_backup_dir/pg_tblspc/*"],
+				 qr/No such file/,
+				 'tablespace directory should be empty');
 }
 
 command_fails(

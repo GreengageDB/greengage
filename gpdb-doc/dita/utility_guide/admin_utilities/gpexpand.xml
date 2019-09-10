@@ -45,7 +45,6 @@
         initialization.
         <ul id="ul_c3w_wdp_lgb">
           <li><codeph>gpbackup</codeph></li>
-          <li><codeph>gpcheck</codeph></li>
           <li><codeph>gpcheckcat</codeph></li>
           <li><codeph>gpconfig</codeph></li>
           <li><codeph>gppkg</codeph></li>
@@ -148,7 +147,7 @@
           <pd>Specifies the name of the expansion configuration file, which contains one line for
             each segment to be added in the format of:</pd>
           <pd>
-            <varname>hostname:address:port:datadir:dbid:content:preferred_role</varname>
+            <varname>hostname|address|port|datadir|dbid|content|preferred_role</varname>
           </pd>
         </plentry>
         <plentry>

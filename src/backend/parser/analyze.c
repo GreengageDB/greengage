@@ -471,12 +471,15 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
 	qry->hasAggs = pstate->p_hasAggs;
 	qry->hasFuncsWithExecRestrictions = pstate->p_hasFuncsWithExecRestrictions;
-	if (pstate->p_hasAggs)
-		parseCheckAggregates(pstate, qry);
+
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
 
 	assign_query_collations(pstate, qry);
+
+	/* this must be done after collations, for reliable comparison of exprs */
+	if (pstate->p_hasAggs)
+		parseCheckAggregates(pstate, qry);
 
 	return qry;
 }
@@ -1746,8 +1749,6 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
 	qry->hasFuncsWithExecRestrictions = pstate->p_hasFuncsWithExecRestrictions;
 	qry->hasAggs = pstate->p_hasAggs;
-	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
-		parseCheckAggregates(pstate, qry);
 
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
@@ -1758,14 +1759,25 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 							   (LockingClause *) lfirst(l), false);
 	}
 
+	assign_query_collations(pstate, qry);
+
+	/* this must be done after collations, for reliable comparison of exprs */
+	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
+		parseCheckAggregates(pstate, qry);
+
 	/*
 	 * If the query mixes window functions and aggregates, we need to
 	 * transform it such that the grouped query appears as a subquery
+	 *
+	 * This must be done after collations. Because it, specifically the
+	 * grouped_window_mutator() it called, will replace some expressions with
+	 * Var and set the varcollid with the replaced expressions' original
+	 * collations, which are from assign_query_collations().
+	 *
+	 * Note: assign_query_collations() doesn't handle Var's collation.
 	 */
 	if (qry->hasWindowFuncs && (qry->groupClause || qry->hasAggs))
 		transformGroupedWindows(pstate, qry);
-
-	assign_query_collations(pstate, qry);
 
 	return qry;
 }
@@ -2226,8 +2238,6 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	qry->hasWindowFuncs = pstate->p_hasWindowFuncs;
 	qry->hasFuncsWithExecRestrictions = pstate->p_hasFuncsWithExecRestrictions;
 	qry->hasAggs = pstate->p_hasAggs;
-	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
-		parseCheckAggregates(pstate, qry);
 
 	if (pstate->p_hasTblValueExpr)
 		parseCheckTableFunctions(pstate, qry);
@@ -2239,6 +2249,10 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 	}
 
 	assign_query_collations(pstate, qry);
+
+	/* this must be done after collations, for reliable comparison of exprs */
+	if (pstate->p_hasAggs || qry->groupClause || qry->havingQual)
+		parseCheckAggregates(pstate, qry);
 
 	return qry;
 }
@@ -2518,30 +2532,31 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 				setop_types->ncols = numCols;
 				setop_types->leafinfos = (List **) palloc0(setop_types->ncols * sizeof(List *));
 			}
-			i = 0;
-			foreach(tl, selectQuery->targetList)
+
+			/*
+			 * It's possible that this leaf query has a different number
+			 * of columns than the previous ones. That's an error, but
+			 * we don't throw it here because we don't have the context
+			 * needed for a good error message. We don't know which
+			 * operation of the setop tree is the one where the number
+			 * of columns between the left and right branches differ.
+			 * Therefore, just return here as if nothing happened, and
+			 * we'll catch that error in the parent instead.
+			 */
+			if (numCols == setop_types->ncols)
 			{
-				TargetEntry *tle = (TargetEntry *) lfirst(tl);
+				i = 0;
+				foreach(tl, selectQuery->targetList)
+				{
+					TargetEntry *tle = (TargetEntry *) lfirst(tl);
 
-				if (tle->resjunk)
-					continue;
+					if (tle->resjunk)
+						continue;
 
-				setop_types->leafinfos[i] = lappend(setop_types->leafinfos[i],
-													(Node *) tle->expr);
-				i++;
-
-				/*
-				 * It's possible that this leaf query has a differnet number
-				 * of columns than the previous ones. That's an error, but
-				 * we don't throw it here because we don't have the context
-				 * needed for a good error message. We don't know which
-				 * operation of the setop tree is the one where the number
-				 * of columns between the left and right branches differ.
-				 * Therefore, just return here as if nothing happened, and
-				 * we'll catch that error in the parent instead.
-				 */
-				if (i == setop_types->ncols)
-					break;
+					setop_types->leafinfos[i] = lappend(setop_types->leafinfos[i],
+														(Node *) tle->expr);
+					i++;
+				}
 			}
 		}
 

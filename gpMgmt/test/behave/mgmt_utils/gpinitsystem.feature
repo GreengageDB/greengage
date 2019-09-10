@@ -74,7 +74,7 @@ Feature: gpinitsystem tests
 
     Scenario: gpinitsystem creates a cluster in default timezone
         Given the database is not running
-        And the environment variable "TZ" is not set
+        And "TZ" environment variable is not set
         And the system timezone is saved
         And the user runs command "rm -rf ../gpAux/gpdemo/datadirs/*"
         And the user runs command "mkdir ../gpAux/gpdemo/datadirs/qddir; mkdir ../gpAux/gpdemo/datadirs/dbfast1; mkdir ../gpAux/gpdemo/datadirs/dbfast2; mkdir ../gpAux/gpdemo/datadirs/dbfast3"

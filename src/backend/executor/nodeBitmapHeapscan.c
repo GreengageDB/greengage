@@ -671,7 +671,7 @@ BitmapAppendOnlyNext(BitmapHeapScanState *node)
 	for (;;)
 	{
 		TBMIterateResult *tbmres = node->tbmres;
-		bool		need_recheck;
+		bool		need_recheck = false;
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -744,7 +744,11 @@ BitmapAppendOnlyNext(BitmapHeapScanState *node)
 		 */
 		if (node->baos_lossy)
 		{
-			psuedoHeapOffset = node->baos_cindex;	// We are iterating through all items.
+			/*
+			 * +1 to convert index to offset, since TID offsets are not zero
+			 * based.
+			 */
+			psuedoHeapOffset = node->baos_cindex + 1;	// We are iterating through all items.
 		}
 		else
 		{

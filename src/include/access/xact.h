@@ -19,6 +19,7 @@
 #include "storage/relfilenode.h"
 
 #include "cdb/cdbpublic.h"
+#include "cdb/cdbtm.h"
 
 /*
  * Xact isolation levels
@@ -143,14 +144,19 @@ typedef struct xl_xact_commit
 	time_t		xtime;
 	uint32		xinfo;			/* info flags */
 	int			nrels;			/* number of RelFileNodes */
+	int			ndeldbs;		/* number of DbDirNodes */
 	int			nsubxacts;		/* number of subtransaction XIDs */
 	int			nmsgs;			/* number of shared inval msgs */
 	Oid			dbId;			/* MyDatabaseId */
 	Oid			tsId;			/* MyDatabaseTableSpace */
+	Oid			tablespace_oid_to_delete_on_commit;
+	DistributedTransactionTimeStamp distribTimeStamp; /**/
+	DistributedTransactionId        distribXid;       /**/
 	/* Array of RelFileNode(s) to drop at commit */
-	RelFileNodeWithStorageType xnodes[1];		/* VARIABLE LENGTH ARRAY */
+	RelFileNodePendingDelete xnodes[1];		/* VARIABLE LENGTH ARRAY */
 	/* ARRAY OF COMMITTED SUBTRANSACTION XIDs FOLLOWS */
 	/* ARRAY OF SHARED INVALIDATION MESSAGES FOLLOWS */
+	/* GPDB: ARRAY OF DbDirNodes to be dropped at commit FOLLOWS */
 	/* DISTRIBUTED XACT STUFF FOLLOWS */
 } xl_xact_commit;
 
@@ -176,10 +182,13 @@ typedef struct xl_xact_abort
 	TimestampTz xact_time;		/* time of abort */
 	time_t		xtime;
 	int			nrels;			/* number of RelFileNodes */
+	int			ndeldbs;		/* number of DbDirNodes */
 	int			nsubxacts;		/* number of subtransaction XIDs */
+	Oid         tablespace_oid_to_delete_on_abort;
 	/* Array of RelFileNode(s) to drop at abort */
-	RelFileNodeWithStorageType xnodes[1];		/* VARIABLE LENGTH ARRAY */
+	RelFileNodePendingDelete xnodes[1];		/* VARIABLE LENGTH ARRAY */
 	/* ARRAY OF ABORTED SUBTRANSACTION XIDs FOLLOWS */
+	/* GPDB: ARRAY OF DbDirNodes to be dropped at abort FOLLOWS */
 } xl_xact_abort;
 
 /* Note the intentional lack of an invalidation message array c.f. commit */
@@ -226,17 +235,20 @@ typedef struct xl_xact_distributed_forget
  */
 
 /* Greenplum Database specific */ 
-extern void SetSharedTransactionId_writer(void);
-extern void SetSharedTransactionId_reader(TransactionId xid, CommandId cid);
+extern void SetSharedTransactionId_writer(DtxContext distributedTransactionContext);
+extern void SetSharedTransactionId_reader(TransactionId xid, CommandId cid, DtxContext distributedTransactionContext);
 extern bool IsTransactionState(void);
 extern bool IsAbortInProgress(void);
-extern bool IsCommitInProgress(void);
 extern bool IsTransactionPreparing(void);
 extern bool IsAbortedTransactionBlockState(void);
+extern bool TransactionDidWriteXLog(void);
+extern bool ExecutorDidWriteXLog(void);
 extern void GetAllTransactionXids(
 	DistributedTransactionId	*distribXid,
 	TransactionId				*localXid,
 	TransactionId				*subXid);
+extern DistributedTransactionId GetCurrentDistributedTransactionId(void);
+extern void SetCurrentDistributedTransactionId(DistributedTransactionId gxid);
 extern TransactionId GetTopTransactionId(void);
 extern TransactionId GetTopTransactionIdIfAny(void);
 extern TransactionId GetCurrentTransactionId(void);
@@ -244,6 +256,7 @@ extern TransactionId GetCurrentTransactionIdIfAny(void);
 extern TransactionId GetStableLatestTransactionId(void);
 extern SubTransactionId GetCurrentSubTransactionId(void);
 extern void MarkCurrentTransactionIdLoggedIfAny(void);
+extern void MarkCurrentTransactionWriteXLogOnExecutor(void);
 extern bool SubTransactionIsActive(SubTransactionId subxid);
 extern CommandId GetCurrentCommandId(bool used);
 extern TimestampTz GetCurrentTransactionStartTimestamp(void);
@@ -277,6 +290,7 @@ extern void ExecutorMarkTransactionDoesWrites(void);
 extern bool ExecutorSaysTransactionDoesWrites(void);
 extern char TransactionBlockStatusCode(void);
 extern void AbortOutOfAnyTransaction(void);
+extern void CommitNotPreparedTransaction(void);
 extern void PreventTransactionChain(bool isTopLevel, const char *stmtType);
 extern void RequireTransactionChain(bool isTopLevel, const char *stmtType);
 extern void WarnNoTransactionChain(bool isTopLevel, const char *stmtType);

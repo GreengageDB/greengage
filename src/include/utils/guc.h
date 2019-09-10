@@ -460,6 +460,7 @@ extern bool optimizer_enable_bitmapscan;
 extern bool optimizer_enable_outerjoin_to_unionall_rewrite;
 extern bool optimizer_enable_ctas;
 extern bool optimizer_enable_partial_index;
+extern bool optimizer_enable_dml;
 extern bool optimizer_enable_dml_triggers;
 extern bool	optimizer_enable_dml_constraints;
 extern bool optimizer_enable_direct_dispatch;
@@ -469,7 +470,11 @@ extern bool optimizer_enable_dynamictablescan;
 extern bool optimizer_enable_indexscan;
 extern bool optimizer_enable_tablescan;
 extern bool optimizer_enable_eageragg;
-extern bool optimizer_enable_full_join;
+extern bool optimizer_expand_fulljoin;
+extern bool optimizer_enable_hashagg;
+extern bool optimizer_enable_groupagg;
+extern bool optimizer_enable_mergejoin;
+extern bool optimizer_prune_unused_columns;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;
@@ -500,10 +505,12 @@ extern int optimizer_join_order_threshold;
 extern int optimizer_join_order;
 extern int optimizer_join_arity_for_associativity_commutativity;
 extern int optimizer_cte_inlining_bound;
+extern int optimizer_push_group_by_below_setop_threshold;
 extern bool optimizer_force_multistage_agg;
 extern bool optimizer_force_three_stage_scalar_dqa;
 extern bool optimizer_force_expanded_distinct_aggs;
 extern bool optimizer_force_agg_skew_avoidance;
+extern bool optimizer_penalize_skew;
 extern bool optimizer_prune_computed_columns;
 extern bool optimizer_push_requirements_from_consumer_to_producer;
 extern bool optimizer_enforce_subplans;
@@ -538,6 +545,7 @@ extern bool	optimizer_partition_selection_log;
 #define JOIN_ORDER_IN_QUERY                 0
 #define JOIN_ORDER_GREEDY_SEARCH            1
 #define JOIN_ORDER_EXHAUSTIVE_SEARCH        2
+#define JOIN_ORDER_EXHAUSTIVE2_SEARCH       3
 
 /* Time based authentication GUC */
 extern char  *gp_auth_time_override_str;

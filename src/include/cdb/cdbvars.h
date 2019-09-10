@@ -383,17 +383,6 @@ extern int	Gp_interconnect_debug_retry_interval;
 extern int 	Gp_udp_bufsize_k;
 
 /*
- * Parameter Gp_interconnect_hash_multiplier
- *
- * The run-time parameter Gp_interconnect_hash_multiplier
- * controls the number of hash buckets used to track 'connections.'
- *
- * This guc is specific to the UDP-interconnect.
- *
- */
-extern int	Gp_interconnect_hash_multiplier;
-
-/*
  * Parameter gp_interconnect_aggressive_retry
  *
  * The run-time parameter gp_interconnect_aggressive_retry controls the
@@ -860,6 +849,7 @@ typedef struct GpId
  * Global variable declaration for the data for the single row of gp_id table
  */
 extern GpId GpIdentity;
+extern int get_dbid_string_length(void);
 #define UNINITIALIZED_GP_IDENTITY_VALUE (-10000)
 #define IS_QUERY_DISPATCHER() (GpIdentity.segindex == MASTER_CONTENT_ID)
 

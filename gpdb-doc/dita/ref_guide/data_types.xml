@@ -2,17 +2,17 @@
 <!DOCTYPE dita PUBLIC "-//OASIS//DTD DITA Composite//EN" "ditabase.dtd">
 <dita>
   <topic id="topic1" xml:lang="en">
-    <title id="if135496">Greenplum Database Data Types</title>
+    <title id="if135496">Data Types</title>
     <body>
       <p>Greenplum Database has a rich set of native data types available to users. Users may also
         define new data types using the <codeph>CREATE TYPE</codeph> command. This reference shows
         all of the built-in data types. In addition to the types listed here, there are also some
         internally used data types, such as <i>oid</i> (object identifier), but those are not
         documented in this guide. </p>
-      <p>Optional modules in the <filepath>contrib</filepath> directory may also install new data
+      <p>Additional modules that you register may also install new data
         types. The <codeph>hstore</codeph> module, for example, introduces a new data type and
         associated functions for working with key-value pairs. See <xref
-          href="modules/hstore.xml#topic_vcn_jkq_1bb"/>. The <codeph>citext</codeph> module
+          href="modules/hstore.xml"/>. The <codeph>citext</codeph> module
         adds a case-insensitive text data type. See <xref href="modules/citext.xml"/>.</p>
       <p>The following data types are specified by SQL: <i>bit</i>, <i>bit varying</i>,
           <i>boolean</i>, <i>character varying, varchar</i>, <i>character, char</i>, <i>date</i>,
@@ -299,7 +299,7 @@
             <row>
               <entry colname="col1">uuid</entry>
               <entry colname="col2"/>
-              <entry colname="col3">32 bytes</entry>
+              <entry colname="col3">16 bytes</entry>
               <entry colname="col4"/>
               <entry colname="col5">Universally Unique Identifiers according to RFC 4122, ISO/IEC
                 9834-8:2005</entry>

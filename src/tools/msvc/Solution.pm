@@ -122,9 +122,38 @@ sub copyFile
 	close(O);
 }
 
+# Fetch version of OpenSSL based on a parsing of the command shipped with
+# the installer this build is linking to.  This returns as result an array
+# made of the three first digits of the OpenSSL version, which is enough
+# to decide which options to apply depending on the version of OpenSSL
+# linking with.
+sub GetOpenSSLVersion
+{
+	my $self = shift;
+
+	# Attempt to get OpenSSL version and location.  This assumes that
+	# openssl.exe is in the specified directory.
+	my $opensslcmd =
+	  $self->{options}->{openssl} . "\\bin\\openssl.exe version 2>&1";
+	my $sslout = `$opensslcmd`;
+
+	$? >> 8 == 0
+	  or croak
+	  "Unable to determine OpenSSL version: The openssl.exe command wasn't found.";
+
+	if ($sslout =~ /(\d+)\.(\d+)\.(\d+)(\D)/m)
+	{
+		return ($1, $2, $3);
+	}
+
+	croak
+	  "Unable to determine OpenSSL version: The openssl.exe version could not be determined.";
+}
+
 sub GenerateFiles
 {
 	my $self = shift;
+	my $buildclient = shift;
 	my $bits = $self->{platform} eq 'Win32' ? 32 : 64;
 
 	# Parse configure.in to get version numbers
@@ -132,7 +161,12 @@ sub GenerateFiles
 	  || confess("Could not open configure.in for reading\n");
 	while (<C>)
 	{
-		if (/^AC_INIT\(\[PostgreSQL\], \[([^\]]+)\]/)
+		if (/^AC_INIT\(\[Greenplum Database\], \[([^\]]+)\]/)
+		{
+			$self->{gpdbver} = $1;
+			$self->{gpdbmajorver} = substr $1, 0, 1;
+		}
+		if (/\[PG_PACKAGE_VERSION=([^\]]+)\]/)
 		{
 			$self->{strver} = $1;
 			if ($self->{strver} !~ /^(\d+)\.(\d+)(?:\.(\d+))?/)
@@ -170,6 +204,8 @@ sub GenerateFiles
 s{PG_VERSION_STR "[^"]+"}{__STRINGIFY(x) #x\n#define __STRINGIFY2(z) __STRINGIFY(z)\n#define PG_VERSION_STR "PostgreSQL $self->{strver}, compiled by Visual C++ build " __STRINGIFY2(_MSC_VER) ", $bits-bit"};
 			print O;
 		}
+		print O "#define GP_VERSION \"$self->{gpdbver}\"\n";
+		print O "#define GP_MAJORVERSION \"$self->{gpdbmajorver}\"\n";
 		print O "#define PG_MAJORVERSION \"$self->{majorver}\"\n";
 		print O "#define LOCALEDIR \"/share/locale\"\n"
 		  if ($self->{options}->{nls});
@@ -181,7 +217,6 @@ s{PG_VERSION_STR "[^"]+"}{__STRINGIFY(x) #x\n#define __STRINGIFY2(z) __STRINGIFY
 		  if ($self->{options}->{integer_datetimes});
 		print O "#define USE_LDAP 1\n"   if ($self->{options}->{ldap});
 		print O "#define HAVE_LIBZ 1\n"  if ($self->{options}->{zlib});
-		print O "#define USE_SSL 1\n"    if ($self->{options}->{openssl});
 		print O "#define ENABLE_NLS 1\n" if ($self->{options}->{nls});
 
 		print O "#define BLCKSZ ", 1024 * $self->{options}->{blocksize}, "\n";
@@ -231,6 +266,22 @@ s{PG_VERSION_STR "[^"]+"}{__STRINGIFY(x) #x\n#define __STRINGIFY2(z) __STRINGIFY
 		if ($self->{options}->{gss})
 		{
 			print O "#define ENABLE_GSS 1\n";
+		}
+		if ($self->{options}->{openssl})
+		{
+			print O "#define USE_SSL 1\n";
+
+			my ($digit1, $digit2, $digit3) = $self->GetOpenSSLVersion();
+
+			# More symbols are needed with OpenSSL 1.1.0 and above.
+			if ($digit1 >= '1' && $digit2 >= '1' && $digit3 >= '0')
+			{
+				print O "#define HAVE_ASN1_STRING_GET0_DATA 1\n";
+				print O "#define HAVE_BIO_GET_DATA 1\n";
+				print O "#define HAVE_BIO_METH_NEW 1\n";
+				print O "#define HAVE_OPENSSL_INIT_SSL 1\n";
+				print O "#define HAVE_RAND_OPENSSL 1\n";
+			}
 		}
 		if (my $port = $self->{options}->{"--with-pgport"})
 		{
@@ -429,6 +480,8 @@ EOF
 		close(O);
 	}
 
+	if (!$buildclient)
+	{
 	my $mf = Project::read_file('src\backend\catalog\Makefile');
 	$mf =~ s{\\s*[\r\n]+}{}mg;
 	$mf =~ /^POSTGRES_BKI_SRCS\s*:?=[^,]+,(.*)\)$/gm
@@ -453,6 +506,7 @@ EOF
 				'src\include\catalog\schemapg.h');
 			last;
 		}
+	}
 	}
 
 	open(O, ">doc/src/sgml/version.sgml")
@@ -502,21 +556,70 @@ sub AddProject
 	if ($self->{options}->{openssl})
 	{
 		$proj->AddIncludeDir($self->{options}->{openssl} . '\include');
-		if (-e "$self->{options}->{openssl}/lib/VC/ssleay32MD.lib")
+		my ($digit1, $digit2, $digit3) = $self->GetOpenSSLVersion();
+
+		# Starting at version 1.1.0 the OpenSSL installers have
+		# changed their library names from:
+		# - libeay to libcrypto
+		# - ssleay to libssl
+		if ($digit1 >= '1' && $digit2 >= '1' && $digit3 >= '0')
 		{
-			$proj->AddLibrary(
-				$self->{options}->{openssl} . '\lib\VC\ssleay32.lib', 1);
-			$proj->AddLibrary(
-				$self->{options}->{openssl} . '\lib\VC\libeay32.lib', 1);
+			my $dbgsuffix;
+			my $libsslpath;
+			my $libcryptopath;
+
+			# The format name of the libraries is slightly
+			# different between the Win32 and Win64 platform, so
+			# adapt.
+			if (-e "$self->{options}->{openssl}/lib/VC/sslcrypto32MD.lib")
+			{
+				# Win32 here, with a debugging library set.
+				$dbgsuffix     = 1;
+				$libsslpath    = '\lib\VC\libssl32.lib';
+				$libcryptopath = '\lib\VC\libcrypto32.lib';
+			}
+			elsif (-e "$self->{options}->{openssl}/lib/VC/sslcrypto64MD.lib")
+			{
+				# Win64 here, with a debugging library set.
+				$dbgsuffix     = 1;
+				$libsslpath    = '\lib\VC\libssl64.lib';
+				$libcryptopath = '\lib\VC\libcrypto64.lib';
+			}
+			else
+			{
+				# On both Win32 and Win64 the same library
+				# names are used without a debugging context.
+				$dbgsuffix     = 0;
+				$libsslpath    = '\lib\libssl.lib';
+				$libcryptopath = '\lib\libcrypto.lib';
+			}
+
+			$proj->AddLibrary($self->{options}->{openssl} . $libsslpath,
+				$dbgsuffix);
+			$proj->AddLibrary($self->{options}->{openssl} . $libcryptopath,
+				$dbgsuffix);
 		}
 		else
 		{
-			# We don't expect the config-specific library to be here,
-			# so don't ask for it in last parameter
-			$proj->AddLibrary(
-				$self->{options}->{openssl} . '\lib\ssleay32.lib', 0);
-			$proj->AddLibrary(
-				$self->{options}->{openssl} . '\lib\libeay32.lib', 0);
+			# Choose which set of libraries to use depending on if
+			# debugging libraries are in place in the installer.
+			if (-e "$self->{options}->{openssl}/lib/VC/ssleay32MD.lib")
+			{
+				$proj->AddLibrary(
+					$self->{options}->{openssl} . '\lib\VC\ssleay32.lib', 1);
+				$proj->AddLibrary(
+					$self->{options}->{openssl} . '\lib\VC\libeay32.lib', 1);
+			}
+			else
+			{
+				# We don't expect the config-specific library
+				# to be here, so don't ask for it in last
+				# parameter.
+				$proj->AddLibrary(
+					$self->{options}->{openssl} . '\lib\ssleay32.lib', 0);
+				$proj->AddLibrary(
+					$self->{options}->{openssl} . '\lib\libeay32.lib', 0);
+			}
 		}
 	}
 	if ($self->{options}->{nls})
@@ -526,10 +629,20 @@ sub AddProject
 	}
 	if ($self->{options}->{gss})
 	{
-		$proj->AddIncludeDir($self->{options}->{gss} . '\inc\krb5');
-		$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\krb5_32.lib');
-		$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\comerr32.lib');
-		$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\gssapi32.lib');
+		if ($self->{platform} eq 'Win32')
+		{
+			$proj->AddIncludeDir($self->{options}->{gss} . '\inc\krb5');
+			$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\krb5_32.lib');
+			$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\comerr32.lib');
+			$proj->AddLibrary($self->{options}->{gss} . '\lib\i386\gssapi32.lib');
+		}
+		else
+		{
+			$proj->AddIncludeDir($self->{options}->{gss} . '\include');
+			$proj->AddLibrary($self->{options}->{gss} . '\lib\krb5_64.lib');
+			$proj->AddLibrary($self->{options}->{gss} . '\lib\comerr64.lib');
+			$proj->AddLibrary($self->{options}->{gss} . '\lib\gssapi64.lib');
+		}
 	}
 	if ($self->{options}->{iconv})
 	{
@@ -552,10 +665,10 @@ sub AddProject
 
 sub Save
 {
-	my ($self) = @_;
+	my ($self, $buildclient) = @_;
 	my %flduid;
 
-	$self->GenerateFiles();
+	$self->GenerateFiles($buildclient);
 	foreach my $fld (keys %{ $self->{projects} })
 	{
 		foreach my $proj (@{ $self->{projects}->{$fld} })
@@ -828,6 +941,34 @@ sub new
 	$self->{vcver}                      = '15.00';
 	$self->{visualStudioName}           = 'Visual Studio 2017';
 	$self->{VisualStudioVersion}        = '15.0.26730.3';
+	$self->{MinimumVisualStudioVersion} = '10.0.40219.1';
+
+	return $self;
+}
+
+package VS2019Solution;
+
+#
+# Package that encapsulates a Visual Studio 2019 solution file
+#
+
+use Carp;
+use strict;
+use warnings;
+use base qw(Solution);
+
+no warnings qw(redefine);    ## no critic
+
+sub new
+{
+	my $classname = shift;
+	my $self      = $classname->SUPER::_new(@_);
+	bless($self, $classname);
+
+	$self->{solutionFileVersion}        = '12.00';
+	$self->{vcver}                      = '16.00';
+	$self->{visualStudioName}           = 'Visual Studio 2019';
+	$self->{VisualStudioVersion}        = '16.0.28729.10';
 	$self->{MinimumVisualStudioVersion} = '10.0.40219.1';
 
 	return $self;

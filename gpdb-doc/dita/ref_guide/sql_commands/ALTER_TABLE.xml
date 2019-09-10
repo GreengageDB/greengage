@@ -33,8 +33,7 @@ ALTER TABLE [IF EXISTS] [ONLY] <varname>name</varname> SET
 
 ALTER TABLE <varname>name</varname>
    [ ALTER PARTITION { <varname>partition_name</varname> | FOR (RANK(<varname>number</varname>)) 
-   | FOR (<varname>value</varname>) } <varname>partition_action</varname> [...] ] 
-   <varname>partition_action</varname>
+   | FOR (<varname>value</varname>) } [...] ] <varname>partition_action</varname>
 
 where <varname>action</varname> is one of:
                         
@@ -58,8 +57,7 @@ where <varname>action</varname> is one of:
   ENABLE TRIGGER [<varname>trigger_name</varname> | ALL | USER]
   CLUSTER ON <varname>index_name</varname>
   SET WITHOUT CLUSTER
-  SET WITH OIDS
-  SET WITHOUT OIDS
+  SET WITHOUT OIDS
   SET (<varname>storage_parameter</varname> = <varname>value</varname>)
   RESET (<varname>storage_parameter</varname> [, ... ])
   INHERIT <varname>parent_table</varname>
@@ -68,6 +66,10 @@ where <varname>action</varname> is one of:
   NOT OF
   OWNER TO <varname>new_owner</varname>
   SET TABLESPACE <varname>new_tablespace</varname></codeblock>
+                        <p>where <varname>table_constraint_using_index</varname> is:</p>
+                        <pre>  [ CONSTRAINT <varname>constraint_name</varname> ]
+  { UNIQUE | PRIMARY KEY } USING INDEX <varname>index_name</varname>
+  [ DEFERRABLE | NOT DEFERRABLE ] [ INITIALLY DEFERRED | INITIALLY IMMEDIATE ]</pre>
                         <p>where <varname>partition_action</varname> is one of:</p>
                         <codeblock>  ALTER DEFAULT PARTITION
   DROP DEFAULT PARTITION [IF EXISTS]
@@ -125,7 +127,7 @@ where <varname>action</varname> is one of:
    compresstype={ZLIB|ZSTD|QUICKLZ|RLE_TYPE|NONE}
    compresslevel={0-9}
    fillfactor={10-100}
-   oids[=TRUE|FALSE]</codeblock>
+   [oids=FALSE]</codeblock>
                 </section>
                 <section id="section3">
                         <title>Description</title>
@@ -167,8 +169,7 @@ where <varname>action</varname> is one of:
                                         old to new type.<note>GPORCA supports collation only when
                                                 all columns in the query use the same collation. If
                                                 columns in the query use different collations, then
-                                                Greenplum uses the Postgres query
-                                        planner.</note></li>
+                                                Greenplum uses the Postgres Planner.</note></li>
                                 <li id="ay136904"><b>SET/DROP DEFAULT</b> — Sets or removes the
                                         default value for a column. Default values only apply in
                                         subsequent <codeph>INSERT</codeph> or
@@ -256,32 +257,27 @@ where <varname>action</varname> is one of:
                                         a b-tree index with default sort ordering. These
                                         restrictions ensure that the index is equivalent to one that
                                         would be built by a regular <codeph>ADD PRIMARY KEY</codeph>
-                                        or <codeph>ADD UNIQUE</codeph> command. <p>If
-                                                  <codeph>PRIMARY KEY</codeph> is specified, and the
-                                                index's columns are not already marked <codeph>NOT
-                                                  NULL</codeph>, then this command will attempt to
-                                                do <codeph>ALTER COLUMN SET NOT NULL</codeph>
-                                                against each such column. That requires a full table
-                                                scan to verify the column(s) contain no nulls. In
-                                                all other cases, this is a fast operation. </p><p>If
-                                                a constraint name is provided then the index will be
-                                                renamed to match the constraint name. Otherwise the
-                                                constraint will be named the same as the
-                                                index.</p><p>After this command is executed, the
-                                                index is "owned" by the constraint, in the same way
-                                                as if the index had been built by a regular
-                                                  <codeph>ADD PRIMARY KEY</codeph> or <codeph>ADD
-                                                  UNIQUE</codeph> command. In particular, dropping
-                                                the constraint will make the index disappear
-                                                too.</p><note> Adding a constraint using an existing
-                                                index can be helpful in situations where a new
-                                                constraint needs to be added without blocking table
-                                                updates for a long time. To do that, create the
-                                                index using <codeph>CREATE INDEX
-                                                  CONCURRENTLY</codeph>, and then install it as an
-                                                official constraint using this syntax. See the
-                                                example below.</note>
-                                </li>
+                                        or <codeph>ADD UNIQUE</codeph> command. <p>Adding a
+                                                  <codeph>PRIMARY KEY</codeph> or
+                                                  <codeph>UNIQUE</codeph> constraint to a table
+                                                based on an existing unique index is not supported
+                                                on a partitioned table.</p><p>If <codeph>PRIMARY
+                                                  KEY</codeph> is specified, and the index's columns
+                                                are not already marked <codeph>NOT NULL</codeph>,
+                                                then this command will attempt to do <codeph>ALTER
+                                                  COLUMN SET NOT NULL</codeph> against each such
+                                                column. That requires a full table scan to verify
+                                                the column(s) contain no nulls. In all other cases,
+                                                this is a fast operation. </p><p>If a constraint
+                                                name is provided then the index will be renamed to
+                                                match the constraint name. Otherwise the constraint
+                                                will be named the same as the index.</p><p>After
+                                                this command is executed, the index is "owned" by
+                                                the constraint, in the same way as if the index had
+                                                been built by a regular <codeph>ADD PRIMARY
+                                                  KEY</codeph> or <codeph>ADD UNIQUE</codeph>
+                                                command. In particular, dropping the constraint will
+                                                make the index disappear too.</p></li>
                                 <li id="ay137038"><b>DROP CONSTRAINT [IF EXISTS]</b> — Drops the
                                         specified constraint on a table. If <codeph>IF
                                                 EXISTS</codeph> is specified and the constraint does
@@ -312,28 +308,25 @@ where <varname>action</varname> is one of:
                                         by the index column(s). <note><codeph>CLUSTER ON</codeph> is
                                                 not supported on append-optimized
                                         tables.</note></li>
-                                <li><b>SET WITH OIDS</b> — Adds an <codeph>oid</codeph> system
-                                        column to the table. It does nothing if the table already
-                                        has OIDs. This is not equivalent to <codeph>ADD COLUMN oid
-                                                oid</codeph>; that would add a normal column that
-                                        happened to be named <codeph>oid</codeph>, not a system
-                                        column. OIDS are not allowed on partitioned tables or
-                                        append-optimized column-oriented tables. <note
-                                                type="warning">Greenplum strongly recommends that
-                                                you do not enable OIDS when creating a table. On
-                                                large tables, such as those in a typical Greenplum
-                                                Database system, using OIDs for table rows can cause
-                                                wrap-around of the 32-bit OID counter. Once the
-                                                counter wraps around, OIDs can no longer be assumed
-                                                to be unique, which not only makes them useless to
-                                                user applications, but can also cause problems in
-                                                the Greenplum Database system catalog tables. In
-                                                addition, excluding OIDs from a table reduces the
-                                                space required to store the table on disk by 4 bytes
-                                                per row, slightly improving performance.</note>
-                                </li>
                                 <li id="ay137152"><b>SET WITHOUT OIDS</b> — Removes the OID system
-                                        column from the table.</li>
+                                        column from the table.<note type="warning"><ph
+                                                  otherprops="pivotal">Pivotal does not support
+                                                  using <codeph>SET WITH OIDS</codeph> or
+                                                  <codeph>oids=TRUE</codeph> to assign an OID system
+                                                  column. </ph>On large tables, such as those in a
+                                                typical Greenplum Database system, using OIDs for
+                                                table rows can cause wrap-around of the 32-bit OID
+                                                counter. Once the counter wraps around, OIDs can no
+                                                longer be assumed to be unique, which not only makes
+                                                them useless to user applications, but can also
+                                                cause problems in the Greenplum Database system
+                                                catalog tables. In addition, excluding OIDs from a
+                                                table reduces the space required to store the table
+                                                on disk by 4 bytes per row, slightly improving
+                                                performance. You cannot create OIDS on a partitioned
+                                                or column-oriented table (an error is displayed).
+                                                This syntax is deprecated and will be removed in a
+                                                future Greenplum release.</note></li>
                                 <li id="ay137192"><b>SET ( FILLFACTOR = <varname>value</varname>) /
                                                 RESET (FILLFACTOR)</b> — Changes the fillfactor for
                                         the table. The fillfactor for a table is a percentage
@@ -666,9 +659,13 @@ where <varname>action</varname> is one of:
                                 <plentry>
                                         <pt>ALTER [DEFAULT] PARTITION</pt>
                                         <pd>If altering a partition deeper than the first level of
-                                                partitions, the <codeph>ALTER PARTITION</codeph>
-                                                clause is used to specify which subpartition in the
-                                                hierarchy you want to alter.</pd>
+                                                partitions, use <codeph>ALTER PARTITION</codeph>
+                                                clauses to specify which subpartition in the
+                                                hierarchy you want to alter. For each partition
+                                                level in the table hierarchy that is above the
+                                                target partition, specify the partition that is
+                                                related to the target partition in an <codeph>ALTER
+                                                  PARTITION</codeph> clause.</pd>
                                 </plentry>
                                 <plentry>
                                         <pt>DROP [DEFAULT] PARTITION</pt>
@@ -869,7 +866,11 @@ where <varname>action</varname> is one of:
                                         <pt>
                                                 <varname>partition_name</varname>
                                         </pt>
-                                        <pd>The given name of a partition. </pd>
+                                        <pd>The given name of a partition. The given partition name
+                                                is the <codeph>partitionname</codeph> column value
+                                                in the <i><xref
+                                                  href="../../ref_guide/system_catalogs/pg_partitions.xml"
+                                                  >pg_partitions</xref></i> system view.</pd>
                                 </plentry>
                                 <plentry>
                                         <pt>FOR (RANK(number))</pt>
@@ -944,7 +945,7 @@ where <varname>action</varname> is one of:
                                 After a table rewrite, the table will appear empty to concurrent
                                 transactions, if they are using a snapshot taken before the rewrite
                                 occurred. See <xref
-                                        href="https://www.postgreql.org/docs/9.4/mvcc-caveats.html"
+                                        href="https://www.postgresql.org/docs/9.4/mvcc-caveats.html"
                                         scope="external" format="html">MVCC Caveats</xref> for more
                                 details. </p>
                         <p> The <codeph>USING</codeph> option of <codeph>SET DATA TYPE</codeph> can
@@ -1063,12 +1064,15 @@ INTO (PARTITION jan09, PARTITION other);</codeblock>
                         <codeblock>ALTER TABLE sales SPLIT PARTITION FOR ('2016-01-01')
 AT ('2016-01-16')
 INTO (PARTITION jan081to15, PARTITION jan0816to31);</codeblock>
-                        <p> To recreate a primary key constraint, without blocking updates while the
-                                index is rebuilt: </p>
-                        <codeblock>CREATE UNIQUE INDEX CONCURRENTLY dist_id_temp_idx ON distributors (dist_id);
-ALTER TABLE distributors DROP CONSTRAINT distributors_pkey,
-ADD CONSTRAINT distributors_pkey PRIMARY KEY USING INDEX dist_id_temp_idx;
-                        </codeblock>
+                        <p>For a multi-level partitioned table that consists of three levels, year,
+                                quarter, and region, exchange a leaf partition
+                                        <codeph>region</codeph> with the table
+                                        <codeph>region_new</codeph>. </p>
+                        <codeblock>ALTER TABLE sales ALTER PARTITION year_1 ALTER PARTITION quarter_4 EXCHANGE PARTITION region WITH TABLE region_new ;</codeblock>
+                        <p>In the previous command, the two <codeph>ALTER PARTITION</codeph> clauses
+                                identify which <codeph>region</codeph> partition to exchange. Both
+                                clauses are required to identify the specific partition to
+                                exchange.</p>
                 </section>
                 <section id="section7">
                         <title>Compatibility</title>

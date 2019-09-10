@@ -89,7 +89,7 @@ where content = 0;
 0U: select 1;
 
 -- create tablespace to test if it works with gprecoverseg -F (pg_basebackup)
-!\retcode mkdir /tmp/mirror_promotion_tablespace_loc;
+!\retcode mkdir -p /tmp/mirror_promotion_tablespace_loc;
 create tablespace mirror_promotion_tablespace location '/tmp/mirror_promotion_tablespace_loc';
 create table mirror_promotion_tblspc_heap_table (a int) tablespace mirror_promotion_tablespace;
 
@@ -98,7 +98,6 @@ create table mirror_promotion_tblspc_heap_table (a int) tablespace mirror_promot
 
 drop table mirror_promotion_tblspc_heap_table;
 drop tablespace mirror_promotion_tablespace;
-!\retcode rm -rf /tmp/mirror_promotion_tablespace_loc;
 
 -- loop while segments come in sync
 do $$

@@ -377,14 +377,34 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] =
 		&optimizer_force_agg_skew_avoidance,
 		false, // m_negate_param
 		GPOS_WSZ_LIT("Always pick a plan for aggregate distinct that minimizes skew.")
-        },
+		},
 
-        {
+		{
 		EopttraceEnableEagerAgg,
 		&optimizer_enable_eageragg,
 		false, // m_negate_param
 		GPOS_WSZ_LIT("Enable Eager Agg transform for pushing aggregate below an innerjoin.")
+		},
+
+		{
+		EopttraceExpandFullJoin,
+		&optimizer_expand_fulljoin,
+		false, // m_negate_param
+		GPOS_WSZ_LIT("Enable Expand Full Join transform for converting FULL JOIN into UNION ALL.")
+		},
+		{
+		EopttracePenalizeSkewedHashJoin,
+		&optimizer_penalize_skew,
+		true, // m_negate_param
+		GPOS_WSZ_LIT("Penalize a hash join with a skewed redistribute as a child.")
+		},
+		{
+		EopttraceTranslateUnusedColrefs,
+		&optimizer_prune_unused_columns,
+		true, // m_negate_param
+		GPOS_WSZ_LIT("Prune unused columns from the query.")
 		}
+	
 };
 
 //---------------------------------------------------------------------------
@@ -398,7 +418,7 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] =
 CBitSet *
 CConfigParamMapping::PackConfigParamInBitset
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	ULONG xform_id // number of available xforms
 	)
 {
@@ -503,6 +523,23 @@ CConfigParamMapping::PackConfigParamInBitset
 		traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfIndexGet2IndexScan));
 	}
 
+	if (!optimizer_enable_hashagg)
+	{
+		 traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfGbAgg2HashAgg));
+		 traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfGbAggDedup2HashAggDedup));
+	}
+
+	if (!optimizer_enable_groupagg)
+	{
+		 traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfGbAgg2StreamAgg));
+		 traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfGbAggDedup2StreamAggDedup));
+	}
+
+	if (!optimizer_enable_mergejoin)
+	{
+		traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfImplementFullOuterMergeJoin));
+	}
+
 	CBitSet *join_heuristic_bitset = NULL;
 	switch (optimizer_join_order)
 	{
@@ -513,7 +550,10 @@ CConfigParamMapping::PackConfigParamInBitset
 			join_heuristic_bitset = CXform::PbsJoinOrderOnGreedyXforms(mp);
 			break;
 		case JOIN_ORDER_EXHAUSTIVE_SEARCH:
-			join_heuristic_bitset = GPOS_NEW(mp) CBitSet(mp, EopttraceSentinel);
+			join_heuristic_bitset = CXform::PbsJoinOrderOnExhaustiveXforms(mp);
+			break;
+		case JOIN_ORDER_EXHAUSTIVE2_SEARCH:
+			join_heuristic_bitset = CXform::PbsJoinOrderOnExhaustive2Xforms(mp);
 			break;
 		default:
 			elog(ERROR, "Invalid value for optimizer_join_order, must \
@@ -528,11 +568,6 @@ CConfigParamMapping::PackConfigParamInBitset
 	if (!optimizer_enable_associativity)
 	{
 		traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfJoinAssociativity));
-	}
-
-	if (!optimizer_enable_full_join)
-	{
-		traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfExpandFullOuterJoin));
 	}
 
 	// enable nested loop index plans using nest params

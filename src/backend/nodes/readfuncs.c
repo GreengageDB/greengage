@@ -37,6 +37,7 @@
 
 #include <math.h>
 
+#include "miscadmin.h"
 #include "nodes/parsenodes.h"
 #include "nodes/readfuncs.h"
 #include "nodes/relation.h"
@@ -2311,7 +2312,6 @@ _readCreateStmt(void)
 	READ_NODE_FIELD(partitionBy);
 	READ_CHAR_FIELD(relKind);
 	READ_CHAR_FIELD(relStorage);
-	/* postCreate omitted */
 	READ_NODE_FIELD(deferredStmts);
 	READ_BOOL_FIELD(is_part_child);
 	READ_BOOL_FIELD(is_part_parent);
@@ -2929,6 +2929,9 @@ parseNodeString(void)
 	void	   *return_value;
 
 	READ_TEMP_LOCALS();
+
+	/* Guard against stack overflow due to overly complex expressions */
+	check_stack_depth();
 
 	token = pg_strtok(&length);
 

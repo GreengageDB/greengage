@@ -19,16 +19,13 @@
  *
  * In GPDB, the "dbid" of the server is also embedded in the path, so that
  * multiple segments running on the host can use the same directory without
- * clashing with each other. In PostgreSQL, the version string used in the
- * path is in TABLESPACE_VERSION_DIRECTORY constant. In GPDB, use the
- * tablespace_version_directory() function, which appends the dbid,
- * instead.
+ * clashing with each other. Each database will create an additional directory
+ * identified by the dbid under the tablespace directory.  In PostgreSQL, the
+ * version string used in the path is in TABLESPACE_VERSION_DIRECTORY constant.
+ * In GPDB, use the GP_TABLESPACE_VERSION_DIRECTORY.
  *
- * Thus the full path to an arbitrary file is
- *			$PGDATA/pg_tblspc/spcoid/GPDB_MAJORVER_CATVER_db<dbid>/dboid/relfilenode
- * e.g.
- *			$PGDATA/pg_tblspc/20981/GPDB_8.5_201001061_db1/719849/83292814
- *
+ * The path to the tablespace looks like this:
+ *          /path/to/tablespace/<dbid>/GPDB_MAJOR_CATVER/dboid/relfilenode
  *
  * There are two tablespaces created at initdb time: pg_global (for shared
  * tables) and pg_default (for everything else).  For backwards compatibility
@@ -62,6 +59,7 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <utils/faultinjector.h>
 
 #include "access/heapam.h"
 #include "access/reloptions.h"
@@ -76,6 +74,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
+#include "catalog/storage_tablespace.h"
 #include "commands/comment.h"
 #include "commands/seclabel.h"
 #include "commands/tablecmds.h"
@@ -93,6 +92,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/tarrable.h"
 #include "utils/tqual.h"
 
 #include "catalog/heap.h"
@@ -101,6 +101,7 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
 #include "miscadmin.h"
+
 
 /* GUC variables */
 char	   *default_tablespace = NULL;
@@ -111,6 +112,11 @@ static void create_tablespace_directories(const char *location,
 							  const Oid tablespaceoid);
 static bool destroy_tablespace_directories(Oid tablespaceoid, bool redo);
 
+static bool is_tablespace_empty(const Oid tablespace_oid);
+static void ensure_tablespace_directory_is_empty(const Oid tablespaceoid, const char *tablespace_name);
+
+static void unlink_during_redo(Oid tablepace_oid_to_unlink);
+static void unlink_without_redo(Oid tablespace_oid_to_unlink);
 
 /*
  * Each database using a table space is isolated into its own name space
@@ -171,8 +177,6 @@ TablespaceCreateDbspace(Oid spcNode, Oid dbNode, bool isRedo)
 				/* Directory creation failed? */
 				if (mkdir(dir, S_IRWXU) < 0)
 				{
-					char	   *parentdir;
-
 					/* Failure other than not exists or not in WAL replay? */
 					if (errno != ENOENT || !isRedo)
 						ereport(ERROR,
@@ -186,30 +190,8 @@ TablespaceCreateDbspace(Oid spcNode, Oid dbNode, bool isRedo)
 					 * than a symlink.
 					 */
 
-					/* create two parents up if not exist */
-					parentdir = pstrdup(dir);
-					get_parent_directory(parentdir);
-					/* Can't create parent and it doesn't already exist? */
-					if (mkdir(parentdir, S_IRWXU) < 0 && errno != EEXIST)
-						ereport(ERROR,
-								(errcode_for_file_access(),
-							  errmsg("could not create directory \"%s\": %m",
-									 parentdir)));
-					pfree(parentdir);
-
-					/* create one parent up if not exist */
-					parentdir = pstrdup(dir);
-					get_parent_directory(parentdir);
-					/* Can't create parent and it doesn't already exist? */
-					if (mkdir(parentdir, S_IRWXU) < 0 && errno != EEXIST)
-						ereport(ERROR,
-								(errcode_for_file_access(),
-							  errmsg("could not create directory \"%s\": %m",
-									 parentdir)));
-					pfree(parentdir);
-
 					/* Create database directory */
-					if (mkdir(dir, S_IRWXU) < 0)
+					if (pg_mkdir_p(dir, S_IRWXU) < 0)
 						ereport(ERROR,
 								(errcode_for_file_access(),
 							  errmsg("could not create directory \"%s\": %m",
@@ -335,15 +317,20 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 
 	/*
 	 * Check that location isn't too long. Remember that we're going to append
-	 * 'PG_XXX/<dboid>/<relid>_<fork>.<nnn>'.  FYI, we never actually
+	 * '<dbid>/<GP_TABLESPACE_VERSION_DIRECTORY>/<dboid>/<relid>_<fork>.<nnn>'.  FYI, we never actually
 	 * reference the whole path here, but mkdir() uses the first two parts.
 	 */
-	if (strlen(location) + 1 + strlen(tablespace_version_directory()) + 1 +
+	if (strlen(location) + 1 + get_dbid_string_length() + 1 + strlen(GP_TABLESPACE_VERSION_DIRECTORY) + 1 +
 	  OIDCHARS + 1 + OIDCHARS + 1 + FORKNAMECHARS + 1 + OIDCHARS > MAXPGPATH)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("tablespace location \"%s\" is too long",
 						location)));
+
+	if ((strlen(location) + 1 + get_dbid_string_length() + 1) > MAX_TARABLE_SYMLINK_PATH_LENGTH)
+		ereport(WARNING, (errmsg("tablespace location \"%s\" is too long for TAR", location),
+						  errdetail("The location is used to create a symlink target from pg_tblspc. Symlink targets are truncated to 100 characters when sending a TAR (e.g the BASE_BACKUP protocol response).")
+						  ));
 
 	/*
 	 * Disallow creation of tablespaces named "pg_xxx"; we reserve this
@@ -423,10 +410,18 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 		rdata[1].len = strlen(location) + 1;
 		rdata[1].buffer = InvalidBuffer;
 		rdata[1].next = NULL;
-
+		
+		SIMPLE_FAULT_INJECTOR("before_xlog_create_tablespace");
 		(void) XLogInsert(RM_TBLSPC_ID, XLOG_TBLSPC_CREATE, rdata);
 	}
 
+	/*
+	 * Mark tablespace for deletion on abort.
+	 */
+	ScheduleTablespaceDirectoryDeletionForAbort(tablespaceoid);
+
+	SIMPLE_FAULT_INJECTOR("after_xlog_create_tablespace");
+	
 	/*
 	 * Force synchronous commit, to minimize the window between creating the
 	 * symlink on-disk and marking the transaction committed.  It's not great
@@ -464,6 +459,87 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	return InvalidOid;			/* keep compiler quiet */
 #endif   /* HAVE_SYMLINK */
 }
+
+/*
+ * Logic for iterating over database directories originally appeared in
+ * destroy_tablespace_directories.
+ *
+ * Note: it is ok for the database directories to exist, but we don't want
+ * them to contain data.
+ */
+static bool
+is_tablespace_empty(const Oid tablespace_oid)
+{
+	char	   *linkloc_with_version_dir;
+	DIR		   *dirdesc;
+	struct dirent *de;
+	char	   *subfile;
+	int is_empty = true;
+
+	linkloc_with_version_dir = psprintf("pg_tblspc/%u/%s", tablespace_oid,
+										GP_TABLESPACE_VERSION_DIRECTORY);
+
+	dirdesc = AllocateDir(linkloc_with_version_dir);
+
+	while (dirdesc != NULL && (de = ReadDir(dirdesc, linkloc_with_version_dir)) != NULL)
+	{
+		if (strcmp(de->d_name, ".") == 0 ||
+			strcmp(de->d_name, "..") == 0)
+			continue;
+
+		subfile = psprintf("%s/%s", linkloc_with_version_dir, de->d_name);
+
+		if (!directory_is_empty(subfile)) {
+			is_empty = false;
+		}
+
+		pfree(subfile);
+	}
+
+	FreeDir(dirdesc);
+	pfree(linkloc_with_version_dir);
+
+	return is_empty;
+}
+
+
+static void 
+ensure_tablespace_directory_is_empty(const Oid tablespace_oid,
+									 const char *tablespace_name) {
+	if (tablespace_oid == InvalidOid)
+		return;
+
+	if (is_tablespace_empty(tablespace_oid))
+		return;
+
+	/*
+	 * There can be lingering empty files in the directories, left behind by for
+	 * example DROP TABLE, that have been scheduled for deletion at next
+	 * checkpoint (see comments in mdunlink() for details).  We force a
+	 * checkpoint which will clean out any lingering files, and try again.
+	 *
+	 * XXX On Windows, an unlinked file persists in the directory listing
+	 * until no process retains an open handle for the file.  The DDL
+	 * commands that schedule files for unlink send invalidation messages
+	 * directing other PostgreSQL processes to close the files.  DROP
+	 * TABLESPACE should not give up on the tablespace becoming empty
+	 * until all relevant invalidation processing is complete.
+	 *
+	 * note: comment taken from DropTableSpace and reworded to be appropriate
+	 * for ensure_tablespace_directory_is_empty.
+	 */
+	RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_FORCE | CHECKPOINT_WAIT);
+
+	if (is_tablespace_empty(tablespace_oid))
+		return;
+
+
+
+	ereport(ERROR, (
+		errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+		errmsg("tablespace \"%s\" is not empty", tablespace_name)));
+}
+
 
 /*
  * Drop a table space
@@ -559,37 +635,7 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 	 */
 	LWLockAcquire(TablespaceCreateLock, LW_EXCLUSIVE);
 
-	/*
-	 * Try to remove the physical infrastructure.
-	 */
-	if (!destroy_tablespace_directories(tablespaceoid, false))
-	{
-		/*
-		 * Not all files deleted?  However, there can be lingering empty files
-		 * in the directories, left behind by for example DROP TABLE, that
-		 * have been scheduled for deletion at next checkpoint (see comments
-		 * in mdunlink() for details).  We could just delete them immediately,
-		 * but we can't tell them apart from important data files that we
-		 * mustn't delete.  So instead, we force a checkpoint which will clean
-		 * out any lingering files, and try again.
-		 *
-		 * XXX On Windows, an unlinked file persists in the directory listing
-		 * until no process retains an open handle for the file.  The DDL
-		 * commands that schedule files for unlink send invalidation messages
-		 * directing other PostgreSQL processes to close the files.  DROP
-		 * TABLESPACE should not give up on the tablespace becoming empty
-		 * until all relevant invalidation processing is complete.
-		 */
-		RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_FORCE | CHECKPOINT_WAIT);
-		if (!destroy_tablespace_directories(tablespaceoid, false))
-		{
-			/* Still not empty, the files must be important then */
-			ereport(ERROR,
-					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					 errmsg("tablespace \"%s\" is not empty",
-							tablespacename)));
-		}
-	}
+	ensure_tablespace_directory_is_empty(tablespaceoid, tablespacename);
 
 	/* Record the filesystem change in XLOG */
 	{
@@ -604,6 +650,10 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 		(void) XLogInsert(RM_TBLSPC_ID, XLOG_TBLSPC_DROP, rdata);
 	}
+
+	ScheduleTablespaceDirectoryDeletionForCommit(tablespaceoid);
+
+	SIMPLE_FAULT_INJECTOR("after_xlog_tblspc_drop");
 
 	/*
 	 * Note: because we checked that the tablespace was empty, there should be
@@ -647,7 +697,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 #endif   /* HAVE_SYMLINK */
 }
 
-
 /*
  * create_tablespace_directories
  *
@@ -658,12 +707,17 @@ static void
 create_tablespace_directories(const char *location, const Oid tablespaceoid)
 {
 	char	   *linkloc;
+	char	   *location_with_dbid_dir;
 	char	   *location_with_version_dir;
 	struct stat st;
 
+	elog(DEBUG5, "creating tablespace directories for tablespaceoid %d on dbid %d",
+		tablespaceoid, GpIdentity.dbid);
+
 	linkloc = psprintf("pg_tblspc/%u", tablespaceoid);
-	location_with_version_dir = psprintf("%s/%s", location,
-										tablespace_version_directory());
+	location_with_dbid_dir = psprintf("%s/%d", location, GpIdentity.dbid);
+	location_with_version_dir = psprintf("%s/%s", location_with_dbid_dir,
+										 GP_TABLESPACE_VERSION_DIRECTORY);
 
 	/*
 	 * Attempt to coerce target directory to safe permissions.  If this fails,
@@ -700,6 +754,31 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 								location_with_version_dir)));
 		}
 	}
+
+	/*
+	 * In GPDB each segment has a directory with its unique dbid under the
+	 * tablespace path. Unlike the location_with_version_dir, do not error out
+	 * if it already exists.
+	 */
+	if (stat(location_with_dbid_dir, &st) < 0) 
+	{
+		if (errno == ENOENT)
+		{
+			if (mkdir(location_with_dbid_dir, S_IRWXU) < 0)
+					ereport(ERROR,
+							(errcode_for_file_access(),
+								errmsg("could not create directory \"%s\": %m", location_with_dbid_dir)));
+		}
+		else
+			ereport(ERROR,
+					(errcode_for_file_access(),
+						errmsg("could not stat directory \"%s\": %m", location_with_dbid_dir)));
+
+	}
+	else
+		ereport(DEBUG1,
+				(errmsg("directory \"%s\" already exists in tablespace",
+					location_with_dbid_dir)));
 
 	/*
 	 * The creation of the version directory prevents more than one tablespace
@@ -750,16 +829,139 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	/*
 	 * Create the symlink under PGDATA
 	 */
-	if (symlink(location, linkloc) < 0)
+	if (symlink(location_with_dbid_dir, linkloc) < 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not create symbolic link \"%s\": %m",
 						linkloc)));
 
 	pfree(linkloc);
+	pfree(location_with_dbid_dir);
 	pfree(location_with_version_dir);
 }
 
+
+/*
+ * This block was moved from DropTableSpace, just before inserting the
+ * XLOG_TBLSPC_CREATE record we'd drop the directories.
+ *
+ * We needed to move it later in the two-phase commit process to ensure
+ * files would still exist to roll back to during an abort.
+ */
+static void
+unlink_without_redo(Oid tablespace_oid_to_unlink)
+{
+	/*
+	 * Explicitly set isRedo to true, even though we're not really doing
+	 * redo behavior right now. This avoids throwing an error out of
+	 * destroy_tablespace_directories, which by now is too late in the
+	 * commit to handle the error.
+	 */
+	bool is_redo_flag_for_destroy_tablespace_directories = true;
+
+	if (!destroy_tablespace_directories(tablespace_oid_to_unlink, is_redo_flag_for_destroy_tablespace_directories))
+	{
+		/*
+		 * Not all files deleted?  However, there can be lingering empty files
+		 * in the directories, left behind by for example DROP TABLE, that
+		 * have been scheduled for deletion at next checkpoint (see comments
+		 * in mdunlink() for details).  We could just delete them immediately,
+		 * but we can't tell them apart from important data files that we
+		 * mustn't delete.  So instead, we force a checkpoint which will clean
+		 * out any lingering files, and try again.
+		 *
+		 * XXX On Windows, an unlinked file persists in the directory listing
+		 * until no process retains an open handle for the file.  The DDL
+		 * commands that schedule files for unlink send invalidation messages
+		 * directing other PostgreSQL processes to close the files.  DROP
+		 * TABLESPACE should not give up on the tablespace becoming empty
+		 * until all relevant invalidation processing is complete.
+		 */
+		RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_FORCE | CHECKPOINT_WAIT);
+
+		if (!destroy_tablespace_directories(tablespace_oid_to_unlink, is_redo_flag_for_destroy_tablespace_directories))
+		{
+			/*
+			 * Still not empty, the files must be important then
+			 *
+			 * GPDB: transformed to warning to avoid throwing an error
+			 */
+			ereport(WARNING,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					errmsg("tablespace with oid \"%u\" is not empty",
+						tablespace_oid_to_unlink)));
+		}
+	}
+}
+
+/*
+ * This was moved from tblspc_redo so it could be executed at the end
+ * of a two-phase commit.
+ */
+static void
+unlink_during_redo(Oid tablepace_oid_to_unlink)
+{
+	/*
+	 * If we issued a WAL record for a drop tablespace it implies that
+	 * there were no files in it at all when the DROP was done. That means
+	 * that no permanent objects can exist in it at this point.
+	 *
+	 * It is possible for standby users to be using this tablespace as a
+	 * location for their temporary files, so if we fail to remove all
+	 * files then do conflict processing and try again, if currently
+	 * enabled.
+	 *
+	 * Other possible reasons for failure include bollixed file
+	 * permissions on a standby server when they were okay on the primary,
+	 * etc etc. There's not much we can do about that, so just remove what
+	 * we can and press on.
+	 */
+	if (!destroy_tablespace_directories(tablepace_oid_to_unlink, true))
+	{
+		ResolveRecoveryConflictWithTablespace(tablepace_oid_to_unlink);
+
+		/*
+		 * If we did recovery processing then hopefully the backends who
+		 * wrote temp files should have cleaned up and exited by now.  So
+		 * retry before complaining.  If we fail again, this is just a LOG
+		 * condition, because it's not worth throwing an ERROR for (as
+		 * that would crash the database and require manual intervention
+		 * before we could get past this WAL record on restart).
+		 */
+		if (!destroy_tablespace_directories(tablepace_oid_to_unlink, true))
+			ereport(LOG, 
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE), 
+					errmsg("directories for tablespace %u could not be removed", 
+						tablepace_oid_to_unlink), 
+					errhint("You can remove the directories manually if necessary.")));
+	}
+}
+
+/*
+ * Added to expose destroy_tablespace_directories
+ * while minimizing the diff with upstream.
+ * 
+ * We unlink at the end of a two-phase commit, to ensure that there are files
+ * to fall back to if there is an abort.
+ * 
+ */
+void 
+UnlinkTablespaceDirectory(Oid tablepace_oid_to_unlink, bool isRedo) 
+{
+	/*
+	 * Acquire TablespaceCreateLock to ensure that no TablespaceCreateDbspace
+	 * is running concurrently.
+	 */
+	LWLockAcquire(TablespaceCreateLock, LW_EXCLUSIVE);
+
+	if (isRedo) {
+		unlink_during_redo(tablepace_oid_to_unlink);
+	} else {
+		unlink_without_redo(tablepace_oid_to_unlink);
+	}
+
+	LWLockRelease(TablespaceCreateLock);
+}
 
 /*
  * destroy_tablespace_directories
@@ -779,13 +981,20 @@ destroy_tablespace_directories(Oid tablespaceoid, bool redo)
 {
 	char	   *linkloc;
 	char	   *linkloc_with_version_dir;
+	char	    link_target_dir[MAXPGPATH + 1 + get_dbid_string_length()];
+	int		    rllen;
 	DIR		   *dirdesc;
 	struct dirent *de;
 	char	   *subfile;
 	struct stat st;
 
+	Assert(LWLockHeldByMe(TablespaceCreateLock));
+
+	elog(DEBUG5, "destroy_tablespace_directories for tablespace %u on dbid %d",
+		tablespaceoid, GpIdentity.dbid);
+
 	linkloc_with_version_dir = psprintf("pg_tblspc/%u/%s", tablespaceoid,
-										tablespace_version_directory());
+										GP_TABLESPACE_VERSION_DIRECTORY);
 
 	/*
 	 * Check if the tablespace still contains any files.  We try to rmdir each
@@ -884,10 +1093,41 @@ destroy_tablespace_directories(Oid tablespaceoid, bool redo)
 	 * Note: in the redo case, we'll return true if this final step fails;
 	 * there's no point in retrying it.  Also, ENOENT should provoke no more
 	 * than a warning.
+	 *
+	 * GPDB: Then remove the symlink target directory: <tablespace_location>/<dbid>
+	 * iff this directory is empty.
 	 */
 remove_symlink:
 	linkloc = pstrdup(linkloc_with_version_dir);
 	get_parent_directory(linkloc);
+
+	/* Remove the symlink target directory if it exists or is valid. */
+	rllen = readlink(linkloc, link_target_dir, sizeof(link_target_dir));
+	if(rllen < 0)
+	{
+		ereport(redo ? LOG : ERROR,
+				(errcode_for_file_access(),
+					errmsg("could not read symbolic link \"%s\": %m",
+						   linkloc)));
+	}
+	else if(rllen >= sizeof(link_target_dir))
+	{
+		ereport(redo ? LOG : ERROR,
+				(errcode_for_file_access(),
+					errmsg("symbolic link \"%s\" target is too long",
+						   linkloc)));
+	}
+	else
+	{
+		link_target_dir[rllen] = '\0';
+		if(directory_is_empty(link_target_dir) && rmdir(link_target_dir) < 0)
+			ereport(redo ? LOG : ERROR,
+				(errcode_for_file_access(),
+					errmsg("could not remove directory \"%s\": %m",
+						link_target_dir)));
+	}
+
+
 	if (lstat(linkloc, &st) == 0 && S_ISDIR(st.st_mode))
 	{
 		if (rmdir(linkloc) < 0)
@@ -1162,10 +1402,11 @@ bool
 check_default_tablespace(char **newval, void **extra, GucSource source)
 {
 	/*
-	 * If we aren't inside a transaction, we cannot do database access so
-	 * cannot verify the name.  Must accept the value on faith.
+	 * If we aren't inside a transaction, or connected to a database, we
+	 * cannot do the catalog accesses necessary to verify the name.  Must
+	 * accept the value on faith.
 	 */
-	if (IsTransactionState())
+	if (IsTransactionState() && MyDatabaseId != InvalidOid)
 	{
 		/*
 		 * get_tablespace_oid cannot be used because it acquires lock hence
@@ -1278,11 +1519,12 @@ check_temp_tablespaces(char **newval, void **extra, GucSource source)
 	}
 
 	/*
-	 * If we aren't inside a transaction, we cannot do database access so
-	 * cannot verify the individual names.  Must accept the list on faith.
+	 * If we aren't inside a transaction, or connected to a database, we
+	 * cannot do the catalog accesses necessary to verify the name.  Must
+	 * accept the value on faith.
 	 * Fortunately, there's then also no need to pass the data to fd.c.
 	 */
-	if (IsTransactionState())
+	if (IsTransactionState() && MyDatabaseId != InvalidOid)
 	{
 		temp_tablespaces_extra *myextra;
 		Oid		   *tblSpcs;
@@ -1628,42 +1870,13 @@ tblspc_redo(XLogRecPtr beginLoc, XLogRecPtr lsn, XLogRecord *record)
 	}
 	else if (info == XLOG_TBLSPC_DROP)
 	{
-		xl_tblspc_drop_rec *xlrec = (xl_tblspc_drop_rec *) XLogRecGetData(record);
-
 		/*
-		 * If we issued a WAL record for a drop tablespace it implies that
-		 * there were no files in it at all when the DROP was done. That means
-		 * that no permanent objects can exist in it at this point.
+		 * We no longer remove tablespace directories while replaying
+		 * XLOG_TBLSPC_DROP. We wait until the commit for the tablespace drop
+		 * gets replayed.
 		 *
-		 * It is possible for standby users to be using this tablespace as a
-		 * location for their temporary files, so if we fail to remove all
-		 * files then do conflict processing and try again, if currently
-		 * enabled.
-		 *
-		 * Other possible reasons for failure include bollixed file
-		 * permissions on a standby server when they were okay on the primary,
-		 * etc etc. There's not much we can do about that, so just remove what
-		 * we can and press on.
+		 * See UnlinkTablespaceDirectory().
 		 */
-		if (!destroy_tablespace_directories(xlrec->ts_id, true))
-		{
-			ResolveRecoveryConflictWithTablespace(xlrec->ts_id);
-
-			/*
-			 * If we did recovery processing then hopefully the backends who
-			 * wrote temp files should have cleaned up and exited by now.  So
-			 * retry before complaining.  If we fail again, this is just a LOG
-			 * condition, because it's not worth throwing an ERROR for (as
-			 * that would crash the database and require manual intervention
-			 * before we could get past this WAL record on restart).
-			 */
-			if (!destroy_tablespace_directories(xlrec->ts_id, true))
-				ereport(LOG,
-						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("directories for tablespace %u could not be removed",
-						xlrec->ts_id),
-						 errhint("You can remove the directories manually if necessary.")));
-		}
 	}
 	else
 		elog(PANIC, "tblspc_redo: unknown op code %u", info);

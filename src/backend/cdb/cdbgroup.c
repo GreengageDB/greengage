@@ -1724,6 +1724,11 @@ make_three_stage_agg_plan(PlannerInfo *root, MppGroupContext *ctx)
 		List	   *rtable = NIL;
 		List	   *coplans = NIL;
 		List	   *coroots = NIL;
+		PlannerInfo *scroot = NULL; /* PlannerInfo for shared scan */
+
+		scroot = makeNode(PlannerInfo);
+		/* shallow copy from root at first. */
+		memcpy(scroot, root, sizeof(PlannerInfo));
 
 		if (ctx->use_sharing)
 		{
@@ -1749,6 +1754,16 @@ make_three_stage_agg_plan(PlannerInfo *root, MppGroupContext *ctx)
 			Plan	   *coplan;
 			Query	   *coquery;
 			PlannerInfo *coroot;
+
+			/*
+			 * For each distinct DQA, we need to build a coplan on base of the
+			 * shared scan plan. But for the DQA other than the first one, the
+			 * arrays for RelOptInfo and RangeTblEntry for the PlannerInfo have
+			 * been rebuilt. So we need to restore the arrays to what they are
+			 * like for the origin shared scan plan.
+			 */
+			if (i != 0)
+				memcpy(root, scroot, sizeof(PlannerInfo));
 
 			coplan = (Plan *) list_nth(share_partners, i);
 			coplan = make_plan_for_one_dqa(root, ctx, i,
@@ -4796,8 +4811,21 @@ cost_common_agg(PlannerInfo *root, MppGroupContext *ctx, AggPlanInfo *info, Plan
 
 	Assert(dummy != NULL);
 
-	input_rows = info->input_path->parent->rows;
-	input_width = info->input_path->parent->width;
+	/*
+	 * For Result pathnode, its parent would be set to NULL. In that case, we
+	 * can use the rows in the Path and use 0 as the width.
+	 */
+	if (info->input_path->parent)
+	{
+		input_rows = info->input_path->parent->rows;
+		input_width = info->input_path->parent->width;
+	}
+	else
+	{
+		input_rows = info->input_path->rows;
+		input_width = 0;
+	}
+
 	/* Path input width isn't correct for ctx->sub_tlist so we guess. */
 	n = 32 * list_length(ctx->sub_tlist);
 	input_width = (input_width < n) ? input_width : n;

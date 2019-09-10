@@ -59,7 +59,7 @@ typedef struct
  * possible auxiliary process type.  (This scheme assumes there is not
  * more than one of any auxiliary process type at a time.)
  */
-#define NumProcSignalSlots	(MaxBackends + NUM_AUXILIARY_PROCS)
+#define NumProcSignalSlots	(MaxBackends + NUM_AUXPROCTYPES)
 
 /*
  * If this flag is set, the process latch will be set whenever SIGUSR1
@@ -71,7 +71,6 @@ bool		set_latch_on_sigusr1;
 
 static ProcSignalSlot *ProcSignalSlots = NULL;
 static volatile ProcSignalSlot *MyProcSignalSlot = NULL;
-static volatile bool InSIGUSR1Handler = false;
 
 static bool CheckProcSignal(ProcSignalReason reason);
 static void CleanupProcSignalState(int status, Datum arg);
@@ -267,7 +266,9 @@ CheckProcSignal(ProcSignalReason reason)
 bool
 AmIInSIGUSR1Handler(void)
 {
-	return InSIGUSR1Handler;
+	sigset_t oldset;
+	sigprocmask(SIG_BLOCK, NULL, &oldset);
+	return sigismember(&oldset, SIGUSR1);
 }
 
 /*
@@ -294,25 +295,11 @@ procsignal_sigusr1_handler(SIGNAL_ARGS)
 {
 	int			save_errno = errno;
 
-	PG_TRY();
-	{
-		InSIGUSR1Handler = true;
+	if (CheckProcSignal(PROCSIG_CATCHUP_INTERRUPT))
+		HandleCatchupInterrupt();
 
-		if (CheckProcSignal(PROCSIG_CATCHUP_INTERRUPT))
-			HandleCatchupInterrupt();
-
-		if (CheckProcSignal(PROCSIG_QUERY_FINISH))
-			QueryFinishHandler();
-
-		latch_sigusr1_handler();
-		InSIGUSR1Handler = false;
-	}
-	PG_CATCH();
-	{
-		InSIGUSR1Handler = false;
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	if (CheckProcSignal(PROCSIG_QUERY_FINISH))
+		QueryFinishHandler();
 
 	if (CheckProcSignal(PROCSIG_WALSND_INIT_STOPPING))
 		HandleWalSndInitStopping();

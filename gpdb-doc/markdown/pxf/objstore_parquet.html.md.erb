@@ -21,7 +21,7 @@ specific language governing permissions and limitations
 under the License.
 -->
 
-The PXF object store connectors support reading and writing Parquet-format data. This section decribes how to use PXF to access Parquet-format data in an object store, including how to create and query external tables that references a Parquet file in the store.
+The PXF object store connectors support reading and writing Parquet-format data. This section describes how to use PXF to access Parquet-format data in an object store, including how to create and query external tables that references a Parquet file in the store.
 
 <div class="note">PXF Parquet write support is a Beta feature.</div>
 
@@ -55,7 +55,7 @@ Use the following syntax to create a Greenplum Database external table that refe
 CREATE [WRITABLE] EXTERNAL TABLE <table_name>
     ( <column_name> <data_type> [, ...] | LIKE <other_table> )
 LOCATION ('pxf://<path-to-dir>
-    ?PROFILE=<objstore>:parquet&SERVER=<server_name>[&<custom-option>=<value>[...]]')
+    ?PROFILE=<objstore>:parquet[&SERVER=<server_name>][&<custom-option>=<value>[...]]')
 FORMAT 'CUSTOM' (FORMATTER='pxfwritable_import'|'pxfwritable_export');
 [DISTRIBUTED BY (<column_name> [, ... ] ) | DISTRIBUTED RANDOMLY];
 ```
@@ -66,12 +66,15 @@ The specific keywords and values used in the [CREATE EXTERNAL TABLE](../ref_guid
 |-------|-------------------------------------|
 | \<path&#8209;to&#8209;dir\>    | The absolute path to the directory in the object store. |
 | PROFILE=\<objstore\>:parquet    | The `PROFILE` keyword must identify the specific object store. For example, `s3:parquet`. |
-| SERVER=\<server_name\>    | The named server configuration that PXF uses to access the data. |
+| SERVER=\<server_name\>    | The named server configuration that PXF uses to access the data. Optional; PXF uses the `default` server if not specified. |
 | \<custom&#8209;option\>=\<value\> | Parquet-specific custom write options are described in the [PXF HDFS Parquet documentation](hdfs_parquet.html#customopts). |
 | FORMAT 'CUSTOM' | Use `FORMAT` '`CUSTOM`' with `(FORMATTER='pxfwritable_export')` (write) or `(FORMATTER='pxfwritable_import')` (read). |
 | DISTRIBUTED BY    | If you plan to load the writable external table with data from an existing Greenplum Database table, consider specifying the same distribution policy or \<column_name\> on the writable external table as that defined for the table from which you plan to load the data. Doing so will avoid extra motion of data between segments on the load operation. |
 
-If you are accessing an S3 object store, you can provide S3 credentials directly in the `CREATE EXTERNAL TABLE` command as described in [Overriding the S3 Server Configuration](access_objstore.html#s3_override).
+If you are accessing an S3 object store:
+
+- You can provide S3 credentials via custom options in the `CREATE EXTERNAL TABLE` command as described in [Overriding the S3 Server Configuration with DDL](access_s3.html#s3_override).
+- If you are reading Parquet data from S3, you can direct PXF to use the S3 Select Amazon service to retrieve the data. Refer to [Using the Amazon S3 Select Service](access_s3.html#s3_select) for more information about the PXF custom option used for this purpose.
 
 ## <a id="example"></a> Example
 

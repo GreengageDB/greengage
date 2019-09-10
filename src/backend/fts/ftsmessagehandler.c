@@ -172,8 +172,6 @@ SendFtsResponse(FtsResponse *response, const char *messagetype)
 {
 	StringInfoData buf;
 
-	initStringInfo(&buf);
-
 	BeginCommand(messagetype, DestRemote);
 
 	pq_beginmessage(&buf, 'T');
@@ -433,7 +431,7 @@ HandleFtsMessage(const char* query_string)
 				(errmsg("message type: %s received contentid:%d doesn't match this segments configured contentid:%d",
 						message_type, contid, GpIdentity.segindex)));
 
-	SIMPLE_FAULT_INJECTOR(FtsHandleMessage);
+	SIMPLE_FAULT_INJECTOR("fts_handle_message");
 
 	if (strncmp(query_string, FTS_MSG_PROBE,
 				strlen(FTS_MSG_PROBE)) == 0)

@@ -77,7 +77,7 @@ Pipeline validated: all jobs accounted for
   Generate Pipeline type: .. : prod
   Pipeline file ............ : ~/workspace/gpdb/concourse/pipelines/gpdb_6X_STABLE-generated.yml
   Template file ............ : gpdb-tpl.yml
-  OS Types ................. : ['centos6', 'centos7', 'sles', 'aix7', 'win', 'ubuntu16']
+  OS Types ................. : ['centos6', 'centos7', 'aix7', 'win']
   Test sections ............ : ['ICW', 'Replication', 'ResourceGroups', 'Interconnect', 'CLI', 'UD', 'AA', 'Extensions', 'Gpperfmon']
   test_trigger ............. : True
 ======================================================================
@@ -145,16 +145,16 @@ fly -t gpdb-dev \
 ```
 
 Use the following to generate a pipeline with `ICW` and `CLI` test jobs
-for `centos6` and `sles` platforms.
+for `centos6` and `ubuntu18.04` platforms.
 
 ```
-$ ./gen_pipeline.py -t cli -u durant -O {centos6,sles} -a {ICW,CLI}
+$ ./gen_pipeline.py -t cli -u durant -O {centos6,ubuntu18.04} -a {ICW,CLI}
 
 ======================================================================
   Generate Pipeline type: .. : cli
   Pipeline file ............ : ~/workspace/gpdb/concourse/pipelines/gpdb-cli-durant.yml
   Template file ............ : gpdb-tpl.yml
-  OS Types ................. : ['centos6', 'sles']
+  OS Types ................. : ['centos6', 'ubuntu18.04']
   Test sections ............ : ['ICW', 'CLI']
   test_trigger ............. : True
 ======================================================================
@@ -163,12 +163,11 @@ NOTE: You can set the developer pipeline with the following:
 
 fly -t gpdb-dev \
     set-pipeline \
-    -p gpdb-cli-durant \
-    -c ~/workspace/gpdb/concourse/pipelines/gpdb-cli-durant.yml \
+    -p gpdb-cs-durant \
+    -c gpdb-cs-durant.yml \
     -l ~/workspace/gp-continuous-integration/secrets/gpdb_common-ci-secrets.yml \
-    -l ~/workspace/gp-continuous-integration/secrets/gpdb_6X_STABLE-ci-secrets.dev.yml \
+    -l ~/workspace/gp-continuous-integration/secrets/gpdb_master-ci-secrets.dev.yml \
     -l ~/workspace/gp-continuous-integration/secrets/ccp_ci_secrets_gpdb-dev.yml \
-    -v gpdb-git-remote=https://github.com/<github-user>/gpdb \
-    -v gpdb-git-branch=<branch-name> \
-    -v pipeline-name=gpdb-cli-durant
+    -v gpdb-git-remote=<https://github.com/<github-user>/gpdb> \
+    -v gpdb-git-branch=<branch-name>
 ```

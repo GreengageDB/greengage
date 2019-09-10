@@ -283,10 +283,6 @@ InitMotionTCP(int *listenerSocketFd, uint16 *listenerPort)
 	tval.tv_sec = 0;
 	tval.tv_usec = 500000;
 
-#ifdef pg_on_solaris
-	listenerBacklog = Min(1024, Max(getgpsegmentCount() * 4, listenerBacklog));
-#endif
-
 	setupTCPListeningSocket(listenerBacklog, listenerSocketFd, listenerPort);
 
 	return;
@@ -1235,7 +1231,7 @@ SetupTCPInterconnect(EState *estate)
 	ChunkTransportStateEntry *sendingChunkTransportState = NULL;
 	ChunkTransportState *interconnect_context;
 
-	SIMPLE_FAULT_INJECTOR(InterconnectSetupPalloc);
+	SIMPLE_FAULT_INJECTOR("interconnect_setup_palloc");
 	interconnect_context = palloc0(sizeof(ChunkTransportState));
 
 	/* initialize state variables */

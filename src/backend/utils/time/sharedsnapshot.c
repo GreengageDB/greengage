@@ -713,7 +713,7 @@ dumpSharedLocalSnapshot_forCursor(void)
 		FileWriteFieldWithCount(count, f, src->snapshot.xmax);
 		FileWriteFieldWithCount(count, f, src->snapshot.xcnt);
 
-		if (!FileWriteOK(f, &src->snapshot.xip, src->snapshot.xcnt * sizeof(TransactionId)))
+		if (!FileWriteOK(f, src->snapshot.xip, src->snapshot.xcnt * sizeof(TransactionId)))
 			break;
 		count += src->snapshot.xcnt * sizeof(TransactionId);
 
@@ -747,7 +747,7 @@ dumpSharedLocalSnapshot_forCursor(void)
 }
 
 void
-readSharedLocalSnapshot_forCursor(Snapshot snapshot)
+readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTransactionContext)
 {
 	BufFile *f;
 	char *fname=NULL;
@@ -766,7 +766,6 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot)
 	Assert(!Gp_is_writer);
 	Assert(SharedLocalSnapshotSlot != NULL);
 	Assert(snapshot->xip != NULL);
-	Assert(snapshot->subxip != NULL);
 
 	/*
 	 * Open our dump-file, this will either return a valid file, or
@@ -872,7 +871,10 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot)
 	/* we're done with file. */
 	BufFileClose(f);
 
-	SetSharedTransactionId_reader(localXid, snapshot->curcid);
+	SetSharedTransactionId_reader(
+		localXid,
+		snapshot->curcid,
+		distributedTransactionContext);
 
 	return;
 }

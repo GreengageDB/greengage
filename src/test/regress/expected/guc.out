@@ -506,6 +506,11 @@ SELECT '2006-08-13 12:34:56'::timestamptz;
  Sun Aug 13 12:34:56 2006 PDT
 (1 row)
 
+-- Test some simple error cases
+SET seq_page_cost TO 'NaN';
+ERROR:  parameter "seq_page_cost" requires a numeric value
+SET vacuum_cost_delay TO '10s';
+ERROR:  10000 is outside the valid range for parameter "vacuum_cost_delay" (0 .. 100)
 --
 -- Test DISCARD TEMP
 --
@@ -769,3 +774,10 @@ NOTICE:  text search configuration "no_such_config" does not exist
 select func_with_bad_set();
 ERROR:  invalid value for parameter "default_text_search_config": "no_such_config"
 reset check_function_bodies;
+SET "request.header.user-agent" = 'curl/7.29.0';
+SHOW "request.header.user-agent";
+ request.header.user-agent 
+---------------------------
+ curl/7.29.0
+(1 row)
+

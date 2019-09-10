@@ -144,6 +144,10 @@ RESET datestyle;
 SHOW datestyle;
 SELECT '2006-08-13 12:34:56'::timestamptz;
 
+-- Test some simple error cases
+SET seq_page_cost TO 'NaN';
+SET vacuum_cost_delay TO '10s';
+
 --
 -- Test DISCARD TEMP
 --
@@ -275,3 +279,6 @@ set default_text_search_config = no_such_config;
 select func_with_bad_set();
 
 reset check_function_bodies;
+
+SET "request.header.user-agent" = 'curl/7.29.0';
+SHOW "request.header.user-agent";

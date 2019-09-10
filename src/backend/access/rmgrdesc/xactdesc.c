@@ -16,6 +16,7 @@
 
 #include "access/xact.h"
 #include "catalog/catalog.h"
+#include "storage/dbdirnode.h"
 #include "storage/sinval.h"
 #include "utils/timestamp.h"
 
@@ -26,9 +27,11 @@ xact_desc_commit(StringInfo buf, xl_xact_commit *xlrec)
 	int			i;
 	TransactionId *subxacts;
 	SharedInvalidationMessage *msgs;
+	DbDirNode *deldbs;
 
 	subxacts = (TransactionId *) &xlrec->xnodes[xlrec->nrels];
 	msgs = (SharedInvalidationMessage *) &subxacts[xlrec->nsubxacts];
+	deldbs = (DbDirNode *) &(msgs[xlrec->nmsgs]);
 
 	appendStringInfoString(buf, timestamptz_to_str(xlrec->xact_time));
 
@@ -37,7 +40,11 @@ xact_desc_commit(StringInfo buf, xl_xact_commit *xlrec)
 		appendStringInfoString(buf, "; rels:");
 		for (i = 0; i < xlrec->nrels; i++)
 		{
-			char	   *path = relpathperm(xlrec->xnodes[i].node, MAIN_FORKNUM);
+			BackendId  backendId = xlrec-> xnodes[i].isTempRelation ?
+								  TempRelBackendId : InvalidBackendId;
+			char	   *path = relpathbackend(xlrec->xnodes[i].node,
+											  backendId,
+											  MAIN_FORKNUM);
 
 			appendStringInfo(buf, " %s", path);
 			pfree(path);
@@ -78,11 +85,25 @@ xact_desc_commit(StringInfo buf, xl_xact_commit *xlrec)
 				appendStringInfo(buf, " unknown id %d", msg->id);
 		}
 	}
+	if (xlrec->distribTimeStamp != 0 || xlrec->distribXid != InvalidDistributedTransactionId)
+		appendStringInfo(buf, " gid = %u-%.10u", xlrec->distribTimeStamp, xlrec->distribXid);
+	if (xlrec->ndeldbs > 0)
+	{
+		appendStringInfoString(buf, "; deldbs:");
+		for (i = 0; i < xlrec->ndeldbs; i++)
+		{
+			char *path =
+					 GetDatabasePath(deldbs[i].database, deldbs[i].tablespace);
+
+			appendStringInfo(buf, " %s", path);
+			pfree(path);
+		}
+	}
 
 	/*
 -	 * MPP: Return end of regular commit information.
 	 */
-	return (char *) &msgs[xlrec->nmsgs];
+	return (char *) &deldbs[xlrec->ndeldbs];
 }
 
 static void
@@ -126,7 +147,12 @@ xact_desc_commit_compact(StringInfo buf, xl_xact_commit_compact *xlrec)
 static void
 xact_desc_abort(StringInfo buf, xl_xact_abort *xlrec)
 {
-	int			i;
+	int				i;
+	TransactionId	*xacts;
+	DbDirNode		*deldbs;
+
+	xacts = (TransactionId *) &xlrec->xnodes[xlrec->nrels];
+	deldbs = (DbDirNode *) &(xacts[xlrec->nsubxacts]);
 
 	appendStringInfoString(buf, timestamptz_to_str(xlrec->xact_time));
 	if (xlrec->nrels > 0)
@@ -134,7 +160,11 @@ xact_desc_abort(StringInfo buf, xl_xact_abort *xlrec)
 		appendStringInfoString(buf, "; rels:");
 		for (i = 0; i < xlrec->nrels; i++)
 		{
-			char	   *path = relpathperm(xlrec->xnodes[i].node, MAIN_FORKNUM);
+			BackendId  backendId = xlrec-> xnodes[i].isTempRelation ?
+								  TempRelBackendId : InvalidBackendId;
+			char	   *path = relpathbackend(xlrec->xnodes[i].node,
+											  backendId,
+											  MAIN_FORKNUM);
 
 			appendStringInfo(buf, " %s", path);
 			pfree(path);
@@ -142,12 +172,21 @@ xact_desc_abort(StringInfo buf, xl_xact_abort *xlrec)
 	}
 	if (xlrec->nsubxacts > 0)
 	{
-		TransactionId *xacts = (TransactionId *)
-		&xlrec->xnodes[xlrec->nrels];
-
 		appendStringInfoString(buf, "; subxacts:");
 		for (i = 0; i < xlrec->nsubxacts; i++)
 			appendStringInfo(buf, " %u", xacts[i]);
+	}
+	if (xlrec->ndeldbs > 0)
+	{
+		appendStringInfoString(buf, "; deldbs:");
+		for (i = 0; i < xlrec->ndeldbs; i++)
+		{
+			char *path =
+					 GetDatabasePath(deldbs[i].database, deldbs[i].tablespace);
+
+			appendStringInfo(buf, " %s", path);
+			pfree(path);
+		}
 	}
 }
 
@@ -199,6 +238,9 @@ xact_desc(StringInfo buf, XLogRecord *record)
 
 		appendStringInfo(buf, "commit prepared %u: ", xlrec->xid);
 		xact_desc_commit(buf, &xlrec->crec);
+
+		appendStringInfo(buf, " gid = %u-%.10u", xlrec->distribTimeStamp, xlrec->distribXid);
+		appendStringInfo(buf, " gxid = %u", xlrec->distribXid);
 	}
 	else if (info == XLOG_XACT_ABORT_PREPARED)
 	{

@@ -42,8 +42,30 @@ from gp_segment_configuration where content = 0 and role = 'p';
 select gp_request_fts_probe_scan();
 select gp_request_fts_probe_scan();
 select role, preferred_role, mode, status from gp_segment_configuration where content = 0;
+
 -- The remaining steps are to bring back the cluster to original state.
 -- start_ignore
+
+-- Wait until content 0 mirror is promoted otherwise, gprecoverseg
+-- that runs after will fail.
+do $$
+declare
+  y int;
+begin
+  for i in 1..120 loop
+    begin
+      select count(*) into y from gp_dist_random('gp_id');
+      raise notice 'got % results, mirror must have been promoted', y;
+      return;
+    exception
+      when others then
+        raise notice 'mirror may not be promoted yet: %', sqlerrm;
+        perform pg_sleep(0.5);
+    end;
+  end loop;
+end;
+$$;
+
 \! gprecoverseg -av --no-progress
 -- end_ignore
 
@@ -85,7 +107,5 @@ select role, preferred_role, mode, status from gp_segment_configuration where co
 -- end_ignore
 
 -- cleanup steps
-select gp_inject_fault('fts_recovery_in_progress', 'reset', dbid)
-from gp_segment_configuration where content = 0 and role = 'p';
-select gp_inject_fault('fts_conn_startup_packet', 'reset', dbid)
+select gp_inject_fault('all', 'reset', dbid)
 from gp_segment_configuration where content = 0 and role = 'p';

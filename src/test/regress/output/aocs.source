@@ -939,7 +939,7 @@ INSERT INTO syscoltest VALUES(1);
 SELECT ctid FROM syscoltest;
      ctid     
 --------------
- (33554432,1)
+ (33554432,2)
 (1 row)
 
 DROP TABLE syscoltest;
@@ -1162,7 +1162,7 @@ select gp_inject_fault('appendonly_skip_compression', 'skip', '', '',
 from gp_segment_configuration where role = 'p' and content = 0;
  gp_inject_fault 
 -----------------
- t
+ Success:
 (1 row)
 
 insert into aocs_small_and_dense_content select i,i from
@@ -1172,7 +1172,7 @@ from gp_segment_configuration where
 role = 'p' and content = 0;
  gp_wait_until_triggered_fault 
 -------------------------------
- t
+ Success:
 (1 row)
 
 -- This should not fail if small content or bulk dense content headers
@@ -1187,6 +1187,6 @@ select gp_inject_fault('appendonly_skip_compression', 'reset', dbid)
 from gp_segment_configuration where role = 'p' and content = 0;
  gp_inject_fault 
 -----------------
- t
+ Success:
 (1 row)
 

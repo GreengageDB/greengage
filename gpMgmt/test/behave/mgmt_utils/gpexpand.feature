@@ -15,7 +15,9 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         And user has created expansiontest tables
+        And 4000000 rows are inserted into table "expansiontest0" in schema "public" with column type list "int"
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
+        And 4000000 rows are inserted into table "expansiontest2" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
          And the user runs gpexpand to redistribute with duration "00:00:02"
         Then gpexpand should print "End time reached.  Stopping expansion." to stdout
@@ -38,7 +40,9 @@ Feature: expand the cluster by adding more segments
         And the cluster is setup for an expansion on hosts "mdw,sdw1"
         When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
         Then user has created expansiontest tables
+        And 4000000 rows are inserted into table "expansiontest0" in schema "public" with column type list "int"
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
+        And 4000000 rows are inserted into table "expansiontest2" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
         When the user runs gpexpand to redistribute with duration "00:00:02"
         Then gpexpand should print "End time reached.  Stopping expansion." to stdout
@@ -56,7 +60,9 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         And user has created expansiontest tables
+        And 4000000 rows are inserted into table "expansiontest0" in schema "public" with column type list "int"
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
+        And 4000000 rows are inserted into table "expansiontest2" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
          And the user runs gpexpand to redistribute with the --end flag
         Then gpexpand should print "End time reached.  Stopping expansion." to stdout
@@ -155,9 +161,31 @@ Feature: expand the cluster by adding more segments
         And the cluster is setup for an expansion on hosts "mdw,sdw1,sdw2,sdw3"
         And the new host "sdw2,sdw3" is ready to go
         When the user runs gpexpand interview to add 1 new segment and 2 new host "sdw2,sdw3"
+       Then the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
+        Then verify that the cluster has 14 new segments
+
+    @gpexpand_mirrors
+    @gpexpand_host_and_segment
+    @gpexpand_standby
+    Scenario: expand a cluster with tablespace that has mirrors with one new host
+        Given the database is not running
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with mirrors on "mdw" and "sdw1"
+        And the user runs gpinitstandby with options " "
+        And database "gptest" exists
+	And a tablespace is created with data
+	And another tablespace is created with data
+        And there are no gpexpand_inputfiles
+        And the cluster is setup for an expansion on hosts "mdw,sdw1,sdw2,sdw3"
+        And the new host "sdw2,sdw3" is ready to go
+        When the user runs gpexpand interview to add 1 new segment and 2 new host "sdw2,sdw3"
         Then the number of segments have been saved
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
         Then verify that the cluster has 14 new segments
+	When the user runs gpexpand to redistribute
+	Then the tablespace is valid after gpexpand
 
     @gpexpand_verify_redistribution
     Scenario: Verify data is correctly redistributed after expansion
@@ -177,7 +205,7 @@ Feature: expand the cluster by adding more segments
         Then the number of segments have been saved
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
         Then verify that the cluster has 3 new segments
-         And the user drops the named connection "default"
+        And the user drops the named connection "default"
         When the user runs gpexpand to redistribute
         Then distribution information from table "public.redistribute" with data in "gptest" is verified against saved data
 

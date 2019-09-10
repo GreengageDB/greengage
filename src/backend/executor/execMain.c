@@ -539,7 +539,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 				SetupInterconnect(estate);
 				UpdateMotionExpectedReceivers(estate->motionlayer_context, estate->es_sliceTable);
 
-				SIMPLE_FAULT_INJECTOR(QEGotSnapshotAndInterconnect);
+				SIMPLE_FAULT_INJECTOR("qe_got_snapshot_and_interconnect");
 				Assert(estate->interconnect_context);
 			}
 			PG_CATCH();
@@ -652,8 +652,8 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * work for this query.
 			 */
 			needDtxTwoPhase = ExecutorSaysTransactionDoesWrites();
-			dtmPreCommand("ExecutorStart", "(none)", queryDesc->plannedstmt,
-						  needDtxTwoPhase, true /* wantSnapshot */, queryDesc->extended_query );
+			if (needDtxTwoPhase)
+				setupTwoPhaseTransaction();
 
 			if (queryDesc->ddesc != NULL)
 			{
@@ -1020,7 +1020,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 	if (estate->es_processed >= 10000 && estate->es_processed <= 1000000)
 	//if (estate->es_processed >= 10000)
 	{
-		if (FaultInjector_InjectFaultIfSet(ExecutorRunHighProcessed,
+		if (FaultInjector_InjectFaultIfSet("executor_run_high_processed",
 										   DDLNotSpecified,
 										   "" /* databaseName */,
 										   "" /* tableName */) == FaultInjectorTypeSkip)
@@ -1535,7 +1535,8 @@ static void
 ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 {
 	ListCell   *l;
-    int         rti;
+	int         rti;
+	char		relstorage;
 
 	/*
 	 * CREATE TABLE AS or SELECT INTO?
@@ -1564,6 +1565,14 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 			continue;
 
 		if ((rte->requiredPerms & (~ACL_SELECT)) == 0)
+			continue;
+
+		/*
+		 * External and foreign tables don't need two phase commit which is for
+		 * local mpp tables
+		 */
+		relstorage = get_rel_relstorage(rte->relid);
+		if (relstorage == RELSTORAGE_EXTERNAL || relstorage == RELSTORAGE_FOREIGN)
 			continue;
 
 		if (isTempNamespace(get_rel_namespace(rte->relid)))
@@ -1703,6 +1712,18 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			resultRelationOid = getrelid(resultRelationIndex, rangeTable);
 			if (operation == CMD_UPDATE || operation == CMD_DELETE)
 			{
+				/*
+				 * On QD, the lock on the table has already been taken during parsing, so if it's a child
+				 * partition, we don't need to take a lock. If there a a deadlock GDD will come in place
+				 * and resolve the deadlock. ORCA Update / Delete plans only contains the root relation, so
+				 * no locks on leaf partition are taken here. The below changes makes planner as well to not
+				 * take locks on leaf partitions with GDD on.
+				 * Note: With GDD off, ORCA and planner both will acquire locks on the leaf partitions.
+				 */
+				if (Gp_role == GP_ROLE_DISPATCH && rel_is_child_partition(resultRelationOid) && gp_enable_global_deadlock_detector)
+				{
+					lockmode = NoLock;
+				}
 				resultRelation = CdbOpenRelation(resultRelationOid,
 													 lockmode,
 													 false, /* noWait */
@@ -1763,16 +1784,18 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			 *   - Otherwise, all_relids is a map of result_partitions to
 			 *     get each element's relation oid.
 			 */
+
 			if (containRoot)
 			{
 				/*
-				 * For partition table, INSERT plan only contains the root table
-				 * in the result relations, whereas DELETE and UPDATE contain
-				 * both root table and the partition tables.
+				 * For partition tables, if GDD is off, any DML statement on root
+				 * partition, must acquire locks on the leaf partitions to avoid
+				 * deadlocks.
 				 *
 				 * Without locking the partition relations on QD when INSERT
-				 * the following dead lock scenario may happen between INSERT and
-				 * AppendOnly VACUUM drop phase on the partition table:
+				 * with Planner the following dead lock scenario may happen
+				 * between INSERT and AppendOnly VACUUM drop phase on the
+				 * partition table:
 				 *
 				 * 1. AO VACUUM drop on QD: acquired AccessExclusiveLock
 				 * 2. INSERT on QE: acquired RowExclusiveLock
@@ -1783,14 +1806,31 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 				 * until 3 and 4 proceed. Hence INSERT needs to Lock the partition
 				 * tables on QD here (before 2) to prevent this dead lock.
 				 *
-				 * FIXME: Ideally we may want to
-				 * 1) Lock the partition table during the parse stage just as when
-				 *    we lock the root oid
-				 * 2) Only lock the particular partition table that we are
-				 *    inserting into, right now we don't have that info here.
+				 * Deadlock can also occur in case of DELETE as below
+				 * Session1: BEGIN; delete from foo_1_prt_1 WHERE c = 999999; => Holds
+				 * Exclusive lock on foo_1_prt_1 on QD and marks the tuple c updated by the
+				 * current transaction;
+				 * Session2: BEGIN; delete from foo WHERE c = 1; => Holds Exclusive lock
+				 * on foo on QD and marks the tuple c = 1 updated by current transaction
+				 * Session1: DELETE FROM foo_1_prt_1 WHERE c = 1; => This wait, as Session
+				 * 2 has already taken the lock, Session1 will wait to acquire the
+				 * transaction lock.
+				 * Session2: DELETE FROM foo WHERE c = 999999; => This waits, as Session 1
+				 * has already taken the lock, Session 2 will wait to acquire the
+				 * transaction lock.
+				 * This will cause a deadlock.
+				 * Similar scenario apply for UPDATE as well.
 				 */
-				lockmode = (operation == CMD_INSERT && rel_is_partitioned(relid)) ?
-					RowExclusiveLock : NoLock;
+				lockmode = NoLock;
+				if ((operation == CMD_DELETE || operation == CMD_INSERT || operation == CMD_UPDATE) &&
+					!gp_enable_global_deadlock_detector &&
+					rel_is_partitioned(relid))
+				{
+					if (operation == CMD_INSERT)
+						lockmode = RowExclusiveLock;
+					else
+						lockmode = ExclusiveLock;
+				}
 				all_relids = find_all_inheritors(relid, lockmode, NULL);
 			}
 			else
@@ -2417,6 +2457,7 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 	resultRelInfo->ri_FdwState = NULL;
 	resultRelInfo->ri_ConstraintExprs = NULL;
 	resultRelInfo->ri_junkFilter = NULL;
+	resultRelInfo->ri_segid_attno = InvalidAttrNumber;
 	resultRelInfo->ri_projectReturning = NULL;
 	resultRelInfo->ri_aoInsertDesc = NULL;
 	resultRelInfo->ri_aocsInsertDesc = NULL;
@@ -2993,7 +3034,7 @@ ExecutePlan(EState *estate,
 			 */
 			if (estate->es_processed >= 10000 && estate->es_processed <= 1000000)
 			{
-				if (FaultInjector_InjectFaultIfSet(ExecutorRunHighProcessed,
+				if (FaultInjector_InjectFaultIfSet("executor_run_high_processed",
 												   DDLNotSpecified,
 												   "" /* databaseName */,
 												   "" /* tableName */) == FaultInjectorTypeSkip)

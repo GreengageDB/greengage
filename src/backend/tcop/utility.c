@@ -518,15 +518,12 @@ standard_ProcessUtility(Node *parsetree,
 
 							Assert(PointerIsValid(name));
 
-							if (Gp_role == GP_ROLE_DISPATCH)
-							{
-								/* We already checked that we're in a
-								 * transaction; need to make certain
-								 * that the BEGIN has been dispatched
-								 * before we start dispatching our savepoint.
-								 */
-								sendDtxExplicitBegin();
-							}
+							/* We already checked that we're in a
+							 * transaction; need to make certain
+							 * that the BEGIN has been dispatched
+							 * before we start dispatching our savepoint.
+							 */
+							sendDtxExplicitBegin();
 
 							DefineDispatchSavepoint(
 									name);
@@ -743,7 +740,7 @@ standard_ProcessUtility(Node *parsetree,
 					ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
 							errmsg("unlisten command cannot run in a function running on a segDB")));
 
-				PreventCommandDuringRecovery("UNLISTEN");
+				/* we allow UNLISTEN during recovery, as it's a noop */
 				CheckRestrictedOperation("UNLISTEN");
 				if (stmt->conditionname)
 					Async_Unlisten(stmt->conditionname);
@@ -1162,8 +1159,6 @@ ProcessUtilitySlow(Node *parsetree,
 							 * one needs a secondary relation too.
 							 */
 							CommandCounterIncrement();
-
-							DefinePartitionedRelation((CreateStmt *) parsetree, relOid);
 
 							if (relKind != RELKIND_COMPOSITE_TYPE)
 							{

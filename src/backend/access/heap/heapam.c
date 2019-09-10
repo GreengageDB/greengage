@@ -1238,7 +1238,7 @@ CdbTryOpenRelation(Oid relid, LOCKMODE reqmode, bool noWait, bool *lockUpgraded)
 	}
 
 	/* inject fault after holding the lock */
-	SIMPLE_FAULT_INJECTOR(UpgradeRowLock);
+	SIMPLE_FAULT_INJECTOR("upgrade_row_lock");
 
 	return rel;
 }                                       /* CdbOpenRelation */
@@ -2369,6 +2369,11 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 
 	gp_expand_protect_catalog_changes(relation);
 
+#ifdef FAULT_INJECTOR
+	FaultInjector_InjectFaultIfSet("heap_insert", DDLNotSpecified, "",
+								   RelationGetRelationName(relation));
+#endif
+
 	/*
 	 * Fill in tuple header fields, assign an OID, and toast the tuple if
 	 * necessary.
@@ -3323,6 +3328,7 @@ l1:
 	if (RelationNeedsWAL(relation))
 	{
 		xl_heap_delete xlrec;
+		xl_heap_header xlhdr;
 		XLogRecPtr	recptr;
 		XLogRecData rdata[4];
 
@@ -3352,8 +3358,6 @@ l1:
 		 */
 		if (old_key_tuple != NULL)
 		{
-			xl_heap_header xlhdr;
-
 			xlhdr.t_infomask2 = old_key_tuple->t_data->t_infomask2;
 			xlhdr.t_infomask = old_key_tuple->t_data->t_infomask;
 			xlhdr.t_hoff = old_key_tuple->t_data->t_hoff;

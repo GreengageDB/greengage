@@ -647,7 +647,7 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 		ExplainProperty("Optimizer", "Postgres query optimizer", false, es);
 #ifdef USE_ORCA
 	else
-		ExplainPropertyStringInfo("Optimizer", es, "PQO version %s", OptVersion());
+		ExplainPropertyStringInfo("Optimizer", es, "Pivotal Optimizer (GPORCA) version %s", OptVersion());
 #endif
 
 	/* We only list the non-default GUCs in verbose mode */
@@ -725,7 +725,7 @@ ExplainPrintPlan(ExplainState *es, QueryDesc *queryDesc)
 	 */
 	if (es->analyze && !es->showstatctx->stats_gathered)
 	{
-		if (!es->currentSlice || sliceRunsOnQD(es->currentSlice))
+		if (Gp_role == GP_ROLE_DISPATCH && (!es->currentSlice || sliceRunsOnQD(es->currentSlice)))
 			cdbexplain_localExecStats(queryDesc->planstate, es->showstatctx);
 
         /* Fill in the plan's Instrumentation with stats from qExecs. */
@@ -959,6 +959,16 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 	{
 		if (segments == 0)
 			appendStringInfo(es->str, "  (slice%d)", slice->sliceIndex);
+		else if (slice->primaryGang && gp_log_gang >= GPVARS_VERBOSITY_DEBUG)
+			/*
+			 * In gpdb 5 there was a unique gang_id for each gang, this was
+			 * retired since gpdb 6, so we use the qe identifier from the first
+			 * segment of the gang to identify each gang.
+			 */
+			appendStringInfo(es->str, "  (slice%d; gang%d; segments: %d)",
+							 slice->sliceIndex,
+							 slice->primaryGang->db_descriptors[0]->identifier,
+							 segments);
 		else
 			appendStringInfo(es->str, "  (slice%d; segments: %d)",
 							 slice->sliceIndex, segments);
@@ -966,6 +976,8 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 	else
 	{
 		ExplainPropertyInteger("Slice", slice->sliceIndex, es);
+		if (slice->primaryGang && gp_log_gang >= GPVARS_VERBOSITY_DEBUG)
+			ExplainPropertyInteger("Gang", slice->primaryGang->db_descriptors[0]->identifier, es);
 		ExplainPropertyInteger("Segments", segments, es);
 		ExplainPropertyText("Gang Type", gangTypeToString(slice->gangType), es);
 	}

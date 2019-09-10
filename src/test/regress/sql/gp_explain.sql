@@ -49,6 +49,17 @@ WHERE et like '%Memory: %';
 
 reset explain_memory_verbosity;
 
+EXPLAIN ANALYZE SELECT id FROM 
+( SELECT id 
+	FROM explaintest
+	WHERE id > (
+		SELECT avg(id)
+		FROM explaintest
+	)
+) as foo
+ORDER BY id
+LIMIT 1;
+
 
 -- Verify that the column references are OK. This tests for an old ORCA bug,
 -- where the Filter clause in the IndexScan of this query was incorrectly
@@ -120,7 +131,7 @@ explain (costs off) select count(*) over (partition by g) from generate_series(1
 -- The default init_file rules contain a line to mask this out in normal
 -- text-format EXPLAIN output, but it doesn't catch these alternative formats.
 -- start_matchignore
--- m/Optimizer.*PQO version .*/
+-- m/Optimizer.*Pivotal Optimizer \(GPORCA\) version .*/
 -- end_matchignore
 
 CREATE EXTERNAL WEB TABLE dummy_ext_tab (x text) EXECUTE 'echo foo' FORMAT 'text';

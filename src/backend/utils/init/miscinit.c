@@ -45,6 +45,7 @@
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/gdd.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -470,8 +471,8 @@ InitializeSessionUserIdStandalone(void)
 	 */
 	AssertState(!IsUnderPostmaster || IsAutoVacuumWorkerProcess() || IsBackgroundWorker
 				|| am_startup
-				|| (am_ftshandler && am_mirror)
-				|| am_global_deadlock_detector);
+				|| (IsFaultHandler && am_mirror)
+				|| (am_ftshandler && am_mirror));
 
 	/* call only once */
 	AssertState(!OidIsValid(AuthenticatedUserId));
@@ -892,14 +893,10 @@ CreateLockFile(const char *filename, bool amPostmaster,
 				if (PGSharedMemoryIsInUse(id1, id2))
 					ereport(FATAL,
 							(errcode(ERRCODE_LOCK_FILE_EXISTS),
-							 errmsg("pre-existing shared memory block "
-									"(key %lu, ID %lu) is still in use",
+							 errmsg("pre-existing shared memory block (key %lu, ID %lu) is still in use",
 									id1, id2),
-							 errhint("If you're sure there are no old "
-									 "server processes still running, remove "
-									 "the shared memory block "
-									 "or just delete the file \"%s\".",
-									 filename)));
+							 errhint("Terminate any old server processes associated with data directory \"%s\".",
+									 refName)));
 			}
 		}
 
@@ -1394,9 +1391,11 @@ void
 process_shared_preload_libraries(void)
 {
 	process_shared_preload_libraries_in_progress = true;
+
 	load_libraries(shared_preload_libraries_string,
 				   "shared_preload_libraries",
 				   false);
+
 	process_shared_preload_libraries_in_progress = false;
 }
 

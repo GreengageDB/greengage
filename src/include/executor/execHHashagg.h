@@ -126,7 +126,6 @@ typedef struct HashAggTableSizes
 	unsigned  workmem_initial;    /* Estimated work_mem bytes at #entries=0 */
 	unsigned  workmem_per_entry;  /* Additional work_mem bytes per entry */
 	bool      spill;      /* Do we expect to spill ? */
-	double    memquota;   /* Minimal required memquota */
 } HashAggTableSizes;
 
 /*
@@ -168,6 +167,9 @@ typedef struct HashAggTable
 	/* The batch file is currently being processed. */
 	SpillFile *curr_spill_file;
 	int curr_spill_level;
+
+	/* The memory context for (de)serialization */
+	MemoryContext serialization_cxt;
 
 	/*
 	 * The space to buffer the free hash entries and AggStatePerGroups. Using this,

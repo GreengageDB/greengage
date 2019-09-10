@@ -172,6 +172,7 @@ SessionState_Release(SessionState *acquired)
 		acquired->cleanupCountdown = CLEANUP_COUNTDOWN_BEFORE_RUNAWAY;
 		acquired->activeProcessCount = 0;
 		acquired->idle_start = 0;
+		Assert(acquired->resGroupSlot == NULL);
 		acquired->resGroupSlot = NULL;
 
 #ifdef USE_ASSERT_CHECKING

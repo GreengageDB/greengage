@@ -93,8 +93,6 @@ static bool check_gp_resource_group_bypass(bool *newval, void **extra, GucSource
 
 extern struct config_generic *find_option(const char *name, bool create_placeholders, int elevel);
 
-extern bool enable_partition_rules;
-
 extern int listenerBacklog;
 
 /* GUC lists for gp_guc_list_show().  (List of struct config_generic) */
@@ -336,6 +334,7 @@ bool		optimizer_enable_bitmapscan;
 bool		optimizer_enable_outerjoin_to_unionall_rewrite;
 bool		optimizer_enable_ctas;
 bool		optimizer_enable_partial_index;
+bool		optimizer_enable_dml;
 bool		optimizer_enable_dml_triggers;
 bool		optimizer_enable_dml_constraints;
 bool		optimizer_enable_master_only_queries;
@@ -343,7 +342,11 @@ bool		optimizer_enable_hashjoin;
 bool		optimizer_enable_dynamictablescan;
 bool		optimizer_enable_indexscan;
 bool		optimizer_enable_tablescan;
-bool		optimizer_enable_full_join;
+bool		optimizer_enable_hashagg;
+bool		optimizer_enable_groupagg;
+bool		optimizer_expand_fulljoin;
+bool		optimizer_enable_mergejoin;
+bool		optimizer_prune_unused_columns;
 
 /* Optimizer plan enumeration related GUCs */
 bool		optimizer_enumerate_plans;
@@ -374,10 +377,12 @@ int         optimizer_array_expansion_threshold;
 int         optimizer_join_order_threshold;
 int			optimizer_join_order;
 int			optimizer_cte_inlining_bound;
+int			optimizer_push_group_by_below_setop_threshold;
 bool		optimizer_force_multistage_agg;
 bool		optimizer_force_three_stage_scalar_dqa;
 bool		optimizer_force_expanded_distinct_aggs;
 bool		optimizer_force_agg_skew_avoidance;
+bool		optimizer_penalize_skew;
 bool		optimizer_prune_computed_columns;
 bool		optimizer_push_requirements_from_consumer_to_producer;
 bool		optimizer_enforce_subplans;
@@ -443,7 +448,9 @@ static const struct config_enum_entry debug_dtm_action_protocol_options[] = {
 	{"abort_no_prepared", DTX_PROTOCOL_COMMAND_ABORT_NO_PREPARED},
 	{"prepare", DTX_PROTOCOL_COMMAND_PREPARE},
 	{"abort_some_prepared", DTX_PROTOCOL_COMMAND_ABORT_SOME_PREPARED},
+	{"commit_onephase", DTX_PROTOCOL_COMMAND_COMMIT_ONEPHASE},
 	{"commit_prepared", DTX_PROTOCOL_COMMAND_COMMIT_PREPARED},
+	{"commit_not_prepared", DTX_PROTOCOL_COMMAND_COMMIT_NOT_PREPARED},
 	{"abort_prepared", DTX_PROTOCOL_COMMAND_ABORT_PREPARED},
 	{"retry_commit_prepared", DTX_PROTOCOL_COMMAND_RETRY_COMMIT_PREPARED},
 	{"retry_abort_prepared", DTX_PROTOCOL_COMMAND_RETRY_ABORT_PREPARED},
@@ -553,6 +560,7 @@ static const struct config_enum_entry optimizer_join_order_options[] = {
 	{"query", JOIN_ORDER_IN_QUERY},
 	{"greedy", JOIN_ORDER_GREEDY_SEARCH},
 	{"exhaustive", JOIN_ORDER_EXHAUSTIVE_SEARCH},
+	{"exhaustive2", JOIN_ORDER_EXHAUSTIVE2_SEARCH},
 	{NULL, 0}
 };
 
@@ -1583,24 +1591,13 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"enable_partition_rules", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Enable creation of RULEs to implement partitioning"),
-			NULL,
-			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&enable_partition_rules,
-		false,
-		NULL, NULL, NULL
-	},
-
-	{
 		{"gp_enable_gpperfmon", PGC_POSTMASTER, UNGROUPED,
 			gettext_noop("Enable gpperfmon monitoring."),
 			NULL,
 		},
 		&gp_enable_gpperfmon,
 		false,
-		gpvars_check_gp_enable_gpperfmon, NULL, NULL
+		NULL, NULL, NULL
 	},
 
 	{
@@ -2178,13 +2175,13 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"optimizer_dpe_stats", PGC_USERSET, LOGGING_WHAT,
+		{"optimizer_dpe_stats", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enable statistics derivation for partitioned tables with dynamic partition elimination."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_dpe_stats,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 	{
@@ -2383,12 +2380,45 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"optimizer_enable_hashagg", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables Pivotal Optimizer (GPORCA) to use hash aggregates."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_hashagg,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_groupagg", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables Pivotal Optimizer (GPORCA) to use group aggregates."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_groupagg,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"optimizer_force_agg_skew_avoidance", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Always pick a plan for aggregate distinct that minimizes skew."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_force_agg_skew_avoidance,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_penalize_skew", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Penalize operators with skewed hash redistribute below it."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_penalize_skew,
 		true,
 		NULL, NULL, NULL
 	},
@@ -2422,7 +2452,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_force_multistage_agg,
-		true,
+		false,
 		NULL, NULL, NULL
 	},
 
@@ -2491,13 +2521,23 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"optimizer_enable_full_join", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Enables the optimizer's support of full outer joins."),
+		{"optimizer_expand_fulljoin", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's support of expanding full outer joins using union all."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
-		&optimizer_enable_full_join,
+		&optimizer_expand_fulljoin,
 		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"optimizer_enable_mergejoin", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enables the optimizer's support of merge joins."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_mergejoin,
+		true,
 		NULL, NULL, NULL
 	},
 	{
@@ -2678,6 +2718,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_enable_partial_index,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_dml", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable DML plans in Pivotal Optimizer (GPORCA)."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_dml,
 		true,
 		NULL, NULL, NULL
 	},
@@ -2921,6 +2972,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&optimizer_enable_eageragg,
 		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_prune_unused_columns", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Prune unused table columns during query optimization."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_prune_unused_columns,
+		true,
 		NULL, NULL, NULL
 	},
 
@@ -3444,17 +3506,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		0, 0, 1,
 		NULL, NULL, NULL
 	},
-
 #endif
-	{
-		{"gp_interconnect_hash_multiplier", PGC_SUSET, GP_ARRAY_TUNING,
-			gettext_noop("Sets the number of hash buckets used by the UDP interconnect to track connections (the number of buckets is given by the product of the segment count and the hash multipliers)."),
-			NULL,
-		},
-		&Gp_interconnect_hash_multiplier,
-		2, 1, 256,
-		NULL, NULL, NULL
-	},
 
 	{
 		{"gp_command_count", PGC_INTERNAL, CLIENT_CONN_OTHER,
@@ -3729,14 +3781,14 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_gpperfmon_send_interval", PGC_USERSET, LOGGING_WHAT,
+		{"gp_gpperfmon_send_interval", PGC_SUSET, LOGGING_WHAT,
 			gettext_noop("Interval in seconds between sending messages to gpperfmon."),
 			NULL,
 			GUC_GPDB_ADDOPT
 		},
 		&gp_gpperfmon_send_interval,
 		1, 1, 3600,
-		gpvars_check_gp_gpperfmon_send_interval, NULL, NULL
+		NULL, NULL, NULL
 	},
 
 	{
@@ -3994,6 +4046,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&optimizer_array_expansion_threshold,
 		100, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_push_group_by_below_setop_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Maximum number of children setops have to consider pushing group bys below it"),
+			NULL,
+			GUC_GPDB_ADDOPT | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_push_group_by_below_setop_threshold,
+		10, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 
@@ -4679,7 +4742,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 	{
 		{"optimizer_join_order", PGC_USERSET, QUERY_TUNING_OTHER,
 			gettext_noop("Set optimizer join heuristic model."),
-			gettext_noop("Valid values are query, greedy and exhaustive"),
+			gettext_noop("Valid values are query, greedy, exhaustive and exhaustive2"),
 			GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_join_order,
