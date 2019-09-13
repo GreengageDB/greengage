@@ -18,7 +18,9 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifndef WIN32
 #include <strings.h>
+#endif
 #ifdef GPFXDIST
 #include <regex.h>
 #include <gpfxdist.h>
@@ -1293,7 +1295,7 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 {
 	int 		size;
 	const int 	whole_rows = 1; /* gpfdist must not read data with partial rows */
-	struct fstream_filename_and_offset fos = {};
+	struct fstream_filename_and_offset fos = {0};
 
 	session_t *session = r->session;
 
@@ -1618,6 +1620,7 @@ static int session_attach(request_t* r)
 		session->active_segids[r->segid] = 1; /* mark this segid as active */
 		session->maxsegs = r->totalsegs;
 		session->requests = apr_hash_make(pool);
+		event_set(&session->ev, 0, 0, 0, 0);
 
 		if (session->tid == 0 || session->path == 0 || session->key == 0)
 			gfatal(r, "out of memory in session_attach");
@@ -2140,6 +2143,8 @@ static void do_accept(int fd, short event, void* arg)
 	r->id = ++REQUEST_SEQ;
 	r->pool = pool;
 	r->sock = sock;
+
+	event_set(&r->ev, 0, 0, 0, 0);
 
 	/* use the block size specified by -m option */
 	r->outblock.data = palloc_safe(r, pool, opt.m, "out of memory when allocating buffer: %d bytes", opt.m);
@@ -4090,6 +4095,23 @@ static int gpfdist_socket_receive(const request_t *r, void *buf, const size_t bu
 	return ( recv(r->sock, buf, buflen, 0) );
 }
 
+/*
+ * request_shutdown_sock
+ *
+ * Shutdown request socket transmission.
+ */
+static void request_shutdown_sock(const request_t* r)
+{
+	int ret = shutdown(r->sock, SHUT_WR);
+	if (ret == 0)
+	{
+		gprintlnif(r, "successfully shutdown socket");
+	}
+	else
+	{
+		gprintln(r, "failed to shutdown socket, errno: %d, msg: %s", errno, strerror(errno));
+	}
+}
 
 #ifdef USE_SSL
 /*
@@ -4103,7 +4125,6 @@ static int gpfdist_SSL_receive(const request_t *r, void *buf, const size_t bufle
 	/* todo: add error checks here */
 }
 
-
 /*
  * free_SSL_resources
  *
@@ -4111,12 +4132,15 @@ static int gpfdist_SSL_receive(const request_t *r, void *buf, const size_t bufle
  */
 static void free_SSL_resources(const request_t *r)
 {
-	BIO_ssl_shutdown(r->sbio);
-	BIO_vfree(r->io);
+	//send close_notify to client
+	SSL_shutdown(r->ssl);  //or BIO_ssl_shutdown(r->ssl_bio);
+
+	request_shutdown_sock(r);
+
+	BIO_vfree(r->io);  //ssl_bio is pushed to r->io list, so ssl_bio is freed too.
 	BIO_vfree(r->sbio);
 	//BIO_vfree(r->ssl_bio);
 	SSL_free(r->ssl);
-
 }
 
 
@@ -4133,7 +4157,7 @@ static void handle_ssl_error(SOCKET sock, BIO *sbio, SSL *ssl)
 		ERR_print_errors(gcb.bio_err);
 	}
 
-	BIO_ssl_shutdown(sbio);
+	SSL_shutdown(ssl);
 	SSL_free(ssl);
 }
 
@@ -4215,7 +4239,7 @@ static void do_close(int fd, short event, void *arg)
 		gwarning(r, "gpfdist shutdown the connection, while have not received response from segment");
 	}
 
-	int ret = read(r->sock, buffer, sizeof(buffer) - 1);
+	int ret = recv(r->sock, buffer, sizeof(buffer) - 1, 0);
 	if (ret < 0)
 	{
 		gwarning(r, "gpfdist read error after shutdown. errno: %d, msg: %s", errno, strerror(errno));
@@ -4261,7 +4285,6 @@ static void do_close(int fd, short event, void *arg)
 	fflush(stdout);
 }
 
-
 /*
  * request_cleanup
  *
@@ -4269,16 +4292,7 @@ static void do_close(int fd, short event, void *arg)
  */
 static void request_cleanup(request_t *r)
 {
-	int ret = shutdown(r->sock, SHUT_WR);
-	if (ret == 0)
-	{
-		gprintlnif(r, "successfully shutdown socket");
-	}
-	else
-	{
-		gprintln(r, "failed to shutdown socket, errno: %d, msg: %s", errno, strerror(errno));
-	}
-
+	request_shutdown_sock(r);
 	setup_do_close(r);
 }
 
@@ -4306,9 +4320,9 @@ static void request_cleanup_and_free_SSL_resources(request_t *r)
 	gprintln(r, "SSL cleanup and free");
 
 	/* Clean up request resources */
-	request_cleanup(r);
+	setup_do_close(r);
 
-	/* Release SSL related memory */
+	/* Shutdown SSL gracefully and Release SSL related memory */
 	free_SSL_resources(r);
 }
 #endif

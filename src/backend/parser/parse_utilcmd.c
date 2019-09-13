@@ -97,7 +97,7 @@ static void transformTableConstraint(CreateStmtContext *cxt,
 						 Constraint *constraint);
 static void transformTableLikeClause(CreateStmtContext *cxt,
 						 TableLikeClause *table_like_clause,
-						 bool forceBareCol);
+						 bool forceBareCol, CreateStmt *stmt, List **stenc);
 static void transformOfType(CreateStmtContext *cxt,
 				TypeName *ofTypename);
 static IndexStmt *generateClonedIndexStmt(CreateStmtContext *cxt,
@@ -306,7 +306,7 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 				{
 					bool            isBeginning = (cxt.columns == NIL);
 
-					transformTableLikeClause(&cxt, (TableLikeClause *) element, false);
+					transformTableLikeClause(&cxt, (TableLikeClause *) element, false, stmt, &stenc);
 
 					if (Gp_role == GP_ROLE_DISPATCH && isBeginning &&
 						stmt->distributedBy == NULL &&
@@ -862,7 +862,7 @@ transformTableConstraint(CreateStmtContext *cxt, Constraint *constraint)
  */
 static void
 transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_clause,
-						 bool forceBareCol)
+						 bool forceBareCol, CreateStmt *stmt, List **stenc)
 {
 	AttrNumber	parent_attno;
 	Relation	relation;
@@ -872,6 +872,7 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 	AclResult	aclresult;
 	char	   *comment;
 	ParseCallbackState pcbstate;
+	MemoryContext oldcontext;
 
 	setup_parser_errposition_callback(&pcbstate, cxt->pstate,
 									  table_like_clause->relation->location);
@@ -1143,6 +1144,38 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 
 			index_close(parent_index, AccessShareLock);
 		}
+	}
+
+	/*
+	 * If STORAGE is included, we need to copy over the table storage params
+	 * as well as the attribute encodings.
+	 */
+	if (stmt && table_like_clause->options & CREATE_TABLE_LIKE_STORAGE)
+	{
+		/*
+		 * As we are modifying the utility statement we must make sure these
+		 * DefElem allocations can survive outside of this context.
+		 */
+		oldcontext = MemoryContextSwitchTo(CurTransactionContext);
+
+		if (relation->rd_appendonly)
+		{
+			Form_pg_appendonly ao = relation->rd_appendonly;
+
+			stmt->options = lappend(stmt->options, makeDefElem("appendonly", (Node *) makeString(pstrdup("true"))));
+			if (ao->columnstore)
+				stmt->options = lappend(stmt->options, makeDefElem("orientation", (Node *) makeString(pstrdup("column"))));
+			stmt->options = lappend(stmt->options, makeDefElem("checksum", (Node *) makeInteger(ao->checksum)));
+			stmt->options = lappend(stmt->options, makeDefElem("compresslevel", (Node *) makeInteger(ao->compresslevel)));
+			if (strlen(NameStr(ao->compresstype)) > 0)
+				stmt->options = lappend(stmt->options, makeDefElem("compresstype", (Node *) makeString(pstrdup(NameStr(ao->compresstype)))));
+		}
+
+		/*
+		 * Set the attribute encodings.
+		 */
+		*stenc = list_union(*stenc, rel_get_column_encodings(relation));
+		MemoryContextSwitchTo(oldcontext);
 	}
 
 	/*
@@ -1591,13 +1624,31 @@ transformCreateExternalStmt(CreateExternalStmt *stmt, const char *queryString)
 	ListCell   *elements;
 	DistributedBy *likeDistributedBy = NULL;
 	bool	    bQuiet = false;	/* shut up transformDistributedBy messages */
-	bool		iswritable = stmt->iswritable;
+	bool		iswritable = false;
 
 	/* Set up pstate */
 	pstate = make_parsestate(NULL);
 	pstate->p_sourcetext = queryString;
 
 	memset(&cxt, 0, sizeof(CreateStmtContext));
+
+	/*
+	 * Create a temporary context in order to confine memory leaks due
+	 * to expansions within a short lived context
+	 */
+	cxt.tempCtx = AllocSetContextCreate(CurrentMemoryContext,
+							  "CreateExteranlStmt analyze context",
+							  ALLOCSET_DEFAULT_MINSIZE,
+							  ALLOCSET_DEFAULT_INITSIZE,
+							  ALLOCSET_DEFAULT_MAXSIZE);
+
+	/*
+	 * There exist transformations that might write on the passed on stmt.
+	 * Create a copy of it to both protect from (un)intentional writes and be
+	 * a bit more explicit of the intended ownership.
+	 */
+	stmt = (CreateExternalStmt *)copyObject(stmt);
+
 	cxt.pstate = pstate;
 	cxt.stmtType = "CREATE EXTERNAL TABLE";
 	cxt.relation = stmt->relation;
@@ -1614,6 +1665,8 @@ transformCreateExternalStmt(CreateExternalStmt *stmt, const char *queryString)
 
 	cxt.blist = NIL;
 	cxt.alist = NIL;
+
+	iswritable = stmt->iswritable;
 
 	/*
 	 * Run through each primary element in the table creation clause. Separate
@@ -1640,7 +1693,7 @@ transformCreateExternalStmt(CreateExternalStmt *stmt, const char *queryString)
 					/* LIKE */
 					bool	isBeginning = (cxt.columns == NIL);
 
-					transformTableLikeClause(&cxt, (TableLikeClause *) element, true);
+					transformTableLikeClause(&cxt, (TableLikeClause *) element, true, NULL, NULL);
 
 					if (Gp_role == GP_ROLE_DISPATCH && isBeginning &&
 						stmt->distributedBy == NULL &&
@@ -1736,6 +1789,8 @@ transformCreateExternalStmt(CreateExternalStmt *stmt, const char *queryString)
 
 	result = lappend(cxt.blist, stmt);
 	result = list_concat(result, cxt.alist);
+
+	MemoryContextDelete(cxt.tempCtx);
 
 	return result;
 }

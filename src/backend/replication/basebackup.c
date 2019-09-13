@@ -49,6 +49,7 @@
 #include "utils/guc.h"
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
+#include "utils/tarrable.h"
 #include "utils/timestamp.h"
 
 
@@ -239,7 +240,7 @@ perform_base_backup(basebackup_options *opt, DIR *tblspcdir)
 	 */
 	WalSndSetXLogCleanUpTo(startptr);
 
-	SIMPLE_FAULT_INJECTOR(BaseBackupPostCreateCheckpoint);
+	SIMPLE_FAULT_INJECTOR("base_backup_post_create_checkpoint");
 
 	/*
 	 * Once do_pg_start_backup has been called, ensure that any failure causes
@@ -285,6 +286,7 @@ perform_base_backup(basebackup_options *opt, DIR *tblspcdir)
 
 #if defined(HAVE_READLINK) || defined(WIN32)
 			rllen = readlink(fullpath, linkpath, sizeof(linkpath));
+
 			if (rllen < 0)
 			{
 				ereport(WARNING,
@@ -292,11 +294,12 @@ perform_base_backup(basebackup_options *opt, DIR *tblspcdir)
 								fullpath)));
 				continue;
 			}
-			else if (rllen >= sizeof(linkpath))
+			else if (rllen >= MAX_TARABLE_SYMLINK_PATH_LENGTH)
 			{
 				ereport(WARNING,
-						(errmsg("symbolic link \"%s\" target is too long",
-								fullpath)));
+						(errmsg("symbolic link \"%s\" target is too long and will not be added to the backup",
+								fullpath),
+						 errdetail("The symbolic link with target \"%s\" is too long. Symlink targets with length greater than %d characters would be truncated.", linkpath, MAX_TARABLE_SYMLINK_PATH_LENGTH)));
 				continue;
 			}
 			linkpath[rllen] = '\0';
@@ -881,6 +884,7 @@ SendBackupHeader(List *tablespaces)
 		else
 		{
 			Size		len;
+			char		*link_path_to_be_sent;
 
 			len = strlen(ti->oid);
 			pq_sendint(&buf, len, 4);
@@ -888,7 +892,18 @@ SendBackupHeader(List *tablespaces)
 
 			len = strlen(ti->path);
 			pq_sendint(&buf, len, 4);
-			pq_sendbytes(&buf, ti->path, len);
+			if(ti->rpath == NULL)
+			{
+				/* Lop off the dbid before sending the link target. */
+				char *link_path_without_dbid = pstrdup(ti->path);
+				char *file_sep_before_dbid_in_link_path =
+						strrchr(link_path_without_dbid, '/');
+				*file_sep_before_dbid_in_link_path = '\0';
+				link_path_to_be_sent = link_path_without_dbid;
+			}
+			else
+				link_path_to_be_sent = ti->path;
+			pq_sendbytes(&buf, link_path_to_be_sent, len);
 		}
 		if (ti->size >= 0)
 			send_int8_string(&buf, ti->size / 1024);
@@ -1026,8 +1041,10 @@ sendTablespace(char *path, bool sizeonly)
 	 * the version directory in it that belongs to us.
 	 */
 	snprintf(pathbuf, sizeof(pathbuf), "%s/%s", path,
-			 tablespace_version_directory());
+			 GP_TABLESPACE_VERSION_DIRECTORY);
 
+	elogif(debug_basebackup, LOG,
+		   "sendTablespace -- Sending tablespace version directory = %s", pathbuf);
 	/*
 	 * Store a directory entry in the tar file so we get the permissions
 	 * right.
@@ -1044,7 +1061,7 @@ sendTablespace(char *path, bool sizeonly)
 		return 0;
 	}
 	if (!sizeonly)
-		_tarWriteHeader(tablespace_version_directory(), NULL, &statbuf);
+		_tarWriteHeader(GP_TABLESPACE_VERSION_DIRECTORY, NULL, &statbuf);
 	size = 512;					/* Size of the header just added */
 
 	/* Send all the files in the tablespace version directory */
@@ -1235,6 +1252,10 @@ sendDir(char *path, int basepathlen, bool sizeonly, List *tablespaces,
 						(errmsg("symbolic link \"%s\" target is too long",
 								pathbuf)));
 			linkpath[rllen] = '\0';
+
+			/* Lop off the dbid before sending the link target. */
+			char *file_sep_before_dbid_in_link_path = strrchr(linkpath, '/');
+			*file_sep_before_dbid_in_link_path = '\0';
 
 			if (!sizeonly)
 				_tarWriteHeader(pathbuf + basepathlen + 1, linkpath, &statbuf);

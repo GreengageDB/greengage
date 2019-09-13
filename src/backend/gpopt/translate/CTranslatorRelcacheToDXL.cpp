@@ -97,7 +97,7 @@ const ULONG cmp_type_mappings[][2] =
 IMDCacheObject *
 CTranslatorRelcacheToDXL::RetrieveObject
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid
 	)
@@ -106,7 +106,7 @@ CTranslatorRelcacheToDXL::RetrieveObject
 	GPOS_ASSERT(NULL != md_accessor);
 
 #ifdef FAULT_INJECTOR
-	gpdb::InjectFaultInOptTasks(OptRelcacheTranslatorCatalogAccess);
+	gpdb::InjectFaultInOptTasks("opt_relcache_translator_catalog_access");
 #endif // FAULT_INJECTOR
 
 	switch(mdid->MdidType())
@@ -155,7 +155,7 @@ CTranslatorRelcacheToDXL::RetrieveObject
 IMDCacheObject *
 CTranslatorRelcacheToDXL::RetrieveObjectGPDB
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid
 	)
@@ -224,7 +224,7 @@ CTranslatorRelcacheToDXL::RetrieveObjectGPDB
 CMDName *
 CTranslatorRelcacheToDXL::GetRelName
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	Relation rel
 	)
 {
@@ -247,7 +247,7 @@ CTranslatorRelcacheToDXL::GetRelName
 CMDIndexInfoArray *
 CTranslatorRelcacheToDXL::RetrieveRelIndexInfo
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	Relation rel
 	)
 {
@@ -273,7 +273,7 @@ CTranslatorRelcacheToDXL::RetrieveRelIndexInfo
 CMDIndexInfoArray *
 CTranslatorRelcacheToDXL::RetrieveRelIndexInfoForPartTable
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	Relation root_rel
 	)
 {
@@ -329,7 +329,7 @@ CTranslatorRelcacheToDXL::RetrieveRelIndexInfoForPartTable
 CMDIndexInfoArray *
 CTranslatorRelcacheToDXL::RetrieveRelIndexInfoForNonPartTable
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	Relation rel
 	)
 {
@@ -429,7 +429,7 @@ CTranslatorRelcacheToDXL::RetrievePartTableIndexInfo
 IMdIdArray *
 CTranslatorRelcacheToDXL::RetrieveRelTriggers
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	Relation rel
 	)
 {
@@ -471,7 +471,7 @@ CTranslatorRelcacheToDXL::RetrieveRelTriggers
 IMdIdArray *
 CTranslatorRelcacheToDXL::RetrieveRelCheckConstraints
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	OID oid
 	)
 {
@@ -542,7 +542,7 @@ CTranslatorRelcacheToDXL::CheckUnsupportedRelation
 IMDRelation *
 CTranslatorRelcacheToDXL::RetrieveRel
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid
 	)
@@ -562,6 +562,7 @@ CTranslatorRelcacheToDXL::RetrieveRel
 	if (RelationIsForeign(rel))
 	{
 		// GPORCA does not support foreign data wrappers
+		gpdb::CloseRelation(rel);
 		GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported, GPOS_WSZ_LIT("Foreign Data"));
 	}
 
@@ -734,7 +735,7 @@ CTranslatorRelcacheToDXL::RetrieveRel
 CMDColumnArray *
 CTranslatorRelcacheToDXL::RetrieveRelColumns
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	Relation rel,
 	IMDRelation::Erelstoragetype rel_storage_type
@@ -831,7 +832,7 @@ CTranslatorRelcacheToDXL::RetrieveRelColumns
 CDXLNode *
 CTranslatorRelcacheToDXL::GetDefaultColumnValue
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	TupleDesc rd_att,
 	AttrNumber attno
@@ -931,7 +932,7 @@ CTranslatorRelcacheToDXL::GetRelDistribution
 ULongPtrArray *
 CTranslatorRelcacheToDXL::RetrieveRelDistributionCols
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	GpPolicy *gp_policy,
 	CMDColumnArray *mdcol_array,
 	ULONG size
@@ -972,7 +973,7 @@ CTranslatorRelcacheToDXL::RetrieveRelDistributionCols
 void
 CTranslatorRelcacheToDXL::AddSystemColumns
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDColumnArray *mdcol_array,
 	Relation rel,
 	BOOL is_ao_table
@@ -1050,7 +1051,7 @@ CTranslatorRelcacheToDXL::IsTransactionVisibilityAttribute
 IMDIndex *
 CTranslatorRelcacheToDXL::RetrieveIndex
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid_index
 	)
@@ -1115,7 +1116,12 @@ CTranslatorRelcacheToDXL::RetrieveIndex
 	
 		index_type = IMDIndex::EmdindBtree;
 		IMDRelation::Erelstoragetype rel_storage_type = md_rel->RetrieveRelStorageType();
-		if (GIST_AM_OID == index_rel->rd_rel->relam)
+		if (GIN_AM_OID == index_rel->rd_rel->relam)
+		{
+				index_type = IMDIndex::EmdindGin;
+				mdid_item_type = GPOS_NEW(mp) CMDIdGPDB(GPDB_ANY);
+		}
+		else if (GIST_AM_OID == index_rel->rd_rel->relam)
 		{
 			index_type = IMDIndex::EmdindGist;
 			mdid_item_type = GPOS_NEW(mp) CMDIdGPDB(GPDB_ANY);
@@ -1192,7 +1198,7 @@ CTranslatorRelcacheToDXL::RetrieveIndex
 IMDIndex *
 CTranslatorRelcacheToDXL::RetrievePartTableIndex
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid_index,
 	const IMDRelation *md_rel,
@@ -1256,7 +1262,7 @@ CTranslatorRelcacheToDXL::LookupLogicalIndexById
 IMDIndex *
 CTranslatorRelcacheToDXL::RetrievePartTableIndex
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	LogicalIndexInfo *index_info,
 	IMDId *mdid_index,
@@ -1380,7 +1386,7 @@ CTranslatorRelcacheToDXL::RetrievePartTableIndex
 	default_levels_derived->Release();
 	mdid_index->AddRef();
 
-	GPOS_ASSERT(INDTYPE_BITMAP == index_info->indType || INDTYPE_BTREE == index_info->indType || INDTYPE_GIST == index_info->indType);
+	GPOS_ASSERT(INDTYPE_BITMAP == index_info->indType || INDTYPE_BTREE == index_info->indType || INDTYPE_GIST == index_info->indType || INDTYPE_GIN == index_info->indType);
 
 	IMDIndex::EmdindexType index_type = IMDIndex::EmdindBtree;
 	IMDId *mdid_item_type = NULL;
@@ -1392,6 +1398,11 @@ CTranslatorRelcacheToDXL::RetrievePartTableIndex
 	else if (INDTYPE_GIST == index_info->indType)
 	{
 		index_type = IMDIndex::EmdindGist;
+		 mdid_item_type = GPOS_NEW(mp) CMDIdGPDB(GPDB_ANY);
+	}
+	else if (INDTYPE_GIN == index_info->indType)
+	{
+		index_type = IMDIndex::EmdindGin;
 		mdid_item_type = GPOS_NEW(mp) CMDIdGPDB(GPDB_ANY);
 	}
 
@@ -1460,7 +1471,7 @@ CTranslatorRelcacheToDXL::LevelHasDefaultPartition
 ULongPtrArray *
 CTranslatorRelcacheToDXL::ComputeIncludedCols
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	const IMDRelation *md_rel
 	)
 {
@@ -1514,7 +1525,7 @@ CTranslatorRelcacheToDXL::GetAttributePosition
 ULONG *
 CTranslatorRelcacheToDXL::PopulateAttnoPositionMap
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	const IMDRelation *md_rel,
 	ULONG size
 	)
@@ -1556,7 +1567,7 @@ CTranslatorRelcacheToDXL::PopulateAttnoPositionMap
 IMDType *
 CTranslatorRelcacheToDXL::RetrieveType
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -1611,6 +1622,7 @@ CTranslatorRelcacheToDXL::RetrieveType
 	CMDIdGPDB *mdid_op_geq = GPOS_NEW(mp) CMDIdGPDB(gpdb::GetInverseOp(ptce->lt_opr));
 	CMDIdGPDB *mdid_op_cmp = GPOS_NEW(mp) CMDIdGPDB(ptce->cmp_proc);
 	BOOL is_hashable = gpdb::IsOpHashJoinable(ptce->eq_opr, oid_type);
+	BOOL is_merge_joinable = gpdb::IsOpMergeJoinable(ptce->eq_opr, oid_type);
 	BOOL is_composite_type = gpdb::IsCompositeType(oid_type);
 
 	// get standard aggregates
@@ -1658,6 +1670,7 @@ CTranslatorRelcacheToDXL::RetrieveType
 						 mdid_sum,
 						 mdid_count,
 						 is_hashable,
+						 is_merge_joinable,
 						 is_composite_type,
 						 mdid_type_relid,
 						 mdid_type_array,
@@ -1677,7 +1690,7 @@ CTranslatorRelcacheToDXL::RetrieveType
 CMDScalarOpGPDB *
 CTranslatorRelcacheToDXL::RetrieveScOp
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -1817,7 +1830,7 @@ CTranslatorRelcacheToDXL::LookupFuncProps
 CMDFunctionGPDB *
 CTranslatorRelcacheToDXL::RetrieveFunc
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -1901,7 +1914,7 @@ CTranslatorRelcacheToDXL::RetrieveFunc
 CMDAggregateGPDB *
 CTranslatorRelcacheToDXL::RetrieveAgg
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -1969,7 +1982,7 @@ CTranslatorRelcacheToDXL::RetrieveAgg
 CMDTriggerGPDB *
 CTranslatorRelcacheToDXL::RetrieveTrigger
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -2030,7 +2043,7 @@ CTranslatorRelcacheToDXL::RetrieveTrigger
 CMDCheckConstraintGPDB *
 CTranslatorRelcacheToDXL::RetrieveCheckConstraints
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid
 	)
@@ -2114,7 +2127,7 @@ CTranslatorRelcacheToDXL::RetrieveCheckConstraints
 CMDName *
 CTranslatorRelcacheToDXL::GetTypeName
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -2217,7 +2230,7 @@ CTranslatorRelcacheToDXL::GetEFuncDataAccess
 IMDId *
 CTranslatorRelcacheToDXL::RetrieveAggIntermediateResultType
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -2251,7 +2264,7 @@ CTranslatorRelcacheToDXL::RetrieveAggIntermediateResultType
 IMDCacheObject *
 CTranslatorRelcacheToDXL::RetrieveRelStats
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -2316,7 +2329,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStats
 IMDCacheObject *
 CTranslatorRelcacheToDXL::RetrieveColStats
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	IMDId *mdid
 	)
@@ -2585,7 +2598,7 @@ CTranslatorRelcacheToDXL::RetrieveColStats
 CDXLColStats *
 CTranslatorRelcacheToDXL::GenerateStatsForSystemCols
        (
-       IMemoryPool *mp,
+       CMemoryPool *mp,
        OID rel_oid,
        CMDIdColStats *mdid_col_stats,
        CMDName *md_colname,
@@ -2709,7 +2722,7 @@ CTranslatorRelcacheToDXL::RetrieveNumChildPartitions
 IMDCacheObject *
 CTranslatorRelcacheToDXL::RetrieveCast
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -2783,7 +2796,7 @@ CTranslatorRelcacheToDXL::RetrieveCast
 IMDCacheObject *
 CTranslatorRelcacheToDXL::RetrieveScCmp
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid
 	)
 {
@@ -2831,7 +2844,7 @@ CTranslatorRelcacheToDXL::RetrieveScCmp
 CDXLBucketArray *
 CTranslatorRelcacheToDXL::TransformStatsToDXLBucketArray
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	OID att_type,
 	CDouble num_distinct,
 	CDouble null_freq,
@@ -2942,7 +2955,7 @@ CTranslatorRelcacheToDXL::TransformStatsToDXLBucketArray
 CHistogram *
 CTranslatorRelcacheToDXL::TransformMcvToOrcaHistogram
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	const IMDType *md_type,
 	const Datum *mcv_values,
 	const float4 *mcv_frequencies,
@@ -2994,7 +3007,7 @@ CTranslatorRelcacheToDXL::TransformMcvToOrcaHistogram
 CHistogram *
 CTranslatorRelcacheToDXL::TransformHistToOrcaHistogram
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	const IMDType *md_type,
 	const Datum *hist_values,
 	ULONG num_hist_values,
@@ -3086,7 +3099,7 @@ CTranslatorRelcacheToDXL::TransformHistToOrcaHistogram
 CDXLBucketArray *
 CTranslatorRelcacheToDXL::TransformHistogramToDXLBucketArray
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	const IMDType *md_type,
 	const CHistogram *hist
 	)
@@ -3167,7 +3180,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStorageType
 void
 CTranslatorRelcacheToDXL::RetrievePartKeysAndTypes
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	Relation rel,
 	OID oid,
 	ULongPtrArray **part_keys,
@@ -3227,7 +3240,7 @@ CTranslatorRelcacheToDXL::RetrievePartKeysAndTypes
 ULONG *
 CTranslatorRelcacheToDXL::ConstructAttnoMapping
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDColumnArray *mdcol_array,
 	ULONG max_cols
 	)
@@ -3269,7 +3282,7 @@ CTranslatorRelcacheToDXL::ConstructAttnoMapping
 ULongPtr2dArray *
 CTranslatorRelcacheToDXL::RetrieveRelKeysets
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	OID oid,
 	BOOL should_add_default_keys,
 	BOOL is_partitioned,
@@ -3391,7 +3404,8 @@ CTranslatorRelcacheToDXL::IsIndexSupported
 	// index expressions and index constraints not supported
 	return gpdb::HeapAttIsNull(tup, Anum_pg_index_indexprs) &&
 		gpdb::HeapAttIsNull(tup, Anum_pg_index_indpred) &&
-		(BTREE_AM_OID == index_rel->rd_rel->relam || BITMAP_AM_OID == index_rel->rd_rel->relam || GIST_AM_OID == index_rel->rd_rel->relam);
+		(BTREE_AM_OID == index_rel->rd_rel->relam || BITMAP_AM_OID == index_rel->rd_rel->relam || GIST_AM_OID == index_rel->rd_rel->relam ||
+		 	GIN_AM_OID == index_rel->rd_rel->relam);
 }
 
 //---------------------------------------------------------------------------
@@ -3405,7 +3419,7 @@ CTranslatorRelcacheToDXL::IsIndexSupported
 CMDPartConstraintGPDB *
 CTranslatorRelcacheToDXL::RetrievePartConstraintForIndex
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	const IMDRelation *md_rel,
 	Node *part_constraint,
@@ -3455,7 +3469,7 @@ CTranslatorRelcacheToDXL::RetrievePartConstraintForIndex
 CMDPartConstraintGPDB *
 CTranslatorRelcacheToDXL::RetrievePartConstraintForRel
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	OID rel_oid,
 	CMDColumnArray *mdcol_array,
@@ -3547,7 +3561,7 @@ CTranslatorRelcacheToDXL::RetrievePartConstraintForRel
 CMDPartConstraintGPDB *
 CTranslatorRelcacheToDXL::RetrievePartConstraintFromNode
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	CDXLColDescrArray *dxl_col_descr_array,
 	Node *part_constraints,
@@ -3660,7 +3674,7 @@ CTranslatorRelcacheToDXL::GetComparisonType
 IMdIdArray *
 CTranslatorRelcacheToDXL::RetrieveIndexOpFamilies
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid_index
 	)
 {
@@ -3689,7 +3703,7 @@ CTranslatorRelcacheToDXL::RetrieveIndexOpFamilies
 IMdIdArray *
 CTranslatorRelcacheToDXL::RetrieveScOpOpFamilies
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IMDId *mdid_scalar_op
 	)
 {

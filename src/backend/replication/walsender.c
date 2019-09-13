@@ -253,7 +253,7 @@ InitWalSender(void)
 	/* Set up resource owner */
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "walsender top-level resource owner");
 
-	SIMPLE_FAULT_INJECTOR(InitializeWalSender);
+	SIMPLE_FAULT_INJECTOR("initialize_wal_sender");
 
 	/*
 	 * Let postmaster know that we're a WAL sender. Once we've declared us as
@@ -1898,7 +1898,7 @@ WalSndLoop(WalSndSendDataCallback send_data)
 	 */
 	for (;;)
 	{
-		SIMPLE_FAULT_INJECTOR(WalSenderLoop);
+		SIMPLE_FAULT_INJECTOR("wal_sender_loop");
 
 		/*
 		 * Emergency bailout if postmaster has died.  This is to avoid the
@@ -1955,6 +1955,8 @@ WalSndLoop(WalSndSendDataCallback send_data)
 		/* Try to flush pending output to the client */
 		if (pq_flush_if_writable() != 0)
 			WalSndShutdown();
+
+		SIMPLE_FAULT_INJECTOR("wal_sender_after_caughtup_within_range");
 
 		/* If nothing remains to be sent right now ... */
 		if (WalSndCaughtUp && !pq_is_send_pending())
@@ -2069,7 +2071,6 @@ InitWalSenderSlot(void)
 			walsnd->apply = InvalidXLogRecPtr;
 			walsnd->state = WALSNDSTATE_STARTUP;
 			/* Will be decided in hand-shake */
-			walsnd->synchronous = false;
 			walsnd->xlogCleanUpTo = InvalidXLogRecPtr;
 			walsnd->caughtup_within_range = false;
 			SpinLockRelease(&walsnd->mutex);
@@ -2117,8 +2118,6 @@ WalSndKill(int code, Datum arg)
 			SyncRepWakeQueue(true, SYNC_REP_WAIT_FLUSH);
 
 			SpinLockAcquire(&MyWalSnd->mutex);
-
-			MyWalSnd->synchronous = false;
 
 			/* xlog can get freed without the WAL sender worry */
 			MyWalSnd->xlogCleanUpTo = InvalidXLogRecPtr;
@@ -3221,7 +3220,7 @@ pg_stat_get_wal_senders(PG_FUNCTION_ARGS)
 			/*
 			 * Treat a standby such as a pg_basebackup background process
 			 * which always returns an invalid flush location, as an
-			 * asynchronous standby. WAL sender must be streaming or
+			 * asynchronous standby.  WAL sender must be streaming or
 			 * stopping.
 			 */
 			sync_priority[i] = XLogRecPtrIsInvalid(walsnd->flush) ?

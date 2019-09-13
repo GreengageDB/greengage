@@ -1821,7 +1821,6 @@ typedef struct CreateStmt
 	Node       *partitionBy;     /* what columns we partition the data by */
 	char	    relKind;         /* CDB: force relkind to this */
 	char		relStorage;
-	Node       *postCreate;      /* CDB: parse and process after the CREATE */
 	List	   *deferredStmts;	/* CDB: Statements, e.g., partial indexes, that can't be
 								 * analyzed until after CREATE (until the target table
 								 * is created and visible). */
@@ -2636,7 +2635,7 @@ typedef struct SecLabelStmt
  * This is used to request the planner to create a plan that's updatable with
  * CURRENT OF. It can be passed to SPI_prepare_cursor.
  */
-#define CURSOR_OPT_UPDATABLE	0x0040	/* updateable with CURRENT OF, if possible */
+#define CURSOR_OPT_UPDATABLE	0x0200	/* updateable with CURRENT OF, if possible */
 
 typedef struct DeclareCursorStmt
 {

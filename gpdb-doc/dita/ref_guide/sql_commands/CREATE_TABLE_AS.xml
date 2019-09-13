@@ -9,7 +9,7 @@
       <title>Synopsis</title>
       <codeblock id="sql_command_synopsis">CREATE [ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } | UNLOGGED ] TABLE <varname>table_name</varname>
         [ (<varname>column_name</varname> [, ...] ) ]
-        [ WITH ( <varname>storage_parameter</varname> [= <varname>value</varname>] [, ... ] ) | WITH OIDS | WITHOUT OIDS ]
+        [ WITH ( <varname>storage_parameter</varname> [= <varname>value</varname>] [, ... ] ) | WITHOUT OIDS ]
         [ ON COMMIT { PRESERVE ROWS | DELETE ROWS | DROP } ]
         [ TABLESPACE <varname>tablespace_name</varname> ]
         AS <varname>query</varname>
@@ -23,7 +23,7 @@
    compresstype={ZLIB|ZSTD|QUICKLZ}
    compresslevel={1-19 | 1}
    fillfactor={10-100}
-   oids[=TRUE|FALSE]</codeblock>
+   [oids=FALSE]</codeblock>
     </section>
     <section id="section3">
       <title>Description</title>
@@ -107,15 +107,18 @@
             option is valid only if <codeph>appendoptimized=TRUE</codeph>.</pd>
           <pd><b>fillfactor</b> — See <codeph><xref href="CREATE_INDEX.xml#topic1" type="topic"
                 format="dita"/></codeph> for more information about this index storage parameter. </pd>
-          <pd><b>oids</b> — Set to <codeph>oids=FALSE</codeph> (the default) so that rows do not have
-            object identifiers assigned to them. Greenplum strongly recommends that you do not
-            enable OIDS when creating a table. On large tables, such as those in a typical Greenplum
-            Database system, using OIDs for table rows can cause wrap-around of the 32-bit OID
-            counter. Once the counter wraps around, OIDs can no longer be assumed to be unique,
-            which not only makes them useless to user applications, but can also cause problems in
-            the Greenplum Database system catalog tables. In addition, excluding OIDs from a table
-            reduces the space required to store the table on disk by 4 bytes per row, slightly
-            improving performance. OIDS are not allowed on column-oriented tables.</pd>
+          <pd><b>oids=FALSE</b> — This setting is the default, and it ensures that rows do not have
+            object identifiers assigned to them. <ph otherprops="pivotal">Pivotal does not support
+              using <codeph>WITH OIDS</codeph> or <codeph>oids=TRUE</codeph> to assign an OID system
+              column. </ph>On large tables, such as those in a typical Greenplum Database system,
+            using OIDs for table rows can cause wrap-around of the 32-bit OID counter. Once the
+            counter wraps around, OIDs can no longer be assumed to be unique, which not only makes
+            them useless to user applications, but can also cause problems in the Greenplum Database
+            system catalog tables. In addition, excluding OIDs from a table reduces the space
+            required to store the table on disk by 4 bytes per row, slightly improving performance.
+            You cannot create OIDS on a partitioned or column-oriented table (an error is
+            displayed). This syntax is deprecated and will be removed in a future Greenplum
+            release.</pd>
         </plentry>
         <plentry>
           <pt>ON COMMIT</pt>
@@ -133,7 +136,8 @@
           <pt>TABLESPACE <varname>tablespace_name</varname></pt>
           <pd>The <varname>tablespace_name</varname> parameter is the name of the tablespace in
             which the new table is to be created. If not specified, the database's default
-            tablespace is used.</pd>
+            tablespace is used, or <xref href="../config_params/guc-list.xml#topic_k52_fqm_f3b"/> if
+            the table is temporary.</pd>
         </plentry>
         <plentry>
           <pt>AS <varname>query</varname></pt>
@@ -163,10 +167,10 @@
             table distribution policy if the <cmdname>DISTRIBUTED BY</cmdname> clause is not
             specified when you create a table. Greenplum Database follows these rules to create a
             table if a distribution policy is not specified.<ul id="ul_ejv_m1b_kr">
-              <li>If the Postgres query optimizer creates the table, and the value of the parameter is
+              <li>If the Postgres Planner creates the table, and the value of the parameter is
                   <codeph>off</codeph>, the table distribution policy is determined based on the
                 command.</li>
-              <li>If the Postgres query optimizer creates the table, and the value of the parameter is
+              <li>If the Postgres Planner creates the table, and the value of the parameter is
                   <codeph>on</codeph>, the table distribution policy is random.</li>
               <li>If GPORCA creates the table, the table distribution policy is random. The
                 parameter value has no effect. </li>
@@ -174,7 +178,7 @@
           <pd>For more information about setting the default table distribution policy, see <xref
               href="../config_params/guc-list.xml#gp_create_table_random_default_distribution"
                 ><codeph>gp_create_table_random_default_distribution</codeph></xref>. For
-            information about the Postgres query optimizer and GPORCA, see <xref
+            information about the Postgres Planner and GPORCA, see <xref
               href="../../admin_guide/query/topics/query.xml#topic1">Querying Data</xref> in the
               <cite>Greenplum Database Administrator Guide</cite>.</pd>
         </plentry>
@@ -198,11 +202,11 @@
       <codeblock>CREATE TABLE films_recent AS SELECT * FROM films WHERE 
 date_prod &gt;= '2007-01-01';</codeblock>
       <p>Create a new temporary table <codeph>films_recent</codeph>, consisting of only recent
-        entries from the table films, using a prepared statement. The new table has OIDs and will be
-        dropped at commit: </p>
+        entries from the table films, using a prepared statement. The new table will be dropped at
+        commit: </p>
       <codeblock>PREPARE recentfilms(date) AS SELECT * FROM films WHERE 
 date_prod &gt; $1;
-CREATE TEMP TABLE films_recent WITH (OIDS) ON COMMIT DROP AS 
+CREATE TEMP TABLE films_recent ON COMMIT DROP AS 
 EXECUTE recentfilms('2007-01-01');</codeblock>
     </section>
     <section id="section7">
@@ -219,7 +223,9 @@ EXECUTE recentfilms('2007-01-01');</codeblock>
         <li id="ce151723">Greenplum Database handles temporary tables differently from the standard;
           see <codeph>CREATE TABLE</codeph> for details.</li>
         <li id="ce151725">The <codeph>WITH</codeph> clause is a Greenplum Database extension;
-          neither storage parameters nor <codeph>OIDs</codeph> are in the standard. </li>
+          neither storage parameters nor <codeph>OIDs</codeph> are in the standard.  The syntax for
+          creating OID system columns is deprecated and will be removed in a future Greenplum
+          release.</li>
         <li id="ce151727">The Greenplum Database concept of tablespaces is not part of the standard.
           The <codeph>TABLESPACE</codeph> clause is an extension.</li>
       </ul>

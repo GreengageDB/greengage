@@ -406,8 +406,9 @@ errstart(int elevel, const char *filename, int lineno,
 					break;
 
 				case DTX_STATE_NONE:
-				case DTX_STATE_ACTIVE_NOT_DISTRIBUTED:
 				case DTX_STATE_ACTIVE_DISTRIBUTED:
+				case DTX_STATE_ONE_PHASE_COMMIT:
+				case DTX_STATE_PERFORMING_ONE_PHASE_COMMIT:
 				case DTX_STATE_INSERTING_FORGET_COMMITTED:
 				case DTX_STATE_INSERTED_FORGET_COMMITTED:
 				case DTX_STATE_NOTIFYING_ABORT_NO_PREPARED:
@@ -662,9 +663,7 @@ errfinish(int dummy __attribute__((unused)),...)
 	 * progress, so that we can report the message before dying.  (Without
 	 * this, pq_putmessage will refuse to send the message at all, which is
 	 * what we want for NOTICE messages, but not for fatal exits.) This hack
-	 * is necessary because of poor design of old-style copy protocol.  Note
-	 * we must do this even if client is fool enough to have set
-	 * client_min_messages above FATAL, so don't look at output_to_client.
+	 * is necessary because of poor design of old-style copy protocol.
 	 */
 	if (elevel >= FATAL && whereToSendOutput == DestRemote)
 		pq_endcopyout(true);
@@ -2061,12 +2060,7 @@ pg_re_throw(void)
 		else
 			edata->output_to_server = (FATAL >= log_min_messages);
 		if (whereToSendOutput == DestRemote)
-		{
-			if (ClientAuthInProgress)
-				edata->output_to_client = true;
-			else
-				edata->output_to_client = (FATAL >= client_min_messages);
-		}
+			edata->output_to_client = true;
 
 		/*
 		 * We can use errfinish() for the rest, but we don't want it to call

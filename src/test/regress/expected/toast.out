@@ -98,20 +98,18 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 SELECT DISTINCT gp_inject_fault('decrease_toast_max_chunk_size', 'skip', dbid)
 	   FROM pg_catalog.gp_segment_configuration
 	   WHERE role = 'p';
-NOTICE:  Success:
  gp_inject_fault 
 -----------------
- t
+ Success:
 (1 row)
 
 INSERT INTO toast_chunk_test VALUES (repeat('abcdefghijklmnopqrstuvwxyz', 1000)::bytea);
 SELECT DISTINCT gp_inject_fault('decrease_toast_max_chunk_size', 'reset', dbid)
 	   FROM pg_catalog.gp_segment_configuration
 	   WHERE role = 'p';
-NOTICE:  Success:
  gp_inject_fault 
 -----------------
- t
+ Success:
 (1 row)
 
 -- The toasted value should still be read correctly.

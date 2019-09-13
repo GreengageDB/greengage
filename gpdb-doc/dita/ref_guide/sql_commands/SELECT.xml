@@ -141,11 +141,7 @@ ROWS FROM( function_name ( [ argument [, ...] ] ) [ AS ( column_definition [, ..
           each query in the <codeph>WITH</codeph> clause. Optionally, a list of column names can be
           specified; if the list of column names is omitted, the names are inferred from the
           subquery. The primary query and the <codeph>WITH</codeph> queries are all (notionally)
-          executed at the same time. </p><p>The <codeph>RECURSIVE</codeph> keyword can be enabled by setting the server configuration
-          parameter <codeph>gp_recursive_cte</codeph> to <codeph>true</codeph>. For
-          information about the parameter, see <xref href="../config_params/guc_config.xml#topic1"
-            />.<note type="note">The <codeph>RECURSIVE</codeph> keyword is a Beta
-          feature.</note></p><p>If <codeph>RECURSIVE</codeph> is specified, it
+          executed at the same time. </p><p>If <codeph>RECURSIVE</codeph> is specified, it
           allows a <codeph>SELECT</codeph> subquery to reference itself by name. Such a subquery has
           the general
           form</p><codeblock><varname>non_recursive_term</varname> UNION [ALL | DISTINCT] <varname>recursive_term</varname></codeblock><p>where
@@ -411,7 +407,8 @@ GROUPING SETS ((<varname>grouping_element</varname> [, ...]))</codeblock><p><cod
           having a single group comprising all the selected rows.) The set of rows fed to each
           aggregate function can be further filtered by attaching a <codeph>FILTER</codeph> clause
           to the aggregate function call. When a <codeph>FILTER</codeph> clause is present, only
-          those rows matching it are included in the input to that aggregate function.</p><p>When
+          those rows matching it are included in the input to that aggregate function. See <xref
+            href="../../admin_guide/query/topics/defining-queries.xml#topic11"/>.</p><p>When
             <codeph>GROUP BY</codeph> is present, or any aggregate functions are present, it is not
           valid for the <codeph>SELECT</codeph> list expressions to refer to ungrouped columns
           except within aggregate functions or when the ungrouped column is functionally dependent
@@ -421,7 +418,7 @@ GROUPING SETS ((<varname>grouping_element</varname> [, ...]))</codeblock><p><cod
           Keep in mind that all aggregate functions are evaluated before evaluating any "scalar"
           expressions in the <codeph>HAVING</codeph> clause or <codeph>SELECT</codeph> list. This
           means that, for example, a <codeph>CASE</codeph> expression cannot be used to skip
-          evaluation of an aggregate function; see<xref
+          evaluation of an aggregate function; see <xref
             href="../../admin_guide/query/topics/defining-queries.xml#topic25"/>. </p><p>Greenplum
           Database has the following additional OLAP grouping extensions (often referred to as
             <i>supergroups</i>):</p><parml>
@@ -845,14 +842,19 @@ OFFSET <varname>start</varname></codeblock><p>where
             SHARE</codeph> are <i>locking clauses</i>; they affect how <codeph>SELECT</codeph> locks
           rows as they are obtained from the table.</p><p>The locking clause has the general
           form</p><codeblock>FOR <varname>lock_strength</varname> [OF <varname>table_name</varname> [ , ... ] ] [ NOWAIT ]</codeblock><p>where
-            <varname>lock_strength</varname> can be one
-          of<codeblock>UPDATE
-NO KEY UPDATE
-SHARE
-KEY SHARE</codeblock></p><note> By default,
-          Greenplum Database acquires an <codeph>EXCLUSIVE</codeph> lock on tables for
-            <codeph>DELETE</codeph> and <codeph>UPDATE</codeph> operations on heap tables. When the
-          Global Deadlock Detector is enabled the lock mode for <codeph>DELETE</codeph> and
+            <varname>lock_strength</varname> can be one of<ul id="ol_m3x_p54_n3b">
+            <li><codeph>FOR UPDATE</codeph> - Locks the table with an <codeph>EXCLUSIVE</codeph>
+              lock.</li>
+            <li><codeph>FOR NO KEY UPDATE</codeph> - Locks the table with an
+                <codeph>EXCLUSIVE</codeph> lock.</li>
+            <li><codeph>FOR SHARE</codeph> - Locks the table with a <codeph>ROW SHARE</codeph>
+              lock.</li>
+            <li><codeph>FOR KEY SHARE</codeph> - Locks the table with a <codeph>ROW SHARE</codeph>
+              lock.</li>
+          </ul></p>
+        <note> By default, Greenplum Database acquires an <codeph>EXCLUSIVE</codeph> lock on tables
+          for <codeph>DELETE</codeph> and <codeph>UPDATE</codeph> operations on heap tables. When
+          the Global Deadlock Detector is enabled the lock mode for <codeph>DELETE</codeph> and
             <codeph>UPDATE</codeph> operations on heap tables is <codeph>ROW EXCLUSIVE</codeph>. The
           Global Deadlock Detector is enabled by setting the <xref
             href="../config_params/guc-list.xml#gp_enable_global_deadlock_detector"

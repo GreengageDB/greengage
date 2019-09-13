@@ -498,6 +498,7 @@ extern void ExceptionalCondition(const char *conditionName,
 					 const char *errorType,
 			 const char *fileName, int lineNumber) __attribute__((noreturn));
 
+extern void CdbProgramErrorHandler(SIGNAL_ARGS);
 
 #ifdef __cplusplus
 }   /* extern "C" */

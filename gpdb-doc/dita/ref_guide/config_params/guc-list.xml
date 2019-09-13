@@ -13,9 +13,6 @@
         <stentry>
           <ul id="ul_tc3_nlx_wp">
             <li>
-              <xref href="#add_missing_from"/>
-            </li>
-            <li>
               <xref href="#application_name"/>
             </li>
             <li>
@@ -93,7 +90,7 @@
             </li>
             <li><xref href="#default_text_search_config" format="dita"/></li>
             <li>
-              <xref href="#default_transction_deferrable"/>
+              <xref href="#default_transaction_deferrable"/>
             </li>
             <li>
               <xref href="#default_transaction_isolation"/>
@@ -196,9 +193,6 @@
               <xref href="#gp_dynamic_partition_pruning"/>
             </li>
             <li>
-              <xref href="#gp_enable_adaptive_nestloop"/>
-            </li>
-            <li>
               <xref href="#gp_enable_agg_distinct"/>
             </li>
             <li>
@@ -274,157 +268,12 @@
               <xref href="#gp_gpperfmon_send_interval"/>
             </li>
             <li>
-              <xref href="#gpperfmon_log_alert_level"/>
-            </li>
-            <li>
               <xref href="#gp_hashjoin_tuples_per_bucket"/>
             </li>
-          </ul>
-        </stentry>
-        <stentry>
-          <ul id="ul_wwy_bmx_wp">
+            <li><xref href="#gp_vmem_protect_limit"/></li>
+            <li><xref href="#gp_vmem_idle_resource_timeout"/></li>
             <li>
-              <xref href="#gp_ignore_error_table"/>
-            </li>
-            <li>
-              <xref href="#topic_lvm_ttc_3p"/>
-            </li>
-            <li>
-              <xref href="#gp_instrument_shmem_size"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_debug_retry_interval"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_fc_method"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_hash_multiplier"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_queue_depth"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_setup_timeout"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_snd_queue_depth"/>
-            </li>
-            <li>
-              <xref href="#gp_interconnect_type"/>
-            </li>
-            <li>
-              <xref href="#gp_log_format"/>
-            </li>
-            <li>
-              <xref href="#gp_log_fts"/>
-            </li>
-            <li><xref href="#gp_log_interconnect"/>
-            </li>
-            <li>
-              <xref href="#gp_log_gang"/>
-            </li>
-            <li>
-              <xref href="#gp_max_local_distributed_cache"/>
-            </li>
-            <li>
-              <xref href="#gp_max_packet_size"/>
-            </li>
-            <li>
-              <xref href="#gp_max_plan_size"/>
-            </li>
-            <li><xref href="#gp_max_slices"/></li>
-            <li>
-              <xref href="#gp_motion_cost_per_row"/>
-            </li>
-            <li><xref href="#gp_recursive_cte"/></li>
-            <li>
-              <xref href="#gp_reject_percent_threshold"/>
-            </li>
-            <li>
-              <xref href="#gp_reraise_signal"/>
-            </li>
-            <li>
-              <xref href="#gp_resgroup_memory_policy"/>
-            </li>
-            <li><xref href="#gp_resource_group_bypass"/>
-            </li>
-            <li>
-              <xref href="#gp_resource_group_cpu_limit"/>
-            </li>
-            <li>
-              <xref href="#gp_resource_group_memory_limit"/>
-            </li>
-            <li>
-              <xref href="#gp_resource_manager"/>
-            </li>
-            <li>
-              <xref href="#gp_resqueue_memory_policy"/>
-            </li>
-            <li>
-              <xref href="#gp_resqueue_priority"/>
-            </li>
-            <li>
-              <xref href="#gp_resqueue_priority_cpucores_per_segment"/>
-            </li>
-            <li>
-              <xref href="#gp_resqueue_priority_sweeper_interval"/>
-            </li>
-            <li>
-              <xref href="#gp_role"/>
-            </li>
-            <li>
-              <xref href="#gp_safefswritesize"/>
-            </li>
-            <li>
-              <xref href="#gp_segment_connect_timeout"/>
-            </li>
-            <li>
-              <xref href="#gp_segments_for_planner"/>
-            </li>
-            <li>
-              <xref href="#gp_server_version"/>
-            </li>
-            <li>
-              <xref href="#gp_server_version_num"/>
-            </li>
-            <li>
-              <xref href="#gp_session_id"/>
-            </li>
-            <li>
-              <xref href="#gp_set_proc_affinity"/>
-            </li>
-            <li>
-              <xref href="#gp_set_read_only"/>
-            </li>
-            <li>
-              <xref href="#gp_statistics_pullup_from_child_partition"/>
-            </li>
-            <li>
-              <xref href="#gp_statistics_use_fkeys"/>
-            </li>
-            <li><xref href="#gp_use_legacy_hashops"/>
-            </li>
-            <li>
-              <xref href="#gp_vmem_idle_resource_timeout"/>
-            </li>
-            <li>
-              <xref href="#gp_vmem_protect_limit"/>
-            </li>
-            <li>
-              <xref href="#gp_vmem_protect_segworker_cache_limit"/>
-            </li>
-            <li>
-              <xref href="#gp_workfile_compression"/>
-            </li>
-            <li>
-              <xref href="#gp_workfile_limit_files_per_query"/>
-            </li>
-            <li>
-              <xref href="#gp_workfile_limit_per_query"/>
-            </li>
-            <li>
-              <xref href="#gp_workfile_limit_per_segment"/>
+              <xref href="#gpperfmon_log_alert_level"/>
             </li>
             <li>
               <xref href="#gpperfmon_port"/>
@@ -449,9 +298,6 @@
               <xref href="#krb_server_keyfile"/>
             </li>
             <li>
-              <xref href="#krb_srvname"/>
-            </li>
-            <li>
               <xref href="#lc_collate"/>
             </li>
             <li>
@@ -472,48 +318,10 @@
             <li>
               <xref href="#listen_addresses"/>
             </li>
-            <li>
-              <xref href="#local_preload_libraries"/>
-            </li>
-            <li>
-              <xref href="#lock_timeout"/>
-            </li>
-            <li>
-              <xref href="#log_autostats"/>
-            </li>
-            <li>
-              <xref href="#log_connections"/>
-            </li>
-            <li>
-              <xref href="#log_disconnections"/>
-            </li>
-            <li>
-              <xref href="#log_dispatch_stats"/>
-            </li>
-            <li>
-              <xref href="#log_duration"/>
-            </li>
-            <li>
-              <xref href="#log_error_verbosity"/>
-            </li>
-            <li>
-              <xref href="#log_executor_stats"/>
-            </li>
-            <li>
-              <xref href="#log_hostname"/>
-            </li>
-            <li>
-              <xref href="#log_min_duration_statement"/>
-            </li>
-            <li>
-              <xref href="#log_min_error_statement"/>
-            </li>
-            <li>
-              <xref href="#log_min_messages"/>
-            </li>
-            <li>
-              <xref href="#log_parser_stats"/>
-            </li>
+          </ul>
+        </stentry>
+        <stentry>
+          <ul id="ul_wwy_bmx_wp">
             <li>
               <xref href="#log_planner_stats"/>
             </li>
@@ -545,10 +353,6 @@
             <li>
               <xref href="#max_connections"/>
             </li>
-          </ul>
-        </stentry>
-        <stentry>
-          <ul id="ul_d5f_hmx_wp">
             <li>
               <xref href="#max_files_per_process"/>
             </li>
@@ -642,6 +446,8 @@
             <li>
               <xref href="#optimizer_parallel_union" type="section"
               >optimizer_parallel_union</xref></li>
+            <li><xref href="#optimizer_penalize_skew" type="section"
+              >optimizer_penalize_skew</xref></li>
             <li>
               <xref href="#optimizer_print_missing_stats" type="section"
                 >optimizer_print_missing_stats</xref>
@@ -740,8 +546,7 @@
               <xref href="#stats_queue_level"/>
             </li>
             <li>
-              <xref href="#superuser_reserved_connections"/>
-            </li>
+              <xref href="#superuser_reserved_connections"/></li>
             <li>
               <xref href="#tcp_keepalives_count"/>
             </li>
@@ -753,6 +558,8 @@
             </li>
             <li>
               <xref href="#temp_buffers"/>
+            </li>
+            <li><xref href="#topic_k52_fqm_f3b" format="dita"/>
             </li>
             <li>
               <xref href="#TimeZone"/>
@@ -829,34 +636,6 @@
       </strow>
     </simpletable>
   </body>
-  <topic id="add_missing_from">
-    <title>add_missing_from</title>
-    <body>
-      <p>Automatically adds missing table references to FROM clauses. Present for compatibility with
-        releases of PostgreSQL prior to 8.1, where this behavior was allowed by default.</p>
-      <table id="add_missing_from_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">Boolean</entry>
-              <entry colname="col2">off</entry>
-              <entry colname="col3">master<p>session</p><p>reload</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
   <topic id="application_name">
     <title>application_name</title>
     <body>
@@ -1126,7 +905,7 @@
   <topic id="cpu_index_tuple_cost">
     <title>cpu_index_tuple_cost</title>
     <body>
-      <p>For the Postgres query optimizer (planner), sets the estimate of the cost of processing each
+      <p>For the Postgres Planner, sets the estimate of the cost of processing each
         index row during an index scan. This is measured as a fraction of the cost of a sequential
         page fetch.</p>
       <table id="cpu_index_tuple_cost_table">
@@ -1155,7 +934,7 @@
   <topic id="cpu_operator_cost">
     <title>cpu_operator_cost</title>
     <body>
-      <p>For the Postgres query optimizer (planner), sets the estimate of the cost of processing each
+      <p>For the Postgres Planner, sets the estimate of the cost of processing each
         operator in a WHERE clause. This is measured as a fraction of the cost of a sequential page
         fetch. </p>
       <table id="cpu_operator_cost_table">
@@ -1184,7 +963,7 @@
   <topic id="cpu_tuple_cost">
     <title>cpu_tuple_cost</title>
     <body>
-      <p>For the Postgres query optimizer (planner), Sets the estimate of the cost of processing each
+      <p>For the Postgres Planner, Sets the estimate of the cost of processing each
         row during a query. This is measured as a fraction of the cost of a sequential page
         fetch.</p>
       <table id="cpu_tuple_cost_table">
@@ -1213,8 +992,8 @@
   <topic id="cursor_tuple_fraction">
     <title>cursor_tuple_fraction</title>
     <body>
-      <p>Tells the Postgres query optimizer (planner) how many rows are expected to be fetched in a
-        cursor query, thereby allowing the Postgres optimizer to use this information to optimize the
+      <p>Tells the Postgres Planner how many rows are expected to be fetched in a
+        cursor query, thereby allowing the Postgres Planner to use this information to optimize the
         query plan. The default of 1 means all rows will be fetched. </p>
       <table id="cursor_tuple_fraction_table">
         <tgroup cols="3">
@@ -1421,7 +1200,7 @@
           <tbody>
             <row>
               <entry colname="col1">Boolean</entry>
-              <entry colname="col2">off</entry>
+              <entry colname="col2">on</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
@@ -1575,7 +1354,7 @@
       <p>Sets the default statistics sampling target (the number of values that are stored in the
         list of common values) for table columns that have not had a column-specific target set via
           <codeph>ALTER TABLE SET STATISTICS</codeph>. Larger values may improve the quality of the
-        Postgres query optimizer (planner) estimates. </p>
+        Postgres Planner estimates. </p>
       <table id="default_statistics_target_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -1792,11 +1571,15 @@
     <title>effective_cache_size</title>
     <body>
       <p>Sets the assumption about the effective size of the disk cache that is available to a
-        single query for the Postgres query optimizer (planner). This is factored into estimates of
+        single query for the Postgres Planner. This is factored into estimates of
         the cost of using an index; a higher value makes it more likely index scans will be used, a
         lower value makes it more likely sequential scans will be used. This parameter has no effect
         on the size of shared memory allocated by a Greenplum server instance, nor does it reserve
         kernel disk cache; it is used only for estimation purposes.</p>
+      <p>Set this parameter to a number of 32K blocks (for example, <codeph>512</codeph> for 16MB),
+        or specify the size of the effective cache (for example, <codeph>'32MB'</codeph> for 1024
+        blocks). The <codeph>gpconfig</codeph> utility and <codeph>SHOW</codeph> command display the
+        effective cache size value in units such as 'MB' or 'kB'.</p>
       <table id="effective_cache_size_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -1812,7 +1595,7 @@
           <tbody>
             <row>
               <entry colname="col1">floating point</entry>
-              <entry colname="col2">512MB</entry>
+              <entry colname="col2">512 (16GB)</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
@@ -1823,8 +1606,8 @@
   <topic id="enable_bitmapscan">
     <title>enable_bitmapscan</title>
     <body>
-      <p>Enables or disables the use of bitmap-scan plan types by the Postgres query optimizer
-        (planner). Note that this is different than a Bitmap Index Scan. A Bitmap Scan means that
+      <p>Enables or disables the use of bitmap-scan plan types by the Postgres Planner. Note that 
+        this is different than a Bitmap Index Scan. A Bitmap Scan means that
         indexes will be dynamically converted to bitmaps in memory when appropriate, giving faster
         index performance on complex queries against very large tables. It is used when there are
         multiple predicates on different indexed columns. Each bitmap per column can be compared to
@@ -1855,8 +1638,7 @@
   <topic id="enable_groupagg">
     <title>enable_groupagg</title>
     <body>
-      <p>Enables or disables the use of group aggregation plan types by the Postgres query optimizer
-        (planner).</p>
+      <p>Enables or disables the use of group aggregation plan types by the Postgres Planner.</p>
       <table id="enable_groupagg_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -1883,8 +1665,7 @@
   <topic id="enable_hashagg">
     <title>enable_hashagg</title>
     <body>
-      <p>Enables or disables the use of hash aggregation plan types by the Postgres query optimizer
-        (planner). </p>
+      <p>Enables or disables the use of hash aggregation plan types by the Postgres Planner. </p>
       <table id="enable_hashagg_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -1911,8 +1692,7 @@
   <topic id="enable_hashjoin">
     <title>enable_hashjoin</title>
     <body>
-      <p>Enables or disables the use of hash-join plan types by the Postgres query optimizer
-        (planner).</p>
+      <p>Enables or disables the use of hash-join plan types by the Postgres Planner.</p>
       <table id="enable_hashjoin_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -1939,8 +1719,7 @@
   <topic id="enable_indexscan">
     <title>enable_indexscan</title>
     <body>
-      <p>Enables or disables the use of index-scan plan types by the Postgres query optimizer
-        (planner).</p>
+      <p>Enables or disables the use of index-scan plan types by the Postgres Planner.</p>
       <table id="enable_indexscan_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -1967,8 +1746,7 @@
   <topic id="enable_mergejoin">
     <title>enable_mergejoin</title>
     <body>
-      <p>Enables or disables the use of merge-join plan types by the Postgres query optimizer
-        (planner). Merge join is based on the idea of sorting the left- and right-hand tables into
+      <p>Enables or disables the use of merge-join plan types by the Postgres Planner. Merge join is based on the idea of sorting the left- and right-hand tables into
         order and then scanning them in parallel. So, both data types must be capable of being fully
         ordered, and the join operator must be one that can only succeed for pairs of values that
         fall at the 'same place' in the sort order. In practice this means that the join operator
@@ -1999,9 +1777,8 @@
   <topic id="enable_nestloop">
     <title>enable_nestloop</title>
     <body>
-      <p>Enables or disables the use of nested-loop join plans by the Postgres query optimizer
-        (planner). It's not possible to suppress nested-loop joins entirely, but turning this
-        variable off discourages the Postgres optimizer from using one if there are other methods
+      <p>Enables or disables the use of nested-loop join plans by the Postgres Planner. It's not possible to suppress nested-loop joins entirely, but turning this
+        variable off discourages the Postgres Planner from using one if there are other methods
         available. </p>
       <table id="enable_nestloop_table">
         <tgroup cols="3">
@@ -2029,9 +1806,8 @@
   <topic id="enable_seqscan">
     <title>enable_seqscan</title>
     <body>
-      <p>Enables or disables the use of sequential scan plan types by the Postgres query optimizer
-        (planner). It's not possible to suppress sequential scans entirely, but turning this
-        variable off discourages the Postgres optimizer from using one if there are other methods
+      <p>Enables or disables the use of sequential scan plan types by the Postgres Planner. It's not possible to suppress sequential scans entirely, but turning this
+        variable off discourages the Postgres Planner from using one if there are other methods
         available.</p>
       <table id="enable_seqscan_table">
         <tgroup cols="3">
@@ -2059,9 +1835,9 @@
   <topic id="enable_sort">
     <title>enable_sort</title>
     <body>
-      <p>Enables or disables the use of explicit sort steps by the Postgres query optimizer (planner).
+      <p>Enables or disables the use of explicit sort steps by the Postgres Planner.
         It's not possible to suppress explicit sorts entirely, but turning this variable off
-        discourages the Postgres optimizer from using one if there are other methods available.</p>
+        discourages the Postgres Planner from using one if there are other methods available.</p>
       <table id="enable_sort_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -2088,8 +1864,7 @@
   <topic id="enable_tidscan">
     <title>enable_tidscan</title>
     <body>
-      <p>Enables or disables the use of tuple identifier (TID) scan plan types by the Postgres query
-        optimizer (planner).</p>
+      <p>Enables or disables the use of tuple identifier (TID) scan plan types by the Postgres Planner.</p>
       <table id="enable_tidscan_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -2176,7 +1951,7 @@
     <body>
       <p>Adjusts the number of digits displayed for floating-point values, including float4, float8,
         and geometric data types. The parameter value is added to the standard number of digits. The
-        value can be set as high as 2, to include partially-significant digits; this is especially
+        value can be set as high as 3, to include partially-significant digits; this is especially
         useful for dumping float data that needs to be restored exactly. Or it can be set negative
         to suppress unwanted digits. </p>
       <table id="extra_float_digits_table">
@@ -2205,7 +1980,7 @@
   <topic id="from_collapse_limit">
     <title>from_collapse_limit</title>
     <body>
-      <p>The Postgres query optimizer (planner) will merge sub-queries into upper queries if the
+      <p>The Postgres Planner will merge sub-queries into upper queries if the
         resulting FROM list would have no more than this many items. Smaller values reduce planning
         time but may yield inferior query plans.</p>
       <table id="from_collapse_limit_table">
@@ -2608,15 +2383,15 @@
         </ul></p>
       <p>For a <cmdname>CREATE TABLE AS</cmdname> command that does not contain a distribution
           clause:<ul id="ul_ejv_m1b_kr">
-          <li>If the Postgres query optimizer creates the table, and the value of the parameter is
+          <li>If the Postgres Planner creates the table, and the value of the parameter is
               <codeph>off</codeph>, the table distribution policy is determined based on the
             command.</li>
-          <li>If the Postgres query optimizer creates the table, and the value of the parameter is
+          <li>If the Postgres Planner creates the table, and the value of the parameter is
               <codeph>on</codeph>, the table distribution policy is random.</li>
           <li>If GPORCA creates the table, the table distribution policy is random. The parameter
             value has no affect. </li>
         </ul></p>
-      <p>For information about the Postgres query optimizer and GPORCA, see "Querying Data" in the
+      <p>For information about the Postgres Planner and GPORCA, see "Querying Data" in the
           <cite>Greenplum Database Administrator Guide</cite>. </p>
       <table id="table_hh5_kgp_kq">
         <tgroup cols="3">
@@ -2828,37 +2603,6 @@
       </table>
     </body>
   </topic>
-  <topic id="gp_enable_adaptive_nestloop">
-    <title>gp_enable_adaptive_nestloop</title>
-    <body>
-      <p>Enables the use a new type of join node called "Adaptive Nestloop" at query execution time
-        by the Postgres query optimizer (planner). This causes the Postgres optimizer to favor a
-        hash-join over a nested-loop join if the number of rows on the outer side of the join
-        exceeds a precalculated threshold. This parameter improves performance of index operations,
-        which previously favored slower nested-loop joins. </p>
-      <table id="gp_enable_adaptive_nestloop_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">Boolean</entry>
-              <entry colname="col2">on</entry>
-              <entry colname="col3">master<p>session</p><p>reload</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
   <topic id="gp_enable_agg_distinct">
     <title>gp_enable_agg_distinct</title>
     <body>
@@ -2992,7 +2736,7 @@
   <topic id="gp_enable_fast_sri">
     <title>gp_enable_fast_sri</title>
     <body>
-      <p>When set to <codeph>on</codeph>, the Postgres query optimizer (planner) plans single row
+      <p>When set to <codeph>on</codeph>, the Postgres Planner plans single row
         inserts so that they are sent directly to the correct segment instance (no motion operation
         required). This significantly improves performance of single-row-insert statements.</p>
       <table id="gp_enable_fast_sri_table">
@@ -3059,7 +2803,7 @@
     <title>gp_enable_gpperfmon</title>
     <body>
       <p>Enables or disables the data collection agents that populate the <codeph>gpperfmon</codeph>
-        database for Greenplum Command Center.</p>
+        database.</p>
       <table id="gp_enable_gpperfmon_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -3088,8 +2832,7 @@
     <body>
       <p>Enables or disables gathering data to a single node to compute distinct-qualified
         aggregates on grouping extension queries. When this parameter and
-          <codeph>gp_enable_groupext_distinct_pruning</codeph> are both enabled, the Postgres query
-        optimizer (planner) uses the cheaper plan.</p>
+          <codeph>gp_enable_groupext_distinct_pruning</codeph> are both enabled, the Postgres Planner uses the cheaper plan.</p>
       <table id="gp_enable_groupext_distinct_gather_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -3118,7 +2861,7 @@
     <body>
       <p>Enables or disables three-phase aggregation and join to compute distinct-qualified
         aggregates on grouping extension queries. Usually, enabling this parameter generates a
-        cheaper query plan that the Postgres query optimizer (planner) will use in preference to
+        cheaper query plan that the Postgres Planner will use in preference to
         existing plan.</p>
       <table id="gp_enable_groupext_distinct_pruning_table">
         <tgroup cols="3">
@@ -3146,8 +2889,8 @@
   <topic id="gp_enable_multiphase_agg">
     <title>gp_enable_multiphase_agg</title>
     <body>
-      <p>Enables or disables the use of two or three-stage parallel aggregation plans Postgres query
-        optimizer (planner). This approach applies to any subquery with aggregation. If
+      <p>Enables or disables the use of two or three-stage parallel aggregation plans Postgres Planner. 
+        This approach applies to any subquery with aggregation. If
           <codeph>gp_enable_multiphase_agg</codeph> is off, then<codeph>
           gp_enable_agg_distinct</codeph> and <codeph>gp_enable_agg_distinct_pruning</codeph> are
         disabled.</p>
@@ -3177,7 +2920,7 @@
   <topic id="gp_enable_predicate_propagation">
     <title>gp_enable_predicate_propagation</title>
     <body>
-      <p>When enabled, the Postgres query optimizer (planner) applies query predicates to both table
+      <p>When enabled, the Postgres Planner applies query predicates to both table
         expressions in cases where the tables are joined on their distribution key column(s).
         Filtering both tables prior to doing the join (when possible) is more efficient.</p>
       <table id="gp_enable_predicate_propagation_table">
@@ -3272,7 +3015,7 @@
   <topic id="gp_enable_relsize_collection">
     <title>gp_enable_relsize_collection</title>
     <body>
-      <p>Enables GPORCA and the Postgres query optimizer (planner) to use the estimated size of a
+      <p>Enables GPORCA and the Postgres Planner to use the estimated size of a
         table (<codeph>pg_relation_size</codeph> function) if there are no statistics for the table.
         By default, GPORCA and the planner use a default value to estimate the number of rows if
         statistics are not available. The default behavior improves query optimization time and
@@ -3601,8 +3344,8 @@
   <topic id="gp_global_deadlock_detector_period">
     <title>gp_global_deadlock_detector_period</title>
     <body>
-      <p>Specifies the executing interval (in seconds) of the global deadlock detector backend
-        process.</p>
+      <p>Specifies the executing interval (in seconds) of the global deadlock detector background
+        worker process.</p>
       <table id="gp_global_deadlock_detector_period">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -3725,7 +3468,7 @@
     <body>
       <p>Sets the frequency that the Greenplum Database server processes send query execution
         updates to the data collection agent processes used to populate the
-          <codeph>gpperfmon</codeph> database for Command Center. Query operations executed during
+          <codeph>gpperfmon</codeph> database. Query operations executed during
         this interval are sent through UDP to the segment monitor agents. If you find that an
         excessive number of UDP packets are dropped during long-running, complex queries, you may
         consider increasing this value.</p>
@@ -3745,7 +3488,7 @@
             <row>
               <entry colname="col1">Any valid time expression (number and unit)</entry>
               <entry colname="col2">1sec</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p></entry>
+              <entry colname="col3">master<p>system</p><p>restart</p><p>superuser</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -3985,37 +3728,6 @@
             <row>
               <entry colname="col1">CAPACITY<p>LOSS</p></entry>
               <entry colname="col2">LOSS</entry>
-              <entry colname="col3">master<p>session</p><p>reload</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
-  <topic id="gp_interconnect_hash_multiplier">
-    <title>gp_interconnect_hash_multiplier</title>
-    <body>
-      <p>Sets the size of the hash table used by the Greenplum Database to track interconnect
-        connections with the default UDPIFC interconnect. This number is multiplied by the number of
-        segments to determine the number of buckets in the hash table. Increasing the value may
-        increase interconnect performance for complex multi-slice queries (while consuming slightly
-        more memory on the segment hosts).</p>
-      <table id="gp_interconnect_hash_multiplier_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">2-25</entry>
-              <entry colname="col2">2</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
@@ -4311,7 +4023,7 @@
   <topic id="gp_motion_cost_per_row">
     <title>gp_motion_cost_per_row</title>
     <body>
-      <p>Sets the Postgres query optimizer (planner) cost estimate for a Motion operator to transfer a
+      <p>Sets the Postgres Planner cost estimate for a Motion operator to transfer a
         row from one segment to another, measured as a fraction of the cost of a sequential page
         fetch. If 0, then the value used is two times the value of <i>cpu_tuple_cost</i>.</p>
       <table id="gp_motion_cost_per_row_table">
@@ -4340,21 +4052,18 @@
   <topic id="gp_recursive_cte">
     <title>gp_recursive_cte</title>
     <body>
-      <p>Controls the availability of the <codeph>RECURSIVE</codeph> keyword (Beta) in the
+      <p>Controls the availability of the <codeph>RECURSIVE</codeph> keyword in the
           <codeph>WITH</codeph> clause of a <codeph>SELECT [INTO]</codeph> command, or a
           <codeph>DELETE</codeph>, <codeph>INSERT</codeph> or <codeph>UPDATE</codeph> command. The
         keyword allows a subquery in the <codeph>WITH</codeph> clause of a command to reference
         itself. The default value is <codeph>false</codeph>, the <codeph>RECURSIVE</codeph> keyword
         is not allowed in the <codeph>WITH</codeph> clause of a command.</p>
-      <note type="warning">The <codeph>RECURSIVE</codeph> keyword is a Beta feature.</note>
       <p>For information about the <codeph>RECURSIVE</codeph> keyword (Beta), see the
             <codeph><xref href="../sql_commands/SELECT.xml">SELECT</xref></codeph> command and <xref
           href="../../admin_guide/query/topics/CTE-query.xml"/>.</p>
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
-      <note>This parameter will be removed if the <codeph>RECURSIVE</codeph> keyword is promoted
-        from Beta, or if the keyword is removed from Greenplum Database.
-        This parameter was previously named <codeph>gp_recursive_cte_prototype</codeph>, but
+      <note>This parameter was previously named <codeph>gp_recursive_cte_prototype</codeph>, but
         has been renamed to reflect the current status of the implementation.</note>
       <table id="table_j4s_yyx_1bb">
         <tgroup cols="3">
@@ -4371,7 +4080,7 @@
           <tbody>
             <row>
               <entry colname="col1">Boolean</entry>
-              <entry colname="col2">false</entry>
+              <entry colname="col2">true</entry>
               <entry colname="col3">master<p>session</p><p>restart</p></entry>
             </row>
           </tbody>
@@ -4702,8 +4411,6 @@
         master should reflect the usage of all available CPU cores. </p>
       <p>Incorrect settings can result in CPU under-utilization or query prioritization not working
         as designed. </p>
-      <p>The default values for the Greenplum Data Computing Appliance V2 are 4 for segments and 25
-        for the master.</p>
       <table id="gp_resqueue_priority_cpucores_per_segment_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -4851,9 +4558,9 @@
   <topic id="gp_segments_for_planner">
     <title>gp_segments_for_planner</title>
     <body>
-      <p>Sets the number of primary segment instances for the Postgres query optimizer (planner) to
+      <p>Sets the number of primary segment instances for the Postgres Planner to
         assume in its cost and size estimates. If 0, then the value used is the actual number of
-        primary segments. This variable affects the Postgres optimizer's estimates of the number of
+        primary segments. This variable affects the Postgres Planner's estimates of the number of
         rows handled by each sending and receiving process in Motion operators.</p>
       <table id="gp_segments_for_planner_table">
         <tgroup cols="3">
@@ -5026,7 +4733,7 @@
     <title>gp_statistics_pullup_from_child_partition</title>
     <body>
       <p>Enables the use of statistics from child tables when planning queries on the parent table
-        by the Postgres query optimizer (planner).</p>
+        by the Postgres Planner.</p>
       <table id="gp_statistics_pullup_from_child_partition_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -5053,7 +4760,7 @@
   <topic id="gp_statistics_use_fkeys">
     <title>gp_statistics_use_fkeys</title>
     <body>
-      <p>When enabled, allows the Postgres query optimizer (planner) to use foreign key information
+      <p>When enabled, allows the Postgres Planner to use foreign key information
         stored in the system catalog to optimize joins between foreign keys and primary keys. </p>
       <table id="gp_statistics_use_fkeys_table">
         <tgroup cols="3">
@@ -5081,15 +4788,10 @@
   <topic id="gp_use_legacy_hashops">
     <title>gp_use_legacy_hashops</title>
     <body>
-      <draft-comment author="msk">DRAFT <xref
-          href="https://github.com/greenplum-db/gpdb/pull/6327/commits/e6ce8e2a" format="html"
-          scope="external">gpdb/pull/6327/commits/e6ce8e2a</xref><p><b>[Q:]</b> expand changes
-          hashmethod from 0 (modulo) to 1 (jump consistent) - What happens if GUC is
-        true?</p></draft-comment>
       <p>For a table that is defined with a <codeph>DISTRIBUTED BY
           <varname>key_column</varname></codeph> clause, this parameter controls the hash algorithm
         that is used to distribute table data among segment instances. The default value is
-          <codeph>false</codeph>, use the jump constant hash algorithm. </p>
+          <codeph>false</codeph>, use the jump consistent hash algorithm. </p>
       <p>Setting the value to <codeph>true</codeph> uses the modulo hash algorithm that is
         compatible with Greenplum Database 5.x and earlier releases.</p>
       <table id="gp_interconnect_fc_method_table">
@@ -5359,7 +5061,7 @@
   <topic id="gpperfmon_port">
     <title>gpperfmon_port</title>
     <body>
-      <p>Sets the port on which all data collection agents (for Command Center) communicate with the
+      <p>Sets the port on which all data collection agents communicate with the
         master. </p>
       <table id="gpperfmon_port_table">
         <tgroup cols="3">
@@ -5492,7 +5194,7 @@
   <topic id="join_collapse_limit">
     <title>join_collapse_limit</title>
     <body>
-      <p>The Postgres query optimizer (planner) will rewrite explicit inner <codeph>JOIN</codeph>
+      <p>The Postgres Planner will rewrite explicit inner <codeph>JOIN</codeph>
         constructs into lists of <codeph>FROM</codeph> items whenever a list of no more than this
         many items in total would result. By default, this variable is set the same as
           <i>from_collapse_limit</i>, which is appropriate for most uses. Setting it to 1 prevents
@@ -5601,33 +5303,6 @@
               <entry colname="col1">path and file name</entry>
               <entry colname="col2">unset</entry>
               <entry colname="col3">master<p>system</p><p>restart</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
-  <topic id="krb_srvname">
-    <title>krb_srvname</title>
-    <body>
-      <p>Sets the Kerberos service name.</p>
-      <table id="krb_srvname_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">service name</entry>
-              <entry colname="col2">postgres</entry>
-              <entry colname="col3">master<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6273,7 +5948,7 @@
   <topic id="log_planner_stats">
     <title>log_planner_stats</title>
     <body>
-      <p>For each query, write performance statistics of the Postgres query optimizer (planner) to the
+      <p>For each query, write performance statistics of the Postgres Planner to the
         server log. This is a crude profiling instrument. Cannot be enabled together with
           <i>log_statement_stats</i>.</p>
       <table id="log_planner_stats_table">
@@ -6593,7 +6268,7 @@
         well. For more information about limiting concurrent connections, see "Configuring Client
         Authentication" in the <i>Greenplum Database Administrator Guide</i>.</p>
       <p>Increasing this parameter may cause Greenplum Database to request more shared
-        memory.Increasing this parameter might cause Greenplum Database to request more shared
+        memory. Increasing this parameter might cause Greenplum Database to request more shared
         memory. See <xref href="#shared_buffers" format="dita"/> for information about Greenplum
         server instance shared memory buffers.</p>
       <table id="max_connections_table">
@@ -6889,15 +6564,12 @@
   <topic id="max_statement_mem">
     <title>max_statement_mem</title>
     <body>
-      <note>The <codeph>max_statement_mem</codeph> server configuration parameter is enforced only
-        when resource queue-based resource management is active.</note>
       <p>Sets the maximum memory limit for a query. Helps avoid out-of-memory errors on a segment
         host during query processing as a result of setting <codeph><xref href="#statement_mem"
             format="dita"/>
-        </codeph>too high. When <codeph><xref href="#gp_resqueue_memory_policy" format="dita"
-          />=auto</codeph>, <codeph>statement_mem</codeph> and resource queue memory limits control
-        query memory usage. Taking into account the configuration of a single segment host,
-        calculate this setting as follows:</p>
+        </codeph>too high.</p>
+      <p>Taking into account the configuration of a single segment host,
+        calculate <codeph>max_statement_mem</codeph> as follows:</p>
       <p>
         <codeph>(seghost_physical_memory) / (average_number_concurrent_queries)</codeph>
       </p>
@@ -6940,8 +6612,11 @@
         a per-query basis. For example, if you have a specific query that spills to disk and
         requires more memory, you may choose to set a larger <codeph>memory_spill_ratio</codeph> to
         increase the initial memory allocation.</p>
-      <p>When you set <codeph>memory_spill_ratio</codeph> at the session level, Greenplum Database
-        does not perform semantic validation on the new value until you next perform a query.</p>
+      <p>You can specify an integer percentage value from 0 to 100 inclusive. If you
+        specify a value of 0, Greenplum Database uses the
+            <xref href="#statement_mem" format="dita"><codeph>statement_mem</codeph></xref>
+        server configuration parameter value to control the initial query operator memory
+        amount.</p>
       <table id="memory_spill_ratio_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -6969,13 +6644,13 @@
     <title>optimizer</title>
     <body>
       <p>Enables or disables GPORCA when running SQL queries. The default is <codeph>on</codeph>. If
-        you disable GPORCA, Greenplum Database uses only the Postgres query optimizer. </p>
-      <p>GPORCA co-exists with the Postgres query optimizer. With GPORCA enabled, Greenplum Database
+        you disable GPORCA, Greenplum Database uses only the Postgres Planner. </p>
+      <p>GPORCA co-exists with the Postgres Planner. With GPORCA enabled, Greenplum Database
         uses GPORCA to generate an execution plan for a query when possible. If GPORCA cannot be
-        used, then the Postgres query optimizer is used. </p>
+        used, then the Postgres Planner is used. </p>
       <p>The <cmdname>optimizer</cmdname> parameter can be set for a database system, an individual
         database, or a session or query.</p>
-      <p>For information about the Postgres query optimizer and GPORCA, see <xref
+      <p>For information about the Postgres Planner and GPORCA, see <xref
           href="../../admin_guide/query/topics/query.xml">Querying Data</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator
         Guide</cite></ph>.</p>
@@ -7008,7 +6683,7 @@
       <p>For a partitioned table, controls whether the <codeph>ROOTPARTITION</codeph> keyword is
         required to collect root partition statistics when the <cmdname>ANALYZE</cmdname> command is
         run on the table. GPORCA uses the root partition statistics when generating a query plan.
-        The Postgres query optimizer does not use these statistics. </p>
+        The Postgres Planner does not use these statistics. </p>
       <p>The default setting for the parameter is <codeph>on</codeph>, the <codeph>ANALYZE</codeph>
         command can collect root partition statistics without the <codeph>ROOTPARTITION</codeph>
         keyword. Root partition statistics are collected when you run <codeph>ANALYZE</codeph> on
@@ -7021,7 +6696,7 @@
         parameter should also be <codeph>on</codeph>. For information about collecting table
         statistics on partitioned tables, see <codeph><xref href="../sql_commands/ANALYZE.xml"
           /></codeph>.</p>
-      <p>For information about the Postgres query optimizer and GPORCA, see <xref
+      <p>For information about the Postgres Planner and GPORCA, see <xref
           href="../../admin_guide/query/topics/query.xml">Querying Data</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator
         Guide</cite></ph>.</p>
@@ -7197,7 +6872,7 @@
     <body>
       <p dir="ltr">When GPORCA is enabled (the default), this parameter allows GPORCA to execute
         catalog queries that run only on the Greenplum Database master. For the default value
-          <codeph>off</codeph>, only the Postgres query optimizer can execute catalog queries that run
+          <codeph>off</codeph>, only the Postgres Planner can execute catalog queries that run
         only on the Greenplum Database master.</p>
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
@@ -7640,6 +7315,42 @@
       </table>
     </body>
   </topic>
+  <topic id=" optimizer_penalize_skew">
+    <title>optimizer_penalize_skew</title>
+    <body>
+      <p dir="ltr">When GPORCA is enabled (the default), this parameter allows GPORCA to penalize
+        the local cost of a HashJoin with a skewed Redistribute Motion as child to favor a Broadcast
+        Motion during query optimization. The default value is <codeph>true</codeph>. </p>
+      <p dir="ltr">GPORCA determines there is skew for a Redistribute Motion when the NDV (number of
+        distinct values) is less than the number of segments. </p>
+      <p>The parameter can be set for a database system, an individual database, or a session or
+        query.</p>
+      <p>For information about GPORCA, see <xref
+          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
+      <table id="table_s11_lln_t3b">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">true</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
   <topic id="optimizer_print_missing_stats">
     <title>optimizer_print_missing_stats</title>
     <body>
@@ -7687,7 +7398,7 @@
         </ul></p>
       <p>The information is logged during query execution, or with the <codeph>EXPLAIN</codeph> or
           <codeph>EXPLAIN ANALYZE</codeph> commands.</p>
-      <p>This parameter can be set for a database system, an individual database,or a session or
+      <p>This parameter can be set for a database system, an individual database, or a session or
         query.</p>
       <table id="table_pdm_kx2_5z">
         <tgroup cols="3">
@@ -8006,8 +7717,8 @@
   <topic id="random_page_cost">
     <title>random_page_cost</title>
     <body>
-      <p>Sets the estimate of the cost of a nonsequentially fetched disk page for the Postgres query
-        optimizer (planner). This is measured as a multiple of the cost of a sequential page fetch.
+      <p>Sets the estimate of the cost of a nonsequentially fetched disk page for the Postgres
+        Planner. This is measured as a multiple of the cost of a sequential page fetch.
         A higher value makes it more likely a sequential scan will be used, a lower value makes it
         more likely an index scan will be used.</p>
       <table id="random_page_cost_table">
@@ -8288,7 +7999,7 @@
           </thead>
           <tbody>
             <row>
-              <entry colname="col1">a comma- separated list of schema names</entry>
+              <entry colname="col1">a comma-separated list of schema names</entry>
               <entry colname="col2">$user,public</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
@@ -8300,7 +8011,7 @@
   <topic id="seq_page_cost">
     <title>seq_page_cost</title>
     <body>
-      <p>For the Postgres query optimizer (planner), sets the estimate of the cost of a disk page
+      <p>For the Postgres Planner, sets the estimate of the cost of a disk page
         fetch that is part of a series of sequential fetches. </p>
       <table id="seq_page_cost_table">
         <tgroup cols="3">
@@ -8373,7 +8084,7 @@
           <tbody>
             <row>
               <entry colname="col1">string</entry>
-              <entry colname="col2">8.3.23</entry>
+              <entry colname="col2">9.4.20</entry>
               <entry colname="col3">read only</entry>
             </row>
           </tbody>
@@ -8401,7 +8112,7 @@
           <tbody>
             <row>
               <entry colname="col1">integer</entry>
-              <entry colname="col2">80323</entry>
+              <entry colname="col2">90420</entry>
               <entry colname="col3">read only</entry>
             </row>
           </tbody>
@@ -8586,23 +8297,33 @@
   <topic id="statement_mem">
     <title>statement_mem</title>
     <body>
-      <note>The <codeph>statement_mem</codeph> server configuration parameter is enforced only when
-        resource queue-based resource management is active.</note>
       <p>Allocates segment host memory per query. The amount of memory allocated with this parameter
         cannot exceed <codeph><xref href="#max_statement_mem" format="dita"/></codeph> or the memory
-        limit on the resource queue through which the query was submitted. When <codeph><xref
-            href="#gp_resqueue_memory_policy" format="dita"/> =auto</codeph>,
+        limit on the resource queue or resource group through which the query was submitted.
+        If additional memory is required for a query, temporary spill files on disk are used.</p>
+      <p><i>If you are using resource groups to control resource allocation in your Greenplum
+        Database cluster</i>:</p><ul>
+        <li>Greenplum Database uses <codeph>statement_mem</codeph> to control query memory
+          usage when the resource group <codeph>MEMORY_SPILL_RATIO</codeph> is set to 0.</li>
+        <li>You can use the following calculation to estimate a reasonable <codeph>statement_mem</codeph>
+          value:
+          <codeblock>rg_perseg_mem = ((RAM * (vm.overcommit_ratio / 100) + SWAP) * gp_resource_group_memory_limit) / num_active_primary_segments
+statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
+      </ul>
+
+      <p><i>If you are using resource queues to control resource allocation in your Greenplum
+        Database cluster</i>:</p><ul>
+        <li> When <codeph><xref href="#gp_resqueue_memory_policy" format="dita"/> =auto</codeph>,
           <codeph>statement_mem</codeph> and resource queue memory limits control query memory
-        usage. </p>
-      <p>If additional memory is required for a query, temporary spill files on disk are used.</p>
-      <p>This calculation can be used to estimate a reasonable value for a wide variety of
-        situations.</p>
-      <codeblock>( <varname>gp_vmem_protect_limit</varname>GB * .9 ) / <varname>max_expected_concurrent_queries</varname></codeblock>
-      <p>With the <varname>gp_vmem_protect_limit</varname> set to 8192MB (8GB) and assuming a
-        maximum of 40 concurrent queries with a 10% buffer </p>
-      <p>
-        <codeblock>(8GB * .9) / 40 = .18GB = 184MB</codeblock>
-      </p>
+        usage. </li>
+        <li>You can use the following calculation to estimate a reasonable <codeph>statement_mem</codeph>
+          value for a wide variety of situations:
+          <codeblock>( <varname>gp_vmem_protect_limit</varname>GB * .9 ) / <varname>max_expected_concurrent_queries</varname></codeblock>
+          <p>For example, with a <varname>gp_vmem_protect_limit</varname> set to 8192MB (8GB)
+            and assuming a maximum of 40 concurrent queries with a 10% buffer, you would use
+            the following calculation to determine the <codeph>statement_mem</codeph> value:</p>
+          <codeblock>(8GB * .9) / 40 = .18GB = 184MB</codeblock></li>
+      </ul>
       <p>When changing both <codeph>max_statement_mem</codeph> and <codeph>statement_mem</codeph>,
           <codeph>max_statement_mem</codeph> must be changed first, or listed first in the
           <systemoutput>postgresql.conf</systemoutput> file.</p>
@@ -8807,12 +8528,18 @@
   <topic id="temp_buffers">
     <title>temp_buffers</title>
     <body>
-      <p>Sets the maximum number of temporary buffers used by each database session. These are
-        session-local buffers used only for access to temporary tables. The setting can be changed
-        within individual sessions, but only up until the first use of temporary tables within a
-        session. The cost of setting a large value in sessions that do not actually need a lot of
-        temporary buffers is only a buffer descriptor, or about 64 bytes, per increment. However if
-        a buffer is actually used, an additional 8192 bytes will be consumed. </p>
+      <p>Sets the maximum memory, in blocks, to allow for temporary buffers by each database
+        session. These are session-local buffers used only for access to temporary tables. The
+        setting can be changed within individual sessions, but only up until the first use of
+        temporary tables within a session. The cost of setting a large value in sessions that do not
+        actually need a lot of temporary buffers is only a buffer descriptor for each block, or
+        about 64 bytes, per increment. However if a buffer is actually used, an additional 32768
+        bytes will be consumed.</p>
+      <p>You can set this parameter to the number of 32K blocks (for example, <codeph>1024</codeph>
+        to allow 32MB for buffers), or specify the maximum amount of memory to allow (for example
+          <codeph>'48MB'</codeph> for 1536 blocks). The <codeph>gpconfig</codeph> utility and
+          <codeph>SHOW</codeph> command report the maximum amount of memory allowed for temporary
+        buffers.</p>
       <table id="temp_buffers_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -8828,7 +8555,52 @@
           <tbody>
             <row>
               <entry colname="col1">integer</entry>
-              <entry colname="col2">1024</entry>
+              <entry colname="col2">1024 (32MB)</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="topic_k52_fqm_f3b">
+    <title>temp_tablespaces</title>
+    <body>
+      <p>Specifies tablespaces in which to create temporary objects (temp tables and indexes on temp
+        tables) when a <codeph>CREATE</codeph> command does not explicitly specify a tablespace.
+        Temporary files for purposes such as sorting large data sets are also created in these
+        tablespaces.</p>
+      <p>The value is a comma-separated list of names of tablespaces. When there is more than one name in the list,
+        Greenplum chooses a random member of the list each time a temporary object is to be created;
+        except that within a transaction, successively created temporary objects are placed in
+        successive tablespaces from the list. If the selected element of the list is an empty
+        string, Greenplum automatically uses the default tablespace of the current database
+        instead.</p>
+      <p>When <codeph>temp_tablespaces</codeph> is set interactively, specifying a nonexistent
+        tablespace is an error, as is specifying a tablespace for which the user does not have
+          <codeph>CREATE</codeph> privilege. However, when using a previously set value, nonexistent
+        tablespaces are ignored, as are tablespaces for which the user lacks <codeph>CREATE</codeph>
+        privilege. In particular, this rule applies when using a value set in
+          <codeph>postgresql.conf</codeph>.</p>
+      <p>The default value is an empty string, which results in all temporary objects being created
+        in the default tablespace of the current database.</p>
+      <p>See also <xref href="#default_tablespace" format="dita"/>.</p>
+      <table id="table_l52_fqm_f3b">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">one or more tablespace names</entry>
+              <entry colname="col2">unset</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>

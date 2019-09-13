@@ -235,6 +235,14 @@ ExecHashJoin_guts(HashJoinState *node)
 					return NULL;
 
 				/*
+				 * Prefetch JoinQual to prevent motion hazard.
+				 *
+				 * See ExecPrefetchJoinQual() for details.
+				 */
+				if (node->prefetch_joinqual && ExecPrefetchJoinQual(&node->js))
+					node->prefetch_joinqual = false;
+
+				/*
 				 * We just scanned the entire inner side and built the hashtable
 				 * (and its overflow batches). Check here and remember if the inner
 				 * side is empty.
@@ -592,6 +600,7 @@ ExecInitHashJoin(HashJoin *node, EState *estate, int eflags)
 	 * the fix to MPP-989)
 	 */
 	hjstate->prefetch_inner = node->join.prefetch_inner;
+	hjstate->prefetch_joinqual = ShouldPrefetchJoinQual(estate, &node->join);
 
 	/*
 	 * initialize child nodes
@@ -890,7 +899,7 @@ ExecHashJoinNewBatch(HashJoinState *hjstate)
 	int			nbatch;
 	int			curbatch;
 
-	SIMPLE_FAULT_INJECTOR(FaultExecHashJoinNewBatch);
+	SIMPLE_FAULT_INJECTOR("exec_hashjoin_new_batch");
 
 	HashState  *hashState = (HashState *) innerPlanState(hjstate);
 
@@ -1439,7 +1448,7 @@ ExecHashJoinReloadHashTable(HashJoinState *hjstate)
 				BufFileGetSize(hashtable->innerBatchFile[curbatch]);
 		}
 
-		SIMPLE_FAULT_INJECTOR(WorkfileHashJoinFailure);
+		SIMPLE_FAULT_INJECTOR("workfile_hashjoin_failure");
 
 		/*
 		 * If we want to re-use the hash table after a re-scan, don't

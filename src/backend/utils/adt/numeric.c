@@ -28,12 +28,15 @@
 
 #include "access/hash.h"
 #include "catalog/pg_type.h"
+#include "executor/execHHashagg.h"
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/execnodes.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/int8.h"
+#include "utils/memutils.h"
 #include "utils/numeric.h"
 
 /* ----------
@@ -2870,19 +2873,45 @@ makeNumericAggState(FunctionCallInfo fcinfo, bool calcSumX2)
 	NumericAggState *state;
 	MemoryContext agg_context;
 	MemoryContext old_context;
+	int agg_type;
 
-	if (!AggCheckCallContext(fcinfo, &agg_context))
+	if (!(agg_type = AggCheckCallContext(fcinfo, &agg_context)))
 		elog(ERROR, "aggregate function called in non-aggregate context");
 
 	old_context = MemoryContextSwitchTo(agg_context);
 
-	state = (NumericAggState *) palloc0(sizeof(NumericAggState));
+	AggState *aggstate = (AggState *)fcinfo->context;
+	if (agg_type == AGG_CONTEXT_AGGREGATE && aggstate->hhashtable)
+	{
+		state = (NumericAggState *) mpool_alloc(aggstate->hhashtable->group_buf, sizeof(NumericAggState));
+		MemSet(state, 0, sizeof(NumericAggState));
+	}
+	else
+	{
+		state = (NumericAggState *) palloc0(sizeof(NumericAggState));
+	}
 	state->calcSumX2 = calcSumX2;
 	state->agg_context = agg_context;
 	quick_init_var(&state->sumX);
 	quick_init_var(&state->sumX2);
 
 	MemoryContextSwitchTo(old_context);
+
+	return state;
+}
+
+/*
+ * Like makeNumericAggState(), but allocate the state in the current memory
+ * context.
+ */
+static NumericAggState *
+makeNumericAggStateCurrentContext(bool calcSumX2)
+{
+	NumericAggState *state;
+
+	state = (NumericAggState *) palloc0(sizeof(NumericAggState));
+	state->calcSumX2 = calcSumX2;
+	state->agg_context = CurrentMemoryContext;
 
 	return state;
 }
@@ -3295,12 +3324,12 @@ numeric_avg_deserialize(PG_FUNCTION_ARGS)
 
 	/*
 	 * Copy the bytea into a StringInfo so that we can "receive" it using the
-	 * standard pq API.
+	 * standard recv-function infrastructure.
 	 */
 	initStringInfo(&buf);
 	appendBinaryStringInfo(&buf, VARDATA(sstate), VARSIZE(sstate) - VARHDRSZ);
 
-	result = makeNumericAggState(fcinfo, false);
+	result = makeNumericAggStateCurrentContext(false);
 
 	/* N */
 	result->N = pq_getmsgint64(&buf);
@@ -3414,12 +3443,12 @@ numeric_deserialize(PG_FUNCTION_ARGS)
 
 	/*
 	 * Copy the bytea into a StringInfo so that we can "receive" it using the
-	 * standard pq API.
+	 * standard recv-function infrastructure.
 	 */
 	initStringInfo(&buf);
 	appendBinaryStringInfo(&buf, VARDATA(sstate), VARSIZE(sstate) - VARHDRSZ);
 
-	result = makeNumericAggState(fcinfo, false);
+	result = makeNumericAggStateCurrentContext(false);
 
 	/* N */
 	result->N = pq_getmsgint64(&buf);
@@ -3512,16 +3541,41 @@ makeInt128AggState(FunctionCallInfo fcinfo, bool calcSumX2)
 	Int128AggState *state;
 	MemoryContext agg_context;
 	MemoryContext old_context;
+	int agg_type;
 
-	if (!AggCheckCallContext(fcinfo, &agg_context))
+	if (!(agg_type = AggCheckCallContext(fcinfo, &agg_context)))
 		elog(ERROR, "aggregate function called in non-aggregate context");
 
 	old_context = MemoryContextSwitchTo(agg_context);
 
-	state = (Int128AggState *) palloc0(sizeof(Int128AggState));
+	AggState *aggstate = (AggState *)fcinfo->context;
+	if (agg_type == AGG_CONTEXT_AGGREGATE && aggstate->hhashtable)
+	{
+		state = (Int128AggState *) mpool_alloc(aggstate->hhashtable->group_buf, sizeof(Int128AggState));
+		MemSet(state, 0, sizeof(Int128AggState));
+	}
+	else
+	{
+		state = (Int128AggState *) palloc0(sizeof(Int128AggState));
+	}
 	state->calcSumX2 = calcSumX2;
 
 	MemoryContextSwitchTo(old_context);
+
+	return state;
+}
+
+/*
+ * Like makeInt128AggState(), but allocate the state in the current memory
+ * context.
+ */
+static Int128AggState *
+makeInt128AggStateCurrentContext(bool calcSumX2)
+{
+	Int128AggState *state;
+
+	state = (Int128AggState *) palloc0(sizeof(Int128AggState));
+	state->calcSumX2 = calcSumX2;
 
 	return state;
 }
@@ -3801,12 +3855,12 @@ numeric_poly_deserialize(PG_FUNCTION_ARGS)
 
 	/*
 	 * Copy the bytea into a StringInfo so that we can "receive" it using the
-	 * standard pq API.
+	 * standard recv-function infrastructure.
 	 */
 	initStringInfo(&buf);
 	appendBinaryStringInfo(&buf, VARDATA(sstate), VARSIZE(sstate) - VARHDRSZ);
 
-	result = makePolyNumAggState(fcinfo, false);
+	result = makePolyNumAggStateCurrentContext(false);
 
 	/* N */
 	result->N = pq_getmsgint64(&buf);
@@ -3939,7 +3993,8 @@ int8_avg_combine(PG_FUNCTION_ARGS)
 
 /*
  * int8_avg_serialize
- *		Serialize PolyNumAggState into bytea using the standard pq API.
+ *		Serialize PolyNumAggState into bytea using the standard
+ *		recv-function infrastructure.
  *
  * int8_avg_deserialize(int8_avg_serialize(state)) must result in a state which
  * matches the original input state.
@@ -4017,12 +4072,12 @@ int8_avg_deserialize(PG_FUNCTION_ARGS)
 
 	/*
 	 * Copy the bytea into a StringInfo so that we can "receive" it using the
-	 * standard pq API.
+	 * standard recv-function infrastructure.
 	 */
 	initStringInfo(&buf);
 	appendBinaryStringInfo(&buf, VARDATA(sstate), VARSIZE(sstate) - VARHDRSZ);
 
-	result = makePolyNumAggState(fcinfo, false);
+	result = makePolyNumAggStateCurrentContext(false);
 
 	/* N */
 	result->N = pq_getmsgint64(&buf);

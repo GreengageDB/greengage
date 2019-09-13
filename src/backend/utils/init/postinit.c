@@ -32,6 +32,9 @@
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/indexing.h"
+#include "catalog/storage_tablespace.h"
+#include "commands/tablespace.h"
+
 #include "libpq/auth.h"
 #include "libpq/hba.h"
 #include "libpq/libpq-be.h"
@@ -59,6 +62,7 @@
 #include "tcop/idle_resource_cleaner.h"
 #include "utils/acl.h"
 #include "utils/backend_cancel.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/pg_locale.h"
@@ -449,9 +453,11 @@ InitCommunication(void)
 	{
 		/*
 		 * We're running a postgres bootstrap process or a standalone backend.
-		 * Create private "shmem" and semaphores.
+		 * Though we won't listen on PostPortNumber, use it to select a shmem
+		 * key.  This increases the chance of detecting a leftover live
+		 * backend of this DataDir.
 		 */
-		CreateSharedMemoryAndSemaphores(true, 0);
+		CreateSharedMemoryAndSemaphores(PostPortNumber);
 	}
 }
 
@@ -560,6 +566,14 @@ BaseInit(void)
 	InitFileAccess();
 	smgrinit();
 	InitBufferPoolAccess();
+
+	/* 
+	 * Initialize catalog tablespace storage component
+	 * with knowledge of how to perform unlink.
+	 * 
+	 * Needed for xlog replay and normal operations.
+	 */
+	TablespaceStorageInit(UnlinkTablespaceDirectory);
 }
 
 /*
@@ -791,7 +805,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	}
 	else if (am_mirror)
 	{
-		Assert(am_ftshandler);
+		Assert(am_ftshandler || IsFaultHandler);
 		/*
 		 * A mirror must receive and act upon FTS messages.  Performing proper
 		 * authentication involves reading pg_authid.  Heap access is not
@@ -881,7 +895,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 					 errmsg("must be superuser or replication role to start walsender")));
 	}
 
-	if (am_ftshandler && !am_superuser)
+	if ((am_ftshandler || IsFaultHandler) && !am_superuser)
 		ereport(FATAL,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser role to handle FTS request")));
@@ -892,7 +906,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * backend startup by processing any options from the startup packet, and
 	 * we're done.
 	 */
-	if ((am_walsender && !am_db_walsender) || am_ftshandler)
+	if ((am_walsender && !am_db_walsender) || am_ftshandler || IsFaultHandler)
 	{
 		/* process any options passed in the startup packet */
 		if (MyProcPort != NULL)
@@ -1124,6 +1138,14 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 				(errcode(ERRCODE_CANNOT_CONNECT_NOW),
 				 errmsg("System was started in master-only utility mode - only utility mode connections are allowed")));
 	}
+	else if ((Gp_session_role == GP_ROLE_DISPATCH) && !IS_QUERY_DISPATCHER())
+	{
+		ereport(FATAL,
+				(errcode(ERRCODE_CANNOT_CONNECT_NOW),
+				 errmsg("connections to primary segments are not allowed"),
+				 errdetail("This database instance is running as a primary segment in a Greenplum cluster and does not permit direct connections."),
+				 errhint("To force a connection anyway (dangerous!), use utility mode.")));
+	}
 
 	/* Process pg_db_role_setting options */
 	process_settings(MyDatabaseId, GetSessionUserId());
@@ -1143,8 +1165,11 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	/* initialize client encoding */
 	InitializeClientEncoding();
 
-	/* report this backend in the PgBackendStatus array */
-	if (!bootstrap)
+	/*
+	 * report this backend in the PgBackendStatus array, meanwhile, we do not
+	 * want users to see auxiliary background worker like fts in pg_stat_* views.
+	 */
+	if (!bootstrap && !amAuxiliaryBgWorker())
 		pgstat_bestart();
 		
 	/* 

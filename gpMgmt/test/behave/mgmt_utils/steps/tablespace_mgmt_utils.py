@@ -1,11 +1,12 @@
-import shutil
+import pipes
 import tempfile
 
-from behave import given, when, then
+from behave import given, then
 from pygresql import pg
 
 from gppylib.db import dbconn
-
+from gppylib.gparray import GpArray
+from test.behave_utils.utils import run_cmd
 
 class Tablespace:
     def __init__(self, name):
@@ -15,12 +16,16 @@ class Tablespace:
         self.table_counter = 0
         self.initial_data = None
 
-        with dbconn.connect(dbconn.DbURL()) as conn:
+        gparray = GpArray.initFromCatalog(dbconn.DbURL())
+        for host in gparray.getHostList():
+            run_cmd('ssh %s mkdir -p %s' % (pipes.quote(host), pipes.quote(self.path)))
+
+        with dbconn.connect(dbconn.DbURL(), unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             db.query("CREATE TABLESPACE %s LOCATION '%s'" % (self.name, self.path))
             db.query("CREATE DATABASE %s TABLESPACE %s" % (self.dbname, self.name))
 
-        with dbconn.connect(dbconn.DbURL(dbname=self.dbname)) as conn:
+        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             db.query("CREATE TABLE tbl (i int) DISTRIBUTED RANDOMLY")
             db.query("INSERT INTO tbl VALUES (GENERATE_SERIES(0, 25))")
@@ -28,7 +33,7 @@ class Tablespace:
             self.initial_data = db.query("SELECT gp_segment_id, i FROM tbl").getresult()
 
     def cleanup(self):
-        with dbconn.connect(dbconn.DbURL(dbname="postgres")) as conn:
+        with dbconn.connect(dbconn.DbURL(dbname="postgres"), unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             db.query("DROP DATABASE IF EXISTS %s" % self.dbname)
             db.query("DROP TABLESPACE IF EXISTS %s" % self.name)
@@ -40,7 +45,9 @@ class Tablespace:
             # before removing them below.
             _checkpoint_and_wait_for_replication_replay(db)
 
-        shutil.rmtree(self.path)
+        gparray = GpArray.initFromCatalog(dbconn.DbURL())
+        for host in gparray.getHostList():
+            run_cmd('ssh %s rm -rf %s' % (pipes.quote(host), pipes.quote(self.path)))
 
     def verify(self, hostname=None, port=0):
         """
@@ -49,7 +56,7 @@ class Tablespace:
         distributed.
         """
         url = dbconn.DbURL(hostname=hostname, port=port, dbname=self.dbname)
-        with dbconn.connect(url) as conn:
+        with dbconn.connect(url, unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             data = db.query("SELECT gp_segment_id, i FROM tbl").getresult()
 
@@ -61,6 +68,33 @@ class Tablespace:
         if sorted(data) != sorted(self.initial_data):
             raise Exception("Tablespace data is not identically distributed. Expected:\n%r\n but found:\n%r" % (
                 sorted(self.initial_data), sorted(data)))
+
+    def verify_for_gpexpand(self, hostname=None, port=0):
+        """
+        For gpexpand, we need make sure:
+          1. data is the same after redistribution finished
+          2. the table's numsegments is enlarged to the new cluster size
+        """
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname=self.dbname)
+        with dbconn.connect(url, unsetSearchPath=False) as conn:
+            db = pg.DB(conn)
+            data = db.query("SELECT gp_segment_id, i FROM tbl").getresult()
+            tbl_numsegments = dbconn.execSQLForSingleton(conn,
+                                                         "SELECT numsegments FROM gp_distribution_policy "
+                                                         "WHERE localoid = 'tbl'::regclass::oid")
+            num_segments = dbconn.execSQLForSingleton(conn,
+                                                     "SELECT COUNT(DISTINCT(content)) - 1 FROM gp_segment_configuration")
+
+        if tbl_numsegments != num_segments:
+            raise Exception("After gpexpand the numsegments for tablespace table 'tbl' %d does not match "
+                            "the number of segments in the cluster %d." % (tbl_numsegments, num_segments))
+
+        initial_data = [i for _, i in self.initial_data]
+        data_without_segid = [i for _, i in data]
+        if sorted(data_without_segid) != sorted(initial_data):
+            raise Exception("Tablespace data is not identically distributed after running gp_expand. "
+                            "Expected pre-gpexpand data:\n%\n but found post-gpexpand data:\n%r" % (
+                                sorted(self.initial_data), sorted(data)))
 
 
 def _checkpoint_and_wait_for_replication_replay(db):
@@ -163,3 +197,9 @@ def impl(context):
 @then('the other tablespace is valid')
 def impl(context):
     context.tablespaces["myspace"].verify()
+
+
+@then('the tablespace is valid after gpexpand')
+def impl(context):
+    for _, tbs in context.tablespaces.items():
+        tbs.verify_for_gpexpand()

@@ -30,6 +30,7 @@
 #include <ctype.h>
 
 #include "lib/stringinfo.h"
+#include "miscadmin.h"
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
 #include "utils/datum.h"
@@ -406,6 +407,7 @@ _outJoinPlanInfo(StringInfo str, const Join *node)
 	_outPlanInfo(str, (const Plan *) node);
 
 	WRITE_BOOL_FIELD(prefetch_inner);
+	WRITE_BOOL_FIELD(prefetch_joinqual);
 
 	WRITE_ENUM_FIELD(jointype, JoinType);
 	WRITE_NODE_FIELD(joinqual);
@@ -2555,7 +2557,6 @@ _outCreateStmtInfo(StringInfo str, const CreateStmt *node)
 	WRITE_CHAR_FIELD(relKind);
 	WRITE_CHAR_FIELD(relStorage);
 	/* policy omitted */
-	/* postCreate omitted */
 	WRITE_NODE_FIELD(deferredStmts);
 	WRITE_BOOL_FIELD(is_part_child);
 	WRITE_BOOL_FIELD(is_part_parent);
@@ -4653,6 +4654,9 @@ _outTupleDescNode(StringInfo str, const TupleDescNode *node)
 static void
 _outNode(StringInfo str, const void *obj)
 {
+	/* Guard against stack overflow due to overly complex expressions */
+	check_stack_depth();
+
 	if (obj == NULL)
 		appendStringInfoString(str, "<>");
 	else if (IsA(obj, List) ||IsA(obj, IntList) || IsA(obj, OidList))

@@ -776,6 +776,18 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path)
 	if (partition_selector_created)
 		((Join *) plan)->prefetch_inner = true;
 
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->outerjoinpath &&
+		best_path->outerjoinpath->motionHazard)
+		((Join *) plan)->prefetch_joinqual = true;
+
 	plan->flow = cdbpathtoplan_create_flow(root,
 			best_path->path.locus,
 			best_path->path.parent ? best_path->path.parent->relids
@@ -1499,7 +1511,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 	}
 
 	/* get the total valid primary segdb count */
-	db_info = cdbcomponent_getCdbComponents(true);
+	db_info = cdbcomponent_getCdbComponents();
 	total_primaries = 0;
 	for (i = 0; i < db_info->total_segment_dbs; i++)
 	{
@@ -1578,7 +1590,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs && !found_match; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int segind = p->segindex;
+				int segind = p->config->segindex;
 
 				/*
 				 * Assign mapping of external file to this segdb only if:
@@ -1595,7 +1607,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 				{
 					if (uri->protocol == URI_FILE)
 					{
-						if (pg_strcasecmp(uri->hostname, p->hostname) != 0 && pg_strcasecmp(uri->hostname, p->address) != 0)
+						if (pg_strcasecmp(uri->hostname, p->config->hostname) != 0 && pg_strcasecmp(uri->hostname, p->config->address) != 0)
 							continue;
 					}
 
@@ -1789,7 +1801,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 				for (i = 0; i < db_info->total_segment_dbs && !found_match; i++)
 				{
 					CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-					int			segind = p->segindex;
+					int			segind = p->config->segindex;
 
 					/*
 					 * Assign mapping of external file to this segdb only if:
@@ -1878,7 +1890,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p))
 					segdb_file_map[segind] = pstrdup(prefixed_command);
@@ -1895,7 +1907,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p))
 				{
@@ -1905,7 +1917,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 					{
 						const char *hostname = strVal(lfirst(lc));
 
-						if (pg_strcasecmp(hostname, p->hostname) == 0)
+						if (pg_strcasecmp(hostname, p->config->hostname) == 0)
 						{
 							host_taken = true;
 							break;
@@ -1921,7 +1933,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 					{
 						segdb_file_map[segind] = pstrdup(prefixed_command);
 						visited_hosts = lappend(visited_hosts,
-										   makeString(pstrdup(p->hostname)));
+										   makeString(pstrdup(p->config->hostname)));
 					}
 				}
 			}
@@ -1935,10 +1947,10 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p) &&
-					pg_strcasecmp(hostname, p->hostname) == 0)
+					pg_strcasecmp(hostname, p->config->hostname) == 0)
 				{
 					segdb_file_map[segind] = pstrdup(prefixed_command);
 					match_found = true;
@@ -1962,7 +1974,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p) && segind == target_segid)
 				{
@@ -1997,7 +2009,7 @@ create_external_scan_uri_list(ExtTableEntry *ext, bool *ismasteronly)
 			for (i = 0; i < db_info->total_segment_dbs; i++)
 			{
 				CdbComponentDatabaseInfo *p = &db_info->segment_db_info[i];
-				int			segind = p->segindex;
+				int			segind = p->config->segindex;
 
 				if (SEGMENT_IS_ACTIVE_PRIMARY(p))
 				{
@@ -3189,6 +3201,18 @@ create_nestloop_plan(PlannerInfo *root,
 	if (prefetch)
 		join_plan->join.prefetch_inner = true;
 
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->outerjoinpath &&
+		best_path->outerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
+
 	return join_plan;
 }
 
@@ -3514,6 +3538,25 @@ create_mergejoin_plan(PlannerInfo *root,
 
 	join_plan->join.prefetch_inner = prefetch;
 
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->jpath.outerjoinpath &&
+		best_path->jpath.outerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
+	/*
+	 * If inner motion is not under a Material or Sort node then there could
+	 * also be motion deadlock between inner and joinqual in mergejoin.
+	 */
+	if (best_path->jpath.innerjoinpath &&
+		best_path->jpath.innerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
+
 	/* Costs of sort and material steps are included in path cost already */
 	copy_path_costsize(root, &join_plan->join.plan, &best_path->jpath.path);
 
@@ -3667,6 +3710,18 @@ create_hashjoin_plan(PlannerInfo *root,
 	{
 		join_plan->join.prefetch_inner = true;
 	}
+
+	/*
+	 * A motion deadlock can also happen when outer and joinqual both contain
+	 * motions.  It is not easy to check for joinqual here, so we set the
+	 * prefetch_joinqual mark only according to outer motion, and check for
+	 * joinqual later in the executor.
+	 *
+	 * See ExecPrefetchJoinQual() for details.
+	 */
+	if (best_path->jpath.outerjoinpath &&
+		best_path->jpath.outerjoinpath->motionHazard)
+		join_plan->join.prefetch_joinqual = true;
 
 	copy_path_costsize(root, &join_plan->join.plan, &best_path->jpath.path);
 
@@ -7038,19 +7093,6 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
                                                 ? subpath->parent->relids
                                                 : NULL,
                                               subplan);
-
-	/**
-	 * If plan has a flow node, and its child is projection capable,
-	 * then ensure all entries of hashExpr are in the targetlist.
-	 */
-	if (subplan->flow &&
-		subplan->flow->hashExprs &&
-		is_projection_capable_plan(subplan))
-	{
-		subplan->targetlist = add_to_flat_tlist_junk(subplan->targetlist,
-													 subplan->flow->hashExprs,
-													 true /* resjunk */);
-	}
 
 	return motion;
 }								/* cdbpathtoplan_create_motion_plan */

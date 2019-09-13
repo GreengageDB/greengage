@@ -82,7 +82,7 @@ FtsShmemInit(void)
 		shared->ControlLock = LWLockAssign();
 		ftsControlLock = shared->ControlLock;
 
-		shared->fts_probe_info.fts_statusVersion = 0;
+		shared->fts_probe_info.status_version = 0;
 		shared->pm_launch_walreceiver = false;
 	}
 }
@@ -99,21 +99,51 @@ ftsUnlock(void)
 	LWLockRelease(ftsControlLock);
 }
 
+/* see src/backend/fts/README */
 void
 FtsNotifyProber(void)
 {
 	Assert(Gp_role == GP_ROLE_DISPATCH);
-	uint8 probeTick = ftsProbeInfo->probeTick;
+	int32			initial_started;
+	int32			started;
+	int32			done;
 
-	/* signal fts-probe */
+	SpinLockAcquire(&ftsProbeInfo->lock);
+	initial_started = ftsProbeInfo->start_count;
+	SpinLockRelease(&ftsProbeInfo->lock);
+
 	SendPostmasterSignal(PMSIGNAL_WAKEN_FTS);
 
-	/* sit and spin */
-	while (probeTick == ftsProbeInfo->probeTick)
+	SIMPLE_FAULT_INJECTOR("ftsNotify_before");
+
+	/* Wait for a new fts probe to start. */
+	for (;;)
 	{
-		pg_usleep(50000);
+		SpinLockAcquire(&ftsProbeInfo->lock);
+		started = ftsProbeInfo->start_count;
+		SpinLockRelease(&ftsProbeInfo->lock);
+
+		if (started != initial_started)
+			break;
+
 		CHECK_FOR_INTERRUPTS();
+		pg_usleep(50000);
 	}
+
+	/* Wait until current probe in progress is completed */
+	for (;;)
+	{
+		SpinLockAcquire(&ftsProbeInfo->lock);
+		done = ftsProbeInfo->done_count;
+		SpinLockRelease(&ftsProbeInfo->lock);
+
+		if (done - started >= 0)
+			break;
+
+		CHECK_FOR_INTERRUPTS();
+		pg_usleep(50000);
+	}
+
 }
 
 /*
@@ -124,10 +154,10 @@ bool
 FtsIsSegmentDown(CdbComponentDatabaseInfo *dBInfo)
 {
 	/* master is always reported as alive */
-	if (dBInfo->segindex == MASTER_SEGMENT_ID)
+	if (dBInfo->config->segindex == MASTER_SEGMENT_ID)
 		return false;
 
-	return FTS_STATUS_IS_DOWN(ftsProbeInfo->fts_status[dBInfo->dbid]);
+	return FTS_STATUS_IS_DOWN(ftsProbeInfo->status[dBInfo->config->dbid]);
 }
 
 /*
@@ -144,12 +174,12 @@ FtsTestSegmentDBIsDown(SegmentDatabaseDescriptor **segdbDesc, int size)
 	{
 		CdbComponentDatabaseInfo *segInfo = segdbDesc[i]->segment_database_info;
 
-		elog(DEBUG2, "FtsTestSegmentDBIsDown: looking for real fault on segment dbid %d", (int) segInfo->dbid);
+		elog(DEBUG2, "FtsTestSegmentDBIsDown: looking for real fault on segment dbid %d", (int) segInfo->config->dbid);
 
 		if (FtsIsSegmentDown(segInfo))
 		{
 			ereport(LOG, (errmsg_internal("FTS: found fault with segment dbid %d. "
-										  "Reconfiguration is in progress", (int) segInfo->dbid)));
+										  "Reconfiguration is in progress", (int) segInfo->config->dbid)));
 			return true;
 		}
 	}
@@ -160,5 +190,5 @@ FtsTestSegmentDBIsDown(SegmentDatabaseDescriptor **segdbDesc, int size)
 uint8
 getFtsVersion(void)
 {
-	return ftsProbeInfo->fts_statusVersion;
+	return ftsProbeInfo->status_version;
 }

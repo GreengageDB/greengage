@@ -52,8 +52,6 @@ extern Oid	DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, char rels
 
 extern void	DefineExternalRelation(CreateExternalStmt *stmt);
 
-extern void	DefinePartitionedRelation(CreateStmt *stmt, Oid reloid);
-
 extern void EvaluateDeferredStatements(List *deferredStmts);
 
 extern void RemoveRelations(DropStmt *drop);
@@ -137,4 +135,6 @@ extern void RangeVarCallbackOwnsTable(const RangeVar *relation,
 
 extern void RangeVarCallbackOwnsRelation(const RangeVar *relation,
 							 Oid relId, Oid oldRelId, void *noCatalogs);
+
+extern List * rel_get_column_encodings(Relation rel);
 #endif   /* TABLECMDS_H */

@@ -20,7 +20,8 @@ unset MAKELEVEL
 # Run a given "initdb" binary and overlay the regression testing
 # authentication configuration.
 standard_initdb() {
-	"$1" -N
+	# Specify "-A trust" explicitly to suppress initdb's warning.
+	"$1" -N -A trust
 	if [ -n "$TEMP_CONFIG" -a -r "$TEMP_CONFIG" ]
 	then
 		cat "$TEMP_CONFIG" >> "$PGDATA/postgresql.conf"
@@ -86,14 +87,6 @@ if [ "$1" = '--install' ]; then
 	LIBPATH=$libdir:$LIBPATH
 	export LIBPATH
 	PATH=$libdir:$PATH
-
-	# We need to make it use psql from our temporary installation,
-	# because otherwise the installcheck run below would try to
-	# use psql from the proper installation directory, which might
-	# be outdated or missing. But don't override anything else that's
-	# already in EXTRA_REGRESS_OPTS.
-	EXTRA_REGRESS_OPTS="$EXTRA_REGRESS_OPTS --psqldir=$bindir"
-	export EXTRA_REGRESS_OPTS
 fi
 
 : ${oldbindir=$bindir}
@@ -101,6 +94,14 @@ fi
 : ${oldsrc=../..}
 oldsrc=`cd "$oldsrc" && pwd`
 newsrc=`cd ../.. && pwd`
+
+# We need to make pg_regress use psql from the desired installation
+# (likely a temporary one), because otherwise the installcheck run
+# below would try to use psql from the proper installation directory
+# of the target version, which might be outdated or not exist. But
+# don't override anything else that's already in EXTRA_REGRESS_OPTS.
+EXTRA_REGRESS_OPTS="$EXTRA_REGRESS_OPTS --psqldir='$oldbindir'"
+export EXTRA_REGRESS_OPTS
 
 PATH=$bindir:$PATH
 export PATH
@@ -149,9 +150,6 @@ done
 # buildfarm may try to override port via EXTRA_REGRESS_OPTS ...
 EXTRA_REGRESS_OPTS="$EXTRA_REGRESS_OPTS --port=$PGPORT"
 export EXTRA_REGRESS_OPTS
-
-# enable echo so the user can see what is being executed
-set -x
 
 standard_initdb "$oldbindir"/initdb
 $oldbindir/pg_ctl start -l "$logdir/postmaster1.log" -o "$POSTMASTER_OPTS" -w
@@ -223,10 +221,6 @@ esac
 
 pg_dumpall -f "$temp_root"/dump2.sql || pg_dumpall2_status=$?
 pg_ctl -m fast stop
-
-# no need to echo commands anymore
-set +x
-echo
 
 if [ -n "$pg_dumpall2_status" ]; then
 	echo "pg_dumpall of post-upgrade database cluster failed"

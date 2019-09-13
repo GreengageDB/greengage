@@ -1742,7 +1742,9 @@ pg_get_expr(PG_FUNCTION_ARGS)
 	text	   *expr = PG_GETARG_TEXT_P(0);
 	Oid			relid = PG_GETARG_OID(1);
 	int			prettyFlags;
-	char	   *relname;
+	char		*relname;
+	text		*result;
+	Relation	rel;
 
 	prettyFlags = PRETTYFLAG_INDENT;
 
@@ -1763,7 +1765,27 @@ pg_get_expr(PG_FUNCTION_ARGS)
 	else
 		relname = NULL;
 
-	PG_RETURN_TEXT_P(pg_get_expr_worker(expr, relid, relname, prettyFlags));
+	/* 
+	 * CDB: hold the AccessShareLock in case some transactions drop it concurrently.
+	 *
+	 * Since here, if the table that the relid tells is dropped, an error will raise
+	 * later when opening the relation to get column names.
+	 *
+	 * pg_get_expr() is used by GPDB add-on view 'pg_partitions' which is widely
+	 * used by regression tests for partition tables. Lots of parallel test cases
+	 * issue view pg_partitions and drop partitions concurrently, so those cases
+	 * are very flaky. Serialize test cases will cost more testing time and be
+	 * fragile, so GPDB holds a AccessShareLock here to make tests stable.
+	 */
+	rel = try_relation_open(relid, AccessShareLock, false);
+
+	if (!rel)
+		PG_RETURN_NULL();
+
+	result = pg_get_expr_worker(expr, relid, relname, prettyFlags);
+	relation_close(rel, AccessShareLock);
+
+	PG_RETURN_TEXT_P(result);
 }
 
 Datum
@@ -1773,7 +1795,9 @@ pg_get_expr_ext(PG_FUNCTION_ARGS)
 	Oid			relid = PG_GETARG_OID(1);
 	bool		pretty = PG_GETARG_BOOL(2);
 	int			prettyFlags;
-	char	   *relname;
+	char		*relname;
+	text		*result;
+	Relation	rel;
 
 	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
 
@@ -1788,7 +1812,27 @@ pg_get_expr_ext(PG_FUNCTION_ARGS)
 	else
 		relname = NULL;
 
-	PG_RETURN_TEXT_P(pg_get_expr_worker(expr, relid, relname, prettyFlags));
+	/* 
+	 * CDB: hold the AccessShareLock in case some transactions drop it concurrently.
+	 *
+	 * Since here, if the table that the relid tells is dropped, an error will raise
+	 * later when opening the relation to get column names.
+	 *
+	 * pg_get_expr() is used by GPDB add-on view 'pg_partitions' which is widely
+	 * used by regression tests for partition tables. Lots of parallel test cases
+	 * issue view pg_partitions and drop partitions concurrently, so those cases
+	 * are very flaky. Serialize test cases will cost more testing time and be
+	 * fragile, so GPDB holds a AccessShareLock here to make tests stable.
+	 */
+	rel = try_relation_open(relid, AccessShareLock, false);
+
+	if (!rel)
+		PG_RETURN_NULL();
+
+	result = pg_get_expr_worker(expr, relid, relname, prettyFlags);
+	relation_close(rel, AccessShareLock);
+
+	PG_RETURN_TEXT_P(result);
 }
 
 static text *
@@ -8535,6 +8579,14 @@ get_coercion_expr(Node *arg, deparse_context *context,
 		if (!PRETTY_PAREN(context))
 			appendStringInfoChar(buf, ')');
 	}
+
+	/*
+	 * Never emit resulttype(arg) functional notation. A pg_proc entry could
+	 * take precedence, and a resulttype in pg_temp would require schema
+	 * qualification that format_type_with_typemod() would usually omit. We've
+	 * standardized on arg::resulttype, but CAST(arg AS resulttype) notation
+	 * would work fine.
+	 */
 	appendStringInfo(buf, "::%s",
 					 format_type_with_typemod(resulttype, resulttypmod));
 }
@@ -9262,8 +9314,16 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		/* Yes, it's correct to put alias after the right paren ... */
 		if (j->alias != NULL)
 		{
+			/*
+			 * Note that it's correct to emit an alias clause if and only if
+			 * there was one originally.  Otherwise we'd be converting a named
+			 * join to unnamed or vice versa, which creates semantic
+			 * subtleties we don't want.  However, we might print a different
+			 * alias name than was there originally.
+			 */
 			appendStringInfo(buf, " %s",
-							 quote_identifier(j->alias->aliasname));
+							 quote_identifier(get_rtable_name(j->rtindex,
+															  context)));
 			get_column_alias_list(colinfo, context);
 		}
 	}

@@ -806,13 +806,23 @@ RelationIsVisible(Oid relid)
 
 /*
  * TypenameGetTypid
+ *		Wrapper for binary compatibility.
+ */
+Oid
+TypenameGetTypid(const char *typname)
+{
+	return TypenameGetTypidExtended(typname, true);
+}
+
+/*
+ * TypenameGetTypidExtended
  *		Try to resolve an unqualified datatype name.
  *		Returns OID if type found in search path, else InvalidOid.
  *
  * This is essentially the same as RelnameGetRelid.
  */
 Oid
-TypenameGetTypid(const char *typname)
+TypenameGetTypidExtended(const char *typname, bool temp_ok)
 {
 	Oid			typid;
 	ListCell   *l;
@@ -822,6 +832,9 @@ TypenameGetTypid(const char *typname)
 	foreach(l, activeSearchPath)
 	{
 		Oid			namespaceId = lfirst_oid(l);
+
+		if (!temp_ok && namespaceId == myTempNamespace)
+			continue;			/* do not look in temp namespace */
 
 		typid = GetSysCacheOid2(TYPENAMENSP,
 								PointerGetDatum(typname),
@@ -4097,12 +4110,31 @@ RemoveTempRelationsCallback(int code, Datum arg)
 
 /*
  * Remove all temp tables from the temporary namespace.
+ *
+ * If we haven't set up one yet, but one exists from a previous crashed
+ * backend, clean that one; but only do this once in a session's life.
  */
 void
 ResetTempTableNamespace(void)
 {
+	static bool	TempNamespaceCleaned = false;
+
 	if (OidIsValid(myTempNamespace))
 		RemoveTempRelations(myTempNamespace);
+	else if (MyBackendId != InvalidBackendId && !RecoveryInProgress() &&
+			 !TempNamespaceCleaned)
+	{
+		char		namespaceName[NAMEDATALEN];
+		Oid			namespaceId;
+
+		snprintf(namespaceName, sizeof(namespaceName), "pg_temp_%d",
+				 MyBackendId);
+		namespaceId = get_namespace_oid(namespaceName, true);
+		if (OidIsValid(namespaceId))
+			RemoveTempRelations(namespaceId);
+	}
+
+	TempNamespaceCleaned = true;
 }
 
 

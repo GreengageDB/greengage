@@ -620,7 +620,7 @@ ReadCommand(StringInfo inBuf)
 {
 	int			result;
 
-	SIMPLE_FAULT_INJECTOR(BeforeReadCommand);
+	SIMPLE_FAULT_INJECTOR("before_read_command");
 
 	if (whereToSendOutput == DestRemote)
 		result = SocketBackend(inBuf);
@@ -3470,7 +3470,7 @@ StatementCancelHandler(SIGNAL_ARGS)
 
 
 /* CDB: Signal handler for program errors */
-static void
+void
 CdbProgramErrorHandler(SIGNAL_ARGS)
 {
     int			save_errno = errno;
@@ -3920,39 +3920,6 @@ ProcessInterrupts(const char* filename, int lineno)
 		}
 	}
 	/* If we get here, do nothing (probably, QueryCancelPending was reset) */
-}
-
-/*
- * Set up the thread signal mask, we don't want to run our signal handlers
- * in our threads (gang-create, dispatch or interconnect threads)
- */
-void
-gp_set_thread_sigmasks(void)
-{
-#ifndef WIN32
-	sigset_t sigs;
-
-	if (pthread_equal(main_tid, pthread_self()))
-	{
-		elog(LOG, "thread_mask called from main thread!");
-		return;
-	}
-
-	sigemptyset(&sigs);
-
-	/* make our thread ignore these signals (which should allow that
-	 * they be delivered to the main thread) */
-	sigaddset(&sigs, SIGHUP);
-	sigaddset(&sigs, SIGINT);
-	sigaddset(&sigs, SIGTERM);
-	sigaddset(&sigs, SIGALRM);
-	sigaddset(&sigs, SIGUSR1);
-	sigaddset(&sigs, SIGUSR2);
-
-	pthread_sigmask(SIG_BLOCK, &sigs, NULL);
-#endif
-
-	return;
 }
 
 /*
@@ -4545,16 +4512,17 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 }
 
 /*
- * Throw an error if we're a FTS handler process.
+ * Throw an error if we're a GPDB specific message handler process.
  *
- * This is used to forbid anything else than simple query protocol messages
- * in a FTS handler process.  'firstchar' specifies what kind of a forbidden
- * message was received, and is used to construct the error message.
+ * This is used to forbid anything else than simple query protocol messages in
+ * a GPDB specific message handler process (e.g. FTS or fault message
+ * handlers).  'firstchar' specifies what kind of a forbidden message was
+ * received, and is used to construct the error message.
  */
 static void
-check_forbidden_in_fts_handler(char firstchar)
+check_forbidden_in_gpdb_handlers(char firstchar)
 {
-	if (am_ftshandler)
+	if (am_ftshandler || IsFaultHandler)
 	{
 		switch (firstchar)
 		{
@@ -4565,7 +4533,7 @@ check_forbidden_in_fts_handler(char firstchar)
 			default:
 				ereport(ERROR,
 						(errcode(ERRCODE_PROTOCOL_VIOLATION),
-						 errmsg("protocol '%c' is not supported in a FTS connection",
+						 errmsg("protocol '%c' is not supported in a GPDB message handler connection",
 								firstchar)));
 		}
 	}
@@ -4881,10 +4849,10 @@ PostgresMain(int argc, char *argv[],
 	}
 
 	/* Also send GPDB QE-backend startup info (motion listener, version). */
-	if (!am_ftshandler && Gp_role == GP_ROLE_EXECUTE)
+	if (!(am_ftshandler || IsFaultHandler) && Gp_role == GP_ROLE_EXECUTE)
 	{
 #ifdef FAULT_INJECTOR
-		if (SIMPLE_FAULT_INJECTOR(SendQEDetailsInitBackend) != FaultInjectorTypeSkip)
+		if (SIMPLE_FAULT_INJECTOR("send_qe_details_init_backend") != FaultInjectorTypeSkip)
 #endif
 			sendQEDetails();
 	}
@@ -4929,6 +4897,8 @@ PostgresMain(int argc, char *argv[],
 	 */
 	if (sigsetjmp(local_sigjmp_buf, 1) != 0)
 	{
+		elog(DEBUG5, "error caught. jumped back to PostgresMain local_sigjmp_buf");
+		
 		/*
 		 * NOTE: if you are tempted to add more code in this if-block,
 		 * consider the high probability that it should be in
@@ -5217,7 +5187,7 @@ PostgresMain(int argc, char *argv[],
 		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
 				(errmsg_internal("First char: '%c'; gp_role = '%s'.", firstchar, role_to_string(Gp_role))));
 
-		check_forbidden_in_fts_handler(firstchar);
+		check_forbidden_in_gpdb_handlers(firstchar);
 
 		switch (firstchar)
 		{
@@ -5238,6 +5208,8 @@ PostgresMain(int argc, char *argv[],
 						exec_replication_command(query_string);
 					else if (am_ftshandler)
 						HandleFtsMessage(query_string);
+					else if (IsFaultHandler)
+						HandleFaultMessage(query_string);
 					else
 						exec_simple_query(query_string);
 

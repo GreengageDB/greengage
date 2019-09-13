@@ -251,6 +251,20 @@ DROP TABLE constraint_rename_test2;
 DROP TABLE constraint_rename_test;
 ALTER TABLE IF EXISTS constraint_rename_test ADD CONSTRAINT con4 UNIQUE (a);
 
+-- renaming constraints with cache reset of target relation
+CREATE TABLE constraint_rename_cache (a int,
+  CONSTRAINT chk_a CHECK (a > 0),
+  PRIMARY KEY (a));
+ALTER TABLE constraint_rename_cache
+  RENAME CONSTRAINT chk_a TO chk_a_new;
+ALTER TABLE constraint_rename_cache
+  RENAME CONSTRAINT constraint_rename_cache_pkey TO constraint_rename_pkey_new;
+CREATE TABLE like_constraint_rename_cache
+  (LIKE constraint_rename_cache INCLUDING ALL);
+\d like_constraint_rename_cache
+DROP TABLE constraint_rename_cache;
+DROP TABLE like_constraint_rename_cache;
+
 -- FOREIGN KEY CONSTRAINT adding TEST
 
 CREATE TABLE tmp2 (a int primary key) distributed by (a);
@@ -1292,6 +1306,32 @@ alter table anothertab alter column atcol1 type boolean
 select * from anothertab;
 
 drop table anothertab;
+
+-- Test index handling in alter table column type (cf. bugs #15835, #15865)
+-- gpdb does not support it 
+-- create table anothertab(f1 int primary key, f2 int unique,
+--                         f3 int, f4 int, f5 int);
+-- alter table anothertab
+--   add exclude using btree (f3 with =);
+-- alter table anothertab
+--   add exclude using btree (f4 with =) where (f4 is not null);
+-- alter table anothertab
+--   add exclude using btree (f4 with =) where (f5 > 0);
+-- alter table anothertab
+--   add unique(f1,f4);
+-- create index on anothertab(f2,f3);
+-- create unique index on anothertab(f4);
+-- 
+-- \d anothertab
+-- alter table anothertab alter column f1 type bigint;
+-- alter table anothertab
+--   alter column f2 type bigint,
+--   alter column f3 type bigint,
+--   alter column f4 type bigint;
+-- alter table anothertab alter column f5 type bigint;
+-- \d anothertab
+-- 
+-- drop table anothertab;
 
 create table another (f1 int, f2 text) distributed by (f1);
 

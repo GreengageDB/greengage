@@ -348,14 +348,13 @@ EXPLAIN (costs off) UPDATE rw_view1 SET a=6 WHERE a=5;
          ->  Sort
                Sort Key: (DMLAction)
                ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                     Hash Key: "outer".a
-                     ->  Result
-                           ->  Split
-                                 ->  Result
-                                       ->  Index Scan using base_tbl_pkey on base_tbl
-                                             Index Cond: ((a = 5) AND (a > 0))
- Optimizer: PQO version 2.74.0
-(12 rows)
+                     Hash Key: base_tbl.a
+                     ->  Split
+                           ->  Result
+                                 ->  Index Scan using base_tbl_pkey on base_tbl
+                                       Index Cond: ((a = 5) AND (a > 0))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.39.0
+(11 rows)
 
 EXPLAIN (costs off) DELETE FROM rw_view1 WHERE a=5;
                        QUERY PLAN                       
@@ -364,7 +363,7 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE a=5;
    ->  Result
          ->  Index Scan using base_tbl_pkey on base_tbl
                Index Cond: ((a = 5) AND (a > 0))
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (5 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -429,14 +428,13 @@ EXPLAIN (costs off) UPDATE rw_view2 SET aaa=5 WHERE aaa=4;
          ->  Sort
                Sort Key: (DMLAction)
                ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                     Hash Key: "outer".aaa
-                     ->  Result
-                           ->  Split
-                                 ->  Result
-                                       ->  Index Scan using base_tbl_pkey on base_tbl
-                                             Index Cond: ((a = 4) AND (a < 10) AND (a > 0))
- Optimizer: PQO version 2.74.0
-(12 rows)
+                     Hash Key: base_tbl.a
+                     ->  Split
+                           ->  Result
+                                 ->  Index Scan using base_tbl_pkey on base_tbl
+                                       Index Cond: ((a = 4) AND (a < 10) AND (a > 0))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.39.0
+(11 rows)
 
 EXPLAIN (costs off) DELETE FROM rw_view2 WHERE aaa=4;
                           QUERY PLAN                          
@@ -445,7 +443,7 @@ EXPLAIN (costs off) DELETE FROM rw_view2 WHERE aaa=4;
    ->  Result
          ->  Index Scan using base_tbl_pkey on base_tbl
                Index Cond: ((a = 4) AND (a < 10) AND (a > 0))
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (5 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -639,7 +637,7 @@ EXPLAIN (costs off) UPDATE rw_view2 SET a=3 WHERE a=2;
                                  Filter: ((base_tbl_1.a = 2) AND (base_tbl_1.a < 10))
                                  ->  Index Scan using base_tbl_pkey on base_tbl base_tbl_1
                                        Index Cond: (a > 0)
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (13 rows)
 
 EXPLAIN (costs off) DELETE FROM rw_view2 WHERE a=2;
@@ -656,7 +654,7 @@ EXPLAIN (costs off) DELETE FROM rw_view2 WHERE a=2;
                            Filter: ((base_tbl_1.a = 2) AND (base_tbl_1.a < 10))
                            ->  Index Scan using base_tbl_pkey on base_tbl base_tbl_1
                                  Index Cond: (a > 0)
- Optimizer: PQO version 2.74.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (12 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -2052,7 +2050,7 @@ EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (2, 'New row 2');
                                                          ->  Result
                                                                ->  Index Scan using base_tbl_pkey on base_tbl
                                                                      Index Cond: (id = 2)
- Optimizer: PQO version 3.1.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
  
  Update
    ->  Result
@@ -2070,7 +2068,7 @@ EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (2, 'New row 2');
                                                          ->  Gather Motion 3:1  (slice1; segments: 3)
                                                                ->  Index Scan using base_tbl_pkey on base_tbl
                                                                      Index Cond: (id = 2)
- Optimizer: PQO version 3.11.0
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.11.0
 (38 rows)
 
 INSERT INTO rw_view1 VALUES (2, 'New row 2');
@@ -2127,13 +2125,15 @@ SELECT * FROM v1 WHERE a=8;
 
 EXPLAIN (VERBOSE, COSTS OFF)
 UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a = 3;
-                         QUERY PLAN                         
-------------------------------------------------------------
- Result
-   Output: 100, t1.b, t1.c, t1.a, t1.ctid, t1.gp_segment_id
-   One-Time Filter: false
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Update on public.t1
+   ->  Result
+         Output: 100, t1.b, t1.c, t1.a, t1.ctid, t1.gp_segment_id
+         One-Time Filter: false
  Optimizer: Postgres query optimizer
-(4 rows)
+ Settings: optimizer=on
+(6 rows)
 
 UPDATE v1 SET a=100 WHERE snoop(a) AND leakproof(a) AND a = 3;
 SELECT * FROM v1 WHERE a=100; -- Nothing should have been changed to 100
@@ -2442,3 +2442,191 @@ ERROR:  new row violates WITH CHECK OPTION for view "v1"
 DETAIL:  Failing row contains (-1, invalid).
 DROP VIEW v1;
 DROP TABLE t1;
+-- Test single- and multi-row inserts with table and view defaults.
+-- Table defaults should be used, unless overridden by view defaults.
+create table base_tab_def (a int, b text default 'Table default',
+                           c text default 'Table default', d text, e text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create view base_tab_def_view as select * from base_tab_def;
+alter view base_tab_def_view alter b set default 'View default';
+alter view base_tab_def_view alter d set default 'View default';
+insert into base_tab_def values (1);
+insert into base_tab_def values (2), (3);
+insert into base_tab_def values (4, default, default, default, default);
+insert into base_tab_def values (5, default, default, default, default),
+                                (6, default, default, default, default);
+insert into base_tab_def_view values (11);
+insert into base_tab_def_view values (12), (13);
+insert into base_tab_def_view values (14, default, default, default, default);
+insert into base_tab_def_view values (15, default, default, default, default),
+                                     (16, default, default, default, default);
+insert into base_tab_def_view values (17), (default);
+select * from base_tab_def order by a;
+ a  |       b       |       c       |      d       | e 
+----+---------------+---------------+--------------+---
+  1 | Table default | Table default |              | 
+  2 | Table default | Table default |              | 
+  3 | Table default | Table default |              | 
+  4 | Table default | Table default |              | 
+  5 | Table default | Table default |              | 
+  6 | Table default | Table default |              | 
+ 11 | View default  | Table default | View default | 
+ 12 | View default  | Table default | View default | 
+ 13 | View default  | Table default | View default | 
+ 14 | View default  | Table default | View default | 
+ 15 | View default  | Table default | View default | 
+ 16 | View default  | Table default | View default | 
+ 17 | View default  | Table default | View default | 
+    | View default  | Table default | View default | 
+(14 rows)
+
+-- Adding an INSTEAD OF trigger should cause NULLs to be inserted instead of
+-- table defaults, where there are no view defaults.
+create function base_tab_def_view_instrig_func() returns trigger
+as
+$$
+begin
+  insert into base_tab_def values (new.a, new.b, new.c, new.d, new.e);
+  return new;
+end;
+$$
+language plpgsql;
+create trigger base_tab_def_view_instrig instead of insert on base_tab_def_view
+  for each row execute procedure base_tab_def_view_instrig_func();
+ERROR:  INSTEAD OF triggers are not supported in Greenplum
+truncate base_tab_def;
+insert into base_tab_def values (1);
+insert into base_tab_def values (2), (3);
+insert into base_tab_def values (4, default, default, default, default);
+insert into base_tab_def values (5, default, default, default, default),
+                                (6, default, default, default, default);
+insert into base_tab_def_view values (11);
+insert into base_tab_def_view values (12), (13);
+insert into base_tab_def_view values (14, default, default, default, default);
+insert into base_tab_def_view values (15, default, default, default, default),
+                                     (16, default, default, default, default);
+insert into base_tab_def_view values (17), (default);
+select * from base_tab_def order by a;
+ a  |       b       |       c       |      d       | e 
+----+---------------+---------------+--------------+---
+  1 | Table default | Table default |              | 
+  2 | Table default | Table default |              | 
+  3 | Table default | Table default |              | 
+  4 | Table default | Table default |              | 
+  5 | Table default | Table default |              | 
+  6 | Table default | Table default |              | 
+ 11 | View default  | Table default | View default | 
+ 12 | View default  | Table default | View default | 
+ 13 | View default  | Table default | View default | 
+ 14 | View default  | Table default | View default | 
+ 15 | View default  | Table default | View default | 
+ 16 | View default  | Table default | View default | 
+ 17 | View default  | Table default | View default | 
+    | View default  | Table default | View default | 
+(14 rows)
+
+-- Using an unconditional DO INSTEAD rule should also cause NULLs to be
+-- inserted where there are no view defaults.
+drop trigger base_tab_def_view_instrig on base_tab_def_view;
+ERROR:  trigger "base_tab_def_view_instrig" for table "base_tab_def_view" does not exist
+drop function base_tab_def_view_instrig_func();
+create rule base_tab_def_view_ins_rule as on insert to base_tab_def_view
+  do instead insert into base_tab_def values (new.a, new.b, new.c, new.d, new.e);
+truncate base_tab_def;
+insert into base_tab_def values (1);
+insert into base_tab_def values (2), (3);
+insert into base_tab_def values (4, default, default, default, default);
+insert into base_tab_def values (5, default, default, default, default),
+                                (6, default, default, default, default);
+insert into base_tab_def_view values (11);
+insert into base_tab_def_view values (12), (13);
+insert into base_tab_def_view values (14, default, default, default, default);
+insert into base_tab_def_view values (15, default, default, default, default),
+                                     (16, default, default, default, default);
+insert into base_tab_def_view values (17), (default);
+select * from base_tab_def order by a;
+ a  |       b       |       c       |      d       | e 
+----+---------------+---------------+--------------+---
+  1 | Table default | Table default |              | 
+  2 | Table default | Table default |              | 
+  3 | Table default | Table default |              | 
+  4 | Table default | Table default |              | 
+  5 | Table default | Table default |              | 
+  6 | Table default | Table default |              | 
+ 11 | View default  |               | View default | 
+ 12 | View default  |               | View default | 
+ 13 | View default  |               | View default | 
+ 14 | View default  |               | View default | 
+ 15 | View default  |               | View default | 
+ 16 | View default  |               | View default | 
+ 17 | View default  |               | View default | 
+    | View default  |               | View default | 
+(14 rows)
+
+-- A DO ALSO rule should cause each row to be inserted twice. The first
+-- insert should behave the same as an auto-updatable view (using table
+-- defaults, unless overridden by view defaults). The second insert should
+-- behave the same as a rule-updatable view (inserting NULLs where there are
+-- no view defaults).
+drop rule base_tab_def_view_ins_rule on base_tab_def_view;
+create rule base_tab_def_view_ins_rule as on insert to base_tab_def_view
+  do also insert into base_tab_def values (new.a, new.b, new.c, new.d, new.e);
+truncate base_tab_def;
+insert into base_tab_def values (1);
+insert into base_tab_def values (2), (3);
+insert into base_tab_def values (4, default, default, default, default);
+insert into base_tab_def values (5, default, default, default, default),
+                                (6, default, default, default, default);
+insert into base_tab_def_view values (11);
+insert into base_tab_def_view values (12), (13);
+insert into base_tab_def_view values (14, default, default, default, default);
+insert into base_tab_def_view values (15, default, default, default, default),
+                                     (16, default, default, default, default);
+insert into base_tab_def_view values (17), (default);
+select * from base_tab_def order by a, c NULLS LAST;
+ a  |       b       |       c       |      d       | e 
+----+---------------+---------------+--------------+---
+  1 | Table default | Table default |              | 
+  2 | Table default | Table default |              | 
+  3 | Table default | Table default |              | 
+  4 | Table default | Table default |              | 
+  5 | Table default | Table default |              | 
+  6 | Table default | Table default |              | 
+ 11 | View default  | Table default | View default | 
+ 11 | View default  |               | View default | 
+ 12 | View default  | Table default | View default | 
+ 12 | View default  |               | View default | 
+ 13 | View default  | Table default | View default | 
+ 13 | View default  |               | View default | 
+ 14 | View default  | Table default | View default | 
+ 14 | View default  |               | View default | 
+ 15 | View default  | Table default | View default | 
+ 15 | View default  |               | View default | 
+ 16 | View default  | Table default | View default | 
+ 16 | View default  |               | View default | 
+ 17 | View default  | Table default | View default | 
+ 17 | View default  |               | View default | 
+    | View default  | Table default | View default | 
+    | View default  |               | View default | 
+(22 rows)
+
+drop view base_tab_def_view;
+drop table base_tab_def;
+-- Test defaults with array assignments
+create table base_tab (a serial, b int[], c text, d text default 'Table default');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create view base_tab_view as select c, a, b from base_tab;
+alter view base_tab_view alter column c set default 'View default';
+insert into base_tab_view (b[1], c, a)
+values (1, default, default), (10, 'C value', 100);
+select * from base_tab order by a;
+  a  |  b   |      c       |       d       
+-----+------+--------------+---------------
+   1 | {1}  | View default | Table default
+ 100 | {10} | C value      | Table default
+(2 rows)
+
+drop view base_tab_view;
+drop table base_tab;

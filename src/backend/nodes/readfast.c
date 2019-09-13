@@ -1064,7 +1064,6 @@ _readCreateStmt_common(CreateStmt *local_node)
 	READ_NODE_FIELD(distributedBy);
 	READ_CHAR_FIELD(relKind);
 	READ_CHAR_FIELD(relStorage);
-	/* postCreate - for analysis, QD only */
 	/* deferredStmts - for analysis, QD only */
 	READ_BOOL_FIELD(is_part_child);
 	READ_BOOL_FIELD(is_part_parent);
@@ -2427,6 +2426,7 @@ void readJoinInfo(Join *local_node)
 	readPlanInfo((Plan *) local_node);
 
 	READ_BOOL_FIELD(prefetch_inner);
+	READ_BOOL_FIELD(prefetch_joinqual);
 
 	READ_ENUM_FIELD(jointype, JoinType);
 	READ_NODE_FIELD(joinqual);
@@ -2907,6 +2907,18 @@ _readLockRows(void)
 
 	READ_NODE_FIELD(rowMarks);
 	READ_INT_FIELD(epqParam);
+
+	READ_DONE();
+}
+
+static LockingClause *
+_readLockingClause(void)
+{
+	READ_LOCALS(LockingClause);
+
+	READ_NODE_FIELD(lockedRels);
+	READ_ENUM_FIELD(strength, LockClauseStrength);
+	READ_BOOL_FIELD(noWait);
 
 	READ_DONE();
 }
@@ -3849,6 +3861,9 @@ readNodeBinary(void)
 				break;
 			case T_AlterTableMoveAllStmt:
 				return_value = _readAlterTableMoveAllStmt();
+				break;
+			case T_LockingClause:
+				return_value = _readLockingClause();
 				break;
 			default:
 				return_value = NULL; /* keep the compiler silent */

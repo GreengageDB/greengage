@@ -178,6 +178,7 @@ static int	syslog_facility = 0;
 static void assign_syslog_facility(int newval, void *extra);
 static void assign_syslog_ident(const char *newval, void *extra);
 static void assign_session_replication_role(int newval, void *extra);
+static bool check_client_min_messages(int *newval, void **extra, GucSource source);
 static bool check_temp_buffers(int *newval, void **extra, GucSource source);
 static bool check_phony_autocommit(bool *newval, void **extra, GucSource source);
 static bool check_debug_assertions(bool *newval, void **extra, GucSource source);
@@ -1564,6 +1565,15 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"data_sync_retry", PGC_POSTMASTER, ERROR_HANDLING_OPTIONS,
+			gettext_noop("Whether to continue running after a failure to sync data files."),
+		},
+		&data_sync_retry,
+		false,
+		NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL, NULL
@@ -2322,7 +2332,7 @@ static struct config_int ConfigureNamesInt[] =
 			NULL,
 		},
 		&max_worker_processes,
-		8, 1, MAX_BACKENDS,
+		8 + MaxPMAuxProc, 1, MAX_BACKENDS,
 		check_max_worker_processes, NULL, NULL
 	},
 
@@ -2558,8 +2568,8 @@ static struct config_int ConfigureNamesInt[] =
 
 	{
 		{"effective_cache_size", PGC_USERSET, QUERY_TUNING_COST,
-			gettext_noop("Sets the planner's assumption about the size of the data cache."),
-			gettext_noop("That is, the size of the cache used for PostgreSQL data files. "
+			gettext_noop("Sets the planner's assumption about the total size of the data caches."),
+			gettext_noop("That is, the total size of the caches (kernel cache and shared buffers) used for PostgreSQL data files. "
 						 "This is measured in disk pages, which are normally 8 kB each."),
 			GUC_UNIT_BLOCKS,
 		},
@@ -2818,7 +2828,7 @@ static struct config_string ConfigureNamesString[] =
 		{"default_tablespace", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the default tablespace to create tables and indexes in."),
 			gettext_noop("An empty string selects the database's default tablespace."),
-			GUC_IS_NAME
+			GUC_IS_NAME | GUC_GPDB_ADDOPT
 		},
 		&default_tablespace,
 		"",
@@ -2829,7 +2839,7 @@ static struct config_string ConfigureNamesString[] =
 		{"temp_tablespaces", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the tablespace(s) to use for temporary tables and sort files."),
 			NULL,
-			GUC_LIST_INPUT | GUC_LIST_QUOTE
+			GUC_LIST_INPUT | GUC_LIST_QUOTE | GUC_GPDB_ADDOPT
 		},
 		&temp_tablespaces,
 		"",
@@ -3367,7 +3377,7 @@ static struct config_enum ConfigureNamesEnum[] =
 	},
 
 	{
-		{"client_min_messages", PGC_USERSET, LOGGING_WHEN,
+		{"client_min_messages", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the message levels that are sent to the client."),
 			gettext_noop("Each level includes all the levels that follow it. The later"
 						 " the level, the fewer messages are sent."),
@@ -3375,7 +3385,7 @@ static struct config_enum ConfigureNamesEnum[] =
 		},
 		&client_min_messages,
 		NOTICE, client_message_level_options,
-		NULL, NULL, NULL
+		check_client_min_messages, NULL, NULL
 	},
 
 	{
@@ -5492,6 +5502,10 @@ parse_real(const char *value, double *result)
 	if (endptr == value || errno == ERANGE)
 		return false;
 
+	/* reject NaN (infinities will fail range checks later) */
+	if (isnan(val))
+		return false;
+
 	/* allow whitespace after number */
 	while (isspace((unsigned char) *endptr))
 		endptr++;
@@ -7415,7 +7429,7 @@ DispatchSetPGVariable(const char *name, List *args, bool is_local)
 		if (is_local)
 			appendStringInfo(&buffer, "LOCAL ");
 
-		appendStringInfo(&buffer, "%s TO ", name);
+		appendStringInfo(&buffer, "%s TO ", quote_identifier(name));
 
 		foreach(l, args)
 		{
@@ -7505,16 +7519,29 @@ set_config_by_name(PG_FUNCTION_ARGS)
 							 true,
 							 0);
 
-    if (Gp_role == GP_ROLE_DISPATCH && !IsBootstrapProcessingMode())
-    {
-			StringInfoData buffer;
-			initStringInfo(&buffer);
-			appendStringInfo(&buffer, "SET ");
-			if (is_local)
-					appendStringInfo(&buffer, "LOCAL ");
-			appendStringInfo(&buffer, "%s TO '%s'", name, value);
-			CdbDispatchSetCommand(buffer.data, false /* cancelOnError */);
-    }
+	if (Gp_role == GP_ROLE_DISPATCH && !IsBootstrapProcessingMode())
+	{
+		StringInfoData	buffer;
+		char		   *quoted_name;
+		char		   *quoted_value = NULL;
+
+		initStringInfo(&buffer);
+
+		quoted_name = quote_literal_cstr(name);
+		if (value)
+			quoted_value = quote_literal_cstr(value);
+
+		appendStringInfo(&buffer, "SELECT pg_catalog.set_config(%s, %s, %s)",
+						 quoted_name,
+						 quoted_value ? quoted_value : "NULL",
+						 is_local ? "true" : "false");
+
+		if (quoted_value)
+			pfree(quoted_value);
+		pfree(quoted_name);
+
+		CdbDispatchSetCommand(buffer.data, false /* cancelOnError */ );
+	}
 
 	/* get the new current value */
 	new_value = GetConfigOptionByName(name, NULL);
@@ -9616,6 +9643,20 @@ assign_session_replication_role(int newval, void *extra)
 }
 
 static bool
+check_client_min_messages(int *newval, void **extra, GucSource source)
+{
+	/*
+	 * We disallow setting client_min_messages above ERROR, because not
+	 * sending an ErrorResponse message for an error breaks the FE/BE
+	 * protocol.  However, for backwards compatibility, we still accept FATAL
+	 * or PANIC as input values, and then adjust here.
+	 */
+	if (*newval > ERROR)
+		*newval = ERROR;
+	return true;
+}
+
+static bool
 check_temp_buffers(int *newval, void **extra, GucSource source)
 {
 	/*
@@ -9891,6 +9932,14 @@ check_max_worker_processes(int *newval, void **extra, GucSource source)
 {
 	if (MaxConnections + autovacuum_max_workers + 1 + *newval > MAX_BACKENDS)
 		return false;
+
+	if (*newval < MaxPMAuxProc)
+	{
+		elog(ERROR, "max_worker_processes less than %d, must reserve %d "
+			 "for auxiliary processes like FTS", MaxPMAuxProc, MaxPMAuxProc);
+		return false;
+	}
+
 	return true;
 }
 

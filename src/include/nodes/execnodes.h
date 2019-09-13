@@ -366,6 +366,7 @@ typedef struct ResultRelInfo
 	List	   *ri_WithCheckOptionExprs;
 	List	  **ri_ConstraintExprs;
 	JunkFilter *ri_junkFilter;
+	AttrNumber  ri_segid_attno; /* gpdb: attribute number of "gp_segment_id" */
 	ProjectionInfo *ri_projectReturning;
 	int			tupdesc_match;
 	struct MemTupleBinding *mt_bind;
@@ -2264,6 +2265,7 @@ typedef struct NestLoopState
 	bool		nl_MatchedOuter;
 	bool		shared_outer;
 	bool		prefetch_inner;
+	bool		prefetch_joinqual;
 	bool		reset_inner; /*CDB-OLAP*/
 	bool		require_inner_reset; /*CDB-OLAP*/
 
@@ -2319,6 +2321,7 @@ typedef struct MergeJoinState
 	ExprContext *mj_OuterEContext;
 	ExprContext *mj_InnerEContext;
 	bool		prefetch_inner; /* MPP-3300 */
+	bool		prefetch_joinqual;
 } MergeJoinState;
 
 /* ----------------
@@ -2376,6 +2379,7 @@ typedef struct HashJoinState
 	bool		hj_OuterNotEmpty;
 	bool		hj_InnerEmpty;  /* set to true if inner side is empty */
 	bool		prefetch_inner;
+	bool		prefetch_joinqual;
 	bool		hj_nonequijoin;
 
 	/* set if the operator created workfiles */
@@ -2782,6 +2786,7 @@ typedef struct DMLState
 	PlanState	ps;
 	JunkFilter *junkfilter;			/* filter that removes junk and dropped attributes */
 	TupleTableSlot *cleanedUpSlot;	/* holds 'final' tuple which matches the target relation schema */
+	AttrNumber	segid_attno;		/* attribute number of "gp_segment_id" */
 } DMLState;
 
 /*

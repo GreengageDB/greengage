@@ -61,6 +61,7 @@ using namespace gpnaucrates;
 using namespace gpmd;
 
 extern bool	optimizer_enable_ctas;
+extern bool optimizer_enable_dml;
 extern bool optimizer_enable_dml_triggers;
 extern bool optimizer_enable_dml_constraints;
 extern bool optimizer_enable_multiple_distinct_aggs;
@@ -252,7 +253,7 @@ CTranslatorQueryToDXL::CTranslatorQueryToDXL
 CTranslatorQueryToDXL *
 CTranslatorQueryToDXL::QueryToDXLInstance
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	CMDAccessor *md_accessor,
 	Query *query
 	)
@@ -724,6 +725,11 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 	GPOS_ASSERT(CMD_INSERT == m_query->commandType);
 	GPOS_ASSERT(0 < m_query->resultRelation);
 
+	if (!optimizer_enable_dml)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("DML not enabled"));
+	}
+
 	CDXLNode *query_dxlnode = TranslateSelectQueryToDXL();
 	const RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(m_query->rtable, m_query->resultRelation - 1);
 
@@ -1141,6 +1147,11 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 	GPOS_ASSERT(CMD_DELETE == m_query->commandType);
 	GPOS_ASSERT(0 < m_query->resultRelation);
 
+	if (!optimizer_enable_dml)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("DML not enabled"));
+	}
+
 	CDXLNode *query_dxlnode = TranslateSelectQueryToDXL();
 	const RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(m_query->rtable, m_query->resultRelation - 1);
 
@@ -1192,6 +1203,11 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 {
 	GPOS_ASSERT(CMD_UPDATE == m_query->commandType);
 	GPOS_ASSERT(0 < m_query->resultRelation);
+
+	if (!optimizer_enable_dml)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("DML not enabled"));
+	}
 
 	CDXLNode *query_dxlnode = TranslateSelectQueryToDXL();
 	const RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(m_query->rtable, m_query->resultRelation - 1);
@@ -4440,7 +4456,7 @@ CTranslatorQueryToDXL::ConstructCTEAnchors
 ULongPtrArray *
 CTranslatorQueryToDXL::GenerateColIds
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	ULONG size
 	)
 	const
@@ -4466,7 +4482,7 @@ CTranslatorQueryToDXL::GenerateColIds
 ULongPtrArray *
 CTranslatorQueryToDXL::ExtractColIds
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IntToUlongMap *attno_to_colid_mapping
 	)
 	const
@@ -4504,7 +4520,7 @@ CTranslatorQueryToDXL::ExtractColIds
 IntToUlongMap *
 CTranslatorQueryToDXL::RemapColIds
 	(
-	IMemoryPool *mp,
+	CMemoryPool *mp,
 	IntToUlongMap *attno_to_colid_mapping,
 	ULongPtrArray *from_list_colids,
 	ULongPtrArray *to_list_colids

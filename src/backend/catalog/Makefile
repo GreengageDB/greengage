@@ -22,7 +22,9 @@ OBJS += pg_exttable.o pg_extprotocol.o \
        aoseg.o aoblkdir.o gp_fastsequence.o gp_segment_config.o \
        pg_attribute_encoding.o pg_compression.o aovisimap.o \
        pg_appendonly.o \
-       oid_dispatch.o aocatalog.o
+       oid_dispatch.o aocatalog.o storage_tablespace.o storage_database.o \
+       storage_tablespace_twophase.o storage_tablespace_xact.o
+
 
 BKIFILES = postgres.bki postgres.description postgres.shdescription
 
@@ -91,6 +93,8 @@ schemapg.h: postgres.bki
 # process it.
 pg_proc_combined.h: $(top_srcdir)/src/include/catalog/pg_proc.h $(top_srcdir)/src/include/catalog/pg_proc_gp.h
 	cat $^ > $@
+
+catalog_json: $(CATALOG_JSON)
 
 $(CATALOG_JSON): process_foreign_keys.pl $(POSTGRES_BKI_SRCS) $(top_srcdir)/src/include/catalog/catversion.h
 	cat $(POSTGRES_BKI_SRCS) $(top_srcdir)/src/include/catalog/catversion.h | $(PERL) process_foreign_keys.pl > $@

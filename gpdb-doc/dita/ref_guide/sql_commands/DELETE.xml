@@ -34,7 +34,8 @@ DELETE FROM [ONLY] <varname>table</varname> [[AS] <varname>alias</varname>]
                 the table's columns, and/or columns of other tables mentioned in
                     <codeph>USING</codeph>, can be computed. The syntax of the
                     <codeph>RETURNING</codeph> list is identical to that of the output list of
-                    <codeph>SELECT</codeph>.</p>
+                    <codeph>SELECT</codeph>.<note>The <codeph>RETURNING</codeph> clause is not
+                    supported when deleting from append-optimized tables.</note></p>
             <p>You must have the <codeph>DELETE</codeph> privilege on the table to delete from it. </p>
             <note>As the default, Greenplum Database acquires an <codeph>EXCLUSIVE</codeph> lock on
                 tables for <codeph>DELETE</codeph> operations on heap tables. When the Global
@@ -68,11 +69,6 @@ DELETE FROM [ONLY] <varname>table</varname> [[AS] <varname>alias</varname>]
                             <codeph>WITH</codeph> clause cannot contain a data-modifying command
                             (<codeph>INSERT</codeph>, <codeph>UPDATE</codeph>, or
                             <codeph>DELETE</codeph>). </pd>
-                    <pd>The <codeph>RECURSIVE</codeph> keyword is a Beta feature. By default, The
-                            <codeph>RECURSIVE</codeph> keyword is not available. The keyword can be
-                        enabled by setting the server configuration parameter <codeph><xref
-                                href="../config_params/guc-list.xml#gp_recursive_cte"
-                            /></codeph> to <codeph>true</codeph>. </pd>
                     <pd>See <xref
                             href="../../admin_guide/query/topics/CTE-query.xml#topic_zhs_r1s_w1b"/>
                         and <codeph><xref href="SELECT.xml#topic1"/></codeph> for details. </pd>
@@ -172,6 +168,11 @@ name = 'Hannah';</codeblock>
                 a specific partition (child table) of a partitioned table is not supported. Instead,
                 these commands must be executed on the root partitioned table, the table created
                 with the <codeph>CREATE TABLE</codeph> command.</p>
+            <p>For a partitioned table, all the child tables are locked during the
+                    <codeph>DELETE</codeph> operation when the Global Deadlock Detector is not
+                enabled (the default). Only some of the leaf child tables are locked when the Global
+                Deadlock Detector is enabled. For information about the Global Deadlock Detector,
+                see <xref href="../../admin_guide/dml.xml#topic_gdd"/>.</p>
         </section>
         <section id="section7">
             <title>Examples</title>

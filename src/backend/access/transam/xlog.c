@@ -3439,7 +3439,7 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno)
 	}
 
 	if (pg_fsync(fd) != 0)
-		ereport(ERROR,
+		ereport(data_sync_elevel(ERROR),
 				(errcode_for_file_access(),
 				 errmsg("could not fsync file \"%s\": %m", tmppath)));
 
@@ -8594,7 +8594,7 @@ CreateCheckPoint(int flags)
 
 #ifdef FAULT_INJECTOR
 	if (FaultInjector_InjectFaultIfSet(
-			Checkpoint,
+			"checkpoint",
 			DDLNotSpecified,
 			"" /* databaseName */,
 			"" /* tableName */) == FaultInjectorTypeSkip)
@@ -8894,7 +8894,7 @@ CreateCheckPoint(int flags)
 	if (!shutdown && XLogStandbyInfoActive())
 		LogStandbySnapshot();
 
-	SIMPLE_FAULT_INJECTOR(CheckpointAfterRedoCalculated);
+	SIMPLE_FAULT_INJECTOR("checkpoint_after_redo_calculated");
 
 	START_CRIT_SECTION();
 
@@ -10088,6 +10088,8 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 							checkPoint.ThisTimeLineID, ThisTimeLineID)));
 
 		RecoveryRestartPoint(&checkPoint);
+
+		SIMPLE_FAULT_INJECTOR("after_xlog_redo_checkpoint_online");
 	}
 	else if (info == XLOG_END_OF_RECOVERY)
 	{
@@ -10112,6 +10114,7 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 	}
 	else if (info == XLOG_NOOP)
 	{
+		SIMPLE_FAULT_INJECTOR("after_xlog_redo_noop");
 		/* nothing to do here */
 	}
 	else if (info == XLOG_SWITCH)

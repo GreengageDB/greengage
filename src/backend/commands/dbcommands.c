@@ -44,6 +44,7 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_tablespace.h"
+#include "catalog/storage_database.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/seclabel.h"
@@ -83,16 +84,26 @@ typedef struct
 	Oid			dest_dboid;		/* DB we are trying to create */
 } createdb_failure_params;
 
+/*
+ * GPDB: A different cleanup mechanism is used. Refer comment in movedb().
+ */
+#if 0
 typedef struct
 {
 	Oid			dest_dboid;		/* DB we are trying to move */
 	Oid			dest_tsoid;		/* tablespace we are trying to move to */
 } movedb_failure_params;
+#endif
 
 /* non-export function prototypes */
 static void createdb_failure_callback(int code, Datum arg);
 static void movedb(const char *dbname, const char *tblspcname);
+/*
+ * GPDB: A different cleanup mechanism is used. Refer comment in movedb().
+ */
+#if 0
 static void movedb_failure_callback(int code, Datum arg);
+#endif
 static bool get_db_info(const char *name, LOCKMODE lockmode,
 			Oid *dbIdP, Oid *ownerIdP,
 			int *encodingP, bool *dbIsTemplateP, bool *dbAllowConnP,
@@ -642,11 +653,19 @@ createdb(const CreatedbStmt *stmt)
 			dstpath = GetDatabasePath(dboid, dsttablespace);
 
 			/*
+			 * Register the database directory to PendingDBDelete link list
+			 * for cleanup in txn abort.
+			 */
+			ScheduleDbDirDelete(dboid, dsttablespace, false);
+
+			/*
 			 * Copy this subdirectory to the new location
 			 *
 			 * We don't need to copy subdirectories
 			 */
 			copydir(srcpath, dstpath, false);
+
+			SIMPLE_FAULT_INJECTOR("create_db_after_file_copy");
 
 			/* Record the filesystem change in XLOG */
 			{
@@ -666,6 +685,9 @@ createdb(const CreatedbStmt *stmt)
 				(void) XLogInsert(RM_DBASE_ID, XLOG_DBASE_CREATE, rdata);
 			}
 		}
+
+		SIMPLE_FAULT_INJECTOR("after_xlog_create_database");
+
 		heap_endscan(scan);
 		heap_close(rel, AccessShareLock);
 
@@ -1137,8 +1159,9 @@ movedb(const char *dbname, const char *tblspcname)
 	char	   *dst_dbpath;
 	DIR		   *dstdir;
 	struct dirent *xlde;
+#if 0
 	movedb_failure_params fparms;
-
+#endif
 	/*
 	 * Look up the target database's OID, and get exclusive lock on it. We
 	 * need this to ensure that no new backend starts up in the database while
@@ -1159,8 +1182,7 @@ movedb(const char *dbname, const char *tblspcname)
 	 * lock be released at commit, except that someone could try to move
 	 * relations of the DB back into the old directory while we rmtree() it.)
 	 */
-	LockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-							   AccessExclusiveLock);
+	MoveDbSessionLockAcquire(db_id);
 
 	/*
 	 * Permission checks
@@ -1205,8 +1227,7 @@ movedb(const char *dbname, const char *tblspcname)
 	if (src_tblspcoid == dst_tblspcoid)
 	{
 		heap_close(pgdbrel, NoLock);
-		UnlockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-									 AccessExclusiveLock);
+		MoveDbSessionLockRelease();
 		return;
 	}
 
@@ -1293,7 +1314,13 @@ movedb(const char *dbname, const char *tblspcname)
 			elog(ERROR, "could not remove directory \"%s\": %m",
 				 dst_dbpath);
 	}
-
+	/*
+	 * GPDB: The failure callback mechanism below that is used upstream is
+	 * insufficient in guaranteeing cleanup throughout a two-phase commit/abort.
+	 * Instead, GPDB uses the pendingDbDeletes mechanism to clean the dboid dir
+	 * under the target tablespace.
+	 */
+#if 0
 	/*
 	 * Use an ENSURE block to make sure we remove the debris if the copy fails
 	 * (eg, due to out-of-disk-space).  This is not a 100% solution, because
@@ -1304,7 +1331,9 @@ movedb(const char *dbname, const char *tblspcname)
 	fparms.dest_tsoid = dst_tblspcoid;
 	PG_ENSURE_ERROR_CLEANUP(movedb_failure_callback,
 							PointerGetDatum(&fparms));
+#endif
 	{
+		ScheduleDbDirDelete(db_id, dst_tblspcoid, false);
 		/*
 		 * Copy files from the old tablespace to the new one
 		 */
@@ -1386,13 +1415,14 @@ movedb(const char *dbname, const char *tblspcname)
 		 */
 		heap_close(pgdbrel, NoLock);
 	}
+#if 0
 	PG_END_ENSURE_ERROR_CLEANUP(movedb_failure_callback,
 								PointerGetDatum(&fparms));
-
+#endif
 	/*
 	 * GPDB: GPDB uses two phase commit and pending deletes, hence cannot locally
 	 * commit here. The rest of the logic related to the non-catalog changes from
-	 * this function is extracted into DropDatabaseDirectory() which is executed at
+	 * this function is extracted into DropDatabaseDirectories() which is executed at
 	 * commit time.
 	 */
 #if 0
@@ -1420,62 +1450,22 @@ movedb(const char *dbname, const char *tblspcname)
 		 * QE needs to release session level locks as can't Prepare Transaction
 		 * with session locks.
 		 */
-		UnlockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-									 AccessExclusiveLock);
+		MoveDbSessionLockRelease();
 	}
 
 	/*
 	 * register the db_id with pending deletes list to schedule removing database
 	 * directory on transaction commit.
 	 */
-	DatabaseDropStorage(db_id, src_tblspcoid);
+	ScheduleDbDirDelete(db_id, src_tblspcoid, true);
 
-	SIMPLE_FAULT_INJECTOR(InsideMoveDbTransaction);
+	SIMPLE_FAULT_INJECTOR("inside_move_db_transaction");
 }
 
 /*
- * This functions contains non-catalog modifications to be performed for movedb().
- * Its called after successfully marking the transaction as committed via pending
- * deletes.
+ * GPDB: A different cleanup mechanism is used. Refer comment in movedb().
  */
-void
-DropDatabaseDirectory(Oid db_id, Oid tblspcoid)
-{
-	char *dbpath = GetDatabasePath(db_id, tblspcoid);
-	/*
-	 * Remove files from the old tablespace
-	 */
-	if (!rmtree(dbpath, true))
-		ereport(WARNING,
-				(errmsg("some useless files may be left behind in old database directory \"%s\"",
-						dbpath)));
-
-	/*
-	 * Record the filesystem change in XLOG
-	 */
-	{
-		xl_dbase_drop_rec xlrec;
-		XLogRecData rdata[1];
-
-		xlrec.db_id = db_id;
-		xlrec.tablespace_id = tblspcoid;
-
-		rdata[0].data = (char *) &xlrec;
-		rdata[0].len = sizeof(xl_dbase_drop_rec);
-		rdata[0].buffer = InvalidBuffer;
-		rdata[0].next = NULL;
-
-		(void) XLogInsert(RM_DBASE_ID, XLOG_DBASE_DROP, rdata);
-	}
-
-	if (Gp_role == GP_ROLE_DISPATCH)
-	{
-		/* Now it's safe to release the database lock */
-		UnlockSharedObjectForSession(DatabaseRelationId, db_id, 0,
-									AccessExclusiveLock);
-	}
-}
-
+#if 0
 /* Error cleanup callback for movedb */
 static void
 movedb_failure_callback(int code, Datum arg)
@@ -1488,7 +1478,7 @@ movedb_failure_callback(int code, Datum arg)
 
 	(void) rmtree(dstpath, true);
 }
-
+#endif
 
 /*
  * ALTER DATABASE name ...
@@ -2187,6 +2177,7 @@ dbase_redo(XLogRecPtr beginLoc  __attribute__((unused)), XLogRecPtr lsn  __attri
 		xl_dbase_create_rec *xlrec = (xl_dbase_create_rec *) XLogRecGetData(record);
 		char	   *src_path;
 		char	   *dst_path;
+		char	   *parentdir;
 		struct stat st;
 
 		src_path = GetDatabasePath(xlrec->src_db_id, xlrec->src_tablespace_id);
@@ -2205,6 +2196,30 @@ dbase_redo(XLogRecPtr beginLoc  __attribute__((unused)), XLogRecPtr lsn  __attri
 						(errmsg("some useless files may be left behind in old database directory \"%s\"",
 								dst_path)));
 		}
+
+		/*
+		 * It is possible that the tablespace was later dropped, but we are
+		 * re-redoing database create before that. In that case,
+		 * either src_path or dst_path is probably missing here and needs to
+		 * be created. We create directories here so that copy_dir() won't
+		 * fail, but do not bother to create the symlink under pg_tblspc
+		 * if the tablespace is not global/default.
+		 */
+		if (stat(src_path, &st) != 0 && pg_mkdir_p(src_path, S_IRWXU) != 0)
+		{
+			ereport(WARNING,
+					(errmsg("can not recursively create directory \"%s\"",
+							src_path)));
+		}
+		parentdir = pstrdup(dst_path);
+		get_parent_directory(parentdir);
+		if (stat(parentdir, &st) != 0 && pg_mkdir_p(parentdir, S_IRWXU) != 0)
+		{
+			ereport(WARNING,
+					(errmsg("can not recursively create directory \"%s\"",
+							parentdir)));
+		}
+		pfree(parentdir);
 
 		/*
 		 * Force dirty buffers out to disk, to ensure source database is
