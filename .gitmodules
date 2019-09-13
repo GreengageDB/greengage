@@ -12,6 +12,8 @@
 [submodule "add_libs/gporca"]
 	path = add_libs/gporca
 	url = https://github.com/arenadata/gporca.git
+	branch = adb-6.x
 [submodule "add_libs/gp-xerces"]
 	path = add_libs/gp-xerces
 	url = https://github.com/arenadata/gp-xerces.git
+	branch = adb-6.x
