@@ -582,8 +582,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='Greenplum Database'
 PACKAGE_TARNAME='greenplum-database'
-PACKAGE_VERSION='6.0.0'
-PACKAGE_STRING='Greenplum Database 6.0.0'
+PACKAGE_VERSION='6.0.1'
+PACKAGE_STRING='Greenplum Database 6.0.1'
 PACKAGE_BUGREPORT='support@greenplum.org'
 PACKAGE_URL=''
 
@@ -1584,8 +1584,8 @@ Optional Packages:
   --with-openssl          build with OpenSSL support
   --with-selinux          build with SELinux support
   --without-readline      do not use GNU Readline nor BSD Libedit for editing
-  --without-libedit-preferred
-                          do not prefer BSD Libedit over GNU Readline
+  --with-libedit-preferred
+                          prefer BSD Libedit over GNU Readline
   --with-uuid=LIB         build contrib/uuid-ossp using LIB (bsd,e2fs,ossp)
   --with-ossp-uuid        obsolete spelling of --with-uuid=ossp
   --with-libxml           build with XML support
@@ -7771,8 +7771,6 @@ fi
 #
 # Prefer libedit
 #
-# In GPDB we want the default to be yes, because we don't want to link with GPL code.
-#
 
 
 
@@ -7792,7 +7790,7 @@ if test "${with_libedit_preferred+set}" = set; then :
   esac
 
 else
-  with_libedit_preferred=yes
+  with_libedit_preferred=no
 
 fi
 
@@ -14902,7 +14900,7 @@ int
 main ()
 {
 
-return strncmp("3.65.", GPORCA_VERSION_STRING, 5);
+return strncmp("3.74.", GPORCA_VERSION_STRING, 5);
 
   ;
   return 0;
@@ -14912,7 +14910,7 @@ if ac_fn_cxx_try_run "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
 $as_echo "ok" >&6; }
 else
-  as_fn_error $? "Your ORCA version is expected to be 3.65.XXX" "$LINENO" 5
+  as_fn_error $? "Your ORCA version is expected to be 3.74.XXX" "$LINENO" 5
 
 fi
 rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \

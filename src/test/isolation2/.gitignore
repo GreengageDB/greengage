@@ -5,6 +5,8 @@ regression.out
 sql/ao_upgrade.sql
 expected/ao_upgrade.out
 expected/ao_upgrade_optimizer.out
+sql/external_table.sql
+expected/external_table.out
 
 -- ignore generated pg_basebackup tests
 /sql/pg_basebackup*.sql
@@ -17,6 +19,7 @@ expected/ao_upgrade_optimizer.out
 /GPTest.pm
 /gpdiff.pl
 /gpstringsubs.pl
+/data
 
 # Generated subdirectories
 /results/

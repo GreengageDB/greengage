@@ -20,6 +20,7 @@
 #include "nodes/primnodes.h"
 #include "utils/datum.h"
 #include "utils/date.h"
+#include "utils/uuid.h"
 
 #include "gpopt/translate/CTranslatorScalarToDXL.h"
 #include "gpopt/translate/CTranslatorQueryToDXL.h"
@@ -2154,7 +2155,6 @@ CTranslatorScalarToDXL::TranslateGenericDatumToDXL
 	CMDIdGPDB *mdid_old = CMDIdGPDB::CastMdid(md_type->MDId());
 	CMDIdGPDB *mdid = GPOS_NEW(mp) CMDIdGPDB(*mdid_old);
 
-	BOOL is_const_by_val = md_type->IsPassedByValue();
 	BYTE *bytes = ExtractByteArrayFromDatum(mp, md_type, is_null, len, datum);
 	ULONG length = 0;
 	if (!is_null)
@@ -2174,7 +2174,7 @@ CTranslatorScalarToDXL::TranslateGenericDatumToDXL
 		lint_value = ExtractLintValueFromDatum(mdid, is_null, bytes, length);
 	}
 
-	return CMDTypeGenericGPDB::CreateDXLDatumVal(mp, mdid, type_modifier, is_const_by_val, is_null, bytes, length, lint_value, double_value);
+	return CMDTypeGenericGPDB::CreateDXLDatumVal(mp, mdid, type_modifier, is_null, bytes, length, lint_value, double_value);
 }
 
 
@@ -2462,7 +2462,11 @@ CTranslatorScalarToDXL::ExtractLintValueFromDatum
 		}
 		else
 		{
-			if (mdid->Equals(&CMDIdGPDB::m_mdid_bpchar))
+			if (mdid->Equals(&CMDIdGPDB::m_mdid_uuid))
+			{
+				hash = gpdb::UUIDHash((Datum) bytes);
+			}
+			else if (mdid->Equals(&CMDIdGPDB::m_mdid_bpchar))
 			{
 				hash = gpdb::HashBpChar((Datum) bytes);
 			}

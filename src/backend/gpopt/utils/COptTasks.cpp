@@ -93,35 +93,10 @@ using namespace gpdbcost;
 #define GPOPT_ERROR_BUFFER_SIZE 10 * 1024 * 1024
 
 // definition of default AutoMemoryPool
-#define AUTO_MEM_POOL(amp) CAutoMemoryPool amp(CAutoMemoryPool::ElcExc, CMemoryPoolManager::EatTracker, false /* fThreadSafe */)
+#define AUTO_MEM_POOL(amp) CAutoMemoryPool amp(CAutoMemoryPool::ElcExc)
 
 // default id for the source system
 const CSystemId default_sysid(IMDId::EmdidGPDB, GPOS_WSZ_STR_LENGTH("GPDB"));
-
-// array of optimizer minor exception types that trigger expected fallback to the planner
-const ULONG expected_opt_fallback[] =
-	{
-		gpopt::ExmiInvalidPlanAlternative,		// chosen plan id is outside range of possible plans
-		gpopt::ExmiUnsupportedOp,				// unsupported operator
-		gpopt::ExmiUnsupportedPred,				// unsupported predicate
-		gpopt::ExmiUnsupportedCompositePartKey	// composite partitioning keys
-	};
-
-// array of DXL minor exception types that trigger expected fallback to the planner
-const ULONG expected_dxl_fallback[] =
-	{
-		gpdxl::ExmiMDObjUnsupported,			// unsupported metadata object
-		gpdxl::ExmiQuery2DXLUnsupportedFeature,	// unsupported feature during algebrization
-		gpdxl::ExmiPlStmt2DXLConversion,		// unsupported feature during plan freezing
-		gpdxl::ExmiDXL2PlStmtConversion			// unsupported feature during planned statement translation
-	};
-
-// array of DXL minor exception types that error out and NOT fallback to the planner
-const ULONG expected_dxl_errors[] =
-	{
-		gpdxl::ExmiDXL2PlStmtExternalScanError,	// external table error
-		gpdxl::ExmiQuery2DXLNotNullViolation,	// not null violation
-	};
 
 
 //---------------------------------------------------------------------------
@@ -284,7 +259,7 @@ COptTasks::Execute
 
 	bool abort_flag = false;
 
-	CAutoMemoryPool amp(CAutoMemoryPool::ElcNone, CMemoryPoolManager::EatTracker, false /* fThreadSafe */);
+	CAutoMemoryPool amp(CAutoMemoryPool::ElcNone);
 
 	gpos_exec_params params;
 	params.func = func;
@@ -471,83 +446,6 @@ COptTasks::CreateOptimizerConfig
 								),
 						GPOS_NEW(mp) CWindowOids(OID(F_WINDOW_ROW_NUMBER), OID(F_WINDOW_RANK))
 						);
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COptTasks::FoundException
-//
-//	@doc:
-//		Lookup given exception type in the given array
-//
-//---------------------------------------------------------------------------
-BOOL
-COptTasks::FoundException
-	(
-	gpos::CException &exc,
-	const ULONG *exceptions,
-	ULONG size
-	)
-{
-	GPOS_ASSERT(NULL != exceptions);
-
-	ULONG minor = exc.Minor();
-	BOOL found = false;
-	for (ULONG ul = 0; !found && ul < size; ul++)
-	{
-		found = (exceptions[ul] == minor);
-	}
-
-	return found;
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COptTasks::IsUnexpectedFailure
-//
-//	@doc:
-//		Check if given exception is an unexpected reason for failing to
-//		produce a plan
-//
-//---------------------------------------------------------------------------
-BOOL
-COptTasks::IsUnexpectedFailure
-	(
-	gpos::CException &exc
-	)
-{
-	ULONG major = exc.Major();
-
-	BOOL is_opt_failure_expected =
-		gpopt::ExmaGPOPT == major &&
-		FoundException(exc, expected_opt_fallback, GPOS_ARRAY_SIZE(expected_opt_fallback));
-
-	BOOL is_dxl_failure_expected =
-		(gpdxl::ExmaDXL == major || gpdxl::ExmaMD == major) &&
-		FoundException(exc, expected_dxl_fallback, GPOS_ARRAY_SIZE(expected_dxl_fallback));
-
-	return (!is_opt_failure_expected && !is_dxl_failure_expected);
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COptTasks::ShouldErrorOut
-//
-//	@doc:
-//		Check if given exception should error out
-//
-//---------------------------------------------------------------------------
-BOOL
-COptTasks::ShouldErrorOut
-	(
-	gpos::CException &exc
-	)
-{
-	return
-		gpdxl::ExmaDXL == exc.Major() &&
-		FoundException(exc, expected_dxl_errors, GPOS_ARRAY_SIZE(expected_dxl_errors));
 }
 
 //---------------------------------------------------------------------------
