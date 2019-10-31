@@ -2,13 +2,14 @@ MODULES=heap_checksum_helper
 PG_CONFIG=pg_config
 
 REGRESS = setup heap_checksum_corruption
-REGRESS_OPTS = --init-file=../regress/init_file --dbname="heap_checksum_regression"
+REGRESS_OPTS = --init-file=../regress/init_file
 
 subdir = src/test/heap_checksum/
 top_builddir = ../../..
 
 include $(top_builddir)/src/Makefile.global
 
+USE_MODULE_DB=1
 NO_PGXS = 1
 include $(top_srcdir)/src/makefiles/pgxs.mk
 

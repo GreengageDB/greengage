@@ -1,11 +1,11 @@
-1:drop view if exists mpp25160 cascade;
+1:drop view if exists concurrent_drop_view cascade;
 DROP
-1:create view mpp25160 as select * from pg_class;
+1:create view concurrent_drop_view as select * from pg_class;
 CREATE
-1:select viewname from pg_views where viewname = 'mpp25160';
- viewname 
-----------
- mpp25160 
+1:select viewname from pg_views where viewname = 'concurrent_drop_view';
+ viewname             
+----------------------
+ concurrent_drop_view 
 (1 row)
 
 -- One transaction drops the view, and before it commits, another
@@ -18,13 +18,19 @@ CREATE
 -- not nice.)
 1:begin;
 BEGIN
-1:drop view mpp25160;
+1:drop view concurrent_drop_view;
 DROP
-2&:select viewname, definition from pg_views where viewname = 'mpp25160';  <waiting ...>
+2&:select viewname, definition from pg_views where viewname = 'concurrent_drop_view';  <waiting ...>
+-- wait till halts for AccessShareLock on QD
+3: SELECT wait_until_waiting_for_required_lock('concurrent_drop_view', 'AccessShareLock', -1);
+ wait_until_waiting_for_required_lock 
+--------------------------------------
+ t                                    
+(1 row)
 1:commit;
 COMMIT
 2<:  <... completed>
- viewname | definition 
-----------+------------
- mpp25160 |            
+ viewname             | definition 
+----------------------+------------
+ concurrent_drop_view |            
 (1 row)

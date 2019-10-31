@@ -22,13 +22,14 @@
 static StringInfoData outputBuffer;
 int elevel;
 
-static void elog_mock(int elevel, const char *fmt,...);
-static void write_stderr_mock(const char *fmt,...);
+static void elog_mock(int elevel, const char *fmt,...) __attribute__((format(printf, 2, 0)));
+static void write_stderr_mock(const char *fmt,...) __attribute__((format(printf, 1, 0)));
 int fwrite_mock(const char *data, Size size, Size count, FILE *file);
 
 /* We will capture write_stderr output using write_stderr_mock */
 #define write_stderr write_stderr_mock
 
+#undef elog
 #define elog elog_mock
 
 /* We will capture fwrite output using fwrite_mock */
@@ -42,7 +43,7 @@ int fwrite_mock(const char *data, Size size, Size count, FILE *file);
  */
 #undef fopen
 /* Return arbitrary pointer so that we don't bypass fwrite completely */
-#define fopen(fileName, mode) 0xabcdef;
+#define fopen(fileName, mode) ((FILE*)0xabcdef);
 
 #undef fclose
 #define fclose(fileHandle)
@@ -73,7 +74,7 @@ elog_mock(int passed_elevel, const char *fmt, ...)
 
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 
-	appendStringInfo(&outputBuffer, buf);
+	appendStringInfoString(&outputBuffer, buf);
 
 	elevel = passed_elevel;
 
@@ -97,7 +98,7 @@ write_stderr_mock(const char *fmt, ...)
 
 	vsnprintf(buf, sizeof(buf), fmt, ap);
 
-	appendStringInfo(&outputBuffer, buf);
+	appendStringInfoString(&outputBuffer, buf);
 
 	va_end(ap);
 }
@@ -109,28 +110,20 @@ write_stderr_mock(const char *fmt, ...)
 int
 fwrite_mock(const char *data, Size size, Size count, FILE *file)
 {
-	appendStringInfo(&outputBuffer, data);
+	appendStringInfoString(&outputBuffer, data);
 
 	return count;
 }
 
+#undef PG_RE_THROW
 #define PG_RE_THROW() siglongjmp(*PG_exception_stack, 1)
-/*
- * This method will emulate the real ExceptionalCondition
- * function by re-throwing the exception, essentially falling
- * back to the next available PG_CATCH();
- */
-void
-_ExceptionalCondition()
-{
-     PG_RE_THROW();
-}
 
 /*
  * This method sets up MemoryContext tree as well as
  * the basic MemoryAccount data structures.
  */
-void SetupMemoryDataStructures(void **state)
+static void
+SetupMemoryDataStructures(void **state)
 {
 	MemoryContextInit();
 
@@ -143,7 +136,7 @@ void SetupMemoryDataStructures(void **state)
  * This method cleans up MemoryContext tree and
  * the MemoryAccount data structures.
  */
-void
+static void
 TeardownMemoryDataStructures(void **state)
 {
 	/*
@@ -187,7 +180,7 @@ TeardownMemoryDataStructures(void **state)
 /*
  * Checks if the created account has correct owner type and quota set.
  */
-void
+static void
 test__CreateMemoryAccountImpl__AccountProperties(void **state)
 {
 	uint64 limits[] = {0, 2048, ULONG_LONG_MAX};
@@ -228,7 +221,7 @@ test__CreateMemoryAccountImpl__AccountProperties(void **state)
  * they are same, but we want to test the general case where they
  * are different.
  */
-void
+static void
 test__CreateMemoryAccountImpl__ActiveVsParent(void **state)
 {
 	MemoryAccountIdType tempParentAccountId = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, ActiveMemoryAccountId);
@@ -243,32 +236,11 @@ test__CreateMemoryAccountImpl__ActiveVsParent(void **state)
 	assert_true(tempChildAccount->parentId != ActiveMemoryAccountId);
 }
 
-void
-test__MemoryAccounting_Optimizer_Oustanding_Balance_Rollover(void **state)
-{
-	MemoryAccountIdType optimizerAccountId = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Optimizer, ActiveMemoryAccountId);
-	MemoryAccountIdType tempParentAccountId = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, optimizerAccountId);
-
-	MemoryAccounting_SwitchAccount(optimizerAccountId);
-	void *ptr = Ext_OptimizerAlloc(1);
-	assert_true(GetOptimizerOutstandingMemoryBalance()==1);
-
-	MemoryAccounting_SwitchAccount(tempParentAccountId);
-	MemoryAccount *currentAccount = MemoryAccounting_ConvertIdToAccount(tempParentAccountId);
-	assert_true(currentAccount->allocated == 0);
-
-	MemoryAccountIdType optimizerAccountId2 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Optimizer, tempParentAccountId);
-	MemoryAccounting_SwitchAccount(optimizerAccountId2);
-	currentAccount = MemoryAccounting_ConvertIdToAccount(optimizerAccountId2);
-	assert_true(currentAccount->allocated == GetOptimizerOutstandingMemoryBalance() );
-
-}
-
 /*
  * Checks whether the regular account creation charges the overhead
  * in the MemoryAccountMemoryAccount and SharedChunkHeadersMemoryAccount.
  */
-void
+static void
 test__CreateMemoryAccountImpl__TracksMemoryOverhead(void **state)
 {
 	MemoryAccount *tempParentAccount = MemoryAccounting_ConvertIdToAccount(
@@ -282,7 +254,7 @@ test__CreateMemoryAccountImpl__TracksMemoryOverhead(void **state)
 	uint64 prevSharedAllocated = SharedChunkHeadersMemoryAccount->allocated;
 	uint64 prevSharedFreed = SharedChunkHeadersMemoryAccount->freed;
 
-	MemoryAccountIdType tempChildAccountId = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, tempParentAccount);
+	MemoryAccountIdType tempChildAccountId = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, tempParentAccount->id);
 
 	/* Only MemoryAccountMemoryAccount changed, and nothing else changed */
 	assert_true((MemoryAccountMemoryAccount->allocated - prevAllocated) +
@@ -324,7 +296,7 @@ test__CreateMemoryAccountImpl__TracksMemoryOverhead(void **state)
  * Checks whether the regular account creation charges the overhead
  * in the MemoryAccountMemoryContext.
  */
-void
+static void
 test__CreateMemoryAccountImpl__AllocatesOnlyFromMemoryAccountMemoryContext(void **state)
 {
 	uint64 MemoryAccountMemoryContextOldAlloc = MemoryAccountMemoryContext->allBytesAlloc;
@@ -365,10 +337,9 @@ test__CreateMemoryAccountImpl__AllocatesOnlyFromMemoryAccountMemoryContext(void 
  * actually switches the ActiveMemoryAccount to the correct
  * one.
  */
-void
+static void
 test__MemoryAccounting_SwitchAccount__AccountIsSwitched(void **state)
 {
-	MemoryAccount *newAccount = 0xabcdefab;
 	/*
 	 * ActiveMemoryAccountId should be set to Top, but we don't care. We only
 	 * want to make sure if switching to an account will work
@@ -386,18 +357,17 @@ test__MemoryAccounting_SwitchAccount__AccountIsSwitched(void **state)
  * This method tests whether MemoryAccountIsValid correctly
  * determines the validity of the input account.
  */
-void
+static void
 test__MemoryAccountIsValid__ProperValidation(void **state)
 {
-	int shortLivingCount = shortLivingMemoryAccountArray->accountCount;
 	/* The initialization already should populate at least Top memory account */
 	assert_true(NULL != shortLivingMemoryAccountArray);
 	assert_true(shortLivingMemoryAccountArray->accountCount > 0);
 
 	/* Create some short accounts */
-	MemoryAccountIdType extraShortAccountId1 = MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Append);
-	MemoryAccountIdType extraShortAccountId2 = MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Hash);
-	MemoryAccountIdType extraShortAccountId3 = MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_SeqScan);
+	MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Append);
+	MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Hash);
+	MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_SeqScan);
 
 	MemoryAccountArray* accountArray = shortLivingMemoryAccountArray;
 
@@ -435,7 +405,7 @@ test__MemoryAccountIsValid__ProperValidation(void **state)
  * MemoryAccountMemoryAccount and MemoryAccountTreeLogicalRoot
  * (i.e., they should not be recreated)
  */
-void
+static void
 test__MemoryAccounting_Reset__ReusesLongLivingAccounts(void **state)
 {
 	MemoryAccount *oldLogicalRoot = MemoryAccounting_ConvertIdToAccount(MEMORY_OWNER_TYPE_LogicalRoot);
@@ -484,14 +454,14 @@ test__MemoryAccounting_Reset__ReusesLongLivingAccounts(void **state)
  * Tests if the MemoryAccounting_Reset() recreates all the short-living
  * basic accounts such as TopMemoryAccount
  */
-void
+static void
 test__MemoryAccounting_Reset__RecreatesShortLivingAccounts(void **state)
 {
 	MemoryAccount *topAccount = MemoryAccounting_ConvertIdToAccount(liveAccountStartId);
 	/* The first account should be Top */
 	assert_true(topAccount->ownerType == MEMORY_OWNER_TYPE_Top);
 	MemoryAccount *oldTop = topAccount;
-	MemoryAccountIdType extraShortAccountId = MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Append);
+	MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Append);
 	assert_true(shortLivingMemoryAccountArray->accountCount == 2);
 
 	/*
@@ -518,7 +488,7 @@ test__MemoryAccounting_Reset__RecreatesShortLivingAccounts(void **state)
  * Tests if the MemoryAccounting_Reset() reuses MemoryAccountMemoryContext,
  * i.e., it does not recreate this account
  */
-void
+static void
 test__MemoryAccounting_Reset__ReusesMemoryAccountMemoryContext(void **state)
 {
 #define CONTEXT_MARKER "ABCDEFG"
@@ -542,7 +512,7 @@ test__MemoryAccounting_Reset__ReusesMemoryAccountMemoryContext(void **state)
  * Tests if the MemoryAccounting_Reset() resets MemoryAccountMemoryContext
  * to drop all the previous generation memory accounts
  */
-void
+static void
 test__MemoryAccounting_Reset__ResetsMemoryAccountMemoryContext(void **state)
 {
 	int64 oldMemContextBalance = MemoryAccountMemoryContext->allBytesAlloc - MemoryAccountMemoryContext->allBytesFreed;
@@ -556,8 +526,8 @@ test__MemoryAccounting_Reset__ResetsMemoryAccountMemoryContext(void **state)
 	 */
 	for (int i = 0; i < numAccountsToCreate; i++)
 	{
-		MemoryAccount *tempAccount = MemoryAccounting_ConvertIdToAccount(CreateMemoryAccountImpl
-				(0, MEMORY_OWNER_TYPE_Exec_Hash, ActiveMemoryAccountId));
+		MemoryAccounting_ConvertIdToAccount(CreateMemoryAccountImpl
+											(0, MEMORY_OWNER_TYPE_Exec_Hash, ActiveMemoryAccountId));
 	}
 
 	assert_true(oldMemContextBalance <
@@ -578,12 +548,12 @@ test__MemoryAccounting_Reset__ResetsMemoryAccountMemoryContext(void **state)
  * Tests if the MemoryAccounting_Reset() sets TopMemoryAccount
  * as the ActiveMemoryAccount
  */
-void
+static void
 test__MemoryAccounting_Reset__TopIsActive(void **state)
 {
 	MemoryAccountIdType newActiveAccountId = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, ActiveMemoryAccountId);
 
-	MemoryAccountIdType oldActiveAccountId = MemoryAccounting_SwitchAccount(newActiveAccountId);
+	MemoryAccounting_SwitchAccount(newActiveAccountId);
 	assert_true(ActiveMemoryAccountId == newActiveAccountId);
 
 	MemoryAccounting_Reset();
@@ -595,7 +565,7 @@ test__MemoryAccounting_Reset__TopIsActive(void **state)
  * Tests if the MemoryAccounting_Reset() advances memory account
  * generation
  */
-void
+static void
 test__MemoryAccounting_Reset__AdvancesGeneration(void **state)
 {
 	MemoryAccountIdType liveStart = liveAccountStartId;
@@ -618,7 +588,7 @@ test__MemoryAccounting_Reset__AdvancesGeneration(void **state)
  * Tests if the MemoryAccounting_Reset() transfers any remaining
  * memory account balance into a dedicated rollover account
  */
-void
+static void
 test__MemoryAccounting_Reset__TransferRemainingToRollover(void **state)
 {
 
@@ -651,7 +621,7 @@ test__MemoryAccounting_Reset__TransferRemainingToRollover(void **state)
  * Tests if the MemoryAccounting_GetAccountCurrentBalance() returns the current
  * balance of an account
  */
-void
+static void
 test__MemoryAccounting_GetAccountCurrentBalance__ResetPeakBalance(void **state)
 {
 	MemoryAccountIdType newAccountId = MemoryAccounting_CreateAccount(0, MEMORY_OWNER_TYPE_Exec_Hash);
@@ -672,7 +642,7 @@ test__MemoryAccounting_GetAccountCurrentBalance__ResetPeakBalance(void **state)
  * Tests if the MemoryAccounting_Reset() resets the high water
  * mark (i.e., peak balance)
  */
-void
+static void
 test__MemoryAccounting_Reset__ResetPeakBalance(void **state)
 {
 	/* First allocate new memory to push the peak balance higher */
@@ -682,8 +652,6 @@ test__MemoryAccounting_Reset__ResetPeakBalance(void **state)
 
 	/* Peak balance should be bigger than outstanding due the pfree call */
 	assert_true(MemoryAccountingPeakBalance > MemoryAccountingOutstandingBalance);
-
-	uint64 oldMemoryAccountingPeakBalance = MemoryAccountingPeakBalance;
 
 	MemoryAccounting_Reset();
 
@@ -698,7 +666,7 @@ test__MemoryAccounting_Reset__ResetPeakBalance(void **state)
  * switch all shared headers' ownership to Rollover (i.e., no migration
  * of the shared headers's ownership to rollover happened)
  */
-void
+static void
 test__MemoryAccounting_AdvanceMemoryAccountingGeneration__TransfersBalanceToRolloverWithoutMigration(void **state)
 {
 	/* First allocate some memory so that we have something to rollover (do not free) */
@@ -722,7 +690,7 @@ test__MemoryAccounting_AdvanceMemoryAccountingGeneration__TransfersBalanceToRoll
  * Tests if the MemoryAccounting_AdvanceMemoryAccountingGeneration()
  * sets RolloverMemoryAccount as the ActiveMemoryAccount
  */
-void
+static void
 test__MemoryAccounting_AdvanceMemoryAccountingGeneration__SetsActiveToRollover(void **state)
 {
 	MemoryAccounting_SwitchAccount(liveAccountStartId);
@@ -736,7 +704,7 @@ test__MemoryAccounting_AdvanceMemoryAccountingGeneration__SetsActiveToRollover(v
 /*
  * Tests if the MemoryContextReset() resets SharedChunkHeadersMemoryAccount balance
  */
-void
+static void
 test__MemoryContextReset__ResetsSharedChunkHeadersMemoryAccountBalance(void **state)
 {
 	/*
@@ -760,7 +728,7 @@ test__MemoryContextReset__ResetsSharedChunkHeadersMemoryAccountBalance(void **st
 
 	MemoryAccounting_SwitchAccount(oldAccountId);
 
-	MemoryContext oldContext = MemoryContextSwitchTo(newContext);
+	MemoryContextSwitchTo(newContext);
 
 	/*
 	 * Record the balance right after the new context creation. Note: the
@@ -770,7 +738,7 @@ test__MemoryContextReset__ResetsSharedChunkHeadersMemoryAccountBalance(void **st
 	int64 initialSharedHeaderBalance = SharedChunkHeadersMemoryAccount->allocated - SharedChunkHeadersMemoryAccount->freed;
 
 	/* This would trigger a new shared header with ActiveMemoryAccountId */
-	void *testAlloc1 = palloc(sizeof(int));
+	palloc(sizeof(int));
 
 	SharedChunkHeader *sharedHeader = ((AllocSet)newContext)->sharedHeaderList;
 
@@ -784,7 +752,7 @@ test__MemoryContextReset__ResetsSharedChunkHeadersMemoryAccountBalance(void **st
 	int64 prevSharedHeaderBalance = SharedChunkHeadersMemoryAccount->allocated - SharedChunkHeadersMemoryAccount->freed;
 
 	/* This would *not* trigger a new shared	 header (reuse header) */
-	void *testAlloc2 = palloc(sizeof(int));
+	palloc(sizeof(int));
 
 	/* Make sure no shared header balance is increased */
 	assert_true(prevSharedHeaderBalance ==
@@ -796,7 +764,7 @@ test__MemoryContextReset__ResetsSharedChunkHeadersMemoryAccountBalance(void **st
 	oldAccountId = MemoryAccounting_SwitchAccount(newAccountId);
 
 	/* Tiny alloc that requires a new SharedChunkHeader, due to a new ActiveMemoryAccount */
-	void *testAlloc3 = palloc(sizeof(int));
+	palloc(sizeof(int));
 
 	/* We should see an increase in SharedChunkHeadersMemoryAccount balance */
 	assert_true(prevSharedHeaderBalance <
@@ -845,7 +813,7 @@ ValidateSerializedAccountArray(const char* bytes, uint32 totalSerialized, uint32
 }
 
 /* Tests if the serialization of the memory accounting tree is working */
-void
+static void
 test__MemoryAccounting_Serialize__Validate(void **state)
 {
 	StringInfoData buffer;
@@ -857,8 +825,8 @@ test__MemoryAccounting_Serialize__Validate(void **state)
 	ValidateSerializedAccountArray(buffer.data, totalSerialized, MEMORY_OWNER_TYPE_END_LONG_LIVING + 1);
 
 	MemoryAccountIdType newAccount1 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, liveAccountStartId /* Top */);
-	MemoryAccountIdType newAccount2 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_SeqScan, newAccount1);
-	MemoryAccountIdType newAccount3 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Sort, newAccount1);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_SeqScan, newAccount1);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Sort, newAccount1);
 
 	pfree(buffer.data);
 	initStringInfo(&buffer);
@@ -881,9 +849,9 @@ test__MemoryAccounting_Serialize__Validate(void **state)
     /* Only top besides the long living accounts */
 	ValidateSerializedAccountArray(buffer.data, totalSerialized, MEMORY_OWNER_TYPE_END_LONG_LIVING + 1);
 
-	MemoryAccountIdType newAccount4 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, liveAccountStartId /* Top */);
-	MemoryAccountIdType newAccount5 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_SeqScan, newAccount1);
-	MemoryAccountIdType newAccount6 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Sort, newAccount1);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, liveAccountStartId /* Top */);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_SeqScan, newAccount1);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Sort, newAccount1);
 
 	pfree(buffer.data);
 	initStringInfo(&buffer);
@@ -899,7 +867,7 @@ test__MemoryAccounting_Serialize__Validate(void **state)
  * Tests if the MemoryAccounting_CombinedAccountArrayToExplain of the memory accounting tree
  *  produces expected output
  */
-void
+static void
 test__MemoryAccounting_CombinedAccountArrayToExplain__Validate(void **state)
 {
 	StringInfoData serializedBytes;
@@ -908,14 +876,11 @@ test__MemoryAccounting_CombinedAccountArrayToExplain__Validate(void **state)
 	MemoryAccount *topAccount = MemoryAccounting_ConvertIdToAccount(liveAccountStartId);
 
 	MemoryAccountIdType newAccount1 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Hash, liveAccountStartId /* Top */);
-	MemoryAccountIdType newAccount2 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_SeqScan, newAccount1);
-	MemoryAccountIdType newAccount3 = CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Sort, newAccount1);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_SeqScan, newAccount1);
+	CreateMemoryAccountImpl(0, MEMORY_OWNER_TYPE_Exec_Sort, newAccount1);
 
 	StringInfoData str;
 	initStringInfoOfSize(&str, MAX_OUTPUT_BUFFER_SIZE);
-
-	size_t oldTopBalance = topAccount->allocated - topAccount->freed;
-	size_t oldTopPeak = topAccount->peak;
 
 	uint32 totalSerialized = MemoryAccounting_Serialize(&serializedBytes);
 
@@ -942,9 +907,6 @@ test__MemoryAccounting_CombinedAccountArrayToExplain__Validate(void **state)
 
 	MemoryAccounting_CombinedAccountArrayToExplain(serializedBytes.data, totalSerialized, &es);
 
-	size_t newTopBalance = topAccount->allocated - topAccount->freed;
-	size_t newTopPeak = topAccount->peak;
-
     assert_true(strcmp(es.str->data, buf) == 0);
 
     pfree(serializedBytes.data);
@@ -953,12 +915,12 @@ test__MemoryAccounting_CombinedAccountArrayToExplain__Validate(void **state)
 
 
 /* Tests if the MemoryOwnerType enum to string conversion is working */
-void
+static void
 test__MemoryAccounting_GetAccountName__Validate(void **state)
 {
 	char* longLivingNames[] = {"Root", "SharedHeader", "Rollover", "MemAcc", "X_Alien", "RelinquishedPool"};
 
-	char* shortLivingNames[] = {"Top", "Main", "Parser", "Planner", "PlannerHook", "Optimizer", "Dispatcher", "Serializer", "Deserializer",
+	char* shortLivingNames[] = {"Top", "Main", "Parser", "Planner", "PlannerHook", "Dispatcher", "Serializer", "Deserializer",
 			"Executor", "X_Result", "X_Append", "X_Sequence", "X_MergeAppend", "X_BitmapAnd", "X_BitmapOr",
 			"X_SeqScan", "X_DynamicSeqScan",
 			"X_ExternalScan",
@@ -983,14 +945,14 @@ test__MemoryAccounting_GetAccountName__Validate(void **state)
 			shortLivingOwnerTypeId <= MEMORY_OWNER_TYPE_END_SHORT_LIVING; shortLivingOwnerTypeId++)
 	{
 		MemoryOwnerType shortLivingOwnerType = (MemoryOwnerType) shortLivingOwnerTypeId;
-		char* name = MemoryAccounting_GetOwnerName(shortLivingOwnerType);
+		const char* name = MemoryAccounting_GetOwnerName(shortLivingOwnerType);
 		char* expected = shortLivingNames[shortLivingOwnerTypeId - MEMORY_OWNER_TYPE_START_SHORT_LIVING];
 		assert_true(strcmp(name, expected) == 0);
 	}
 }
 
 /* Tests if the MemoryAccounting_SizeOfAccountInBytes returns correct size */
-void
+static void
 test__MemoryAccounting_SizeOfAccountInBytes__Validate(void **state)
 {
 	size_t accountSize = MemoryAccounting_SizeOfAccountInBytes();
@@ -998,7 +960,7 @@ test__MemoryAccounting_SizeOfAccountInBytes__Validate(void **state)
 }
 
 /* Tests if the MemoryAccounting_GetGlobalPeak returns correct global peak balance */
-void
+static void
 test__MemoryAccounting_GetGlobalPeak__Validate(void **state)
 {
 	uint64 peak = MemoryAccounting_GetGlobalPeak();
@@ -1006,7 +968,7 @@ test__MemoryAccounting_GetGlobalPeak__Validate(void **state)
 }
 
 /* Tests if the MemoryAccounting_GetAccountPeakBalance is returning the correct peak balance */
-void
+static void
 test__MemoryAccounting_GetAccountPeakBalance__Validate(void **state)
 {
 	uint64 peakBalances[] = {0, UINT32_MAX, UINT64_MAX};
@@ -1027,7 +989,7 @@ test__MemoryAccounting_GetAccountPeakBalance__Validate(void **state)
 }
 
 /* Tests if the MemoryAccounting_GetBalance is returning the current balance */
-void
+static void
 test__MemoryAccounting_GetBalance__Validate(void **state)
 {
 	uint64 allAllocated[] = {0, UINT32_MAX, UINT64_MAX, UINT64_MAX};
@@ -1054,7 +1016,7 @@ test__MemoryAccounting_GetBalance__Validate(void **state)
  * Tests if the MemoryAccounting_ToExplain is correctly converting
  * a memory accounting tree to string
  */
-void
+static void
 test__MemoryAccounting_ToExplain__Validate(void **state)
 {
 	char *templateString =
@@ -1122,7 +1084,7 @@ test__MemoryAccounting_ToExplain__Validate(void **state)
  *
  * Note: we don't test the exact log saving here.
  */
-void
+static void
 test__MemoryAccounting_SaveToLog__GeneratesCorrectString(void **state)
 {
 	char *templateString =
@@ -1184,7 +1146,7 @@ memory: X_Hash, 8, 7, 0, %" PRIu64 ", %" PRIu64 ", %" PRIu64 ", %" PRIu64 "\n";
  *
  * Note: we don't test the exact file saving here.
  */
-void
+static void
 test__MemoryAccounting_SaveToFile__GeneratesCorrectString(void **state)
 {
 	MemoryOwnerType newAccountOwnerType = MEMORY_OWNER_TYPE_Exec_Hash;
@@ -1324,7 +1286,7 @@ test__MemoryAccounting_SaveToFile__GeneratesCorrectString(void **state)
  * Tests if we correctly convert the short and long living indexes to a combined
  * array index
  */
-void
+static void
 test__ConvertIdToUniversalArrayIndex__Validate(void **state)
 {
 	// For long living number of short living accounts don't matter to resolve to a compact index
@@ -1379,7 +1341,6 @@ main(int argc, char* argv[])
 		unit_test_setup_teardown(test__MemoryAccounting_CombinedAccountArrayToExplain__Validate, SetupMemoryDataStructures, TeardownMemoryDataStructures),
 		unit_test_setup_teardown(test__ConvertIdToUniversalArrayIndex__Validate, SetupMemoryDataStructures, TeardownMemoryDataStructures),
 		unit_test_setup_teardown(test__MemoryAccounting_GetAccountCurrentBalance__ResetPeakBalance, SetupMemoryDataStructures, TeardownMemoryDataStructures),
-		unit_test_setup_teardown(test__MemoryAccounting_Optimizer_Oustanding_Balance_Rollover, SetupMemoryDataStructures, TeardownMemoryDataStructures),
 	};
 
 	return run_tests(tests);

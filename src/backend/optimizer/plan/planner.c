@@ -235,13 +235,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		if (gp_log_optimization_time)
 			INSTR_TIME_SET_CURRENT(starttime);
 
-		curMemoryAccountId = MemoryAccounting_GetOrCreateOptimizerAccount();
-
-		START_MEMORY_ACCOUNT(curMemoryAccountId);
-		{
-			result = optimize_query(parse, boundParams);
-		}
-		END_MEMORY_ACCOUNT();
+		result = optimize_query(parse, boundParams);
 
 		if (gp_log_optimization_time)
 		{
@@ -2202,33 +2196,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			result_plan = cdb_grouping_planner(root,
 											   &agg_costs,
 											   &group_context);
-
-			/* Add the Repeat node if needed. */
-			if (result_plan != NULL &&
-				canonical_grpsets != NULL &&
-				canonical_grpsets->grpset_counts != NULL)
-			{
-				bool		need_repeat_node = false;
-				int			grpset_no;
-				int			repeat_count = 0;
-
-				for (grpset_no = 0; grpset_no < canonical_grpsets->ngrpsets; grpset_no++)
-				{
-					if (canonical_grpsets->grpset_counts[grpset_no] > 1)
-					{
-						need_repeat_node = true;
-						break;
-					}
-				}
-
-				if (canonical_grpsets->ngrpsets == 1)
-					repeat_count = canonical_grpsets->grpset_counts[0];
-
-				if (need_repeat_node)
-				{
-					result_plan = add_repeat_node(result_plan, repeat_count, 0);
-				}
-			}
 
 			if (result_plan != NULL && querynode_changed)
 			{

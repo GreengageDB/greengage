@@ -751,5 +751,20 @@ select count(*) from dispatch_foo, dispatch_bar where exists (select dispatch_fo
 (1 row)
 
 reset gp_cached_segworkers_threshold;
+-- A regression test, derived from diskquota tests.  It contains two init
+-- plans, both contain motions, the plans should be dispatched correctly.
+create table table_size (tableid oid, size bigint, primary key(tableid));
+create view show_fast_database_size_view as
+  select ((select sum(pg_relation_size(oid))
+             from gp_dist_random('pg_class')
+            where oid <= 16384) +
+          (select sum(size) from table_size)) as dbsize;
+select count((pg_database_size(oid) - dbsize) / dbsize) < 0
+  from pg_database, show_fast_database_size_view;
+ ?column? 
+----------
+ f
+(1 row)
+
 \c regression
 DROP DATABASE dispatch_test_db;

@@ -41,12 +41,18 @@
           <codeph>SELECT</codeph> from the external table. For writable external tables,
           <codeph>gpfdist</codeph> accepts parallel output streams from the segments when users
           <codeph>INSERT</codeph> into the external table, and writes to an output file.</p>
+      <note>When <codeph>gpfdist</codeph> reads data and encounters a data formatting error, the
+        error message includes a row number indicating the location of the formatting error.
+          <codeph>gpfdist</codeph> attempts to capture the row that contains the error. However,
+          <codeph>gpfdist</codeph> might not capture the exact row for some formatting
+        errors.</note>
       <p>For readable external tables, if load files are compressed using <codeph>gzip</codeph> or
           <codeph>bzip2</codeph> (have a <codeph>.gz</codeph> or <codeph>.bz2</codeph> file
-        extension), <codeph>gpfdist</codeph> uncompresses the files automatically before loading
-        provided that <codeph>gunzip</codeph> or <codeph>bunzip2</codeph> is in your path. </p>
-      <note type="note">Currently, readable external tables do not support compression on Windows
-        platforms, and writable external tables do not support compression on any platforms.</note>
+        extension), <codeph>gpfdist</codeph> uncompresses the files before loading. For writable
+        external tables, <codeph>gpfdist</codeph> compresses the data using <codeph>gzip</codeph> if
+        the target file has a <codeph>.gz</codeph> extension.</p>
+      <note type="note">Compression is not supported for readable and writeable external tables when
+        the <codeph>gpfdist</codeph> utility runs on Windows platforms.</note>
       <p>When reading or writing data with the <codeph>gpfdist</codeph> or <codeph>gpfdists</codeph>
         protocol, Greenplum Database includes <codeph>X-GP-PROTO</codeph> in the HTTP request header
         to indicate that the request is from Greenplum Database. The utility rejects HTTP requests
@@ -204,8 +210,9 @@
             trusted by Greenplum Database.</li>
           <li>The host name contained in the SSL certificate does not match the host name that is
             running <codeph>gpfdist</codeph>.</li>
-        </ul><note type="warning">Disabling SSL certificate authentication exposes a security risk
-          by not validating the <codeph>gpfdists</codeph> SSL certificate. </note></p>
+        </ul>
+        <note type="warning">Disabling SSL certificate authentication exposes a security risk by not
+          validating the <codeph>gpfdists</codeph> SSL certificate. </note></p>
       <p>If the <codeph>gpfdist</codeph> utility hangs with no read or write activity occurring, you
         can generate a core dump the next time a hang occurs to help debug the issue. Set the
         environment variable <codeph>GPFDIST_WATCHDOG_TIMER</codeph> to the number of seconds of no
