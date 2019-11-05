@@ -615,6 +615,9 @@ if test "$GCC" = yes -a "$ICC" = no; then
   PGAC_PROG_CC_CFLAGS_OPT([-Wno-unused-but-set-variable])
   PGAC_PROG_CC_CFLAGS_OPT([-Wno-address])
 
+  PGAC_PROG_CC_CFLAGS_OPT([-Wimplicit-fallthrough])
+  PGAC_PROG_CC_CFLAGS_OPT([-Werror=implicit-fallthrough])
+
   #-Wno-error=enum-compare -Wno-error=address -Wno-error=maybe-uninitialized
 
   # Optimization flags for specific files that benefit from vectorization

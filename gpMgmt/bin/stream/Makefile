@@ -19,8 +19,8 @@ installdirs:
 install: stream installdirs
 	$(INSTALL_PROGRAM) stream$(X) '$(DESTDIR)$(bindir)/lib/stream$(X)'
 	# Symlink bin/lib/stream to bin/stream to maintain backward compatibility
-	if [[ ! -f $(DESTDIR)$(bindir)/stream/stream$(X) && ! -L $(DESTDIR)$(bindir)/stream/stream$(X) ]]; then \
-		$(LN_S) $(DESTDIR)$(bindir)/lib/stream$(X) $(DESTDIR)$(bindir)/stream/stream$(X); \
+	if [ ! -f $(DESTDIR)$(bindir)/stream/stream$(X) ] && [ ! -L $(DESTDIR)$(bindir)/stream/stream$(X) ]; then \
+		$(LN_S) ../lib/stream$(X) $(DESTDIR)$(bindir)/stream/stream$(X); \
 	fi
 
 uninstall:

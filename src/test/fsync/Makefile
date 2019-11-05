@@ -6,9 +6,9 @@ REGRESS = setup bgwriter_checkpoint
 subdir = src/test/fsync/
 top_builddir = ../../..
 
+USE_MODULE_DB=1
 include $(top_builddir)/src/Makefile.global
 
-USE_MODULE_DB=1
 NO_PGXS = 1
 include $(top_srcdir)/src/makefiles/pgxs.mk
 

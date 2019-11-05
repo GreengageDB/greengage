@@ -2556,6 +2556,14 @@ select test();
 
 
 --
+-- Test that rules with functions can be serialized correctly
+-- This is tested here because the rules tests are not enabled
+--
+create table  qp_misc_jiras.rules (a integer);
+create rule "_RETURN" as on select to qp_misc_jiras.rules do instead
+  select * from generate_series(1,5) x(a);
+
+--
 -- Test gp_enable_relsize_collection's effect on ORCA plan generation
 --
 create table tbl_z(x int) distributed by (x);
@@ -2571,6 +2579,48 @@ explain select 1 as t1 where 1 <= ALL (select x from tbl_z);
 drop table if exists tbl_z;
 reset optimizer_metadata_caching;
 reset gp_enable_relsize_collection;
+
+-- orca should estimate more than 1 row
+-- even for real small frequency
+
+create table epsilon_test (b smallint);
+set allow_system_table_mods=on;
+
+UPDATE pg_class
+SET
+        relpages = 4901842::int,
+        reltuples = 495454000.0::real
+WHERE relname = 'epsilon_test';
+
+INSERT INTO pg_statistic VALUES (
+        'epsilon_test'::regclass,
+        1::smallint,
+	False::boolean,
+        0.0::real,
+        2::integer,
+        10.0::real,
+        1::smallint,
+        2::smallint,
+        0::smallint,
+        0::smallint,
+	0::smallint,
+        94::oid,
+        95::oid,
+        0::oid,
+        0::oid,
+	0::oid,
+        E'{0.259358,0.15047,0.124118,0.117294,0.117195,0.11612,0.115285}'::real[],
+        NULL::real[],
+        NULL::real[],
+        NULL::real[],
+	NULL::real[],
+        E'{25,7,143,6,107,10,21}'::int2[],
+        E'{0,30}'::int2[],
+        NULL::int2[],
+        NULL::int2[],
+	NULL::anyarray);
+
+explain select b from epsilon_test where b in (11,30) limit 30;
 
 -- start_ignore
 drop schema qp_misc_jiras cascade;

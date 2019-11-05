@@ -4,12 +4,12 @@ PG_CONFIG=pg_config
 subdir = src/test/walrep/
 top_builddir = ../../..
 
+USE_MODULE_DB=1
 include $(top_builddir)/src/Makefile.global
 
 REGRESS = setup
 REGRESS += replication_views_mirrored missing_xlog walreceiver generate_ao_xlog generate_aoco_xlog
 
-USE_MODULE_DB=1
 NO_PGXS = 1
 include $(top_srcdir)/src/makefiles/pgxs.mk
 
