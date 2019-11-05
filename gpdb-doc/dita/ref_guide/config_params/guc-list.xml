@@ -6,9 +6,9 @@
   <abstract>Descriptions of the Greenplum Database server configuration parameters listed
     alphabetically.</abstract>
   <body>
-    <!--Table is HTML only op-help-->
+    <!--Table is PDF only-->
     <simpletable frame="all" relcolwidth="1.0* 1.09* 1.13*" id="simpletable_c53_rlx_wp"
-      otherprops="op-help">
+      otherprops="op-print">
       <strow>
         <stentry>
           <ul id="ul_tc3_nlx_wp">
@@ -275,8 +275,13 @@
             </li>
             <li>
               <xref href="#gp_use_legacy_hashops"/></li>
-            <li><xref href="#gp_vmem_protect_limit"/></li>
             <li><xref href="#gp_vmem_idle_resource_timeout"/></li>
+            <li><xref href="#gp_vmem_protect_limit"/></li>
+            <li><xref href="#gp_vmem_protect_segworker_cache_limit"/></li>
+            <li><xref href="#gp_workfile_compression"/></li>
+            <li><xref href="#gp_workfile_limit_files_per_query"/></li>
+            <li><xref href="#gp_workfile_limit_per_query"/></li>
+            <li><xref href="#gp_workfile_limit_per_segment"/></li>
             <li>
               <xref href="#gpperfmon_log_alert_level"/>
             </li>
@@ -320,13 +325,13 @@
             <li>
               <xref href="#lc_time"/>
             </li>
-            <li>
-              <xref href="#listen_addresses"/>
-            </li>
           </ul>
         </stentry>
         <stentry>
           <ul id="ul_wwy_bmx_wp">
+            <li>
+              <xref href="#listen_addresses"/>
+            </li>
             <li>
               <xref href="#log_planner_stats"/>
             </li>
@@ -9228,7 +9233,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
       <p>For information about the <codeph>gpfdists</codeph> protocol, see <xref
           href="../../admin_guide/external/g-gpfdists-protocol.xml">gpfdists:// Protocol</xref>. For
         information about running the <codeph>gpfdist</codeph> utility, see <xref
-          href="../../utility_guide/admin_utilities/gpfdist.xml"/>. </p>
+          href="../../utility_guide/ref/gpfdist.xml"/>. </p>
       <table id="table_ncx_n1h_ldb">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>

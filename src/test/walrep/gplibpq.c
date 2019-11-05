@@ -8,6 +8,7 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 #include "access/xlog_internal.h"
+#include "access/xlogreader.h"
 #include "replication/walreceiver.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbappendonlyxlog.h"
@@ -345,8 +346,8 @@ test_xlog_ao(PG_FUNCTION_ARGS)
 		xrecoff = (uint32)startpoint;
 
 		walrcv_connect(conninfo);
-		/* For now hard-coding it to 1 */
-		startpointTLI = 1;
+		/* Get current timeline ID */
+		walrcv_identify_system(&startpointTLI);
 		walrcv_startstreaming(startpointTLI, startpoint, NULL);
 
 		for (int i = 0; i < NUM_RETRIES; i++)
@@ -405,7 +406,6 @@ static uint32
 check_ao_record_present(unsigned char type, char *buf, Size len,
 						uint32 xrecoff,	CheckAoRecordResult *aorecordresults)
 {
-	uint32               i = 0;
 	int                  num_found = 0;
 	XLogRecPtr  dataStart;
 	XLogRecPtr  walEnd;
@@ -414,6 +414,10 @@ check_ao_record_present(unsigned char type, char *buf, Size len,
 	int         hdrlen = sizeof(int64) + sizeof(int64) + sizeof(int64);
 	StringInfoData incoming_message;
 	initStringInfo(&incoming_message);
+
+	XLogReaderState *xlogreader;
+	char	   *errormsg;
+	uint32 rec_total_length = 0;
 
 	if (type != 'w')
 		return num_found;
@@ -437,120 +441,47 @@ check_ao_record_present(unsigned char type, char *buf, Size len,
 	test_PrintLog("wal start record", dataStart, sendTime);
 	test_PrintLog("wal end record", walEnd, sendTime);
 
+	xlogreader = XLogReaderAllocate(&read_local_xlog_page, NULL);
+
+	/*
+	 * Find the first valid record at or after the given starting point.
+	 *
+	 * XLogReadRecord() trips an assertion if it's given an invalid location,
+	 * and in the tests, we might be given a WAL position that points to the
+	 * beginning of a page, rather than a valid record.
+	 */
+	dataStart = XLogFindNextRecord(xlogreader, dataStart);
+	if (dataStart == InvalidXLogRecPtr)
+		return 0;
+
 	/* process the xlog records one at a time and check if it is an AO/AOCO record */
-	while (i < len)
+	do
 	{
-		XLogRecord 		   *xlrec = (XLogRecord *)(buf + i);
-		XLogPageHeaderData *hdr = (XLogPageHeaderData *)xlrec;
-		uint8	            info = xlrec->xl_info & ~XLR_INFO_MASK;
-		uint32 			    avail_in_block = XLOG_BLCKSZ - ((xrecoff + i) % XLOG_BLCKSZ);
-
-		elog(DEBUG1, "len/offset:%u/%u, avail_in_block = %u",
-			 xlrec->xl_tot_len, i, avail_in_block);
-
-		if (hdr->xlp_magic == XLOG_PAGE_MAGIC)
+		XLogRecord *record;
+		record = XLogReadRecord(xlogreader, dataStart, &errormsg);
+		if (record)
 		{
-			/*
-			 * If we encounter a page header, check if it is a continuation
-			 * record and skip the page header and the remaining data to move
-			 * on to the next xlog record. If it is not a continuation record,
-			 * skip only the page header and move on to the next record.
-			 */
-			if (hdr->xlp_info & XLP_FIRST_IS_CONTRECORD)
+			if (record->xl_rmid == RM_APPEND_ONLY_ID)
 			{
-				elog(DEBUG1, "remaining length of record = %u", hdr->xlp_rem_len);
-				if (hdr->xlp_rem_len > XLOG_BLCKSZ - XLogPageHeaderSize(hdr))
-					i += XLOG_BLCKSZ;
-				else
-					i += MAXALIGN(XLogPageHeaderSize(hdr) + hdr->xlp_rem_len);
+				CheckAoRecordResult *aorecordresult = &aorecordresults[num_found];
+				xl_ao_target *xlaorecord = (xl_ao_target*) XLogRecGetData(record);
+
+				aorecordresult->xrecoff = xlogreader->ReadRecPtr;
+				aorecordresult->target.node.spcNode = xlaorecord->node.spcNode;
+				aorecordresult->target.node.dbNode = xlaorecord->node.dbNode;
+				aorecordresult->target.node.relNode = xlaorecord->node.relNode;
+				aorecordresult->target.segment_filenum = xlaorecord->segment_filenum;
+				aorecordresult->target.offset = xlaorecord->offset;
+				aorecordresult->len = record->xl_len;
+				aorecordresult->ao_xlog_record_type = record->xl_info & ~XLR_INFO_MASK;
+
+				num_found++;
 			}
-			else
-			{
-				i += XLogPageHeaderSize(hdr);
-				elog(DEBUG1, "XLOG_PAGE_MAGIC else, i:%u", i);
-			}
-		}
-		else if (xlrec->xl_rmid == RM_APPEND_ONLY_ID)
-		{
-			CheckAoRecordResult *aorecordresult = &aorecordresults[num_found];
-			aorecordresult->xrecoff = xrecoff + i;
-
-			if (xlrec->xl_tot_len > avail_in_block)
-			{
-				Assert(avail_in_block >= sizeof(xl_ao_target));
-
-				/*
-				 * The AO record has been split across two pages. Create a
-				 * temporary buffer to combine the split record back.
-				 */
-				char *tmpbuffer = (char *) palloc(xlrec->xl_tot_len);
-				memcpy(tmpbuffer, buf + i, avail_in_block);
-
-				/* Move on to the continuation record on the next page */
-				i += avail_in_block;
-				elog(DEBUG1, "AO record split found, i: %u, avail_in_block: %u", i, avail_in_block);
-
-				/* Construct the continuation record to get the remaining length */
-				XLogPageHeaderData *hdr_cont = (XLogPageHeaderData *)(buf + i);
-				elog(DEBUG1, "combining AO record split with XLogContRecord xl_rem_len %u",
-					 hdr_cont->xlp_rem_len);
-
-				/*
-				 * Move on to the second part of the split AO record and copy
-				 * the second part into the temporary buffer. The second part
-				 * does not contain a header and is directly after the
-				 * continuation record (no MAXALIGN padding).
-				 */
-				i += XLogPageHeaderSize(hdr_cont);
-				memcpy(tmpbuffer + avail_in_block,
-					   buf + i,
-					   hdr_cont->xlp_rem_len);
-
-				/*
-				 * Our split AO record is now combined back. Set the i to the
-				 * next XLog record (may need MAXALIGN padding).
-				 */
-				xlrec = (XLogRecord *) tmpbuffer;
-				i = MAXALIGN(i + hdr_cont->xlp_rem_len);
-			}
-			else
-			{
-				i += MAXALIGN(xlrec->xl_tot_len);
-				elog(DEBUG1, "RM_APPEND_ONLY_ID, else, i: %u", i);
-			}
-
-			xl_ao_target *xlaorecord = (xl_ao_target*) XLogRecGetData(xlrec);
-
-			aorecordresult->target.node.spcNode = xlaorecord->node.spcNode;
-			aorecordresult->target.node.dbNode = xlaorecord->node.dbNode;
-			aorecordresult->target.node.relNode = xlaorecord->node.relNode;
-			aorecordresult->target.segment_filenum = xlaorecord->segment_filenum;
-			aorecordresult->target.offset = xlaorecord->offset;
-			aorecordresult->len = xlrec->xl_len;
-			aorecordresult->ao_xlog_record_type = info;
-
-			num_found++;
-
+			dataStart = InvalidXLogRecPtr;
+			rec_total_length = record->xl_tot_len;
 		}
 		else
-		{
-			/*
-			 * Either the entire record is too long to fit into the current
-			 * page or there is not enough space remaining in the current page
-			 * to write the XLogHeader. So skip the remaining bytes to move
-			 * onto the next page.
-			 */
-			if (xlrec->xl_tot_len > avail_in_block || avail_in_block < SizeOfXLogRecord)
-			{
-				i += avail_in_block;
-				elog(DEBUG1, "record too long, i: %u, avail_in_block: %u, xlrec->xl_tot_len: %u", i, avail_in_block, xlrec->xl_tot_len);
-			}
-			else
-			{
-				i += MAXALIGN(xlrec->xl_tot_len);
-				elog(DEBUG1, "default, else, i: %u, xlrec->xl_tot_len: %u", i, xlrec->xl_tot_len);
-			}
-		}
-	}
+			break;
+	} while (xlogreader->ReadRecPtr + rec_total_length + SizeOfXLogRecord < walEnd);
 	return num_found;
 }

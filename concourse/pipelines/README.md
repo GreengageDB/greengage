@@ -90,6 +90,8 @@ fly -t gpdb-prod \
     -c ~/workspace/gpdb/concourse/pipelines/gpdb_6X_STABLE-generated.yml \
     -l ~/workspace/gp-continuous-integration/secrets/gpdb_common-ci-secrets.yml \
     -l ~/workspace/gp-continuous-integration/secrets/gpdb_6X_STABLE-ci-secrets.prod.yml \
+    -v gpdb-git-remote=https://github.com/greenplum-db/gpdb.git \
+    -v gpdb-git-branch=6X_STABLE \
     -v pipeline-name=6X_STABLE
 
 fly -t gpdb-prod \
@@ -98,6 +100,8 @@ fly -t gpdb-prod \
     -c ~/workspace/gpdb/concourse/pipelines/gpdb_6X_STABLE-generated.yml \
     -l ~/workspace/gp-continuous-integration/secrets/gpdb_common-ci-secrets.yml \
     -l ~/workspace/gp-continuous-integration/secrets/gpdb_6X_STABLE_without_asserts-ci-secrets.prod.yml \
+    -v gpdb-git-remote=https://github.com/greenplum-db/gpdb.git \
+    -v gpdb-git-branch=6X_STABLE \
     -v pipeline-name=6X_STABLE_without_asserts
 ```
 

@@ -46,6 +46,7 @@
 #include "cdb/cdbconn.h"
 #include "cdb/cdbfts.h"
 #include "storage/ipc.h"
+#include "storage/proc.h"
 #include "postmaster/fts.h"
 #include "catalog/namespace.h"
 #include "utils/gpexpand.h"
@@ -843,7 +844,10 @@ cleanupQE(SegmentDatabaseDescriptor *segdbDesc)
 
 	/* Note, we cancel all "still running" queries */
 	if (!cdbconn_discardResults(segdbDesc, 20))
-		elog(FATAL, "cleanup called when a segworker is still busy");
+	{
+		elog(LOG, "cleaning up seg%d while it is still busy", segdbDesc->segindex);
+		return false;
+	}
 
 	/* QE is no longer associated with a slice. */
 	cdbconn_setQEIdentifier(segdbDesc, /* slice index */ -1);	
@@ -1028,9 +1032,17 @@ cdb_setup(void)
 	{
 		while (true)
 		{
-			pg_usleep(100 * 1000); /* 100ms */
+			int rc;
 			if (*shmDtmStarted)
 				break;
+			CHECK_FOR_INTERRUPTS();
+			/* wait for 100ms or postmaster dies */
+			rc = WaitLatch(&MyProc->procLatch,
+				   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, 100);
+
+			ResetLatch(&MyProc->procLatch);
+			if (rc & WL_POSTMASTER_DEATH)
+				proc_exit(1);
 		}
 	}
 }
