@@ -3063,14 +3063,18 @@ explain (costs off)
 SELECT unique1 FROM tenk1
 WHERE unique1 IN (1,42,7)
 ORDER BY unique1;
-                         QUERY PLAN                          
--------------------------------------------------------------
- Gather Motion 2:1  (slice1; segments: 2)
+                               QUERY PLAN
+-------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: unique1
-   ->  Index Only Scan using tenk1_unique1 on tenk1
-         Index Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
- Optimizer: Postgres query optimizer
-(5 rows)
+   ->  Sort
+         Sort Key: unique1
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
+               ->  Bitmap Index Scan on tenk1_unique1
+                     Index Cond: (unique1 = ANY ('{1,42,7}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+(9 rows)
 
 SELECT unique1 FROM tenk1
 WHERE unique1 IN (1,42,7)
@@ -3086,15 +3090,17 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
 ORDER BY thousand;
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
+                            QUERY PLAN
+-------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand
-   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
-         Index Cond: (thousand < 2)
-         Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
- Optimizer: Postgres query optimizer
-(7 rows)
+   ->  Sort
+         Sort Key: thousand
+         ->  Index Scan using tenk1_thous_tenthous on tenk1
+               Index Cond: (thousand < 2)
+               Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.80.0
+(8 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
@@ -3115,16 +3121,17 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)
 ORDER BY thousand;
-                                       QUERY PLAN                                       
-----------------------------------------------------------------------------------------
+                            QUERY PLAN
+-------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: thousand
    ->  Sort
          Sort Key: thousand
          ->  Index Scan using tenk1_thous_tenthous on tenk1
-               Index Cond: ((thousand < 2) AND (tenthous = ANY ('{1001,3000}'::integer[])))
- Optimizer: Postgres query optimizer
-(7 rows)
+               Index Cond: (thousand < 2)
+               Filter: (tenthous = ANY ('{1001,3000}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.80.0
+(8 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 2 AND tenthous IN (1001,3000)

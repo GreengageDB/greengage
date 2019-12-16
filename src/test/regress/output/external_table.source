@@ -184,7 +184,7 @@ domain_name			varchar(350)
 )
 location ('gpfdist://@hostname@:7070/exttab1/whois.csv' )
 format 'csv' ( header quote as 'ggg');
-ERROR:  quote must be a single one-byte character
+ERROR:  COPY quote must be a single one-byte character
 select count(*) from bad_whois;
 ERROR:  relation "bad_whois" does not exist
 LINE 1: select count(*) from bad_whois;
@@ -715,7 +715,7 @@ SELECT * from exttab_insert_1 order by i;
 SELECT count(*) from gp_read_error_log('exttab_basic_5');
  count 
 -------
-     4
+     5
 (1 row)
 
 -- CTAS
@@ -772,7 +772,7 @@ LINE 1: SELECT * from exttab_ctas_2 order by i;
 SELECT count(*) from gp_read_error_log('exttab_basic_7');
  count 
 -------
-     4
+     5
 (1 row)
 
 -- Drop external table gets rid off error logs
@@ -856,7 +856,7 @@ CONTEXT:  External table exttab_cte_2, line 7 of file://@hostname@@abs_srcdir@/d
 select count(*) from gp_read_error_log('exttab_cte_2');
  count 
 -------
-     1
+     2
 (1 row)
 
 -- start_ignore
@@ -940,7 +940,7 @@ SET ROLE exttab_superuser;
 SELECT COUNT(*) FROM gp_read_error_log('exttab_permissions_2');
  count 
 -------
-     1
+     2
 (1 row)
 
 SELECT gp_truncate_error_log('*');
@@ -2353,7 +2353,7 @@ CONTEXT:  External table exttab_limit_2, line 7 of file://@hostname@@abs_srcdir@
 SELECT count(*) FROM gp_read_error_log('exttab_limit_2');
  count 
 -------
-     1
+     2
 (1 row)
 
 SELECT gp_truncate_error_log('exttab_limit_1');
@@ -4810,3 +4810,18 @@ select numsegments from gp_distribution_policy where localoid = 'ext_w_expand'::
 (1 row)
 
 drop external table ext_w_expand;
+--
+-- Test host name cannot be resolved
+--
+CREATE READABLE EXTERNAL TABLE ext_invalid_host() LOCATION ('gpfdist://not-exist-host/data.csv') FORMAT 'CSV' ( DELIMITER AS ',');
+SELECT * from ext_invalid_host;
+WARNING:  could not translate host name "not-exist-host", port "8080" to address: Name or service not known  (seg0 slice1 127.0.0.1:5434 pid=181826)
+WARNING:  could not translate host name "not-exist-host", port "8080" to address: Name or service not known  (seg1 slice1 127.0.0.1:5435 pid=181824)
+WARNING:  could not translate host name "not-exist-host", port "8080" to address: Name or service not known  (seg2 slice1 127.0.0.1:5436 pid=181825)
+ERROR:  hostname cannot be resolved 'gpfdist://not-exist-host:8080/data.csv'  (seg0 slice1 127.0.0.1:5434 pid=181826)
+-- Test delimiter off
+CREATE EXTERNAL TABLE test_delimiter(data text) LOCATION('gpfdist://127.0.0.1/test_delimiter.txt') FORMAT 'text' (DELIMITER 'off');
+DROP EXTERNAL TABLE test_delimiter;
+-- Test multiple character delimiter
+CREATE EXTERNAL TABLE test_delimiter(data text) LOCATION('gpfdist://127.0.0.1/test_delimiter.txt') FORMAT 'csv' (DELIMITER 'ab');
+ERROR:  COPY delimiter must be a single one-byte character, or 'off'

@@ -80,6 +80,7 @@ INPUT_CONFIG=""
 OUTPUT_CONFIG=""
 GPHOSTCACHELOOKUP=$WORKDIR/lib/gphostcachelookup.py
 STANDBY_RET_CODE=0
+IGNORE_WARNINGS=0
 
 #******************************************************************************
 # DCA Specific Variables
@@ -114,6 +115,7 @@ USAGE () {
 		$ECHO
 		$ECHO "      General options:"
 		$ECHO "      -v, display version information & exit"
+		$ECHO "      --ignore-warnings, exit with status 0 on success, and non-zero for failures"
 		$ECHO
 		$ECHO "      Logging options:"
 		$ECHO "      -a, don't ask to confirm instance creation [default:- ask]"
@@ -166,6 +168,11 @@ USAGE () {
 		$ECHO "      1 - Warning generated, but instance operational"
 		$ECHO "      2 - Fatal error, instance not created/started, or in an inconsistent state,"
 		$ECHO "          see log file for failure reason."
+		$ECHO
+		$ECHO "      Return codes when --ignore-warnings specified:"
+		$ECHO "      0 - Instance operational. May have generated warnings."
+		$ECHO "      non-zero - Fatal error, instance not created/started, or in an inconsistent state,"
+		$ECHO "          see log file for failure reason. Do not depend on a particular non-zero value."
 		$ECHO
 		exit $EXIT_STATUS
 	fi
@@ -1914,13 +1921,14 @@ while getopts ":vaqe:c:l:-:p:m:h:n:s:P:S:b:DB:I:O:" opt
 						"standby-datadir" ) STANDBY_DATADIR=$VAL ;;
 						"help"            ) USAGE "print_doc" ;;
 						"version"         ) print_version ;;
+						"ignore-warnings" ) IGNORE_WARNINGS=1 ;;
 						* ) LOG_MSG "[ERROR]:-Unknown option --$NAME" 1; USAGE ;;
 					esac
 
-					# Check if we are missing the long option value.  Currently all
-					# long options require a value so we can just do the check once.
-					if [ x"$NAME" == x"$VAL" ]; then
-						LOG_MSG "[FATAL]:-Missing value for option --$NAME" 1;
+					# Check if we are missing the long option value.  All long options
+					# except ignore-warnings require a value, so do the check once.
+					if [ x"$NAME" == x"$VAL" ] && [ x"$NAME" != x"ignore-warnings" ]; then
+						LOG_MSG "[FATAL]:-Missing value for option --$NAME" 2;
 						USAGE;
 					fi
 					;;
@@ -2075,4 +2083,13 @@ if [ $STANDBY_RET_CODE -ne 0 ] && [ $STANDBY_RET_CODE -ne 1 ]; then
 fi
 
 LOG_MSG "[INFO]:-End Main"
+
+if [ $IGNORE_WARNINGS -eq 1 ]; then
+	if [ $EXIT_STATUS -eq 1 ]; then
+		EXIT_STATUS=0
+	elif [ $EXIT_STATUS -eq 2 ]; then
+		EXIT_STATUS=1
+	fi
+fi
+
 exit $EXIT_STATUS

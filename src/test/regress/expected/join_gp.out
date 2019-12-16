@@ -838,3 +838,101 @@ reset enable_nestloop;
 reset enable_material;
 reset enable_seqscan;
 reset enable_bitmapscan;
+-- test that flow->hashExpr variables can be resolved
+CREATE TABLE hexpr_t1 (c1 int, c2 character varying(16)) DISTRIBUTED BY (c1);
+CREATE TABLE hexpr_t2 (c3 character varying(16)) DISTRIBUTED BY (c3);
+INSERT INTO hexpr_t1 SELECT i, i::character varying FROM generate_series(1,10)i;
+INSERT INTO hexpr_t2 SELECT i::character varying FROM generate_series(1,10)i;
+EXPLAIN SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)  (cost=3.23..6.70 rows=10 width=2)
+   ->  Hash Left Join  (cost=3.23..6.70 rows=4 width=2)
+         Hash Cond: (btrim((hexpr_t1.c2)::text) = (hexpr_t2.c3)::text)
+         ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..3.30 rows=4 width=2)
+               Hash Key: btrim((hexpr_t1.c2)::text)
+               ->  Seq Scan on hexpr_t1  (cost=0.00..3.10 rows=4 width=2)
+         ->  Hash  (cost=3.10..3.10 rows=4 width=2)
+               ->  Seq Scan on hexpr_t2  (cost=0.00..3.10 rows=4 width=2)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+EXPLAIN SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)  (cost=3.23..6.70 rows=10 width=2)
+   ->  Hash Left Join  (cost=3.23..6.70 rows=4 width=2)
+         Hash Cond: (btrim((hexpr_t1.c2)::text) = (hexpr_t2.c3)::text)
+         ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..3.30 rows=4 width=2)
+               Hash Key: btrim((hexpr_t1.c2)::text)
+               ->  Seq Scan on hexpr_t1  (cost=0.00..3.10 rows=4 width=2)
+         ->  Hash  (cost=3.10..3.10 rows=4 width=2)
+               ->  Seq Scan on hexpr_t2  (cost=0.00..3.10 rows=4 width=2)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+EXPLAIN SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)  (cost=3.23..6.70 rows=10 width=2)
+   ->  Hash Left Join  (cost=3.23..6.70 rows=4 width=2)
+         Hash Cond: (btrim((hexpr_t1.c2)::text) = (hexpr_t2.c3)::text)
+         ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..3.30 rows=4 width=2)
+               Hash Key: btrim((hexpr_t1.c2)::text)
+               ->  Seq Scan on hexpr_t1  (cost=0.00..3.10 rows=4 width=2)
+         ->  Hash  (cost=3.10..3.10 rows=4 width=2)
+               ->  Seq Scan on hexpr_t2  (cost=0.00..3.10 rows=4 width=2)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+ foo 
+-----
+ 5
+ 6
+ 8
+ 2
+ 3
+ 4
+ 7
+ 9
+ 10
+ 1
+(10 rows)
+
+SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+ foo 
+-----
+ 2
+ 3
+ 4
+ 7
+ 5
+ 6
+ 8
+ 9
+ 10
+ 1
+(10 rows)
+
+SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+ foo 
+-----
+ 2
+ 3
+ 4
+ 7
+ 8
+ 5
+ 6
+ 1
+ 9
+ 10
+(10 rows)
+

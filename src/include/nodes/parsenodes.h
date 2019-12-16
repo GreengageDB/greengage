@@ -94,6 +94,7 @@ typedef uint32 AclMode;			/* a bitmask of privilege bits */
  * PARENTSTMTTYPE_NONE		query is not included in a utility stmt.
  * PARENTSTMTTYPE_CTAS		query is included in a CreateTableAsStmt.
  * PARENTSTMTTYPE_COPY		query is included in a CopyStmt.
+ * PARENTSTMTTYPE_REFRESH_MATVIEW		query is included in a RefreshMatviewStmt.
  *
  * Previously we added the isCtas field to Query to indicate that
  * the query is included in CreateTableAsStmt. For this type of
@@ -111,6 +112,7 @@ typedef uint8 ParentStmtType;
 #define PARENTSTMTTYPE_NONE	0
 #define PARENTSTMTTYPE_CTAS	1
 #define PARENTSTMTTYPE_COPY	2
+#define PARENTSTMTTYPE_REFRESH_MATVIEW	3
 
 /*
  * Query -
@@ -2159,6 +2161,13 @@ typedef enum CreateExtensionState
 	CREATE_EXTENSION_END		/* finish to create extension */
 } CreateExtensionState;
 
+typedef enum UpdateExtensionState
+{
+	UPDATE_EXTENSION_INIT,		/* not start to update extension */
+	UPDATE_EXTENSION_BEGIN,     /* start to update extension */
+	UPDATE_EXTENSION_END		/* finish to update extension */
+} UpdateExtensionState;
+
 typedef struct CreateExtensionStmt
 {
 	NodeTag		type;
@@ -2174,6 +2183,7 @@ typedef struct AlterExtensionStmt
 	NodeTag		type;
 	char	   *extname;
 	List	   *options;		/* List of DefElem nodes */
+	UpdateExtensionState update_ext_state;	/* update extension state, only used for ALTER EXTENSION UPDATE */
 } AlterExtensionStmt;
 
 typedef struct AlterExtensionContentsStmt

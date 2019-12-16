@@ -3571,11 +3571,14 @@
     </body>
   </topic>
   <topic id="gp_ignore_error_table">
-    <title>gp_ignore_error_table (Deprecated)</title>
+    <title>gp_ignore_error_table</title>
     <body>
       <p>Controls Greenplum Database behavior when the deprecated <codeph>INTO ERROR TABLE</codeph>
         clause is specified in a <codeph>CREATE EXTERNAL TABLE</codeph> or <codeph>COPY</codeph>
         command.</p>
+      <note>The <codeph>INTO ERROR TABLE</codeph> clause was deprecated and removed in Greenplum
+        Database 5. In Greenplum Database 7, this parameter will be removed as well, causing all
+          <codeph>INTO ERROR TABLE</codeph> invocations be yield a syntax error.</note>
       <p>The default value is <codeph>false</codeph>, Greenplum Database returns an error if the
           <codeph>INTO ERROR TABLE</codeph> clause is specified in a command. </p>
       <p>If the value is <codeph>true</codeph>, Greenplum Database ignores the clause, issues a
@@ -3588,9 +3591,6 @@
         you run applications that execute <codeph>CREATE EXTERNAL TABLE</codeph> or
           <codeph>COPY</codeph> commands that include the Greenplum Database 4.3.x <codeph>INTO
           ERROR TABLE</codeph> clause.</p>
-      <p>The <codeph>INTO ERROR TABLE</codeph> clause was deprecated and removed in Greenplum
-        Database 5. In Greenplum Database 7, this parameter will be removed as well, causing all
-          <codeph>INTO ERROR TABLE</codeph> invocations be yield a syntax error.</p>
       <table id="table_hnf_2v5_bdb">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -4777,8 +4777,11 @@
   <topic id="gp_statistics_use_fkeys">
     <title>gp_statistics_use_fkeys</title>
     <body>
-      <p>When enabled, allows the Postgres Planner to use foreign key information
-        stored in the system catalog to optimize joins between foreign keys and primary keys. </p>
+      <p>When enabled, the Postgres Planner will use the statistics of the referenced column in the
+        parent table when a column is foreign key reference to another table instead of the
+        statistics of the column itself.</p>
+      <note>This parameter is deprecated and will be removed in a future Greenplum Database
+        release.</note>
       <table id="gp_statistics_use_fkeys_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>

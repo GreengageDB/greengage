@@ -22,6 +22,8 @@ gpinitsystem -c <gpinitsystem_config>
             [--mirror-mode={group|spread}] [-a] [-q] [-l <logfile_directory>] [-D]
             [-I input_configuration_file]
             [-O output_configuration_file]
+            [--help]
+            [--ignore-warnings]
 
 gpinitsystem -v
 
@@ -261,6 +263,11 @@ OPTIONS
  Displays the online help.
 
 
+--ignore-warnings
+
+  Exit with status 0 for warnings and non-zero for fatal errors.
+
+
 *****************************************************
 INITIALIZATION CONFIGURATION FILE FORMAT
 *****************************************************
@@ -400,11 +407,10 @@ MIRROR_DATA_DIRECTORY
 EXAMPLES
 *****************************************************
 
-Initialize a Greenplum Database array by supplying a configuration file 
-and a segment host address file, and set up a spread mirroring (-S) 
-configuration:
+Initialize a Greenplum Database array by supplying a configuration file
+and a segment host address file, and set up a spread mirroring configuration:
 
- $ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem -S
+ $ gpinitsystem -c gpinitsystem_config -h hostfile_gpinitsystem --mirror-mode=spread
 
 
 Initialize a Greenplum Database array and set the superuser remote password:

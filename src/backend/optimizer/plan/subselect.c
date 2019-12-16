@@ -74,7 +74,7 @@ static Node *convert_testexpr_mutator(Node *node,
 static bool subplan_is_hashable(PlannerInfo *root, Plan *plan);
 static bool testexpr_is_hashable(Node *testexpr);
 static bool hash_ok_operator(OpExpr *expr);
-static bool simplify_EXISTS_query(PlannerInfo *root, Query *query);
+static bool simplify_EXISTS_query(Query *query);
 static Query *convert_EXISTS_to_ANY(PlannerInfo *root, Query *subselect,
 					  Node **testexpr, List **paramIds);
 static Node *replace_correlation_vars_mutator(Node *node, PlannerInfo *root);
@@ -86,6 +86,8 @@ static Bitmapset *finalize_plan(PlannerInfo *root,
 			  Bitmapset *scan_params);
 static bool finalize_primnode(Node *node, finalize_primnode_context *context);
 static bool finalize_agg_primnode(Node *node, finalize_primnode_context *context);
+static Node *remove_useless_EXISTS_sublink(PlannerInfo *root,
+						Query *subselect, bool under_not);
 
 extern	double global_work_mem(PlannerInfo *root);
 
@@ -540,7 +542,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 	 * If it's an EXISTS subplan, we might be able to simplify it.
 	 */
 	if (subLinkType == EXISTS_SUBLINK)
-		simple_exists = simplify_EXISTS_query(root, subquery);
+		simple_exists = simplify_EXISTS_query(subquery);
 
 	/*
 	 * For an EXISTS subplan, tell lower-level planner to expect that only the
@@ -638,7 +640,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 		/* Make a second copy of the original subquery */
 		subquery = (Query *) copyObject(orig_subquery);
 		/* and re-simplify */
-		simple_exists = simplify_EXISTS_query(root, subquery);
+		simple_exists = simplify_EXISTS_query(subquery);
 		Assert(simple_exists);
 		/* See if it can be converted to an ANY query */
 		subquery = convert_EXISTS_to_ANY(root, subquery,
@@ -1504,14 +1506,9 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	int			varno;
 	Relids		clause_varnos;
 	Relids		upper_varnos;
-	Node		*limitqual = NULL;
-	Node		*lnode;
-	Node		*rnode;
-	Node		*node;
+	Node	   *boolConst;
 
 	Assert(sublink->subLinkType == EXISTS_SUBLINK);
-
-	Assert(IsA(subselect, Query));
 
 	/*
 	 * Can't flatten if it contains WITH.  (We could arrange to pull up the
@@ -1530,85 +1527,12 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	 */
 	subselect = (Query *) copyObject(subselect);
 
-
-	if (has_correlation_in_funcexpr_rte(subselect->rtable))
-		return NULL;
-
 	/*
-	 * If deeply correlated, don't bother.
+	 * Check if the EXISTS sublink doesn't actually need to be executed at all,
+	 * and return TRUE/FALSE directly for it in that case.
 	 */
-	if (IsSubqueryMultiLevelCorrelated(subselect))
-		return NULL;
-
-	/*
-	 * 'LIMIT n' makes EXISTS false when n <= 0, and doesn't affect the
-	 * outcome when n > 0.  Delete subquery's LIMIT and build (0 < n) expr to
-	 * be ANDed into the parent qual.
-	 */
-	if (subselect->limitCount)
-	{
-		rnode = copyObject(subselect->limitCount);
-		IncrementVarSublevelsUp(rnode, -1, 1);
-		lnode = (Node *) makeConst(INT8OID, -1, InvalidOid,
-								   sizeof(int64), Int64GetDatum(0),
-								   false, true);
-		limitqual = (Node *) make_op(NULL, list_make1(makeString("<")),
-									 lnode, rnode, -1);
-		subselect->limitCount = NULL;
-	}
-
-	/*
-	 * Trivial EXISTS subquery can be eliminated altogether.  If subquery has
-	 * aggregates without GROUP BY or HAVING, its result is exactly one row
-	 * (assuming no errors), unless that row is discarded by LIMIT/OFFSET.
-	 */
-	if (subselect->hasAggs &&
-		subselect->groupClause == NIL &&
-		subselect->havingQual == NULL)
-	{
-		/*
-		 * 'OFFSET m' falsifies EXISTS for m >= 1, and doesn't affect the
-		 * outcome for m < 1, given that the subquery yields at most one row.
-		 * Delete subquery's OFFSET and build (m < 1) expr to be anded with
-		 * the current query's WHERE clause.
-		 */
-		if (subselect->limitOffset)
-		{
-			lnode = copyObject(subselect->limitOffset);
-			IncrementVarSublevelsUp(lnode, -1, 1);
-			rnode = (Node *) makeConst(INT8OID, -1, InvalidOid,
-									   sizeof(int64), Int64GetDatum(1),
-									   false, true);
-			node = (Node *) make_op(NULL, list_make1(makeString("<")),
-									lnode, rnode, -1);
-			limitqual = make_and_qual(limitqual, node);
-		}
-
-		/* Replace trivial EXISTS(...) with TRUE if no LIMIT/OFFSET. */
-		if (limitqual == NULL)
-			return makeBoolConst(!under_not, false);
-
-		if (under_not)
-			return (Node *) make_notclause((Expr *)limitqual);
-
-		return limitqual;
-	}
-
-	/*
-	 * If uncorrelated, the subquery will be executed only once.  Add LIMIT 1
-	 * and let the SubLink remain unflattened.  It will become an InitPlan.
-	 * (CDB TODO: Would it be better to go ahead and convert these to joins?)
-	 */
-	if (!contain_vars_of_level_or_above(sublink->subselect, 1))
-	{
-		((Query*)sublink->subselect)->limitCount = (Node *) makeConst(INT8OID, -1, InvalidOid,
-																      sizeof(int64), Int64GetDatum(1),
-																      false, true);
-		node = make_and_qual(limitqual, (Node *) sublink);
-		if (under_not)
-			return (Node *) make_notclause((Expr *)node);
-		return node;
-	}
+	if ((boolConst = remove_useless_EXISTS_sublink(root, subselect, under_not)))
+		return boolConst;
 
 	/*
 	 * See if the subquery can be simplified based on the knowledge that it's
@@ -1616,7 +1540,7 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	 * targetlist, we have to fail, because the pullup operation leaves us
 	 * with noplace to evaluate the targetlist.
 	 */
-	if (!simplify_EXISTS_query(root, subselect))
+	if (!simplify_EXISTS_query(subselect))
 		return NULL;
 
 	/*
@@ -1645,7 +1569,15 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	 * parent query, else it's not gonna be a join.
 	 */
 	if (!contain_vars_of_level(whereClause, 1))
+	{
+		/*
+		 * CDB: Add 'limit 1' in this case.
+		 */
+		((Query*)sublink->subselect)->limitCount =
+			(Node *) makeConst(INT8OID, -1, InvalidOid, sizeof(int64),
+								Int64GetDatum(1), false, true);
 		return NULL;
+	}
 
 	/*
 	 * We don't risk optimizing if the WHERE clause is volatile, either.
@@ -1721,7 +1653,7 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	result->usingClause = NIL;
 	result->quals = whereClause;
 	result->alias = NULL;
-	result->rtindex = 0;
+	result->rtindex = 0;		/* we don't need an RTE for it */
 
 	return (Node *) result;
 }
@@ -1743,7 +1675,7 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
  * Returns TRUE if was able to discard the targetlist, else FALSE.
  */
 static bool
-simplify_EXISTS_query(PlannerInfo *root, Query *query)
+simplify_EXISTS_query(Query *query)
 {
 	/*
 	 * PostgreSQL:
@@ -1755,9 +1687,7 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	 * In GPDB, we try a bit harder: Try to demote HAVING to WHERE, in case
 	 * there are no aggregates or volatile functions. If that fails, only
 	 * then give up. Also, just discard any window functions; they
-	 * shouldn't affect the number of rows returned. If subquery contains
-	 * LIMIT, it is already handled in convert_EXISTS_sublink_to_join()
-	 * before we reach here.
+	 * shouldn't affect the number of rows returned.
 	 */
 	if (query->commandType != CMD_SELECT ||
 		query->setOperations ||
@@ -1766,10 +1696,9 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 		query->hasWindowFuncs ||
 		query->havingQual ||
 #endif
+		query->hasModifyingCTE ||
 		query->limitOffset ||
-#if 0
 		query->limitCount ||
-#endif
 		query->rowMarks)
 		return false;
 
@@ -1809,6 +1738,7 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	 * targetlist, we'd better throw them away if we drop the targetlist.)
 	 */
 	query->targetList = NIL;
+
 	/*
 	 * Delete GROUP BY if no aggregates.
 	 *
@@ -1827,6 +1757,72 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	query->hasDistinctOn = false;
 
 	return true;
+}
+
+/*
+ * remove_useless_EXISTS_sublink
+ * 		Check if the EXISTS sublink doesn't actually need to be executed at all,
+ * 		and return TRUE/FALSE directly for it in that case. Otherwise return
+ * 		NULL.
+ */
+static Node *
+remove_useless_EXISTS_sublink(PlannerInfo *root, Query *subselect, bool under_not)
+{
+	/*
+	 * 'LIMIT n' makes EXISTS false when n <= 0, and doesn't affect the
+	 * outcome when n > 0.
+	 */
+	if (subselect->limitCount)
+	{
+		Node	*node = eval_const_expressions(root, subselect->limitCount);
+		Const	*limit;
+
+		subselect->limitCount = node;
+
+		if (!IsA(node, Const))
+			return NULL;
+
+		limit = (Const *) node;
+		Assert(limit->consttype == INT8OID);
+		if (!limit->constisnull && DatumGetInt64(limit->constvalue) <= 0)
+			return makeBoolConst(under_not, false);
+
+		subselect->limitCount = NULL;
+	}
+
+	/*
+	 * If subquery has aggregates without GROUP BY or HAVING, its result is
+	 * exactly one row (assuming no errors), unless that row is discarded by
+	 * LIMIT/OFFSET.
+	 */
+	if (subselect->hasAggs &&
+		subselect->groupClause == NIL &&
+		subselect->havingQual == NULL)
+	{
+		/*
+		 * 'OFFSET m' falsifies EXISTS for m >= 1, and doesn't affect the
+		 * outcome for m < 1, given that the subquery yields at most one row.
+		 */
+		if (subselect->limitOffset)
+		{
+			Node	*node = eval_const_expressions(root, subselect->limitOffset);
+			Const	*limit;
+
+			subselect->limitOffset = node;
+
+			if (!IsA(node, Const))
+				return NULL;
+
+			limit = (Const *) node;
+			Assert(limit->consttype == INT8OID);
+			if (!limit->constisnull && DatumGetInt64(limit->constvalue) > 0)
+				return makeBoolConst(under_not, false);
+		}
+
+		return makeBoolConst(!under_not, false);
+	}
+
+	return NULL;
 }
 
 /*

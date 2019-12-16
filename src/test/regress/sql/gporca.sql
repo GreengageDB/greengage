@@ -1457,6 +1457,24 @@ select * from orca.bm_dyn_test_onepart where i=2 and t='2';
 reset optimizer_enable_dynamictablescan;
 reset optimizer_enable_bitmapscan;
 
+-- Multi-level partition with dynamic bitmap indexes
+create table orca.bm_dyn_test_multilvl_part (id int, year int, quarter int, region text)
+distributed by (id) partition by range (year)
+  subpartition by range (quarter)
+    subpartition template (
+      start (1) end (3) every (1) )
+      subpartition by list (region)
+      subpartition template (
+      subpartition usa values ('usa'),
+      default subpartition other_regions )
+  ( start (2018) end (2020) every (1) );
+insert into orca.bm_dyn_test_multilvl_part select i, 2018 + (i%2), i%2 + 1, 'usa' from generate_series(1,100)i;
+create index bm_multi_test_idx_part on orca.bm_dyn_test_multilvl_part using bitmap(year);
+analyze orca.bm_dyn_test_multilvl_part;
+-- print name of parent index
+explain select * from orca.bm_dyn_test_multilvl_part where year = 2019;
+select count(*) from orca.bm_dyn_test_multilvl_part where year = 2019;
+
 -- More BitmapTableScan & BitmapIndexScan tests
 
 set optimizer_enable_bitmapscan=on;
@@ -1808,12 +1826,24 @@ drop table canSetTag_bug_table;
 drop table canSetTag_input_data;
 
 -- Test B-Tree index scan with in list
-CREATE TABLE btree_test as SELECT * FROM generate_series(1,100) as a distributed randomly;
+CREATE TABLE btree_test as SELECT i a, i b FROM generate_series(1,100) i distributed randomly;
 CREATE INDEX btree_test_index ON btree_test(a);
+set optimizer_enable_tablescan = off;
+-- start_ignore
+select disable_xform('CXformSelect2IndexGet');
+-- end_ignore
 EXPLAIN SELECT * FROM btree_test WHERE a in (1, 47);
 EXPLAIN SELECT * FROM btree_test WHERE a in ('2', 47);
 EXPLAIN SELECT * FROM btree_test WHERE a in ('1', '2');
 EXPLAIN SELECT * FROM btree_test WHERE a in ('1', '2', 47);
+SELECT * FROM btree_test WHERE a in ('1', '2', 47);
+CREATE INDEX btree_test_index_ab ON btree_test using btree(a,b);
+EXPLAIN SELECT * FROM btree_test WHERE a in (1, 2, 47) AND b > 1;
+SELECT * FROM btree_test WHERE a in (1, 2, 47) AND b > 1;
+-- start_ignore
+select enable_xform('CXformSelect2IndexGet');
+-- end_ignore
+reset optimizer_enable_tablescan;
 
 -- Test Bitmap index scan with in list
 CREATE TABLE bitmap_test as SELECT * FROM generate_series(1,100) as a distributed randomly;
@@ -2236,6 +2266,56 @@ insert into tt values (1, 'b'), (1, 'B');
 
 -- expected fall back to the planner
 select * from tc, tt where c = v;
+
+-- test gpexpand phase 1
+-- right now, these will fall back to planner in 6X and 7X, ORCA should handle them in 5X unless noted
+drop table if exists noexp_hash, gpexp_hash, gpexp_rand, gpexp_repl;
+create table noexp_hash(a int, b int) distributed by (a);
+insert into  noexp_hash select i, i from generate_series(1,50) i;
+
+-- three tables that will be expanded (simulated)
+create table gpexp_hash(a int, b int) distributed by (a);
+create table gpexp_rand(a int, b int) distributed randomly;
+create table gpexp_repl(a int, b int) distributed replicated;
+
+-- simulate a cluster with one segment less than we have now
+set allow_system_table_mods = true;
+update gp_distribution_policy set numsegments = numsegments-1 where localoid = 'gpexp_hash'::regclass and numsegments > 1;
+update gp_distribution_policy set numsegments = numsegments-1 where localoid = 'gpexp_rand'::regclass and numsegments > 1;
+update gp_distribution_policy set numsegments = numsegments-1 where localoid = 'gpexp_repl'::regclass and numsegments > 1;
+reset allow_system_table_mods;
+
+-- populate the tables on this smaller cluster
+explain insert into gpexp_hash select i, i from generate_series(1,50) i;
+
+insert into gpexp_hash select i, i from generate_series(1,50) i;
+insert into gpexp_rand select i, i from generate_series(1,50) i;
+insert into gpexp_repl select i, i from generate_series(1,50) i;
+
+-- the segment ids in the unmodified table should have one extra number
+select max(noexp_hash.gp_segment_id) - max(gpexp_hash.gp_segment_id) as expect_one
+from noexp_hash, gpexp_hash;
+
+-- join should have a redistribute motion for gpexp_hash
+explain select count(*) from noexp_hash n join gpexp_hash x on n.a=x.a;
+select count(*) from noexp_hash n join gpexp_hash x on n.a=x.a;
+delete from gpexp_hash where b between 21 and 50;
+select count(*) from gpexp_hash;
+update gpexp_hash set b=-1 where b between 11 and 100;
+select b, count(*) from gpexp_hash group by b order by b;
+
+explain update gpexp_rand set b=(select b from gpexp_hash where gpexp_rand.a = gpexp_hash.a);
+update gpexp_rand set b=(select b from gpexp_hash where gpexp_rand.a = gpexp_hash.a);
+select b, count(*) from gpexp_rand group by b order by b;
+
+delete from gpexp_repl where b >= 20;
+explain insert into gpexp_repl values (20, 20);
+insert into gpexp_repl values (20, 20);
+
+explain select count(*) from gpexp_hash h join gpexp_repl r on h.a=r.a;
+select count(*) as expect_20 from gpexp_hash h join gpexp_repl r on h.a=r.a;
+explain select count(*) as expect_20 from noexp_hash h join gpexp_repl r on h.a=r.a;
+select count(*) as expect_20 from noexp_hash h join gpexp_repl r on h.a=r.a;
 
 -- start_ignore
 DROP SCHEMA orca CASCADE;

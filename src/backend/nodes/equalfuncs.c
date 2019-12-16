@@ -1851,6 +1851,7 @@ _equalAlterExtensionStmt(const AlterExtensionStmt *a, const AlterExtensionStmt *
 {
 	COMPARE_STRING_FIELD(extname);
 	COMPARE_NODE_FIELD(options);
+	COMPARE_SCALAR_FIELD(update_ext_state);
 
 	return true;
 }

@@ -9,11 +9,11 @@
 
 
 PGconn *
-connectTo(int port)
+connectTo(int port, char *database_name)
 {
 	char		buffer[1000];
 
-	sprintf(buffer, "dbname=postgres port=%d", port);
+	snprintf(buffer, sizeof(buffer), "dbname=%s port=%d", database_name, port);
 	PGconn	   *connection = PQconnectdb(buffer);
 
 	if (PQstatus(connection) != CONNECTION_OK)
@@ -23,7 +23,7 @@ connectTo(int port)
 }
 
 PGresult *
-executeQuery(PGconn *connection, char *const query)
+executeQuery(PGconn *connection, const char *query)
 {
 	ExecStatusType status;
 
@@ -38,7 +38,7 @@ executeQuery(PGconn *connection, char *const query)
 }
 
 void
-executeQueryClearResult(PGconn *connection, char *const query)
+executeQueryClearResult(PGconn *connection, const char *query)
 {
 	PQclear(executeQuery(connection, query));
 }

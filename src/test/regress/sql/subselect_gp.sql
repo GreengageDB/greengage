@@ -334,6 +334,20 @@ explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1
 
 select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.n + 1=t1.i + 1);
 
+--
+-- Test a few cases where pulling up an aggregate subquery is not possible
+--
+
+-- subquery contains a LIMIT
+explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.t=t1.t LIMIT 1);
+
+select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.t=t1.t LIMIT 1);
+
+-- subquery contains a HAVING clause
+explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.t=t1.t HAVING count(*) < 10);
+
+select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.t=t1.t HAVING count(*) < 10);
+
 
 --
 -- NOT EXISTS CSQs to joins
@@ -796,3 +810,80 @@ ANALYZE TEST_IN;
 SELECT COUNT(*) FROM
 TEST_IN A
 WHERE A.C01 IN(SELECT C02 FROM TEST_IN);
+
+
+-- EXISTS sublink simplication
+
+drop table if exists simplify_sub;
+
+create table simplify_sub (i int) distributed by (i);
+insert into simplify_sub values (1);
+insert into simplify_sub values (2);
+
+-- limit n
+explain (costs off)
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 1);
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 1);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 1);
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 1);
+
+explain (costs off)
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 0);
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 0);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 0);
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit 0);
+
+explain (costs off)
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit all);
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit all);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit all);
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit all);
+
+explain (costs off)
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit NULL);
+select * from simplify_sub t1 where exists (select 1 from simplify_sub t2 where t1.i = t2.i limit NULL);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit NULL);
+select * from simplify_sub t1 where not exists (select 1 from simplify_sub t2 where t1.i = t2.i limit NULL);
+
+-- aggregates without GROUP BY or HAVING
+explain (costs off)
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i);
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i);
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i);
+
+explain (costs off)
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 0);
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 0);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 0);
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 0);
+
+explain (costs off)
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 1);
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 1);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 1);
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset 1);
+
+explain (costs off)
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset NULL);
+select * from simplify_sub t1 where exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset NULL);
+
+explain (costs off)
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset NULL);
+select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset NULL);
+
+drop table if exists simplify_sub;

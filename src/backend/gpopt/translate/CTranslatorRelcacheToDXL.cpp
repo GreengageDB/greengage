@@ -2972,7 +2972,7 @@ CTranslatorRelcacheToDXL::TransformMcvToOrcaHistogram
 			// building a histogram. return an empty histogram
 			datums->Release();
 			freqs->Release();
-			return GPOS_NEW(mp) CHistogram(GPOS_NEW(mp) CBucketArray(mp));
+			return GPOS_NEW(mp) CHistogram(mp);
 		}
 	}
 
@@ -3073,11 +3073,11 @@ CTranslatorRelcacheToDXL::TransformHistToOrcaHistogram
 			// order is different in GPDB, and use const expression eval to compare
 			// datums in Orca (MPP-22780)
 			buckets->Release();
-			return GPOS_NEW(mp) CHistogram(GPOS_NEW(mp) CBucketArray(mp));
+			return GPOS_NEW(mp) CHistogram(mp);
 		}
 	}
 
-	CHistogram *hist = GPOS_NEW(mp) CHistogram(buckets);
+	CHistogram *hist = GPOS_NEW(mp) CHistogram(mp, buckets);
 	return hist;
 }
 

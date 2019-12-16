@@ -244,6 +244,8 @@ class AnalyzeDb(Operation):
 
         if args:
             logger.warn("Please note that some of the arguments (%s) aren't valid and will be ignored.", args)
+        if not options.rootstats:
+            logger.warn("The --skip_root_stats option is no longer supported and will be ignored.")
         if options.masterDataDirectory is None:
             options.masterDataDirectory = gp.get_masterdatadir()
         self.master_datadir = options.masterDataDirectory
@@ -259,7 +261,6 @@ class AnalyzeDb(Operation):
         self.full_analyze = options.full_analyze
         self.dry_run = options.dry_run
         self.parallel_level = options.parallel_level
-        self.rootstats = options.rootstats
         self.silent = options.silent
         self.verbose = options.verbose
         self.clean_last = options.clean_last
@@ -296,13 +297,6 @@ class AnalyzeDb(Operation):
 
         if self.parallel_level < 1 or self.parallel_level > 10:
             raise ProgramArgumentValidationException('option -p requires a value between 1 and 10')
-
-        if self.rootstats:
-            qresult = execute_sql("SELECT version()", self.pg_port, self.dbname)
-            version = GpVersion(qresult[0][0])
-            if version < GpVersion('4.3.4.0'):
-                logger.debug("Adding --skip_root_stats option since Greenplum version is lower than 4.3.4.0")
-                self.rootstats = False
 
     def _preprocess_options(self):
 
@@ -411,8 +405,7 @@ class AnalyzeDb(Operation):
             # and its corresponding columns to be analyzed
             # key: name of the root partition whose stats needs to be refreshed
             # value: a set of column names to be analyzed, or '-1' meaning all columns of that table
-            if self.rootstats:
-                root_partition_col_dict = self._get_root_partition_col_dict(candidates, input_col_dict)
+            root_partition_col_dict = self._get_root_partition_col_dict(candidates, input_col_dict)
 
             ordered_candidates = self._get_ordered_candidates(candidates, root_partition_col_dict)
             target_list = []
@@ -458,44 +451,57 @@ class AnalyzeDb(Operation):
 
         return 0
 
+    # We run 'analyze <table>' and 'analyze rootpartition <root>' commands in
+    # separate batches, as 'analyze rootpartition' commands will go through
+    # different codepaths depending on whether all leaf partitions have been
+    # analyzed. If all leaves have been analyzed, 'analyze rootpartition'
+    # simply merges the HLL statistics. If any leaves have not been analyzed, a
+    # sample is taken, which can take longer. Thus we run all 'analyze'
+    # statements before 'analyze rootpartition' statments
     def run_analyze(self, logger, ordered_candidates, candidates, input_col_dict, root_partition_col_dict):
         logger.info("Starting analyze with %d workers..." % self.parallel_level)
-        pool = AnalyzeWorkerPool(numWorkers=self.parallel_level)
+        non_root_pool = AnalyzeWorkerPool(numWorkers=self.parallel_level)
+        root_pool = AnalyzeWorkerPool(numWorkers=self.parallel_level)
 
         for can in ordered_candidates:
             can_schema, can_table = can[0], can[1]
             if can in candidates:
                 target = self._get_tablename_with_cols(can_schema, can_table, input_col_dict)
                 cmd = create_psql_command(self.dbname, self.analyze_gucs + ANALYZE_SQL % target)
+                non_root_pool.addCommand(cmd)
 
             else:  # can in root_partition_col_dict
                 target = self._get_tablename_with_cols(can_schema, can_table, root_partition_col_dict)
                 cmd = create_psql_command(self.dbname, ANALYZE_ROOT_SQL % target)
+                root_pool.addCommand(cmd)
 
             # Also stash the name of the target table in the object, so that it can be extracted
             # from it later.
             cmd.target_schema = can_schema
             cmd.target_table = can_table
-            pool.addCommand(cmd)
 
-        wait_count = len(ordered_candidates)
+        wait_count = num_tables = len(ordered_candidates)
+        num_roots = root_pool.assigned
         start_time = time.time()
+        non_root_pool.run()
         try:
-            while wait_count > 0:
-                done_cmd = pool.completed_queue.get()
-                if done_cmd.was_successful():
-                    subject = (done_cmd.target_schema, done_cmd.target_table)
-                    self.success_list.append(subject)
-                if wait_count % 10 == 0:
-                    logger.info("progress status: completed %d out of %d tables or partitions" %
-                                (len(self.success_list), len(ordered_candidates)))
+            while wait_count > num_roots:
+                self.run_analyze_statements(non_root_pool, wait_count, num_tables)
                 wait_count -= 1
-
-            pool.join()
-            pool.haltWork()
+            non_root_pool.join()
+            non_root_pool.haltWork()
+            root_pool.run()
+            while wait_count > 0:
+                self.run_analyze_statements(root_pool, wait_count, num_tables)
+                wait_count -= 1
+            root_pool.join()
+            root_pool.haltWork()
         except:
-            pool.haltWork()
-            pool.joinWorkers()
+            non_root_pool.haltWork()
+            non_root_pool.joinWorkers()
+            if non_root_pool.completed_queue.qsize() == 0:
+                root_pool.haltWork()
+                root_pool.joinWorkers()
             raise
 
         finally:
@@ -503,6 +509,15 @@ class AnalyzeDb(Operation):
             logger.info(
                         "Total elapsed time: %d seconds. Analyzed %d out of %d table(s) or partition(s) successfully."
                         % (int(end_time - start_time), len(self.success_list), len(ordered_candidates)))
+
+    def run_analyze_statements(self, pool, wait_count, total_to_analyze):
+        done_cmd = pool.completed_queue.get()
+        if done_cmd.was_successful():
+            subject = (done_cmd.target_schema, done_cmd.target_table)
+            self.success_list.append(subject)
+        if wait_count % 10 == 0:
+            logger.info("progress status: completed %d out of %d tables or partitions" %
+                        (len(self.success_list), total_to_analyze))
 
     def read_last_analyzedb_output(self):
         last_analyze_timestamp = get_lastest_analyze_timestamp(self.master_datadir, self.analyze_dir, self.dbname)
@@ -735,8 +750,8 @@ class AnalyzeDb(Operation):
                 fp.write("\nanalyzedb finished successfully.\n")
 
     def _get_dirty_lastop_tables(self, curr_last_op, prev_last_op):
-        old_pgstatoperations_dict = get_pgstatlastoperations_dict(prev_last_op)
-        dirty_tables = compare_metadata(old_pgstatoperations_dict, curr_last_op)
+        old_pgstatlastoperation_dict = get_pgstatlastoperation_dict(prev_last_op)
+        dirty_tables = compare_metadata(old_pgstatlastoperation_dict, curr_last_op)
         return dirty_tables
 
     def _get_dirty_ao_state_tables(self, curr_ao_state, prev_ao_state):
@@ -994,17 +1009,17 @@ def get_prev_ao_state(timestamp, master_datadir, analyze_dir, dbname):
 
 def get_prev_last_op(timestamp, master_datadir, analyze_dir, dbname):
     logger.debug("getting previous last operation...")
-    old_pgstatoperations_file = generate_statefile_name('lastop', master_datadir, analyze_dir, dbname, timestamp)
-    if not os.path.isfile(old_pgstatoperations_file):
-        old_pgstatoperations = []
+    old_pgstatlastoperation_file = generate_statefile_name('lastop', master_datadir, analyze_dir, dbname, timestamp)
+    if not os.path.isfile(old_pgstatlastoperation_file):
+        old_pgstatlastoperation = []
     else:
-        old_pgstatoperations = get_lines_from_file(old_pgstatoperations_file)
+        old_pgstatlastoperation = get_lines_from_file(old_pgstatlastoperation_file)
     # Parse the lines into tuples like:
     # [('public', 'ao_tab', 67468, 'ALTER', 'ADD COLUMN', '2014-10-15 14:49:27.658777-07'), ...]
     # Each line is a comma-separated string. XXX: This file format cannot deal with names
     # with commas.
     ret = []
-    for l in old_pgstatoperations:
+    for l in old_pgstatlastoperation:
         r = l.split(',')
         tup = (r[0], r[1], r[2], r[3], r[4], r[5])
         ret.append(tup)
@@ -1075,19 +1090,22 @@ def construct_entries_from_dict_colstate(prev_col_dict):
     return ret
 
 
-def compare_metadata(old_pgstatoperations, cur_pgstatoperations):
+def compare_metadata(old_pgstatlastoperation, cur_pgstatlastoperation):
     diffs = set()
-    for operation in cur_pgstatoperations:
-        if (operation[2], operation[3]) not in old_pgstatoperations \
-                or old_pgstatoperations[(operation[2], operation[3])] != operation:
+    for operation in cur_pgstatlastoperation:
+        # operation[0] and [1] give the schema and table name respectively
+        # operation[3] gives the staactionname
+        # all three are required to create a unique key for a specific operation
+        if (operation[0], operation[1], operation[3]) not in old_pgstatlastoperation \
+                or old_pgstatlastoperation[(operation[0], operation[1], operation[3])] != operation:
             diffs.add((operation[0], operation[1]))
     return diffs
 
 
-def get_pgstatlastoperations_dict(last_operations):
+def get_pgstatlastoperation_dict(last_operations):
     last_operations_dict = {}
     for operation in last_operations:
-        last_operations_dict[(str(operation[2]), operation[3])] = operation
+        last_operations_dict[(operation[0], operation[1], operation[3])] = operation
     return last_operations_dict
 
 
@@ -1265,7 +1283,7 @@ def create_parser():
     parser.add_option('-p', type='int', dest='parallel_level', default=5, metavar="<parallel level>",
                       help="Parallel level, i.e. the number of tables to be analyzed in parallel. Valid numbers are between 1 and 10. Default value is 5.")
     parser.add_option('--skip_root_stats', action='store_false', dest='rootstats', default=True,
-                      help="Skip refreshing root partition stats if any of the leaf partitions is analyzed.")
+                      help="This option is no longer used. Please remove it from your scripts.")
     parser.add_option('--gen_profile_only', action='store_true', dest='gen_profile_only', default=False,
                       help="Create cached state files to indicate specified table or all tables have been analyzed.")
     parser.add_option('--full', action='store_true', dest='full_analyze', default=False,
@@ -1311,9 +1329,11 @@ class AnalyzeWorkerPool(WorkerPool):
             # use AnalyzeWorker instead of Worker
             w = AnalyzeWorker("worker%d" % i, self)
             self.workers.append(w)
-            w.start()
         self.numWorkers = numWorkers
 
+    def run(self):
+        for w in self.workers:
+            w.start()
 
 class AnalyzeWorker(Worker):
     """

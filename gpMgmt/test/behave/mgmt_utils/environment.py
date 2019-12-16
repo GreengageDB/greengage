@@ -17,7 +17,8 @@ def before_all(context):
 
 def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors', 'gpconfig', 'gpssh-exkeys', 'gpstop']
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
+                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -91,7 +92,8 @@ def before_scenario(context, scenario):
     if 'gpssh-exkeys' in context.feature.tags:
         context.gpssh_exkeys_context = GpsshExkeysMgmtContext(context)
 
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors', 'gpconfig', 'gpssh-exkeys', 'gpstop']
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
+                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -118,7 +120,8 @@ def after_scenario(context, scenario):
             ''')
 
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpinitstandby', 'gpconfig', 'gpstop']
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpinitstandby',
+                    'gpconfig', 'gpstop', 'gpinitsystem']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 

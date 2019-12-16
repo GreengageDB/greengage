@@ -77,8 +77,7 @@ cdbpullup_expr(Expr *expr, List *targetlist, List *newvarlist, Index newvarno);
 bool
 cdbpullup_exprHasSubplanRef(Expr *expr);
 
-
-extern Expr *cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist);
+extern Expr *cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist, Oid hashOpFamily);
 
 extern List *cdbpullup_truncatePathKeysForTargetList(List *pathkeys, List *targetlist);
 

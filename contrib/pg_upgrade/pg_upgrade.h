@@ -15,6 +15,8 @@
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
 
+#include "old_tablespace_file_contents.h"
+
 /* Use port in the private/dynamic port number range */
 #define DEF_PGUPORT			50432
 
@@ -39,6 +41,7 @@
 
 #define GLOBALS_OIDS_DUMP_FILE	"pg_upgrade_dump_globals_oids.sql"
 #define DB_OIDS_DUMP_FILE_MASK	"pg_upgrade_dump_%u_oids.sql"
+#define OLD_TABLESPACES_FILE    "old_tablespaces.txt"
 
 /* needs to be kept in sync with pg_class.h */
 #define RELSTORAGE_EXTERNAL	'x'
@@ -407,6 +410,9 @@ typedef struct
 	const char *tablespace_suffix;		/* directory specification */
 
 	char	   *global_reserved_oids; /* OID preassign calls for shared objects */
+	int gp_dbid; /* greenplum database id of the cluster */
+
+	OldTablespaceFileContents *old_tablespace_file_contents;
 } ClusterInfo;
 
 
@@ -435,6 +441,7 @@ typedef struct
 	bool		progress;
 	segmentMode	segment_mode;
 	checksumMode checksum_mode;
+	char *old_tablespace_file_path;
 
 } UserOpts;
 
@@ -497,10 +504,10 @@ void		generate_old_dump(void);
 /* exec.c */
 
 #define EXEC_PSQL_ARGS "--echo-queries --set ON_ERROR_STOP=on --no-psqlrc --dbname=template1"
-bool
-exec_prog(const char *log_file, const char *opt_log_file,
-		  bool throw_error, const char *fmt,...)
-__attribute__((format(PG_PRINTF_ATTRIBUTE, 4, 5)));
+
+bool exec_prog(const char *log_file, const char *opt_log_file,
+		  bool report_error, bool exit_on_error, const char *fmt,...)
+		  __attribute__((format(PG_PRINTF_ATTRIBUTE, 5, 6)));
 void		verify_directories(void);
 bool		pid_lock_file_exists(const char *datadir);
 
@@ -582,6 +589,12 @@ void transfer_all_new_dbs(DbInfoArr *old_db_arr,
 
 void		init_tablespaces(void);
 
+/* tablespace_gp.c */
+void populate_old_cluster_with_old_tablespaces(ClusterInfo *oldCluster, const char *file_path);
+void generate_old_tablespaces_file(ClusterInfo *oldCluster);
+void populate_gpdb6_cluster_tablespace_suffix(ClusterInfo *cluster);
+bool is_gpdb_version_with_filespaces(ClusterInfo *cluster);
+
 
 /* server.c */
 
@@ -592,8 +605,8 @@ __attribute__((format(PG_PRINTF_ATTRIBUTE, 2, 3)));
 
 char	   *cluster_conn_opts(ClusterInfo *cluster);
 
-bool		start_postmaster(ClusterInfo *cluster, bool throw_error);
-void		stop_postmaster(bool fast);
+bool		start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error);
+void		stop_postmaster(bool in_atexit);
 uint32		get_major_server_version(ClusterInfo *cluster);
 void		check_pghost_envvar(void);
 
@@ -699,3 +712,9 @@ void check_greenplum(void);
 void report_progress(ClusterInfo *cluster, progress_type op, char *fmt,...)
 __attribute__((format(PG_PRINTF_ATTRIBUTE, 3, 4)));
 void close_progress(void);
+
+static inline bool
+is_gpdb6(ClusterInfo *cluster)
+{
+	return GET_MAJOR_VERSION(cluster->major_version) == 904;
+}
