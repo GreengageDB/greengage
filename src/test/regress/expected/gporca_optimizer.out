@@ -9849,7 +9849,7 @@ explain select * from orca.bm_dyn_test where i=2 and t='2';
          ->  Dynamic Bitmap Heap Scan on bm_dyn_test (dynamic scan id: 1)  (cost=0.00..204.40 rows=1 width=8)
                Recheck Cond: (i = 2)
                Filter: ((i = 2) AND (t = '2'::text))
-               ->  Dynamic Bitmap Index Scan on bm_dyn_test_1_prt_part0_i_idx  (cost=0.00..0.00 rows=0 width=0)
+               ->  Dynamic Bitmap Index Scan on bm_dyn_test_idx  (cost=0.00..0.00 rows=0 width=0)
                      Index Cond: (i = 2)
  Planning time: 26.274 ms
  Optimizer: Pivotal Optimizer (GPORCA) version 3.9.0
@@ -9937,6 +9937,55 @@ DETAIL:  No plan has been computed for required properties
 
 reset optimizer_enable_dynamictablescan;
 reset optimizer_enable_bitmapscan;
+-- Multi-level partition with dynamic bitmap indexes
+create table orca.bm_dyn_test_multilvl_part (id int, year int, quarter int, region text)
+distributed by (id) partition by range (year)
+  subpartition by range (quarter)
+    subpartition template (
+      start (1) end (3) every (1) )
+      subpartition by list (region)
+      subpartition template (
+      subpartition usa values ('usa'),
+      default subpartition other_regions )
+  ( start (2018) end (2020) every (1) );
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1" for table "bm_dyn_test_multilvl_part"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1_2_prt_1" for table "bm_dyn_test_multilvl_part_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1_2_prt_1_3_prt_usa" for table "bm_dyn_test_multilvl_part_1_prt_1_2_prt_1"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1_2_prt_1_3_prt_other_regions" for table "bm_dyn_test_multilvl_part_1_prt_1_2_prt_1"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1_2_prt_2" for table "bm_dyn_test_multilvl_part_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1_2_prt_2_3_prt_usa" for table "bm_dyn_test_multilvl_part_1_prt_1_2_prt_2"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_1_2_prt_2_3_prt_other_regions" for table "bm_dyn_test_multilvl_part_1_prt_1_2_prt_2"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2" for table "bm_dyn_test_multilvl_part"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2_2_prt_1" for table "bm_dyn_test_multilvl_part_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2_2_prt_1_3_prt_usa" for table "bm_dyn_test_multilvl_part_1_prt_2_2_prt_1"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2_2_prt_1_3_prt_other_regions" for table "bm_dyn_test_multilvl_part_1_prt_2_2_prt_1"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2_2_prt_2" for table "bm_dyn_test_multilvl_part_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2_2_prt_2_3_prt_usa" for table "bm_dyn_test_multilvl_part_1_prt_2_2_prt_2"
+NOTICE:  CREATE TABLE will create partition "bm_dyn_test_multilvl_part_1_prt_2_2_prt_2_3_prt_other_regions" for table "bm_dyn_test_multilvl_part_1_prt_2_2_prt_2"
+insert into orca.bm_dyn_test_multilvl_part select i, 2018 + (i%2), i%2 + 1, 'usa' from generate_series(1,100)i;
+create index bm_multi_test_idx_part on orca.bm_dyn_test_multilvl_part using bitmap(year);
+analyze orca.bm_dyn_test_multilvl_part;
+-- print name of parent index
+explain select * from orca.bm_dyn_test_multilvl_part where year = 2019;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..68.13 rows=1 width=16)
+   ->  Sequence  (cost=0.00..68.13 rows=1 width=16)
+         ->  Partition Selector for bm_dyn_test_multilvl_part (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4)
+               Partitions selected: 4 (out of 8)
+         ->  Dynamic Bitmap Heap Scan on bm_dyn_test_multilvl_part (dynamic scan id: 1)  (cost=0.00..68.13 rows=1 width=16)
+               Recheck Cond: (year = 2019)
+               ->  Dynamic Bitmap Index Scan on bm_multi_test_idx_part  (cost=0.00..0.00 rows=0 width=0)
+                     Index Cond: (year = 2019)
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+(9 rows)
+
+select count(*) from orca.bm_dyn_test_multilvl_part where year = 2019;
+ count 
+-------
+    50
+(1 row)
+
 -- More BitmapTableScan & BitmapIndexScan tests
 set optimizer_enable_bitmapscan=on;
 create schema bm;
@@ -10550,56 +10599,97 @@ drop function canSetTag_Func(x int);
 drop table canSetTag_bug_table;
 drop table canSetTag_input_data;
 -- Test B-Tree index scan with in list
-CREATE TABLE btree_test as SELECT * FROM generate_series(1,100) as a distributed randomly;
+CREATE TABLE btree_test as SELECT i a, i b FROM generate_series(1,100) i distributed randomly;
 CREATE INDEX btree_test_index ON btree_test(a);
+set optimizer_enable_tablescan = off;
+-- start_ignore
+select disable_xform('CXformSelect2IndexGet');
+           disable_xform           
+-----------------------------------
+ CXformSelect2IndexGet is disabled
+(1 row)
+
+-- end_ignore
 EXPLAIN SELECT * FROM btree_test WHERE a in (1, 47);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  DXL-to-PlStmt Translation: ScalarArrayOpExpr condition on index scan not supported
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.25 rows=2 width=4)
-   ->  Seq Scan on btree_test  (cost=0.00..2.25 rows=1 width=4)
-         Filter: a = ANY ('{1,47}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
- Optimizer status: Postgres query optimizer
-(5 rows)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..204.38 rows=3 width=8)
+   ->  Bitmap Heap Scan on btree_test  (cost=0.00..204.38 rows=1 width=8)
+         Recheck Cond: (a = ANY ('{1,47}'::integer[]))
+         ->  Bitmap Index Scan on btree_test_index  (cost=0.00..0.00 rows=0 width=0)
+               Index Cond: (a = ANY ('{1,47}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+(6 rows)
 
 EXPLAIN SELECT * FROM btree_test WHERE a in ('2', 47);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  DXL-to-PlStmt Translation: ScalarArrayOpExpr condition on index scan not supported
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.25 rows=2 width=4)
-   ->  Seq Scan on btree_test  (cost=0.00..2.25 rows=1 width=4)
-         Filter: a = ANY ('{2,47}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
- Optimizer status: Postgres query optimizer
-(5 rows)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..204.38 rows=3 width=8)
+   ->  Bitmap Heap Scan on btree_test  (cost=0.00..204.38 rows=1 width=8)
+         Recheck Cond: (a = ANY ('{2,47}'::integer[]))
+         ->  Bitmap Index Scan on btree_test_index  (cost=0.00..0.00 rows=0 width=0)
+               Index Cond: (a = ANY ('{2,47}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+(6 rows)
 
 EXPLAIN SELECT * FROM btree_test WHERE a in ('1', '2');
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  DXL-to-PlStmt Translation: ScalarArrayOpExpr condition on index scan not supported
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.25 rows=2 width=4)
-   ->  Seq Scan on btree_test  (cost=0.00..2.25 rows=1 width=4)
-         Filter: a = ANY ('{1,2}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
- Optimizer status: Postgres query optimizer
-(5 rows)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..204.38 rows=3 width=8)
+   ->  Bitmap Heap Scan on btree_test  (cost=0.00..204.38 rows=1 width=8)
+         Recheck Cond: (a = ANY ('{1,2}'::integer[]))
+         ->  Bitmap Index Scan on btree_test_index  (cost=0.00..0.00 rows=0 width=0)
+               Index Cond: (a = ANY ('{1,2}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+(6 rows)
 
 EXPLAIN SELECT * FROM btree_test WHERE a in ('1', '2', 47);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  DXL-to-PlStmt Translation: ScalarArrayOpExpr condition on index scan not supported
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.38 rows=3 width=4)
-   ->  Seq Scan on btree_test  (cost=0.00..2.38 rows=1 width=4)
-         Filter: a = ANY ('{1,2,47}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
- Optimizer status: Postgres query optimizer
-(5 rows)
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..613.15 rows=4 width=8)
+   ->  Bitmap Heap Scan on btree_test  (cost=0.00..613.15 rows=2 width=8)
+         Recheck Cond: (a = ANY ('{1,2,47}'::integer[]))
+         ->  Bitmap Index Scan on btree_test_index  (cost=0.00..0.00 rows=0 width=0)
+               Index Cond: (a = ANY ('{1,2,47}'::integer[]))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+(6 rows)
 
+SELECT * FROM btree_test WHERE a in ('1', '2', 47);
+ a  | b  
+----+----
+  1 |  1
+  2 |  2
+ 47 | 47
+(3 rows)
+
+CREATE INDEX btree_test_index_ab ON btree_test using btree(a,b);
+EXPLAIN SELECT * FROM btree_test WHERE a in (1, 2, 47) AND b > 1;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.06 rows=4 width=8)
+   ->  Bitmap Heap Scan on btree_test  (cost=0.00..431.06 rows=2 width=8)
+         Recheck Cond: ((a = ANY ('{1,2,47}'::integer[])) AND (b > 1))
+         ->  Bitmap Index Scan on btree_test_index_ab  (cost=0.00..0.00 rows=0 width=0)
+               Index Cond: ((a = ANY ('{1,2,47}'::integer[])) AND (b > 1))
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.82.0
+(6 rows)
+
+SELECT * FROM btree_test WHERE a in (1, 2, 47) AND b > 1;
+ a  | b  
+----+----
+  2 |  2
+ 47 | 47
+(2 rows)
+
+-- start_ignore
+select enable_xform('CXformSelect2IndexGet');
+           enable_xform           
+----------------------------------
+ CXformSelect2IndexGet is enabled
+(1 row)
+
+-- end_ignore
+reset optimizer_enable_tablescan;
 -- Test Bitmap index scan with in list
 CREATE TABLE bitmap_test as SELECT * FROM generate_series(1,100) as a distributed randomly;
 CREATE INDEX bitmap_index ON bitmap_test USING BITMAP(a);
@@ -11613,4 +11703,219 @@ DETAIL:  Operator Citext comparison in join. not supported
  1 | B | 1 | B
  1 | b | 1 | b
 (4 rows)
+
+-- test gpexpand phase 1
+-- right now, these will fall back to planner in 6X and 7X, ORCA should handle them in 5X unless noted
+drop table if exists noexp_hash, gpexp_hash, gpexp_rand, gpexp_repl;
+NOTICE:  table "noexp_hash" does not exist, skipping
+NOTICE:  table "gpexp_hash" does not exist, skipping
+NOTICE:  table "gpexp_rand" does not exist, skipping
+NOTICE:  table "gpexp_repl" does not exist, skipping
+create table noexp_hash(a int, b int) distributed by (a);
+insert into  noexp_hash select i, i from generate_series(1,50) i;
+-- three tables that will be expanded (simulated)
+create table gpexp_hash(a int, b int) distributed by (a);
+create table gpexp_rand(a int, b int) distributed randomly;
+create table gpexp_repl(a int, b int) distributed replicated;
+-- simulate a cluster with one segment less than we have now
+set allow_system_table_mods = true;
+update gp_distribution_policy set numsegments = numsegments-1 where localoid = 'gpexp_hash'::regclass and numsegments > 1;
+update gp_distribution_policy set numsegments = numsegments-1 where localoid = 'gpexp_rand'::regclass and numsegments > 1;
+update gp_distribution_policy set numsegments = numsegments-1 where localoid = 'gpexp_repl'::regclass and numsegments > 1;
+reset allow_system_table_mods;
+-- populate the tables on this smaller cluster
+explain insert into gpexp_hash select i, i from generate_series(1,50) i;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Insert on gpexp_hash  (cost=0.00..10.00 rows=500 width=4)
+   ->  Redistribute Motion 1:2  (slice1; segments: 1)  (cost=0.00..10.00 rows=1000 width=4)
+         Hash Key: i.i
+         ->  Function Scan on generate_series i  (cost=0.00..10.00 rows=500 width=4)
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+insert into gpexp_hash select i, i from generate_series(1,50) i;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+insert into gpexp_rand select i, i from generate_series(1,50) i;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+insert into gpexp_repl select i, i from generate_series(1,50) i;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+-- the segment ids in the unmodified table should have one extra number
+select max(noexp_hash.gp_segment_id) - max(gpexp_hash.gp_segment_id) as expect_one
+from noexp_hash, gpexp_hash;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ expect_one 
+------------
+          1
+(1 row)
+
+-- join should have a redistribute motion for gpexp_hash
+explain select count(*) from noexp_hash n join gpexp_hash x on n.a=x.a;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=8.50..8.51 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=8.44..8.49 rows=1 width=8)
+         ->  Aggregate  (cost=8.44..8.45 rows=1 width=8)
+               ->  Hash Join  (cost=4.12..8.31 rows=17 width=0)
+                     Hash Cond: (n.a = x.a)
+                     ->  Seq Scan on noexp_hash n  (cost=0.00..3.50 rows=17 width=4)
+                     ->  Hash  (cost=3.50..3.50 rows=17 width=4)
+                           ->  Redistribute Motion 2:3  (slice1; segments: 2)  (cost=0.00..3.50 rows=25 width=4)
+                                 Hash Key: x.a
+                                 ->  Seq Scan on gpexp_hash x  (cost=0.00..2.50 rows=25 width=4)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(*) from noexp_hash n join gpexp_hash x on n.a=x.a;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ count 
+-------
+    50
+(1 row)
+
+delete from gpexp_hash where b between 21 and 50;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+select count(*) from gpexp_hash;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ count 
+-------
+    20
+(1 row)
+
+update gpexp_hash set b=-1 where b between 11 and 100;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+select b, count(*) from gpexp_hash group by b order by b;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ b  | count 
+----+-------
+ -1 |    10
+  1 |     1
+  2 |     1
+  3 |     1
+  4 |     1
+  5 |     1
+  6 |     1
+  7 |     1
+  8 |     1
+  9 |     1
+ 10 |     1
+(11 rows)
+
+explain update gpexp_rand set b=(select b from gpexp_hash where gpexp_rand.a = gpexp_hash.a);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Update on gpexp_rand  (cost=0.00..133.75 rows=25 width=14)
+   ->  Explicit Redistribute Motion 2:2  (slice2; segments: 2)  (cost=0.00..133.75 rows=25 width=14)
+         ->  Seq Scan on gpexp_rand  (cost=0.00..133.75 rows=25 width=14)
+               SubPlan 1  (slice2; segments: 2)
+                 ->  Result  (cost=0.00..2.63 rows=1 width=4)
+                       Filter: (gpexp_rand.a = gpexp_hash.a)
+                       ->  Materialize  (cost=0.00..2.63 rows=1 width=4)
+                             ->  Broadcast Motion 2:2  (slice1; segments: 2)  (cost=0.00..2.62 rows=1 width=4)
+                                   ->  Seq Scan on gpexp_hash  (cost=0.00..2.62 rows=1 width=4)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+update gpexp_rand set b=(select b from gpexp_hash where gpexp_rand.a = gpexp_hash.a);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+select b, count(*) from gpexp_rand group by b order by b;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ b  | count 
+----+-------
+ -1 |    10
+  1 |     1
+  2 |     1
+  3 |     1
+  4 |     1
+  5 |     1
+  6 |     1
+  7 |     1
+  8 |     1
+  9 |     1
+ 10 |     1
+    |    30
+(12 rows)
+
+delete from gpexp_repl where b >= 20;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+explain insert into gpexp_repl values (20, 20);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Insert on gpexp_repl  (cost=0.00..0.01 rows=1 width=0)
+   ->  Result  (cost=0.00..0.01 rows=1 width=0)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+insert into gpexp_repl values (20, 20);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+explain select count(*) from gpexp_hash h join gpexp_repl r on h.a=r.a;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
+ Aggregate  (cost=5.49..5.50 rows=1 width=8)
+   ->  Gather Motion 2:1  (slice1; segments: 2)  (cost=5.44..5.48 rows=1 width=8)
+         ->  Aggregate  (cost=5.44..5.45 rows=1 width=8)
+               ->  Hash Join  (cost=2.12..5.31 rows=25 width=0)
+                     Hash Cond: (h.a = r.a)
+                     ->  Seq Scan on gpexp_hash h  (cost=0.00..2.50 rows=25 width=4)
+                     ->  Hash  (cost=1.50..1.50 rows=17 width=4)
+                           ->  Seq Scan on gpexp_repl r  (cost=0.00..1.50 rows=50 width=4)
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select count(*) as expect_20 from gpexp_hash h join gpexp_repl r on h.a=r.a;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ expect_20 
+-----------
+        20
+(1 row)
+
+explain select count(*) as expect_20 from noexp_hash h join gpexp_repl r on h.a=r.a;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=7.50..7.51 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=7.44..7.49 rows=1 width=8)
+         ->  Aggregate  (cost=7.44..7.45 rows=1 width=8)
+               ->  Hash Join  (cost=3.12..7.31 rows=17 width=0)
+                     Hash Cond: (h.a = r.a)
+                     ->  Seq Scan on noexp_hash h  (cost=0.00..3.50 rows=17 width=4)
+                     ->  Hash  (cost=2.50..2.50 rows=17 width=4)
+                           ->  Redistribute Motion 1:3  (slice1; segments: 1)  (cost=0.00..2.50 rows=50 width=4)
+                                 Hash Key: r.a
+                                 ->  Seq Scan on gpexp_repl r  (cost=0.00..1.50 rows=50 width=4)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select count(*) as expect_20 from noexp_hash h join gpexp_repl r on h.a=r.a;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Unknown error: Partially Distributed Data
+ expect_20 
+-----------
+        20
+(1 row)
 

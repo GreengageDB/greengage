@@ -434,3 +434,21 @@ reset enable_nestloop;
 reset enable_material;
 reset enable_seqscan;
 reset enable_bitmapscan;
+
+-- test that flow->hashExpr variables can be resolved
+CREATE TABLE hexpr_t1 (c1 int, c2 character varying(16)) DISTRIBUTED BY (c1);
+CREATE TABLE hexpr_t2 (c3 character varying(16)) DISTRIBUTED BY (c3);
+INSERT INTO hexpr_t1 SELECT i, i::character varying FROM generate_series(1,10)i;
+INSERT INTO hexpr_t2 SELECT i::character varying FROM generate_series(1,10)i;
+EXPLAIN SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+EXPLAIN SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+EXPLAIN SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);
+SELECT btrim(hexpr_t1.c2::text)::character varying AS foo FROM hexpr_t1 LEFT JOIN hexpr_t2
+ON hexpr_t2.c3::text = btrim(hexpr_t1.c2::text);

@@ -76,6 +76,7 @@ typedef struct
 	indexed_tlist *subplan_itlist;
 	Index		newvarno;
 	int			rtoffset;
+	bool		flow_expr;
 } fix_upper_expr_context;
 
 typedef struct
@@ -124,6 +125,9 @@ static Var *search_indexed_tlist_for_var(Var *var,
 static Var *search_indexed_tlist_for_non_var(Node *node,
 								 indexed_tlist *itlist,
 								 Index newvarno);
+static Var *search_indexed_tlist_for_non_var_in_flow_expr(Node *node,
+														 indexed_tlist *itlist,
+														 Index newvarno);
 static Var *search_indexed_tlist_for_sortgroupref(Node *node,
 									  Index sortgroupref,
 									  indexed_tlist *itlist,
@@ -151,6 +155,11 @@ static Node *fix_upper_expr(PlannerInfo *root,
 			   indexed_tlist *subplan_itlist,
 			   Index newvarno,
 			   int rtoffset);
+static Node *fix_upper_flow_expr(PlannerInfo *root,
+								  Node *node,
+								  indexed_tlist *subplan_itlist,
+								  Index newvarno,
+								  int rtoffset);
 static Node *fix_upper_expr_mutator(Node *node,
 					   fix_upper_expr_context *context);
 static List *set_returning_clause_references(PlannerInfo *root,
@@ -589,7 +598,7 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
         indexed_tlist  *plan_itlist = build_tlist_index(plan->targetlist);
 
 		plan->flow->hashExprs =
-			(List *) fix_upper_expr(root,
+			(List *) fix_upper_flow_expr(root,
 									(Node *) plan->flow->hashExprs,
 									plan_itlist,
 									OUTER_VAR,
@@ -2087,6 +2096,30 @@ search_indexed_tlist_for_non_var(Node *node,
 }
 
 /*
+ * GPDB: same as search_indexed_tlist_for_non_var, except it ignores
+ * relabel for matching non vars in flow->hashExpr nodes.
+ */
+static Var *
+search_indexed_tlist_for_non_var_in_flow_expr(Node *node,
+												indexed_tlist *itlist, Index newvarno)
+{
+	TargetEntry *tle;
+
+	tle = tlist_member_ignore_relabel(node, itlist->tlist);
+	if (tle)
+	{
+		/* Found a matching subplan output expression */
+		Var		   *newvar;
+
+		newvar = makeVarFromTargetEntry(newvarno, tle);
+		newvar->varnoold = 0;	/* wasn't ever a plain Var */
+		newvar->varoattno = 0;
+		return newvar;
+	}
+	return NULL;				/* no match */
+}
+
+/*
  * search_indexed_tlist_for_sortgroupref --- find a sort/group expression
  *		(which is assumed not to be just a Var)
  *
@@ -2417,9 +2450,26 @@ fix_upper_expr(PlannerInfo *root,
 	context.subplan_itlist = subplan_itlist;
 	context.newvarno = newvarno;
 	context.rtoffset = rtoffset;
+	context.flow_expr = false;
 	return fix_upper_expr_mutator(node, &context);
 }
 
+static Node *
+fix_upper_flow_expr(PlannerInfo *root,
+					Node *node,
+					indexed_tlist *subplan_itlist,
+					Index newvarno,
+					int rtoffset)
+{
+	fix_upper_expr_context context;
+
+	context.root = root;
+	context.subplan_itlist = subplan_itlist;
+	context.newvarno = newvarno;
+	context.rtoffset = rtoffset;
+	context.flow_expr = true;
+	return fix_upper_expr_mutator(node, &context);
+}
 static Node *
 fix_upper_expr_mutator(Node *node, fix_upper_expr_context *context)
 {
@@ -2458,9 +2508,18 @@ fix_upper_expr_mutator(Node *node, fix_upper_expr_context *context)
 	/* Try matching more complex expressions too, if tlist has any */
 	if (context->subplan_itlist->has_non_vars && !IsA(node, GroupId))
 	{
-		newvar = search_indexed_tlist_for_non_var(node,
-												  context->subplan_itlist,
-												  context->newvarno);
+		if (context->flow_expr)
+		{
+			newvar = search_indexed_tlist_for_non_var_in_flow_expr(node,
+																  context->subplan_itlist,
+																  context->newvarno);
+		}
+		else
+		{
+			newvar = search_indexed_tlist_for_non_var(node,
+													  context->subplan_itlist,
+													  context->newvarno);
+		}
 		if (newvar)
 			return (Node *) newvar;
 	}

@@ -283,7 +283,11 @@ ERROR_EXIT () {
 						$ECHO "$RM -f $BACKOUT_FILE" >> $BACKOUT_FILE
 				fi
 		fi
-		exit $2
+		if [ $IGNORE_WARNINGS -eq 1 ]; then
+				exit 1
+		else
+				exit $2
+		fi
 	LOG_MSG "[INFO]:-End Function $FUNCNAME"
 }
 
@@ -595,11 +599,11 @@ GET_REPLY () {
 	$ECHO -n "> "
 	read REPLY
 	if [ -z $REPLY ]; then
-		LOG_MSG "[WARN]:-User abort requested, Script Exits!" 1
+		LOG_MSG "[FATAL]:-User abort requested, Script Exits!" 1
 		exit 1
 	fi
 	if [ $REPLY != Y ] && [ $REPLY != y ]; then
-		LOG_MSG "[WARN]:-User abort requested, Script Exits!" 1
+		LOG_MSG "[FATAL]:-User abort requested, Script Exits!" 1
 		exit 1
 	fi
 }

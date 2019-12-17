@@ -193,7 +193,7 @@ main(int argc, char **argv)
 	 * because there is no need to have the schema load use new oids.
 	 */
 	prep_status("Setting next OID for new cluster");
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "\"%s/pg_resetxlog\" --binary-upgrade -o %u \"%s\"",
 			  new_cluster.bindir, old_cluster.controldata.chkpnt_nxtoid,
 			  new_cluster.pgdata);
@@ -204,7 +204,7 @@ main(int argc, char **argv)
 		reset_system_identifier();
 
 	prep_status("Sync data directory to disk");
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "\"%s/initdb\" --sync-only \"%s\"", new_cluster.bindir,
 			  new_cluster.pgdata);
 	check_ok();
@@ -462,7 +462,7 @@ prepare_new_cluster(void)
 	if (user_opts.segment_mode == DISPATCHER)
 	{
 		prep_status("Analyzing all rows in the new cluster");
-		exec_prog(UTILITY_LOG_FILE, NULL, true,
+		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 				  "PGOPTIONS='-c gp_session_role=utility' \"%s/vacuumdb\" %s --all --analyze %s",
 				  new_cluster.bindir, cluster_conn_opts(&new_cluster),
 				  log_opts.verbose ? "--verbose" : "");
@@ -476,7 +476,7 @@ prepare_new_cluster(void)
 	 * counter later.
 	 */
 	prep_status("Freezing all rows on the new cluster");
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "PGOPTIONS='-c gp_session_role=utility' "
 			  "\"%s/vacuumdb\" %s --all --freeze %s",
 			  new_cluster.bindir, cluster_conn_opts(&new_cluster),
@@ -514,7 +514,7 @@ prepare_new_databases(void)
 	 * support functions in template1 but pg_dumpall creates database using
 	 * the template0 template.
 	 */
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "PGOPTIONS='-c gp_session_role=utility' "
 			  "\"%s/psql\" " EXEC_PSQL_ARGS " %s -f \"%s\"",
 			  new_cluster.bindir, cluster_conn_opts(&new_cluster),
@@ -775,7 +775,7 @@ copy_subdir_files(char *subdir)
 
 	prep_status("Copying old %s to new server", subdir);
 
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 #ifndef WIN32
 			  "cp -Rf \"%s\" \"%s\"",
 #else
@@ -795,11 +795,11 @@ copy_clog_xlog_xid(void)
 
 	/* set the next transaction id and epoch of the new cluster */
 	prep_status("Setting next transaction ID and epoch for new cluster");
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "\"%s/pg_resetxlog\" --binary-upgrade -f -x %u \"%s\"",
 			  new_cluster.bindir, old_cluster.controldata.chkpnt_nxtxid,
 			  new_cluster.pgdata);
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "\"%s/pg_resetxlog\" --binary-upgrade -f -e %u \"%s\"",
 			  new_cluster.bindir, old_cluster.controldata.chkpnt_nxtepoch,
 			  new_cluster.pgdata);
@@ -823,7 +823,7 @@ copy_clog_xlog_xid(void)
 		 * we preserve all files and contents, so we must preserve both "next"
 		 * counters here and the oldest multi present on system.
 		 */
-		exec_prog(UTILITY_LOG_FILE, NULL, true,
+		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 				  "\"%s/pg_resetxlog\" --binary-upgrade -O %u -m %u,%u \"%s\"",
 				  new_cluster.bindir,
 				  old_cluster.controldata.chkpnt_nxtmxoff,
@@ -851,7 +851,7 @@ copy_clog_xlog_xid(void)
 		 * might end up wrapped around (i.e. 0) if the old cluster had
 		 * next=MaxMultiXactId, but multixact.c can cope with that just fine.
 		 */
-		exec_prog(UTILITY_LOG_FILE, NULL, true,
+		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 				  "\"%s/pg_resetxlog\" --binary-upgrade -m %u,%u \"%s\"",
 				  new_cluster.bindir,
 				  old_cluster.controldata.chkpnt_nxtmulti + 1,
@@ -862,7 +862,7 @@ copy_clog_xlog_xid(void)
 
 	/* now reset the wal archives in the new cluster */
 	prep_status("Resetting WAL archives");
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  /* use timeline 1 to match controldata and no WAL history file */
 			  "\"%s/pg_resetxlog\" --binary-upgrade -l 00000001%s \"%s\"", new_cluster.bindir,
 			  old_cluster.controldata.nextxlogfile + 8,
@@ -1047,7 +1047,7 @@ reset_system_identifier(void)
 	sysidentifier |= ((uint64) tv.tv_usec) << 12;
 	sysidentifier |= getpid() & 0xFFF;
 
-	exec_prog(UTILITY_LOG_FILE, NULL, true,
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
 			  "\"%s/pg_resetxlog\" --binary-upgrade --system-identifier " UINT64_FORMAT " \"%s\"",
 			  new_cluster.bindir, sysidentifier, new_cluster.pgdata);
 

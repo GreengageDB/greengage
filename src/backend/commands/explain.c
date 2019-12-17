@@ -17,6 +17,7 @@
 
 #include "access/xact.h"
 #include "catalog/pg_type.h"
+#include "cdb/cdbpartition.h"
 #include "commands/createas.h"
 #include "commands/defrem.h"
 #include "commands/prepare.h"
@@ -1631,11 +1632,30 @@ ExplainNode(PlanState *planstate, List *ancestors,
 			}
 			break;
 		case T_BitmapIndexScan:
-		case T_DynamicBitmapIndexScan:
 			{
 				BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *) plan;
 				const char *indexname =
 				explain_get_index_name(bitmapindexscan->indexid);
+
+				if (es->format == EXPLAIN_FORMAT_TEXT)
+					appendStringInfo(es->str, " on %s", indexname);
+				else
+					ExplainPropertyText("Index Name", indexname, es);
+			}
+			break;
+		case T_DynamicBitmapIndexScan:
+			{
+				BitmapIndexScan *bitmapindexscan = (BitmapIndexScan *) plan;
+				Oid indexoid = bitmapindexscan->indexid;
+				Oid parentOid = rel_partition_get_root(indexoid);
+				while (parentOid != InvalidOid)
+				{
+					indexoid = parentOid;
+					parentOid = rel_partition_get_root(indexoid);
+				}
+
+				const char *indexname =
+				explain_get_index_name(indexoid);
 
 				if (es->format == EXPLAIN_FORMAT_TEXT)
 					appendStringInfo(es->str, " on %s", indexname);

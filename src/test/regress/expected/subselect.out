@@ -635,7 +635,10 @@ where a.thousand = b.thousand
   and exists ( select 1 from tenk1 c where b.hundred = c.hundred
                    and not exists ( select 1 from tenk1 d
                                     where a.thousand = d.thousand ) );
-ERROR:  correlated subquery with skip-level correlations is not supported
+ thousand 
+----------
+(0 rows)
+
 --
 -- Check that nested sub-selects are not pulled up if they contain volatiles
 --
