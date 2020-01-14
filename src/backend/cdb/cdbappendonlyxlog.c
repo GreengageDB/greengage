@@ -19,12 +19,13 @@
 #include <fcntl.h>
 #include <sys/file.h>
 
+#include "access/aomd.h"
+#include "access/xlogutils.h"
+#include "catalog/catalog.h"
 #include "cdb/cdbappendonlyxlog.h"
 #include "storage/fd.h"
-#include "catalog/catalog.h"
 #include "utils/faultinjector.h"
 #include "utils/faultinjector_lists.h"
-#include "access/xlogutils.h"
 
 /*
  * Insert an AO XLOG/AOCO record.
@@ -60,6 +61,8 @@ xlog_ao_insert(RelFileNode relFileNode, int32 segmentFileNum,
 
 	SIMPLE_FAULT_INJECTOR("xlog_ao_insert");
 	XLogInsert(RM_APPEND_ONLY_ID, XLOG_APPENDONLY_INSERT, rdata);
+
+	wait_to_avoid_large_repl_lag();
 }
 
 static void
@@ -117,13 +120,9 @@ ao_insert_replay(XLogRecord *record)
 						path)));
 	}
 
-	if (FileSync(file) != 0)
-	{
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("failed to flush file \"%s\": %m",
-						path)));
-	}
+	register_dirty_segment_ao(xlrec->target.node,
+							  xlrec->target.segment_filenum,
+							  file);
 
 	FileClose(file);
 }

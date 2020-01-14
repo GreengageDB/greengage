@@ -7,9 +7,6 @@ test: select_dropped_table
 # test update hash col under utility mode
 test: update_hash_col_utilitymode
 
-# test delete/update when there are tuples with wrong distribution on segments.
-test: modifytable_with_bad_distribution
-
 # Tests for crash recovery
 test: uao_crash_compaction_column
 test: uao_crash_compaction_row
@@ -19,6 +16,10 @@ test: crash_recovery_dtm
 test: unlogged_heap_tables
 test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios
+
+# Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
+# so must be scheduled after that one.
+test: packcore
 
 # Tests on global deadlock detector
 test: select_for_update
@@ -38,6 +39,8 @@ test: gdd/dml_locks_only_targeted_table_in_query
 test: gdd/local-deadlock-03
 # gdd end
 test: gdd/end
+
+test: modify_table_data_corrupt
 
 # The following test injects a fault at a generic location
 # (StartTransaction).  The fault can be easily triggered by a
@@ -70,6 +73,9 @@ test: ao_upgrade
 
 # below test utilizes fault injectors so it needs to be in a group by itself
 test: external_table
+
+# This test validates that for AO we delay fsync to checkpointer on mirror.
+test: fsync_ao
 
 # Tests on Append-Optimized tables (row-oriented).
 test: concurrent_index_creation_should_not_deadlock

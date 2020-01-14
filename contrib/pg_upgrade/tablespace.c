@@ -10,9 +10,10 @@
 #include "postgres_fe.h"
 
 #include "pg_upgrade.h"
+#include "greenplum/old_tablespace_file_gp.h"
+#include "greenplum/pg_upgrade_greenplum.h"
 
 #include <sys/types.h>
-#include "old_tablespace_file_contents.h"
 
 static void get_tablespace_paths(void);
 static void set_tablespace_directory_suffix(ClusterInfo *cluster);
@@ -29,13 +30,6 @@ init_tablespaces(void)
 	strcmp(old_cluster.tablespace_suffix, new_cluster.tablespace_suffix) == 0)
 		pg_fatal("Cannot upgrade to/from the same system catalog version when\n"
 				 "using tablespaces.\n");
-}
-
-static void
-populate_os_info_with_file_contents(OldTablespaceFileContents *contents)
-{
-	os_info.num_old_tablespaces = OldTablespaceFileContents_TotalNumberOfTablespaces(contents);
-	os_info.old_tablespaces = OldTablespaceFileContents_GetArrayOfTablespacePaths(contents);
 }
 
 static void
@@ -81,9 +75,8 @@ verify_old_tablespace_paths(void)
 static void
 get_tablespace_paths(void)
 {
-	if (old_cluster.old_tablespace_file_contents &&
-		!is_old_tablespaces_file_empty(old_cluster.old_tablespace_file_contents)) {
-		populate_os_info_with_file_contents(old_cluster.old_tablespace_file_contents);
+	if (old_tablespace_file_contents_exists()) {
+		populate_os_info_with_file_contents();
 		verify_old_tablespace_paths();
 		return;
 	}

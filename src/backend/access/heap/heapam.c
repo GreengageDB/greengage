@@ -2366,7 +2366,9 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	Buffer		buffer;
 	Buffer		vmbuffer = InvalidBuffer;
 	bool		all_visible_cleared = false;
+	bool		needwal;
 
+	needwal = !(options & HEAP_INSERT_SKIP_WAL) && RelationNeedsWAL(relation);
 	gp_expand_protect_catalog_changes(relation);
 
 #ifdef FAULT_INJECTOR
@@ -2436,7 +2438,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	MarkBufferDirty(buffer);
 
 	/* XLOG stuff */
-	if (!(options & HEAP_INSERT_SKIP_WAL) && RelationNeedsWAL(relation))
+	if (needwal)
 	{
 		xl_heap_insert xlrec;
 		xl_heap_header xlhdr;
@@ -2562,6 +2564,9 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 		tup->t_self = heaptup->t_self;
 		heap_freetuple(heaptup);
 	}
+
+	if (needwal)
+		wait_to_avoid_large_repl_lag();
 
 	return HeapTupleGetOid(tup);
 }
@@ -2940,6 +2945,9 @@ heap_multi_insert(Relation relation, HeapTuple *tuples, int ntuples,
 		tuples[i]->t_self = heaptuples[i]->t_self;
 
 	pgstat_count_heap_insert(relation, ntuples);
+
+	if (needwal)
+		wait_to_avoid_large_repl_lag();
 }
 
 /*
