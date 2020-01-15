@@ -1235,6 +1235,9 @@ lazy_scan_heap(Relation onerel, LVRelStats *vacrelstats,
 		 */
 		if (vacrelstats->num_dead_tuples == prev_dead_count)
 			RecordPageWithFreeSpace(onerel, blkno, freespace);
+
+		if (RelationNeedsWAL(onerel))
+			wait_to_avoid_large_repl_lag();
 	}
 
 	pfree(frozen);

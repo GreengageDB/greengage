@@ -11,11 +11,13 @@ OBJS = check.o controldata.o dump.o exec.o file.o function.o info.o \
        tablespace.o util.o version.o version_old_8_3.o $(WIN32RES)
 
 # Source files specific to Greenplum
-OBJS += aotable.o gpdb4_heap_convert.o version_gp.o \
-        check_gp.o file_gp.o reporting.o aomd_filehandler.o \
-        old_tablespace_file_contents.o old_tablespace_file_parser.o \
-        tablespace_gp.o old_tablespace_file_parser_observer.o \
-        info_gp.o
+OBJS += greenplum/aotable.o greenplum/gpdb4_heap_convert.o greenplum/version_gp.o \
+		greenplum/check_gp.o greenplum/file_gp.o greenplum/reporting.o \
+		greenplum/aomd_filehandler.o greenplum/option_gp.o \
+		greenplum/controldata_gp.o \
+		greenplum/old_tablespace_file_contents.o greenplum/old_tablespace_file_parser.o \
+		greenplum/tablespace_gp.o greenplum/info_gp.o greenplum/old_tablespace_file_gp.o \
+		greenplum/server_gp.o greenplum/greenplum_cluster_info.o
 
 PG_CPPFLAGS  = -DFRONTEND -DDLSUFFIX=\"$(DLSUFFIX)\" -I$(srcdir) -I$(libpq_srcdir)
 PG_LIBS = $(libpq_pgport)
@@ -37,8 +39,8 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
-aomd_filehandler.c: % : $(top_srcdir)/src/backend/access/appendonly/%
-	rm -f $@ && $(LN_S) $< .
+greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
+	rm -f $@ && $(LN_S) ../$< $@
 
 check: test_gpdb.sh all
 	bash $< -C -r -s -o $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)

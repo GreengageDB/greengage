@@ -380,8 +380,8 @@ extern bool IsStandbyMode(void);
 extern DBState GetCurrentDBState(void);
 extern XLogRecPtr last_xlog_replay_location(void);
 extern void wait_for_mirror(void);
+extern void wait_to_avoid_large_repl_lag(void);
 extern bool IsRoleMirror(void);
 extern void SignalPromote(void);
-
-
+extern void initialize_wal_bytes_written(void);
 #endif   /* XLOG_H */

@@ -3,6 +3,10 @@
 #include "cmockery_gp.h"
 
 #include "pg_upgrade.h"
+
+#include "greenplum/old_tablespace_file_gp.h"
+#include "greenplum/pg_upgrade_greenplum.h"
+
 #include "pg_upgrade_dummies.c"
 
 /* 
@@ -15,11 +19,29 @@ ClusterInfo *test_cluster;
 OSInfo      os_info;
 OSInfo      *test_os_info;
 
-bool _is_old_tablespaces_file_empty;
-bool _populate_gpdb6_cluster_tablespace_suffix_was_called;
+static bool _stubbed_old_tablespace_file_contents_is_empty = true;
 
-char **_stubbed_tablespace_paths = NULL;
-int _stubbed_number_of_tablespaces = 0;
+static bool _populate_os_info_with_file_contents_was_called;
+
+void
+populate_os_info_with_file_contents(void)
+{
+	_populate_os_info_with_file_contents_was_called = true;
+}
+
+//OldTablespaceFileContents *
+//get_old_tablespace_file_contents(void)
+//{
+//	return _stubbed_old_tablespace_file_contents;
+//}
+
+bool
+old_tablespace_file_contents_exists(void)
+{
+	return _stubbed_old_tablespace_file_contents_is_empty != true;
+}
+
+bool _populate_gpdb6_cluster_tablespace_suffix_was_called;
 
 static void stub_number_of_tablespaces(int stub_value)
 {
@@ -27,66 +49,17 @@ static void stub_number_of_tablespaces(int stub_value)
 	 * given the old cluster some non-null
 	 * contents to signify that it is populated
 	 */
-	old_cluster.old_tablespace_file_contents = palloc0(sizeof(void *));
-
-	_stubbed_number_of_tablespaces = stub_value;
-}
-
-static void stub_tablespace_paths(char **paths)
-{
-	_stubbed_tablespace_paths = paths;
-}
-
-static void
-assert_contents_exist(OldTablespaceFileContents *contents)
-{
-	if (contents == NULL)
-		fail_msg("unexpected null old tablespace file contents.");
-}
-
-char **
-OldTablespaceFileContents_GetArrayOfTablespacePaths(OldTablespaceFileContents *contents)
-{
-	assert_contents_exist(contents);
-
-	return _stubbed_tablespace_paths;
-}
-
-int
-OldTablespaceFileContents_TotalNumberOfTablespaces(OldTablespaceFileContents *contents)
-{
-	assert_contents_exist(contents);
-
-	return _stubbed_number_of_tablespaces;
+	_stubbed_old_tablespace_file_contents_is_empty = false;
 }
 
 /*
  * Stub functions:
  */
-
-/*
- * implements is_old_tablespaces_file_empty to return stubbed value
- */
-bool
-is_old_tablespaces_file_empty(OldTablespaceFileContents *contents)
-{
-	return _is_old_tablespaces_file_empty;
-}
-
 void
 populate_gpdb6_cluster_tablespace_suffix(ClusterInfo *cluster)
 {
 	_populate_gpdb6_cluster_tablespace_suffix_was_called = true;
 	cluster->tablespace_suffix = "some-tablespace-suffix";
-}
-
-/* 
- * allows test to stub value for is_old_tablespaces_file_empty
- */
-static void 
-stub_is_old_tablespaces_file_empty(bool value)
-{
-	_is_old_tablespaces_file_empty = value;
 }
 
 /*
@@ -100,9 +73,8 @@ setup(void **state)
 	old_cluster  = *test_cluster;
 	os_info = *test_os_info;
 
-	old_cluster.old_tablespace_file_contents = NULL;
-	stub_is_old_tablespaces_file_empty(true);
-
+	_stubbed_old_tablespace_file_contents_is_empty = true;
+	_populate_os_info_with_file_contents_was_called = false;
 	_populate_gpdb6_cluster_tablespace_suffix_was_called = false;
 }
 
@@ -166,11 +138,8 @@ static void
 test_when_file_is_empty_populate_is_not_called(
 	void **state)
 {
-	old_cluster.gp_dbid = 999;
 	old_cluster.major_version = 80400;
 	new_cluster.major_version = 90400;
-
-	stub_is_old_tablespaces_file_empty(true);
 
 	init_tablespaces();
 
@@ -178,28 +147,13 @@ test_when_file_is_empty_populate_is_not_called(
 }
 
 static void
-test_it_finds_old_tablespaces_when_provided_as_a_file(void **state)
+test_it_populates_old_tablespace_paths_from_greenplum_when_greenplum_has_file(void **state)
 {
-	old_cluster.gp_dbid = 999;
-	old_cluster.major_version = 80400;
-	new_cluster.major_version = 90400;
-
-	stub_is_old_tablespaces_file_empty(false);
-
-	stub_number_of_tablespaces(2);
-
-	char *tablespace_paths[] = {
-		"/some/directory/for/999",
-		"/some/other/directory/for/999"
-	};
-
-	stub_tablespace_paths(tablespace_paths);
+	stub_number_of_tablespaces(1);
 
 	init_tablespaces();
 
-	assert_int_equal(os_info.num_old_tablespaces, 2);
-	assert_string_equal("/some/directory/for/999", os_info.old_tablespaces[0]);
-	assert_string_equal("/some/other/directory/for/999", os_info.old_tablespaces[1]);
+	assert_true(_populate_os_info_with_file_contents_was_called);
 }
 
 int
@@ -209,7 +163,7 @@ main(int argc, char *argv[])
 
 	const UnitTest tests[] = {
 		unit_test_setup_teardown(
-			test_it_finds_old_tablespaces_when_provided_as_a_file,
+			test_it_populates_old_tablespace_paths_from_greenplum_when_greenplum_has_file,
 			setup,
 			teardown),
 		unit_test_setup_teardown(

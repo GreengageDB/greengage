@@ -1,3 +1,5 @@
+#ifndef PG_UPGRADE_H
+#define PG_UPGRADE_H
 /*
  *	pg_upgrade.h
  *
@@ -15,7 +17,7 @@
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"
 
-#include "old_tablespace_file_contents.h"
+#include "greenplum/greenplum_cluster_info.h"
 
 /* Use port in the private/dynamic port number range */
 #define DEF_PGUPORT			50432
@@ -27,8 +29,6 @@
 #define LINE_ALLOC			4096
 #define QUERY_ALLOC			8192
 
-#define NUMERIC_ALLOC 100
-
 #define MIGRATOR_API_VERSION	1
 
 #define MESSAGE_WIDTH		60
@@ -38,15 +38,6 @@
 /* contains both global db information and CREATE DATABASE commands */
 #define GLOBALS_DUMP_FILE	"pg_upgrade_dump_globals.sql"
 #define DB_DUMP_FILE_MASK	"pg_upgrade_dump_%u.custom"
-
-#define GLOBALS_OIDS_DUMP_FILE	"pg_upgrade_dump_globals_oids.sql"
-#define DB_OIDS_DUMP_FILE_MASK	"pg_upgrade_dump_%u_oids.sql"
-#define OLD_TABLESPACES_FILE    "old_tablespaces.txt"
-
-/* needs to be kept in sync with pg_class.h */
-#define RELSTORAGE_EXTERNAL	'x'
-#define RELSTORAGE_AOROWS	'a'
-#define RELSTORAGE_AOCOLS	'c'
 
 #define DB_DUMP_LOG_FILE_MASK	"pg_upgrade_dump_%u.log"
 #define SERVER_LOG_FILE		"pg_upgrade_server.log"
@@ -287,8 +278,6 @@ typedef struct
 	char		db_tablespace[MAXPGPATH];		/* database default tablespace
 												 * path */
 	RelInfoArr	rel_arr;		/* array of all user relinfos */
-
-	char	   *reserved_oids;	/* as a string */
 } DbInfo;
 
 typedef struct
@@ -339,22 +328,6 @@ typedef enum
 } transferMode;
 
 /*
- * Enumeration to denote checksum modes
- */
-typedef enum
-{
-	CHECKSUM_NONE = 0,
-	CHECKSUM_ADD,
-	CHECKSUM_REMOVE
-} checksumMode;
-
-typedef enum
-{
-	DISPATCHER = 0,
-	SEGMENT
-} segmentMode;
-
-/*
  * Enumeration to denote pg_log modes
  */
 typedef enum
@@ -366,20 +339,6 @@ typedef enum
 	PG_FATAL
 } eLogType;
 
-/*
- * Enumeration for operations in the progress report
- */
-typedef enum
-{
-	CHECK,
-	SCHEMA_DUMP,
-	SCHEMA_RESTORE,
-	FILE_MAP,
-	FILE_COPY,
-	FIXUP,
-	ABORT,
-	DONE
-} progress_type;
 
 typedef long pgpid_t;
 
@@ -409,12 +368,8 @@ typedef struct
 	Oid			role_count;		/* number of roles defined in the cluster */
 	const char *tablespace_suffix;		/* directory specification */
 
-	char	   *global_reserved_oids; /* OID preassign calls for shared objects */
-	int gp_dbid; /* greenplum database id of the cluster */
-
-	OldTablespaceFileContents *old_tablespace_file_contents;
+	GreenplumClusterInfo *greenplum_cluster_info;
 } ClusterInfo;
-
 
 /*
  *	LogOpts
@@ -437,12 +392,6 @@ typedef struct
 	transferMode transfer_mode; /* copy files or link them? */
 	int			jobs;			/* number of processes/threads to use */
 	char	   *socketdir;		/* directory to use for Unix sockets */
-
-	bool		progress;
-	segmentMode	segment_mode;
-	checksumMode checksum_mode;
-	char *old_tablespace_file_path;
-
 } UserOpts;
 
 
@@ -471,7 +420,6 @@ extern UserOpts user_opts;
 extern ClusterInfo old_cluster,
 			new_cluster;
 extern OSInfo os_info;
-
 
 /* check.c */
 
@@ -589,13 +537,6 @@ void transfer_all_new_dbs(DbInfoArr *old_db_arr,
 
 void		init_tablespaces(void);
 
-/* tablespace_gp.c */
-void populate_old_cluster_with_old_tablespaces(ClusterInfo *oldCluster, const char *file_path);
-void generate_old_tablespaces_file(ClusterInfo *oldCluster);
-void populate_gpdb6_cluster_tablespace_suffix(ClusterInfo *cluster);
-bool is_gpdb_version_with_filespaces(ClusterInfo *cluster);
-
-
 /* server.c */
 
 PGconn	   *connectToServer(ClusterInfo *cluster, const char *db_name);
@@ -677,44 +618,4 @@ bool		reap_child(bool wait_for_child);
 #endif
 #define Assert(condition) ((void) (true || (condition)))
 
-/* aotable.c */
-
-void		restore_aosegment_tables(void);
-
-/* gpdb4_heap_convert.c */
-
-const char *convert_gpdb4_heap_file(const char *src, const char *dst,
-									bool has_numerics, AttInfo *atts, int natts);
-void		finish_gpdb4_page_converter(void);
-
-/* file_gp.c */
-
-void copy_distributedlog(void);
-const char * rewriteHeapPageChecksum( const char *fromfile, const char *tofile,
-					 const char *schemaName, const char *relName);
-
-/* version_gp.c */
-
-void old_GPDB4_check_for_money_data_type_usage(void);
-void old_GPDB4_check_no_free_aoseg(void);
-void check_hash_partition_usage(void);
-void new_gpdb5_0_invalidate_indexes(void);
-void new_gpdb_invalidate_bitmap_indexes(void);
-Oid *get_numeric_types(PGconn *conn);
-void old_GPDB5_check_for_unsupported_distribution_key_data_types(void);
-
-/* check_gp.c */
-
-void check_greenplum(void);
-
-/* reporting.c */
-
-void report_progress(ClusterInfo *cluster, progress_type op, char *fmt,...)
-__attribute__((format(PG_PRINTF_ATTRIBUTE, 3, 4)));
-void close_progress(void);
-
-static inline bool
-is_gpdb6(ClusterInfo *cluster)
-{
-	return GET_MAJOR_VERSION(cluster->major_version) == 904;
-}
+#endif /* PG_UPGRADE_H */

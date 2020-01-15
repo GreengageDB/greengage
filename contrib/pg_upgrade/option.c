@@ -13,6 +13,7 @@
 #include "getopt_long.h"
 
 #include "pg_upgrade.h"
+#include "greenplum/pg_upgrade_greenplum.h"
 
 #include <time.h>
 #include <sys/types.h>
@@ -26,7 +27,6 @@ static void check_required_directory(char **dirpath,
 						 const char *envVarName, bool useCwd,
 						 const char *cmdLineOption, const char *description);
 #define FIX_DEFAULT_READ_ONLY "-c default_transaction_read_only=false"
-#define GP_DBID_NOT_SET -1
 
 UserOpts	user_opts;
 
@@ -57,13 +57,7 @@ parseCommandLine(int argc, char *argv[])
 		{"verbose", no_argument, NULL, 'v'},
 
 		/* Greenplum specific parameters */
-		{"mode", required_argument, NULL, 1},
-		{"progress", no_argument, NULL, 2},
-		{"add-checksum", no_argument, NULL, 3},
-		{"remove-checksum", no_argument, NULL, 4},
-		{"old-gp-dbid", required_argument, NULL, 5},
-		{"new-gp-dbid", required_argument, NULL, 6},
-		{"old-tablespaces-file", required_argument, NULL, 7},
+		GREENPLUM_OPTIONS
 
 		{NULL, 0, NULL, 0}
 	};
@@ -75,11 +69,6 @@ parseCommandLine(int argc, char *argv[])
 	time_t		run_time = time(NULL);
 
 	user_opts.transfer_mode = TRANSFER_MODE_COPY;
-	user_opts.old_tablespace_file_path = NULL;
-
-	old_cluster.gp_dbid = GP_DBID_NOT_SET;
-	new_cluster.gp_dbid = GP_DBID_NOT_SET;
-	old_cluster.old_tablespace_file_contents = NULL;
 
 	os_info.progname = get_progname(argv[0]);
 
@@ -89,7 +78,7 @@ parseCommandLine(int argc, char *argv[])
 
 	os_user_effective_id = get_user_info(&os_info.user);
 
-	user_opts.segment_mode = SEGMENT;
+	initialize_greenplum_user_options();
 
 	/* we override just the database user name;  we got the OS id above */
 	if (getenv("PGUSER"))
@@ -207,50 +196,10 @@ parseCommandLine(int argc, char *argv[])
 				log_opts.verbose = true;
 				break;
 
-			/*
-			 * Greenplum specific parameters
-			 */
-
-			case 1:		/* --mode={dispatcher|segment} */
-				if (pg_strcasecmp("dispatcher", optarg) == 0)
-					user_opts.segment_mode = DISPATCHER;
-				else if (pg_strcasecmp("segment", optarg) == 0)
-					user_opts.segment_mode = SEGMENT;
-				else
-				{
-					pg_log(PG_FATAL, "invalid segment configuration\n");
-					exit(1);
-				}
-
-				break;
-
-			case 2:		/* --progress */
-				user_opts.progress = true;
-				break;
-
-			case 3:		/* --add-checksum */
-				user_opts.checksum_mode = CHECKSUM_ADD;
-				break;
-
-			case 4:		/* --remove-checksum */
-				user_opts.checksum_mode = CHECKSUM_REMOVE;
-				break;
-				
-			case 5: /* --old-gp-dbid */
-				old_cluster.gp_dbid = atoi(optarg);
-				break;
-
-			case 6: /* --new-gp-dbid */
-				new_cluster.gp_dbid = atoi(optarg);
-				break;
-
-			case 7: /* --old-tablespaces-file */
-				user_opts.old_tablespace_file_path = pg_strdup(optarg);
-				break;
-
 			default:
-				pg_fatal("Try \"%s --help\" for more information.\n",
-						 os_info.progname);
+				if (!process_greenplum_option(option, pg_strdup(optarg)))
+					pg_fatal("Try \"%s --help\" for more information.\n",
+							 os_info.progname);
 				break;
 		}
 	}
@@ -296,20 +245,10 @@ parseCommandLine(int argc, char *argv[])
 
 	/* Ensure we are only adding checksums in copy mode */
 	if (user_opts.transfer_mode != TRANSFER_MODE_COPY &&
-		user_opts.checksum_mode != CHECKSUM_NONE)
+		!is_checksum_mode(CHECKSUM_NONE))
 		pg_log(PG_FATAL, "Adding and removing checksums only supported in copy mode.\n");
 
-	if (old_cluster.gp_dbid == GP_DBID_NOT_SET)
-		pg_fatal("--old-gp-dbid must be set\n");
-
-	if (new_cluster.gp_dbid == GP_DBID_NOT_SET)
-		pg_fatal("--new-gp-dbid must be set\n");
-
-	if (user_opts.old_tablespace_file_path) {
-		populate_old_cluster_with_old_tablespaces(
-			&old_cluster,
-			user_opts.old_tablespace_file_path);
-	}
+	validate_greenplum_options();
 }
 
 
@@ -337,13 +276,7 @@ Options:\n\
   -U, --username=NAME           cluster superuser (default \"%s\")\n\
   -v, --verbose                 enable verbose internal logging\n\
   -V, --version                 display version information, then exit\n\
-      --mode=TYPE               designate node type to upgrade, \"segment\" or \"dispatcher\" (default \"segment\")\n\
-      --progress                enable progress reporting\n\
-      --remove-checksum         remove data checksums when creating new cluster\n\
-      --add-checksum            add data checksumming to the new cluster\n\
-      --old-gp-dbid             greenplum database id of the old segment\n\
-      --new-gp-dbid             greenplum database id of the new segment\n\
-      --old-tablespaces-file    file containing the tablespaces from an old gpdb five cluster\n\
+%s\
   -?, --help                    show this help, then exit\n\
 \n\
 Before running pg_upgrade you must:\n\
@@ -359,7 +292,7 @@ When you run pg_upgrade, you must provide the following information:\n\
 \n\
 For example:\n\
   pg_upgrade -d oldCluster/data -D newCluster/data -b oldCluster/bin -B newCluster/bin\n\
-or\n"), old_cluster.port, new_cluster.port, os_info.user);
+or\n"), old_cluster.port, new_cluster.port, os_info.user, GREENPLUM_USAGE);
 #ifndef WIN32
 	printf(_("\
   $ export PGDATAOLD=oldCluster/data\n\

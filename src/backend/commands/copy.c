@@ -1719,6 +1719,8 @@ BeginCopy(bool is_from,
 	CopyState	cstate;
 	int			num_phys_attrs;
 	MemoryContext oldcontext;
+	bool is_copy = true;
+	int num_columns = 0;
 
 	/* Allocate workspace and zero all fields */
 	cstate = (CopyStateData *) palloc0(sizeof(CopyStateData));
@@ -1737,10 +1739,20 @@ BeginCopy(bool is_from,
 
 	oldcontext = MemoryContextSwitchTo(cstate->copycontext);
 
+	/*
+	 * Since external scan calls BeginCopyFrom to init CopyStateData.
+	 * Current relation may be an external relation.
+	 */
+	if (rel != NULL && RelationIsExternal(rel))
+	{
+		is_copy = false;
+		num_columns = rel->rd_att->natts;
+	}
+
 	/* Extract options from the statement node tree */
 	ProcessCopyOptions(cstate, is_from, options,
-					   0, /* pass correct value when COPY supports no delim */
-					   true);
+					   num_columns, /* pass correct value when COPY supports no delim */
+					   is_copy);
 
 
 	/* Process the source/target relation or query */
@@ -3844,8 +3856,12 @@ CopyFrom(CopyState cstate)
 				int relnatts;
 
 				if (!resultRelInfo->ri_resultSlot)
+				{
+					MemoryContextSwitchTo(estate->es_query_cxt);
 					resultRelInfo->ri_resultSlot =
 						MakeSingleTupleTableSlot(resultRelInfo->ri_RelationDesc->rd_att);
+					MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
+				}
 
 				relnatts = resultRelInfo->ri_RelationDesc->rd_att->natts;
 				slot = resultRelInfo->ri_resultSlot;
@@ -4008,7 +4024,6 @@ CopyFrom(CopyState cstate)
 				HeapTuple	tuple;
 				if (resultRelInfo->nBufferedTuples == 0)
 					firstBufferedLineNo = cstate->cur_lineno;
-				tuple = ExecFetchSlotHeapTuple(slot);
 
 				resultRelInfoList = list_append_unique_ptr(resultRelInfoList, resultRelInfo);
 				if (resultRelInfo->bufferedTuples == NULL)
@@ -4020,7 +4035,8 @@ CopyFrom(CopyState cstate)
 
 				MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 				/* Add this tuple to the tuple buffer */
-				resultRelInfo->bufferedTuples[resultRelInfo->nBufferedTuples++] = heap_copytuple(tuple);
+				tuple = ExecCopySlotHeapTuple(slot);
+				resultRelInfo->bufferedTuples[resultRelInfo->nBufferedTuples++] = tuple;
 				resultRelInfo->bufferedTuplesSize += tuple->t_len;
 				nTotalBufferedTuples++;
 				totalBufferedTuplesSize += tuple->t_len;
@@ -6055,18 +6071,24 @@ CopyReadLineText(CopyState cstate)
 					if (c2 == '\n')
 					{
 						if (!cstate->csv_mode)
+						{
+							cstate->raw_buf_index = raw_buf_ptr;
 							ereport(ERROR,
 									(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
 									 errmsg("end-of-copy marker does not match previous newline style")));
+						}
 						else
 							NO_END_OF_COPY_GOTO;
 					}
 					else if (c2 != '\r')
 					{
 						if (!cstate->csv_mode)
+						{
+							cstate->raw_buf_index = raw_buf_ptr;
 							ereport(ERROR,
 									(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
 									 errmsg("end-of-copy marker corrupt")));
+						}
 						else
 							NO_END_OF_COPY_GOTO;
 					}
@@ -6080,9 +6102,12 @@ CopyReadLineText(CopyState cstate)
 				if (c2 != '\r' && c2 != '\n')
 				{
 					if (!cstate->csv_mode)
+					{
+						cstate->raw_buf_index = raw_buf_ptr;
 						ereport(ERROR,
 								(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
 								 errmsg("end-of-copy marker corrupt")));
+					}
 					else
 						NO_END_OF_COPY_GOTO;
 				}
@@ -6091,6 +6116,7 @@ CopyReadLineText(CopyState cstate)
 					(cstate->eol_type == EOL_CRNL && c2 != '\n') ||
 					(cstate->eol_type == EOL_CR && c2 != '\r'))
 				{
+					cstate->raw_buf_index = raw_buf_ptr;
 					ereport(ERROR,
 							(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
 							 errmsg("end-of-copy marker does not match previous newline style")));

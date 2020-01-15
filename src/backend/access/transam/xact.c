@@ -1660,7 +1660,7 @@ RecordTransactionCommit(void)
 	if (markXidCommitted || isDtxPrepared)
 	{
 		Assert(recptr != 0);
-		SyncRepWaitForLSN(recptr);
+		SyncRepWaitForLSN(recptr, true);
 	}
 
 	/* Compute latestXid while we have the child XIDs handy */
@@ -2611,6 +2611,7 @@ StartTransaction(void)
 	if (ShouldAssignResGroupOnMaster())
 		AssignResGroupOnMaster();
 
+	initialize_wal_bytes_written();
 	ShowTransactionState("StartTransaction");
 
 	ereportif(Debug_print_full_dtm, LOG,
