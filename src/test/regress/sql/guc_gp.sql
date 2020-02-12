@@ -142,3 +142,48 @@ BEGIN TRANSACTION ISOLATION LEVEL serializable;
 	SELECT * FROM test_serializable;
 COMMIT;
 DROP TABLE test_serializable;
+--
+-- Test DISCARD TEMP.
+--
+-- There's a test like this in upstream 'guc' test, but this expanded version
+-- verifies that temp tables are dropped on segments, too.
+--
+CREATE TEMP TABLE reset_test ( data text ) ON COMMIT DELETE ROWS;
+DISCARD TEMP;
+-- Try to create a new temp table with same. Should work.
+CREATE TEMP TABLE reset_test ( data text ) ON COMMIT PRESERVE ROWS;
+
+-- Now test that the effects of DISCARD TEMP can be rolled back
+BEGIN;
+DISCARD TEMP;
+ROLLBACK;
+-- the table should still exist.
+INSERT INTO reset_test VALUES (1);
+
+-- Unlike DISCARD TEMP, DISCARD ALL cannot be run in a transaction.
+BEGIN;
+DISCARD ALL;
+COMMIT;
+-- the table should still exist.
+INSERT INTO reset_test VALUES (2);
+SELECT * FROM reset_test;
+
+-- Also DISCARD ALL does not have cluster wide effects. CREATE will fail as the
+-- table will not be dropped in the segments.
+DISCARD ALL;
+CREATE TEMP TABLE reset_test ( data text ) ON COMMIT PRESERVE ROWS;
+
+-- Test single query guc rollback
+set allow_segment_DML to on;
+
+set datestyle='german';
+select gp_inject_fault('set_variable_fault', 'error', dbid)
+from gp_segment_configuration where content=0 and role='p';
+set datestyle='sql, mdy';
+-- after guc set failed, before next query handle, qd will sync guc
+-- to qe. using `select 1` trigger guc reset.
+select 1;
+select current_setting('datestyle') from gp_dist_random('gp_id');
+
+select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
+set allow_segment_DML to off;

@@ -57,6 +57,10 @@ explain (costs off) select count(distinct dqa_t1.dt) from dqa_t1, dqa_t2 where d
 select count(distinct dqa_t1.dt) from dqa_t1, dqa_t2 where dqa_t1.c = dqa_t2.c group by dqa_t2.dt;
 explain (costs off) select count(distinct dqa_t1.dt) from dqa_t1, dqa_t2 where dqa_t1.c = dqa_t2.c group by dqa_t2.dt;
 
+-- multi args singledqa (not supported by cdbgroup.c nor ORCA, falls back to
+-- gathering all rows to QD.)
+select corr(distinct d, i) from dqa_t1;
+explain (costs off) select corr(distinct d, i) from dqa_t1;
 
 -- MPP-19037
 drop table if exists fact_route_aggregation;

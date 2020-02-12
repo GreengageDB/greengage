@@ -618,16 +618,19 @@ ExecuteGrantStmt(GrantStmt *stmt)
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
+		GrantStmt *tmpStmt = copyObject(stmt);
+
 		/*
 		 * GPDB: It is possible that objectNamesToOids has expanded references to
 		 * partitioned relations. It is needed to recostruct the GrantStmt objects
 		 * to include those references. We do it uncoditionally of partitioned
 		 * references now for Object Targets.
 		 */
-		if (stmt->targtype == ACL_TARGET_OBJECT &&
-				stmt->objtype == ACL_OBJECT_RELATION)
+		if (tmpStmt->targtype == ACL_TARGET_OBJECT &&
+			tmpStmt->objtype == ACL_OBJECT_RELATION)
 		{
 			List *n = NIL;
+
 			foreach(cell, istmt.objects)
 			{
 				Oid rid = lfirst_oid(cell);
@@ -639,10 +642,10 @@ ExecuteGrantStmt(GrantStmt *stmt)
 				n = lappend(n, rv);
 			}
 
-			stmt->objects = n;
+			tmpStmt->objects = n;
 		}
 
-		CdbDispatchUtilityStatement((Node *) stmt,
+		CdbDispatchUtilityStatement((Node *) tmpStmt,
 									DF_CANCEL_ON_ERROR|
 									DF_WITH_SNAPSHOT|
 									DF_NEED_TWO_PHASE,

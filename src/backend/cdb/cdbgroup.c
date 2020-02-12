@@ -236,6 +236,10 @@ typedef struct MppGroupContext
 								 * query. */
 	Node	   *havingQual;		/* The proprocessed having qual of the
 								 * original query. */
+
+	bool		has_aggfilters;
+	bool		has_multi_arg_distinct_aggs;
+
 	Path	   *best_path;
 	Path	   *cheapest_path;
 	Plan	   *subplan;
@@ -405,7 +409,7 @@ static Cost incremental_agg_cost(double rows, int width, AggStrategy strategy,
 					 const AggClauseCosts *aggcosts);
 static Cost incremental_motion_cost(double sendrows, double recvrows);
 
-static bool contain_aggfilters(Node *node);
+static void analyze_aggrefs(Node *node, MppGroupContext *ctx);
 static bool areAllExpressionsHashable(List *exprs);
 
 /*---------------------------------------------
@@ -588,6 +592,9 @@ cdb_grouping_planner(PlannerInfo *root,
 		}
 	}
 
+	/* Does the query contain any unsupported aggregates? */
+	analyze_aggrefs((Node *) group_context->tlist, &ctx);
+
 	/*
 	 * When an input plan is given, use it, including its target list. When an
 	 * input target list (and no plan) is given, use it for the plan to be
@@ -701,8 +708,17 @@ cdb_grouping_planner(PlannerInfo *root,
 		 * FILTER implementation, but it doesn't work with the new one without
 		 * some extra work.
 		 */
-		if (contain_aggfilters((Node *) group_context->tlist))
+		if (ctx.has_aggfilters)
 			allowed_agg &= ~AGG_3PHASE;
+
+		/*
+		 * Similarly, we don't support aggregates with multiple DISTINCT
+		 * arguments. They used to be completely unsupported, but that changed
+		 * with the PostgreSQL 9.1 merge (upstream commit 34d26872ed), but the
+		 * code in this file was never updated to handle them.
+		 */
+		if (ctx.has_multi_arg_distinct_aggs)
+			allowed_agg &= ~(AGG_3PHASE | AGG_2PHASE_DQA);
 
 		possible_agg = AGG_SINGLEPHASE;
 
@@ -5754,8 +5770,10 @@ add_motion_to_dqa_child(Plan *plan, PlannerInfo *root, bool *motion_added)
 
 
 static bool
-contain_aggfilters_walker(Node *node, void *context)
+analyze_aggrefs_walker(Node *node, void *context)
 {
+	MppGroupContext *ctx = (MppGroupContext *) context;
+
 	if (node == NULL)
 		return false;
 
@@ -5764,15 +5782,18 @@ contain_aggfilters_walker(Node *node, void *context)
 		Aggref	   *aggref = (Aggref *) node;
 
 		if (aggref->aggfilter)
-			return true;
+			ctx->has_aggfilters = true;
+
+		if (list_length(aggref->aggdistinct) > 1)
+			ctx->has_multi_arg_distinct_aggs = true;
 	}
-	return expression_tree_walker(node, contain_aggfilters_walker, NULL);
+	return expression_tree_walker(node, analyze_aggrefs_walker, context);
 }
 
-static bool
-contain_aggfilters(Node *node)
+static void
+analyze_aggrefs(Node *node, MppGroupContext *ctx)
 {
-	return contain_aggfilters_walker(node, NULL);
+	(void) analyze_aggrefs_walker(node, ctx);
 }
 
 static bool

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
-	<topicref href="../../6-2/homenav.html" scope="external"
-		navtitle="Greenplum Database® 6.2 Documentation" format="html" otherprops="oss-only"/>
-	<topicref href="../../6-2/homenav.html" scope="external"
-		navtitle="Pivotal Greenplum® 6.2 Documentation" format="html" otherprops="pivotal"/>
+	<topicref href="../../6-3/homenav.html" scope="external"
+		navtitle="Greenplum Database® 6.3 Documentation" format="html" otherprops="oss-only"/>
+	<topicref href="../../6-3/homenav.html" scope="external"
+		navtitle="Pivotal Greenplum® 6.3 Documentation" format="html" otherprops="pivotal"/>
 	<topicref href="ref_guide.xml">
 		<topicref href="sql_commands/sql_ref.xml">
 			<topicref href="GPReferenceSQLSummaryLOP.xml"/>
@@ -174,7 +174,6 @@
 			<topicref href="datatype-range.xml"/>
 		</topicref>
 		<topicref href="function-summary.xml" id="func_summary"/>
-		<topicref href="extensions/extensions.ditamap" format="ditamap"/>
 		<topicref href="modules/modules.ditamap" format="ditamap"/>
 		<topicref href="character_sets.xml" id="character_sets"/>
 		<topicref href="config_params/guc_config.ditamap" id="guc_config" format="ditamap"/>

@@ -227,7 +227,7 @@ CdbDispatchPlan(struct QueryDesc *queryDesc,
 	 */
 	if (queryDesc->extended_query)
 	{
-		verify_shared_snapshot_ready();
+		verify_shared_snapshot_ready(gp_command_count);
 	}
 
 	cdbdisp_dispatchX(queryDesc, planRequiresTxn, cancelOnError);
@@ -690,19 +690,6 @@ compare_slice_order(const void *aa, const void *bb)
 		return -1;
 	}
 
-	/*
-	 * sort the writer gang slice first, because he sets the shared snapshot
-	 */
-	if (a->slice->primaryGang->gang_id == 1)
-	{
-		Assert(b->slice->primaryGang->gang_id != 1);
-		return -1;
-	}
-	if (b->slice->primaryGang->gang_id == 1)
-	{
-		return 1;
-	}
-
 	/* sort slice with larger size first because it has a bigger chance to contain writers */
 	if (a->slice->primaryGang->size > b->slice->primaryGang->size)
 		return -1;
@@ -1146,6 +1133,10 @@ cdbdisp_dispatchX(QueryDesc* queryDesc,
 
 		primaryGang = slice->primaryGang;
 		Assert(primaryGang != NULL);
+		AssertImply(queryDesc->extended_query,
+					primaryGang->type == GANGTYPE_PRIMARY_READER ||
+					primaryGang->type == GANGTYPE_SINGLETON_READER ||
+					primaryGang->type == GANGTYPE_ENTRYDB_READER);
 
 		if (Test_print_direct_dispatch_info)
 			elog(INFO, "(slice %d) Dispatch command to %s", slice->sliceIndex,

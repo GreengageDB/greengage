@@ -179,11 +179,11 @@ inline static char extended_char(char* token, size_t length)
 /* Read an integer array (anything written as ":fldname %d %d ...") */
 #define READ_INT_ARRAY(fldname, count, Type) \
 	token = pg_strtok(&length);		/* skip :fldname */ \
-	if ( local_node->count > 0 ) \
+	if ( count > 0 ) \
 	{ \
 		int i; \
-		local_node->fldname = (Type *)palloc(local_node->count * sizeof(Type)); \
-		for(i=0; i<local_node->count; i++) \
+		local_node->fldname = (Type *)palloc(count * sizeof(Type)); \
+		for(i=0; i<count; i++) \
 		{ \
 			token = pg_strtok(&length);		/* get field value */ \
 			local_node->fldname[i] = (Type) atoi(token); \
@@ -258,11 +258,11 @@ inline static char extended_char(char* token, size_t length)
 /* Read an Oid array (written as ":fldname %u %u ...") */
 #define READ_OID_ARRAY(fldname, count) \
 	token = pg_strtok(&length);		/* skip :fldname */ \
-	if ( local_node->count > 0 ) \
+	if ( count > 0 ) \
 	{ \
 		int i; \
-		local_node->fldname = (Oid *)palloc(local_node->count * sizeof(Oid)); \
-		for(i=0; i<local_node->count; i++) \
+		local_node->fldname = (Oid *)palloc(count * sizeof(Oid)); \
+		for(i=0; i<count; i++) \
 		{ \
 			token = pg_strtok(&length);		/* get field value */ \
 			local_node->fldname[i] = atooid(token); \
@@ -2336,7 +2336,6 @@ _readCreateStmt(void)
 }
 #endif /* COMPILING_BINARY_FUNCS */
 
-#ifndef COMPILING_BINARY_FUNCS
 static Partition *
 _readPartition(void)
 {
@@ -2348,14 +2347,12 @@ _readPartition(void)
 	READ_INT_FIELD(parlevel);
 	READ_BOOL_FIELD(paristemplate);
 	READ_INT_FIELD(parnatts);
-	READ_INT_ARRAY(paratts, parnatts, int16);
-	READ_OID_ARRAY(parclass, parnatts);
+	READ_INT_ARRAY(paratts, local_node->parnatts, int16);
+	READ_OID_ARRAY(parclass, local_node->parnatts);
 
 	READ_DONE();
 }
-#endif /* COMPILING_BINARY_FUNCS */
 
-#ifndef COMPILING_BINARY_FUNCS
 static PartitionRule *
 _readPartitionRule(void)
 {
@@ -2365,6 +2362,7 @@ _readPartitionRule(void)
 	READ_OID_FIELD(paroid);
 	READ_OID_FIELD(parchildrelid);
 	READ_OID_FIELD(parparentoid);
+	READ_BOOL_FIELD(parisdefault);
 	READ_STRING_FIELD(parname);
 	READ_NODE_FIELD(parrangestart);
 	READ_BOOL_FIELD(parrangestartincl);
@@ -2379,20 +2377,18 @@ _readPartitionRule(void)
 
 	READ_DONE();
 }
-#endif /* COMPILING_BINARY_FUNCS */
 
-#ifndef COMPILING_BINARY_FUNCS
 static PartitionNode *
 _readPartitionNode(void)
 {
 	READ_LOCALS(PartitionNode);
 
 	READ_NODE_FIELD(part);
+	READ_NODE_FIELD(default_part);
 	READ_NODE_FIELD(rules);
 
 	READ_DONE();
 }
-#endif /* COMPILING_BINARY_FUNCS */
 
 static PgPartRule *
 _readPgPartRule(void)
@@ -2819,6 +2815,7 @@ _readVacuumStmt(void)
 	READ_NODE_FIELD(expanded_relids);
 	READ_NODE_FIELD(appendonly_compaction_segno);
 	READ_NODE_FIELD(appendonly_compaction_insert_segno);
+	READ_BOOL_FIELD(appendonly_relation_empty);
 	READ_ENUM_FIELD(appendonly_phase, AOVacuumPhase);
 
 	READ_DONE();

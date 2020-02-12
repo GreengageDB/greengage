@@ -234,10 +234,6 @@ sub init_match_subs
 m/\s+\(seg.*pid.*\)/
 s/\s+\(seg.*pid.*\)//
 
-# distributed transactions
-m/^(?:ERROR|WARNING|CONTEXT|NOTICE|PANIC):.*gid\s+=\s+(?:\d+)/
-s/gid.*/gid DUMMY/
-
 m/^(?:ERROR|WARNING|CONTEXT|NOTICE):.*connection.*failed.*(?:http|gpfdist)/
 s/connection.*failed.*(http|gpfdist).*/connection failed dummy_protocol\:\/\/DUMMY_LOCATION/
 

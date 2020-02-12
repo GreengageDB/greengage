@@ -2509,6 +2509,13 @@ create_bitmap_subplan(PlannerInfo *root, Path *bitmapqual,
 		plan->plan_rows =
 			clamp_row_est(ipath->indexselectivity * ipath->path.parent->tuples);
 		plan->plan_width = 0;	/* meaningless */
+
+		/* decorate the node with a Flow node, for EXPLAIN. */
+		plan->flow = cdbpathtoplan_create_flow(root,
+											   ipath->path.locus,
+											   ipath->path.parent->relids,
+											   plan);
+
 		*qual = get_actual_clauses(ipath->indexclauses);
 		*indexqual = get_actual_clauses(ipath->indexquals);
 		foreach(l, ipath->indexinfo->indpred)

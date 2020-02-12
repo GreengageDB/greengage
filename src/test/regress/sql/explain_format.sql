@@ -94,9 +94,41 @@ EXPLAIN (ANALYZE, FORMAT YAML) SELECT * from boxes LEFT JOIN apples ON apples.id
 EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM generate_series(1, 10);
 
 EXPLAIN (FORMAT XML, COSTS OFF) SELECT * FROM generate_series(1, 10);
+
+-- Test for an old bug in printing Sequence nodes in JSON/XML format
+-- (https://github.com/greenplum-db/gpdb/issues/9410)
+CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EVERY(1));
+EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;
+
 -- explain_processing_on
+
+
+-- Test for github issue #9359
+--
+-- The plan contains an Agg and a Hash node on top of each other, neither of
+-- which have a plan->flow set. Explain should be able to dig the flow from
+-- the grandchild node then.
+CREATE TEMPORARY TABLE SUBSELECT_TBL (
+  f1 integer,
+  f2 integer,
+  f3 float
+);
+explain (format json) SELECT '' AS six, f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
+  WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL WHERE
+    f2 IN (SELECT f1 FROM SUBSELECT_TBL));
+
+-- Test for similar bug of missing flow with bitmap index scan.
+-- (github issue #9404).
+CREATE INDEX ss_f1 on SUBSELECT_TBL(f1);
+begin;
+set local enable_seqscan=off;
+set local enable_indexscan=off;
+set local enable_bitmapscan=on;
+explain (format json, costs off) select * from subselect_tbl where f1 < 10;
+commit;
 
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
 DROP TABLE box_locations;
+DROP TABLE jsonexplaintest;

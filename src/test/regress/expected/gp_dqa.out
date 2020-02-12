@@ -701,6 +701,23 @@ explain (costs off) select count(distinct dqa_t1.dt) from dqa_t1, dqa_t2 where d
  Optimizer: Postgres query optimizer
 (19 rows)
 
+-- multi args singledqa (not supported by cdbgroup.c nor ORCA, falls back to
+-- gathering all rows to QD.)
+select corr(distinct d, i) from dqa_t1;
+        corr        
+--------------------
+ 0.0824013341460019
+(1 row)
+
+explain (costs off) select corr(distinct d, i) from dqa_t1;
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on dqa_t1
+ Optimizer: Postgres query optimizer
+(4 rows)
+
 -- MPP-19037
 drop table if exists fact_route_aggregation;
 NOTICE:  table "fact_route_aggregation" does not exist, skipping

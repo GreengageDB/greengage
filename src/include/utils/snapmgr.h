@@ -18,7 +18,6 @@
 #include "utils/snapshot.h"
 #include "cdb/cdbtm.h"
 
-
 extern bool FirstSnapshotSet;
 
 extern PGDLLIMPORT TransactionId TransactionXmin;

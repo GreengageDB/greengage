@@ -631,19 +631,19 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	if (es->analyze)
 		ExplainPrintTriggers(es, queryDesc);
 
-    /*
-     * Display per-slice and whole-query statistics.
-     */
-    if (es->analyze)
-        cdbexplain_showExecStatsEnd(queryDesc->plannedstmt, queryDesc->showstatctx,
+	/*
+	 * Display per-slice and whole-query statistics.
+	 */
+	if (es->analyze)
+		cdbexplain_showExecStatsEnd(queryDesc->plannedstmt, queryDesc->showstatctx,
 									queryDesc->estate, es);
 
-    /*
+	/*
 	 * Show non-default GUC settings that might have affected the plan as well
 	 * as optimizer settings etc.
-     */
+	 */
 	ExplainOpenGroup("Settings", "Settings", true, es);
-	
+
 	if (queryDesc->plannedstmt->planGen == PLANGEN_PLANNER)
 		ExplainProperty("Optimizer", "Postgres query optimizer", false, es);
 #ifdef USE_ORCA
@@ -921,27 +921,37 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 				 * - for non-motion nodes the segments count can be fetched
 				 *   from either lefttree or plan itself, they should be the
 				 *   same;
-				 * - there is also nodes like Hash that might have NULL
+				 * - there are also nodes like Hash that might have NULL
 				 *   plan->flow but non-NULL lefttree->flow, so we can use
 				 *   whichever that's available.
 				 */
-				if (plan->lefttree && plan->lefttree->flow)
-				{
-					if (plan->lefttree->flow->flotype == FLOW_SINGLETON)
-						segments = 1;
-					else
-						segments = plan->lefttree->flow->numsegments;
-				}
-				else
-				{
-					Assert(!IsA(plan, Motion));
-					Assert(plan->flow);
+				Plan	   *fplan;
 
-					if (plan->flow->flotype == FLOW_SINGLETON)
-						segments = 1;
-					else
-						segments = plan->flow->numsegments;
+				fplan = plan;
+				while ((IsA(fplan, Motion) || !fplan->flow) &&
+					   fplan->lefttree)
+					fplan = fplan->lefttree;
+
+				Assert(!IsA(fplan, Motion));
+				if (!fplan->flow)
+				{
+					/*
+					 * This shouldn't happen, but just in case the planner
+					 * failed to decorate a node with a flow, don't panic
+					 * in production. Not all nodes need to be marked with a
+					 * flow, as long as the Motions, and the nodes immediately
+					 * below a Motion are, so this just leads to incorrect
+					 * information in EXPLAIN output. We'd still like to fix
+					 * such cases, though so Assert so that we catch them
+					 * during development.
+					 */
+					Assert(fplan->flow);
+					segments = 1;
 				}
+				else if (fplan->flow->flotype == FLOW_SINGLETON)
+					segments = 1;
+				else
+					segments = fplan->flow->numsegments;
 			}
 			else
 			{
@@ -2243,6 +2253,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		IsA(plan, ModifyTable) ||
 		IsA(plan, Append) ||
 		IsA(plan, MergeAppend) ||
+		IsA(plan, Sequence) ||
 		IsA(plan, BitmapAnd) ||
 		IsA(plan, BitmapOr) ||
 		IsA(plan, SubqueryScan) ||

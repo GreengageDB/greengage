@@ -236,9 +236,6 @@ static TransactionId unreportedXids[PGPROC_MAX_CACHED_SUBXIDS];
 
 static TransactionState CurrentTransactionState = &TopTransactionStateData;
 
-/* distributed transaction id of current transaction, if any. */
-static DistributedTransactionId currentDistribXid;
-
 /*
  * The subtransaction ID and command ID assignment counters are global
  * to a whole transaction, so we do not keep them in the state stack.
@@ -440,22 +437,11 @@ GetAllTransactionXids(
 {
 	TransactionState s = CurrentTransactionState;
 
-	*distribXid = currentDistribXid;
+	*distribXid = getDistributedTransactionId();
 	*localXid = s->transactionId;
 	*subXid = s->subTransactionId;
 }
 
-DistributedTransactionId
-GetCurrentDistributedTransactionId(void)
-{
-	return currentDistribXid;
-}
-
-void
-SetCurrentDistributedTransactionId(DistributedTransactionId gxid)
-{
-	currentDistribXid = gxid;
-}
 /*
  *	GetTopTransactionId
  *
@@ -1291,11 +1277,11 @@ RecordTransactionCommit(void)
 	bool		RelcacheInitFileInval = false;
 	bool		wrote_xlog;
 	bool		isDtxPrepared = 0;
-	bool		isOnePhaseQE = (Gp_role == GP_ROLE_EXECUTE && MyTmGxact->isOnePhaseCommit);
+	bool		isOnePhaseQE = (Gp_role == GP_ROLE_EXECUTE && MyTmGxactLocal->isOnePhaseCommit);
 	TMGXACT_LOG gxact_log;
+	DistributedTransactionTimeStamp distribTimestamp = getDistributedTransactionTimestamp();
+	DistributedTransactionId distributedXid = getDistributedTransactionId();
 	XLogRecPtr	recptr = InvalidXLogRecPtr;
-	DistributedTransactionTimeStamp distribTimeStamp = 0;
-	DistributedTransactionId distribXid = 0;
 	Oid pending_tablespace_for_deletion = InvalidOid;
 
 	/* Like in CommitTransaction(), treat a QE reader as if there was no XID */
@@ -1307,9 +1293,6 @@ RecordTransactionCommit(void)
 	else
 		xid = GetTopTransactionIdIfAny();
 	markXidCommitted = TransactionIdIsValid(xid);
-
-	if (isOnePhaseQE)
-		dtxCrackOpenGid(MyTmGxact->gid, &distribTimeStamp, &distribXid);
 
 	/* Get data needed for commit record */
 	nrels = smgrGetPendingDeletes(true, &rels);
@@ -1394,7 +1377,7 @@ RecordTransactionCommit(void)
 		 * checkpoint process fails to record this transaction in the
 		 * checkpoint.  Crash recovery will never see the commit record for
 		 * this transaction and the second phase of 2PC will never happen.  The
-		 * inCommit flag avoids this situation by blocking checkpointer until a
+		 * delayChkpt flag avoids this situation by blocking checkpointer until a
 		 * backend has finished updating the state.
 		 */
 		START_CRIT_SECTION();
@@ -1493,7 +1476,8 @@ RecordTransactionCommit(void)
 			if (isDtxPrepared)
 			{
 				/* add global transaction information */
-				getDtxLogInfo(&gxact_log);
+				gxact_log.gxid = distributedXid;
+				dtxFormGID(gxact_log.gid, distribTimestamp, distributedXid);
 
 				rdata[lastrdata].next = &(rdata[5]);
 				rdata[5].data = (char *) &gxact_log;
@@ -1515,8 +1499,8 @@ RecordTransactionCommit(void)
 			}
 			else
 			{
-				xlrec.distribTimeStamp = distribTimeStamp;
-				xlrec.distribXid = distribXid;
+				xlrec.distribTimeStamp = distribTimestamp;
+				xlrec.distribXid = distributedXid;
 				recptr = XLogInsert(RM_XACT_ID, XLOG_XACT_COMMIT, rdata);
 			}
 
@@ -1588,14 +1572,10 @@ RecordTransactionCommit(void)
 			 * to look it up in the DistributedLog.
 			 */
 			/* UNDONE: What are the locking issues here? */
-			if (isDtxPrepared)
+			if (isDtxPrepared || isOnePhaseQE)
 				DistributedLog_SetCommittedTree(xid, nchildren, children,
-												getDtxStartTime(),
-												getDistributedTransactionId(),
-												/* isRedo */ false);
-			else if (isOnePhaseQE)
-				DistributedLog_SetCommittedTree(xid, nchildren, children,
-												distribTimeStamp, distribXid,
+												distribTimestamp,
+												distributedXid,
 												/* isRedo */ false);
 
 			TransactionIdCommitTree(xid, nchildren, children);
@@ -2368,15 +2348,6 @@ StartTransaction(void)
 
 		case DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE:
 		{
-			/*
-			 * Generate the distributed transaction ID and save it.
-			 * it's not really needed by a select-only implicit transaction, but
-			 * currently gpfdist and pxf is using it.
-			 * We should probably replace xid with "session id + command id" in
-			 * identify a query in gpfdist and pxf.
-			 */
-			currentDistribXid = generateGID();
-
 			if (SharedLocalSnapshotSlot != NULL)
 			{
 				LWLockAcquire(SharedLocalSnapshotSlot->slotLock, LW_EXCLUSIVE);
@@ -2421,22 +2392,15 @@ StartTransaction(void)
 
 			/*
 			 * MPP: we're a QE Writer.
-			 *
-			 * For DTX_CONTEXT_QE_AUTO_COMMIT_IMPLICIT don't use the
-			 * distributed xid map since this may be one of funny distributed
-			 * queries the executor uses behind the scenes for estimation
-			 * work. We also don't need a local XID right now - we let it be
-			 * assigned lazily, as on a local transaction. This transaction
-			 * will auto-commit, and then we will follow it with the real user
-			 * command.
 			 */
+			MyTmGxact->gxid = QEDtxContextInfo.distributedXid;
+			MyTmGxact->distribTimeStamp = QEDtxContextInfo.distributedTimeStamp;
+
 			if (DistributedTransactionContext ==
 				DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER ||
 				DistributedTransactionContext ==
 				DTX_CONTEXT_QE_TWO_PHASE_IMPLICIT_WRITER)
 			{
-				currentDistribXid = QEDtxContextInfo.distributedXid;
-
 				Assert(QEDtxContextInfo.distributedTimeStamp != 0);
 				Assert(QEDtxContextInfo.distributedXid !=
 					   InvalidDistributedTransactionId);
@@ -2459,7 +2423,6 @@ StartTransaction(void)
 				SharedLocalSnapshotSlot->xid = s->transactionId;
 				SharedLocalSnapshotSlot->startTimestamp = stmtStartTimestamp;
 				SharedLocalSnapshotSlot->QDxid = QEDtxContextInfo.distributedXid;
-				SharedLocalSnapshotSlot->pid = MyProc->pid;
 				SharedLocalSnapshotSlot->writer_proc = MyProc;
 				SharedLocalSnapshotSlot->writer_xact = MyPgXact;
 
@@ -2488,7 +2451,8 @@ StartTransaction(void)
 			 * MPP: we're a QE Reader.
 			 */
 			Assert (SharedLocalSnapshotSlot != NULL);
-			currentDistribXid = QEDtxContextInfo.distributedXid;
+			MyTmGxact->gxid = QEDtxContextInfo.distributedXid;
+			MyTmGxact->distribTimeStamp = QEDtxContextInfo.distributedTimeStamp;
 
 			/*
 			 * Snapshot must not be created before setting transaction
@@ -2897,7 +2861,6 @@ CommitTransaction(void)
 		LocalDistribXactCache_ShowStats("CommitTransaction");
 	}
 
-	currentDistribXid = InvalidDistributedTransactionId;
 	s->transactionId = InvalidTransactionId;
 	s->subTransactionId = InvalidSubTransactionId;
 	s->nestingLevel = 0;
@@ -3210,7 +3173,6 @@ PrepareTransaction(void)
 		LocalDistribXactCache_ShowStats("PrepareTransaction");
 	}
 
-	currentDistribXid = InvalidDistributedTransactionId;
 	s->transactionId = InvalidTransactionId;
 	s->subTransactionId = InvalidSubTransactionId;
 	s->nestingLevel = 0;
@@ -3381,7 +3343,9 @@ AbortTransaction(void)
 
 		AtAbort_TablespaceStorage();
 		AtEOXact_AppendOnly();
+		gp_guc_need_restore = true;
 		AtEOXact_GUC(false, 1);
+		gp_guc_need_restore = false;
 		AtEOXact_SPI(false);
 		AtEOXact_on_commit_actions(false);
 		AtEOXact_Namespace(false);
@@ -3471,7 +3435,6 @@ CleanupTransaction(void)
 
 	AtCleanup_Memory();			/* and transaction memory */
 
-	currentDistribXid = InvalidDistributedTransactionId;
 	s->transactionId = InvalidTransactionId;
 	s->subTransactionId = InvalidSubTransactionId;
 	s->nestingLevel = 0;
@@ -5177,26 +5140,6 @@ RollbackAndReleaseCurrentSubTransaction(void)
 	}
 }
 
-void
-CommitNotPreparedTransaction(void)
-{
-	TransactionState s = CurrentTransactionState;
-
-	while (s->blockState == TBLOCK_SUBINPROGRESS)
-	{
-		CommitSubTransaction();
-		s = CurrentTransactionState;
-	}
-
-	if (s->blockState == TBLOCK_INPROGRESS)
-	{
-		Assert(s->parent == NULL);
-		CommitTransaction();
-	}
-	s->blockState = TBLOCK_DEFAULT;
-	MyProc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
-	return;
-}
 /*
  *	AbortOutOfAnyTransaction
  *

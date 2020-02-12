@@ -16,6 +16,7 @@ test: crash_recovery_dtm
 test: unlogged_heap_tables
 test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios
+test: ao_same_trans_truncate_crash
 
 # Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
 # so must be scheduled after that one.
@@ -47,7 +48,11 @@ test: modify_table_data_corrupt
 # concurrent test, so run the test by itself.
 test: deadlock_under_entry_db_singleton
 
-test: starve_case pg_views_concurrent_drop alter_blocks_for_update_and_viceversa drop_rename reader_waits_for_lock resource_queue misc
+#  this case creates table & index in utility mode, which may cause oid
+#  conflict when running in parallel with other cases.
+test: misc
+
+test: starve_case pg_views_concurrent_drop alter_blocks_for_update_and_viceversa drop_rename reader_waits_for_lock resource_queue
 test: vacuum_drop_phase_ao
 
 # below test(s) inject faults so each of them need to be in a separate group
@@ -174,6 +179,8 @@ test: uao/vacuum_cleanup_column
 test: uao/insert_should_not_use_awaiting_drop_column
 test: add_column_after_vacuum_skip_drop_column
 test: vacuum_after_vacuum_skip_drop_column
+
+test: segwalrep/die_commit_pending_replication
 
 # Tests for FTS
 test: fts_errors

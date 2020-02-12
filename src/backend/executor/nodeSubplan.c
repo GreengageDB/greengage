@@ -999,7 +999,7 @@ PG_TRY();
 {
 	if (shouldDispatch)
 	{			
-		needDtxTwoPhase = isCurrentDtxTwoPhase();
+		needDtxTwoPhase = isCurrentDtxTwoPhaseActivated();
 
 		/*
 		 * This call returns after launching the threads that send the
@@ -1018,20 +1018,6 @@ PG_TRY();
 		UpdateMotionExpectedReceivers(queryDesc->estate->motionlayer_context, queryDesc->estate->es_sliceTable);
 
 		ExecUpdateTransportState(planstate, queryDesc->estate->interconnect_context);
-
-		/*
-		 * MPP-7504/MPP-7448: the pre-dispatch function evaluator
-		 * may mess up our snapshot-sync mechanism. So we've
-		 * called verify_shared_snapshot() down in the dispatcher.
-		 */
-		if (queryDesc->extended_query)
-		{
-			/*
-			 * We rewind the segmateSync value since the InitPlan can
-			 * share the same value with its parent plan. See MPP-4504.
-			 */
-			DtxContextInfo_RewindSegmateSync();
-		}
 	}
 
 	if (subLinkType == ANY_SUBLINK ||
