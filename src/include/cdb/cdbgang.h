@@ -32,14 +32,8 @@ struct CdbDispatcherState;
 typedef struct Gang
 {
 	GangType type;
-	int	gang_id;
-	int	size;
 
-	/*
-	 * Keep track of dispatcher use for writer gang. (reader gangs already track
-	 * this properly, since they get allocated from a list of available gangs.)
-	 */
-	bool dispatcherActive;
+	int	size;
 
 	/*
 	 * Array of QEs/segDBs that make up this gang. Sorted by segment index.

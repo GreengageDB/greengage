@@ -582,8 +582,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='Greenplum Database'
 PACKAGE_TARNAME='greenplum-database'
-PACKAGE_VERSION='6.3.0'
-PACKAGE_STRING='Greenplum Database 6.3.0'
+PACKAGE_VERSION='6.4.0'
+PACKAGE_STRING='Greenplum Database 6.4.0'
 PACKAGE_BUGREPORT='support@greenplum.org'
 PACKAGE_URL=''
 
@@ -8247,6 +8247,14 @@ if test "$with_libcurl" = "no" && test "$enable_pxf" = "yes"; then
   as_fn_error $? "libcurl is required by PXF" "$LINENO" 5
 fi
 
+if test "$with_libcurl" = "no" && test "$enable_gpcloud" = "yes"; then
+  as_fn_error $? "libcurl is required by gpcloud" "$LINENO" 5
+fi
+
+if test "$with_libxml" = "no" && test "$enable_gpcloud" = "yes"; then
+  as_fn_error $? "libxml is required by gpcloud" "$LINENO" 5
+fi
+
 #
 # libapr. Used for gpfdist and gpperfmon
 #
@@ -14940,7 +14948,7 @@ int
 main ()
 {
 
-return strncmp("3.86.", GPORCA_VERSION_STRING, 5);
+return strncmp("3.88.", GPORCA_VERSION_STRING, 5);
 
   ;
   return 0;
@@ -14950,7 +14958,7 @@ if ac_fn_cxx_try_run "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
 $as_echo "ok" >&6; }
 else
-  as_fn_error $? "Your ORCA version is expected to be 3.86.XXX" "$LINENO" 5
+  as_fn_error $? "Your ORCA version is expected to be 3.88.XXX" "$LINENO" 5
 
 fi
 rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
@@ -16643,6 +16651,27 @@ if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
   cat >>confdefs.h <<_ACEOF
 #define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
 _ACEOF
+
+fi
+done
+
+
+# For upstream Postgres, the getifaddrs() symbol is optional, but the GPDB
+# ifaddrs utility requires it, along with inet_ntop(). The check for getifaddrs
+# is duplicated here to avoid a merge conflict in the AC_CHECK_FUNCS block
+# above.
+for ac_func in getifaddrs inet_ntop
+do :
+  as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
+ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
+_ACEOF
+
+else
+
+	as_fn_error $? "getifaddrs and inet_ntop are required for Greenplum" "$LINENO" 5
 
 fi
 done

@@ -159,10 +159,12 @@ void gpmon_record_update(int32 tmid, int32 ssid, int32 ccnt,
 
 void gpmon_gettmid(int32* tmid)
 {
-    char buff[TMGIDSIZE] = {0};
-    int32 xid;
-    getDistributedTransactionIdentifier(buff);
-    sscanf(buff, "%d-%d", tmid, &xid);
+	if (QEDtxContextInfo.distributedSnapshot.distribTransactionTimeStamp > 0)
+		/* On QE */
+		*tmid = (int32)QEDtxContextInfo.distributedSnapshot.distribTransactionTimeStamp;
+	else
+		/* On QD */
+		*tmid = (int32)getDtxStartTime();
 } 
 
 

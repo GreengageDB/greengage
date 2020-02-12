@@ -1766,9 +1766,6 @@ ExecuteTruncate(TruncateStmt *stmt)
 	/*
 	 * OK, truncate each table.
 	 */
-	if (Gp_role == GP_ROLE_DISPATCH)
-		cdb_sync_oid_to_segments();
-
 	mySubid = GetCurrentSubTransactionId();
 
 	foreach(cell, rels)
@@ -1848,11 +1845,12 @@ ExecuteTruncate(TruncateStmt *stmt)
 	{
 		ListCell	*lc;
 
+		Assert(GetAssignedOidsForDispatch() == NIL);
 		CdbDispatchUtilityStatement((Node *) stmt,
 									DF_CANCEL_ON_ERROR |
 									DF_WITH_SNAPSHOT |
 									DF_NEED_TWO_PHASE,
-									GetAssignedOidsForDispatch(),
+									NIL,
 									NULL);
 
 		/* MPP-6929: metadata tracking */

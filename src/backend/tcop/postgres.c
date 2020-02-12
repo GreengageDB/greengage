@@ -1461,21 +1461,18 @@ CheckDebugDtmActionProtocol(DtxProtocolCommand dtxProtocolCommand,
 
 static void
 exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
-							  int flags, const char *loggingStr,
-							  const char *gid, DistributedTransactionId gxid,
+							  const char *loggingStr,
+							  const char *gid,
 							  DtxContextInfo *contextInfo)
 {
 	CommandDest dest = whereToSendOutput;
 	const char *commandTag = loggingStr;
 
 	if (log_statement == LOGSTMT_ALL)
-	{
-		elog(LOG,"DTM protocol command '%s' for gid = %s",
-			 loggingStr, gid);
-	}
+		elog(LOG,"DTM protocol command '%s' for gid = %s", loggingStr, gid);
 
-	elog((Debug_print_full_dtm ? LOG : DEBUG5),"exec_mpp_dtx_protocol_command received the dtxProtocolCommand = %d (%s) gid = %s (gxid = %u, flags = 0x%x)",
-		 dtxProtocolCommand, loggingStr, gid, gxid, flags);
+	elog((Debug_print_full_dtm ? LOG : DEBUG5),"exec_mpp_dtx_protocol_command received the dtxProtocolCommand = %d (%s) gid = %s",
+		 dtxProtocolCommand, loggingStr, gid);
 
 	set_ps_display(commandTag, false);
 
@@ -1509,7 +1506,7 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 
 	BeginCommand(commandTag, dest);
 
-	performDtxProtocolCommand(dtxProtocolCommand, flags, loggingStr, gid, gxid, contextInfo);
+	performDtxProtocolCommand(dtxProtocolCommand, gid, contextInfo);
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),"exec_mpp_dtx_protocol_command calling EndCommand for dtxProtocolCommand = %d (%s) gid = %s",
 		 dtxProtocolCommand, loggingStr, gid);
@@ -1522,6 +1519,16 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 				 errmsg("Raise error for debug_dtm_action = %d, debug_dtm_action_protocol = %s",
 						Debug_dtm_action, DtxProtocolCommandToString(dtxProtocolCommand))));
 	}
+
+	/*
+	 * GPDB: There is a corner case that we need to delay connection
+	 * termination to here. see SyncRepWaitForLSN() for details.
+	 * */
+	if (ProcDiePending)
+		ereport(FATAL,
+				(errcode(ERRCODE_ADMIN_SHUTDOWN),
+				errmsg("Terminating the connection (DTM protocol command '%s' "
+					   "for gid=%s", loggingStr, gid)));
 
 	EndCommand(commandTag, dest);
 }
@@ -1542,6 +1549,36 @@ CheckDebugDtmActionSqlCommandTag(const char *sqlCommandTag)
 		(result ? "true" : "false"));
 
 	return result;
+}
+
+static void
+restore_guc_to_QE(void )
+{
+	Assert(Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list);
+	ListCell *lc;
+
+	start_xact_command();
+
+	foreach(lc, gp_guc_restore_list)
+	{
+		struct config_generic* gconfig = (struct config_generic *)lfirst(lc);
+		PG_TRY();
+		{
+			DispatchSyncPGVariable(gconfig);
+		}
+		PG_CATCH();
+		{
+			/* if some guc can not restore successful
+			 * we can not keep alive gang anymore.
+			 */
+			DisconnectAndDestroyAllGangs(false);
+		}
+		PG_END_TRY();
+	}
+
+	finish_xact_command();
+	list_free(gp_guc_restore_list);
+	gp_guc_restore_list = NIL;
 }
 
 /*
@@ -5185,6 +5222,11 @@ PostgresMain(int argc, char *argv[],
 		if (ignore_till_sync && firstchar != EOF)
 			continue;
 
+		/* last txn abort, try to synchronize guc to cached QE */
+		if(Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
+			restore_guc_to_QE();
+
+
 		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
 				(errmsg_internal("First char: '%c'; gp_role = '%s'.", firstchar, role_to_string(Gp_role))));
 
@@ -5373,17 +5415,10 @@ PostgresMain(int argc, char *argv[],
             case 'T': /* MPP dispatched dtx protocol command from QD */
 				{
 					DtxProtocolCommand dtxProtocolCommand;
-
-					int flags;
-
 					int loggingStrLen;
 					const char *loggingStr;
-
 					int gidLen;
 					const char *gid;
-
-					DistributedTransactionId gxid;
-
 					int serializedDtxContextInfolen;
 					const char *serializedDtxContextInfo;
 
@@ -5397,9 +5432,6 @@ PostgresMain(int argc, char *argv[],
 					/* get the transaction protocol command # */
 					dtxProtocolCommand = (DtxProtocolCommand) pq_getmsgint(&input_message, 4);
 
-					/* get the flags */
-					flags = pq_getmsgint(&input_message, 4);
-
 					/* get the logging string length */
 					loggingStrLen = pq_getmsgint(&input_message, 4);
 
@@ -5411,9 +5443,6 @@ PostgresMain(int argc, char *argv[],
 
 					/* get the logging string */
 					gid = pq_getmsgbytes(&input_message,gidLen);
-
-					/* get the distributed transaction id */
-					gxid = (DistributedTransactionId) pq_getmsgint(&input_message, 4);
 
 					serializedDtxContextInfolen = pq_getmsgint(&input_message, 4);
 
@@ -5427,7 +5456,7 @@ PostgresMain(int argc, char *argv[],
 
 					pq_getmsgend(&input_message);
 
-					exec_mpp_dtx_protocol_command(dtxProtocolCommand, flags, loggingStr, gid, gxid, &TempDtxContextInfo);
+					exec_mpp_dtx_protocol_command(dtxProtocolCommand, loggingStr, gid, &TempDtxContextInfo);
 
 					send_ready_for_query = true;
             	}
