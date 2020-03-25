@@ -87,6 +87,7 @@ static bool index_recheck_constraint(Relation index, Oid *constr_procs,
 						 Datum *existing_values, bool *existing_isnull,
 						 Datum *new_values);
 static void ShutdownExprContext(ExprContext *econtext, bool isCommit);
+static List *flatten_logic_exprs(Node *node);
 
 
 /* ----------------------------------------------------------------
@@ -1683,6 +1684,95 @@ ExecGetShareNodeEntry(EState* estate, int shareidx, bool fCreate)
 }
 
 /*
+ * flatten_logic_exprs
+ * This function is only used by ExecPrefetchJoinQual.
+ * ExecPrefetchJoinQual need to prefetch subplan in join
+ * qual that contains motion to materialize it to avoid
+ * motion deadlock. This function is going to flatten
+ * the bool exprs to avoid shortcut of bool logic.
+ * An example is:
+ * (a and b or c) or (d or e and f or g) and (h and i or j)
+ * will be transformed to
+ * (a, b, c, d, e, f, g, h, i, j).
+ */
+static List *
+flatten_logic_exprs(Node *node)
+{
+	if (node == NULL)
+		return NIL;
+
+	if (IsA(node, BoolExprState))
+	{
+		BoolExprState *be = (BoolExprState *) node;
+		return flatten_logic_exprs((Node *) (be->args));
+	}
+
+	if (IsA(node, List))
+	{
+		List     *es = (List *) node;
+		List     *result = NIL;
+		ListCell *lc = NULL;
+
+		foreach(lc, es)
+		{
+			Node *n = (Node *) lfirst(lc);
+			result = list_concat(result,
+								 flatten_logic_exprs(n));
+		}
+
+		return result;
+	}
+
+	return list_make1(node);
+}
+
+/*
+ * fake_outer_params
+ *   helper function to fake the nestloop's nestParams
+ *   so that prefetch inner or prefetch joinqual will
+ *   not encounter NULL pointer reference issue. It is
+ *   only invoked in ExecNestLoop and ExecPrefetchJoinQual
+ *   when the join is a nestloop join.
+ */
+void
+fake_outer_params(JoinState *node)
+{
+	ExprContext    *econtext = node->ps.ps_ExprContext;
+	PlanState      *inner = innerPlanState(node);
+	TupleTableSlot *outerTupleSlot = econtext->ecxt_outertuple;
+	NestLoop       *nl = (NestLoop *) (node->ps.plan);
+	ListCell       *lc = NULL;
+
+	/* only nestloop contains nestParams */
+	Assert(IsA(node->ps.plan, NestLoop));
+
+	/* econtext->ecxt_outertuple must have been set fakely. */
+	Assert(outerTupleSlot != NULL);
+	/*
+	 * fetch the values of any outer Vars that must be passed to the
+	 * inner scan, and store them in the appropriate PARAM_EXEC slots.
+	 */
+	foreach(lc, nl->nestParams)
+	{
+		NestLoopParam *nlp = (NestLoopParam *) lfirst(lc);
+		int			paramno = nlp->paramno;
+		ParamExecData *prm;
+
+		prm = &(econtext->ecxt_param_exec_vals[paramno]);
+		/* Param value should be an OUTER_VAR var */
+		Assert(IsA(nlp->paramval, Var));
+		Assert(nlp->paramval->varno == OUTER_VAR);
+		Assert(nlp->paramval->varattno > 0);
+		prm->value = slot_getattr(outerTupleSlot,
+								  nlp->paramval->varattno,
+								  &(prm->isnull));
+		/* Flag parameter value as changed */
+		inner->chgParam = bms_add_member(inner->chgParam,
+										 paramno);
+	}
+}
+
+/*
  * Prefetch JoinQual to prevent motion hazard.
  *
  * A motion hazard is a deadlock between motions, a classic motion hazard in a
@@ -1709,7 +1799,7 @@ ExecGetShareNodeEntry(EState* estate, int shareidx, bool fCreate)
  *
  * Return true if the JoinQual is prefetched.
  */
-bool
+void
 ExecPrefetchJoinQual(JoinState *node)
 {
 	EState	   *estate = node->ps.state;
@@ -1719,8 +1809,10 @@ ExecPrefetchJoinQual(JoinState *node)
 	List	   *joinqual = node->joinqual;
 	TupleTableSlot *innertuple = econtext->ecxt_innertuple;
 
-	if (!joinqual)
-		return false;
+	ListCell   *lc = NULL;
+	List       *quals = NIL;
+
+	Assert(joinqual);
 
 	/* Outer tuples should not be fetched before us */
 	Assert(econtext->ecxt_outertuple == NULL);
@@ -1731,36 +1823,29 @@ ExecPrefetchJoinQual(JoinState *node)
 	econtext->ecxt_outertuple = ExecInitNullTupleSlot(estate,
 													  ExecGetResultType(outer));
 
+	if (IsA(node->ps.plan, NestLoop))
+	{
+		NestLoop *nl = (NestLoop *) (node->ps.plan);
+		if (nl->nestParams)
+			fake_outer_params(node);
+	}
+
+	quals = flatten_logic_exprs((Node *) joinqual);
+
 	/* Fetch subplan with the fake inner & outer tuples */
-	ExecQual(joinqual, econtext, false);
+	foreach(lc, quals)
+	{
+		/*
+		 * Force every joinqual is prefech because
+		 * our target is to materialize motion node.
+		 */
+		ExprState  *clause = (ExprState *) lfirst(lc);
+		(void) ExecQual(list_make1(clause), econtext, false);
+	}
 
 	/* Restore previous state */
 	econtext->ecxt_innertuple = innertuple;
 	econtext->ecxt_outertuple = NULL;
-
-	return true;
-}
-
-/*
- * Decide if should prefetch joinqual.
- *
- * Joinqual should be prefetched when both outer and joinqual contain motions.
- * In create_*join_plan() functions we set prefetch_joinqual according to the
- * outer motions, now we detect for joinqual motions to make the final
- * decision.
- *
- * See ExecPrefetchJoinQual() for details.
- *
- * This function should be called in ExecInit*Join() functions.
- *
- * Return true if JoinQual should be prefetched.
- */
-bool
-ShouldPrefetchJoinQual(EState *estate, Join *join)
-{
-	return (join->prefetch_joinqual &&
-			findSenderMotion(estate->es_plannedstmt,
-							 estate->currentSliceIdInPlan));
 }
 
 /* ----------------------------------------------------------------

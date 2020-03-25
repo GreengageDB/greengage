@@ -47,10 +47,8 @@
 #include <io.h>
 #define SHUT_WR SD_SEND
 #define socklen_t int
-#ifndef ECONNRESET
+#undef ECONNRESET
 #define ECONNRESET   WSAECONNRESET
-#endif
-
 #endif
 
 #include <pg_config.h>
@@ -1178,7 +1176,11 @@ static int local_send(request_t *r, const char* buf, int buflen)
 			if (r->session)
 				session_end(r->session, 0);
 		} else {
-			gdebug(r, "gpfdist_send failed - due to (%d: %s)", e, strerror(e));
+			if (!ok) {
+				gwarning(r, "gpfdist_send failed - due to (%d: %s)", e, strerror(e));
+			} else {
+				gdebug(r, "gpfdist_send failed - due to (%d: %s), should try again", e, strerror(e));
+			}
 		}
 		return ok ? 0 : -1;
 	}
@@ -1344,13 +1346,14 @@ session_get_block(const request_t* r, block_t* retblock, char* line_delim_str, i
 /* finish the session - close the file */
 static void session_end(session_t* session, int error)
 {
-	gprintln(NULL, "session end.");
+	gprintln(NULL, "session end. id = %ld, is_error = %d, error = %d", session->id, session->is_error, error);
 
 	if (error)
 		session->is_error = error;
 
 	if (session->fstream)
 	{
+		gprintln(NULL, "close fstream");
 		fstream_close(session->fstream);
 		session->fstream = 0;
 	}
@@ -1633,14 +1636,6 @@ static int session_attach(request_t* r)
 
 	/* found a session in hashtable*/
 
-	/* if error, send an error and close */
-	if (session->is_error)
-	{
-		http_error(r, FDIST_INTERNAL_ERROR, "session error");
-		request_end(r, 1, 0);
-		return -1;
-	}
-
 	/* session already ended. send an empty response, and close. */
 	if (NULL == session->fstream)
 	{
@@ -1648,6 +1643,14 @@ static int session_attach(request_t* r)
 
 		http_empty(r);
 		request_end(r, 0, 0);
+		return -1;
+	}
+
+	/* if error, send an error and close */
+	if (session->is_error)
+	{
+		http_error(r, FDIST_INTERNAL_ERROR, "session error");
+		request_end(r, 1, 0);
 		return -1;
 	}
 
@@ -1772,6 +1775,10 @@ static void do_write(int fd, short event, void* arg)
 				n = local_send(r, datablock->hdr.hbyte + datablock->hdr.hbot, n);
 				if (n < 0)
 				{
+					/*
+					 * TODO: It is not safe to check errno here, should check and
+					 * return special value in local_send()
+					 */
 					if (errno == EPIPE || errno == ECONNRESET)
 						r->outblock.bot = r->outblock.top;
 					request_end(r, 1, "gpfdist send block header failure");

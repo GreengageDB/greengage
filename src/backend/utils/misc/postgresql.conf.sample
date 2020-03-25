@@ -310,6 +310,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #gp_segments_for_planner = 0     # if 0, actual number of segments is used
 
 #gp_enable_direct_dispatch = on
+#plan_cache_mode = auto
 
 optimizer_analyze_root_partition = on # stats collection on root partitions
 

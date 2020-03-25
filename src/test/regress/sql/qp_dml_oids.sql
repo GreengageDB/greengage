@@ -194,6 +194,18 @@ INSERT INTO dml_ao (a, b, c) VALUES (10, 2, repeat('x', 50000));
 SELECT COUNT(distinct oid) FROM dml_ao where a = 10;
 
 --
+-- Check that 'toast' is disabled by GUC.
+--
+set debug_appendonly_use_no_toast to on;
+CREATE TABLE dml_ao1 (a int , b int default -1, c text) WITH (appendonly = true, oids = true) DISTRIBUTED BY (a);
+INSERT INTO dml_ao1 (a, b, c) VALUES (10, 3, repeat('x', 50000));
+INSERT INTO dml_ao1 (a, b, c) VALUES (10, 4, repeat('x', 50000));
+
+SELECT COUNT(distinct oid) FROM dml_ao where a = 10;
+DROP TABLE dml_ao1;
+reset debug_appendonly_use_no_toast;
+
+--
 -- Check that new OIDs are generated even if the tuple being inserted came from
 -- the same relation and segment.
 --

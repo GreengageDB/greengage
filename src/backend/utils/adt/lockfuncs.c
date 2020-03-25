@@ -35,6 +35,7 @@ static const char *const LockTagTypeNames[] = {
 	"append-only segment file",
 	"object",
 	"resource queue",
+	"distributed xid",
 	"userlock",
 	"advisory"
 };
@@ -391,6 +392,18 @@ pg_lock_status(PG_FUNCTION_ARGS)
 				nulls[9] = true;
 				break;
 			case LOCKTAG_TRANSACTION:
+				values[6] =
+					TransactionIdGetDatum(instance->locktag.locktag_field1);
+				nulls[1] = true;
+				nulls[2] = true;
+				nulls[3] = true;
+				nulls[4] = true;
+				nulls[5] = true;
+				nulls[7] = true;
+				nulls[8] = true;
+				nulls[9] = true;
+				break;
+			case LOCKTAG_DISTRIB_TRANSACTION:
 				values[6] =
 					TransactionIdGetDatum(instance->locktag.locktag_field1);
 				nulls[1] = true;

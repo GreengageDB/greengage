@@ -1618,6 +1618,7 @@ CTranslatorRelcacheToDXL::RetrieveType
 	BOOL is_hashable = gpdb::IsOpHashJoinable(ptce->eq_opr, oid_type);
 	BOOL is_merge_joinable = gpdb::IsOpMergeJoinable(ptce->eq_opr, oid_type);
 	BOOL is_composite_type = gpdb::IsCompositeType(oid_type);
+	BOOL is_text_related_type = gpdb::IsTextRelatedType(oid_type);
 
 	// get standard aggregates
 	CMDIdGPDB *mdid_min = GPOS_NEW(mp) CMDIdGPDB(gpdb::GetAggregate("min", oid_type));
@@ -1666,6 +1667,7 @@ CTranslatorRelcacheToDXL::RetrieveType
 						 is_hashable,
 						 is_merge_joinable,
 						 is_composite_type,
+						 is_text_related_type,
 						 mdid_type_relid,
 						 mdid_type_array,
 						 ptce->typlen
@@ -2274,7 +2276,6 @@ CTranslatorRelcacheToDXL::RetrieveRelStats
 
 	double num_rows = 0.0;
 	CMDName *mdname = NULL;
-	BOOL stats_empty = false;
 
 	GPOS_TRY
 	{
@@ -2285,7 +2286,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStats
 		// CMDName ctor created a copy of the string
 		GPOS_DELETE(relname_str);
 
-		num_rows = gpdb::CdbEstimatePartitionedNumTuples(rel, &stats_empty);
+		num_rows = gpdb::CdbEstimatePartitionedNumTuples(rel);
 
 		m_rel_stats_mdid->AddRef();
 		gpdb::CloseRelation(rel);
@@ -2297,9 +2298,14 @@ CTranslatorRelcacheToDXL::RetrieveRelStats
 	}
 	GPOS_CATCH_END;
 
+	/*
+	 * relation_empty should be set to true only if the total row
+	 * count of the partition table is 0.
+	 */
+	BOOL relation_empty = false;
 	if (num_rows == 0.0)
 	{
-		stats_empty = true;
+		relation_empty = true;
 	}
 
 	CDXLRelStats *dxl_rel_stats = GPOS_NEW(mp) CDXLRelStats
@@ -2308,7 +2314,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStats
 												m_rel_stats_mdid,
 												mdname,
 												CDouble(num_rows),
-												stats_empty
+												relation_empty
 												);
 
 
@@ -2345,9 +2351,8 @@ CTranslatorRelcacheToDXL::RetrieveColStats
 
 	// number of rows from pg_class
 	double num_rows;
-	bool stats_empty;
 
-	num_rows = gpdb::CdbEstimatePartitionedNumTuples(rel, &stats_empty);
+	num_rows = gpdb::CdbEstimatePartitionedNumTuples(rel);
 
 	// extract column name and type
 	CMDName *md_colname = GPOS_NEW(mp) CMDName(mp, md_col->Mdname().GetMDName());

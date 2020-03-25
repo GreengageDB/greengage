@@ -36,6 +36,7 @@
 /expected/unsupported_dist_coltypes.out
 /expected/gphdfs.out
 /expected/mismatched_aopartition_indexes.out
+/expected/mismatched_partition_schemas.out
 /expected/unsupported_name_col.out
 /expected/unsupported_tsquery_col.out
 /expected/upgraded_ao_table_without_base_relfilenode.out
@@ -48,6 +49,7 @@
 /sql/unsupported_dist_coltypes.sql
 /sql/gphdfs.sql
 /sql/mismatched_aopartition_indexes.sql
+/sql/mismatched_partition_schemas.sql
 /sql/unsupported_name_col.sql
 /sql/unsupported_tsquery_col.sql
 /sql/upgraded_ao_table_without_base_relfilenode.sql

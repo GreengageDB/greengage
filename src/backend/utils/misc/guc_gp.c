@@ -109,6 +109,7 @@ bool        gp_guc_need_restore = false;
 
 char	   *Debug_dtm_action_sql_command_tag;
 
+bool		dev_opt_unsafe_truncate_in_subtransaction = false;
 bool		Debug_print_full_dtm = false;
 bool		Debug_print_snapshot_dtm = false;
 bool		Debug_disable_distributed_snapshot = false;
@@ -132,6 +133,8 @@ bool		Debug_appendonly_print_compaction = false;
 bool		Debug_resource_group = false;
 bool		Debug_bitmap_print_insert = false;
 bool		Test_print_direct_dispatch_info = false;
+bool        Test_print_prefetch_joinqual = false;
+bool		Test_copy_qd_qe_split = false;
 bool		gp_permit_relation_node_change = false;
 int			gp_max_local_distributed_cache = 1024;
 bool		gp_appendonly_verify_block_checksums = true;
@@ -406,6 +409,7 @@ bool		optimizer_cte_inlining;
 bool		optimizer_enable_space_pruning;
 bool		optimizer_enable_associativity;
 bool		optimizer_enable_eageragg;
+bool		optimizer_enable_range_predicate_dpe;
 
 /* Analyze related GUCs for Optimizer */
 bool		optimizer_analyze_root_partition;
@@ -488,6 +492,7 @@ static const struct config_enum_entry optimizer_minidump_options[] = {
 static const struct config_enum_entry optimizer_cost_model_options[] = {
 	{"legacy", OPTIMIZER_GPDB_LEGACY},
 	{"calibrated", OPTIMIZER_GPDB_CALIBRATED},
+	{"experimental", OPTIMIZER_GPDB_EXPERIMENTAL},
 	{NULL, 0}
 };
 
@@ -1216,6 +1221,21 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"dev_opt_unsafe_truncate_in_subtransaction", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Pick unsafe truncate instead of safe truncate inside sub-transaction."),
+		 gettext_noop("Usage of this GUC is strongly discouraged and only "
+					  "should be used after understanding the impact of using "
+					  "the same. Setting the GUC comes with cost of losing "
+					  "table data on truncate command despite sub-transaction "
+					  "rollback for table created within transaction."),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_DISALLOW_IN_AUTO_FILE
+		},
+		&dev_opt_unsafe_truncate_in_subtransaction,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"debug_print_full_dtm", PGC_SUSET, LOGGING_WHAT,
 			gettext_noop("Prints full DTM information to server log."),
 			NULL,
@@ -1541,6 +1561,28 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&Test_print_direct_dispatch_info,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"test_print_prefetch_joinqual", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("For testing purposes, print information about if we prefetch join qual."),
+			NULL,
+			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&Test_print_prefetch_joinqual,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"test_copy_qd_qe_split", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("For testing purposes, print information about which columns are parsed in QD and which in QE."),
+			NULL,
+			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&Test_copy_qd_qe_split,
 		false,
 		NULL, NULL, NULL
 	},
@@ -2994,6 +3036,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"optimizer_enable_range_predicate_dpe", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable range predicates for dynamic partition elimination."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_range_predicate_dpe,
+		false,
+		NULL, NULL, NULL
+	},
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL
@@ -4213,6 +4265,17 @@ struct config_int ConfigureNamesInt_gp[] =
 struct config_real ConfigureNamesReal_gp[] =
 {
 	{
+		{"disable_cost", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Sets the planner's cost of a disabled path."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&disable_cost,
+		1.0e10, 1.0e10, 1.0e30,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_motion_cost_per_row", PGC_USERSET, QUERY_TUNING_COST,
 			gettext_noop("Sets the planner's estimate of the cost of "
 						 "moving a row between worker processes."),
@@ -4451,7 +4514,7 @@ struct config_string ConfigureNamesString_gp[] =
 	},
 	{
 		{"pljava_classpath", PGC_SUSET, CUSTOM_OPTIONS,
-			gettext_noop("classpath used by the the JVM"),
+			gettext_noop("classpath used by the JVM"),
 			NULL,
 			GUC_NOT_IN_SAMPLE
 		},
@@ -4596,7 +4659,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 	{
 		{"optimizer_cost_model", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Set optimizer cost model."),
-			gettext_noop("Valid values are legacy, calibrated"),
+			gettext_noop("Valid values are legacy, calibrated, experimental"),
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_cost_model,

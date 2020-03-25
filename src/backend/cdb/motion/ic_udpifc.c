@@ -38,7 +38,6 @@
 #include "port/pg_crc32c.h"
 #include "storage/latch.h"
 #include "storage/pmsignal.h"
-#include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -920,7 +919,7 @@ initCursorICHistoryTable(CursorICHistoryTable *t)
 
 /*
  * addCursorIcEntry
- * 		Add an entry to the the cursor ic table.
+ * 		Add an entry to the cursor ic table.
  */
 static void
 addCursorIcEntry(CursorICHistoryTable *t, uint32 icId, uint32 cid)
@@ -1193,7 +1192,7 @@ setupUDPListeningSocket(int *listenerSocketFd, uint16 *listenerPort, int *txFami
 #endif
 
 	fun = "getaddrinfo";
-	s = getaddrinfo(BackendListenAddress, service, &hints, &addrs);
+	s = getaddrinfo(NULL, service, &hints, &addrs);
 	if (s != 0)
 		elog(ERROR, "getaddrinfo says %s", gai_strerror(s));
 

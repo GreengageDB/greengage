@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Cwd;
 use TestLib;
-use Test::More tests => 39;
+use Test::More tests => 42;
 
 program_help_ok('pg_basebackup');
 program_version_ok('pg_basebackup');
@@ -179,3 +179,44 @@ command_fails(
 command_fails(
 	[ 'pg_basebackup', '-D', "$tempdir/backup_foo", '-Fp', "-Tfoo" ],
 	'-T with invalid format fails');
+
+#
+# GPDB: Exclude some files with the --exclude-from option
+#
+
+my $exclude_tempdir = "$tempdir/backup_exclude";
+my $excludelist = "$tempdir/exclude.list";
+
+mkdir "$exclude_tempdir";
+mkdir "$tempdir/pgdata/exclude";
+
+open EXCLUDELIST, ">$excludelist";
+
+# Put a large amount of non-exist patterns in the exclude-from file,
+# the pattern matching is efficient enough to handle them.
+for my $i (1..1000000) {
+	print EXCLUDELIST "./exclude/non_exist.$i\n";
+}
+
+# Create some files to exclude
+for my $i (1..1000) {
+	print EXCLUDELIST "./exclude/$i\n";
+
+	open FILE, ">$tempdir/pgdata/exclude/$i";
+	close FILE;
+}
+
+# Below file should not be excluded
+open FILE, ">$tempdir/pgdata/exclude/keep";
+close FILE;
+
+close EXCLUDELIST;
+
+command_ok(
+	[	'pg_basebackup',
+		'-D', "$exclude_tempdir",
+		'--target-gp-dbid', '123',
+		'--exclude-from', "$excludelist" ],
+	'pg_basebackup runs with exclude-from file');
+ok(! -f "$exclude_tempdir/exclude/0", 'excluded files were not created');
+ok(-f "$exclude_tempdir/exclude/keep", 'other files were created');

@@ -247,6 +247,8 @@ struct pg_result
 	/* GPDB: number of processed tuples for each AO partition */
 	int			naotupcounts;
 	PQaoRelTupCount *aotupcounts;
+	int		nWaits;
+	int		*waitGxids;
 };
 
 /* PGAsyncStatusType defines the state of the query-execution state machine */

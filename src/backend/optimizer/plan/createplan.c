@@ -25,6 +25,8 @@
 #include "access/skey.h"
 #include "access/sysattr.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_exttable.h"
+#include "catalog/pg_proc.h"
 #include "foreign/fdwapi.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -48,6 +50,7 @@
 #include "parser/parse_clause.h"
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"	/* ordering_oper_opid */
+#include "rewrite/rewriteManip.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/uri.h"
@@ -61,6 +64,14 @@
 #include "cdb/cdbsreh.h"
 #include "cdb/cdbvars.h"
 
+typedef struct
+{
+	plan_tree_base_prefix base; /* Required prefix for
+								 * plan_tree_walker/mutator */
+	Bitmapset            *seen_subplans;
+	bool                  result;
+} contain_motion_walk_context;
+
 static Plan *create_subplan(PlannerInfo *root, Path *best_path);		/* CDB */
 static Plan *create_scan_plan(PlannerInfo *root, Path *best_path);
 static List *build_path_tlist(PlannerInfo *root, Path *path);
@@ -73,6 +84,7 @@ static Plan *create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_p
 static Result *create_result_plan(PlannerInfo *root, ResultPath *best_path);
 static Material *create_material_plan(PlannerInfo *root, MaterialPath *best_path);
 static Plan *create_unique_plan(PlannerInfo *root, UniquePath *best_path);
+static Plan *create_projection_plan(PlannerInfo *root, ProjectionPath *best_path);
 static Plan *create_motion_plan(PlannerInfo *root, CdbMotionPath *path);
 static SeqScan *create_seqscan_plan(PlannerInfo *root, Path *best_path,
 					List *tlist, List *scan_clauses);
@@ -183,6 +195,9 @@ static EquivalenceMember *find_ec_member_for_tle(EquivalenceClass *ec,
 static Motion *cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 								 CdbMotionPath *path,
 								 Plan *subplan);
+static void append_initplan_for_function_scan(PlannerInfo *root, Path *best_path, Plan *plan);
+static bool contain_motion(PlannerInfo *root, Node *node);
+static bool contain_motion_walk(Node *node, contain_motion_walk_context *ctx);
 
 /*
  * GPDB_92_MERGE_FIXME: The following functions have been removed in PG 9.2
@@ -305,8 +320,16 @@ create_plan_recurse(PlannerInfo *root, Path *best_path)
 											(MergeAppendPath *) best_path);
 			break;
 		case T_Result:
-			plan = (Plan *) create_result_plan(root,
-											   (ResultPath *) best_path);
+			if (IsA(best_path, ProjectionPath))
+			{
+				plan = create_projection_plan(root,
+											  (ProjectionPath *) best_path);
+			}
+			else
+			{
+				plan = (Plan *) create_result_plan(root,
+												   (ResultPath *) best_path);
+			}
 			break;
 		case T_Material:
 			plan = (Plan *) create_material_plan(root,
@@ -452,6 +475,7 @@ create_scan_plan(PlannerInfo *root, Path *best_path)
 													 best_path,
 													 tlist,
 													 scan_clauses);
+			append_initplan_for_function_scan(root, best_path, plan);
 			break;
 
 		case T_TableFunctionScan:
@@ -776,17 +800,15 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path)
 	if (partition_selector_created)
 		((Join *) plan)->prefetch_inner = true;
 
-	/*
-	 * A motion deadlock can also happen when outer and joinqual both contain
-	 * motions.  It is not easy to check for joinqual here, so we set the
-	 * prefetch_joinqual mark only according to outer motion, and check for
-	 * joinqual later in the executor.
-	 *
-	 * See ExecPrefetchJoinQual() for details.
+	/* CDB: if the join's locus is bottleneck which means the
+	 * join gang only contains one process, so there is no
+	 * risk for motion deadlock.
 	 */
-	if (best_path->outerjoinpath &&
-		best_path->outerjoinpath->motionHazard)
-		((Join *) plan)->prefetch_joinqual = true;
+	if (CdbPathLocus_IsBottleneck(best_path->path.locus))
+	{
+		((Join *) plan)->prefetch_inner = false;
+		((Join *) plan)->prefetch_joinqual = false;
+	}
 
 	plan->flow = cdbpathtoplan_create_flow(root,
 			best_path->path.locus,
@@ -801,6 +823,20 @@ create_join_plan(PlannerInfo *root, JoinPath *best_path)
 	if (plan->flow && plan->flow->hashExprs)
 	{
 		plan->targetlist = add_to_flat_tlist_junk(plan->targetlist, plan->flow->hashExprs, true /* resjunk */ );
+	}
+
+	/*
+	 * We may set prefetch_joinqual to true if there is
+	 * potential risk when create_xxxjoin_plan. Here, we
+	 * have all the information at hand, this is the final
+	 * logic to set prefetch_joinqual.
+	 */
+	if (((Join *) plan)->prefetch_joinqual)
+	{
+		List *joinqual = ((Join *) plan)->joinqual;
+
+		((Join *) plan)->prefetch_joinqual = contain_motion(root,
+															(Node *) joinqual);
 	}
 
 	/*
@@ -1239,6 +1275,95 @@ create_unique_plan(PlannerInfo *root, UniquePath *best_path)
 	return plan;
 }
 
+/*
+ * create_projection_plan
+ *
+ *	  Create a plan tree to do a projection step and (recursively) plans
+ *	  for its subpaths.  We may need a Result node for the projection,
+ *	  but sometimes we can just let the subplan do the work.
+ */
+static Plan *
+create_projection_plan(PlannerInfo *root, ProjectionPath *best_path)
+{
+	Plan	   *plan;
+	Plan	   *subplan;
+	List	   *tlist;
+
+	/* Since we intend to project, we don't need to constrain child tlist */
+	subplan = create_plan_recurse(root, best_path->subpath);
+
+	tlist = build_path_tlist(root, &best_path->path);
+
+	/*
+	 * We might not really need a Result node here, either because the subplan
+	 * can project or because it's returning the right list of expressions
+	 * anyway.  Usually create_projection_path will have detected that and set
+	 * dummypp if we don't need a Result; but its decision can't be final,
+	 * because some createplan.c routines change the tlists of their nodes.
+	 * (An example is that create_merge_append_plan might add resjunk sort
+	 * columns to a MergeAppend.)  So we have to recheck here.  If we do
+	 * arrive at a different answer than create_projection_path did, we'll
+	 * have made slightly wrong cost estimates; but label the plan with the
+	 * cost estimates we actually used, not "corrected" ones.  (XXX this could
+	 * be cleaned up if we moved more of the sortcolumn setup logic into Path
+	 * creation, but that would add expense to creating Paths we might end up
+	 * not using.)
+	 */
+	if (!best_path->cdb_restrict_clauses &&
+		(is_projection_capable_plan(subplan) ||
+		 tlist_same_exprs(tlist, subplan->targetlist)))
+	{
+		/* Don't need a separate Result, just assign tlist to subplan */
+		plan = subplan;
+		plan->targetlist = tlist;
+
+		/* Label plan with the estimated costs we actually used */
+		plan->startup_cost = best_path->path.startup_cost;
+		plan->total_cost = best_path->path.total_cost;
+		plan->plan_rows = best_path->path.rows;
+		plan->plan_width = subplan->plan_width;
+		/* ... but be careful not to munge subplan's parallel-aware flag */
+	}
+	else
+	{
+		List	   *scan_clauses = NIL;
+		List	   *pseudoconstants = NIL;
+
+		if (best_path->cdb_restrict_clauses)
+		{
+			List	   *all_clauses = best_path->cdb_restrict_clauses;
+
+			/* Replace any outer-relation variables with nestloop params */
+			if (best_path->path.param_info)
+			{
+				all_clauses = (List *)
+					replace_nestloop_params(root, (Node *) all_clauses);
+			}
+
+			/* Sort clauses into best execution order */
+			all_clauses = order_qual_clauses(root, all_clauses);
+
+			/* Reduce RestrictInfo list to bare expressions; ignore pseudoconstants */
+			scan_clauses = extract_actual_clauses(all_clauses, false);
+
+			/* but we actually also want the pseudoconstants */
+			pseudoconstants = extract_actual_clauses(all_clauses, true);
+		}
+
+		/* We need a Result node */
+		plan = (Plan *) make_result(root, tlist, (Node *) pseudoconstants, subplan);
+
+		plan->qual = scan_clauses;
+
+		copy_path_costsize(root, plan, (Path *) best_path);
+		plan->flow = cdbpathtoplan_create_flow(root,
+											   best_path->path.locus,
+											   best_path->path.parent ? best_path->path.parent->relids : NULL,
+											   plan);
+	}
+
+	return plan;
+}
 
 /*
  * create_motion_plan
@@ -3217,7 +3342,8 @@ create_nestloop_plan(PlannerInfo *root,
 	 * See ExecPrefetchJoinQual() for details.
 	 */
 	if (best_path->outerjoinpath &&
-		best_path->outerjoinpath->motionHazard)
+		best_path->outerjoinpath->motionHazard &&
+		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 
 	return join_plan;
@@ -3554,14 +3680,16 @@ create_mergejoin_plan(PlannerInfo *root,
 	 * See ExecPrefetchJoinQual() for details.
 	 */
 	if (best_path->jpath.outerjoinpath &&
-		best_path->jpath.outerjoinpath->motionHazard)
+		best_path->jpath.outerjoinpath->motionHazard &&
+		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 	/*
 	 * If inner motion is not under a Material or Sort node then there could
 	 * also be motion deadlock between inner and joinqual in mergejoin.
 	 */
 	if (best_path->jpath.innerjoinpath &&
-		best_path->jpath.innerjoinpath->motionHazard)
+		best_path->jpath.innerjoinpath->motionHazard &&
+		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 
 	/* Costs of sort and material steps are included in path cost already */
@@ -3727,7 +3855,8 @@ create_hashjoin_plan(PlannerInfo *root,
 	 * See ExecPrefetchJoinQual() for details.
 	 */
 	if (best_path->jpath.outerjoinpath &&
-		best_path->jpath.outerjoinpath->motionHazard)
+		best_path->jpath.outerjoinpath->motionHazard &&
+		join_plan->join.joinqual != NIL)
 		join_plan->join.prefetch_joinqual = true;
 
 	copy_path_costsize(root, &join_plan->join.plan, &best_path->jpath.path);
@@ -4668,6 +4797,7 @@ make_functionscan(List *qptlist,
 	node->scan.scanrelid = scanrelid;
 	node->functions = functions;
 	node->funcordinality = funcordinality;
+	node->resultInTupleStore = false;
 
 	return node;
 }
@@ -7103,3 +7233,161 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 
 	return motion;
 }								/* cdbpathtoplan_create_motion_plan */
+
+/*
+ * append_initplan_for_function_scan
+ *
+ * CDB: gpdb specific function to append an initplan node for function scan.
+ *
+ * Note that append initplan for function scan node only takes effect when
+ * the function location is PROEXECLOCATION_INITPLAN and optimizer is off.
+ *
+ * Considering functions which include DDLs, they cannot run on QEs.
+ * But for query like 'create table t as select * from f();' QD needs to do
+ * the CTAS work and function f() will be run on EntryDB, which is also a QE.
+ * To support this kind of query in GPDB, we run the function scan on initplan
+ * firstly, and store the results into tuplestore, later the function scan
+ * on EnrtyDB could fetch tuple from tuplestore instead of executing the real
+ * fucntion.
+ */
+static void
+append_initplan_for_function_scan(PlannerInfo *root, Path *best_path, Plan *plan)
+{
+	FunctionScan *fsplan = (FunctionScan *)plan;
+	char	exec_location;
+	Param	*prm;
+	RangeTblFunction	*rtfunc;
+	FuncExpr	*funcexpr;
+
+	/* Currently we limit function number to one */
+	if (list_length(fsplan->functions) != 1)
+		return;
+
+	rtfunc = (RangeTblFunction *) linitial(fsplan->functions);
+	
+	if (!IsA(rtfunc->funcexpr, FuncExpr))
+		return;
+
+	/* function must be specified EXECUTE ON INITPLAN */
+	funcexpr = (FuncExpr *) rtfunc->funcexpr;
+	exec_location = func_exec_location(funcexpr->funcid);
+	if (exec_location != PROEXECLOCATION_INITPLAN)
+		return;
+
+	/* 
+	 * Create a copied FunctionScan plan as a initplan
+	 * Initplan is responsible to run the real function
+	 * and store the result into tuplestore.
+	 * Original FunctionScan just read the tuple store
+	 * (indicated by resultInTupleStore) and return the
+	 * result to upper plan node.
+	 *
+	 * We are going to construct what is effectively a sub-SELECT query, so
+	 * clone the current query level's state and adjust it to make it look
+	 * like a subquery.  Any outer references will now be one level higher
+	 * than before.  (This means that when we are done, there will be no Vars
+	 * of level 1, which is why the subquery can become an initplan.)
+	 */
+	PlannerInfo *subroot;
+	Query	   *parse;
+	subroot = (PlannerInfo *) palloc(sizeof(PlannerInfo));
+	memcpy(subroot, root, sizeof(PlannerInfo));
+	subroot->query_level++;
+	subroot->parent_root = root;
+	/* reset subplan-related stuff */
+	subroot->plan_params = NIL;
+	subroot->init_plans = NIL;
+	subroot->cte_plan_ids = NIL;
+
+	subroot->parse = parse = (Query *) copyObject(root->parse);
+	IncrementVarSublevelsUp((Node *) parse, 1, 1);
+
+	/* append_rel_list might contain outer Vars? */
+	subroot->append_rel_list = (List *) copyObject(root->append_rel_list);
+	IncrementVarSublevelsUp((Node *) subroot->append_rel_list, 1, 1);
+
+	/* create initplan for this FunctionScan plan */
+	FunctionScan* initplan =(FunctionScan*) copyObject(plan);
+	
+	/*
+	 * the following param of initplan is a dummy param.
+	 * this param is not used by the main plan, since when
+	 * function scan is running in initplan, it stores the
+	 * result rows in tuplestore instead of a scalar param
+	 */
+	prm = SS_make_initplan_from_plan(subroot, (Plan *)initplan, InvalidOid, -1, InvalidOid, true);
+
+	fsplan->param = prm;
+	fsplan->resultInTupleStore = true;
+
+    /*
+     * Make sure the initplan gets into the outer PlannerInfo, along with any
+     * other initplans generated by the sub-planning run.  We had to include
+     * the outer PlannerInfo's pre-existing initplans into the inner one's
+     * init_plans list earlier, so make sure we don't put back any duplicate
+     * entries.
+     */
+    root->init_plans = list_concat_unique_ptr(root->init_plans,
+                                              subroot->init_plans);
+
+	/* Decorate the top node of the plan with a Flow node. */
+	initplan->scan.plan.flow = cdbpathtoplan_create_flow(root,
+														 best_path->locus,
+														 best_path->parent ? best_path->parent->relids
+														 : NULL,
+														 &initplan->scan.plan);
+}
+
+/*
+ * contain_motion
+ * This function walks the joinqual list to  see there is
+ * any motion node in it. The only case a qual contains motion
+ * is that it is a SubPlan and the SubPlan contains motion.
+ * XXX: an over kill method is used here, for details please
+ * refer to the following function `contain_motion_walk`.
+ */
+static bool
+contain_motion(PlannerInfo *root, Node *node)
+{
+	contain_motion_walk_context ctx;
+	planner_init_plan_tree_base(&ctx.base, root);
+	ctx.result = false;
+	ctx.seen_subplans = NULL;
+
+	(void) contain_motion_walk(node, &ctx);
+
+	return ctx.result;
+}
+
+static bool
+contain_motion_walk(Node *node, contain_motion_walk_context *ctx)
+{
+	if (ctx->result)
+		return true;
+
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, SubPlan))
+	{
+		/*
+		 * In 6X we add motions for SubPlan after we have gotten
+		 * the plan. So at the time of this function calling,
+		 * we do not know if the SubPlan contains motion. We might
+		 * walk the plannedstmt to accurately determine this, but
+		 * that makes the code not that clean. So, we adopt an over
+		 * kill method here: any SubPlan contains motion. At least,
+		 * this can avoid motion deadlock.
+		 */
+		ctx->result = true;
+		return true;
+	}
+
+	if (IsA(node, Motion))
+	{
+		ctx->result = true;
+		return true;
+	}
+
+	return plan_tree_walker((Node *) node, contain_motion_walk, ctx);
+}

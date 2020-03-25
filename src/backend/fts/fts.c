@@ -404,6 +404,18 @@ void FtsLoop()
 		timeout = elapsed >= gp_fts_probe_interval ? 0 : 
 							gp_fts_probe_interval - elapsed;
 
+		/*
+		 * In above code we might update gp_segment_configuration and then wal
+		 * is generated. While synchronizing wal to standby, we need to wait on
+		 * MyLatch also in SyncRepWaitForLSN(). The set latch introduced by
+		 * outside fts probe trigger (e.g. gp_request_fts_probe_scan() or
+		 * FtsNotifyProber()) might be consumed by it so we do not WaitLatch()
+		 * here with a long timout here else we may block for that long
+		 * timeout, so we recheck probe_requested here before waitLatch().
+		 */
+		if (probe_requested)
+			timeout = 0;
+
 		rc = WaitLatch(&MyProc->procLatch,
 					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 					   timeout * 1000L);

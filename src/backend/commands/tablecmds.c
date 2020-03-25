@@ -1771,6 +1771,8 @@ ExecuteTruncate(TruncateStmt *stmt)
 	foreach(cell, rels)
 	{
 		Relation	rel = (Relation) lfirst(cell);
+		bool inSubTransaction = mySubid != TopSubTransactionId;
+		bool createdInThisTransactionScope = rel->rd_createSubid != InvalidSubTransactionId;
 
 		Assert(CheckExclusiveAccess(rel));
 
@@ -1780,9 +1782,17 @@ ExecuteTruncate(TruncateStmt *stmt)
 		 * a new relfilenode in the current (sub)transaction, then we can just
 		 * truncate it in-place, because a rollback would cause the whole
 		 * table or the current physical file to be thrown away anyway.
+		 *
+		 * GPDB: Using GUC dev_opt_unsafe_truncate_in_subtransaction can force
+		 * unsafe truncation only if
+
+		 *   - inside sub-transaction and not in top transaction
+		 *   - table was created somewhere within this transaction scope
 		 */
 		if (rel->rd_createSubid == mySubid ||
-			rel->rd_newRelfilenodeSubid == mySubid)
+			rel->rd_newRelfilenodeSubid == mySubid ||
+			(dev_opt_unsafe_truncate_in_subtransaction &&
+			 inSubTransaction && createdInThisTransactionScope))
 		{
 			/* Immediate, non-rollbackable truncation is OK */
 			heap_truncate_one_rel(rel);
@@ -15370,7 +15380,7 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 													 ldistro->numsegments);
 
 				/*
-				 * See if the the old policy is the same as the new one but
+				 * See if the old policy is the same as the new one but
 				 * remember, we still might have to rebuild if there are new
 				 * storage options.
 				 */
@@ -17458,19 +17468,31 @@ split_rows(Relation intoa, Relation intob, Relation temprel)
 				break;
 		}
 
-		/* prepare for ExecQual */
-		econtext->ecxt_scantuple = slotT;
+		/*
+		 * Map attributes from origin to target. We should consider dropped
+		 * columns in the origin.
+		 * 
+		 * ExecQual should use targetSlot rather than slotT in case possible 
+		 * partition key mapping.
+		 */
+		AssertImply(!PointerIsValid(achk), PointerIsValid(bchk));
+		targetSlot = reconstructMatchingTupleSlot(slotT, achk ? rria : rrib);
+		econtext->ecxt_scantuple = targetSlot;
 
 		/* determine if we are inserting into a or b */
 		if (achk)
 		{
 			targetIsA = ExecQual((List *)achk, econtext, false);
+
+			if (!targetIsA)
+				targetSlot = reconstructMatchingTupleSlot(slotT, rrib);
 		}
 		else
 		{
-			Assert(PointerIsValid(bchk));
-
 			targetIsA = !ExecQual((List *)bchk, econtext, false);
+
+			if (targetIsA)
+				targetSlot = reconstructMatchingTupleSlot(slotT, rria);
 		}
 
 		/* load variables for the specific target */
@@ -17488,12 +17510,6 @@ split_rows(Relation intoa, Relation intob, Relation temprel)
 			targetAOCSDescPtr = &aocsinsertdesc_b;
 			targetRelInfo = rrib;
 		}
-
-		/*
-		 * Map attributes from origin to target.  We should consider dropped
-		 * columns in the origin.
-		 */
-		targetSlot = reconstructMatchingTupleSlot(slotT, targetRelInfo);
 
 		/* insert into the target table */
 		if (RelationIsHeap(targetRelation))

@@ -82,5 +82,9 @@ extern void DistributedLog_InitOldestXmin(void);
 
 extern void DistributedLog_redo(XLogRecPtr beginLoc, XLogRecPtr lsn, XLogRecord *record);
 extern void DistributedLog_desc(StringInfo buf, XLogRecord *record);
+extern void DistributedLog_GetDistributedXid(
+				TransactionId 						localXid,
+				DistributedTransactionTimeStamp		*distribTimeStamp,
+				DistributedTransactionId 			*distribXid);
 
 #endif							/* DISTRIBUTEDLOG_H */
