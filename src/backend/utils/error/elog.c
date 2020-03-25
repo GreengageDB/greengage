@@ -918,7 +918,7 @@ errfinish_and_return(const char *filename, int lineno, const char *funcname)
  *
  * The code is expected to be represented as per MAKE_SQLSTATE().
  */
-void
+int
 errcode(int sqlerrcode)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -933,6 +933,8 @@ errcode(int sqlerrcode)
 		edata->omit_location = false;
 	else
 		edata->omit_location = true;
+
+	return 0;					/* return value does not matter */
 }
 
 
@@ -945,7 +947,7 @@ errcode(int sqlerrcode)
  * NOTE: the primary error message string should generally include %m
  * when this is used.
  */
-void
+int
 errcode_for_file_access(void)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1004,6 +1006,8 @@ errcode_for_file_access(void)
 			edata->omit_location = false;
 			break;
 	}
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1015,7 +1019,7 @@ errcode_for_file_access(void)
  * NOTE: the primary error message string should generally include %m
  * when this is used.
  */
-void
+int
 errcode_for_socket_access(void)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1036,6 +1040,8 @@ errcode_for_socket_access(void)
 			edata->omit_location = false;
 			break;
 	}
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1157,7 +1163,7 @@ sqlstate_to_errcode(const char *sqlstate)
  * Note: no newline is needed at the end of the fmt string, since
  * ereport will provide one for the output methods that need it.
  */
-void
+int
 errmsg(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1173,6 +1179,8 @@ errmsg(const char *fmt,...)
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1244,7 +1252,7 @@ set_backtrace(ErrorData *edata, int num_skip)
  * the message because the translation would fail and result in infinite
  * error recursion.
  */
-void
+int
 errmsg_internal(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1260,6 +1268,8 @@ errmsg_internal(const char *fmt,...)
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 
@@ -1267,7 +1277,7 @@ errmsg_internal(const char *fmt,...)
  * errmsg_plural --- add a primary error message text to the current error,
  * with support for pluralization of the message text
  */
-void
+int
 errmsg_plural(const char *fmt_singular, const char *fmt_plural,
 			  unsigned long n, ...)
 {
@@ -1284,13 +1294,15 @@ errmsg_plural(const char *fmt_singular, const char *fmt_plural,
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 
 /*
  * errdetail --- add a detail error message text to the current error
  */
-void
+int
 errdetail(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1305,6 +1317,8 @@ errdetail(const char *fmt,...)
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 
@@ -1317,7 +1331,7 @@ errdetail(const char *fmt,...)
  * messages that seem not worth translating for one reason or another
  * (typically, that they don't seem to be useful to average users).
  */
-void
+int
 errdetail_internal(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1331,13 +1345,14 @@ errdetail_internal(const char *fmt,...)
 
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
+	return 0;					/* return value does not matter */
 }
 
 
 /*
  * errdetail_log --- add a detail_log error message text to the current error
  */
-void
+int
 errdetail_log(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1352,13 +1367,15 @@ errdetail_log(const char *fmt,...)
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 /*
  * errdetail_log_plural --- add a detail_log error message text to the current error
  * with support for pluralization of the message text
  */
-void
+int
 errdetail_log_plural(const char *fmt_singular, const char *fmt_plural,
 					 unsigned long n,...)
 {
@@ -1373,6 +1390,7 @@ errdetail_log_plural(const char *fmt_singular, const char *fmt_plural,
 
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
+	return 0;					/* return value does not matter */
 }
 
 
@@ -1380,7 +1398,7 @@ errdetail_log_plural(const char *fmt_singular, const char *fmt_plural,
  * errdetail_plural --- add a detail error message text to the current error,
  * with support for pluralization of the message text
  */
-void
+int
 errdetail_plural(const char *fmt_singular, const char *fmt_plural,
 				 unsigned long n, ...)
 {
@@ -1396,13 +1414,15 @@ errdetail_plural(const char *fmt_singular, const char *fmt_plural,
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 
 /*
  * errhint --- add a hint error message text to the current error
  */
-void
+int
 errhint(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1417,6 +1437,8 @@ errhint(const char *fmt,...)
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 
@@ -1427,7 +1449,7 @@ errhint(const char *fmt,...)
  * context information.  We assume earlier calls represent more-closely-nested
  * states.
  */
-void
+int
 errcontext_msg(const char *fmt,...)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1442,6 +1464,8 @@ errcontext_msg(const char *fmt,...)
 	MemoryContextSwitchTo(oldcontext);
 	recursion_depth--;
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1453,7 +1477,7 @@ errcontext_msg(const char *fmt,...)
  * a set_errcontext_domain() call to specify the domain.  This is usually
  * done transparently by the errcontext() macro.
  */
-void
+int
 set_errcontext_domain(const char *domain)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1463,6 +1487,8 @@ set_errcontext_domain(const char *domain)
 
 	/* the default text domain is the backend's */
 	edata->context_domain = domain ? domain : PG_TEXTDOMAIN("postgres");
+
+	return 0;					/* return value does not matter */
 }
 
 
@@ -1471,7 +1497,7 @@ set_errcontext_domain(const char *domain)
  *
  * This should be called if the message text already includes the statement.
  */
-void
+int
 errhidestmt(bool hide_stmt)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1480,6 +1506,8 @@ errhidestmt(bool hide_stmt)
 	CHECK_STACK_DEPTH();
 
 	edata->hide_stmt = hide_stmt;
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1488,7 +1516,7 @@ errhidestmt(bool hide_stmt)
  * This should only be used for verbose debugging messages where the repeated
  * inclusion of context would bloat the log volume too much.
  */
-void
+int
 errhidecontext(bool hide_ctx)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1497,13 +1525,15 @@ errhidecontext(bool hide_ctx)
 	CHECK_STACK_DEPTH();
 
 	edata->hide_ctx = hide_ctx;
+
+	return 0;					/* return value does not matter */
 }
 
 
 /*
  * errposition --- add cursor position to the current error
  */
-void
+int
 errposition(int cursorpos)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1512,6 +1542,8 @@ errposition(int cursorpos)
 	CHECK_STACK_DEPTH();
 
 	edata->cursorpos = cursorpos;
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1530,7 +1562,7 @@ errprintstack(bool printstack)
 /*
  * internalerrposition --- add internal cursor position to the current error
  */
-void
+int
 internalerrposition(int cursorpos)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1539,6 +1571,8 @@ internalerrposition(int cursorpos)
 	CHECK_STACK_DEPTH();
 
 	edata->internalpos = cursorpos;
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1548,7 +1582,7 @@ internalerrposition(int cursorpos)
  * is intended for use in error callback subroutines that are editorializing
  * on the layout of the error report.
  */
-void
+int
 internalerrquery(const char *query)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1565,6 +1599,8 @@ internalerrquery(const char *query)
 	if (query)
 		edata->internalquery = MemoryContextStrdup(edata->assoc_context, query);
 	errno = edata->saved_errno; /*CDB*/
+
+	return 0;					/* return value does not matter */
 }
 
 /*
@@ -1577,7 +1613,7 @@ internalerrquery(const char *query)
  * Most potential callers should not use this directly, but instead prefer
  * higher-level abstractions, such as errtablecol() (see relcache.c).
  */
-void
+int
 err_generic_string(int field, const char *str)
 {
 	ErrorData  *edata = &errordata[errordata_stack_depth];
@@ -1606,6 +1642,8 @@ err_generic_string(int field, const char *str)
 			elog(ERROR, "unsupported ErrorData field id: %d", field);
 			break;
 	}
+
+	return 0;					/* return value does not matter */
 }
 
 /*
