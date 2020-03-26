@@ -403,6 +403,12 @@ CConfigParamMapping::SConfigMappingElem CConfigParamMapping::m_elements[] =
 		&optimizer_prune_unused_columns,
 		true, // m_negate_param
 		GPOS_WSZ_LIT("Prune unused columns from the query.")
+		},
+		{
+		EopttraceAllowGeneralPredicatesforDPE,
+		&optimizer_enable_range_predicate_dpe,
+		false, // m_negate_param
+		GPOS_WSZ_LIT("Enable range predicates for dynamic partition elimination.")
 		}
 	
 };
@@ -568,6 +574,11 @@ CConfigParamMapping::PackConfigParamInBitset
 	if (!optimizer_enable_associativity)
 	{
 		traceflag_bitset->ExchangeSet(GPOPT_DISABLE_XFORM_TF(CXform::ExfJoinAssociativity));
+	}
+
+	if (OPTIMIZER_GPDB_EXPERIMENTAL == optimizer_cost_model)
+	{
+		traceflag_bitset->ExchangeSet(EopttraceCalibratedBitmapIndexCostModel);
 	}
 
 	// enable nested loop index plans using nest params

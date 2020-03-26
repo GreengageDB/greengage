@@ -269,7 +269,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	MemoryContext oldcontext;
 	GpExecIdentity exec_identity;
 	bool		shouldDispatch;
-	bool		needDtxTwoPhase;
+	bool		needDtx;
 
 	/* sanity checks: queryDesc must not be started already */
 	Assert(queryDesc != NULL);
@@ -632,9 +632,9 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * ExecutorSaysTransactionDoesWrites() before any dispatch
 			 * work for this query.
 			 */
-			needDtxTwoPhase = ExecutorSaysTransactionDoesWrites();
-			if (needDtxTwoPhase)
-				setupTwoPhaseTransaction();
+			needDtx = ExecutorSaysTransactionDoesWrites();
+			if (needDtx)
+				setupDtxTransaction();
 
 			if (queryDesc->ddesc != NULL)
 			{
@@ -687,7 +687,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * Main plan is parallel, send plan to it.
 			 */
 			if (queryDesc->plannedstmt->planTree->dispatch == DISPATCH_PARALLEL)
-				CdbDispatchPlan(queryDesc, needDtxTwoPhase, true);
+				CdbDispatchPlan(queryDesc, needDtx, true);
 		}
 
 		/*
@@ -1697,7 +1697,7 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			{
 				/*
 				 * On QD, the lock on the table has already been taken during parsing, so if it's a child
-				 * partition, we don't need to take a lock. If there a a deadlock GDD will come in place
+				 * partition, we don't need to take a lock. If there a deadlock GDD will come in place
 				 * and resolve the deadlock. ORCA Update / Delete plans only contains the root relation, so
 				 * no locks on leaf partition are taken here. The below changes makes planner as well to not
 				 * take locks on leaf partitions with GDD on.
@@ -2935,6 +2935,13 @@ ExecutePlan(EState *estate,
 {
 	TupleTableSlot *slot;
 	long		current_tuple_count;
+
+	/*
+	 * For holdable cursor, the plan is executed without rewinding on gpdb. We
+	 * need to quit if the executor has already emitted all tuples.
+	 */
+	if (estate->es_got_eos)
+		return;
 
 	/*
 	 * initialize local variables

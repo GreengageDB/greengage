@@ -664,6 +664,7 @@
           <strow>
             <stentry>
               <p><xref href="guc-list.xml#gp_max_slices">gp_max_slices</xref></p>
+              <p><xref href="guc-list.xml#plan_cache_mode">plan_cache_mode</xref></p>
             </stentry>
           </strow>
         </simpletable>
@@ -1189,6 +1190,10 @@
             </p>
             <p>
               <xref href="guc-list.xml#memory_spill_ratio" type="section">memory_spill_ratio</xref>
+            </p>
+            <p>
+              <xref href="guc-list.xml#runaway_detector_activation_percent" type="section"
+                >runaway_detector_activation_percent</xref>
             </p>
             <p>
               <xref href="guc-list.xml#statement_mem" type="section">statement_mem</xref>

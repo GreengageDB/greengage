@@ -508,3 +508,28 @@ fetch all from c;
 move backward all in c;
 fetch all from c;
 rollback;
+-- gpdb: Test executor should return NULL directly during commit for holdable
+-- cursor if previously executor has emitted all tuples. We've seen two issues
+-- below.
+
+-- Assert failure:
+-- DETAIL:  FailedAssertion("!(!((heap)->bh_size == 0) && heap->bh_has_heap_property)", File: "binaryheap.c", Line: 161)
+SET gp_enable_motion_mk_sort = false;
+CREATE TABLE foo1_tbl (a int);
+INSERT INTO foo1_tbl values(2);
+BEGIN;
+DECLARE foo1 CURSOR WITH HOLD FOR SELECT * FROM foo1_tbl ORDER BY a;
+FETCH ALL FROM foo1;
+COMMIT;
+FETCH ALL FROM foo1;
+CLOSE foo1;
+DROP TABLE foo1_tbl;
+RESET gp_enable_motion_mk_sort;
+
+-- ERROR:  cannot execute squelched plan node of type: 232 (execProcnode.c:887)
+BEGIN;
+DECLARE foo2 CURSOR WITH HOLD FOR SELECT relname, spcname FROM pg_catalog.pg_tablespace t, pg_catalog.pg_class c where c.reltablespace = t.oid AND c.relname = 'foo1_tbl';
+FETCH ALL FROM foo2;
+COMMIT;
+FETCH ALL FROM foo2;
+CLOSE foo2;

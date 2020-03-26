@@ -37,10 +37,10 @@ insert into sourcetable values
 -- Check that the rows come out in order, if there's an ORDER BY in
 -- the view definition.
 create view  v_sourcetable as select * from sourcetable order by vn;
-select row_number() over(), * from v_sourcetable;
+select row_number() over(), * from v_sourcetable order by vn;
 
 create view v_sourcetable1 as SELECT sourcetable.qty, vn, pn FROM sourcetable union select sourcetable.qty, sourcetable.vn, sourcetable.pn from sourcetable order by qty;
-select row_number() over(), * from v_sourcetable1;
+select row_number() over(), * from v_sourcetable1 order by qty;
 
 
 -- Check that the row-comparison operator is serialized and deserialized

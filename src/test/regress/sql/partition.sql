@@ -251,6 +251,7 @@ insert into bar_p values(100);
 alter table foo_p exchange partition for(rank(6)) with table bar_p;
 alter table foo_p exchange partition for(rank(6)) with table bar_p without
 validation;
+analyze foo_p;
 select * from foo_p;
 drop table foo_p, bar_p;
 
@@ -262,6 +263,7 @@ create table bar_p(i int, j int) distributed by (i);
 
 insert into bar_p values(6);
 alter table foo_p exchange partition for(rank(6)) with table bar_p;
+analyze foo_p;
 select * from foo_p;
 select * from bar_p;
 -- test that we got the dependencies right
@@ -295,6 +297,7 @@ create table bar_p(i int, j int) distributed by (i);
 insert into foo_p values(1, 1), (2, 1), (3, 1);
 insert into bar_p values(6, 6);
 alter table foo_p exchange partition for(rank(6)) with table bar_p;
+analyze foo_p;
 select * from foo_p;
 drop table bar_p;
 drop table foo_p;
@@ -308,6 +311,7 @@ create table bar_p(i int, j int) with(appendonly = true) distributed by (i);
 insert into foo_p values(1, 1), (2, 1), (3, 2);
 insert into bar_p values(6, 6);
 alter table foo_p exchange partition for(rank(6)) with table bar_p;
+analyze foo_p;
 select * from foo_p;
 drop table bar_p;
 drop table foo_p;
@@ -321,6 +325,7 @@ create table bar_p(i int, j int) with(appendonly = true) distributed by (i);
 insert into foo_p values(1, 2), (2, 3), (3, 4);
 insert into bar_p values(6, 6);
 alter table foo_p exchange partition for(rank(6)) with table bar_p;
+analyze foo_p;
 select * from foo_p;
 drop table bar_p;
 drop table foo_p;
@@ -333,6 +338,7 @@ create table bar_p(i int, j int) distributed by (i);
 
 insert into bar_p values(6, 6);
 alter table foo_p exchange partition for(rank(6)) with table bar_p;
+analyze foo_p;
 select * from foo_p;
 select * from bar_p;
 
@@ -3589,6 +3595,7 @@ select * from part_tab_1_prt_2;
 
 -- Right part
 insert into part_tab_1_prt_3 values(5,5);
+analyze part_tab;
 select * from part_tab;
 select * from part_tab_1_prt_3;
 
@@ -3605,6 +3612,7 @@ insert into input2 select i, i from (select generate_series(1,10) as i) as t;
 
 -- Multiple range table entries in the plan
 insert into part_tab_1_prt_1 select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x where i2.y = 5;
+analyze part_tab;
 select * from part_tab;
 select * from part_tab_1_prt_1;
 
@@ -3643,6 +3651,7 @@ select * from deep_part;
 
 -- Correct leaf part
 insert into deep_part_1_prt_male_2_prt_1_3_prt_1 values (1, 1, 1, 'M');
+analyze deep_part;
 select * from deep_part;
 select * from deep_part_1_prt_male_2_prt_1_3_prt_1;
 
@@ -3676,6 +3685,7 @@ drop table if exists part_tab;
 create table part_tab ( i int, j int) distributed by (i) partition by range(j) (start(0) end(10) every(2));
 -- Wrong part
 insert into part_tab_1_prt_1 values(5,5);
+analyze part_tab;
 select * from part_tab;
 select * from part_tab_1_prt_1;
 
@@ -3701,6 +3711,7 @@ insert into input2 select i, i from (select generate_series(1,10) as i) as t;
 
 -- Multiple range table entries in the plan
 insert into part_tab_1_prt_1 select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x where i2.y = 5;
+analyze part_tab;
 select * from part_tab;
 select * from part_tab_1_prt_1;
 
@@ -3740,6 +3751,7 @@ select * from deep_part;
 
 -- Correct leaf part
 insert into deep_part_1_prt_male_2_prt_1_3_prt_1 values (1, 1, 1, 'M');
+analyze deep_part;
 select * from deep_part;
 select * from deep_part_1_prt_male_2_prt_1_3_prt_1;
 
@@ -4014,3 +4026,36 @@ select a.typowner=b.typowner from pg_type a join pg_type b on true where a.typna
 select nspname from pg_namespace join pg_type on pg_namespace.oid = pg_type.typnamespace where pg_type.typname = 'xchg_tab1' or pg_type.typname = '_xchg_tab1';
 select typname from pg_type where typelem = 'xchg_tab1'::regtype;
 select typname from pg_type where typarray = '_xchg_tab1'::regtype;
+
+-- Test partition table with ACL.
+-- We grant default SELECT permission to a new user, this new user should be
+-- able to SELECT from any partition table we create later.
+-- (https://github.com/greenplum-db/gpdb/issues/9524)
+DROP TABLE IF EXISTS public.t_part_acl;
+DROP ROLE IF EXISTS user_prt_acl;
+
+CREATE ROLE user_prt_acl;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO user_prt_acl;
+
+CREATE TABLE public.t_part_acl (dt date)
+PARTITION BY RANGE (dt)
+(
+    START (date '2019-12-01') INCLUSIVE
+    END (date '2020-02-01') EXCLUSIVE
+    EVERY (INTERVAL '1 month')
+);
+INSERT INTO public.t_part_acl VALUES (date '2019-12-01'), (date '2020-01-31');
+
+-- check if parent and child table have same relacl
+SELECT relname FROM pg_class
+WHERE relname LIKE 't_part_acl%'
+  AND relacl = (SELECT relacl FROM pg_class WHERE relname = 't_part_acl');
+
+-- check if new user can SELECT all data
+SET ROLE user_prt_acl;
+SELECT * FROM public.t_part_acl;
+
+RESET ROLE;
+DROP TABLE public.t_part_acl;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM user_prt_acl;
+DROP ROLE user_prt_acl;

@@ -329,6 +329,9 @@ namespace gpdb {
 	// get the default hash opclass for type
 	Oid GetDefaultDistributionOpclassForType(Oid typid);
 
+	// get the column-definition hash opclass for type
+	Oid GetColumnDefOpclassForType(List *opclassName, Oid typid);
+
 	// get the hash function in an opfamily for given datatype
 	Oid GetHashProcInOpfamily(Oid opfamily, Oid typid);
 
@@ -523,7 +526,7 @@ namespace gpdb {
 
 	// estimate the relation size using the real number of blocks and tuple density
 	void CdbEstimateRelationSize (RelOptInfo *relOptInfo, Relation rel, int32 *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac);
-	double CdbEstimatePartitionedNumTuples (Relation rel, bool *stats_missing);
+	double CdbEstimatePartitionedNumTuples (Relation rel);
 
 	// close the given relation
 	void CloseRelation(Relation rel);
@@ -565,6 +568,8 @@ namespace gpdb {
 
 	// check whether a type is composite
 	bool IsCompositeType(Oid typid);
+
+	bool IsTextRelatedType(Oid typid);
 
 	// get integer value from an Integer value node
 	int GetIntFromValue(Node *node);
@@ -657,9 +662,13 @@ namespace gpdb {
 						   int numsegments);
 
 
+	uint32 HashChar(Datum d);
+
 	uint32 HashBpChar(Datum d);
 
 	uint32 HashText(Datum d);
+
+	uint32 HashName(Datum d);
 
 	uint32 UUIDHash(Datum d);
 

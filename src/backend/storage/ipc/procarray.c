@@ -1281,7 +1281,7 @@ GetOldestXmin(Relation rel, bool ignoreVacuum)
 	 * In QD node, all distributed transactions have an entry in the proc array,
 	 * so we're done.
 	 *
-	 * During binary upgrade and in in maintenance mode, we don't have
+	 * During binary upgrade and in maintenance mode, we don't have
 	 * distributed transactions, so we're done there too. This ensures correct
 	 * operation of VACUUM FREEZE during pg_upgrade and maintenance mode.
 	 *
@@ -4822,6 +4822,40 @@ GetPidByGxid(DistributedTransactionId gxid)
 	LWLockRelease(ProcArrayLock);
 
 	return pid;
+}
+
+DistributedTransactionId
+LocalXidGetDistributedXid(TransactionId xid)
+{
+	int index;
+	DistributedTransactionTimeStamp tstamp;
+	DistributedTransactionId gxid = InvalidDistributedTransactionId;
+	ProcArrayStruct *arrayP = procArray;
+
+	SIMPLE_FAULT_INJECTOR("before_get_distributed_xid");
+	LWLockAcquire(ProcArrayLock, LW_SHARED);
+	for (index = 0; index < arrayP->numProcs; index++)
+	{
+		int		 pgprocno = arrayP->pgprocnos[index];
+		volatile PGXACT *pgxact = &allPgXact[pgprocno];
+		volatile TMGXACT *gxact = &allTmGxact[pgprocno];
+		if (xid == pgxact->xid)
+		{
+			gxid = gxact->gxid;
+			break;
+		}
+	}
+	LWLockRelease(ProcArrayLock);
+
+	/* The transaction has already committed on segment */
+	if (gxid == InvalidDistributedTransactionId)
+	{
+		DistributedLog_GetDistributedXid(xid, &tstamp, &gxid);
+		AssertImply(gxid != InvalidDistributedTransactionId,
+					tstamp == MyTmGxact->distribTimeStamp);
+	}
+
+	return gxid;
 }
 
 /*
