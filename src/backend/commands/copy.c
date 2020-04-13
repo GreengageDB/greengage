@@ -2048,17 +2048,21 @@ CopyDispatchOnSegment(CopyState cstate, const CopyStmt *stmt)
 	int			i;
 	uint64		processed = 0;
 	uint64		rejected = 0;
+	bool		partitioned;
+	HTAB	   *aopartcounts = NULL;
+
 	dispatchStmt = copyObject((Node *) stmt);
 
 	/* add in partitions for dispatch */
 	dispatchStmt->partitions = RelationBuildPartitionDesc(cstate->rel, false);
 
 	all_relids = list_make1_oid(RelationGetRelid(cstate->rel));
+	partitioned = rel_is_partitioned(RelationGetRelid(cstate->rel));
 
 	/* add in AO segno map for dispatch */
 	if (dispatchStmt->is_from)
 	{
-		if (rel_is_partitioned(RelationGetRelid(cstate->rel)))
+		if (partitioned)
 		{
 			PartitionNode *pn = RelationBuildPartitionDesc(cstate->rel, false);
 
@@ -2088,10 +2092,53 @@ CopyDispatchOnSegment(CopyState cstate, const CopyStmt *stmt)
 
 		processed += result->numCompleted;
 		rejected += result->numRejected;
+
+		if (partitioned)
+			aopartcounts = PQprocessAoTupCounts(aopartcounts,
+												(void *) result->aotupcounts,
+												result->naotupcounts);
 	}
 
 	if (rejected)
 		ReportSrehResults(NULL, rejected);
+
+	/*
+	 * Record new tuple counts and increment the modification count in
+	 * pg_aoseg entries if the relations we've copied into are append only.
+	 */
+	if (dispatchStmt->is_from)
+	{
+		if (aopartcounts)
+		{
+			ListCell *lc;
+			foreach(lc, dispatchStmt->ao_segnos)
+			{
+				SegfileMapNode *map = lfirst(lc);
+				struct {
+					Oid relid;
+					int64 tupcount;
+				} *entry;
+				bool found;
+
+				entry = hash_search(aopartcounts,
+									&(map->relid),
+									HASH_FIND,
+									&found);
+
+				if (found && entry->tupcount > 0)
+				{
+					Relation rel = heap_open(map->relid, AccessShareLock);
+					UpdateMasterAosegTotals(rel, map->segno, entry->tupcount, 1);
+					heap_close(rel, NoLock);
+				}
+			}
+		}
+		else if (RelationIsAppendOptimized(cstate->rel) && processed > 0)
+		{
+			SegfileMapNode *map = linitial(dispatchStmt->ao_segnos);
+			UpdateMasterAosegTotals(cstate->rel, map->segno, processed, 1);
+		}
+	}
 
 	cdbdisp_clearCdbPgResults(&pgresults);
 	return processed;
@@ -2503,16 +2550,16 @@ BeginCopyTo(Relation rel,
 }
 
 /*
- * Set up CopyState for writing to an external table.
+ * Set up CopyState for writing to a foreign or external table.
  */
 CopyState
-BeginCopyToForExternalTable(Relation extrel, List *options)
+BeginCopyToForeignTable(Relation forrel, List *options)
 {
 	CopyState	cstate;
 
-	Assert(RelationIsExternal(extrel));
+	Assert(RelationIsExternal(forrel) || RelationIsForeign(forrel));
 
-	cstate = BeginCopy(false, extrel, NULL, NULL, NIL, options, NULL);
+	cstate = BeginCopy(false, forrel, NULL, NULL, NIL, options, NULL);
 	cstate->dispatch_mode = COPY_DIRECT;
 
 	/*

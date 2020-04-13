@@ -1516,10 +1516,57 @@ NOTICE:  COPY ignores external partition(s)
 COPY sales TO PROGRAM 'printf <SEGID> && cat > /dev/null' ON SEGMENT IGNORE EXTERNAL PARTITIONS;
 NOTICE:  COPY ignores external partition(s)
 DROP TABLE sales;
+-- Make sure COPY TO/FROM ON SEGMENT on an AO table works and that the
+-- corresponding aoseg tables get updated accordingly. We also check
+-- against an AO partition table since the dispatch result stores the
+-- individual leaf partition results in a special way compared to a
+-- single AO table and has its own result parsing logic.
 CREATE TABLE ao_copy(c int) WITH (appendonly=true);
+INSERT INTO ao_copy values (1);
 COPY ao_copy TO '/tmp/ao<SEGID>.txt' ON SEGMENT;
+SELECT segno, modcount FROM gp_toolkit.__gp_aoseg('ao_copy'::regclass);
+ segno | modcount 
+-------+----------
+     1 |        1
+(1 row)
+
 COPY ao_copy FROM '/tmp/ao<SEGID>.txt' ON SEGMENT;
+SELECT segno, modcount FROM gp_toolkit.__gp_aoseg('ao_copy'::regclass);
+ segno | modcount 
+-------+----------
+     1 |        2
+(1 row)
+
 DROP TABLE ao_copy;
+CREATE TABLE aopart_copy(c int, d int) WITH (appendonly=true) PARTITION BY RANGE(d) (START(0) END(2) EVERY(1));
+INSERT INTO aopart_copy values (1, 0), (2, 1);
+COPY aopart_copy TO '/tmp/ao<SEGID>.txt' ON SEGMENT;
+SELECT segno, modcount FROM gp_toolkit.__gp_aoseg('aopart_copy_1_prt_1'::regclass);
+ segno | modcount 
+-------+----------
+     1 |        1
+(1 row)
+
+SELECT segno, modcount FROM gp_toolkit.__gp_aoseg('aopart_copy_1_prt_2'::regclass);
+ segno | modcount 
+-------+----------
+     1 |        1
+(1 row)
+
+COPY aopart_copy FROM '/tmp/ao<SEGID>.txt' ON SEGMENT;
+SELECT segno, modcount FROM gp_toolkit.__gp_aoseg('aopart_copy_1_prt_1'::regclass);
+ segno | modcount 
+-------+----------
+     1 |        2
+(1 row)
+
+SELECT segno, modcount FROM gp_toolkit.__gp_aoseg('aopart_copy_1_prt_2'::regclass);
+ segno | modcount 
+-------+----------
+     1 |        2
+(1 row)
+
+DROP TABLE aopart_copy;
 -- "unknown" types can be dumped and restored: these attributes are
 -- NULL-terminated in memory (attlen == -2), so the COPY code needs to handle
 -- them explicitly.
