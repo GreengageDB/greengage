@@ -8941,10 +8941,13 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
     </body>
   </topic>
   <topic id="unix_socket_directory">
-    <title>unix_socket_directory</title>
+    <title>unix_socket_directories</title>
     <body>
       <p>Specifies the directory of the UNIX-domain socket on which the server is to listen for
-        connections from client applications.</p>
+        connections from client applications. Multiple sockets can be created by listing multiple
+        directories separated by commas. </p>
+      <note type="important">Do not change the value of this parameter. The default location is
+        required for Greenplum Database utilities.</note>
       <table id="unix_socket_directory_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -9383,7 +9386,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
         files that are saved by the by the active Greenplum Database master if a checkpoint
         operation occurs.</p>
       <p>The segment files are used to synchronize the active master on the standby master. </p>
-      <table id="keep_wal_segments_table">
+      <table id="wal_keep_segments_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
           <colspec colnum="2" colname="col2" colwidth="1*"/>

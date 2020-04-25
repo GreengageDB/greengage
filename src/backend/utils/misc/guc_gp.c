@@ -3956,7 +3956,16 @@ struct config_int ConfigureNamesInt_gp[] =
 		1000, 1000, INT_MAX,
 		NULL, NULL, NULL
 	},
-
+	{
+		{"gp_resource_group_queuing_timeout", PGC_USERSET, RESOURCES_MGM,
+			gettext_noop("A transaction gives up on queuing on a resource group after this timeout (in ms)."),
+			NULL,
+			GUC_UNIT_MS
+		},
+		&gp_resource_group_queuing_timeout,
+		0, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
 	{
 		{"gp_perfmon_segment_interval", PGC_POSTMASTER, STATS,
 			gettext_noop("Interval (in ms) between sending segment statistics to perfmon."),

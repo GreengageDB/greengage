@@ -58,6 +58,7 @@
 #include "storage/procsignal.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
+#include "utils/ps_status.h"
 #include "utils/resgroup-ops.h"
 #include "utils/resgroup.h"
 #include "utils/resource_manager.h"
@@ -83,7 +84,8 @@ int							gp_resgroup_memory_policy = RESMANAGER_MEMORY_POLICY_NONE;
 bool						gp_log_resgroup_memory = false;
 int							gp_resgroup_memory_policy_auto_fixed_mem;
 bool						gp_resgroup_print_operator_memory_limits = false;
-int							memory_spill_ratio=20;
+int							memory_spill_ratio = 20;
+int							gp_resource_group_queuing_timeout = 0;
 
 /*
  * Data structures
@@ -2753,12 +2755,31 @@ SwitchResGroupOnSegment(const char *buf, int len)
 static void
 waitOnGroup(ResGroupData *group)
 {
+	int64 timeout = -1;
+	int64 curTime;
+	int64 groupWaitStart;
+	const char *old_status;
+	char *new_status = NULL;
+	int len;
 	PGPROC *proc = MyProc;
+	const char *queueStr = " queuing";
 
 	Assert(!LWLockHeldExclusiveByMe(ResGroupLock));
 	Assert(!selfIsAssigned());
 
 	pgstat_report_resgroup(GetCurrentTimestamp(), group->groupId);
+
+	/* set ps status to waiting */
+	if (update_process_title)
+	{
+		old_status = get_real_act_ps_display(&len);
+		new_status = (char *) palloc(len + strlen(queueStr) + 1);
+		memcpy(new_status, old_status, len);
+		strcpy(new_status + len, queueStr);
+		set_ps_display(new_status, false);
+		/* truncate off " queuing" */
+		new_status[len] = '\0';
+	}
 
 	/*
 	 * Mark that we are waiting on resource group
@@ -2766,6 +2787,8 @@ waitOnGroup(ResGroupData *group)
 	 * This is used for interrupt cleanup, similar to lockAwaited in ProcSleep
 	 */
 	groupAwaited = group;
+
+	groupWaitStart = GetCurrentIntegerTimestamp();
 
 	/*
 	 * Make sure we have released all locks before going to sleep, to eliminate
@@ -2781,11 +2804,33 @@ waitOnGroup(ResGroupData *group)
 
 			if (!procIsWaiting(proc))
 				break;
-			WaitLatch(&proc->procLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1);
+
+			if (gp_resource_group_queuing_timeout > 0)
+			{
+				curTime = GetCurrentIntegerTimestamp();
+				timeout = gp_resource_group_queuing_timeout - (curTime - groupWaitStart) / 1000;
+				if (timeout < 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_QUERY_CANCELED),
+							 errmsg("canceling statement due to resource group waiting timeout")));
+
+				WaitLatch(&proc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH, (long)timeout);
+			}
+			else
+			{
+				WaitLatch(&proc->procLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1);
+			}
 		}
 	}
 	PG_CATCH();
 	{
+		/* reset ps status */
+		if (update_process_title)
+		{
+			set_ps_display(new_status, false);
+			pfree(new_status);
+		}
+
 		groupWaitCancel();
 		PG_RE_THROW();
 	}
@@ -2794,6 +2839,13 @@ waitOnGroup(ResGroupData *group)
 	groupAwaited = NULL;
 
 	gpstat_report_waiting(PGBE_WAITING_NONE);
+
+	/* reset ps status */
+	if (update_process_title)
+	{
+		set_ps_display(new_status, false);
+		pfree(new_status);
+	}
 }
 
 /*
