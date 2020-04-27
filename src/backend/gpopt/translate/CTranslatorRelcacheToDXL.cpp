@@ -581,6 +581,7 @@ CTranslatorRelcacheToDXL::RetrieveRel
 	CMDColumnArray *mdcol_array = NULL;
 	IMDRelation::Ereldistrpolicy dist = IMDRelation::EreldistrSentinel;
 	ULongPtrArray *distr_cols = NULL;
+	IMdIdArray *distr_op_families = NULL;
 	CMDIndexInfoArray *md_index_info_array = NULL;
 	IMdIdArray *mdid_triggers_array = NULL;
 	ULongPtrArray *part_keys = NULL;
@@ -616,6 +617,7 @@ CTranslatorRelcacheToDXL::RetrieveRel
 		if (IMDRelation::EreldistrHash == dist)
 		{
 			distr_cols = RetrieveRelDistributionCols(mp, gp_policy, mdcol_array, max_cols);
+			distr_op_families = RetrieveRelDistributionOpFamilies(mp, gp_policy);
 		}
 
 		convert_hash_to_random = gpdb::IsChildPartDistributionMismatched(rel);
@@ -676,6 +678,7 @@ CTranslatorRelcacheToDXL::RetrieveRel
 							dist,
 							mdcol_array,
 							distr_cols,
+							distr_op_families,
 							convert_hash_to_random,
 							keyset_array,
 							md_index_info_array,
@@ -708,6 +711,7 @@ CTranslatorRelcacheToDXL::RetrieveRel
 							dist,
 							mdcol_array,
 							distr_cols,
+							distr_op_families,
 							part_keys,
 							part_types,
 							num_leaf_partitions,
@@ -960,6 +964,25 @@ CTranslatorRelcacheToDXL::RetrieveRelDistributionCols
 
 	GPOS_DELETE_ARRAY(attno_mapping);
 	return distr_cols;
+}
+
+IMdIdArray *
+CTranslatorRelcacheToDXL::RetrieveRelDistributionOpFamilies
+	(
+	CMemoryPool *mp,
+	GpPolicy *gp_policy
+	)
+{
+	IMdIdArray *distr_op_classes = GPOS_NEW(mp) IMdIdArray(mp);
+
+	Oid *opclasses = gp_policy->opclasses;
+	for (ULONG ul = 0; ul < (ULONG) gp_policy->nattrs; ul++)
+	{
+		Oid opfamily = gpdb::GetOpclassFamily(opclasses[ul]);
+		distr_op_classes->Append(GPOS_NEW(mp) CMDIdGPDB(opfamily));
+	}
+
+	return distr_op_classes;
 }
 
 //---------------------------------------------------------------------------
@@ -1639,10 +1662,25 @@ CTranslatorRelcacheToDXL::RetrieveType
 	// get array type mdid
 	CMDIdGPDB *mdid_type_array = GPOS_NEW(mp) CMDIdGPDB(gpdb::GetArrayType(oid_type));
 
-	BOOL is_redistributable = gpdb::GetDefaultDistributionOpclassForType(oid_type) != InvalidOid;
+	OID distr_opfamily = gpdb::GetDefaultDistributionOpfamilyForType(oid_type);
+
+	BOOL is_redistributable = false;
+	CMDIdGPDB *mdid_distr_opfamily = NULL;
+	if (distr_opfamily != InvalidOid)
+	{
+		mdid_distr_opfamily = GPOS_NEW(mp) CMDIdGPDB(distr_opfamily);
+		is_redistributable = true;
+	}
+
+	CMDIdGPDB *mdid_legacy_distr_opfamily = NULL;
+	OID legacy_opclass = gpdb::GetLegacyCdbHashOpclassForBaseType(oid_type);
+	if (legacy_opclass != InvalidOid)
+	{
+		OID legacy_opfamily = gpdb::GetOpclassFamily(legacy_opclass);
+		mdid_legacy_distr_opfamily = GPOS_NEW(mp) CMDIdGPDB(legacy_opfamily);
+	}
 
 	mdid->AddRef();
-
 	return GPOS_NEW(mp) CMDTypeGenericGPDB
 						 (
 						 mp,
@@ -1652,6 +1690,8 @@ CTranslatorRelcacheToDXL::RetrieveType
 						 is_fixed_length,
 						 length,
 						 is_passed_by_value,
+						 mdid_distr_opfamily,
+						 mdid_legacy_distr_opfamily,
 						 mdid_op_eq,
 						 mdid_op_neq,
 						 mdid_op_lt,
@@ -1761,6 +1801,20 @@ CTranslatorRelcacheToDXL::RetrieveScOp
 
 	BOOL returns_null_on_null_input = gpdb::IsOpStrict(op_oid);
 
+	CMDIdGPDB *mdid_hash_opfamily = NULL;
+	OID distr_opfamily = gpdb::GetCompatibleHashOpFamily(op_oid);
+	if (InvalidOid != distr_opfamily)
+	{
+		 mdid_hash_opfamily = GPOS_NEW(mp) CMDIdGPDB(distr_opfamily);
+	}
+
+	CMDIdGPDB *mdid_legacy_hash_opfamily = NULL;
+	OID legacy_distr_opfamily = gpdb::GetCompatibleLegacyHashOpFamily(op_oid);
+	if (InvalidOid != legacy_distr_opfamily)
+	{
+		mdid_legacy_hash_opfamily = GPOS_NEW(mp) CMDIdGPDB(legacy_distr_opfamily);
+	}
+
 	mdid->AddRef();
 	CMDScalarOpGPDB *md_scalar_op = GPOS_NEW(mp) CMDScalarOpGPDB
 											(
@@ -1775,7 +1829,9 @@ CTranslatorRelcacheToDXL::RetrieveScOp
 											m_mdid_inverse_opr,
 											cmp_type,
 											returns_null_on_null_input,
-											RetrieveScOpOpFamilies(mp, mdid)
+											RetrieveScOpOpFamilies(mp, mdid),
+											mdid_hash_opfamily,
+											mdid_legacy_hash_opfamily
 											);
 	return md_scalar_op;
 }
@@ -2775,6 +2831,11 @@ CTranslatorRelcacheToDXL::RetrieveCast
 			break;
 		case COERCION_PATH_FUNC:
 			return GPOS_NEW(mp) CMDCastGPDB(mp, mdid, mdname, mdid_src, mdid_dest, is_binary_coercible, GPOS_NEW(mp) CMDIdGPDB(cast_fn_oid), IMDCast::EmdtFunc);
+			break;
+		case COERCION_PATH_RELABELTYPE:
+			// binary-compatible cast, no function
+			GPOS_ASSERT(cast_fn_oid == 0);
+			return GPOS_NEW(mp) CMDCastGPDB(mp, mdid, mdname, mdid_src, mdid_dest, true /*is_binary_coercible*/, GPOS_NEW(mp) CMDIdGPDB(cast_fn_oid));
 			break;
 		default:
 			break;
