@@ -141,6 +141,7 @@ beginCurrentIndexScan(DynamicIndexScanState *node, EState *estate,
 	Oid			indexOid;
 	List	   *save_tupletable;
 	MemoryContext oldCxt;
+	PlanState  *isPlanState;
 
 	/*
 	 * open the base relation and acquire appropriate lock on it.
@@ -173,6 +174,17 @@ beginCurrentIndexScan(DynamicIndexScanState *node, EState *estate,
 	node->indexScanState = ExecInitIndexScanForPartition(&dynamicIndexScan->indexscan, estate,
 														 node->eflags,
 														 currentRelation, indexOid);
+
+	/*
+	 * Setup gpmon counters for IndexScan. Rows count for sidecar index scan should
+	 * be consistent with a parent dynamic scan as they share the same plan_node_id.
+	 * Otherwise index sends zero row number while dynamic scan sends an actual value
+	 * and this is confusing.
+	 */
+	isPlanState = &node->indexScanState->ss.ps;
+	InitPlanNodeGpmonPkt(isPlanState->plan, &isPlanState->gpmon_pkt, estate);
+	isPlanState->gpmon_pkt.u.qexec.rowsout = node->ss.ps.gpmon_pkt.u.qexec.rowsout;
+
 	/* The IndexScan node takes ownership of currentRelation, and will close it when done */
 	node->tuptable = estate->es_tupleTable;
 	estate->es_tupleTable = save_tupletable;
@@ -291,6 +303,14 @@ ExecDynamicIndexScan(DynamicIndexScanState *node)
 		   initNextIndexToScan(node))
 	{
 		slot = ExecIndexScan(node->indexScanState);
+
+		/*
+		 * Increment sidecar's index scan tuples count.
+		 * It should be incremented consistently with a
+		 * dynamic scan to avoid gpperfmon anomalies.
+		 */
+		if (&node->indexScanState->ss.ps.gpmon_pkt)
+			Gpmon_Incr_Rows_Out(&node->indexScanState->ss.ps.gpmon_pkt);
 
 		if (TupIsNull(slot))
 		{
