@@ -1790,15 +1790,9 @@ SetupTCPInterconnect(EState *estate)
  * This context is destroyed at the end of the query and all memory that gets
  * allocated under it is free'd.  We don't have have to worry about pfree() but
  * we definitely have to worry about socket resources.
- *
- * If forceEOS is set, we force end-of-stream notifications out any send-nodes,
- * and we wrap that send in a PG_TRY/CATCH block because the goal is to reduce
- * confusion (and if we're being shutdown abnormally anyhow, let's not start
- * adding errors!).
  */
 void
-TeardownTCPInterconnect(ChunkTransportState *transportStates,
-						bool forceEOS, bool hasError)
+TeardownTCPInterconnect(ChunkTransportState *transportStates, bool hasErrors)
 {
 	ListCell   *cell;
 	ChunkTransportStateEntry *pEntry = NULL;
@@ -1816,7 +1810,7 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates,
 	 * if we're already trying to clean up after an error -- don't allow
 	 * signals to interrupt us
 	 */
-	if (forceEOS)
+	if (hasErrors)
 		HOLD_INTERRUPTS();
 
 	mySlice = (Slice *) list_nth(transportStates->sliceTable->slices, transportStates->sliceId);
@@ -1826,7 +1820,7 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates,
 	{
 		int			elevel = 0;
 
-		if (forceEOS || !transportStates->activated)
+		if (hasErrors || !transportStates->activated)
 		{
 			if (gp_log_interconnect >= GPVARS_VERBOSITY_DEBUG)
 				elevel = LOG;
@@ -1840,7 +1834,7 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates,
 			ereport(elevel, (errmsg("Interconnect seg%d slice%d cleanup state: "
 									"%s; setup was %s",
 									GpIdentity.segindex, mySlice->sliceIndex,
-									forceEOS ? "force" : "normal",
+									hasErrors ? "error" : "normal",
 									transportStates->activated ? "completed" : "exited")));
 
 		/* if setup did not complete, log the slicetable */
@@ -1915,9 +1909,6 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates,
 				 GpIdentity.segindex, mySlice->sliceIndex, mySlice->parentIndex);
 
 		getChunkTransportState(transportStates, mySlice->sliceIndex, &pEntry);
-
-		if (forceEOS && !hasError)
-			forceEosToPeers(transportStates, mySlice->sliceIndex);
 
 		for (i = 0; i < pEntry->numConns; i++)
 		{
@@ -2004,7 +1995,7 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates,
 		 * If some errors are happening, senders can skip this step to avoid hung
 		 * issues, QD will take care of the error handling.
 		 */
-		if (!hasError)
+		if (!hasErrors)
 			waitOnOutbound(pEntry);
 
 		for (i = 0; i < pEntry->numConns; i++)
@@ -2035,7 +2026,7 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates,
 		pfree(transportStates->states);
 	pfree(transportStates);
 
-	if (forceEOS)
+	if (hasErrors)
 		RESUME_INTERRUPTS();
 
 #ifdef AMS_VERBOSE_LOGGING
@@ -2701,7 +2692,7 @@ flushBuffer(ChunkTransportState *transportStates,
 	{
 		struct timeval timeout;
 
-		/* check for stop message before sending anything  */
+		/* check for stop message or peer teardown before sending anything  */
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 0;
 		MPP_FD_ZERO(&rset);
@@ -2725,6 +2716,7 @@ flushBuffer(ChunkTransportState *transportStates,
 
 		if ((n = send(conn->sockfd, sendptr + sent, conn->msgSize - sent, 0)) < 0)
 		{
+			int	send_errno = errno;
 			ML_CHECK_FOR_INTERRUPTS(transportStates->teardownActive);
 			if (errno == EINTR)
 				continue;
@@ -2768,8 +2760,8 @@ flushBuffer(ChunkTransportState *transportStates,
 
 					/*
 					 * as a sender... if there is something to read... it must
-					 * mean its a StopSendingMessage.  we don't even bother to
-					 * read it.
+					 * mean its a StopSendingMessage or receiver has teared down
+					 * the interconnect, we don't even bother to read it.
 					 */
 					if (MPP_FD_ISSET(conn->sockfd, &rset) || transportStates->teardownActive)
 					{
@@ -2795,11 +2787,35 @@ flushBuffer(ChunkTransportState *transportStates,
 					conn->stillActive = false;
 					return false;
 				}
+
+				/* check whether receiver has teared down the interconnect */
+				timeout.tv_sec = 0;
+				timeout.tv_usec = 0;
+				MPP_FD_ZERO(&rset);
+				MPP_FD_SET(conn->sockfd, &rset);
+
+				n = select(conn->sockfd + 1, (fd_set *) &rset, NULL, NULL, &timeout);
+
+				/*
+				 * as a sender... if there is something to read... it must
+				 * mean its a StopSendingMessage or receiver has teared down
+				 * the interconnect, we don't even bother to read it.
+				 */
+				if (n > 0 && MPP_FD_ISSET(conn->sockfd, &rset))
+				{
+#ifdef AMS_VERBOSE_LOGGING
+					print_connection(transportStates, conn->sockfd, "stop from");
+#endif
+					/* got a stop message */
+					conn->stillActive = false;
+					return false;
+				}
+
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 						 errmsg("interconnect error writing an outgoing packet"),
 						 errdetail("Error during send() call (error:%d) for remote connection: contentId=%d at %s",
-								   errno, conn->remoteContentId,
+								   send_errno, conn->remoteContentId,
 								   conn->remoteHostAndPort)));
 			}
 		}

@@ -206,18 +206,6 @@ namespace gpnaucrates
 				)
 				const;
 
-			// create a new histogram with updated bucket frequency
-			CHistogram *MakeHistogramUpdateFreq
-						(
-						const CBucketArray *histogram_buckets,
-						CDoubleArray *dest_bucket_freqs,
-						CDouble *num_output_rows,
-						CDouble num_null_rows,
-						CDouble num_NDV_remain,
-						CDouble num_NDV_remain_rows
-						)
-						const;
-
 		public:
 
 			// ctors
@@ -360,13 +348,13 @@ namespace gpnaucrates
 					const;
 
 			// number of buckets
-			ULONG Buckets() const
+			ULONG GetNumBuckets() const
 			{
 				return m_histogram_buckets->Size();
 			}
 
 			// buckets accessor
-			const CBucketArray *ParseDXLToBucketsArray() const
+			const CBucketArray *GetBuckets() const
 			{
 				return m_histogram_buckets;
 			}
@@ -386,6 +374,10 @@ namespace gpnaucrates
 			// print function
 			virtual
 			IOstream &OsPrint(IOstream &os) const;
+
+#ifdef GPOS_DEBUG
+			void DbgPrint() const;
+#endif
 
 			// total frequency from buckets and null fraction
 			CDouble GetFrequency() const;

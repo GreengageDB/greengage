@@ -5,6 +5,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_timing
     Scenario: after resuming a duration interrupted redistribution, tables are restored
 	Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
 	And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with no mirrors on "mdw" and "sdw1"
@@ -31,6 +33,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_standby
     Scenario: after a duration interrupted redistribution, state file on standby matches master
     	Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with no mirrors on "mdw" and "sdw1"
@@ -51,6 +55,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_timing
     Scenario: after resuming an end time interrupted redistribution, tables are restored
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with no mirrors on "mdw" and "sdw1"
@@ -74,6 +80,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_segment
     Scenario: expand a cluster that has no mirrors
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with no mirrors on "mdw" and "sdw1"
@@ -89,6 +97,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_host
     Scenario: expand a cluster that has no mirrors with one new hosts
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with no mirrors on "mdw" and "sdw1"
@@ -105,6 +115,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_host_and_segment
     Scenario: expand a cluster that has no mirrors with one new hosts
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with no mirrors on "mdw" and "sdw1"
@@ -121,6 +133,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_segment
     Scenario: expand a cluster that has mirrors
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with mirrors on "mdw" and "sdw1"
@@ -135,6 +149,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_segment
     Scenario: expand a cluster that has mirrors and recover a failed segment
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with mirrors on "mdw" and "sdw1"
@@ -155,6 +171,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_host
     Scenario: expand a cluster that has mirrors with one new hosts
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with mirrors on "mdw" and "sdw1"
@@ -172,6 +190,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_standby
     Scenario: expand a cluster that has mirrors with one new host
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with mirrors on "mdw" and "sdw1"
@@ -190,6 +210,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_standby
     Scenario: expand a cluster with tablespace that has mirrors with one new host
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with mirrors on "mdw" and "sdw1"
@@ -210,6 +232,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_verify_redistribution
     Scenario: Verify data is correctly redistributed after expansion
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And the cluster is generated with "1" primaries only
@@ -232,6 +256,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_verify_writable_external_redistribution
     Scenario: Verify policy of writable external table is correctly updated after redistribution
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And the cluster is generated with "1" primaries only
@@ -249,6 +275,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_icw_db_concourse
     Scenario: Use a dump of the ICW database for expansion
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
         And a cluster is created with mirrors on "mdw" and "sdw1"
@@ -267,6 +295,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_catalog_copied
     Scenario: expand a cluster without restarting db and catalog has been copied
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
@@ -291,6 +321,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_conf_copied
     Scenario: expand a cluster without restarting db and conf has been copie
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
@@ -313,6 +345,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_long_run_read_only
     Scenario: expand a cluster without restarting db with long-run read-only transaction
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
@@ -338,6 +372,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_change_catalog_abort
     Scenario: expand a cluster without restarting db and any transaction which wants to change the catalog must be aborted
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
@@ -361,6 +397,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_dml
     Scenario: expand a cluster without restarting db and any transaction which wants to do dml work well
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
@@ -387,6 +425,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_rollback
     Scenario: inject a fail and test if rollback is ok
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
@@ -407,6 +447,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_with_special_character
     Scenario: create database,schema,table with special character
         Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/tmp/gpexpand_behave'
         And the user runs command "rm -rf /tmp/gpexpand_behave/*"
         And a temporary directory under "/tmp/gpexpand_behave/expandedData" to expand into
@@ -427,6 +469,8 @@ Feature: expand the cluster by adding more segments
     @gpexpand_retry_failing_work_in_phase1_after_releasing_catalog_lock
     Scenario: inject a fail and test if retry is ok
     	Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
         And a working directory of the test as '/data/gpdata/gpexpand'
         And the user runs command "rm -rf /data/gpdata/gpexpand/*"
         And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into

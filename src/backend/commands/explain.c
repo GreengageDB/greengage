@@ -927,14 +927,40 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 				Plan	   *fplan;
 
 				fplan = plan;
-				while ((IsA(fplan, Motion) || !fplan->flow) &&
-					   fplan->lefttree)
-					fplan = fplan->lefttree;
 
-				Assert(!IsA(fplan, Motion));
-				if (!fplan->flow)
+				for (;;)
 				{
+					if (IsA(fplan, Motion))
+					{
+						Assert(fplan->lefttree);
+						fplan = fplan->lefttree;
+						continue;
+					}
+
+					if (fplan->flow)
+						break;
+
+					/* No flow on this node. Dig into child. */
+					if (fplan->lefttree)
+					{
+						fplan = fplan->lefttree;
+						continue;
+					}
+					if (IsA(fplan, Append))
+					{
+						Append	   *aplan = (Append *) fplan;
+
+						if (aplan->appendplans)
+						{
+							fplan = (Plan *) linitial(aplan->appendplans);
+							continue;
+						}
+					}
+
 					/*
+					 * No flow, and no subplan. Shouldn't happen, but let's not
+					 * panic if it does.
+					 *
 					 * This shouldn't happen, but just in case the planner
 					 * failed to decorate a node with a flow, don't panic
 					 * in production. Not all nodes need to be marked with a
@@ -944,7 +970,13 @@ show_dispatch_info(Slice *slice, ExplainState *es, Plan *plan)
 					 * such cases, though so Assert so that we catch them
 					 * during development.
 					 */
-					Assert(fplan->flow);
+					elog(WARNING, "could not find flow for node of type %d", fplan->type);
+					break;
+				}
+
+				if (!fplan->flow)
+				{
+					/* no flow and no subplan; shouldn't happen */
 					segments = 1;
 				}
 				else if (fplan->flow->flotype == FLOW_SINGLETON)

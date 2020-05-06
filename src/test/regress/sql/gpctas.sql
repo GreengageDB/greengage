@@ -89,4 +89,12 @@ INSERT INTO ctas_src(col1, col3,col4,col5)
 CREATE TABLE ctas_dst as SELECT col1,col3,col4,col5 FROM ctas_src order by 1;
 
 -- This will fail to find some of the rows, if they're distributed incorrectly.
-SELECT * FROM ctas_src, ctas_dst WHERE ctas_src.col1 = ctas_dst.col1
+SELECT * FROM ctas_src, ctas_dst WHERE ctas_src.col1 = ctas_dst.col1;
+
+-- Github issue 9790.
+-- Previously, CTAS with no data won't handle the 'WITH' clause
+CREATE TABLE ctas_base(a int, b int);
+CREATE TABLE ctas_aocs WITH (appendonly=true, orientation=column) AS SELECT * FROM ctas_base WITH NO DATA;
+SELECT * FROM ctas_aocs;
+DROP TABLE ctas_base;
+DROP TABLE ctas_aocs;
