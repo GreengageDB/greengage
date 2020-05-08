@@ -2124,6 +2124,14 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 
 	currentSlice = getCurrentSlice(estate, LocallyExecutingSliceIndex(estate));
 
+	/* Teardown the Interconnect */
+	if (estate->es_interconnect_is_setup)
+	{
+		TeardownInterconnect(estate->interconnect_context, false);
+		estate->interconnect_context = NULL;
+		estate->es_interconnect_is_setup = false;
+	}
+
 	/*
 	 * If QD, wait for QEs to finish and check their results.
 	 */
@@ -2242,20 +2250,6 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 		estate->dispatcherState = NULL;
 		cdbdisp_destroyDispatcherState(ds);
 	}
-
-	/* Teardown the Interconnect */
-	if (estate->es_interconnect_is_setup)
-	{
-		/*
-		 * MPP-3413: If we got here during cancellation of a cursor,
-		 * we need to set the "forceEos" argument correctly --
-		 * otherwise we potentially hang (cursors cancel on the QEs,
-		 * mark the estate to "cancelUnfinished" and then try to do a
-		 * normal interconnect teardown).
-		 */
-		TeardownInterconnect(estate->interconnect_context, estate->cancelUnfinished, false);
-		estate->es_interconnect_is_setup = false;
-	}
 }
 
 /*
@@ -2275,6 +2269,12 @@ void mppExecutorCleanup(QueryDesc *queryDesc)
 	/* GPDB hook for collecting query info */
 	if (query_info_collect_hook && QueryCancelCleanup)
 		(*query_info_collect_hook)(METRICS_QUERY_CANCELING, queryDesc);
+	/* Clean up the interconnect. */
+	if (estate->es_interconnect_is_setup)
+	{
+		TeardownInterconnect(estate->interconnect_context, true);
+		estate->es_interconnect_is_setup = false;
+	}
 
 	/*
 	 * If this query is being canceled, record that when the gpperfmon
@@ -2297,13 +2297,6 @@ void mppExecutorCleanup(QueryDesc *queryDesc)
 	{
 		estate->dispatcherState = NULL;
 		CdbDispatchHandleError(ds);
-	}
-
-	/* Clean up the interconnect. */
-	if (estate->es_interconnect_is_setup)
-	{
-		TeardownInterconnect(estate->interconnect_context, true /* force EOS */, true);
-		estate->es_interconnect_is_setup = false;
 	}
 
 	/* GPDB hook for collecting query info */

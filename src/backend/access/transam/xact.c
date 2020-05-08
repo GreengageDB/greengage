@@ -185,11 +185,12 @@ typedef struct TransactionStateData
 	bool		startedInRecovery;		/* did we start in recovery? */
 	bool		didLogXid;		/* has xid been included in WAL record? */
 	bool		executorSaysXactDoesWrites;	/* GP executor says xact does writes */
-	bool		executorDidWriteXLog;	/* QE has wrote xlog */
 	struct TransactionStateData *parent;		/* back link to parent */
 
 	struct TransactionStateData *fastLink;        /* back link to jump to parent for efficient search */
 } TransactionStateData;
+
+static bool	TopXactexecutorDidWriteXLog;	/* QE has wrote xlog */
 
 typedef TransactionStateData *TransactionState;
 
@@ -223,7 +224,6 @@ static TransactionStateData TopTransactionStateData = {
 	false,						/* startedInRecovery */
 	false,						/* didLogXid */
 	false,						/* executorSaysXactDoesWrites */
-	false,						/* executorDidWriteXLog */
 	NULL						/* link to parent state block */
 };
 
@@ -423,10 +423,9 @@ TransactionDidWriteXLog(void)
 }
 
 bool
-ExecutorDidWriteXLog(void)
+TopXactExecutorDidWriteXLog(void)
 {
-	TransactionState s = CurrentTransactionState;
-	return s->executorDidWriteXLog;
+	return TopXactexecutorDidWriteXLog;
 }
 
 void
@@ -512,9 +511,9 @@ MarkCurrentTransactionIdLoggedIfAny(void)
 }
 
 void
-MarkCurrentTransactionWriteXLogOnExecutor(void)
+MarkTopTransactionWriteXLogOnExecutor(void)
 {
-	CurrentTransactionState->executorDidWriteXLog = true;
+	TopXactexecutorDidWriteXLog = true;
 }
 
 /*
@@ -2311,7 +2310,7 @@ StartTransaction(void)
 	 */
 	nUnreportedXids = 0;
 	s->didLogXid = false;
-	s->executorDidWriteXLog = false;
+	TopXactexecutorDidWriteXLog = false;
 
 	/*
 	 * must initialize resource-management stuff first

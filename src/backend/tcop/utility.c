@@ -71,6 +71,7 @@
 #include "utils/syscache.h"
 
 #include "catalog/oid_dispatch.h"
+#include "catalog/pg_attribute_encoding.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbpartition.h"
 #include "cdb/cdbvars.h"
@@ -1159,6 +1160,14 @@ ProcessUtilitySlow(Node *parsetree,
 							 * one needs a secondary relation too.
 							 */
 							CommandCounterIncrement();
+
+							/* Add column encoding entries based on the WITH clauses */
+							if (cstmt->isCtas && cstmt->options)
+							{
+								Relation rel = heap_open(relOid, AccessExclusiveLock);
+								AddDefaultRelationAttributeOptions(rel, cstmt->options);
+								heap_close(rel, NoLock);
+							}
 
 							if (relKind != RELKIND_COMPOSITE_TYPE)
 							{
