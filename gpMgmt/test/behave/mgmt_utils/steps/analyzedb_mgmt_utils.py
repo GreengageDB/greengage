@@ -4,6 +4,7 @@ import shutil
 import time
 from datetime import datetime, timedelta
 from gppylib.db import dbconn
+from contextlib import closing
 from test.behave_utils.utils import check_schema_exists, check_table_exists, drop_table_if_exists
 from behave import given, when, then
 
@@ -196,7 +197,8 @@ def impl(context, qualified_table):
 @then('{num_rows} rows are inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
 @when('{num_rows} rows are inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
 def impl(context, num_rows, tablename, schemaname, column_type_list):
-    insert_data_into_table(context.conn, schemaname, tablename, column_type_list, num_rows)
+    with closing(dbconn.connect(dbconn.DbURL(dbname=context.dbname))) as conn:
+        insert_data_into_table(conn, schemaname, tablename, column_type_list, num_rows)
 
 @given('some data is inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
 @when('some data is inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
