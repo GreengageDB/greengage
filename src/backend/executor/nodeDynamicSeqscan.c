@@ -105,6 +105,7 @@ initNextTableToScan(DynamicSeqScanState *node)
 	AttrNumber *attMap;
 	Oid		   *pid;
 	Relation	currentRelation;
+	PlanState  *ssPlanState;
 
 	pid = hash_seq_search(&node->pidStatus);
 	if (pid == NULL)
@@ -168,6 +169,17 @@ initNextTableToScan(DynamicSeqScanState *node)
 	DynamicScan_SetTableOid(&node->ss, *pid);
 	node->seqScanState = ExecInitSeqScanForPartition(&plan->seqscan, estate, node->eflags,
 													 currentRelation);
+
+	/*
+	 * Setup gpmon counters for SeqScan. Rows count for sidecar partition scan should
+	 * be consistent with a parent dynamic scan as they share the same plan_node_id.
+	 * Otherwise partition sends zero row number while dynamic scan sends an actual
+	 * value and this is confusing.
+	 */
+	ssPlanState = &node->seqScanState->ss.ps;
+	InitPlanNodeGpmonPkt(ssPlanState->plan, &ssPlanState->gpmon_pkt, estate);
+	ssPlanState->gpmon_pkt.u.qexec.rowsout = node->ss.ps.gpmon_pkt.u.qexec.rowsout;
+
 	return true;
 }
 
@@ -232,7 +244,16 @@ ExecDynamicSeqScan(DynamicSeqScanState *node)
 		slot = ExecSeqScan(node->seqScanState);
 
 		if (!TupIsNull(slot))
+		{
+			/*
+			 * Increment sidecar's partition scan tuples count.
+			 * It should be incremented consistently with a
+			 * dynamic scan to avoid gpperfmon anomalies.
+			 */
+			if (&node->seqScanState->ss.ps.gpmon_pkt)
+				Gpmon_Incr_Rows_Out(&node->seqScanState->ss.ps.gpmon_pkt);
 			break;
+		}
 
 		/* No more tuples from this partition. Move to next one. */
 		CleanupOnePartition(node);

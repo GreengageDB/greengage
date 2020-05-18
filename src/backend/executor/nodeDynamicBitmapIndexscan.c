@@ -115,6 +115,7 @@ beginCurrentBitmapIndexScan(DynamicBitmapIndexScanState *node, EState *estate,
 	Relation	currentRelation;
 	Oid			indexOid;
 	MemoryContext oldCxt;
+	PlanState	*bisPlanState;
 
 	oldCxt = MemoryContextSwitchTo(node->partitionMemoryContext);
 
@@ -151,6 +152,16 @@ beginCurrentBitmapIndexScan(DynamicBitmapIndexScanState *node, EState *estate,
 														 estate,
 														 node->eflags);
 
+	/*
+	 * Setup gpmon counters for BitmapIndexScan. Bitmaps count for sidecar index scan
+	 * should be consistent with a parent dynamic scan as they share the same plan_node_id.
+	 * Otherwise index sends zero bitmap number while dynamic scan sends an actual value
+	 * and this is confusing.
+	 */
+	bisPlanState = &node->bitmapIndexScanState->ss.ps;
+	InitPlanNodeGpmonPkt(bisPlanState->plan, &bisPlanState->gpmon_pkt, estate);
+	bisPlanState->gpmon_pkt.u.qexec.rowsout = node->ss.ps.gpmon_pkt.u.qexec.rowsout;
+
 	if (node->ss.ps.instrument)
 	{
 		/* Let the BitmapIndexScan share our Instrument node */
@@ -184,6 +195,7 @@ MultiExecDynamicBitmapIndexScan(DynamicBitmapIndexScanState *node)
 {
 	EState	   *estate = node->ss.ps.state;
 	Oid			tableOid;
+	Node	   *bitmap = NULL;
 
 	/* close previously open scan, if any. */
 	endCurrentBitmapIndexScan(node);
@@ -205,7 +217,17 @@ MultiExecDynamicBitmapIndexScan(DynamicBitmapIndexScanState *node)
 	 */
 	beginCurrentBitmapIndexScan(node, estate, tableOid);
 
-	return MultiExecBitmapIndexScan(node->bitmapIndexScanState);
+	bitmap = MultiExecBitmapIndexScan(node->bitmapIndexScanState);
+
+	/*
+	 * Increment dynamic index scan bitmap count.
+	 * It should be incremented consistently with a
+	 * sidecar index scan to avoid gpperfmon anomalies.
+	 */
+	if (&node->ss.ps.gpmon_pkt)
+		Gpmon_Incr_Rows_Out(&node->ss.ps.gpmon_pkt);
+
+	return bitmap;
 }
 
 /*

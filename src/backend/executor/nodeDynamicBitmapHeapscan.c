@@ -112,6 +112,7 @@ initNextTableToScan(DynamicBitmapHeapScanState *node)
 	Oid			currentPartitionOid;
 	Oid		   *pid;
 	Relation	currentRelation;
+	PlanState  *bhsPlanState;
 
 	pid = hash_seq_search(&node->pidStatus);
 	if (pid == NULL)
@@ -176,6 +177,16 @@ initNextTableToScan(DynamicBitmapHeapScanState *node)
 	DynamicScan_SetTableOid(&node->ss, currentPartitionOid);
 	node->bhsState = ExecInitBitmapHeapScanForPartition(&plan->bitmapheapscan, estate, node->eflags,
 													 currentRelation);
+
+	/*
+	 * Setup gpmon counters for BitmapHeapScan. Rows count for sidecar partition scan should
+	 * be consistent with a parent dynamic scan as they share the same plan_node_id. Otherwise
+	 * partition sends zero row number while dynamic scan sends an actual value and this is
+	 * confusing.
+	 */
+	bhsPlanState = &node->bhsState->ss.ps;
+	InitPlanNodeGpmonPkt(bhsPlanState->plan, &bhsPlanState->gpmon_pkt, estate);
+	bhsPlanState->gpmon_pkt.u.qexec.rowsout = node->ss.ps.gpmon_pkt.u.qexec.rowsout;
 
 	/*
 	 * Rescan the child node, and attach it to the sidecar BitmapHeapScan.
@@ -248,7 +259,16 @@ ExecDynamicBitmapHeapScan(DynamicBitmapHeapScanState *node)
 		slot = ExecBitmapHeapScan(node->bhsState);
 
 		if (!TupIsNull(slot))
+		{
+			/*
+			 * Increment sidecar's partition scan tuples count.
+			 * It should be incremented consistently with a
+			 * dynamic scan to avoid gpperfmon anomalies.
+			 */
+			if (&node->bhsState->ss.ps.gpmon_pkt)
+				Gpmon_Incr_Rows_Out(&node->bhsState->ss.ps.gpmon_pkt);
 			break;
+		}
 
 		/* No more tuples from this partition. Move to next one. */
 		CleanupOnePartition(node);
