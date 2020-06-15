@@ -10,6 +10,7 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
+#include "gpos/error/CAutoTrace.h"
 #include "gpos/common/CPrintablePointer.h"
 
 #include "gpopt/base/CUtils.h"
@@ -672,13 +673,17 @@ CReqdPropPlan::OsPrint
 	)
 	const
 {
-	os << "req cols: [";
-	if (NULL != m_pcrs)
+	if (GPOS_FTRACE(EopttracePrintRequiredColumns))
 	{
-		os << (*m_pcrs);
+		os << "req cols: [";
+		if (NULL != m_pcrs)
+		{
+			os << (*m_pcrs);
+		}
+		os << "], ";
 	}
 
-	os << "], req CTEs: [";
+	os << "req CTEs: [";
 	if (NULL != m_pcter)
 	{
 		os << (*m_pcter);
@@ -830,13 +835,5 @@ CReqdPropPlan::PrppRemap
 	return GPOS_NEW(mp) CReqdPropPlan(pcrsRequired, peo, ped, per, pepp, pcter);
 }
 
-#ifdef GPOS_DEBUG
-void
-CReqdPropPlan::DbgPrint() const
-{
-	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
-	CAutoTrace at(mp);
-	(void) this->OsPrint(at.Os());
-}
-#endif // GPOS_DEBUG
+
 // EOF

@@ -307,6 +307,8 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		 * Something wrong happened - our RQ is gone. Release all locks and
 		 * clean out
 		 */
+		lock->nRequested--;
+		lock->requested[lockmode]--;
 		LWLockReleaseAll();
 		PG_RE_THROW();
 	}
@@ -346,6 +348,8 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 	incrementSet = ResIncrementAdd(incrementSet, proclock, owner);
 	if (!incrementSet)
 	{
+		lock->nRequested--;
+		lock->requested[lockmode]--;
 		LWLockRelease(ResQueueLock);
 		LWLockRelease(partitionLock);
 		ereport(ERROR,
@@ -448,6 +452,8 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 
 		/*
 		 * Have been awakened, check state is consistent.
+		 * Should not get here, ResWaitOnLock will either grant the lock or
+		 * error out.
 		 */
 		if (!(proclock->holdMask & LOCKBIT_ON(lockmode)))
 		{
@@ -563,6 +569,7 @@ ResLockRelease(LOCKTAG *locktag, uint32 resPortalId)
 		LWLockRelease(partitionLock);
 		elog(DEBUG1, "Resource queue %d: proclock not held", locktag->locktag_field1);
 		RemoveLocalLock(locallock);
+		ResCleanUpLock(lock, proclock, hashcode, false);
 
 		return false;
 	}
@@ -1473,7 +1480,7 @@ ResIncrementAdd(ResPortalIncrement *incSet, PROCLOCK *proclock, ResourceOwner ow
 	else
 	{
 		/* We have added this portId before - something has gone wrong! */
-
+		ResIncrementRemove(&portaltag);
 		elog(WARNING, "duplicate portal id %u for proc %d", incSet->portalId, incSet->pid);
 		incrementSet = NULL;
 	}

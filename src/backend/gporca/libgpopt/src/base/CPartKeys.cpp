@@ -10,6 +10,7 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
+#include "gpos/error/CAutoTrace.h"
 #include "gpopt/base/CPartKeys.h"
 #include "gpopt/base/CColRefSet.h"
 #include "gpopt/base/CUtils.h"
@@ -217,14 +218,4 @@ CPartKeys::OsPrint
 	return os;
 }
 
-#ifdef GPOS_DEBUG
-void
-CPartKeys::DbgPrint() const
-{
-
-	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
-	CAutoTrace at(mp);
-	(void) this->OsPrint(at.Os());
-}
-#endif // GPOS_DEBUG
 // EOF

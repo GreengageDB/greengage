@@ -18,6 +18,8 @@
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbvars.h"
+#include "commands/resgroupcmds.h"
+#include "storage/procarray.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/resgroup.h"

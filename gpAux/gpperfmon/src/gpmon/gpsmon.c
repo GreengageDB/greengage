@@ -105,7 +105,7 @@ struct gx_t
 typedef struct qexec_agg_hash_key_t {
 	apr_int32_t tmid;	/* transaction time */
 	apr_int32_t ssid;	/* session id */
-	apr_int16_t ccnt;	/* command count */
+	apr_int32_t ccnt;	/* command count */
 	apr_int16_t nid;	/* plan node id */
 }qexec_agg_hash_key_t;
 

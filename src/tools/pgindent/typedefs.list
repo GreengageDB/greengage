@@ -207,6 +207,8 @@ BoolExprType
 BoolTestType
 BooleanTest
 BpChar
+BtreeCheckState
+BtreeLevel
 Bucket
 BufFile
 BufFlags

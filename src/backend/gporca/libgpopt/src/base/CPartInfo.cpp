@@ -10,6 +10,7 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
+#include "gpos/error/CAutoTrace.h"
 #include "gpopt/base/CPartInfo.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/metadata/CPartConstraint.h"
@@ -118,16 +119,6 @@ CPartInfo::CPartInfoEntry::OsPrint
 
 	return os;
 }
-
-#ifdef GPOS_DEBUG
-void
-CPartInfo::CPartInfoEntry::DbgPrint() const
-{
-	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
-	CAutoTrace at(mp);
-	(void) this->OsPrint(at.Os());
-}
-#endif // GPOS_DEBUG
 
 
 //---------------------------------------------------------------------------
@@ -494,16 +485,5 @@ CPartInfo::OsPrint
 
 	return os;
 }
-
-#ifdef GPOS_DEBUG
-void
-CPartInfo::DbgPrint() const
-{
-	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
-	CAutoTrace at(mp);
-	(void) this->OsPrint(at.Os());
-}
-#endif // GPOS_DEBUG
-
 
 // EOF

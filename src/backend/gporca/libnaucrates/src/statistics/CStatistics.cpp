@@ -20,6 +20,7 @@
 #include "naucrates/statistics/CLeftAntiSemiJoinStatsProcessor.h"
 #include "naucrates/statistics/CInnerJoinStatsProcessor.h"
 #include "gpos/common/CBitSet.h"
+#include "gpos/error/CAutoTrace.h"
 #include "gpos/memory/CAutoMemoryPool.h"
 
 #include "gpopt/base/CColumnFactory.h"
@@ -165,17 +166,6 @@ CStatistics::OsPrint
 
 	return os;
 }
-
-
-#ifdef GPOS_DEBUG
-void
-CStatistics::DbgPrint() const
-{
-	CAutoTrace at(CTask::Self()->Pmp());
-
-	OsPrint(at.Os());
-}
-#endif
 
 
 //	return the total number of rows for this statistics object

@@ -5,6 +5,8 @@
     <title id="ow138313">gpsys1</title>
     <body>
         <p>Displays information about your operating system.</p>
+        <note>This utility is deprecated and will be removed in the next major release of Greenplum
+            Database.</note>
         <section id="section2">
             <title>Synopsis</title>
             <codeblock><b>gpsys1</b> [ <b>-a</b> | <b>-m</b> | <b>-p</b> ]

@@ -5,6 +5,7 @@ top_builddir = ..
 include $(top_builddir)/src/Makefile.global
 
 SUBDIRS = \
+		amcheck		\
 		auth_delay	\
 		auto_explain	\
 		btree_gin	\

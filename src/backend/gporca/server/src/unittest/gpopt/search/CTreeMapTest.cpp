@@ -9,6 +9,7 @@
 //		Test of tree map facility
 //---------------------------------------------------------------------------
 
+#include "gpos/error/CAutoTrace.h"
 #include "gpos/types.h"
 #include "gpos/io/COstreamString.h"
 #include "gpos/string/CWStringDynamic.h"
@@ -82,7 +83,7 @@ CTreeMapTest::EresUnittest()
 //
 //---------------------------------------------------------------------------
 IOstream &
-CTreeMapTest::CNode::OsPrint
+CTreeMapTest::CNode::OsPrintWithIndent
 	(
 	IOstream &os,
 	ULONG ulIndent
@@ -97,7 +98,7 @@ CTreeMapTest::CNode::OsPrint
 	
 	for (ULONG ulChild = 0; ulChild < m_pdrgpnd->Size(); ulChild++)
 	{
-		(void) (*m_pdrgpnd)[ulChild]->OsPrint(os, ulIndent + 2);
+		(void) (*m_pdrgpnd)[ulChild]->OsPrintWithIndent(os, ulIndent + 2);
 	}
 	
 	return os;

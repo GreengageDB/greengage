@@ -53,7 +53,7 @@ namespace gpdxl
 	class CQueryMutators
 	{
 		typedef Node *(*MutatorWalkerFn) ();
-		typedef BOOL (*FallbackWalkerFn) ();
+		typedef BOOL (*ExprWalkerFn) ();
 
 		typedef struct SContextGrpbyPlMutator
 		{
@@ -270,6 +270,10 @@ namespace gpdxl
 			// reassign the sorting clause from the derived table to the new top-level query
 			static
 			void ReassignSortClause(Query *top_level_query, Query *derive_table_query);
+
+			static
+			BOOL HasOuterRefs(Node *node, void *context);
+
 	};
 }
 #endif // GPDXL_CWalkerUtils_H

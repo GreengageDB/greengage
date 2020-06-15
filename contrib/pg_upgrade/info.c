@@ -486,6 +486,14 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	int			i;
 	Oid tablespace_oid;
 
+	PGresult   *aorels;
+	int			i_aoreloid,
+				i_aosegrel,
+				i_aovisimaprel,
+				i_aoblkdirrel;
+	int			num_aorels;
+	int			current_ao;
+
 	/*
 	 * If we are upgrading from Greenplum 4.3.x we need to record which rels
 	 * have numeric attributes, as they need to be rewritten.
@@ -651,6 +659,47 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	i_reltablespace = PQfnumber(res, "reltablespace");
 	i_spclocation = PQfnumber(res, "spclocation");
 
+	/*
+	 * GPDB: preload as much AO table information as we can in a single query,
+	 * rather than making one query per AO table which slows down upgrades of
+	 * real-world AO partition hierarchies considerably. This should ideally be
+	 * pulled into the info_rels structure, but to decrease the potential merge
+	 * hazard, we make a separate query and "join" by OID later.
+	 *
+	 * XXX (Unfortunately, since the AO auxiliary catalogs exist in separate
+	 * relations named by AO table OID, they can't be easily queried at once.
+	 * Improve this situation.)
+	 *
+	 * First query the catalog for the auxiliary heap relations which describe
+	 * AO{CS} relations. The segrel and visimap must exist but the blkdirrel is
+	 * created when required so it might not exist.
+	 *
+	 * We don't dump the block directory, even if it exists, if the table
+	 * doesn't have any indexes. This isn't just an optimization: restoring it
+	 * wouldn't work, because without indexes, restore won't create a block
+	 * directory in the new cluster.
+	 */
+	aorels = executeQueryOrDie(conn, "%s",
+			 "SELECT a.relid, "
+			 "       cs.relname AS segrel, "
+			 "       cv.relname AS visimaprel, "
+			 "       cb.relname AS blkdirrel "
+			 "FROM   pg_appendonly a "
+			 "       JOIN pg_class cs on (cs.oid = a.segrelid) "
+			 "       JOIN pg_class cv on (cv.oid = a.visimaprelid) "
+			 "       LEFT JOIN pg_class cb on (cb.oid = a.blkdirrelid "
+			 "                                 AND a.blkdirrelid <> 0 "
+			 "                                 AND EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.relid)) "
+			 "ORDER BY a.relid ");
+
+	num_aorels = PQntuples(aorels);
+	current_ao = 0;
+
+	i_aoreloid = PQfnumber(aorels, "relid");
+	i_aosegrel = PQfnumber(aorels, "segrel");
+	i_aovisimaprel = PQfnumber(aorels, "visimaprel");
+	i_aoblkdirrel = PQfnumber(aorels, "blkdirrel");
+
 	for (relnum = 0; relnum < ntups; relnum++)
 	{
 		RelInfo    *curr = &relinfos[num_rels++];
@@ -727,46 +776,38 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 		 */
 		if (is_appendonly(relstorage))
 		{
+			PGresult   *aores;
+			Oid			aoreloid = 0;
 			char	   *segrel;
 			char	   *visimaprel;
 			char	   *blkdirrel = NULL;
-			PGresult   *aores;
 			int			j;
 
 			/*
-			 * First query the catalog for the auxiliary heap relations which
-			 * describe AO{CS} relations. The segrel and visimap must exist
-			 * but the blkdirrel is created when required so it might not
-			 * exist.
-			 *
-			 * We don't dump the block directory, even if it exists, if the
-			 * table doesn't have any indexes. This isn't just an optimization:
-			 * restoring it wouldn't work, because without indexes, restore
-			 * won't create a block directory in the new cluster.
+			 * Since res and aorels are both sorted by relation OID, the next
+			 * row in aorels should usually be exactly the relation we're
+			 * looking for. The exception is that some AO tables aren't included
+			 * in info_rels (e.g. append-only materialized views), so we have to
+			 * handle extras in the list.
 			 */
-			aores = executeQueryOrDie(conn,
-					 "SELECT cs.relname AS segrel, "
-					 "       cv.relname AS visimaprel, "
-					 "       cb.relname AS blkdirrel "
-					 "FROM   pg_appendonly a "
-					 "       JOIN pg_class cs on (cs.oid = a.segrelid) "
-					 "       JOIN pg_class cv on (cv.oid = a.visimaprelid) "
-					 "       LEFT JOIN pg_class cb on (cb.oid = a.blkdirrelid "
-					 "                                 AND a.blkdirrelid <> 0 "
-					 "                                 AND EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.relid)) "
-					 "WHERE  a.relid = %u::pg_catalog.oid ",
-					 curr->reloid);
+			while (current_ao < num_aorels)
+			{
+				aoreloid = atooid(PQgetvalue(aorels, current_ao, i_aoreloid));
+				if (aoreloid >= curr->reloid)
+					break;
 
-			if (PQntuples(aores) == 0)
-				pg_log(PG_FATAL, "Unable to find auxiliary AO relations for %u (%s)\n",
-					   curr->reloid, curr->relname);
+				++current_ao;
+			}
+			if (aoreloid != curr->reloid)
+				pg_log(PG_FATAL, "Unable to find auxiliary AO relations for %u (%s) in database '%s'",
+					   curr->reloid, curr->relname, dbinfo->db_name);
 
-			segrel = pg_strdup(PQgetvalue(aores, 0, PQfnumber(aores, "segrel")));
-			visimaprel = pg_strdup(PQgetvalue(aores, 0, PQfnumber(aores, "visimaprel")));
-			if (!PQgetisnull(aores, 0, PQfnumber(aores, "blkdirrel")))
-				blkdirrel = pg_strdup(PQgetvalue(aores, 0, PQfnumber(aores, "blkdirrel")));
+			segrel = pg_strdup(PQgetvalue(aorels, current_ao, i_aosegrel));
+			visimaprel = pg_strdup(PQgetvalue(aorels, current_ao, i_aovisimaprel));
+			if (!PQgetisnull(aorels, current_ao, i_aoblkdirrel))
+				blkdirrel = pg_strdup(PQgetvalue(aorels, current_ao, i_aoblkdirrel));
 
-			PQclear(aores);
+			++current_ao;
 
 			if (relstorage == 'a')
 			{
@@ -1073,6 +1114,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			curr->gpdb4_heap_conversion_needed = false;
 	}
 	PQclear(res);
+	PQclear(aorels);
 
 	PQfinish(conn);
 

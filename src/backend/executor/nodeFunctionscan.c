@@ -103,16 +103,9 @@ FunctionNext_guts(FunctionScanState *node)
 		{
 
 			char rwfile_prefix[100];
-			function_scan_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix));
+			function_scan_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), node->initplanId);
 
-			node->ts_state->matstore = ntuplestore_create_readerwriter(rwfile_prefix, 0, false, false);
-			/*
-			 * delete file when close tuplestore reader
-			 * tuplestore writer is created in initplan, so it needs to keep
-			 * the file even if initplan ended. 
-			 * we should let the reader to delete it when reader's job finished.
-			 */
-			ntuplestore_set_is_temp_file(node->ts_state->matstore, true);
+			node->ts_state->matstore = ntuplestore_create_readerwriter(rwfile_prefix, 0, false);
 			
 			node->ts_pos = (NTupleStoreAccessor *) ntuplestore_create_accessor(node->ts_state->matstore, false);
 			ntuplestore_acc_seek_bof((NTupleStoreAccessor *) node->ts_pos);
@@ -405,6 +398,7 @@ ExecInitFunctionScan(FunctionScan *node, EState *estate, int eflags)
 	scanstate->eflags = eflags;
 	scanstate->resultInTupleStore = node->resultInTupleStore;
 	scanstate->ts_state = palloc0(sizeof(GenericTupStore));
+	scanstate->initplanId = node->initplanId;
 	scanstate->ts_pos = NULL;
 	/*
 	 * are we adding an ordinality column?
@@ -721,6 +715,18 @@ ExecReScanFunctionScan(FunctionScanState *node)
 			ExecClearTuple(fs->func_slot);
 	}
 
+	/*
+	 * For function execute on INITPLAN, tuplestore accessor needs to
+	 * seek to the begin of file for rescan.
+	 *
+	 * Note that we've already stored the function result in tuplestore by
+	 * INITPLAN node, so there is no need to re-use the tuplestore in
+	 * function scan, which is used to avoid re-executing the
+	 * function again when rescan a FunctionScan
+	 */
+	if(node->resultInTupleStore && node->ts_pos)
+		ntuplestore_acc_seek_bof(node->ts_pos);
+
 	ExecScanReScan(&node->ss);
 
 	ItemPointerSet(&node->cdb_fake_ctid, 0, 0);
@@ -796,8 +802,8 @@ ExecSquelchFunctionScan(FunctionScanState *node)
 }
 
 void
-function_scan_create_bufname_prefix(char* p, int size)
+function_scan_create_bufname_prefix(char* p, int size, int initplan_id)
 {
-	snprintf(p, size, "FUNCTION_SCAN_%d",
-			 gp_session_id);
+	snprintf(p, size, "FUNCTION_SCAN_%d_%d",
+			 gp_session_id, initplan_id);
 }
