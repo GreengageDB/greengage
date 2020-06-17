@@ -9,7 +9,6 @@
 //		Statistics helper routines for processing Left Semi Joins
 //---------------------------------------------------------------------------
 
-#include "gpopt/operators/ops.h"
 #include "naucrates/statistics/CLeftSemiJoinStatsProcessor.h"
 #include "naucrates/statistics/CGroupByStatsProcessor.h"
 
@@ -35,8 +34,11 @@ CLeftSemiJoinStatsProcessor::CalcLSJoinStatsStatic
 	ULongPtrArray *inner_colids = GPOS_NEW(mp) ULongPtrArray(mp);
 	for (ULONG ul = 0; ul < length; ul++)
 	{
-		ULONG colid = ((*join_preds_stats)[ul])->ColIdInner();
-		inner_colids->Append(GPOS_NEW(mp) ULONG(colid));
+		if ((*join_preds_stats)[ul]->HasValidColIdInner())
+		{
+			ULONG colid = ((*join_preds_stats)[ul])->ColIdInner();
+			inner_colids->Append(GPOS_NEW(mp) ULONG(colid));
+		}
 	}
 
 	// dummy agg columns required for group by derivation

@@ -150,6 +150,7 @@ DESCR("get replication error");
 DATA(insert OID = 7154 ( pg_terminate_backend  PGNSP PGUID 12 1 0 0 0 f f f f t f v 2 0 16 "23 25" _null_ _null_ _null_ _null_ pg_terminate_backend_msg _null_ _null_ _null_ n a ));
 DESCR("terminate a server process");
 
+
 /* pg_resgroup_get_status_kv(IN prop_in text, OUT rsgid oid, OUT prop text, OUT value text) => SETOF pg_catalog.record */
 DATA(insert OID = 6065 ( pg_resgroup_get_status_kv  PGNSP PGUID 12 1 1000 0 0 f f f f f t v 1 0 2249 "25" "{25,26,25,25}" "{i,o,o,o}" "{prop_in,rsgid,prop,value}" _null_ pg_resgroup_get_status_kv _null_ _null_ _null_ n a ));
 DESCR("statistics: information about resource groups in key-value style");

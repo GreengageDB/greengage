@@ -59,7 +59,7 @@ resources:
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: gp-internal-artifacts/centos7/python-(2\.7\.12-.*).tar.gz
+    regexp: gp-internal-artifacts/centos7/python-(2\.7\.12\+.*).tar.gz
 
 
 jobs:

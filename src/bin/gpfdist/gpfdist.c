@@ -3608,6 +3608,7 @@ int gpfdist_init(int argc, const char* const argv[])
 
 	if (wd != NULL)
 	{
+		errno = 0;
 		val = strtol(wd, &endptr, 10);
 
 		if (errno || endptr == wd || val > INT_MAX)

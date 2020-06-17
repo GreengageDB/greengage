@@ -33,13 +33,13 @@ CREATE VIEW gp_instrument_shmem_detail AS
 WITH all_entries AS (
   SELECT C.*
     FROM __gp_localid, gp_instrument_shmem_detail_f() as C (
-      tmid int4,ssid int4,ccnt int2,segid int2,pid int4
+      tmid int4,ssid int4,ccnt int4,segid int2,pid int4
       ,nid int2,tuplecount int8,nloops int8,ntuples int8
     )
   UNION ALL
   SELECT C.*
     FROM __gp_masterid, gp_instrument_shmem_detail_f() as C (
-      tmid int4,ssid int4,ccnt int2,segid int2,pid int4
+      tmid int4,ssid int4,ccnt int4,segid int2,pid int4
       ,nid int2,tuplecount int8,nloops int8,ntuples int8
     ))
 SELECT tmid, ssid, ccnt,segid, pid, nid, tuplecount, nloops, ntuples

@@ -647,8 +647,11 @@ CHistogram::IsValid
 		return false;
 	}
 
-	if (!IsHistogramForTextRelatedTypes())
+	if (IsHistogramForTextRelatedTypes())
 	{
+		return m_histogram_buckets->Size() == 0 || this->ContainsOnlySingletonBuckets();
+	}
+	else {
 		for (ULONG bucket_index = 1; bucket_index < m_histogram_buckets->Size(); bucket_index++)
 		{
 			CBucket *bucket = (*m_histogram_buckets)[bucket_index];
@@ -1144,6 +1147,21 @@ CHistogram::IsOpSupportedForFilter
 	}
 }
 
+BOOL
+CHistogram::ContainsOnlySingletonBuckets() const
+{
+	for (ULONG ul = 0; ul < m_histogram_buckets->Size(); ++ul)
+	{
+		CBucket *bucket = (*m_histogram_buckets)[ul];
+
+		if (!bucket->IsSingleton())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 // is comparison type supported for join?
 BOOL
 CHistogram::JoinPredCmpTypeIsSupported
@@ -1174,10 +1192,7 @@ CHistogram::MakeJoinHistogramEqualityFilter
 	CDouble distinct_remaining(0.0);
 	CDouble freq_remaining(0.0);
 
-	BOOL NDVBasedJoinCardEstimation1 = DoNDVBasedCardEstimation(this);
-	BOOL NDVBasedJoinCardEstimation2 = DoNDVBasedCardEstimation(histogram);
-
-	if (NDVBasedJoinCardEstimation1 || NDVBasedJoinCardEstimation2)
+	if (NeedsNDVBasedCardEstimationForEq(this) || NeedsNDVBasedCardEstimationForEq(histogram))
 	{
 		return MakeNDVBasedJoinHistogramEqualityFilter(histogram);
 	}
@@ -2069,7 +2084,7 @@ CHistogram::MakeDefaultBoolHistogram
 
 // check if the join cardinality estimation can be done based on NDV alone
 BOOL
-CHistogram::DoNDVBasedCardEstimation
+CHistogram::NeedsNDVBasedCardEstimationForEq
 	(
 	const CHistogram *histogram
 	)
@@ -2096,13 +2111,25 @@ CHistogram::DoNDVBasedCardEstimation
 		return false;
 	}
 
-	BOOL result = true;
-	if (datum->StatsMappable() && datum->IsDatumMappableToDouble())
+	if (datum->StatsMappable())
 	{
-		result = false;
+		if (datum->IsDatumMappableToDouble())
+		{
+			// int like type such as numeric
+			return false;
+		}
+		else if (histogram->ContainsOnlySingletonBuckets())
+		{
+			GPOS_ASSERT(datum->IsDatumMappableToLINT());
+			// Types such as text should only produce histograms that contain only singleton buckets.
+			// The histograms cannot be used for range predicates but it is ok for equality predicates.
+			return false;
+		}
 	}
 
-	return result;
+	// For other cases, (e.g. certain non int types with non-singleton buckets),
+	// we are forced to use NDV based cardinality estimation.
+	return true;
 }
 
 // append given histograms to current object

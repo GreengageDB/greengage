@@ -2156,6 +2156,8 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters
 		output_context
 		);
 
+	bool targetlist_modified = false;
+
 	// translate hash expr list
 	if (EdxlopPhysicalMotionRedistribute == motion_dxlop->GetDXLOperator())
 	{
@@ -2203,6 +2205,7 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters
 								     CTranslatorUtils::CreateMultiByteCharStringFromWCString(str_unnamed_col.GetBuffer()),
 								     false /* resjunk */);
 				plan->targetlist = gpdb::LAppend(plan->targetlist, (void *) target_entry);
+				targetlist_modified = true;
 			}
 
 			result->hashFilterColIdx[ul] = target_entry->resno;
@@ -2227,6 +2230,66 @@ CTranslatorDXLToPlStmt::TranslateDXLRedistributeMotionToResultHashFilters
 	plan->nMotionNodes = child_plan->nMotionNodes;
 
 	SetParamIds(plan);
+
+	Plan *child_result = (Plan *) result;
+
+	if (targetlist_modified)
+	{
+		// If the targetlist is modified by adding any expressions, such as for
+		// hashFilterColIdx & hashFilterFuncs, add an additional Result node on top
+		// to project only the elements from the original targetlist.
+		// This is needed in case the Result node is created under the Hash
+		// operator (or any non-projecting node), which expects the targetlist of its
+		// child node to contain only elements that are to be hashed.
+		// We should not generate a plan where the target list of a non-projecting
+		// node such as Hash does not match its child. Additional expressions
+		// here can cause issues with memtuple bindings that can lead to errors.
+		Result *result = MakeNode(Result);
+
+		Plan *plan = &(result->plan);
+		plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+		// keep the same costs & rows estimates
+		plan->startup_cost = child_result->startup_cost;
+		plan->total_cost = child_result->total_cost;
+		plan->plan_rows = child_result->plan_rows;
+		plan->plan_width = child_result->plan_width;
+
+		// populate the targetlist based on child_result's original targetlist
+		plan->targetlist = NIL;
+		ListCell *lc = NULL;
+		ULONG ul = 0;
+		ForEach (lc, child_result->targetlist)
+		{
+			if (ul++ >= project_list_dxlnode->Arity())
+			{
+				// done with the original targetlist, stop
+				// all expressions added after project_list_dxlnode->Arity() are
+				// not output cols, but rather hash expressions and should not be projected
+				break;
+			}
+
+			TargetEntry *te = (TargetEntry *) lfirst(lc);
+			Var *var = gpdb::MakeVar(OUTER_VAR,
+									 te->resno,
+									 gpdb::ExprType((Node *) te->expr),
+									 gpdb::ExprTypeMod((Node *) te->expr),
+									 0	/* varlevelsup */);
+			TargetEntry *new_te = gpdb::MakeTargetEntry((Expr *) var,
+														ul, /* resno */
+														te->resname,
+														te->resjunk);
+			plan->targetlist = gpdb::LAppend(plan->targetlist, new_te);
+		}
+
+		plan->qual = NIL;
+		plan->lefttree = child_result;
+		plan->nMotionNodes = child_plan->nMotionNodes;
+
+		SetParamIds(plan);
+
+		return (Plan *) result;
+	}
 
 	return (Plan *) result;
 }
@@ -3175,6 +3238,8 @@ CTranslatorDXLToPlStmt::TranslateDXLMaterialize
 	CDXLPhysicalMaterialize *materialize_dxlop = CDXLPhysicalMaterialize::Cast(materialize_dxlnode->GetOperator());
 
 	materialize->cdb_strict = materialize_dxlop->IsEager();
+	// ensure that executor actually materializes results
+	materialize->cdb_shield_child_from_rescans = true;
 
 	// translate operator costs
 	TranslatePlanCosts
@@ -5579,6 +5644,7 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapBoolOp
 	if (CDXLScalarBitmapBoolOp::EdxlbitmapAnd == sc_bitmap_boolop_dxlop->GetDXLBitmapOpType())
 	{
 		BitmapAnd *bitmapand = MakeNode(BitmapAnd);
+		bitmapand->plan.plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 		bitmapand->bitmapplans = child_plan_list;
 		bitmapand->plan.targetlist = NULL;
 		bitmapand->plan.qual = NULL;
@@ -5587,6 +5653,7 @@ CTranslatorDXLToPlStmt::TranslateDXLBitmapBoolOp
 	else
 	{
 		BitmapOr *bitmapor = MakeNode(BitmapOr);
+		bitmapor->plan.plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 		bitmapor->bitmapplans = child_plan_list;
 		bitmapor->plan.targetlist = NULL;
 		bitmapor->plan.qual = NULL;

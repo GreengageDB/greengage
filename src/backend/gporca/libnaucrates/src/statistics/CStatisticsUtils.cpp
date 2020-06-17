@@ -10,12 +10,15 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
+#include "gpos/error/CAutoTrace.h"
 
 #include "gpopt/base/CUtils.h"
 #include "gpopt/base/CColRefTable.h"
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/exception.h"
-#include "gpopt/operators/ops.h"
+#include "gpopt/operators/CLogicalDynamicIndexGet.h"
+#include "gpopt/operators/CLogicalIndexGet.h"
+#include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CExpressionUtils.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/mdcache/CMDAccessor.h"
@@ -36,6 +39,7 @@
 #include "naucrates/md/IMDScalarOp.h"
 #include "naucrates/md/IMDType.h"
 #include "naucrates/md/IMDTypeInt2.h"
+#include "naucrates/md/IMDTypeInt4.h"
 #include "naucrates/md/IMDTypeInt8.h"
 #include "naucrates/md/IMDTypeOid.h"
 #include "naucrates/md/CMDIdColStats.h"
@@ -1176,6 +1180,7 @@ CStatisticsUtils::DeriveStatsForDynamicScan
 														scalar_expr,
 														output_colrefs,
 														outer_refs,
+														true, // semi-join
 														&unsupported_pred_stats
 														);
 
@@ -1859,9 +1864,7 @@ CStatisticsUtils::IsStatsCmpTypeNdvEq
 	 CStatsPred::EStatsCmpType stats_cmp_type
 	)
 {
-	return (CStatsPred::EstatscmptEqNDVOuter == stats_cmp_type ||
-			CStatsPred::EstatscmptEqNDVInner == stats_cmp_type
-			);
+	return (CStatsPred::EstatscmptEqNDV == stats_cmp_type);
 }
 //---------------------------------------------------------------------------
 //	@function:

@@ -134,7 +134,7 @@ CQueryMutators::ShouldFallback
 		return false;
 	}
 
-	return gpdb::WalkExpressionTree(node, (FallbackWalkerFn) CQueryMutators::ShouldFallback, context);
+	return gpdb::WalkExpressionTree(node, (ExprWalkerFn) CQueryMutators::ShouldFallback, context);
 }
 
 
@@ -1582,6 +1582,13 @@ CQueryMutators::NormalizeWindowProjList
 		}
 		else
 		{
+			if (HasOuterRefs((Node *) target_entry->expr, NULL))
+			{
+				// We currently don't support this situation, so fall back.
+				GPOS_RAISE(gpdxl::ExmaDXL,
+						   gpdxl::ExmiExpr2DXLUnsupportedFeature,
+						   GPOS_WSZ_LIT("Window functions and correlated subqueries appear together in select list"));
+			}
 			// normalize target list entry
 			Expr *pexprNew = (Expr*) RunWindowProjListMutator( (Node*) target_entry->expr, &context);
 			TargetEntry *new_target_entry = gpdb::MakeTargetEntry(pexprNew, ulResNoNew, target_entry->resname, target_entry->resjunk);
@@ -1787,5 +1794,43 @@ CQueryMutators::ReassignSortClause
 	derived_table_query->limitOffset = NULL;
 	derived_table_query->limitCount = NULL;
 }
+
+//---------------------------------------------------------------------------
+//	CQueryMutators::HasOuterRefs
+//
+//	Search the tree for any outer refs.
+//---------------------------------------------------------------------------
+BOOL
+CQueryMutators::HasOuterRefs
+	(
+	Node *node,
+	void *context
+	)
+{
+	if (NULL == node)
+	{
+		return false;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *var = (Var *) node;
+		if (0 < var->varlevelsup)
+		{
+			// we found an outer ref
+			return true;
+		}
+
+		return false;
+	}
+	if (IsA(node, Query))
+	{
+		return gpdb::WalkQueryTree((Query *) node, (ExprWalkerFn) CQueryMutators::HasOuterRefs, context, 0);
+	}
+
+	return gpdb::WalkExpressionTree(node, (ExprWalkerFn) CQueryMutators::HasOuterRefs, context);
+}
+
+
 
 // EOF

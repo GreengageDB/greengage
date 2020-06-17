@@ -2,7 +2,6 @@
 -- Test extensions to functions (MPP-16060)
 -- 	1. data access indicators
 -- -----------------------------------------------------------------
-
 -- test prodataaccess
 create function func1(int, int) returns int as
 $$
@@ -239,6 +238,12 @@ SELECT trigger_unique();
 -- But EntryDB and QEs cannot run DDLs which needs to do dispatch.
 -- We introduce new function location 'EXECUTE ON INITPLAN' to run
 -- the function on initplan to overcome the above issue.
+CREATE or replace FUNCTION get_temp_file_num() returns text as
+$$
+import os
+fileNum = len([name for name in os.listdir('base/pgsql_tmp') if name.startswith('FUNCTION_SCAN')])
+return fileNum
+$$ language plpythonu;
 
 CREATE OR REPLACE FUNCTION get_country()
  RETURNS TABLE (
@@ -265,6 +270,8 @@ AS $$
   end; $$
 LANGUAGE 'plpgsql' EXECUTE ON INITPLAN;
 
+-- Temp file number before running INITPLAN function
+SELECT get_temp_file_num();
 SELECT * FROM get_country();
 SELECT get_country();
 
@@ -316,3 +323,23 @@ DROP TABLE IF EXISTS t3_function_scan;
 CREATE TABLE t3_function_scan AS SELECT * FROM get_id();
 SELECT count(*) FROM t3_function_scan;
 
+-- abort case 1: abort before entrydb run the function scan
+DROP TABLE IF EXISTS t4_function_scan;
+CREATE TABLE t4_function_scan AS SELECT 444, (1 / (0* random()))::text UNION ALL SELECT * FROM get_country();
+
+-- Temp file number after running INITPLAN function, number should not changed.
+SELECT get_temp_file_num();
+
+-- test join case with two INITPLAN functions
+DROP TABLE IF EXISTS t5_function_scan;
+CREATE TABLE t5_function_scan AS SELECT * FROM get_id(), get_country();
+SELECT count(*) FROM t5_function_scan;
+
+-- test union all 
+DROP TABLE IF EXISTS t6_function_scan;
+CREATE TABLE t6_function_scan AS SELECT 100/(1+ 1* random())::int id, 'cc'::text cc UNION ALL SELECT * FROM  get_country();
+SELECT count(*) FROM t6_function_scan;
+
+DROP TABLE IF EXISTS t7_function_scan;
+CREATE TABLE t7_function_scan AS SELECT * FROM  get_country() UNION ALL SELECT 100/(1+ 1* random())::int, 'cc'::text;
+SELECT count(*) FROM t7_function_scan;

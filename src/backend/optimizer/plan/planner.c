@@ -2814,7 +2814,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		 * SELECT DISTINCT query as argument to a table function?
 		 */
 		!parse->isTableValueSelect &&
-		!parse->limitCount && !parse->limitOffset)
+		!limit_needed(parse))
 	{
 		must_gather = true;
 	}

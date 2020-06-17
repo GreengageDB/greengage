@@ -10,6 +10,7 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
+#include "gpos/error/CAutoTrace.h"
 
 #include "gpopt/base/CEnfdOrder.h"
 #include "gpopt/base/COptimizationContext.h"
@@ -17,6 +18,7 @@
 #include "gpopt/search/CGroupExpression.h"
 
 #include "gpopt/operators/CPhysicalAgg.h"
+#include "gpopt/operators/CPhysicalCTEProducer.h"
 #include "gpopt/operators/CPhysicalMotion.h"
 #include "gpopt/operators/CPhysicalSort.h"
 #include "gpopt/operators/CPhysicalNLJoin.h"
@@ -471,6 +473,16 @@ COptimizationContext::PrppCTEProducer
 IOstream &
 COptimizationContext::OsPrint
 	(
+	IOstream &os
+	)
+	const
+{
+	return OsPrintWithPrefix(os, "");
+}
+
+IOstream &
+COptimizationContext::OsPrintWithPrefix
+	(
 	IOstream &os,
 	const CHAR *szPrefix
 	)
@@ -486,16 +498,6 @@ COptimizationContext::OsPrint
 
 	return os;
 }
-
-#ifdef GPOS_DEBUG
-void
-COptimizationContext::DbgPrint()
-{
-	CAutoTraceFlag atf(EopttracePrintOptimizationContext, true);
-	CAutoTrace at(m_mp);
-	(void) this->OsPrint(at.Os(), " ");
-}
-#endif // GPOS_DEBUG
 
 // EOF
 

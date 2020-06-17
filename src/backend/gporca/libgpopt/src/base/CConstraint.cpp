@@ -26,6 +26,7 @@
 #include "gpopt/base/CConstraintNegation.h"
 #include "gpopt/operators/CScalarIdent.h"
 #include "gpopt/operators/CScalarArrayCmp.h"
+#include "gpopt/operators/CScalarCmp.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
 #include "gpopt/operators/CPredicateUtils.h"
 
@@ -1062,14 +1063,5 @@ CConstraint::PrintConjunctionDisjunction
 
 	return os;
 }
-
-#ifdef GPOS_DEBUG
-void
-CConstraint::DbgPrint() const
-{
-	CAutoTrace at(m_mp);
-	(void) this->OsPrint(at.Os());
-}
-#endif  // GPOS_DEBUG
 
 // EOF

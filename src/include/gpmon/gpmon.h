@@ -192,7 +192,7 @@ typedef struct gpmon_qexec_hash_key_t {
 typedef struct gpmon_qexeckey_t {
     int32 tmid;  /* transaction time */
     int32 ssid; /* session id */
-    int16 ccnt;	/* command count */
+    int32 ccnt;	/* command count */
     gpmon_qexec_hash_key_t hash_key;
 }gpmon_qexeckey_t;
 

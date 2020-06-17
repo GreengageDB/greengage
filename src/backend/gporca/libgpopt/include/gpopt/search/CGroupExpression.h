@@ -12,14 +12,11 @@
 #define GPOPT_CGroupExpression_H
 
 #include "gpos/base.h"
-#include "gpos/common/CDynamicPtrArray.h"
-#include "gpos/common/CList.h"
 #include "gpos/common/CRefCount.h"
 
 #include "gpopt/base/CCostContext.h"
 #include "gpopt/engine/CPartialPlan.h"
 #include "gpopt/operators/COperator.h"
-#include "gpopt/search/CBinding.h"
 #include "gpopt/search/CGroup.h"
 #include "gpopt/xforms/CXform.h"
 
@@ -45,7 +42,7 @@ namespace gpopt
 
 #ifdef GPOS_DEBUG
 			// debug print; for interactive debugging sessions only
-			void DbgPrint();
+			void DbgPrintWithProperties();
 #endif 		// GPOS_DEBUG
 
 			// states of a group expression
@@ -197,7 +194,7 @@ namespace gpopt
 			CCostContext *PccInsertBest(CCostContext *pcc);
 
 			// print group expression cost contexts
-			IOstream & OsPrintCostContexts(IOstream &os, const CHAR *szPrefix);
+			IOstream & OsPrintCostContexts(IOstream &os, const CHAR *szPrefix) const;
 
 			// private copy ctor
 			CGroupExpression(const CGroupExpression &);
@@ -447,7 +444,9 @@ namespace gpopt
 				);
 
 			// print driver
-			IOstream &OsPrint(IOstream &os, const CHAR * = "");
+			virtual
+			IOstream &OsPrint(IOstream &os) const;
+			IOstream &OsPrintWithPrefix(IOstream &os, const CHAR *prefix) const;
 
 			// link for list in Group
 			SLink m_linkGroup;

@@ -10,6 +10,7 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
+#include "gpos/error/CAutoTrace.h"
 #include "gpos/task/CAutoSuspendAbort.h"
 #include "gpos/task/CAutoTraceFlag.h"
 #include "gpos/task/CWorker.h"
@@ -30,6 +31,7 @@
 
 #include "gpopt/exception.h"
 
+#include "naucrates/statistics/CStatistics.h"
 #include "naucrates/traceflags/traceflags.h"
 
 using namespace gpnaucrates;
@@ -412,6 +414,35 @@ CGroup::PocLookupBest
 	}
 
 	return pocBest;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CGroup::Ppoc
+//
+//	@doc:
+//		Lookup a context by id
+//
+//---------------------------------------------------------------------------
+COptimizationContext *
+CGroup::Ppoc(ULONG id) const
+{
+	COptimizationContext *poc = NULL;
+	ShtIter shtit(const_cast<CGroup *>(this)->m_sht);
+	while (shtit.Advance())
+	{
+		{
+			ShtAccIter shtitacc(shtit);
+			poc = shtitacc.Value();
+
+			if (poc->Id() == id)
+			{
+				return poc;
+			}
+		}
+	}
+	return NULL;
 }
 
 
@@ -1715,25 +1746,22 @@ CGroup::OsPrintGrpOptCtxts
 	(
 	IOstream &os,
 	const CHAR *szPrefix
-	)
+	) const
 {
 	if (!FScalar() && !FDuplicateGroup() && GPOS_FTRACE(EopttracePrintOptimizationContext))
 	{
 		os << szPrefix << "Grp OptCtxts:" << std::endl;
 
-		COptimizationContext *poc = NULL;
-		ShtIter shtit(m_sht);
-		while (shtit.Advance())
+		ULONG num_opt_contexts = m_sht.Size();
+
+		for (ULONG ul=0; ul < num_opt_contexts; ul++)
 		{
-			{
-				ShtAccIter shtitacc(shtit);
-				poc = shtitacc.Value();
-			}
+			COptimizationContext *poc = Ppoc(ul);
 
 			if (NULL != poc)
 			{
 				os << szPrefix;
-				(void) poc->OsPrint(os, szPrefix);
+				(void) poc->OsPrintWithPrefix(os, szPrefix);
 			}
 
 			GPOS_CHECK_ABORT;
@@ -1757,7 +1785,7 @@ CGroup::OsPrintGrpScalarProps
 	(
 	IOstream &os,
 	const CHAR *szPrefix
-	)
+	) const
 {
 	GPOS_ASSERT(FScalar());
 
@@ -1825,7 +1853,7 @@ CGroup::OsPrintGrpProps
 	(
 	IOstream &os,
 	const CHAR *szPrefix
-	)
+	) const
 {
 	if (!FDuplicateGroup() && GPOS_FTRACE(EopttracePrintGroupProperties))
 	{
@@ -2090,7 +2118,7 @@ IOstream &
 CGroup::OsPrint
 	(
 	IOstream &os
-	)
+	) const
 {
 	const CHAR *szPrefix = "  ";
 	os << std::endl << "Group " << m_id << " (";
@@ -2112,7 +2140,7 @@ CGroup::OsPrint
 	CGroupExpression *pgexpr = m_listGExprs.First();
 	while (NULL != pgexpr)
 	{
-		(void) pgexpr->OsPrint(os, szPrefix);
+		(void) pgexpr->OsPrintWithPrefix(os, szPrefix);
 		pgexpr = m_listGExprs.Next(pgexpr);
 
 		GPOS_CHECK_ABORT;
@@ -2206,12 +2234,13 @@ CGroup::CostLowerBound
 //
 //---------------------------------------------------------------------------
 void
-CGroup::DbgPrint()
+CGroup::DbgPrintWithProperties()
 {
 	CAutoTraceFlag atf(EopttracePrintGroupProperties, true);
 	CAutoTrace at(m_mp);
 	(void) this->OsPrint(at.Os());
 }
+
 #endif
 
 // EOF

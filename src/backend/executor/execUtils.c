@@ -1883,9 +1883,6 @@ InitSliceTable(EState *estate, int nMotions, int nSubplans)
 	table->slices = NIL;
 	table->instrument_options = INSTRUMENT_NONE;
 
-	/* Each slice table has a unique-id. */
-	table->ic_instance_id = ++gp_interconnect_id;
-
 	for (i = 0; i < n; i++)
 	{
 		slice = makeNode(Slice);

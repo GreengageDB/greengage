@@ -283,7 +283,7 @@ ERROR_EXIT () {
 						$ECHO "$RM -f $BACKOUT_FILE" >> $BACKOUT_FILE
 				fi
 		fi
-		if [ $IGNORE_WARNINGS -eq 1 ]; then
+		if [[ $IGNORE_WARNINGS -eq 1 ]]; then
 				exit 1
 		else
 				exit $2
@@ -516,13 +516,14 @@ CREATE_SPREAD_MIRROR_ARRAY () {
 		# Calculate the index based on host and subnet number
 		((PRIM_SEG_INDEX=($DEST_HOST*$NUM_DATADIR)+($DEST_SUBNET*$DIRS_PER_SUBNET)))
 
-		QE_M_NAME=`$ECHO ${QE_PRIMARY_ARRAY[$PRIM_SEG_INDEX]}|$AWK -F"~" '{print $1}'`
+		QE_M_HOST=`$ECHO ${QE_PRIMARY_ARRAY[$PRIM_SEG_INDEX]}|$AWK -F"~" '{print $1}'`
+		QE_M_NAME=`$ECHO ${QE_PRIMARY_ARRAY[$PRIM_SEG_INDEX]}|$AWK -F"~" '{print $2}'`
 		GP_M_DIR=${MIRROR_DATA_DIRECTORY[$SEGS_PROCESSED%$NUM_DATADIR]}
-		P_PORT=`$ECHO $QE_LINE|$AWK -F"~" '{print $2}'`
+		P_PORT=`$ECHO $QE_LINE|$AWK -F"~" '{print $3}'`
 		((GP_M_PORT=$P_PORT+$MIRROR_OFFSET))
-		M_CONTENT=`$ECHO $QE_LINE|$AWK -F"~" '{print $5}'`
-		M_SEG=`$ECHO $QE_LINE|$AWK -F"~" '{print $3}'|$AWK -F"/" '{print $NF}'`
-		QE_MIRROR_ARRAY=(${QE_MIRROR_ARRAY[@]} ${QE_M_NAME}~${GP_M_PORT}~${GP_M_DIR}/${M_SEG}~${DBID_COUNT}~${M_CONTENT})
+		M_CONTENT=`$ECHO $QE_LINE|$AWK -F"~" '{print $6}'`
+		M_SEG=`$ECHO $QE_LINE|$AWK -F"~" '{print $4}'|$AWK -F"/" '{print $NF}'`
+		QE_MIRROR_ARRAY=(${QE_MIRROR_ARRAY[@]} ${QE_M_HOST}~${QE_M_NAME}~${GP_M_PORT}~${GP_M_DIR}/${M_SEG}~${DBID_COUNT}~${M_CONTENT})
 		POSTGRES_PORT_CHK $GP_M_PORT $QE_M_NAME
 		((DBID_COUNT=$DBID_COUNT+1))
 		((SEGS_PROCESSED=$SEGS_PROCESSED+1))
@@ -577,14 +578,15 @@ CREATE_GROUP_MIRROR_ARRAY () {
 
 		if [ $DEBUG_LEVEL -eq 0 ] && [ x"" != x"$VERBOSE" ];then $NOLINE_ECHO ".\c";fi
 
-		QE_M_NAME=`$ECHO ${QE_PRIMARY_ARRAY[$MIRROR_INDEX]}|$AWK -F"~" '{print $1}'`
-		GP_M_DIR=${MIRROR_DATA_DIRECTORY[$PRIMARY_INDEX%$NUM_DATADIR]}/`$ECHO $QE_LINE|$AWK -F"~" '{print $3}'|$AWK -F"/" '{print $NF}'`
+		QE_M_HOST=`$ECHO ${QE_PRIMARY_ARRAY[$MIRROR_INDEX]}|$AWK -F"~" '{print $1}'`
+		QE_M_NAME=`$ECHO ${QE_PRIMARY_ARRAY[$MIRROR_INDEX]}|$AWK -F"~" '{print $2}'`
+		GP_M_DIR=${MIRROR_DATA_DIRECTORY[$PRIMARY_INDEX%$NUM_DATADIR]}/`$ECHO $QE_LINE|$AWK -F"~" '{print $4}'|$AWK -F"/" '{print $NF}'`
 
-		M_CONTENT=`$ECHO $QE_LINE|$AWK -F"~" '{print $5}'`
-		P_PORT=`$ECHO $QE_LINE|$AWK -F"~" '{print $2}'`
+		M_CONTENT=`$ECHO $QE_LINE|$AWK -F"~" '{print $6}'`
+		P_PORT=`$ECHO $QE_LINE|$AWK -F"~" '{print $3}'`
 		GP_M_PORT=$(($P_PORT+$MIRROR_OFFSET))
 
-		QE_MIRROR_ARRAY=(${QE_MIRROR_ARRAY[@]} ${QE_M_NAME}~${GP_M_PORT}~${GP_M_DIR}~${DBID_COUNT}~${M_CONTENT})
+		QE_MIRROR_ARRAY=(${QE_MIRROR_ARRAY[@]} ${QE_M_HOST}~${QE_M_NAME}~${GP_M_PORT}~${GP_M_DIR}~${DBID_COUNT}~${M_CONTENT})
 		POSTGRES_PORT_CHK $GP_M_PORT $QE_M_NAME
 
 		DBID_COUNT=$(($DBID_COUNT+1))
@@ -1310,6 +1312,75 @@ SET_GP_USER_PW () {
 
     ERROR_CHK $? "update Greenplum superuser password" 1
     LOG_MSG "[INFO]:-End Function $FUNCNAME"
+}
+
+SET_VAR () {
+	# MPP-13617: If segment contains a ~, we assume ~ is the field delimiter.
+	# Otherwise we assume : is the delimiter.  This allows us to easily
+	# handle IPv6 addresses which may contain a : by using a ~ as a delimiter.
+	I=$1
+	case $I in
+		*~*)
+			S="~"
+			;;
+		*)
+			S=":"
+			;;
+	esac
+	if [ -z "$I" ]; then
+		return
+	fi
+
+	local fields=()
+	IFS=$S read -ra fields <<< "$I"
+
+	# The input_config format for specifying a segment array changed in a 6X
+	# minor release to include the hostname in addition to the address.  To
+	# maintain backwards compatibility, detect when the incoming array needs
+	# the host field to be prepended.  For example, an input line of
+	# QD_PRIMARY_ARRAY=mdw~5432~/data/master/gpseg-1~1~-1
+	# would be treated as
+	# QD_PRIMARY_ARRAY=mdw~mdw~5432~/data/master/gpseg-1~1~-1
+	if [[ ! ( "${#fields[@]}" == "5" || "${#fields[@]}" == "6" ) ]]; then
+		ERROR_EXIT "[FATAL]:-$I has the wrong number of fields" 2
+	fi
+
+	# Handle backward compatibility for configuration file generated
+	# which had ~0 at the end for QD_PRIMARY_ARRAY
+	IS_DEPRECATED_FORMAT_FOR_QD=false
+	if [[ "${fields[5]}" == "0" ]] && [[ "${fields[4]}" == "-1" ]]; then
+		IS_DEPRECATED_FORMAT_FOR_QD=true
+	fi
+
+	if [[ "${#fields[@]}" == "5" ]] || ${IS_DEPRECATED_FORMAT_FOR_QD} ;  then
+		# Ex: mdw~5432~/data/master/gpseg-1~1~-1
+		# or
+		# mdw~5432~/data/master/gpseg-1~1~-1~0
+		GP_HOSTNAME="${fields[0]}"
+		GP_HOSTADDRESS=$GP_HOSTNAME
+		GP_PORT="${fields[1]}"
+		GP_DIR="${fields[2]}"
+		GP_DBID="${fields[3]}"
+		GP_CONTENT="${fields[4]}"
+	else
+		# ARRAY for master / segments
+		# Ex: mdw~mdw~5432~/data/master/gpseg-1~1~-1
+		GP_HOSTNAME="${fields[0]}"
+		GP_HOSTADDRESS="${fields[1]}"
+		GP_PORT="${fields[2]}"
+		GP_DIR="${fields[3]}"
+		GP_DBID="${fields[4]}"
+		GP_CONTENT="${fields[5]}"
+	fi
+
+	# Quick sanity checks on value types to ensure that e.g. passing a 5.X
+	# config file isn't misread as a new-format 6.X file and mis-parsed.
+	if ! [[ "$GP_PORT" =~ ^[0-9]+$ && "$GP_DBID" =~ ^[0-9]+$ && "$GP_CONTENT" =~ ^-?[0-9]+$ ]]; then
+		ERROR_EXIT "[FATAL]:-One or more numeric fields in $I have a non-numeric value" 2
+	fi
+	if ! [[ "$GP_DIR" =~ ^/[^/]+ ]]; then
+		ERROR_EXIT "[FATAL]:-Value for directory field in $I is not a valid path" 2
+	fi
 }
 
 #******************************************************************************

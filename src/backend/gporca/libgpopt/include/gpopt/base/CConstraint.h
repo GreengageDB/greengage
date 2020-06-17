@@ -13,9 +13,11 @@
 
 #include "gpos/base.h"
 #include "gpos/types.h"
+#include "gpos/common/CDynamicPtrArray.h"
+#include "gpos/common/CHashMap.h"
 #include "gpos/common/CRefCount.h"
-
-#include "gpopt/base/CRange.h"
+#include "gpopt/base/CColRef.h"
+#include "gpopt/base/CColRefSet.h"
 
 namespace gpopt
 {
@@ -24,7 +26,6 @@ namespace gpopt
 	// fwd declaration
 	class CExpression;
 	class CConstraint;
-	class CRange;
 
 	// constraint array
 	typedef CDynamicPtrArray<CConstraint, CleanupRelease> CConstraintArray;
@@ -242,14 +243,6 @@ namespace gpopt
 			virtual
 			CConstraint *PcnstrRemapForColumn(CMemoryPool *mp, CColRef *colref) const = 0;
 
-			// print
-			virtual
-			IOstream &OsPrint
-						(
-						IOstream &os
-						)
-						const = 0;
-
 			// create constraint from scalar expression and pass back any discovered
 			// equivalence classes
 			static
@@ -276,9 +269,6 @@ namespace gpopt
 			// subset of the given constraints, which reference the given column
 			static
 			CConstraintArray *PdrgpcnstrOnColumn(CMemoryPool *mp, CConstraintArray *pdrgpcnstr, CColRef *colref, BOOL fExclusive);
-#ifdef GPOS_DEBUG
-			void DbgPrint() const;
-#endif  // GPOS_DEBUG
 
 	}; // class CConstraint
 

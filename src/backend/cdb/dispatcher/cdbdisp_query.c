@@ -1076,6 +1076,8 @@ cdbdisp_dispatchX(QueryDesc* queryDesc,
 	nTotalSlices = list_length(sliceTbl->slices);
 	sliceVector = palloc0(nTotalSlices * sizeof(SliceVec));
 	nSlices = fillSliceVector(sliceTbl, rootIdx, sliceVector, nTotalSlices);
+	/* Each slice table has a unique-id. */
+	sliceTbl->ic_instance_id = ++gp_interconnect_id;
 
 	pQueryParms = cdbdisp_buildPlanQueryParms(queryDesc, planRequiresTxn);
 	queryText = buildGpQueryString(pQueryParms, &queryTextLength);

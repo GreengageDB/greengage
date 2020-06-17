@@ -1,3 +1,7 @@
+drop role if exists matview_ao_role;
+create role matview_ao_role;
+set role matview_ao_role;
+
 CREATE TABLE t_matview_ao (id int NOT NULL PRIMARY KEY, type text NOT NULL, amt numeric NOT NULL);
 INSERT INTO t_matview_ao VALUES
   (1, 'x', 2),
@@ -16,6 +20,8 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY m_heap;
 SELECT * FROM m_heap;
 REFRESH MATERIALIZED VIEW m_heap WITH NO DATA;
 SELECT * FROM m_heap;
+-- test WITH NO DATA is also dispatched to QEs
+select relispopulated from gp_dist_random('pg_class') where relname = 'm_heap';
 REFRESH MATERIALIZED VIEW m_heap;
 SELECT * FROM m_heap;
 
@@ -38,3 +44,8 @@ SELECT * FROM m_aocs;
 REFRESH MATERIALIZED VIEW m_aocs;
 SELECT * FROM m_aocs;
 
+\dm m_heap
+\dm m_ao
+\dm m_aocs
+
+RESET role;

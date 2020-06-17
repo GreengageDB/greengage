@@ -24,6 +24,7 @@ OBJS        = CAutoTimer.o \
               CHeapObject.o \
               CMainArgs.o \
               CRandom.o \
+              CRefCount.o \
               CStackDescriptor.o \
               CStackObject.o \
               CTimerUser.o \
