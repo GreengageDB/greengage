@@ -442,6 +442,11 @@ check_ao_record_present(unsigned char type, char *buf, Size len,
 	test_PrintLog("wal end record", walEnd, sendTime);
 
 	xlogreader = XLogReaderAllocate(&read_local_xlog_page, NULL);
+	if (!xlogreader)
+		ereport(ERROR,
+			(errcode(ERRCODE_OUT_OF_MEMORY),
+			 errmsg("out of memory"),
+			 errdetail("Failed while allocating an XLog reading processor.")));
 
 	/*
 	 * Find the first valid record at or after the given starting point.

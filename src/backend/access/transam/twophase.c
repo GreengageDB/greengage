@@ -1401,6 +1401,11 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 	 * file descriptor here.
 	 */
 	xlogreader = XLogReaderAllocate(&read_local_xlog_page, NULL);
+	if (!xlogreader)
+		ereport(ERROR,
+			(errcode(ERRCODE_OUT_OF_MEMORY),
+			 errmsg("out of memory"),
+			 errdetail("Failed while allocating an XLog reading processor.")));
 
 	tfRecord = XLogReadRecord(xlogreader, tfXLogRecPtr, &errormsg);
 	if (tfRecord == NULL)
@@ -1687,6 +1692,11 @@ PrescanPreparedTransactions(TransactionId **xids_p, int *nxids_p)
 	}
 
 	xlogreader = XLogReaderAllocate(&read_local_xlog_page, NULL);
+	if (!xlogreader)
+		ereport(ERROR,
+			(errcode(ERRCODE_OUT_OF_MEMORY),
+			 errmsg("out of memory"),
+			 errdetail("Failed while allocating an XLog reading processor.")));
 
 	while (tfXLogRecPtr != InvalidXLogRecPtr)
 	{
@@ -1913,6 +1923,11 @@ RecoverPreparedTransactions(void)
 	char	   *errormsg;
 
 	xlogreader = XLogReaderAllocate(&read_local_xlog_page, NULL);
+	if (!xlogreader)
+		ereport(ERROR,
+			(errcode(ERRCODE_OUT_OF_MEMORY),
+			 errmsg("out of memory"),
+			 errdetail("Failed while allocating an XLog reading processor.")));
 
 	if (crashRecoverPostCheckpointPreparedTransactions_map_ht != NULL)
 	{
