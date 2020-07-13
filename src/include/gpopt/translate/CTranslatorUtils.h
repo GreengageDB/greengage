@@ -157,7 +157,8 @@ namespace gpdxl
 								CMDAccessor *md_accessor,
 								CIdGenerator *id_generator,
 								const RangeTblEntry *rte,
-								BOOL *is_distributed_table = NULL
+								BOOL *is_distributed_table = NULL,
+								BOOL *is_replicated_table = NULL
 								);
 
 			// translate a RangeTableEntry into a CDXLLogicalTVF
