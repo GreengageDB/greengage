@@ -86,7 +86,8 @@ LocalDistribXact_ChangeState(int pgprocno,
 			break;
 
 		case LOCALDISTRIBXACT_STATE_COMMITTED:
-			if (oldState != LOCALDISTRIBXACT_STATE_ACTIVE)
+			if (oldState != LOCALDISTRIBXACT_STATE_ACTIVE &&
+				oldState != LOCALDISTRIBXACT_STATE_PREPARED)
 				elog(PANIC,
 					 "Expected distributed transaction xid = %u to local element to be in state \"Active\" or \"Commit Delivery\" and "
 					 "found state \"%s\"",
@@ -95,7 +96,8 @@ LocalDistribXact_ChangeState(int pgprocno,
 			break;
 
 		case LOCALDISTRIBXACT_STATE_ABORTED:
-			if (oldState != LOCALDISTRIBXACT_STATE_ACTIVE)
+			if (oldState != LOCALDISTRIBXACT_STATE_ACTIVE &&
+				oldState != LOCALDISTRIBXACT_STATE_ABORTED)
 				elog(PANIC,
 					 "Expected distributed transaction xid = %u to local element to be in state \"Active\" or \"Abort Delivery\" and "
 					 "found state \"%s\"",

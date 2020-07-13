@@ -491,13 +491,10 @@ namespace gpdb {
 	// expression tree walker
 	bool WalkExpressionTree(Node *node, bool(*walker)(), void *context);
 
-	// query tree walkers, descend into subqueries
-	bool WalkQueryTree(Query *node, bool (*walker) (), void *context, int flags);
-
 	// query or expression tree walker
 	bool WalkQueryOrExpressionTree(Node *node, bool(*walker)(), void *context, int flags);
 
-	// modify a query tree
+	// modify the components of a Query tree
 	Query *MutateQueryTree(Query *query, Node *(*mutator)(), void *context, int flags);
 
 	// modify an expression tree
@@ -505,9 +502,6 @@ namespace gpdb {
 
 	// modify a query or an expression tree
 	Node *MutateQueryOrExpressionTree(Node *node, Node *(*mutator)(), void *context, int flags);
-
-	// the part of MutateQueryTree that processes a query's rangetable
-	List *MutateRangeTable(List *rtable, Node *(*mutator)(), void *context, int flags);
 
 	// check whether the part with the given oid is the root of a partition table
 	bool RelPartIsRoot(Oid relid);

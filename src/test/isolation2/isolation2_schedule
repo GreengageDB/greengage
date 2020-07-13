@@ -191,6 +191,9 @@ test: segwalrep/mirror_promotion
 test: segwalrep/cancel_commit_pending_replication
 test: segwalrep/twophase_tolerance_with_mirror_promotion
 test: segwalrep/restartpoint_remove_xlog
+# Both restartpoint_remove_xlog and checkpoint_with_prepare run checkpoint so
+# put them together to make the subsequent checkpoint faster.
+test: segwalrep/checkpoint_with_prepare
 test: segwalrep/failover_with_many_records
 test: segwalrep/dtm_recovery_on_standby
 test: segwalrep/commit_blocking_on_standby
@@ -245,3 +248,5 @@ test: setup_too_many_exec_accounts
 test: oom_too_many_accounts
 test: restore_memory_accounting_default
 #Too many exec account tests end
+
+test: distributed_transactions

@@ -487,8 +487,6 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid, bool lockHeld)
 
 		Assert(pgxact->nxids == 0);
 		Assert(pgxact->overflowed == false);
-
-		proc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
 	}
 
 	/* Clear distributed transaction status for one-phase commit transaction */
@@ -520,8 +518,6 @@ ProcArrayClearTransaction(PGPROC *proc)
 	proc->lxid = InvalidLocalTransactionId;
 	pgxact->xmin = InvalidTransactionId;
 	proc->recoveryConflictPending = false;
-
-	proc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
 
 	/* redundant, but just in case */
 	pgxact->vacuumFlags &= ~PROC_VACUUM_STATE_MASK;

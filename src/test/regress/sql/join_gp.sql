@@ -498,6 +498,27 @@ explain select * from t1_lateral_limit as t1 cross join lateral
 select * from t1_lateral_limit as t1 cross join lateral
 (select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1)s;
 
+-- Continue with the above cases, if the lateral subquery contains union all
+-- and in some of its appendquerys contain limit, it may also lead to bad plan.
+-- The best solution may be to walk the query to and do some static analysis
+-- to find out which rel has to be gathered and materialized. But it is complicated
+-- to do so and this seems less efficient. I believe in future we should do big
+-- refactor to make greenplum support lateral well so now, let's just make sure
+-- we will not panic.
+explain (costs off) select * from t1_lateral_limit as t1 cross join lateral
+((select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1) union all select 1)s;
+
+select * from t1_lateral_limit as t1 cross join lateral
+((select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1) union all select 1)s;
+
+-- test lateral subquery contains group by (group-by is another place that
+-- may add motions in the subquery's plan).
+explain select * from t1_lateral_limit t1 cross join lateral
+(select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
+
+select * from t1_lateral_limit t1 cross join lateral
+(select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
+
 -- The following case is from Github Issue
 -- https://github.com/greenplum-db/gpdb/issues/8860
 -- It is the same issue as the above test suite.
@@ -586,3 +607,28 @@ cross join lateral
   (select p from gist_tbl_github9733 where p <@ bb order by p <-> bb[0] limit 2) ss;
 
 reset enable_bitmapscan;
+
+-- Test targetlist contains placeholder var
+-- When creating a redistributed motion with hash keys,
+-- Greenplum planner will invoke `cdbpullup_findEclassInTargetList`.
+-- The following test case contains non-strict function `coalesce`
+-- in the subquery at nullable-side of outerjoin and thus will
+-- have PlaceHolderVar in targetlist. The case is to test if
+-- function `cdbpullup_findEclassInTargetList` handles PlaceHolderVar
+-- correct.
+-- See github issue: https://github.com/greenplum-db/gpdb/issues/10315
+create table t_issue_10315 ( id1 int, id2 int );
+
+insert into t_issue_10315 select i,i from generate_series(1, 2)i;
+insert into t_issue_10315 select i,null from generate_series(1, 2)i;
+insert into t_issue_10315 select null,i from generate_series(1, 2)i;
+
+select *  from
+( select coalesce( bq.id1 ) id1, coalesce ( bq.id2 ) id2
+        from ( select r.id1, r.id2 from t_issue_10315 r group by r.id1, r.id2 ) bq  ) t
+full join ( select r.id1, r.id2 from t_issue_10315 r group by r.id1, r.id2 ) bq_all
+on t.id1 = bq_all.id1  and t.id2 = bq_all.id2
+full join ( select r.id1, r.id2 from t_issue_10315 r group by r.id1, r.id2 ) tq_all
+on (coalesce(t.id1) = tq_all.id1  and t.id2 = tq_all.id2) ;
+
+drop table t_issue_10315;

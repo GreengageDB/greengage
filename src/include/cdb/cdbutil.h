@@ -209,6 +209,7 @@ extern int numsegmentsFromQD;
  */
 extern int getgpsegmentCount(void);
 
+extern void AvoidCorefileGeneration(void);
 #define ELOG_DISPATCHER_DEBUG(...) do { \
        if (gp_log_gang >= GPVARS_VERBOSITY_DEBUG) elog(LOG, __VA_ARGS__); \
     } while(false);

@@ -22,6 +22,8 @@
 --
 -- end_matchsubs
 
+include: helpers/server_helpers.sql;
+
 CREATE extension IF NOT EXISTS gp_inject_fault;
 1:set dtx_phase2_retry_count=10;
 !\retcode gpconfig -c gp_fts_probe_retries -v 2 --masteronly;
@@ -107,14 +109,5 @@ CREATE extension IF NOT EXISTS gp_inject_fault;
 !\retcode gpstop -u;
 
 -- loop while segments come in sync
-do $$
-begin /* in func */
-  for i in 1..120 loop /* in func */
-    if (select count(*) = 0 from gp_segment_configuration where content != -1 and mode != 's') then /* in func */
-      return; /* in func */
-    end if; /* in func */
-    perform gp_request_fts_probe_scan(); /* in func */
-  end loop; /* in func */
-end; /* in func */
-$$;
+select wait_until_all_segments_synchronized();
 5:SELECT role, preferred_role, content FROM gp_segment_configuration;

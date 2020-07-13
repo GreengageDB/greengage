@@ -1104,7 +1104,7 @@ gpstart
         query to the destination resource group. Greenplum Database assigns
         subsequent queries that you submit in the session to the original
         resource group.</p>
-      <note>Greenplum Database version 6.8 introduces support for moving a query
+      <note>Greenplum Database version 6.8 introduced support for moving a query
         to a different resource group.<ul>
         <li>If you upgraded from a previous Greenplum 6.x installation, you must
           manually register the supporting functions for this feature, and grant
