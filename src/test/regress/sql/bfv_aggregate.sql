@@ -1413,6 +1413,17 @@ select count(*) over (partition by t) from int2vectortab;
 select count(distinct t) from int2vectortab;
 select count(distinct t), count(distinct t2) from int2vectortab;
 
+-- Test if the correct EC is used after cdb_grouping_planner changes the parsetree
+drop table if exists t;
+create table t (a int, b int, c int) distributed by(b);
+
+insert into t select 1, i, i from generate_series(1,10)i;
+analyze t;
+
+explain (costs off)
+select c, count(*) from t where a = 1 group by 1 order by 1;
+select c, count(*) from t where a = 1 group by 1 order by 1;
+
 -- CLEANUP
 set client_min_messages='warning';
 drop schema bfv_aggregate cascade;

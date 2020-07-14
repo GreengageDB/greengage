@@ -6547,8 +6547,6 @@ insert into orca_w2 select i, i from generate_series(2, 4) i;
 insert into orca_w3 select i, i from generate_series(3, 5) i;
 -- outer ref in subquery in target list and window func in target list
 select (select b from orca_w3 where a = orca_w1.a) as one, row_number() over(partition by orca_w1.a) as two from orca_w2, orca_w1;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  one | two 
 -----+-----
      |   1
@@ -6564,8 +6562,6 @@ DETAIL:  Feature not supported: Window functions and correlated subqueries appea
 
 -- aggref in subquery with window func in target list
 select orca_w1.a, (select sum(orca_w2.a) from orca_w2 where orca_w1.b = orca_w2.b), count(*), rank() over (order by orca_w1.b) from orca_w1 group by orca_w1.a, orca_w1.b order by orca_w1.a;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  a | sum | count | rank 
 ---+-----+-------+------
  1 |     |     1 |    1
@@ -6584,8 +6580,6 @@ select orca_w1.a, (select rank() over (order by orca_w1.b) from orca_w2 where or
 
 -- window function with empty partition clause inside subquery inside target list with outer ref
 select (select rank() over() from orca_w3 where a = orca_w1.a) as one, row_number() over(partition by orca_w1.a) as two from orca_w1, orca_w2;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  one | two 
 -----+-----
      |   1
@@ -6608,8 +6602,6 @@ select (select a from orca_w3 where a = orca_w1.a) as one from orca_w1 where orc
 
 -- window function in subquery inside target list with outer ref in partition clause
 select (select rank() over(partition by orca_w2.a) from orca_w3 where a = orca_w1.a) as one, row_number() over(partition by orca_w1.a) as two from orca_w1, orca_w2 order by orca_w1.a;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  one | two 
 -----+-----
      |   2
@@ -6623,10 +6615,36 @@ DETAIL:  Feature not supported: Window functions and correlated subqueries appea
    1 |   1
 (9 rows)
 
+-- correlated subquery in target list
+select (select a+1 from (select a from orca_w2 where orca_w1.a=orca_w2.a) sq(a)) as one, row_number() over(partition by orca_w1.a) as two from orca_w1;
+ one | two 
+-----+-----
+   3 |   1
+   4 |   1
+     |   1
+(3 rows)
+
+-- correlated subquery in target list, mismatching varattnos
+select (select a+1 from (select a from orca_w2 where sq2.a=orca_w2.a) sq1(a)) as one, row_number() over(partition by sq2.a) as two from (select 1,1,1,a from orca_w1) sq2(x,y,z,a);
+ one | two 
+-----+-----
+     |   1
+   3 |   1
+   4 |   1
+(3 rows)
+
+-- cte in scalar subquery
+with x as (select a, b from orca_w1)
+select (select count(*) from x) as one, rank() over(partition by a) as rank_within_parent from x order by a desc;
+ one | rank_within_parent 
+-----+--------------------
+   3 |                  1
+   3 |                  1
+   3 |                  1
+(3 rows)
+
 -- window function in subquery inside target list with outer ref in order clause
 select (select rank() over(order by orca_w2.a) from orca_w3 where a = orca_w1.a) as one, row_number() over(partition by orca_w1.a) as two from orca_w1, orca_w2 order by orca_w1.a;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  one | two 
 -----+-----
      |   2
@@ -6642,8 +6660,6 @@ DETAIL:  Feature not supported: Window functions and correlated subqueries appea
 
 -- window function with outer ref in arguments
 select (select sum(orca_w1.a + a) over(order by b) + 1 from orca_w2 where orca_w1.a = orca_w2.a) from orca_w1 order by orca_w1.a;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  ?column? 
 ----------
          
@@ -6653,8 +6669,6 @@ DETAIL:  Feature not supported: Window functions and correlated subqueries appea
 
 -- window function with outer ref in window clause and arguments 
 select (select sum(orca_w1.a + a) over(order by b + orca_w1.a) + 1 from orca_w2 where orca_w1.a = orca_w2.a) from orca_w1 order by orca_w1.a;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Window functions and correlated subqueries appear together in select list
  ?column? 
 ----------
          
@@ -9077,7 +9091,8 @@ SELECT * FROM CTE1,CTE WHERE CTE.a = CTE1.f and CTE.a = 2 ORDER BY 1;
  10 | 2 | 2 | 2
 (10 rows)
 
-SET optimizer_cte_inlining = off;
+RESET optimizer_cte_inlining;
+RESET optimizer_cte_inlining_bound;
 -- catalog queries
 select 1 from pg_class c group by c.oid limit 1;
  ?column? 
@@ -10587,7 +10602,6 @@ drop table idxscan_outer;
 drop table idxscan_inner;
 drop table if exists ggg;
 NOTICE:  table "ggg" does not exist, skipping
-set optimizer_metadata_caching=on;
 create table ggg (a char(1), b char(2), d char(3));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -10831,7 +10845,6 @@ EXPLAIN SELECT * FROM bitmap_test WHERE a in (1);
          Recheck Cond: a = 1
          ->  Bitmap Index Scan on bitmap_index  (cost=0.00..0.00 rows=0 width=0)
                Index Cond: a = 1
- Settings:  optimizer_cte_inlining_bound=1000; optimizer_metadata_caching=on
  Optimizer status: Pivotal Optimizer (GPORCA) version 2.48.9
 (7 rows)
 
@@ -10843,7 +10856,7 @@ EXPLAIN SELECT * FROM bitmap_test WHERE a in (1, 47);
          Recheck Cond: a = ANY ('{1,47}'::integer[])
          ->  Bitmap Index Scan on bitmap_index  (cost=0.00..0.00 rows=0 width=0)
                Index Cond: a = ANY ('{1,47}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
+ Settings:  optimizer=on
  Optimizer status: Pivotal Optimizer (GPORCA) version 1.647
 (7 rows)
 
@@ -10855,7 +10868,7 @@ EXPLAIN SELECT * FROM bitmap_test WHERE a in ('2', 47);
          Recheck Cond: a = ANY ('{2,47}'::integer[])
          ->  Bitmap Index Scan on bitmap_index  (cost=0.00..0.00 rows=0 width=0)
                Index Cond: a = ANY ('{2,47}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
+ Settings:  optimizer=on
  Optimizer status: Pivotal Optimizer (GPORCA) version 1.647
 (7 rows)
 
@@ -10867,7 +10880,7 @@ EXPLAIN SELECT * FROM bitmap_test WHERE a in ('1', '2');
          Recheck Cond: a = ANY ('{1,2}'::integer[])
          ->  Bitmap Index Scan on bitmap_index  (cost=0.00..0.00 rows=0 width=0)
                Index Cond: a = ANY ('{1,2}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
+ Settings:  optimizer=on
  Optimizer status: Pivotal Optimizer (GPORCA) version 1.647
 (7 rows)
 
@@ -10877,7 +10890,7 @@ EXPLAIN SELECT * FROM bitmap_test WHERE a in ('1', '2', 47);
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=4 width=4)
    ->  Seq Scan on bitmap_test  (cost=0.00..431.00 rows=2 width=4)
          Filter: a = ANY ('{1,2,47}'::integer[])
- Settings:  optimizer=on; optimizer_metadata_caching=on
+ Settings:  optimizer=on
  Optimizer status: Pivotal Optimizer (GPORCA) version 1.647
 (5 rows)
 
@@ -12293,12 +12306,15 @@ INSERT INTO foo1 values (1), (2);
 INSERT INTO foo2 values (1,1,1), (2,2,2);
 INSERT INTO foo3 values (1,1), (2,2);
 set optimizer_join_order=query;
+-- we ignore enable/disable_xform statements as their output will differ if the server is compiled without Orca (the xform won't exist)
+-- start_ignore
 select disable_xform('CXformInnerJoin2HashJoin');
             disable_xform             
 --------------------------------------
  CXformInnerJoin2HashJoin is disabled
 (1 row)
 
+-- end_ignore
 EXPLAIN SELECT 1 FROM foo1, foo2 WHERE foo1.a = foo2.a AND foo2.c = 3 AND foo2.b IN (SELECT b FROM foo3);
                                                     QUERY PLAN                                                    
 ------------------------------------------------------------------------------------------------------------------
@@ -12329,12 +12345,15 @@ SELECT 1 FROM foo1, foo2 WHERE foo1.a = foo2.a AND foo2.c = 3 AND foo2.b IN (SEL
 (0 rows)
 
 reset optimizer_join_order;
+-- start_ignore
 select enable_xform('CXformInnerJoin2HashJoin');
             enable_xform             
 -------------------------------------
  CXformInnerJoin2HashJoin is enabled
 (1 row)
 
+-- end_ignore
+-- Test that duplicate sensitive redistributes don't have invalid projection (eg: element that can't be hashed)
 drop table if exists t55;
 NOTICE:  table "t55" does not exist, skipping
 drop table if exists tp;
@@ -12386,7 +12405,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entr
                                                                ->  Result  (cost=0.00..0.00 rows=1 width=1)
                                                                      Output: true
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: optimizer=on, optimizer_cte_inlining_bound=1000, optimizer_join_order=query, optimizer_metadata_caching=on
+ Settings: optimizer=on, optimizer_join_order=query
 (34 rows)
 
 CREATE TABLE TP AS

@@ -3753,6 +3753,10 @@ EvalPlanQualFetch(EState *estate, Relation relation, int lockmode, bool noWait,
 						ereport(ERROR,
 								(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
 								 errmsg("could not serialize access due to concurrent update")));
+					if (ItemPointerIndicatesMovedPartitions(&hufd.ctid))
+						ereport(ERROR,
+								(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+								 errmsg("tuple to be locked was already moved to another segment due to concurrent update")));
 					if (!ItemPointerEquals(&hufd.ctid, &tuple.t_self))
 					{
 						/* it was updated, so look at the updated version */
@@ -3811,6 +3815,14 @@ EvalPlanQualFetch(EState *estate, Relation relation, int lockmode, bool noWait,
 		 * As above, it should be safe to examine xmax and t_ctid without the
 		 * buffer content lock, because they can't be changing.
 		 */
+
+		/* check whether next version would be in a different segment */
+		if (HeapTupleHeaderIndicatesMovedPartitions(tuple.t_data))
+			ereport(ERROR,
+					(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+					 errmsg("tuple to be locked was already moved to another segment due to concurrent update")));
+
+		/* check whether tuple has been deleted */
 		if (ItemPointerEquals(&tuple.t_self, &tuple.t_data->t_ctid))
 		{
 			/* deleted, so forget about it */

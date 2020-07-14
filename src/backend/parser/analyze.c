@@ -1377,10 +1377,15 @@ static Node* grouped_window_mutator(Node *node, void *context)
 					 errmsg("unresolved grouping key in window query"),
 					 errhint("You might need to use explicit aliases and/or to refer to grouping keys in the same way throughout the query.")));
 	}
+	else if (IsA(node, SubLink))
+	{
+		/* put the subquery into Q'' */
+		result = (Node *) var_for_gw_expr(ctx, node, true /* force */);
+	}
 	else
 	{
 		/* Grouping expression; may not find one. */
-		result = (Node*) var_for_gw_expr(ctx, node, false);
+		result = (Node*) var_for_gw_expr(ctx, node, false /* force */);
 	}
 
 

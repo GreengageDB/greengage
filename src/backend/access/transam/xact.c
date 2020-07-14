@@ -1867,7 +1867,9 @@ RecordTransactionAbort(bool isSubXact)
 	 * wrote a commit record for it, there's no turning back. The Distributed
 	 * Transaction Manager will take care of completing the transaction for us.
 	 */
-	if (isQEReader || getCurrentDtxState() == DTX_STATE_NOTIFYING_COMMIT_PREPARED)
+	if (isQEReader ||
+		getCurrentDtxState() == DTX_STATE_NOTIFYING_COMMIT_PREPARED ||
+		MyProc->localDistribXactData.state == LOCALDISTRIBXACT_STATE_ABORTED)
 		xid = InvalidTransactionId;
 	else
 		xid = GetCurrentTransactionIdIfAny();
@@ -2337,6 +2339,12 @@ StartTransaction(void)
 		case DTX_CONTEXT_QD_RETRY_PHASE_2:
 		case DTX_CONTEXT_QE_FINISH_PREPARED:
 		{
+			if (DistributedTransactionContext == DTX_CONTEXT_LOCAL_ONLY &&
+				Gp_role == GP_ROLE_UTILITY)
+			{
+				LocalDistribXactData *ele = &MyProc->localDistribXactData;
+				ele->state = LOCALDISTRIBXACT_STATE_ACTIVE;
+			}
 			/*
 			 * MPP: we're in utility-mode or a QE starting a pure-local
 			 * transaction without any synchronization to segmates!
@@ -2358,6 +2366,8 @@ StartTransaction(void)
 				SharedLocalSnapshotSlot->startTimestamp = stmtStartTimestamp;
 				LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 			}
+			LocalDistribXactData *ele = &MyProc->localDistribXactData;
+			ele->state = LOCALDISTRIBXACT_STATE_ACTIVE;
 		}
 		break;
 
@@ -2721,8 +2731,6 @@ CommitTransaction(void)
 
 	TRACE_POSTGRESQL_TRANSACTION_COMMIT(MyProc->lxid);
 
-	EndLocalDistribXact(true);
-
 	if (notifyCommittedDtxTransactionIsNeeded())
 	{
 		/*
@@ -2757,6 +2765,8 @@ CommitTransaction(void)
 		 */
 		ProcArrayEndTransaction(MyProc, latestXid, false);
 	}
+
+	EndLocalDistribXact(true);
 
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
@@ -2854,6 +2864,8 @@ CommitTransaction(void)
 	AtCommit_Memory();
 
 	finishDistributedTransactionContext("CommitTransaction", false);
+
+	MyProc->localDistribXactData.state = LOCALDISTRIBXACT_STATE_NONE;
 
 	if (gp_local_distributed_cache_stats)
 	{
@@ -3303,7 +3315,6 @@ AbortTransaction(void)
 
 	TRACE_POSTGRESQL_TRANSACTION_ABORT(MyProc->lxid);
 
-	EndLocalDistribXact(false);
 	/*
 	 * Let others know about no transaction in progress by me. Note that this
 	 * must be done _before_ releasing locks we hold and _after_
@@ -3311,6 +3322,9 @@ AbortTransaction(void)
 	 */
 	ProcArrayEndTransaction(MyProc, latestXid, false);
 
+	EndLocalDistribXact(false);
+
+	SIMPLE_FAULT_INJECTOR("abort_after_procarray_end");
 	/*
 	 * Post-abort cleanup.  See notes in CommitTransaction() concerning
 	 * ordering.  We can skip all of it if the transaction failed before
@@ -5930,7 +5944,6 @@ TransStateAsString(TransState state)
 
 /*
  * EndLocalDistribXact
- *		Debug support
  */
 static void
 EndLocalDistribXact(bool isCommit)
@@ -5939,15 +5952,18 @@ EndLocalDistribXact(bool isCommit)
 		return;
 
 	/*
-	 * MyProc->localDistribXactData is only used for debugging purpose by
-	 * backend itself on segments only hence okay to modify without holding
-	 * the lock.
+	 * MyProc->localDistribXactData is access by backend itself only hence okay
+	 * to modify without holding the lock.
 	 */
 	switch (DistributedTransactionContext)
 	{
 		case DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER:
 		case DTX_CONTEXT_QE_TWO_PHASE_IMPLICIT_WRITER:
 		case DTX_CONTEXT_QE_AUTO_COMMIT_IMPLICIT:
+		case DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE:
+		case DTX_CONTEXT_QD_RETRY_PHASE_2:
+		case DTX_CONTEXT_LOCAL_ONLY:
+		case DTX_CONTEXT_QE_FINISH_PREPARED:
 			LocalDistribXact_ChangeState(MyProc->pgprocno,
 										 isCommit ?
 										 LOCALDISTRIBXACT_STATE_COMMITTED :
@@ -5959,10 +5975,7 @@ EndLocalDistribXact(bool isCommit)
 			// QD or QE Writer will handle it.
 			break;
 
-		case DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE:
-		case DTX_CONTEXT_QD_RETRY_PHASE_2:
 		case DTX_CONTEXT_QE_PREPARED:
-		case DTX_CONTEXT_QE_FINISH_PREPARED:
 			elog(PANIC, "Unexpected distribute transaction context: '%s'",
 				 DtxContextToString(DistributedTransactionContext));
 			break;

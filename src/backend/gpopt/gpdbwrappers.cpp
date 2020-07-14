@@ -494,23 +494,6 @@ gpdb::WalkExpressionTree
 	return false;
 }
 
-bool
-gpdb::WalkQueryTree
-	(
-	Query *node,
-	bool (*walker) (),
-	void *context,
-	int flags
-	)
-{
-	GP_WRAP_START;
-	{
-		return query_tree_walker(node, walker, context, flags);
-	}
-	GP_WRAP_END;
-	return false;
-}
-
 Oid
 gpdb::ExprType
 	(
@@ -2364,23 +2347,6 @@ gpdb::MutateQueryTree
 	}
 	GP_WRAP_END;
 	return NULL;
-}
-
-List *
-gpdb::MutateRangeTable
-	(
-	List *rtable,
-	Node *(*mutator) (),
-	void *context,
-	int flags
-	)
-{
-	GP_WRAP_START;
-	{
-		return range_table_mutator(rtable, mutator, context, flags);
-	}
-	GP_WRAP_END;
-	return NIL;
 }
 
 bool
