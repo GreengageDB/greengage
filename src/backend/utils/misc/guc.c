@@ -1040,7 +1040,7 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"enable_hashagg_disk", PGC_USERSET, QUERY_TUNING_METHOD,
+		{"enable_hashagg_disk", PGC_USERSET, DEFUNCT_OPTIONS,
 			gettext_noop("Enables the planner's use of hashed aggregation plans that are expected to exceed work_mem."),
 			NULL,
 			GUC_EXPLAIN
