@@ -442,6 +442,7 @@ create readable external table bar_p(i int, j int) location ('gpfdist://host.inv
 alter table foo_p exchange partition for(rank(3)) with table bar_p;
 alter table foo_p exchange partition for(rank(3)) with table bar_p without validation;
 truncate foo_p;
+analyze foo_p;
 drop table foo_p;
 drop table bar_p;
 

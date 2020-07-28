@@ -2061,8 +2061,9 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 		/* We already got the needed lock */
 		childrel = heap_open(childOID, NoLock);
 
-		/* Ignore if temp table of another backend */
-		if (RELATION_IS_OTHER_TEMP(childrel))
+		/* Ignore if temp table of another backend or external table */
+		if (RELATION_IS_OTHER_TEMP(childrel) ||
+			RelationIsExternal(childrel))
 		{
 			/* ... but release the lock on it */
 			Assert(childrel != onerel);
