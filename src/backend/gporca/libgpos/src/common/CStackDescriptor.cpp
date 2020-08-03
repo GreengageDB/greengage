@@ -34,7 +34,7 @@ CStackDescriptor::BackTrace
 {
 	// get base pointer of current frame
 
-	int gpos_stack_trace_depth_actual;
+	ULONG gpos_stack_trace_depth_actual;
 	#ifdef GPOS_GET_FRAME_POINTER
 	ULONG_PTR current_frame;
 	GPOS_GET_FRAME_POINTER(current_frame);
