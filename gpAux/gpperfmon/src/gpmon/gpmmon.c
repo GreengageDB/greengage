@@ -1273,9 +1273,6 @@ static int read_conf_file(char *conffile)
 		}
 	}
 
-	smon_terminate_timeout = opt.quantum * smon_terminate_safe_factor;
-	recv_timeout = opt.quantum * recv_timeout_factor;
-
 	/* check for valid entries */
 	if (!section_found)
 		fprintf(stderr, "Performance Monitor - Failed to find [gpmmon] section in the "
@@ -1347,6 +1344,8 @@ static int read_conf_file(char *conffile)
 		opt.tail_buffer_max = (1LL << 31); /* 2GB */
 	}
 
+	smon_terminate_timeout = opt.quantum * smon_terminate_safe_factor;
+	recv_timeout = opt.quantum * recv_timeout_factor;
 	verbose = opt.v;
 	min_query_time = opt.min_query_time;
 	quantum = opt.quantum;
