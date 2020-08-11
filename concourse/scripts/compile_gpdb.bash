@@ -48,6 +48,21 @@ function prep_env() {
   esac
 }
 
+function install_libuv() {
+  local includedir=/usr/include
+  local libdir
+
+  case "${TARGET_OS}" in
+    centos | sles) libdir=/usr/lib64 ;;
+    ubuntu) libdir=/usr/lib/x86_64-linux-gnu ;;
+    *) return ;;
+  esac
+  # provided by build container
+  cp -a /usr/local/include/uv* ${includedir}/
+  cp -a /usr/local/lib/libuv* ${libdir}/
+}
+
+
 function install_deps_for_centos_or_sles() {
   rpm -i libquicklz-installer/libquicklz-*.rpm
   rpm -i libquicklz-devel-installer/libquicklz-*.rpm
@@ -64,6 +79,7 @@ function install_deps() {
     centos | sles) install_deps_for_centos_or_sles;;
     ubuntu) install_deps_for_ubuntu;;
   esac
+  install_libuv
 }
 
 function link_python() {
@@ -162,6 +178,21 @@ function include_libstdcxx() {
     popd
   fi
 
+}
+
+function include_libuv() {
+  local includedir=/usr/include
+  local libdir
+  case "${TARGET_OS}" in
+    centos | sles) libdir=/usr/lib64 ;;
+    ubuntu) libdir=/usr/lib/x86_64-linux-gnu ;;
+    *) return ;;
+  esac
+  pushd ${GREENPLUM_INSTALL_DIR}
+    # need to include both uv.h and uv/*.h
+    cp -a ${includedir}/uv* include
+    cp -a ${libdir}/libuv.so* lib
+  popd
 }
 
 function export_gpdb() {
@@ -277,6 +308,7 @@ function _main() {
   include_zstd
   include_quicklz
   include_libstdcxx
+  include_libuv
   export_gpdb
   export_gpdb_extensions
   export_gpdb_win32_ccl

@@ -16,6 +16,7 @@
 
 #include "fmgr.h"
 #include "access/xlogdefs.h"
+#include "replication/walsender_private.h"
 
 /* global state */
 extern bool am_walsender;
@@ -38,6 +39,8 @@ extern void WalSndShmemInit(void);
 extern void WalSndWakeup(void);
 extern void WalSndInitStopping(void);
 extern void WalSndWaitStopping(void);
+extern void WalSndInitStoppingOneWalSender(WalSnd *walsnd);
+extern void WalSndWaitStoppingOneWalSender(WalSnd *walsnd);
 extern void HandleWalSndInitStopping(void);
 extern void WalSndRqstFileReload(void);
 extern XLogRecPtr WalSndCtlGetXLogCleanUpTo(void);

@@ -1291,20 +1291,18 @@
           Greenplum Database.</p>
         <simpletable frame="none" id="simpletable_awg_1tl_zp">
           <strow>
-            <stentry>
-              <p>
+            <stentry><p>
                 <xref href="guc-list.xml#max_appendonly_tables" type="section"
                   >max_appendonly_tables</xref>
-              </p>
+              </p><xref href="guc-list.xml#gp_add_column_inherits_table_setting"
+                >gp_add_column_inherits_table_setting</xref>
               <p>
                 <xref href="guc-list.xml#gp_appendonly_compaction" type="section"
                   >gp_appendonly_compaction</xref>
-              </p>
-              <p>
-                <xref href="guc-list.xml#gp_appendonly_compaction_threshold"/></p>
-              <p><xref href="guc-list.xml#validate_previous_free_tid"/>
-              </p>
-            </stentry>
+              </p><p>
+                <xref href="guc-list.xml#gp_appendonly_compaction_threshold"/></p><p><xref
+                  href="guc-list.xml#validate_previous_free_tid"/>
+              </p></stentry>
           </strow>
         </simpletable>
       </body>

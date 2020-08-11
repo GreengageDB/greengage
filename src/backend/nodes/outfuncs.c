@@ -4435,6 +4435,7 @@ _outCdbProcess(StringInfo str, const CdbProcess *node)
 	WRITE_INT_FIELD(listenerPort);
 	WRITE_INT_FIELD(pid);
 	WRITE_INT_FIELD(contentid);
+	WRITE_INT_FIELD(dbid);
 }
 
 static void

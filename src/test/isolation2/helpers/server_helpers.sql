@@ -41,7 +41,6 @@ returns text as $$
         raise PgCtlError(stdout+'|'+stderr)
 $$ language plpythonu;
 
-
 --
 -- pg_ctl_start:
 --
@@ -130,7 +129,7 @@ $$ language sql;
 
 create or replace function wait_until_segment_synchronized(segment_number int) returns text as $$
 begin
-	for i in 1..600 loop
+	for i in 1..1200 loop
 		if (select count(*) = 0 from gp_segment_configuration where content = segment_number and mode != 's') then
 			return 'OK';
 		end if;
@@ -143,7 +142,7 @@ $$ language plpgsql;
 
 create or replace function wait_until_all_segments_synchronized() returns text as $$
 begin
-	for i in 1..600 loop
+	for i in 1..1200 loop
 		if (select count(*) = 0 from gp_segment_configuration where content != -1 and mode != 's') then
 			return 'OK';
 		end if;
@@ -154,14 +153,46 @@ begin
 end;
 $$ language plpgsql;
 
-create or replace function wait_until_master_standby_insync() returns text as $$
+create or replace function wait_for_replication_replay (segid int, retries int) returns bool as
+$$
+declare
+	i int;
+	result bool;
 begin
-	for i in 1..1200 loop
-		if (select count(*) = 1 from pg_stat_replication) then
-			return 'OK';
+	i := 0;
+	-- Wait until the mirror/standby has replayed up to flush location
+	loop
+		SELECT flush_location = replay_location INTO result from gp_stat_replication where gp_segment_id = segid;
+		if result then
+			return true;
+		end if;
+
+		if i >= retries then
+		   return false;
 		end if;
 		perform pg_sleep(0.1);
+		perform pg_stat_clear_snapshot();
+		i := i + 1;
 	end loop;
-	return 'Fail';
+end;
+$$ language plpgsql;
+
+create or replace function wait_until_standby_in_state(targetstate text)
+returns text as $$
+declare
+   replstate text;
+   i int;
+begin
+   i := 0;
+   while i < 1200 loop
+      select state into replstate from pg_stat_replication;
+      if replstate = targetstate then
+          return replstate;
+      end if;
+      perform pg_sleep(0.1);
+      perform pg_stat_clear_snapshot();
+      i := i + 1;
+   end loop;
+   return replstate;
 end;
 $$ language plpgsql;

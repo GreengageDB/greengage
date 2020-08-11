@@ -4677,8 +4677,6 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 				Oid relid = RelationGetRelid(rel);
 				PartStatus ps = rel_part_status(relid);
 
-				ATExternalPartitionCheck(cmd->subtype, rel, recursing);
-
 				if (Gp_role == GP_ROLE_DISPATCH &&
 					rel->rd_cdbpolicy->numsegments == getgpsegmentCount())
 					ereport(ERROR,
@@ -7765,7 +7763,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			c->encoding = TypeNameGetStorageDirective(colDef->typeName);
 			
 			if (!c->encoding)
-				c->encoding = default_column_encoding_clause();
+				c->encoding = default_column_encoding_clause(rel);
 		}
 
 		AddRelationAttributeEncodings(rel, list_make1(c));
@@ -13557,6 +13555,13 @@ ATExecAddInherit(Relation child_rel, Node *node, LOCKMODE lockmode)
 
 	Assert(PointerIsValid(node));
 
+	/* 1. Replicated table cannot inherit a parent */
+	if (child_rel->rd_cdbpolicy &&
+		child_rel->rd_cdbpolicy->ptype == POLICYTYPE_REPLICATED)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Replicated table cannot inherit a parent")));
+
 	if (IsA(node, InheritPartitionCmd))
 	{
 		parent = ((InheritPartitionCmd *) node)->parent;
@@ -13574,6 +13579,12 @@ ATExecAddInherit(Relation child_rel, Node *node, LOCKMODE lockmode)
 	 */
 	parent_rel = heap_openrv(parent, ShareUpdateExclusiveLock);
 
+	/* 2. Replicated table cannot be inherited */
+	if (parent_rel->rd_cdbpolicy &&
+		parent_rel->rd_cdbpolicy->ptype == POLICYTYPE_REPLICATED)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("Replicated table cannot be inherited")));
 	/*
 	 * Must be owner of both parent and child -- child was checked by
 	 * ATSimplePermissions call in ATPrepCmd
@@ -14947,10 +14958,12 @@ ATExecExpandTable(List **wqueue, Relation rel, AlterTableCmd *cmd)
 		bool           iswritable = ext->iswritable;
 
 		relation_close(rel, NoLock);
+		/*
+		 * Skip expanding readable external table, since data is not
+		 * located inside gpdb
+		 */
 		if (!iswritable)
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("unsupported ALTER command for external table")));
+			return;
 	}
 	else
 	{

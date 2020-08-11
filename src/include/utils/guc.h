@@ -225,6 +225,10 @@ typedef enum
 #define GUC_GPDB_NO_SYNC       0x00040000  /* guc value is not synced between master and primary */
 #define GUC_DISALLOW_USER_SET  0x00080000 /* Do not allow this GUC to be set by the user */
 
+#define GUC_UNIT_MB			   0x00100000 /* value is in metabytes */
+/* to avoid ABI change, add a new macro to include GUC_UNIT_MB*/
+#define GUC_UNIT_MEMORY_NEW	   (GUC_UNIT_MEMORY | GUC_UNIT_MB)
+
 /* GUC lists for gp_guc_list_show().  (List of struct config_generic) */
 extern List    *gp_guc_list_for_explain;
 extern List    *gp_guc_list_for_no_plan;
@@ -479,6 +483,7 @@ extern bool optimizer_enable_master_only_queries;
 extern bool optimizer_enable_hashjoin;
 extern bool optimizer_enable_dynamictablescan;
 extern bool optimizer_enable_indexscan;
+extern bool optimizer_enable_indexonlyscan;
 extern bool optimizer_enable_tablescan;
 extern bool optimizer_enable_eageragg;
 extern bool optimizer_expand_fulljoin;

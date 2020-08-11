@@ -144,6 +144,7 @@
 #include "cdb/cdbgang.h"                /* cdbgang_parse_gpqeid_params */
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
+#include "cdb/ic_proxy_bgworker.h"
 
 /*
  * This is set in backends that are handling a GPDB specific message (FTS or
@@ -411,6 +412,15 @@ static BackgroundWorker PMAuxProcList[MaxPMAuxProc] =
 	 0, /* restart immediately if perfmon process exits with non-zero code */
 	 PerfmonMain, {0}, {0}, 0, 0,
 	 PerfmonStartRule},
+
+#ifdef ENABLE_IC_PROXY
+	{"ic proxy process",
+	 0,
+	 BgWorkerStart_RecoveryFinished,
+	 0, /* restart immediately if ic proxy process exits with non-zero code */
+	 ICProxyMain, {0}, {0}, 0, 0,
+	 ICProxyStartRule},
+#endif  /* ENABLE_IC_PROXY */
 };
 
 static bool ReachedNormalRunning = false;		/* T if we've reached PM_RUN */

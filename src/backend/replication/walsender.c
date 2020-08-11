@@ -90,7 +90,9 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "utils/faultinjector.h"
+
 #include "cdb/cdbvars.h"
+#include "replication/gp_replication.h"
 
 /*
  * Maximum data payload in a WAL data message.  Must be >= XLOG_BLCKSZ.
@@ -550,6 +552,13 @@ StartReplication(StartReplicationCmd *cmd)
 	XLogRecPtr	FlushPtr;
 
 	/*
+	 * Create FTSReplicationStatus for current application if not created before.
+	 * This is only called for GPDB primary-mirror replication.
+	 */
+	if (MyWalSnd->is_for_gp_walreceiver)
+		FTSReplicationStatusCreateIfNotExist(application_name);
+
+	/*
 	 * We assume here that we're logging enough information in the WAL for
 	 * log-shipping, since this is checked in PostmasterMain().
 	 *
@@ -565,6 +574,7 @@ StartReplication(StartReplicationCmd *cmd)
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					 (errmsg("cannot use a logical replication slot for physical replication"))));
+		MyReplicationSlot->walsnd = MyWalSnd;
 	}
 
 	/*
@@ -2102,6 +2112,10 @@ WalSndKill(int code, Datum arg)
 
 	Assert(walsnd != NULL);
 
+	/* Only track failure for GPDB primary-mirror replication */
+	if (MyWalSnd->is_for_gp_walreceiver)
+		FTSReplicationStatusMarkDisconnectForReplication(application_name);
+
 	if (IS_QUERY_DISPATCHER())
 	{
 		/*
@@ -2123,7 +2137,6 @@ WalSndKill(int code, Datum arg)
 			MyWalSnd->xlogCleanUpTo = InvalidXLogRecPtr;
 
 			/* Mark WalSnd struct no longer in use. */
-			MyWalSnd->replica_disconnected_at = (pg_time_t) time(NULL);
 			MyWalSnd->pid = 0;
 
 			SpinLockRelease(&MyWalSnd->mutex);
@@ -2146,7 +2159,6 @@ WalSndKill(int code, Datum arg)
 
 	SpinLockAcquire(&walsnd->mutex);
 	/* Mark WalSnd struct as no longer being in use. */
-	walsnd->replica_disconnected_at = (pg_time_t) time(NULL);
 	walsnd->pid = 0;
 	SpinLockRelease(&walsnd->mutex);
 }
@@ -2302,12 +2314,17 @@ XLogRead(char *buf, XLogRecPtr startptr, Size count)
 	 * already have been overwritten with new WAL records.
 	 */
 	XLByteToSeg(startptr, segno);
-	CheckXLogRemoved(segno, ThisTimeLineID);
 
-	// GPDB_93_MERGE_FIXME: This used to happen, when the "has already been removed"
-	// error was thrown. But that's not checked in CheckXLogRemoved(). Do we
-	// still need the 'error' field?
-	//WalSndCtl->error = WALSNDERROR_WALREAD;
+	PG_TRY();
+	{
+		CheckXLogRemoved(segno, ThisTimeLineID);
+	}
+	PG_CATCH();
+	{
+		WalSndCtl->error = WALSNDERROR_WALREAD;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	WalSndCtl->error = WALSNDERROR_NONE;
 }
@@ -2336,6 +2353,12 @@ XLogSendPhysical(void)
 	/* If requested switch the WAL sender to the stopping state. */
 	if (got_STOPPING)
 		WalSndSetState(WALSNDSTATE_STOPPING);
+
+#ifdef FAULT_INJECTOR
+		/* the walsender skip send WAL to the mirror . */
+		if (SIMPLE_FAULT_INJECTOR("walsnd_skip_send") == FaultInjectorTypeSkip)
+			return;
+#endif
 
 	if (streamingDoneSending)
 	{
@@ -2874,7 +2897,6 @@ WalSndShmemInit(void)
 
 			SpinLockInit(&walsnd->mutex);
 			InitSharedLatch(&walsnd->latch);
-			walsnd->replica_disconnected_at = (pg_time_t) time(NULL);
 		}
 	}
 }
@@ -2892,6 +2914,60 @@ WalSndWakeup(void)
 
 	for (i = 0; i < max_wal_senders; i++)
 		SetLatch(&WalSndCtl->walsnds[i].latch);
+}
+
+/*
+ * Signal walsender to move to stopping state.
+ *
+ * Same as WalSndInitStopping except it stops one specific walsender
+ */
+void
+WalSndInitStoppingOneWalSender(WalSnd *walsnd)
+{
+	pid_t		pid;
+
+	Assert (walsnd != NULL);
+
+	SpinLockAcquire(&walsnd->mutex);
+	pid = walsnd->pid;
+	SpinLockRelease(&walsnd->mutex);
+
+	if (pid == 0)
+		return;
+
+	SendProcSignal(pid, PROCSIG_WALSND_INIT_STOPPING, InvalidBackendId);
+	return;
+}
+
+/*
+ * Wait the WAL senders have quit or reached the stopping state. 
+ *
+ * Same as WalSndWaitStopping except it waits for one specific walsender
+ */
+void
+WalSndWaitStoppingOneWalSender(WalSnd *walsnd)
+{
+	WalSndState state;
+
+	Assert(walsnd != NULL);
+
+	for (;;)
+	{
+		SpinLockAcquire(&walsnd->mutex);
+		if (walsnd->pid == 0)
+		{
+			SpinLockRelease(&walsnd->mutex);
+			return;
+		}
+		state = walsnd->state;
+		SpinLockRelease(&walsnd->mutex);
+
+		/* safe to leave if confirmation is done the WAL sender */
+		if (state == WALSNDSTATE_STOPPING)
+			return;
+
+		pg_usleep(10000L);		/* wait for 10 msec */
+	}
 }
 
 /*
@@ -2983,11 +3059,17 @@ WalSndSetState(WalSndState state)
 
 	SpinLockAcquire(&walsnd->mutex);
 	walsnd->state = state;
-	if (state == WALSNDSTATE_CATCHUP || state == WALSNDSTATE_STREAMING)
-		walsnd->replica_disconnected_at = 0;
-	else if (walsnd->replica_disconnected_at == 0)
-		walsnd->replica_disconnected_at = (pg_time_t) time(NULL);
 	SpinLockRelease(&walsnd->mutex);
+
+	/*
+	 * If the walsender is not for GPDB primary-mirror replication,
+	 * skip failure stats.
+	 */
+	if (!walsnd->is_for_gp_walreceiver)
+		return;
+
+	/* Update WAL replication status. */
+	FTSReplicationStatusUpdateForWalState(application_name, state);
 }
 
 /*

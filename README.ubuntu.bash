@@ -22,7 +22,6 @@ apt-get install -y \
   libperl-dev \
   libreadline-dev \
   libssl-dev \
-  libxerces-c-dev \
   libxml2-dev \
   libyaml-dev \
   libzstd-dev \
@@ -33,7 +32,6 @@ apt-get install -y \
   openssh-server \
   openssl \
   python-dev \
-  python-lockfile \
   python-pip \
   python-psutil \
   python-yaml \

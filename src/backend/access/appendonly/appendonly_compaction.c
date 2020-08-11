@@ -72,7 +72,7 @@ AppendOnlyCompaction_DropSegmentFile(Relation aorel, int segno)
 	/* Open and truncate the relation segfile */
 	MakeAOSegmentFileName(aorel, segno, -1, &fileSegNo, filenamepath);
 
-	fd = OpenAOSegmentFile(aorel, filenamepath, fileSegNo, 0);
+	fd = OpenAOSegmentFile(aorel, filenamepath, 0);
 	if (fd >= 0)
 	{
 		TruncateAOSegmentFile(fd, aorel, fileSegNo, 0);
@@ -238,7 +238,7 @@ AppendOnlySegmentFileTruncateToEOF(Relation aorel,
 		   segno,
 		   segeof);
 
-	fd = OpenAOSegmentFile(aorel, filenamepath, fileSegNo, segeof);
+	fd = OpenAOSegmentFile(aorel, filenamepath, segeof);
 	if (fd >= 0)
 	{
 		TruncateAOSegmentFile(fd, aorel, fileSegNo, segeof);

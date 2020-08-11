@@ -4849,6 +4849,7 @@ _copyCdbProcess(const CdbProcess *from)
 	COPY_SCALAR_FIELD(listenerPort);
 	COPY_SCALAR_FIELD(pid);
 	COPY_SCALAR_FIELD(contentid);
+	COPY_SCALAR_FIELD(dbid);
 
 	return newnode;
 }

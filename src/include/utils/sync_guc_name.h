@@ -35,6 +35,7 @@
 		"gp_interconnect_log_stats",
 		"gp_interconnect_min_retries_before_timeout",
 		"gp_interconnect_min_rto",
+		"gp_interconnect_proxy_addresses",
 		"gp_interconnect_queue_depth",
 		"gp_interconnect_setup_timeout",
 		"gp_interconnect_snd_queue_depth",
@@ -111,3 +112,4 @@
 		"vmem_process_interrupt",
 		"work_mem",
 		"temp_tablespaces",
+		"gp_add_column_inherits_table_setting",

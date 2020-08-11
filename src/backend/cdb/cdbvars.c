@@ -135,6 +135,13 @@ int			gp_fts_probe_interval = 60;
 int gp_fts_mark_mirror_down_grace_period = 30;
 
 /*
+ * If primary-mirror replication attempts to connect continuously and exceed
+ * this count, mark the mirror down to prevent wal sync block.
+ * More details please refer to FTSGetReplicationDisconnectTime.
+ */
+int			gp_fts_replication_attempt_count = 10;
+
+/*
  * When we have certain types of failures during gang creation which indicate
  * that a segment is in recovery mode we may be able to retry.
  */
@@ -191,6 +198,15 @@ bool		gp_interconnect_full_crc = false;	/* sanity check UDP data. */
 bool		gp_interconnect_log_stats = false;	/* emit stats at log-level */
 
 bool		gp_interconnect_cache_future_packets = true;
+
+/*
+ * format: dbid:content:address:port,dbid:content:address:port ...
+ * example: 1:-1:10.0.0.1:2000 2:0:10.0.0.2:2000 3:1:10.0.0.2:2001
+ *
+ * FIXME: at the moment:
+ * - the address must be specified as IP;
+ */
+char	   *gp_interconnect_proxy_addresses = NULL;
 
 int			Gp_udp_bufsize_k;	/* UPD recv buf size, in KB */
 

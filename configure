@@ -582,8 +582,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='Greenplum Database'
 PACKAGE_TARNAME='greenplum-database'
-PACKAGE_VERSION='6.9.1'
-PACKAGE_STRING='Greenplum Database 6.9.1'
+PACKAGE_VERSION='6.10.0'
+PACKAGE_STRING='Greenplum Database 6.10.0'
 PACKAGE_BUGREPORT='support@greenplum.org'
 PACKAGE_URL=''
 
@@ -743,6 +743,7 @@ with_perl
 with_tcl
 enable_thread_safety
 INCLUDES
+enable_ic_proxy
 HAVE_CXX11
 enable_gpcloud
 enable_mapreduce
@@ -865,6 +866,7 @@ enable_debugntuplestore
 enable_orca
 enable_mapreduce
 enable_gpcloud
+enable_ic_proxy
 enable_thread_safety
 with_tcl
 with_tclconfig
@@ -1548,6 +1550,8 @@ Optional Features:
   --disable-orca          disable ORCA optimizer
   --enable-mapreduce      enable Greenplum Mapreduce support
   --disable-gpcloud       disable gpcloud support
+  --enable-ic-proxy       enable interconnect proxy mode (requires libuv
+                          library)
   --disable-thread-safety disable thread-safety in client libraries
   --disable-largefile     omit support for large files
 
@@ -7130,6 +7134,36 @@ $as_echo "#define HAVE_CXX11 1" >>confdefs.h
 fi # fi
 
 #
+# ic-proxy
+#
+
+
+# Check whether --enable-ic-proxy was given.
+if test "${enable_ic_proxy+set}" = set; then :
+  enableval=$enable_ic_proxy;
+  case $enableval in
+    yes)
+
+$as_echo "#define ENABLE_IC_PROXY 1" >>confdefs.h
+
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --enable-ic-proxy option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  enable_ic_proxy=no
+
+fi
+
+
+
+
+#
 # Include directories
 #
 ac_save_IFS=$IFS
@@ -11523,6 +11557,56 @@ _ACEOF
 
 else
   as_fn_error $? "quicklz library not found." "$LINENO" 5
+fi
+
+fi
+
+if test "$enable_ic_proxy" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for uv_default_loop in -luv" >&5
+$as_echo_n "checking for uv_default_loop in -luv... " >&6; }
+if ${ac_cv_lib_uv_uv_default_loop+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-luv  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char uv_default_loop ();
+int
+main ()
+{
+return uv_default_loop ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_uv_uv_default_loop=yes
+else
+  ac_cv_lib_uv_uv_default_loop=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_uv_uv_default_loop" >&5
+$as_echo "$ac_cv_lib_uv_uv_default_loop" >&6; }
+if test "x$ac_cv_lib_uv_uv_default_loop" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBUV 1
+_ACEOF
+
+  LIBS="-luv $LIBS"
+
+else
+  as_fn_error $? "libuv library not found, it is required by --enable-ic-proxy." "$LINENO" 5
 fi
 
 fi

@@ -146,6 +146,8 @@
             <li>
               <xref href="#from_collapse_limit"/>
             </li>
+            <li><xref href="#gp_add_column_inherits_table_setting"/>
+            </li>
             <li>
               <xref href="#gp_adjust_selectivity_for_outerjoins"/>
             </li>
@@ -2029,6 +2031,57 @@
             <row>
               <entry colname="col1">1-<i>n</i></entry>
               <entry colname="col2">20</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="gp_add_column_inherits_table_setting">
+    <title>gp_add_column_inherits_table_setting</title>
+    <body>
+      <p>When adding a column to an append-optimized, column-oriented table with the <codeph><xref
+            href="../sql_commands/ALTER_TABLE.xml">ALTER TABLE</xref></codeph> command, this
+        parameter controls whether the table's data compression parameters for a column
+          (<codeph>compresstype</codeph>, <codeph>compresslevel</codeph>, and
+          <codeph>blocksize</codeph>) can be inherited from the table values. The default is
+          <codeph>off</codeph>, the table's data compression settings are not considered when adding
+        a column to the table. If the value is <codeph>on</codeph>, the table's settings are
+        considered. </p>
+      <p>When you create an append-optimized column-oriented table, you can set the table's data
+        compression parameters <codeph>compresstype</codeph>, <codeph>compresslevel</codeph>, and
+          <codeph>blocksize</codeph> for the table in the <codeph>WITH</codeph> clause. When you add
+        a column, Greenplum Database sets each data compression parameter based on one of the
+        following settings, in order of preference.<ol id="ol_hqk_l4w_kmb">
+          <li>The data compression setting specified in the <codeph>ALTER TABLE</codeph> command
+              <codeph>ENCODING</codeph> clause.</li>
+          <li>If this server configuration parameter is set to <codeph>on</codeph>, the table's data
+            compression setting specified in the <codeph>WITH</codeph> clause when the table was
+            created. Otherwise, the table's data compression setting is ignored.</li>
+          <li>The data compression setting specified in the server configuration parameter
+                <codeph><xref href="#gp_default_storage_options"
+              >gp_default_storage_options</xref></codeph>.</li>
+          <li> The default data compression setting.</li>
+        </ol></p>
+      <p>For information about the data storage compression parameters, see <codeph><xref
+            href="../sql_commands/CREATE_TABLE.xml">CREATE TABLE</xref></codeph>.</p>
+      <table id="table_nyn_wjd_lmb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">off</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>

@@ -533,11 +533,13 @@ makeCdbProcess(SegmentDatabaseDescriptor *segdbDesc)
 
 	if (Gp_interconnect_type == INTERCONNECT_TYPE_UDPIFC)
 		process->listenerPort = (segdbDesc->motionListener >> 16) & 0x0ffff;
-	else if (Gp_interconnect_type == INTERCONNECT_TYPE_TCP)
+	else if (Gp_interconnect_type == INTERCONNECT_TYPE_TCP ||
+			 Gp_interconnect_type == INTERCONNECT_TYPE_PROXY)
 		process->listenerPort = (segdbDesc->motionListener & 0x0ffff);
 
 	process->pid = segdbDesc->backendPid;
 	process->contentid = segdbDesc->segindex;
+	process->dbid = qeinfo->config->dbid;
 	return process;
 }
 
@@ -620,11 +622,13 @@ getCdbProcessesForQD(int isPrimary)
 
 	if (Gp_interconnect_type == INTERCONNECT_TYPE_UDPIFC)
 		proc->listenerPort = (Gp_listener_port >> 16) & 0x0ffff;
-	else if (Gp_interconnect_type == INTERCONNECT_TYPE_TCP)
+	else if (Gp_interconnect_type == INTERCONNECT_TYPE_TCP ||
+			 Gp_interconnect_type == INTERCONNECT_TYPE_PROXY)
 		proc->listenerPort = (Gp_listener_port & 0x0ffff);
 
 	proc->pid = MyProcPid;
 	proc->contentid = -1;
+	proc->dbid = qdinfo->config->dbid;
 
 	list = lappend(list, proc);
 	return list;

@@ -1,5 +1,10 @@
 test: setup
 
+test: lockmodes
+# Put test prepare_limit near to test lockmodes since both of them reboot the
+# cluster during testing. Usually the 2nd reboot should be faster.
+test: prepare_limit
+test: prepared_xact_deadlock_pg_rewind
 test: ao_partition_lock
 test: dml_on_root_locks_all_parts
 
@@ -25,6 +30,7 @@ test: packcore
 # Tests on global deadlock detector
 test: select_for_update
 test: gdd/prepare
+test: gdd/concurrent_update
 test: gdd/dist-deadlock-01 gdd/dist-deadlock-04 gdd/dist-deadlock-05 gdd/dist-deadlock-06 gdd/dist-deadlock-07 gdd/dist-deadlock-102 gdd/dist-deadlock-103 gdd/dist-deadlock-104 gdd/dist-deadlock-106 gdd/non-lock-105
 # until we can improve below flaky case please keep it disabled
 ignore: gdd/non-lock-107
@@ -184,6 +190,7 @@ test: segwalrep/die_commit_pending_replication
 
 # Tests for FTS
 test: fts_errors
+test: segwalrep/replication_keeps_crash
 test: segwalrep/commit_blocking
 test: segwalrep/fts_unblock_primary
 test: segwalrep/recoverseg_from_file
@@ -197,6 +204,8 @@ test: segwalrep/checkpoint_with_prepare
 test: segwalrep/failover_with_many_records
 test: segwalrep/dtm_recovery_on_standby
 test: segwalrep/commit_blocking_on_standby
+test: segwalrep/max_slot_wal_keep_size
+test: segwalrep/dtx_recovery_wait_lsn
 test: pg_basebackup
 test: pg_basebackup_with_tablespaces
 test: fts_manual_probe
@@ -221,11 +230,6 @@ test: reindex/vacuum_while_reindex_ao_bitmap reindex/vacuum_while_reindex_heap_b
 
 # Cancel test
 test: cancel_plpython
-
-# Test concurrent UPDATE
-test: concurrent_update
-test: concurrent_update_distkeys
-test: concurrent_update_epq
 
 # Tests for getting numsegments in utility mode
 test: upgrade_numsegments

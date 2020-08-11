@@ -12,6 +12,7 @@
 #define GPNAUCRATES_CHistogram_H
 
 #include "gpos/base.h"
+#include "gpopt/base/CKHeap.h"
 #include "naucrates/statistics/CBucket.h"
 #include "naucrates/statistics/CStatsPred.h"
 
@@ -157,6 +158,15 @@ namespace gpnaucrates
 					ULONG end
 					);
 
+			// helper to combine histogram buckets to reduce total buckets
+			static
+			CBucketArray *CombineBuckets
+					(
+					CMemoryPool *mp,
+					CBucketArray *buckets,
+					ULONG desired_num_buckets
+					);
+
 			// check if we can compute NDVRemain for JOIN histogram for the given input histograms
 			static
 			BOOL CanComputeJoinNDVRemain(const CHistogram *histogram1, const CHistogram *histogram2);
@@ -205,6 +215,28 @@ namespace gpnaucrates
 				CDoubleArray *dest_bucket_freqs
 				)
 				const;
+
+			// used to keep track of adjacent stats buckets and how similar
+			// they are in terms of distribution
+			struct SAdjBucketBoundary
+				{
+					// boundary_index 0 refers to boundary between b[0] and b[1]
+					ULONG m_boundary_index;
+					// similarity factor between two adjacent buckets calculated as (freq0/ndv0 - freq1/ndv1) + (freq0/width0 - freq1/width1)
+					CDouble m_similarity_factor;
+
+					SAdjBucketBoundary(
+							ULONG index,
+							CDouble similarity_factor
+						) :
+						m_boundary_index(index),
+						m_similarity_factor(similarity_factor) {}
+
+					// used for sorting in the binary heap
+					CDouble DCost() { return m_similarity_factor; }
+					CDouble GetCostForHeap() { return DCost(); }
+				};
+			typedef CDynamicPtrArray<SAdjBucketBoundary, CleanupDelete<SAdjBucketBoundary> > SAdjBucketBoundaryArray;
 
 		public:
 

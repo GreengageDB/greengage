@@ -7631,10 +7631,19 @@ get_rule_expr(Node *node, deparse_context *context,
 						if (IsA(arg, DistinctExpr))
 						{
 							DistinctExpr 	*dexpr = (DistinctExpr *) arg;
-							Node			*rhs;
+							Node			*lhs = (Node *) linitial(dexpr->args);
+							Node			*rhs = (Node *) lsecond(dexpr->args);
 
+							/*
+							 * If lhs contains CaseTestExpr node as placeholder, we should
+							 * omit the lhs for dump
+							 */
+							if (!IsA(strip_implicit_coercions(lhs), CaseTestExpr))
+							{
+								get_rule_expr(lhs, context, false);
+								appendStringInfoChar(buf, ' ');
+							}
 							appendStringInfoString(buf, "IS NOT DISTINCT FROM ");
-							rhs = (Node *) lsecond(dexpr->args);
 							get_rule_expr(rhs, context, false);
 						}
 						else

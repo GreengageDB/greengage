@@ -103,6 +103,7 @@ int			sync_method = DEFAULT_SYNC_METHOD;
 int			wal_level = WAL_LEVEL_MINIMAL;
 int			CommitDelay = 0;	/* precommit delay in microseconds */
 int			CommitSiblings = 5; /* # concurrent xacts needed to sleep */
+int			max_slot_wal_keep_size_mb = -1;
 
 #ifdef WAL_DEBUG
 bool		XLOG_DEBUG = false;
@@ -703,6 +704,10 @@ static ControlFileData *ControlFile = NULL;
  */
 #define UsableBytesInPage (XLOG_BLCKSZ - SizeOfXLogShortPHD)
 #define UsableBytesInSegment ((XLOG_SEG_SIZE / XLOG_BLCKSZ) * UsableBytesInPage - (SizeOfXLogLongPHD - SizeOfXLogShortPHD))
+
+/* Convert values of GUCs measured in megabytes to equiv. segment count */
+#define ConvertToXSegs(x)	\
+	(x / (XLOG_SEG_SIZE / (1024 * 1024)))
 
 /*
  * Private, possibly out-of-date copy of shared LogwrtResult.
@@ -3851,9 +3856,10 @@ XLogGetLastRemovedSegno(void)
 	return lastRemovedSegNo;
 }
 
+
 /*
- * Update the last removed segno pointer in shared memory, to reflect
- * that the given XLOG file has been removed.
+ * Update the last removed segno pointer in shared memory, to reflect that the
+ * given XLOG file has been removed.
  */
 static void
 UpdateLastRemovedPtr(char *filename)
@@ -9075,6 +9081,7 @@ CreateCheckPoint(int flags)
 	{
 		GetXLogCleanUpTo(recptr, &_logSegNo);
 		KeepLogSeg(recptr, &_logSegNo);
+		InvalidateObsoleteReplicationSlots(_logSegNo);
 		_logSegNo--;
 		RemoveOldXlogFiles(_logSegNo, recptr);
 	}
@@ -9447,6 +9454,7 @@ CreateRestartPoint(int flags)
 		endptr = (receivePtr < replayPtr) ? replayPtr : receivePtr;
 
 		KeepLogSeg(endptr, &_logSegNo);
+		InvalidateObsoleteReplicationSlots(_logSegNo);
 		_logSegNo--;
 
 		/*
@@ -9540,18 +9548,26 @@ CreateRestartPoint(int flags)
  *
  * This is calculated by subtracting wal_keep_segments from the given xlog
  * location, recptr and by making sure that that result is below the
- * requirement of replication slots.
+ * requirement of replication slots.  For the latter criterion we do consider
+ * the effects of max_slot_wal_keep_size: reserve at most that much space back
+ * from recptr.
  */
 static void
 KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 {
+	XLogSegNo	currSegNo;
 	XLogSegNo	segno;
 	XLogRecPtr	keep;
 	bool setvalue = false;
 
-	XLByteToSeg(recptr, segno);
-	keep = XLogGetReplicationSlotMinimumLSN();
+	XLByteToSeg(recptr, currSegNo);
+	segno = currSegNo;
 
+	/*
+	 * Calculate how many segments are kept by slots first, adjusting for
+	 * max_slot_wal_keep_size.
+	 */
+	keep = XLogGetReplicationSlotMinimumLSN();
 #ifdef FAULT_INJECTOR
 	/*
 	 * Ignore the replication slot's LSN and let the WAL still needed by the
@@ -9562,34 +9578,40 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 	if (SIMPLE_FAULT_INJECTOR("keep_log_seg") == FaultInjectorTypeSkip)
 		keep = GetXLogWriteRecPtr();
 #endif
-
-	/* compute limit for wal_keep_segments first */
-	if (wal_keep_segments > 0)
+	if (keep != InvalidXLogRecPtr)
 	{
-		/* avoid underflow, don't go below 1 */
-		if (segno <= wal_keep_segments)
-			segno = 1;
-		else
-			segno = segno - wal_keep_segments;
+		XLByteToSeg(keep, segno);
 		setvalue = true;
+
+		/* Cap by max_slot_wal_keep_size ... */
+		if (max_slot_wal_keep_size_mb >= 0)
+		{
+			XLogRecPtr	slot_keep_segs;
+
+			slot_keep_segs = ConvertToXSegs(max_slot_wal_keep_size_mb);
+
+			if (slot_keep_segs > wal_keep_segments &&
+				currSegNo - segno > slot_keep_segs)
+			{
+				*logSegNo = currSegNo - slot_keep_segs;
+				return;
+			}
+		}
 	}
 
-	/* then check whether slots limit removal further */
-	if (max_replication_slots > 0 && keep != InvalidXLogRecPtr)
+	/* but, keep at least wal_keep_segments if that's set */
+	if (wal_keep_segments > 0 && currSegNo - segno < wal_keep_segments)
 	{
-		XLogSegNo	slotSegNo;
-
-		XLByteToSeg(keep, slotSegNo);
-
-		if (slotSegNo <= 0)
+		/* avoid underflow, don't go below 1 */
+		if (currSegNo <= wal_keep_segments)
 			segno = 1;
-		else if (slotSegNo < segno)
-			segno = slotSegNo;
+		else
+			segno = currSegNo - wal_keep_segments;
 		setvalue = true;
 	}
 
 	/* don't delete WAL segments newer than the calculated segment */
-	if (setvalue && segno < *logSegNo)
+	if (setvalue && (XLogRecPtrIsInvalid(*logSegNo) || segno < *logSegNo))
 		*logSegNo = segno;
 }
 

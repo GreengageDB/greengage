@@ -4509,7 +4509,7 @@ transformAttributeEncoding(List *stenc, CreateStmt *stmt, CreateStmtContext *cxt
 					if (te)
 						c->encoding = copyObject(te);
 					else
-						c->encoding = default_column_encoding_clause();
+						c->encoding = default_column_encoding_clause(NULL);
 				}
 			}
 		}

@@ -75,6 +75,12 @@ extern void load_auxiliary_libraries(void);
 extern bool amAuxiliaryBgWorker(void);
 extern bool IsUnderMasterDispatchMode(void);
 
+#ifdef ENABLE_IC_PROXY
+# define IC_PROXY_NUM_BGWORKER 1
+#else  /* ENABLE_IC_PROXY */
+# define IC_PROXY_NUM_BGWORKER 0
+#endif  /* ENABLE_IC_PROXY */
+
 /*
  * Note: MAX_BACKENDS is limited to 2^23-1 because inval.c stores the
  * backend ID as a 3-byte signed integer.  Even if that limitation were
@@ -83,6 +89,6 @@ extern bool IsUnderMasterDispatchMode(void);
  * GUC check hooks and in RegisterBackgroundWorker().
  */
 #define MAX_BACKENDS	0x7fffff
-#define MaxPMAuxProc	6
+#define MaxPMAuxProc	(6 + IC_PROXY_NUM_BGWORKER)
 
 #endif   /* _POSTMASTER_H */

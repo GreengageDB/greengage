@@ -15,6 +15,7 @@
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
 #include "storage/spin.h"
+#include "replication/walsender_private.h"
 
 /*
  * Behaviour of replication slots, upon release or crash.
@@ -111,6 +112,9 @@ typedef struct ReplicationSlot
 	/* is somebody performing io on this slot? */
 	LWLock	   *io_in_progress_lock;
 
+	/* GPDB: the walsnd of this replication slot */
+	WalSnd	   *walsnd;
+
 	/* all the remaining data is only used for logical slots */
 
 	/* ----
@@ -169,6 +173,7 @@ extern void ReplicationSlotsComputeRequiredXmin(bool already_locked);
 extern void ReplicationSlotsComputeRequiredLSN(void);
 extern XLogRecPtr ReplicationSlotsComputeLogicalRestartLSN(void);
 extern bool ReplicationSlotsCountDBSlots(Oid dboid, int *nslots, int *nactive);
+extern void InvalidateObsoleteReplicationSlots(XLogSegNo oldestSegno);
 
 extern void StartupReplicationSlots(void);
 extern void CheckPointReplicationSlots(void);

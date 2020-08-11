@@ -232,7 +232,7 @@ AddDefaultRelationAttributeOptions(Relation rel, List *options)
 
  	ce = form_default_storage_directive(options);
 	if (!ce)
-		ce = default_column_encoding_clause();
+		ce = default_column_encoding_clause(NULL);
 
 	ce = transformStorageEncodingClause(ce);
 

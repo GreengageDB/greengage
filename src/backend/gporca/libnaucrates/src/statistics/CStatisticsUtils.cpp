@@ -511,15 +511,7 @@ CStatisticsUtils::IsValidBucket
 	if (datum->IsDatumMappableToLINT())
 	{
 		// test if this integer bucket is well-defined
-		CDouble bound_diff = bucket_upper_bound->Distance(bucket_lower_bound);
-		if (!is_lower_closed)
-		{
-			bound_diff = bound_diff + CDouble(-1.0);
-		}
-		if (!is_upper_closed)
-		{
-			bound_diff = bound_diff + CDouble(-1.0);
-		}
+		CDouble bound_diff = bucket_upper_bound->Width(bucket_lower_bound, is_lower_closed, is_upper_closed);
 		if (CDouble(0) > bound_diff)
 		{
 			return false;
@@ -914,7 +906,7 @@ CStatisticsUtils::PrintHistogramMap
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CStatisticsUtils::CreateHistHashMapAfterMergingDisjPreds
+//		CStatisticsUtils::MergeHistogramMapsForDisjPreds
 //
 //	@doc:
 //		Create a new hash map of histograms after merging
@@ -922,102 +914,74 @@ CStatisticsUtils::PrintHistogramMap
 //
 //---------------------------------------------------------------------------
 UlongToHistogramMap *
-CStatisticsUtils::CreateHistHashMapAfterMergingDisjPreds
+CStatisticsUtils::MergeHistogramMapsForDisjPreds
 	(
 	CMemoryPool *mp,
 	CBitSet *non_updatable_cols,
-	UlongToHistogramMap *col_histogram_mapping,
-	UlongToHistogramMap *disj_preds_histogram_map,
-	CDouble cumulative_rows,
-	CDouble num_rows_disj_child
+	UlongToHistogramMap *hmap1,
+	UlongToHistogramMap *hmap2,
+	CDouble rows1,
+	CDouble rows2
 	)
 {
 	GPOS_ASSERT(NULL != non_updatable_cols);
-	GPOS_ASSERT(NULL != col_histogram_mapping);
-	GPOS_ASSERT(NULL != disj_preds_histogram_map);
+	GPOS_ASSERT(NULL != hmap1);
+	GPOS_ASSERT(NULL != hmap2);
 
-	BOOL is_empty = (CStatistics::Epsilon >= num_rows_disj_child);
 	CDouble output_rows(CStatistics::MinRows.Get());
 
-	UlongToHistogramMap *merged_histogram = GPOS_NEW(mp) UlongToHistogramMap(mp);
+	UlongToHistogramMap *merged_hmap = GPOS_NEW(mp) UlongToHistogramMap(mp);
 
 	// iterate over the new hash map of histograms and only add
 	// histograms of columns whose output statistics can be updated
-	UlongToHistogramMapIter disj_hist_iter(disj_preds_histogram_map);
-	while (disj_hist_iter.Advance())
+	if (rows2 > CStatistics::Epsilon)
 	{
-		ULONG disj_child_colid = *(disj_hist_iter.Key());
-		const CHistogram *disj_child_histogram = disj_hist_iter.Value();
-		if (!non_updatable_cols->Get(disj_child_colid))
+		UlongToHistogramMapIter hmap2_iter(hmap2);
+		while (hmap2_iter.Advance())
 		{
-			if (!is_empty)
+			ULONG colid = *(hmap2_iter.Key());
+			const CHistogram *histogram = hmap2_iter.Value();
+			if (!non_updatable_cols->Get(colid))
 			{
-				AddHistogram(mp, disj_child_colid, disj_child_histogram, merged_histogram);
+				AddHistogram(mp, colid, histogram, merged_hmap);
 			}
-			else
-			{
-				// add a dummy statistics object since the estimated number of rows for
-				// disjunction child is "0"
-				merged_histogram->Insert
-									(
-									GPOS_NEW(mp) ULONG(disj_child_colid),
-									 GPOS_NEW(mp) CHistogram(mp, false /* is_well_defined */)
-									);
-			}
-		}
-		GPOS_CHECK_ABORT;
-	}
-
-	// iterate over the previously generated histograms and
-	// union them with newly created hash map of histograms (if these columns are updatable)
-	UlongToHistogramMapIter col_hist_mapping_iter(col_histogram_mapping);
-	while (col_hist_mapping_iter.Advance())
-	{
-		ULONG colid = *(col_hist_mapping_iter.Key());
-		const CHistogram *histogram = col_hist_mapping_iter.Value();
-		if (NULL != histogram && !non_updatable_cols->Get(colid))
-		{
-			if (is_empty)
-			{
-				// since the estimated output of the disjunction child is "0" tuples
-				// no point merging histograms.
-				AddHistogram
-					(
-					mp,
-					colid,
-					histogram,
-					merged_histogram,
-					true /* replace_old */
-					);
-			}
-			else
-			{
-				const CHistogram *disj_child_histogram = disj_preds_histogram_map->Find(&colid);
-				CHistogram *normalized_union_histogram = histogram->MakeUnionHistogramNormalize
-													(
-													cumulative_rows,
-													disj_child_histogram,
-													num_rows_disj_child,
-													&output_rows
-													);
-
-				AddHistogram
-					(
-					mp,
-					colid,
-					normalized_union_histogram,
-					merged_histogram,
-					true /* fReplaceOld */
-					);
-
-				GPOS_DELETE(normalized_union_histogram);
-			}
-
 			GPOS_CHECK_ABORT;
 		}
 	}
 
-	return merged_histogram;
+	// iterate over the previously generated histograms and
+	// union them with newly created hash map of histograms (if these columns are updatable)
+	if (rows1 > CStatistics::Epsilon)
+	{
+		UlongToHistogramMapIter hmap1_iter(hmap1);
+		while (hmap1_iter.Advance())
+		{
+			ULONG colid = *(hmap1_iter.Key());
+			const CHistogram *histogram1 = hmap1_iter.Value();
+			if (NULL != histogram1 && !non_updatable_cols->Get(colid))
+			{
+				// merge with viable histograms that were added to merged_hmap
+				const CHistogram *histogram2 = merged_hmap->Find(&colid);
+				if (NULL != histogram2)
+				{
+					CHistogram *normalized_union_histogram =
+					histogram1->MakeUnionHistogramNormalize(rows1, histogram2, rows2, &output_rows);
+
+					AddHistogram(mp, colid, normalized_union_histogram, merged_hmap, true /* fReplaceOld */);
+
+					GPOS_DELETE(normalized_union_histogram);
+				}
+				else
+				{
+					AddHistogram(mp, colid, histogram1, merged_hmap);
+				}
+
+				GPOS_CHECK_ABORT;
+			}
+		}
+	}
+
+	return merged_hmap;
 }
 
 
@@ -1292,7 +1256,7 @@ CStatisticsUtils::DeriveStatsForBitmapTableGet
 {
 	GPOS_ASSERT(CLogical::EopLogicalBitmapTableGet == expr_handle.Pop()->Eopid() ||
 				CLogical::EopLogicalDynamicBitmapTableGet == expr_handle.Pop()->Eopid());
-	CTableDescriptor *table_descriptor = CLogical::PtabdescFromTableGet(expr_handle.Pop());
+	CTableDescriptor *table_descriptor = expr_handle.DeriveTableDescriptor();
 
 	// the index of the condition
 	ULONG child_cond_index = 0;

@@ -42,6 +42,13 @@ Follow [these macOS steps](README.macOS.md) for getting your system ready for GP
 ### Installing dependencies (for Linux developers)
 Follow [appropriate linux steps](README.linux.md) for getting your system ready for GPDB
 
+## xerces
+
+ORCA requires xerces 3.1 or gp-xerces. For the most up-to-date way of
+building gp-xerces, see the README at the following repository:
+
+* https://github.com/greenplum-db/gp-xerces
+
 ### Build the database
 
 ```

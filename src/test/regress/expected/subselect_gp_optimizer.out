@@ -847,6 +847,29 @@ select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t
  abc | 1 | 2 | xyz
 (3 rows)
 
+-- subquery contains quals of form 'function(outervar, innervar1) = innvervar2'
+explain select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.n + t1.n =t1.i);
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..5172.20 rows=1 width=17)
+   ->  Result  (cost=0.00..5172.20 rows=1 width=17)
+         Filter: (1 = (SubPlan 1))
+         ->  Seq Scan on csq_pullup  (cost=0.00..5172.19 rows=334 width=36)
+         SubPlan 1
+           ->  Aggregate  (cost=0.00..431.00 rows=1 width=8)
+                 ->  Result  (cost=0.00..431.00 rows=1 width=1)
+                       Filter: ((csq_pullup.n + csq_pullup_1.n) = (csq_pullup_1.i)::numeric)
+                       ->  Materialize  (cost=0.00..431.00 rows=1 width=9)
+                             ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=9)
+                                   ->  Seq Scan on csq_pullup csq_pullup_1  (cost=0.00..431.00 rows=1 width=9)
+ Optimizer: Pivotal Optimizer (GPORCA) version 3.93.0
+(12 rows)
+
+select * from csq_pullup t0 where 1= (select count(*) from csq_pullup t1 where t0.n + t1.n =t1.i);
+ t | n | i | v 
+---+---+---+---
+(0 rows)
+
 --
 -- NOT EXISTS CSQs to joins
 --
@@ -938,17 +961,17 @@ explain select * from subselect_t1 where x in (select y from subselect_t2 union 
 -----------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=2 width=4)
    ->  Hash Join  (cost=0.00..1293.00 rows=1 width=4)
-         Hash Cond: subselect_t2.y = subselect_t1.x
-         ->  GroupAggregate  (cost=0.00..862.00 rows=2 width=4)
-               Group Key: subselect_t2.y
-               ->  Sort  (cost=0.00..862.00 rows=2 width=4)
-                     Sort Key: subselect_t2.y
-                     ->  Append  (cost=0.00..862.00 rows=2 width=4)
-                           ->  Seq Scan on subselect_t2  (cost=0.00..431.00 rows=1 width=4)
-                           ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..431.00 rows=1 width=4)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-               ->  Seq Scan on subselect_t1  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
+         Hash Cond: (subselect_t1.x = subselect_t2.y)
+         ->  Seq Scan on subselect_t1  (cost=0.00..431.00 rows=1 width=4)
+         ->  Hash  (cost=862.00..862.00 rows=1 width=4)
+               ->  GroupAggregate  (cost=0.00..862.00 rows=1 width=4)
+                     Group Key: subselect_t2.y
+                     ->  Sort  (cost=0.00..862.00 rows=2 width=4)
+                           Sort Key: subselect_t2.y
+                           ->  Append  (cost=0.00..862.00 rows=2 width=4)
+                                 ->  Seq Scan on subselect_t2  (cost=0.00..431.00 rows=1 width=4)
+                                 ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..431.00 rows=1 width=4)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (13 rows)
 
 select * from subselect_t1 where x in (select y from subselect_t2 union all select y from subselect_t2);
@@ -986,17 +1009,17 @@ explain select count(*) from subselect_t1 where x in (select y from subselect_t2
  Aggregate  (cost=0.00..1293.00 rows=1 width=8)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.00 rows=2 width=1)
          ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1)
-               Hash Cond: (subselect_t2.y = subselect_t1.x)
-               ->  GroupAggregate  (cost=0.00..862.00 rows=2 width=4)
-                     Group Key: subselect_t2.y
-                     ->  Sort  (cost=0.00..862.00 rows=2 width=4)
-                           Sort Key: subselect_t2.y
-                           ->  Append  (cost=0.00..862.00 rows=2 width=4)
-                                 ->  Seq Scan on subselect_t2  (cost=0.00..431.00 rows=1 width=4)
-                                 ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..431.00 rows=1 width=4)
-               ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-                     ->  Seq Scan on subselect_t1  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.64.0
+               Hash Cond: (subselect_t1.x = subselect_t2.y)
+               ->  Seq Scan on subselect_t1  (cost=0.00..431.00 rows=1 width=4)
+               ->  Hash  (cost=862.00..862.00 rows=1 width=4)
+                     ->  GroupAggregate  (cost=0.00..862.00 rows=1 width=4)
+                           Group Key: subselect_t2.y
+                           ->  Sort  (cost=0.00..862.00 rows=2 width=4)
+                                 Sort Key: subselect_t2.y
+                                 ->  Append  (cost=0.00..862.00 rows=2 width=4)
+                                       ->  Seq Scan on subselect_t2  (cost=0.00..431.00 rows=1 width=4)
+                                       ->  Seq Scan on subselect_t2 subselect_t2_1  (cost=0.00..431.00 rows=1 width=4)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (14 rows)
 
 select count(*) from subselect_t1 where x in (select y from subselect_t2 union all select y from subselect_t2);

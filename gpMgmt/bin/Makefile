@@ -59,7 +59,7 @@ core: pygresql subprocess32
 	python gpconfig_modules/parse_guc_metadata.py $(DESTDIR)$(prefix)
 
 ifneq "$(wildcard $(CURDIR)/pythonSrc/ext/*.tar.gz)" ""
-install: installdirs installprograms core lockfile psutil
+install: installdirs installprograms core psutil pygresql pyyaml
 else
 install: installdirs installprograms core
 endif
@@ -101,24 +101,8 @@ pygresql:
 	touch $(PYLIB_DIR)/__init__.py
 
 #
-# LOCKFILE
+# subprocess32
 #
-# note the awk commands are used to eliminate references to code in __init__.py
-# that we don't use and also to insert a comment to tell pylint not to complain
-# about these files since we are not in a position to correct those warnings.
-#
-LOCKFILE_VERSION=0.9.1
-LOCKFILE_DIR=lockfile-$(LOCKFILE_VERSION)
-LOCKFILE_SRC=$(PYLIB_SRC_EXT)/$(LOCKFILE_DIR)/build/lib*/lockfile
-LOCKFILE_DST=$(PYLIB_DIR)/lockfile
-lockfile:
-	@echo "--- lockfile"
-	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(LOCKFILE_DIR).tar.gz
-	cd $(PYLIB_SRC_EXT)/$(LOCKFILE_DIR)/ && python setup.py build
-	mkdir -p $(LOCKFILE_DST)
-	awk 'BEGIN{print "# pylint: disable-all"} /^if hasattr/ {exit} { print }' < `echo $(LOCKFILE_SRC)/__init__.py`    > $(LOCKFILE_DST)/__init__.py
-	awk 'BEGIN{print "# pylint: disable-all"} { print }'                      < `echo $(LOCKFILE_SRC)/pidlockfile.py` > $(LOCKFILE_DST)/pidlockfile.py
-
 subprocess32:
 	@echo "--- subprocess32, Linux only"
 	@if [ `uname -s` = 'Linux' ]; then \
@@ -140,6 +124,18 @@ ifeq "$(findstring $(BLD_ARCH),aix7_ppc_64 )" ""
 	cd $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)/ && CC="$(CC)" python setup.py build
 	cp -r $(PYLIB_SRC_EXT)/$(PSUTIL_DIR)/build/lib.*/psutil $(PYLIB_DIR)
 endif
+
+#
+# PYYAML
+#
+PYYAML_VERSION=5.3.1
+PYYAML_DIR=PyYAML-$(PYYAML_VERSION)
+
+pyyaml:
+	@echo "--- pyyaml"
+	cd $(PYLIB_SRC_EXT)/ && $(TAR) xzf $(PYYAML_DIR).tar.gz
+	cd $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/ && env -u CC python setup.py build
+	cp -r $(PYLIB_SRC_EXT)/$(PYYAML_DIR)/build/lib*/* $(PYLIB_DIR)
 
 #
 # PYLINT
@@ -223,6 +219,7 @@ unitdevel:
 
 .PHONY: installcheck-bash
 installcheck-bash:
+	./test-generate-greenplum-path.bash
 	./test/suite.bash
 
 .PHONY: installcheck
@@ -230,7 +227,6 @@ installcheck: installcheck-bash
 	$(MAKE) -C gpload_test $@
 
 clean distclean:
-	rm -rf $(PYLIB_SRC_EXT)/$(LOCKFILE_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(PYLINT_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(LOGILAB_COMMON_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(LOGILAB_ASTNG_DIR)

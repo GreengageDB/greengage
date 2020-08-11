@@ -47,6 +47,7 @@
 #include "storage/fd.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
+#include "replication/walsender.h"
 
 /*
  * Replication slot on-disk data structure.
@@ -392,6 +393,7 @@ ReplicationSlotRelease(void)
 
 		SpinLockAcquire(&slot->mutex);
 		vslot->active = false;
+		vslot->walsnd = NULL;
 		SpinLockRelease(&slot->mutex);
 	}
 
@@ -488,6 +490,7 @@ ReplicationSlotDropAcquired(void)
 
 		SpinLockAcquire(&slot->mutex);
 		vslot->active = false;
+		vslot->walsnd = NULL;
 		SpinLockRelease(&slot->mutex);
 
 		ereport(fail_softly ? WARNING : ERROR,
@@ -506,6 +509,7 @@ ReplicationSlotDropAcquired(void)
 	LWLockAcquire(ReplicationSlotControlLock, LW_EXCLUSIVE);
 	slot->active = false;
 	slot->in_use = false;
+	slot->walsnd = NULL;
 	LWLockRelease(ReplicationSlotControlLock);
 
 	/*
@@ -648,6 +652,10 @@ ReplicationSlotsComputeRequiredXmin(bool already_locked)
 
 /*
  * Compute the oldest restart LSN across all slots and inform xlog module.
+ *
+ * Note: while max_slot_wal_keep_size is theoretically relevant for this
+ * purpose, we don't try to account for that, because this module doesn't
+ * know what to compare against.
  */
 void
 ReplicationSlotsComputeRequiredLSN(void)
@@ -726,6 +734,9 @@ ReplicationSlotsComputeLogicalRestartLSN(void)
 		SpinLockAcquire(&s->mutex);
 		restart_lsn = s->data.restart_lsn;
 		SpinLockRelease(&s->mutex);
+
+		if (restart_lsn == InvalidXLogRecPtr)
+			continue;
 
 		if (result == InvalidXLogRecPtr ||
 			restart_lsn < result)
@@ -880,6 +891,74 @@ ReplicationSlotReserveWal(void)
 		if (XLogGetLastRemovedSegno() < segno)
 			break;
 	}
+}
+
+/*
+ * Mark any slot that points to an LSN older than the given segment
+ * as invalid; it requires WAL that's about to be removed.
+ *
+ * NB - this runs as part of checkpoint, so avoid raising errors if possible.
+ */
+void
+InvalidateObsoleteReplicationSlots(XLogSegNo oldestSegno)
+{
+	XLogRecPtr	oldestLSN;
+
+	XLogSegNoOffsetToRecPtr(oldestSegno, 0, oldestLSN);
+
+restart:
+	LWLockAcquire(ReplicationSlotControlLock, LW_SHARED);
+	for (int i = 0; i < max_replication_slots; i++)
+	{
+		ReplicationSlot *s = &ReplicationSlotCtl->replication_slots[i];
+		XLogRecPtr	restart_lsn = InvalidXLogRecPtr;
+		char	   *slotname;
+
+		if (!s->in_use)
+			continue;
+		if (!s->walsnd)
+			continue;
+
+		SpinLockAcquire(&s->mutex);
+		if (s->data.restart_lsn == InvalidXLogRecPtr ||
+			s->data.restart_lsn >= oldestLSN)
+		{
+			SpinLockRelease(&s->mutex);
+			continue;
+		}
+
+		slotname = pstrdup(NameStr(s->data.name));
+		restart_lsn = s->data.restart_lsn;
+
+		SpinLockRelease(&s->mutex);
+		LWLockRelease(ReplicationSlotControlLock);
+
+		ereport(LOG,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				errmsg("replication slot %s becomes obsolete, stop the WAL sender %d",
+						slotname, s->walsnd->pid)));
+		/*
+		 * Signal walsenders to move to stopping state.
+		 */
+		WalSndInitStoppingOneWalSender(s->walsnd);
+
+		/*
+		 * Wait for WAL senders to be in stopping state.  This prevents commands
+		 * from writing new WAL.
+		 */
+		WalSndWaitStoppingOneWalSender(s->walsnd);
+
+		WalSndCtl->error = WALSNDERROR_WALREAD;
+
+		SpinLockAcquire(&s->mutex);
+		s->data.restart_lsn = InvalidXLogRecPtr;
+		SpinLockRelease(&s->mutex);
+
+		/* if we did anything, start from scratch */
+		CHECK_FOR_INTERRUPTS();
+		goto restart;
+	}
+	LWLockRelease(ReplicationSlotControlLock);
 }
 
 /*
@@ -1362,6 +1441,7 @@ RestoreSlotFromDisk(const char *name)
 
 		slot->in_use = true;
 		slot->active = false;
+		slot->walsnd = NULL;
 
 		restored = true;
 		break;

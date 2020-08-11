@@ -158,10 +158,7 @@
       <!--OSS only-->
       <p otherprops="oss-only">The following table lists minimum recommended specifications for
         hardware servers intended to support Greenplum Database on Linux systems. All host servers
-        in your Greenplum Database system must have the same hardware and software configuration.
-        <note type="warning">Running Greenplum Database on hyper-converged infrastructure (HCI) has
-          known issues with performance, scalability, and stability and is not
-        recommended.</note></p>
+        in your Greenplum Database system must have the same hardware and software configuration. </p>
       <table id="ji162790">
         <title>Minimum Hardware Requirements</title>
         <tgroup cols="2">
@@ -222,13 +219,7 @@
           with the expected operation of Greenplum Database.</ph></p>
       <p>Greenplum Database can be deployed to virtualized systems only if the storage is presented
         as block devices and the XFS file system is mounted for the storage of the segment
-        directories.
-        <note type="warning">Running Greenplum Database on hyper-converged infrastructure (HCI) has
-          known issues with performance, scalability, and stability and is not recommended<ph> as a
-            scalable solution for Pivotal Greenplum Database and may not be supported by Pivotal if
-            stability problems appear related to the infrastructure. HCI virtualizes all of the
-            elements of conventional hardware systems and includes, at a minimum, virtualized
-            computing, a virtualised SAN, and virtualized networking</ph>.</note></p>
+        directories. </p>
       <p>Greenplum Database <ph otherprops="pivotal">is supported </ph><ph otherprops="oss-only">can
           run </ph>on Amazon Web Services (AWS) servers using either Amazon instance store (Amazon
         uses the volume names <codeph>ephemeral[0-20]</codeph>) or Amazon Elastic Block Store
@@ -417,11 +408,11 @@
       <body>
         <p>
           <ul id="ul_ckf_sfc_hbb">
-            <li>Greenplum Platform Extension Framework (PXF) v5.12 - PXF, integrated with Greenplum
-              Database 6, provides access to Hadoop, object store, and SQL external data stores.
-              Refer to <xref scope="peer" href="../admin_guide/external/pxf-overview.xml">Accessing
-                External Data with PXF</xref> in the <cite>Greenplum Database Administrator
-                Guide</cite> for PXF configuration and usage
+            <li>Greenplum Platform Extension Framework (PXF) v5.13.0 - PXF, integrated with
+              Greenplum Database 6, provides access to Hadoop, object store, and SQL external data
+              stores. Refer to <xref scope="peer" href="../admin_guide/external/pxf-overview.xml"
+                >Accessing External Data with PXF</xref> in the <cite>Greenplum Database
+                Administrator Guide</cite> for PXF configuration and usage
               information.<!--Also check OSS information in Hadoop section--></li>
             <li>Greenplum-Kafka Integration - The Pivotal Greenplum-Kafka Integration provides high
               speed, parallel data transfer from a Kafka cluster to a Pivotal Greenplum Database
@@ -488,7 +479,7 @@
     <title id="pm357649">Hadoop Distributions</title>
     <body>
       <p>Greenplum Database provides access to HDFS with the Greenplum Platform Extension Framework
-          (PXF).<ph otherprops="oss-only"> PXF v5.12 is integrated with Greenplum Database 6, and
+          (PXF).<ph otherprops="oss-only"> PXF v5.13.0 is integrated with Greenplum Database 6, and
           provides access to Hadoop, object store, and SQL external data stores. Refer to <xref
             scope="peer" href="../admin_guide/external/pxf-overview.xml">Accessing External Data
             with PXF</xref> in the <cite>Greenplum Database Administrator Guide</cite> for PXF
@@ -513,7 +504,7 @@
           </thead>
           <tbody>
             <row>
-              <entry colname="col1">5.12, 5.11.1, 5.10.1</entry>
+              <entry colname="col1">5.13.0, 5.12.0, 5.11.1, 5.10.1</entry>
               <entry colname="col2">2.x, 3.1+</entry>
               <entry colname="col3">1.x, 2.x, 3.1+</entry>
               <entry colname="col4">1.3.2</entry>

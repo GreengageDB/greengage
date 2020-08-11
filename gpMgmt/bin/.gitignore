@@ -1,4 +1,3 @@
-ext
 /analyzedbc
 /gpactivatestandbyc
 /gpaddmirrorsc
@@ -24,3 +23,7 @@ ext
 /gpstopc
 /gpsys1c
 /minireproc
+
+# ignore anything in ext but keep folder
+ext/*
+!ext/.gitkeep

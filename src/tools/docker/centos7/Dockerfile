@@ -16,7 +16,7 @@ RUN yum makecache && \
     yum -y install libevent-devel libuuid-devel libxml2-devel libyaml-devel libzstd-devel && \
     yum -y install openssl-devel pam-devel readline-devel snappy-devel && \
     yum -y install apache-ivy libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
-    pip install psi lockfile && \
+    pip install psi && \
     yum clean all
 
 # setup ssh configuration
@@ -36,6 +36,7 @@ RUN ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa && \
 # newer version of gcc and run environment for gpdb
 RUN yum -y install centos-release-scl && \
     yum -y install --nogpgcheck devtoolset-6-gcc devtoolset-6-gcc-c++ && yum clean all && \
+    pip --no-cache-dir install psi && \
     ln -s /usr/bin/cmake3 /usr/bin/cmake && \
     echo -e 'source /opt/rh/devtoolset-6/enable' >> /opt/gcc_env.sh && \
     echo -e 'source /opt/gcc_env.sh' >> /root/.bashrc && \

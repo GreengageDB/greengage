@@ -1527,7 +1527,7 @@ GetDistributedSnapshotMaxCount(DtxContext distributedTransactionContext)
 		return 0;
 
 	case DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE:
-		return max_prepared_xacts;
+		return GetMaxSnapshotXidCount();
 
 	case DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER:
 	case DTX_CONTEXT_QE_TWO_PHASE_IMPLICIT_WRITER:
@@ -2227,6 +2227,8 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 
 				if (total_sleep_time_us >= segmate_timeout_us)
 				{
+					LWLockRelease(SharedLocalSnapshotSlot->slotLock);
+					LWLockAcquire(SharedSnapshotLock, LW_SHARED); /* For SharedSnapshotDump() */
 					ereport(ERROR,
 							(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 							 errmsg("GetSnapshotData timed out waiting for Writer to set the shared snapshot."),
