@@ -845,7 +845,12 @@ plan_tree_mutator(Node *node,
 				SCANMUTATE(newfdwscan, fdwscan);
 
 				MUTATE(newfdwscan->fdw_exprs, fdwscan->fdw_exprs, List *);
-				MUTATE(newfdwscan->fdw_private, fdwscan->fdw_private, List *);
+
+				/*
+				 * Don't mutate fdw_private, it's private to the FDW. Must make
+				 * a copy of it, though.
+				 */
+				newfdwscan->fdw_private = copyObject(fdwscan->fdw_private);
 				newfdwscan->fsSystemCol = fdwscan->fsSystemCol;
 
 				return (Node *) newfdwscan;
