@@ -2749,7 +2749,7 @@ acquire_sample_rows_dispatcher(Relation onerel, bool inh, int elevel,
 			 * This result is for a segment that's not holding any data for this
 			 * table. Should get 0 rows.
 			 */
-			if (this_totalrows != 0 || this_totalrows != 0)
+			if (this_totalrows != 0)
 				elog(WARNING, "table \"%s\" contains rows in segment %d, which is outside the # of segments for the table's policy (%d segments)",
 					 RelationGetRelationName(onerel), resultno, onerel->rd_cdbpolicy->numsegments);
 		}
@@ -4180,7 +4180,7 @@ merge_leaf_stats(VacAttrStatsP stats,
 	MemoryContext old_context;
 
 	HeapTuple *heaptupleStats =
-		(HeapTuple *) palloc(numPartitions * sizeof(HeapTuple *));
+		(HeapTuple *) palloc(numPartitions * sizeof(HeapTuple));
 
 	// NDV calculations
 	float4 colAvgWidth = 0;
@@ -4247,8 +4247,8 @@ merge_leaf_stats(VacAttrStatsP stats,
 
 		AttStatsSlot hllSlot;
 
-		get_attstatsslot(&hllSlot, heaptupleStats[i], STATISTIC_KIND_FULLHLL,
-						 InvalidOid, ATTSTATSSLOT_VALUES);
+		(void) get_attstatsslot(&hllSlot, heaptupleStats[i], STATISTIC_KIND_FULLHLL,
+								InvalidOid, ATTSTATSSLOT_VALUES);
 
 		if (hllSlot.nvalues > 0)
 		{
@@ -4264,8 +4264,8 @@ merge_leaf_stats(VacAttrStatsP stats,
 			totalhll_count++;
 		}
 
-		get_attstatsslot(&hllSlot, heaptupleStats[i], STATISTIC_KIND_HLL,
-						 InvalidOid, ATTSTATSSLOT_VALUES);
+		(void) get_attstatsslot(&hllSlot, heaptupleStats[i], STATISTIC_KIND_HLL,
+								InvalidOid, ATTSTATSSLOT_VALUES);
 
 		if (hllSlot.nvalues > 0)
 		{

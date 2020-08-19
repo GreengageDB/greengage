@@ -1379,6 +1379,9 @@
                   >gp_interconnect_fc_method</xref>
               </p>
               <p>
+                <xref href="guc-list.xml#gp_interconnect_proxy_addresses" type="section"
+                  >gp_interconnect_proxy_addresses</xref></p>
+              <p>
                 <xref href="guc-list.xml#gp_interconnect_queue_depth" type="section"
                   >gp_interconnect_queue_depth</xref>
               </p>
@@ -1456,11 +1459,15 @@
             </stentry>
             <stentry>
               <p>
+                <xref href="guc-list.xml#gp_fts_probe_threadcount" type="section"
+                  >gp_fts_probe_threadcount</xref>
+              </p>
+              <p>
                 <xref href="guc-list.xml#gp_fts_probe_timeout" format="dita"/>
               </p>
               <p>
-                <xref href="guc-list.xml#gp_fts_probe_threadcount" type="section"
-                  >gp_fts_probe_threadcount</xref>
+                <xref href="guc-list.xml#gp_fts_replication_attempt_count" type="section"
+                  >gp_fts_replication_attempt_count</xref>
               </p>
               <p>
                 <xref href="guc-list.xml#gp_log_fts" format="dita"/>
@@ -1530,7 +1537,10 @@
         <strow>
           <stentry>
             <p>
-              <xref href="guc-list.xml#repl_catchup_within_range" type="section"
+              <xref href="guc-list.xml#max_slot_wal_keep_size" type="section"
+                >max_slot_wal_keep_size</xref>
+            </p>
+            <p><xref href="guc-list.xml#repl_catchup_within_range" type="section"
                 >repl_catchup_within_range</xref>
             </p>
             <p>

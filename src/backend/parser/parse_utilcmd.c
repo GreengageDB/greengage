@@ -418,6 +418,17 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 	{
 		int			numsegments = -1;
 
+		/*
+		 * Child table in a partition created in utility mode doesn't have a
+		 * policy
+		 */
+		if (Gp_role != GP_ROLE_DISPATCH &&
+			!IsBinaryUpgrade &&
+			stmt->is_part_child)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					 errmsg("cannot create partition table in utility mode")));
+
 		AssertImply(stmt->is_part_parent,
 					stmt->distributedBy == NULL);
 		AssertImply(stmt->is_part_child,

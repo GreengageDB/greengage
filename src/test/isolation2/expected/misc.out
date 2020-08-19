@@ -45,3 +45,9 @@ CREATE
 -----------------
  pg_toast_temp_0 
 (1 row)
+
+--
+-- Validate GPDB doesn't crash when creating partitioned table in utility mode
+--
+0U: create table utilitymode_pt_lt_tab (col1 int, col2 decimal) distributed by (col1) partition by list(col2) (partition part1 values(1));
+ERROR:  cannot create partition table in utility mode

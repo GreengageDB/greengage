@@ -112,6 +112,7 @@
             <topicref href="guc-list.xml#gp_fts_probe_retries"/>
             <topicref href="guc-list.xml#gp_fts_probe_threadcount"/>
             <topicref href="guc-list.xml#gp_fts_probe_timeout"/>
+            <topicref href="guc-list.xml#gp_fts_replication_attempt_count"/>
             <topicref href="guc-list.xml#gp_global_deadlock_detector_period"/>
             <topicref href="guc-list.xml#gp_gpperfmon_send_interval"/>
             <topicref href="guc-list.xml#gpperfmon_log_alert_level"/>
@@ -121,6 +122,7 @@
             <topicref href="guc-list.xml#gp_instrument_shmem_size"/>
             <topicref href="guc-list.xml#gp_interconnect_debug_retry_interval"/>
             <topicref href="guc-list.xml#gp_interconnect_fc_method"/>
+            <topicref href="guc-list.xml#gp_interconnect_proxy_addresses"/>
             <topicref href="guc-list.xml#gp_interconnect_queue_depth"/>
             <topicref href="guc-list.xml#gp_interconnect_setup_timeout"/>
             <topicref href="guc-list.xml#gp_interconnect_snd_queue_depth"/>

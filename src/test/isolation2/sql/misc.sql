@@ -32,3 +32,9 @@
       JOIN pg_namespace n2
         ON n2.nspname = 'pg_toast_temp_0' || substring(n1.nspname FROM 10)
      WHERE c.relname = 'utilitymode_tmp_tab';
+
+--
+-- Validate GPDB doesn't crash when creating partitioned table in utility mode
+--
+0U: create table utilitymode_pt_lt_tab (col1 int, col2 decimal)
+	distributed by (col1) partition by list(col2) (partition part1 values(1));
