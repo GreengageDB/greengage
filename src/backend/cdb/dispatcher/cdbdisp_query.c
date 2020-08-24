@@ -38,6 +38,7 @@
 #include "utils/session_state.h"
 #include "utils/typcache.h"
 #include "miscadmin.h"
+#include "mb/pg_wchar.h"
 
 #include "cdb/cdbdisp.h"
 #include "cdb/cdbdisp_query.h"
@@ -857,11 +858,14 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 	 *
 	 * Here we only need to determine the truncated size, the actual work is
 	 * done later when copying it to the result buffer.
+	 *
+	 * The +1 and -1 below are adjustments to accommodate terminating null
+	 * character.
 	 */
-	if (querytree || plantree)
-		command_len = strnlen(command, QUERY_STRING_TRUNCATE_SIZE - 1) + 1;
-	else
-		command_len = strlen(command) + 1;
+	command_len = strlen(command) + 1;
+	if ((querytree || plantree) && command_len > QUERY_STRING_TRUNCATE_SIZE)
+		command_len = pg_mbcliplen(command, command_len,
+								   QUERY_STRING_TRUNCATE_SIZE-1) + 1;
 
 	initStringInfo(&resgroupInfo);
 	if (IsResGroupActivated())
