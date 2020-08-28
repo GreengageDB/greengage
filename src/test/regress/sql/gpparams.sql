@@ -1,5 +1,5 @@
 --
--- All derived from MPP-3613: use of incorrect parameters in queries
+-- Derived from MPP-3613: use of incorrect parameters in queries
 -- which intermix initPlans with "internal" parameters.
 --
 --
@@ -577,3 +577,30 @@ select * from create_target_list_sql(30);
 --select * from create_target_list(30, 1);
 --truncate module_targets;
 --select * from create_target_list_sql(30);
+
+
+--
+-- Test case on using initPlan with internal not-evaluated parameter of RECORD
+-- type that have to be transmited to QEs from master node
+--
+CREATE TABLE users_unmasked (
+    user_id bigint NOT NULL,
+    params text
+) DISTRIBUTED BY (user_id);
+
+ALTER TABLE ONLY users_unmasked
+ADD CONSTRAINT users_20171219_pkey PRIMARY KEY (user_id);
+
+-- query that on segment side deserializes not-evaluated zero parameter
+-- corresponding to returning 'row(u.user_id)' tuple from subquery inside WHERE
+-- stmt
+SELECT cte."userId" FROM ( SELECT 7 as "userId" ) cte WHERE (
+    SELECT
+        row(u.user_id)
+    FROM
+        users_unmasked u
+    WHERE
+        u.user_id = 7
+) IS NOT NULL;
+
+DROP TABLE users_unmasked;

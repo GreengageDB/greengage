@@ -266,6 +266,9 @@ TRRemapDatum(TupleRemapper *remapper, Oid typeid, Datum value)
 	TupleRemapInfo *remapinfo;
 	bool		changed;
 
+	if (value == 0)
+		return value;
+
 	remapinfo = BuildTupleRemapInfo(typeid, remapper->mycontext);
 
 	if (!remapinfo)
