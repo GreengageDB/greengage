@@ -15644,6 +15644,7 @@ unreserved_keyword:
 			| CPU_RATE_LIMIT
 			| CREATEEXTTABLE
 			| CSV
+			| CUBE
 			| CURRENT_P
 			| CURSOR
 			| CYCLE
@@ -16228,7 +16229,6 @@ col_name_keyword:
 			| CHAR_P
 			| CHARACTER
 			| COALESCE
-			| CUBE
 			| DEC
 			| DECIMAL_P
 			| EXISTS
