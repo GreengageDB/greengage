@@ -2238,7 +2238,6 @@ rebuild_append_simple_rel_and_rte(PlannerInfo *root,
 	int			i;
 	int			array_size;
 	ListCell	*l1, *l2, *l3;
-	RelOptInfo	*rel;
 
 	if (root->simple_rel_array)
 		pfree(root->simple_rel_array);
@@ -2256,23 +2255,56 @@ rebuild_append_simple_rel_and_rte(PlannerInfo *root,
 	Assert(list_length(rtable) == list_length(subplans));
 	Assert(list_length(subplans) == list_length(subroots));
 
+	/*
+	 * Build RTE array before initialization of RelOptInfos because
+	 * build_simple_rel() routine called from inside the next loop is recursive
+	 * for inherited relations that require a full list of already initialized
+	 * child RTEs.
+	 */
 	i = 0;
-	forthree(l1, rtable, l2, subroots, l3, subplans)
+	foreach(l1, rtable)
+	{
+		RangeTblEntry	*rte = (RangeTblEntry *)lfirst(l1);
+
+		/* the first array entry is not indexed */
+		i++;
+
+		/* skip empty RTE and join */
+		if (rte == NULL || rte->rtekind == RTE_JOIN)
+			continue;
+
+		root->simple_rte_array[i] = rte;
+	}
+
+	i = 0;
+	forboth(l2, subroots, l3, subplans)
 	{
 		SubqueryScan	*splan;
 		PlannerInfo		*sroot;
 		RangeTblEntry	*rte;
+		RelOptInfo		*rel;
 
-		/* skip the first one */
+		/* the first array entry is not indexed */
 		i++;
 
-		rte = (RangeTblEntry *)lfirst(l1);
-		if (rte == NULL || rte->rtekind == RTE_JOIN)
+		rte = root->simple_rte_array[i];
+		rel = root->simple_rel_array[i];
+
+		/* skip empty RTE and already initialized RelOptInfo */
+		if (rte == NULL || rel != NULL)
 			continue;
 
-		root->simple_rte_array[i] = rte; 
 		if (rte->rtekind == RTE_VOID)
+		{
 			rel = makeNode(RelOptInfo);
+
+			/*
+			 * XXX: save empty RelOptInfo that corresponds to deleted RTE
+			 * (former pulled up subquery) in common array. This can be
+			 * incorrect decision.
+			 */
+			root->simple_rel_array[i] = rel;
+		}
 		else
 			rel = build_simple_rel(root, i, RELOPT_BASEREL);
 
