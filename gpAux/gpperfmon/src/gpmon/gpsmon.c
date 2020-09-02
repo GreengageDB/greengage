@@ -863,7 +863,7 @@ static void gx_gettcpcmd(SOCKET sock, short event, void* arg)
 	struct timeval tv;
 	tv.tv_sec = opt.terminate_timeout;
 	tv.tv_usec = 0;
-	if (event_add(&gx.tcp_event, &tv)) //reset timeout
+	if (event_add(&gx.tcp_event, opt.terminate_timeout ? &tv : NULL)) //reset timeout
         {
 		gpmon_warningx(FLINE, APR_FROM_OS_ERROR(errno), "event_add failed");
         }
@@ -952,7 +952,7 @@ static void gx_accept(SOCKET sock, short event, void* arg)
 	tv.tv_sec = opt.terminate_timeout;
 	tv.tv_usec = 0;
 	event_set(&gx.tcp_event, nsock, EV_READ | EV_PERSIST | EV_TIMEOUT, gx_gettcpcmd, 0);
-	if (event_add(&gx.tcp_event, &tv))
+	if (event_add(&gx.tcp_event, opt.terminate_timeout ? &tv : NULL))
 	{
 		gpmon_warningx(FLINE, APR_FROM_OS_ERROR(errno), "event_add failed");
 		close(nsock);
