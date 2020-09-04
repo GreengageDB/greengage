@@ -60,6 +60,12 @@ namespace gpdxl
 			// What operator classes are used in the distribution keys?
 			DistributionHashOpsKind m_distribution_hashops;
 
+			// does the query have any replicated tables?
+			BOOL m_has_replicated_tables;
+
+			// does the query have any volatile functions?
+			BOOL m_has_volatile_functions;
+
 		public:
 			// ctor
 			CContextQueryToDXL
