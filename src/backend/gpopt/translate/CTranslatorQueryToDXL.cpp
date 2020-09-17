@@ -623,6 +623,12 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 		dxl_cte_anchor_bottom->AddChild(result_dxlnode);
 		result_dxlnode = dxl_cte_anchor_top;
 	}
+
+	if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+	}
 	
 	return result_dxlnode;
 }
@@ -738,12 +744,19 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 	CDXLNode *query_dxlnode = TranslateSelectQueryToDXL();
 	const RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(m_query->rtable, m_query->resultRelation - 1);
 
-	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte, &m_context->m_has_distributed_tables);
+	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte,
+		&m_context->m_has_distributed_tables, &m_context->m_has_replicated_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 	if (!optimizer_enable_dml_triggers && CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel, Edxldmlinsert))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("INSERT with triggers"));
 	}
+
+    if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+    {
+        GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+            GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+    }
 
 	BOOL rel_has_constraints = CTranslatorUtils::RelHasConstraints(md_rel);
 	if (!optimizer_enable_dml_constraints && rel_has_constraints)
@@ -853,7 +866,7 @@ CTranslatorQueryToDXL::TranslateCTASToDXL()
 
 	ULongPtrArray *source_array = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
 	IntPtrArray* var_typmods = GPOS_NEW(m_mp) IntPtrArray(m_mp);
-	
+
 //	List *col_names = into_clause->colNames;
 	List *col_names = NIL;
 	for (ULONG ul = 0; ul < num_columns; ul++)
@@ -905,6 +918,12 @@ CTranslatorQueryToDXL::TranslateCTASToDXL()
 	if (NULL != m_query->intoPolicy)
 	{
 		rel_distr_policy = CTranslatorRelcacheToDXL::GetRelDistribution(m_query->intoPolicy);
+
+		if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+		}
 		
 		if (IMDRelation::EreldistrHash == rel_distr_policy)
 		{
@@ -1167,12 +1186,19 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 	CDXLNode *query_dxlnode = TranslateSelectQueryToDXL();
 	const RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(m_query->rtable, m_query->resultRelation - 1);
 
-	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte, &m_context->m_has_distributed_tables);
+	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte,
+		&m_context->m_has_distributed_tables, &m_context->m_has_replicated_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 	if (!optimizer_enable_dml_triggers && CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel, Edxldmldelete))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("DELETE with triggers"));
 	}
+
+    if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+    {
+        GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+            GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+    }
 
 	// make note of the operator classes used in the distribution key
 	NoteDistributionPolicyOpclasses(rte);
@@ -1224,13 +1250,21 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 	CDXLNode *query_dxlnode = TranslateSelectQueryToDXL();
 	const RangeTblEntry *rte = (RangeTblEntry *) gpdb::ListNth(m_query->rtable, m_query->resultRelation - 1);
 
-	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte, &m_context->m_has_distributed_tables);
+	CDXLTableDescr *table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte,
+		&m_context->m_has_distributed_tables, &m_context->m_has_replicated_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
 	if (!optimizer_enable_dml_triggers && CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel, Edxldmlupdate))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("UPDATE with triggers"));
 	}
 	
+
+    if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+    {
+        GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+            GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+    }
+
 	if (!optimizer_enable_dml_constraints && CTranslatorUtils::RelHasConstraints(md_rel))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("UPDATE with constraints"));
@@ -3104,7 +3138,8 @@ CTranslatorQueryToDXL::TranslateRTEToDXLLogicalGet
 	}
 
 	// construct table descriptor for the scan node from the range table entry
-	CDXLTableDescr *dxl_table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte, &m_context->m_has_distributed_tables);
+	CDXLTableDescr *dxl_table_descr = CTranslatorUtils::GetTableDescr(m_mp, m_md_accessor, m_context->m_colid_counter, rte,
+		&m_context->m_has_distributed_tables, &m_context->m_has_replicated_tables);
 
 	CDXLLogicalGet *dxl_op = NULL;
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(dxl_table_descr->MDId());

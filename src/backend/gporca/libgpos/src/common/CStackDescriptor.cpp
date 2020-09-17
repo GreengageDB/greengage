@@ -33,8 +33,16 @@ CStackDescriptor::BackTrace
 	)
 {
 	// get base pointer of current frame
+
+	ULONG gpos_stack_trace_depth_actual;
+	#ifdef GPOS_GET_FRAME_POINTER
 	ULONG_PTR current_frame;
 	GPOS_GET_FRAME_POINTER(current_frame);
+	gpos_stack_trace_depth_actual = GPOS_STACK_TRACE_DEPTH;
+	#else
+	void *current_frame[GPOS_STACK_TRACE_DEPTH];
+	gpos_stack_trace_depth_actual = backtrace(current_frame, GPOS_STACK_TRACE_DEPTH);
+	#endif
 
 	// reset stack depth
 	Reset();
@@ -55,7 +63,7 @@ CStackDescriptor::BackTrace
 	stack_start = worker->GetStackStart();
 
 	// consider the first GPOS_STACK_TRACE_DEPTH frames below worker object
-	for (ULONG frame_counter = 0; frame_counter < GPOS_STACK_TRACE_DEPTH; frame_counter++)
+	for (ULONG frame_counter = 0; frame_counter < gpos_stack_trace_depth_actual; frame_counter++)
 	{
 		// check if the frame pointer is after stack start and before previous frame
 		if ((ULONG_PTR) *next_frame > stack_start ||
