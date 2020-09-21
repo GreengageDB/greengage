@@ -157,7 +157,7 @@ function install_python_requirements_on_single_host() {
     # Install requirements into the vendored Python stack
     mkdir -p /tmp/py-requirements
     source /tmp/venv/bin/activate
-        pip --retries 10 install --prefix /tmp/py-requirements -r ${requirements_txt}
+        pip --retries 10 install --ignore-installed --prefix /tmp/py-requirements -r ${requirements_txt}
         cp -r /tmp/py-requirements/* /usr/local/greenplum-db-devel/ext/python/
     deactivate
 }
@@ -174,7 +174,7 @@ function install_python_requirements_on_multi_host() {
     mkdir -p /tmp/py-requirements
 
     source /tmp/venv/bin/activate
-        pip --retries 10 install --prefix /tmp/py-requirements -r ${requirements_txt}
+        pip --retries 10 install --ignore-installed --prefix /tmp/py-requirements -r ${requirements_txt}
         while read -r host; do
             rsync -rz /tmp/py-requirements/ "$host":/usr/local/greenplum-db-devel/ext/python/
         done < /tmp/hostfile_all

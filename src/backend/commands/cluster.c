@@ -50,6 +50,7 @@
 #include "storage/predicate.h"
 #include "storage/smgr.h"
 #include "utils/acl.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -1625,18 +1626,16 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 							mapped_tables);
 	}
 
-	/* swap size statistics too, since new rel has freshly-updated stats */
-	if (swap_stats)
+	/* Send statistics from QE to QD */
+	if (Gp_role == GP_ROLE_EXECUTE && swap_stats && !IsSystemClass(r1, relform1))
 	{
 		rel = relation_open(r1, AccessShareLock);
 
-		vac_update_relstats(rel, relform1->relpages, relform1->reltuples,
-							relform1->relallvisible,
-							relform1->relhaspkey,
-							relform1->relfrozenxid,
-							relform1->relminmxid,
-							false,
-							true /* isvacuum */);
+		vac_send_relstats_to_qd(rel,
+								relform1->relpages,
+								relform1->reltuples,
+								relform1->relallvisible);
+
 		relation_close(rel, AccessShareLock);
 	}
 	/* Clean up. */
@@ -1697,6 +1696,8 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 						swap_stats,
 						is_internal,
 						frozenXid, cutoffMulti, mapped_tables);
+
+	SIMPLE_FAULT_INJECTOR("after_swap_relation_files");
 
 	/*
 	 * If it's a system catalog, queue an sinval message to flush all

@@ -138,6 +138,7 @@ CDXLTokens::Init
 			{EdxltokenPhysicalDMLDelete, GPOS_WSZ_LIT("DMLDelete")},
 			{EdxltokenPhysicalDMLUpdate, GPOS_WSZ_LIT("DMLUpdate")},
 			{EdxltokenDirectDispatchInfo, GPOS_WSZ_LIT("DirectDispatchInfo")},
+			{EdxltokenDirectDispatchIsRaw, GPOS_WSZ_LIT("IsRaw")},
 			{EdxltokenDirectDispatchKeyValue, GPOS_WSZ_LIT("KeyValue")},
 			
 			{EdxltokenPhysicalPartitionSelector, GPOS_WSZ_LIT("PartitionSelector")},
@@ -641,6 +642,7 @@ CDXLTokens::Init
 			{EdxltokenGPDBFuncReturnsSet, GPOS_WSZ_LIT("ReturnsSet")},
 			{EdxltokenGPDBFuncStrict, GPOS_WSZ_LIT("IsStrict")},
 			{EdxltokenGPDBFuncNDVPreserving, GPOS_WSZ_LIT("IsNDVPreserving")},
+			{EdxltokenGPDBFuncIsAllowedForPS, GPOS_WSZ_LIT("IsAllowedForPS")},
 
 			{EdxltokenGPDBAgg, GPOS_WSZ_LIT("GPDBAgg")},
 			{EdxltokenGPDBIsAggOrdered, GPOS_WSZ_LIT("IsOrdered")},

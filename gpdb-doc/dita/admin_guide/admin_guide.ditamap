@@ -4,7 +4,7 @@
     <topicref href="../../6-10/homenav.html" scope="external"
         navtitle="Greenplum Database® 6.10 Documentation" format="html" otherprops="oss-only"/>
     <topicref href="../../6-10/homenav.html" scope="external"
-        navtitle="Pivotal Greenplum® 6.10 Documentation" format="html" otherprops="pivotal"/>
+        navtitle="VMware Tanzu Greenplum® 6.10 Documentation" format="html" otherprops="pivotal"/>
     <topicref href="admin_guide.xml" navtitle="Administration Guide">
         <topicref href="intro/partI.xml" id="partI" format="dita">
             <topicref href="intro/arch_overview.xml" id="arch_overview"/>

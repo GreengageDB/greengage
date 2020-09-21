@@ -1,10 +1,15 @@
 # contrib/postgres_fdw/Makefile
+# disable postgre_fdw on MaxOS as --exclude-libs and -Bstatic are not supported
+OS := $(shell uname -s)
+ifeq ($(OS),Darwin)
+$(error "postgres_fdw can't be built on Mac")
+endif
 
 MODULE_big = postgres_fdw
 OBJS = postgres_fdw.o option.o deparse.o connection.o
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
-SHLIB_LINK_INTERNAL = $(libpq)
+SHLIB_LINK_INTERNAL = -Wl,--exclude-libs=libpq.a -Wl,-Bstatic $(libpq) -Wl,-Bdynamic
 
 EXTENSION = postgres_fdw
 DATA = postgres_fdw--1.0.sql

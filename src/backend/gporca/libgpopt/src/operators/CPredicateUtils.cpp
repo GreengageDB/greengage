@@ -154,13 +154,15 @@ CPredicateUtils::FComparison
 	CExpression *pexprRight = (*pexpr)[1];
 
 	if (CUtils::FScalarIdent(pexprLeft, colref) ||
-		CScalarIdent::FCastedScId(pexprLeft, colref))
+		CScalarIdent::FCastedScId(pexprLeft, colref) ||
+		CScalarIdent::FAllowedFuncScId(pexprLeft, colref))
 	{
 		return FValidRefsOnly(pexprRight, pcrsAllowedRefs);
 	}
 
 	if (CUtils::FScalarIdent(pexprRight, colref) ||
-		CScalarIdent::FCastedScId(pexprRight, colref))
+		CScalarIdent::FCastedScId(pexprRight, colref) ||
+		CScalarIdent::FAllowedFuncScId(pexprRight, colref))
 	{
 		return FValidRefsOnly(pexprLeft, pcrsAllowedRefs);
 	}
@@ -172,12 +174,14 @@ CPredicateUtils::FComparison
 // an expression involving only the allowed columns. If the allowed columns set
 // is NULL, then we only want constant comparisons.
 // Also, the comparison type must be one of: LT, GT, LEq, GEq, Eq
+// NEq is allowed only when requested by the caller
 BOOL
 CPredicateUtils::FRangeComparison
 	(
 	CExpression *pexpr,
 	CColRef *colref,
-	CColRefSet *pcrsAllowedRefs // other column references allowed in the comparison
+	CColRefSet *pcrsAllowedRefs, // other column references allowed in the comparison
+	BOOL allowNotEqualPreds
 	)
 {
 	if (!FComparison(pexpr, colref, pcrsAllowedRefs))
@@ -185,7 +189,8 @@ CPredicateUtils::FRangeComparison
 		return false;
 	}
 	IMDType::ECmpType cmp_type = CScalarCmp::PopConvert(pexpr->Pop())->ParseCmpType();
-	return (IMDType::EcmptOther != cmp_type && IMDType::EcmptNEq != cmp_type);
+	return (IMDType::EcmptOther != cmp_type &&
+			(allowNotEqualPreds || IMDType::EcmptNEq != cmp_type));
 }
 
 BOOL
@@ -682,14 +687,16 @@ CPredicateUtils::ExtractComponents
 			CScalarCmp::PopConvert(pexprScCmp->Pop())->ParseCmpType();
 
 	if (CUtils::FScalarIdent(pexprLeft, pcrKey) ||
-		CScalarIdent::FCastedScId(pexprLeft, pcrKey))
+		CScalarIdent::FCastedScId(pexprLeft, pcrKey) ||
+		CScalarIdent::FAllowedFuncScId(pexprLeft, pcrKey))
 	{
 		*ppexprKey = pexprLeft;
 		*ppexprOther = pexprRight;
 		*pecmpt = cmp_type;
 	}
 	else if (CUtils::FScalarIdent(pexprRight, pcrKey) ||
-			 CScalarIdent::FCastedScId(pexprRight, pcrKey))
+			 CScalarIdent::FCastedScId(pexprRight, pcrKey) ||
+			 CScalarIdent::FAllowedFuncScId(pexprRight, pcrKey))
 	{
 		*ppexprKey = pexprRight;
 		*ppexprOther = pexprLeft;
@@ -1428,7 +1435,8 @@ CPredicateUtils::PexprPartPruningPredicate
 	const CExpressionArray *pdrgpexpr,
 	CColRef *pcrPartKey,
 	CExpression *pexprCol,	    // predicate on pcrPartKey obtained from pcnstr
-	CColRefSet *pcrsAllowedRefs // allowed colrefs in exprs (except pcrPartKey)
+	CColRefSet *pcrsAllowedRefs, // allowed colrefs in exprs (except pcrPartKey)
+	BOOL allowNotEqualPreds    // allow NEq to generate partition pruning predicate
 	)
 {
 	CExpressionArray *pdrgpexprResult = GPOS_NEW(mp) CExpressionArray(mp);
@@ -1480,8 +1488,8 @@ CPredicateUtils::PexprPartPruningPredicate
 
 			if (FBoolPredicateOnColumn(pexpr, pcrPartKey) ||
 				FNullCheckOnColumn(pexpr, pcrPartKey) ||
-				IsDisjunctionOfRangeComparison(mp, pexpr, pcrPartKey, pcrsAllowedRefs) ||
-				(FRangeComparison(pexpr, pcrPartKey, pcrsAllowedRefs) &&
+				IsDisjunctionOfRangeComparison(mp, pexpr, pcrPartKey, pcrsAllowedRefs, allowNotEqualPreds) ||
+				(FRangeComparison(pexpr, pcrPartKey, pcrsAllowedRefs, allowNotEqualPreds) &&
 				 !pexpr->DeriveScalarFunctionProperties()->NeedsSingletonExecution()))
 			{
 				pexpr->AddRef();
@@ -1660,7 +1668,8 @@ CPredicateUtils::IsDisjunctionOfRangeComparison
 	CMemoryPool *mp,
 	CExpression *pexpr,
 	CColRef *colref,
-	CColRefSet *pcrsAllowedRefs
+	CColRefSet *pcrsAllowedRefs,
+	BOOL allowNotEqualPreds
 	)
 {
 	if (!FOr(pexpr))
@@ -1673,7 +1682,7 @@ CPredicateUtils::IsDisjunctionOfRangeComparison
 	for (ULONG ulDisj = 0; ulDisj < ulDisjuncts; ulDisj++)
 	{
 		CExpression *pexprDisj = (*pdrgpexprDisjuncts)[ulDisj];
-		if (!FRangeComparison(pexprDisj, colref, pcrsAllowedRefs))
+		if (!FRangeComparison(pexprDisj, colref, pcrsAllowedRefs, allowNotEqualPreds))
 		{
 			pdrgpexprDisjuncts->Release();
 			return false;
@@ -1696,7 +1705,8 @@ CPredicateUtils::PexprExtractPredicatesOnPartKeys
 	CExpression *pexprScalar,
 	CColRef2dArray *pdrgpdrgpcrPartKeys,
 	CColRefSet *pcrsAllowedRefs,
-	BOOL fUseConstraints
+	BOOL fUseConstraints,
+	const IMDRelation *pmdrel
 	)
 {	
 	GPOS_ASSERT(NULL != pdrgpdrgpcrPartKeys);
@@ -1752,11 +1762,22 @@ CPredicateUtils::PexprExtractPredicatesOnPartKeys
 	for (ULONG ul = 0; ul < ulLevels; ul++)
 	{
 		CColRef *colref = CUtils::PcrExtractPartKey(pdrgpdrgpcrPartKeys, ul);
+		// extract part type for this level
+		BOOL isKnownToBeListPartitioned = false;
+		if(pmdrel != NULL)
+		{
+			CHAR szPartType = pmdrel->PartTypeAtLevel(ul);
+			// we want to allow NEq predicates for partition selection only for
+			// list partitioned tables. We avoid this for ranged partitioned tables
+			// since NEq predicates can hardly eliminate any range partitions
+			isKnownToBeListPartitioned = (IMDRelation::ErelpartitionList == szPartType);
+		}
+
 		CExpression *pexprCol = PexprPredicateCol(mp, pcnstr, colref, fUseConstraints);
 
 		// look for a filter on the part key
 		CExpression *pexprCmp =
-			PexprPartPruningPredicate(mp, pdrgpexprConjuncts, colref, pexprCol, pcrsAllowedRefs);
+			PexprPartPruningPredicate(mp, pdrgpexprConjuncts, colref, pexprCol, pcrsAllowedRefs, isKnownToBeListPartitioned /* allowNotEqualPreds */);
 		CRefCount::SafeRelease(pexprCol);
 		GPOS_ASSERT_IMP(NULL != pexprCmp && COperator::EopScalarCmp == pexprCmp->Pop()->Eopid(),
 				IMDType::EcmptOther != CScalarCmp::PopConvert(pexprCmp->Pop())->ParseCmpType());

@@ -27,7 +27,9 @@ class GpReload:
                                     """SELECT count(*)
                                        FROM pg_class, pg_namespace
                                        WHERE pg_namespace.nspname = '{schema}'
-                                       AND pg_class.relname = '{table}'""".format(schema=schema_name, table=table_name))
+                                       AND pg_class.relname = '{table}'
+                                       AND pg_class.relnamespace = pg_namespace.oid
+                                       AND pg_class.relkind != 'v'""".format(schema=schema_name, table=table_name))
             if not c:
                 raise ExceptionNoStackTraceNeeded('Table {schema}.{table} does not exist'
                                                   .format(schema=schema_name, table=table_name))
@@ -40,7 +42,9 @@ class GpReload:
                              FROM pg_attribute
                              WHERE attrelid = (SELECT pg_class.oid
                                                FROM pg_class, pg_namespace
-                                               WHERE pg_class.relname = '{table}' AND pg_namespace.nspname = '{schema}')"""
+                                               WHERE pg_class.relname = '{table}' AND pg_namespace.nspname = '{schema}'
+                                               AND pg_class.relnamespace = pg_namespace.oid
+                                               AND pg_class.relkind != 'v')"""
                                  .format(table=table_name, schema=schema_name))
             for cols in res.fetchall():
                 columns.append(cols[0].strip())
@@ -152,8 +156,7 @@ class GpReload:
                                              FROM pg_index
                                              WHERE indrelid = (SELECT pg_class.oid
                                                                FROM pg_class, pg_namespace
-                                                               WHERE pg_class.relname='{table}' AND pg_namespace.nspname='{schema}')
-                                          """.format(table=table_name, schema=schema_name))
+                                                               WHERE pg_class.relname='{table}' AND pg_namespace.nspname='{schema}' AND pg_class.relnamespace = pg_namespace.oid)""".format(table=table_name, schema=schema_name))
             if c != 0:
                 if self.interactive:
                     return ask_yesno(None,

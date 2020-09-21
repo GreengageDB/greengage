@@ -5392,6 +5392,8 @@ CTranslatorExprToDXL::PdxlnScCmpPartKey
 	CExpression *pexprOther = NULL;
 	IMDType::ECmpType cmp_type = IMDType::EcmptOther;
 
+	// Make sure that pexprNewPartKey is either ScalarIdent or Cast(ident) or allowedFunc(ident)
+	// and extract required components
 	CPredicateUtils::ExtractComponents(pexprScCmp, pcrPartKey, &pexprPartKey, &pexprOther, &cmp_type);
 
 	*pfLTComparison = *pfLTComparison || (IMDType::EcmptL == cmp_type) || (IMDType::EcmptLEq == cmp_type);
@@ -5420,7 +5422,8 @@ CTranslatorExprToDXL::PdxlnScCmpPartKey
 			pexprPartKey->Release();
 		}
 
-		CTranslatorExprToDXLUtils::ExtractCastMdids(pexprNewPartKey->Pop(), &pmdidTypeCastExpr, &mdid_cast_func);
+		//Extract cast/func details
+		CTranslatorExprToDXLUtils::ExtractCastFuncMdids(pexprNewPartKey->Pop(), &pmdidTypeCastExpr, &mdid_cast_func);
 
 		return CTranslatorExprToDXLUtils::PdxlnRangeFilterScCmp
 								(
@@ -5869,7 +5872,7 @@ CTranslatorExprToDXL::GetDXLDirectDispatchInfo
 
 	CDXLDatum2dArray *pdrgpdrgpdxldatum = GPOS_NEW(m_mp) CDXLDatum2dArray(m_mp);
 	pdrgpdrgpdxldatum->Append(pdrgpdxldatum);
-	return GPOS_NEW(m_mp) CDXLDirectDispatchInfo(pdrgpdrgpdxldatum);
+	return GPOS_NEW(m_mp) CDXLDirectDispatchInfo(pdrgpdrgpdxldatum, false);
 }
 
 //---------------------------------------------------------------------------

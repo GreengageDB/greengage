@@ -601,7 +601,8 @@ namespace gpdxl
 		EdxltokenGPDBFuncReturnsSet,
 		EdxltokenGPDBFuncStrict,
 		EdxltokenGPDBFuncNDVPreserving,
-		
+		EdxltokenGPDBFuncIsAllowedForPS,
+
 		EdxltokenGPDBCast,
 		EdxltokenGPDBCastBinaryCoercible,
 		EdxltokenGPDBCastSrcType,
@@ -651,6 +652,7 @@ namespace gpdxl
 		EdxltokenPhysicalDMLDelete,
 		EdxltokenPhysicalDMLUpdate,
 		EdxltokenDirectDispatchInfo,
+		EdxltokenDirectDispatchIsRaw,
 		EdxltokenDirectDispatchKeyValue,
 		EdxltokenPhysicalSplit,
 		EdxltokenPhysicalRowTrigger,

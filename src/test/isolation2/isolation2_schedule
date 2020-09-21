@@ -77,6 +77,7 @@ test: commit_transaction_block_checkpoint
 test: instr_in_shmem_setup
 test: instr_in_shmem_terminate
 test: vacuum_recently_dead_tuple_due_to_distributed_snapshot
+test: vacuum_full_interrupt
 test: invalidated_toast_index
 test: distributed_snapshot
 test: gp_collation
@@ -197,9 +198,10 @@ test: segwalrep/recoverseg_from_file
 test: segwalrep/mirror_promotion
 test: segwalrep/cancel_commit_pending_replication
 test: segwalrep/twophase_tolerance_with_mirror_promotion
+# Put these checkpoint/restartpoint related tests together since if there is
+# just a checkpoint, subsequent checkpoint is usually faster.
+test: segwalrep/checkpoint_remove_xlog
 test: segwalrep/restartpoint_remove_xlog
-# Both restartpoint_remove_xlog and checkpoint_with_prepare run checkpoint so
-# put them together to make the subsequent checkpoint faster.
 test: segwalrep/checkpoint_with_prepare
 test: segwalrep/failover_with_many_records
 test: segwalrep/dtm_recovery_on_standby

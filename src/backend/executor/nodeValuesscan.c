@@ -166,13 +166,19 @@ ValuesNext(ValuesScanState *node)
 		 */
 		ExecStoreVirtualTuple(slot);
 
-        /* CDB: Label each row with a synthetic ctid for subquery dedup. */
-        if (node->cdb_want_ctid)
+		/*
+		 * CDB: Label each row with a synthetic ctid for subquery dedup.
+		 *
+		 * Values Scan supports backward scans too, so we can't use
+		 * slot_set_ctid_from_fake() like most scan types do.
+		 */
+		if (node->cdb_want_ctid)
         {
-            HeapTuple   tuple = ExecFetchSlotHeapTuple(slot); 
+			HeapTuple	tuple = ExecFetchSlotHeapTuple(slot);
 
-            ItemPointerSet(&tuple->t_self, node->curr_idx >> 16,
-                           (OffsetNumber)node->curr_idx);
+			ItemPointerSet(&tuple->t_self,
+						   (BlockNumber) (node->curr_idx / 1024),
+						   (OffsetNumber) ((node->curr_idx % 1024) + 1));
         }
 	}
 
