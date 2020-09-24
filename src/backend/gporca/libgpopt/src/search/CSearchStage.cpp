@@ -71,7 +71,7 @@ IOstream &
 CSearchStage::OsPrint
 	(
 	IOstream &os
-	)
+	) const
 {
 	os
 		<< "Search Stage" << std::endl

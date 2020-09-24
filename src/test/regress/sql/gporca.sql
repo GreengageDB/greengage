@@ -2540,6 +2540,143 @@ every (interval '1 day'));
 insert into sales select i, i%100, i%1000, timestamp '2010-01-01 00:00:00' + i * interval '1 day' from generate_series(1,20) i;
 select * from sales where sales_ts::date != '2010-01-05' order by sales_ts;
 
+-- test n-ary inner and left joins with outer references
+drop table if exists tcorr1, tcorr2;
+
+create table tcorr1(a int, b int);
+create table tcorr2(a int, b int);
+
+insert into tcorr1 values (1,99);
+insert into tcorr2 values (1,1);
+
+set optimizer_trace_fallback to on;
+
+explain
+select *
+from tcorr1 out
+where out.b in (select coalesce(tcorr2.a, 99)
+                from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
+
+-- expect 1 row
+-- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- select *
+-- from tcorr1 out
+-- where out.b in (select coalesce(tcorr2.a, 99)
+--                 from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
+
+explain
+select *
+from tcorr1 out
+where out.b in (select max(tcorr2.b + out.b - 1)
+                from tcorr2
+                where tcorr2.a=out.a);
+-- expect 1 row
+select *
+from tcorr1 out
+where out.b in (select max(tcorr2.b + out.b - 1)
+                from tcorr2
+                where tcorr2.a=out.a);
+
+explain
+select *
+from tcorr1 out
+where out.b in (select coalesce(tcorr2_d.c, 99)
+                from tcorr1 left outer join (select a, count(*) as c
+                                             from tcorr2
+                                             where tcorr2.b = out.b
+                                             group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
+-- expect 1 row
+select *
+from tcorr1 out
+where out.b in (select coalesce(tcorr2_d.c, 99)
+                from tcorr1 left outer join (select a, count(*) as c
+                                             from tcorr2
+                                             where tcorr2.b = out.b
+                                             group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
+
+-- expect 1 row
+-- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- select *
+-- from tcorr1 out
+-- where out.b in (select coalesce(tcorr2.a, 99)
+--                 from tcorr1 full outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
+
+set optimizer_join_order to exhaustive2;
+
+explain
+select *
+from tcorr1 out
+where out.b in (select coalesce(tcorr2.a, 99)
+                from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
+-- expect 1 row
+-- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- select *
+-- from tcorr1 out
+-- where out.b in (select coalesce(tcorr2.a, 99)
+--                 from tcorr1 left outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
+
+explain
+select *
+from tcorr1 out
+where out.b in (select max(tcorr2.b + out.b - 1)
+                from tcorr2
+                where tcorr2.a=out.a);
+-- expect 1 row
+select *
+from tcorr1 out
+where out.b in (select max(tcorr2.b + out.b - 1)
+                from tcorr2
+                where tcorr2.a=out.a);
+
+explain
+select *
+from tcorr1 out
+where out.b in (select coalesce(tcorr2_d.c, 99)
+                from tcorr1 left outer join (select a, count(*) as c
+                                             from tcorr2
+                                             where tcorr2.b = out.b
+                                             group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
+-- expect 1 row
+select *
+from tcorr1 out
+where out.b in (select coalesce(tcorr2_d.c, 99)
+                from tcorr1 left outer join (select a, count(*) as c
+                                             from tcorr2
+                                             where tcorr2.b = out.b
+                                             group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
+
+-- expect 1 row
+-- FIXME: A process terminates during execution, see https://github.com/greenplum-db/gpdb/issues/10791
+-- select *
+-- from tcorr1 out
+-- where out.b in (select coalesce(tcorr2.a, 99)
+--                 from tcorr1 full outer join tcorr2 on tcorr1.a=tcorr2.a+out.a);
+
+reset optimizer_join_order;
+
+-- test selecting an outer ref from a scalar subquery, this will fall back to planner
+-- expect 0 rows
+SELECT 1
+FROM   tcorr1
+WHERE  tcorr1.a IS NULL OR
+       tcorr1.a = (SELECT tcorr1.a
+                   FROM   (SELECT rtrim(tcorr1.a::text) AS userid,
+                                  rtrim(tcorr1.b::text) AS part_pls
+                           FROM   tcorr2) al
+                   WHERE  3 = tcorr1.a
+                  );
+
+-- expect 1 row, subquery returns a row, falls back in ORCA
+select * from tcorr1 where b = (select tcorr1.b from tcorr2);
+
+-- expect 0 rows, subquery returns no rows, falls back in ORCA
+select * from tcorr1 where b = (select tcorr1.b from tcorr2 where b=33);
+
+-- expect 1 row, subquery returns nothing, so a < 22 is true, falls back in ORCA
+select * from tcorr1 where a < coalesce((select tcorr1.a from tcorr2 where a = 11), 22);
+
+reset optimizer_trace_fallback;
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore

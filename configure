@@ -582,8 +582,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='Greenplum Database'
 PACKAGE_TARNAME='greenplum-database'
-PACKAGE_VERSION='6.11.0'
-PACKAGE_STRING='Greenplum Database 6.11.0'
+PACKAGE_VERSION='6.11.1'
+PACKAGE_STRING='Greenplum Database 6.11.1'
 PACKAGE_BUGREPORT='support@greenplum.org'
 PACKAGE_URL=''
 
@@ -17282,8 +17282,10 @@ int does_int64_work()
     return 0;
   return 1;
 }
+
+int
 main() {
-  exit(! does_int64_work());
+  return (! does_int64_work());
 }
 _ACEOF
 if ac_fn_c_try_run "$LINENO"; then :
@@ -17364,8 +17366,10 @@ int does_int64_work()
     return 0;
   return 1;
 }
+
+int
 main() {
-  exit(! does_int64_work());
+  return (! does_int64_work());
 }
 _ACEOF
 if ac_fn_c_try_run "$LINENO"; then :
@@ -17440,8 +17444,10 @@ int does_int64_snprintf_work()
     return 0;			/* either multiply or snprintf is busted */
   return 1;
 }
+
+int
 main() {
-  exit(! does_int64_snprintf_work());
+  return (! does_int64_snprintf_work());
 }
 _ACEOF
 if ac_fn_c_try_run "$LINENO"; then :

@@ -408,7 +408,7 @@
       <body>
         <p>
           <ul id="ul_ckf_sfc_hbb">
-            <li>Greenplum Platform Extension Framework (PXF) v5.14.0 - PXF, integrated with
+            <li>Greenplum Platform Extension Framework (PXF) v5.15.0 - PXF, integrated with
               Greenplum Database 6, provides access to Hadoop, object store, and SQL external data
               stores. Refer to <xref scope="peer" href="../admin_guide/external/pxf-overview.xml"
                 >Accessing External Data with PXF</xref> in the <cite>Greenplum Database
@@ -436,7 +436,7 @@
             <li>Progress DataDirect JDBC Drivers v5.1.4.000223 - The Progress DataDirect JDBC
               drivers are compliant with the Type 4 architecture, but provide advanced features that
               define them as Type 5 drivers.</li>
-            <li>Progress DataDirect ODBC Drivers v7.1.6 (07.16.0301) - The Progress DataDirect ODBC
+            <li>Progress DataDirect ODBC Drivers v7.1.6 (07.16.0389) - The Progress DataDirect ODBC
               drivers enable third party applications to connect via a common interface to the
               Pivotal Greenplum Database system.</li>
             <!--            <li>Gemfire-Greenplum Connector - The Pivotal Gemfire-Greenplum Connector supports the
@@ -479,7 +479,7 @@
     <title id="pm357649">Hadoop Distributions</title>
     <body>
       <p>Greenplum Database provides access to HDFS with the Greenplum Platform Extension Framework
-          (PXF).<ph otherprops="oss-only"> PXF v5.14.0 is integrated with Greenplum Database 6, and
+          (PXF).<ph otherprops="oss-only"> PXF v5.15.0 is integrated with Greenplum Database 6, and
           provides access to Hadoop, object store, and SQL external data stores. Refer to <xref
             scope="peer" href="../admin_guide/external/pxf-overview.xml">Accessing External Data
             with PXF</xref> in the <cite>Greenplum Database Administrator Guide</cite> for PXF
@@ -504,7 +504,7 @@
           </thead>
           <tbody>
             <row>
-              <entry colname="col1">5.14.0, 5.13.0, 5.12.0, 5.11.1, 5.10.1</entry>
+              <entry colname="col1">5.15.0, 5.14.0, 5.13.0, 5.12.0, 5.11.1, 5.10.1</entry>
               <entry colname="col2">2.x, 3.1+</entry>
               <entry colname="col3">1.x, 2.x, 3.1+</entry>
               <entry colname="col4">1.3.2</entry>
