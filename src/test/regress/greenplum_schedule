@@ -270,4 +270,7 @@ test: gangsize gang_reuse
 # some utilities do not work while doing gpexpand, check them can print correct message
 test: run_utility_gpexpand_phase1
 
+# check the row/block statistics is gathered for auxiliary relations of AO table
+test: aux_ao_rels_stat
+
 # end of tests
