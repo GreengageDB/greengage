@@ -17,34 +17,32 @@
 
 namespace gpos
 {
-	//---------------------------------------------------------------------------
-	//	@class:
-	//		CFSimulatorTestExt
-	//
-	//	@doc:
-	//		Extended unittests for f-simulator
-	//
-	//---------------------------------------------------------------------------
-	class CFSimulatorTestExt
-	{
-		public:
+//---------------------------------------------------------------------------
+//	@class:
+//		CFSimulatorTestExt
+//
+//	@doc:
+//		Extended unittests for f-simulator
+//
+//---------------------------------------------------------------------------
+class CFSimulatorTestExt
+{
+public:
+	// unittests
+	static GPOS_RESULT EresUnittest();
+	static GPOS_RESULT EresUnittest_OOM();
+	static GPOS_RESULT EresUnittest_Abort();
+	static GPOS_RESULT EresUnittest_IOError();
+	static GPOS_RESULT EresUnittest_NetError();
 
-			// unittests
-			static GPOS_RESULT EresUnittest();
-			static GPOS_RESULT EresUnittest_OOM();
-			static GPOS_RESULT EresUnittest_Abort();
-			static GPOS_RESULT EresUnittest_IOError();
-			static GPOS_RESULT EresUnittest_NetError();
+	// simulate exceptions of given type
+	static GPOS_RESULT EresUnittest_SimulateException(ULONG major, ULONG minor);
 
-			// simulate exceptions of given type
-			static GPOS_RESULT EresUnittest_SimulateException(ULONG major, ULONG minor);
+};	// CFSimulatorTestExt
+}  // namespace gpos
 
-	}; // CFSimulatorTestExt
-}
+#endif	// GPOS_FPSIMULATOR
 
-#endif // GPOS_FPSIMULATOR
-
-#endif // !GPOS_CFSimulatorTestExt_H
+#endif	// !GPOS_CFSimulatorTestExt_H
 
 // EOF
-

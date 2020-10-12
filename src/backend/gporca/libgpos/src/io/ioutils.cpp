@@ -41,11 +41,7 @@ using namespace gpos;
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::CheckState
-	(
-	const CHAR *file_path,
-	SFileStat *file_state
-	)
+gpos::ioutils::CheckState(const CHAR *file_path, SFileStat *file_state)
 {
 	GPOS_ASSERT(NULL != file_path);
 	GPOS_ASSERT(NULL != file_state);
@@ -74,11 +70,8 @@ gpos::ioutils::CheckState
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::CheckStateUsingFileDescriptor
-	(
-	const INT file_descriptor,
-	SFileStat *file_state
-	)
+gpos::ioutils::CheckStateUsingFileDescriptor(const INT file_descriptor,
+											 SFileStat *file_state)
 {
 	GPOS_ASSERT(NULL != file_state);
 
@@ -106,10 +99,7 @@ gpos::ioutils::CheckStateUsingFileDescriptor
 //
 //---------------------------------------------------------------------------
 BOOL
-gpos::ioutils::PathExists
-	(
-	const CHAR *file_path
-	)
+gpos::ioutils::PathExists(const CHAR *file_path)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -130,10 +120,7 @@ gpos::ioutils::PathExists
 //
 //---------------------------------------------------------------------------
 BOOL
-gpos::ioutils::IsDir
-	(
-	const CHAR *file_path
-	)
+gpos::ioutils::IsDir(const CHAR *file_path)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -153,10 +140,7 @@ gpos::ioutils::IsDir
 //
 //---------------------------------------------------------------------------
 BOOL
-gpos::ioutils::IsFile
-	(
-	const CHAR *file_path
-	)
+gpos::ioutils::IsFile(const CHAR *file_path)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -176,10 +160,7 @@ gpos::ioutils::IsFile
 //
 //---------------------------------------------------------------------------
 ULLONG
-gpos::ioutils::FileSize
-	(
-	const CHAR *file_path
-	)
+gpos::ioutils::FileSize(const CHAR *file_path)
 {
 	GPOS_ASSERT(NULL != file_path);
 	GPOS_ASSERT(IsFile(file_path));
@@ -200,10 +181,7 @@ gpos::ioutils::FileSize
 //
 //---------------------------------------------------------------------------
 ULLONG
-gpos::ioutils::FileSize
-	(
-	const INT file_descriptor
-	)
+gpos::ioutils::FileSize(const INT file_descriptor)
 {
 	SFileStat fs;
 	CheckStateUsingFileDescriptor(file_descriptor, &fs);
@@ -221,11 +199,8 @@ gpos::ioutils::FileSize
 //
 //---------------------------------------------------------------------------
 BOOL
-gpos::ioutils::CheckFilePermissions
-	(
-	const CHAR *file_path,
-	ULONG permission_bits
-	)
+gpos::ioutils::CheckFilePermissions(const CHAR *file_path,
+									ULONG permission_bits)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -245,11 +220,7 @@ gpos::ioutils::CheckFilePermissions
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::CreateDir
-	(
-	const CHAR *file_path,
-	ULONG permission_bits
-	)
+gpos::ioutils::CreateDir(const CHAR *file_path, ULONG permission_bits)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -274,10 +245,7 @@ gpos::ioutils::CreateDir
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::RemoveDir
-	(
-	const CHAR *file_path
-	)
+gpos::ioutils::RemoveDir(const CHAR *file_path)
 {
 	GPOS_ASSERT(NULL != file_path);
 	GPOS_ASSERT(IsDir(file_path));
@@ -304,11 +272,7 @@ gpos::ioutils::RemoveDir
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::Move
-	(
-	const CHAR *old_path,
-	const CHAR *szNew
-	)
+gpos::ioutils::Move(const CHAR *old_path, const CHAR *szNew)
 {
 	GPOS_ASSERT(NULL != old_path);
 	GPOS_ASSERT(NULL != szNew);
@@ -341,10 +305,7 @@ gpos::ioutils::Move
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::Unlink
-	(
-	const CHAR *file_path
-	)
+gpos::ioutils::Unlink(const CHAR *file_path)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -364,12 +325,7 @@ gpos::ioutils::Unlink
 //
 //---------------------------------------------------------------------------
 INT
-gpos::ioutils::OpenFile
-	(
-	const CHAR *file_path,
-	INT mode,
-	INT permission_bits
-	)
+gpos::ioutils::OpenFile(const CHAR *file_path, INT mode, INT permission_bits)
 {
 	GPOS_ASSERT(NULL != file_path);
 
@@ -390,10 +346,7 @@ gpos::ioutils::OpenFile
 //
 //---------------------------------------------------------------------------
 INT
-gpos::ioutils::CloseFile
-	(
-	INT file_descriptor
-	)
+gpos::ioutils::CloseFile(INT file_descriptor)
 {
 	INT res = close(file_descriptor);
 
@@ -412,11 +365,7 @@ gpos::ioutils::CloseFile
 //
 //---------------------------------------------------------------------------
 INT
-gpos::ioutils::GetFileState
-	(
-	INT file_descriptor,
-	SFileStat *file_state
-	)
+gpos::ioutils::GetFileState(INT file_descriptor, SFileStat *file_state)
 {
 	GPOS_ASSERT(NULL != file_state);
 
@@ -437,12 +386,8 @@ gpos::ioutils::GetFileState
 //
 //---------------------------------------------------------------------------
 INT_PTR
-gpos::ioutils::Write
-	(
-	INT file_descriptor,
-	const void *buffer,
-	const ULONG_PTR ulpCount
-	)
+gpos::ioutils::Write(INT file_descriptor, const void *buffer,
+					 const ULONG_PTR ulpCount)
 {
 	GPOS_ASSERT(NULL != buffer);
 	GPOS_ASSERT(0 < ulpCount);
@@ -465,12 +410,7 @@ gpos::ioutils::Write
 //
 //---------------------------------------------------------------------------
 INT_PTR
-gpos::ioutils::Read
-	(
-	INT file_descriptor,
-	void *buffer,
-	const ULONG_PTR ulpCount
-	)
+gpos::ioutils::Read(INT file_descriptor, void *buffer, const ULONG_PTR ulpCount)
 {
 	GPOS_ASSERT(NULL != buffer);
 	GPOS_ASSERT(0 < ulpCount);
@@ -492,10 +432,7 @@ gpos::ioutils::Read
 //
 //---------------------------------------------------------------------------
 void
-gpos::ioutils::CreateTempDir
-	(
-	CHAR *dir_path
-	)
+gpos::ioutils::CreateTempDir(CHAR *dir_path)
 {
 	GPOS_ASSERT(NULL != dir_path);
 
@@ -506,10 +443,11 @@ gpos::ioutils::CreateTempDir
 
 	GPOS_ASSERT(size > ulNumOfCmp);
 
-	GPOS_ASSERT(0 == clib::Memcmp("XXXXXX", dir_path + (size - ulNumOfCmp), ulNumOfCmp));
+	GPOS_ASSERT(0 == clib::Memcmp("XXXXXX", dir_path + (size - ulNumOfCmp),
+								  ulNumOfCmp));
 #endif	// GPOS_DEBUG
 
-	CHAR* szRes = NULL;
+	CHAR *szRes = NULL;
 
 
 	// check to simulate I/O error
@@ -536,20 +474,16 @@ gpos::ioutils::CreateTempDir
 //
 //---------------------------------------------------------------------------
 static BOOL
-FSimulateIOErrorInternal
-	(
-	INT error_no,
-	const CHAR *file,
-	ULONG line_num
-	)
+FSimulateIOErrorInternal(INT error_no, const CHAR *file, ULONG line_num)
 {
 	BOOL fRes = false;
 
 	ITask *ptsk = ITask::Self();
-	if (NULL != ptsk &&
-	    ptsk->IsTraceSet(EtraceSimulateIOError) &&
-	    CFSimulator::FSim()->NewStack(CException::ExmaSystem, CException::ExmiIOError) &&
-	    !GPOS_MATCH_EX(ptsk->GetErrCtxt()->GetException(), CException::ExmaSystem, CException::ExmiIOError))
+	if (NULL != ptsk && ptsk->IsTraceSet(EtraceSimulateIOError) &&
+		CFSimulator::FSim()->NewStack(CException::ExmaSystem,
+									  CException::ExmiIOError) &&
+		!GPOS_MATCH_EX(ptsk->GetErrCtxt()->GetException(),
+					   CException::ExmaSystem, CException::ExmiIOError))
 	{
 		// disable simulation temporarily to log injection
 		CAutoTraceFlag(EtraceSimulateIOError, false);
@@ -581,13 +515,8 @@ FSimulateIOErrorInternal
 //
 //---------------------------------------------------------------------------
 BOOL
-gpos::ioutils::SimulateIOError
-	(
-	INT *return_value,
-	INT error_no,
-	const CHAR *file,
-	ULONG line_num
-	)
+gpos::ioutils::SimulateIOError(INT *return_value, INT error_no,
+							   const CHAR *file, ULONG line_num)
 {
 	GPOS_ASSERT(NULL != return_value);
 
@@ -607,13 +536,8 @@ gpos::ioutils::SimulateIOError
 //
 //---------------------------------------------------------------------------
 BOOL
-gpos::ioutils::SimulateIOError
-	(
-	CHAR **return_value,
-	INT error_no,
-	const CHAR *file,
-	ULONG line_num
-	)
+gpos::ioutils::SimulateIOError(CHAR **return_value, INT error_no,
+							   const CHAR *file, ULONG line_num)
 {
 	GPOS_ASSERT(NULL != return_value);
 
@@ -621,7 +545,6 @@ gpos::ioutils::SimulateIOError
 
 	return FSimulateIOErrorInternal(error_no, file, line_num);
 }
-#endif // GPOS_FPSIMULATOR
+#endif	// GPOS_FPSIMULATOR
 
 // EOF
-

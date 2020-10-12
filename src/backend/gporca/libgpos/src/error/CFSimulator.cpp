@@ -8,7 +8,7 @@
 //	@doc:
 //		Failpoint simulator; maintains a hashtable of bitvectors which encode
 //		stacks. Stack walker determines computes a hash value for call stack
-//		when checking for a failpoint: if stack has been seen before, skip, 
+//		when checking for a failpoint: if stack has been seen before, skip,
 //		otherwise raise exception.
 //---------------------------------------------------------------------------
 
@@ -30,11 +30,8 @@ CFSimulator *CFSimulator::m_fsim = NULL;
 
 // invalid stack key
 const CFSimulator::CStackTracker::SStackKey
-	CFSimulator::CStackTracker::m_invalid_key
-		(
-		CException::ExmaInvalid,
-		CException::ExmiInvalid
-		);
+	CFSimulator::CStackTracker::m_invalid_key(CException::ExmaInvalid,
+											  CException::ExmiInvalid);
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -47,35 +44,33 @@ const CFSimulator::CStackTracker::SStackKey
 //
 //---------------------------------------------------------------------------
 void
-CFSimulator::AddTracker
-	(
-	CStackTracker::SStackKey key
-	)
+CFSimulator::AddTracker(CStackTracker::SStackKey key)
 {
 	// disable OOM simulation in this scope
 	CAutoTraceFlag atf(EtraceSimulateOOM, false);
 
 	// allocate new tracker
-	CStackTracker *new_stack_tracker = GPOS_NEW(m_mp) CStackTracker(m_mp, m_resolution, key);
-	
+	CStackTracker *new_stack_tracker =
+		GPOS_NEW(m_mp) CStackTracker(m_mp, m_resolution, key);
+
 	// assume somebody overtook
 	BOOL overtaken = true;
-	
+
 	// scope for accessor
 	{
 		CStackTableAccessor acc(m_stack, key);
 		CStackTracker *stack_tracker = acc.Find();
-		
+
 		if (NULL == stack_tracker)
 		{
 			overtaken = false;
 			acc.Insert(new_stack_tracker);
 		}
-		
+
 		// must have tracker now
 		GPOS_ASSERT(NULL != acc.Find());
 	}
-	
+
 	// clean up as necessary
 	if (overtaken)
 	{
@@ -93,20 +88,16 @@ CFSimulator::AddTracker
 //
 //---------------------------------------------------------------------------
 BOOL
-CFSimulator::NewStack
-	(
-	ULONG major,
-	ULONG minor
-	)
+CFSimulator::NewStack(ULONG major, ULONG minor)
 {
 	// hash stack
 	CStackDescriptor stack_desc;
 	stack_desc.BackTrace();
 	ULONG hash = stack_desc.HashValue();
-	
+
 	CStackTracker::SStackKey key(major, minor);
-	
-	// attempt direct lookup; if we don't have a tracker yet, we 
+
+	// attempt direct lookup; if we don't have a tracker yet, we
 	// need to retry exactly once
 	for (ULONG i = 0; i < 2; i++)
 	{
@@ -114,18 +105,18 @@ CFSimulator::NewStack
 		{
 			CStackTableAccessor acc(m_stack, key);
 			CStackTracker *stack_tracker = acc.Find();
-			
+
 			// always true once a tracker has been initialized
 			if (NULL != stack_tracker)
 			{
 				return false == stack_tracker->ExchangeSet(hash % m_resolution);
 			}
 		}
-				
+
 		// very first time we call in here: fall through and add new tracker
 		this->AddTracker(key);
 	}
-	
+
 	GPOS_ASSERT(!"Unexpected exit from loop");
 	return false;
 }
@@ -142,15 +133,14 @@ CFSimulator::NewStack
 GPOS_RESULT
 CFSimulator::Init()
 {
-	
 	CAutoMemoryPool amp;
 	CMemoryPool *mp = amp.Pmp();
-	
+
 	CFSimulator::m_fsim = GPOS_NEW(mp) CFSimulator(mp, GPOS_FSIM_RESOLUTION);
 
 	// detach safety
 	(void) amp.Detach();
-	
+
 	return GPOS_OK;
 }
 
@@ -170,10 +160,10 @@ CFSimulator::Shutdown()
 	CMemoryPool *mp = m_mp;
 	GPOS_DELETE(CFSimulator::m_fsim);
 	CFSimulator::m_fsim = NULL;
-	
+
 	CMemoryPoolManager::GetMemoryPoolMgr()->Destroy(mp);
 }
-#endif // GPOS_DEBUG
+#endif	// GPOS_DEBUG
 
 
 //---------------------------------------------------------------------------
@@ -184,15 +174,9 @@ CFSimulator::Shutdown()
 //		ctor
 //
 //---------------------------------------------------------------------------
-CFSimulator::CStackTracker::CStackTracker
-	(
-	CMemoryPool *mp,
-	ULONG resolution,
-	SStackKey key
-	)
-	:
-	m_key(key),
-	m_bit_vector(NULL)
+CFSimulator::CStackTracker::CStackTracker(CMemoryPool *mp, ULONG resolution,
+										  SStackKey key)
+	: m_key(key), m_bit_vector(NULL)
 {
 	// allocate bit vector
 	m_bit_vector = GPOS_NEW(mp) CBitVector(mp, resolution);
@@ -208,10 +192,7 @@ CFSimulator::CStackTracker::CStackTracker
 //
 //---------------------------------------------------------------------------
 BOOL
-CFSimulator::CStackTracker::ExchangeSet
-	(
-	ULONG bit
-	)
+CFSimulator::CStackTracker::ExchangeSet(ULONG bit)
 {
 	return m_bit_vector->ExchangeSet(bit);
 }
@@ -225,29 +206,16 @@ CFSimulator::CStackTracker::ExchangeSet
 //		ctor
 //
 //---------------------------------------------------------------------------
-CFSimulator::CFSimulator
-	(
-	CMemoryPool *mp,
-	ULONG resolution
-	)
-	:
-	m_mp(mp),
-	m_resolution(resolution)
+CFSimulator::CFSimulator(CMemoryPool *mp, ULONG resolution)
+	: m_mp(mp), m_resolution(resolution)
 {
 	// setup init table
-	m_stack.Init
-		(
-		m_mp,
-		1024,
-		GPOS_OFFSET(CStackTracker, m_link),
-		GPOS_OFFSET(CStackTracker, m_key),
-		&(CStackTracker::m_invalid_key),
-		CStackTracker::SStackKey::HashValue,
-		CStackTracker::SStackKey::Equals
-		);
+	m_stack.Init(
+		m_mp, 1024, GPOS_OFFSET(CStackTracker, m_link),
+		GPOS_OFFSET(CStackTracker, m_key), &(CStackTracker::m_invalid_key),
+		CStackTracker::SStackKey::HashValue, CStackTracker::SStackKey::Equals);
 }
 
-#endif // GPOS_FPSIMULATOR
+#endif	// GPOS_FPSIMULATOR
 
 // EOF
-

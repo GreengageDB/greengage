@@ -101,7 +101,7 @@ anchors:
       config:
         platform: linux
         image_resource:
-          type: docker-image
+          type: registry-image
           source:
             repository: pivotaldata/ccp
             tag: "7"
@@ -124,7 +124,7 @@ anchors:
 - &set_failed_two_clusters_common
   platform: linux
   image_resource:
-    type: docker-image
+    type: registry-image
     source:
       repository: pivotaldata/ccp
       tag: "7"
@@ -292,6 +292,7 @@ groups:
   jobs:
   - gate_release_candidate_start
   - Release_Candidate
+  - Build_Release_Candidate_RPMs
   - Publish Server Builds
 
 {% endif %}
@@ -450,16 +451,16 @@ groups:
 
 resource_types:
 - name: terraform
-  type: docker-image
+  type: registry-image
   source:
     repository: ljfranklin/terraform-resource
     tag: 0.11.14
 - name: gcs
-  type: docker-image
+  type: registry-image
   source:
     repository: frodenas/gcs-resource
 - name: pivnet
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotalcf/pivnet-resource
     tag: latest-final
@@ -491,13 +492,13 @@ resources:
   <<: *terraform_cluster
 
 - name: alpine-docker
-  type: docker-image
+  type: registry-image
   source:
     repository: alpine
     tag: latest
 
 - name: ccp-image
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/ccp
     tag: '7'
@@ -623,26 +624,26 @@ resources:
 {% endif %}
 {% if "centos6" in os_types %}
 - name: gpdb6-centos6-build
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-centos6-build
     tag: latest
 
 - name: gpdb6-centos6-test
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-centos6-test
     tag: latest
 {% endif %}
 {% if "centos7" in os_types %}
 - name: gpdb6-centos7-build
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-centos7-build
     tag: latest
 
 - name: gpdb6-centos7-test
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-centos7-test
     tag: latest
@@ -650,7 +651,7 @@ resources:
 {% endif %}
 {% if "oracle7" in os_types %}
 - name: gpdb6-oracle7-test
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-oel7-test
     tag: latest
@@ -658,14 +659,14 @@ resources:
 {% endif %}
 
 - name: gpdb6-ubuntu18.04-build
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-ubuntu18.04-build
     tag: latest
 
 {% if "ubuntu18.04" in os_types %}
 - name: gpdb6-ubuntu18.04-test
-  type: docker-image
+  type: registry-image
   source:
     repository: pivotaldata/gpdb6-ubuntu18.04-test
     tag: latest
@@ -714,12 +715,26 @@ resources:
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/published/gpdb6/server-rc-(.*)-rhel6_x86_64((rc-build-type-gcs)).tar.gz
 
+- name: gpdb_rpm_installer_centos6
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/gpdb6/greenplum-db-(.*)-rhel6-x86_64((rc-build-type-gcs)).rpm
+
 - name: bin_gpdb_centos7_rc
   type: gcs
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/published/gpdb6/server-rc-(.*)-rhel7_x86_64((rc-build-type-gcs)).tar.gz
+
+- name: gpdb_rpm_installer_centos7
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: server/published/gpdb6/greenplum-db-(.*)-rhel7-x86_64((rc-build-type-gcs)).rpm
 
 - name: bin_gpdb_ubuntu18.04_rc
   type: gcs
@@ -748,6 +763,21 @@ resources:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: clients/published/gpdb6/clients-rc-(.*)-ubuntu18.04_x86_64((rc-build-type-gcs)).tar.gz
+
+- name: greenplum-database-release
+  type: git
+  icon: git
+  source:
+    branch: master
+    uri: https://github.com/greenplum-db/greenplum-database-release.git
+
+- name: license_file
+  type: gcs
+  icon: google
+  source:
+    bucket: ((gcs-bucket-for-oss))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: osl/released/gpdb6/open_source_license_greenplum-database-6.0.0-97773a0-(.*).txt
 
 {% endif %}
 {% if "centos6" in os_types %}
@@ -1177,6 +1207,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos6]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb_binary_swap.yml
     image: gpdb6-centos6-test
     params:
@@ -1201,6 +1234,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos6]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos6-test
     params:
@@ -1220,6 +1256,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos6]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos6-test
     params:
@@ -1239,6 +1278,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos6]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos6-test
     params:
@@ -1258,6 +1300,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos6]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos6-test
     params:
@@ -1278,6 +1323,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos7]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos7-test
     params:
@@ -1297,6 +1345,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos7]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos7-test
     params:
@@ -1316,6 +1367,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos7]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos7-test
     params:
@@ -1335,6 +1389,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-centos7]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-centos7-test
     params:
@@ -1356,6 +1413,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-oracle7-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-oracle7]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-oracle7-test
     params:
@@ -1375,6 +1435,9 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-oracle7-test
   - task: ic_gpdb
+    {% if pipeline_configuration == "prod" %}
+    tags: [icw-oracle7]
+    {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
     image: gpdb6-oracle7-test
     params:
@@ -1396,6 +1459,9 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
+      {% if pipeline_configuration == "prod" %}
+      tags: [icw-ubuntu18.04]
+      {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
       image: gpdb6-ubuntu18.04-test
       params:
@@ -1415,6 +1481,9 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
+      {% if pipeline_configuration == "prod" %}
+      tags: [icw-ubuntu18.04]
+      {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
       image: gpdb6-ubuntu18.04-test
       params:
@@ -1434,6 +1503,9 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
+      {% if pipeline_configuration == "prod" %}
+      tags: [icw-ubuntu18.04]
+      {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
       image: gpdb6-ubuntu18.04-test
       params:
@@ -1453,6 +1525,9 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
+      {% if pipeline_configuration == "prod" %}
+      tags: [icw-ubuntu18.04]
+      {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
       image: gpdb6-ubuntu18.04-test
       params:
@@ -1500,7 +1575,7 @@ jobs:
     config:
       platform: linux
       image_resource:
-        type: docker-image
+        type: registry-image
         source:
           repository: pivotaldata/ccp
           tag: "7"
@@ -2547,6 +2622,81 @@ jobs:
       - put: bin_gpdb_clients_windows_rc
         params:
           file: "release_candidates/clients-rc-*-windows*.msi"
+
+- name: Build_Release_Candidate_RPMs
+  plan:
+  - in_parallel:
+      steps:
+      - get: gpdb_src
+        trigger: true
+        passed: [gate_release_candidate_start]
+      - get: bin_gpdb_centos6
+        trigger: true
+        passed: [gate_release_candidate_start]
+      - get: bin_gpdb_centos7
+        trigger: true
+        passed: [gate_release_candidate_start]
+      - get: gpdb6-centos6-build
+      - get: gpdb6-centos7-build
+      - get: greenplum-database-release
+      - get: license_file
+  - task: create_gpdb_rpm_package_centos6
+    file: greenplum-database-release/ci/concourse/tasks/build_gpdb_rpm.yml
+    image: gpdb6-centos6-build
+    input_mapping:
+      bin_gpdb: bin_gpdb_centos6
+    output_mapping:
+      gpdb_rpm_installer: gpdb_rpm_centos6
+    params:
+      PLATFORM: "rhel6"
+      GPDB_NAME: greenplum-db-6
+      GPDB_RELEASE: 1
+      GPDB_LICENSE: Pivotal Software EULA
+      GPDB_URL: https://github.com/greenplum-db/gpdb
+      GPDB_OSS: false
+  - task: create_gpdb_rpm_package_centos7
+    file: greenplum-database-release/ci/concourse/tasks/build_gpdb_rpm.yml
+    image: gpdb6-centos7-build
+    input_mapping:
+      bin_gpdb: bin_gpdb_centos7
+    output_mapping:
+      gpdb_rpm_installer: gpdb_rpm_centos7
+    params:
+      PLATFORM: "rhel7"
+      GPDB_NAME: greenplum-db-6
+      GPDB_RELEASE: 1
+      GPDB_LICENSE: Pivotal Software EULA
+      GPDB_URL: https://github.com/greenplum-db/gpdb
+      GPDB_OSS: false
+  - task: rename_rc_artifacts
+    image: gpdb6-centos6-build
+    config:
+      platform: linux
+      inputs:
+        - name: gpdb_src
+        - name: gpdb_rpm_centos6
+        - name: gpdb_rpm_centos7
+      outputs:
+        - name: renamed_gpdb_rpm_centos6
+        - name: renamed_gpdb_rpm_centos7
+      params:
+        RC_BUILD_TYPE_GCS: ((rc-build-type-gcs))
+      run:
+        path: sh
+        args:
+          - -exc
+          - |
+            gpdb_semver=$(gpdb_src/getversion | cut -d' ' -f1)
+            cp -v gpdb_rpm_centos6/*.rpm renamed_gpdb_rpm_centos6/greenplum-db-${gpdb_semver}-rhel6-x86_64${RC_BUILD_TYPE_GCS}.rpm
+            cp -v gpdb_rpm_centos7/*.rpm renamed_gpdb_rpm_centos7/greenplum-db-${gpdb_semver}-rhel7-x86_64${RC_BUILD_TYPE_GCS}.rpm
+  - in_parallel:
+      steps:
+      - put: gpdb_rpm_installer_centos6
+        params:
+          file: renamed_gpdb_rpm_centos6/*.rpm
+      - put: gpdb_rpm_installer_centos7
+        params:
+          file: renamed_gpdb_rpm_centos7/*.rpm
 
 {% endif %}
 

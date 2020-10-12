@@ -33,13 +33,11 @@ using namespace gpos;
 GPOS_RESULT
 CFSimulatorTest::EresUnittest()
 {
-	CUnittest rgut[] =
-		{
-		GPOS_UNITTEST_FUNC(CFSimulatorTest::EresUnittest_BasicTracking)
-		};
-		
+	CUnittest rgut[] = {
+		GPOS_UNITTEST_FUNC(CFSimulatorTest::EresUnittest_BasicTracking)};
+
 	// ignore this test for FP simulation and time slicing check
-	if (CFSimulator::FSimulation() )
+	if (CFSimulator::FSimulation())
 	{
 		return GPOS_OK;
 	}
@@ -66,14 +64,15 @@ CFSimulatorTest::EresUnittest_BasicTracking()
 {
 	BOOL fThrown = false;
 	static ULONG ul = 0;
- 	if (10 == ul)
- 	{
- 		return GPOS_OK;
+	if (10 == ul)
+	{
+		return GPOS_OK;
 	}
 
 	GPOS_TRY
 	{
-		GPOS_SIMULATE_FAILURE(EtraceTest, CException::ExmaSystem, CException::ExmiOOM);
+		GPOS_SIMULATE_FAILURE(EtraceTest, CException::ExmaSystem,
+							  CException::ExmiOOM);
 	}
 	GPOS_CATCH_EX(ex)
 	{
@@ -86,7 +85,7 @@ CFSimulatorTest::EresUnittest_BasicTracking()
 
 			fThrown = true;
 		}
-		
+
 		GPOS_RESET_EX;
 	}
 	GPOS_CATCH_END;
@@ -102,7 +101,6 @@ CFSimulatorTest::EresUnittest_BasicTracking()
 	return GPOS_FAILED;
 }
 
-#endif // GPOS_FPSIMULATOR
+#endif	// GPOS_FPSIMULATOR
 
 // EOF
-

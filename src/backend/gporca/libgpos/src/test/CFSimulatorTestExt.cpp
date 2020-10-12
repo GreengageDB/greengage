@@ -35,13 +35,12 @@ using namespace gpos;
 GPOS_RESULT
 CFSimulatorTestExt::EresUnittest()
 {
-	CUnittest rgut[] =
-		{
+	CUnittest rgut[] = {
 		GPOS_UNITTEST_FUNC(CFSimulatorTestExt::EresUnittest_OOM),
 		GPOS_UNITTEST_FUNC(CFSimulatorTestExt::EresUnittest_Abort),
 		GPOS_UNITTEST_FUNC(CFSimulatorTestExt::EresUnittest_IOError),
 		GPOS_UNITTEST_FUNC(CFSimulatorTestExt::EresUnittest_NetError),
-		};
+	};
 
 	GPOS_RESULT eres = CUnittest::EresExecute(rgut, GPOS_ARRAY_SIZE(rgut));
 
@@ -64,7 +63,8 @@ CFSimulatorTestExt::EresUnittest_OOM()
 	CAutoTraceFlag atfSet(EtraceSimulateOOM, true);
 
 	// run simulation
-	return EresUnittest_SimulateException(CException::ExmaSystem, CException::ExmiOOM);
+	return EresUnittest_SimulateException(CException::ExmaSystem,
+										  CException::ExmiOOM);
 }
 
 
@@ -83,7 +83,8 @@ CFSimulatorTestExt::EresUnittest_Abort()
 	CAutoTraceFlag atfSet(EtraceSimulateAbort, true);
 
 	// run simulation
-	return EresUnittest_SimulateException(CException::ExmaSystem, CException::ExmiAbort);
+	return EresUnittest_SimulateException(CException::ExmaSystem,
+										  CException::ExmiAbort);
 }
 
 
@@ -102,7 +103,8 @@ CFSimulatorTestExt::EresUnittest_IOError()
 	CAutoTraceFlag atfSet(EtraceSimulateIOError, true);
 
 	// run simulation
-	return EresUnittest_SimulateException(CException::ExmaSystem, CException::ExmiIOError);
+	return EresUnittest_SimulateException(CException::ExmaSystem,
+										  CException::ExmiIOError);
 }
 
 
@@ -121,7 +123,8 @@ CFSimulatorTestExt::EresUnittest_NetError()
 	CAutoTraceFlag atfSet(EtraceSimulateNetError, true);
 
 	// run simulation
-	return EresUnittest_SimulateException(CException::ExmaSystem, CException::ExmiNetError);
+	return EresUnittest_SimulateException(CException::ExmaSystem,
+										  CException::ExmiNetError);
 }
 
 
@@ -134,11 +137,7 @@ CFSimulatorTestExt::EresUnittest_NetError()
 //
 //---------------------------------------------------------------------------
 GPOS_RESULT
-CFSimulatorTestExt::EresUnittest_SimulateException
-	(
-	ULONG major,
-	ULONG minor
-	)
+CFSimulatorTestExt::EresUnittest_SimulateException(ULONG major, ULONG minor)
 {
 	// assemble -u option
 	const CHAR *rgsz[] = {"", "-u"};
@@ -158,18 +157,16 @@ CFSimulatorTestExt::EresUnittest_SimulateException
 			GPOS_RESET_EX;
 
 			// retry every time we hit an OOM, else bail
-			if(!GPOS_MATCH_EX(ex, major, minor))
+			if (!GPOS_MATCH_EX(ex, major, minor))
 			{
 				return GPOS_FAILED;
 			}
 		}
 		GPOS_CATCH_END;
 	}
-
 }
 
 
-#endif // GPOS_FPSIMULATOR
+#endif	// GPOS_FPSIMULATOR
 
 // EOF
-
