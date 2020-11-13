@@ -22,5 +22,5 @@ PostgreSQL extensions do not provide a capability to set a custom `DROP EXTENSIO
 ```sql
 DROP EXTENSION pg_partitions_nolock;
 SET allow_system_table_mods = true;
-ALTER VIEW pg_catalog.pg_partitions_lock RENAME TO pg_catalog.pg_partitions;
+ALTER VIEW pg_catalog.pg_partitions_lock RENAME TO pg_partitions;
 ```
