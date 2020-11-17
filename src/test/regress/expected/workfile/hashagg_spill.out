@@ -156,6 +156,31 @@ SELECT avg(col2) col2 FROM hashagg_spill GROUP BY col1 HAVING(sum(col1)) < 0;') 
  t
 (1 row)
 
+-- Test the spilling aggregates for pergroupstate inconsistency
+create table spill_pgs1(a bigint, b bigint, c text, d bigint) distributed randomly;
+insert into spill_pgs1 select g, null::bigint, 'aaaaaa', g from generate_series(1, 500000) as g;
+insert into spill_pgs1 select g, g, 'aaaaaa', g from generate_series(1, 500000) as g;
+create index spill_pgs1_idx on spill_pgs1(a) where c = 'aaaaaa' or c = 'bbbbbb';
+create table spill_pgs2(a bigint) distributed randomly;
+insert into spill_pgs2 select generate_series(1, 500000);
+create table spill_pgs3(d bigint, f integer) distributed randomly;
+insert into spill_pgs3 select g, 1 from generate_series(300000, 1000000) as g;
+set statement_mem='2MB';
+set optimizer=off;
+select count(q.*) as num from (
+    select
+        spill_pgs1.a, spill_pgs3.f,
+        sum(spill_pgs1.b) filter (where spill_pgs1.c in ('bbbbbb'))
+    from spill_pgs1 join spill_pgs2 using(a)
+    left join spill_pgs3 using(d)
+    where spill_pgs1.c in ('aaaaaa', 'bbbbbb')
+    group by 1, 2  
+) as q;
+  num   
+--------
+ 500000
+(1 row)
+
 -- check spilling to a temp tablespace
 CREATE TABLE spill_temptblspace (a numeric) DISTRIBUTED BY (a);
 SET temp_tablespaces=pg_default;
