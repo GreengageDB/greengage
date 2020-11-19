@@ -1,0 +1,18 @@
+2020-10-13 17:52:40|INFO|gpload session started 2020-10-13 17:52:40
+2020-10-13 17:52:40|INFO|setting schema 'public' for table 'testspecialchar'
+2020-10-13 17:52:40|INFO|started gpfdist -p 8081 -P 8082 -f "/home/gpadmin/workspace/gpdb/gpMgmt/bin/gpload_test/gpload2/data_file.txt" -t 30
+2020-10-13 17:52:40|INFO|did not find an external table to reuse. creating ext_gpload_reusable_d5200d42_0d39_11eb_992a_00505698707d
+2020-10-13 17:52:40|INFO|running time: 0.09 seconds
+2020-10-13 17:52:40|INFO|rows Inserted          = 8
+2020-10-13 17:52:40|INFO|rows Updated           = 0
+2020-10-13 17:52:40|INFO|data formatting errors = 0
+2020-10-13 17:52:40|INFO|gpload succeeded
+2020-10-13 17:52:40|INFO|gpload session started 2020-10-13 17:52:40
+2020-10-13 17:52:40|INFO|setting schema 'public' for table 'testspecialchar'
+2020-10-13 17:52:40|INFO|started gpfdist -p 8081 -P 8082 -f "/home/gpadmin/workspace/gpdb/gpMgmt/bin/gpload_test/gpload2/data_file.txt" -t 30
+2020-10-13 17:52:40|INFO|reusing external table ext_gpload_reusable_d5200d42_0d39_11eb_992a_00505698707d
+2020-10-13 17:52:40|INFO|running time: 0.07 seconds
+2020-10-13 17:52:40|INFO|rows Inserted          = 8
+2020-10-13 17:52:40|INFO|rows Updated           = 0
+2020-10-13 17:52:40|INFO|data formatting errors = 0
+2020-10-13 17:52:40|INFO|gpload succeeded

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map><title>Security Configuration Guide</title>
-    <topicref href="../../6-11/homenav.html" scope="external" navtitle="Greenplum Database® 6.11 Documentation"
+    <topicref href="../../6-12/homenav.html" scope="external" navtitle="Greenplum Database® 6.12 Documentation"
         format="html" otherprops="oss-only"/>
-    <topicref href="../../6-11/homenav.html" scope="external" navtitle="VMware Tanzu Greenplum® 6.11 Documentation"
+    <topicref href="../../6-12/homenav.html" scope="external" navtitle="VMware Tanzu Greenplum® 6.12 Documentation"
         format="html" otherprops="pivotal"/>
     <topicref href="topics/preface.xml">
         <topicref href="topics/SecuringGPDB.xml"/>

@@ -61,6 +61,8 @@ using namespace gpmd;
 #define GPDXL_MOTION_ID_START 1
 #define GPDXL_PARAM_ID_START 0
 
+ULONG CTranslatorDXLToPlStmt::m_external_scan_counter = 0;
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::CTranslatorDXLToPlStmt
@@ -78,7 +80,6 @@ CTranslatorDXLToPlStmt::CTranslatorDXLToPlStmt(
 	  m_cmd_type(CMD_SELECT),
 	  m_is_tgt_tbl_distributed(false),
 	  m_result_rel_list(NULL),
-	  m_external_scan_counter(0),
 	  m_num_of_segments(num_of_segments),
 	  m_partition_selector_counter(0)
 {

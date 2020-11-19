@@ -1681,6 +1681,12 @@ ExecuteTruncate(TruncateStmt *stmt)
 		}
 	}
 
+	/* GPDB does not support all FK feature but keeps FK grammar recognition,
+	 * which reduces migration manual workload from other databases.
+	 * We do not want to reject relation truncate if the relation contains FK
+	 * satisfied tuple, so skip heap_truncate_check_FKs function call.
+	 */
+#if 0
 	/*
 	 * Check foreign key references.  In CASCADE mode, this should be
 	 * unnecessary since we just pulled in all the references; but as a
@@ -1691,6 +1697,7 @@ ExecuteTruncate(TruncateStmt *stmt)
 #else
 	if (stmt->behavior == DROP_RESTRICT)
 		heap_truncate_check_FKs(rels, false);
+#endif
 #endif
 
 	/*

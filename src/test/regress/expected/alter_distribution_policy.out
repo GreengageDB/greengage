@@ -1398,6 +1398,9 @@ select policytype, distkey, distclass from gp_distribution_policy where localoid
 -- have a hash opclass!
 CREATE TABLE tstab (i int4, t tsvector) distributed by (i);
 CREATE UNIQUE INDEX tstab_idx ON tstab(t);
+NOTICE:  UNIQUE index must contain all columns in the table's distribution key.
+DETAIL:  Distribution key column "i" is not included in the constraint.
+HINT:  Add "i" to the constraint with the operator.
 ERROR:  UNIQUE index must contain all columns in the distribution key of relation "tstab"
 INSERT INTO tstab VALUES (1, 'foo');
 -- ALTER TABLE SET DISTRIBUTED RANDOMLY should not work on a table

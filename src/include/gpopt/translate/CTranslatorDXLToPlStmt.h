@@ -143,7 +143,7 @@ private:
 	List *m_result_rel_list;
 
 	// external scan counter
-	ULONG m_external_scan_counter;
+	static ULONG m_external_scan_counter;
 
 	// number of segments
 	ULONG m_num_of_segments;

@@ -135,6 +135,10 @@ def write_config_file(mode='insert', reuse_flag='',columns_flag='0',mapping='0',
         f.write("\n    - COLUMNS:")
         f.write("\n           - 'Field1': bigint")
         f.write("\n           - 'Field#2': text")
+    if columns_flag == '2':
+        f.write("\n    - COLUMNS:")
+        f.write("\n           - 'Field1':")
+        f.write("\n           - 'Field#2':")
     if format:
         f.write("\n    - FORMAT: "+format)
     if log_errors:
@@ -454,7 +458,7 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
 
     def test_00_gpload_formatOpts_setup(self):
         "0  gpload setup"
-        for num in range(1,42):
+        for num in range(1,43):
            f = open(mkpath('query%d.sql' % num),'w')
            f.write("\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n"+"\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n")
            f.close()
@@ -810,6 +814,13 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
         f.write("\! gpload -f "+mkpath('config/config_file2')+ " -d reuse_gptest\n")
         f.close()
         self.doTest(41)
+    
+    def test_42_gpload_column_without_data_type(self):
+        file = mkpath('setup.sql')
+        runfile(file)
+        copy_data('external_file_15.txt','data_file.txt')
+        write_config_file(mode='insert',reuse_flag='true',fast_match='false', file='data_file.txt',table='testSpecialChar',columns_flag='3', delimiter=";")
+        self.doTest(42)
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(GPLoad_FormatOpts_TestCase)

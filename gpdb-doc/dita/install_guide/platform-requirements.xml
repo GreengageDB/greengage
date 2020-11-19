@@ -40,6 +40,7 @@
         <li>CentOS 64-bit 7.x</li>
         <li id="pm405698" class="- topic/li ">CentOS 64-bit 6.x</li>
         <li>Ubuntu 18.04 LTS</li>
+        <li>Oracle Linux 64-bit 7, using the Red Hat Compatible Kernel (RHCK)</li>
       </ul>
       <note type="important">Significant Greenplum Database performance degradation has been
         observed when enabling resource group-based workload management on RedHat 6.x and CentOS 6.x
@@ -91,7 +92,7 @@
             <li>apr</li>
             <li>apr-util</li>
             <li>libyaml</li>
-            <li>libevent</li>
+            <li>libevent (or libevent2 on RHEL/CentOS 6)</li>
           </ul></p>
         <p>On Ubuntu systems, Greenplum Database 6 requires the following software packages, which
           are installed automatically as dependencies when you install Greenplum Database with the

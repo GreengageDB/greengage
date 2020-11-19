@@ -380,7 +380,6 @@ extern int Debug_dtm_action_protocol;
 extern int Debug_dtm_action_segment;
 extern int Debug_dtm_action_nestinglevel;
 
-extern char *data_directory;
 extern PGDLLIMPORT char *ConfigFileName;
 extern char *HbaFileName;
 extern char *IdentFileName;

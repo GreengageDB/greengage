@@ -15,15 +15,20 @@
 
 /* These are always necessary for a bgworker */
 #include "miscadmin.h"
+#include "utils/faultinjector.h"
+#include "utils/guc.h"
+#include "utils/ps_status.h"
 #include "postmaster/bgworker.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "storage/lwlock.h"
+#include "storage/pmsignal.h"
 #include "storage/proc.h"
 #include "storage/shmem.h"
 #include "storage/procarray.h"
 
 #include "access/xact.h"
+#include "cdb/cdbgang.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdispatchresult.h"
@@ -32,7 +37,11 @@
 #include "tcop/tcopprot.h"
 #include "libpq-int.h"
 
-volatile bool *shmDtmStarted;
+#define MAX_FREQ_CHECK_TIMES 12
+static int frequent_check_times;
+
+volatile bool *shmDtmStarted = NULL;
+volatile pid_t *shmDtxRecoveryPid = NULL;
 
 /* transactions need recover */
 TMGXACT_LOG *shmCommittedGxactArray;
@@ -40,6 +49,8 @@ volatile int *shmNumCommittedGxacts;
 
 static int	redoFileFD = -1;
 static int	redoFileOffset;
+
+static volatile sig_atomic_t got_SIGHUP = false;
 
 typedef struct InDoubtDtx
 {
@@ -58,14 +69,14 @@ typedef struct InDoubtDtx
 
 static void recoverTM(void);
 static bool recoverInDoubtTransactions(void);
-static HTAB *gatherRMInDoubtTransactions(void);
+static HTAB *gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError);
 static void abortRMInDoubtTransactions(HTAB *htab);
 static void doAbortInDoubt(char *gid);
 static bool doNotifyCommittedInDoubt(char *gid);
 static void UtilityModeSaveRedo(bool committed, TMGXACT_LOG *gxact_log);
 static void ReplayRedoFromUtilityMode(void);
 static void RemoveRedoUtilityModeFile(void);
-static void dumpRMOnlyDtx(HTAB *htab, StringInfoData *buff);
+static void AbortOrphanedPreparedTransactions(void);
 
 static bool
 doNotifyCommittedInDoubt(char *gid)
@@ -98,9 +109,13 @@ doAbortInDoubt(char *gid)
 											 NULL, /* raiseError */ false,
 											 cdbcomponent_getCdbComponentsList(), NULL, 0);
 	if (!succeeded)
-		elog(FATAL, "Crash recovery retry of the distributed transaction "
+	{
+		DisconnectAndDestroyAllGangs(true);
+		CheckForResetSession();
+		elog(LOG, "Crash recovery retry of the distributed transaction "
 			 		"'Abort Prepared' broadcast failed to one or more segments "
 					"for gid = %s.  System will retry again later", gid);
+	}
 	else
 		elog(LOG, "Crash recovery broadcast of the distributed transaction "
 			 	  "'Abort Prepared' broadcast succeeded for gid = %s", gid);
@@ -111,7 +126,8 @@ GetRedoFileName(char *path)
 {
 	snprintf(path, MAXPGPATH,
 			 "%s/" UTILITYMODEDTMREDO_DIR "/" UTILITYMODEDTMREDO_FILE, DataDir);
-	elog(DTM_DEBUG3, "Returning save DTM redo file path = %s", path);
+	elogif(Debug_print_full_dtm, LOG,
+		   "Returning save DTM redo file path = %s", path);
 }
 
 /*
@@ -133,7 +149,8 @@ GetRedoFileName(char *path)
 static void
 recoverTM(void)
 {
-	elog(DTM_DEBUG3, "Starting to Recover DTM...");
+	elogif(Debug_print_full_dtm, LOG,
+		   "Starting to Recover DTM...");
 
 	/*
 	 * attempt to recover all in-doubt transactions.
@@ -146,6 +163,12 @@ recoverTM(void)
 	/* finished recovery successfully. */
 	*shmDtmStarted = true;
 	elog(LOG, "DTM Started");
+
+	/*
+	 * dtx recovery process won't exit, so signal postmaster to launch
+	 * bg workers that depend on dtx recovery.
+	 */
+	SendPostmasterSignal(PMSIGNAL_BACKGROUND_WORKER_CHANGE);
 }
 
 /* 
@@ -159,7 +182,8 @@ recoverInDoubtTransactions(void)
 	int			i;
 	HTAB	   *htab;
 
-	elog(DTM_DEBUG3, "recover in-doubt distributed transactions");
+	elogif(Debug_print_full_dtm, LOG,
+		   "recover in-doubt distributed transactions");
 
 	ReplayRedoFromUtilityMode();
 
@@ -168,9 +192,9 @@ recoverInDoubtTransactions(void)
 	 * matched by a forget committed record, change its state indicating
 	 * committed notification needed.  Attempt a notification.
 	 */
-	elog(DTM_DEBUG5,
-		 "Going to retry commit notification for distributed transactions (count = %d)",
-		 *shmNumCommittedGxacts);
+	elogif(Debug_print_full_dtm, LOG,
+		   "Going to retry commit notification for distributed transactions (count = %d)",
+		   *shmNumCommittedGxacts);
 
 	for (i = 0; i < *shmNumCommittedGxacts; i++)
 	{
@@ -178,9 +202,9 @@ recoverInDoubtTransactions(void)
 
 		Assert(gxact_log->gxid != InvalidDistributedTransactionId);
 
-		elog(DTM_DEBUG5,
-			 "Recovering committed distributed transaction gid = %s",
-			 gxact_log->gid);
+		elogif(Debug_print_full_dtm, LOG,
+			   "Recovering committed distributed transaction gid = %s",
+			   gxact_log->gid);
 
 		doNotifyCommittedInDoubt(gxact_log->gid);
 
@@ -191,9 +215,9 @@ recoverInDoubtTransactions(void)
 
 	/*
 	 * Any in-doubt transctions found will be for aborted
-	 * transactions. Gather in-boubt transactions and issue aborts.
+	 * transactions. Gather in-doubt transactions and issue aborts.
 	 */
-	htab = gatherRMInDoubtTransactions();
+	htab = gatherRMInDoubtTransactions(0, true);
 
 	/*
 	 * go through and resolve any remaining in-doubt transactions that the
@@ -207,38 +231,6 @@ recoverInDoubtTransactions(void)
 	/* get rid of the hashtable */
 	hash_destroy(htab);
 
-	/* yes... we are paranoid and will double check */
-	htab = gatherRMInDoubtTransactions();
-
-	/*
-	 * Hmm.  we still have some remaining indoubt transactions.  For now we
-	 * dont have an automated way to clean this mess up.  So we'll have to
-	 * rely on smart Admins to do the job manually.  We'll error out of here
-	 * and try and provide as much info as possible.
-	 *
-	 * TODO: We really want to be able to say this particular segdb has these
-	 * remaining in-doubt transactions.
-	 */
-	if (htab != NULL)
-	{
-		StringInfoData indoubtBuff;
-
-		initStringInfo(&indoubtBuff);
-
-		dumpRMOnlyDtx(htab, &indoubtBuff);
-
-		ereport(FATAL,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("DTM Log recovery failed, There are still unresolved "
-						"in-doubt transactions on some of the segment databases "
-						"that were not able to be resolved for an unknown reason"),
-				 errdetail("Here is a list of in-doubt transactions in the system: %s",
-						   indoubtBuff.data),
-				 errhint("Try restarting the Greenplum Database array.  If the problem persists "
-						 "an Administrator will need to resolve these transactions  manually.")));
-
-	}
-
 	RemoveRedoUtilityModeFile();
 
 	return true;
@@ -251,14 +243,17 @@ recoverInDoubtTransactions(void)
  * without duplicates of all the in-doubt transactions.  It does not keep track
  * of which seg db's have which transactions in-doubt.  It currently doesn't
  * need to due to the way we handle this information later.
+ *
+ * Parameter prepared_seconds: Gather prepared transactions which have
+ * existed for at least prepared_seconds seconds.
+ * Parameter raiseError: if true, rethrow the error else ignore it.
  */
 static HTAB *
-gatherRMInDoubtTransactions(void)
+gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError)
 {
 	CdbPgResults cdb_pgresults = {NULL, 0};
-	const char *cmdbuf = "select gid from pg_prepared_xacts";
 	PGresult   *rs;
-
+	char		cmdbuf[256];
 	InDoubtDtx *lastDtx = NULL;
 
 	HASHCTL		hctl;
@@ -268,8 +263,34 @@ gatherRMInDoubtTransactions(void)
 				rows;
 	bool		found;
 
-	/* call to all QE to get in-doubt transactions */
-	CdbDispatchCommand(cmdbuf, DF_NONE, &cdb_pgresults);
+	snprintf(cmdbuf, sizeof(cmdbuf), "select gid from pg_prepared_xacts where "
+			 "prepared < now() - interval'%d seconds'",
+			 prepared_seconds);
+
+	PG_TRY();
+	{
+		CdbDispatchCommand(cmdbuf, DF_NONE, &cdb_pgresults);
+	}
+	PG_CATCH();
+	{
+		cdbdisp_clearCdbPgResults(&cdb_pgresults);
+
+		if (raiseError)
+			PG_RE_THROW();
+		else
+		{
+			if (!elog_demote(WARNING))
+			{
+				elog(LOG, "unable to demote an error");
+				PG_RE_THROW();
+			}
+
+			EmitErrorReport();
+			FlushErrorState();
+			DisconnectAndDestroyAllGangs(true);
+		}
+	}
+	PG_END_TRY();
 
 	/* if any result set is nonempty, there are in-doubt transactions. */
 	for (i = 0; i < cdb_pgresults.numResults; i++)
@@ -317,8 +338,6 @@ gatherRMInDoubtTransactions(void)
 		}
 	}
 
-	cdbdisp_clearCdbPgResults(&cdb_pgresults);
-
 	return htab;
 }
 
@@ -349,29 +368,44 @@ abortRMInDoubtTransactions(HTAB *htab)
 
 	while ((entry = (InDoubtDtx *) hash_seq_search(&status)) != NULL)
 	{
-		elog(DTM_DEBUG3, "Aborting in-doubt transaction with gid = %s", entry->gid);
+		elogif(Debug_print_full_dtm, LOG,
+			   "Aborting in-doubt transaction with gid = %s", entry->gid);
 
 		doAbortInDoubt(entry->gid);
 	}
 }
 
+/*
+ * abortOrphanedTransactions:
+ * Goes through all the InDoubtDtx's in the provided htab and find orphaned
+ * ones and then abort them.
+ */
 static void
-dumpRMOnlyDtx(HTAB *htab, StringInfoData *buff)
+abortOrphanedTransactions(HTAB *htab)
 {
 	HASH_SEQ_STATUS status;
 	InDoubtDtx *entry = NULL;
+	DistributedTransactionTimeStamp	distribTimeStamp;
+	DistributedTransactionId	gxid;
 
 	if (htab == NULL)
 		return;
 
 	hash_seq_init(&status, htab);
 
-	appendStringInfo(buff, "List of In-doubt transactions remaining across the segdbs: (");
-
 	while ((entry = (InDoubtDtx *) hash_seq_search(&status)) != NULL)
-		appendStringInfo(buff, "\"%s\" , ", entry->gid);
+	{
+		elogif(Debug_print_full_dtm, LOG,
+			   "Finding orphaned transactions with gid = %s", entry->gid);
 
-	appendStringInfo(buff, ")");
+		dtxCrackOpenGid(entry->gid, &distribTimeStamp, &gxid);
+
+		if (!IsDtxInProgress(distribTimeStamp, gxid))
+		{
+			elog(LOG, "Aborting orphaned transactions with gid = %s", entry->gid);
+			doAbortInDoubt(entry->gid);
+		}
+	}
 }
 
 static void
@@ -383,10 +417,11 @@ UtilityModeSaveRedo(bool committed, TMGXACT_LOG *gxact_log)
 	utilityModeRedo.committed = committed;
 	memcpy(&utilityModeRedo.gxact_log, gxact_log, sizeof(TMGXACT_LOG));
 
-	elog(DTM_DEBUG5, "Writing {committed = %s, gid = %s, gxid = %u} to DTM redo file",
-		 (utilityModeRedo.committed ? "true" : "false"),
-		 utilityModeRedo.gxact_log.gid,
-		 utilityModeRedo.gxact_log.gxid);
+	elogif(Debug_print_full_dtm, LOG,
+		   "Writing {committed = %s, gid = %s, gxid = %u} to DTM redo file",
+		   (utilityModeRedo.committed ? "true" : "false"),
+		   utilityModeRedo.gxact_log.gid,
+		   utilityModeRedo.gxact_log.gxid);
 
 	write_len = write(redoFileFD, &utilityModeRedo, sizeof(TMGXACT_UTILITY_MODE_REDO));
 	if (write_len != sizeof(TMGXACT_UTILITY_MODE_REDO))
@@ -414,13 +449,13 @@ ReplayRedoFromUtilityMode(void)
 	if (fd < 0)
 	{
 		/* UNDONE: Distinquish "not found" from other errors. */
-		elog(DTM_DEBUG3, "Could not open DTM redo file %s for reading",
-			 path);
+		elogif(Debug_print_full_dtm, LOG,
+			   "Could not open DTM redo file %s for reading", path);
 		return;
 	}
 
-	elog(DTM_DEBUG3, "Succesfully opened DTM redo file %s for reading",
-		 path);
+	elogif(Debug_print_full_dtm, LOG,
+		   "Succesfully opened DTM redo file %s for reading", path);
 
 	while (true)
 	{
@@ -440,10 +475,11 @@ ReplayRedoFromUtilityMode(void)
 					 errmsg("error reading DTM redo file: %m")));
 		}
 
-		elog(DTM_DEBUG5, "Read {committed = %s, gid = %s, gxid = %u} from DTM redo file",
-			 (utilityModeRedo.committed ? "true" : "false"),
-			 utilityModeRedo.gxact_log.gid,
-			 utilityModeRedo.gxact_log.gxid);
+		elogif(Debug_print_full_dtm, LOG,
+			   "Read {committed = %s, gid = %s, gxid = %u} from DTM redo file",
+			   (utilityModeRedo.committed ? "true" : "false"),
+			   utilityModeRedo.gxact_log.gid,
+			   utilityModeRedo.gxact_log.gxid);
 		if (utilityModeRedo.committed)
 			redoDistributedCommitRecord(&utilityModeRedo.gxact_log);
 		else
@@ -452,8 +488,8 @@ ReplayRedoFromUtilityMode(void)
 		entries++;
 	}
 
-	elog(DTM_DEBUG5, "Processed %d entries from DTM redo file",
-		 entries);
+	elogif(Debug_print_full_dtm, LOG,
+		   "Processed %d entries from DTM redo file", entries);
 	close(fd);
 }
 
@@ -465,8 +501,8 @@ RemoveRedoUtilityModeFile(void)
 
 	GetRedoFileName(path);
 	removed = (unlink(path) == 0);
-	elog(DTM_DEBUG5, "Removed DTM redo file %s (%s)",
-		 path, (removed ? "true" : "false"));
+	elogif(Debug_print_full_dtm, LOG,
+		   "Removed DTM redo file %s (%s)", path, (removed ? "true" : "false"));
 }
 
 void
@@ -474,11 +510,12 @@ UtilityModeCloseDtmRedoFile(void)
 {
 	if (Gp_role != GP_ROLE_UTILITY)
 	{
-		elog(DTM_DEBUG3, "Not in Utility Mode (role = %s)-- skipping closing DTM redo file",
-			 role_to_string(Gp_role));
+		elogif(Debug_print_full_dtm, LOG,
+			   "Not in Utility Mode (role = %s)-- skipping closing DTM redo file",
+			   role_to_string(Gp_role));
 		return;
 	}
-	elog(DTM_DEBUG3, "Closing DTM redo file");
+	elogif(Debug_print_full_dtm, LOG, "Closing DTM redo file");
 	close(redoFileFD);
 }
 
@@ -489,8 +526,9 @@ UtilityModeFindOrCreateDtmRedoFile(void)
 
 	if (Gp_role != GP_ROLE_UTILITY)
 	{
-		elog(DTM_DEBUG3, "Not in Utility Mode (role = %s) -- skipping finding or creating DTM redo file",
-			 role_to_string(Gp_role));
+		elogif(Debug_print_full_dtm, LOG,
+			   "Not in Utility Mode (role = %s) -- skipping finding or creating DTM redo file",
+			   role_to_string(Gp_role));
 		return;
 	}
 	GetRedoFileName(path);
@@ -502,8 +540,9 @@ UtilityModeFindOrCreateDtmRedoFile(void)
 				 errmsg("could not create save DTM redo file \"%s\"", path)));
 
 	redoFileOffset = lseek(redoFileFD, 0, SEEK_END);
-	elog(DTM_DEBUG3, "Succesfully opened DTM redo file %s (end offset %d)",
-		 path, redoFileOffset);
+	elogif(Debug_print_full_dtm, LOG,
+		   "Succesfully opened DTM redo file %s (end offset %d)",
+		   path, redoFileOffset);
 }
 
 /*
@@ -521,7 +560,8 @@ redoDtxCheckPoint(TMGXACT_CHECKPOINT *gxact_checkpoint)
 	 * in-memory if Dispatch.
 	 */
 	committedCount = gxact_checkpoint->committedCount;
-	elog(DTM_DEBUG5, "redoDtxCheckPoint has committedCount = %d", committedCount);
+	elogif(Debug_print_full_dtm, LOG,
+		   "redoDtxCheckPoint has committedCount = %d", committedCount);
 
 	for (i = 0; i < committedCount; i++)
 		redoDistributedCommitRecord(&gxact_checkpoint->committedGxactArray[i]);
@@ -545,7 +585,8 @@ redoDistributedCommitRecord(TMGXACT_LOG *gxact_log)
 
 	if (Gp_role == GP_ROLE_UTILITY)
 	{
-		elog(DTM_DEBUG3, "DB in Utility mode.  Save DTM distributed commit until later.");
+		elogif(Debug_print_full_dtm, LOG,
+			   "DB in Utility mode.  Save DTM distributed commit until later.");
 		UtilityModeSaveRedo(true, gxact_log);
 		return;
 	}
@@ -571,8 +612,8 @@ redoDistributedCommitRecord(TMGXACT_LOG *gxact_log)
 							   "around this issue and then report a bug")));
 
 		shmCommittedGxactArray[(*shmNumCommittedGxacts)++] = *gxact_log;
-		elog((Debug_print_full_dtm ? LOG : DEBUG5),
-			 "Crash recovery redo added committed distributed transaction gid = %s", gxact_log->gid);
+		elogif(Debug_print_full_dtm, LOG,
+			   "Crash recovery redo added committed distributed transaction gid = %s", gxact_log->gid);
 	}
 }
 
@@ -586,7 +627,8 @@ redoDistributedForgetCommitRecord(TMGXACT_LOG *gxact_log)
 
 	if (Gp_role == GP_ROLE_UTILITY)
 	{
-		elog(DTM_DEBUG3, "DB in Utility mode.  Save DTM disributed forget until later.");
+		elogif(Debug_print_full_dtm, LOG,
+			   "DB in Utility mode.  Save DTM disributed forget until later.");
 		UtilityModeSaveRedo(false, gxact_log);
 		return;
 	}
@@ -596,9 +638,9 @@ redoDistributedForgetCommitRecord(TMGXACT_LOG *gxact_log)
 		if (strcmp(gxact_log->gid, shmCommittedGxactArray[i].gid) == 0)
 		{
 			/* found an active global transaction */
-			elog((Debug_print_full_dtm ? INFO : DEBUG5),
-				 "Crash recovery redo removed committed distributed transaction gid = %s for forget",
-				 gxact_log->gid);
+			elogif(Debug_print_full_dtm, INFO,
+				   "Crash recovery redo removed committed distributed transaction gid = %s for forget",
+				   gxact_log->gid);
 
 			/*
 			 * there's no concurrent access to shmCommittedGxactArray during
@@ -612,9 +654,9 @@ redoDistributedForgetCommitRecord(TMGXACT_LOG *gxact_log)
 		}
 	}
 
-	elog((Debug_print_full_dtm ? WARNING : DEBUG5),
-		 "Crash recovery redo did not find committed distributed transaction gid = %s for forget",
-		 gxact_log->gid);
+	elogif(Debug_print_full_dtm, WARNING,
+		   "Crash recovery redo did not find committed distributed transaction gid = %s for forget",
+		   gxact_log->gid);
 }
 
 bool
@@ -627,22 +669,124 @@ DtxRecoveryStartRule(Datum main_arg)
 	return false;
 }
 
+static void
+AbortOrphanedPreparedTransactions()
+{
+	HTAB	   *htab;
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("before_orphaned_check") == FaultInjectorTypeSkip)
+		return;
+#endif
+
+	StartTransactionCommand();
+	htab = gatherRMInDoubtTransactions(gp_dtx_recovery_prepared_period, false);
+
+	/* in case an error happens somehow. */
+	if (htab != NULL)
+	{
+		abortOrphanedTransactions(htab);
+
+		/* get rid of the hashtable */
+		hash_destroy(htab);
+	}
+
+	CommitTransactionCommand();
+	DisconnectAndDestroyAllGangs(true);
+
+	SIMPLE_FAULT_INJECTOR("after_orphaned_check");
+}
+
+static void
+sigIntHandler(SIGNAL_ARGS)
+{
+	if (frequent_check_times == 0)
+		frequent_check_times = MAX_FREQ_CHECK_TIMES;
+
+	if (MyProc)
+		SetLatch(&MyProc->procLatch);
+}
+
+static void
+sigHupHandler(SIGNAL_ARGS)
+{
+	got_SIGHUP = true;
+
+	if (MyProc)
+		SetLatch(&MyProc->procLatch);
+}
+
+pid_t
+DtxRecoveryPID(void)
+{
+	return *shmDtxRecoveryPid;
+}
+
 /*
  * DtxRecoveryMain
  */
 void
 DtxRecoveryMain(Datum main_arg)
 {
+	*shmDtxRecoveryPid = MyProcPid;
+
+	/*
+	 * reread postgresql.conf if requested
+	 */
+	pqsignal(SIGHUP, sigHupHandler);
+	pqsignal(SIGINT, sigIntHandler);
+
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();
 
 	/* Connect to postgres */
 	BackgroundWorkerInitializeConnection(DB_FOR_COMMON_ACCESS, NULL);
 
-	/* do the real job of dtx recovery process */
-	StartTransactionCommand();
-	recoverTM();
-	CommitTransactionCommand();
+	/*
+	 * Do dtx recovery process.  It is possible that *shmDtmStarted is true
+	 * here if we terminate after this code block, e.g. due to error and then
+	 * postmaster restarts dtx recovery.
+	 */
+	if (!*shmDtmStarted)
+	{
+		set_ps_display("recovering", false);
+
+		StartTransactionCommand();
+		recoverTM();
+		CommitTransactionCommand();
+		DisconnectAndDestroyAllGangs(true);
+
+		set_ps_display("", false);
+	}
+
+	while (true)
+	{
+		int rc;
+
+		CHECK_FOR_INTERRUPTS();
+
+		if (got_SIGHUP)
+		{
+			got_SIGHUP = false;
+			ProcessConfigFile(PGC_SIGHUP);
+		}
+
+		/* Find orphaned prepared transactions and abort them. */
+		AbortOrphanedPreparedTransactions();
+
+		rc = WaitLatch(&MyProc->procLatch,
+					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					   frequent_check_times > 0 ?
+					   5 * 1000L : gp_dtx_recovery_interval * 1000L);
+		ResetLatch(&MyProc->procLatch);
+
+		/* emergency bailout if postmaster has died */
+		if (rc & WL_POSTMASTER_DEATH)
+			proc_exit(1);
+
+		if (frequent_check_times > 0)
+			frequent_check_times--;
+	}
 
 	/* One iteration done, go away */
 	proc_exit(0);
