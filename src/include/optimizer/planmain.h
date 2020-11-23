@@ -62,6 +62,8 @@ typedef struct GroupContext
 	double *p_dNumGroups;
 	List **pcurrent_pathkeys;
 	bool *querynode_changed;
+
+	bool	pretend_has_agg;
 } GroupContext;
 
 /* GUC parameters */

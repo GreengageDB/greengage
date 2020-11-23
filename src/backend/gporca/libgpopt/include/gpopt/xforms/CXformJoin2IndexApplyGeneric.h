@@ -82,7 +82,7 @@ public:
 	}
 
 	virtual CLogicalApply *
-	PopLogicalApply(CMemoryPool *, CColRefArray *) const
+	PopLogicalApply(CMemoryPool *, CColRefArray *, CExpression *) const
 	{
 		return NULL;
 	}

@@ -340,8 +340,9 @@ CPhysicalFilter::PdsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 			}
 
 			CDistributionSpecHashed *pdshashedComplete =
-				CDistributionSpecHashed::CompleteEquivSpec(mp, pdshashed,
-														   pexprFilterPred);
+				CDistributionSpecHashed::TryToCompleteEquivSpec(
+					mp, pdshashed, pexprFilterPred,
+					exprhdl.DeriveOuterReferences());
 
 			CExpressionArray *pdrgpexprOriginal =
 				pdshashedOriginal->Pdrgpexpr();
@@ -368,16 +369,9 @@ CPhysicalFilter::PdsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 					pdshashedComplete, opfamiliesOriginal);
 			}
 
-			// in any case, returned distribution spec must be complete!
-			GPOS_ASSERT(NULL == pdsResult->PdshashedEquiv() ||
-						pdsResult->HasCompleteEquivSpec(mp));
 			pdsChild->Release();
 			return pdsResult;
 		}
-
-		// in any case, returned distribution spec must be complete!
-		GPOS_ASSERT(NULL == pdshashedEquiv ||
-					pdshashedOriginal->HasCompleteEquivSpec(mp));
 	}
 
 	return pdsChild;

@@ -4322,27 +4322,7 @@ select 1 from orca.r group by ();
  ?column? 
 ----------
         1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-        1
-(21 rows)
+(1 row)
 
 select a,1 from orca.r group by rollup(a);
  a  | ?column? 

@@ -6,7 +6,7 @@ import time
 
 from gppylib.mainUtils import *
 
-from gppylib.utils import checkNotNone, appendNewEntriesToHbaFile
+from gppylib.utils import checkNotNone
 from gppylib.db import dbconn
 from gppylib import gparray, gplog
 from gppylib.commands import unix
@@ -397,6 +397,7 @@ class GpMirrorListToBuild:
             if not cmd.was_successful():
                 dbid = int(cmd.name.split(':')[1].strip())
                 self.__logger.debug("%s failed" % cmd.name)
+                self.__logger.warning(cmd.get_stdout())
                 self.__logger.warning("Incremental recovery failed for dbid %d. You must use gprecoverseg -F to recover the segment." % dbid)
                 rewindFailedSegments.append(rewindInfo[dbid].targetSegment)
 

@@ -314,7 +314,15 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 
 	/* check before dispatch to segment */
 	if (IsResGroupActivated())
+	{
+		/* Argument of callback function should be allocated in heap region */
+		callbackCtx = (ResourceGroupCallbackContext *)
+			MemoryContextAlloc(TopMemoryContext, sizeof(*callbackCtx));
+		callbackCtx->groupid = groupid;
+		RegisterXactCallbackOnce(dropResgroupCallback, callbackCtx);
+
 		ResGroupCheckForDrop(groupid, stmt->name);
+	}
 
 	/*
 	 * Check to see if any roles are in this resource group.
@@ -347,15 +355,6 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 									DF_NEED_TWO_PHASE,
 									NIL,
 									NULL);
-	}
-
-	if (IsResGroupActivated())
-	{
-		/* Argument of callback function should be allocated in heap region */
-		callbackCtx = (ResourceGroupCallbackContext *)
-			MemoryContextAlloc(TopMemoryContext, sizeof(*callbackCtx));
-		callbackCtx->groupid = groupid;
-		RegisterXactCallbackOnce(dropResgroupCallback, callbackCtx);
 	}
 }
 

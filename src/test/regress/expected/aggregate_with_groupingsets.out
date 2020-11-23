@@ -84,17 +84,9 @@ ORDER BY type, s_quant;
       | Bed   |     300
 (6 rows)
 
---
--- Reset settings
---
-reset optimizer;
 ---
 --- Planning for sub-queries that have grouping sets
 ---
---
--- Turn off GPORCA
---
-set optimizer to off;
 explain (costs off) WITH table1 AS (
 	SELECT 2 AS city_id, 5 AS cnt
 	UNION ALL
@@ -146,6 +138,28 @@ WHERE location_id = 1;
                                  ->  Result
  Optimizer: Postgres query optimizer
 (23 rows)
+
+--
+-- Select constant from GROUPING SETS of multiple empty sets
+--
+explain (costs off)
+select 1 from foo group by grouping sets ((), ());
+                      QUERY PLAN                      
+------------------------------------------------------
+ Repeat
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Aggregate
+                     ->  Seq Scan on foo
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select 1 from foo group by grouping sets ((), ());
+ ?column? 
+----------
+        1
+        1
+(2 rows)
 
 --
 -- Reset settings

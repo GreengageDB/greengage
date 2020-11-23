@@ -1135,8 +1135,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * protect ourselves from normal clients who might be trying to connect to
 	 * the system while we startup.
 	 */
-	if ((Gp_role == GP_ROLE_UTILITY) && (Gp_session_role != GP_ROLE_UTILITY) &&
-		!IsAutoVacuumWorkerProcess())
+	if ((Gp_role == GP_ROLE_UTILITY) && (Gp_session_role != GP_ROLE_UTILITY))
 	{
 		ereport(FATAL,
 				(errcode(ERRCODE_CANNOT_CONNECT_NOW),

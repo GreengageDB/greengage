@@ -473,7 +473,7 @@ cdb_grouping_planner(PlannerInfo *root,
 	Plan	   *result_plan = NULL;
 	List	   *sub_tlist = NIL;
 	bool		has_groups = root->parse->groupClause != NIL;
-	bool		has_aggs = agg_costs->numAggs > 0;
+	bool		has_aggs = agg_costs->numAggs > 0 || group_context->pretend_has_agg;
 	bool		has_ordered_aggs = agg_costs->numPureOrderedAggs > 0;
 	ListCell   *lc;
 

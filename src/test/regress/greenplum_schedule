@@ -262,6 +262,7 @@ test: oid_wraparound
 test: fts_recovery_in_progress
 test: mirror_replay
 test: autovacuum-template0
+test: autovacuum-template0-segment
 
 # gpexpand introduce the partial tables, check them if they can run correctly
 test: gangsize gang_reuse

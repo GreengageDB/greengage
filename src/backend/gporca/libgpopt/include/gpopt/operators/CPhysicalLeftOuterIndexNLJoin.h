@@ -18,12 +18,16 @@ private:
 	// columns from outer child used for index lookup in inner child
 	CColRefArray *m_pdrgpcrOuterRefs;
 
+	// a copy of the original join predicate that has been pushed down to the inner side
+	CExpression *m_origJoinPred;
+
 	// private copy ctor
 	CPhysicalLeftOuterIndexNLJoin(const CPhysicalLeftOuterIndexNLJoin &);
 
 public:
 	// ctor
-	CPhysicalLeftOuterIndexNLJoin(CMemoryPool *mp, CColRefArray *colref_array);
+	CPhysicalLeftOuterIndexNLJoin(CMemoryPool *mp, CColRefArray *colref_array,
+								  CExpression *origJoinPred);
 
 	// dtor
 	virtual ~CPhysicalLeftOuterIndexNLJoin();
@@ -75,6 +79,12 @@ public:
 		GPOS_ASSERT(EopPhysicalLeftOuterIndexNLJoin == pop->Eopid());
 
 		return dynamic_cast<CPhysicalLeftOuterIndexNLJoin *>(pop);
+	}
+
+	CExpression *
+	OrigJoinPred()
+	{
+		return m_origJoinPred;
 	}
 
 };	// class CPhysicalLeftOuterIndexNLJoin

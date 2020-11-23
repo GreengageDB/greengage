@@ -67,20 +67,10 @@ FROM (
 GROUP BY GROUPING SETS((type), (prod))
 ORDER BY type, s_quant;
 
---
--- Reset settings
---
-reset optimizer;
-
 
 ---
 --- Planning for sub-queries that have grouping sets
 ---
-
---
--- Turn off GPORCA
---
-set optimizer to off;
 
 explain (costs off) WITH table1 AS (
 	SELECT 2 AS city_id, 5 AS cnt
@@ -107,6 +97,14 @@ FROM (
 SELECT *
 FROM fin
 WHERE location_id = 1;
+
+
+--
+-- Select constant from GROUPING SETS of multiple empty sets
+--
+explain (costs off)
+select 1 from foo group by grouping sets ((), ());
+select 1 from foo group by grouping sets ((), ());
 
 --
 -- Reset settings
