@@ -314,6 +314,9 @@ public:
 	// is this a time-related type
 	static BOOL IsTimeRelatedType(const IMDId *mdid);
 
+	// is this a time-related type that is mappable to DOUBLE
+	static BOOL IsTimeRelatedTypeMappableToDouble(const IMDId *mdid);
+
 	// is this a network-related type
 	static BOOL IsNetworkRelatedType(const IMDId *mdid);
 };

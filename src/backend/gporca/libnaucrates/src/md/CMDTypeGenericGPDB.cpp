@@ -477,7 +477,8 @@ CMDTypeGenericGPDB::HasByte2IntMapping(const IMDType *mdtype)
 {
 	IMDId *mdid = mdtype->MDId();
 	return mdtype->IsTextRelated() || mdid->Equals(&CMDIdGPDB::m_mdid_uuid) ||
-		   mdid->Equals(&CMDIdGPDB::m_mdid_cash);
+		   mdid->Equals(&CMDIdGPDB::m_mdid_cash) ||
+		   mdid->Equals(&CMDIdGPDB::m_mdid_date);
 }
 
 //---------------------------------------------------------------------------
@@ -493,7 +494,8 @@ CMDTypeGenericGPDB::HasByte2DoubleMapping(const IMDId *mdid)
 {
 	return mdid->Equals(&CMDIdGPDB::m_mdid_numeric) ||
 		   mdid->Equals(&CMDIdGPDB::m_mdid_float4) ||
-		   mdid->Equals(&CMDIdGPDB::m_mdid_float8) || IsTimeRelatedType(mdid) ||
+		   mdid->Equals(&CMDIdGPDB::m_mdid_float8) ||
+		   IsTimeRelatedTypeMappableToDouble(mdid) ||
 		   IsNetworkRelatedType(mdid);
 }
 
@@ -516,6 +518,19 @@ CMDTypeGenericGPDB::IsTimeRelatedType(const IMDId *mdid)
 		   mdid->Equals(&CMDIdGPDB::m_mdid_relative_time) ||
 		   mdid->Equals(&CMDIdGPDB::m_mdid_interval) ||
 		   mdid->Equals(&CMDIdGPDB::m_mdid_time_interval);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToDouble
+//
+//	@doc:
+//		is this a time-related type that is mappable to double
+//---------------------------------------------------------------------------
+inline BOOL
+CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToDouble(const IMDId *mdid)
+{
+	return IsTimeRelatedType(mdid) && !mdid->Equals(&CMDIdGPDB::m_mdid_date);
 }
 
 //---------------------------------------------------------------------------
