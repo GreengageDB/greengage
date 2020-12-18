@@ -3834,7 +3834,7 @@ CTestUtils::CreateGenericDatum(CMemoryPool *mp, CMDAccessor *md_accessor,
 			ulbaSize, CDouble(value));
 	}
 	else if (pmdtype->IsTextRelated() ||
-			 mdid_type->Equals(&CMDIdGPDB::m_mdid_date))
+			 CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToLint(mdid_type))
 	{
 		dxl_datum = GPOS_NEW(mp) CDXLDatumStatsLintMappable(
 			mp, mdid_type, default_type_modifier, false /*is_const_null*/, data,

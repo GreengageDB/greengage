@@ -33,7 +33,7 @@ using namespace gpopt;
 //
 //	@doc:
 //		It expects that the given expression is a scalar comparison between
-//		two date constants. It compares the two constants using their int64
+//		two date constants. It compares the two constants using their lint
 //		stats mapping, which in the case of the date type gives a correct result.
 //		If it gets an illegal expression, an assertion failure is raised in
 //		debug mode.
