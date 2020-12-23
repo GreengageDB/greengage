@@ -522,32 +522,6 @@ CMDTypeGenericGPDB::IsTimeRelatedType(const IMDId *mdid)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToDouble
-//
-//	@doc:
-//		is this a time-related type that is mappable to double
-//---------------------------------------------------------------------------
-inline BOOL
-CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToDouble(const IMDId *mdid)
-{
-	return IsTimeRelatedType(mdid) && !mdid->Equals(&CMDIdGPDB::m_mdid_date);
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToLint
-//
-//	@doc:
-//		is this a time-related type that is mappable to lint
-//---------------------------------------------------------------------------
-inline BOOL
-CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToLint(const IMDId *mdid)
-{
-	return mdid->Equals(&CMDIdGPDB::m_mdid_date);
-}
-
-//---------------------------------------------------------------------------
-//	@function:
 //		CMDTypeGenericGPDB::IsNetworkRelatedType
 //
 //	@doc:
