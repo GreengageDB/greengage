@@ -181,7 +181,7 @@ explain select * from dd_part_singlecol where a is null and b is null;
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true">
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true">
         </dxl:PartConstraint>
       </dxl:Relation>
     </dxl:Metadata>

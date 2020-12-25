@@ -42,6 +42,7 @@ const CCostModelGPDB::SCostMapping CCostModelGPDB::m_rgcm[] = {
 	{COperator::EopPhysicalTableScan, CostScan},
 	{COperator::EopPhysicalDynamicTableScan, CostScan},
 	{COperator::EopPhysicalExternalScan, CostScan},
+	{COperator::EopPhysicalMultiExternalScan, CostScan},
 
 	{COperator::EopPhysicalFilter, CostFilter},
 
@@ -1586,20 +1587,60 @@ CCostModelGPDB::CostIndexScan(CMemoryPool *,  // mp
 
 
 CCost
-CCostModelGPDB::CostIndexOnlyScan(CMemoryPool *,		   // mp
-								  CExpressionHandle &,	   //exprhdl
-								  const CCostModelGPDB *,  // pcmgpdb
-								  const SCostingInfo *pci  //pci
+CCostModelGPDB::CostIndexOnlyScan(CMemoryPool *,				  // mp
+								  CExpressionHandle &exprhdl,	  //exprhdl
+								  const CCostModelGPDB *pcmgpdb,  // pcmgpdb
+								  const SCostingInfo *pci		  //pci
 )
 {
-	// FIXME: Gather relation's visibility map statistics and use that info to
-	// create a cost model. When a block is visible then the scan can rely
-	// solely on the values stored in the index and does not have to open the
-	// corresponding heap page of the relation. If the blocks are not visible
-	// then there is no benefit over an index scan and you pay overhead of
-	// looking at visibility map.
-	pci->NumRebinds();
-	return CCost(std::numeric_limits<double>::max());
+	GPOS_ASSERT(NULL != pcmgpdb);
+	GPOS_ASSERT(NULL != pci);
+
+	COperator *pop = exprhdl.Pop();
+	GPOS_ASSERT(COperator::EopPhysicalIndexOnlyScan == pop->Eopid());
+
+	const CDouble dTableWidth =
+		CPhysicalScan::PopConvert(pop)->PstatsBaseTable()->Width();
+
+	const CDouble dIndexFilterCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpIndexFilterCostUnit)
+			->Get();
+	const CDouble dIndexScanTupCostUnit =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpIndexScanTupCostUnit)
+			->Get();
+	const CDouble dIndexScanTupRandomFactor =
+		pcmgpdb->GetCostModelParams()
+			->PcpLookup(CCostModelParamsGPDB::EcpIndexScanTupRandomFactor)
+			->Get();
+	GPOS_ASSERT(0 < dIndexFilterCostUnit);
+	GPOS_ASSERT(0 < dIndexScanTupCostUnit);
+	GPOS_ASSERT(0 < dIndexScanTupRandomFactor);
+
+	CDouble dRowsIndex = pci->Rows();
+
+	ULONG ulIndexKeys =
+		CPhysicalIndexOnlyScan::PopConvert(pop)->Pindexdesc()->Keys();
+	IStatistics *stats =
+		CPhysicalIndexOnlyScan::PopConvert(pop)->PstatsBaseTable();
+
+	// Calculating cost of index-only-scan is identical to index-scan with the
+	// addition of dPartialVisFrac which indicates the percentage of pages not
+	// currently marked as all-visible. Planner has similar logic inside
+	// `cost_index()` to calculate pages fetched from index-only-scan.
+
+	CDouble dCostPerIndexRow = ulIndexKeys * dIndexFilterCostUnit +
+							   dTableWidth * dIndexScanTupCostUnit;
+	CDouble dPartialVisFrac(1);
+	if (stats->RelPages() != 0)
+	{
+		dPartialVisFrac =
+			1 - (CDouble(stats->RelAllVisible()) / CDouble(stats->RelPages()));
+	}
+	return CCost(pci->NumRebinds() *
+				 (dRowsIndex * dCostPerIndexRow +
+				  dIndexScanTupRandomFactor * dPartialVisFrac));
 }
 
 CCost
@@ -1876,7 +1917,8 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 	COperator::EOperatorId op_id = pop->Eopid();
 	GPOS_ASSERT(COperator::EopPhysicalTableScan == op_id ||
 				COperator::EopPhysicalDynamicTableScan == op_id ||
-				COperator::EopPhysicalExternalScan == op_id);
+				COperator::EopPhysicalExternalScan == op_id ||
+				COperator::EopPhysicalMultiExternalScan == op_id);
 
 	const CDouble dInitScan =
 		pcmgpdb->GetCostModelParams()
@@ -1897,6 +1939,7 @@ CCostModelGPDB::CostScan(CMemoryPool *,	 // mp
 		case COperator::EopPhysicalTableScan:
 		case COperator::EopPhysicalDynamicTableScan:
 		case COperator::EopPhysicalExternalScan:
+		case COperator::EopPhysicalMultiExternalScan:
 			// table scan cost considers only retrieving tuple cost,
 			// since we scan the entire table here, the cost is correlated with table rows and table width,
 			// since Scan's parent operator may be a filter that will be pushed into Scan node in GPDB plan,

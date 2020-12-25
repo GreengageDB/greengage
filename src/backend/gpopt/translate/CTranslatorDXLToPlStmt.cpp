@@ -124,6 +124,8 @@ CTranslatorDXLToPlStmt::InitTranslators()
 		 &gpopt::CTranslatorDXLToPlStmt::TranslateDXLTblScan},
 		{EdxlopPhysicalExternalScan,
 		 &gpopt::CTranslatorDXLToPlStmt::TranslateDXLTblScan},
+		{EdxlopPhysicalMultiExternalScan,
+		 &gpopt::CTranslatorDXLToPlStmt::TranslateDXLTblScan},
 		{EdxlopPhysicalIndexScan,
 		 &gpopt::CTranslatorDXLToPlStmt::TranslateDXLIndexScan},
 		{EdxlopPhysicalIndexOnlyScan,

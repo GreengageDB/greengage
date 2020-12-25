@@ -280,7 +280,7 @@ private:
 	// retrieve part constraint for relation
 	static CMDPartConstraintGPDB *RetrievePartConstraintForRel(
 		CMemoryPool *mp, CMDAccessor *md_accessor, OID rel_oid,
-		CMDColumnArray *mdcol_array, BOOL has_index);
+		CMDColumnArray *mdcol_array, BOOL construct_full_expr);
 
 	// retrieve part constraint from a GPDB node
 	static CMDPartConstraintGPDB *RetrievePartConstraintFromNode(
@@ -346,6 +346,9 @@ private:
 
 	static IMdIdArray *RetrieveRelDistributionOpFamilies(CMemoryPool *mp,
 														 GpPolicy *policy);
+
+	static IMdIdArray *RetrieveRelExternalPartitions(CMemoryPool *mp,
+													 OID rel_oid);
 
 	// for non-leaf partition tables return the number of child partitions
 	// else return 1

@@ -116,7 +116,8 @@ static int
 
 static void parruleord_open_gap(Oid partid, int16 level, Oid parent,
 					int16 ruleord, int16 stopkey, bool closegap);
-static bool has_external_partition(List *rules);
+static bool has_external_partition(PartitionNode *pn);
+static void collect_external_partitions(PartitionNode *pn, List **extparts);
 
 /*
  * Hash keys are null-terminated C strings assumed to be stably
@@ -495,7 +496,21 @@ rel_has_external_partition(Oid relid)
 	if (n == NULL || n->rules == NULL)
 		return false;
 
-	return has_external_partition(n->rules);
+	return has_external_partition(n);
+}
+
+List *
+rel_get_external_partitions(Oid relid)
+{
+	PartitionNode *n = get_parts(relid, 0 /* level */ ,
+								 0 /* parent */ , false /* inctemplate */ , true /* includesubparts */ );
+
+	if (n == NULL || n->rules == NULL)
+		return NIL;
+
+	List *extparts = NIL;
+	collect_external_partitions(n, &extparts);
+	return extparts;
 }
 
 /*
@@ -8989,14 +9004,15 @@ findPartitionNodeEntry(PartitionNode *partitionNode, Oid partOid)
  * external partition table
  */
 static bool
-has_external_partition(List *rules) {
-	if (rules == NULL)
+has_external_partition(PartitionNode *pn)
+{
+	if (pn == NULL)
 	{
 		return false;
 	}
 
 	ListCell *lc = NULL;
-	foreach(lc, rules)
+	foreach(lc, pn->rules)
 	{
 		PartitionRule *rule = lfirst(lc);
 		Relation rel = heap_open(rule->parchildrelid, NoLock);
@@ -9009,7 +9025,24 @@ has_external_partition(List *rules) {
 		else
 		{
 			heap_close(rel, NoLock);
-			if (rule->children && has_external_partition(rule->children->rules))
+			if (rule->children && has_external_partition(rule->children))
+			{
+				return true;
+			}
+		}
+	}
+	if (pn->default_part)
+	{
+		Relation rel = heap_open(pn->default_part->parchildrelid, NoLock);
+		if (RelationIsExternal(rel))
+		{
+			heap_close(rel, NoLock);
+			return true;
+		}
+		else
+		{
+			heap_close(rel, NoLock);
+			if (pn->default_part->children && has_external_partition(pn->default_part->children))
 			{
 				return true;
 			}
@@ -9017,4 +9050,40 @@ has_external_partition(List *rules) {
 	}
 
 	return false;
+}
+
+/*
+ * check parition rule if contains
+ * external partition table
+ */
+static void
+collect_external_partitions(PartitionNode *pn, List **extparts) {
+	if (pn == NULL)
+	{
+		return;
+	}
+
+	ListCell *lc = NULL;
+	foreach(lc, pn->rules)
+	{
+		PartitionRule *rule = lfirst(lc);
+		Relation rel = heap_open(rule->parchildrelid, NoLock);
+
+		if (RelationIsExternal(rel))
+		{
+			*extparts = lappend_oid(*extparts, rel->rd_id);
+		}
+		heap_close(rel, NoLock);
+		collect_external_partitions(rule->children, extparts);
+	}
+	if (pn->default_part)
+	{
+		Relation rel = heap_open(pn->default_part->parchildrelid, NoLock);
+		if (RelationIsExternal(rel))
+		{
+			*extparts = lappend_oid(*extparts, rel->rd_id);
+		}
+		collect_external_partitions(pn->default_part->children, extparts);
+		heap_close(rel, NoLock);
+	}
 }

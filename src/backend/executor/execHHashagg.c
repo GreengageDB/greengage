@@ -47,6 +47,7 @@ struct BatchFileInfo
 	int64 total_bytes;
 	int64 ntuples;
 	BufFile *wfile;
+	bool suspended;
 };
 
 /*
@@ -1160,6 +1161,7 @@ getSpillFile(workfile_set *work_set, SpillSet *set, int file_no, int *p_alloc_si
 		/* Initialize to NULL in case the create function below throws an exception */
 		spill_file->file_info->wfile = NULL; 
 		spill_file->file_info->wfile = BufFileCreateTempInSet(work_set, false /* interXact */);
+		spill_file->file_info->suspended = false;
 		BufFilePledgeSequential(spill_file->file_info->wfile);	/* allow compression */
 
 		elog(HHA_MSG_LVL, "HashAgg: create %d level batch file %d",
@@ -1192,7 +1194,9 @@ suspendSpillFiles(SpillSet *spill_set)
 		if (spill_file->file_info &&
 			spill_file->file_info->wfile != NULL)
 		{
+			Assert(spill_file->file_info->suspended == false);
 			BufFileSuspend(spill_file->file_info->wfile);
+			spill_file->file_info->suspended = true;
 
 			freed_size += FREEABLE_BATCHFILE_METADATA;
 
@@ -1231,7 +1235,8 @@ closeSpillFile(AggState *aggstate, SpillSet *spill_set, int file_no)
 		BufFileClose(spill_file->file_info->wfile);
 		spill_file->file_info->wfile = NULL;
 		freedspace += (BATCHFILE_METADATA - sizeof(BatchFileInfo));
-		
+		if (spill_file->file_info->suspended)
+			freedspace -= FREEABLE_BATCHFILE_METADATA;
 	}
 	if (spill_file->file_info)
 	{
@@ -1359,7 +1364,7 @@ spill_hash_table(AggState *aggstate)
 	/* Book keeping. */
 	hashtable->is_spilling = true;
 
-	Assert(hashtable->nbuckets > spill_set->num_spill_files);
+	Assert(hashtable->nbuckets >= spill_set->num_spill_files);
 
 	/*
 	 * Write each spill file. Write the last spill file first, since it will
@@ -1868,7 +1873,9 @@ agg_hash_reload(AggState *aggstate)
 
 	if (spill_file->file_info->wfile != NULL)
 	{
+		Assert(spill_file->file_info->suspended);
 		BufFileResume(spill_file->file_info->wfile);
+		spill_file->file_info->suspended = false;
 		hashtable->mem_for_metadata  += FREEABLE_BATCHFILE_METADATA;
 	}
 

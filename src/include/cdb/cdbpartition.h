@@ -76,6 +76,8 @@ extern void rel_partition_keys_kinds_ordered(Oid relid, List **pkeys, List **pki
 
 extern bool rel_has_external_partition(Oid relid);
 
+extern List *rel_get_external_partitions(Oid relid);
+
 extern bool rel_has_appendonly_partition(Oid relid);
 
 extern bool rel_is_child_partition(Oid relid);
@@ -119,6 +121,9 @@ all_partition_relids(PartitionNode *pn);
 
 extern Node *
 get_relation_part_constraints(Oid rootOid, List **defaultLevels);
+
+extern Node *
+get_leaf_part_constraints(Oid partoid, List **defaultLevels);
 
 extern List *
 all_prule_relids(PartitionRule *prule);

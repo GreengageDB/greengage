@@ -25,6 +25,7 @@ OBJS        = CDecorrelator.o \
               CXformDelete2DML.o \
               CXformDifference2LeftAntiSemiJoin.o \
               CXformDifferenceAll2LeftAntiSemiJoin.o \
+              CXformExpandDynamicGetWithExternalPartitions.o \
               CXformDynamicGet2DynamicTableScan.o \
               CXformDynamicIndexGet2DynamicIndexScan.o \
               CXformEagerAgg.o \
@@ -36,6 +37,7 @@ OBJS        = CDecorrelator.o \
               CXformExpandNAryJoinMinCard.o \
               CXformExploration.o \
               CXformExternalGet2ExternalScan.o \
+              CXformMultiExternalGet2MultiExternalScan.o \
               CXformFactory.o \
               CXformGbAgg2Apply.o \
               CXformGbAgg2HashAgg.o \

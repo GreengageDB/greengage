@@ -13,6 +13,8 @@
 
 #include "gpos/base.h"
 #include "gpopt/xforms/CXformImplementation.h"
+#include "gpopt/operators/CLogicalDynamicGet.h"
+#include "gpopt/operators/CExpressionHandle.h"
 
 namespace gpopt
 {
@@ -58,9 +60,23 @@ public:
 
 	// compute xform promise for a given expression handle
 	virtual EXformPromise
-	Exfp(CExpressionHandle &  // exprhdl
-	) const
+	Exfp(CExpressionHandle &exprhdl) const
 	{
+		CLogicalDynamicGet *popGet =
+			CLogicalDynamicGet::PopConvert(exprhdl.Pop());
+		CTableDescriptor *ptabdesc = popGet->Ptabdesc();
+		CMDAccessor *mda = COptCtxt::PoctxtFromTLS()->Pmda();
+
+		const IMDRelation *relation = mda->RetrieveRel(ptabdesc->MDId());
+		if (relation->HasExternalPartitions() && !popGet->IsPartial())
+		{
+			GPOS_ASSERT(GPOS_FTRACE(EopttraceEnableExternalPartitionedTables));
+			// In case the relation has any external partition tables, they must
+			// first be extracted into partial scans and a MulitExternalGet by
+			// CXformExpandDynamicGetWithExternalPartitions, before this
+			// DynamicGet can be implemented as a DynamicTableScan
+			return CXform::ExfpNone;
+		}
 		return CXform::ExfpHigh;
 	}
 

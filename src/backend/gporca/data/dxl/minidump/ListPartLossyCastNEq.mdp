@@ -195,10 +195,10 @@ Optimizer: Pivotal Optimizer (GPORCA)
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="false" ExprAbsent="true"/>
         <dxl:DistrOpfamilies>
           <dxl:DistrOpfamily Mdid="0.1971.1.0"/>
         </dxl:DistrOpfamilies>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="false"/>
       </dxl:Relation>
       <dxl:ColumnStatistics Mdid="1.77262.1.0.1" Name="b" Width="8.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>
       <dxl:ColumnStatistics Mdid="1.77262.1.0.0" Name="a" Width="8.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>

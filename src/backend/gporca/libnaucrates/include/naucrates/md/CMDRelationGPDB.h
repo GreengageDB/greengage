@@ -123,6 +123,9 @@ private:
 	// array of column widths including dropped columns
 	CDoubleArray *m_col_width_array;
 
+	// oids of any external partitions (for partitioned tables only)
+	IMdIdArray *m_external_partitions;
+
 	// private copy ctor
 	CMDRelationGPDB(const CMDRelationGPDB &);
 
@@ -139,7 +142,8 @@ public:
 					CMDIndexInfoArray *md_index_info_array,
 					IMdIdArray *mdid_triggers_array,
 					IMdIdArray *mdid_check_constraint_array,
-					IMDPartConstraint *mdpart_constraint, BOOL has_oids);
+					IMDPartConstraint *mdpart_constraint, BOOL has_oids,
+					IMdIdArray *external_partitions);
 
 	// dtor
 	virtual ~CMDRelationGPDB();
@@ -257,6 +261,9 @@ public:
 
 	// part constraint
 	virtual IMDPartConstraint *MDPartConstraint() const;
+
+	// external partitions (for partitioned tables)
+	virtual IMdIdArray *GetExternalPartitions() const;
 
 #ifdef GPOS_DEBUG
 	// debug print of the metadata relation

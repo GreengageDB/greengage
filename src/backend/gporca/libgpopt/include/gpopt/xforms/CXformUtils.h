@@ -335,11 +335,6 @@ private:
 		CMemoryPool *mp, BOOL fConjunction, CExpression *pexprOriginalPred,
 		CExpression **ppexprResidual, CExpressionArray *pdrgpexprResidualNew);
 
-	// compute a disjunction of two part constraints
-	static CPartConstraint *PpartcnstrDisjunction(
-		CMemoryPool *mp, CPartConstraint *ppartcnstrOld,
-		CPartConstraint *ppartcnstrNew);
-
 	// construct a bitmap index path expression for the given predicate coming
 	// from a condition without outer references
 	static CExpression *PexprBitmapSelectBestIndex(
@@ -643,6 +638,11 @@ public:
 	// over bitmap bool op
 	static CExpression *PexprSelect2BitmapBoolOp(CMemoryPool *mp,
 												 CExpression *pexpr);
+
+	// compute a disjunction of two part constraints
+	static CPartConstraint *PpartcnstrDisjunction(
+		CMemoryPool *mp, CPartConstraint *ppartcnstrOld,
+		CPartConstraint *ppartcnstrNew);
 
 	// find a set of partial index combinations
 	static SPartDynamicIndexGetInfoArrays *PdrgpdrgppartdigCandidates(

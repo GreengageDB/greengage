@@ -6911,6 +6911,7 @@ is_projection_capable_plan(Plan *plan)
 		case T_RecursiveUnion:
 		case T_Motion:
 		case T_ShareInputScan:
+		case T_PartitionSelector:
 			return false;
 		default:
 			break;

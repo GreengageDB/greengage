@@ -23,12 +23,12 @@
           <codeph>gpperfmon</codeph> database. See the documentation for the
           <codeph>gpperfmon</codeph> database in the <cite>Greenplum Database Reference
         Guide</cite>.</p>
-      <p otherprops="pivotal">Pivotal Greenplum Command Center, an optional web-based interface,
+      <p otherprops="pivotal">Tanzu Greenplum Command Center, an optional web-based interface,
         provides cluster status information, graphical administrative tools, real-time query
         monitoring, and historical cluster and query data. Download the Greenplum Command Center
         package from <xref href="https://network.pivotal.io/products/pivotal-gpdb" scope="external"
-          format="html">Pivotal Network</xref> and view the documentation at the <xref
-          href="http://gpcc.docs.pivotal.io" scope="external" format="html">Greenplum Command Center
+          format="html">VMware Tanzu Network</xref> and view the documentation at the <xref
+          href="http://gpcc.docs.pivotal.io" scope="external" format="html">Tanzu Greenplum Command Center
           Documentation</xref> web site. </p>
     </body>
   </topic>

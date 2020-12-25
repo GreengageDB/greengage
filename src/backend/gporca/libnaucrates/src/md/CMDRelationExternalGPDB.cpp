@@ -30,7 +30,8 @@ CMDRelationExternalGPDB::CMDRelationExternalGPDB(
 	ULongPtrArray *distr_col_array, IMdIdArray *distr_opfamilies,
 	BOOL convert_hash_to_random, ULongPtr2dArray *keyset_array,
 	CMDIndexInfoArray *md_index_info_array, IMdIdArray *mdid_triggers_array,
-	IMdIdArray *mdid_check_constraint_array, INT reject_limit,
+	IMdIdArray *mdid_check_constraint_array,
+	IMDPartConstraint *mdpart_constraint, INT reject_limit,
 	BOOL is_reject_limit_in_rows, IMDId *mdid_fmt_err_table)
 	: m_mp(mp),
 	  m_mdid(mdid),
@@ -45,6 +46,7 @@ CMDRelationExternalGPDB::CMDRelationExternalGPDB(
 	  m_mdindex_info_array(md_index_info_array),
 	  m_mdid_trigger_array(mdid_triggers_array),
 	  m_mdid_check_constraint_array(mdid_check_constraint_array),
+	  m_mdpart_constraint(mdpart_constraint),
 	  m_reject_limit(reject_limit),
 	  m_is_rej_limit_in_rows(is_reject_limit_in_rows),
 	  m_mdid_fmt_err_table(mdid_fmt_err_table),
@@ -130,6 +132,7 @@ CMDRelationExternalGPDB::~CMDRelationExternalGPDB()
 	m_mdid_check_constraint_array->Release();
 	CRefCount::SafeRelease(m_mdid_fmt_err_table);
 
+	CRefCount::SafeRelease(m_mdpart_constraint);
 	CRefCount::SafeRelease(m_colpos_nondrop_colpos_map);
 	CRefCount::SafeRelease(m_attrno_nondrop_col_pos_map);
 	CRefCount::SafeRelease(m_nondrop_col_pos_array);
@@ -528,6 +531,12 @@ CMDRelationExternalGPDB::CheckConstraintMDidAt(ULONG pos) const
 	return (*m_mdid_check_constraint_array)[pos];
 }
 
+IMDPartConstraint *
+CMDRelationExternalGPDB::MDPartConstraint() const
+{
+	return m_mdpart_constraint;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CMDRelationExternalGPDB::Serialize
@@ -645,6 +654,12 @@ CMDRelationExternalGPDB::Serialize(CXMLSerializer *xml_serializer) const
 			xml_serializer, m_distr_opfamilies,
 			CDXLTokens::GetDXLTokenStr(EdxltokenRelDistrOpfamilies),
 			CDXLTokens::GetDXLTokenStr(EdxltokenRelDistrOpfamily));
+	}
+
+	// serialize part constraint
+	if (NULL != m_mdpart_constraint)
+	{
+		m_mdpart_constraint->Serialize(xml_serializer);
 	}
 
 	xml_serializer->CloseElement(

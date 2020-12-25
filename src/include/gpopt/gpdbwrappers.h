@@ -249,6 +249,9 @@ List *GetCheckConstraintOids(Oid rel_oid);
 // part constraint expression tree
 Node *GetRelationPartContraints(Oid rel_oid, List **default_levels);
 
+// part constraint expression tree for a leaf partition
+Node *GetLeafPartContraints(Oid rel_oid, List **default_levels);
+
 // get the cast function for the specified source and destination types
 bool GetCastFunc(Oid src_oid, Oid dest_oid, bool *is_binary_coercible,
 				 Oid *cast_fn_oid, CoercionPathType *pathtype);
@@ -300,6 +303,8 @@ bool IsLeafPartition(Oid oid);
 
 // partition table has an external partition
 bool HasExternalPartition(Oid oid);
+
+List *GetExternalPartitions(Oid oid);
 
 // find the oid of the root partition given partition oid belongs to
 Oid GetRootPartition(Oid oid);

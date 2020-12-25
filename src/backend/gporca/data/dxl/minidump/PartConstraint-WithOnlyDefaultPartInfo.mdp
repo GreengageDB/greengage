@@ -82,7 +82,7 @@ EXPLAIN SELECT * FROM date_parts WHERE month BETWEEN 1 AND 4;
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0,1,2" Unbounded="true"/>
+        <dxl:PartConstraint DefaultPartition="0,1,2" Unbounded="true" ExprAbsent="true"/>
       </dxl:Relation>
       <dxl:ColumnStatistics Mdid="1.3730374.1.0.9" Name="cmax" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>
       <dxl:ColumnStatistics Mdid="1.3730374.1.0.8" Name="xmax" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>

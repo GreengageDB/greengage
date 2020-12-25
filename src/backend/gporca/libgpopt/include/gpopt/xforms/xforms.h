@@ -19,6 +19,7 @@
 
 #include "gpopt/xforms/CXformGet2TableScan.h"
 #include "gpopt/xforms/CXformExternalGet2ExternalScan.h"
+#include "gpopt/xforms/CXformMultiExternalGet2MultiExternalScan.h"
 #include "gpopt/xforms/CXformDynamicGet2DynamicTableScan.h"
 #include "gpopt/xforms/CXformDynamicIndexGet2DynamicIndexScan.h"
 #include "gpopt/xforms/CXformSelect2DynamicIndexGet.h"
@@ -165,6 +166,8 @@
 #include "gpopt/xforms/CXformGbAggWithMDQA2Join.h"
 #include "gpopt/xforms/CXformMaxOneRow2Assert.h"
 #include "gpopt/xforms/CXformRemoveSubqDistinct.h"
+
+#include "gpopt/xforms/CXformExpandDynamicGetWithExternalPartitions.h"
 
 #endif	// !GPOPT_xforms_H
 

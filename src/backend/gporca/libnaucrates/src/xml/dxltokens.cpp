@@ -370,6 +370,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenTotalCost, GPOS_WSZ_LIT("TotalCost")},
 		{EdxltokenRows, GPOS_WSZ_LIT("Rows")},
 		{EdxltokenWidth, GPOS_WSZ_LIT("Width")},
+		{EdxltokenRelPages, GPOS_WSZ_LIT("RelPages")},
+		{EdxltokenRelAllVisible, GPOS_WSZ_LIT("RelAllVisible")},
 		{EdxltokenTableName, GPOS_WSZ_LIT("TableName")},
 		{EdxltokenDerivedTableName, GPOS_WSZ_LIT("DerivedTableName")},
 		{EdxltokenExecuteAsUser, GPOS_WSZ_LIT("ExecuteAsUser")},
@@ -569,6 +571,9 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenOpfamily, GPOS_WSZ_LIT("Opfamily")},
 		{EdxltokenOpfamilies, GPOS_WSZ_LIT("Opfamilies")},
 
+		{EdxltokenRelExternalPartitions, GPOS_WSZ_LIT("ExternalPartitions")},
+		{EdxltokenRelExternalPartition, GPOS_WSZ_LIT("ExternalPartition")},
+
 		{EdxltokenPartitions, GPOS_WSZ_LIT("Partitions")},
 		{EdxltokenPartition, GPOS_WSZ_LIT("Partition")},
 
@@ -579,6 +584,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenCheckConstraint, GPOS_WSZ_LIT("CheckConstraint")},
 
 		{EdxltokenPartConstraint, GPOS_WSZ_LIT("PartConstraint")},
+		{EdxltokenPartConstraintExprAbsent, GPOS_WSZ_LIT("ExprAbsent")},
 		{EdxltokenDefaultPartition, GPOS_WSZ_LIT("DefaultPartition")},
 		{EdxltokenPartConstraintUnbounded, GPOS_WSZ_LIT("Unbounded")},
 

@@ -863,6 +863,18 @@ gpdb::GetRelationPartContraints(Oid rel_oid, List **default_levels)
 	return NULL;
 }
 
+Node *
+gpdb::GetLeafPartContraints(Oid rel_oid, List **default_levels)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_partition, pg_partition_rule, pg_constraint */
+		return get_leaf_part_constraints(rel_oid, default_levels);
+	}
+	GP_WRAP_END;
+	return NULL;
+}
+
 bool
 gpdb::HasExternalPartition(Oid oid)
 {
@@ -875,6 +887,17 @@ gpdb::HasExternalPartition(Oid oid)
 	return false;
 }
 
+List *
+gpdb::GetExternalPartitions(Oid oid)
+{
+	GP_WRAP_START;
+	{
+		/* catalog tables: pg_partition, pg_partition_rule */
+		return rel_get_external_partitions(oid);
+	}
+	GP_WRAP_END;
+	return NIL;
+}
 
 bool
 gpdb::IsLeafPartition(Oid oid)

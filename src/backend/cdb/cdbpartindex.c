@@ -1005,6 +1005,41 @@ get_relation_part_constraints(Oid rootOid, List **defaultLevels)
 }
 
 /*
+ * get_leaf_part_constraints
+ *  return the leaf part constraints for a partitioned table given its oid
+ */
+Node *
+get_leaf_part_constraints(Oid partOid, List **defaultLevels)
+{
+	Assert(rel_is_leaf_partition(partOid));
+
+	Oid rootOid = rel_partition_get_master(partOid);
+	if (rootOid == InvalidOid)
+	{
+		return NULL;
+	}
+
+	List	   *partkeys = rel_partition_keys_ordered(rootOid);
+	int			nLevels = list_length(partkeys);
+	list_free(partkeys);
+
+	for (int level = 0; level < nLevels; level++)
+	{
+		PartitionNode *pn = get_parts(rootOid, level, 0 /* parent */ , false /* inctemplate */ , false /* includesubparts */ );
+		if (pn->default_part)
+		{
+			*defaultLevels = lappend_int(*defaultLevels, level);
+		}
+	}
+
+	/* fetch part constraint mapped to root */
+	Node	   *partCons = getPartConstraints(partOid, rootOid, NIL /* partKey */ );
+
+	Assert(partCons);
+	return partCons;
+}
+
+/*
  * populateIndexInfo
  *  Populate the IndexInfo structure with the information from pg_index tuple.
  */

@@ -57,7 +57,7 @@ CDistributionSpecExternal::FSatisfies(const CDistributionSpec *pds) const
 		return true;
 	}
 
-	return EdtAny == pds->Edt();
+	return EdtAny == pds->Edt() || EdtNonSingleton == pds->Edt();
 }
 
 void

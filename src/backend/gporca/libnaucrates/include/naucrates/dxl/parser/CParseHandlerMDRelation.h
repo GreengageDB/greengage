@@ -82,11 +82,17 @@ protected:
 	// distribution opfamilies parse handler
 	CParseHandlerBase *m_opfamilies_parse_handler;
 
+	// distribution opfamilies parse handler
+	CParseHandlerBase *m_external_partitions_parse_handler;
+
 	// levels that include default partitions
 	ULongPtrArray *m_level_with_default_part_array;
 
 	// is part constraint unbounded
 	BOOL m_part_constraint_unbounded;
+
+	// is part constraint complete with part constraint expr
+	BOOL m_part_constraint_contains_expr;
 
 	// helper function to parse main relation attributes: name, id,
 	// distribution policy and keys

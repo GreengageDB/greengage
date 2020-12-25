@@ -438,6 +438,16 @@ CTranslatorExprToDXL::CreateDXLNode(CExpression *pexpr,
 
 		return dxlnode;
 	}
+	if (COperator::EopPhysicalMultiExternalScan == ulOpId)
+	{
+		CDXLNode *dxlnode = PdxlnMultiExternalScan(
+			pexpr, NULL /*pcrsOutput*/, colref_array, pdrgpdsBaseTables,
+			NULL /* pexprScalarCond */, NULL /* cost info */);
+		CTranslatorExprToDXLUtils::SetStats(m_mp, m_pmda, dxlnode,
+											pexpr->Pstats(), fRoot);
+
+		return dxlnode;
+	}
 	PfPdxlnPhysical pf = m_rgpfPhysicalTranslators[ulOpId];
 	if (NULL == pf)
 	{
@@ -1366,6 +1376,116 @@ CTranslatorExprToDXL::PdxlnDynamicIndexScan(
 	return pdxlnDIS;
 }
 
+CDXLNode *
+CTranslatorExprToDXL::PdxlnMultiExternalScan(
+	CExpression *pexprTblScan, CColRefSet *pcrsOutput,
+	CColRefArray *colref_array, CDistributionSpecArray *pdrgpdsBaseTables,
+	CExpression *pexprScalar, CDXLPhysicalProperties *dxl_properties)
+{
+	GPOS_ASSERT(NULL != pexprTblScan);
+
+	CPhysicalMultiExternalScan *multi_extscan =
+		CPhysicalMultiExternalScan::PopConvert(pexprTblScan->Pop());
+	CColRefArray *pdrgpcrOutput = multi_extscan->PdrgpcrOutput();
+
+	// construct plan costs, if there are not passed as a parameter
+	if (NULL == dxl_properties)
+	{
+		dxl_properties = GetProperties(pexprTblScan);
+	}
+	if (NULL == pcrsOutput)
+	{
+		pcrsOutput = pexprTblScan->Prpp()->PcrsRequired();
+	}
+	CDXLNode *pdxlnPrL = PdxlnProjList(pcrsOutput, colref_array);
+
+	CDXLNode *pdxlnResult = NULL;
+
+	// Create an append node if there are more than 1 external scans to create!
+	if (multi_extscan->GetScanPartitionMdids()->Size() > 1)
+	{
+		pdxlnResult = GPOS_NEW(m_mp) CDXLNode(
+			m_mp, GPOS_NEW(m_mp) CDXLPhysicalAppend(m_mp, false, false));
+		pdxlnResult->SetProperties(dxl_properties);
+		pdxlnResult->AddChild(pdxlnPrL);
+		pdxlnResult->AddChild(PdxlnFilter(NULL));
+	}
+
+	for (ULONG ul = 0; ul < multi_extscan->GetScanPartitionMdids()->Size();
+		 ul++)
+	{
+		IMDId *extpart_mdid = (*multi_extscan->GetScanPartitionMdids())[ul];
+		const IMDRelation *extpart = m_pmda->RetrieveRel(extpart_mdid);
+
+		extpart_mdid->AddRef();
+		CTableDescriptor *table_descr = GPOS_NEW(m_mp) CTableDescriptor(
+			m_mp, extpart_mdid, extpart->Mdname().GetMDName(),
+			extpart->ConvertHashToRandom(), extpart->GetRelDistribution(),
+			extpart->RetrieveRelStorageType(),
+			multi_extscan->Ptabdesc()->GetExecuteAsUserId());
+
+		// Each scan shares the same col descriptors as the parent partitioned table
+		// FIXME: Dropped columns break the assumption above. Handle it correctly.
+		CColumnDescriptorArray *multi_extscan_col_desc =
+			multi_extscan->Ptabdesc()->Pdrgpcoldesc();
+		for (ULONG ul = 0; ul < multi_extscan_col_desc->Size(); ul++)
+		{
+			CColumnDescriptor *col_desc = (*multi_extscan_col_desc)[ul];
+			col_desc->AddRef();
+			table_descr->AddColumn(col_desc);
+		}
+
+		CDXLTableDescr *dxl_table_descr =
+			MakeDXLTableDescr(table_descr, pdrgpcrOutput, pexprTblScan->Prpp());
+		table_descr->Release();
+		CDXLNode *dxlnode = GPOS_NEW(m_mp)
+			CDXLNode(m_mp, GPOS_NEW(m_mp)
+							   CDXLPhysicalExternalScan(m_mp, dxl_table_descr));
+
+		// FIXME: Computer stats & properties per scan
+		dxl_properties->AddRef();
+		dxlnode->SetProperties(dxl_properties);
+
+		// construct projection list - same as the upper Append node
+		GPOS_ASSERT(NULL != pexprTblScan->Prpp());
+
+		pdxlnPrL->AddRef();
+		dxlnode->AddChild(pdxlnPrL);  // project list
+
+		// apply the condition on each external scan
+		CDXLNode *pdxlnCond = NULL;
+		if (NULL != pexprScalar)
+		{
+			pdxlnCond = PdxlnScalar(pexprScalar);
+		}
+		CDXLNode *filter_dxlnode = PdxlnFilter(pdxlnCond);
+		dxlnode->AddChild(filter_dxlnode);	// filter
+
+#ifdef GPOS_DEBUG
+		dxlnode->GetOperator()->AssertValid(dxlnode,
+											false /* validate_children */);
+#endif
+
+		if (NULL == pdxlnResult)
+		{
+			// no Append node created - there must be only one node to scan!
+			pdxlnResult = dxlnode;
+			GPOS_ASSERT(1 == multi_extscan->GetScanPartitionMdids()->Size());
+			CRefCount::SafeRelease(dxl_properties);
+			CRefCount::SafeRelease(pdxlnPrL);
+		}
+		else
+		{
+			// add to the other scans under the created Append node
+			pdxlnResult->AddChild(dxlnode);
+		}
+	}
+
+	CDistributionSpec *pds = pexprTblScan->GetDrvdPropPlan()->Pds();
+	pds->AddRef();
+	pdrgpdsBaseTables->Append(pds);
+	return pdxlnResult;
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -1529,6 +1649,7 @@ CTranslatorExprToDXL::PdxlnIndexScanWithInlinedCondition(
 
 	COperator::EOperatorId op_id = pexprIndexScan->Pop()->Eopid();
 	GPOS_ASSERT(COperator::EopPhysicalIndexScan == op_id ||
+				COperator::EopPhysicalIndexOnlyScan == op_id ||
 				COperator::EopPhysicalDynamicIndexScan == op_id);
 
 	// TODO: Index only scans work on GiST and SP-GiST only for specific operators
@@ -7415,8 +7536,10 @@ CTranslatorExprToDXL::GetProperties(const CExpression *pexpr)
 		rows = stats->Rows();
 	}
 
-	if (CDistributionSpec::EdtReplicated ==
-		pexpr->GetDrvdPropPlan()->Pds()->Edt())
+	if (CDistributionSpec::EdtStrictReplicated ==
+			pexpr->GetDrvdPropPlan()->Pds()->Edt() ||
+		CDistributionSpec::EdtTaintedReplicated ==
+			pexpr->GetDrvdPropPlan()->Pds()->Edt())
 	{
 		// if distribution is replicated, multiply number of rows by number of segments
 		ULONG ulSegments = COptCtxt::PoctxtFromTLS()->GetCostModel()->UlHosts();

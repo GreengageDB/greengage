@@ -224,7 +224,7 @@ default subpartition other2
         <dxl:DistrOpfamilies>
           <dxl:DistrOpfamily Mdid="0.1971.1.0"/>
         </dxl:DistrOpfamilies>
-        <dxl:PartConstraint DefaultPartition="1" Unbounded="false"/>
+        <dxl:PartConstraint DefaultPartition="1" Unbounded="false" ExprAbsent="true"/>
       </dxl:Relation>
     </dxl:Metadata>
     <dxl:Query>

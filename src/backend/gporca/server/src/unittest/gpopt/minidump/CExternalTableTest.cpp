@@ -41,7 +41,10 @@ const CHAR *rgszExternalTableFileNames[] = {
 	"../data/dxl/minidump/ExternalTableWithFilter.mdp",
 	"../data/dxl/minidump/CTAS-with-randomly-distributed-external-table.mdp",
 	"../data/dxl/minidump/CTAS-with-hashed-distributed-external-table.mdp",
-	"../data/dxl/minidump/AggonExternalTableNoMotion.mdp"};
+	"../data/dxl/minidump/AggonExternalTableNoMotion.mdp",
+	"../data/dxl/minidump/ExternalPartitionTableNoPredicate.mdp",
+	"../data/dxl/minidump/ExternalPartitionTableSelectOnPartKey.mdp",
+};
 
 
 //---------------------------------------------------------------------------

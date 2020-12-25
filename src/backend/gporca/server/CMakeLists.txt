@@ -312,7 +312,10 @@ ReplicatedJoinRandomDistributedTable ReplicatedLOJHashDistributedTable
 ReplicatedLOJRandomDistributedTable ReplicatedLOJReplicated
 ReplicatedNLJReplicated ReplicatedTableAggregate ReplicatedTableCTE
 ReplicatedTableGroupBy ReplicatedJoinPartitionedTable
-ReplicatedTableInClause;
+ReplicatedTableInClause ReplicatedTableSequenceInsert;
+
+CTaintedReplicatedTest:
+InsertNonSingleton NonSingleton TaintedReplicatedAgg TaintedReplicatedWindowAgg TaintedReplicatedLimit TaintedReplicatedFilter;
 
 CDqaTest:
 NonSplittableAgg DqaHavingMax DqaMax DqaMin DqaSubqueryMax DqaNoRedistribute;
@@ -331,7 +334,10 @@ Distinct-LegacyOpfamily;
 
 CSubquery2Test:
 Subq2PartialDecorrelate Subq2CorrSQInLOJOn Subq2NotInWhereLOJ Subq2OuterRef2InJoin Subq2OuterRefMultiLevelInOn
-Index-Join-With-Subquery-In-Pred
+Index-Join-With-Subquery-In-Pred;
+
+CIndexOnlyScanTest:
+IndexOnlyScan-NoDistKeyInIndex
 ")
 
 set(mdp_dir "../data/dxl/minidump/")

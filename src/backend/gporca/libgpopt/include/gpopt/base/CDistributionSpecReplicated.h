@@ -15,37 +15,36 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/CDistributionSpec.h"
-#include "gpopt/base/CDistributionSpecSingleton.h"
 
 namespace gpopt
 {
 using namespace gpos;
 
-//---------------------------------------------------------------------------
-//	@class:
-//		CDistributionSpecReplicated
-//
-//	@doc:
-//		Class for representing replicated distribution specification.
-//
-//---------------------------------------------------------------------------
 class CDistributionSpecReplicated : public CDistributionSpec
 {
 private:
-	// private copy ctor
 	CDistributionSpecReplicated(const CDistributionSpecReplicated &);
+
+	// replicated support
+	CDistributionSpec::EDistributionType m_replicated;
 
 public:
 	// ctor
-	CDistributionSpecReplicated()
+	CDistributionSpecReplicated(
+		CDistributionSpec::EDistributionType replicated_type)
+		: m_replicated(replicated_type)
 	{
+		GPOS_ASSERT(replicated_type == CDistributionSpec::EdtReplicated ||
+					replicated_type ==
+						CDistributionSpec::EdtTaintedReplicated ||
+					replicated_type == CDistributionSpec::EdtStrictReplicated);
 	}
 
 	// accessor
 	virtual EDistributionType
 	Edt() const
 	{
-		return CDistributionSpec::EdtReplicated;
+		return m_replicated;
 	}
 
 	// does this distribution satisfy the given one
@@ -68,7 +67,22 @@ public:
 	virtual IOstream &
 	OsPrint(IOstream &os) const
 	{
-		return os << "REPLICATED ";
+		switch (Edt())
+		{
+			case CDistributionSpec::EdtReplicated:
+				os << "REPLICATED";
+				break;
+			case CDistributionSpec::EdtTaintedReplicated:
+				os << "TAINTED REPLICATED";
+				break;
+			case CDistributionSpec::EdtStrictReplicated:
+				os << "STRICT REPLICATED";
+				break;
+			default:
+				GPOS_ASSERT(
+					!"Replicated type must be General, Tainted, or Strict");
+		}
+		return os;
 	}
 
 	// conversion function
@@ -76,7 +90,9 @@ public:
 	PdsConvert(CDistributionSpec *pds)
 	{
 		GPOS_ASSERT(NULL != pds);
-		GPOS_ASSERT(EdtReplicated == pds->Edt());
+		GPOS_ASSERT(EdtStrictReplicated == pds->Edt() ||
+					EdtReplicated == pds->Edt() ||
+					EdtTaintedReplicated == pds->Edt());
 
 		return dynamic_cast<CDistributionSpecReplicated *>(pds);
 	}

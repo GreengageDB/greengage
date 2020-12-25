@@ -192,7 +192,7 @@ EXPLAIN SELECT * FROM listfoo WHERE b IS DISTINCT FROM 2;
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true"/>
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true"/>
       </dxl:Relation>
     </dxl:Metadata>
     <dxl:Query>

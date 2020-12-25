@@ -131,7 +131,15 @@ CMDPartConstraintGPDB::Serialize(CXMLSerializer *xml_serializer) const
 
 	// serialize the scalar expression
 	if (NULL != m_dxl_node)
+	{
 		m_dxl_node->SerializeToDXL(xml_serializer);
+	}
+	else
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenPartConstraintExprAbsent),
+			true);
+	}
 
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix),

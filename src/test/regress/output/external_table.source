@@ -23,6 +23,9 @@
 -- m/DETAIL:  Found \d+ URLs and \d+ primary segments./
 -- s/Found.+//
 --
+-- m/NOTICE:\s+found \d+ data formatting errors \(\d+ or more input rows\)/
+-- s/found.+//
+--
 -- end_matchsubs
 CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152)) DISTRIBUTED BY (R_REGIONKEY);
 -- --------------------------------------

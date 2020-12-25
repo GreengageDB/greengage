@@ -566,6 +566,7 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	BOOL has_oids = false;
 	BOOL is_partitioned = false;
 	IMDRelation *md_rel = NULL;
+	IMdIdArray *external_partitions = NULL;
 
 
 	GPOS_TRY
@@ -629,6 +630,12 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 		is_temporary = (rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
 		has_oids = rel->rd_rel->relhasoids;
 
+		if (gpdb::HasExternalPartition(oid))
+		{
+			GPOS_ASSERT(GPOS_FTRACE(EopttraceEnableExternalPartitionedTables));
+			external_partitions = RetrieveRelExternalPartitions(mp, oid);
+		}
+
 		GPOS_DELETE_ARRAY(attno_mapping);
 		gpdb::CloseRelation(rel);
 	}
@@ -644,6 +651,16 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 
 	mdid->AddRef();
 
+	// Retrieve full part constraints partitioned tables with indexes or external partitions;
+	// returns NULL for non-partitioned tables
+	BOOL construct_full_partcnstr_expr =
+		(md_index_info_array->Size() > 0 ||
+		 (external_partitions != NULL && external_partitions->Size() > 0) ||
+		 IMDRelation::ErelstorageExternal == rel_storage_type);
+
+	CMDPartConstraintGPDB *mdpart_constraint = RetrievePartConstraintForRel(
+		mp, md_accessor, oid, mdcol_array, construct_full_partcnstr_expr);
+
 	if (IMDRelation::ErelstorageExternal == rel_storage_type)
 	{
 		ExtTableEntry *extentry = gpdb::GetExternalTableEntry(oid);
@@ -651,8 +668,8 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 		md_rel = GPOS_NEW(mp) CMDRelationExternalGPDB(
 			mp, mdid, mdname, dist, mdcol_array, distr_cols, distr_op_families,
 			convert_hash_to_random, keyset_array, md_index_info_array,
-			mdid_triggers_array, check_constraint_mdids, extentry->rejectlimit,
-			('r' == extentry->rejectlimittype),
+			mdid_triggers_array, check_constraint_mdids, mdpart_constraint,
+			extentry->rejectlimit, ('r' == extentry->rejectlimittype),
 			NULL /* it's sufficient to pass NULL here since ORCA
 								doesn't really make use of the logerrors value.
 								In case of converting the DXL returned from to
@@ -662,20 +679,12 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	}
 	else
 	{
-		CMDPartConstraintGPDB *mdpart_constraint = NULL;
-
-		// retrieve the part constraints if relation is partitioned
-		if (is_partitioned)
-			mdpart_constraint = RetrievePartConstraintForRel(
-				mp, md_accessor, oid, mdcol_array,
-				md_index_info_array->Size() > 0 /*has_index*/);
-
 		md_rel = GPOS_NEW(mp) CMDRelationGPDB(
 			mp, mdid, mdname, is_temporary, rel_storage_type, dist, mdcol_array,
 			distr_cols, distr_op_families, part_keys, part_types,
 			num_leaf_partitions, convert_hash_to_random, keyset_array,
 			md_index_info_array, mdid_triggers_array, check_constraint_mdids,
-			mdpart_constraint, has_oids);
+			mdpart_constraint, has_oids, external_partitions);
 	}
 
 	return md_rel;
@@ -922,6 +931,23 @@ CTranslatorRelcacheToDXL::RetrieveRelDistributionOpFamilies(CMemoryPool *mp,
 	}
 
 	return distr_op_classes;
+}
+
+IMdIdArray *
+CTranslatorRelcacheToDXL::RetrieveRelExternalPartitions(CMemoryPool *mp,
+														OID rel_oid)
+{
+	IMdIdArray *external_partitions = GPOS_NEW(mp) IMdIdArray(mp);
+
+	List *extparts_list = gpdb::GetExternalPartitions(rel_oid);
+	ListCell *lc;
+	foreach (lc, extparts_list)
+	{
+		OID ext_rel_oid = lfirst_oid(lc);
+		external_partitions->Append(GPOS_NEW(mp) CMDIdGPDB(ext_rel_oid));
+	}
+
+	return external_partitions;
 }
 
 //---------------------------------------------------------------------------
@@ -2165,6 +2191,8 @@ CTranslatorRelcacheToDXL::RetrieveRelStats(CMemoryPool *mp, IMDId *mdid)
 
 	double num_rows = 0.0;
 	CMDName *mdname = NULL;
+	ULONG relpages = 0;
+	ULONG relallvisible = 0;
 
 	GPOS_TRY
 	{
@@ -2177,6 +2205,9 @@ CTranslatorRelcacheToDXL::RetrieveRelStats(CMemoryPool *mp, IMDId *mdid)
 		GPOS_DELETE(relname_str);
 
 		num_rows = gpdb::CdbEstimatePartitionedNumTuples(rel);
+
+		relpages = rel->rd_rel->relpages;
+		relallvisible = rel->rd_rel->relallvisible;
 
 		m_rel_stats_mdid->AddRef();
 		gpdb::CloseRelation(rel);
@@ -2198,9 +2229,9 @@ CTranslatorRelcacheToDXL::RetrieveRelStats(CMemoryPool *mp, IMDId *mdid)
 		relation_empty = true;
 	}
 
-	CDXLRelStats *dxl_rel_stats = GPOS_NEW(mp) CDXLRelStats(
-		mp, m_rel_stats_mdid, mdname, CDouble(num_rows), relation_empty);
-
+	CDXLRelStats *dxl_rel_stats = GPOS_NEW(mp)
+		CDXLRelStats(mp, m_rel_stats_mdid, mdname, CDouble(num_rows),
+					 relation_empty, relpages, relallvisible);
 
 	return dxl_rel_stats;
 }
@@ -3261,15 +3292,31 @@ CTranslatorRelcacheToDXL::RetrievePartConstraintForIndex(
 CMDPartConstraintGPDB *
 CTranslatorRelcacheToDXL::RetrievePartConstraintForRel(
 	CMemoryPool *mp, CMDAccessor *md_accessor, OID rel_oid,
-	CMDColumnArray *mdcol_array, bool has_index)
+	CMDColumnArray *mdcol_array, bool construct_full_expr)
 {
 	// get the part constraints
 	List *default_levels_rel = NIL;
-	Node *node = gpdb::GetRelationPartContraints(rel_oid, &default_levels_rel);
+	Node *node;
 
-	// don't retrieve part constraints if there are no indices
-	// and no default partitions at any level
-	if (!has_index && NIL == default_levels_rel)
+	if (!GPOS_FTRACE(EopttraceEnableExternalPartitionedTables) ||
+		gpdb::RelPartIsRoot(rel_oid))
+	{
+		node = gpdb::GetRelationPartContraints(rel_oid, &default_levels_rel);
+	}
+	else if (gpdb::IsLeafPartition(rel_oid))
+	{
+		GPOS_ASSERT(GPOS_FTRACE(EopttraceEnableExternalPartitionedTables));
+		node = gpdb::GetLeafPartContraints(rel_oid, &default_levels_rel);
+	}
+	else
+	{
+		// interior partition of a partition table or not a partitioned table
+		return NULL;
+	}
+
+	// don't retrieve part constraints if they are not needed
+	// and if there no default partitions at any level
+	if (!construct_full_expr && NIL == default_levels_rel)
 	{
 		return NULL;
 	}
@@ -3294,11 +3341,16 @@ CTranslatorRelcacheToDXL::RetrievePartConstraintForRel(
 
 	CMDPartConstraintGPDB *mdpart_constraint = NULL;
 
-	if (!has_index)
+	// FIXME: Deal with default partitions for external tables
+	if (gpdb::IsLeafPartition(rel_oid))
 	{
-		// if there are no indices then we don't need to construct the partition constraint
-		// expression since ORCA is never going to use it.
-		// only send the default partition information.
+		is_unbounded = false;
+	}
+
+	if (!construct_full_expr)
+	{
+		// Do not construct the partition constraint expression since ORCA is not going
+		// to use it. Only send the default partition information.
 		default_levels_derived->AddRef();
 		mdpart_constraint = GPOS_NEW(mp) CMDPartConstraintGPDB(
 			mp, default_levels_derived, is_unbounded, NULL);

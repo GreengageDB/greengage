@@ -74,7 +74,8 @@ CLogicalDynamicGet::CLogicalDynamicGet(
 CLogicalDynamicGet::CLogicalDynamicGet(CMemoryPool *mp, const CName *pnameAlias,
 									   CTableDescriptor *ptabdesc,
 									   ULONG ulPartIndex)
-	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex)
+	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
+							 NULL /* pdrgpcrOutput*/)
 {
 }
 
@@ -194,6 +195,8 @@ CLogicalDynamicGet::PxfsCandidates(CMemoryPool *mp) const
 {
 	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
 	(void) xform_set->ExchangeSet(CXform::ExfDynamicGet2DynamicTableScan);
+	(void) xform_set->ExchangeSet(
+		CXform::ExfExpandDynamicGetWithExternalPartitions);
 	return xform_set;
 }
 

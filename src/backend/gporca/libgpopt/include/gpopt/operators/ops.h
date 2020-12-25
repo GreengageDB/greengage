@@ -66,6 +66,7 @@
 #include "gpopt/operators/CLogicalIntersectAll.h"
 #include "gpopt/operators/CLogicalGet.h"
 #include "gpopt/operators/CLogicalExternalGet.h"
+#include "gpopt/operators/CLogicalMultiExternalGet.h"
 #include "gpopt/operators/CLogicalIndexGet.h"
 #include "gpopt/operators/CLogicalDynamicIndexGet.h"
 #include "gpopt/operators/CLogicalBitmapTableGet.h"
@@ -118,6 +119,7 @@
 // physical ops
 #include "gpopt/operators/CPhysicalTableScan.h"
 #include "gpopt/operators/CPhysicalExternalScan.h"
+#include "gpopt/operators/CPhysicalMultiExternalScan.h"
 #include "gpopt/operators/CPhysicalIndexScan.h"
 #include "gpopt/operators/CPhysicalBitmapTableScan.h"
 #include "gpopt/operators/CPhysicalFilter.h"
