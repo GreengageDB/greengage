@@ -316,7 +316,7 @@ public:
 
 	// is this a time-related type mappable to DOUBLE
 	static inline BOOL IsTimeRelatedTypeMappableToDouble(const IMDId *mdid) {
-		return IsTimeRelatedType(mdid) && !mdid->Equals(&CMDIdGPDB::m_mdid_date);
+		return IsTimeRelatedType(mdid) && !IsTimeRelatedTypeMappableToLint(mdid);
 	}
 
 	// is this a time-related type mappable to LINT
