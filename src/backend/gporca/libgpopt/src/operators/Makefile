@@ -33,6 +33,7 @@ OBJS        = CExpression.o \
               CLogicalDynamicGetBase.o \
               CLogicalDynamicIndexGet.o \
               CLogicalExternalGet.o \
+              CLogicalMultiExternalGet.o \
               CLogicalFullOuterJoin.o \
               CLogicalGbAgg.o \
               CLogicalGbAggDeduplicate.o \
@@ -93,6 +94,7 @@ OBJS        = CExpression.o \
               CPhysicalDynamicScan.o \
               CPhysicalDynamicTableScan.o \
               CPhysicalExternalScan.o \
+              CPhysicalMultiExternalScan.o \
               CPhysicalFilter.o \
               CPhysicalFullMergeJoin.o \
               CPhysicalHashAgg.o \

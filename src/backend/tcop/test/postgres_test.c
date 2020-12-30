@@ -40,7 +40,6 @@ errfinish_impl(int dummy __attribute__((unused)),...)
 		will_return(errstart, true);\
     } \
 
-const char *progname = "postgres";
 
 /* List with multiple elements, return FALSE. */
 static void

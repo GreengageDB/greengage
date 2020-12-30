@@ -272,9 +272,8 @@ CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
 	ListCell   *le;
 	ErrorData *qeError = NULL;
 
-	elog((Debug_print_full_dtm ? LOG : DEBUG5),
-		 "CdbDispatchSetCommand for command = '%s'",
-		 strCommand);
+	elogif(Debug_print_full_dtm, LOG,
+		   "CdbDispatchSetCommand for command = '%s'", strCommand);
 
 	pQueryParms = cdbdisp_buildCommandQueryParms(strCommand, DF_NONE);
 
@@ -362,7 +361,7 @@ CdbDispatchCommandToSegments(const char *strCommand,
 	if (needTwoPhase)
 		setupDtxTransaction();
 
-	elogif((Debug_print_full_dtm || log_min_messages <= DEBUG5), LOG,
+	elogif(Debug_print_full_dtm, LOG,
 		   "CdbDispatchCommand: %s (needTwoPhase = %s)",
 		   strCommand, (needTwoPhase ? "true" : "false"));
 
@@ -400,7 +399,7 @@ CdbDispatchUtilityStatement(struct Node *stmt,
 	if (needTwoPhase)
 		setupDtxTransaction();
 
-	elogif((Debug_print_full_dtm || log_min_messages <= DEBUG5), LOG,
+	elogif(Debug_print_full_dtm, LOG,
 		   "CdbDispatchUtilityStatement: %s (needTwoPhase = %s)",
 		   debug_query_string, (needTwoPhase ? "true" : "false"));
 
@@ -894,7 +893,7 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 		sizeof(resgroupInfo.len) +
 		resgroupInfo.len;
 
-	shared_query = palloc0(total_query_len);
+	shared_query = palloc(total_query_len);
 
 	pos = shared_query;
 
@@ -1425,7 +1424,7 @@ CdbDispatchCopyStart(struct CdbCopy *cdbCopy, Node *stmt, int flags)
 	if (needTwoPhase)
 		setupDtxTransaction();
 
-	elogif((Debug_print_full_dtm || log_min_messages <= DEBUG5), LOG,
+	elogif(Debug_print_full_dtm, LOG,
 		   "CdbDispatchCopyStart: %s (needTwoPhase = %s)",
 		   debug_query_string, (needTwoPhase ? "true" : "false"));
 

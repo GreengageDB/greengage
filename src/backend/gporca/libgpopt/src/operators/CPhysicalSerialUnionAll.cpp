@@ -8,8 +8,8 @@
 //	@doc:
 //		Implementation of physical union all operator
 //
-//	@owner: 
-//		
+//	@owner:
+//
 //
 //	@test:
 //
@@ -41,15 +41,11 @@ using namespace gpopt;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CPhysicalSerialUnionAll::CPhysicalSerialUnionAll
-	(
-	CMemoryPool *mp,
-	CColRefArray *pdrgpcrOutput,
-	CColRef2dArray *pdrgpdrgpcrInput,
-	ULONG ulScanIdPartialIndex
-	)
-	:
-	CPhysicalUnionAll(mp, pdrgpcrOutput, pdrgpdrgpcrInput, ulScanIdPartialIndex)
+CPhysicalSerialUnionAll::CPhysicalSerialUnionAll(
+	CMemoryPool *mp, CColRefArray *pdrgpcrOutput,
+	CColRef2dArray *pdrgpdrgpcrInput, ULONG ulScanIdPartialIndex)
+	: CPhysicalUnionAll(mp, pdrgpcrOutput, pdrgpdrgpcrInput,
+						ulScanIdPartialIndex)
 {
 	// UnionAll creates two distribution requests to enforce distribution of its children:
 	// (1) (Hashed, Hashed): used to pass hashed distribution (requested from above)
@@ -75,22 +71,16 @@ CPhysicalSerialUnionAll::~CPhysicalSerialUnionAll()
 //
 //---------------------------------------------------------------------------
 CDistributionSpec *
-CPhysicalSerialUnionAll::PdsRequired
-	(
-	CMemoryPool *mp,
-	CExpressionHandle &exprhdl,
-	CDistributionSpec *pdsRequired,
-	ULONG child_index,
-	CDrvdPropArray *pdrgpdpCtxt,
-	ULONG ulOptReq
-	)
-	const
+CPhysicalSerialUnionAll::PdsRequired(
+	CMemoryPool *mp, CExpressionHandle &exprhdl, CDistributionSpec *pdsRequired,
+	ULONG child_index, CDrvdPropArray *pdrgpdpCtxt, ULONG ulOptReq) const
 {
 	GPOS_ASSERT(NULL != PdrgpdrgpcrInput());
 	GPOS_ASSERT(child_index < PdrgpdrgpcrInput()->Size());
 	GPOS_ASSERT(2 > ulOptReq);
 
-	CDistributionSpec *pds = PdsRequireSingletonOrReplicated(mp, exprhdl, pdsRequired, child_index, ulOptReq);
+	CDistributionSpec *pds = PdsRequireSingletonOrReplicated(
+		mp, exprhdl, pdsRequired, child_index, ulOptReq);
 	if (NULL != pds)
 	{
 		return pds;
@@ -99,7 +89,8 @@ CPhysicalSerialUnionAll::PdsRequired
 	if (0 == ulOptReq && CDistributionSpec::EdtHashed == pdsRequired->Edt())
 	{
 		// attempt passing requested hashed distribution to children
-		CDistributionSpecHashed *pdshashed = PdshashedPassThru(mp, CDistributionSpecHashed::PdsConvert(pdsRequired), child_index);
+		CDistributionSpecHashed *pdshashed = PdshashedPassThru(
+			mp, CDistributionSpecHashed::PdsConvert(pdsRequired), child_index);
 		if (NULL != pdshashed)
 		{
 			return pdshashed;
@@ -113,13 +104,15 @@ CPhysicalSerialUnionAll::PdsRequired
 	}
 
 	// inspect distribution delivered by outer child
-	CDistributionSpec *pdsOuter = CDrvdPropPlan::Pdpplan((*pdrgpdpCtxt)[0])->Pds();
+	CDistributionSpec *pdsOuter =
+		CDrvdPropPlan::Pdpplan((*pdrgpdpCtxt)[0])->Pds();
 
 	if (CDistributionSpec::EdtSingleton == pdsOuter->Edt() ||
 		CDistributionSpec::EdtStrictSingleton == pdsOuter->Edt())
 	{
 		// outer child is Singleton, require inner child to have matching Singleton distribution
-		return CPhysical::PdssMatching(mp, CDistributionSpecSingleton::PdssConvert(pdsOuter));
+		return CPhysical::PdssMatching(
+			mp, CDistributionSpecSingleton::PdssConvert(pdsOuter));
 	}
 
 	if (CDistributionSpec::EdtUniversal == pdsOuter->Edt())
@@ -130,10 +123,12 @@ CPhysicalSerialUnionAll::PdsRequired
 		return GPOS_NEW(mp) CDistributionSpecSingleton();
 	}
 
-	if (CDistributionSpec::EdtReplicated == pdsOuter->Edt())
+	if (CDistributionSpec::EdtStrictReplicated == pdsOuter->Edt() ||
+		CDistributionSpec::EdtTaintedReplicated == pdsOuter->Edt())
 	{
 		// outer child is replicated, require inner child to be replicated
-		return GPOS_NEW(mp) CDistributionSpecReplicated();
+		return GPOS_NEW(mp)
+			CDistributionSpecReplicated(CDistributionSpec::EdtReplicated);
 	}
 
 	if (CDistributionSpec::EdtExternal == pdsOuter->Edt())
@@ -147,7 +142,8 @@ CPhysicalSerialUnionAll::PdsRequired
 	// we need to the inner child to be distributed across segments that does
 	// not generate duplicate results. That is, inner child should not be replicated.
 
-	return GPOS_NEW(mp) CDistributionSpecNonSingleton(false /*fAllowReplicated*/);
+	return GPOS_NEW(mp)
+		CDistributionSpecNonSingleton(false /*fAllowReplicated*/);
 }
 
 // EOF

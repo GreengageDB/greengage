@@ -298,7 +298,7 @@
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true">
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true">
         </dxl:PartConstraint>
       </dxl:Relation>
       <dxl:RelationStatistics Mdid="2.290415.1.1" Name="t" Rows="0.000000"/>

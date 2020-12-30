@@ -19,6 +19,7 @@
 
 #include "gpopt/xforms/CXformGet2TableScan.h"
 #include "gpopt/xforms/CXformExternalGet2ExternalScan.h"
+#include "gpopt/xforms/CXformMultiExternalGet2MultiExternalScan.h"
 #include "gpopt/xforms/CXformDynamicGet2DynamicTableScan.h"
 #include "gpopt/xforms/CXformDynamicIndexGet2DynamicIndexScan.h"
 #include "gpopt/xforms/CXformSelect2DynamicIndexGet.h"
@@ -118,28 +119,14 @@
 
 #include "gpopt/xforms/CXformSubqJoin2Apply.h"
 #include "gpopt/xforms/CXformSubqNAryJoin2Apply.h"
-#include "gpopt/xforms/CXformInnerJoin2IndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoin2DynamicIndexGetApply.h"
+#include "gpopt/xforms/CXformJoin2BitmapIndexGetApply.h"
+#include "gpopt/xforms/CXformJoin2IndexGetApply.h"
 #include "gpopt/xforms/CXformInnerJoin2PartialDynamicIndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoin2BitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoinWithInnerSelect2IndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoinWithInnerSelect2DynamicIndexGetApply.h"
 #include "gpopt/xforms/CXformInnerJoinWithInnerSelect2PartialDynamicIndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoin2DynamicBitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoinWithInnerSelect2BitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformInnerJoinWithInnerSelect2DynamicBitmapIndexGetApply.h"
 
 #include "gpopt/xforms/CXformInnerApply2InnerJoin.h"
 #include "gpopt/xforms/CXformInnerApply2InnerJoinNoCorrelations.h"
 #include "gpopt/xforms/CXformImplementInnerCorrelatedApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoin2BitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoin2IndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoinWithInnerSelect2BitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoinWithInnerSelect2IndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoin2DynamicBitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoin2DynamicIndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoinWithInnerSelect2DynamicBitmapIndexGetApply.h"
-#include "gpopt/xforms/CXformLeftOuterJoinWithInnerSelect2DynamicIndexGetApply.h"
 #include "gpopt/xforms/CXformLeftOuterApply2LeftOuterJoin.h"
 #include "gpopt/xforms/CXformLeftOuterApply2LeftOuterJoinNoCorrelations.h"
 #include "gpopt/xforms/CXformImplementLeftOuterCorrelatedApply.h"
@@ -180,6 +167,8 @@
 #include "gpopt/xforms/CXformMaxOneRow2Assert.h"
 #include "gpopt/xforms/CXformRemoveSubqDistinct.h"
 
-#endif // !GPOPT_xforms_H
+#include "gpopt/xforms/CXformExpandDynamicGetWithExternalPartitions.h"
+
+#endif	// !GPOPT_xforms_H
 
 // EOF

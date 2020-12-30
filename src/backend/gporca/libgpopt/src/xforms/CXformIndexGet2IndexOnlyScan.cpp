@@ -34,35 +34,26 @@ using namespace gpopt;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CXformIndexGet2IndexOnlyScan::CXformIndexGet2IndexOnlyScan
-	(
-	CMemoryPool *mp
-	)
-	:
-	// pattern
-	CXformImplementation
-		(
-		GPOS_NEW(mp) CExpression
-				(
-				mp,
-				GPOS_NEW(mp) CLogicalIndexGet(mp),
-				GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CPatternLeaf(mp))	// index lookup predicate
-				)
-		)
-{}
+CXformIndexGet2IndexOnlyScan::CXformIndexGet2IndexOnlyScan(CMemoryPool *mp)
+	:  // pattern
+	  CXformImplementation(GPOS_NEW(mp) CExpression(
+		  mp, GPOS_NEW(mp) CLogicalIndexGet(mp),
+		  GPOS_NEW(mp) CExpression(
+			  mp, GPOS_NEW(mp) CPatternLeaf(mp))  // index lookup predicate
+		  ))
+{
+}
 
-CXform::EXformPromise CXformIndexGet2IndexOnlyScan::Exfp
-(
- CExpressionHandle &exprhdl
-)
-const
+CXform::EXformPromise
+CXformIndexGet2IndexOnlyScan::Exfp(CExpressionHandle &exprhdl) const
 {
 	CLogicalIndexGet *popGet = CLogicalIndexGet::PopConvert(exprhdl.Pop());
 
 	CTableDescriptor *ptabdesc = popGet->Ptabdesc();
 	CIndexDescriptor *pindexdesc = popGet->Pindexdesc();
 
-	if ((pindexdesc->IndexType() == IMDIndex::EmdindBtree && ptabdesc->IsAORowOrColTable()) ||
+	if ((pindexdesc->IndexType() == IMDIndex::EmdindBtree &&
+		 ptabdesc->IsAORowOrColTable()) ||
 		!pindexdesc->SupportsIndexOnlyScan())
 	{
 		// we don't support btree index scans on AO tables
@@ -82,13 +73,9 @@ const
 //
 //---------------------------------------------------------------------------
 void
-CXformIndexGet2IndexOnlyScan::Transform
-	(
-	CXformContext *pxfctxt,
-	CXformResult *pxfres,
-	CExpression *pexpr
-	)
-	const
+CXformIndexGet2IndexOnlyScan::Transform(CXformContext *pxfctxt,
+										CXformResult *pxfres,
+										CExpression *pexpr) const
 {
 	GPOS_ASSERT(NULL != pxfctxt);
 	GPOS_ASSERT(FPromising(pxfctxt->Pmp(), this, pexpr));
@@ -99,6 +86,13 @@ CXformIndexGet2IndexOnlyScan::Transform
 	CIndexDescriptor *pindexdesc = pop->Pindexdesc();
 	CTableDescriptor *ptabdesc = pop->Ptabdesc();
 
+	// extract components
+	CExpression *pexprIndexCond = (*pexpr)[0];
+	if (pexprIndexCond->DeriveHasSubquery())
+	{
+		return;
+	}
+
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 	const IMDRelation *pmdrel = md_accessor->RetrieveRel(ptabdesc->MDId());
 	const IMDIndex *pmdindex = md_accessor->RetrieveIndex(pindexdesc->MDId());
@@ -107,7 +101,8 @@ CXformIndexGet2IndexOnlyScan::Transform
 	GPOS_ASSERT(NULL != pdrgpcrOutput);
 	pdrgpcrOutput->AddRef();
 
-	CColRefSet *matched_cols = CXformUtils::PcrsIndexKeys(mp, pdrgpcrOutput, pmdindex, pmdrel);
+	CColRefSet *matched_cols =
+		CXformUtils::PcrsIndexKeys(mp, pdrgpcrOutput, pmdindex, pmdrel);
 	CColRefSet *output_cols = GPOS_NEW(mp) CColRefSet(mp);
 
 	// An index only scan is allowed iff each used output column reference also
@@ -115,7 +110,16 @@ CXformIndexGet2IndexOnlyScan::Transform
 	for (ULONG i = 0; i < pdrgpcrOutput->Size(); i++)
 	{
 		CColRef *col = (*pdrgpcrOutput)[i];
-		if (col->GetUsage(true /*check_system_cols*/) == CColRef::EUsed)
+
+		// In most cases we want to treat system columns unconditionally as
+		// used. This is because certain transforms like those for DML or
+		// CXformPushGbBelowJoin use unique keys in the derived properties,
+		// even if they are not referenced in the query. Those keys are system
+		// columns gp_segment_id and ctid. We also treat distribution columns
+		// as used, since they appear in the CDistributionSpecHashed of
+		// physical properties and therefore might be used in the plan.
+		if (col->GetUsage(true /*check_system_cols*/,
+						  true /*check_distribution_col*/) == CColRef::EUsed)
 		{
 			output_cols->Include(col);
 		}
@@ -139,31 +143,19 @@ CXformIndexGet2IndexOnlyScan::Transform
 	GPOS_ASSERT(NULL != pos);
 	pos->AddRef();
 
-	// extract components
-	CExpression *pexprIndexCond = (*pexpr)[0];
+
 
 	// addref all children
 	pexprIndexCond->AddRef();
 
-	CExpression *pexprAlt =
-		GPOS_NEW(mp) CExpression
-			(
-			mp,
-			GPOS_NEW(mp) CPhysicalIndexOnlyScan
-				(
-				mp,
-				pindexdesc,
-				ptabdesc,
-				pexpr->Pop()->UlOpId(),
-				GPOS_NEW(mp) CName (mp, pop->NameAlias()),
-				pdrgpcrOutput,
-				pos
-				),
-			pexprIndexCond
-			);
+	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
+		mp,
+		GPOS_NEW(mp) CPhysicalIndexOnlyScan(
+			mp, pindexdesc, ptabdesc, pexpr->Pop()->UlOpId(),
+			GPOS_NEW(mp) CName(mp, pop->NameAlias()), pdrgpcrOutput, pos),
+		pexprIndexCond);
 	pxfres->Add(pexprAlt);
 }
 
 
 // EOF
-

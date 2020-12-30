@@ -34,11 +34,10 @@ using namespace gpos;
 GPOS_RESULT
 CLoggerTest::EresUnittest()
 {
-	CUnittest rgut[] =
-		{
+	CUnittest rgut[] = {
 		GPOS_UNITTEST_FUNC(CLoggerTest::EresUnittest_Basic),
 		GPOS_UNITTEST_FUNC(CLoggerTest::EresUnittest_LoggerSyslog),
-		};
+	};
 
 	GPOS_RESULT eres = CUnittest::EresExecute(rgut, GPOS_ARRAY_SIZE(rgut));
 
@@ -67,7 +66,8 @@ CLoggerTest::EresUnittest_Basic()
 		CAutoTraceFlag atfSet(EtraceSimulateAbort, false);
 
 		// log warning message
-		GPOS_WARNING(CException::ExmaSystem, CException::ExmiDummyWarning, "Foo");
+		GPOS_WARNING(CException::ExmaSystem, CException::ExmiDummyWarning,
+					 "Foo");
 	}
 
 	return GPOS_OK;
@@ -94,4 +94,3 @@ CLoggerTest::EresUnittest_LoggerSyslog()
 
 
 // EOF
-

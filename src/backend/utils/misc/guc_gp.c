@@ -202,8 +202,6 @@ int			gp_connection_send_timeout;
 
 bool create_restartpoint_on_ckpt_record_replay = false;
 
-char	   *data_directory;
-
 /*
  * This variable is a dummy that doesn't do anything, except in some
  * cases provide the value for SHOW to display.  The real state is elsewhere
@@ -1891,6 +1889,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"gp_resgroup_debug_wait_queue", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable the debugging check on the wait queue of resource group."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_resgroup_debug_wait_queue,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_dynamic_partition_pruning", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("This guc enables plans that can dynamically eliminate scanning of partitions."),
 			NULL
@@ -2417,7 +2426,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_enable_indexonlyscan,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 
@@ -3767,6 +3776,28 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_fts_replication_attempt_count,
 		10, 0, 100,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_dtx_recovery_interval", PGC_SIGHUP, GP_ARRAY_TUNING,
+			gettext_noop("A complete checking in dtx recovery process starts each time a timer with this period expires."),
+			gettext_noop("Used by the dtx recovery process. "),
+			GUC_UNIT_S
+		},
+		&gp_dtx_recovery_interval,
+		60, 5, 3600,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_dtx_recovery_prepared_period", PGC_SIGHUP, GP_ARRAY_TUNING,
+			gettext_noop("Gather prepared transactions before the time (in seconds) to find potential orphaned ones."),
+			gettext_noop("Used by the dtx recovery process. "),
+			GUC_UNIT_S
+		},
+		&gp_dtx_recovery_prepared_period,
+		120, 0, 3600,
 		NULL, NULL, NULL
 	},
 

@@ -9,123 +9,92 @@
 
 namespace gpopt
 {
+class CPhysicalFullMergeJoin : public CPhysicalJoin
+{
+private:
+	// private copy ctor
+	CPhysicalFullMergeJoin(const CPhysicalFullMergeJoin &);
 
-	class CPhysicalFullMergeJoin : public CPhysicalJoin
+	CExpressionArray *m_outer_merge_clauses;
+
+	CExpressionArray *m_inner_merge_clauses;
+
+public:
+	// ctor
+	explicit CPhysicalFullMergeJoin(CMemoryPool *mp,
+									CExpressionArray *outer_merge_clauses,
+									CExpressionArray *inner_merge_clauses,
+									IMdIdArray *hash_opfamilies = NULL);
+
+	// dtor
+	virtual ~CPhysicalFullMergeJoin();
+
+	// ident accessors
+	virtual EOperatorId
+	Eopid() const
 	{
+		return EopPhysicalFullMergeJoin;
+	}
 
-		private:
+	// return a string for operator name
+	virtual const CHAR *
+	SzId() const
+	{
+		return "CPhysicalFullMergeJoin";
+	}
 
-			// private copy ctor
-			CPhysicalFullMergeJoin(const CPhysicalFullMergeJoin &);
+	// conversion function
+	static CPhysicalFullMergeJoin *
+	PopConvert(COperator *pop)
+	{
+		GPOS_ASSERT(EopPhysicalFullMergeJoin == pop->Eopid());
 
-			CExpressionArray *m_outer_merge_clauses;
+		return dynamic_cast<CPhysicalFullMergeJoin *>(pop);
+	}
 
-			CExpressionArray *m_inner_merge_clauses;
+	virtual CDistributionSpec *PdsRequired(CMemoryPool *mp,
+										   CExpressionHandle &exprhdl,
+										   CDistributionSpec *pdsRequired,
+										   ULONG child_index,
+										   CDrvdPropArray *pdrgpdpCtxt,
+										   ULONG ulOptReq) const;
 
-		public:
+	virtual CEnfdDistribution *Ped(CMemoryPool *mp, CExpressionHandle &exprhdl,
+								   CReqdPropPlan *prppInput, ULONG child_index,
+								   CDrvdPropArray *pdrgpdpCtxt,
+								   ULONG ulDistrReq);
 
-			// ctor
-			explicit
-			CPhysicalFullMergeJoin(CMemoryPool *mp,
-								   CExpressionArray *outer_merge_clauses,
-								   CExpressionArray *inner_merge_clauses,
-								   IMdIdArray *hash_opfamilies = NULL);
+	virtual COrderSpec *PosRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+									COrderSpec *posInput, ULONG child_index,
+									CDrvdPropArray *pdrgpdpCtxt,
+									ULONG ulOptReq) const;
 
-			// dtor
-			virtual
-			~CPhysicalFullMergeJoin();
+	// compute required rewindability of the n-th child
+	virtual CRewindabilitySpec *PrsRequired(CMemoryPool *mp,
+											CExpressionHandle &exprhdl,
+											CRewindabilitySpec *prsRequired,
+											ULONG child_index,
+											CDrvdPropArray *pdrgpdpCtxt,
+											ULONG ulOptReq) const;
 
-			// ident accessors
-			virtual
-			EOperatorId Eopid() const
-			{
-				return EopPhysicalFullMergeJoin;
-			}
+	// return order property enforcing type for this operator
+	virtual CEnfdProp::EPropEnforcingType EpetOrder(
+		CExpressionHandle &exprhdl, const CEnfdOrder *peo) const;
 
-			 // return a string for operator name
-			virtual
-			const CHAR *SzId() const
-			{
-				return "CPhysicalFullMergeJoin";
-			}
+	virtual CEnfdDistribution::EDistributionMatching Edm(
+		CReqdPropPlan *,   // prppInput
+		ULONG,			   //child_index,
+		CDrvdPropArray *,  // pdrgpdpCtxt,
+		ULONG			   // ulOptReq
+	);
 
-			// conversion function
-			static
-			CPhysicalFullMergeJoin *PopConvert
-				(
-				COperator *pop
-				)
-			{
-				GPOS_ASSERT(EopPhysicalFullMergeJoin == pop->Eopid());
+	virtual CDistributionSpec *PdsDerive(CMemoryPool *mp,
+										 CExpressionHandle &exprhdl) const;
 
-				return dynamic_cast<CPhysicalFullMergeJoin*>(pop);
-			}
+};	// class CPhysicalFullMergeJoin
 
-			virtual
-			CDistributionSpec *PdsRequired
-				(
-				CMemoryPool *mp,
-				CExpressionHandle &exprhdl,
-				CDistributionSpec *pdsRequired,
-				ULONG child_index,
-				CDrvdPropArray *pdrgpdpCtxt,
-				ULONG ulOptReq
-				)
-				const;
+}  // namespace gpopt
 
-			virtual
-			COrderSpec *PosRequired
-				(
-				CMemoryPool *mp,
-				CExpressionHandle &exprhdl,
-				COrderSpec *posInput,
-				ULONG child_index,
-				CDrvdPropArray *pdrgpdpCtxt,
-				ULONG ulOptReq
-				)
-				const;
-
-			// compute required rewindability of the n-th child
-			virtual
-			CRewindabilitySpec *PrsRequired
-				(
-				CMemoryPool *mp,
-				CExpressionHandle &exprhdl,
-				CRewindabilitySpec *prsRequired,
-				ULONG child_index,
-				CDrvdPropArray *pdrgpdpCtxt,
-				ULONG ulOptReq
-				)
-				const;
-
-			// return order property enforcing type for this operator
-			virtual
-			CEnfdProp::EPropEnforcingType EpetOrder
-				(
-				CExpressionHandle &exprhdl,
-				const CEnfdOrder *peo
-				) const;
-
-			virtual
-			CEnfdDistribution::EDistributionMatching Edm
-				(
-				CReqdPropPlan *, // prppInput
-				ULONG , //child_index,
-				CDrvdPropArray *, // pdrgpdpCtxt,
-				ULONG // ulOptReq
-				);
-
-			virtual
-			CDistributionSpec *PdsDerive
-				(
-					CMemoryPool *mp,
-					CExpressionHandle &exprhdl
-				) const;
-
-	}; // class CPhysicalFullMergeJoin
-
-}
-
-#endif // !GPOPT_CPhysicalFullMergeJoin_H
+#endif	// !GPOPT_CPhysicalFullMergeJoin_H
 
 // EOF

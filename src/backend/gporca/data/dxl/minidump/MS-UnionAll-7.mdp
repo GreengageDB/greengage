@@ -283,7 +283,7 @@
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true">
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true">
         </dxl:PartConstraint>
       </dxl:Relation>
       <dxl:ColumnStatistics Mdid="1.17327104.1.1.27" Name="valuationmodelid" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>
@@ -439,7 +439,7 @@
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true">
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true">
         </dxl:PartConstraint>
       </dxl:Relation>
       <dxl:GPDBScalarOp Mdid="0.1093.1.0" Name="=" ComparisonType="Eq" ReturnsNullOnNullInput="true">
@@ -590,7 +590,7 @@
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true">
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true">
         </dxl:PartConstraint>
       </dxl:Relation>
       <dxl:ColumnStatistics Mdid="1.17327104.1.1.31" Name="gp_segment_id" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>
@@ -651,7 +651,7 @@
                 </dxl:IsNotNull>
                 <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                   <dxl:Ident ColId="3" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                 </dxl:Comparison>
               </dxl:And>
               <dxl:LogicalGet>
@@ -716,7 +716,7 @@
                 </dxl:IsNotNull>
                 <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                   <dxl:Ident ColId="36" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                 </dxl:Comparison>
               </dxl:And>
               <dxl:LogicalGet>
@@ -782,7 +782,7 @@
               </dxl:IsNotNull>
               <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                 <dxl:Ident ColId="69" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
               </dxl:Comparison>
             </dxl:And>
             <dxl:LogicalGet>
@@ -1024,7 +1024,7 @@
                           </dxl:Properties>
                           <dxl:ProjList/>
                           <dxl:PartEqFilters>
-                            <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                            <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                           </dxl:PartEqFilters>
                           <dxl:PartFilters>
                             <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
@@ -1038,7 +1038,7 @@
                           <dxl:PrintableFilter>
                             <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                               <dxl:Ident ColId="2" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                              <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                              <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                             </dxl:Comparison>
                           </dxl:PrintableFilter>
                         </dxl:PartitionSelector>
@@ -1077,7 +1077,7 @@
                               </dxl:Not>
                               <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                                 <dxl:Ident ColId="2" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                               </dxl:Comparison>
                             </dxl:And>
                           </dxl:Filter>
@@ -1267,7 +1267,7 @@
                           </dxl:Properties>
                           <dxl:ProjList/>
                           <dxl:PartEqFilters>
-                            <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                            <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                           </dxl:PartEqFilters>
                           <dxl:PartFilters>
                             <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
@@ -1281,7 +1281,7 @@
                           <dxl:PrintableFilter>
                             <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                               <dxl:Ident ColId="35" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                              <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                              <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                             </dxl:Comparison>
                           </dxl:PrintableFilter>
                         </dxl:PartitionSelector>
@@ -1320,7 +1320,7 @@
                               </dxl:Not>
                               <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                                 <dxl:Ident ColId="35" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                               </dxl:Comparison>
                             </dxl:And>
                           </dxl:Filter>
@@ -1510,7 +1510,7 @@
                           </dxl:Properties>
                           <dxl:ProjList/>
                           <dxl:PartEqFilters>
-                            <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                            <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                           </dxl:PartEqFilters>
                           <dxl:PartFilters>
                             <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
@@ -1524,7 +1524,7 @@
                           <dxl:PrintableFilter>
                             <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                               <dxl:Ident ColId="68" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                              <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                              <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                             </dxl:Comparison>
                           </dxl:PrintableFilter>
                         </dxl:PartitionSelector>
@@ -1563,7 +1563,7 @@
                               </dxl:Not>
                               <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.1093.1.0">
                                 <dxl:Ident ColId="68" ColName="businessdate" TypeMdid="0.1082.1.0"/>
-                                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" DoubleValue="451267200000000.000000"/>
+                                <dxl:ConstValue TypeMdid="0.1082.1.0" Value="ZxQAAA==" LintValue="5223"/>
                               </dxl:Comparison>
                             </dxl:And>
                           </dxl:Filter>

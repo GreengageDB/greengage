@@ -156,3 +156,29 @@ explain (costs off)
 select count(distinct j), count(distinct k), count(distinct m) from (select j,k,m from multiagg_with_subquery group by j,k,m ) sub group by j;
 select count(distinct j), count(distinct k), count(distinct m) from (select j,k,m from multiagg_with_subquery group by j,k,m ) sub group by j;
 drop table multiagg_with_subquery;
+
+-- Test multi-phase aggregate with an expression as the group key
+create table multiagg_expr_group_tbl (i int, j int) distributed by (i);
+insert into multiagg_expr_group_tbl values(-1, -2), (-1, -1), (0, 1), (1, 2);
+explain (costs off) select j >= 0, not j >= 0 from multiagg_expr_group_tbl group by 1;
+select j >= 0, not j >= 0 from multiagg_expr_group_tbl group by 1;
+select j >= 0,
+		case when not j >= 0 then
+			'not greater than 0'
+		end
+		from multiagg_expr_group_tbl group by 1;
+
+drop table multiagg_expr_group_tbl;
+
+CREATE TABLE multiagg_expr_group_tbl2 (
+	A int,
+	B int,
+	C text ) DISTRIBUTED RANDOMLY;
+CREATE VIEW multiagg_expr_group_view as select B, rtrim(C) AS C FROM multiagg_expr_group_tbl2;
+INSERT INTO multiagg_expr_group_tbl2 VALUES(1,1,1), (2,2,2);
+SELECT v1.B
+  FROM multiagg_expr_group_view v1
+  GROUP BY
+  v1.B, v1.C
+  HAVING ( v1.B= ( SELECT v2.B FROM multiagg_expr_group_view v2 WHERE v1.C = v2.C));
+

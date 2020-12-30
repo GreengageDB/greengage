@@ -2315,7 +2315,7 @@ rebuild_append_simple_rel_and_rte(PlannerInfo *root,
 		splan = (SubqueryScan *)lfirst(l3);
 
 		rel->subroot = sroot;
-		if (splan != NULL)
+		if (splan != NULL && IsA(splan, SubqueryScan))
 		{
 			splan->scan.scanrelid = i;
 			rel->subplan = splan->subplan;

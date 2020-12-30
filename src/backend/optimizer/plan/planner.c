@@ -1715,6 +1715,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 	List	   *distinct_dist_exprs = NIL;
 	List	   *distinct_dist_opfamilies = NIL;
 	bool		must_gather;
+	bool		pretend_has_agg = false;
 
 	double		motion_cost_per_row =
 	(gp_motion_cost_per_row > 0.0) ?
@@ -1888,6 +1889,9 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 		{
 			list_free(parse->groupClause);
 			parse->groupClause = NIL;
+
+			if (canonical_grpsets->ngrpsets > 0)
+				pretend_has_agg = true;
 		}
 
 		grpext = is_grouping_extension(canonical_grpsets);
@@ -2210,6 +2214,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			group_context.p_dNumGroups = &dNumGroups;
 			group_context.pcurrent_pathkeys = &current_pathkeys;
 			group_context.querynode_changed = &querynode_changed;
+			group_context.pretend_has_agg = pretend_has_agg;
 
 			result_plan = cdb_grouping_planner(root,
 											   &agg_costs,

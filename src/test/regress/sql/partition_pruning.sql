@@ -871,4 +871,69 @@ select get_selected_parts('explain analyze select * from bar where j is distinct
 -- 8 parts: NULL is shared with others on p1. So, all 8 parts.
 select get_selected_parts('explain analyze select * from bar where j is distinct from NULL;');
 
+-- Validate that a planner bug found in production is fixed.  The bug
+-- caused a SIGSEGV during execution due to incorrect manipulation of
+-- target list when adding a junk attribute for a sort key when
+-- generating a Merge Join plan with Parition Selector.
+--
+-- Prerequisites to trigger the bug include dynamic partition
+-- elimination node (Partition Selector) in the plan, one or more junk
+-- attributes in sort key and presense of a Motion node between the
+-- Partition Selector and Append nodes.
+
+create table part_left (id int, pkey timestamp, d int)
+distributed by (pkey)
+partition by range (pkey)
+(start ('2020-12-01 00:00:00'::timestamp)
+ end   ('2020-12-04 23:59:59'::timestamp)
+ every ('1 day'::interval));
+
+insert into part_left values (1, '2020-12-01 00:00:00'::timestamp, 1);
+insert into part_left values (1, '2020-12-02 13:00:00'::timestamp, 2);
+insert into part_left values (1, '2020-12-03 14:00:00'::timestamp, 3);
+
+create table part_right (id int, pkey timestamp, d int)
+distributed by (id)
+partition by range (pkey)
+(start ('2020-12-01 00:00:00'::timestamp)
+ end   ('2020-12-31 23:59:59'::timestamp)
+ every ('1 day'::interval));
+
+insert into part_right values (1, '2020-12-01 12:00:00'::timestamp, 1);
+insert into part_right values (1, '2020-12-10 13:00:00'::timestamp, 2);
+insert into part_right values (1, '2020-12-20 14:00:00'::timestamp, 3);
+
+analyze part_left;
+analyze part_right;
+
+-- Enforce merge join because the plan should have a Sort node.
+set enable_hashjoin=off;
+set enable_mergejoin=on;
+
+-- The date_trunc() function causes a junk attribute to be generated
+-- when computing the sort key for the merge join.  The target list of
+-- Sort node is appended with one target entry corresponding to the
+-- junk attribute.  Presence of a Result node as a child of the Sort
+-- node indicates that the generated plan is correct.  The Result node
+-- has its own target list, separate from its child node's target
+-- list.  Without a Result node, the target list of Partition Selector
+-- node ends up being modified and Partition Node shares the target
+-- list with its child, which happens to be Motion node in this case.
+-- Motion node does not share targe list with its children.  However,
+-- if Motion node's target list does not match its child, there will
+-- be trouble during execution because the expected number of
+-- attributes received is more than the number of attributes actually
+-- sent by the motion sender (aka SIGSEGV).
+explain (costs off) select r.id, l.pkey from part_left l inner join part_right r
+on (date_trunc('day', r.pkey) = l.pkey
+    and r.pkey between '2020-12-01 00:00:00'::timestamp and
+                        '2020-12-03 00:00:59'::timestamp
+                        );
+
+select r.id, l.pkey from part_left l inner join part_right r
+on (date_trunc('day', r.pkey) = l.pkey
+    and r.pkey between '2020-12-01 00:00:00'::timestamp and
+                        '2020-12-03 00:00:59'::timestamp
+                        );
+
 RESET ALL;

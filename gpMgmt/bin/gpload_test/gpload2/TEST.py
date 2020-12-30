@@ -98,7 +98,8 @@ d = mkpath('config')
 if not os.path.exists(d):
     os.mkdir(d)
 
-def write_config_file(mode='insert', reuse_flag='',columns_flag='0',mapping='0',portNum='8081',database='reuse_gptest',host='localhost',formatOpts='text',file='data/external_file_01.txt',table='texttable',format='text',delimiter="'|'",escape='',quote='',truncate='False',log_errors=None, error_limit='0',error_table=None,externalSchema=None,staging_table=None,fast_match='false', encoding=None, preload=True, fill=False, config='config/config_file', match_columns='true', update_columns='n2'):
+def write_config_file(mode='insert', reuse_flag='',columns_flag='0',mapping='0',portNum='8081',database='reuse_gptest',host='localhost',formatOpts='text',file='data/external_file_01.txt',table='texttable',format='text',delimiter="'|'",
+escape='',quote='',truncate='False',log_errors=None, error_limit='0',error_table=None,externalSchema=None,staging_table=None,fast_match='false', encoding=None, preload=True, fill=False, config='config/config_file', match_columns='true', update_columns='n2',header=None):
 
     f = open(mkpath(config),'w')
     f.write("VERSION: 1.0.0.1")
@@ -135,6 +136,10 @@ def write_config_file(mode='insert', reuse_flag='',columns_flag='0',mapping='0',
         f.write("\n    - COLUMNS:")
         f.write("\n           - 'Field1': bigint")
         f.write("\n           - 'Field#2': text")
+    if columns_flag == '2':
+        f.write("\n    - COLUMNS:")
+        f.write("\n           - 'Field1':")
+        f.write("\n           - 'Field#2':")
     if format:
         f.write("\n    - FORMAT: "+format)
     if log_errors:
@@ -151,6 +156,8 @@ def write_config_file(mode='insert', reuse_flag='',columns_flag='0',mapping='0',
         f.write("\n    - ESCAPE: "+escape)
     if quote:
         f.write("\n    - QUOTE: "+quote)
+    if header:
+        f.write("\n    - HEADER: "+header)
     if fill:
         f.write("\n    - FILL_MISSING_FIELDS: true")
     f.write("\n   OUTPUT:")
@@ -454,7 +461,7 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
 
     def test_00_gpload_formatOpts_setup(self):
         "0  gpload setup"
-        for num in range(1,42):
+        for num in range(1,44):
            f = open(mkpath('query%d.sql' % num),'w')
            f.write("\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n"+"\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n")
            f.close()
@@ -810,6 +817,21 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
         f.write("\! gpload -f "+mkpath('config/config_file2')+ " -d reuse_gptest\n")
         f.close()
         self.doTest(41)
+    
+    def test_42_gpload_column_without_data_type(self):
+        file = mkpath('setup.sql')
+        runfile(file)
+        copy_data('external_file_15.txt','data_file.txt')
+        write_config_file(mode='insert',reuse_flag='true',fast_match='false', file='data_file.txt',table='testSpecialChar',columns_flag='3', delimiter=";")
+        self.doTest(42)
+
+    def test_43_gpload_header_compat_with_4(self):
+        "43 gpload header attribute and make it usable in gpdb4"
+        file = mkpath('setup.sql')
+        runfile(file)
+        copy_data('external_file_01.txt','data_file.txt')
+        write_config_file(formatOpts='text',file='data_file.txt',table='texttable',delimiter="'|'", header='true')
+        self.doTest(43)
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(GPLoad_FormatOpts_TestCase)

@@ -188,7 +188,7 @@
         <dxl:IndexInfoList/>
         <dxl:Triggers/>
         <dxl:CheckConstraints/>
-        <dxl:PartConstraint DefaultPartition="0" Unbounded="true">
+        <dxl:PartConstraint DefaultPartition="0" Unbounded="true" ExprAbsent="true">
         </dxl:PartConstraint>
       </dxl:Relation>
       <dxl:ColumnStatistics Mdid="1.224805.1.1.3" Name="ctid" Width="6.000000"/>

@@ -1539,6 +1539,7 @@ AutoVacWorkerMain(int argc, char *argv[])
 
 	/* MPP-4990: Autovacuum always runs as utility-mode */
 	Gp_role = GP_ROLE_UTILITY;
+	Gp_session_role = GP_ROLE_UTILITY;
 
 	/* reset MyProcPid */
 	MyProcPid = getpid();

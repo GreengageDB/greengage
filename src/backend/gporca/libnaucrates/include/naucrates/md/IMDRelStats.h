@@ -21,38 +21,39 @@
 
 namespace gpmd
 {
-	using namespace gpos;
-	using namespace gpdxl;
+using namespace gpos;
+using namespace gpdxl;
 
-	//---------------------------------------------------------------------------
-	//	@class:
-	//		IMDRelStats
-	//
-	//	@doc:
-	//		Interface for relation stats
-	//
-	//---------------------------------------------------------------------------
-	class IMDRelStats : public IMDCacheObject
-	{		
-		public:
-		
-			// object type
-			virtual
-			Emdtype MDType() const
-			{
-				return EmdtRelStats;
-			}
-		
-			// number of rows
-			virtual
-			CDouble Rows() const = 0;			
+//---------------------------------------------------------------------------
+//	@class:
+//		IMDRelStats
+//
+//	@doc:
+//		Interface for relation stats
+//
+//---------------------------------------------------------------------------
+class IMDRelStats : public IMDCacheObject
+{
+public:
+	// object type
+	virtual Emdtype
+	MDType() const
+	{
+		return EmdtRelStats;
+	}
 
-			// is statistics on an empty input
-			virtual
-			BOOL IsEmpty() const = 0;
-	};
-}
+	// number of rows
+	virtual CDouble Rows() const = 0;
 
-#endif // !GPMD_IMDRelStats_H
+	virtual ULONG RelPages() const = 0;
+
+	virtual ULONG RelAllVisible() const = 0;
+
+	// is statistics on an empty input
+	virtual BOOL IsEmpty() const = 0;
+};
+}  // namespace gpmd
+
+#endif	// !GPMD_IMDRelStats_H
 
 // EOF

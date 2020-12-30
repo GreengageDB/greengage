@@ -1876,7 +1876,7 @@ class gpload:
                     self.log(self.DEBUG,
                              'getting source column data type from target')
                     for name, typ, mapto, hasseq in self.into_columns:
-                        if sqlIdentifierCompare(name, key):
+                        if sqlIdentifierCompare(name,quote_ident(key) ):
                             d[key] = typ
                             break
 

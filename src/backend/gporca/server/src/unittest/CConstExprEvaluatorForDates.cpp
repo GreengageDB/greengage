@@ -9,7 +9,7 @@
 //		Implementation of a constant expression evaluator for dates data
 //
 //	@owner:
-//		
+//
 //
 //	@test:
 //
@@ -33,32 +33,33 @@ using namespace gpopt;
 //
 //	@doc:
 //		It expects that the given expression is a scalar comparison between
-//		two date constants. It compares the two constants using their double
+//		two date constants. It compares the two constants using their lint
 //		stats mapping, which in the case of the date type gives a correct result.
 //		If it gets an illegal expression, an assertion failure is raised in
 //		debug mode.
 //
 //---------------------------------------------------------------------------
 CExpression *
-CConstExprEvaluatorForDates::PexprEval
-	(
-	CExpression *pexpr
-	)
+CConstExprEvaluatorForDates::PexprEval(CExpression *pexpr)
 {
 	GPOS_ASSERT(COperator::EopScalarCmp == pexpr->Pop()->Eopid());
 	GPOS_ASSERT(COperator::EopScalarConst == (*pexpr)[0]->Pop()->Eopid());
 	GPOS_ASSERT(COperator::EopScalarConst == (*pexpr)[1]->Pop()->Eopid());
 
-	CScalarConst *popScalarLeft = dynamic_cast<CScalarConst *>((*pexpr)[0]->Pop());
+	CScalarConst *popScalarLeft =
+		dynamic_cast<CScalarConst *>((*pexpr)[0]->Pop());
 
-	GPOS_ASSERT(CMDIdGPDB::m_mdid_date.Equals(popScalarLeft->GetDatum()->MDId()));
-	CScalarConst *popScalarRight = dynamic_cast<CScalarConst *>((*pexpr)[1]->Pop());
+	GPOS_ASSERT(
+		CMDIdGPDB::m_mdid_date.Equals(popScalarLeft->GetDatum()->MDId()));
+	CScalarConst *popScalarRight =
+		dynamic_cast<CScalarConst *>((*pexpr)[1]->Pop());
 
-	GPOS_ASSERT(CMDIdGPDB::m_mdid_date.Equals(popScalarRight->GetDatum()->MDId()));
+	GPOS_ASSERT(
+		CMDIdGPDB::m_mdid_date.Equals(popScalarRight->GetDatum()->MDId()));
 
 	CScalarCmp *popScCmp = dynamic_cast<CScalarCmp *>(pexpr->Pop());
-	CDouble dLeft = popScalarLeft->GetDatum()->GetDoubleMapping();
-	CDouble dRight = popScalarRight->GetDatum()->GetDoubleMapping();
+	LINT dLeft = popScalarLeft->GetDatum()->GetLINTMapping();
+	LINT dRight = popScalarRight->GetDatum()->GetLINTMapping();
 	BOOL result = false;
 	switch (popScCmp->ParseCmpType())
 	{

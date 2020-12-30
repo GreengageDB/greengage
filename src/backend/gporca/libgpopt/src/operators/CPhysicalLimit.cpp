@@ -13,6 +13,7 @@
 #include "gpopt/base/CUtils.h"
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDistributionSpecSingleton.h"
+#include "gpopt/base/CDistributionSpecReplicated.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalLimit.h"
 
@@ -28,21 +29,14 @@ using namespace gpopt;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CPhysicalLimit::CPhysicalLimit
-	(
-	CMemoryPool *mp,
-	COrderSpec *pos,
-	BOOL fGlobal,
-	BOOL fHasCount,
-	BOOL fTopLimitUnderDML
-	)
-	:
-	CPhysical(mp),
-	m_pos(pos),
-	m_fGlobal(fGlobal),
-	m_fHasCount(fHasCount),
-	m_top_limit_under_dml(fTopLimitUnderDML),
-	m_pcrsSort(NULL)
+CPhysicalLimit::CPhysicalLimit(CMemoryPool *mp, COrderSpec *pos, BOOL fGlobal,
+							   BOOL fHasCount, BOOL fTopLimitUnderDML)
+	: CPhysical(mp),
+	  m_pos(pos),
+	  m_fGlobal(fGlobal),
+	  m_fHasCount(fHasCount),
+	  m_top_limit_under_dml(fTopLimitUnderDML),
+	  m_pcrsSort(NULL)
 {
 	GPOS_ASSERT(NULL != mp);
 	GPOS_ASSERT(NULL != pos);
@@ -75,16 +69,12 @@ CPhysicalLimit::~CPhysicalLimit()
 //
 //---------------------------------------------------------------------------
 BOOL
-CPhysicalLimit::Matches
-	(
-	COperator *pop
-	)
-	const
+CPhysicalLimit::Matches(COperator *pop) const
 {
 	if (pop->Eopid() == Eopid())
 	{
 		CPhysicalLimit *popLimit = CPhysicalLimit::PopConvert(pop);
-		
+
 		if (popLimit->FGlobal() == m_fGlobal &&
 			popLimit->FHasCount() == m_fHasCount)
 		{
@@ -92,7 +82,7 @@ CPhysicalLimit::Matches
 			return m_pos->Matches(popLimit->m_pos);
 		}
 	}
-	
+
 	return false;
 }
 
@@ -106,15 +96,11 @@ CPhysicalLimit::Matches
 //
 //---------------------------------------------------------------------------
 CColRefSet *
-CPhysicalLimit::PcrsRequired
-	(
-	CMemoryPool *mp,
-	CExpressionHandle &exprhdl,
-	CColRefSet *pcrsRequired,
-	ULONG child_index,
-	CDrvdPropArray *, // pdrgpdpCtxt
-	ULONG // ulOptReq
-	)
+CPhysicalLimit::PcrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							 CColRefSet *pcrsRequired, ULONG child_index,
+							 CDrvdPropArray *,	// pdrgpdpCtxt
+							 ULONG				// ulOptReq
+)
 {
 	GPOS_ASSERT(0 == child_index);
 
@@ -138,20 +124,17 @@ CPhysicalLimit::PcrsRequired
 //
 //---------------------------------------------------------------------------
 COrderSpec *
-CPhysicalLimit::PosRequired
-	(
-	CMemoryPool *, // mp
-	CExpressionHandle &, // exprhdl
-	COrderSpec *, // posInput
-	ULONG
+CPhysicalLimit::PosRequired(CMemoryPool *,		  // mp
+							CExpressionHandle &,  // exprhdl
+							COrderSpec *,		  // posInput
+							ULONG
 #ifdef GPOS_DEBUG
-		child_index
-#endif // GPOS_DEBUG
-	,
-	CDrvdPropArray *, // pdrgpdpCtxt
-	ULONG // ulOptReq
-	)
-	const
+								child_index
+#endif	// GPOS_DEBUG
+							,
+							CDrvdPropArray *,  // pdrgpdpCtxt
+							ULONG			   // ulOptReq
+) const
 {
 	GPOS_ASSERT(0 == child_index);
 
@@ -163,64 +146,78 @@ CPhysicalLimit::PosRequired
 	return m_pos;
 }
 
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CPhysicalLimit::PdsRequired
-//
-//	@doc:
-//		Compute required distribution of the n-th child
-//
-//---------------------------------------------------------------------------
 CDistributionSpec *
-CPhysicalLimit::PdsRequired
-	(
-	CMemoryPool *mp,
-	CExpressionHandle &exprhdl,
-	CDistributionSpec *pdsInput,
-	ULONG child_index,
-	CDrvdPropArray *, // pdrgpdpCtxt
-	ULONG // ulOptReq
-	)
-	const
+CPhysicalLimit::PdsRequired(CMemoryPool *, CExpressionHandle &,
+							CDistributionSpec *, ULONG, CDrvdPropArray *,
+							ULONG) const
+{
+	// FIXME: this method will (and should) _never_ be called
+	// sweep through all 38 overrides of PdsRequired and switch to Ped()
+	GPOS_RAISE(
+		CException::ExmaInvalid, CException::ExmiInvalid,
+		GPOS_WSZ_LIT("PdsRequired should not be called for CPhysicalLimit"));
+	return NULL;
+}
+
+CEnfdDistribution *
+CPhysicalLimit::Ped(CMemoryPool *mp, CExpressionHandle &exprhdl,
+					CReqdPropPlan *prppInput, ULONG child_index,
+					CDrvdPropArray *,  // pdrgpdpCtxt
+					ULONG			   // ulDistrReq
+)
 {
 	GPOS_ASSERT(0 == child_index);
+
+	CDistributionSpec *const pdsInput = prppInput->Ped()->PdsRequired();
 
 	if (FGlobal())
 	{
 		// TODO:  - Mar 19, 2012; Cleanup: move this check to the caller
 		if (exprhdl.HasOuterRefs())
 		{
-			return PdsPassThru(mp, exprhdl, pdsInput, child_index);
+			return GPOS_NEW(mp) CEnfdDistribution(
+				PdsPassThru(mp, exprhdl, pdsInput, child_index),
+				CEnfdDistribution::EdmSatisfy);
 		}
 
-		CExpression *pexprOffset = exprhdl.PexprScalarExactChild(1 /*child_index*/);
+		CExpression *pexprOffset =
+			exprhdl.PexprScalarExactChild(1 /*child_index*/);
 		if (!m_fHasCount && CUtils::FScalarConstIntZero(pexprOffset))
 		{
 			// pass through input distribution if it has no count nor offset and is not
 			// a singleton
 			if (CDistributionSpec::EdtSingleton != pdsInput->Edt() &&
-					CDistributionSpec::EdtStrictSingleton != pdsInput->Edt())
+				CDistributionSpec::EdtStrictSingleton != pdsInput->Edt())
 			{
-				return PdsPassThru(mp, exprhdl, pdsInput, child_index);
+				return GPOS_NEW(mp) CEnfdDistribution(
+					PdsPassThru(mp, exprhdl, pdsInput, child_index),
+					CEnfdDistribution::EdmSatisfy);
 			}
 
-			return GPOS_NEW(mp) CDistributionSpecAny(this->Eopid());
+			return GPOS_NEW(mp) CEnfdDistribution(
+				GPOS_NEW(mp) CDistributionSpecAny(this->Eopid()),
+				CEnfdDistribution::EdmSatisfy);
 		}
 		if (CDistributionSpec::EdtSingleton == pdsInput->Edt())
 		{
 			// pass through input distribution if it is a singleton (and it has count or offset)
-			return PdsPassThru(mp, exprhdl, pdsInput, child_index);
+			return GPOS_NEW(mp) CEnfdDistribution(
+				PdsPassThru(mp, exprhdl, pdsInput, child_index),
+				CEnfdDistribution::EdmSatisfy);
 		}
 
 		// otherwise, require a singleton explicitly
-		return GPOS_NEW(mp) CDistributionSpecSingleton();
+		return GPOS_NEW(mp)
+			CEnfdDistribution(GPOS_NEW(mp) CDistributionSpecSingleton(),
+							  CEnfdDistribution::EdmSatisfy);
 	}
 
 	// if expression has to execute on a single host then we need a gather
 	if (exprhdl.NeedsSingletonExecution())
 	{
-		return PdsRequireSingleton(mp, exprhdl, pdsInput, child_index);
+		return GPOS_NEW(mp) CEnfdDistribution(
+			PdsRequireSingleton(mp, exprhdl, pdsInput, child_index),
+			CEnfdDistribution::EdmSatisfy);
 	}
 
 	// no local limits are generated if there are outer references, so if this
@@ -228,7 +225,9 @@ CPhysicalLimit::PdsRequired
 	GPOS_ASSERT(0 == exprhdl.DeriveOuterReferences()->Size());
 
 	// for local limit, we impose no distribution requirements
-	return GPOS_NEW(mp) CDistributionSpecAny(this->Eopid());
+	return GPOS_NEW(mp)
+		CEnfdDistribution(GPOS_NEW(mp) CDistributionSpecAny(this->Eopid()),
+						  CEnfdDistribution::EdmSatisfy);
 }
 
 
@@ -241,16 +240,11 @@ CPhysicalLimit::PdsRequired
 //
 //---------------------------------------------------------------------------
 CRewindabilitySpec *
-CPhysicalLimit::PrsRequired
-	(
-	CMemoryPool *mp,
-	CExpressionHandle &exprhdl,
-	CRewindabilitySpec *prsRequired,
-	ULONG child_index,
-	CDrvdPropArray *, // pdrgpdpCtxt
-	ULONG // ulOptReq
-	)
-	const
+CPhysicalLimit::PrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							CRewindabilitySpec *prsRequired, ULONG child_index,
+							CDrvdPropArray *,  // pdrgpdpCtxt
+							ULONG			   // ulOptReq
+) const
 {
 	GPOS_ASSERT(0 == child_index);
 
@@ -258,12 +252,13 @@ CPhysicalLimit::PrsRequired
 	{
 		// If the Limit op or its subtree contains an outer ref, then it must
 		// request rewindability with a motion hazard (a Blocking Spool) from its
-		// subtree. Otherwise, if a streaming Spool is added to the subtree, it will 
+		// subtree. Otherwise, if a streaming Spool is added to the subtree, it will
 		// only return tuples it materialized in its first execution (i.e with the
 		// first value of the outer ref) for every re-execution. This can produce
 		// wrong results.
 		// E.g select *, (select 1 from generate_series(1, 10) limit t1.a) from t1;
-		return GPOS_NEW(mp) CRewindabilitySpec(prsRequired->Ert(), CRewindabilitySpec::EmhtMotion);
+		return GPOS_NEW(mp) CRewindabilitySpec(prsRequired->Ert(),
+											   CRewindabilitySpec::EmhtMotion);
 	}
 
 	return PrsPassThru(mp, exprhdl, prsRequired, child_index);
@@ -278,29 +273,27 @@ CPhysicalLimit::PrsRequired
 //
 //---------------------------------------------------------------------------
 CPartitionPropagationSpec *
-CPhysicalLimit::PppsRequired
-	(
-	CMemoryPool *mp,
-	CExpressionHandle &exprhdl,
-	CPartitionPropagationSpec *pppsRequired,
-	ULONG
+CPhysicalLimit::PppsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
+							 CPartitionPropagationSpec *pppsRequired,
+							 ULONG
 #ifdef GPOS_DEBUG
-	child_index
+								 child_index
 #endif
-	,
-	CDrvdPropArray *, //pdrgpdpCtxt
-	ULONG //ulOptReq
-	)
+							 ,
+							 CDrvdPropArray *,	//pdrgpdpCtxt
+							 ULONG				//ulOptReq
+)
 {
 	GPOS_ASSERT(0 == child_index);
 	GPOS_ASSERT(NULL != pppsRequired);
-	
+
 	// limit should not push predicate below it as it will generate wrong results
 	// for example, the following two queries are not equivalent.
 	// Q1: select * from (select * from foo order by a limit 1) x where x.a = 10
 	// Q2: select * from (select * from foo where a = 10 order by a limit 1) x
 
-	return CPhysical::PppsRequiredPushThruUnresolvedUnary(mp, exprhdl, pppsRequired, CPhysical::EppcProhibited, NULL);
+	return CPhysical::PppsRequiredPushThruUnresolvedUnary(
+		mp, exprhdl, pppsRequired, CPhysical::EppcProhibited, NULL);
 }
 
 //---------------------------------------------------------------------------
@@ -312,20 +305,17 @@ CPhysicalLimit::PppsRequired
 //
 //---------------------------------------------------------------------------
 CCTEReq *
-CPhysicalLimit::PcteRequired
-	(
-	CMemoryPool *, //mp,
-	CExpressionHandle &, //exprhdl,
-	CCTEReq *pcter,
-	ULONG
+CPhysicalLimit::PcteRequired(CMemoryPool *,		   //mp,
+							 CExpressionHandle &,  //exprhdl,
+							 CCTEReq *pcter,
+							 ULONG
 #ifdef GPOS_DEBUG
-	child_index
+								 child_index
 #endif
-	,
-	CDrvdPropArray *, //pdrgpdpCtxt,
-	ULONG //ulOptReq
-	)
-	const
+							 ,
+							 CDrvdPropArray *,	//pdrgpdpCtxt,
+							 ULONG				//ulOptReq
+) const
 {
 	GPOS_ASSERT(0 == child_index);
 	return PcterPushThru(pcter);
@@ -340,13 +330,10 @@ CPhysicalLimit::PcteRequired
 //
 //---------------------------------------------------------------------------
 BOOL
-CPhysicalLimit::FProvidesReqdCols
-	(
-	CExpressionHandle &exprhdl,
-	CColRefSet *pcrsRequired,
-	ULONG // ulOptReq
-	)
-	const
+CPhysicalLimit::FProvidesReqdCols(CExpressionHandle &exprhdl,
+								  CColRefSet *pcrsRequired,
+								  ULONG	 // ulOptReq
+) const
 {
 	return FUnaryProvidesReqdCols(exprhdl, pcrsRequired);
 }
@@ -361,12 +348,9 @@ CPhysicalLimit::FProvidesReqdCols
 //
 //---------------------------------------------------------------------------
 COrderSpec *
-CPhysicalLimit::PosDerive
-	(
-	CMemoryPool *,// mp
-	CExpressionHandle & // exprhdl
-	)
-	const
+CPhysicalLimit::PosDerive(CMemoryPool *,	   // mp
+						  CExpressionHandle &  // exprhdl
+) const
 {
 	m_pos->AddRef();
 
@@ -382,15 +366,28 @@ CPhysicalLimit::PosDerive
 //		Derive distribution
 //
 //---------------------------------------------------------------------------
-CDistributionSpec*
-CPhysicalLimit::PdsDerive
-	(
-	CMemoryPool *,// mp
-	CExpressionHandle &exprhdl
-	)
-	const
+CDistributionSpec *
+CPhysicalLimit::PdsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 {
-	return PdsDerivePassThruOuter(exprhdl);
+	CDistributionSpec *pdsOuter = exprhdl.Pdpplan(0)->Pds();
+
+	if (CDistributionSpec::EdtStrictReplicated == pdsOuter->Edt())
+	{
+		// Limit functions can give unstable results and therefore cannot
+		// guarantee strictly replicated data. For example,
+		//
+		//   SELECT * FROM foo WHERE a<>1 LIMIT 1;
+		//
+		// In this case, if the child was replicated, we can no longer
+		// guarantee that property and must now derive tainted replicated.
+		return GPOS_NEW(mp) CDistributionSpecReplicated(
+			CDistributionSpec::EdtTaintedReplicated);
+	}
+	else
+	{
+		pdsOuter->AddRef();
+		return pdsOuter;
+	}
 }
 
 
@@ -403,12 +400,7 @@ CPhysicalLimit::PdsDerive
 //
 //---------------------------------------------------------------------------
 CRewindabilitySpec *
-CPhysicalLimit::PrsDerive
-	(
-	CMemoryPool *mp,
-	CExpressionHandle &exprhdl
-	)
-	const
+CPhysicalLimit::PrsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 {
 	return PrsDerivePassThruOuter(mp, exprhdl);
 }
@@ -423,12 +415,8 @@ CPhysicalLimit::PrsDerive
 //
 //---------------------------------------------------------------------------
 CEnfdProp::EPropEnforcingType
-CPhysicalLimit::EpetOrder
-	(
-	CExpressionHandle &, // exprhdl
-	const CEnfdOrder *peo
-	)
-	const
+CPhysicalLimit::EpetOrder(CExpressionHandle &,	// exprhdl
+						  const CEnfdOrder *peo) const
 {
 	GPOS_ASSERT(NULL != peo);
 	GPOS_ASSERT(!peo->PosRequired()->IsEmpty());
@@ -453,12 +441,8 @@ CPhysicalLimit::EpetOrder
 //
 //---------------------------------------------------------------------------
 CEnfdProp::EPropEnforcingType
-CPhysicalLimit::EpetDistribution
-	(
-	CExpressionHandle &exprhdl,
-	const CEnfdDistribution *ped
-	)
-	const
+CPhysicalLimit::EpetDistribution(CExpressionHandle &exprhdl,
+								 const CEnfdDistribution *ped) const
 {
 	GPOS_ASSERT(NULL != ped);
 
@@ -490,12 +474,9 @@ CPhysicalLimit::EpetDistribution
 //
 //---------------------------------------------------------------------------
 CEnfdProp::EPropEnforcingType
-CPhysicalLimit::EpetRewindability
-	(
-	CExpressionHandle &, // exprhdl
-	const CEnfdRewindability * // per
-	)
-	const
+CPhysicalLimit::EpetRewindability(CExpressionHandle &,		  // exprhdl
+								  const CEnfdRewindability *  // per
+) const
 {
 	// rewindability is preserved on operator's output
 	return CEnfdProp::EpetOptional;
@@ -511,14 +492,10 @@ CPhysicalLimit::EpetRewindability
 //
 //---------------------------------------------------------------------------
 IOstream &
-CPhysicalLimit::OsPrint
-	(
-	IOstream &os
-	)
-	const
+CPhysicalLimit::OsPrint(IOstream &os) const
 {
 	os << SzId() << " " << (*m_pos) << " " << (m_fGlobal ? "global" : "local");
-	
+
 	return os;
 }
 

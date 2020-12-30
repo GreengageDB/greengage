@@ -384,7 +384,7 @@ extern TupleTableSlot *ExecAllocTableSlot(List **tupleTable);
 extern void ExecResetTupleTable(List *tupleTable, bool shouldFree);
 extern TupleTableSlot *MakeSingleTupleTableSlot(TupleDesc tupdesc);
 extern void ExecDropSingleTupleTableSlot(TupleTableSlot *slot);
-extern void ExecSetSlotDescriptor(TupleTableSlot *slot, TupleDesc tupdesc); 
+extern void ExecSetSlotDescriptor(TupleTableSlot *slot, TupleDesc tupdesc);
 
 extern TupleTableSlot *ExecStoreHeapTuple(HeapTuple tuple,
 			   TupleTableSlot *slot,
@@ -393,6 +393,16 @@ extern TupleTableSlot *ExecStoreHeapTuple(HeapTuple tuple,
 extern TupleTableSlot *ExecStoreMinimalTuple(MemTuple mtup,
 					  TupleTableSlot *slot,
 					  bool shouldFree);
+
+/*
+ * Some external libraries such as redis_fdw are using this API, which is
+ * changed in Greenplum. Added it back.
+ */
+static inline TupleTableSlot *ExecStoreTuple(HeapTuple tuple,
+			TupleTableSlot *slot, Buffer buffer, bool shouldFree)
+{
+	return ExecStoreHeapTuple(tuple, slot, buffer, shouldFree);
+}
 
 extern TupleTableSlot *ExecClearTuple(TupleTableSlot *slot);
 extern TupleTableSlot *ExecStoreVirtualTuple(TupleTableSlot *slot);

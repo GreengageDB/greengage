@@ -73,6 +73,7 @@ test: gpexpand_catalog_lock
 
 test: reindex
 test: reindex_gpfastsequence
+test: checkpoint_prepare
 test: commit_transaction_block_checkpoint
 test: instr_in_shmem_setup
 test: instr_in_shmem_terminate
@@ -230,6 +231,9 @@ test: reindex/repeatable_read_reindex_with_insert_heap
 test: reindex/repeatable_read_reindex_with_insert_part_heap reindex/vacuum_analyze_while_reindex_ao_btree
 test: reindex/vacuum_while_reindex_ao_bitmap reindex/vacuum_while_reindex_heap_btree reindex/vacuum_while_reindex_heap_btree_toast
 
+# test workfile_mgr
+test: workfile_mgr_test
+
 # Cancel test
 test: cancel_plpython
 
@@ -256,3 +260,6 @@ test: restore_memory_accounting_default
 #Too many exec account tests end
 
 test: distributed_transactions
+
+# Test for distributed commit array overflow during replay on standby
+test: standby_replay_dtx_info

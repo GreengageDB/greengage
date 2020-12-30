@@ -113,3 +113,4 @@
 		"work_mem",
 		"temp_tablespaces",
 		"gp_add_column_inherits_table_setting",
+		"gp_resgroup_debug_wait_queue",
