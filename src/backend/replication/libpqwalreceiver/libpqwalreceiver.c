@@ -124,10 +124,12 @@ libpqrcv_connect(char *conninfo)
 		int			io_flag;
 		int			rc;
 
-		if (status == PGRES_POLLING_READING)
-			io_flag = WL_SOCKET_READABLE;
-		else
-			io_flag = WL_SOCKET_WRITEABLE;
+		/*
+		 * This flag has to be setup for the further call of WaitLatchOrSocket.
+		 */
+		io_flag = WL_SOCKET_READABLE;
+		if (status == PGRES_POLLING_WRITING)
+			io_flag |= WL_SOCKET_WRITEABLE;
 
 		rc = WaitLatchOrSocket(&MyProc->procLatch,
 							   WL_POSTMASTER_DEATH | WL_LATCH_SET | io_flag,
