@@ -3820,13 +3820,14 @@ CTestUtils::CreateGenericDatum(CMemoryPool *mp, CMDAccessor *md_accessor,
 		CDXLUtils::DecodeByteArrayFromString(mp, pstrEncodedValue, &ulbaSize);
 
 	CDXLDatumGeneric *dxl_datum = NULL;
-	if (CMDTypeGenericGPDB::IsTimeRelatedType(mdid_type))
+	if (CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToDouble(mdid_type))
 	{
 		dxl_datum = GPOS_NEW(mp) CDXLDatumStatsDoubleMappable(
 			mp, mdid_type, default_type_modifier, false /*is_const_null*/, data,
 			ulbaSize, CDouble(value));
 	}
-	else if (pmdtype->IsTextRelated())
+	else if (pmdtype->IsTextRelated() ||
+			 CMDTypeGenericGPDB::IsTimeRelatedTypeMappableToLint(mdid_type))
 	{
 		dxl_datum = GPOS_NEW(mp) CDXLDatumStatsLintMappable(
 			mp, mdid_type, default_type_modifier, false /*is_const_null*/, data,

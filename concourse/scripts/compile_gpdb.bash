@@ -296,8 +296,8 @@ function _main() {
       prep_env
       build_xerces
       test_orca
-      install_deps
-      link_python
+      #install_deps
+      #link_python
       ;;
     win32)
         export BLD_ARCH=win32
@@ -330,7 +330,7 @@ function _main() {
       unittest_check_gpdb
   fi
   include_zstd
-  include_quicklz
+  #include_quicklz
   include_libstdcxx
   include_libuv
   export_gpdb
