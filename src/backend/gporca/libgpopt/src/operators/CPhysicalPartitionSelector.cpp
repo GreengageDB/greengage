@@ -9,16 +9,17 @@
 //		Implementation of physical partition selector
 //---------------------------------------------------------------------------
 
+#include "gpopt/operators/CPhysicalPartitionSelector.h"
+
 #include "gpos/base.h"
 
-#include "gpopt/base/CUtils.h"
-#include "gpopt/base/COptCtxt.h"
+#include "gpopt/base/CColRef.h"
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDrvdPropCtxtPlan.h"
+#include "gpopt/base/COptCtxt.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
-#include "gpopt/operators/CPhysicalPartitionSelector.h"
 #include "gpopt/operators/CPredicateUtils.h"
-#include "gpopt/base/CColRef.h"
 
 using namespace gpopt;
 
@@ -724,6 +725,18 @@ CRewindabilitySpec *
 CPhysicalPartitionSelector::PrsDerive(CMemoryPool *mp,
 									  CExpressionHandle &exprhdl) const
 {
+	CPartInfo *ppartinfo = exprhdl.DerivePartitionInfo(0);
+	BOOL staticPartitionSelector = ppartinfo->FContainsScanId(this->ScanId());
+	if (!staticPartitionSelector)
+	{
+		// Currently the executor function ExecRescanPartitionSelector() expects
+		// that a dynamic partition selector is not rescannable. So, prevent
+		// Orca from picking such a plan.
+		CRewindabilitySpec *prs = exprhdl.Pdpplan(0 /*child_index*/)->Prs();
+		return GPOS_NEW(mp)
+			CRewindabilitySpec(CRewindabilitySpec::ErtNone, prs->Emht());
+	}
+
 	return PrsDerivePassThruOuter(mp, exprhdl);
 }
 

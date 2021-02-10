@@ -20,7 +20,7 @@ function prep_env() {
   case "${TARGET_OS}" in
   centos)
     case "${TARGET_OS_VERSION}" in
-    6 | 7) BLD_ARCH=rhel${TARGET_OS_VERSION}_x86_64 ;;
+    6 | 7 | 8) BLD_ARCH=rhel${TARGET_OS_VERSION}_x86_64 ;;
     *)
       echo "TARGET_OS_VERSION not set or recognized for Centos/RHEL"
       exit 1
@@ -45,6 +45,15 @@ function prep_env() {
       ;;
     esac
     ;;
+  photon)
+    case "${TARGET_OS_VERSION}" in
+    3) export BLD_ARCH=photon3_x86_64; export LANG=en_US.UTF-8;;
+    *)
+      echo "TARGET_OS_VERSION not set or recognized for Photon"
+      exit 1
+      ;;
+    esac
+    ;;
   esac
 }
 
@@ -53,7 +62,7 @@ function install_libuv() {
   local libdir
 
   case "${TARGET_OS}" in
-    centos | sles) libdir=/usr/lib64 ;;
+    centos | sles | photon) libdir=/usr/lib64 ;;
     ubuntu) libdir=/usr/lib/x86_64-linux-gnu ;;
     *) return ;;
   esac
@@ -67,7 +76,14 @@ function install_deps_for_centos_or_sles() {
   rpm -i libquicklz-installer/libquicklz-*.rpm
   rpm -i libquicklz-devel-installer/libquicklz-*.rpm
   # install libsigar from tar.gz
-  tar zxf libsigar-installer/sigar-*.targz -C gpdb_src/gpAux/ext
+  if [[ "${TARGET_OS}" != "centos" ]] || [[ "${TARGET_OS_VERSION}" != "8"  ]] ; then
+    tar zxf libsigar-installer/sigar-*.targz -C gpdb_src/gpAux/ext
+  fi
+}
+
+function install_deps_for_photon() {
+  rpm -i libquicklz-installer/libquicklz-*.rpm
+  rpm -i libquicklz-devel-installer/libquicklz-*.rpm
 }
 
 function install_deps_for_ubuntu() {
@@ -78,13 +94,18 @@ function install_deps() {
   case "${TARGET_OS}" in
     centos | sles) install_deps_for_centos_or_sles;;
     ubuntu) install_deps_for_ubuntu;;
+    photon) install_deps_for_photon;;
   esac
   install_libuv
 }
 
 function link_python() {
   tar xf python-tarball/python-*.tar.gz -C $(pwd)/${GPDB_SRC_PATH}/gpAux/ext
-  ln -sf $(pwd)/${GPDB_SRC_PATH}/gpAux/ext/${BLD_ARCH}/python-2.7.12 /opt/python-2.7.12
+  if [[ "${TARGET_OS}" == "centos" ]] && [[ "${TARGET_OS_VERSION}" == "8"  ]] ; then
+    ln -sf $(pwd)/${GPDB_SRC_PATH}/gpAux/ext/${BLD_ARCH}/python-2.7.17 /opt/python-2.7.17
+  else
+    ln -sf $(pwd)/${GPDB_SRC_PATH}/gpAux/ext/${BLD_ARCH}/python-2.7.12 /opt/python-2.7.12
+  fi
 }
 
 function generate_build_number() {
@@ -140,7 +161,7 @@ function unittest_check_gpdb() {
 function include_zstd() {
   local libdir
   case "${TARGET_OS}" in
-    centos | sles) libdir=/usr/lib64 ;;
+    centos | sles | photon) libdir=/usr/lib64 ;;
     ubuntu) libdir=/usr/lib ;;
     *) return ;;
   esac
@@ -154,7 +175,7 @@ function include_zstd() {
 function include_quicklz() {
   local libdir
   case "${TARGET_OS}" in
-    centos | sles) libdir=/usr/lib64 ;;
+    centos | sles | photon) libdir=/usr/lib64 ;;
     ubuntu) libdir=/usr/local/lib ;;
     *) return ;;
   esac
@@ -164,7 +185,7 @@ function include_quicklz() {
 }
 
 function include_libstdcxx() {
-  if [ "${TARGET_OS}" == "centos" ] ; then
+  if [[ "${TARGET_OS}" == "centos"  ]] && [[ "${TARGET_OS_VERSION}" != 8 ]]; then
     pushd /opt/gcc-6*/lib64
       for libfile in libstdc++.so.*; do
         case $libfile in
@@ -184,7 +205,7 @@ function include_libuv() {
   local includedir=/usr/include
   local libdir
   case "${TARGET_OS}" in
-    centos | sles) libdir=/usr/lib64 ;;
+    centos | sles | photon) libdir=/usr/lib64 ;;
     ubuntu) libdir=/usr/lib/x86_64-linux-gnu ;;
     *) return ;;
   esac
@@ -271,7 +292,7 @@ function _main() {
   mkdir gpdb_src/gpAux/ext
 
   case "${TARGET_OS}" in
-    centos|ubuntu|sles)
+    centos|ubuntu|sles|photon)
       prep_env
       build_xerces
       test_orca
@@ -282,7 +303,7 @@ function _main() {
         export BLD_ARCH=win32
         ;;
     *)
-        echo "only centos, ubuntu, sles and win32 are supported TARGET_OS'es"
+        echo "only centos, ubuntu, sles, photon and win32 are supported TARGET_OS'es"
         false
         ;;
   esac

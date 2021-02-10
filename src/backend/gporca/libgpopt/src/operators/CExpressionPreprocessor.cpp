@@ -10,20 +10,24 @@
 //		logical expression to be optimized
 //---------------------------------------------------------------------------
 
+#include "gpopt/operators/CExpressionPreprocessor.h"
+
 #include "gpos/base.h"
-#include "gpopt/base/CUtils.h"
+#include "gpos/common/CAutoRef.h"
+#include "gpos/common/CAutoTimer.h"
+
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/CColRefTable.h"
 #include "gpopt/base/CConstraintInterval.h"
-#include "gpos/common/CAutoTimer.h"
-#include "gpos/common/CAutoRef.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/exception.h"
-
-#include "gpopt/operators/CWindowPreprocessor.h"
-#include "gpopt/operators/CLogicalConstTableGet.h"
+#include "gpopt/mdcache/CMDAccessor.h"
+#include "gpopt/operators/CExpressionFactorizer.h"
+#include "gpopt/operators/CExpressionUtils.h"
 #include "gpopt/operators/CLogicalCTEAnchor.h"
 #include "gpopt/operators/CLogicalCTEConsumer.h"
 #include "gpopt/operators/CLogicalCTEProducer.h"
+#include "gpopt/operators/CLogicalConstTableGet.h"
 #include "gpopt/operators/CLogicalGbAgg.h"
 #include "gpopt/operators/CLogicalInnerJoin.h"
 #include "gpopt/operators/CLogicalLimit.h"
@@ -33,11 +37,8 @@
 #include "gpopt/operators/CLogicalSetOp.h"
 #include "gpopt/operators/CLogicalUnion.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
-#include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CNormalizer.h"
-#include "gpopt/operators/CExpressionUtils.h"
-#include "gpopt/operators/CExpressionFactorizer.h"
-#include "gpopt/operators/CExpressionPreprocessor.h"
+#include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarCmp.h"
 #include "gpopt/operators/CScalarIdent.h"
 #include "gpopt/operators/CScalarNAryJoinPredList.h"
@@ -47,14 +48,12 @@
 #include "gpopt/operators/CScalarSubqueryAny.h"
 #include "gpopt/operators/CScalarSubqueryExists.h"
 #include "gpopt/operators/CScalarSubqueryQuantified.h"
+#include "gpopt/operators/CWindowPreprocessor.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
-
-#include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/xforms/CXform.h"
 #include "naucrates/md/IMDScalarOp.h"
 #include "naucrates/md/IMDType.h"
 #include "naucrates/statistics/CStatistics.h"
-
 #include "naucrates/traceflags/traceflags.h"
 
 using namespace gpopt;
@@ -1357,11 +1356,8 @@ CExpressionPreprocessor::PexprOuterJoinToInnerJoin(CMemoryPool *mp,
 						PexprOuterJoinToInnerJoin(mp, (*pexprChild)[1]);
 					CExpression *pexprNewScalar =
 						PexprOuterJoinToInnerJoin(mp, (*pexprChild)[2]);
-					CExpression *pexprJoin =
-						CUtils::PexprLogicalJoin<CLogicalInnerJoin>(
-							mp, pexprNewOuter, pexprNewInner, pexprNewScalar);
-					pexprChild = PexprCollapseJoins(mp, pexprJoin);
-					pexprJoin->Release();
+					pexprChild = CUtils::PexprLogicalJoin<CLogicalInnerJoin>(
+						mp, pexprNewOuter, pexprNewInner, pexprNewScalar);
 					fNewChild = true;
 				}
 			}
@@ -1553,11 +1549,10 @@ CExpressionPreprocessor::PexprAddEqualityPreds(CMemoryPool *mp,
 // constraint property. Columns for which predicates are generated will be
 // added to the set of processed columns
 CExpression *
-CExpressionPreprocessor::PexprScalarPredicates(CMemoryPool *mp,
-											   CPropConstraint *ppc,
-											   CColRefSet *pcrsNotNull,
-											   CColRefSet *pcrs,
-											   CColRefSet *pcrsProcessed)
+CExpressionPreprocessor::PexprScalarPredicates(
+	CMemoryPool *mp, CPropConstraint *ppc,
+	CPropConstraint *constraintsForOuterRefs, CColRefSet *pcrsNotNull,
+	CColRefSet *pcrs, CColRefSet *pcrsProcessed)
 {
 	CExpressionArray *pdrgpexpr = GPOS_NEW(mp) CExpressionArray(mp);
 
@@ -1566,8 +1561,8 @@ CExpressionPreprocessor::PexprScalarPredicates(CMemoryPool *mp,
 	{
 		CColRef *colref = crsi.Pcr();
 
-		CExpression *pexprScalar =
-			ppc->PexprScalarMappedFromEquivCols(mp, colref);
+		CExpression *pexprScalar = ppc->PexprScalarMappedFromEquivCols(
+			mp, colref, constraintsForOuterRefs);
 		if (NULL == pexprScalar)
 		{
 			continue;
@@ -1600,8 +1595,9 @@ CExpressionPreprocessor::PexprScalarPredicates(CMemoryPool *mp,
 // derived constraints. This function is needed because scalar expressions
 // can have relational children when there are subqueries
 CExpression *
-CExpressionPreprocessor::PexprFromConstraintsScalar(CMemoryPool *mp,
-													CExpression *pexpr)
+CExpressionPreprocessor::PexprFromConstraintsScalar(
+	CMemoryPool *mp, CExpression *pexpr,
+	CPropConstraint *constraintsForOuterRefs)
 {
 	GPOS_ASSERT(NULL != pexpr);
 	GPOS_ASSERT(pexpr->Pop()->FScalar());
@@ -1620,13 +1616,15 @@ CExpressionPreprocessor::PexprFromConstraintsScalar(CMemoryPool *mp,
 		CExpression *pexprChild = (*pexpr)[ul];
 		if (pexprChild->Pop()->FScalar())
 		{
-			pexprChild = PexprFromConstraintsScalar(mp, pexprChild);
+			pexprChild = PexprFromConstraintsScalar(mp, pexprChild,
+													constraintsForOuterRefs);
 		}
 		else
 		{
 			GPOS_ASSERT(pexprChild->Pop()->FLogical());
 			CColRefSet *pcrsProcessed = GPOS_NEW(mp) CColRefSet(mp);
-			pexprChild = PexprFromConstraints(mp, pexprChild, pcrsProcessed);
+			pexprChild = PexprFromConstraints(mp, pexprChild, pcrsProcessed,
+											  constraintsForOuterRefs);
 			pcrsProcessed->Release();
 		}
 
@@ -1667,8 +1665,9 @@ CExpressionPreprocessor::PexprWithImpliedPredsOnLOJInnerChild(
 
 	// generate a scalar predicate from the computed constraint, restricted to LOJ inner child
 	CColRefSet *pcrsProcessed = GPOS_NEW(mp) CColRefSet(mp);
-	CExpression *pexprPred = PexprScalarPredicates(
-		mp, ppc, pcrsInnerNotNull, pcrsInnerOutput, pcrsProcessed);
+	CExpression *pexprPred =
+		PexprScalarPredicates(mp, ppc, NULL /*no outer refs*/, pcrsInnerNotNull,
+							  pcrsInnerOutput, pcrsProcessed);
 	pcrsProcessed->Release();
 	ppc->Release();
 
@@ -1778,9 +1777,9 @@ CExpressionPreprocessor::PexprOuterJoinInferPredsFromOuterChildToInnerChild(
 // in the already processed set. This set is expanded with more columns
 // that get processed along the way
 CExpression *
-CExpressionPreprocessor::PexprFromConstraints(CMemoryPool *mp,
-											  CExpression *pexpr,
-											  CColRefSet *pcrsProcessed)
+CExpressionPreprocessor::PexprFromConstraints(
+	CMemoryPool *mp, CExpression *pexpr, CColRefSet *pcrsProcessed,
+	CPropConstraint *constraintsForOuterRefs)
 {
 	GPOS_ASSERT(NULL != pcrsProcessed);
 	GPOS_ASSERT(NULL != pexpr);
@@ -1797,14 +1796,17 @@ CExpressionPreprocessor::PexprFromConstraints(CMemoryPool *mp,
 		CExpression *pexprChild = (*pexpr)[ul];
 		if (pexprChild->Pop()->FScalar())
 		{
-			pexprChild = PexprFromConstraintsScalar(mp, pexprChild);
+			// we could potentially combine constraintsForOuterRefs and ppc,
+			// but for now just pass ppc, the constraints from the direct ancestor
+			// of the subquery
+			pexprChild = PexprFromConstraintsScalar(mp, pexprChild, ppc);
 			pdrgpexprChildren->Append(pexprChild);
 			continue;
 		}
 
 		// process child
-		CExpression *pexprChildNew =
-			PexprFromConstraints(mp, pexprChild, pcrsProcessed);
+		CExpression *pexprChildNew = PexprFromConstraints(
+			mp, pexprChild, pcrsProcessed, constraintsForOuterRefs);
 
 		CColRefSet *pcrsOutChild = GPOS_NEW(mp) CColRefSet(mp);
 		// output columns on which predicates must be inferred
@@ -1816,8 +1818,9 @@ CExpressionPreprocessor::PexprFromConstraints(CMemoryPool *mp,
 		pcrsOutChild->Exclude(pcrsProcessed);
 
 		// generate predicates for the output columns of child
-		CExpression *pexprPred = PexprScalarPredicates(
-			mp, ppc, pcrsNotNull, pcrsOutChild, pcrsProcessed);
+		CExpression *pexprPred =
+			PexprScalarPredicates(mp, ppc, constraintsForOuterRefs, pcrsNotNull,
+								  pcrsOutChild, pcrsProcessed);
 		pcrsOutChild->Release();
 
 		if (NULL != pexprPred)
@@ -2036,7 +2039,7 @@ CExpressionPreprocessor::PexprAddPredicatesFromConstraints(CMemoryPool *mp,
 	// based on equivalence classes, e.g. constraint a=1 and equiv class {a,b} adds pred b=1
 	CColRefSet *pcrsProcessed = GPOS_NEW(mp) CColRefSet(mp);
 	CExpression *pexprConstraints =
-		PexprFromConstraints(mp, pexprNormalized, pcrsProcessed);
+		PexprFromConstraints(mp, pexprNormalized, pcrsProcessed, NULL);
 	GPOS_CHECK_ABORT;
 	pexprNormalized->Release();
 	pcrsProcessed->Release();

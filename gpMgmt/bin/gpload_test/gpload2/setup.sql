@@ -10,6 +10,7 @@ DROP EXTERNAL TABLE IF EXISTS temp_gpload_staging_table;
 DROP TABLE IF EXISTS texttable;
 DROP TABLE IF EXISTS csvtable;
 DROP TABLE IF EXISTS texttable1;
+DROP TABLE IF EXISTS test.csvtable;
 DROP TABLE IF EXISTS testSpecialChar;
 reset client_min_messages;
 CREATE TABLE texttable (

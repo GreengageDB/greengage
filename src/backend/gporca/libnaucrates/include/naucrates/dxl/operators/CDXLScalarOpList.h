@@ -13,6 +13,7 @@
 #define GPDXL_CDXLScalarOpList_H
 
 #include "gpos/base.h"
+
 #include "naucrates/dxl/operators/CDXLScalar.h"
 
 namespace gpdxl
@@ -34,6 +35,7 @@ public:
 	enum EdxlOpListType
 	{
 		EdxloplistEqFilterList,
+		EdxloplistEqFilterElemList,
 		EdxloplistFilterList,
 		EdxloplistGeneral,
 		EdxloplistSentinel

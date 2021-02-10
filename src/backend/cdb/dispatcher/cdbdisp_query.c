@@ -401,7 +401,8 @@ CdbDispatchUtilityStatement(struct Node *stmt,
 
 	elogif(Debug_print_full_dtm, LOG,
 		   "CdbDispatchUtilityStatement: %s (needTwoPhase = %s)",
-		   debug_query_string, (needTwoPhase ? "true" : "false"));
+		   (PointerIsValid(debug_query_string) ? debug_query_string : "\"\""),
+		   (needTwoPhase ? "true" : "false"));
 
 	pQueryParms = cdbdisp_buildUtilityQueryParms(stmt, flags, oid_assignments);
 
@@ -541,7 +542,7 @@ cdbdisp_buildUtilityQueryParms(struct Node *stmt,
 	}
 
 	pQueryParms = palloc0(sizeof(*pQueryParms));
-	pQueryParms->strCommand = debug_query_string;
+	pQueryParms->strCommand = PointerIsValid(debug_query_string) ? debug_query_string : "";
 	pQueryParms->serializedQuerytree = serializedQuerytree;
 	pQueryParms->serializedQuerytreelen = serializedQuerytree_len;
 	pQueryParms->serializedQueryDispatchDesc = serializedQueryDispatchDesc;
@@ -1426,7 +1427,8 @@ CdbDispatchCopyStart(struct CdbCopy *cdbCopy, Node *stmt, int flags)
 
 	elogif(Debug_print_full_dtm, LOG,
 		   "CdbDispatchCopyStart: %s (needTwoPhase = %s)",
-		   debug_query_string, (needTwoPhase ? "true" : "false"));
+		   (PointerIsValid(debug_query_string) ? debug_query_string : "\"\""),
+		   (needTwoPhase ? "true" : "false"));
 
 	pQueryParms = cdbdisp_buildUtilityQueryParms(stmt, flags, NULL);
 

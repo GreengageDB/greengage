@@ -9,14 +9,14 @@
 //		Implementation of GPDB's legacy cost model
 //---------------------------------------------------------------------------
 
+#include "gpdbcost/CCostModelGPDBLegacy.h"
+
 #include "gpopt/base/COrderSpec.h"
 #include "gpopt/base/CWindowFrame.h"
-#include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
+#include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalSequenceProject.h"
-
-#include "gpdbcost/CCostModelGPDBLegacy.h"
 
 using namespace gpos;
 using namespace gpdbcost;
@@ -60,6 +60,7 @@ const CCostModelGPDBLegacy::SCostMapping CCostModelGPDBLegacy::m_rgcm[] = {
 	{COperator::EopPhysicalLeftAntiSemiHashJoin, CostHashJoin},
 	{COperator::EopPhysicalLeftAntiSemiHashJoinNotIn, CostHashJoin},
 	{COperator::EopPhysicalLeftOuterHashJoin, CostHashJoin},
+	{COperator::EopPhysicalRightOuterHashJoin, CostHashJoin},
 
 	{COperator::EopPhysicalInnerIndexNLJoin, CostIndexNLJoin},
 	{COperator::EopPhysicalLeftOuterIndexNLJoin, CostIndexNLJoin},
@@ -710,7 +711,8 @@ CCostModelGPDBLegacy::CostHashJoin(CMemoryPool *,  // mp
 				COperator::EopPhysicalLeftSemiHashJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiHashJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == op_id ||
-				COperator::EopPhysicalLeftOuterHashJoin == op_id);
+				COperator::EopPhysicalLeftOuterHashJoin == op_id ||
+				COperator::EopPhysicalRightOuterHashJoin == op_id);
 #endif	// GPOS_DEBUG
 
 	DOUBLE num_rows_outer = pci->PdRows()[0];

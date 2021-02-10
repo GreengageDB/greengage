@@ -13,27 +13,28 @@
 //
 //---------------------------------------------------------------------------
 
-#include "gpopt/utils/gpdbdefs.h"
-#include "gpopt/utils/CConstExprEvaluatorProxy.h"
 #include "gpopt/utils/COptTasks.h"
-#include "gpopt/relcache/CMDProviderRelcache.h"
-#include "gpopt/config/CConfigParamMapping.h"
-#include "gpopt/translate/CTranslatorDXLToExpr.h"
-#include "gpopt/translate/CTranslatorExprToDXL.h"
-#include "gpopt/translate/CTranslatorUtils.h"
-#include "gpopt/translate/CTranslatorQueryToDXL.h"
-#include "gpopt/translate/CTranslatorDXLToPlStmt.h"
-#include "gpopt/translate/CContextDXLToPlStmt.h"
-#include "gpopt/translate/CTranslatorRelcacheToDXL.h"
-#include "gpopt/eval/CConstExprEvaluatorDXL.h"
-#include "gpopt/engine/CHint.h"
-
-#include "cdb/cdbvars.h"
-#include "utils/guc.h"
-#include "utils/fmgroids.h"
 
 #include "gpos/base.h"
 #include "gpos/error/CException.h"
+
+#include "gpopt/config/CConfigParamMapping.h"
+#include "gpopt/engine/CHint.h"
+#include "gpopt/eval/CConstExprEvaluatorDXL.h"
+#include "gpopt/relcache/CMDProviderRelcache.h"
+#include "gpopt/translate/CContextDXLToPlStmt.h"
+#include "gpopt/translate/CTranslatorDXLToExpr.h"
+#include "gpopt/translate/CTranslatorDXLToPlStmt.h"
+#include "gpopt/translate/CTranslatorExprToDXL.h"
+#include "gpopt/translate/CTranslatorQueryToDXL.h"
+#include "gpopt/translate/CTranslatorRelcacheToDXL.h"
+#include "gpopt/translate/CTranslatorUtils.h"
+#include "gpopt/utils/CConstExprEvaluatorProxy.h"
+#include "gpopt/utils/gpdbdefs.h"
+
+#include "cdb/cdbvars.h"
+#include "utils/fmgroids.h"
+#include "utils/guc.h"
 #undef setstate
 
 #include "gpos/_api.h"
@@ -42,47 +43,36 @@
 #include "gpos/io/COstreamString.h"
 #include "gpos/memory/CAutoMemoryPool.h"
 #include "gpos/task/CAutoTraceFlag.h"
-#include "gpos/common/CAutoP.h"
 
-#include "gpopt/translate/CTranslatorDXLToExpr.h"
-#include "gpopt/translate/CTranslatorExprToDXL.h"
-
+#include "gpdbcost/CCostModelGPDB.h"
 #include "gpopt/base/CAutoOptCtxt.h"
+#include "gpopt/engine/CCTEConfig.h"
 #include "gpopt/engine/CEnumeratorConfig.h"
 #include "gpopt/engine/CStatisticsConfig.h"
-#include "gpopt/engine/CCTEConfig.h"
+#include "gpopt/exception.h"
+#include "gpopt/gpdbwrappers.h"
 #include "gpopt/mdcache/CAutoMDAccessor.h"
 #include "gpopt/mdcache/CMDCache.h"
 #include "gpopt/minidump/CMinidumperUtils.h"
 #include "gpopt/optimizer/COptimizer.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
+#include "gpopt/translate/CTranslatorDXLToExpr.h"
+#include "gpopt/translate/CTranslatorExprToDXL.h"
 #include "gpopt/xforms/CXformFactory.h"
-#include "gpopt/exception.h"
-
-#include "naucrates/init.h"
-#include "naucrates/traceflags/traceflags.h"
-
 #include "naucrates/base/CQueryToDXLResult.h"
-
-#include "naucrates/md/IMDId.h"
-#include "naucrates/md/CMDIdRelStats.h"
-
-#include "naucrates/md/CSystemId.h"
-#include "naucrates/md/IMDRelStats.h"
-#include "naucrates/md/CMDIdCast.h"
-#include "naucrates/md/CMDIdScCmp.h"
-
-#include "naucrates/dxl/operators/CDXLNode.h"
-#include "naucrates/dxl/parser/CParseHandlerDXL.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/CIdGenerator.h"
+#include "naucrates/dxl/operators/CDXLNode.h"
+#include "naucrates/dxl/parser/CParseHandlerDXL.h"
 #include "naucrates/exception.h"
-
-#include "gpdbcost/CCostModelGPDB.h"
-#include "gpdbcost/CCostModelGPDBLegacy.h"
-
-
-#include "gpopt/gpdbwrappers.h"
+#include "naucrates/init.h"
+#include "naucrates/md/CMDIdCast.h"
+#include "naucrates/md/CMDIdRelStats.h"
+#include "naucrates/md/CMDIdScCmp.h"
+#include "naucrates/md/CSystemId.h"
+#include "naucrates/md/IMDId.h"
+#include "naucrates/md/IMDRelStats.h"
+#include "naucrates/traceflags/traceflags.h"
 
 using namespace gpos;
 using namespace gpopt;
@@ -429,17 +419,9 @@ COptTasks::SetCostModelParams(ICostModel *cost_model)
 	if (optimizer_nestloop_factor > 1.0)
 	{
 		// change NLJ cost factor
-		ICostModelParams::SCostParam *cost_param = NULL;
-		if (OPTIMIZER_GPDB_CALIBRATED >= optimizer_cost_model)
-		{
-			cost_param = cost_model->GetCostModelParams()->PcpLookup(
+		ICostModelParams::SCostParam *cost_param =
+			cost_model->GetCostModelParams()->PcpLookup(
 				CCostModelParamsGPDB::EcpNLJFactor);
-		}
-		else
-		{
-			cost_param = cost_model->GetCostModelParams()->PcpLookup(
-				CCostModelParamsGPDBLegacy::EcpNLJFactor);
-		}
 		CDouble nlj_factor(optimizer_nestloop_factor);
 		cost_model->GetCostModelParams()->SetParam(
 			cost_param->Id(), nlj_factor, nlj_factor - 0.5, nlj_factor + 0.5);
@@ -448,18 +430,15 @@ COptTasks::SetCostModelParams(ICostModel *cost_model)
 	if (optimizer_sort_factor > 1.0 || optimizer_sort_factor < 1.0)
 	{
 		// change sort cost factor
-		ICostModelParams::SCostParam *cost_param = NULL;
-		if (OPTIMIZER_GPDB_CALIBRATED >= optimizer_cost_model)
-		{
-			cost_param = cost_model->GetCostModelParams()->PcpLookup(
+		ICostModelParams::SCostParam *cost_param =
+			cost_model->GetCostModelParams()->PcpLookup(
 				CCostModelParamsGPDB::EcpSortTupWidthCostUnit);
 
-			CDouble sort_factor(optimizer_sort_factor);
-			cost_model->GetCostModelParams()->SetParam(
-				cost_param->Id(), cost_param->Get() * optimizer_sort_factor,
-				cost_param->GetLowerBoundVal() * optimizer_sort_factor,
-				cost_param->GetUpperBoundVal() * optimizer_sort_factor);
-		}
+		CDouble sort_factor(optimizer_sort_factor);
+		cost_model->GetCostModelParams()->SetParam(
+			cost_param->Id(), cost_param->Get() * optimizer_sort_factor,
+			cost_param->GetLowerBoundVal() * optimizer_sort_factor,
+			cost_param->GetUpperBoundVal() * optimizer_sort_factor);
 	}
 }
 
@@ -475,15 +454,7 @@ COptTasks::SetCostModelParams(ICostModel *cost_model)
 ICostModel *
 COptTasks::GetCostModel(CMemoryPool *mp, ULONG num_segments)
 {
-	ICostModel *cost_model = NULL;
-	if (optimizer_cost_model >= OPTIMIZER_GPDB_CALIBRATED)
-	{
-		cost_model = GPOS_NEW(mp) CCostModelGPDB(mp, num_segments);
-	}
-	else
-	{
-		cost_model = GPOS_NEW(mp) CCostModelGPDBLegacy(mp, num_segments);
-	}
+	ICostModel *cost_model = GPOS_NEW(mp) CCostModelGPDB(mp, num_segments);
 
 	SetCostModelParams(cost_model);
 

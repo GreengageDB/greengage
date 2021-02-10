@@ -12,10 +12,11 @@
 #define GPOPT_CPredicateUtils_H
 
 #include "gpos/base.h"
+
 #include "gpopt/base/CUtils.h"
+#include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CScalarBoolOp.h"
-#include "gpopt/mdcache/CMDAccessor.h"
 
 namespace gpopt
 {
@@ -113,9 +114,10 @@ public:
 	// is the given expression a scalar comparison
 	static BOOL FComparison(CExpression *pexpr);
 
-	// is the given expression a conjunction of equality comparisons
-	static BOOL FConjunctionOfEqComparisons(CMemoryPool *mp,
-											CExpression *pexpr);
+	// is the given expression a disjunction of equality comparisons
+	static BOOL FDisjunctionOfIdentEqComparisons(CMemoryPool *mp,
+												 CExpression *pexpr,
+												 CColRef *colref);
 
 	// is the given expression a comparison of the given type
 	static BOOL FComparison(CExpression *pexpr, IMDType::ECmpType cmp_type);

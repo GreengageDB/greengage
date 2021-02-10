@@ -186,6 +186,7 @@ CParseHandlerFactory::Init(CMemoryPool *mp)
 		 &CreateScSubPlanParamListParseHandler},
 		{EdxltokenScalarSubPlanParam, &CreateScSubPlanParamParseHandler},
 		{EdxltokenScalarOpList, &CreateScOpListParseHandler},
+		{EdxltokenPartLevelEqFilterElemList, &CreateScOpListParseHandler},
 		{EdxltokenScalarPartOid, &CreateScPartOidParseHandler},
 		{EdxltokenScalarPartDefault, &CreateScPartDefaultParseHandler},
 		{EdxltokenScalarPartBound, &CreateScPartBoundParseHandler},

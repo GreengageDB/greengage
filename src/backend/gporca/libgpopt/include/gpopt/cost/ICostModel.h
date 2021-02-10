@@ -17,9 +17,9 @@
 #include "gpos/base.h"
 #include "gpos/common/CRefCount.h"
 
+#include "naucrates/md/IMDRelation.h"
 #include "naucrates/statistics/IStatistics.h"
 
-#include "naucrates/md/IMDRelation.h"
 #include "CCost.h"
 #include "ICostModelParams.h"
 
@@ -54,7 +54,8 @@ public:
 	{
 		EcmtGPDBLegacy = 0,
 		EcmtGPDBCalibrated = 1,
-		EcmtSentinel = 2
+		EcmtGPDBExperimental = 2,
+		EcmtSentinel = 3
 	};
 
 	//---------------------------------------------------------------------------

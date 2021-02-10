@@ -2717,6 +2717,14 @@ _equalDistributedBy(const DistributedBy *a, const DistributedBy *b)
 }
 
 static bool
+_equalPartitionRule(const PartitionRule *a, const PartitionRule *b)
+{
+	COMPARE_SCALAR_FIELD(parchildrelid);
+
+	return true;
+}
+
+static bool
 _equalXmlSerialize(const XmlSerialize *a, const XmlSerialize *b)
 {
 	COMPARE_SCALAR_FIELD(xmloption);
@@ -3505,6 +3513,9 @@ equal(const void *a, const void *b)
 			break;
 		case T_DistributedBy:
 			retval = _equalDistributedBy(a, b);
+			break;
+		case T_PartitionRule:
+			retval = _equalPartitionRule(a, b);
 			break;
 		default:
 			elog(ERROR, "unrecognized node type: %d",

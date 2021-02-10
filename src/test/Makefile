@@ -14,6 +14,6 @@ include $(top_builddir)/src/Makefile.global
 
 SUBDIRS = perl regress isolation
 
-SUBDIRS += fsync walrep heap_checksum isolation2 kerberos modules
+SUBDIRS += fsync walrep heap_checksum isolation2 kerberos modules fdw
 
 $(recurse)

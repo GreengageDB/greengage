@@ -9,17 +9,17 @@
 //		Statistics helper routines for processing all join types
 //---------------------------------------------------------------------------
 
+#include "naucrates/statistics/CJoinStatsProcessor.h"
+
 #include "gpopt/operators/CLogicalIndexApply.h"
 #include "gpopt/operators/CLogicalNAryJoin.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarNAryJoinPredList.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
-
-#include "naucrates/statistics/CStatisticsUtils.h"
-#include "naucrates/statistics/CJoinStatsProcessor.h"
-#include "naucrates/statistics/CLeftAntiSemiJoinStatsProcessor.h"
 #include "naucrates/statistics/CFilterStatsProcessor.h"
+#include "naucrates/statistics/CLeftAntiSemiJoinStatsProcessor.h"
 #include "naucrates/statistics/CScaleFactorUtils.h"
+#include "naucrates/statistics/CStatisticsUtils.h"
 
 using namespace gpopt;
 
@@ -563,7 +563,8 @@ CJoinStatsProcessor::DeriveJoinStats(CMemoryPool *mp,
 	GPOS_ASSERT(COperator::EopLogicalLeftOuterJoin == op_id ||
 				COperator::EopLogicalInnerJoin == op_id ||
 				COperator::EopLogicalNAryJoin == op_id ||
-				COperator::EopLogicalFullOuterJoin == op_id);
+				COperator::EopLogicalFullOuterJoin == op_id ||
+				COperator::EopLogicalRightOuterJoin == op_id);
 #endif
 
 	// derive stats based on local join condition

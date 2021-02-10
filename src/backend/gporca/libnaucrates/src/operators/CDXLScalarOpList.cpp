@@ -10,10 +10,10 @@
 //---------------------------------------------------------------------------
 
 #include "naucrates/dxl/operators/CDXLScalarOpList.h"
-#include "naucrates/dxl/operators/CDXLNode.h"
-#include "naucrates/dxl/xml/CXMLSerializer.h"
 
 #include "gpopt/mdcache/CMDAccessor.h"
+#include "naucrates/dxl/operators/CDXLNode.h"
+#include "naucrates/dxl/xml/CXMLSerializer.h"
 
 using namespace gpos;
 using namespace gpdxl;
@@ -63,6 +63,10 @@ CDXLScalarOpList::GetOpNameStr() const
 	{
 		case EdxloplistEqFilterList:
 			dxl_token = EdxltokenPartLevelEqFilterList;
+			break;
+
+		case EdxloplistEqFilterElemList:
+			dxl_token = EdxltokenPartLevelEqFilterElemList;
 			break;
 
 		case EdxloplistFilterList:

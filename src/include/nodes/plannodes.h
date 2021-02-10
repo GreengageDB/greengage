@@ -1501,7 +1501,7 @@ typedef struct PartitionSelector
 	int32		selectorId;				/* id of this partition selector */
 
 	/* Fields for dynamic selection */
-	List		*levelEqExpressions;	/* equality expressions used for individual levels */
+	List		*levelEqExpressions;	/* list of list of equality expressions used for individual levels */
 	List		*levelExpressions;  	/* predicates used for individual levels */
 	Node		*residualPredicate; 	/* residual predicate (to be applied at the end) */
 	Node		*propagationExpression; /* propagation expression */

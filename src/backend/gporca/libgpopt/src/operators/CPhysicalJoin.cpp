@@ -10,21 +10,19 @@
 //---------------------------------------------------------------------------
 
 #include "gpos/base.h"
-#include "gpopt/exception.h"
 
-#include "gpopt/base/CUtils.h"
 #include "gpopt/base/CCastUtils.h"
 #include "gpopt/base/CDistributionSpecAny.h"
 #include "gpopt/base/CDistributionSpecReplicated.h"
-
-#include "naucrates/md/IMDScalarOp.h"
-
+#include "gpopt/base/CUtils.h"
+#include "gpopt/exception.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalInnerIndexNLJoin.h"
 #include "gpopt/operators/CPhysicalLeftOuterIndexNLJoin.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarCmp.h"
 #include "gpopt/operators/CScalarIsDistinctFrom.h"
+#include "naucrates/md/IMDScalarOp.h"
 
 using namespace gpopt;
 
@@ -350,6 +348,15 @@ CPhysicalJoin::PdsDerive(CMemoryPool *mp, CExpressionHandle &exprhdl) const
 {
 	CDistributionSpec *pdsOuter = exprhdl.Pdpplan(0 /*child_index*/)->Pds();
 	CDistributionSpec *pdsInner = exprhdl.Pdpplan(1 /*child_index*/)->Pds();
+
+	// We must use the non-nullable side for the distribution spec for outer joins.
+	// For right join, the hash side is the non-nullable side, so we swap the inner/outer
+	// distribution specs for the logic below
+	if (exprhdl.Pop()->Eopid() == EopPhysicalRightOuterHashJoin)
+	{
+		pdsOuter = exprhdl.Pdpplan(1 /*child_index*/)->Pds();
+		pdsInner = exprhdl.Pdpplan(0 /*child_index*/)->Pds();
+	}
 
 	CDistributionSpec *pds;
 

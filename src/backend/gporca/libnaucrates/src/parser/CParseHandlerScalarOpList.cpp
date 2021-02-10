@@ -18,11 +18,10 @@
 
 #include "naucrates/dxl/parser/CParseHandlerScalarOpList.h"
 
-#include "naucrates/dxl/parser/CParseHandlerFactory.h"
-#include "naucrates/dxl/parser/CParseHandlerScalarOp.h"
-
 #include "naucrates/dxl/operators/CDXLOperatorFactory.h"
 #include "naucrates/dxl/operators/CDXLScalarOpList.h"
+#include "naucrates/dxl/parser/CParseHandlerFactory.h"
+#include "naucrates/dxl/parser/CParseHandlerScalarOp.h"
 
 
 using namespace gpdxl;
@@ -70,6 +69,24 @@ CParseHandlerScalarOpList::StartElement(const XMLCh *const element_uri,
 		m_dxl_node = GPOS_NEW(m_mp) CDXLNode(
 			m_mp, GPOS_NEW(m_mp) CDXLScalarOpList(m_mp, m_dxl_op_list_type));
 	}
+	else if (CDXLScalarOpList::EdxloplistEqFilterList == dxl_op_list_type)
+	{
+		// we must have already initialized the list node
+		GPOS_ASSERT(NULL != m_dxl_node);
+
+		// parse scalar child
+		CParseHandlerBase *child_parse_handler =
+			CParseHandlerFactory::GetParseHandler(
+				m_mp, CDXLTokens::XmlstrToken(EdxltokenScalarOpList),
+				m_parse_handler_mgr, this);
+		m_parse_handler_mgr->ActivateParseHandler(child_parse_handler);
+
+		// store parse handler
+		this->Append(child_parse_handler);
+
+		child_parse_handler->startElement(element_uri, element_local_name,
+										  element_qname, attrs);
+	}
 	else
 	{
 		// we must have already initialized the list node
@@ -114,6 +131,13 @@ CParseHandlerScalarOpList::GetDXLOpListType(
 				 element_local_name))
 	{
 		return CDXLScalarOpList::EdxloplistEqFilterList;
+	}
+
+	if (0 == XMLString::compareString(
+				 CDXLTokens::XmlstrToken(EdxltokenPartLevelEqFilterElemList),
+				 element_local_name))
+	{
+		return CDXLScalarOpList::EdxloplistEqFilterElemList;
 	}
 
 	if (0 == XMLString::compareString(

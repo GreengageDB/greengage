@@ -10,20 +10,19 @@
 //---------------------------------------------------------------------------
 
 
-#include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/statistics/CHistogram.h"
-#include "naucrates/dxl/operators/CDXLScalarConstValue.h"
-#include "naucrates/dxl/CDXLUtils.h"
+
+#include "gpos/common/syslibwrapper.h"
 #include "gpos/io/COstreamString.h"
 #include "gpos/string/CWStringDynamic.h"
-#include "gpos/common/syslibwrapper.h"
-
-#include "naucrates/statistics/CStatistics.h"
-#include "naucrates/statistics/CStatisticsUtils.h"
-#include "naucrates/statistics/CLeftAntiSemiJoinStatsProcessor.h"
-#include "naucrates/statistics/CScaleFactorUtils.h"
 
 #include "gpopt/base/CColRef.h"
+#include "naucrates/dxl/CDXLUtils.h"
+#include "naucrates/dxl/operators/CDXLScalarConstValue.h"
+#include "naucrates/statistics/CLeftAntiSemiJoinStatsProcessor.h"
+#include "naucrates/statistics/CScaleFactorUtils.h"
+#include "naucrates/statistics/CStatistics.h"
+#include "naucrates/statistics/CStatisticsUtils.h"
 
 using namespace gpnaucrates;
 using namespace gpopt;
@@ -711,7 +710,8 @@ CHistogram::MakeJoinHistogramNormalize(CStatsPred::EStatsCmpType stats_cmp_type,
 			rows_other * other_histogram->GetNullFreq();
 		CDouble expected_num_rows_INDF =
 			expected_num_rows_eq_join + (num_null_rows * num_null_rows_other);
-		*scale_factor = cartesian_product_num_rows / expected_num_rows_INDF;
+		*scale_factor = std::max(
+			CDouble(1.0), cartesian_product_num_rows / expected_num_rows_INDF);
 	}
 
 	// bound scale factor by cross product

@@ -1876,7 +1876,7 @@ class gpload:
                     self.log(self.DEBUG,
                              'getting source column data type from target')
                     for name, typ, mapto, hasseq in self.into_columns:
-                        if sqlIdentifierCompare(name,quote_ident(key) ):
+                        if sqlIdentifierCompare(name,key):
                             d[key] = typ
                             break
 
@@ -1888,7 +1888,7 @@ class gpload:
 
                 # Mark this column as having no mapping, which is important
                 # for do_insert()
-                self.from_columns.append([quote_ident(key),d[key].lower(),None, False])
+                self.from_columns.append([key,d[key].lower(),None, False])
         else:
             self.from_columns = self.into_columns
             self.from_cols_from_user = False
@@ -2437,7 +2437,8 @@ class gpload:
         sql += "(%s)" % ','.join(map(lambda a:'%s %s' % (a[0], a[1]), from_cols))
 
         sql += "location(%s) "%locationStr
-        sql += "format%s "% quote(formatType)
+        sql += "format %s "% quote(formatType)
+
         if len(self.formatOpts) > 0:
             sql += "(%s) "% self.formatOpts
         if encodingStr:

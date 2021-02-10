@@ -262,8 +262,8 @@ NumLWLocks(void)
 	/* predicate.c needs one per old serializable xid buffer */
 	numLocks += NUM_OLDSERXID_BUFFERS;
 
-	/* cdbdistributedlog.c needs one per DistributedLog buffer */
-	numLocks += NUM_DISTRIBUTEDLOG_BUFFERS;
+	/* distributedlog.c needs one per DistributedLog buffer */
+	numLocks += DistributedLog_ShmemBuffers();
 
 	/* sharedsnapshot.c needs one per shared snapshot slot */
 	numLocks += NUM_SHARED_SNAPSHOT_SLOTS;

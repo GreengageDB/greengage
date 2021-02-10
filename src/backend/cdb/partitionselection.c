@@ -199,7 +199,7 @@ partition_rules_for_general_predicate(PartitionSelectorState *node, int level,
  *
  * ----------------------------------------------------------------
  */
-static PartitionRule *
+static List *
 partition_rules_for_equality_predicate(PartitionSelectorState *node, int level,
 									   TupleTableSlot *inputTuple, PartitionNode *parentNode)
 {
@@ -211,7 +211,7 @@ partition_rules_for_equality_predicate(PartitionSelectorState *node, int level,
 	Assert(level < ps->nLevels);
 
 	/* evaluate equalityPredicate to get partition identifier value */
-	ExprState  *exprState = (ExprState *) lfirst(list_nth_cell(node->levelEqExprStates, level));
+	List  *exprStateList = (List *) lfirst(list_nth_cell(node->levelEqExprStates, level));
 
 	ExprContext *econtext = node->ps.ps_ExprContext;
 
@@ -221,16 +221,25 @@ partition_rules_for_equality_predicate(PartitionSelectorState *node, int level,
 
 	bool		isNull = false;
 	ExprDoneCond isDone = ExprSingleResult;
-	Datum		value = ExecEvalExpr(exprState, econtext, &isNull, &isDone);
+	ListCell *lc;
+	List *rules = NIL;
+	foreach(lc, exprStateList)
+	{
+		ExprState *exprState = lfirst(lc);
+		Datum		value = ExecEvalExpr(exprState, econtext, &isNull, &isDone);
 
-	/*
-	 * Compute the type of the expression result. Sometimes this can be
-	 * different than the type of the partition rules (MPP-25707), and we'll
-	 * need this type to choose the correct comparator.
-	 */
-	Oid			exprTypid = exprType((Node *) exprState->expr);
+		/*
+		 * Compute the type of the expression result. Sometimes this can be
+		 * different than the type of the partition rules (MPP-25707), and we'll
+		 * need this type to choose the correct comparator.
+		 */
+		Oid			exprTypid = exprType((Node *) exprState->expr);
 
-	return partition_selection(parentNode, node->accessMethods, ps->relid, value, exprTypid, isNull);
+		PartitionRule *rule = partition_selection(parentNode, node->accessMethods, ps->relid, value, exprTypid, isNull);
+		if (rule)
+			rules = list_append_unique(rules, rule);
+	}
+	return rules;
 }
 
 /* ----------------------------------------------------------------
@@ -270,7 +279,7 @@ processLevel(PartitionSelectorState *node, int level, TupleTableSlot *inputTuple
 	Assert(level < ps->nLevels);
 
 	/* get equality and general predicate for the current level */
-	Expr	   *equalityPredicate = (Expr *) lfirst(list_nth_cell(ps->levelEqExpressions, level));
+	List	   *equalityPredicate = (List *) lfirst(list_nth_cell(ps->levelEqExpressions, level));
 	Expr	   *generalPredicate = (Expr *) lfirst(list_nth_cell(ps->levelExpressions, level));
 
 	/* get parent PartitionNode if in level 0, it's the root PartitionNode */
@@ -290,12 +299,9 @@ processLevel(PartitionSelectorState *node, int level, TupleTableSlot *inputTuple
 	{
 		Assert(NULL == generalPredicate);
 
-		PartitionRule *chosenRule = partition_rules_for_equality_predicate(node, level, inputTuple, parentNode);
+		List *chosenRules = partition_rules_for_equality_predicate(node, level, inputTuple, parentNode);
 
-		if (chosenRule != NULL)
-		{
-			satisfiedRules = lappend(satisfiedRules, chosenRule);
-		}
+		satisfiedRules = list_concat(satisfiedRules, chosenRules);
 	}
 	/* If generalPredicate exists */
 	else if (NULL != generalPredicate)

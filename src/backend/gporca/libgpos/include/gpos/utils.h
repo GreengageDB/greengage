@@ -15,10 +15,9 @@
 #ifndef GPOS_utils_H
 #define GPOS_utils_H
 
-#include "gpos/types.h"
-
 #include "gpos/error/CException.h"
 #include "gpos/io/COstreamBasic.h"
+#include "gpos/types.h"
 
 // These fallback is similar to the one used in Postgres 'elog.c'
 #if defined(__x86_64__)

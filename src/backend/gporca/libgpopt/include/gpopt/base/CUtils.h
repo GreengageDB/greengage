@@ -18,10 +18,10 @@
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CExpression.h"
-#include "gpopt/operators/CScalarArrayCmp.h"
-#include "gpopt/operators/CScalarConst.h"
-#include "gpopt/operators/CScalarBoolOp.h"
 #include "gpopt/operators/CScalarAggFunc.h"
+#include "gpopt/operators/CScalarArrayCmp.h"
+#include "gpopt/operators/CScalarBoolOp.h"
+#include "gpopt/operators/CScalarConst.h"
 
 // fwd declarations
 namespace gpmd
@@ -549,8 +549,8 @@ public:
 	// check if a given operator is a physical join
 	static BOOL FPhysicalJoin(COperator *pop);
 
-	// check if a given operator is a physical outer join
-	static BOOL FPhysicalOuterJoin(COperator *pop);
+	// check if a given operator is a physical left outer join
+	static BOOL FPhysicalLeftOuterJoin(COperator *pop);
 
 	// check if a given operator is a physical scan
 	static BOOL FPhysicalScan(COperator *pop);

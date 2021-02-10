@@ -21,22 +21,19 @@
 #include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CExpression.h"
-#include "gpopt/operators/CScalarArrayCmp.h"
-#include "gpopt/operators/CScalarConst.h"
 #include "gpopt/operators/CLogicalGet.h"
+#include "gpopt/operators/CScalarArrayCmp.h"
 #include "gpopt/operators/CScalarBoolOp.h"
+#include "gpopt/operators/CScalarConst.h"
 #include "gpopt/operators/CScalarProjectList.h"
 #include "gpopt/operators/CScalarSubquery.h"
 #include "naucrates/md/CMDTypeInt2GPDB.h"
 #include "naucrates/md/CMDTypeInt4GPDB.h"
 #include "naucrates/md/CMDTypeInt8GPDB.h"
 #include "naucrates/md/CSystemId.h"
-
-#include "gpdbcost/CCostModelGPDBLegacy.h"
+#include "naucrates/statistics/CPoint.h"
 
 #include "unittest/base.h"
-
-#include "naucrates/statistics/CPoint.h"
 
 
 #define GPOPT_MDCACHE_TEST_OID 1234
@@ -605,7 +602,7 @@ public:
 	static ICostModel *
 	GetCostModel(CMemoryPool *mp)
 	{
-		return GPOS_NEW(mp) CCostModelGPDBLegacy(mp, GPOPT_TEST_SEGMENTS);
+		return GPOS_NEW(mp) CCostModelGPDB(mp, GPOPT_TEST_SEGMENTS);
 	}
 
 	// create a datum with a given type, encoded value and int value

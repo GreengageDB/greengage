@@ -58,6 +58,7 @@ select count(*) from hjtest a1, hjtest a2 where a2.i = least (a1.i,4) and a2.j =
      1
 (1 row)
 
+drop table hjtest;
 --
 -- Test for correct behavior when there is a Merge Join on top of Materialize
 -- on top of a Motion :
@@ -617,22 +618,22 @@ ANALYZE t2;
 ANALYZE t3;
 -- ensure plan has a filter over left outer join
 explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a IS NULL OR (t1.c = t3.c));
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    ->  Result
          Filter: ((t2.a IS NULL) OR (t1.c = t3.c))
-         ->  Hash Left Join
-               Hash Cond: (t1.a = t2.a)
-               ->  Hash Join
-                     Hash Cond: (t1.b = t3.b)
-                     ->  Seq Scan on t1
-                     ->  Hash
-                           ->  Broadcast Motion 3:3  (slice1; segments: 3)
-                                 ->  Seq Scan on t3
+         ->  Hash Right Join
+               Hash Cond: (t2.a = t1.a)
+               ->  Seq Scan on t2
                ->  Hash
-                     ->  Seq Scan on t2
- Optimizer: Pivotal Optimizer (GPORCA) version 3.23.0
+                     ->  Hash Join
+                           Hash Cond: (t1.b = t3.b)
+                           ->  Seq Scan on t1
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                                       ->  Seq Scan on t3
+ Optimizer: Pivotal Optimizer (GPORCA)
 (14 rows)
 
 select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a IS NULL OR (t1.c = t3.c));
@@ -665,22 +666,22 @@ select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t
 
 -- ensure plan has a filter over left outer join
 explain (costs off) select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a is distinct from t3.a);
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    ->  Result
          Filter: (t2.a IS DISTINCT FROM t3.a)
-         ->  Hash Left Join
-               Hash Cond: (t1.a = t2.a)
-               ->  Hash Join
-                     Hash Cond: (t1.b = t3.b)
-                     ->  Seq Scan on t1
-                     ->  Hash
-                           ->  Broadcast Motion 3:3  (slice1; segments: 3)
-                                 ->  Seq Scan on t3
+         ->  Hash Right Join
+               Hash Cond: (t2.a = t1.a)
+               ->  Seq Scan on t2
                ->  Hash
-                     ->  Seq Scan on t2
- Optimizer: Pivotal Optimizer (GPORCA) version 3.23.0
+                     ->  Hash Join
+                           Hash Cond: (t1.b = t3.b)
+                           ->  Seq Scan on t1
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                                       ->  Seq Scan on t3
+ Optimizer: Pivotal Optimizer (GPORCA)
 (14 rows)
 
 select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t2.a is distinct from t3.a);
@@ -692,21 +693,21 @@ select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t
 
 -- ensure plan has a filter over left outer join
 explain select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2.b t2b, t2.c t2c from t1 left join t2 on (t1.a = t2.a)) t on (t1a = t3.a) WHERE (t2a IS NULL OR (t1c = t3.a));
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.22 rows=4 width=36)
-   ->  Result  (cost=0.00..1293.22 rows=2 width=36)
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.15 rows=4 width=36)
+   ->  Result  (cost=0.00..1293.15 rows=2 width=36)
          Filter: ((t2.a IS NULL) OR (t1.c = t3.a))
-         ->  Hash Left Join  (cost=0.00..1293.22 rows=2 width=36)
-               Hash Cond: (t1.a = t2.a)
-               ->  Hash Join  (cost=0.00..862.08 rows=1 width=24)
-                     Hash Cond: (t1.a = t3.a)
-                     ->  Seq Scan on t1  (cost=0.00..431.01 rows=334 width=12)
-                     ->  Hash  (cost=431.00..431.00 rows=1 width=12)
-                           ->  Seq Scan on t3  (cost=0.00..431.00 rows=1 width=12)
-               ->  Hash  (cost=431.01..431.01 rows=333 width=12)
-                     ->  Seq Scan on t2  (cost=0.00..431.01 rows=333 width=12)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.23.0
+         ->  Hash Right Join  (cost=0.00..1293.15 rows=2 width=36)
+               Hash Cond: (t2.a = t1.a)
+               ->  Seq Scan on t2  (cost=0.00..431.01 rows=333 width=12)
+               ->  Hash  (cost=862.08..862.08 rows=1 width=24)
+                     ->  Hash Join  (cost=0.00..862.08 rows=1 width=24)
+                           Hash Cond: (t1.a = t3.a)
+                           ->  Seq Scan on t1  (cost=0.00..431.01 rows=334 width=12)
+                           ->  Hash  (cost=431.00..431.00 rows=1 width=12)
+                                 ->  Seq Scan on t3  (cost=0.00..431.00 rows=1 width=12)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (13 rows)
 
 select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2.b t2b, t2.c t2c from t1 left join t2 on (t1.a = t2.a)) t on (t1a = t3.a) WHERE (t2a IS NULL OR (t1c = t3.a));
@@ -720,36 +721,36 @@ explain select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 lef
   join t3 on tt.t1b = t3.b 
   join (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt1 on tt1.t1b = t3.b 
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
-                                                                  QUERY PLAN                                                                  
-----------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice4; segments: 3)  (cost=0.00..2586.40 rows=8 width=56)
-   ->  Hash Join  (cost=0.00..2586.39 rows=3 width=56)
-         Hash Cond: ((t1.b = t3_1.b) AND (t1_1.b = t3_1.b) AND (t3.b = t3_1.b))
-         ->  Result  (cost=0.00..2155.39 rows=2 width=44)
-               Filter: ((t2_1.a IS NULL) OR (t1.b = t3.b))
-               ->  Hash Left Join  (cost=0.00..2155.39 rows=2 width=44)
-                     Hash Cond: (t1.a = t2_1.a)
-                     ->  Hash Join  (cost=0.00..1724.29 rows=1 width=36)
-                           Hash Cond: ((t1.b = t3.b) AND (t1.b = t1_1.b))
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Hash Join  (cost=0.00..2586.30 rows=3 width=56)
+   Hash Cond: (t1.b = t3_1.b)
+   ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1293.15 rows=3 width=28)
+         ->  Hash Right Join  (cost=0.00..1293.15 rows=1 width=28)
+               Hash Cond: (t2.a = t1.a)
+               ->  Seq Scan on t2  (cost=0.00..431.01 rows=333 width=8)
+               ->  Hash  (cost=862.07..862.07 rows=1 width=20)
+                     ->  Hash Join  (cost=0.00..862.07 rows=1 width=20)
+                           Hash Cond: (t1.b = t3.b)
                            ->  Seq Scan on t1  (cost=0.00..431.01 rows=334 width=8)
-                           ->  Hash  (cost=1293.18..1293.18 rows=3 width=28)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1293.18 rows=3 width=28)
-                                       ->  Hash Left Join  (cost=0.00..1293.18 rows=1 width=28)
-                                             Hash Cond: (t1_1.a = t2.a)
-                                             ->  Hash Join  (cost=0.00..862.07 rows=1 width=20)
-                                                   Hash Cond: (t1_1.b = t3.b)
-                                                   ->  Seq Scan on t1 t1_1  (cost=0.00..431.01 rows=334 width=8)
-                                                   ->  Hash  (cost=431.00..431.00 rows=2 width=12)
-                                                         ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
-                                                               ->  Seq Scan on t3  (cost=0.00..431.00 rows=1 width=12)
-                                             ->  Hash  (cost=431.01..431.01 rows=333 width=8)
-                                                   ->  Seq Scan on t2  (cost=0.00..431.01 rows=333 width=8)
-                     ->  Hash  (cost=431.01..431.01 rows=333 width=8)
+                           ->  Hash  (cost=431.00..431.00 rows=2 width=12)
+                                 ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+                                       ->  Seq Scan on t3  (cost=0.00..431.00 rows=1 width=12)
+   ->  Hash  (cost=1293.15..1293.15 rows=1 width=28)
+         ->  Gather Motion 3:1  (slice4; segments: 3)  (cost=0.00..1293.15 rows=3 width=28)
+               ->  Result  (cost=0.00..1293.15 rows=1 width=28)
+                     Filter: ((t2_1.a IS NULL) OR (t1_1.b = t3_1.b))
+                     ->  Hash Right Join  (cost=0.00..1293.15 rows=1 width=28)
+                           Hash Cond: (t2_1.a = t1_1.a)
                            ->  Seq Scan on t2 t2_1  (cost=0.00..431.01 rows=333 width=8)
-         ->  Hash  (cost=431.00..431.00 rows=2 width=12)
-               ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
-                     ->  Seq Scan on t3 t3_1  (cost=0.00..431.00 rows=1 width=12)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.23.0
+                           ->  Hash  (cost=862.07..862.07 rows=1 width=20)
+                                 ->  Hash Join  (cost=0.00..862.07 rows=1 width=20)
+                                       Hash Cond: (t1_1.b = t3_1.b)
+                                       ->  Seq Scan on t1 t1_1  (cost=0.00..431.01 rows=334 width=8)
+                                       ->  Hash  (cost=431.00..431.00 rows=2 width=12)
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..431.00 rows=2 width=12)
+                                                   ->  Seq Scan on t3 t3_1  (cost=0.00..431.00 rows=1 width=12)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (28 rows)
 
 select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t2 on t1.a = t2.a) tt 
@@ -1223,7 +1224,7 @@ select p from
           (box(point(0.8,0.8), point(1.0,1.0)))) as v(bb)
 cross join lateral
   (select p from gist_tbl_github9733 where p <@ bb order by p <-> bb[0] limit 2) ss;
-ERROR:  could not devise a query plan for the given query (pathnode.c:420)
+ERROR:  could not devise a query plan for the given query (pathnode.c:421)
 reset enable_seqscan;
 explain (costs off)
 select p from
@@ -1307,3 +1308,119 @@ on (coalesce(t.id1) = tq_all.id1  and t.id2 = tq_all.id2) ;
 (14 rows)
 
 drop table t_issue_10315;
+--
+-- test in subplan, if one side of a qual is a Param refers to system table
+-- and another side refers to a replicate table, we do not create index plan
+-- in the subplan though this is kind of aggressive (Defintely there exists room
+-- for optimization) but let's make sure the correctness of these cases at first.
+-- https://github.com/greenplum-db/gpdb/issues/8648
+--
+set enable_seqscan = 0;
+create table rep_tbl (tablename text, explanation text) distributed replicated;
+create table dis_tbl (relname text, tablename text, explanation text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'relname' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into rep_tbl values ('pg_class', 'contains all relations');
+create index on rep_tbl (tablename);
+analyze rep_tbl;
+--- The Var case
+explain verbose select c.relname, (select explanation from rep_tbl where rep_tbl.tablename=c.relname ) from pg_class c where relname = 'pg_class';
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
+ Index Only Scan using pg_class_relname_nsp_index on pg_catalog.pg_class c  (cost=0.27..10000000101.31 rows=1 width=64)
+   Output: c.relname, (SubPlan 1)
+   Index Cond: (c.relname = 'pg_class'::name)
+   SubPlan 1  (slice0)
+     ->  Result  (cost=10000000000.00..10000000001.02 rows=1 width=23)
+           Output: rep_tbl.explanation
+           Filter: (rep_tbl.tablename = (c.relname)::text)
+           ->  Materialize  (cost=10000000000.00..10000000001.02 rows=1 width=23)
+                 Output: rep_tbl.explanation, rep_tbl.tablename
+                 ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000000001.01 rows=1 width=23)
+                       Output: rep_tbl.explanation, rep_tbl.tablename
+                       ->  Seq Scan on public.rep_tbl  (cost=10000000000.00..10000000001.01 rows=1 width=23)
+                             Output: rep_tbl.explanation, rep_tbl.tablename
+ Optimizer: Postgres query optimizer
+ Settings: enable_seqscan=off
+(15 rows)
+
+select c.relname, (select explanation from rep_tbl where rep_tbl.tablename=c.relname ) from pg_class c where relname = 'pg_class';
+ relname  |      explanation       
+----------+------------------------
+ pg_class | contains all relations
+(1 row)
+
+explain verbose select c.relname, (select explanation from rep_tbl where rep_tbl.tablename=c.relname ) from (select oid, relname from pg_class offset 0) c where relname = 'pg_class';
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Subquery Scan on c  (cost=10000000000.00..20000000017.85 rows=1 width=64)
+   Output: c.relname, (SubPlan 1)
+   Filter: (c.relname = 'pg_class'::name)
+   ->  Seq Scan on pg_catalog.pg_class  (cost=10000000000.00..10000000011.37 rows=437 width=68)
+         Output: pg_class.oid, pg_class.relname
+   SubPlan 1  (slice0)
+     ->  Result  (cost=10000000000.00..10000000001.02 rows=1 width=23)
+           Output: rep_tbl.explanation
+           Filter: (rep_tbl.tablename = (c.relname)::text)
+           ->  Materialize  (cost=10000000000.00..10000000001.02 rows=1 width=23)
+                 Output: rep_tbl.explanation, rep_tbl.tablename
+                 ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000000001.01 rows=1 width=23)
+                       Output: rep_tbl.explanation, rep_tbl.tablename
+                       ->  Seq Scan on public.rep_tbl  (cost=10000000000.00..10000000001.01 rows=1 width=23)
+                             Output: rep_tbl.explanation, rep_tbl.tablename
+ Optimizer: Postgres query optimizer
+ Settings: enable_seqscan=off
+(17 rows)
+
+select c.relname, (select explanation from rep_tbl where rep_tbl.tablename=c.relname ) from (select oid, relname from pg_class offset 0) c where relname = 'pg_class';
+ relname  |      explanation       
+----------+------------------------
+ pg_class | contains all relations
+(1 row)
+
+--- The PlaceholderVar case
+explain verbose select t1.relname, ss.x from
+  pg_class t1 left join (select relisshared as x, coalesce(t2.relname, 'dummy') y from pg_class t2) ss
+  on t1.relname = ss.y
+  where 1 = (select 1 from rep_tbl t3 where ss.y = t3.tablename limit 1);
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Hash Left Join  (cost=10000001023.23..28100000005004.11 rows=12 width=65)
+   Output: t1.relname, t2.relisshared
+   Hash Cond: (t1.relname = COALESCE(t2.relname, 'dummy'::name))
+   Filter: (1 = (SubPlan 1))
+   ->  Bitmap Heap Scan on pg_catalog.pg_class t1  (cost=915.03..988.12 rows=2809 width=64)
+         Output: t1.relname
+         ->  Bitmap Index Scan on pg_class_relname_nsp_index  (cost=0.00..914.32 rows=2809 width=0)
+   ->  Hash  (cost=10000000073.09..10000000073.09 rows=937 width=129)
+         Output: t2.relisshared, t2.relname, (COALESCE(t2.relname, 'dummy'::name))
+         ->  Seq Scan on pg_catalog.pg_class t2  (cost=10000000000.00..10000000073.09 rows=2809 width=129)
+               Output: t2.relisshared, t2.relname, COALESCE(t2.relname, 'dummy'::name)
+   SubPlan 1  (slice0)
+     ->  Limit  (cost=10000000000.00..10000000001.03 rows=1 width=0)
+           Output: "outer".?column?
+           ->  Result  (cost=10000000000.00..10000000001.02 rows=1 width=0)
+                 Output: 1
+                 Filter: (((COALESCE(t2.relname, 'dummy'::name)))::text = t3.tablename)
+                 ->  Materialize  (cost=10000000000.00..10000000001.02 rows=1 width=0)
+                       Output: t3.tablename
+                       ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=10000000000.00..10000000001.01 rows=1 width=0)
+                             Output: t3.tablename
+                             ->  Seq Scan on public.rep_tbl t3  (cost=10000000000.00..10000000001.01 rows=1 width=0)
+                                   Output: t3.tablename
+ Optimizer: Postgres query optimizer
+ Settings: enable_seqscan=off
+(25 rows)
+
+select t1.relname, ss.x from
+  pg_class t1 left join (select relisshared as x, coalesce(t2.relname, 'dummy') y from pg_class t2) ss
+  on t1.relname = ss.y
+  where 1 = (select 1 from rep_tbl t3 where ss.y = t3.tablename limit 1);
+ relname  | x 
+----------+---
+ pg_class | f
+(1 row)
+
+drop table rep_tbl;
+drop table dis_tbl;
+reset enable_seqscan;

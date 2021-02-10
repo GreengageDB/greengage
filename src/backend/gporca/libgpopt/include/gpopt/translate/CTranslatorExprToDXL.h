@@ -17,18 +17,17 @@
 #include "gpos/base.h"
 #include "gpos/memory/CMemoryPool.h"
 
-#include "naucrates/dxl/operators/CDXLScalarBoolExpr.h"
-#include "naucrates/dxl/operators/CDXLScalarWindowRef.h"
-#include "naucrates/dxl/operators/CDXLColRef.h"
-#include "naucrates/dxl/operators/CDXLPhysicalDML.h"
-#include "naucrates/dxl/operators/CDXLPhysicalAgg.h"
-#include "naucrates/dxl/operators/CDXLPhysicalMotion.h"
-#include "naucrates/dxl/operators/CDXLScalarArrayRefIndexList.h"
-#include "naucrates/dxl/operators/CDXLScalarSubPlan.h"
-
-#include "gpopt/operators/ops.h"
 #include "gpopt/mdcache/CMDAccessor.h"
 #include "gpopt/metadata/CTableDescriptor.h"
+#include "gpopt/operators/ops.h"
+#include "naucrates/dxl/operators/CDXLColRef.h"
+#include "naucrates/dxl/operators/CDXLPhysicalAgg.h"
+#include "naucrates/dxl/operators/CDXLPhysicalDML.h"
+#include "naucrates/dxl/operators/CDXLPhysicalMotion.h"
+#include "naucrates/dxl/operators/CDXLScalarArrayRefIndexList.h"
+#include "naucrates/dxl/operators/CDXLScalarBoolExpr.h"
+#include "naucrates/dxl/operators/CDXLScalarSubPlan.h"
+#include "naucrates/dxl/operators/CDXLScalarWindowRef.h"
 
 // fwd declaration
 namespace gpnaucrates
@@ -450,12 +449,21 @@ private:
 		BOOL *pfDML, CExpression *pexprScalarCond,
 		CDXLPhysicalProperties *dxl_properties);
 
-	// translate partition filter list
-	CDXLNode *PdxlnPartFilterList(CExpression *pexpr, BOOL fEqFilters);
+	// construct a part eq filter list for fast pass
+	CDXLNode *PdxlPartEqFilterList(CExpression *pexpr);
+
+	// construct a part filter list with all children being scalar const true
+	CDXLNode *PdxlnPartFilterListDummy(CExpression *pexpr);
+
+	// construct a part eq filter elem list for the given partition level
+	CDXLNode *PdxlnPartEqFilterElemList(
+		CExpression *pexpr, bool fEqFilter, ULONG level,
+		CPhysicalPartitionSelector *popSelector);
 
 	// check whether the given partition selector only has equality filters
-	// or no filters on all partitioning levels. return false if it has
-	// non-equality filters.
+	// or no filters on all partitioning levels. If fCheckGeneralFilters is
+	// true, returns true if content of general filter is disjunction of ident
+	// equality filters
 	BOOL FEqPartFiltersAllLevels(CExpression *pexpr, BOOL fCheckGeneralFilters);
 
 	// translate a filter-based partition selector

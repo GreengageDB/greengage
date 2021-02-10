@@ -292,7 +292,9 @@ select * from PT where j = 5;
             <dxl:ProjList/>
             <dxl:PartEqFilters>
               <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
-              <dxl:ConstValue TypeMdid="0.23.1.0" Value="5"/>
+              <dxl:PartEqFilterElems>
+                <dxl:ConstValue TypeMdid="0.23.1.0" Value="5"/>
+              </dxl:PartEqFilterElems>
             </dxl:PartEqFilters>
             <dxl:PartFilters>
               <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>

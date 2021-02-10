@@ -9,24 +9,22 @@
 //		Implementation of group expressions
 //---------------------------------------------------------------------------
 
+#include "gpopt/search/CGroupExpression.h"
+
 #include "gpos/base.h"
 #include "gpos/error/CAutoTrace.h"
+#include "gpos/io/COstreamString.h"
+#include "gpos/string/CWStringDynamic.h"
 #include "gpos/task/CAutoSuspendAbort.h"
 #include "gpos/task/CWorker.h"
 
-#include "gpopt/base/CUtils.h"
 #include "gpopt/base/COptimizationContext.h"
+#include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CPhysicalAgg.h"
 #include "gpopt/search/CBinding.h"
-#include "gpopt/search/CGroupExpression.h"
 #include "gpopt/search/CGroupProxy.h"
-
 #include "gpopt/xforms/CXformFactory.h"
 #include "gpopt/xforms/CXformUtils.h"
-
-#include "gpos/string/CWStringDynamic.h"
-#include "gpos/io/COstreamString.h"
-
 #include "naucrates/traceflags/traceflags.h"
 
 using namespace gpopt;
@@ -1111,14 +1109,7 @@ CGroupExpression::ContainsCircularDependencies()
 
 	GPOS_ASSERT(m_ecirculardependency == CGroupExpression::ecdDefault);
 
-	// if exploration is completed, then the group expression does not have
-	// any circular dependency
-	if (Pgroup()->FExplored())
-	{
-		return false;
-	}
-
-	// we are still in exploration phase, check if there are any circular dependencies
+	// check if there are any circular dependencies
 	CGroupArray *child_groups = Pdrgpgroup();
 	for (ULONG ul = 0; ul < child_groups->Size(); ul++)
 	{
