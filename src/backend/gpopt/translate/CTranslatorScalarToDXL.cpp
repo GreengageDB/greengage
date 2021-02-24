@@ -1192,6 +1192,9 @@ CTranslatorScalarToDXL::TranslateFuncExprToDXL(
 	const IMDFunction *md_func = m_md_accessor->RetrieveFunc(mdid_func);
 	if (IMDFunction::EfsVolatile == md_func->GetFuncStability())
 	{
+		if (m_context)
+			m_context->m_has_volatile_functions = true;
+
 		ListCell *lc = NULL;
 		ForEach(lc, func_expr->args)
 		{
@@ -2229,7 +2232,8 @@ CTranslatorScalarToDXL::ExtractLintValueFromDatum(const IMDType *md_type,
 		return lint_value;
 	}
 
-	if (mdid->Equals(&CMDIdGPDB::m_mdid_cash))
+	if (mdid->Equals(&CMDIdGPDB::m_mdid_cash) ||
+		mdid->Equals(&CMDIdGPDB::m_mdid_date))
 	{
 		// cash is a pass-by-ref type
 		Datum datumConstVal = (Datum) 0;

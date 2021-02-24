@@ -23,7 +23,7 @@ INSERT INTO zstdtest SELECT g, 'bar' || g FROM generate_series(1, 100000) g;
 SELECT get_ao_compression_ratio('zstdtest');
  get_ao_compression_ratio 
 --------------------------
-                     2.62
+                     2.66
 (1 row)
 
 -- Check contents, at the beginning of the table and at the end.

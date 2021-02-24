@@ -2465,7 +2465,7 @@ CDXLOperatorFactory::GetDatumVal(CDXLMemoryManager *dxl_memory_manager,
 		 &CDXLOperatorFactory::GetDatumStatsDoubleMappable},
 		// time-related types
 		{CMDIdGPDB::m_mdid_date.Oid(),
-		 &CDXLOperatorFactory::GetDatumStatsDoubleMappable},
+		 &CDXLOperatorFactory::GetDatumStatsLintMappable},
 		{CMDIdGPDB::m_mdid_time.Oid(),
 		 &CDXLOperatorFactory::GetDatumStatsDoubleMappable},
 		{CMDIdGPDB::m_mdid_timeTz.Oid(),

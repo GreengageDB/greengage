@@ -19,8 +19,16 @@
 #include "gpos/io/COstreamBasic.h"
 #include "gpos/types.h"
 
-#define GPOS_ASMFP asm volatile("movq %%rbp, %0" : "=g"(ulp));
-#define GPOS_ASMSP asm volatile("movq %%rsp, %0" : "=g"(ulp));
+// These fallback is similar to the one used in Postgres 'elog.c'
+#if defined(__x86_64__)
+#define GPOS_ASMFP asm volatile ("movq %%rbp, %0" : "=g" (ulp));
+#define GPOS_GET_FRAME_POINTER(x) do { ULONG_PTR ulp; GPOS_ASMFP; x = ulp; } while (0)
+#elif defined(__i386)
+#define GPOS_ASMFP asm volatile ("movl %%ebp, %0" : "=g" (ulp));
+#define GPOS_GET_FRAME_POINTER(x) do { ULONG_PTR ulp; GPOS_ASMFP; x = ulp; } while (0)
+#else
+#include <execinfo.h>
+#endif
 
 #define ALIGNED_16(x) \
 	(((ULONG_PTR) x >> 1) << 1 == (ULONG_PTR) x)  // checks 16-bit alignment
