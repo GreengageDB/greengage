@@ -6977,7 +6977,7 @@
                               <dxl:And>
                                 <dxl:Comparison ComparisonOperator="&gt;=" OperatorMdid="0.1098.1.0">
                                   <dxl:Ident ColId="19" ColName="o_orderdate" TypeMdid="0.1082.1.0"/>
-                                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="cff//w==" DoubleValue="-189302400000000.000000"/>
+                                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="cff//w==" LintValue="-2191"/>
                                 </dxl:Comparison>
                                 <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.2345.1.0">
                                   <dxl:Ident ColId="19" ColName="o_orderdate" TypeMdid="0.1082.1.0"/>
