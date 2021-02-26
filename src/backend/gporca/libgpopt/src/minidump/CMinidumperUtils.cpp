@@ -192,7 +192,7 @@ CMinidumperUtils::GenerateMinidumpFileName(
 
 		ulNameLength = clib::Strlen(szMinidumpFileName + ulNameStart);
 		clib::Strncpy(buf + ulPrefixLength, szMinidumpFileName + ulNameStart,
-					  ulNameLength);
+					  ulNameLength + 1);
 	}
 }
 

@@ -194,6 +194,13 @@
         </tgroup>
       </table>
     </body>
+    <topic id="topic_elb_4ss_n4b" otherprops="pivotal">
+      <title>Tanzu Greenplum on DCA Systems</title>
+      <body>
+        <p>Tanzu Greenplum version 6.9 and later is supported on Dell EMC DCA systems with software
+          version 4.2.0.0 and later.</p>
+      </body>
+    </topic>
   </topic>
   <topic id="topic_pnz_5zd_xs">
     <title>Storage</title>
@@ -285,7 +292,9 @@
         <ul id="ul_ft3_5jm_3bb">
           <li id="pm445741" class="- topic/li ">Red Hat Enterprise Linux x86_64 6.x (RHEL 6)</li>
           <li id="pm445741a" class="- topic/li ">Red Hat Enterprise Linux x86_64 7.x (RHEL 7)</li>
+          <li class="- topic/li ">Red Hat Enterprise Linux x86_64 8.x (RHEL 8)</li>
           <li>Ubuntu 18.04 LTS</li>
+          <li>SUSE Linux Enterprise Server x86_64 12 (SLES 12)</li>
           <!-- li dir="ltr">AIX 7.2 (64-bit) (Client and Load Tools only)</li>
           <li id="pm445742" class="- topic/li ">SuSE Linux Enterprise Server x86_64 SLES 11</li> -->
           <li dir="ltr">Windows 10 (32-bit and 64-bit)</li>

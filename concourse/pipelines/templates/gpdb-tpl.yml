@@ -206,6 +206,10 @@ groups:
 {% if "ubuntu18.04" in os_types %}
   - compile_gpdb_ubuntu18.04
 {% endif %}
+{% if "sles12" in os_types %}
+  - compile_gpdb_sles12
+  - test_gpdb_clients_sles12
+{% endif %}
 {% if "win" in os_types %}
   - compile_gpdb_clients_windows
   - test_gpdb_clients_windows
@@ -325,6 +329,10 @@ groups:
 {% endif %}
 {% if "ubuntu18.04" in os_types %}
   - compile_gpdb_ubuntu18.04
+{% endif %}
+{% if "sles12" in os_types %}
+  - compile_gpdb_sles12
+  - test_gpdb_clients_sles12
 {% endif %}
 {% if "win" in os_types %}
   - compile_gpdb_clients_windows
@@ -514,11 +522,6 @@ resources:
     repository: alpine
     tag: latest
 
-- name: clang_toolchain
-  type: registry-image
-  source:
-    repository: gcr.io/data-orca/clang-toolchain
-
 - name: ccp-image
   type: registry-image
   source:
@@ -650,6 +653,29 @@ resources:
     regexp: gp-internal-artifacts/ubuntu18.04/libquicklz-dev_(1\.5\.0-.*)-1_amd64.deb
 
 {% endif %}
+{% if "sles12" in os_types %}
+- name: libquicklz-sles12
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: gp-internal-artifacts/sles12/libquicklz-(1\.5\.0-.*)-1.x86_64.rpm
+
+- name: libquicklz-devel-sles12
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: gp-internal-artifacts/sles12/libquicklz-devel-(1\.5\.0-.*)-1.x86_64.rpm
+
+- name: libsigar-sles12
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: gp-internal-artifacts/sles12/sigar-sles12_x86_64-(1\.6\.5-.*).targz
+
+{% endif %}
 {% if "centos6" in os_types %}
 - name: python-centos6
   type: gcs
@@ -691,6 +717,15 @@ resources:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: gp-internal-artifacts/ubuntu18.04/python-(2\.7\.12\+.*).tar.gz
+
+{% endif %}
+{% if "sles12" in os_types %}
+- name: python-sles12
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: gp-internal-artifacts/sles12/python-(2\.7\.12-.*).tar.gz
 
 {% endif %}
 {% if "centos6" in os_types %}
@@ -757,6 +792,16 @@ resources:
     repository: pivotaldata/gpdb6-ubuntu18.04-test
     tag: latest
 
+{% endif %}
+
+{% if "sles12" in os_types %}
+- name: gpdb6-sles12-build
+  type: docker-image
+  source:
+    repository: pivotaldata/gpdb6-sles12-build
+    tag: latest
+    username: ((docker_username))
+    password: ((docker_password))
 {% endif %}
 
 {% if "centos6" in os_types %}
@@ -863,6 +908,13 @@ resources:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: clients/published/gpdb6/clients-rc-(.*)-rhel8_x86_64((rc-build-type-gcs)).tar.gz
+
+- name: bin_gpdb_clients_sles12_rc
+  type: gcs
+  source:
+    bucket: ((gcs-bucket))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    regexp: clients/published/gpdb6/clients-rc-(.*)-sles12_x86_64((rc-build-type-gcs)).tar.gz
 
 - name: bin_gpdb_clients_ubuntu18.04_rc
   type: gcs
@@ -992,6 +1044,22 @@ resources:
     regexp: server/published/gpdb6/server-build-(.*)-photon3_x86_64((rc-build-type-gcs)).tar.gz
 {% endif %}
 {% endif %}
+{% if "sles12" in os_types %}
+- name: bin_gpdb_sles12
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: ((pipeline-name))/bin_gpdb_sles12/bin_gpdb.tar.gz
+
+- name: bin_gpdb_clients_sles12
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: ((pipeline-name))/bin_gpdb_clients_sles12/bin_gpdb_clients.tar.gz
+
+{% endif %}
 {% if "win" in os_types %}
 - name: terraform_windows
   type: terraform
@@ -1077,6 +1145,11 @@ resources:
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: gp-internal-artifacts/madlib-snowflakes/boost_(1_61_0).tar.gz
 {% endif %}
+
+- name: clang_toolchain
+  type: registry-image
+  source:
+    repository: gcr.io/data-orca/clang-toolchain
 
 - name: reduced-frequency-trigger
   type: time
@@ -1380,6 +1453,63 @@ jobs:
 
 {% endif %}
 
+{% if "sles12" in os_types %}
+- name: compile_gpdb_sles12
+  plan:
+    - in_parallel:
+        steps:
+        - get: reduced-frequency-trigger
+          trigger: ((reduced-frequency-trigger-flag))
+        - get: gpdb_src
+          passed:
+            - check_format
+          trigger: ((gpdb_src-trigger-flag))
+        - get: gpdb6-sles12-build
+        - get: libquicklz-installer
+          resource: libquicklz-sles12
+        - get: libquicklz-devel-installer
+          resource: libquicklz-devel-sles12
+        - get: libsigar-installer
+          resource: libsigar-sles12
+        - get: python-tarball
+          resource: python-sles12
+    - task: compile_gpdb
+      image: gpdb6-sles12-build
+      file: gpdb_src/concourse/tasks/compile_gpdb.yml
+      params:
+        CONFIGURE_FLAGS: {{configure_flags_with_extensions}}
+        TARGET_OS: sles
+        TARGET_OS_VERSION: "12"
+        BLD_TARGETS: "clients"
+        RC_BUILD_TYPE_GCS: ((rc-build-type-gcs))
+    - in_parallel:
+        steps:
+        - put: bin_gpdb_sles12
+          params:
+            file: gpdb_artifacts/bin_gpdb.tar.gz
+        - put: bin_gpdb_clients_sles12
+          params:
+            file: gpdb_artifacts/gpdb-clients-sles12.tar.gz
+
+- name: test_gpdb_clients_sles12
+  plan:
+    - in_parallel:
+        steps:
+          - get: gpdb_src
+            trigger: true
+            passed: [compile_gpdb_sles12]
+          - get: bin_gpdb
+            resource: bin_gpdb_sles12
+            passed: [compile_gpdb_sles12]
+          - get: bin_gpdb_clients
+            resource: bin_gpdb_clients_sles12
+            passed: [compile_gpdb_sles12]
+          - get: gpdb6-sles12-build
+    - task: run_tests
+      image: gpdb6-sles12-build
+      file: gpdb_src/concourse/tasks/test_gpdb_clients.yml
+
+{% endif %}
 {% if "win" in os_types %}
 - name: compile_gpdb_clients_windows
   serial: true
@@ -1466,7 +1596,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos6]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb_binary_swap.yml
@@ -1493,7 +1623,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos6]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1515,7 +1645,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos6]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1537,7 +1667,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos6]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1559,7 +1689,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos6-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos6]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1582,7 +1712,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos7]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1604,7 +1734,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos7]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1626,7 +1756,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos7]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1648,7 +1778,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-centos7-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-centos7]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1672,7 +1802,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-oracle7-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-oracle7]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1694,7 +1824,7 @@ jobs:
         trigger: [[ test_trigger ]]
       - get: gpdb6-oracle7-test
   - task: ic_gpdb
-    {% if pipeline_configuration == "prod" %}
+    {% if use_ICW_workers %}
     tags: [icw-oracle7]
     {% endif %}
     file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1718,7 +1848,7 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
-      {% if pipeline_configuration == "prod" %}
+      {% if use_ICW_workers %}
       tags: [icw-ubuntu18.04]
       {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1740,7 +1870,7 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
-      {% if pipeline_configuration == "prod" %}
+      {% if use_ICW_workers %}
       tags: [icw-ubuntu18.04]
       {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1762,7 +1892,7 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
-      {% if pipeline_configuration == "prod" %}
+      {% if use_ICW_workers %}
       tags: [icw-ubuntu18.04]
       {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1784,7 +1914,7 @@ jobs:
           trigger: [[ test_trigger ]]
         - get: gpdb6-ubuntu18.04-test
     - task: ic_gpdb
-      {% if pipeline_configuration == "prod" %}
+      {% if use_ICW_workers %}
       tags: [icw-ubuntu18.04]
       {% endif %}
       file: gpdb_src/concourse/tasks/ic_gpdb.yml
@@ -1864,7 +1994,6 @@ jobs:
   ensure:
     <<: *set_failed
 {% endif %}
-
 - name: gate_icw_end
   plan:
   - in_parallel:
@@ -2701,6 +2830,7 @@ jobs:
         - compile_gpdb_centos8
         - compile_gpdb_photon3
         - compile_gpdb_ubuntu18.04
+        - compile_gpdb_sles12
         - icw_planner_centos6
         - icw_gporca_centos6
         - icw_planner_icproxy_centos6
@@ -2718,6 +2848,7 @@ jobs:
         - icw_planner_ictcp_centos6
         - icw_extensions_gpcloud_centos6
         - test_gpdb_clients_centos8
+        - test_gpdb_clients_sles12
         - resource_group_centos6
         - resource_group_centos7
         - gpperfmon_centos6
@@ -2805,6 +2936,9 @@ jobs:
       - get: bin_gpdb_clients_centos8
         passed:
         - test_gpdb_clients_centos8
+      - get: bin_gpdb_clients_sles12
+        passed:
+        - test_gpdb_clients_sles12
 
 - name: Publish Server Builds
   plan:
@@ -2879,6 +3013,9 @@ jobs:
       - get: bin_gpdb_clients_centos8
         trigger: true
         passed: [gate_release_candidate_start]
+      - get: bin_gpdb_clients_sles12
+        trigger: true
+        passed: [gate_release_candidate_start]
       - get: gpdb6-centos6-build
   - in_parallel:
       steps:
@@ -2920,6 +3057,9 @@ jobs:
       - put: bin_gpdb_clients_centos8_rc
         params:
           file: "release_candidates/clients-rc-*rhel8*.tar.gz"
+      - put: bin_gpdb_clients_sles12_rc
+        params:
+          file: "release_candidates/clients-rc-*sles12*.tar.gz"
 
 - name: Build_Release_Candidate_RPMs
   plan:

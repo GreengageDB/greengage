@@ -5,7 +5,7 @@ test: lockmodes
 # cluster during testing. Usually the 2nd reboot should be faster.
 test: prepare_limit
 test: prepared_xact_deadlock_pg_rewind
-test: ao_partition_lock
+test: ao_partition_lock query_gp_partitions_view
 test: dml_on_root_locks_all_parts
 
 test: select_dropped_table

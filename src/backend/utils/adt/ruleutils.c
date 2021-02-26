@@ -1844,9 +1844,7 @@ pg_get_expr(PG_FUNCTION_ARGS)
 	text	   *expr = PG_GETARG_TEXT_P(0);
 	Oid			relid = PG_GETARG_OID(1);
 	int			prettyFlags;
-	char		*relname;
-	text		*result;
-	Relation	rel;
+	char	   *relname;
 
 	prettyFlags = PRETTYFLAG_INDENT;
 
@@ -1867,27 +1865,7 @@ pg_get_expr(PG_FUNCTION_ARGS)
 	else
 		relname = NULL;
 
-	/* 
-	 * CDB: hold the AccessShareLock in case some transactions drop it concurrently.
-	 *
-	 * Since here, if the table that the relid tells is dropped, an error will raise
-	 * later when opening the relation to get column names.
-	 *
-	 * pg_get_expr() is used by GPDB add-on view 'pg_partitions' which is widely
-	 * used by regression tests for partition tables. Lots of parallel test cases
-	 * issue view pg_partitions and drop partitions concurrently, so those cases
-	 * are very flaky. Serialize test cases will cost more testing time and be
-	 * fragile, so GPDB holds a AccessShareLock here to make tests stable.
-	 */
-	rel = try_relation_open(relid, AccessShareLock, false);
-
-	if (!rel)
-		PG_RETURN_NULL();
-
-	result = pg_get_expr_worker(expr, relid, relname, prettyFlags);
-	relation_close(rel, AccessShareLock);
-
-	PG_RETURN_TEXT_P(result);
+	PG_RETURN_TEXT_P(pg_get_expr_worker(expr, relid, relname, prettyFlags));
 }
 
 Datum
@@ -1897,9 +1875,7 @@ pg_get_expr_ext(PG_FUNCTION_ARGS)
 	Oid			relid = PG_GETARG_OID(1);
 	bool		pretty = PG_GETARG_BOOL(2);
 	int			prettyFlags;
-	char		*relname;
-	text		*result;
-	Relation	rel;
+	char	   *relname;
 
 	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
 
@@ -1914,27 +1890,53 @@ pg_get_expr_ext(PG_FUNCTION_ARGS)
 	else
 		relname = NULL;
 
-	/* 
-	 * CDB: hold the AccessShareLock in case some transactions drop it concurrently.
-	 *
-	 * Since here, if the table that the relid tells is dropped, an error will raise
-	 * later when opening the relation to get column names.
-	 *
-	 * pg_get_expr() is used by GPDB add-on view 'pg_partitions' which is widely
-	 * used by regression tests for partition tables. Lots of parallel test cases
-	 * issue view pg_partitions and drop partitions concurrently, so those cases
-	 * are very flaky. Serialize test cases will cost more testing time and be
-	 * fragile, so GPDB holds a AccessShareLock here to make tests stable.
-	 */
-	rel = try_relation_open(relid, AccessShareLock, false);
+	PG_RETURN_TEXT_P(pg_get_expr_worker(expr, relid, relname, prettyFlags));
+}
 
-	if (!rel)
-		PG_RETURN_NULL();
+/*
+ * Find Var nodes in an expression tree.
+ */
+static bool
+find_var(Node *node, bool *var_exist)
+{
+	Assert(var_exist);
 
-	result = pg_get_expr_worker(expr, relid, relname, prettyFlags);
-	relation_close(rel, AccessShareLock);
+	if (node == NULL)
+		return false;
 
-	PG_RETURN_TEXT_P(result);
+	if (nodeTag(node) == T_Var)
+	{
+		*var_exist = true;
+		return true;
+	}
+
+	return expression_tree_walker(node, find_var, var_exist);
+}
+
+/*
+ * If there are no Var nodes exists in the expression tree, we treat
+ * it as a simple expression since deparse_expression_pretty doesn't
+ * need to interpret Vars in the node tree. So skip calling
+ * deparse_context_for, this avoids unnecessary lock on relation.
+ * Currently this optimization only apply to pg_partitions view to
+ * avoid acquire lock on the relation. Otherwise the view takes locks
+ * on every partition table defined in the database and that conflicts
+ * heavily with concurrent DDL transactions, if any.
+ */
+static bool
+expr_has_vars(Node *expr)
+{
+	bool	containVar = false;
+
+	if (expr == NULL)
+		return false;
+
+	if (nodeTag(expr) == T_Var)
+		return true;
+
+	expression_tree_walker(expr, find_var, &containVar);
+
+	return containVar;
 }
 
 static text *
@@ -1954,7 +1956,7 @@ pg_get_expr_worker(text *expr, Oid relid, const char *relname, int prettyFlags)
 	pfree(exprstr);
 
 	/* Prepare deparse context if needed */
-	if (OidIsValid(relid))
+	if (OidIsValid(relid) && expr_has_vars(node))
 		context = deparse_context_for(relname, relid);
 	else
 		context = NIL;

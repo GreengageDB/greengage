@@ -3,7 +3,7 @@
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>
-      <dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.010000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/>
+      <dxl:StatisticsConfig DampingFactorFilter="0.750000" DampingFactorJoin="0.000000" DampingFactorGroupBy="0.750000" MaxStatsBuckets="100"/>
       <dxl:CTEConfig CTEInliningCutoff="0"/> 
       <dxl:WindowOids RowNumber="7000" Rank="7001"/>
       <dxl:TraceFlags Value="102001,102002,102003,102144,103001,103027,103033"/>
@@ -6497,10 +6497,10 @@
         </dxl:LogicalGroupBy>
       </dxl:LogicalLimit>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="11166015676">
+    <dxl:Plan Id="0" SpaceSize="9016323952">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="527997.396320" Rows="25.000000" Width="34"/>
+          <dxl:Cost StartupCost="0" TotalCost="505295.883530" Rows="25.000000" Width="34"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="69" Alias="n_name">
@@ -6516,7 +6516,7 @@
         </dxl:SortingColumnList>
         <dxl:Sort SortDiscardDuplicates="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="527997.392503" Rows="25.000000" Width="34"/>
+            <dxl:Cost StartupCost="0" TotalCost="505295.879713" Rows="25.000000" Width="34"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="69" Alias="n_name">
@@ -6534,7 +6534,7 @@
           <dxl:LimitOffset/>
           <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="527997.383723" Rows="25.000000" Width="34"/>
+              <dxl:Cost StartupCost="0" TotalCost="505295.870932" Rows="25.000000" Width="34"/>
             </dxl:Properties>
             <dxl:GroupingColumns>
               <dxl:GroupingColumn ColId="69"/>
@@ -6552,7 +6552,7 @@
             <dxl:Filter/>
             <dxl:RedistributeMotion InputSegments="0,1" OutputSegments="0,1">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="527997.381937" Rows="25.000000" Width="34"/>
+                <dxl:Cost StartupCost="0" TotalCost="505295.869146" Rows="25.000000" Width="34"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="69" Alias="n_name">
@@ -6571,7 +6571,7 @@
               </dxl:HashExprList>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="527997.380606" Rows="25.000000" Width="34"/>
+                  <dxl:Cost StartupCost="0" TotalCost="505295.867816" Rows="25.000000" Width="34"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="69" Alias="n_name">
@@ -6585,7 +6585,7 @@
                 <dxl:OneTimeFilter/>
                 <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="true">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="527997.380606" Rows="25.000000" Width="34"/>
+                    <dxl:Cost StartupCost="0" TotalCost="505295.867816" Rows="25.000000" Width="34"/>
                   </dxl:Properties>
                   <dxl:GroupingColumns>
                     <dxl:GroupingColumn ColId="69"/>
@@ -6609,7 +6609,7 @@
                   <dxl:Filter/>
                   <dxl:HashJoin JoinType="Inner">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="516749.583045" Rows="168702200.194000" Width="42"/>
+                      <dxl:Cost StartupCost="0" TotalCost="504845.955799" Rows="6748088.007760" Width="42"/>
                     </dxl:Properties>
                     <dxl:ProjList>
                       <dxl:ProjElem ColId="36" Alias="l_extendedprice">
