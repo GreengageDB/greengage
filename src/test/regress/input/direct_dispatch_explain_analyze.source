@@ -1,0 +1,46 @@
+-- start_matchsubs
+-- m/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/
+-- s/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/(actual time=##.###..##.### rows=# loops=#)/
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes\./
+-- s/Executor memory: (\d+)\w bytes.*/Executor memory: (#####)K bytes./
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\)\./
+-- s/Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\).*/Executor memory: ####K bytes avg x #### workers, ####K bytes max (seg#)./
+-- m/Work_mem: \d+\w bytes max\./
+-- s/Work_mem: \d+\w bytes max\. */Work_mem: ###K bytes max./
+-- m/Execution time: \d+\.\d+ ms/
+-- s/Execution time: \d+\.\d+ ms/Execution time: ##.### ms/
+-- m/Planning time: \d+\.\d+ ms/
+-- s/Planning time: \d+\.\d+ ms/Planning time: ##.### ms/
+-- m/cost=\d+\.\d+\.\.\d+\.\d+ rows=\d+ width=\d+/
+-- s/\(cost=\d+\.\d+\.\.\d+\.\d+ rows=\d+ width=\d+\)/(cost=##.###..##.### rows=### width=###)/
+-- m/Memory used:  \d+\w?B/
+-- s/Memory used:  \d+\w?B/Memory used: ###B/
+-- end_matchsubs
+-- start_matchignore
+-- m|Peak/Cur|
+-- m/Total memory used across slices/
+-- end_matchignore
+\t
+\a
+set client_min_messages to warning;
+set optimizer to off;
+set gp_autostats_mode = none;
+
+-- start_ignore
+drop schema if exists direct_dispatch_explain_analyze_testschema;
+create schema direct_dispatch_explain_analyze_testschema;
+-- end_ignore
+set search_path=direct_dispatch_explain_analyze_testschema,public,pg_catalog;
+
+create table t(i int, j int) distributed by (i);
+insert into t select i, i from generate_series(1, 10) i;
+
+set explain_memory_verbosity to detail;
+set test_print_direct_dispatch_info to on;
+explain (costs off, analyze) select * from t where i = 2 or i = 5;
+
+explain (costs off, analyze) select * from t where i = 1 or i = 5;
+
+-- start_ignore
+drop schema direct_dispatch_explain_analyze_testschema cascade;
+-- end_ignore

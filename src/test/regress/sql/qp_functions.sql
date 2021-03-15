@@ -510,3 +510,18 @@ begin
   raise notice 'n: %', n;
 end;
 $$;
+
+-- Set returning functions should be prohibited in predicates.
+create table srf_placement_tab ( a int, b int[], c text[]) distributed by (a);
+insert into srf_placement_tab values
+       (1, ARRAY[1,2,3,4,5], ARRAY['this','is','test']),
+       (1, ARRAY[10,20,30,40,50], ARRAY['this', 'is', 'another', 'test']),
+       (1, ARRAY[-1,-2,-3,-4,-5], ARRAY['and', 'yet', 'another', 'test']);
+-- both the following select statements should report error due to the
+-- set-returning-function unnest being called from the wrong place
+select * from srf_placement_tab where unnest(b) = ANY(ARRAY[3,4]);
+select * from srf_placement_tab where length(unnest(c)) = ALL(ARRAY[5, 4]);
+-- SRFs are not allowed in update statements
+update srf_placement_tab set a = generate_series(1,10);
+-- And in limit clause
+select 1 limit generate_series(1,10);

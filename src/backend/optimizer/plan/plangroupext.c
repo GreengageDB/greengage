@@ -618,8 +618,6 @@ make_list_aggs_for_rollup(PlannerInfo *root,
 	double current_numGroups;
 	uint64 grouping = 0;
 	double numGroups = *context->p_dNumGroups; /* make a copy of the original number */
-	/* The query has a non-empty set group clause */
-	bool has_groups = (root->parse->groupClause != NIL);
 	bool need_repeat_node = false;
 	List	   *group_pathkeys;
 
@@ -769,11 +767,6 @@ make_list_aggs_for_rollup(PlannerInfo *root,
 			}
 
 			context->aggstrategy = aggstrategy;
-
-			if (current_lefttree->flow != NULL &&
-				current_lefttree->flow->flotype == FLOW_SINGLETON &&
-				has_groups)
-				need_finalagg = false;
 
 			if (!need_finalagg && group_no == last_group_no)
 			{

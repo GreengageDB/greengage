@@ -11,6 +11,7 @@
 
 #include "postgres.h"
 #include "fmgr.h"
+#include "funcapi.h"
 #include "access/transam.h"
 #include "catalog/binary_upgrade.h"
 #include "catalog/namespace.h"
@@ -24,6 +25,8 @@
 #include "cdb/cdbvars.h"
 #include "commands/extension.h"
 #include "miscadmin.h"
+#include "nodes/nodeFuncs.h"
+#include "rewrite/rewriteHandler.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 
@@ -56,6 +59,10 @@ PG_FUNCTION_INFO_V1(set_next_pg_namespace_oid);
 
 PG_FUNCTION_INFO_V1(set_preassigned_oids);
 PG_FUNCTION_INFO_V1(set_next_preassigned_tablespace_oid);
+
+PG_FUNCTION_INFO_V1(view_has_anyarray_casts);
+
+static bool check_node_anyarray_walker(Node *node, void *context);
 
 Datum
 set_next_pg_type_oid(PG_FUNCTION_ARGS)
@@ -272,3 +279,65 @@ set_next_preassigned_tablespace_oid(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+/*
+ * Check for anyarray casts which may have corrupted the given view's definition
+ * The corruption can result from the GPDB special handling for ANYARRAY types
+ * in parse_coerce.c: coerce_type()
+ */
+
+Datum
+view_has_anyarray_casts(PG_FUNCTION_ARGS)
+{
+	Oid			view_oid = PG_GETARG_OID(0);
+	Relation 	rel = try_relation_open(view_oid, AccessShareLock, false);
+	Query		*viewquery;
+	bool		found;
+
+	if (rel == NULL)
+		elog(ERROR, "Could not open relation file for relation oid %u", view_oid);
+
+	if(rel->rd_rel->relkind == RELKIND_VIEW)
+	{
+		viewquery = get_view_query(rel);
+		found = query_tree_walker(viewquery, check_node_anyarray_walker, NULL, 0);
+	}
+	else
+		found = false;
+
+	relation_close(rel, AccessShareLock);
+
+	PG_RETURN_BOOL(found);
+}
+
+static bool
+check_node_anyarray_walker(Node *node, void *context)
+{
+	Assert(context == NULL);
+
+	if (node == NULL)
+		return false;
+
+	/*
+	 * Look only at Consts since the GPDB special handling hack for ANYARRAY
+	 * types is only applied to Consts. See parse_coerce.c: coerce_type()
+	 */
+	if (IsA(node, Const))
+	{
+		Const *constant = (Const *) node;
+		/*
+		 * Check to see if the constant has an anyarray cast. If the constant's
+		 * value is NULL, disregard. This is because NULL::anyarray is a valid
+		 * expression and is encountered in the pg_stats catalog view.
+		 */
+		return constant->consttype == ANYARRAYOID && !constant->constisnull;
+	}
+	else if (IsA(node, Query))
+	{
+		/* recurse into subselects and ctes */
+		Query *query = (Query *) node;
+		return query_tree_walker(query, check_node_anyarray_walker, context, 0);
+	}
+
+	return expression_tree_walker(node, check_node_anyarray_walker,
+								  context);
+}

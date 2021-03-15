@@ -1405,7 +1405,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 		pfree(waitGxids);
 
 	if (results)
-		free(results);
+		pfree(results);
 
 	return (numOfFailed == 0);
 }

@@ -318,12 +318,17 @@ public:
 	static BOOL IsTimeRelatedType(const IMDId *mdid);
 
 	// is this a time-related type mappable to DOUBLE
-	static inline BOOL IsTimeRelatedTypeMappableToDouble(const IMDId *mdid) {
-		return IsTimeRelatedType(mdid) && !IsTimeRelatedTypeMappableToLint(mdid);
+	static inline BOOL
+	IsTimeRelatedTypeMappableToDouble(const IMDId *mdid)
+	{
+		return IsTimeRelatedType(mdid) &&
+			   !IsTimeRelatedTypeMappableToLint(mdid);
 	}
 
 	// is this a time-related type mappable to LINT
-	static inline BOOL IsTimeRelatedTypeMappableToLint(const IMDId *mdid) {
+	static inline BOOL
+	IsTimeRelatedTypeMappableToLint(const IMDId *mdid)
+	{
 		return mdid->Equals(&CMDIdGPDB::m_mdid_date);
 	}
 

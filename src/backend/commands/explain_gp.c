@@ -1543,19 +1543,29 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 
 		for (int iWorker = 0; iWorker < ctx->slices[curSliceId].nworker; iWorker++)
 		{
+			void *memacc = ctx->slices[curSliceId].memoryAccounts[iWorker];
+			int segno = iWorker + ctx->slices[curSliceId].segindex0;
+			/*
+			 * The content id of QEs in slice may not be continuous when Direct Dispatch is enabled in this slice,
+			 * which means memacc may be uninitialized by cdbexplain_depositSliceStats(), and the initial value of
+			 * memacc is NULL.
+			 */
+			if (memacc == NULL)
+				continue;
+
 			if (es->format == EXPLAIN_FORMAT_TEXT)
 			{
 				appendStringInfoSpaces(es->str, es->indent * 2);
-				appendStringInfo(es->str, "slice %d, seg %d\n", curSliceId, iWorker);
+				appendStringInfo(es->str, "slice %d, seg %d\n", curSliceId, segno);
 			}
 			else
 			{
 				ExplainOpenGroup("MemoryAccounting", NULL, false, es);
 				ExplainPropertyInteger("Slice", curSliceId, es);
-				ExplainPropertyInteger("Segment", iWorker, es);
+				ExplainPropertyInteger("Segment", segno, es);
 			}
 
-			MemoryAccounting_CombinedAccountArrayToExplain(ctx->slices[curSliceId].memoryAccounts[iWorker],
+			MemoryAccounting_CombinedAccountArrayToExplain(memacc,
 														   ctx->slices[curSliceId].memoryAccountCount[iWorker],
 														   es);
 			if (es->format != EXPLAIN_FORMAT_TEXT)

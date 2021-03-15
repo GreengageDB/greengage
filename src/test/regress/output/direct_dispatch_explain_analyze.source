@@ -1,0 +1,117 @@
+-- start_matchsubs
+-- m/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/
+-- s/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/(actual time=##.###..##.### rows=# loops=#)/
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes\./
+-- s/Executor memory: (\d+)\w bytes.*/Executor memory: (#####)K bytes./
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\)\./
+-- s/Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\).*/Executor memory: ####K bytes avg x #### workers, ####K bytes max (seg#)./
+-- m/Work_mem: \d+\w bytes max\./
+-- s/Work_mem: \d+\w bytes max\. */Work_mem: ###K bytes max./
+-- m/Execution time: \d+\.\d+ ms/
+-- s/Execution time: \d+\.\d+ ms/Execution time: ##.### ms/
+-- m/Planning time: \d+\.\d+ ms/
+-- s/Planning time: \d+\.\d+ ms/Planning time: ##.### ms/
+-- m/cost=\d+\.\d+\.\.\d+\.\d+ rows=\d+ width=\d+/
+-- s/\(cost=\d+\.\d+\.\.\d+\.\d+ rows=\d+ width=\d+\)/(cost=##.###..##.### rows=### width=###)/
+-- m/Memory used:  \d+\w?B/
+-- s/Memory used:  \d+\w?B/Memory used: ###B/
+-- end_matchsubs
+-- start_matchignore
+-- m|Peak/Cur|
+-- m/Total memory used across slices/
+-- end_matchignore
+\t
+\a
+set client_min_messages to warning;
+set optimizer to off;
+set gp_autostats_mode = none;
+-- start_ignore
+drop schema if exists direct_dispatch_explain_analyze_testschema;
+create schema direct_dispatch_explain_analyze_testschema;
+-- end_ignore
+set search_path=direct_dispatch_explain_analyze_testschema,public,pg_catalog;
+create table t(i int, j int) distributed by (i);
+insert into t select i, i from generate_series(1, 10) i;
+set explain_memory_verbosity to detail;
+set test_print_direct_dispatch_info to on;
+explain (costs off, analyze) select * from t where i = 2 or i = 5;
+INFO:  (slice 1) Dispatch command to PARTIAL contents: 0 2
+Gather Motion 2:1  (slice1; segments: 2) (actual time=0.511..0.515 rows=2 loops=1)
+  slice 1, seg 0
+    Root: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      Top: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+        Main: Peak/Cur 6176/5968 bytes. Quota: 0 bytes.
+          Executor: Peak/Cur 99904/99904 bytes. Quota: 0 bytes.
+            X_Motion: Peak/Cur 4736/4736 bytes. Quota: 102400 bytes.
+              X_SeqScan: Peak/Cur 36304/23504 bytes. Quota: 102400 bytes.
+          Deserializer: Peak/Cur 1464/1464 bytes. Quota: 0 bytes.
+          Deserializer: Peak/Cur 4496/4496 bytes. Quota: 0 bytes.
+      X_Alien: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      MemAcc: Peak/Cur 1656/1656 bytes. Quota: 0 bytes.
+      Rollover: Peak/Cur 1583816/1433832 bytes. Quota: 0 bytes.
+      SharedHeader: Peak/Cur 5896/5896 bytes. Quota: 0 bytes.
+  slice 1, seg 2
+    Root: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      Top: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+        Main: Peak/Cur 6176/5968 bytes. Quota: 0 bytes.
+          Executor: Peak/Cur 99904/99904 bytes. Quota: 0 bytes.
+            X_Motion: Peak/Cur 4736/4736 bytes. Quota: 102400 bytes.
+              X_SeqScan: Peak/Cur 36304/23504 bytes. Quota: 102400 bytes.
+          Deserializer: Peak/Cur 1464/1464 bytes. Quota: 0 bytes.
+          Deserializer: Peak/Cur 4496/4496 bytes. Quota: 0 bytes.
+      X_Alien: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      MemAcc: Peak/Cur 1656/1656 bytes. Quota: 0 bytes.
+      Rollover: Peak/Cur 1583816/1433832 bytes. Quota: 0 bytes.
+      SharedHeader: Peak/Cur 5896/5896 bytes. Quota: 0 bytes.
+  ->  Seq Scan on t (actual time=0.034..0.039 rows=1 loops=1)
+        Filter: ((i = 2) OR (i = 5))
+Planning time: 4.290 ms
+  (slice0)    Executor memory: 59K bytes.  Peak memory: 1675K bytes.  Vmem reserved: 14336K bytes.
+  (slice1)    Executor memory: 42K bytes avg x 2 workers, 42K bytes max (seg0).  Peak memory: 2K bytes avg x 2 workers, 1551K bytes max (seg0).  Vmem reserved: 13312K bytes avg x 2 workers, 13312K bytes max (seg0).
+Total memory used across slices: 4777K bytes 
+Memory used:  128000kB
+Optimizer: Postgres query optimizer
+Execution time: 1.416 ms
+explain (costs off, analyze) select * from t where i = 1 or i = 5;
+INFO:  (slice 1) Dispatch command to PARTIAL contents: 1 2
+Gather Motion 2:1  (slice1; segments: 2) (actual time=0.411..0.502 rows=2 loops=1)
+  slice 1, seg 1
+    Root: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      Top: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+        Main: Peak/Cur 6176/5968 bytes. Quota: 0 bytes.
+          Executor: Peak/Cur 99904/99904 bytes. Quota: 0 bytes.
+            X_Motion: Peak/Cur 4736/4736 bytes. Quota: 102400 bytes.
+              X_SeqScan: Peak/Cur 36304/23504 bytes. Quota: 102400 bytes.
+          Deserializer: Peak/Cur 1464/1464 bytes. Quota: 0 bytes.
+          Deserializer: Peak/Cur 4496/4496 bytes. Quota: 0 bytes.
+      X_Alien: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      MemAcc: Peak/Cur 1656/1656 bytes. Quota: 0 bytes.
+      Rollover: Peak/Cur 1583816/1433832 bytes. Quota: 0 bytes.
+      SharedHeader: Peak/Cur 5896/5896 bytes. Quota: 0 bytes.
+  slice 1, seg 2
+    Root: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      Top: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+        Main: Peak/Cur 6176/5968 bytes. Quota: 0 bytes.
+          Executor: Peak/Cur 99904/99904 bytes. Quota: 0 bytes.
+            X_Motion: Peak/Cur 4736/4736 bytes. Quota: 102400 bytes.
+              X_SeqScan: Peak/Cur 36304/15912 bytes. Quota: 102400 bytes.
+          Deserializer: Peak/Cur 1464/1464 bytes. Quota: 0 bytes.
+          Deserializer: Peak/Cur 4496/4496 bytes. Quota: 0 bytes.
+      X_Alien: Peak/Cur 0/0 bytes. Quota: 0 bytes.
+      MemAcc: Peak/Cur 1656/1656 bytes. Quota: 0 bytes.
+      Rollover: Peak/Cur 1587928/1441424 bytes. Quota: 0 bytes.
+      SharedHeader: Peak/Cur 5984/5984 bytes. Quota: 0 bytes.
+  ->  Seq Scan on t (actual time=0.032..0.033 rows=1 loops=1)
+        Filter: ((i = 1) OR (i = 5))
+Planning time: 1.519 ms
+  (slice0)    Executor memory: 59K bytes.  Peak memory: 1675K bytes.  Vmem reserved: 14336K bytes.
+  (slice1)    Executor memory: 42K bytes avg x 2 workers, 42K bytes max (seg1).  Peak memory: 2K bytes avg x 2 workers, 1559K bytes max (seg2).  Vmem reserved: 13312K bytes avg x 2 workers, 13312K bytes max (seg1).
+Total memory used across slices: 4785K bytes 
+Memory used:  128000kB
+Optimizer: Postgres query optimizer
+Execution time: 1.291 ms
+-- start_ignore
+drop schema direct_dispatch_explain_analyze_testschema cascade;
+INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+-- end_ignore

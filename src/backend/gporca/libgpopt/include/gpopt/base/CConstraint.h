@@ -32,9 +32,8 @@ class CConstraint;
 typedef CDynamicPtrArray<CConstraint, CleanupRelease> CConstraintArray;
 
 // hash map mapping CColRef -> CConstraintArray
-typedef CHashMap<CColRef, CConstraintArray, gpos::HashValue<CColRef>,
-				 gpos::Equals<CColRef>, CleanupNULL<CColRef>,
-				 CleanupRelease<CConstraintArray> >
+typedef CHashMap<CColRef, CConstraintArray, CColRef::HashValue, CColRef::Equals,
+				 CleanupNULL<CColRef>, CleanupRelease<CConstraintArray> >
 	ColRefToConstraintArrayMap;
 
 // mapping CConstraint -> BOOL to cache previous containment queries,

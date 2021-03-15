@@ -892,3 +892,32 @@ select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_s
 select * from simplify_sub t1 where not exists (select sum(t2.i) from simplify_sub t2 where t1.i = t2.i offset NULL);
 
 drop table if exists simplify_sub;
+
+-- Regression of duplicated initplans of a partitioned table
+DROP TABLE IF EXISTS foo, lookup_table;
+
+CREATE TABLE foo(a int, b text, c timestamp)
+  DISTRIBUTED BY (a)
+  PARTITION BY LIST(b) (VALUES('a'), VALUES('b'));
+INSERT INTO foo VALUES (1, 'a', '2012-12-12 13:00');
+INSERT INTO foo VALUES (2, 'b', '2012-12-13 12:00');
+
+CREATE TABLE lookup_table(a text, c timestamp)
+  DISTRIBUTED BY (a);
+INSERT INTO lookup_table VALUES ('a', '2012-12-12 12:00');
+INSERT INTO lookup_table VALUES ('b', '2021-12-21 21:00');
+
+CREATE OR REPLACE FUNCTION my_lookup(a_in text) RETURNS timestamp AS
+$$
+DECLARE
+   c_var timestamp;
+BEGIN
+   BEGIN
+      SELECT c INTO c_var FROM lookup_table WHERE a = a_in;
+   END;
+   RETURN c_var;
+END;
+$$
+LANGUAGE plpgsql NO SQL;
+
+SELECT a, b FROM foo f WHERE EXISTS (SELECT 1 FROM foo f1 WHERE f.b=f1.b AND f1.c > (SELECT my_lookup('a')));

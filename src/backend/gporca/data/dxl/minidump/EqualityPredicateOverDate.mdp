@@ -1,5 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+  <dxl:Comment><![CDATA[
+  Description:
+    This test case checks cardinality for selection with equality predicate that
+    contains date type attribute. This attribute is compared with scalar value
+    that have not to be presented in MCV list in statistics gathered for this
+    column. Result cardinality value has not to be equaled to 1 (dummy value for
+    very low selectivity predicate) and have to be near real number of rows.
+  Setup:
+    CREATE TABLE test(d date) DISTRIBUTED BY (d);
+    INSERT INTO test
+      SELECT '2018-01-01'::date + make_interval(days := (i%1000))
+      FROM generate_series(0, 1000000) i;
+    SET default_statistics_target TO 5;
+    ANALYZE test;
+  Query to test:
+    # select scalar for predicate that is not in MCV
+    # real number of returned rows is 10^3
+    EXPLAIN SELECT * FROM test WHERE d = '2018-09-22';
+  Physical plan:
+                                             QUERY PLAN
+     -------------------------------------------------------------------------------------------
+     Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..482.634091 rows=984.924062 width=4)
+       ->  Seq Scan on test  (cost=0.00..482.607379 rows=984.924062 width=4)
+             Filter: (d = '2018-09-22'::date)
+  ]]>
+  </dxl:Comment>
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>
@@ -275,7 +301,7 @@
     <dxl:Plan Id="0" SpaceSize="1">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="482.634091" Rows="984.924062" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="482.634262" Rows="989.898435" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="d">
@@ -286,7 +312,7 @@
         <dxl:SortingColumnList/>
         <dxl:TableScan>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="482.607379" Rows="984.924062" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="482.607416" Rows="989.898435" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="d">

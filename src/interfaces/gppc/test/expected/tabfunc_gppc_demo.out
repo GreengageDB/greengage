@@ -419,10 +419,9 @@ LINE 1: SELECT * FROM TABLE(select a from t1);
     SELECT * FROM t1 WHERE a IN ( 
         transform( TABLE(select a,e from t1 where a < 5) )
     );
-ERROR:  operator does not exist: integer = record
-LINE 1: SELECT * FROM t1 WHERE a IN ( 
-                                 ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+ERROR:  set-returning functions are not allowed in WHERE
+LINE 2:         transform( TABLE(select a,e from t1 where a < 5) )
+                ^
     -- ERROR:  operator does not exist: integer = outtable
     -- TVE in IN clause
     SELECT * FROM t1 WHERE a IN ( 
@@ -2425,7 +2424,7 @@ select * from t1 order by transform( TABLE(select * from intable));
 ERROR:  table functions must be invoked in FROM clause
 -- ETF in LIMIT
 select * from t1 LIMIT transform (TABLE(select * from intable));
-ERROR:  argument of LIMIT must be type bigint, not type record
+ERROR:  set-returning functions are not allowed in LIMIT
 LINE 1: select * from t1 LIMIT transform (TABLE(select * from intabl...
                                ^
 -- ETF in GROUP BY
@@ -2435,10 +2434,9 @@ ERROR:  table functions must be invoked in FROM clause
 -- ETF in IN clause
 select * from t1 where a in 
               (transform(TABLE(select a,e from t1 where a<10)));
-ERROR:  operator does not exist: integer = record
-LINE 1: select * from t1 where a in 
-                                 ^
-HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
+ERROR:  set-returning functions are not allowed in WHERE
+LINE 2:               (transform(TABLE(select a,e from t1 where a<10...
+                       ^
 -- Positive: ETF can be used for table JOIN operation
 -- The followings should succeed
     -- join table t1 with ETF

@@ -112,32 +112,38 @@ FROM (
 SELECT *
 FROM fin
 WHERE location_id = 1;
-                       QUERY PLAN                        
----------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Subquery Scan on base
    Filter: (COALESCE(base.country_id, base.city_id) = 1)
    ->  Append
-         ->  GroupAggregate
-               Group Key: table1.city_id, (1)
-               ->  Sort
-                     Sort Key: table1.city_id
-                     ->  Subquery Scan on table1
-                           ->  Append
-                                 ->  Result
-                                 ->  Result
-                                 ->  Result
-                                 ->  Result
-         ->  GroupAggregate
-               Group Key: (1), table1_1.city_id
-               ->  Sort
-                     ->  Subquery Scan on table1_1
-                           ->  Append
-                                 ->  Result
-                                 ->  Result
-                                 ->  Result
-                                 ->  Result
+         ->  HashAggregate
+               Group Key: "rollup".city_id, "rollup".prelim_aggref_1, "rollup"."grouping", "rollup"."group_id"
+               ->  Subquery Scan on "rollup"
+                     ->  GroupAggregate
+                           Group Key: table1.city_id, (1)
+                           ->  Sort
+                                 Sort Key: table1.city_id
+                                 ->  Subquery Scan on table1
+                                       ->  Append
+                                             ->  Result
+                                             ->  Result
+                                             ->  Result
+                                             ->  Result
+         ->  HashAggregate
+               Group Key: rollup_1.prelim_aggref_1, rollup_1.city_id, rollup_1."grouping", rollup_1."group_id"
+               ->  Subquery Scan on rollup_1
+                     ->  GroupAggregate
+                           Group Key: (1), table1_1.city_id
+                           ->  Sort
+                                 ->  Subquery Scan on table1_1
+                                       ->  Append
+                                             ->  Result
+                                             ->  Result
+                                             ->  Result
+                                             ->  Result
  Optimizer: Postgres query optimizer
-(23 rows)
+(29 rows)
 
 --
 -- Select constant from GROUPING SETS of multiple empty sets

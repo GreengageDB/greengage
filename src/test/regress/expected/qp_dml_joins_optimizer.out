@@ -3182,7 +3182,9 @@ SELECT COUNT(*) FROM dml_heap_pt_r WHERE c ='n';
 (1 row)
 
 UPDATE dml_heap_pt_r SET a = generate_series(1,10), c ='n';
-ERROR:  cross-partition or multi-update to a row
+ERROR:  set-returning functions are not allowed in UPDATE
+LINE 1: UPDATE dml_heap_pt_r SET a = generate_series(1,10), c ='n';
+                                     ^
 SELECT COUNT(*) FROM dml_heap_pt_r WHERE c ='n';
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT COUNT(*) FROM dml_heap_pt_r WHERE a = 1;
@@ -3850,7 +3852,9 @@ SELECT COUNT(*) FROM dml_heap_r WHERE c ='n';
 (1 row)
 
 UPDATE dml_heap_r SET a = generate_series(1,10), c ='n';
-ERROR:  cross-partition or multi-update to a row
+ERROR:  set-returning functions are not allowed in UPDATE
+LINE 1: UPDATE dml_heap_r SET a = generate_series(1,10), c ='n';
+                                  ^
 SELECT COUNT(*) FROM dml_heap_r WHERE c ='n';
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT SUM(a) FROM dml_heap_r WHERE a = 1;

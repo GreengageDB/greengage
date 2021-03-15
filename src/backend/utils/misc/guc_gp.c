@@ -3099,6 +3099,17 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"gpfdist_retry_timeout", PGC_USERSET, EXTERNAL_TABLES,
+			gettext_noop("Timeout (in seconds) for writing data to gpfdist server."),
+			gettext_noop("Default value is 300."),
+			GUC_UNIT_S | GUC_NOT_IN_SAMPLE
+		},
+		&gpfdist_retry_timeout,
+		300, 1, 7200,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"writable_external_table_bufsize", PGC_USERSET, EXTERNAL_TABLES,
 			gettext_noop("Buffer size in kilobytes for writable external table before writing data to gpfdist."),
 			gettext_noop("Valid value is between 32K and 128M: [32, 131072]."),
