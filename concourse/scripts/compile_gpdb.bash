@@ -199,7 +199,7 @@ function _main() {
 	prep_env
 
 	build_xerces
-	link_python
+	#link_python
 	generate_build_number
 	build_gpdb "${BLD_TARGET_OPTION[@]}"
 	git_info
@@ -209,7 +209,7 @@ function _main() {
 	fi
 
 	include_zstd
-	include_quicklz
+	#include_quicklz
 	include_libuv
 	include_libstdcxx
 
