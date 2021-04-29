@@ -275,6 +275,12 @@
             <li>
               <xref href="#gp_hashjoin_tuples_per_bucket"/>
             </li>
+            <li><xref href="#gp_resgroup_memory_policy"/></li>
+            <li><xref href="#gp_resource_group_bypass"/></li>
+            <li><xref href="#gp_resource_group_cpu_ceiling_enforcement"/></li>
+            <li><xref href="#gp_resource_group_cpu_limit"/></li>
+            <li><xref href="#gp_resource_group_memory_limit"/></li>
+            <li><xref href="#gp_resource_group_queuing_timeout"/></li>
             <li>
               <xref href="#gp_resource_manager"/>
             </li>
@@ -287,6 +293,8 @@
             <li><xref href="#gp_workfile_limit_files_per_query"/></li>
             <li><xref href="#gp_workfile_limit_per_query"/></li>
             <li><xref href="#gp_workfile_limit_per_segment"/></li>
+            <li><xref href="#gpfdist_retry_timeout" type="section">gpfdist_retry_timeout</xref>
+            </li>
             <li>
               <xref href="#gpperfmon_log_alert_level"/>
             </li>
@@ -419,6 +427,10 @@
               <xref href="#optimizer_cte_inlining_bound" type="section"
                 >optimizer_cte_inlining_bound</xref>
             </li>
+            <li>
+              <xref href="#optimizer_dpe_stats" type="section"
+                >optimizer_dpe_stats</xref>
+            </li>
             <li><xref href="#optimizer_enable_associativity" type="section"
                 >optimizer_enable_associativity</xref>
             </li>
@@ -430,8 +442,9 @@
               <xref href="#optimizer_enable_master_only_queries" type="section"
                 >optimizer_enable_master_only_queries</xref>
             </li>
-            <li><xref href="#optimizer_force_agg_skew_avoidance" type="section"
-                >optimizer_force_agg_skew_avoidance</xref>
+            <li>
+              <xref href="#optimizer_enable_multiple_distinct_aggs" type="section"
+                >optimizer_enable_multiple_distinct_aggs</xref>
             </li>
             <li>
               <xref href="#optimizer_force_multistage_agg" type="section"
@@ -3625,6 +3638,37 @@
       </table>
     </body>
   </topic>
+  <topic id="gpfdist_retry_timeout">
+    <title>gpfdist_retry_timeout</title>
+    <body>
+      <p>Controls the time (in seconds) that Greenplum Database waits before returning an error when
+        Greenplum Database is attempting to connect or write to a <codeph><xref
+            href="../../utility_guide/ref/gpfdist.xml"/></codeph> server and
+          <codeph>gpfdist</codeph> does not respond. The default value is 300 (5 minutes). A value
+        of 0 disables the timeout.</p>
+      <table id="table_fkm_jqp_dmb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">0 - <codeph>INT_MAX</codeph> (2147483647)</entry>
+              <entry colname="col2">300</entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
   <topic id="gpperfmon_log_alert_level">
     <title>gpperfmon_log_alert_level</title>
     <body>
@@ -4283,8 +4327,8 @@
         keyword allows a subquery in the <codeph>WITH</codeph> clause of a command to reference
         itself. The default value is <codeph>false</codeph>, the <codeph>RECURSIVE</codeph> keyword
         is not allowed in the <codeph>WITH</codeph> clause of a command.</p>
-      <p>For information about the <codeph>RECURSIVE</codeph> keyword (Beta), see the
-            <codeph><xref href="../sql_commands/SELECT.xml">SELECT</xref></codeph> command and <xref
+      <p>For information about the <codeph>RECURSIVE</codeph> keyword, see the <codeph><xref
+            href="../sql_commands/SELECT.xml">SELECT</xref></codeph> command and <xref
           href="../../admin_guide/query/topics/CTE-query.xml"/>.</p>
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
@@ -4444,6 +4488,34 @@
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">false</entry>
               <entry colname="col3">session</entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="gp_resource_group_cpu_ceiling_enforcement">
+    <title>gp_resource_group_cpu_ceiling_enforcement</title>
+    <body>
+      <p>Enables the Ceiling Enforcement mode when assigning CPU resources by Percentage. When
+        disabled, the Elastic mode will be used. </p>
+      <table id="table_wtb_y2g_fpb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">false</entry>
+              <entry colname="col3">local<p>system</p><p>restart</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6457,6 +6529,7 @@
           <codeph>COPY</codeph>, and <codeph>VACUUM</codeph> operations. The limit is only for
         in-progress transactions. Once a transaction ends (either aborted or committed), it is no
         longer counted against this limit.</p>
+      <note>Greenplum Database limits the maximum number of concurrent inserts into an append-only table to 127.</note>
       <p>For operations against a partitioned table, each subpartition (child table) that is an
         append-optimized table and is changed counts as a single table towards the maximum. For
         example, a partitioned table <codeph>p_tbl</codeph> is defined with three subpartitions that
@@ -7100,6 +7173,8 @@
       </table>
     </body>
   </topic>
+
+
   <topic id="optimizer_cte_inlining_bound">
     <title>optimizer_cte_inlining_bound</title>
     <body>
@@ -7124,6 +7199,35 @@
             <row>
               <entry colname="col1">Decimal >= 0</entry>
               <entry colname="col2">0</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="optimizer_dpe_stats">
+    <title>optimizer_dpe_stats</title>
+    <body>
+      <p>When GPORCA is enabled (the default) and this parameter is <codeph>true</codeph> (the default), GPORCA derives statistics that 
+	allow it to more accurately estimate the number of rows to be scanned during dynamic partition elimination.</p>
+      <p>The parameter can be set for a database system, an individual database, or a session or query.</p>
+      <table id="dpe_stats_table">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">true</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
@@ -7261,6 +7365,42 @@
           href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_ykk_rg5_gv">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">off</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="optimizer_enable_multiple_distinct_aggs">
+    <title>optimizer_enable_multiple_distinct_aggs</title>
+    <body>
+      <p dir="ltr">When GPORCA is enabled (the default), this parameter allows GPORCA to support
+        Multiple Distinct Qualified Aggregates, such as <codeph>SELECT count(DISTINCT
+          a),sum(DISTINCT b) FROM foo</codeph>. This parameter is disabled by default because its
+        plan is generally suboptimal in comparison to the plan generated by the Postgres
+        planner.</p>
+      <p>The parameter can be set for a database system, an individual database, or a session or
+        query.</p>
+      <p>For information about GPORCA, see <xref
+          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
+      <table id="table_zct_qn1_bpb">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
           <colspec colnum="2" colname="col2" colwidth="1*"/>
@@ -8487,8 +8627,8 @@
           <i>pg_catalog</i>, is always searched, whether it is mentioned in the path or not. When
         objects are created without specifying a particular target schema, they will be placed in
         the first schema listed in the search path. The current effective value of the search path
-        can be examined via the SQL function <i>current_schemas()</i>. <i>current_schemas()</i>
-        shows how the requests appearing in <i>search_path</i> were resolved.</p>
+        can be examined via the SQL function <i>current_schema()</i>. <i>current_schema()</i> shows
+        how the requests appearing in <i>search_path</i> were resolved.</p>
       <table id="search_path_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>

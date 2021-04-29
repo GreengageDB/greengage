@@ -4452,38 +4452,44 @@ ORDER BY to_char(order_datetime,'YYYY-Q')
                             <dxl:And>
                               <dxl:Or>
                                 <dxl:And>
-                                  <dxl:Comparison ComparisonOperator="&gt;=" OperatorMdid="0.2065.1.0">
+                                  <dxl:Or>
+                                    <dxl:Comparison ComparisonOperator="&gt;=" OperatorMdid="0.2065.1.0">
+                                      <dxl:PartBound Level="0" Type="0.1114.1.0" LowerBound="false"/>
+                                      <dxl:ConstValue TypeMdid="0.1114.1.0" Value="AKAEUCAmAQA=" DoubleValue="323395200000000.000000"/>
+                                    </dxl:Comparison>
+                                    <dxl:PartBoundOpen Level="0" LowerBound="false"/>
+                                  </dxl:Or>
+                                  <dxl:PartBoundInclusion Level="0" LowerBound="false"/>
+                                </dxl:And>
+                                <dxl:Or>
+                                  <dxl:Comparison ComparisonOperator="&gt;" OperatorMdid="0.2064.1.0">
                                     <dxl:PartBound Level="0" Type="0.1114.1.0" LowerBound="false"/>
                                     <dxl:ConstValue TypeMdid="0.1114.1.0" Value="AKAEUCAmAQA=" DoubleValue="323395200000000.000000"/>
                                   </dxl:Comparison>
-                                  <dxl:PartBoundInclusion Level="0" LowerBound="false"/>
-                                </dxl:And>
-                                <dxl:Comparison ComparisonOperator="&gt;" OperatorMdid="0.2064.1.0">
-                                  <dxl:PartBound Level="0" Type="0.1114.1.0" LowerBound="false"/>
-                                  <dxl:ConstValue TypeMdid="0.1114.1.0" Value="AKAEUCAmAQA=" DoubleValue="323395200000000.000000"/>
-                                </dxl:Comparison>
+                                  <dxl:PartBoundOpen Level="0" LowerBound="false"/>
+                                </dxl:Or>
                               </dxl:Or>
                               <dxl:Or>
                                 <dxl:And>
-                                  <dxl:Comparison ComparisonOperator="&lt;=" OperatorMdid="0.2372.1.0">
+                                  <dxl:Or>
+                                    <dxl:Comparison ComparisonOperator="&lt;=" OperatorMdid="0.2372.1.0">
+                                      <dxl:PartBound Level="0" Type="0.1114.1.0" LowerBound="true"/>
+                                      <dxl:ConstValue TypeMdid="0.1082.1.0" Value="+Q4AAA==" LintValue="3833"/>
+                                    </dxl:Comparison>
+                                    <dxl:PartBoundOpen Level="0" LowerBound="true"/>
+                                  </dxl:Or>
+                                  <dxl:PartBoundInclusion Level="0" LowerBound="true"/>
+                                </dxl:And>
+                                <dxl:Or>
+                                  <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.2371.1.0">
                                     <dxl:PartBound Level="0" Type="0.1114.1.0" LowerBound="true"/>
                                     <dxl:ConstValue TypeMdid="0.1082.1.0" Value="+Q4AAA==" LintValue="3833"/>
                                   </dxl:Comparison>
-                                  <dxl:PartBoundInclusion Level="0" LowerBound="true"/>
-                                </dxl:And>
-                                <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.2371.1.0">
-                                  <dxl:PartBound Level="0" Type="0.1114.1.0" LowerBound="true"/>
-                                  <dxl:ConstValue TypeMdid="0.1082.1.0" Value="+Q4AAA==" LintValue="3833"/>
-                                </dxl:Comparison>
+                                  <dxl:PartBoundOpen Level="0" LowerBound="true"/>
+                                </dxl:Or>
                               </dxl:Or>
                             </dxl:And>
-                            <dxl:Or>
-                              <dxl:DefaultPart Level="0"/>
-                              <dxl:Or>
-                                <dxl:PartBoundOpen Level="0" LowerBound="true"/>
-                                <dxl:PartBoundOpen Level="0" LowerBound="false"/>
-                              </dxl:Or>
-                            </dxl:Or>
+                            <dxl:DefaultPart Level="0"/>
                           </dxl:Or>
                         </dxl:PartFilters>
                         <dxl:ResidualFilter>

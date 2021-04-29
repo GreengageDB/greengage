@@ -5299,10 +5299,10 @@ prepare_sort_from_pathkeys(PlannerInfo *root, Plan *lefttree, List *pathkeys,
 	 * We will need at most list_length(pathkeys) sort columns; possibly less
 	 */
 	numsortkeys = list_length(pathkeys);
-	sortColIdx = (AttrNumber *) palloc(numsortkeys * sizeof(AttrNumber));
-	sortOperators = (Oid *) palloc(numsortkeys * sizeof(Oid));
-	collations = (Oid *) palloc(numsortkeys * sizeof(Oid));
-	nullsFirst = (bool *) palloc(numsortkeys * sizeof(bool));
+	sortColIdx = (AttrNumber *) palloc0(numsortkeys * sizeof(AttrNumber));
+	sortOperators = (Oid *) palloc0(numsortkeys * sizeof(Oid));
+	collations = (Oid *) palloc0(numsortkeys * sizeof(Oid));
+	nullsFirst = (bool *) palloc0(numsortkeys * sizeof(bool));
 
 	numsortkeys = 0;
 

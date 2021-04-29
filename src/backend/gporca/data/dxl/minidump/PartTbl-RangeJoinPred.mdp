@@ -5426,29 +5426,32 @@ where d.msisdn=f.subscriberaddress and f.sessioncreationtimestamp >= d.start_dtm
                 <dxl:And>
                   <dxl:Or>
                     <dxl:And>
-                      <dxl:Comparison ComparisonOperator="&gt;=" OperatorMdid="0.1325.1.0">
+                      <dxl:Or>
+                        <dxl:Comparison ComparisonOperator="&gt;=" OperatorMdid="0.1325.1.0">
+                          <dxl:PartBound Level="0" Type="0.1184.1.0" LowerBound="false"/>
+                          <dxl:Ident ColId="70" ColName="start_dtm" TypeMdid="0.1184.1.0"/>
+                        </dxl:Comparison>
+                        <dxl:PartBoundOpen Level="0" LowerBound="false"/>
+                      </dxl:Or>
+                      <dxl:PartBoundInclusion Level="0" LowerBound="false"/>
+                    </dxl:And>
+                    <dxl:Or>
+                      <dxl:Comparison ComparisonOperator="&gt;" OperatorMdid="0.1324.1.0">
                         <dxl:PartBound Level="0" Type="0.1184.1.0" LowerBound="false"/>
                         <dxl:Ident ColId="70" ColName="start_dtm" TypeMdid="0.1184.1.0"/>
                       </dxl:Comparison>
-                      <dxl:PartBoundInclusion Level="0" LowerBound="false"/>
-                    </dxl:And>
-                    <dxl:Comparison ComparisonOperator="&gt;" OperatorMdid="0.1324.1.0">
-                      <dxl:PartBound Level="0" Type="0.1184.1.0" LowerBound="false"/>
-                      <dxl:Ident ColId="70" ColName="start_dtm" TypeMdid="0.1184.1.0"/>
-                    </dxl:Comparison>
+                      <dxl:PartBoundOpen Level="0" LowerBound="false"/>
+                    </dxl:Or>
                   </dxl:Or>
-                  <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.1322.1.0">
-                    <dxl:PartBound Level="0" Type="0.1184.1.0" LowerBound="true"/>
-                    <dxl:Ident ColId="71" ColName="end_dtm" TypeMdid="0.1184.1.0"/>
-                  </dxl:Comparison>
-                </dxl:And>
-                <dxl:Or>
-                  <dxl:DefaultPart Level="0"/>
                   <dxl:Or>
+                    <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.1322.1.0">
+                      <dxl:PartBound Level="0" Type="0.1184.1.0" LowerBound="true"/>
+                      <dxl:Ident ColId="71" ColName="end_dtm" TypeMdid="0.1184.1.0"/>
+                    </dxl:Comparison>
                     <dxl:PartBoundOpen Level="0" LowerBound="true"/>
-                    <dxl:PartBoundOpen Level="0" LowerBound="false"/>
                   </dxl:Or>
-                </dxl:Or>
+                </dxl:And>
+                <dxl:DefaultPart Level="0"/>
               </dxl:Or>
             </dxl:PartFilters>
             <dxl:ResidualFilter>

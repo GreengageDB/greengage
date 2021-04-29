@@ -262,25 +262,7 @@ explain select * from dd_part_singlecol where a is null and b is null;
             </dxl:PartEqFilters>
             <dxl:PartFilters>
               <dxl:Or>
-                <dxl:And>
-                  <dxl:Not>
-                    <dxl:Or>
-                      <dxl:DefaultPart Level="0"/>
-                      <dxl:Or>
-                        <dxl:PartBoundOpen Level="0" LowerBound="true"/>
-                        <dxl:PartBoundOpen Level="0" LowerBound="false"/>
-                      </dxl:Or>
-                    </dxl:Or>
-                  </dxl:Not>
-                  <dxl:And>
-                    <dxl:IsNull>
-                      <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="true"/>
-                    </dxl:IsNull>
-                    <dxl:IsNull>
-                      <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="false"/>
-                    </dxl:IsNull>
-                  </dxl:And>
-                </dxl:And>
+                <dxl:DefaultPart Level="0"/>
                 <dxl:DefaultPart Level="0"/>
               </dxl:Or>
             </dxl:PartFilters>
@@ -340,7 +322,7 @@ explain select * from dd_part_singlecol where a is null and b is null;
       </dxl:GatherMotion>
       <dxl:DirectDispatchInfo>
         <dxl:KeyValue>
-          <dxl:Datum TypeMdid="0.23.1.0" IsNull="true" IsByValue="true"/>
+          <dxl:Datum TypeMdid="0.23.1.0" IsNull="true"/>
         </dxl:KeyValue>
       </dxl:DirectDispatchInfo>
     </dxl:Plan>

@@ -799,31 +799,7 @@ select * from x, y where (x.i > y.j);
                   <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
                 </dxl:PartEqFilters>
                 <dxl:PartFilters>
-                  <dxl:Or>
-                    <dxl:And>
-                      <dxl:Not>
-                        <dxl:Or>
-                          <dxl:DefaultPart Level="0"/>
-                          <dxl:Or>
-                            <dxl:PartBoundOpen Level="0" LowerBound="true"/>
-                            <dxl:PartBoundOpen Level="0" LowerBound="false"/>
-                          </dxl:Or>
-                        </dxl:Or>
-                      </dxl:Not>
-                      <dxl:And>
-                        <dxl:IsNotNull>
-                          <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="true"/>
-                        </dxl:IsNotNull>
-                        <dxl:IsNotNull>
-                          <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="false"/>
-                        </dxl:IsNotNull>
-                      </dxl:And>
-                    </dxl:And>
-                    <dxl:Or>
-                      <dxl:PartBoundOpen Level="0" LowerBound="true"/>
-                      <dxl:PartBoundOpen Level="0" LowerBound="false"/>
-                    </dxl:Or>
-                  </dxl:Or>
+                  <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
                 </dxl:PartFilters>
                 <dxl:ResidualFilter>
                   <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>

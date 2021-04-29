@@ -922,24 +922,30 @@ select * from P,X where P.a=X.a  and X.a not in (1,2);
                           <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="true"/>
                           <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
                         </dxl:Comparison>
-                        <dxl:And>
+                        <dxl:PartBoundOpen Level="0" LowerBound="true"/>
+                      </dxl:Or>
+                      <dxl:And>
+                        <dxl:Or>
                           <dxl:Comparison ComparisonOperator="&gt;" OperatorMdid="0.521.1.0">
                             <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="false"/>
                             <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
                           </dxl:Comparison>
+                          <dxl:PartBoundOpen Level="0" LowerBound="false"/>
+                        </dxl:Or>
+                        <dxl:Or>
                           <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.97.1.0">
                             <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="true"/>
                             <dxl:ConstValue TypeMdid="0.23.1.0" Value="2"/>
                           </dxl:Comparison>
-                        </dxl:And>
-                      </dxl:Or>
+                          <dxl:PartBoundOpen Level="0" LowerBound="true"/>
+                        </dxl:Or>
+                      </dxl:And>
+                    </dxl:Or>
+                    <dxl:Or>
                       <dxl:Comparison ComparisonOperator="&gt;" OperatorMdid="0.521.1.0">
                         <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="false"/>
                         <dxl:ConstValue TypeMdid="0.23.1.0" Value="2"/>
                       </dxl:Comparison>
-                    </dxl:Or>
-                    <dxl:Or>
-                      <dxl:PartBoundOpen Level="0" LowerBound="true"/>
                       <dxl:PartBoundOpen Level="0" LowerBound="false"/>
                     </dxl:Or>
                   </dxl:Or>

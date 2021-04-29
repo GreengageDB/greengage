@@ -736,8 +736,8 @@ CTranslatorExprToDXLUtils::PdxlnListFilterPartKey(CMemoryPool *mp,
 	else if (CScalarIdent::FCastedScId(pexprPartKey) ||
 			 CScalarIdent::FAllowedFuncScId(pexprPartKey))
 	{
-		IMDId *pmdidDestElem;
-		IMDId *pmdidArrayCastFunc;
+		IMDId *pmdidDestElem = NULL;
+		IMDId *pmdidArrayCastFunc = NULL;
 		ExtractCastFuncMdids(pexprPartKey->Pop(), &pmdidDestElem,
 							 &pmdidArrayCastFunc);
 		IMDId *pmdidDestArray =
@@ -879,8 +879,9 @@ CTranslatorExprToDXLUtils::PdxlnRangeFilterScCmp(
 		mp, md_accessor, ulPartLevel, fLowerBound, pdxlnScalar, cmp_type,
 		pmdidTypePartKey, pmdidTypeOther, pmdidTypeCastExpr, mdid_cast_func);
 
-	if (NULL != mdid_cast_func && md_accessor->RetrieveFunc(mdid_cast_func)
-									  ->IsAllowedForPS())  // is a lossy cast
+	if (NULL != mdid_cast_func && mdid_cast_func->IsValid() &&
+		md_accessor->RetrieveFunc(mdid_cast_func)
+			->IsAllowedForPS())	 // is a lossy cast
 	{
 		// In case of lossy casts, we don't want to eliminate partitions with
 		// exclusive ends when the predicate is on that end
@@ -902,7 +903,8 @@ CTranslatorExprToDXLUtils::PdxlnRangeFilterScCmp(
 		GPOS_NEW(mp) CDXLNode(mp, GPOS_NEW(mp) CDXLScalarBoolExpr(mp, Edxland),
 							  pdxlnInclusiveCmp, pdxlnInclusiveBoolPredicate);
 
-	// return the final predicate in the form "(point <= col and colIncluded) or point < col" / "(point >= col and colIncluded) or point > col"
+	// return the final predicate in the form "(point <= col and colIncluded) or point < col" or
+	//                                        "(point >= col and colIncluded) or point > col"
 	return GPOS_NEW(mp)
 		CDXLNode(mp, GPOS_NEW(mp) CDXLScalarBoolExpr(mp, Edxlor),
 				 pdxlnPredicateInclusive, pdxlnPredicateExclusive);
@@ -922,6 +924,9 @@ CTranslatorExprToDXLUtils::PdxlnRangeFilterEqCmp(
 	IMDId *pmdidTypePartKey, IMDId *pmdidTypeOther, IMDId *pmdidTypeCastExpr,
 	IMDId *mdid_cast_func, ULONG ulPartLevel)
 {
+	// create a predicate of the form
+	// (lower_bound < part_key or lower_bound_is_open) and
+	// (upper_bound > part_key or upper_bound_is_open)
 	CDXLNode *pdxlnPredicateMin = PdxlnRangeFilterPartBound(
 		mp, md_accessor, pdxlnScalar, pmdidTypePartKey, pmdidTypeOther,
 		pmdidTypeCastExpr, mdid_cast_func, ulPartLevel, true /*fLowerBound*/,
@@ -967,8 +972,9 @@ CTranslatorExprToDXLUtils::PdxlnRangeFilterPartBound(
 		mp, md_accessor, ulPartLevel, fLowerBound, pdxlnScalar, ecmptInc,
 		pmdidTypePartKey, pmdidTypeOther, pmdidTypeCastExpr, mdid_cast_func);
 
-	if (NULL != mdid_cast_func && md_accessor->RetrieveFunc(mdid_cast_func)
-									  ->IsAllowedForPS())  // is a lossy cast
+	if (NULL != mdid_cast_func && mdid_cast_func->IsValid() &&
+		md_accessor->RetrieveFunc(mdid_cast_func)
+			->IsAllowedForPS())	 // is a lossy cast
 	{
 		// In case of lossy casts, we don't want to eliminate partitions with
 		// exclusive ends when the predicate is on that end
@@ -995,71 +1001,6 @@ CTranslatorExprToDXLUtils::PdxlnRangeFilterPartBound(
 	return GPOS_NEW(mp)
 		CDXLNode(mp, GPOS_NEW(mp) CDXLScalarBoolExpr(mp, Edxlor),
 				 pdxlnPredicateInclusive, pdxlnPredicateExclusive);
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorExprToDXLUtils::PdxlnRangeFilterDefaultAndOpenEnded
-//
-//	@doc:
-//		Construct predicates to cover the cases of default partition and
-//		open-ended partitions if necessary
-//
-//---------------------------------------------------------------------------
-CDXLNode *
-CTranslatorExprToDXLUtils::PdxlnRangeFilterDefaultAndOpenEnded(
-	CMemoryPool *mp, ULONG ulPartLevel, BOOL fLTComparison, BOOL fGTComparison,
-	BOOL fEQComparison, BOOL fDefaultPart)
-{
-	CDXLNode *pdxlnResult = NULL;
-	if (fLTComparison || fEQComparison)
-	{
-		// add a condition to cover the cases of open-ended interval (-inf, x)
-		pdxlnResult = GPOS_NEW(mp)
-			CDXLNode(mp, GPOS_NEW(mp) CDXLScalarPartBoundOpen(
-							 mp, ulPartLevel, true /*is_lower_bound*/));
-	}
-
-	if (fGTComparison || fEQComparison)
-	{
-		// add a condition to cover the cases of open-ended interval (x, inf)
-		CDXLNode *pdxlnOpenMax = GPOS_NEW(mp)
-			CDXLNode(mp, GPOS_NEW(mp) CDXLScalarPartBoundOpen(
-							 mp, ulPartLevel, false /*is_lower_bound*/));
-
-		// construct a boolean OR expression over the two expressions
-		if (NULL != pdxlnResult)
-		{
-			pdxlnResult = GPOS_NEW(mp)
-				CDXLNode(mp, GPOS_NEW(mp) CDXLScalarBoolExpr(mp, Edxlor),
-						 pdxlnResult, pdxlnOpenMax);
-		}
-		else
-		{
-			pdxlnResult = pdxlnOpenMax;
-		}
-	}
-
-	if (fDefaultPart)
-	{
-		// add a condition to cover the cases of default partition
-		CDXLNode *pdxlnDefault = GPOS_NEW(mp)
-			CDXLNode(mp, GPOS_NEW(mp) CDXLScalarPartDefault(mp, ulPartLevel));
-
-		if (NULL != pdxlnResult)
-		{
-			pdxlnResult = GPOS_NEW(mp)
-				CDXLNode(mp, GPOS_NEW(mp) CDXLScalarBoolExpr(mp, Edxlor),
-						 pdxlnDefault, pdxlnResult);
-		}
-		else
-		{
-			pdxlnResult = pdxlnDefault;
-		}
-	}
-
-	return pdxlnResult;
 }
 
 
@@ -1152,6 +1093,42 @@ CTranslatorExprToDXLUtils::PdxlnCmp(
 	}
 	pdxlnScCmp->AddChild(pdxlnPartBound);
 	pdxlnScCmp->AddChild(pdxlnScalar);
+
+	// We added a check for (boundary op expr), but in many cases we also need
+	// to handle the case where there is an open boundary (-inf or inf).
+	// So, instead of (boundary op expr) return
+	// (boundary op expr) or boundary_is_open
+	CDXLNode *pdxlnOpenBound = GPOS_NEW(mp) CDXLNode(
+		mp, GPOS_NEW(mp) CDXLScalarPartBoundOpen(mp, ulPartLevel, fLowerBound));
+
+	// For certain cases we would have to negate the open boundary
+	// boolean value to get the right result, but those cases currently
+	// don't happen.
+	//
+	// comparison             result for an open bound
+	// ------------------   ----------------------------
+	// lower_bound < expr             true
+	// lower_bound = expr             false
+	// lower_bound > expr             false
+	// upper_bound < expr             false
+	// upper_bound = expr             false
+	// upper_bound > expr             true
+	// lower_bound <> expr            true
+	// upper_bound <> expr            true
+	// NOTE: <= and >= give the same result as < and >
+
+	// Assert that we can use the positive condition <boundary_is_open>.
+	// If we ever hit this assert then we'll have to add a NOT on top
+	// of pdxlnOpenBound.
+	GPOS_RTL_ASSERT(
+		((fLowerBound && IMDType::EcmptEq != cmp_type &&
+		  IMDType::EcmptG != cmp_type && IMDType::EcmptGEq != cmp_type) ||
+		 (!fLowerBound && IMDType::EcmptL != cmp_type &&
+		  IMDType::EcmptLEq != cmp_type && IMDType::EcmptEq != cmp_type)));
+
+	pdxlnScCmp =
+		GPOS_NEW(mp) CDXLNode(mp, GPOS_NEW(mp) CDXLScalarBoolExpr(mp, Edxlor),
+							  pdxlnScCmp, pdxlnOpenBound);
 
 	return pdxlnScCmp;
 }

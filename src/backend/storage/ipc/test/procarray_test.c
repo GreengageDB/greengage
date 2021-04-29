@@ -72,7 +72,7 @@ test__CreateDistributedSnapshot(void **state)
 	 * Basic case, no other in progress transaction in system
 	 */
 	memset(ds->inProgressXidArray, 0, SIZE_OF_IN_PROGRESS_ARRAY);
-	CreateDistributedSnapshot(&distribSnapshotWithLocalMapping, DTX_CONTEXT_LOCAL_ONLY);
+	CreateDistributedSnapshot(ds, DTX_CONTEXT_LOCAL_ONLY);
 
 	/* perform all the validations */
 	assert_true(ds->xminAllDistributedSnapshots == 20);
@@ -98,7 +98,7 @@ test__CreateDistributedSnapshot(void **state)
 	procArray->numProcs = 3;
 
 	memset(ds->inProgressXidArray, 0, SIZE_OF_IN_PROGRESS_ARRAY);
-	CreateDistributedSnapshot(&distribSnapshotWithLocalMapping, DTX_CONTEXT_LOCAL_ONLY);
+	CreateDistributedSnapshot(ds, DTX_CONTEXT_LOCAL_ONLY);
 
 	/* perform all the validations */
 	assert_true(ds->xminAllDistributedSnapshots == 5);
@@ -124,7 +124,7 @@ test__CreateDistributedSnapshot(void **state)
 	procArray->numProcs = 5;
 
 	memset(ds->inProgressXidArray, 0, SIZE_OF_IN_PROGRESS_ARRAY);
-	CreateDistributedSnapshot(&distribSnapshotWithLocalMapping, DTX_CONTEXT_LOCAL_ONLY);
+	CreateDistributedSnapshot(ds, DTX_CONTEXT_LOCAL_ONLY);
 
 	/* perform all the validations */
 	assert_true(ds->xminAllDistributedSnapshots == 5);
@@ -132,6 +132,9 @@ test__CreateDistributedSnapshot(void **state)
 	assert_true(ds->xmax == 30);
 	assert_true(ds->count == 4);
 	assert_true(MyTmGxact->xminDistributedSnapshot == 7);
+
+	qsort(ds->inProgressXidArray, ds->count,
+		  sizeof(DistributedTransactionId), DistributedSnapshotMappedEntry_Compare);
 	assert_true(ds->inProgressXidArray[0] == 7);
 	assert_true(ds->inProgressXidArray[1] == 10);
 	assert_true(ds->inProgressXidArray[2] == 15);

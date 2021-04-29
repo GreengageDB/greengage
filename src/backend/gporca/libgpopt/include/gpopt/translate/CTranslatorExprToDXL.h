@@ -488,24 +488,20 @@ private:
 	// comparison type flags accordingly
 	CDXLNode *PdxlnPredOnPartKey(CExpression *pexprPred, CColRef *pcrPartKey,
 								 IMDId *pmdidTypePartKey, ULONG ulPartLevel,
-								 BOOL fRangePart, BOOL *pfLTComparison,
-								 BOOL *pfGTComparison, BOOL *pfEQComparison);
+								 BOOL fRangePart);
 
 	// translate a conjunctive or disjunctive predicate on a part key and update the various
 	// comparison type flags accordingly
 	CDXLNode *PdxlnConjDisjOnPartKey(CExpression *pexprPred,
 									 CColRef *pcrPartKey,
 									 IMDId *pmdidTypePartKey, ULONG ulPartLevel,
-									 BOOL fRangePart, BOOL *pfLTComparison,
-									 BOOL *pfGTComparison,
-									 BOOL *pfEQComparison);
+									 BOOL fRangePart);
 
 	// translate a scalar comparison on a part key and update the various
 	// comparison type flags accordingly
 	CDXLNode *PdxlnScCmpPartKey(CExpression *pexprScCmp, CColRef *pcrPartKey,
 								IMDId *pmdidTypePartKey, ULONG ulPartLevel,
-								BOOL fRangePart, BOOL *pfLTComparison,
-								BOOL *pfGTComparison, BOOL *pfEQComparison);
+								BOOL fRangePart);
 
 	// translate a scalar null test on a part key
 	CDXLNode *PdxlnScNullTestPartKey(IMDId *pmdidTypePartKey, ULONG ulPartLevel,
@@ -522,11 +518,7 @@ private:
 	CDXLNode *PdxlArrayExprOnPartKey(CExpression *pexprPred,
 									 CColRef *pcrPartKey,
 									 IMDId *pmdidTypePartKey, ULONG ulPartLevel,
-									 BOOL fRangePart,
-									 BOOL *pfLTComparison,	// input/output
-									 BOOL *pfGTComparison,	// input/output
-									 BOOL *pfEQComparison	// input/output
-	);
+									 BOOL fRangePart);
 
 	// translate a DML operator
 	CDXLNode *PdxlnDML(CExpression *pexpr, CColRefArray *colref_array,

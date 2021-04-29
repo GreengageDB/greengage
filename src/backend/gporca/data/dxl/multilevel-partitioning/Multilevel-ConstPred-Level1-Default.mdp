@@ -261,14 +261,14 @@ select * from PT where k < 4;
             </dxl:PartEqFilters>
             <dxl:PartFilters>
               <dxl:Or>
-                <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.97.1.0">
-                  <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="true"/>
-                  <dxl:ConstValue TypeMdid="0.23.1.0" Value="4"/>
-                </dxl:Comparison>
                 <dxl:Or>
-                  <dxl:DefaultPart Level="0"/>
+                  <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.97.1.0">
+                    <dxl:PartBound Level="0" Type="0.23.1.0" LowerBound="true"/>
+                    <dxl:ConstValue TypeMdid="0.23.1.0" Value="4"/>
+                  </dxl:Comparison>
                   <dxl:PartBoundOpen Level="0" LowerBound="true"/>
                 </dxl:Or>
+                <dxl:DefaultPart Level="0"/>
               </dxl:Or>
               <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
             </dxl:PartFilters>

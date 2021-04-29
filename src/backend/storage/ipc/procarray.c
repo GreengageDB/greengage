@@ -1882,18 +1882,7 @@ CreateDistributedSnapshot(DistributedSnapshot *ds, DtxContext distributedTransac
 		globalXminDistributedSnapshots = xmin;
 
 	/*
-	 * Sort the entry {distribXid} to support the QEs doing culls on their
-	 * DisribToLocalXact sorted lists.
-	 */
-	qsort(
-		  ds->inProgressXidArray,
-		  count,
-		  sizeof(DistributedTransactionId),
-		  DistributedSnapshotMappedEntry_Compare);
-
-	/*
-	 * Copy the information we just captured under lock and then sorted into
-	 * the distributed snapshot.
+	 * Copy the information we just captured under lock.
 	 */
 	ds->distribTransactionTimeStamp = *shmDistribTimeStamp;
 	ds->xminAllDistributedSnapshots = globalXminDistributedSnapshots;
@@ -1987,6 +1976,8 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	bool		suboverflowed = false;
 	volatile TransactionId replication_slot_xmin = InvalidTransactionId;
 	volatile TransactionId replication_slot_catalog_xmin = InvalidTransactionId;
+	DistributedSnapshotWithLocalMapping *dslm = &snapshot->distribSnapshotWithLocalMapping;
+	DistributedSnapshot *ds = &snapshot->distribSnapshotWithLocalMapping.ds;
 
 	Assert(snapshot != NULL);
 
@@ -2038,24 +2029,24 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 */
 	elogif(Debug_print_full_dtm, LOG,
 		   "GetSnapshotData maxCount %d, inProgressEntryArray %p",
-		   snapshot->distribSnapshotWithLocalMapping.ds.maxCount,
-		   snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray);
+		   ds->maxCount,
+		   ds->inProgressXidArray);
 
-	if (snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray == NULL)
+	if (ds->inProgressXidArray == NULL)
 	{
 		int maxCount = GetDistributedSnapshotMaxCount(distributedTransactionContext);
 		if (maxCount > 0)
 		{
-			snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray =
+			ds->inProgressXidArray =
 				(DistributedTransactionId*)malloc(maxCount * sizeof(DistributedTransactionId));
-			if (snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray == NULL)
+			if (ds->inProgressXidArray == NULL)
 				ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("out of memory")));
 
-			snapshot->distribSnapshotWithLocalMapping.ds.maxCount = maxCount;
+			ds->maxCount = maxCount;
 
-			snapshot->distribSnapshotWithLocalMapping.currentLocalXidsCount = 0;
-			snapshot->distribSnapshotWithLocalMapping.minCachedLocalXid = InvalidTransactionId;
-			snapshot->distribSnapshotWithLocalMapping.maxCachedLocalXid = InvalidTransactionId;
+			dslm->currentLocalXidsCount = 0;
+			dslm->minCachedLocalXid = InvalidTransactionId;
+			dslm->maxCachedLocalXid = InvalidTransactionId;
 
 			if (!IS_QUERY_DISPATCHER())
 			{
@@ -2063,15 +2054,15 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 				 * Allocate memory for local xid cache, currently allocating it
 				 * same size as distributed, not necessary.
 				 */
-				snapshot->distribSnapshotWithLocalMapping.inProgressMappedLocalXids =
+				dslm->inProgressMappedLocalXids =
 					(TransactionId*)malloc(maxCount * sizeof(TransactionId));
-				if (snapshot->distribSnapshotWithLocalMapping.inProgressMappedLocalXids == NULL)
+				if (dslm->inProgressMappedLocalXids == NULL)
 					ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("out of memory")));
 
-				snapshot->distribSnapshotWithLocalMapping.maxLocalXidsCount = maxCount;
+				dslm->maxLocalXidsCount = maxCount;
 			}
 			else
-				snapshot->distribSnapshotWithLocalMapping.maxLocalXidsCount = 0;
+				dslm->maxLocalXidsCount = 0;
 		}
 	}
 
@@ -2340,7 +2331,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE)
 	{
 		snapshot->haveDistribSnapshot = CreateDistributedSnapshot(
-			&snapshot->distribSnapshotWithLocalMapping.ds,
+			ds,
 			distributedTransactionContext);
 
 		elogif(Debug_print_full_dtm, LOG,
@@ -2536,8 +2527,6 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 		 */
 		if (snapshot->haveDistribSnapshot)
 		{
-			DistributedSnapshot *ds = &snapshot->distribSnapshotWithLocalMapping.ds;
-
 			globalxmin =
 				DistributedLog_AdvanceOldestXmin(globalxmin,
 												 ds->distribTransactionTimeStamp,
@@ -2589,6 +2578,16 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	snapshot->active_count = 0;
 	snapshot->regd_count = 0;
 	snapshot->copied = false;
+
+	/*
+	 * Sort the entry {distribXid} to support the QEs doing culls on their
+	 * DisribToLocalXact sorted lists.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		snapshot->haveDistribSnapshot &&
+		ds->count > 1)
+		qsort(ds->inProgressXidArray, ds->count,
+			  sizeof(DistributedTransactionId), DistributedSnapshotMappedEntry_Compare);
 
 	/*
 	 * MPP Addition. If we are the chief then we'll save our local snapshot

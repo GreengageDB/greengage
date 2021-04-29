@@ -5310,10 +5310,6 @@ CTranslatorExprToDXL::ConstructLevelFilters4PartitionSelector(
 		BOOL fDefaultPartition =
 			pbsDefaultParts ? pbsDefaultParts->Get(ulLevel) : false;
 
-		BOOL fLTComparison = false;
-		BOOL fGTComparison = false;
-		BOOL fEQComparison = false;
-
 		// check if there is an equality filter on current level
 		CExpression *pexprEqFilter = popSelector->PexprEqFilter(ulLevel);
 		if (NULL != pexprEqFilter)
@@ -5321,7 +5317,6 @@ CTranslatorExprToDXL::ConstructLevelFilters4PartitionSelector(
 			CDXLNode *pdxlnEq = PdxlnScalar(pexprEqFilter);
 			IMDId *pmdidTypeOther =
 				CScalar::PopConvert(pexprEqFilter->Pop())->MdidType();
-			fEQComparison = true;
 
 			if (fRangePart)
 			{
@@ -5358,10 +5353,9 @@ CTranslatorExprToDXL::ConstructLevelFilters4PartitionSelector(
 
 			for (ULONG ul = 0; ul < length; ul++)
 			{
-				CDXLNode *pdxlnScCmp = PdxlnPredOnPartKey(
-					(*pdrgpexprConjuncts)[ul], pcrPartKey, pmdidTypePartKey,
-					ulLevel, fRangePart, &fLTComparison, &fGTComparison,
-					&fEQComparison);
+				CDXLNode *pdxlnScCmp =
+					PdxlnPredOnPartKey((*pdrgpexprConjuncts)[ul], pcrPartKey,
+									   pmdidTypePartKey, ulLevel, fRangePart);
 
 				filter_dxlnode = CTranslatorExprToDXLUtils::PdxlnCombineBoolean(
 					m_mp, filter_dxlnode, pdxlnScCmp, Edxland);
@@ -5370,15 +5364,14 @@ CTranslatorExprToDXL::ConstructLevelFilters4PartitionSelector(
 			pdrgpexprConjuncts->Release();
 		}
 
-		if (NULL != filter_dxlnode && fRangePart)
+		if (NULL != filter_dxlnode && fRangePart && fDefaultPartition)
 		{
-			CDXLNode *pdxlnDefaultAndOpenEnded =
-				CTranslatorExprToDXLUtils::PdxlnRangeFilterDefaultAndOpenEnded(
-					m_mp, ulLevel, fLTComparison, fGTComparison, fEQComparison,
-					fDefaultPartition);
+			// add a condition to select the default partition
+			CDXLNode *pdxlnDefault = GPOS_NEW(m_mp) CDXLNode(
+				m_mp, GPOS_NEW(m_mp) CDXLScalarPartDefault(m_mp, ulLevel));
 
 			filter_dxlnode = CTranslatorExprToDXLUtils::PdxlnCombineBoolean(
-				m_mp, filter_dxlnode, pdxlnDefaultAndOpenEnded, Edxlor);
+				m_mp, filter_dxlnode, pdxlnDefault, Edxlor);
 		}
 
 		if (NULL == filter_dxlnode)
@@ -5412,17 +5405,12 @@ CDXLNode *
 CTranslatorExprToDXL::PdxlnPredOnPartKey(CExpression *pexprPred,
 										 CColRef *pcrPartKey,
 										 IMDId *pmdidTypePartKey,
-										 ULONG ulPartLevel, BOOL fRangePart,
-										 BOOL *pfLTComparison,	// input/output
-										 BOOL *pfGTComparison,	// input/output
-										 BOOL *pfEQComparison	// input/output
-)
+										 ULONG ulPartLevel, BOOL fRangePart)
 {
 	if (CPredicateUtils::FComparison(pexprPred))
 	{
 		return PdxlnScCmpPartKey(pexprPred, pcrPartKey, pmdidTypePartKey,
-								 ulPartLevel, fRangePart, pfLTComparison,
-								 pfGTComparison, pfEQComparison);
+								 ulPartLevel, fRangePart);
 	}
 
 	if (CUtils::FScalarNullTest(pexprPred))
@@ -5448,7 +5436,6 @@ CTranslatorExprToDXL::PdxlnPredOnPartKey(CExpression *pexprPred,
 			CCastUtils::FBinaryCoercibleCastedScId(pexprChild, pcrPartKey));
 #endif	//GPOS_DEBUG
 
-		*pfEQComparison = true;
 		return PdxlnScNullTestPartKey(pmdidTypePartKey, ulPartLevel, fRangePart,
 									  false /*is_null*/);
 	}
@@ -5456,16 +5443,14 @@ CTranslatorExprToDXL::PdxlnPredOnPartKey(CExpression *pexprPred,
 	if (CPredicateUtils::FCompareIdentToConstArray(pexprPred))
 	{
 		return PdxlArrayExprOnPartKey(pexprPred, pcrPartKey, pmdidTypePartKey,
-									  ulPartLevel, fRangePart, pfLTComparison,
-									  pfGTComparison, pfEQComparison);
+									  ulPartLevel, fRangePart);
 	}
 
 	GPOS_ASSERT(CPredicateUtils::FOr(pexprPred) ||
 				CPredicateUtils::FAnd(pexprPred));
 
 	return PdxlnConjDisjOnPartKey(pexprPred, pcrPartKey, pmdidTypePartKey,
-								  ulPartLevel, fRangePart, pfLTComparison,
-								  pfGTComparison, pfEQComparison);
+								  ulPartLevel, fRangePart);
 }
 
 //---------------------------------------------------------------------------
@@ -5484,13 +5469,10 @@ CTranslatorExprToDXL::PdxlnPredOnPartKey(CExpression *pexprPred,
 //
 //---------------------------------------------------------------------------
 CDXLNode *
-CTranslatorExprToDXL::PdxlArrayExprOnPartKey(
-	CExpression *pexprPred, CColRef *pcrPartKey, IMDId *pmdidTypePartKey,
-	ULONG ulPartLevel, BOOL fRangePart,
-	BOOL *pfLTComparison,  // input/output
-	BOOL *pfGTComparison,  // input/output
-	BOOL *pfEQComparison   // input/output
-)
+CTranslatorExprToDXL::PdxlArrayExprOnPartKey(CExpression *pexprPred,
+											 CColRef *pcrPartKey,
+											 IMDId *pmdidTypePartKey,
+											 ULONG ulPartLevel, BOOL fRangePart)
 {
 	GPOS_ASSERT(CUtils::FScalarArrayCmp(pexprPred));
 
@@ -5505,8 +5487,7 @@ CTranslatorExprToDXL::PdxlArrayExprOnPartKey(
 	CExpression *pexprDisj = pci->PexprConstructDisjunctionScalar(m_mp);
 
 	CDXLNode *dxlnode = PdxlnConjDisjOnPartKey(
-		pexprDisj, pcrPartKey, pmdidTypePartKey, ulPartLevel, fRangePart,
-		pfLTComparison, pfGTComparison, pfEQComparison);
+		pexprDisj, pcrPartKey, pmdidTypePartKey, ulPartLevel, fRangePart);
 	pexprDisj->Release();
 	pci->Release();
 
@@ -5524,13 +5505,10 @@ CTranslatorExprToDXL::PdxlArrayExprOnPartKey(
 //
 //---------------------------------------------------------------------------
 CDXLNode *
-CTranslatorExprToDXL::PdxlnConjDisjOnPartKey(
-	CExpression *pexprPred, CColRef *pcrPartKey, IMDId *pmdidTypePartKey,
-	ULONG ulPartLevel, BOOL fRangePart,
-	BOOL *pfLTComparison,  // input/output
-	BOOL *pfGTComparison,  // input/output
-	BOOL *pfEQComparison   // input/output
-)
+CTranslatorExprToDXL::PdxlnConjDisjOnPartKey(CExpression *pexprPred,
+											 CColRef *pcrPartKey,
+											 IMDId *pmdidTypePartKey,
+											 ULONG ulPartLevel, BOOL fRangePart)
 {
 	GPOS_ASSERT(CPredicateUtils::FOr(pexprPred) ||
 				CPredicateUtils::FAnd(pexprPred));
@@ -5556,8 +5534,7 @@ CTranslatorExprToDXL::PdxlnConjDisjOnPartKey(
 	{
 		CExpression *pexprChild = (*pdrgpexprChildren)[ul];
 		CDXLNode *child_dxlnode = PdxlnPredOnPartKey(
-			pexprChild, pcrPartKey, pmdidTypePartKey, ulPartLevel, fRangePart,
-			pfLTComparison, pfGTComparison, pfEQComparison);
+			pexprChild, pcrPartKey, pmdidTypePartKey, ulPartLevel, fRangePart);
 
 		if (NULL == pdxlnPred)
 		{
@@ -5588,11 +5565,7 @@ CDXLNode *
 CTranslatorExprToDXL::PdxlnScCmpPartKey(CExpression *pexprScCmp,
 										CColRef *pcrPartKey,
 										IMDId *pmdidTypePartKey,
-										ULONG ulPartLevel, BOOL fRangePart,
-										BOOL *pfLTComparison,  // input/output
-										BOOL *pfGTComparison,  // input/output
-										BOOL *pfEQComparison   // input/output
-)
+										ULONG ulPartLevel, BOOL fRangePart)
 {
 	GPOS_ASSERT(CPredicateUtils::FComparison(pexprScCmp));
 
@@ -5605,12 +5578,6 @@ CTranslatorExprToDXL::PdxlnScCmpPartKey(CExpression *pexprScCmp,
 	// and extract required components
 	CPredicateUtils::ExtractComponents(pexprScCmp, pcrPartKey, &pexprPartKey,
 									   &pexprOther, &cmp_type);
-
-	*pfLTComparison = *pfLTComparison || (IMDType::EcmptL == cmp_type) ||
-					  (IMDType::EcmptLEq == cmp_type);
-	*pfGTComparison = *pfGTComparison || (IMDType::EcmptG == cmp_type) ||
-					  (IMDType::EcmptGEq == cmp_type);
-	*pfEQComparison = *pfEQComparison || IMDType::EcmptEq == cmp_type;
 
 	GPOS_ASSERT(NULL != pexprPartKey && NULL != pexprOther);
 	GPOS_ASSERT(IMDType::EcmptOther != cmp_type);
@@ -5670,9 +5637,8 @@ CTranslatorExprToDXL::PdxlnScCmpPartKey(CExpression *pexprScCmp,
 //
 //---------------------------------------------------------------------------
 CDXLNode *
-CTranslatorExprToDXL::PdxlnScNullTestPartKey(IMDId *pmdidTypePartKey,
-											 ULONG ulPartLevel, BOOL fRangePart,
-											 BOOL is_null)
+CTranslatorExprToDXL::PdxlnScNullTestPartKey(IMDId *, ULONG ulPartLevel,
+											 BOOL fRangePart, BOOL is_null)
 {
 	if (!fRangePart)  // list partition
 	{
@@ -5686,42 +5652,17 @@ CTranslatorExprToDXL::PdxlnScNullTestPartKey(IMDId *pmdidTypePartKey,
 					 pdxlnPartListNullTest, pdxlnDefault);
 	}
 
-	pmdidTypePartKey->AddRef();
-	CDXLNode *pdxlnPredicateMin = GPOS_NEW(m_mp) CDXLNode(
-		m_mp, GPOS_NEW(m_mp) CDXLScalarNullTest(m_mp, is_null),
-		GPOS_NEW(m_mp) CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarPartBound(
-										  m_mp, ulPartLevel, pmdidTypePartKey,
-										  true /*is_lower_bound*/)));
+	if (!is_null)
+	{
+		// IS NOT NULL can't easily eliminate any range partition
+		return CTranslatorExprToDXLUtils::PdxlnBoolConst(m_mp, m_pmda,
+														 true /*value*/);
+	}
 
-	pmdidTypePartKey->AddRef();
-	CDXLNode *pdxlnPredicateMax = GPOS_NEW(m_mp) CDXLNode(
-		m_mp, GPOS_NEW(m_mp) CDXLScalarNullTest(m_mp, is_null),
-		GPOS_NEW(m_mp) CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarPartBound(
-										  m_mp, ulPartLevel, pmdidTypePartKey,
-										  false /*is_lower_bound*/)));
-
-	// construct the conjunction of the predicate for the lower and upper bounds
-	CDXLNode *pdxlnNullTests = GPOS_NEW(m_mp)
-		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarBoolExpr(m_mp, Edxland),
-				 pdxlnPredicateMin, pdxlnPredicateMax);
-
-	// AND that with the following: !(default || min_open || max_open)
-	CDXLNode *pdxlnDefaultOrOpenEnded =
-		CTranslatorExprToDXLUtils::PdxlnRangeFilterDefaultAndOpenEnded(
-			m_mp, ulPartLevel,
-			true,	//fLTComparison
-			true,	//fGTComparison
-			false,	//fEQComparison
-			true	//fDefaultPartition
-		);
-
-	CDXLNode *pdxlnNotDefaultOrOpenEnded = GPOS_NEW(m_mp)
-		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarBoolExpr(m_mp, Edxlnot),
-				 pdxlnDefaultOrOpenEnded);
-
+	// select the default partition since in a range-partitioned table only it can contain
+	// the NULL value
 	return GPOS_NEW(m_mp)
-		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarBoolExpr(m_mp, Edxland),
-				 pdxlnNotDefaultOrOpenEnded, pdxlnNullTests);
+		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarPartDefault(m_mp, ulPartLevel));
 }
 
 //---------------------------------------------------------------------------
