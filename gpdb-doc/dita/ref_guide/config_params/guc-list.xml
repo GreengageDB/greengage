@@ -7588,10 +7588,9 @@
           (default 10) tables, this algorithm employs a gradual transition to the
           <codeph>greedy</codeph> method; planning time goes up smoothly as the
           query gets more complicated, and plan quality and execution time only
-          gradually degrade.</li>
+          gradually degrade. <codeph>exhaustive2</codeph> provides a good
+          trade-off between planning time and execution time for many queries.</li>
       </ul>
-      <p>The default value, <codeph>exhaustive2</codeph>, provides a better
-        trade-off between planning time and execution time for most queries.</p>
       <p>Setting this parameter to
           <codeph>query</codeph> or <codeph>greedy</codeph> can generate a suboptimal query plan.
         However, if the administrator is confident that a satisfactory plan is generated with the
@@ -7616,7 +7615,7 @@
           <tbody>
             <row>
               <entry colname="col1">query<p>greedy</p><p>exhaustive</p><p>exhaustive2</p></entry>
-              <entry colname="col2">exhaustive2</entry>
+              <entry colname="col2">exhaustive</entry>
               <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>

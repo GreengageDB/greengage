@@ -409,6 +409,7 @@ _outJoinPlanInfo(StringInfo str, const Join *node)
 
 	WRITE_BOOL_FIELD(prefetch_inner);
 	WRITE_BOOL_FIELD(prefetch_joinqual);
+	WRITE_BOOL_FIELD(prefetch_qual);
 
 	WRITE_ENUM_FIELD(jointype, JoinType);
 	WRITE_NODE_FIELD(joinqual);

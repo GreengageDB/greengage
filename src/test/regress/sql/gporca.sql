@@ -2872,6 +2872,32 @@ select enable_xform('CXformSelect2BitmapBoolOp');
 select enable_xform('CXformSelect2DynamicBitmapBoolOp');
 select enable_xform('CXformJoin2BitmapIndexGetApply');
 select enable_xform('CXformInnerJoin2NLJoin');
+
+-- test casting with setops
+with v(year) as (
+    select 2019::float8 + dx from (VALUES (-1), (0), (0), (1), (1)) t(dx)
+  except
+    select 2019::int)
+select * from v where year > 1;
+
+with v(year) as (
+    select 2019::float8 + dx from (VALUES (-1), (0), (0), (1), (1)) t(dx)
+  except all
+    select 2019::int)
+select * from v where year > 1;
+
+with v(year) as (
+    select 2019::float8 + dx from (VALUES (-1), (0), (0), (1), (1)) t(dx)
+  intersect
+    select 2019::int)
+select * from v where year > 1;
+
+with v(year) as (
+    select 2019::float8 + dx from (VALUES (-1), (0), (0), (1), (1)) t(dx)
+  intersect all
+    select 2019::int)
+select * from v where year > 1;
+
 reset optimizer_enable_hashjoin;
 reset optimizer_trace_fallback;
 

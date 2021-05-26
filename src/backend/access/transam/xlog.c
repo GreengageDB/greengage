@@ -813,6 +813,12 @@ static bool bgwriterLaunched = false;
 static int	MyLockNo = 0;
 static bool holdingAllLocks = false;
 
+/*
+ * gpdb: backup of ControlFile->checkPointCopy.redo.  This is used by
+ * KeepLogSeg() to avoid pg_rewind failure due to missing xlog file.
+ */
+static XLogRecPtr ControlFileOldCheckpointCopyRedo = InvalidXLogRecPtr;
+
 static void readRecoveryCommandFile(void);
 static void exitArchiveRecovery(TimeLineID endTLI, XLogSegNo endLogSegNo);
 static bool recoveryStopsBefore(XLogRecord *record);
@@ -883,8 +889,6 @@ static int	get_sync_bit(int method);
 
 /* New functions added for WAL replication */
 static void XLogProcessCheckpointRecord(XLogRecord *rec);
-
-static void GetXLogCleanUpTo(XLogRecPtr recptr, XLogSegNo *_logSegNo);
 
 static void CopyXLogRecordToWAL(int write_len, bool isLogSwitch,
 					XLogRecData *rdata,
@@ -8989,6 +8993,12 @@ CreateCheckPoint(int flags)
 				(errmsg("concurrent transaction log activity while database system is shutting down")));
 
 	/*
+	 * ControlFile->checkPointCopy.redo will be updated soon so let's store it
+	 * for later use in KeepLogSeg().
+	 */
+	ControlFileOldCheckpointCopyRedo = ControlFile->checkPointCopy.redo;
+
+	/*
 	 * Select point at which we can truncate the log, which we base on the
 	 * prior checkpoint's earliest info or the oldest prepared transaction xlog record's info.
 	 */
@@ -9064,7 +9074,6 @@ CreateCheckPoint(int flags)
 	 */
 	if (gp_keep_all_xlog == false && _logSegNo)
 	{
-		GetXLogCleanUpTo(recptr, &_logSegNo);
 		KeepLogSeg(recptr, &_logSegNo);
 		InvalidateObsoleteReplicationSlots(_logSegNo);
 		_logSegNo--;
@@ -9543,7 +9552,7 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 	XLogSegNo	currSegNo;
 	XLogSegNo	segno;
 	XLogRecPtr	keep;
-	bool setvalue = false;
+	static XLogRecPtr CkptRedoBeforeMinLSN = InvalidXLogRecPtr;
 
 	XLByteToSeg(recptr, currSegNo);
 	segno = currSegNo;
@@ -9551,36 +9560,53 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 	/*
 	 * Calculate how many segments are kept by slots first, adjusting for
 	 * max_slot_wal_keep_size.
+	 *
+	 * Greenplum: coordinator needs a different way to determine the keep
+	 * point as replication slot is not created there.
 	 */
-	keep = XLogGetReplicationSlotMinimumLSN();
+	keep = IS_QUERY_DISPATCHER() ?
+		WalSndCtlGetXLogCleanUpTo() :
+		XLogGetReplicationSlotMinimumLSN();
+
 #ifdef FAULT_INJECTOR
 	/*
-	 * Ignore the replication slot's LSN and let the WAL still needed by the
-	 * replication slot to be removed.  This is used to test if WAL sender can
-	 * recognize that an incremental recovery has failed when the WAL
+	 * Let the WAL still needed be removed.  This is used to test if WAL sender
+	 * can recognize that an incremental recovery has failed when the WAL
 	 * requested by a mirror no longer exists.
 	 */
 	if (SIMPLE_FAULT_INJECTOR("keep_log_seg") == FaultInjectorTypeSkip)
+	{
 		keep = GetXLogWriteRecPtr();
+		XLByteToSeg(keep, *logSegNo);
+	}
 #endif
 	if (keep != InvalidXLogRecPtr)
 	{
+		if (!XLogRecPtrIsInvalid(ControlFileOldCheckpointCopyRedo))
+		{
+			/*
+			 * basically with this logic, GPDB never uses restart_lsn as
+			 * lowest cut-off point. Instead always will use Checkpoint redo
+			 * location prior to restart_lsn as cut-off point.
+			 */
+			if (ControlFileOldCheckpointCopyRedo < keep)
+			{
+				keep = ControlFileOldCheckpointCopyRedo;
+				CkptRedoBeforeMinLSN = ControlFileOldCheckpointCopyRedo;
+			}
+			else if (!XLogRecPtrIsInvalid(CkptRedoBeforeMinLSN))
+				keep = CkptRedoBeforeMinLSN;
+		}
+
 		XLByteToSeg(keep, segno);
-		setvalue = true;
 
 		/* Cap by max_slot_wal_keep_size ... */
 		if (max_slot_wal_keep_size_mb >= 0)
 		{
 			XLogRecPtr	slot_keep_segs;
-
 			slot_keep_segs = ConvertToXSegs(max_slot_wal_keep_size_mb);
-
-			if (slot_keep_segs > wal_keep_segments &&
-				currSegNo - segno > slot_keep_segs)
-			{
-				*logSegNo = currSegNo - slot_keep_segs;
-				return;
-			}
+			if (currSegNo - segno > slot_keep_segs)
+				segno = currSegNo - slot_keep_segs;
 		}
 	}
 
@@ -9592,11 +9618,10 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 			segno = 1;
 		else
 			segno = currSegNo - wal_keep_segments;
-		setvalue = true;
 	}
 
 	/* don't delete WAL segments newer than the calculated segment */
-	if (setvalue && (XLogRecPtrIsInvalid(*logSegNo) || segno < *logSegNo))
+	if (segno < *logSegNo)
 		*logSegNo = segno;
 }
 
@@ -12239,28 +12264,6 @@ bool
 IsStandbyMode(void)
 {
 	return StandbyMode;
-}
-
-static void
-GetXLogCleanUpTo(XLogRecPtr recptr, XLogSegNo *_logSegNo)
-{
-	/*
-	 * See if we have a live WAL sender and see if it has a
-	 * start xlog location (with active basebackup) or standby fsync location
-	 * (with active standby). We have to compare it with prev. checkpoint
-	 * location. We use the min out of them to figure out till
-	 * what point we need to save the xlog seg files
-	 */
-	XLogRecPtr xlogCleanUpTo = WalSndCtlGetXLogCleanUpTo();
-	if (!XLogRecPtrIsInvalid(xlogCleanUpTo))
-	{
-		if (recptr < xlogCleanUpTo)
-			xlogCleanUpTo = recptr;
-	}
-	else
-		xlogCleanUpTo = recptr;
-
-	KeepLogSeg(xlogCleanUpTo, _logSegNo);
 }
 
 /*

@@ -25,6 +25,11 @@
                       {'name': 'gprecoverseg',
                        'use_concourse_cluster': true,
                        'additional_ccp_vars': 'number_of_nodes: 3'},
+                      {'name': 'gprecoverseg_newhost',
+                       'use_concourse_cluster': true,
+                       'additional_ccp_vars': 'number_of_nodes: 7',
+                       'reserve_spare_hosts': true,
+                       'sudo_access_on_hosts': true},
                       {'name': 'gpaddmirrors',
                        'use_concourse_cluster': true,
                        'additional_ccp_vars': 'number_of_nodes: 4'},
@@ -54,6 +59,7 @@ anchors:
   action: create
   delete_on_failure: true
   generate_random_name: true
+  plugin_dir: ../../terraform.d/plugin-cache/linux_amd64
   terraform_source: ccp_src/google/
 
 - &ccp_default_vars
@@ -62,6 +68,7 @@ anchors:
 
 - &destroy_common
   action: destroy
+  plugin_dir: ../../terraform.d/plugin-cache/linux_amd64
   terraform_source: ccp_src/google/
   vars:
     aws_instance-node-instance_type: t2.micro #t2.micro is ignored in destroy, but aws_instance-node-instance_type is required.
@@ -518,6 +525,15 @@ resources:
 - name: terraform_2
   <<: *terraform_cluster
 
+- name: terraform.d
+  source:
+    access_key_id: ((bucket-access-key-id))
+    bucket: ccp-terraform-provider-plugins
+    region_name: ((aws-region))
+    secret_access_key: ((bucket-secret-access-key))
+    versioned_file: plugin-cache.tgz
+  type: s3
+
 - name: alpine-docker
   type: registry-image
   source:
@@ -943,12 +959,19 @@ resources:
     uri: ((madlib-ci-git-remote))
     private_key: ((madlib-ci-git-key))
 
-- name: madlib_gppkg
+- name: madlib_gppkg_centos6
   type: gcs
   source:
     bucket: ((gcs-bucket-intermediates))
     json_key: ((concourse-gcs-resources-service-account-key))
     versioned_file: ((pipeline-name))/madlib_gppkg/madlib-master-gp6-rhel6-x86_64.gppkg
+
+- name: madlib_gppkg_centos7
+  type: gcs
+  source:
+    bucket: ((gcs-bucket-intermediates))
+    json_key: ((concourse-gcs-resources-service-account-key))
+    versioned_file: ((pipeline-name))/madlib_gppkg/madlib-master-gp6-rhel7-x86_64.gppkg
 
 - name: cmake_tar
   type: gcs
@@ -978,11 +1001,6 @@ resources:
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: gp-internal-artifacts/madlib-snowflakes/boost_(1_61_0).tar.gz
 {% endif %}
-
-- name: clang_toolchain
-  type: registry-image
-  source:
-    repository: gcr.io/data-orca/clang-toolchain
 
 - name: reduced-frequency-trigger
   type: time
@@ -1015,12 +1033,9 @@ jobs:
 
 - name: check_format
   plan:
-    - in_parallel:
-      - get: gpdb_src
-        trigger: true
-      - get: clang_toolchain
+    - get: gpdb_src
+      trigger: true
     - task: check_format
-      image: clang_toolchain
       file: gpdb_src/concourse/tasks/check_format.yml
 
 ## ======================================================================
@@ -1298,11 +1313,15 @@ jobs:
         passed: [compile_gpdb_clients_windows]
       - get: bin_gpdb
         resource: bin_gpdb_centos7_rc
+      - get: terraform.d
+        params:
+          unpack: true
   - put: terraform_windows
     params:
       action: create
       delete_on_failure: true
       generate_random_name: true
+      plugin_dir: ../../terraform.d/plugin-cache/linux_amd64
       terraform_source: ccp_src/gpdb_windows_client_test/
   - task: run_tests
     file: gpdb_src/concourse/tasks/windows_remote_test.yml
@@ -1315,6 +1334,7 @@ jobs:
     put: terraform_windows
     params:
       action: destroy
+      plugin_dir: ../../terraform.d/plugin-cache/linux_amd64
       env_name_file: terraform_windows/name
       terraform_source: ccp_src/gpdb_windows_client_test/
       vars:
@@ -1704,11 +1724,15 @@ jobs:
       trigger: true
     - get: ccp_src
     - get: ccp-image
+    - get: terraform.d
+      params:
+        unpack: true
   - put: terraform
     params:
       action: create
       delete_on_failure: true
       generate_random_name: true
+      plugin_dir: ../../terraform.d/plugin-cache/linux_amd64
       terraform_source: ccp_src/google/
       vars:
         PLATFORM: centos7
@@ -1889,6 +1913,9 @@ jobs:
         passed: [gate_resource_groups_start]
         resource: binary_swap_gpdb_centos6
         trigger: [[ test_trigger ]]
+      - get: terraform.d
+        params:
+          unpack: true
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -1928,6 +1955,9 @@ jobs:
         passed: [gate_resource_groups_start]
         resource: binary_swap_gpdb_centos6
         trigger: [[ test_trigger ]]
+      - get: terraform.d
+        params:
+          unpack: true
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -2096,6 +2126,9 @@ jobs:
             trigger: [[ test_trigger ]]
           - get: ccp_src
           - get: ccp-image
+          - get: terraform.d
+            params:
+              unpack: true
           - put: terraform
             params:
               <<: *ccp_default_params
@@ -2107,12 +2140,34 @@ jobs:
             file: ccp_src/ci/tasks/gen_cluster.yml
             params:
               <<: *ccp_gen_cluster_default_params
+          {% if test.reserve_spare_hosts %}
+          - get: alpine-docker
+          - task: reserve_spare_hosts
+            image: alpine-docker
+            config:
+              platform: linux
+              inputs:
+                - name: cluster_env_files
+              outputs:
+                - name: cluster_env_files
+              run:
+                path: sh
+                args:
+                  - -exc
+                  - |
+                    # modify the hostfile_init used by gpinitsystem to exclude the last two hosts, so they are spares
+                    cp cluster_env_files/hostfile_init cluster_env_files/hostfile_init_orig
+                    head -n -2 cluster_env_files/hostfile_init_orig > cluster_env_files/hostfile_init
+          {% endif %}
           - task: gpinitsystem
             file: ccp_src/ci/tasks/gpinitsystem.yml
           - task: [[ test.name ]]_concourse_cluster_tests
             file: gpdb_src/concourse/tasks/run_behave_on_ccp_cluster.yml
             image: ccp-image
             params:
+              {% if test.sudo_access_on_hosts %}
+              SUDO_ACCESS_ON_HOSTS: 1
+              {% endif %}
               BEHAVE_FLAGS: --tags=[[ test.name ]] --tags=concourse_cluster
               [[ test.env ]]
             on_success:
@@ -2151,6 +2206,9 @@ jobs:
             passed: [compile_gpdb_ubuntu18.04]
             trigger: [[ test_trigger ]]
           - get: ccp_src
+          - get: terraform.d
+            params:
+              unpack: true
           - put: terraform
             params:
               <<: *ccp_default_params
@@ -2164,12 +2222,35 @@ jobs:
             params:
               <<: *ccp_gen_cluster_default_params
               PLATFORM: ubuntu18.04
+          {% if test.reserve_spare_hosts %}
+          - get: alpine-docker
+          - task: reserve_spare_hosts
+            image: alpine-docker
+            config:
+              platform: linux
+              inputs:
+                - name: cluster_env_files
+              outputs:
+                - name: cluster_env_files
+              run:
+                path: sh
+                args:
+                  - -exc
+                  - |
+                    # modify the hostfile_init used by gpinitsystem to exclude the last two hosts, so they are spares
+                    cp cluster_env_files/hostfile_init cluster_env_files/hostfile_init_orig
+                    head -n -2 cluster_env_files/hostfile_init_orig > cluster_env_files/hostfile_init
+          {% endif %}
           - task: gpinitsystem
             file: ccp_src/ci/tasks/gpinitsystem.yml
           - task: [[ test.name ]]_concourse_cluster_tests
             file: gpdb_src/concourse/tasks/run_behave_on_ccp_cluster.yml
             image: gpdb6-ubuntu18.04-test
             params:
+              {% if test.sudo_access_on_hosts %}
+              SUDO_ACCESS_ON_HOSTS: 1
+              SUDO_MDW_USERNAME: ubuntu
+              {% endif %}
               BEHAVE_FLAGS: --tags=[[ test.name ]] --tags=concourse_cluster
               [[ test.env ]]
             on_success:
@@ -2209,6 +2290,9 @@ jobs:
       - get: ccp_src
       - get: ccp-image
       - get: alpine-docker
+      - get: terraform.d
+        params:
+          unpack: true
     - task: generate-ssh-keys
       image: alpine-docker
       config:
@@ -2345,6 +2429,9 @@ jobs:
       - get: icw_planner_centos6_dump
         passed: [icw_planner_centos6]
       - get: ccp_src
+      - get: terraform.d
+        params:
+          unpack: true
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -2389,6 +2476,9 @@ jobs:
       - get: ccp-image
       - get: icw_planner_centos6_dump
         passed: [icw_planner_centos6]
+      - get: terraform.d
+        params:
+          unpack: true
   - put: terraform
     params:
       <<: *ccp_default_params
@@ -2463,23 +2553,44 @@ jobs:
       - get: boost
       - get: gpdb_src
         passed: [gate_advanced_analytics_start]
-      - get: bin_gpdb
-        resource: bin_gpdb_centos6
+      - get: bin_gpdb_centos6
         trigger: [[ test_trigger ]]
         passed: [gate_advanced_analytics_start]
       - get: bin_gpdb_centos7
+        trigger: [[ test_trigger ]]
         passed: [gate_advanced_analytics_start]
       - get: gpdb6-centos6-build
-  - task: build_madlib_gppkg_from_source
-    file: madlib_ci/concourse/tasks/madlib_build_gppkg_from_source.yml
-    image: gpdb6-centos6-build
-    params:
-      TEST_OS: centos6
-      DB_TYPE: gpdb6
-      CMAKE_BUILD_TYPE: Release
-  - put: madlib_gppkg
-    params:
-      file: madlib_master_artifacts/madlib-*.gppkg
+      - get: gpdb6-centos7-test
+  - in_parallel:
+    - task: build_madlib_gppkg_from_source_centos6
+      file: madlib_ci/concourse/tasks/madlib_build_gppkg_from_source.yml
+      image: gpdb6-centos6-build
+      input_mapping:
+        bin_gpdb: bin_gpdb_centos6
+      output_mapping:
+        madlib_master_artifacts: madlib_master_artifacts_centos6
+      params:
+        TEST_OS: centos6
+        DB_TYPE: gpdb6
+        CMAKE_BUILD_TYPE: Release
+    - task: build_madlib_gppkg_from_source_centos7
+      file: madlib_ci/concourse/tasks/madlib_build_gppkg_from_source.yml
+      image: gpdb6-centos7-test
+      input_mapping:
+        bin_gpdb: bin_gpdb_centos7
+      output_mapping:
+        madlib_master_artifacts: madlib_master_artifacts_centos7
+      params:
+        TEST_OS: centos7
+        DB_TYPE: gpdb6
+        CMAKE_BUILD_TYPE: Release
+  - in_parallel:
+    - put: madlib_gppkg_centos6
+      params:
+        file: madlib_master_artifacts_centos6/madlib-*.gppkg
+    - put: madlib_gppkg_centos7
+      params:
+        file: madlib_master_artifacts_centos7/madlib-*.gppkg
 {% endif %}
 
 {% if "centos6" in os_types %}
@@ -2495,6 +2606,7 @@ jobs:
         passed: [madlib_build_gppkg]
       - get: gpdb6-centos6-test
       - get: madlib_gppkg
+        resource: madlib_gppkg_centos6
         passed: [madlib_build_gppkg]
         trigger: true
   - task: MADlib_Test_gppkg
@@ -2517,6 +2629,7 @@ jobs:
         passed: [madlib_build_gppkg]
       - get: gpdb6-centos6-test
       - get: madlib_gppkg
+        resource: madlib_gppkg_centos6
         passed: [madlib_build_gppkg]
         trigger: true
   - task: MADlib_Test_gppkg
@@ -2541,6 +2654,7 @@ jobs:
         passed: [madlib_build_gppkg]
       - get: gpdb6-centos7-test
       - get: madlib_gppkg
+        resource: madlib_gppkg_centos7
         passed: [madlib_build_gppkg]
         trigger: true
   - task: MADlib_Test_gppkg
@@ -2563,6 +2677,7 @@ jobs:
         passed: [madlib_build_gppkg]
       - get: gpdb6-centos7-test
       - get: madlib_gppkg
+        resource: madlib_gppkg_centos7
         passed: [madlib_build_gppkg]
         trigger: true
   - task: MADlib_Test_gppkg

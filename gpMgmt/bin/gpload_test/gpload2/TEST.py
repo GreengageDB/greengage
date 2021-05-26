@@ -900,6 +900,7 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
         f.close()
         self.doTest(45)
 
+
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(GPLoad_FormatOpts_TestCase)
     runner = unittest.TextTestRunner(verbosity=2)

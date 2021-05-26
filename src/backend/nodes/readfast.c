@@ -2380,6 +2380,7 @@ void readJoinInfo(Join *local_node)
 
 	READ_BOOL_FIELD(prefetch_inner);
 	READ_BOOL_FIELD(prefetch_joinqual);
+	READ_BOOL_FIELD(prefetch_qual);
 
 	READ_ENUM_FIELD(jointype, JoinType);
 	READ_NODE_FIELD(joinqual);
