@@ -40,6 +40,7 @@
 #include "access/twophase_rmgr.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "catalog/aocatalog.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
 #include "executor/instrument.h"
@@ -1694,6 +1695,7 @@ pgstat_initstats(Relation rel)
 
 	/* We only count stats for things that have storage */
 	if (!(relkind == RELKIND_RELATION ||
+		  IsAppendonlyMetadataRelkind(relkind) ||
 		  relkind == RELKIND_MATVIEW ||
 		  relkind == RELKIND_INDEX ||
 		  relkind == RELKIND_TOASTVALUE ||
