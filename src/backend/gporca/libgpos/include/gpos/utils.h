@@ -41,21 +41,6 @@
 
 #define ALIGN_STORAGE __attribute__((aligned(8)))
 
-#define GPOS_GET_FRAME_POINTER(x) \
-	do                            \
-	{                             \
-		ULONG_PTR ulp;            \
-		GPOS_ASMFP;               \
-		x = ulp;                  \
-	} while (0)
-#define GPOS_GET_STACK_POINTER(x) \
-	do                            \
-	{                             \
-		ULONG_PTR ulp;            \
-		GPOS_ASMSP;               \
-		x = ulp;                  \
-	} while (0)
-
 #define GPOS_MSEC_IN_SEC ((ULLONG) 1000)
 #define GPOS_USEC_IN_MSEC ((ULLONG) 1000)
 #define GPOS_USEC_IN_SEC (((ULLONG) 1000) * 1000)
