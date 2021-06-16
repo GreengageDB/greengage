@@ -373,7 +373,7 @@ class GpMirrorListToBuild:
         # Run pg_rewind on all the targets
         cmds = []
         progressCmds = []
-        removeCmds= []
+        removeCmds= {}
         for rewindSeg in rewindInfo.values():
             # Do CHECKPOINT on source to force TimeLineID to be updated in pg_control.
             # pg_rewind wants that to make incremental recovery successful finally.
@@ -406,11 +406,10 @@ class GpMirrorListToBuild:
                                    rewindSeg.sourcePort,
                                    rewindSeg.progressFile,
                                    verbose=True)
-            progressCmd, removeCmd = self.__getProgressAndRemoveCmds(rewindSeg.progressFile,
+            progressCmd, removeCmds[cmd] = self.__getProgressAndRemoveCmds(rewindSeg.progressFile,
                                                                      rewindSeg.targetSegment.getSegmentDbId(),
                                                                      rewindSeg.targetSegment.getSegmentHostName())
             cmds.append(cmd)
-            removeCmds.append(removeCmd)
             if progressCmd:
                 progressCmds.append(progressCmd)
 
@@ -418,9 +417,6 @@ class GpMirrorListToBuild:
         completedCmds = self.__runWaitAndCheckWorkerPoolForErrorsAndClear(cmds, "rewinding segments",
                                                           suppressErrorCheck=True,
                                                           progressCmds=progressCmds)
-
-        self.__runWaitAndCheckWorkerPoolForErrorsAndClear(removeCmds, "removing rewind progress logfiles",
-                                                          suppressErrorCheck=False)
 
         rewindFailedSegments = []
         for cmd in completedCmds:
@@ -431,6 +427,11 @@ class GpMirrorListToBuild:
                 self.__logger.warning(cmd.get_stdout())
                 self.__logger.warning("Incremental recovery failed for dbid %d. You must use gprecoverseg -F to recover the segment." % dbid)
                 rewindFailedSegments.append(rewindInfo[dbid].targetSegment)
+                del removeCmds[cmd]
+
+        if removeCmds:
+            self.__runWaitAndCheckWorkerPoolForErrorsAndClear(list(removeCmds.values()), "removing rewind progress logfiles",
+                                                              suppressErrorCheck=False)
 
         return rewindFailedSegments
 

@@ -490,7 +490,7 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
 
     def test_00_gpload_formatOpts_setup(self):
         "0  gpload setup"
-        for num in range(1,46):
+        for num in range(1,47):
            f = open(mkpath('query%d.sql' % num),'w')
            f.write("\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n"+"\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n")
            f.close()
@@ -899,6 +899,18 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
         f.write("\! gpload -f "+mkpath('config/config_file4')+ " -d reuse_gptest\n")
         f.close()
         self.doTest(45)
+
+    def test_46_gpload_col_without_quotes(self):
+        """46 test gpload column name without quotes but has capital letters and special characters"""
+        copy_data('external_file_15.txt','data_file.txt')
+        columns = ['Field1: bigint','Field#2: text' ]
+        write_config_file(mode='insert',reuse_flag='true',fast_match='false', file='data_file.txt',table='testSpecialChar',columns_flag='4',columns = columns, delimiter=";",SQL=True,sql_before='set standard_conforming_strings =on;')
+        write_config_file(mode='insert',config='config/config_file2', reuse_flag='true',fast_match='false', file='data_file.txt',table='testSpecialChar',columns_flag='4',columns = columns, delimiter=";",SQL=True,sql_before='set standard_conforming_strings =off;')
+        f = open(mkpath('query46.sql'),'w')
+        f.write("\! gpload -f "+mkpath('config/config_file')+ " -d reuse_gptest\n")
+        f.write("\! gpload -f "+mkpath('config/config_file2')+ " -d reuse_gptest\n")
+        f.close()
+        self.doTest(46)
 
 
 if __name__ == '__main__':
