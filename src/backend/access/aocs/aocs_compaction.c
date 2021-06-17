@@ -31,6 +31,7 @@
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
 #include "storage/lmgr.h"
+#include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/relcache.h"
@@ -182,6 +183,10 @@ AOCSTruncateToEOF(Relation aorel)
 	LockAcquireResult acquireResult;
 	AOCSFileSegInfo *fsinfo;
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("ao_column_truncate_to_eof");
+#endif
 
 	Assert(RelationIsAoCols(aorel));
 
@@ -517,6 +522,10 @@ AOCSCompact(Relation aorel,
 	LockAcquireResult acquireResult;
 	AOCSFileSegInfo *fsinfo;
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("ao_column_compact");
+#endif
 
 	Assert(RelationIsAoCols(aorel));
 	Assert(Gp_role == GP_ROLE_EXECUTE || Gp_role == GP_ROLE_UTILITY);

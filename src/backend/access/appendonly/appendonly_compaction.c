@@ -40,6 +40,7 @@
 #include "nodes/execnodes.h"
 #include "storage/procarray.h"
 #include "storage/lmgr.h"
+#include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/relcache.h"
@@ -591,6 +592,10 @@ AppendOnlyTruncateToEOF(Relation aorel)
 	FileSegInfo *fsinfo;
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("ao_row_truncate_to_eof");
+#endif
+
 	Assert(RelationIsAoRows(aorel));
 
 	relname = RelationGetRelationName(aorel);
@@ -678,6 +683,10 @@ AppendOnlyCompact(Relation aorel,
 				segno;
 	FileSegInfo *fsinfo;
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("ao_row_compact");
+#endif
 
 	Assert(Gp_role == GP_ROLE_EXECUTE || Gp_role == GP_ROLE_UTILITY);
 	Assert(insert_segno >= 0);

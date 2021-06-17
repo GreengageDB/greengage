@@ -830,6 +830,13 @@ aocs_insert_init(Relation rel, int segno, bool update_mode)
 	desc->aoi_rel = rel;
 	desc->appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("ao_column_insert_init_1") == FaultInjectorTypeSkip)
+	{
+		SIMPLE_FAULT_INJECTOR("ao_column_insert_init_2");
+	}
+#endif
+
 	/*
 	 * Writers uses this since they have exclusive access to the lock acquired
 	 * with LockRelationAppendOnlySegmentFile for the segment-file.

@@ -2622,6 +2622,13 @@ appendonly_insert_init(Relation rel, int segno, bool update_mode)
 	 */
 	aoInsertDesc->appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("ao_row_insert_init_1") == FaultInjectorTypeSkip)
+	{
+		SIMPLE_FAULT_INJECTOR("ao_row_insert_init_2");
+	}
+#endif
+
 	aoInsertDesc->mt_bind = create_memtuple_binding(RelationGetDescr(rel));
 
 	aoInsertDesc->appendFile = -1;
