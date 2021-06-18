@@ -519,7 +519,7 @@ AppendOnlyDrop(Relation aorel, List *compaction_segno)
 	int			i,
 				segno;
 	FileSegInfo *fsinfo;
-	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+	Snapshot	appendOnlyMetaDataSnapshot = SnapshotSelf;
 
 	Assert(Gp_role == GP_ROLE_EXECUTE || Gp_role == GP_ROLE_UTILITY);
 	Assert(RelationIsAoRows(aorel));
@@ -572,7 +572,6 @@ AppendOnlyDrop(Relation aorel, List *compaction_segno)
 		FreeAllSegFileInfo(segfile_array, total_segfiles);
 		pfree(segfile_array);
 	}
-	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }
 
 /*
@@ -590,7 +589,7 @@ AppendOnlyTruncateToEOF(Relation aorel)
 				segno;
 	LockAcquireResult acquireResult;
 	FileSegInfo *fsinfo;
-	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+	Snapshot	appendOnlyMetaDataSnapshot = SnapshotSelf;
 
 #ifdef FAULT_INJECTOR
 	SIMPLE_FAULT_INJECTOR("ao_row_truncate_to_eof");
@@ -654,7 +653,6 @@ AppendOnlyTruncateToEOF(Relation aorel)
 		FreeAllSegFileInfo(segfile_array, total_segfiles);
 		pfree(segfile_array);
 	}
-	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }
 
 /*
@@ -682,7 +680,7 @@ AppendOnlyCompact(Relation aorel,
 	int			i,
 				segno;
 	FileSegInfo *fsinfo;
-	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+	Snapshot	appendOnlyMetaDataSnapshot = SnapshotSelf;
 
 #ifdef FAULT_INJECTOR
 	SIMPLE_FAULT_INJECTOR("ao_row_compact");
@@ -762,7 +760,6 @@ AppendOnlyCompact(Relation aorel,
 		FreeAllSegFileInfo(segfile_array, total_segfiles);
 		pfree(segfile_array);
 	}
-	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }
 
 /*

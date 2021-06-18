@@ -828,7 +828,7 @@ aocs_insert_init(Relation rel, int segno, bool update_mode)
 
 	desc = (AOCSInsertDesc) palloc0(sizeof(AOCSInsertDescData));
 	desc->aoi_rel = rel;
-	desc->appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+	desc->appendOnlyMetaDataSnapshot = SnapshotSelf;
 
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("ao_column_insert_init_1") == FaultInjectorTypeSkip)
@@ -1014,8 +1014,6 @@ aocs_insert_finish(AOCSInsertDesc idesc)
 	AppendOnlyBlockDirectory_End_forInsert(&(idesc->blockDirectory));
 
 	UpdateAOCSFileSegInfo(idesc);
-
-	UnregisterSnapshot(idesc->appendOnlyMetaDataSnapshot);
 
 	pfree(idesc->fsInfo);
 

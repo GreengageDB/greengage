@@ -2620,7 +2620,7 @@ appendonly_insert_init(Relation rel, int segno, bool update_mode)
 	 * Writers uses this since they have exclusive access to the lock acquired
 	 * with LockRelationAppendOnlySegmentFile for the segment-file.
 	 */
-	aoInsertDesc->appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
+	aoInsertDesc->appendOnlyMetaDataSnapshot = SnapshotSelf;
 
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("ao_row_insert_init_1") == FaultInjectorTypeSkip)
@@ -3099,8 +3099,6 @@ appendonly_insert_finish(AppendOnlyInsertDesc aoInsertDesc)
 	AppendOnlyBlockDirectory_End_forInsert(&(aoInsertDesc->blockDirectory));
 
 	AppendOnlyStorageWrite_FinishSession(&aoInsertDesc->storageWrite);
-
-	UnregisterSnapshot(aoInsertDesc->appendOnlyMetaDataSnapshot);
 
 	pfree(aoInsertDesc->title);
 	pfree(aoInsertDesc);
