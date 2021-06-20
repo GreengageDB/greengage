@@ -42,7 +42,7 @@ Please find the below list of general checks, which we can enforce on credential
 | username_min_digit        | username | minimum number of digits                            | 1             | &check; a1bc                | &#10008; abcd                |
 | username_min_upper        | username | minimum number of upper case                        | 2             | &check; aBC                | &#10008; aBc                |
 | username_min_lower        | username | minimum number of lower case                        | 1             | &check; aBC                | &#10008; ABC                |
-| username_min_repeat       | username | minimum number of times a character should repeat   | 2             | &check; aaBCa              | &#10008; aaaBCa             |
+| username_min_repeat       | username | maximum number of times a character should repeat   | 2             | &check; aaBCa              | &#10008; aaaBCa             |
 | username_contain_password | username | username should not contain password                | on            | &check; username - password | &#10008; username + password |
 | username_contain          | username | username should contain one of these characters     | a,b,c         | &check; ade                 | &#10008; efg                 |
 | username_not_contain      | username | username should not contain one of these characters | x,y,z         | &check; ade                 | &#10008; axf                 |
@@ -52,7 +52,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_min_digit        | password | minimum number of digits in a password              | 1             | &check; a1bc                | &#10008; abc                 |
 | password_min_upper        | password | minimum number of uppercase characters              | 1             | &check; Abc                 | &#10008; abc                 |
 | password_min_lower        | password | minimum number of lowercase characters              | 1             | &check; aBC                 | &#10008; ABC                 |
-| password_min_repeat       | password | minimum number of times a character should repeat   | 2             | &check; aab                 | &#10008; aaab                |
+| password_min_repeat       | password | maximum number of times a character should repeat   | 2             | &check; aab                 | &#10008; aaab                |
 | password_contain_username | password | password should not contain password                | on            | &check; password - username | &#10008; password + username |
 | password_contain          | password | password should contain these characters            | a,b,c         | &check; ade                 | &#10008; xfg                 |
 | password_not_contain      | password | password should not contain these characters        | x,y,z         | &check; abc                 | &#10008; axf                 |
