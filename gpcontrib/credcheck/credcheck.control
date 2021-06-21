@@ -1,0 +1,4 @@
+comment = 'credcheck - postgresql credential checker'
+default_version = '0.1.0'
+module_pathname = '$libdir/credcheck'
+relocatable = true
