@@ -71,7 +71,7 @@ DROP USER IF EXISTS "pA$user";
 CREATE USER "pA$user" WITH PASSWORD 'dummy';
 DROP USER IF EXISTS "aA$user";
 CREATE USER "aA$user" WITH PASSWORD 'dummy';
-DROP USER IF EXISTS auser;
+DROP USER IF EXISTS "aA$user";
 --
 --must not contain one of the characters 'x','z'
 --

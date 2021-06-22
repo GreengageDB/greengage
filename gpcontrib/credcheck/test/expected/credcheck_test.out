@@ -84,9 +84,9 @@ NOTICE:  role "pA$user" does not exist, skipping
 CREATE USER "pA$user" WITH PASSWORD 'dummy';
 ERROR:  username does not contain the configured credcheck.username_contain characters
 DROP USER IF EXISTS "aA$user";
+NOTICE:  role "aA$user" does not exist, skipping
 CREATE USER "aA$user" WITH PASSWORD 'dummy';
-DROP USER IF EXISTS auser;
-NOTICE:  role "auser" does not exist, skipping
+DROP USER IF EXISTS "aA$user";
 --
 --must not contain one of the characters 'x','z'
 --

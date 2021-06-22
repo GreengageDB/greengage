@@ -10,6 +10,10 @@
 #include "libpq/crypt.h"
 #include "commands/user.h"
 
+#if PG_VERSION_NUM < 100000
+#error Minimum version of PostgreSQL required is 10
+#endif
+
 PG_MODULE_MAGIC;
 
 extern void _PG_init(void);
