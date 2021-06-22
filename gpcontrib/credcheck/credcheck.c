@@ -558,28 +558,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			break;
 		}
 
-		case T_AlterRoleStmt:
-		{
-			/* Look for password change in ALTER ROLE statement */
-			AlterRoleStmt   *stmt = (AlterRoleStmt *)parsetree;
-			ListCell   *option;
-
-			/* Extract options from the statement node tree */
-			foreach(option, stmt->options)
-			{
-				DefElem    *defel = (DefElem *) lfirst(option);
-
-				if (strcmp(defel->defname, "password") == 0)
-				{
-					DefElem    *dpassword = defel;
-					if (dpassword && dpassword->arg)
-						password_check(stmt->role->rolename,
-									strVal(dpassword->arg));
-				}
-			}
-			break;
-		}
-
 		default:
 			break;
 	}
