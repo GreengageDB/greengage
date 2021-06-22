@@ -4,21 +4,44 @@
 
 #include <ctype.h>
 #include <limits.h>
+
 #include "postgres.h"
-#include "fmgr.h"
-#include "utils/guc.h"
-#include "libpq/crypt.h"
+
 #include "commands/user.h"
+#include "nodes/nodes.h"
+#include "tcop/utility.h"
+#include "utils/guc.h"
+
 
 #if PG_VERSION_NUM < 100000
 #error Minimum version of PostgreSQL required is 10
 #endif
 
+/* Define ProcessUtility hook proto/parameters following the PostgreSQL version */
+#if PG_VERSION_NUM >= 130000
+#define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
+					ProcessUtilityContext context, ParamListInfo params, \
+					QueryEnvironment *queryEnv, DestReceiver *dest, \
+					QueryCompletion *qc
+#define PEL_PROCESSUTILITY_ARGS pstmt, queryString, context, params, queryEnv, dest, qc
+#else
+#define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
+					ProcessUtilityContext context, ParamListInfo params, \
+					QueryEnvironment *queryEnv, DestReceiver *dest, \
+					char *completionTag
+#define PEL_PROCESSUTILITY_ARGS pstmt, queryString, context, params, queryEnv, dest, completionTag
+#endif
+
 PG_MODULE_MAGIC;
 
+/* Hooks */
+static check_password_hook_type prev_check_password_hook = NULL;
+static ProcessUtility_hook_type prev_ProcessUtility = NULL;
+
+/* Functions */
 extern void _PG_init(void);
 extern void _PG_fini(void);
-static check_password_hook_type prev_check_password_hook = NULL;
+static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
 
 // username flags
 static int username_min_length = 1;
@@ -122,123 +145,132 @@ static bool char_repeat_exceeds(const char *str, int max_repeat) {
   return false;
 }
 
-static void username_check(const char *username, const char *password) {
+static void
+username_check(const char *username, const char *password)
+{
+	int user_total_special = 0;
+	int user_total_digit = 0;
+	int user_total_upper = 0;
+	int user_total_lower = 0;
 
-  int user_total_special = 0;
-  int user_total_digit = 0;
-  int user_total_upper = 0;
-  int user_total_lower = 0;
+	char *tmp_pass = NULL;
+	char *tmp_user = NULL;
+	char *tmp_contains = NULL;
+	char *tmp_not_contains = NULL;
 
-  char *tmp_pass = NULL;
-  char *tmp_user = NULL;
-  char *tmp_contains = NULL;
-  char *tmp_not_contains = NULL;
+	/* checks has to be done by ignoring case */
+	if (username_ignore_case)
+	{
+		if (password != NULL)
+			tmp_pass = to_nlower(password, INT_MAX);
+		tmp_user = to_nlower(username, INT_MAX);
+		tmp_contains = to_nlower(username_contain, INT_MAX);
+		tmp_not_contains = to_nlower(username_not_contain, INT_MAX);
+	}
+	else
+	{
+		if (password != NULL)
+			tmp_pass = strndup(password, INT_MAX);
+		tmp_user = strndup(username, INT_MAX);
+		tmp_contains = strndup(username_contain, INT_MAX);
+		tmp_not_contains = strndup(username_not_contain, INT_MAX);
+	}
 
-  // checks
-  //
-  // checks has to be done by ignoring case
-  if (username_ignore_case) {
-    tmp_pass = to_nlower(password, INT_MAX);
-    tmp_user = to_nlower(username, INT_MAX);
-    tmp_contains = to_nlower(username_contain, INT_MAX);
-    tmp_not_contains = to_nlower(username_not_contain, INT_MAX);
-  } else {
-    tmp_pass = strndup(password, INT_MAX);
-    tmp_user = strndup(username, INT_MAX);
-    tmp_contains = strndup(username_contain, INT_MAX);
-    tmp_not_contains = strndup(username_not_contain, INT_MAX);
-  }
+	/* Rule 1: username length */
+	if (strnlen(tmp_user, INT_MAX) < username_min_length)
+	{
+		elog(ERROR, gettext_noop("username length should match the configured "
+				     "credcheck.username_min_length"));
+		goto clean;
+	}
 
-  // 1
-  // username length
-  if (strnlen(tmp_user, INT_MAX) < username_min_length) {
-    elog(ERROR, gettext_noop("username length should match the configured "
-                             "credcheck.username_min_length"));
-    goto clean;
-  }
+	/* Rule 2: username contains password
+	 * Note:
+	 * tmp_pass is NULL for ALTER USER ... RENAME TO ...;
+	 * statement so this rule can not be applied.
+	 */
+	if (tmp_pass != NULL && username_contain_password)
+	{
+		if (strstr(tmp_user, tmp_pass)) {
+			elog(ERROR, gettext_noop("username should not contain password"));
+			goto clean;
+		}
+	}
 
-  // 2
-  // username contains password
-  if (username_contain_password) {
-    if (strstr(tmp_user, tmp_pass)) {
-      elog(ERROR, gettext_noop("username should not contain password"));
-      goto clean;
-    }
-  }
+	/* Rule 3: contain characters */
+	if (tmp_contains != NULL && strlen(tmp_contains) > 0)
+	{
+		if (str_contains(tmp_contains, tmp_user) == false)
+		{
+			elog(ERROR, gettext_noop("username does not contain the configured "
+					       "credcheck.username_contain characters"));
+			goto clean;
+		}
+	}
 
-  // 3
-  // contain characters
-  // if credcheck.username_contain is not an empty string
-  if (strncmp(tmp_contains, "", strlen(tmp_contains)) != 0) {
-    if (str_contains(tmp_contains, tmp_user) == false) {
-      elog(ERROR, gettext_noop("username does not contain the configured "
-                               "credcheck.username_contain characters"));
-      goto clean;
-    }
-  }
+	/* Rule 4: not contain characters */
+	if (tmp_not_contains != NULL && strlen(tmp_not_contains) > 0)
+	{
+		if (str_contains(tmp_not_contains, tmp_user) == true)
+		{
+			elog(ERROR, gettext_noop("username does contain the configured "
+					       "credcheck.username_not_contain characters"));
+			goto clean;
+		}
+	}
 
-  // 4
-  // not contain characters
-  // if credcheck.username_not_contain is not an empty string
-  if (strncmp(tmp_not_contains, "", strlen(tmp_not_contains)) != 0) {
-    if (str_contains(tmp_not_contains, tmp_user) == true) {
-      elog(ERROR, gettext_noop("username does contain the configured "
-                               "credcheck.username_not_contain characters"));
-      goto clean;
-    }
-  }
+	check_str_counters(tmp_user, &user_total_lower, &user_total_upper,
+		     &user_total_digit, &user_total_special);
 
-  check_str_counters(tmp_user, &user_total_lower, &user_total_upper,
-                     &user_total_digit, &user_total_special);
+	/* Rule 5: total upper characters */
+	if (!username_ignore_case && user_total_upper < username_min_upper)
+	{
+		elog(ERROR, gettext_noop("username does not contain the configured "
+				     "credcheck.username_min_upper characters"));
+		goto clean;
+	}
 
-  // 5
-  // total upper characters
-  if (!username_ignore_case && user_total_upper < username_min_upper) {
-    elog(ERROR, gettext_noop("username does not contain the configured "
-                             "credcheck.username_min_upper characters"));
-    goto clean;
-  }
+	/* Rule 6: total lower characters */
+	if (!username_ignore_case && user_total_lower < username_min_lower)
+	{
+		elog(ERROR, gettext_noop("username does not contain the configured "
+				     "credcheck.username_min_lower characters"));
+		goto clean;
+	}
 
-  // 6
-  // total lower characters
-  if (!username_ignore_case && user_total_lower < username_min_lower) {
-    elog(ERROR, gettext_noop("username does not contain the configured "
-                             "credcheck.username_min_lower characters"));
-    goto clean;
-  }
+	/* Rule 7: total digits */
+	if (user_total_digit < username_min_digit)
+	{
+		elog(ERROR, gettext_noop("username does not contain the configured "
+				     "credcheck.username_min_digit characters"));
+		goto clean;
+	}
 
-  // 7
-  // total digits
-  if (user_total_digit < username_min_digit) {
-    elog(ERROR, gettext_noop("username does not contain the configured "
-                             "credcheck.username_min_digit characters"));
-    goto clean;
-  }
+	/* Rule 8: total special */
+	if (user_total_special < username_min_special)
+	{
+		elog(ERROR, gettext_noop("username does not contain the configured "
+				     "credcheck.username_min_special characters"));
+		goto clean;
+	}
 
-  // 8
-  // total special
-  if (user_total_special < username_min_special) {
-    elog(ERROR, gettext_noop("username does not contain the configured "
-                             "credcheck.username_min_special characters"));
-    goto clean;
-  }
+	/* Rule 9: minimum char repeat */
+	if (username_min_repeat)
+	{
+		if (char_repeat_exceeds(tmp_user, username_min_repeat))
+		{
+			elog(ERROR,
+			   gettext_noop("username characters are repeated more than the "
+					"configured credcheck.username_min_repeat times"));
+			goto clean;
+		}
+	}
+	clean:
 
-  // 9
-  // minimum char repeat
-  if (username_min_repeat) {
-    if (char_repeat_exceeds(tmp_user, username_min_repeat)) {
-      elog(ERROR,
-           gettext_noop("username characters are repeated more than the "
-                        "configured credcheck.username_min_repeat times"));
-      goto clean;
-    }
-  }
-clean:
-
-  free(tmp_pass);
-  free(tmp_user);
-  free(tmp_contains);
-  free(tmp_not_contains);
+	free(tmp_pass);
+	free(tmp_user);
+	free(tmp_contains);
+	free(tmp_not_contains);
 }
 
 static void password_check(const char *username, const char *password) {
@@ -482,12 +514,52 @@ static void check_password(const char *username, const char *password,
   }
 }
 
-void _PG_init(void) {
-  username_guc();
-  password_guc();
+void
+_PG_init(void)
+{
+	/* Defined GUCs */
+	username_guc();
+	password_guc();
 
-  prev_check_password_hook = check_password_hook;
-  check_password_hook = check_password;
+	/* Install hooks */
+	prev_ProcessUtility = ProcessUtility_hook;
+	ProcessUtility_hook = cc_ProcessUtility;
+	prev_check_password_hook = check_password_hook;
+	check_password_hook = check_password;
 }
 
-void _PG_fini(void) { check_password_hook = prev_check_password_hook; }
+void
+_PG_fini(void)
+{
+	/* Uninstall hooks */
+	check_password_hook = prev_check_password_hook;
+	ProcessUtility_hook = prev_ProcessUtility;
+}
+
+static void
+cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
+{
+	Node *parsetree = pstmt->utilityStmt;
+
+	/* Intercept ALTER USER .. RENAME statements */
+	switch (nodeTag(parsetree))
+	{
+		case T_RenameStmt:
+		{
+			RenameStmt *stmt = (RenameStmt *)parsetree;
+			/* We only take care of user renaming */
+			if (stmt->renameType != OBJECT_ROLE || stmt->newname == NULL)
+				break;
+			username_check(stmt->newname, NULL);
+		}
+		default:
+			break;
+
+	}
+	
+	/* Excecute the utility command, we are not concerned */
+	if (prev_ProcessUtility)
+		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+	else
+		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+}

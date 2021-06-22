@@ -5,7 +5,7 @@ PGFILEDESC = "credcheck - postgresql credential checker"
 DATA = credcheck--0.1.0.sql
 
 REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
-TESTS = 01_username 02_password
+TESTS = 01_username 02_password 03_rename
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
