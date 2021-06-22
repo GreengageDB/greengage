@@ -4,3 +4,5 @@
 .cproject
 .settings
 .project
+*.bc
+results/*
