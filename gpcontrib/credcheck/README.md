@@ -16,7 +16,7 @@
 
 ### [Description](#description)
 
-The `credcheck` PostgreSQL extension provides few general credentail checks, which will be evaluated during the user creation or during the password change. By using this extension, we can define a set of rules to allow a specific set of credentials, and a set of rules to reject a certain type of credentials. This extension is developed based on the PostgreSQL's `check_password_hook` hook.
+The `credcheck` PostgreSQL extension provides few general credentail checks, which will be evaluated during the user creation, during the password change and user renaming. By using this extension, we can define a set of rules to allow a specific set of credentials, and a set of rules to reject a certain type of credentials. This extension is developed based on the PostgreSQL's `check_password_hook` hook.
 
 This extension provides all the checks as configuration parameters, and the values can be applied during the configuration reload(SIGHUP).
 When we create this extension, the default configuration settings, will not enforce any complex checks and will try to allow all the credentials. By using `ALTER SYSTEM SET credcheck.<check-name> TO <some value>;` command, followed by `SELECT pg_reload_conf();` command we can enforce new settings for the credential checks.
@@ -71,11 +71,9 @@ postgres=# SHOW credcheck.username_min_length;
  4
 (1 row)
 
--- ERROR
 postgres=# CREATE USER abc WITH PASSWORD 'pass';
 ERROR:  username length should match the configured credcheck.username_min_length
 
--- OK
 postgres=# CREATE USER abcd WITH PASSWORD 'pass';
 CREATE ROLE
 ```
@@ -89,11 +87,9 @@ postgres=# SHOW credcheck.username_min_special;
  1
 (1 row)
 
--- ERROR
 postgres=# CREATE USER abcd WITH PASSWORD 'pass';
 ERROR:  username does not contain the configured credcheck.username_min_special characters
 
--- OK
 postgres=# CREATE USER abcd$ WITH PASSWORD 'pass';
 CREATE ROLE
 ```
@@ -108,11 +104,9 @@ postgres=# show credcheck.username_min_repeat ;
  1
 (1 row)
 
--- ERROR
 postgres=# CREATE USER week$ WITH PASSWORD 'pass';
 ERROR:  username characters are repeated more than the configured credcheck.username_min_repeat times
 
--- OK
 postgres=# CREATE USER weak$ WITH PASSWORD 'pass';
 CREATE ROLE
 
@@ -122,7 +116,6 @@ postgres=# SHOW credcheck.username_min_repeat ;
  2
 (1 row)
 
--- OK
 postgres=# CREATE USER week$ WITH PASSWORD 'pass';
 CREATE ROLE
 ```
@@ -137,11 +130,9 @@ postgres=# SHOW credcheck.password_not_contain ;
  !@=$#
 (1 row)
 
--- ERROR
 postgres=# CREATE USER abcd$ WITH PASSWORD 'p@ss';
 ERROR:  password does contain the configured credcheck.password_not_contain characters
 
--- OK
 postgres=# CREATE USER abcd$ WITH PASSWORD 'pass';
 CREATE ROLE
 ```
@@ -155,7 +146,6 @@ postgres=# SHOW credcheck.password_contain_username ;
  on
 (1 row)
 
--- ERROR
 postgres=# CREATE USER abcd$ WITH PASSWORD 'abcd$xyz';
 ERROR:  password should not contain username
 
@@ -163,7 +153,6 @@ ERROR:  password should not contain username
 postgres=# CREATE USER abcd$ WITH PASSWORD 'ABCD$xyz';
 CREATE ROLE
 
--- OK
 postgres=# CREATE USER abcd$ WITH PASSWORD 'axyz';
 CREATE ROLE
 ```
@@ -177,11 +166,9 @@ postgres=# SHOW credcheck.password_ignore_case;
  on
 (1 row)
 
--- ERROR
 postgres=# CREATE USER abcd$ WITH PASSWORD 'ABCD$xyz';
 ERROR:  password should not contain username
 
--- OK
 postgres=# CREATE USER abcd$ WITH PASSWORD 'A$xyz';
 CREATE ROLE
 ```
@@ -195,11 +182,9 @@ postgres=# SHOW credcheck.password_min_repeat ;
  3
 (1 row)
 
--- ERROR
 postgres=# CREATE USER abcd$ WITH PASSWORD 'straaaangepaasssword';
 ERROR:  password characters are repeated more than the configured credcheck.password_min_repeat times
 
--- OK
 postgres=# CREATE USER abcd$ WITH PASSWORD 'straaangepaasssword';
 CREATE ROLE
 ```
@@ -221,7 +206,7 @@ postgres=# CREATE USER user1 PASSWORD 'md55e4cc86d2d6a8b73bbefc4d5b91baa45';
 ERROR:  password type is not a plain text
 ```
 
-Username checks will not get enforce while create an user without password, and while renaming the user.
+Username checks will not get enforced while create an user without password, and while renaming the user if the user doesn't have a password defined.
 
 Example (username checks won't invoke here)
 ```
@@ -233,9 +218,12 @@ Example (username checks won't invoke here)
 postgres=# ALTER USER user1 RENAME to test_user;
 ```
 
-
-
-
+Example (username checks will invoke here and on the rename statement too)
+```
+postgres=# CREATE USER user1 PASSWORD 'this is some plain text';
+CREATE ROLE
+postgres=# ALTER USER user1 RENAME to test_user;
+```
 
 ### [Authors](#authors)
 - Dinesh Kumar

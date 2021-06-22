@@ -139,3 +139,9 @@ CREATE USER aa2 WITH PASSWORD 'dummy';
 ERROR:  username does not contain the configured credcheck.username_min_special characters
 DROP USER IF EXISTS aa2;
 NOTICE:  role "aa2" does not exist, skipping
+CREATE USER "a$user1" WITH PASSWORD '';
+ERROR:  password length should match the configured credcheck.password_min_length
+DROP USER "a$user1";
+ERROR:  role "a$user1" does not exist
+CREATE USER aa;
+DROP USER aa;

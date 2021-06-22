@@ -161,7 +161,7 @@ username_check(const char *username, const char *password)
 	/* checks has to be done by ignoring case */
 	if (username_ignore_case)
 	{
-		if (password != NULL)
+		if (password != NULL && strlen(password) > 0)
 			tmp_pass = to_nlower(password, INT_MAX);
 		tmp_user = to_nlower(username, INT_MAX);
 		tmp_contains = to_nlower(username_contain, INT_MAX);
@@ -169,7 +169,7 @@ username_check(const char *username, const char *password)
 	}
 	else
 	{
-		if (password != NULL)
+		if (password != NULL && strlen(password) > 0)
 			tmp_pass = strndup(password, INT_MAX);
 		tmp_user = strndup(username, INT_MAX);
 		tmp_contains = strndup(username_contain, INT_MAX);
