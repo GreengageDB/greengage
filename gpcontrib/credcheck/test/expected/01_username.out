@@ -94,7 +94,7 @@ SET credcheck.username_not_contain TO 'x,z';
 DROP USER IF EXISTS "xaA$user";
 NOTICE:  role "xaA$user" does not exist, skipping
 CREATE USER "xaA$user" WITH PASSWORD 'dummy';
-ERROR:  username does contain the configured credcheck.username_not_contain characters
+ERROR:  username contains the configured credcheck.username_not_contain unauthorized characters
 DROP USER IF EXISTS "aaA$user";
 NOTICE:  role "aaA$user" does not exist, skipping
 CREATE USER "aaA$user" WITH PASSWORD 'dummy';

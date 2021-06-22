@@ -64,7 +64,7 @@ ERROR:  username does not contain the configured credcheck.username_contain char
 --
 SET credcheck.username_not_contain TO 'x,z';
 ALTER USER aaa RENAME TO "a$exF";
-ERROR:  username does contain the configured credcheck.username_not_contain characters
+ERROR:  username contains the configured credcheck.username_not_contain unauthorized characters
 --
 --min digit >=1
 --

@@ -213,8 +213,8 @@ username_check(const char *username, const char *password)
 	{
 		if (str_contains(tmp_not_contains, tmp_user) == true)
 		{
-			elog(ERROR, gettext_noop("username does contain the configured "
-					       "credcheck.username_not_contain characters"));
+			elog(ERROR, gettext_noop("username contains the configured "
+					       "credcheck.username_not_contain unauthorized characters"));
 			goto clean;
 		}
 	}
@@ -273,124 +273,128 @@ username_check(const char *username, const char *password)
 	free(tmp_not_contains);
 }
 
-static void password_check(const char *username, const char *password) {
+static void password_check(const char *username, const char *password)
+{
 
-  int pass_total_special = 0;
-  int pass_total_digit = 0;
-  int pass_total_upper = 0;
-  int pass_total_lower = 0;
+	int pass_total_special = 0;
+	int pass_total_digit = 0;
+	int pass_total_upper = 0;
+	int pass_total_lower = 0;
 
-  char *tmp_pass = NULL;
-  char *tmp_user = NULL;
-  char *tmp_contains = NULL;
-  char *tmp_not_contains = NULL;
+	char *tmp_pass = NULL;
+	char *tmp_user = NULL;
+	char *tmp_contains = NULL;
+	char *tmp_not_contains = NULL;
 
-  // checks
-  //
-  // checks has to be done by ignoring case
-  if (password_ignore_case) {
-    tmp_pass = to_nlower(password, INT_MAX);
-    tmp_user = to_nlower(username, INT_MAX);
-    tmp_contains = to_nlower(password_contain, INT_MAX);
-    tmp_not_contains = to_nlower(password_not_contain, INT_MAX);
-  } else {
-    tmp_pass = strndup(password, INT_MAX);
-    tmp_user = strndup(username, INT_MAX);
-    tmp_contains = strndup(password_contain, INT_MAX);
-    tmp_not_contains = strndup(password_not_contain, INT_MAX);
-  }
+	/* checks has to be done by ignoring case */
+	if (password_ignore_case)
+	{
+		tmp_pass = to_nlower(password, INT_MAX);
+		tmp_user = to_nlower(username, INT_MAX);
+		tmp_contains = to_nlower(password_contain, INT_MAX);
+		tmp_not_contains = to_nlower(password_not_contain, INT_MAX);
+	}
+	else
+	{
+		tmp_pass = strndup(password, INT_MAX);
+		tmp_user = strndup(username, INT_MAX);
+		tmp_contains = strndup(password_contain, INT_MAX);
+		tmp_not_contains = strndup(password_not_contain, INT_MAX);
+	}
 
-  // 1
-  // password length
-  if (strnlen(tmp_pass, INT_MAX) < password_min_length) {
-    elog(ERROR, gettext_noop("password length should match the configured "
-                             "credcheck.password_min_length"));
-    goto clean;
-  }
+	/* Rule 1: password length */
+	if (strnlen(tmp_pass, INT_MAX) < password_min_length)
+	{
+		elog(ERROR, gettext_noop("password length should match the configured "
+				     "credcheck.password_min_length"));
+		goto clean;
+	}
 
-  // 2
-  // password contains username
-  if (password_contain_username) {
-    if (strstr(tmp_pass, tmp_user)) {
-      elog(ERROR, gettext_noop("password should not contain username"));
-      goto clean;
-    }
-  }
+	/* Rule 2: password contains username */
+	if (password_contain_username)
+	{
+		if (strstr(tmp_pass, tmp_user))
+		{
+			elog(ERROR, gettext_noop("password should not contain username"));
+			goto clean;
+		}
+	}
 
-  // 3
-  // contain characters
-  // if credcheck.password_contain is not an empty string
-  if (strncmp(tmp_contains, "", strlen(tmp_contains)) != 0) {
-    if (str_contains(tmp_contains, tmp_pass) == false) {
-      elog(ERROR, gettext_noop("password does not contain the configured "
-                               "credcheck.password_contain characters"));
-      goto clean;
-    }
-  }
+	/* Rule 3: contain characters */
+	if (tmp_contains != NULL && strlen(tmp_contains) > 0)
+	{
+		if (str_contains(tmp_contains, tmp_pass) == false)
+		{
+			elog(ERROR, gettext_noop("password does not contain the configured "
+					       "credcheck.password_contain characters"));
+			goto clean;
+		}
+	}
 
-  // 4
-  // not contain characters
-  // if credcheck.password_not_contain is not an empty string
-  if (strncmp(tmp_not_contains, "", strlen(tmp_not_contains)) != 0) {
-    if (str_contains(tmp_not_contains, tmp_pass) == true) {
-      elog(ERROR, gettext_noop("password does contain the configured "
-                               "credcheck.password_not_contain characters"));
-      goto clean;
-    }
-  }
+	/* Rule 4: not contain characters */
+	if (tmp_not_contains != NULL && strlen(tmp_not_contains) > 0)
+	{
+		if (str_contains(tmp_not_contains, tmp_pass) == true)
+		{
+			elog(ERROR, gettext_noop("password contains the configured "
+					       "credcheck.password_not_contain unauthorized characters"));
+			goto clean;
+		}
+	}
 
-  check_str_counters(tmp_pass, &pass_total_lower, &pass_total_upper,
-                     &pass_total_digit, &pass_total_special);
+	check_str_counters(tmp_pass, &pass_total_lower, &pass_total_upper,
+		     &pass_total_digit, &pass_total_special);
 
-  // 5
-  // total upper characters
-  if (!password_ignore_case && pass_total_upper < password_min_upper) {
-    elog(ERROR, gettext_noop("password does not contain the configured "
-                             "credcheck.password_min_upper characters"));
-    goto clean;
-  }
+	/* Rule 5: total upper characters */
+	if (!password_ignore_case && pass_total_upper < password_min_upper)
+	{
+		elog(ERROR, gettext_noop("password does not contain the configured "
+				     "credcheck.password_min_upper characters"));
+		goto clean;
+	}
 
-  // 6
-  // total lower characters
-  if (!password_ignore_case && pass_total_lower < password_min_lower) {
-    elog(ERROR, gettext_noop("password does not contain the configured "
-                             "credcheck.password_min_lower characters"));
-    goto clean;
-  }
+	/* Rule 6: total lower characters */
+	if (!password_ignore_case && pass_total_lower < password_min_lower)
+	{
+		elog(ERROR, gettext_noop("password does not contain the configured "
+				     "credcheck.password_min_lower characters"));
+		goto clean;
+	}
 
-  // 7
-  // total digits
-  if (pass_total_digit < password_min_digit) {
-    elog(ERROR, gettext_noop("password does not contain the configured "
-                             "credcheck.password_min_digit characters"));
-    goto clean;
-  }
+	/* Rule 7: total digits */
+	if (pass_total_digit < password_min_digit)
+	{
+		elog(ERROR, gettext_noop("password does not contain the configured "
+				     "credcheck.password_min_digit characters"));
+		goto clean;
+	}
 
-  // 8
-  // total special
-  if (pass_total_special < password_min_special) {
-    elog(ERROR, gettext_noop("password does not contain the configured "
-                             "credcheck.password_min_special characters"));
-    goto clean;
-  }
+	/* Rule 8: total special */
+	if (pass_total_special < password_min_special)
+	{
+		elog(ERROR, gettext_noop("password does not contain the configured "
+				     "credcheck.password_min_special characters"));
+		goto clean;
+	}
 
-  // 9
-  // minimum char repeat
-  if (password_min_repeat) {
-    if (char_repeat_exceeds(tmp_pass, password_min_repeat)) {
-      elog(ERROR,
-           gettext_noop("password characters are repeated more than the "
-                        "configured credcheck.password_min_repeat times"));
-      goto clean;
-    }
-  }
+	/* Rule 9: minimum char repeat */
+	if (password_min_repeat)
+	{
+		if (char_repeat_exceeds(tmp_pass, password_min_repeat))
+		{
+			elog(ERROR,
+			   gettext_noop("password characters are repeated more than the "
+					"configured credcheck.password_min_repeat times"));
+			goto clean;
+		}
+	}
 
-clean:
+	clean:
 
-  free(tmp_pass);
-  free(tmp_user);
-  free(tmp_contains);
-  free(tmp_not_contains);
+	free(tmp_pass);
+	free(tmp_user);
+	free(tmp_contains);
+	free(tmp_not_contains);
 }
 
 static void username_guc() {
@@ -497,21 +501,22 @@ static void password_guc() {
       &password_contain, "", PGC_USERSET, 0, NULL, NULL, NULL);
 }
 
-static void check_password(const char *username, const char *password,
+static void
+check_password(const char *username, const char *password,
                            PasswordType password_type, Datum validuntil_time,
-                           bool validuntil_null) {
-  switch (password_type) {
-  case PASSWORD_TYPE_PLAINTEXT:
+                           bool validuntil_null)
+{
+	switch (password_type)
+	{
+		case PASSWORD_TYPE_PLAINTEXT:
+			username_check(username, password);
+			password_check(username, password);
+			break;
 
-    username_check(username, password);
-    password_check(username, password);
-
-    break;
-
-  default:
-    elog(ERROR, "password type is not a plain text");
-    break;
-  }
+		default:
+			elog(ERROR, "password type is not a plain text");
+			break;
+	}
 }
 
 void
@@ -548,13 +553,35 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		{
 			RenameStmt *stmt = (RenameStmt *)parsetree;
 			/* We only take care of user renaming */
-			if (stmt->renameType != OBJECT_ROLE || stmt->newname == NULL)
-				break;
-			username_check(stmt->newname, NULL);
+			if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
+				username_check(stmt->newname, NULL);
+			break;
 		}
+
+		case T_AlterRoleStmt:
+		{
+			/* Look for password change in ALTER ROLE statement */
+			AlterRoleStmt   *stmt = (AlterRoleStmt *)parsetree;
+			ListCell   *option;
+
+			/* Extract options from the statement node tree */
+			foreach(option, stmt->options)
+			{
+				DefElem    *defel = (DefElem *) lfirst(option);
+
+				if (strcmp(defel->defname, "password") == 0)
+				{
+					DefElem    *dpassword = defel;
+					if (dpassword && dpassword->arg)
+						password_check(stmt->role->rolename,
+									strVal(dpassword->arg));
+				}
+			}
+			break;
+		}
+
 		default:
 			break;
-
 	}
 	
 	/* Excecute the utility command, we are not concerned */
