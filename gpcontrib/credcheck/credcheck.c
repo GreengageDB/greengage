@@ -13,6 +13,8 @@
 PG_MODULE_MAGIC;
 
 extern void _PG_init(void);
+extern void _PG_fini(void);
+static check_password_hook_type prev_check_password_hook = NULL;
 
 // username flags
 static int username_min_length = 1;
@@ -40,7 +42,6 @@ static bool password_ignore_case = false;
 
 static char *to_nlower(const char *str, size_t max) {
   char *lower_str;
-
   int i = 0;
 
   lower_str = (char *)calloc(strlen(str), sizeof(char));
@@ -81,26 +82,35 @@ static void check_str_counters(const char *str, int *lower, int *upper,
 
 static bool char_repeat_exceeds(const char *str, int max_repeat) {
   int occurred = 1;
+  size_t len = strlen(str);
 
-  for (int i = 0; i < strlen(str); i++) {
+  for (size_t i = 0; i < len;) {
     occurred = 1;
     // first character = str[i]
     // second character = str[i+1]
-    // hunt for a series of same character
+    // search for an adjacent repeated characters
     // for example, in this string "weekend summary"
     // search for the series "ee", "mm"
-    for (int j = (i + 1), k = 1; j < strlen(str); j++, k++) {
+    for (size_t j = (i + 1), k = 1; j < len; j++, k++) {
       // character matched
       if (str[i] == str[j]) {
         // is the previous, current character positions are adjacent
-        //
         if (i + k == j) {
           occurred++;
           if (occurred > max_repeat) {
             return true;
           }
         }
-      } else {
+      }
+
+      // if we reach an end of the string, no need to process further
+      if (j + 1 == len) {
+        return false;
+      }
+
+      // if the characters are not equal then point "i" to "j"
+      if (str[i] != str[j]) {
+        i = j;
         break;
       }
     }
@@ -210,7 +220,7 @@ static void username_check(const char *username, const char *password) {
   }
 
   // 9
-  // minium char repeat
+  // minimum char repeat
   if (username_min_repeat) {
     if (char_repeat_exceeds(tmp_user, username_min_repeat)) {
       elog(ERROR,
@@ -329,7 +339,7 @@ static void password_check(const char *username, const char *password) {
   }
 
   // 9
-  // minium char repeat
+  // minimum char repeat
   if (password_min_repeat) {
     if (char_repeat_exceeds(tmp_pass, password_min_repeat)) {
       elog(ERROR,
@@ -469,16 +479,11 @@ static void check_password(const char *username, const char *password,
 }
 
 void _PG_init(void) {
-
-  static bool inited = false;
-
-  if (inited) {
-    return;
-  }
   username_guc();
   password_guc();
 
+  prev_check_password_hook = check_password_hook;
   check_password_hook = check_password;
-
-  inited = true;
 }
+
+void _PG_fini(void) { check_password_hook = prev_check_password_hook; }

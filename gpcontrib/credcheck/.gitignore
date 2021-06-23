@@ -1,3 +1,6 @@
 *.o
 .deps
 *.so
+.cproject
+.settings
+.project
