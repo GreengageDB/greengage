@@ -95,11 +95,116 @@ postgres=# CREATE USER abcd$ WITH PASSWORD 'pass';
 CREATE ROLE
 ```
 
+Let us add one more check to the username, where username should not contain more than 1 adjacent repeat characters.
+
+
+```
+postgres=# show credcheck.username_min_repeat ;
+ credcheck.username_min_repeat 
+-------------------------------
+ 1
+(1 row)
+
+-- ERROR
+postgres=# CREATE USER week$ WITH PASSWORD 'pass';
+ERROR:  username characters are repeated more than the configured credcheck.username_min_repeat times
+
+-- OK
+postgres=# CREATE USER weak$ WITH PASSWORD 'pass';
+CREATE ROLE
+
+postgres=# SHOW credcheck.username_min_repeat ;
+ credcheck.username_min_repeat 
+-------------------------------
+ 2
+(1 row)
+
+-- OK
+postgres=# CREATE USER week$ WITH PASSWORD 'pass';
+CREATE ROLE
+```
+
+Now, let us add some checks for the password.
+Let us start with a check as a password should not contain these characters (!@=$#).
+
+```
+postgres=# SHOW credcheck.password_not_contain ;
+ credcheck.password_not_contain 
+--------------------------------
+ !@=$#
+(1 row)
+
+-- ERROR
+postgres=# CREATE USER abcd$ WITH PASSWORD 'p@ss';
+ERROR:  password does contain the configured credcheck.password_not_contain characters
+
+-- OK
+postgres=# CREATE USER abcd$ WITH PASSWORD 'pass';
+CREATE ROLE
+```
+
+Let us add another check for the password as, the password should not contain username.
+
+```
+postgres=# SHOW credcheck.password_contain_username ;
+ credcheck.password_contain_username 
+-------------------------------------
+ on
+(1 row)
+
+-- ERROR
+postgres=# CREATE USER abcd$ WITH PASSWORD 'abcd$xyz';
+ERROR:  password should not contain username
+
+-- OK, ignore case is disabled
+postgres=# CREATE USER abcd$ WITH PASSWORD 'ABCD$xyz';
+CREATE ROLE
+
+-- OK
+postgres=# CREATE USER abcd$ WITH PASSWORD 'axyz';
+CREATE ROLE
+```
+
+Let us make checks as to ignore the case.
+
+```
+postgres=# SHOW credcheck.password_ignore_case;
+ credcheck.password_ignore_case 
+--------------------------------
+ on
+(1 row)
+
+-- ERROR
+postgres=# CREATE USER abcd$ WITH PASSWORD 'ABCD$xyz';
+ERROR:  password should not contain username
+
+-- OK
+postgres=# CREATE USER abcd$ WITH PASSWORD 'A$xyz';
+CREATE ROLE
+```
+
+Let us add one final check to the password as the password should not contain any adjacent repeated characters.
+
+```
+postgres=# SHOW credcheck.password_min_repeat ;
+ credcheck.password_min_repeat 
+-------------------------------
+ 3
+(1 row)
+
+-- ERROR
+postgres=# CREATE USER abcd$ WITH PASSWORD 'straaaangepaasssword';
+ERROR:  password characters are repeated more than the configured credcheck.password_min_repeat times
+
+-- OK
+postgres=# CREATE USER abcd$ WITH PASSWORD 'straaangepaasssword';
+CREATE ROLE
+```
 
 
 ### [Limitations](#limitations)
 This extension only works for the plain text passwords.
- 
+
 Example
 ```
 postgres=# CREATE USER user1 PASSWORD 'this is some plain text';
