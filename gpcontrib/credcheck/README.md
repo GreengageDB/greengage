@@ -219,9 +219,15 @@ Example
 postgres=# CREATE USER user1 PASSWORD 'md55e4cc86d2d6a8b73bbefc4d5b91baa45';
 ERROR:  password type is not a plain text
 ```
-Username checks will not get enforce while renaming the user.
-  
-Example
+
+Username checks will not get enforce while create an user without password, and while renaming the user.
+
+Example (username checks won't invoke here)
+```
+postgres=# CREATE USER user1;
+```
+
+Example (username checks won't invoke here)
 ```
 postgres=# ALTER USER user1 RENAME to test_user;
 ```
