@@ -7,11 +7,21 @@
 
 #include "postgres.h"
 
+#include "catalog/catalog.h"
+#include "catalog/pg_authid.h"
 #include "commands/user.h"
 #include "nodes/nodes.h"
+#include "access/table.h"
 #include "tcop/utility.h"
 #include "utils/guc.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
 
+#if PG_VERSION_NUM < 120000
+#define table_open(r,l)         heap_open(r,l)
+#define table_openrv(r,l)       heap_openrv(r,l)
+#define table_close(r,l)        heap_close(r,l)
+#endif
 
 #if PG_VERSION_NUM < 100000
 #error Minimum version of PostgreSQL required is 10
@@ -554,7 +564,50 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			RenameStmt *stmt = (RenameStmt *)parsetree;
 			/* We only take care of user renaming */
 			if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
+			{
+				/* only user with password are checked */
+				HeapTuple       oldtuple;
+				TupleDesc       dsc;
+				Relation        rel;
+				bool            isnull;
+				Form_pg_authid  authform;
+
+				rel = table_open(AuthIdRelationId, RowExclusiveLock);
+				dsc = RelationGetDescr(rel);
+
+				oldtuple = SearchSysCache1(AUTHNAME, CStringGetDatum(stmt->subname));
+				if (!HeapTupleIsValid(oldtuple))
+					ereport(ERROR,
+							(errcode(ERRCODE_UNDEFINED_OBJECT),
+							 errmsg("role \"%s\" does not exist", stmt->subname)));
+				authform = (Form_pg_authid) GETSTRUCT(oldtuple);
+				/*
+				 * Check that this is not a system role or a 
+				 * role into the reserved "pg_" namespace.
+				 */
+				if (IsReservedName(NameStr(authform->rolname)))
+					ereport(ERROR,
+							(errcode(ERRCODE_RESERVED_NAME),
+							 errmsg("role name \"%s\" is reserved",
+									NameStr(authform->rolname)),
+							 errdetail("Role names starting with \"pg_\" are reserved.")));
+
+				if (IsReservedName(stmt->newname))
+					ereport(ERROR,
+							(errcode(ERRCODE_RESERVED_NAME),
+							 errmsg("role name \"%s\" is reserved",
+									stmt->newname),
+							 errdetail("Role names starting with \"pg_\" are reserved.")));
+
+				/* look if the password is null */
+				(void) heap_getattr(oldtuple, Anum_pg_authid_rolpassword, dsc, &isnull);
+				ReleaseSysCache(oldtuple);
+				table_close(rel, NoLock);
+				if (isnull)
+					break;
+				/* check the validity of the username */
 				username_check(stmt->newname, NULL);
+			}
 			break;
 		}
 

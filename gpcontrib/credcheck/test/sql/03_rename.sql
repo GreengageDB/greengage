@@ -1,4 +1,5 @@
 CREATE USER aaa PASSWORD 'DummY';
+CREATE USER bbb;
 
 LOAD 'credcheck';
 --
@@ -30,6 +31,9 @@ SET credcheck.password_min_repeat TO DEFAULT;
 --
 SET credcheck.username_min_length TO 2;
 ALTER USER aaa RENAME TO b;
+-- Check that a user without password doesn't invoke the extension
+ALTER USER bbb RENAME TO b;
+DROP USER b;
 
 --
 --min user repeat
