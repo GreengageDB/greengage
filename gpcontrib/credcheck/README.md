@@ -22,8 +22,8 @@ This extension provides all the checks as configuration parameters, and the valu
 When we create this extension, the default configuration settings, will not enforce any complex checks and will try to allow all the credentials. By using `ALTER SYSTEM SET credcheck.<check-name> TO <some value>;` command, followed by `SELECT pg_reload_conf();` command we can enforce new settings for the credential checks.
 
 ### [Installation](#installation)
-- Make sure the `pg_config` is set in the currnet `PATH`.
-- Clone or download this repository in a directory, and run the `make install` command.
+- Make sure the `pg_config` binary is set in the currnet `PATH`.
+- Clone or download this repository into a directory, and run the `make install` command.
 - If there are any permission issues, then use the `sudo make install` command.
 - Perform the regression tests by running the `make installcheck` command.
 - Test this extension in one session by using `LOAD 'credcheck';` PostgreSQL command.
@@ -33,6 +33,8 @@ When we create this extension, the default configuration settings, will not enfo
 
 
 ### [Checks](#checks)
+Please find the below list of general checks, which we can enforce on credentials.
+
 | Check                     | Type     | Description                                         | Setting Value | Accepted                    | Not Accepted                 |
 |---------------------------|----------|-----------------------------------------------------|---------------|-----------------------------|------------------------------|
 | username_min_length       | username | minimum length of a username                        | 4             | &check; abcd                | &#10008; abc                 |
