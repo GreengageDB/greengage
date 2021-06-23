@@ -86,22 +86,21 @@ static bool char_repeat_exceeds(const char *str, int max_repeat) {
     occurred = 1;
     // first character = str[i]
     // second character = str[i+1]
-    // always start from the next character
-    // start searching for character from the next position of the character
+    // hunt for a series of same character
+    // for example, in this string "weekend summary"
+    // search for the series "ee", "mm"
     for (int j = (i + 1), k = 1; j < strlen(str); j++, k++) {
       // character matched
       if (str[i] == str[j]) {
-        // is the last character's next position is the current position?
+        // is the previous, current character positions are adjacent
+        //
         if (i + k == j) {
           occurred++;
-
           if (occurred > max_repeat) {
             return true;
           }
         }
       } else {
-        // characters are not matching, so break the loop and continue with the
-        // next character
         break;
       }
     }
@@ -464,7 +463,7 @@ static void check_password(const char *username, const char *password,
     break;
 
   default:
-    elog(ERROR, "password type is not plain text");
+    elog(ERROR, "password type is not a plain text");
     break;
   }
 }
