@@ -233,7 +233,7 @@ postgres=# ALTER USER user1 RENAME to test_user;
 
 ### [License](#license)
 
-This extension is free software distributed under the PostgreSQL
+This extension is free software distributed under the MIT
 License.
 
     Copyright (c) 2021 MigOps Inc.
