@@ -7,11 +7,17 @@
 
 #include "postgres.h"
 
+
+#if PG_VERSION_NUM < 120000
+#include "access/heapam.h"
+#include "access/htup_details.h"
+#else
+#include "access/table.h"
+#endif
 #include "catalog/catalog.h"
 #include "catalog/pg_authid.h"
 #include "commands/user.h"
 #include "nodes/nodes.h"
-#include "access/table.h"
 #include "tcop/utility.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
