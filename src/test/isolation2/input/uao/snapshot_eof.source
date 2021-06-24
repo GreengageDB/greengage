@@ -177,3 +177,35 @@ FROM gp_segment_configuration WHERE role = 'p';
 -- end_ignore
 1:DROP TABLE insert_eof;
 1:RESET gp_default_storage_options;
+
+--
+-- Check that we don't have anomalies on concurrent segment file
+-- modifications during prepared phase.
+--
+-- Configure fault injection.
+-- start_ignore
+1:SELECT gp_inject_fault('after_commit_prepared', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+-- end_ignore
+-- Emulate concurrent segment file modification.
+1:SET gp_default_storage_options = "appendonly=true, orientation=@orientation@";
+1:CREATE TABLE insert_eof(a int) DISTRIBUTED RANDOMLY;
+-- start_ignore
+1:SELECT gp_inject_fault('after_commit_prepared', 'suspend', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+-- end_ignore
+1&:INSERT INTO insert_eof SELECT generate_series(1, 10);
+-- Validate that segment file has a correct amount of rows.
+2:SELECT count(*) FROM insert_eof;
+-- start_ignore
+2:SELECT gp_inject_fault('after_commit_prepared', 'resume', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+-- end_ignore
+1<:
+-- Cleanup.
+-- start_ignore
+1:SELECT gp_inject_fault('after_commit_prepared', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+-- end_ignore
+1:DROP TABLE insert_eof;
+1:RESET gp_default_storage_options;
