@@ -22,6 +22,48 @@ FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
 -- end_ignore
 -- Create segment file that requires eof truncate.
 1:SET gp_default_storage_options = "appendonly=true, orientation=@orientation@";
+1:CREATE TABLE truncate_eof (a int) DISTRIBUTED BY (a);
+1:BEGIN;
+1:INSERT INTO truncate_eof SELECT generate_series(1, 10);
+1:ROLLBACK;
+-- Pause VACUUM after an appendonly metadata snapshot has been acquired
+-- but before segment file has been locked.
+2&:VACUUM truncate_eof;
+-- Commit new data in two parallel sessions and move eof.
+-- start_ignore
+1&:COPY truncate_eof FROM PROGRAM 'printf "1\n2\n3\n4\n5\n6\n7\n8\n9\n10"';
+-- end_ignore
+3:COPY truncate_eof FROM PROGRAM 'printf "1\n2\n3\n4\n5\n6\n7\n8\n9\n10"';
+-- Resume VACUUM.
+-- start_ignore
+3:SELECT gp_inject_fault('ao_@orientation@_truncate_to_eof', 'resume', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+1<:
+-- end_ignore
+2<:
+-- Validate that segment file is not corrupted.
+3:SELECT count(*) FROM truncate_eof;
+-- Cleanup.
+-- start_ignore
+3:SELECT gp_inject_fault('ao_@orientation@_truncate_to_eof', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+-- end_ignore
+3:DROP TABLE truncate_eof;
+3:RESET gp_default_storage_options;
+
+--
+-- Check that VACUUM truncate uses the latest committed segment eof.
+-- Test with VACUUM in utility mode.
+--
+-- Configure fault injection.
+-- start_ignore
+1:SELECT gp_inject_fault('ao_@orientation@_truncate_to_eof', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+1:SELECT gp_inject_fault('ao_@orientation@_truncate_to_eof', 'suspend', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+-- end_ignore
+-- Create segment file that requires eof truncate.
+1:SET gp_default_storage_options = "appendonly=true, orientation=@orientation@";
 1:CREATE TABLE truncate_eof (a int) DISTRIBUTED RANDOMLY;
 1:INSERT INTO truncate_eof SELECT generate_series(1, 10);
 1:BEGIN;
