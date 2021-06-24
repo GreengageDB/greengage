@@ -8,12 +8,14 @@
 #include "postgres.h"
 
 
+
 #if PG_VERSION_NUM < 120000
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #else
 #include "access/table.h"
 #endif
+
 #include "catalog/catalog.h"
 #include "catalog/pg_authid.h"
 #include "commands/user.h"
@@ -22,6 +24,7 @@
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+
 
 #if PG_VERSION_NUM < 120000
 #define table_open(r,l)         heap_open(r,l)
@@ -59,7 +62,7 @@ extern void _PG_init(void);
 extern void _PG_fini(void);
 static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
 
-// username flags
+/* Username flags*/
 static int username_min_length = 1;
 static int username_min_special = 0;
 static int username_min_digit = 0;
@@ -71,7 +74,7 @@ static char *username_contain = NULL;
 static bool username_contain_password = true;
 static bool username_ignore_case = false;
 
-// password flags
+/* Password flags*/
 static int password_min_length = 1;
 static int password_min_special = 0;
 static int password_min_digit = 0;
@@ -621,7 +624,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			break;
 	}
 	
-	/* Excecute the utility command, we are not concerned */
+	/* Execute the utility command, we are not concerned */
 	if (prev_ProcessUtility)
 		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
 	else

@@ -230,11 +230,12 @@ postgres=# ALTER USER user1 RENAME to test_user;
 
 ### [License](#license)
 
-This extension is free software distributed under the MIT
+This extension is free software distributed under the PostgreSQL
 License.
 
     Copyright (c) 2021 MigOps Inc.
 ### [Credits](#credits)
+- Thanks to Gilles Darold for suggestions and improvements
 - Thanks to the [passwordcheck extension author](https://www.postgresql.org/docs/current/passwordcheck.html)
 - Thanks to the [password policy extension author](https://github.com/eendroroy/passwordpolicy)
 - Thanks to the [blog author](https://paquier.xyz/postgresql-2/postgres-module-highlight-customize-passwordcheck-to-secure-your-database/)
