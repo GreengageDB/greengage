@@ -1,7 +1,15 @@
-/*
- * credcheck
+/*-------------------------------------------------------------------------
+ *
+ * credcheck.c:
+ * 		This file has the general PostgreSQL credential checks.
+ *
+ * This program is open source, licensed under the PostgreSQL license.
+ * For license terms, see the LICENSE file.
+ *
+ * Copyright (C) 2021: MigOps Inc
+ *
+ *-------------------------------------------------------------------------
  */
-
 #include <ctype.h>
 #include <limits.h>
 
