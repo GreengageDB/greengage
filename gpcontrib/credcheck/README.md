@@ -16,14 +16,13 @@
 
 ### [Description](#description)
 
-The `credcheck` PostgreSQL extension provides few general credentail checks, which will be evaluated during the user creation, during the password change and user renaming. By using this extension, we can define a set of rules to allow a specific set of credentials, and a set of rules to reject a certain type of credentials. This extension is developed based on the PostgreSQL's `check_password_hook` hook.
+The `credcheck` PostgreSQL extension provides few general credential checks, which will be evaluated during the user creation, during the password change and user renaming. By using this extension, we can define a set of rules to allow a specific set of credentials, and a set of rules to reject a certain type of credentials. This extension is developed based on the PostgreSQL's `check_password_hook` hook.
 
-This extension provides all the checks as configuration parameters, and the values can be applied during the configuration reload(SIGHUP).
-When we create this extension, the default configuration settings, will not enforce any complex checks and will try to allow all the credentials. By using `ALTER SYSTEM SET credcheck.<check-name> TO <some value>;` command, followed by `SELECT pg_reload_conf();` command we can enforce new settings for the credential checks.
+This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks.
 
 ### [Installation](#installation)
 - Minimum version of PostgreSQL required is 10.0.
-- Make sure the `pg_config` binary is set in the currnet `PATH`.
+- Make sure the `pg_config` binary is set in the current `PATH`.
 - Clone or download this repository into a directory, and run the `make install` command.
 - If there are any permission issues, then use the `sudo make install` command.
 - Perform the regression tests by running the `make installcheck` command.
@@ -94,7 +93,7 @@ postgres=# CREATE USER abcd$ WITH PASSWORD 'pass';
 CREATE ROLE
 ```
 
-Let us add one more check to the username, where username should not contain more than 1 adjacent repeat characters.
+Let us add one more check to the username, where username should not contain more than 1 adjacent repeat character.
 
 
 ```

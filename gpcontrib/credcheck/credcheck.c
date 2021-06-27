@@ -564,33 +564,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
 	Node *parsetree = pstmt->utilityStmt;
 
-
 	switch (nodeTag(parsetree))
 	{
-		/*Intercept CREATE ROLE/USER*/
-		case T_CreateRoleStmt: {
-			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
-			ListCell   *option;
-			bool foundPasswordOption = false;
-			/*If it is a plain CREATE ROLE role-name; which do not have a password then validate username*/
-			if (stmt->stmt_type == ROLESTMT_ROLE || stmt->stmt_type == ROLESTMT_USER) {
-				foreach(option, stmt->options)
-				{
-					DefElem    *defel = (DefElem *) lfirst(option);
-					if (strcmp(defel->defname, "password") == 0)
-					{
-						foundPasswordOption = true;
-					}
-				}
-
-				/*password option is not found in the statement*/
-				if (!foundPasswordOption) {
-					/* check the validity of the username */
-					username_check(stmt->role, NULL);
-				}
-			}
-			break;
-		}
 		/* Intercept ALTER USER .. RENAME statements */
 		case T_RenameStmt:
 		{
