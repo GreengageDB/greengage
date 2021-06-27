@@ -137,17 +137,23 @@ static bool char_repeat_exceeds(const char *str, int max_repeat) {
   int occurred = 1;
   size_t len = strlen(str);
 
+  /*if string has only one character, then no need to proceed further*/
+  if (len==1) {
+	  return false;
+  }
+
   for (size_t i = 0; i < len;) {
     occurred = 1;
-    // first character = str[i]
-    // second character = str[i+1]
-    // search for an adjacent repeated characters
-    // for example, in this string "weekend summary"
-    // search for the series "ee", "mm"
+    /*first character = str[i]
+     second character = str[i+1]
+     search for an adjacent repeated characters
+     for example, in this string "weekend summary"
+     search for the series "ee", "mm"
+     */
     for (size_t j = (i + 1), k = 1; j < len; j++, k++) {
-      // character matched
+      /* character matched*/
       if (str[i] == str[j]) {
-        // is the previous, current character positions are adjacent
+        /* is the previous, current character positions are adjacent*/
         if (i + k == j) {
           occurred++;
           if (occurred > max_repeat) {
@@ -156,12 +162,12 @@ static bool char_repeat_exceeds(const char *str, int max_repeat) {
         }
       }
 
-      // if we reach an end of the string, no need to process further
+      /* if we reach an end of the string, no need to process further*/
       if (j + 1 == len) {
         return false;
       }
 
-      // if the characters are not equal then point "i" to "j"
+      /* if the characters are not equal then point "i" to "j"*/
       if (str[i] != str[j]) {
         i = j;
         break;
