@@ -198,8 +198,6 @@ function _main() {
 
 	prep_env
 
-	build_xerces
-	#link_python
 	generate_build_number
 	build_gpdb "${BLD_TARGET_OPTION[@]}"
 	git_info
@@ -207,11 +205,6 @@ function _main() {
 	if [[ -z "${SKIP_UNITTESTS}" ]]; then
 		unittest_check_gpdb
 	fi
-
-	include_zstd
-	#include_quicklz
-	include_libuv
-	include_libstdcxx
 
 	export_gpdb
 	export_gpdb_extensions
