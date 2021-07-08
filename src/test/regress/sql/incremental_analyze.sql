@@ -823,3 +823,13 @@ ANALYZE VERBOSE foo_1_prt_1;
 ANALYZE VERBOSE foo_1_prt_2;
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
 RESET gp_autostats_mode;
+-- Test application of column-wise statistics setting to the number of MCVs and histogram bounds on partitioned table
+DROP TABLE IF EXISTS foo;
+CREATE TABLE foo (a int) PARTITION BY RANGE (a) (START (0) END (10) EVERY (5));
+-- fill foo with even numbers twice as large than odd ones to avoid fully even distribution of 'a' attribute and hence empty MCV/MCF
+INSERT INTO foo SELECT i%10 FROM generate_series(0, 100) i;
+INSERT INTO foo SELECT i%10 FROM generate_series(0, 100) i WHERE i%2 = 0;
+-- default_statistics_target is 4
+ALTER TABLE foo ALTER COLUMN a SET STATISTICS 5;
+ANALYZE foo;
+SELECT array_length(most_common_vals, 1), array_length(most_common_freqs, 1), array_length(histogram_bounds, 1) FROM pg_stats WHERE tablename = 'foo' AND attname = 'a';
