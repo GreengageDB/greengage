@@ -18,7 +18,6 @@ function prep_env() {
 	GREENPLUM_CL_INSTALL_DIR=/usr/local/greenplum-clients-devel
 
 	mkdir -p "${GPDB_ARTIFACTS_DIR}"
-	link_python
 
 	# By default, only GPDB Server binary is build.
 	# Use BLD_TARGETS flag with appropriate value string to generate client, loaders
