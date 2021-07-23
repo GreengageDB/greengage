@@ -163,8 +163,6 @@ function _main() {
 		unittest_check_gpdb
 	fi
 
-	include_dependencies
-
 	export_gpdb
 	export_gpdb_extensions
 
