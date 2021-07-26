@@ -65,6 +65,8 @@ run_feature() {
 
   docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
+      -f behave_utils.arenadata.formatter:CustomFormatter \
+      -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
       -o /tmp/allure-results"  \
     cdw gpdb_src/arenadata/scripts/behave_gpdb.bash
