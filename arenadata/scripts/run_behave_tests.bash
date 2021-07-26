@@ -45,7 +45,7 @@ run_feature() {
   echo "Started $feature behave tests on cluster $cluster and project $project"
   docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env up -d
   docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
-    -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
+    -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.arenadata.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
