@@ -266,6 +266,7 @@ WalReceiverMain(void)
 	/* Reset some signals that are accepted by postmaster but not here */
 	pqsignal(SIGCHLD, SIG_DFL);
 
+	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 	#ifdef SIGILL
 		pqsignal(SIGILL, WalRcvCrashHandler);
 	#endif

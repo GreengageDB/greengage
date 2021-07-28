@@ -128,6 +128,7 @@ FtsProbeMain(Datum main_arg)
 	pqsignal(SIGHUP, sigHupHandler);
 	pqsignal(SIGINT, sigIntHandler);
 
+	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 	#ifdef SIGILL
 		pqsignal(SIGILL, FtsProbeCrashHandler);
 	#endif
