@@ -99,11 +99,11 @@ SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 linux_x86_64 photon3_x86
 # Compiler options
 #---------------------------------------------------------------------
 
-OPTFLAGS="$(strip $(BLD_CFLAGS) -O3 -fargument-noalias-global -fno-omit-frame-pointer -g)"
-PROFFLAGS="$(strip $(BLD_CFLAGS) -O3 -fargument-noalias-global -fno-omit-frame-pointer -g)"
+OPTFLAGS="$(strip $(BLD_CFLAGS) -O3 -fargument-noalias-global -g)"
+PROFFLAGS="$(strip $(BLD_CFLAGS) -O3 -fargument-noalias-global -g)"
 
 ifeq (on, ${GPDBGOPT})
-CFLAGS_OPT=-O1 -fno-omit-frame-pointer
+CFLAGS_OPT=-O1
 else
 CFLAGS_OPT=-O0
 endif

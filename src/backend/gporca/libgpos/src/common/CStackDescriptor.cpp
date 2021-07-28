@@ -15,6 +15,8 @@
 #include "gpos/task/IWorker.h"
 #include "gpos/utils.h"
 
+#include <execinfo.h>
+
 #define GPOS_STACK_DESCR_TRACE_BUF (4096)
 
 using namespace gpos;
@@ -30,61 +32,20 @@ using namespace gpos;
 void
 CStackDescriptor::BackTrace(ULONG top_frames_to_skip)
 {
-	// get base pointer of current frame
-
 	ULONG gpos_stack_trace_depth_actual;
-	#ifdef GPOS_GET_FRAME_POINTER
-	ULONG_PTR current_frame;
-	GPOS_GET_FRAME_POINTER(current_frame);
-	gpos_stack_trace_depth_actual = GPOS_STACK_TRACE_DEPTH;
-	#else
-	void *current_frame[GPOS_STACK_TRACE_DEPTH];
-	gpos_stack_trace_depth_actual = backtrace(current_frame, GPOS_STACK_TRACE_DEPTH);
-	#endif
+	void *raddrs[GPOS_STACK_TRACE_DEPTH];
+
+	// get the backtrace in platform-independent way
+	gpos_stack_trace_depth_actual = backtrace(raddrs, GPOS_STACK_TRACE_DEPTH);
 
 	// reset stack depth
 	Reset();
 
-	// pointer to next frame in stack
-	void **next_frame = (void **) current_frame;
-
-	// get stack start address
-	ULONG_PTR stack_start = 0;
-	IWorker *worker = IWorker::Self();
-	if (NULL == worker)
+	// skip the first top_frames_to_skip
+	for (ULONG i = top_frames_to_skip; i < gpos_stack_trace_depth_actual; i++)
 	{
-		// no worker in stack, return immediately
-		return;
-	}
-
-	// get address from worker
-	stack_start = worker->GetStackStart();
-
-	// consider the first GPOS_STACK_TRACE_DEPTH frames below worker object
-	for (ULONG frame_counter = 0; frame_counter < gpos_stack_trace_depth_actual;
-		 frame_counter++)
-	{
-		// check if the frame pointer is after stack start and before previous frame
-		if ((ULONG_PTR) *next_frame > stack_start ||
-			(ULONG_PTR) *next_frame < (ULONG_PTR) next_frame)
-		{
-			break;
-		}
-
-		// skip top frames
-		if (0 < top_frames_to_skip)
-		{
-			top_frames_to_skip--;
-		}
-		else
-		{
-			// get return address (one above the base pointer)
-			ULONG_PTR *frame_address = (ULONG_PTR *) (next_frame + 1);
-			m_array_of_addresses[m_depth++] = (void *) *frame_address;
-		}
-
-		// move to next frame
-		next_frame = (void **) *next_frame;
+		// backtrace() produces pure return addresses, so just copy them
+		m_array_of_addresses[m_depth++] = raddrs[i];
 	}
 }
 
