@@ -1,5 +1,8 @@
 FROM centos:centos7 as base
 
+ARG sigar=https://ci.arenadata.io/artifactory/ADB/6.7.1_arenadata4/centos/7/community/x86_64/sigar-1.6.5-163.el7.x86_64.rpm
+ARG sigar_headers=https://ci.arenadata.io/artifactory/ADB/6.7.1_arenadata4/centos/7/community/x86_64/sigar-headers-1.6.5-163.el7.x86_64.rpm
+
 # Install some basic utilities and build tools
 RUN yum makecache && \
     rpm --import http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-7 && \
@@ -48,16 +51,15 @@ RUN yum -y install centos-release-scl && \
     echo -e 'export JAVA_HOME=/etc/alternatives/java_sdk' >> /etc/profile.d/jdk_home.sh && \
     echo -e 'export PATH=$JAVA_HOME/bin:$PATH' >> /etc/profile.d/jdk_home.sh
 
+RUN rpm -i $sigar && rpm -i $sigar_headers
+
 WORKDIR /home/gpadmin
 
 FROM base as build
 
-ARG sigar=https://ci.arenadata.io/artifactory/ADB/6.7.1_arenadata4/centos/7/community/x86_64/sigar-1.6.5-163.el7.x86_64.rpm
-ARG sigar_headers=https://ci.arenadata.io/artifactory/ADB/6.7.1_arenadata4/centos/7/community/x86_64/sigar-headers-1.6.5-163.el7.x86_64.rpm
-
 COPY . gpdb_src
 
-RUN rpm -i $sigar && rpm -i $sigar_headers && mkdir /home/gpadmin/bin_gpdb
+RUN mkdir /home/gpadmin/bin_gpdb
 
 ENV TARGET_OS_VERSION=7
 ENV TARGET_OS=centos
@@ -77,4 +79,3 @@ COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb
 
 # Volume for tests output
 VOLUME /home/gpadmin/gpdb_src/src/test
-
