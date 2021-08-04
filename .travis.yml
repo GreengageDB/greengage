@@ -61,6 +61,15 @@ matrix:
                   packages:
                       - *common_packages
                       - clang-7
+        # macOS, XCode11
+        - os: osx
+          compiler: clang
+          osx_image: xcode11
+          env: T=macos
+          addons:
+            homebrew:
+              packages:
+                - ccache
 
         - stage: check-format
           os: linux

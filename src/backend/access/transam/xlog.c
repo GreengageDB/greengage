@@ -6476,10 +6476,37 @@ StartupXLOG(void)
 	 * unflushed writes to be lost, even though more recent data written to
 	 * disk from here on would be persisted.  To avoid that, fsync the entire
 	 * data directory.
+	 *
+	 * GPDB: We don't force to fsync the whole pgdata directory as upstream
+	 * code since that could be very slow in cases that the pgdata
+	 * directory has a lot of (e.g. millions of) files. See below for details.
+	 *---------
 	 */
 	if (ControlFile->state != DB_SHUTDOWNED &&
 		ControlFile->state != DB_SHUTDOWNED_IN_RECOVERY)
-		SyncDataDirectory();
+	{
+		/*
+		 * 1. If the backup_label file exists, we assume the pgdata has already
+		 * been synchronized. This is true on gpdb since we do force fsync
+		 * during pg_basebackup and pg_rewind.
+		 *
+		 * 2. else for the crash recovery case.
+		 *
+		 *    2.1. if full page writes is enabled, we do synchronize the wal
+		 *    files only. wal files must be synchronized here, else if xlog
+		 *    redo writes some buffer pages and those pages are partly
+		 *    synchronized, and then system crashes and some xlogs are lost,
+		 *    those table file pages might be broken.
+		 *
+		 *    2.2. else, simply synchronize the whole pgdata directory though
+		 *    there might be room for optimization but we would mostly not run
+		 *    into this code branch. Since we can not get
+		 *    checkPoint.fullPageWrites here so we do pgdata fsync later (
+		 *    i.e. call SyncDataDirectory()) after reading the checkpoint.
+		 */
+		if (access(BACKUP_LABEL_FILE, F_OK) != 0)
+				SyncAllXLogFiles();
+	}
 
 	/*
 	 * Initialize on the assumption we want to recover to the latest timeline
@@ -6668,7 +6695,17 @@ StartupXLOG(void)
 	}
 
 	/*
-	 * If the location of the checkpoint record is not on the expected
+	 * gpdb specific: Do pgdata fsync for the case that is almost not possible
+	 * on real production scenarios. See previous code that calls
+	 * SyncAllXLogFiles() for details.
+	 */
+	if (!checkPoint.fullPageWrites &&
+		!haveBackupLabel &&
+		ControlFile->state != DB_SHUTDOWNED &&
+		ControlFile->state != DB_SHUTDOWNED_IN_RECOVERY)
+		SyncDataDirectory();
+
+	/* If the location of the checkpoint record is not on the expected
 	 * timeline in the history of the requested timeline, we cannot proceed:
 	 * the backup is not part of the history of the requested timeline.
 	 */
@@ -8798,32 +8835,6 @@ CreateCheckPoint(int flags)
 	TRACE_POSTGRESQL_CHECKPOINT_START(flags);
 
 	/*
-	 * When the crash happens, we need to handle the transactions that have
-	 * already inserted 'commit' record and haven't inserted 'forget' record.
-	 *
-	 * If the 'commit' record is logically before the checkpoint REDO pointer,
-	 * we save the transactions in checkpoint record, and these transactions
-	 * will be load into shared memory and mark as 'crash committed' during
-	 * redo checkpoint.
-	 * If the 'commit' record is logically after the checkpoint REDO pointer,
-	 * the transactions will be added to shared memory and mark as 'crash
-	 * committed' during redo xact.
-	 * All these transactions will be stored in the shutdown checkpoint record
-	 * after recovery, and they will be finally recovered in recoverTM().
-	 *
-	 * So if it's a shutdown checkpoint here, we should include all 'crash
-	 * committed' transactions, and if it's a normal checkpoint should include
-	 * all transactions whose 'commit' record is logically before checkpoint
-	 * REDO pointer.
-	 *
-	 * We don't hold the WALInsertLock, so there's a time window that allows
-	 * transactions insert 'commit' record and/or 'forget' record after
-	 * checkpoint REDO pointer. That's fine, resend 'commit prepared' to already
-	 * finished transactions is handled.
-	 */
-	getDtxCheckPointInfo(&dtxCheckPointInfo, &dtxCheckPointInfoSize);
-
-	/*
 	 * Get the other info we need for the checkpoint record.
 	 */
 	LWLockAcquire(XidGenLock, LW_SHARED);
@@ -8865,6 +8876,8 @@ CreateCheckPoint(int flags)
 	 */
 	END_CRIT_SECTION();
 
+	SIMPLE_FAULT_INJECTOR("before_wait_VirtualXIDsDelayingChkpt");
+
 	/*
 	 * In some cases there are groups of actions that must all occur on one
 	 * side or the other of a checkpoint record. Before flushing the
@@ -8903,6 +8916,39 @@ CreateCheckPoint(int flags)
 		} while (HaveVirtualXIDsDelayingChkpt(vxids, nvxids));
 	}
 	pfree(vxids);
+
+	/*
+	 * When the crash happens, we need to handle the transactions that have
+	 * already inserted 'commit' record and haven't inserted 'forget' record.
+	 *
+	 * If the 'commit' record is logically before the checkpoint REDO pointer,
+	 * we save the transactions in checkpoint record, and these transactions
+	 * will be load into shared memory and mark as 'crash committed' during
+	 * redo checkpoint.
+	 * If the 'commit' record is logically after the checkpoint REDO pointer,
+	 * the transactions will be added to shared memory and mark as 'crash
+	 * committed' during redo xact.
+	 * All these transactions will be stored in the shutdown checkpoint record
+	 * after recovery, and they will be finally recovered in recoverTM().
+	 *
+	 * So if it's a shutdown checkpoint here, we should include all 'crash
+	 * committed' transactions, and if it's a normal checkpoint should include
+	 * all transactions whose 'commit' record is logically before checkpoint
+	 * REDO pointer.
+	 *
+	 * We don't hold the WALInsertLock, so there's a time window that allows
+	 * transactions insert 'commit' record and/or 'forget' record after
+	 * checkpoint REDO pointer. That's fine, resend 'commit prepared' to already
+	 * finished transactions is handled.
+	 *
+	 * Currently `MyTmGxact->includeInCkpt = true` and `XLogInsert(RM_XACT_ID, XLOG_XACT_DISTRIBUTED_COMMIT)`
+	 * is already protected by delayChkpt, so these are an atomic operation
+	 * from the outside perspective. getDtxCheckPointInfo() should be called
+	 * after HaveVirtualXIDsDelayingChkpt() otherwise some distributed transactions
+	 * with a state of DTX_STATE_INSERTED_COMMITTED may not be included in the
+	 * checkpoint record.
+	 */
+	getDtxCheckPointInfo(&dtxCheckPointInfo, &dtxCheckPointInfoSize);
 
 	CheckPointGuts(checkPoint.redo, flags);
 

@@ -698,7 +698,7 @@ vacuumStatement_Relation(VacuumStmt *vacstmt, Oid relid,
 		CommitTransactionCommand();
 		return;
 	}
-
+	SIMPLE_FAULT_INJECTOR("vacuum_hold_lock");
 	/*
 	 * Check permissions.
 	 *
@@ -1561,6 +1561,13 @@ vac_update_relstats_from_list(List *updated_stats)
 	 * explicit about that given the assumptions taken.
 	 */
 	Assert(Gp_role == GP_ROLE_DISPATCH);
+
+	/*
+	 * To read latest version of pg_class tuple below, as it was most likely
+	 * updated earlier within same command by earlier call to
+	 * vac_update_relstats().
+	 */
+	CommandCounterIncrement();
 
 	foreach (lc, updated_stats)
 	{

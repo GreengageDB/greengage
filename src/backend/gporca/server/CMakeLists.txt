@@ -253,7 +253,7 @@ COuterJoin1Test:
 ExpandNAryJoinGreedyWithLOJOnly NaryWithLojAndNonLojChilds LOJ_bb_mpph LOJ-Condition-False
 LeftJoin-With-Pred-On-Inner LeftJoin-With-Pred-On-Inner2
 LeftJoin-With-Col-Const-Pred LeftJoin-With-Coalesce LOJWithFalsePred LeftJoin-DPv2-With-Select
-DPv2GreedyOnly DPv2MinCardOnly DPv2QueryOnly;
+DPv2GreedyOnly DPv2MinCardOnly DPv2QueryOnly LOJ-PushDown;
 
 COuterJoin2Test:
 LOJ-IsNullPred Select-Proj-OuterJoin OuterJoin-With-OuterRefs Join-Disj-Subqs
@@ -342,7 +342,10 @@ CIndexOnlyScanTest:
 IndexOnlyScan-NoDistKeyInIndex;
 
 CRightJoinTest:
-RightJoinHashed RightJoinRedistribute RightJoinReplicated RightJoinBothReplicated RightJoinDPS RightJoinNoDPSNonDistKey RightJoinTVF
+RightJoinHashed RightJoinRedistribute RightJoinReplicated RightJoinBothReplicated RightJoinDPS RightJoinNoDPSNonDistKey RightJoinTVF;
+
+CSqlFunctionTest:
+SqlFuncNullReject SqlFuncPredFactorize SqlFuncDmlScalar SqlFuncDmlTvf
 ")
 
 set(mdp_dir "../data/dxl/minidump/")

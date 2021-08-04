@@ -21,7 +21,9 @@ RUN yum makecache && \
     yum -y install openssl-devel pam-devel readline-devel snappy-devel libuv-devel && \
     yum -y install apache-ivy libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     yum -y install perl-IPC-Run perl-Test-Base && \
-    pip install psi && \
+    # The last python 2.7 pip
+    pip install -U pip==20.3.4 && \
+    pip install psi pytest==3.10.1 && \
     yum clean all
 
 # setup ssh configuration
@@ -45,7 +47,6 @@ RUN yum -y install centos-release-scl && \
     ln -s /usr/bin/cmake3 /usr/bin/cmake && \
     ln -s /usr/bin/ctest3 /usr/bin/ctest && \
     echo -e 'source /opt/rh/devtoolset-7/enable' >> /opt/gcc_env.sh && \
-    echo -e 'source /opt/gcc_env.sh' >> /root/.bashrc && \
     echo -e '#!/bin/sh' >> /etc/profile.d/jdk_home.sh && \
     echo -e 'export JAVA_HOME=/etc/alternatives/java_sdk' >> /etc/profile.d/jdk_home.sh && \
     echo -e 'export PATH=$JAVA_HOME/bin:$PATH' >> /etc/profile.d/jdk_home.sh
@@ -66,8 +67,7 @@ ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
 ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" 
 
 # Compile with running mocking tests
-RUN source /opt/gcc_env.sh && \
-    bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base as code
 COPY . gpdb_src

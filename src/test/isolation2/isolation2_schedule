@@ -1,5 +1,6 @@
 test: setup
-
+test: cached_plan
+test: checkpoint_dtx_info
 test: lockmodes
 # Put test prepare_limit near to test lockmodes since both of them reboot the
 # cluster during testing. Usually the 2nd reboot should be faster.
@@ -90,6 +91,9 @@ test: external_table
 
 # This test validates that for AO we delay fsync to checkpointer on mirror.
 test: fsync_ao
+
+# Test deadlock situation when waiting on a resource queue lock
+test: resource_queue_deadlock
 
 # Tests on Append-Optimized tables (row-oriented).
 test: concurrent_index_creation_should_not_deadlock
@@ -269,3 +273,6 @@ test: distributed_transactions
 
 # Test for distributed commit array overflow during replay on standby
 test: standby_replay_dtx_info
+
+# Test for concurrent vacuum with delete
+test: concurrent_vacuum_with_delete

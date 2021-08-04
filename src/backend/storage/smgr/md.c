@@ -2000,7 +2000,7 @@ _mdfd_getseg(SMgrRelation reln, ForkNumber forknum, BlockNumber blkno,
 							 zerobuf, skipFsync);
 					pfree(zerobuf);
 				}
-				v->mdfd_chain = _mdfd_openseg(reln, forknum, +nextsegno, O_CREAT);
+				v->mdfd_chain = _mdfd_openseg(reln, forknum, nextsegno, O_CREAT);
 			}
 			else
 			{

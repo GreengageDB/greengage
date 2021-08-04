@@ -2133,9 +2133,15 @@ class gpload:
         for i, l in enumerate(self.locations):
             sql += " and pgext.urilocation[%s] = %s\n" % (i + 1, quote(l))
 
-        sql+= """and pgext.fmttype = %s
-                 and pgext.writable = false
-                 and pgext.fmtopts like %s """ % (quote('b') if formatType == 'custom' else quote(formatType[0]),quote("%" + quote_unident(formatOpts.rstrip()) +"%"))
+        if formatType != 'custom':
+            sql+= """and pgext.fmttype = %s
+                     and pgext.writable = false
+                     and pgext.fmtopts like %s """ % (quote(formatType[0]), quote("%" + quote_unident(formatOpts.rstrip())))
+        # Custom formatter option ends with space ' '
+        else:
+            sql+= """and pgext.fmttype = %s
+                     and pgext.writable = false
+                     and pgext.fmtopts like %s """ % (quote('b'), quote("%" + quote_unident(formatOpts)))
 
         if limitStr:
             sql += "and pgext.rejectlimit = %s " % limitStr
@@ -2215,9 +2221,14 @@ class gpload:
         for i, l in enumerate(self.locations):
             sql += " and pgext.urilocation[%s] = %s\n" % (i + 1, quote(l))
 
-        sql+= """and pgext.fmttype = %s
-                 and pgext.writable = false
-                 and pgext.fmtopts like %s """ % (quote('b') if formatType == 'custom' else quote(formatType[0]),quote("%" + quote_unident(formatOpts.rstrip()) +"%"))
+        if formatType != 'custom':
+            sql+= """and pgext.fmttype = %s
+                     and pgext.writable = false
+                     and pgext.fmtopts like %s """ % (quote(formatType[0]), quote("%" + quote_unident(formatOpts.rstrip())))
+        else:
+            sql+= """and pgext.fmttype = %s
+                     and pgext.writable = false
+                     and pgext.fmtopts like %s """ % (quote('b'), quote("%" + quote_unident(formatOpts)))
 
         if limitStr:
             sql += "and pgext.rejectlimit = %s " % limitStr
@@ -2534,7 +2545,19 @@ class gpload:
         try:
             self.db.query(sql.encode('utf-8'))
         except Exception, e:
-            self.log(self.ERROR, 'could not run SQL "%s": %s' % (sql, unicode(e)))
+            get_standard_conforming_strings = 'show standard_conforming_strings;'
+            try:
+                scs = self.db.query(get_standard_conforming_strings.encode('utf-8')).getresult()
+                if scs[0][0] == 'off':
+                    self.log(self.ERROR, 'could not run SQL "%s": %s ' % (sql, unicode(e)) +
+                    "standard_conforming_strings is set to 'off', please set it to 'on' and try again \n")
+                else:
+                    self.log(self.ERROR, 'could not run SQL "%s": %s' % (sql, unicode(e)))
+            except Exception, ee:
+                self.log(self.ERROR, 'could not run SQL "%s": %s ' % (sql, unicode(e)) +
+                "could not get standard_conforming_strings, %s " % unicode(ee) +
+                "if standard_conforming_strings is set to 'off', please set it to 'on' and try again \n"
+                )
 
         # set up to drop the external table at the end of operation, unless user
         # specified the 'reuse_tables' option, in which case we don't drop

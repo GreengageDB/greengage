@@ -943,7 +943,8 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"wal_log_hints", PGC_POSTMASTER, WAL_SETTINGS,
 			gettext_noop("Writes full pages to WAL when first modified after a checkpoint, even for a non-critical modifications."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&wal_log_hints,
 		false,
@@ -1004,7 +1005,8 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"restart_after_crash", PGC_SIGHUP, ERROR_HANDLING_OPTIONS,
 			gettext_noop("Reinitialize server after backend crash."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&restart_after_crash,
 		true,
@@ -1332,7 +1334,7 @@ static struct config_bool ConfigureNamesBool[] =
 		{"transaction_deferrable", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Whether to defer a read-only serializable transaction until it can be executed with no possible serialization failures."),
 			NULL,
-			GUC_NO_RESET_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
+			GUC_NO_RESET_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE | GUC_NO_SHOW_ALL
 		},
 		&XactDeferrable,
 		false,
@@ -1509,7 +1511,8 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"hot_standby", PGC_POSTMASTER, REPLICATION_STANDBY,
 			gettext_noop("Allows connections and queries during recovery."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&EnableHotStandby,
 		false,
@@ -1519,7 +1522,8 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"hot_standby_feedback", PGC_SIGHUP, REPLICATION_STANDBY,
 			gettext_noop("Allows feedback from a hot standby to the primary that will avoid query conflicts."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&hot_standby_feedback,
 		false,
@@ -1553,7 +1557,8 @@ static struct config_bool ConfigureNamesBool[] =
 		{"lo_compat_privileges", PGC_SUSET, COMPAT_OPTIONS_PREVIOUS,
 			gettext_noop("Enables backward compatibility mode for privilege checks on large objects."),
 			gettext_noop("Skips privilege checks when reading or modifying large objects, "
-				  "for compatibility with PostgreSQL releases prior to 9.0.")
+						 "for compatibility with PostgreSQL releases prior to 9.0."),
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&lo_compat_privileges,
 		false,
@@ -1712,7 +1717,7 @@ static struct config_int ConfigureNamesInt[] =
 		{"max_standby_archive_delay", PGC_SIGHUP, REPLICATION_STANDBY,
 			gettext_noop("Sets the maximum delay before canceling queries when a hot standby server is processing archived WAL data."),
 			NULL,
-			GUC_UNIT_MS
+			GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&max_standby_archive_delay,
 		30 * 1000, -1, INT_MAX,
@@ -1723,7 +1728,7 @@ static struct config_int ConfigureNamesInt[] =
 		{"max_standby_streaming_delay", PGC_SIGHUP, REPLICATION_STANDBY,
 			gettext_noop("Sets the maximum delay before canceling queries when a hot standby server is processing streamed WAL data."),
 			NULL,
-			GUC_UNIT_MS
+			GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&max_standby_streaming_delay,
 		30 * 1000, -1, INT_MAX,
@@ -1831,7 +1836,8 @@ static struct config_int ConfigureNamesInt[] =
 						 "to be a numeric mode specification in the form "
 						 "accepted by the chmod and umask system calls. "
 						 "(To use the customary octal format the number must "
-						 "start with a 0 (zero).)")
+						 "start with a 0 (zero).)"),
+			 GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&Log_file_mode,
 		0600, 0000, 0777,
@@ -2073,7 +2079,8 @@ static struct config_int ConfigureNamesInt[] =
 	{
 		{"vacuum_defer_cleanup_age", PGC_SIGHUP, REPLICATION_MASTER,
 			gettext_noop("Number of transactions by which VACUUM and HOT cleanup should be deferred, if any."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&vacuum_defer_cleanup_age,
 		0, 0, 1000000,
@@ -2201,7 +2208,8 @@ static struct config_int ConfigureNamesInt[] =
 		/* see max_connections */
 		{"max_wal_senders", PGC_POSTMASTER, REPLICATION_SENDING,
 			gettext_noop("Sets the maximum number of simultaneously running WAL sender processes."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&max_wal_senders,
 		/*
@@ -2219,7 +2227,8 @@ static struct config_int ConfigureNamesInt[] =
 		/* see max_connections */
 		{"max_replication_slots", PGC_POSTMASTER, REPLICATION_SENDING,
 			gettext_noop("Sets the maximum number of simultaneously defined replication slots."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&max_replication_slots,
 		10, 1, MAX_BACKENDS /* XXX? */ ,
@@ -3294,7 +3303,7 @@ static struct config_string ConfigureNamesString[] =
 		{"synchronous_standby_names", PGC_SIGHUP, REPLICATION_MASTER,
 			gettext_noop("List of names of potential synchronous standbys."),
 			NULL,
-			GUC_LIST_INPUT
+			GUC_LIST_INPUT | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&SyncRepStandbyNames,
 		"",
@@ -3509,7 +3518,8 @@ static struct config_enum ConfigureNamesEnum[] =
 	{
 		{"session_replication_role", PGC_SUSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the session's behavior for triggers and rewrite rules."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&SessionReplicationRole,
 		SESSION_REPLICATION_ROLE_ORIGIN, session_replication_role_options,
@@ -3519,7 +3529,8 @@ static struct config_enum ConfigureNamesEnum[] =
 	{
 		{"synchronous_commit", PGC_USERSET, WAL_SETTINGS,
 			gettext_noop("Sets the current transaction's synchronization level."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&synchronous_commit,
 		SYNCHRONOUS_COMMIT_ON, synchronous_commit_options,
@@ -3555,7 +3566,8 @@ static struct config_enum ConfigureNamesEnum[] =
 	{
 		{"wal_level", PGC_POSTMASTER, WAL_SETTINGS,
 			gettext_noop("Set the level of information written to the WAL."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&wal_level,
 		WAL_LEVEL_ARCHIVE, wal_level_options,
@@ -3607,7 +3619,8 @@ static struct config_enum ConfigureNamesEnum[] =
 	{
 		{"huge_pages", PGC_POSTMASTER, RESOURCES_MEM,
 			gettext_noop("Use of huge pages on Linux."),
-			NULL
+			NULL,
+			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
 		},
 		&huge_pages,
 		HUGE_PAGES_TRY, huge_pages_options,
