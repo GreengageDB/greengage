@@ -51,18 +51,31 @@ run_feature() {
       -f allure_behave.formatter:AllureFormatter \
       -o /tmp/allure-results"  \
     mdw gpdb_src/arenadata/scripts/behave_gpdb.bash
+  status=$?
+
   docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env down -v
+
+  if [[ $status > 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
+  exit $status
 }
 
+pids=""
+exits=0
 for feature in $features
 do
   for cluster in $clusters
   do
      run_feature $feature $cluster &
-
+     pids+="$! "
      if [[ $(jobs -r -p | wc -l) -ge $processes ]]; then
         wait -n
+        exits+="$?"
      fi
   done
 done
-wait
+for pid in $pids
+  do
+    wait $pid
+    exits=$((exits + $?))
+  done
+if [[ $exits > 0 ]]; then exit 1; fi
