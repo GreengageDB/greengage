@@ -53,7 +53,7 @@ ROLLBACK
 COPY 10
 -- Resume VACUUM.
 -- start_ignore
-3:SELECT gp_inject_fault('ao_column_truncate_to_eof', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+3:SELECT gp_inject_fault('ao_@orientation@_truncate_to_eof', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
  gp_inject_fault 
 -----------------
  Success:        
@@ -73,7 +73,7 @@ VACUUM
 (1 row)
 -- Cleanup.
 -- start_ignore
-3:SELECT gp_inject_fault('ao_column_truncate_to_eof', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+3:SELECT gp_inject_fault('ao_@orientation@_truncate_to_eof', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
  gp_inject_fault 
 -----------------
  Success:        
