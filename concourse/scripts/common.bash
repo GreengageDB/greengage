@@ -41,7 +41,7 @@ function build_arch() {
 	*) ;;
 	esac
 
-	echo "${id}${version}_x86_64"
+	echo "${id}${version}_$(uname -p)"
 }
 
 ## ----------------------------------------------------------------------
