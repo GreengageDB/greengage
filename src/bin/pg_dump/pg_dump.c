@@ -5035,7 +5035,14 @@ getFuncs(Archive *fout, int *numFuncs)
 							 "\n  WHERE pg_cast.oid > '%u'::oid"
 							 "\n  AND p.oid = pg_cast.castfunc)",
 							 FirstNormalObjectId);
+/*
+ * GPDB: Much of the extension machinery was backported into GPDB 5 from higher
+ * major versions. So include the clause if we are running against GPDB 5.
+ */
+#if 0
 		if (binary_upgrade && fout->remoteVersion >= 90100)
+#endif
+		if (binary_upgrade && fout->remoteVersion >= 80300)
 			appendPQExpBufferStr(query,
 							   "\n  OR EXISTS(SELECT 1 FROM pg_depend WHERE "
 								 "classid = 'pg_proc'::regclass AND "
@@ -5044,7 +5051,7 @@ getFuncs(Archive *fout, int *numFuncs)
 								 "deptype = 'e')");
 		appendPQExpBufferChar(query, ')');
 	}
-	else if (fout->remoteVersion >= 70300)
+	else if (fout->remoteVersion >= 70100)
 	{
 		appendPQExpBuffer(query,
 						  "SELECT tableoid, oid, proname, prolang, "
