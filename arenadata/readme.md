@@ -1,3 +1,73 @@
+# How to run tests
+
+## Build docker gpdb image with developer options
+
+Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
+
+```bash 
+docker build -t gpdb6_regress:latest -f arenadata/Dockerfile .
+```
+
+There are two additional options in [Dockerfile](./Dockerfile) to passthrough urls for [sigar](https://github.com/hyperic/sigar) packages:
+
+* `--build-arg sigar=https://path_to_sigar.rpm` for package with sigar library
+* `--build-arg sigar_headers=https://path_to_sigar_headers.rpm` for package with sigar headers files
+
+These options may be useful to build image on different platforms.
+
+CI pushes docker images to the internal registry for each branch. We can pull it with usage of:
+
+* branch name as tag (latest for `adb-6.x` branch)
+* commit hash:
+  ```bash
+  docker pull hub.adsw.io/library/gpdb6_regress:1353d81 
+  ```
+
+## Full regression tests suite run
+
+We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_gpdb.bash) in container to create demo cluster and run different test suites against it:
+
+```bash
+docker run --name gpdb6_opt_on --rm -it -e TEST_OS=centos \
+  -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on' installcheck-world" \
+  --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_regress:latest \
+  bash -c "ssh-keygen -A && /usr/sbin/sshd && bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash"
+```
+
+* we need to modify `MAKE_TEST_COMMAND` environment variable to run different suite. e.g. we may run test againt Postgres optimizer or ORCA with altering `PGOPTIONS` environment variable;
+* we need to run container as `--privileged` to run debugger inside it
+* we need to increase semaphore amount to be able to run demo cluster
+* we need running ssh server to be able to run demo cluster
+
+## ORCA unit test run
+
+```bash
+docker run --rm -it gpdb6_regress:latest bash -c "gpdb_src/concourse/scripts/unit_tests_gporca.bash"
+```
+
+## How to run demo cluster inside docker container manually
+
+1. Build or pull from internal registry (see above) needed image
+1. Start container with
+   ```bash
+   docker run --name gpdb6_demo --rm -it --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_regress:latest \
+     bash -c "ssh-keygen -A && /usr/sbin/sshd && bash"
+   ```
+1. Run the next commands in container
+   ```bash
+   source gpdb_src/concourse/scripts/common.bash
+   # this command unpack binaries to `/usr/local/greenplum-db-devel/`
+   install_and_configure_gpdb
+   gpdb_src/concourse/scripts/setup_gpadmin_user.bash
+   make_cluster
+   su - gpadmin -c '
+   source /usr/local/greenplum-db-devel/greenplum_path.sh;
+   source gpdb_src/gpAux/gpdemo/gpdemo-env.sh; 
+   psql postgres'
+   ```
+
+## Behave test run
+
 Behave tests now can run locally with docker-compose.
 
 Feature files are located in `gpMgmt/test/behave/mgmt_utils`
