@@ -44,6 +44,14 @@
 #endif
 
 /* Define ProcessUtility hook proto/parameters following the PostgreSQL version */
+#if PG_VERSION_NUM >= 140000
+#define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
+				       bool readOnlyTree, \
+					ProcessUtilityContext context, ParamListInfo params, \
+					QueryEnvironment *queryEnv, DestReceiver *dest, \
+					QueryCompletion *qc
+#define PEL_PROCESSUTILITY_ARGS pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc
+#else
 #if PG_VERSION_NUM >= 130000
 #define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
 					ProcessUtilityContext context, ParamListInfo params, \
@@ -56,6 +64,7 @@
 					QueryEnvironment *queryEnv, DestReceiver *dest, \
 					char *completionTag
 #define PEL_PROCESSUTILITY_ARGS pstmt, queryString, context, params, queryEnv, dest, completionTag
+#endif
 #endif
 
 PG_MODULE_MAGIC;
