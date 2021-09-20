@@ -1,0 +1,23 @@
+2021-09-20 - Version 0.2.0
+
+This release adds support to PostgreSQL v14 and fix some minor issues
+reported by users since the last 3 months.
+
+  - Remove SQL extension file as it is empty and not required.
+  - Fix compilation error with PostgreSQL v14, thanks to Devrim Gunduz
+    for the report. [ patch from Gilles Darold ]
+  - Add upgrade SQL script for extension. [ patch from Gilles Darold ]
+  - Ignore char repeat checks, if the string size is 1
+    also changing the comment style. [ patch from Dinesh Kumar ]
+  - Adding file header content. [ patch from Dinesh Kumar ]
+  - Typo fix in docs. [ patch from Dinesh Kumar ]
+
+2021-06-25 - Version 0.1.1
+
+This release adds minor fixes to ignore char repeat checks if the string
+size is 1 and also change the comment style in C code.
+
+2021-06-24 - Version 0.1.0
+
+This is the first release of credcheck extension, which is a credential
+checker for the PostgreSQL users.
