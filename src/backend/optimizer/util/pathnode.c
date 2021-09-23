@@ -1581,6 +1581,7 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 		else
 		{
 			subpath = cdbpath_create_motion_path(root, subpath, subpath->pathkeys, false, targetlocus);
+			Insist(subpath);
 		}
 
 		pathnode->sameslice_relids = bms_union(pathnode->sameslice_relids, subpath->sameslice_relids);

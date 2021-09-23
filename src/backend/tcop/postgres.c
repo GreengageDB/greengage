@@ -121,6 +121,9 @@ int			max_stack_depth = 100;
 /* wait N seconds to allow attach from a debugger */
 int			PostAuthDelay = 0;
 
+/* Time between checks that the client is still connected. */
+int         client_connection_check_interval = 0;
+
 
 /*
  * Hook for extensions, to get notified when query cancel or DIE signal is
@@ -1143,6 +1146,10 @@ exec_mpp_query(const char *query_string,
 		ddesc = (QueryDispatchDesc *) deserializeNode(serializedQueryDispatchDesc,serializedQueryDispatchDesclen);
 		if (!ddesc || !IsA(ddesc, QueryDispatchDesc))
 			elog(ERROR, "MPPEXEC: received invalid QueryDispatchDesc with planned statement");
+		/*
+		 * Deserialize and apply security context from QD.
+		 */
+		SetUserIdAndSecContext(GetUserId(), ddesc->secContext);
 
         sliceTable = ddesc->sliceTable;
 
@@ -3223,6 +3230,15 @@ start_xact_command(void)
 		else
 			disable_timeout(STATEMENT_TIMEOUT, false);
 
+		/* Start timeout for checking if the client has gone away if necessary. */
+		if (client_connection_check_interval > 0 &&
+			Gp_role != GP_ROLE_EXECUTE &&
+			IsUnderPostmaster &&
+			MyProcPort &&
+			!get_timeout_active(CLIENT_CONNECTION_CHECK_TIMEOUT))
+			enable_timeout_after(CLIENT_CONNECTION_CHECK_TIMEOUT,
+								 client_connection_check_interval);
+
 		xact_started = true;
 	}
 }
@@ -3786,6 +3802,27 @@ ProcessInterrupts(const char* filename, int lineno)
 						 errmsg("terminating connection due to administrator command")));
 		}
 	}
+
+	if (CheckClientConnectionPending)
+	{
+		CheckClientConnectionPending = false;
+
+		/*
+		 * Check for lost connection and re-arm, if still configured, but not
+		 * if we've arrived back at DoingCommandRead state.  We don't want to
+		 * wake up idle sessions, and they already know how to detect lost
+		 * connections.
+		 */
+		if (!DoingCommandRead && client_connection_check_interval > 0)
+		{
+			if (!pq_check_connection())
+				ClientConnectionLost = true;
+			else
+				enable_timeout_after(CLIENT_CONNECTION_CHECK_TIMEOUT,
+									 client_connection_check_interval);
+		}
+	}
+
 	if (ClientConnectionLost)
 	{
 		QueryCancelPending = false;		/* lost connection trumps QueryCancel */
@@ -4745,6 +4782,8 @@ PostgresMain(int argc, char *argv[],
 		 */
 		pqsignal(SIGCHLD, SIG_DFL);		/* system() requires this on some
 										 * platforms */
+
+		InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 #ifndef _WIN32
 #ifdef SIGILL
 		pqsignal(SIGILL, CdbProgramErrorHandler);
@@ -5402,7 +5441,7 @@ PostgresMain(int argc, char *argv[],
 									   serializedParams, serializedParamslen,
 									   serializedQueryDispatchDesc, serializedQueryDispatchDesclen);
 
-					SetUserIdAndContext(GetOuterUserId(), false);
+					SetUserIdAndSecContext(GetOuterUserId(), 0);
 
 					send_ready_for_query = true;
 				}

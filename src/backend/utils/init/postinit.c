@@ -90,6 +90,7 @@ static void InitCommunication(void);
 static void ShutdownPostgres(int code, Datum arg);
 static void StatementTimeoutHandler(void);
 static void LockTimeoutHandler(void);
+static void ClientCheckTimeoutHandler(void);
 static bool ThereIsAtLeastOneRole(void);
 static void process_startup_options(Port *port, bool am_superuser);
 static void process_settings(Oid databaseid, Oid roleid);
@@ -686,6 +687,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		RegisterTimeout(STATEMENT_TIMEOUT, StatementTimeoutHandler);
 		RegisterTimeout(LOCK_TIMEOUT, LockTimeoutHandler);
 		RegisterTimeout(GANG_TIMEOUT, IdleGangTimeoutHandler);
+		RegisterTimeout(CLIENT_CONNECTION_CHECK_TIMEOUT, ClientCheckTimeoutHandler);
 	}
 
 	/*
@@ -1408,6 +1410,13 @@ LockTimeoutHandler(void)
 	kill(MyProcPid, SIGINT);
 }
 
+static void
+ClientCheckTimeoutHandler(void)
+{
+	CheckClientConnectionPending = true;
+	InterruptPending = true;
+	SetLatch(&MyProc->procLatch);
+}
 
 /*
  * Returns true if at least one role is defined in this database cluster.

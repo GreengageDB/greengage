@@ -80,6 +80,7 @@ Feature: gpinitsystem tests
         And the user asynchronously sets up to end bin/gpinitsystem process in 0 seconds
         And the user waits 10 second
         Then gpintsystem logs should not contain lines about running backout script
+        And all files in gpAdminLogs directory are deleted
         And the user runs "gpinitsystem -a -c ../gpAux/gpdemo/clusterConfigFile"
         Then gpinitsystem should return a return code of 0
 
