@@ -508,8 +508,6 @@ class GpGetStatusUsingTransitionArgs(CmdArgs):
         @param status_request
         """
         CmdArgs.__init__(self, [
-            "env",
-            "pgdatabase=%s" % os.getenv('PGDATABASE'),
             "$GPHOME/sbin/gpgetstatususingtransition.py",
             "-s", str(status_request)
         ])
