@@ -20,7 +20,7 @@ RUN yum makecache && \
     yum -y install libevent-devel libuuid-devel libxml2-devel libyaml-devel libzstd-devel && \
     yum -y install openssl-devel pam-devel readline-devel snappy-devel libuv-devel && \
     yum -y install apache-ivy libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
-    yum -y install perl-IPC-Run perl-Test-Base && \
+    yum -y install perl-IPC-Run perl-Test-Base libxslt-devel && \
     # The last python 2.7 pip
     pip install -U pip==20.3.4 && \
     pip install psi pytest==3.10.1 && \
