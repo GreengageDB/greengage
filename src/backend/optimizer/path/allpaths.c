@@ -437,6 +437,7 @@ bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel, List *outer_quals)
 											  NIL, // DESTROY pathkeys
 											  false,
 											  target_locus);
+			Insist(path);
 
 			path = (Path *) create_material_path(root, rel, path);
 

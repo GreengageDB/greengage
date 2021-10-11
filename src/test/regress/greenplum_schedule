@@ -286,4 +286,7 @@ test: run_utility_gpexpand_phase1
 # check correct error message when create extension error on segment
 test: create_extension_gp_debug_segments
 
+# check the row/block statistics is gathered for auxiliary relations of AO table
+test: aux_ao_rels_stat
+
 # end of tests

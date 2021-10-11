@@ -424,7 +424,7 @@ CREATE VIEW pg_stat_all_tables AS
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm')
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M')
     GROUP BY C.oid, N.nspname, C.relname;
 
 CREATE VIEW pg_stat_xact_all_tables AS
@@ -444,7 +444,7 @@ CREATE VIEW pg_stat_xact_all_tables AS
     FROM pg_class C LEFT JOIN
          pg_index I ON C.oid = I.indrelid
          LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm')
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M')
     GROUP BY C.oid, N.nspname, C.relname;
 
 CREATE VIEW pg_stat_sys_tables AS
@@ -489,7 +489,7 @@ CREATE VIEW pg_statio_all_tables AS
             pg_class T ON C.reltoastrelid = T.oid LEFT JOIN
             pg_index X ON T.oid = X.indrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm')
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M')
     GROUP BY C.oid, N.nspname, C.relname, T.oid, X.indrelid;
 
 CREATE VIEW pg_statio_sys_tables AS
@@ -516,7 +516,7 @@ CREATE VIEW pg_stat_all_indexes AS
             pg_index X ON C.oid = X.indrelid JOIN
             pg_class I ON I.oid = X.indexrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm');
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 CREATE VIEW pg_stat_sys_indexes AS
     SELECT * FROM pg_stat_all_indexes
@@ -542,7 +542,7 @@ CREATE VIEW pg_statio_all_indexes AS
             pg_index X ON C.oid = X.indrelid JOIN
             pg_class I ON I.oid = X.indexrelid
             LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
-    WHERE C.relkind IN ('r', 't', 'm');
+    WHERE C.relkind IN ('r', 't', 'm', 'o', 'b', 'M');
 
 CREATE VIEW pg_statio_sys_indexes AS
     SELECT * FROM pg_statio_all_indexes

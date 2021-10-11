@@ -32,6 +32,7 @@ volatile bool QueryCancelPending = false;
 volatile bool QueryCancelCleanup = false;
 volatile bool QueryFinishPending = false;
 volatile bool ProcDiePending = false;
+volatile sig_atomic_t CheckClientConnectionPending = false;
 volatile bool ClientConnectionLost = false;
 volatile bool ImmediateInterruptOK = false;
 /* Make these signed integers (instead of uint32) to detect garbage negative values. */
