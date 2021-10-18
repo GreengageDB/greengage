@@ -10,7 +10,7 @@ function set_env() {
 }
 
 function os_id() {
-	if [[ -z "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
+	if [[ ! -f "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
 		echo "centos"
 	else
 		echo "$(
@@ -21,7 +21,7 @@ function os_id() {
 }
 
 function os_version() {
-	if [[ -z "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
+	if [[ ! -f "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
 		echo "$(sed </etc/redhat-release 's/.*release *//' | cut -d. -f1)"
 	else
 		echo "$(
