@@ -1151,6 +1151,11 @@ exec_mpp_query(const char *query_string,
 		 */
 		SetUserIdAndSecContext(GetUserId(), ddesc->secContext);
 
+		/*
+		 * Deserialize and apply security context from QD.
+		 */
+		SetUserIdAndSecContext(GetUserId(), ddesc->secContext);
+
         sliceTable = ddesc->sliceTable;
 
 		if (sliceTable)

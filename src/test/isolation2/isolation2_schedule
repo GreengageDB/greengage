@@ -1,5 +1,6 @@
 test: setup
 test: cached_plan
+test: gpdispatch
 test: checkpoint_dtx_info
 test: lockmodes
 # Put test prepare_limit near to test lockmodes since both of them reboot the
@@ -84,8 +85,8 @@ test: invalidated_toast_index
 test: distributed_snapshot
 test: gp_collation
 test: ao_upgrade
-test: bitmap_index_concurrent
-
+test: bitmap_update_words_backup_block
+test: bitmap_index_crash
 # below test utilizes fault injectors so it needs to be in a group by itself
 test: external_table
 
@@ -276,3 +277,6 @@ test: standby_replay_dtx_info
 
 # Test for concurrent vacuum with delete
 test: concurrent_vacuum_with_delete
+
+# test if GUC is synchronized from the QD to QEs.
+test: sync_guc

@@ -3017,6 +3017,59 @@ reset optimizer_enable_hashjoin;
 reset enable_nestloop;
 reset enable_hashjoin;
 
+--- IS DISTINCT FROM FALSE previously simplified to IS TRUE, returning incorrect results for some hash anti joins
+--- the following tests were added to verify the behavior is correct
+CREATE TABLE tt1 (a int, b int);
+CREATE TABLE tt2 (c int, d int);
+
+INSERT INTO tt1 VALUES (1, NULL), (2, 2), (3, 4), (NULL, 5);
+INSERT INTO tt2 VALUES (1, 1), (2, NULL), (4, 4), (NULL, 2);
+
+ANALYZE tt1;
+ANALYZE tt2;
+
+EXPLAIN SELECT b FROM tt1 WHERE NOT EXISTS (SELECT * FROM tt2 WHERE (tt2.d = tt1.b) IS DISTINCT FROM false);
+SELECT b FROM tt1 WHERE NOT EXISTS (SELECT * FROM tt2 WHERE (tt2.d = tt1.b) IS DISTINCT FROM false);
+
+EXPLAIN SELECT b FROM tt1 WHERE NOT EXISTS (SELECT * FROM tt2 WHERE (tt2.d = tt1.b) IS DISTINCT FROM true);
+SELECT b FROM tt1 WHERE NOT EXISTS (SELECT * FROM tt2 WHERE (tt2.d = tt1.b) IS DISTINCT FROM true);
+
+EXPLAIN SELECT b FROM tt1 WHERE NOT EXISTS (SELECT * FROM tt2 WHERE (tt1.b = tt2.d) IS DISTINCT FROM NULL);
+SELECT b FROM tt1 WHERE NOT EXISTS (SELECT * FROM tt2 WHERE (tt1.b = tt2.d) IS DISTINCT FROM NULL);
+create or replace function one(i int) returns int as $$
+begin
+	return 1;
+end
+$$ language PLPGSQL;
+CREATE TABLE tone (a int, b int, c int);
+insert into tone select i,i,i from generate_series(1, 10) i;
+ANALYZE tone;
+
+WITH cte AS (SELECT one(min(a)) from tone) SELECT 1 FROM tone, cte c1;
+
+--- optimizer_xform_bind_threshold should limit the search space and quickly
+--- generate a plan (<100ms, but if this GUC is not set it will take minutes to
+--- optimize)
+create table binding (a int) distributed by (a);
+set optimizer_xform_bind_threshold=100;
+
+set statement_timeout = '15s';
+select a in (
+       select a from binding as t1 where a in (
+           select a from binding as t2 where a in (
+               select a from binding as t3 where a in (
+                   select a from binding as t4 join binding as t5 using(a) group by t4.a
+                   union
+                   select a from binding as t4 join binding as t5 using(a) group by t4.a
+                   union
+                   select a from binding as t4 join binding as t5 using(a) group by t4.a
+               )
+           )
+       )
+   ) from binding;
+reset optimizer_xform_bind_threshold;
+reset statement_timeout;
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore

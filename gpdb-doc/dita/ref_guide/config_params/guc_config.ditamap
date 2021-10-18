@@ -194,6 +194,7 @@
             <topicref href="guc-list.xml#log_duration"/>
             <topicref href="guc-list.xml#log_error_verbosity"/>
             <topicref href="guc-list.xml#log_executor_stats"/>
+            <topicref href="guc-list.xml#log_file_mode"/>
             <topicref href="guc-list.xml#log_hostname"/>
             <topicref href="guc-list.xml#log_min_duration_statement"/>
             <topicref href="guc-list.xml#log_min_error_statement"/>
@@ -249,6 +250,7 @@
             <topicref href="guc-list.xml#optimizer_print_optimization_stats"/>
             <topicref href="guc-list.xml#optimizer_sort_factor"/>
             <topicref href="guc-list.xml#optimizer_use_gpdb_allocators"/>
+            <topicref href="guc-list.xml#optimizer_xform_bind_threshold"/>
             <topicref href="guc-list.xml#password_encryption"/>
             <topicref href="guc-list.xml#password_hash_algorithm"/>
             <topicref href="guc-list.xml#plan_cache_mode"/>

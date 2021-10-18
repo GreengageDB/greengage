@@ -346,6 +346,9 @@
               <xref href="#listen_addresses"/>
             </li>
             <li>
+              <xref href="#log_file_mode"/>
+            </li>
+            <li>
               <xref href="#log_planner_stats"/>
             </li>
             <li>
@@ -498,6 +501,9 @@
             <li>
               <xref href="#optimizer_use_gpdb_allocators" format="dita"
                 >optimizer_use_gpdb_allocators</xref></li>
+            <li>
+              <xref href="#optimizer_xform_bind_threshold" format="dita"
+                >optimizer_xform_bind_threshold</xref></li>
             <li>
               <p>
                 <xref href="#plan_cache_mode"/></p>
@@ -2857,7 +2863,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">on</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p></entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -4356,8 +4362,8 @@
           <codeph>WITH</codeph> clause of a <codeph>SELECT [INTO]</codeph> command, or a
           <codeph>DELETE</codeph>, <codeph>INSERT</codeph> or <codeph>UPDATE</codeph> command. The
         keyword allows a subquery in the <codeph>WITH</codeph> clause of a command to reference
-        itself. The default value is <codeph>false</codeph>, the <codeph>RECURSIVE</codeph> keyword
-        is not allowed in the <codeph>WITH</codeph> clause of a command.</p>
+        itself. The default value is <codeph>true</codeph>, the <codeph>RECURSIVE</codeph> keyword
+        is allowed in the <codeph>WITH</codeph> clause of a command.</p>
       <p>For information about the <codeph>RECURSIVE</codeph> keyword, see the <codeph><xref
             href="../sql_commands/SELECT.xml">SELECT</xref></codeph> command and <xref
           href="../../admin_guide/query/topics/CTE-query.xml"/>.</p>
@@ -5203,7 +5209,7 @@
             <row>
               <entry colname="col1">Any valid time expression (number and unit)</entry>
               <entry colname="col2">18s</entry>
-              <entry colname="col3">master<p>system</p><p>reload</p></entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -5223,9 +5229,13 @@
           <codeph>4096</codeph>. Do not add the units <codeph>MB</codeph> to the value.</p>
       <p>To prevent over-allocation of memory, these calculations can estimate a safe
           <codeph>gp_vmem_protect_limit</codeph> value.</p>
-      <p>First calculate the value <varname>gp_vmem</varname>. This is the Greenplum Database memory
-        available on a
-        host<codeblock><varname>gp_vmem</varname> = ((<varname>SWAP</varname> + <varname>RAM</varname>) – (7.5GB + 0.05 * <varname>RAM</varname>)) / 1.7</codeblock></p>
+      <p>First calculate the value of <varname>gp_vmem</varname>. This is the Greenplum Database
+        memory available on a host.<ul id="ul_ftf_yw5_rqb">
+          <li>If the total system memory is less than 256 GB, use this
+            formula:<codeblock>gp_vmem = ((SWAP + RAM) – (7.5GB + 0.05 * RAM)) / 1.7</codeblock></li>
+          <li>If the total system memory is equal to or greater than 256 GB, use this formula:
+            <codeblock>gp_vmem = ((SWAP + RAM) – (7.5GB + 0.05 * RAM)) / 1.17</codeblock></li>
+        </ul></p>
       <p>where <varname>SWAP</varname> is the host swap space and <varname>RAM</varname> is the RAM
         on the host in GB.</p>
       <p>Next, calculate the <varname>max_acting_primary_segments</varname>. This is the maximum
@@ -5239,8 +5249,12 @@
         converted to MB.</p>
       <codeblock><codeph>gp_vmem_protect_limit</codeph> = <varname>gp_vmem</varname> / <varname>acting_primary_segments</varname></codeblock>
       <p>For scenarios where a large number of workfiles are generated, this is the calculation for
-          <varname>gp_vmem</varname> that accounts for the workfiles.</p>
-      <codeblock><varname>gp_vmem</varname> = ((<varname>SWAP</varname> + <varname>RAM</varname>) – (7.5GB + 0.05 * <varname>RAM</varname> - (300KB * <varname>total_#_workfiles</varname>))) / 1.7</codeblock>
+          <varname>gp_vmem</varname> that accounts for the workfiles.<ul id="ul_hpm_gnb_sqb">
+          <li>If the total system memory is less than 256
+            GB:<codeblock><varname>gp_vmem</varname> = ((<varname>SWAP</varname> + <varname>RAM</varname>) – (7.5GB + 0.05 * <varname>RAM</varname> - (300KB * <varname>total_#_workfiles</varname>))) / 1.7</codeblock></li>
+          <li>If the total system memory is equal to or greater than 256
+            GB:<codeblock><varname>gp_vmem</varname> = ((<varname>SWAP</varname> + <varname>RAM</varname>) – (7.5GB + 0.05 * <varname>RAM</varname> - (300KB * <varname>total_#_workfiles</varname>))) / 1.17</codeblock></li>
+        </ul></p>
       <p>For information about monitoring and managing workfile usage, see the <cite>Greenplum
           Database Administrator Guide</cite>.</p>
       <p>Based on the <varname>gp_vmem</varname> value you can calculate the value for the
@@ -5484,7 +5498,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">off</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -5724,7 +5738,7 @@
             <row>
               <entry colname="col1">&lt;system dependent&gt;</entry>
               <entry colname="col2"/>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -5754,7 +5768,7 @@
             <row>
               <entry colname="col1">&lt;system dependent&gt;</entry>
               <entry colname="col2"/>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -5977,7 +5991,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">off</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6005,7 +6019,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">off</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6033,7 +6047,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">off</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6125,6 +6139,37 @@
       </table>
     </body>
   </topic>
+  <topic id="log_file_mode">
+    <title>log_file_mode</title>
+    <body>
+      <p>On Unix systems this parameter sets the permissions for log files when
+          <codeph>logging_collector</codeph> is enabled. The parameter value is expected to be a
+        numeric mode specified in the format accepted by the <codeph>chmod</codeph> and
+          <codeph>umask</codeph> system calls.</p>
+      <table id="table_s4d_hfj_2qb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">numeric UNIX file permission mode (as accepted by the
+                  <i>chmod</i> or <i>umask</i> commands)</entry>
+              <entry colname="col2">0600</entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
   <topic id="log_hostname">
     <title>log_hostname</title>
     <body>
@@ -6148,7 +6193,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">off</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p></entry>
+              <entry colname="col3">master<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6514,7 +6559,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">off</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6544,7 +6589,7 @@
             <row>
               <entry colname="col1">Integer</entry>
               <entry colname="col2">16</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -6891,7 +6936,7 @@
             <row>
               <entry colname="col1">Integer</entry>
               <entry colname="col2">-1</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -8061,6 +8106,38 @@
       </table>
     </body>
   </topic>
+  <topic id="optimizer_xform_bind_threshold">
+    <title>optimizer_xform_bind_threshold</title>
+    <body>
+      <p>When GPORCA is enabled (the default), this parameter controls the maximum number of
+        bindings per transform that GPORCA produces per group expression. Setting this
+        parameter limits the number of alternatives that GPORCA creates, in many cases
+        reducing the optimization time and overall memory usage of queries that include
+        deeply nested expressions.</p>
+      <p>The default value is <codeph>0</codeph>, GPORCA produces an unlimited set of bindings.</p>
+      <table id="table_oxbt">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">0 - INT_MAX</entry>
+              <entry colname="col2">0</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
   <topic id="password_encryption">
     <title>password_encryption</title>
     <body>
@@ -8240,7 +8317,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">false</entry>
-              <entry colname="col3">master<p>session</p><p>restart</p><p>superuser</p></entry>
+              <entry colname="col3">master<p>session</p><p>reload</p><p>superuser</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -8267,7 +8344,7 @@
             <row>
               <entry colname="col1">number of kilobytes</entry>
               <entry colname="col2">10</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p><p>superuser</p></entry>
+              <entry colname="col3">master<p>system</p><p>reload</p><p>superuser</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -8295,7 +8372,7 @@
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">true</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p><p>superuser</p></entry>
+              <entry colname="col3">master<p>system</p><p>reload</p><p>superuser</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -8457,7 +8534,7 @@
     </body>
   </topic>
   <topic id="replication_timeout">
-    <title>replication_timeout</title>
+    <title>wal_sender_timeout</title>
     <body>
       <p>For Greenplum Database master mirroring, sets the maximum time in milliseconds that the
           <codeph>walsender</codeph> process on the active master waits for a status message from
@@ -8482,34 +8559,6 @@
               <entry colname="col1">0 - INT_MAX</entry>
               <entry colname="col2">60000 ms (60 seconds)</entry>
               <entry colname="col3">master<p>system</p><p>reload</p><p>superuser</p></entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </body>
-  </topic>
-  <topic id="regex_flavor">
-    <title>regex_flavor</title>
-    <body>
-      <p>The 'extended' setting may be useful for exact backwards compatibility with pre-7.4
-        releases of PostgreSQL. </p>
-      <table id="regex_flavor_table">
-        <tgroup cols="3">
-          <colspec colnum="1" colname="col1" colwidth="1*"/>
-          <colspec colnum="2" colname="col2" colwidth="1*"/>
-          <colspec colnum="3" colname="col3" colwidth="1*"/>
-          <thead>
-            <row>
-              <entry colname="col1">Value Range</entry>
-              <entry colname="col2">Default</entry>
-              <entry colname="col3">Set Classifications</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry colname="col1">advanced<p>extended</p><p>basic</p></entry>
-              <entry colname="col2">advanced</entry>
-              <entry colname="col3">master<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9567,7 +9616,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
           <tbody>
             <row>
               <entry colname="col1">directory path</entry>
-              <entry colname="col2">unset</entry>
+              <entry colname="col2">0777</entry>
               <entry colname="col3">local<p>system</p><p>restart</p></entry>
             </row>
           </tbody>
@@ -9625,7 +9674,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">numeric UNIX file permission mode (as accepted by the
                   <i>chmod</i> or <i>umask</i> commands)</entry>
-              <entry colname="col2">511</entry>
+              <entry colname="col2">0777</entry>
               <entry colname="col3">local<p>system</p><p>restart</p></entry>
             </row>
           </tbody>
@@ -9654,7 +9703,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">Boolean</entry>
               <entry colname="col2">on</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9682,7 +9731,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">milliseconds &lt; 0 (in multiples of 10)</entry>
               <entry colname="col2">0</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9709,7 +9758,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">integer &gt; 0</entry>
               <entry colname="col2">200</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9737,7 +9786,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">integer &gt; 0</entry>
               <entry colname="col2">20</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9766,7 +9815,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">integer &gt; 0</entry>
               <entry colname="col2">1</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9795,7 +9844,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">integer &gt; 0</entry>
               <entry colname="col2">10</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9826,8 +9875,8 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
           <tbody>
             <row>
               <entry colname="col1">integer 0-100000000000</entry>
-              <entry colname="col2">100000000</entry>
-              <entry colname="col3">local<p>system</p><p>restart</p></entry>
+              <entry colname="col2">50000000</entry>
+              <entry colname="col3">local<p>session</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -9976,7 +10025,7 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
             <row>
               <entry colname="col1">0 - MAX-INT / 1024</entry>
               <entry colname="col2">1024</entry>
-              <entry colname="col3">master<p>system</p><p>restart</p></entry>
+              <entry colname="col3">master<p>system</p><p>reload</p></entry>
             </row>
           </tbody>
         </tgroup>
@@ -10047,10 +10096,12 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
   <topic id="writable_external_table_bufsize">
     <title>writable_external_table_bufsize</title>
     <body>
-      <p>Size of the buffer (in KB) that Greenplum Database uses for network communication, such as
-        the <codeph>gpfdist</codeph> utility and external web tables (that use http). Greenplum
-        Database stores data in the buffer before writing the data out. For information about
-          <codeph>gpfdist</codeph>, see the <cite>Greenplum Database Utility Guide</cite>.</p>
+      <p>Size of the buffer that Greenplum Database uses for network communication, such as the
+          <codeph>gpfdist</codeph> utility and external web tables (that use http). Valid units are
+          <codeph>KB</codeph> (as in <codeph>128KB</codeph>), <codeph>MB</codeph>,
+          <codeph>GB</codeph>, and <codeph>TB</codeph>. Greenplum Database stores data in the buffer
+        before writing the data out. For information about <codeph>gpfdist</codeph>, see the
+          <cite>Greenplum Database Utility Guide</cite>.</p>
       <table id="table_writable_external_table_bufsize">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
