@@ -43,8 +43,6 @@ function _main() {
 		time install_gpdb
 		time ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash
 
-		pip install --ignore-installed "pip<21.0"
-		pip install allure-behave==2.4.0
 
 		local hosts="sdw1 sdw2 sdw3 mdw"
 		for host in $hosts

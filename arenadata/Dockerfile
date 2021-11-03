@@ -22,8 +22,9 @@ RUN yum makecache && \
     yum -y install apache-ivy libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     yum -y install perl-IPC-Run perl-Test-Base libxslt-devel && \
     # The last python 2.7 pip
-    pip install -U pip==20.3.4 && \
+    pip install --ignore-installed "pip<21.0" && \
     pip install psi pytest==3.10.1 && \
+    pip install allure-behave==2.4.0 && \
     yum clean all
 
 # setup ssh configuration
