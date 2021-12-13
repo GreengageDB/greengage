@@ -1228,7 +1228,7 @@ static struct config_bool ConfigureNamesBool[] =
 #endif
 
 	{
-		{"log_lock_waits", PGC_SUSET, DEFUNCT_OPTIONS,
+		{"log_lock_waits", PGC_SUSET, LOGGING_WHAT,
 			gettext_noop("Logs long lock waits."),
 			NULL
 		},
