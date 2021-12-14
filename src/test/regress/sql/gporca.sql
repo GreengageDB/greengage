@@ -2216,7 +2216,7 @@ INSERT INTO onetimefilter1 SELECT i, i FROM generate_series(1,10)i;
 INSERT INTO onetimefilter2 SELECT i, i FROM generate_series(1,10)i;
 ANALYZE onetimefilter1;
 ANALYZE onetimefilter2;
-EXPLAIN WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onetimefilter2 WHERE onetimefilter1.a=onetimefilter2.a) SELECT (SELECT 1 FROM abc WHERE f1.b = f2.b LIMIT 1), COALESCE((SELECT 2 FROM abc WHERE f1.a=random() AND f1.a=2), 0), (SELECT b FROM abc WHERE b=f1.b) FROM onetimefilter1 f1, onetimefilter2 f2 WHERE f1.b = f2.b;
+EXPLAIN (COSTS OFF) WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onetimefilter2 WHERE onetimefilter1.a=onetimefilter2.a) SELECT (SELECT 1 FROM abc WHERE f1.b = f2.b LIMIT 1), COALESCE((SELECT 2 FROM abc WHERE f1.a=random() AND f1.a=2), 0), (SELECT b FROM abc WHERE b=f1.b) FROM onetimefilter1 f1, onetimefilter2 f2 WHERE f1.b = f2.b;
 WITH abc AS (SELECT onetimefilter1.a, onetimefilter1.b FROM onetimefilter1, onetimefilter2 WHERE onetimefilter1.a=onetimefilter2.a) SELECT (SELECT 1 FROM abc WHERE f1.b = f2.b LIMIT 1), COALESCE((SELECT 2 FROM abc WHERE f1.a=random() AND f1.a=2), 0), (SELECT b FROM abc WHERE b=f1.b) FROM onetimefilter1 f1, onetimefilter2 f2 WHERE f1.b = f2.b;
 
 
@@ -3093,6 +3093,35 @@ insert into tone select i,i,i from generate_series(1, 10) i;
 ANALYZE tone;
 
 WITH cte AS (SELECT one(min(a)) from tone) SELECT 1 FROM tone, cte c1;
+--- if the inner child is already distributed on the join column, orca should
+--- not place any motion on the inner child
+SET optimizer_enable_hashjoin=off;
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a;
+SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a;
+
+--- if the inner child is not distributed on the join column, orca should 
+--- redistribute the inner child
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b;
+SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b;
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN (SELECT 1+t2.b as b from tone t2) t2 ON t1.a = t2.b;
+SELECT * FROM tone t1 LEFT OUTER JOIN (SELECT 1+t2.b as b from tone t2) t2 ON t1.a = t2.b;
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b+t2.a+1;
+SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b+t2.a+1;
+
+--- send a broadcast request to the inner child where the inner side clause contains
+--- columns from the outer side
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b-t1.a;
+SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b-t1.a;
+
+--- orca should broadcast the inner child if the guc is set off
+SET optimizer_enable_redistribute_nestloop_loj_inner_child=off;
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b;
+SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.b;
+
+EXPLAIN (COSTS OFF) SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a;
+SELECT * FROM tone t1 LEFT OUTER JOIN tone t2 ON t1.a = t2.a;
+RESET optimizer_enable_redistribute_nestloop_loj_inner_child;
+RESET optimizer_enable_hashjoin;
 
 --- optimizer_xform_bind_threshold should limit the search space and quickly
 --- generate a plan (<100ms, but if this GUC is not set it will take minutes to
@@ -3117,6 +3146,30 @@ select a in (
 reset optimizer_xform_bind_threshold;
 reset statement_timeout;
 
+-- an agg of a non-SRF with a nested SRF should be treated as a SRF, the
+-- optimizer must not eliminate the SRF or it can produce incorrect results
+set optimizer_trace_fallback = on;
+create table nested_srf(a text);
+insert into nested_srf values ('abc,def,ghi');
+
+select * from (select regexp_split_to_table((a)::text, ','::text) from nested_srf)a;
+select count(*) from (select regexp_split_to_table((a)::text, ','::text) from nested_srf)a;
+
+select * from (select trim(regexp_split_to_table((a)::text, ','::text)) from nested_srf)a;
+select count(*) from (select trim(regexp_split_to_table((a)::text, ','::text)) from nested_srf)a;
+
+select count(*) from (select trim( case when a!='abc' then  (regexp_split_to_table((a)::text, ','::text)) else ' ' end) from nested_srf)a;
+select count(regexp_split_to_table((a)::text, ','::text)) from nested_srf;
+-- This produces wrong results on planner
+select count(*) from (select trim(coalesce(regexp_split_to_table((a)::text, ','::text),'')) from nested_srf)a;
+
+truncate nested_srf;
+insert into nested_srf values (NULL);
+
+select * from (select trim(regexp_split_to_table((a)::text, ','::text)) from nested_srf)a;
+select count(*) from (select trim(regexp_split_to_table((a)::text, ','::text)) from nested_srf)a;
+
+reset optimizer_trace_fallback;
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore

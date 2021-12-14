@@ -24,6 +24,7 @@ test: unlogged_heap_tables
 test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios
 test: ao_same_trans_truncate_crash
+test: ao_fsync_panic
 
 # Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
 # so must be scheduled after that one.
@@ -264,6 +265,7 @@ ignore: restore_memory_accounting_default
 test: setup_startup_memory_accounting
 test: oom_startup_memory
 test: restore_memory_accounting_default
+test: runaway_query
 
 # Too many exec accounts test start
 test: setup_too_many_exec_accounts
