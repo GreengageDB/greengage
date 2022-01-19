@@ -927,6 +927,45 @@ include_dir 'conf.d'
       </listitem>
      </varlistentry>
 
+     <varlistentry id="guc-client-connection-check-interval" xreflabel="client_connection_check_interval">
+      <term><varname>client_connection_check_interval</varname> (<type>integer</type>)
+      <indexterm>
+       <primary><varname>client_connection_check_interval</varname> configuration parameter</primary>
+      </indexterm>
+      </term>
+      <listitem>
+       <para>
+        Sets the time interval between optional checks that the client is still
+        connected, while running queries.  The check is performed by polling
+        the socket, and allows long running queries to be aborted sooner if
+        the kernel reports that the connection is closed.
+       </para>
+       <para>
+        This option is currently available only on systems that support the
+        non-standard <symbol>POLLRDHUP</symbol> extension to the
+        <symbol>poll</symbol> system call, including Linux, or are able to
+        detect client disconnection using POLLHUP option defined by POSIX,
+        including OSX.
+       </para>
+       <para>
+        If the value is specified without units, it is taken as milliseconds.
+        The default value is <literal>0</literal>, which disables connection
+        checks.  Without connection checks, the server will detect the loss of
+        the connection only at the next interaction with the socket, when it
+        waits for, receives or sends data.
+       </para>
+       <para>
+        For the kernel itself to detect lost TCP connections reliably and within
+        a known timeframe in all scenarios including network failure, it may
+        also be necessary to adjust the TCP keepalive settings of the operating
+        system, or the <xref linkend="guc-tcp-keepalives-idle"/>,
+        <xref linkend="guc-tcp-keepalives-interval"/> and
+        <xref linkend="guc-tcp-keepalives-count"/> settings of
+        <productname>PostgreSQL</productname>.
+       </para>
+      </listitem>
+     </varlistentry>
+
      </variablelist>
      </sect2>
      <sect2 id="runtime-config-connection-security">
@@ -2496,7 +2535,7 @@ include_dir 'conf.d'
 
     <variablelist>
      <varlistentry id="guc-archive-mode" xreflabel="archive_mode">
-      <term><varname>archive_mode</varname> (<type>boolean</type>)
+      <term><varname>archive_mode</varname> (<type>enum</type>)
       <indexterm>
        <primary><varname>archive_mode</> configuration parameter</primary>
       </indexterm>
@@ -2505,7 +2544,16 @@ include_dir 'conf.d'
        <para>
         When <varname>archive_mode</> is enabled, completed WAL segments
         are sent to archive storage by setting
-        <xref linkend="guc-archive-command">.
+        <xref linkend="guc-archive-command">. In addition to <literal>off</>,
+        to disable, there are two modes: <literal>on</>, and
+        <literal>always</>. During normal operation, there is no
+        difference between the two modes, but when set to <literal>always</>
+        the WAL archiver is enabled also during archive recovery or standby
+        mode. In <literal>always</> mode, all files restored from the archive
+        or streamed with streaming replication will be archived (again). See
+        <xref linkend="continuous-archiving-in-standby"> for details.
+       </para>  
+       <para>
         <varname>archive_mode</> and <varname>archive_command</> are
         separate variables so that <varname>archive_command</> can be
         changed without leaving archiving mode.
