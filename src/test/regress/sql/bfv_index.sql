@@ -344,6 +344,15 @@ SET optimizer_enable_indexscan=off;
 SET optimizer_enable_indexonlyscan=on;
 EXPLAIN SELECT c, a FROM table_with_reversed_index WHERE a > 5;
 SELECT c, a FROM table_with_reversed_index WHERE a > 5;
+--
+-- test query with set-returning-functions in targetlists and query plan use Index Only Scan
+-- issue: https://github.com/greenplum-db/gpdb/issues/11307
+--
+EXPLAIN SELECT a, generate_series(0,1) FROM table_with_reversed_index WHERE a > 5;
+SELECT a, generate_series(0,1) FROM table_with_reversed_index WHERE a > 5;
+explain select generate_series(0,1) from pg_class where relname='table_with_reversed_index';
+select generate_series(0,1) from pg_class where relname='table_with_reversed_index';
+
 RESET enable_seqscan;
 RESET enable_bitmapscan;
 RESET optimizer_enable_tablescan;

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
-    <topicref href="../../6-18/homenav.html" scope="external"
-        navtitle="Greenplum Database 6.18 Documentation" format="html"/>
+    <topicref href="../../6-19/homenav.html" scope="external"
+        navtitle="Greenplum Database 6.19 Documentation" format="html"/>
     <topicref href="install_guide.xml" navtitle="Installation Guide">
         <topicref href="platform-requirements.xml"/>
         <topicref href="preinstall_concepts.xml">

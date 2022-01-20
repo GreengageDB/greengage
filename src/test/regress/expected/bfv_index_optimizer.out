@@ -740,6 +740,43 @@ SELECT c, a FROM table_with_reversed_index WHERE a > 5;
  ab | 10
 (1 row)
 
+--
+-- test query with set-returning-functions in targetlists and query plan use Index Only Scan
+-- issue: https://github.com/greenplum-db/gpdb/issues/11307
+--
+EXPLAIN SELECT a, generate_series(0,1) FROM table_with_reversed_index WHERE a > 5;
+                                                             QUERY PLAN                                                             
+------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..6.00 rows=1 width=8)
+   ->  Result  (cost=0.00..6.00 rows=1 width=8)
+         ->  Index Only Scan using table_with_reversed_index_c_a_idx on table_with_reversed_index  (cost=0.00..6.00 rows=1 width=4)
+               Index Cond: (a > 5)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
+
+SELECT a, generate_series(0,1) FROM table_with_reversed_index WHERE a > 5;
+ a  | generate_series 
+----+-----------------
+ 10 |               0
+ 10 |               1
+(2 rows)
+
+explain select generate_series(0,1) from pg_class where relname='table_with_reversed_index';
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=10000000000.27..10000000105.29 rows=1000 width=0)
+   ->  Index Only Scan using pg_class_relname_nsp_index on pg_class  (cost=10000000000.27..10000000105.29 rows=1000 width=0)
+         Index Cond: (relname = 'table_with_reversed_index'::name)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select generate_series(0,1) from pg_class where relname='table_with_reversed_index';
+ generate_series 
+-----------------
+               0
+               1
+(2 rows)
+
 RESET enable_seqscan;
 RESET enable_bitmapscan;
 RESET optimizer_enable_tablescan;

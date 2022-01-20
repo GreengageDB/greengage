@@ -2091,7 +2091,7 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 		CdbPathLocus_MakeSingleQE(&singleQE,
 								  CdbPathLocus_NumSegments(path->locus));
 		mpath = cdbpath_create_motion_path(root, path, NIL, false, singleQE);
-		Insist(mpath);
+		Assert(mpath);
 		ppath =  create_projection_path_with_quals(root, mpath->parent, mpath, NIL);
 		ppath->force = true;
 		return (Path *) ppath;

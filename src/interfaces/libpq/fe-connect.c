@@ -326,23 +326,19 @@ static const internalPQconninfoOption PQconninfoOptions[] = {
 		"Require-Peer", "", 10,
 	offsetof(struct pg_conn, requirepeer)},
 
-#if defined(ENABLE_GSS) || defined(ENABLE_SSPI)
+	/*
+	 * As with SSL, all GSS options are exposed even in builds that don't have
+	 * support.
+	 */
+
 	/* Kerberos and GSSAPI authentication support specifying the service name */
 	{"krbsrvname", "PGKRBSRVNAME", PG_KRB_SRVNAM, NULL,
 		"Kerberos-service-name", "", 20,
 	offsetof(struct pg_conn, krbsrvname)},
-#endif
 
-#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
-
-	/*
-	 * GSSAPI and SSPI both enabled, give a way to override which is used by
-	 * default
-	 */
 	{"gsslib", "PGGSSLIB", NULL, NULL,
 		"GSS-library", "", 7,	/* sizeof("gssapi") = 7 */
 	offsetof(struct pg_conn, gsslib)},
-#endif
 
 	{"replication", NULL, NULL, NULL,
 		"Replication", "D", 5,
@@ -2436,6 +2432,19 @@ keep_going:						/* We will come back to here until there is
 				pollres = pqsecure_open_client(conn);
 				if (pollres == PGRES_POLLING_OK)
 				{
+					/*
+					 * At this point we should have no data already buffered.
+					 * If we do, it was received before we performed the SSL
+					 * handshake, so it wasn't encrypted and indeed may have
+					 * been injected by a man-in-the-middle.
+					 */
+					if (conn->inCursor != conn->inEnd)
+					{
+						appendPQExpBufferStr(&conn->errorMessage,
+											 libpq_gettext("received unencrypted data after SSL response\n"));
+						goto error_return;
+					}
+
 					/* SSL handshake done, ready to send startup packet */
 					conn->status = CONNECTION_MADE;
 					return PGRES_POLLING_WRITING;
@@ -3138,14 +3147,10 @@ freePGconn(PGconn *conn)
 		free(conn->sslcompression);
 	if (conn->requirepeer)
 		free(conn->requirepeer);
-#if defined(ENABLE_GSS) || defined(ENABLE_SSPI)
 	if (conn->krbsrvname)
 		free(conn->krbsrvname);
-#endif
-#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
 	if (conn->gsslib)
 		free(conn->gsslib);
-#endif
 	if (conn->gpqeid)			/* CDB */
 		free(conn->gpqeid);
 	/* Note that conn->Pfdebug is not ours to close or free */

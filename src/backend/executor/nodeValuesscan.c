@@ -28,8 +28,8 @@
 #include "cdb/cdbvars.h"
 #include "executor/executor.h"
 #include "executor/nodeValuesscan.h"
-#include "optimizer/var.h"		/* CDB: contain_var_reference() */
 #include "optimizer/clauses.h"
+#include "optimizer/var.h"              /* CDB: contain_var_reference() */
 #include "parser/parsetree.h"
 
 

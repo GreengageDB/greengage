@@ -668,6 +668,13 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 			{
 				IndexOnlyScan *splan = (IndexOnlyScan *) plan;
 
+				/* The node doesn't support for evaluating set-returning-functions in targetlists,
+				 * they should be moved onto a new Result node which will be inserted above the given node.
+				 * issue:https://github.com/greenplum-db/gpdb/issues/11307
+				 */
+				if (cdb_expr_requires_full_eval((Node *)plan->targetlist))
+					return cdb_insert_result_node(root, plan, rtoffset);
+
 				return set_indexonlyscan_references(root, splan, rtoffset);
 			}
 			break;
