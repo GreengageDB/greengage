@@ -87,6 +87,7 @@ extern PGDLLIMPORT volatile bool QueryFinishPending;
 extern PGDLLIMPORT volatile bool ProcDiePending;
 extern PGDLLIMPORT volatile sig_atomic_t ConfigReloadPending;
 
+extern PGDLLIMPORT volatile sig_atomic_t CheckClientConnectionPending;
 extern volatile bool ClientConnectionLost;
 
 /* these are marked volatile because they are examined by signal handlers: */

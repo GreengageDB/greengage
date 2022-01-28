@@ -244,3 +244,151 @@ drop table public.restore_guc_test;
 reset search_path;
 SELECT gp_inject_fault('change_string_guc', 'reset', 1);
 SELECT gp_inject_fault('restore_string_guc', 'reset', 1);
+
+-- Test single query default_tablespace GUC rollback
+-- Function just to save default_tablespace GUC to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET default_tablespace TO '';
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save default_tablespace GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger default_tablespace GUC restore from gp_guc_restore_list
+SELECT 1;
+-- When default_tablespace GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
+
+-- Test single query gp_default_storage_options GUC rollback
+-- Function just to save gp_default_storage_options to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET gp_default_storage_options TO 'appendonly=false,blocksize=32768,compresstype=none,checksum=true,orientation=row';
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save gp_default_storage_options GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger gp_default_storage_options GUC restore from gp_guc_restore_list
+SELECT 1;
+-- When gp_default_storage_options GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
+
+-- Test single query lc_numeric GUC rollback
+-- Set lc_numeric to value that has to be quoted due to dot
+SET lc_numeric TO 'en_US.utf8';
+-- Function just to save lc_numeric GUC to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET lc_numeric TO 'en_US.utf8';
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save lc_numeric GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger lc_numeric GUC restore from gp_guc_restore_list
+SELECT 1;
+-- When lc_numeric GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
+
+-- Test single query pljava_classpath GUC rollback
+-- Function just to save pljava_classpath GUC to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET pljava_classpath TO '';
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save pljava_classpath GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger pljava_classpath GUC restore from gp_guc_restore_list
+SELECT 1;
+-- When pljava_classpath GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
+
+-- Test single query pljava_vmoptions GUC rollback
+-- Function just to save pljava_vmoptions GUC to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET pljava_vmoptions TO '';
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save pljava_vmoptions GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger pljava_vmoptions GUC restore from gp_guc_restore_list
+SELECT 1;
+-- When pljava_vmoptions GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
+
+-- Test single query GUC TimeZone rollback
+-- Set TimeZone to value that has to be quoted due to slash
+SET TimeZone TO 'Africa/Mbabane';
+-- Function just to save TimeZone to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET TimeZone TO 'UTC';
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save TimeZone GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger TimeZone GUC restore from gp_guc_restore_list
+SELECT 1;
+-- When TimeZone GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
