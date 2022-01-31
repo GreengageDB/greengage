@@ -361,6 +361,9 @@
               >optimizer_enable_multiple_distinct_aggs</xref></p>
             <p><xref href="guc-list.xml#optimizer_force_agg_skew_avoidance" type="section"
                 >optimizer_force_agg_skew_avoidance</xref></p>
+            <p><xref href="guc-list.xml#optimizer_force_comprehensive_join_implementation" type="section"
+                >optimizer_force_comprehensive_join_implementation</xref>
+            </p>
           </stentry>
           <stentry>
             <p><xref href="guc-list.xml#optimizer_force_multistage_agg" type="section"
@@ -1400,6 +1403,9 @@
         <simpletable frame="none" id="simpletable_uy5_1bv_bdb">
           <strow>
             <stentry>
+              <p>
+                <xref href="guc-list.xml#enable_implicit_timeformat_YYYYMMDDHH24MISS" type="section">enable_implicit_timeformat_YYYYMMDDHH24MISS</xref>
+              </p>
               <p><xref href="guc-list.xml#gp_ignore_error_table">gp_ignore_error_table</xref>
               </p>
             </stentry>

@@ -164,7 +164,7 @@ CArrayCmpTest:
 ArrayConcat ArrayRef FoldedArrayCmp IN-ArrayCmp NOT-IN-ArrayCmp ArrayCmpAll
 UDA-AnyArray InClauseWithMCV CastedInClauseWithMCV FilterScalarCast
 IN-Nulls-ArrayCmpAny ArrayCmp-IN-ManyElements ArrayCmpAnyEmpty ArrayCmpAllEmpty
-ArrayCmpAnyEmptyLessThan;
+ArrayCmpAnyEmptyLessThan ArrayCmpAll-Disjunct ArrayCmpAll-Disjunct-2;
 
 CCTEPropertiesTest:
 CTE-PushProperties CTE-NoPushProperties;
@@ -492,6 +492,7 @@ add_orca_test(CConstTblGetTest)
 add_orca_test(CScalarIsDistinctFromTest)
 
 add_orca_test(CSubqueryHandlerTest)
+add_orca_test(CXformRightOuterJoin2HashJoinTest)
 
 add_orca_test(CBindingTest)
 add_orca_test(CEngineTest)

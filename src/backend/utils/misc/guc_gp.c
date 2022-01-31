@@ -218,6 +218,7 @@ int			gp_resqueue_priority_grouping_timeout;
 double		gp_resqueue_priority_cpucores_per_segment;
 char	   *gp_resqueue_priority_default_value;
 bool		gp_debug_resqueue_priority = false;
+bool		gp_log_resqueue_priority_sleep_time = false;
 
 /* Resource group GUCs */
 int			gp_resource_group_cpu_priority;
@@ -3136,6 +3137,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"gp_log_resqueue_priority_sleep_time", PGC_USERSET, RESOURCES_MGM,
+		 gettext_noop("If set, log the duration for which the statement was put to sleep in resource queue"),
+		 NULL,
+		 },
+		 &gp_log_resqueue_priority_sleep_time,
+		 false,
+		 NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL
@@ -5461,26 +5472,40 @@ DispatchSyncPGVariable(struct config_generic * gconfig)
 		case PGC_STRING:
 		{
 			struct config_string *sguc = (struct config_string *) gconfig;
-			char *str = *sguc->variable;
-			int			i;
+			const char *str = *sguc->variable;
 
 			appendStringInfo(&buffer, "%s TO ", gconfig->name);
 
 			/*
-			 * Plain string literal or identifier. Quote it.
-			 * GUC_LIST_INPUT should not be quoted or it will break list.
+			 * If it's a list, we need to split the list into elements and
+			 * quote the elements individually.
+			 * else if it's empty or not a list, we should quote the whole src.
+			 *
+			 * This is the copied from pg_get_functiondef()'s handling of
+			 * proconfig options.
 			 */
-			if (!(gconfig->flags & GUC_LIST_INPUT))
+			if (sguc->gen.flags & GUC_LIST_QUOTE && str[0] != '\0')
 			{
-				str = quote_literal_cstr(*sguc->variable);
-			}
+				List       *namelist;
+				ListCell   *lc;
 
-			/*
-			 * All whitespace characters must be escaped. See
-			 * pg_split_opts() in the backend.
-			 */
-			for (i = 0; str[i] != '\0'; i++)
-				appendStringInfoChar(&buffer, str[i]);
+				/* Parse string into list of identifiers */
+				if (!SplitGUCList((char *) pstrdup(str), ',', &namelist))
+				{
+					/* this shouldn't fail really */
+					elog(ERROR, "invalid list syntax in proconfig item");
+				}
+				foreach(lc, namelist)
+				{
+					char       *curname = (char *) lfirst(lc);
+
+					appendStringInfoString(&buffer, quote_literal_cstr(curname));
+					if (lnext(lc))
+						appendStringInfoString(&buffer, ", ");
+				}
+			}
+			else
+				appendStringInfoString(&buffer, quote_literal_cstr(str));
 
 			break;
 		}

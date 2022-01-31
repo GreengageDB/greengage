@@ -26,6 +26,8 @@ test: udf_exception_blocks_panic_scenarios
 test: ao_same_trans_truncate_crash
 test: ao_fsync_panic
 
+test: prevent_ao_wal
+
 # Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
 # so must be scheduled after that one.
 test: packcore
@@ -103,6 +105,7 @@ test: fsync_ao
 
 # Test deadlock situation when waiting on a resource queue lock
 test: resource_queue_deadlock
+test: resource_queue_query_cancel_deadlock_timeout
 
 # Tests on Append-Optimized tables (row-oriented).
 test: concurrent_index_creation_should_not_deadlock
@@ -256,6 +259,7 @@ test: workfile_mgr_test
 
 # Cancel test
 test: cancel_plpython
+test: cancel_query
 
 # Tests for getting numsegments in utility mode
 test: upgrade_numsegments

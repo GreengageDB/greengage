@@ -2204,13 +2204,12 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&max_wal_senders,
 		/*
-		 * GPDB doesn't support 1:n replication yet.  In normal operation,
-		 * when primary and mirror are streaming WAL, only 1 WalSnd should be
-		 * active.  We need 2 during base backup, 1 WalSnd to serve backup
+		 * For cluster with mirrors we need 2 WalSnds during base backup, 1 WalSnd to serve backup
 		 * request and 1 WalSnd to serve the log streamer process started by
-		 * pg_basebackup.
+		 * pg_basebackup. For mirrorless cluster replication is disabled, and in this case
+		 * max_wal_senders=0 should be specified.
 		 */
-		10, 2, MAX_BACKENDS,
+		10, 0, MAX_BACKENDS,
 		NULL, NULL, NULL
 	},
 
@@ -7536,10 +7535,7 @@ DispatchSetPGVariable(const char *name, List *args, bool is_local)
 						 * Plain string literal or identifier. Quote it.
 						 */
 
-						if (val[0] != '\'')
-							appendStringInfo(&buffer, "%s", quote_literal_cstr(val));
-						else
-							appendStringInfo(&buffer, "%s",val);
+						appendStringInfo(&buffer, "%s", quote_literal_cstr(val));
 
 
 						break;
