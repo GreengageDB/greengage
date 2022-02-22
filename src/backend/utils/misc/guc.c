@@ -22,6 +22,9 @@
 #include <float.h>
 #include <math.h>
 #include <limits.h>
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#endif
 #include <unistd.h>
 #include <sys/stat.h>
 #ifdef HAVE_SYSLOG
@@ -205,6 +208,7 @@ static bool check_max_worker_processes(int *newval, void **extra, GucSource sour
 static bool check_autovacuum_max_workers(int *newval, void **extra, GucSource source);
 static bool check_autovacuum_work_mem(int *newval, void **extra, GucSource source);
 static bool check_effective_io_concurrency(int *newval, void **extra, GucSource source);
+static bool check_client_connection_check_interval(int *newval, void **extra, GucSource source);
 static void assign_effective_io_concurrency(int newval, void *extra);
 static void assign_pgstat_temp_directory(const char *newval, void *extra);
 static bool check_application_name(char **newval, void **extra, GucSource source);
@@ -420,6 +424,7 @@ static const struct config_enum_entry plan_cache_mode_options[] = {
  * Options for enum values stored in other modules
  */
 extern const struct config_enum_entry wal_level_options[];
+extern const struct config_enum_entry archive_mode_options[];
 extern const struct config_enum_entry sync_method_options[];
 extern const struct config_enum_entry dynamic_shared_memory_options[];
 
@@ -1223,7 +1228,7 @@ static struct config_bool ConfigureNamesBool[] =
 #endif
 
 	{
-		{"log_lock_waits", PGC_SUSET, DEFUNCT_OPTIONS,
+		{"log_lock_waits", PGC_SUSET, LOGGING_WHAT,
 			gettext_noop("Logs long lock waits."),
 			NULL
 		},
@@ -1491,16 +1496,6 @@ static struct config_bool ConfigureNamesBool[] =
 		},
 		&synchronize_seqscans,
 		true,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"archive_mode", PGC_POSTMASTER, WAL_ARCHIVING,
-			gettext_noop("Allows archiving of WAL files using archive_command."),
-			NULL
-		},
-		&XLogArchiveMode,
-		false,
 		NULL, NULL, NULL
 	},
 
@@ -2638,6 +2633,17 @@ static struct config_int ConfigureNamesInt[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"client_connection_check_interval", PGC_USERSET, CLIENT_CONN_OTHER,
+			gettext_noop("Sets the time interval between checks for disconnection while running queries."),
+			NULL,
+			GUC_UNIT_MS
+		},
+		&client_connection_check_interval,
+		0, 0, INT_MAX,
+		check_client_connection_check_interval, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, 0, 0, 0, NULL, NULL, NULL
@@ -3519,6 +3525,16 @@ static struct config_enum ConfigureNamesEnum[] =
 		&synchronous_commit,
 		SYNCHRONOUS_COMMIT_ON, synchronous_commit_options,
 		NULL, assign_synchronous_commit, NULL
+	},
+
+	{
+		{"archive_mode", PGC_POSTMASTER, WAL_ARCHIVING,
+			gettext_noop("Allows archiving of WAL files using archive_command."),
+			NULL
+		},
+		&XLogArchiveMode,
+		ARCHIVE_MODE_OFF, archive_mode_options,
+		NULL, NULL, NULL
 	},
 
 	{
@@ -10077,6 +10093,20 @@ assign_effective_io_concurrency(int newval, void *extra)
 #ifdef USE_PREFETCH
 	target_prefetch_pages = *((int *) extra);
 #endif   /* USE_PREFETCH */
+}
+
+static bool
+check_client_connection_check_interval(int *newval, void **extra, GucSource source)
+{
+#if !(defined(POLLRDHUP) || defined(__darwin__))
+	/* Linux and OSX only, for now.  See pq_check_connection(). */
+	if (*newval != 0)
+	{
+		GUC_check_errdetail("client_connection_check_interval must be set to 0 on platforms that lack POLLRDHUP and not OSX.";
+		return false;
+	}
+#endif
+	return true;
 }
 
 static void

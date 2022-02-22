@@ -550,7 +550,7 @@ Feature: gpstate tests
     Scenario: gpstate -e -v logs no errors when the user sets PGDATABASE
         Given a standard local demo cluster is running
         And the user runs command "export PGDATABASE=postgres && $GPHOME/bin/gpstate -e -v"
-        Then command should print "pg_isready -q -h .* -p .* -d postgres" to stdout
+        Then command should print "PGOPTIONS='-c gp_session_role=utility' pg_isready -q -h .* -p .* -d postgres" to stdout
         And command should print "All segments are running normally" to stdout
 
 
@@ -562,5 +562,5 @@ Feature: gpstate tests
         Given the database is running
         And all the segments are running
         And the user runs command "unset PGDATABASE && $GPHOME/bin/gpstate -e -v"
-        Then command should print "pg_isready -q -h .* -p .* -d postgres" to stdout
+        Then command should print "PGOPTIONS='-c gp_session_role=utility' pg_isready -q -h .* -p .* -d postgres" to stdout
         And command should print "All segments are running normally" to stdout

@@ -943,7 +943,6 @@ CTranslatorExprToDXL::PdxlnBitmapTableScan(
 	);
 }
 
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorExprToDXL::PdxlnBitmapTableScan
