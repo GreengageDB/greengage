@@ -470,14 +470,14 @@ mdunlink(RelFileNodeBackend rnode, ForkNumber forkNum, bool isRedo, char relstor
  * Truncate a file to release disk space.
  */
 static int
-do_truncate(char *path)
+do_truncate(const char *path)
 {
 	int			save_errno;
 	int			ret;
 	int			fd;
 
 	/* truncate(2) would be easier here, but Windows hasn't got it */
-	fd = OpenTransientFile(path, O_RDWR | PG_BINARY, 0);
+	fd = OpenTransientFile((char *) path, O_RDWR | PG_BINARY, 0);
 	if (fd >= 0)
 	{
 		ret = ftruncate(fd, 0);
