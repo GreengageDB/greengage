@@ -2,36 +2,36 @@
 title: Creating the Data Storage Areas 
 ---
 
-Describes how to create the directory locations where Greenplum Database data is stored for each coordinator, standby, and segment instance.
+Describes how to create the directory locations where Greenplum Database data is stored for each master, standby, and segment instance.
 
 **Parent topic:**[Installing and Upgrading Greenplum](install_guide.html)
 
-## <a id="topic_wqb_1lc_wp"></a>Creating Data Storage Areas on the Coordinator and Standby Coordinator Hosts 
+## <a id="topic_wqb_1lc_wp"></a>Creating Data Storage Areas on the Master and Standby Master Hosts 
 
-A data storage area is required on the Greenplum Database coordinator and standby coordinator hosts to store Greenplum Database system data such as catalog data and other system metadata.
+A data storage area is required on the Greenplum Database master and standby master hosts to store Greenplum Database system data such as catalog data and other system metadata.
 
-### <a id="topic_ix1_x1n_tp"></a>To create the data directory location on the coordinator 
+### <a id="topic_ix1_x1n_tp"></a>To create the data directory location on the master 
 
-The data directory location on the coordinator is different than those on the segments. The coordinator does not store any user data, only the system catalog tables and system metadata are stored on the coordinator instance, therefore you do not need to designate as much storage space as on the segments.
+The data directory location on the master is different than those on the segments. The master does not store any user data, only the system catalog tables and system metadata are stored on the master instance, therefore you do not need to designate as much storage space as on the segments.
 
-1.  Create or choose a directory that will serve as your coordinator data storage area. This directory should have sufficient disk space for your data and be owned by the `gpadmin` user and group. For example, run the following commands as `root`:
+1.  Create or choose a directory that will serve as your master data storage area. This directory should have sufficient disk space for your data and be owned by the `gpadmin` user and group. For example, run the following commands as `root`:
 
     ```
-    # mkdir -p /data/coordinator
+    # mkdir -p /data/master
     ```
 
 2.  Change ownership of this directory to the `gpadmin` user. For example:
 
     ```
-    # chown gpadmin:gpadmin /data/coordinator
+    # chown gpadmin:gpadmin /data/master
     ```
 
-3.  Using [gpssh](../utility_guide/ref/gpssh.html), create the coordinator data directory location on your standby coordinator as well. For example:
+3.  Using [gpssh](../utility_guide/ref/gpssh.html), create the master data directory location on your standby master as well. For example:
 
     ```
     # source /usr/local/greenplum-db/greenplum_path.sh 
-    # gpssh -h smdw -e 'mkdir -p /data/coordinator'
-    # gpssh -h smdw -e 'chown gpadmin:gpadmin /data/coordinator'
+    # gpssh -h smdw -e 'mkdir -p /data/master'
+    # gpssh -h smdw -e 'chown gpadmin:gpadmin /data/master'
     ```
 
 
@@ -41,7 +41,7 @@ Data storage areas are required on the Greenplum Database segment hosts for prim
 
 ### <a id="topic_tnb_v1n_tp"></a>To create the data directory locations on all segment hosts 
 
-1.  On the coordinator host, log in as `root`:
+1.  On the master host, log in as `root`:
 
     ```
     # su

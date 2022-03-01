@@ -393,6 +393,7 @@ extern void do_pg_abort_backup(void);
 /* Greenplum additions */
 extern List *XLogReadTimeLineHistory(TimeLineID targetTLI);
 extern bool IsStandbyMode(void);
+extern bool IsCrashRecoveryOnly(void);
 extern DBState GetCurrentDBState(void);
 extern XLogRecPtr last_xlog_replay_location(void);
 extern void wait_for_mirror(void);

@@ -48,16 +48,16 @@ export LD_LIBRARY_PATH
 
 ### <a id="topic6"></a>MASTER\_DATA\_DIRECTORY 
 
-This should point to the directory created by the gpinitsystem utility in the coordinator data directory location. For example:
+This should point to the directory created by the gpinitsystem utility in the master data directory location. For example:
 
 ```
-MASTER_DATA_DIRECTORY=/data/coordinator/gpseg-1
+MASTER_DATA_DIRECTORY=/data/master/gpseg-1
 export MASTER_DATA_DIRECTORY
 ```
 
 ## <a id="topic7"></a>Optional Environment Variables 
 
-The following are standard PostgreSQL environment variables, which are also recognized in Greenplum Database. You may want to add the connection-related environment variables to your profile for convenience, so you do not have to type so many options on the command line for client connections. Note that these environment variables should be set on the Greenplum Database coordinator host only.
+The following are standard PostgreSQL environment variables, which are also recognized in Greenplum Database. You may want to add the connection-related environment variables to your profile for convenience, so you do not have to type so many options on the command line for client connections. Note that these environment variables should be set on the Greenplum Database master host only.
 
 **Parent topic:**[Greenplum Environment Variables](env_var_ref.html)
 
@@ -71,11 +71,11 @@ The name of the default database to use when connecting.
 
 ### <a id="topic10"></a>PGHOST 
 
-The Greenplum Database coordinator host name.
+The Greenplum Database master host name.
 
 ### <a id="topic11"></a>PGHOSTADDR 
 
-The numeric IP address of the coordinator host. This can be set instead of or in addition to `PGHOST` to avoid DNS lookup overhead.
+The numeric IP address of the master host. This can be set instead of or in addition to `PGHOST` to avoid DNS lookup overhead.
 
 ### <a id="topic12"></a>PGPASSWORD 
 
@@ -87,11 +87,11 @@ The name of the password file to use for lookups. If not set, it defaults to `~/
 
 ### <a id="topic14"></a>PGOPTIONS 
 
-Sets additional configuration parameters for the Greenplum Database coordinator server.
+Sets additional configuration parameters for the Greenplum Database master server.
 
 ### <a id="topic15"></a>PGPORT 
 
-The port number of the Greenplum Database server on the coordinator host. The default port is 5432.
+The port number of the Greenplum Database server on the master host. The default port is 5432.
 
 ### <a id="topic16"></a>PGUSER 
 

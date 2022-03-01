@@ -12362,6 +12362,16 @@ IsStandbyMode(void)
 }
 
 /*
+ * True if we are currently performing crash recovery.
+ * False if we are running standby-mode continuous or archive recovery.
+ */
+bool
+IsCrashRecoveryOnly(void)
+{
+	return !ArchiveRecoveryRequested && !StandbyModeRequested;
+}
+
+/*
  * Report the last WAL replay location
  */
 XLogRecPtr

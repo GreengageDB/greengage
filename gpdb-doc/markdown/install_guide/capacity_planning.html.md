@@ -75,16 +75,16 @@ As with all databases, the size of your raw data will be slightly larger once it
 
 On each segment host, you will also want to account for space for Greenplum Database log files and metadata:
 
--   **System Metadata** — For each Greenplum Database segment instance \(primary or mirror\) or coordinator instance running on a host, estimate approximately 20 MB for the system catalogs and metadata.
--   **Write Ahead Log** — For each Greenplum Database segment \(primary or mirror\) or coordinator instance running on a host, allocate space for the write ahead log \(WAL\). The WAL is divided into segment files of 64 MB each. At most, the number of WAL files will be:
+-   **System Metadata** — For each Greenplum Database segment instance \(primary or mirror\) or master instance running on a host, estimate approximately 20 MB for the system catalogs and metadata.
+-   **Write Ahead Log** — For each Greenplum Database segment \(primary or mirror\) or master instance running on a host, allocate space for the write ahead log \(WAL\). The WAL is divided into segment files of 64 MB each. At most, the number of WAL files will be:
 
     ```
     2 * checkpoint_segments + 1
     ```
 
-    You can use this to estimate space requirements for WAL. The default checkpoint\_segments setting for a Greenplum Database instance is 8, meaning 1088 MB WAL space allocated for each segment or coordinator instance on a host.
+    You can use this to estimate space requirements for WAL. The default checkpoint\_segments setting for a Greenplum Database instance is 8, meaning 1088 MB WAL space allocated for each segment or master instance on a host.
 
--   **Greenplum Database Log Files** — Each segment instance and the coordinator instance generates database log files, which will grow over time. Sufficient space should be allocated for these log files, and some type of log rotation facility should be used to ensure that to log files do not grow too large.
+-   **Greenplum Database Log Files** — Each segment instance and the master instance generates database log files, which will grow over time. Sufficient space should be allocated for these log files, and some type of log rotation facility should be used to ensure that to log files do not grow too large.
 -   **Command Center Data** — The data collection agents utilized by Command Center run on the same set of hosts as your Greenplum Database instance and utilize the system resources of those hosts. The resource consumption of the data collection agent processes on these hosts is minimal and should not significantly impact database performance. Historical data collected by the collection agents is stored in its own Command Center database within your Greenplum Database system. Collected data is distributed just like regular database data, so you will need to account for disk space in the data directory locations of your Greenplum segment instances. The amount of space required depends on the amount of historical data you would like to keep. Historical data is not automatically truncated. Database administrators must set up a truncation policy to maintain the size of the Command Center database.
 
 **Parent topic:**[Estimating Storage Capacity](capacity_planning.html)

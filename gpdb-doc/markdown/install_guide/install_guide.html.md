@@ -15,7 +15,7 @@ Describes how to prepare your operating system environment for Greenplum Databas
 -   **[Installing the Greenplum Database Software](install_gpdb.html)**  
 Describes how to install the Greenplum Database software binaries on all of the hosts that will comprise your Greenplum Database system, how to enable passwordless SSH for the `gpadmin` user, and how to verify the installation.
 -   **[Creating the Data Storage Areas](create_data_dirs.html)**  
-Describes how to create the directory locations where Greenplum Database data is stored for each coordinator, standby, and segment instance.
+Describes how to create the directory locations where Greenplum Database data is stored for each master, standby, and segment instance.
 -   **[Validating Your Systems](validate.html)**  
 Validate your hardware and network performance.
 -   **[Initializing a Greenplum Database System](init_gpdb.html)**  

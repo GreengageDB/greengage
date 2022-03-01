@@ -16,16 +16,16 @@ EXPLAIN SELECT id FROM aoco_gist_tbl
  WHERE b ~= '( (1,2), (3,4) )'
  ORDER BY id;
 
-                                    QUERY PLAN                                     
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..391.30 rows=1 width=4)
-   Merge Key: id
-   ->  Sort  (cost=0.00..391.30 rows=1 width=4)
-         Sort Key: id
-         ->  Bitmap Heap Scan on aoco_gist_tbl  (cost=0.00..391.30 rows=1 width=4)
-               Recheck Cond: (b ~= '(3,4),(1,2)'::box)
-               ->  Bitmap Index Scan on boxindex  (cost=0.00..0.00 rows=0 width=0)
-                     Index Cond: (b ~= '(3,4),(1,2)'::box)
- Optimizer: Pivotal Optimizer (GPORCA)
+                          QUERY PLAN
+Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..391.30 rows=1 width=4)
+  Merge Key: id
+  ->  Sort  (cost=0.00..391.30 rows=1 width=4)
+        Sort Key: id
+        ->  Bitmap Heap Scan on aoco_gist_tbl  (cost=0.00..391.30 rows=1 width=4)
+              Recheck Cond: (b ~= '(3,4),(1,2)'::box)
+              ->  Bitmap Index Scan on boxindex  (cost=0.00..0.00 rows=0 width=0)
+                    Index Cond: (b ~= '(3,4),(1,2)'::box)
+Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 -->
 <dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">

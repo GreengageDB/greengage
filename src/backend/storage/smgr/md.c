@@ -241,6 +241,16 @@ mdinit(void)
 }
 
 /*
+ * Get the memory stats of MdCxt.
+ */
+void
+GetMdCxtStat(uint64 *nBlocks, uint64 *nChunks, uint64 *currentAvailable, 
+		uint64 *allAllocated, uint64 *allFreed, uint64 *maxHeld)
+{
+	(MdCxt->methods.stats)(MdCxt, nBlocks, nChunks, currentAvailable, allAllocated, allFreed, maxHeld);
+}
+
+/*
  * In archive recovery, we rely on checkpointer to do fsyncs, but we will have
  * already created the pendingOpsTable during initialization of the startup
  * process.  Calling this function drops the local pendingOpsTable so that
@@ -460,14 +470,14 @@ mdunlink(RelFileNodeBackend rnode, ForkNumber forkNum, bool isRedo, char relstor
  * Truncate a file to release disk space.
  */
 static int
-do_truncate(char *path)
+do_truncate(const char *path)
 {
 	int			save_errno;
 	int			ret;
 	int			fd;
 
 	/* truncate(2) would be easier here, but Windows hasn't got it */
-	fd = OpenTransientFile(path, O_RDWR | PG_BINARY, 0);
+	fd = OpenTransientFile((char *) path, O_RDWR | PG_BINARY, 0);
 	if (fd >= 0)
 	{
 		ret = ftruncate(fd, 0);
@@ -1278,6 +1288,7 @@ mdsync(void)
 				{
 					SMgrRelation reln;
 					MdfdVec    *seg;
+					bool		closeSeg = false;
 					char	   *path;
 					int			save_errno;
 
@@ -1302,7 +1313,10 @@ mdsync(void)
 						/*
 						 * For AO table, only access what the segno denoted, instead
 						 * of the chain to the target segment as HEAP.
+						 * _mdf_openseg does not register the file in SMgrRelation
+						 * we must close and free it manually
 						 */
+						closeSeg = true;
 						seg = _mdfd_openseg(reln, forknum, segno, 0);
 					}
 					else
@@ -1332,8 +1346,20 @@ mdsync(void)
 								 processed,
 								 FilePathName(seg->mdfd_vfd),
 								 (double) elapsed / 1000);
+						if (closeSeg)
+						{
+							Assert(reln->md_fd[forknum] == NULL);
+							FileClose(seg->mdfd_vfd);
+							pfree(seg);
+						}
 
 						break;	/* out of retry loop */
+					}
+					if (seg != NULL && closeSeg)
+					{
+						Assert(reln->md_fd[forknum] == NULL);
+						FileClose(seg->mdfd_vfd);
+						pfree(seg);
 					}
 
 					/* Compute file name for use in message */

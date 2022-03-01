@@ -56,14 +56,14 @@ To test disk and memory bandwidth performance, run [gpcheckperf](../utility_guid
 
 ### <a id="jj161569"></a>To run the disk and stream tests 
 
-1.  Log in on the coordinator host as the `gpadmin` user.
+1.  Log in on the master host as the `gpadmin` user.
 2.  Source the `greenplum_path.sh` path file from your Greenplum installation. For example:
 
     ```
     $ source /usr/local/greenplum-db/greenplum_path.sh
     ```
 
-3.  Create a host file named `hostfile_gpcheckperf` that has one host name per segment host. Do not include the coordinator host. For example:
+3.  Create a host file named `hostfile_gpcheckperf` that has one host name per segment host. Do not include the master host. For example:
 
     ```
     sdw1

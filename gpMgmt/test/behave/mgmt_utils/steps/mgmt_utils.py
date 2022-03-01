@@ -413,10 +413,11 @@ def impl(context, content):
 
 
 def backup_bashrc():
-    file = '~/.bashrc'
-    backup_fle = '~/.bashrc.backup'
+    home_dir = os.environ.get('HOME')
+    file = home_dir + '/.bashrc'
+    backup_fle = home_dir + '/.bashrc.backup'
     if (os.path.isfile(file)):
-        command = "cp -f %s %s.backup" % (file, backup_fle)
+        command = "cp -f %s %s" % (file, backup_fle)
         result = run_cmd(command)
         if (result[0] != 0):
             raise Exception("Error while backing up bashrc file. STDERR:%s" % (result[2]))
@@ -425,15 +426,16 @@ def backup_bashrc():
 
 
 def restore_bashrc():
-    file = '~/.bashrc'
-    backup_fle = '~/.bashrc.backup'
+    home_dir = os.environ.get('HOME')
+    file = home_dir + '/.bashrc'
+    backup_fle = home_dir + '/.bashrc.backup'
     if (os.path.isfile(backup_fle)):
-        command = "mv -f %s.backup %s" % (backup_fle, file)
+        command = "mv -f %s %s" % (backup_fle, file)
     else:
         command = "rm -f %s" % (file)
     result = run_cmd(command)
     if (result[0] != 0):
-        raise Exception('Error while restoring up bashrc file. ')
+        raise Exception("Error while restoring up bashrc file. STDERR:%s" % (result[2]))
 
 
 @given('the user runs "{command}"')
@@ -1143,6 +1145,17 @@ def stop_all_primary_or_mirror_segments(context, segment_type):
     role = ROLE_PRIMARY if segment_type == 'primary' else ROLE_MIRROR
     stop_segments(context, lambda seg: seg.getSegmentRole() == role and seg.content != -1)
 
+@given('user stops all {segment_type} processes on "{hosts}"')
+@given('user stops all {segment_type} processes on "{hosts}"')
+@given('user stops all {segment_type} processes on "{hosts}"')
+def stop_all_primary_or_mirror_segments_on_hosts(context, segment_type, hosts):
+    hosts = hosts.split(',')
+    if segment_type not in ("primary", "mirror"):
+        raise Exception("Expected segment_type to be 'primary' or 'mirror', but found '%s'." % segment_type)
+    print("Stopping {} on {}".format(segment_type, hosts))
+    role = ROLE_PRIMARY if segment_type == 'primary' else ROLE_MIRROR
+    stop_segments(context, lambda seg: seg.getSegmentRole() == role and seg.content != -1 and seg.getSegmentHostName() in hosts)
+
 
 @given('the {role} on content {contentID} is stopped')
 def stop_segments_on_contentID(context, role, contentID):
@@ -1158,11 +1171,12 @@ def stop_segments(context, where_clause):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
 
     segments = filter(where_clause, gparray.getDbList())
+    print("Stopping segments: {}".format(segments))
     for seg in segments:
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
         subprocess.check_call(['ssh', seg.getSegmentHostName(),
-                               'source %s/greenplum_path.sh && pg_ctl stop -m fast -D %s -w' % (
+                               'source %s/greenplum_path.sh && pg_ctl stop -m fast -D %s -w -t 120' % (
                                    pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg.getSegmentDataDirectory()))
                                ])
 

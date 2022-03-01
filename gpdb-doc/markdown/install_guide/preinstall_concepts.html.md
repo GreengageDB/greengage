@@ -10,9 +10,9 @@ Greenplum Database stores and processes large amounts of data by distributing th
 
 Greenplum Database is a software-only solution; the hardware and database software are not coupled. Greenplum Database runs on a variety of commodity server platforms from Greenplum-certified hardware vendors. Performance depends on the hardware on which it is installed. Because the database is distributed across multiple machines in a Greenplum Database system, proper selection and configuration of hardware is vital to achieving the best possible performance.
 
-This chapter describes the major components of a Greenplum Database system and the hardware considerations and concepts associated with each component: [The Greenplum Coordinator](#topic2), [The Segments](#topic4) and [The Interconnect](#topic9). Additionally, a system may have optional [ETL Hosts for Data Loading](#topic13) and [Tanzu Greenplum Performance Monitoring](#topic_e5t_whm_kbb) for monitoring query workload and performance.
+This chapter describes the major components of a Greenplum Database system and the hardware considerations and concepts associated with each component: [The Greenplum Master](#topic2), [The Segments](#topic4) and [The Interconnect](#topic9). Additionally, a system may have optional [ETL Hosts for Data Loading](#topic13) and [Tanzu Greenplum Performance Monitoring](#topic_e5t_whm_kbb) for monitoring query workload and performance.
 
--   **[The Greenplum Coordinator](preinstall_concepts.html)**  
+-   **[The Greenplum Master](preinstall_concepts.html)**  
 
 -   **[The Segments](preinstall_concepts.html)**  
 
@@ -25,7 +25,7 @@ This chapter describes the major components of a Greenplum Database system and t
 
 **Parent topic:**[Installing and Upgrading Greenplum](install_guide.html)
 
-## <a id="topic2"></a>The Greenplum Coordinator 
+## <a id="topic2"></a>The Greenplum Master 
 
 The *master* is the entry point to the Greenplum Database system. It is the database server process that accepts client connections and processes the SQL commands that system users issue. Users connect to Greenplum Database through the master using a PostgreSQL-compatible client program such as `psql` or ODBC.
 
@@ -35,7 +35,7 @@ Because the master does not contain any user data, it has very little disk load.
 
 **Parent topic:**[Introduction to Greenplum](preinstall_concepts.html)
 
-### <a id="topic3"></a>Coordinator Redundancy 
+### <a id="topic3"></a>Master Redundancy 
 
 You may optionally deploy a *backup* or *mirror* of the master instance. A backup master host serves as a *warm standby* if the primary master host becomes nonoperational. You can deploy the standby master on a designated redundant master host or on one of the segment hosts.
 
@@ -43,7 +43,7 @@ The standby master is kept up to date by a transaction log replication process, 
 
 Since the master does not contain any user data, only the system catalog tables need to be synchronized between the primary and backup copies. When these tables are updated, changes automatically copy over to the standby master so it is always synchronized with the primary.
 
-![](graphics/standby_master.jpg "Coordinator Mirroring in Greenplum Database")
+![](graphics/standby_master.jpg "Master Mirroring in Greenplum Database")
 
 ## <a id="topic4"></a>The Segments 
 

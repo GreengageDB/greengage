@@ -4,7 +4,7 @@ title: Upgrading from an Earlier Greenplum 6 Release
 
 The upgrade path supported for this release is Greenplum Database 6.x to a newer Greenplum Database 6.x release.
 
-**Important:** Set the Greenplum Database timezone to a value that is compatible with your host systems. Setting the Greenplum Database timezone prevents Greenplum Database from selecting a timezone each time the cluster is restarted and sets the timezone for the Greenplum Database coordinator and segment instances. After you upgrade to this release and if you have not set a Greenplum Database timezone value, verify that the selected Greenplum Database timezone is acceptable for your deployment. See [Configuring Timezone and Localization Settings](localization.html) for more information.
+**Important:** Set the Greenplum Database timezone to a value that is compatible with your host systems. Setting the Greenplum Database timezone prevents Greenplum Database from selecting a timezone each time the cluster is restarted and sets the timezone for the Greenplum Database master and segment instances. After you upgrade to this release and if you have not set a Greenplum Database timezone value, verify that the selected Greenplum Database timezone is acceptable for your deployment. See [Configuring Timezone and Localization Settings](localization.html) for more information.
 
 ## <a id="gpdb_prereq"></a>Prerequisites 
 
@@ -37,7 +37,7 @@ Before starting the upgrade process, perform the following checks.
 
 An upgrade from Greenplum Database 6.x to a newer 6.x release involves stopping Greenplum Database, updating the Greenplum Database software binaries, and restarting Greenplum Database. If you are using Greenplum Database extension packages there are additional requirements. See [Prerequisites](#gpdb_prereq) in the previous section.
 
-1.  Log in to your Greenplum Database coordinator host as the Greenplum administrative user:
+1.  Log in to your Greenplum Database master host as the Greenplum administrative user:
 
     ```
     $ su - gpadmin
@@ -49,7 +49,7 @@ An upgrade from Greenplum Database 6.x to a newer 6.x release involves stopping 
     $ gpstop -a
     ```
 
-3.  Copy the new Greenplum Database software installation package to the `gpadmin` user's home directory on each coordinator, standby, and segment host.
+3.  Copy the new Greenplum Database software installation package to the `gpadmin` user's home directory on each master, standby, and segment host.
 4.  *If you used `yum` or `apt` to install Greenplum Database to the default location*, run these commands on each host to upgrade to the new software release.
 
     For RHEL/CentOS systems:
@@ -80,7 +80,7 @@ An upgrade from Greenplum Database 6.x to a newer 6.x release involves stopping 
     $ sudo chown -R gpadmin:gpadmin /usr/local/greenplum*
     ```
 
-7.  If needed, update the `greenplum_path.sh` file on the coordinator and standby coordinator hosts for use with your specific installation. These are some examples.
+7.  If needed, update the `greenplum_path.sh` file on the master and standby master hosts for use with your specific installation. These are some examples.
     -   If Greenplum Database uses LDAP authentication, edit the `greenplum_path.sh` file to add the line:
 
         ```
@@ -123,7 +123,7 @@ An upgrade from Greenplum Database 6.x to a newer 6.x release involves stopping 
 
 11. For Tanzu Greenplum Database, use the `gppkg` utility to re-install Tanzu Greenplum Database extensions. If you were previously using any Tanzu Greenplum Database extensions such as pgcrypto, PL/R, PL/Java, or PostGIS, download the corresponding packages from [VMware Tanzu Network](https://network.pivotal.io/products/pivotal-gpdb), and install using this utility. See the extension documentation for details.
 
-    Also copy any files that are used by the extensions \(such as JAR files, shared object files, and libraries\) from the previous version installation directory to the new version installation directory on the coordinator and segment host systems.
+    Also copy any files that are used by the extensions \(such as JAR files, shared object files, and libraries\) from the previous version installation directory to the new version installation directory on the master and segment host systems.
 
 12. If you configured PXF in your previous Greenplum Database installation, you may need to install PXF in your new Greenplum installation, and you may be required to re-initialize or register the PXF service after you upgrade Greenplum Database. Refer to the [Step 2](../pxf/upgrade_pxf_6x.html#pxfup) PXF upgrade procedure for instructions.
 13. For Tanzu Greenplum Database, if you configured GPSS in your previous installation, you may be required to perform some upgrade actions, and you must re-restart the GPSS service instances and jobs. Refer to [Step 2](http://greenplum.docs.pivotal.io/streaming-server/1-5/upgrading-gpss.html#step2) of the GPSS upgrade procedure for instructions.

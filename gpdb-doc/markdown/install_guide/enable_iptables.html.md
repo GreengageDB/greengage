@@ -10,7 +10,7 @@ For more information about `iptables` see the `iptables` and firewall documentat
 
 ## <a id="ji163124"></a>How to Enable iptables 
 
-1.  As `gpadmin`, run this command on the Greenplum Database coordinator host to stop Greenplum Database:
+1.  As `gpadmin`, run this command on the Greenplum Database master host to stop Greenplum Database:
 
     ```
     $ gpstop -a
@@ -25,7 +25,7 @@ For more information about `iptables` see the `iptables` and firewall documentat
         # service iptables start
         ```
 
-3.  As gpadmin, run this command on the Greenplum Database coordinator host to start Greenplum Database:
+3.  As gpadmin, run this command on the Greenplum Database master host to start Greenplum Database:
 
     ```
     $ gpstart -a
@@ -56,14 +56,14 @@ The value might need to be adjusted for your hosts. To maintain the value after 
 
 ## <a id="topic16"></a>Example iptables Rules 
 
-When `iptables` is enabled, `iptables` manages the IP communication on the host system based on configuration settings \(rules\). The example rules are used to configure `iptables` for Greenplum Database coordinator host, standby coordinator host, and segment hosts.
+When `iptables` is enabled, `iptables` manages the IP communication on the host system based on configuration settings \(rules\). The example rules are used to configure `iptables` for Greenplum Database master host, standby master host, and segment hosts.
 
--   [Example Coordinator and Standby Coordinator iptables Rules](#topic17)
+-   [Example Master and Standby Master iptables Rules](#topic17)
 -   [Example Segment Host iptables Rules](#topic18)
 
-The two sets of rules account for the different types of communication Greenplum Database expects on the coordinator \(primary and standby\) and segment hosts. The rules should be added to the `/etc/sysconfig/iptables` file of the Greenplum Database hosts. For Greenplum Database, `iptables` rules should allow the following communication:
+The two sets of rules account for the different types of communication Greenplum Database expects on the master \(primary and standby\) and segment hosts. The rules should be added to the `/etc/sysconfig/iptables` file of the Greenplum Database hosts. For Greenplum Database, `iptables` rules should allow the following communication:
 
--   For customer facing communication with the Greenplum Database coordinator, allow at least `postgres` and `28080` \(`eth1` interface in the example\).
+-   For customer facing communication with the Greenplum Database master, allow at least `postgres` and `28080` \(`eth1` interface in the example\).
 -   For Greenplum Database system interconnect, allow communication using `tcp`, `udp`, and `icmp` protocols \(`eth4` and `eth5` interfaces in the example\).
 
     The network interfaces that you specify in the `iptables` settings are the interfaces for the Greenplum Database hosts that you list in the hostfile\_gpinitsystem file. You specify the file when you run the `gpinitsystem` command to initialize a Greenplum Database system. See [Initializing a Greenplum Database System](init_gpdb.html) for information about the hostfile\_gpinitsystem file and the `gpinitsystem` command.
@@ -77,9 +77,9 @@ The example rules should be adjusted for your configuration. For example:
 -   The append command, the `-A` lines and connection parameter `-i` should match the connectors for your hosts.
 -   the CIDR network mask information for the source parameter `-s` should match the IP addresses for your network.
 
-### <a id="topic17"></a>Example Coordinator and Standby Coordinator iptables Rules 
+### <a id="topic17"></a>Example Master and Standby Master iptables Rules 
 
-Example `iptables` rules with comments for the `/etc/sysconfig/iptables` file on the Greenplum Database coordinator host and standby coordinator host.
+Example `iptables` rules with comments for the `/etc/sysconfig/iptables` file on the Greenplum Database master host and standby master host.
 
 ```
 *filter
@@ -126,7 +126,7 @@ COMMIT
 
 ### <a id="topic18"></a>Example Segment Host iptables Rules 
 
-Example `iptables` rules for the `/etc/sysconfig/iptables` file on the Greenplum Database segment hosts. The rules for segment hosts are similar to the coordinator rules with fewer interfaces and fewer `udp` and `tcp` services.
+Example `iptables` rules for the `/etc/sysconfig/iptables` file on the Greenplum Database segment hosts. The rules for segment hosts are similar to the master rules with fewer interfaces and fewer `udp` and `tcp` services.
 
 ```
 *filter

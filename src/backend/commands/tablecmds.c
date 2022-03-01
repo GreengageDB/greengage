@@ -14685,8 +14685,11 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 	return queryDesc;
 }
 
+/*
+ * GPDB: Convenience function to get reloptions for a given relation.
+ */
 static Datum
-new_rel_opts(Relation rel)
+get_rel_opts(Relation rel)
 {
 	Datum newOptions = PointerGetDatum(NULL);
 
@@ -15164,7 +15167,6 @@ static void
 ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 {
 	RangeVar			*tmprv;
-	Datum				newOptions;
 	Oid					tmprelid;
 	Oid					relid = RelationGetRelid(rel);
 	char				relstorage = rel->rd_rel->relstorage;
@@ -15206,10 +15208,8 @@ ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 		distby = make_distributedby_for_rel(rel);
 		distby->numsegments = getgpsegmentCount();
 
-		newOptions = new_rel_opts(rel);
-
 		queryDesc = build_ctas_with_dist(rel, distby,
-						untransformRelOptions(newOptions),
+						untransformRelOptions(get_rel_opts(rel)),
 						&tmprv,
 						true);
 
@@ -15365,7 +15365,6 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 	bool        rand_pol = false;
 	bool        rep_pol = false;
 	bool        force_reorg = false;
-	Datum		newOptions = PointerGetDatum(NULL);
 	bool		change_policy = false;
 	int			numsegments;
 	SetDistributionCmd *qe_data = NULL;
@@ -15456,8 +15455,6 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			lwith = nlist;
 		}
 
-		newOptions = new_rel_opts(rel);
-
 		if (ldistro)
 			change_policy = true;
 
@@ -15498,8 +15495,8 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 				rel->rd_cdbpolicy = GpPolicyCopy(policy);
 				MemoryContextSwitchTo(oldcontext);
 
-				/* only need to rebuild if have new storage options */
-				if (!(DatumGetPointer(newOptions) || force_reorg))
+				/* no need to rebuild if REORGANIZE=false*/
+				if (!force_reorg)
 				{
 					/*
 					 * caller expects ATExecSetDistributedBy() to close rel
@@ -15527,9 +15524,8 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 
 			policy = createReplicatedGpPolicy(ldistro->numsegments);
 
-			/* rebuild if have new storage options or policy changed */
-			if (!DatumGetPointer(newOptions) &&
-				GpPolicyIsReplicated(rel->rd_cdbpolicy))
+			/* rebuild only if policy changed */
+			if (GpPolicyIsReplicated(rel->rd_cdbpolicy))
 			{
 				/*
 				 * caller expects ATExecSetDistributedBy() to close rel
@@ -15642,11 +15638,9 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 													 ldistro->numsegments);
 
 				/*
-				 * See if the old policy is the same as the new one but
-				 * remember, we still might have to rebuild if there are new
-				 * storage options.
+				 * See if the old policy is the same as the new one.
 				 */
-				if (!DatumGetPointer(newOptions) && !force_reorg &&
+				if (!force_reorg &&
 					(policy->nattrs == rel->rd_cdbpolicy->nattrs))
 				{
 					int i;
@@ -15760,7 +15754,7 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 
 		/* Step (b) - build CTAS */
 		queryDesc = build_ctas_with_dist(rel, ldistro,
-						untransformRelOptions(newOptions),
+						untransformRelOptions(get_rel_opts(rel)),
 						&tmprv,
 						true);
 
@@ -15866,7 +15860,6 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		backend_id = qe_data->backendId;
 		tmprv = make_temp_table_name(rel, backend_id);
 
-		newOptions = new_rel_opts(rel);
 	}
 
 	/*
@@ -15908,61 +15901,8 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 						ReadNextMultiXactId(),
 						NULL);
 
-	/*
-	 * Make changes from swapping relation files visible before updating
-	 * options below or else we get an already updated tuple error.
-	 */
+	/* Make changes from swapping relation files visible. */
 	CommandCounterIncrement();
-
-	if (DatumGetPointer(newOptions))
-	{
-		Datum		repl_val[Natts_pg_class];
-		bool		repl_null[Natts_pg_class];
-		bool		repl_repl[Natts_pg_class];
-		HeapTuple	newOptsTuple;
-		HeapTuple	tuple;
-		Relation	relationRelation;
-
-		/*
-		 * All we need do here is update the pg_class row; the new
-		 * options will be propagated into relcaches during
-		 * post-commit cache inval.
-		 */
-		MemSet(repl_val, 0, sizeof(repl_val));
-		MemSet(repl_null, false, sizeof(repl_null));
-		MemSet(repl_repl, false, sizeof(repl_repl));
-
-		if (newOptions != (Datum) 0)
-			repl_val[Anum_pg_class_reloptions - 1] = newOptions;
-		else
-			repl_null[Anum_pg_class_reloptions - 1] = true;
-
-		repl_repl[Anum_pg_class_reloptions - 1] = true;
-
-		relationRelation = heap_open(RelationRelationId, RowExclusiveLock);
-		tuple = SearchSysCache(RELOID,
-							   ObjectIdGetDatum(tarrelid),
-							   0, 0, 0);
-
-		Insist(HeapTupleIsValid(tuple));
-		newOptsTuple = heap_modify_tuple(tuple, RelationGetDescr(relationRelation),
-										 repl_val, repl_null, repl_repl);
-
-		simple_heap_update(relationRelation, &tuple->t_self, newOptsTuple);
-		CatalogUpdateIndexes(relationRelation, newOptsTuple);
-
-		heap_freetuple(newOptsTuple);
-
-		ReleaseSysCache(tuple);
-
-		heap_close(relationRelation, RowExclusiveLock);
-
-		/*
-		 * Increment cmd counter to make updates visible; this is
-		 * needed because the same tuple has to be updated again
-		 */
-		CommandCounterIncrement();
-	}
 
 	/* now, reindex */
 	reindex_relation(tarrelid, 0);

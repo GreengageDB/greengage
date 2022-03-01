@@ -39,7 +39,7 @@ Follow the instructions in [Verifying the VMware Tanzu Greenplum Software Downlo
 
 ### <a id="topic_install"></a>Installing the Greenplum Database Software
 
-Before you begin installing Greenplum Database, be sure you have completed the steps in [Configuring Your Systems](prep_os.html) to configure each of the coordinator, standby coordinator, and segment host machines for Greenplum Database.
+Before you begin installing Greenplum Database, be sure you have completed the steps in [Configuring Your Systems](prep_os.html) to configure each of the master, standby master, and segment host machines for Greenplum Database.
 
 **Important:** After installing Greenplum Database, you must set Greenplum Database environment variables. See [Setting Greenplum Environment Variables](init_gpdb.html).
 
@@ -49,7 +49,7 @@ Follow these instructions to install Greenplum Database from a pre-built binary.
 
 **Important:** You require sudo or root user access to install from a pre-built RPM or DEB file.
 
-1.  Download and copy the Greenplum Database package to the `gpadmin` user's home directory on the coordinator, standby coordinator, and every segment host machine. The distribution file name has the format `greenplum-db-<version>-<platform>.rpm` for RHEL, CentOS, and Oracle Linux systems, or `greenplum-db-<version>-<platform>.deb` for Ubuntu systems, where `<platform>` is similar to `rhel7-x86_64` \(Red Hat 7 64-bit\).
+1.  Download and copy the Greenplum Database package to the `gpadmin` user's home directory on the master, standby master, and every segment host machine. The distribution file name has the format `greenplum-db-<version>-<platform>.rpm` for RHEL, CentOS, and Oracle Linux systems, or `greenplum-db-<version>-<platform>.deb` for Ubuntu systems, where `<platform>` is similar to `rhel7-x86_64` \(Red Hat 7 64-bit\).
 
     **Note:** For Oracle Linux installations, download and install the `rhel7-x86_64`distribution files.
 
@@ -83,7 +83,7 @@ Follow these instructions to install Greenplum Database to a specific directory.
 
 **Important:** You require sudo or root user access to install from a pre-built RPM file.
 
-1.  Download and copy the Greenplum Database package to the `gpadmin` user's home directory on the coordinator, standby coordinator, and every segment host machine. The distribution file name has the format `greenplum-db-<version>-<platform>.rpm` for RHEL and CentOS systems, or `greenplum-db-<version>-<platform>.deb` for Ubuntu systems, where `<platform>` is similar to `rhel7-x86_64` \(Red Hat 7 64-bit\).
+1.  Download and copy the Greenplum Database package to the `gpadmin` user's home directory on the master, standby master, and every segment host machine. The distribution file name has the format `greenplum-db-<version>-<platform>.rpm` for RHEL and CentOS systems, or `greenplum-db-<version>-<platform>.deb` for Ubuntu systems, where `<platform>` is similar to `rhel7-x86_64` \(Red Hat 7 64-bit\).
 2.  Manually install the Greenplum Database dependencies to each host system:
 
     ```
@@ -112,9 +112,9 @@ If you install to a non-default directory using `rpm`, you will need to continue
 
 ## <a id="topic_xmb_gb5_vhb"></a>Enabling Passwordless SSH 
 
-The `gpadmin` user on each Greenplum host must be able to SSH from any host in the cluster to any other host in the cluster without entering a password or passphrase \(called "passwordless SSH"\). If you enable passwordless SSH from the coordinator host to every other host in the cluster \("1-*n* passwordless SSH"\), you can use the Greenplum Database `gpssh-exkeys` command-line utility to enable passwordless SSH from every host to every other host \("*n*-*n* passwordless SSH"\).
+The `gpadmin` user on each Greenplum host must be able to SSH from any host in the cluster to any other host in the cluster without entering a password or passphrase \(called "passwordless SSH"\). If you enable passwordless SSH from the master host to every other host in the cluster \("1-*n* passwordless SSH"\), you can use the Greenplum Database `gpssh-exkeys` command-line utility to enable passwordless SSH from every host to every other host \("*n*-*n* passwordless SSH"\).
 
-1.  Log in to the coordinator host as the `gpadmin` user.
+1.  Log in to the master host as the `gpadmin` user.
 2.  Source the `path` file in the Greenplum Database installation directory.
 
     ```
@@ -139,7 +139,7 @@ The `gpadmin` user on each Greenplum host must be able to SSH from any host in t
     $ SSHPASS=<password> sshpass -e ssh-copy-id smdw
     ```
 
-4.  In the `gpadmin` home directory, create a file named `hostfile_exkeys` that has the machine configured host names and host addresses \(interface names\) for each host in your Greenplum system \(coordinator, standby coordinator, and segment hosts\). Make sure there are no blank lines or extra spaces. Check the `/etc/hosts` file on your systems for the correct host names to use for your environment. For example, if you have a coordinator, standby coordinator, and three segment hosts with two unbonded network interfaces per host, your file would look something like this:
+4.  In the `gpadmin` home directory, create a file named `hostfile_exkeys` that has the machine configured host names and host addresses \(interface names\) for each host in your Greenplum system \(master, standby master, and segment hosts\). Make sure there are no blank lines or extra spaces. Check the `/etc/hosts` file on your systems for the correct host names to use for your environment. For example, if you have a master, standby master, and three segment hosts with two unbonded network interfaces per host, your file would look something like this:
 
     ```
     mdw
@@ -168,9 +168,9 @@ The `gpadmin` user on each Greenplum host must be able to SSH from any host in t
 
 ## <a id="topic10"></a>Confirming Your Installation 
 
-To make sure the Greenplum software was installed and configured correctly, run the following confirmation steps from your Greenplum coordinator host. If necessary, correct any problems before continuing on to the next task.
+To make sure the Greenplum software was installed and configured correctly, run the following confirmation steps from your Greenplum master host. If necessary, correct any problems before continuing on to the next task.
 
-1.  Log in to the coordinator host as `gpadmin`:
+1.  Log in to the master host as `gpadmin`:
 
     ```
     $ su - gpadmin

@@ -9,13 +9,12 @@
     EXPLAIN SELECT count(*) FROM t WHERE a @> '{"wait":null}';
                                      QUERY PLAN
 -------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..68.13 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..68.13 rows=1 width=8)
-         ->  Aggregate  (cost=0.00..68.13 rows=1 width=8)
-               ->  Bitmap Heap Scan on t  (cost=0.00..68.13 rows=1 width=1)
-                     Recheck Cond: (a @> '{"wait": null}'::jsonb)
-                     ->  Bitmap Index Scan on jidx  (cost=0.00..0.00 rows=0 width=0)
-                           Index Cond: (a @> '{"wait": null}'::jsonb)
+  Aggregate  (cost=0.00..391.30 rows=1 width=8)
+    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..391.30 rows=1 width=1)
+          ->  Bitmap Heap Scan on t  (cost=0.00..391.30 rows=1 width=1)
+                Recheck Cond: (a @> '{"wait": null}'::jsonb)
+                ->  Bitmap Index Scan on jidx  (cost=0.00..0.00 rows=0 width=0)
+                      Index Cond: (a @> '{"wait": null}'::jsonb)
   ]]>
   </dxl:Comment>
   <dxl:Thread Id="0">
