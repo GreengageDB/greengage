@@ -238,7 +238,7 @@ static int	InteractiveBackend(StringInfo inBuf);
 static int	interactive_getc(void);
 static int	SocketBackend(StringInfo inBuf);
 static int	ReadCommand(StringInfo inBuf);
-static void forbidden_in_wal_sender(char firstchar);
+static void forbidden_in_wal_sender(int firstchar);
 static List *pg_rewrite_query(Query *query);
 static bool check_log_statement(List *stmt_list);
 static int	errdetail_execute(List *raw_parsetree_list);
@@ -4610,7 +4610,7 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
  * received, and is used to construct the error message.
  */
 static void
-check_forbidden_in_gpdb_handlers(char firstchar)
+check_forbidden_in_gpdb_handlers(int firstchar)
 {
 	if (am_ftshandler || IsFaultHandler)
 	{
@@ -5766,7 +5766,7 @@ PostgresMain(int argc, char *argv[],
  * message was received, and is used to construct the error message.
  */
 static void
-forbidden_in_wal_sender(char firstchar)
+forbidden_in_wal_sender(int firstchar)
 {
 	if (am_walsender)
 	{
