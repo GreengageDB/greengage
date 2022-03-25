@@ -46,14 +46,14 @@ endif
 	$(CC) $(INCS) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
 
 install: all
-	mkdir -p $(prefix)/bin
-	cp -p gpmmon $(prefix)/bin
-	cp -p gpsmon $(prefix)/bin
-	cp -p gpperfmoncat.sh $(prefix)/bin
-	cp -p gpmon_catqrynow.py $(prefix)/sbin
-	cp -p gpperfmon_install $(prefix)/bin
-	mkdir -p $(prefix)/lib/gpperfmon
-	cp -p gpperfmon.sql $(prefix)/lib/gpperfmon
+	mkdir -p $(DESTDIR)$(prefix)/bin
+	cp -p gpmmon $(DESTDIR)$(prefix)/bin
+	cp -p gpsmon $(DESTDIR)$(prefix)/bin
+	cp -p gpperfmoncat.sh $(DESTDIR)$(prefix)/bin
+	cp -p gpmon_catqrynow.py $(DESTDIR)$(prefix)/sbin
+	cp -p gpperfmon_install $(DESTDIR)$(prefix)/bin
+	mkdir -p $(DESTDIR)$(prefix)/lib/gpperfmon
+	cp -p gpperfmon.sql $(DESTDIR)$(prefix)/lib/gpperfmon
 
 clean:
 	rm -rf *.o gpmmon gpsmon sigartest

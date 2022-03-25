@@ -202,7 +202,7 @@ typedef struct QueryDispatchDesc
 	/*
 	 * Security context flags.
 	 */
-	int     secContext;
+	int		secContext;
 } QueryDispatchDesc;
 
 /*

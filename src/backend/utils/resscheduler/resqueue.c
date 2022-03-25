@@ -1313,6 +1313,7 @@ ResRemoveFromWaitQueue(PGPROC *proc, uint32 hashcode)
 	/* Clean up the proc's own state */
 	proc->waitLock = NULL;
 	proc->waitProcLock = NULL;
+	proc->waitStatus = STATUS_ERROR;
 
 	/*
 	 * Remove the waited on portal increment.
