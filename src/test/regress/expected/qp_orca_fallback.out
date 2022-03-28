@@ -286,11 +286,11 @@ t2 AS (SELECT id, refrcode FROM tbl2 WHERE REFERENCEID = 101991)
                      ->  Hash  (cost=166.30..166.30 rows=2 width=548)
                            ->  Subquery Scan on r  (cost=0.00..166.30 rows=6 width=548)
                                  ->  Seq Scan on tbl2  (cost=0.00..166.25 rows=6 width=548)
-                                       Filter: (referenceid = 101991::numeric)
+                                       Filter: (referenceid = '101991'::numeric)
                ->  Hash  (cost=166.30..166.30 rows=2 width=548)
                      ->  Subquery Scan on r1  (cost=0.00..166.30 rows=6 width=548)
                            ->  Seq Scan on tbl2 tbl2_1  (cost=0.00..166.25 rows=6 width=548)
-                                 Filter: (referenceid = 101991::numeric)
+                                 Filter: (referenceid = '101991'::numeric)
  Optimizer: Postgres query optimizer
 (16 rows)
 
