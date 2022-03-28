@@ -302,6 +302,7 @@
             <li>
               <xref href="#gp_resource_manager"/>
             </li>
+            <li><xref href="#gp_retrieve_conn"/></li>
             <li>
               <xref href="#gp_use_legacy_hashops"/></li>
             <li><xref href="#gp_vmem_idle_resource_timeout"/></li>
@@ -467,6 +468,8 @@
               <xref href="#optimizer_enable_multiple_distinct_aggs" type="section"
                 >optimizer_enable_multiple_distinct_aggs</xref>
             </li>
+            <li><xref href="#optimizer_enable_orderedagg" type="section"
+                >optimizer_enable_orderedagg</xref></li>
             <li>
               <xref href="#optimizer_force_comprehensive_join_implementation" type="section"
                 >optimizer_force_comprehensive_join_implementation</xref>
@@ -1524,7 +1527,8 @@
     <body>
       <p>Selects the text search configuration that is used by those variants of the text search
         functions that do not have an explicit argument specifying the configuration. See <xref
-          href="../../admin_guide/textsearch/full-text-search.xml#full-text-search"/> for further
+          href="../../admin_guide/textsearch/full-text-search.html#full-text-search" scope="external"
+          format="html">Using Full Text Search</xref> for further
         information. The built-in default is <codeph>pg_catalog.simple</codeph>, but
           <codeph>initdb</codeph> will initialize the configuration file with a setting that
         corresponds to the chosen <codeph>lc_ctype</codeph> locale, if a configuration matching that
@@ -3136,7 +3140,8 @@
     <body>
       <p>Controls whether the Greenplum Database Global Deadlock Detector is enabled to manage
         concurrent <codeph>UPDATE</codeph> and <codeph>DELETE</codeph> operations on heap tables to
-        improve performance. See <xref href="../../admin_guide/dml.xml#topic_gdd"/><ph
+        improve performance. See <xref href="../../admin_guide/dml.html#topic_gdd" scope="external"
+          format="html">Inserting, Updating, and Deleting Data</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>.
         The default is <codeph>off</codeph>, the Global Deadlock Detector is disabled. </p>
       <p>If the Global Deadlock Detector is disabled (the default), Greenplum Database runs
@@ -3573,7 +3578,8 @@
       <p>Enable filter pushdown when reading data from external tables. If pushdown fails, a query
         is run without pushing filters to the external data source (instead, Greenplum Database
         applies the same constraints to the result). See <xref
-          href="../../admin_guide/external/g-external-tables.xml#topic3"/> for more information.</p>
+          href="../../admin_guide/external/g-external-tables.html#topic3" scope="external"
+          format="html">Defining External Tables</xref> for more information.</p>
       <table id="enable_filter_pushdown_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -4205,7 +4211,8 @@
         single-quoted string. The Greenplum system consists of a master and a single segment
         instance.<codeblock>gpconfig --skipvalidation -c gp_interconnect_proxy_addresses -v "'1:-1:192.168.180.50:35432,2:0:192.168.180.54:35000'"</codeblock></p>
       <p>For an example of setting <codeph>gp_interconnect_proxy_addresses</codeph>, see <xref
-          href="../../admin_guide/managing/proxy-ic.xml"/>.</p>
+          href="../../admin_guide/managing/proxy-ic.html" scope="external"
+          format="html">Configuring Proxies for the Greenplum Interconnect</xref>.</p>
       <table id="table_dlg_dch_mmb">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -4369,7 +4376,8 @@
         instances with the server configuration parameter <codeph><xref
             href="#gp_interconnect_proxy_addresses" format="dita"/></codeph>. For information about
         configuring and using proxies with the Greenplum interconnect, see <xref
-          href="../../admin_guide/managing/proxy-ic.xml"/>.</p>
+          href="../../admin_guide/managing/proxy-ic.html" scope="external"
+          format="html">Configuring Proxies for the Greenplum Interconnect</xref>.</p>
       <table id="table_jn5_frn_xv">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -4591,7 +4599,8 @@
         is allowed in the <codeph>WITH</codeph> clause of a command.</p>
       <p>For information about the <codeph>RECURSIVE</codeph> keyword, see the <codeph><xref
             href="../sql_commands/SELECT.xml">SELECT</xref></codeph> command and <xref
-          href="../../admin_guide/query/topics/CTE-query.xml"/>.</p>
+          href="../../admin_guide/query/topics/CTE-query.html" scope="external"
+          format="html">WITH Queries (Common Table Expressions)</xref>.</p>
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
       <note>This parameter was previously named <codeph>gp_recursive_cte_prototype</codeph>, but
@@ -4900,7 +4909,8 @@
     <body>
       <p>Identifies the resource management scheme currently enabled in the Greenplum Database
         cluster. The default scheme is to use resource queues. For information about Greenplum
-        Database resource management, see <xref href="../../admin_guide/wlmgmt.xml"/>.</p>
+        Database resource management, see <xref href="../../admin_guide/wlmgmt.html" scope="external"
+          format="html">Managing Resources</xref>.</p>
       <table id="gp_resource_manager_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -5063,10 +5073,40 @@
       </table>
     </body>
   </topic>
+  <topic id="gp_retrieve_conn">
+    <title>gp_retrieve_conn</title>
+    <body>
+      <p>A session that you initiate with <codeph>PGOPTIONS='-c gp_retrieve_conn=true'</codeph>
+        is a retrieve session. You use a retrieve session to retrieve query result tuples
+        from a specific endpoint instantiated for a parallel retrieve cursor.</p>
+      <p>The default value is <codeph>false</codeph>.</p>
+      <table id="gp_retrieve_conn_table">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">false</entry>
+              <entry colname="col3">read only</entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
   <topic id="gp_role">
     <title>gp_role</title>
     <body>
-      <p>The role of this server process " set to <i>dispatch</i> for the master and <i>execute</i>
+      <p>The role of this server process is set to <i>dispatch</i> for the master and <i>execute</i>
         for a segment.</p>
       <table id="gp_role_table">
         <tgroup cols="3">
@@ -7295,7 +7335,8 @@
       <p>The <cmdname>optimizer</cmdname> parameter can be set for a database system, an individual
         database, or a session or query.</p>
       <p>For information about the Postgres Planner and GPORCA, see <xref
-          href="../../admin_guide/query/topics/query.xml">Querying Data</xref><ph
+          href="../../admin_guide/query/topics/query.html" scope="external"
+          format="html">Querying Data</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator
         Guide</cite></ph>.</p>
       <table id="optimizer_guc_table">
@@ -7341,7 +7382,8 @@
         statistics on partitioned tables, see <codeph><xref href="../sql_commands/ANALYZE.xml"
           /></codeph>.</p>
       <p>For information about the Postgres Planner and GPORCA, see <xref
-          href="../../admin_guide/query/topics/query.xml">Querying Data</xref><ph
+          href="../../admin_guide/query/topics/query.html" scope="external"
+          format="html">Querying Data</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator
         Guide</cite></ph>.</p>
       <table id="table_gj5_k5l_vp">
@@ -7555,7 +7597,8 @@
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_zqr_knr_hdb">
         <tgroup cols="3">
@@ -7592,7 +7635,8 @@
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_igw_npf_fjb">
         <tgroup cols="3">
@@ -7632,7 +7676,8 @@
       <p>The parameter can be set for a database system, an individual database,
         or a session or query.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_igw_npf_fjb">
         <tgroup cols="3">
@@ -7669,7 +7714,8 @@
       <note>Enabling this parameter decreases performance of short running catalog queries. To avoid
         this issue, set this parameter only for a session or a query. </note>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_ykk_rg5_gv">
         <tgroup cols="3">
@@ -7705,7 +7751,43 @@
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
+          otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
+      <table id="table_zct_qn1_bpb">
+        <tgroup cols="3">
+          <colspec colnum="1" colname="col1" colwidth="1*"/>
+          <colspec colnum="2" colname="col2" colwidth="1*"/>
+          <colspec colnum="3" colname="col3" colwidth="1*"/>
+          <thead>
+            <row>
+              <entry colname="col1">Value Range</entry>
+              <entry colname="col2">Default</entry>
+              <entry colname="col3">Set Classifications</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry colname="col1">Boolean</entry>
+              <entry colname="col2">off</entry>
+              <entry colname="col3">master<p>session</p><p>reload</p></entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+    </body>
+  </topic>
+  <topic id="optimizer_enable_orderedagg">
+    <title>optimizer_enable_orderedagg</title>
+    <body>
+      <p>When GPORCA is enabled (the default), this parameter determines whether or not
+        GPORCA generates a query plan for ordered aggregates. This parameter is disabled by
+        default; GPORCA does not generate a plan for a query that includes an ordered
+        aggregate, and the query falls back to the Postgres Planner.</p>
+      <p>You can set this parameter for a database system, an individual database,
+        or a session or query.</p>
+      <p>For information about GPORCA, see <xref
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" format="html" scope="external">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_zct_qn1_bpb">
         <tgroup cols="3">
@@ -7743,7 +7825,8 @@
           <codeph>GROUP BY</codeph> columns for distribution. These plans might perform poorly when
         processing skew is present.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_ebp_rcr_cgb">
         <tgroup cols="3">
@@ -8095,7 +8178,8 @@
       <p>Setting this parameter to <codeph>ALWAYS</codeph> generates a minidump for all queries. Set
         this parameter to <codeph>ONERROR</codeph> to minimize total optimization time. </p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="optimizer_minidump">
         <tgroup cols="3">
@@ -8203,7 +8287,8 @@
       <p>The parameter can be set for a database system, an individual database, or a session or
         query.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_s11_lln_t3b">
         <tgroup cols="3">
@@ -8344,7 +8429,8 @@
         and improves GPORCA support of vmem limits when compared to GPORCA-specific memory
         management.</p>
       <p>For information about GPORCA, see <xref
-          href="../../admin_guide/query/topics/query-piv-optimizer.xml">About GPORCA</xref><ph
+          href="../../admin_guide/query/topics/query-piv-optimizer.html" scope="external"
+          format="html">About GPORCA</xref><ph
           otherprops="op-print"> in the <cite>Greenplum Database Administrator Guide</cite></ph>. </p>
       <table id="table_xlm_qxh_gjb">
         <tgroup cols="3">
@@ -8943,20 +9029,22 @@
           /></codeph>.</p>
       <p>For example, if vmem memory is set to 10GB, and this parameter is 90 (90%), Greenplum
         Database starts terminating queries when the utilized vmem memory exceeds 9 GB.</p>
-      <p>For information about resource queues, see <xref href="../../admin_guide/workload_mgmt.xml"
-        />.</p>
+      <p>For information about resource queues, see <xref href="../../admin_guide/workload_mgmt.html" scope="external"
+          format="html">Using Resource Queues</xref>.</p>
       <p><b>When resource groups are enabled -</b> This parameter sets the percent of utilized
         resource group global shared memory that triggers the termination of queries that are
         managed by resource groups that are configured to use the <codeph>vmtracker</codeph> memory
         auditor, such as <codeph>admin_group</codeph> and <codeph>default_group</codeph>. For
         information about memory auditors, see <xref
-          href="../../admin_guide/workload_mgmt_resgroups.xml#topic8339777"/>.</p>
+          href="../../admin_guide/workload_mgmt_resgroups.html#topic8339777" scope="external"
+          format="html">Memory Auditor</xref>.</p>
       <p>Resource groups have a global shared memory pool when the sum of the
           <codeph>MEMORY_LIMIT</codeph> attribute values configured for all resource groups is less
         than 100. For example, if you have 3 resource groups configured with
           <codeph>memory_limit</codeph> values of 10 , 20, and 30, then global shared memory is 40%
         = 100% - (10% + 20% + 30%). See <xref
-          href="../../admin_guide/workload_mgmt_resgroups.xml#topic833glob"/>.</p>
+          href="../../admin_guide/workload_mgmt_resgroups.html#topic833glob" scope="external"
+          format="html">Global Shared Memory</xref>.</p>
       <p>If the percentage of utilized global shared memory exceeds the specified value, Greenplum
         Database terminates queries based on memory usage, selecting from queries managed by the
         resource groups that are configured to use the <codeph>vmtracker</codeph> memory auditor.
@@ -8966,7 +9054,8 @@
       <p>For example, if global shared memory is 10GB, and this parameter is 90 (90%), Greenplum
         Database starts terminating queries when the utilized global shared memory exceeds 9 GB.</p>
       <p>For information about resource groups, see <xref
-          href="../../admin_guide/workload_mgmt_resgroups.xml"/>.</p>
+          href="../../admin_guide/workload_mgmt_resgroups.html" scope="external"
+          format="html">Using Resource Groups</xref>.</p>
       <table id="runaway_detector_activation_percent_table">
         <tgroup cols="3">
           <colspec colnum="1" colname="col1" colwidth="1*"/>
@@ -10233,7 +10322,8 @@ statement_mem = rg_perseg_mem / max_expected_concurrent_queries</codeblock></li>
         <note type="warning">Disabling SSL certificate authentication exposes a security risk by not
           validating the <codeph>gpfdists</codeph> SSL certificate. </note></p>
       <p>For information about the <codeph>gpfdists</codeph> protocol, see <xref
-          href="../../admin_guide/external/g-gpfdists-protocol.xml">gpfdists:// Protocol</xref>. For
+          href="../../admin_guide/external/g-gpfdists-protocol.html" scope="external"
+          format="html">gpfdists:// Protocol</xref>. For
         information about running the <codeph>gpfdist</codeph> utility, see <xref
           href="../../utility_guide/ref/gpfdist.xml"/>. </p>
       <table id="table_ncx_n1h_ldb">

@@ -97,6 +97,7 @@ test: bitmap_update_words_backup_block
 test: bitmap_index_crash
 test: bitmap_index_concurrent
 test: bitmap_union
+test: bitmap_index_inspect
 
 # below test utilizes fault injectors so it needs to be in a group by itself
 test: external_table
@@ -160,6 +161,7 @@ test: uao/bitmapindex_rescan_row
 test: reorganize_after_ao_vacuum_skip_drop truncate_after_ao_vacuum_skip_drop mark_all_aoseg_await_drop
 # below test(s) inject faults so each of them need to be in a separate group
 test: segwalrep/master_xlog_switch
+test: idle_gang_cleaner
 
 # Tests on Append-Optimized tables (column-oriented).
 test: uao/alter_while_vacuum_column uao/alter_while_vacuum2_column

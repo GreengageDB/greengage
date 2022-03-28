@@ -207,7 +207,7 @@ kernel.shmall = 197951838
 kernel.shmmax = 810810728448
 ```
 
-If the Greeplum Database master has a different shared memory configuration than the segment hosts, the \_PHYS\_PAGES and PAGE\_SIZE values might differ, and the `kernel.shmall` and `kernel.shmmax` values on the master host will differ from those on the segment hosts.
+If the Greenplum Database master has a different shared memory configuration than the segment hosts, the \_PHYS\_PAGES and PAGE\_SIZE values might differ, and the `kernel.shmall` and `kernel.shmmax` values on the master host will differ from those on the segment hosts.
 
 **Segment Host Memory**
 

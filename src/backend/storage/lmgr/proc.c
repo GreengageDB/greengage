@@ -320,7 +320,7 @@ InitProcess(void)
 	 * such as mppSessionId being valid and mppIsWriter set to true.
 	 */
 	if (IsAutoVacuumWorkerProcess() || am_walsender || am_ftshandler ||
-		IsFaultHandler)
+		am_faulthandler)
 		Gp_role = GP_ROLE_UTILITY;
 
 	/*
@@ -945,6 +945,8 @@ ProcKill(int code, Datum arg)
 	PGPROC	   *proc;
 
 	Assert(MyProc != NULL);
+
+	SIMPLE_FAULT_INJECTOR("proc_kill");
 
 	/* Make sure we're out of the sync rep lists */
 	SyncRepCleanupAtProcExit();

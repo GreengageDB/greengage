@@ -144,6 +144,7 @@
 #include "cdb/cdbgang.h"                /* cdbgang_parse_gpqeid_params */
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
+#include "cdb/cdbendpoint.h"
 #include "cdb/ic_proxy_bgworker.h"
 
 /*
@@ -2537,7 +2538,7 @@ retry1:
 	 * can make sense to first make a basebackup and then stream changes
 	 * starting from that.
 	 */
-	if ((am_walsender && !am_db_walsender) || am_ftshandler || IsFaultHandler)
+	if ((am_walsender && !am_db_walsender) || am_ftshandler || am_faulthandler)
 		port->database_name[0] = '\0';
 
 	/*
@@ -2559,7 +2560,7 @@ retry1:
 	switch (port->canAcceptConnections)
 	{
 		case CAC_STARTUP:
-			if ((am_ftshandler || IsFaultHandler) && am_mirror)
+			if ((am_ftshandler || am_faulthandler) && am_mirror)
 				break;
 
 			recptr = last_xlog_replay_location();
@@ -2594,7 +2595,7 @@ retry1:
 			Assert(port->canAcceptConnections != CAC_WAITBACKUP);
 			break;
 		case CAC_MIRROR_READY:
-			if (am_ftshandler || IsFaultHandler)
+			if (am_ftshandler || am_faulthandler)
 			{
 				/* Even if the connection state is MIRROR_READY, the role
 				 * may change to primary during promoting. Hence, we need
@@ -2622,7 +2623,7 @@ retry1:
 	}
 
 #ifdef FAULT_INJECTOR
-	if (!am_ftshandler && !IsFaultHandler && !am_walsender &&
+	if (!am_ftshandler && !am_faulthandler && !am_walsender &&
 		FaultInjector_InjectFaultIfSet("process_startup_packet",
 									   DDLNotSpecified,
 									   port->database_name /* databaseName */,
@@ -4752,7 +4753,7 @@ BackendInitialize(Port *port)
 	else if (am_ftshandler)
 		init_ps_display("fts handler process", port->user_name, remote_ps_data,
 						update_process_title ? "authentication" : "");
-	else if (IsFaultHandler)
+	else if (am_faulthandler)
 		init_ps_display("fault handler process", port->user_name, remote_ps_data,
 						update_process_title ? "authentication" : "");
 	else

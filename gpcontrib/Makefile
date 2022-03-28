@@ -14,19 +14,23 @@ recurse_targets = ""
 ifeq "$(enable_debug_extensions)" "yes"
 	recurse_targets = gp_sparse_vector \
                gp_distribution_policy \
+               gp_parallel_retrieve_cursor \
                gp_internal_tools \
                gp_pitr \
                gp_debug_numsegments \
                gp_inject_fault \
                gp_replica_check \
                gp_legacy_string_agg \
+               gp_array_agg \
                gp_error_handling
 else
 	recurse_targets = gp_sparse_vector \
                gp_distribution_policy \
+               gp_parallel_retrieve_cursor \
                gp_internal_tools \
                gp_pitr \
                gp_legacy_string_agg \
+               gp_array_agg \
                gp_error_handling
 endif
 
@@ -81,15 +85,11 @@ distclean:
 
 installcheck:
 	$(MAKE) -C gp_internal_tools installcheck
+	$(MAKE) -C gp_array_agg installcheck
 	if [ "$(enable_mapreduce)" = "yes" ]; then \
 		$(MAKE) -C gpmapreduce installcheck; \
 	fi
 	if [ "$(enable_orafce)" = "yes" ]; then $(MAKE) -C orafce installcheck; fi
-
-ifeq "$(with_zstd)" "yes"
-	$(MAKE) -C zstd installcheck
-endif
-
-ifeq "$(with_quicklz)" "yes"
-	$(MAKE) -C quicklz installcheck
-endif
+	if [ "$(with_zstd)" = "yes" ]; then $(MAKE) -C zstd installcheck; fi
+	if [ "$(with_quicklz)" = "yes" ]; then $(MAKE) -C quicklz installcheck; fi
+	$(MAKE) -C gp_sparse_vector installcheck

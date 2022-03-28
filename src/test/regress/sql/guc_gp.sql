@@ -219,32 +219,6 @@ $$ language plpythonu;
 
 select run_all_in_one();
 
--- when the original string guc is empty, we change the guc to new value during executing a command.
--- this guc will be added to gp_guc_restore_list, and they will be restored
--- to original value to qe when the next command is executed.
--- however, the dispatch command is "set xxx to ;" that is wrong.
-create extension if not exists gp_inject_fault;
-create table public.restore_guc_test(tc1 int);
-
--- inject fault to change the value of search_path during creating materialized view
-SELECT gp_inject_fault('change_string_guc', 'skip', 1);
--- inject fault when dispatch guc restore command occur errors, we throw an error.
-SELECT gp_inject_fault('restore_string_guc', 'error', 1);
-
--- set search_path to '';
-SELECT pg_catalog.set_config('search_path', '', false);
--- trigger inject fault of change_string_guc, and add this guc to gp_guc_restore_list
-create MATERIALIZED VIEW public.view_restore_guc_test as select * from public.restore_guc_test;
-
---we should restore gucs in gp_guc_restore_list to qe, no error occurs.
-drop MATERIALIZED VIEW public.view_restore_guc_test;
-drop table public.restore_guc_test;
-
---cleanup
-reset search_path;
-SELECT gp_inject_fault('change_string_guc', 'reset', 1);
-SELECT gp_inject_fault('restore_string_guc', 'reset', 1);
-
 -- Test single query default_tablespace GUC rollback
 -- Function just to save default_tablespace GUC to gp_guc_restore_list
 CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
@@ -277,7 +251,7 @@ BEGIN
     EXECUTE 'SELECT 1;';
 END;
 $$ LANGUAGE plpgsql
-SET gp_default_storage_options TO 'appendonly=false,blocksize=32768,compresstype=none,checksum=true,orientation=row';
+SET gp_default_storage_options TO 'blocksize=32768,compresstype=none,checksum=false';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
@@ -294,8 +268,8 @@ SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg
 DROP TABLE just_a_temp_table;
 
 -- Test single query lc_numeric GUC rollback
--- Set lc_numeric to value that has to be quoted due to dot
-SET lc_numeric TO 'en_US.utf8';
+-- Set lc_numeric to OS-friendly value
+SET lc_numeric TO 'C';
 -- Function just to save lc_numeric GUC to gp_guc_restore_list
 CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
 AS $$
@@ -303,7 +277,7 @@ BEGIN
     EXECUTE 'SELECT 1;';
 END;
 $$ LANGUAGE plpgsql
-SET lc_numeric TO 'en_US.utf8';
+SET lc_numeric TO 'C';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
@@ -392,3 +366,34 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
 -- Cleanup
 DROP TABLE just_a_temp_table;
+
+-- Test single query search_path GUC rollback
+-- Add empty value to search_path that caused issues before
+-- to verify that rollback it it will be successful.
+SET search_path TO public, '';
+-- Function just to save default_tablespace GUC to gp_guc_restore_list
+CREATE OR REPLACE FUNCTION set_conf_param() RETURNS VOID
+AS $$
+BEGIN
+    EXECUTE 'SELECT 1;';
+END;
+$$ LANGUAGE plpgsql
+SET search_path TO "public";
+
+-- Create temp table to create temp schema
+CREATE TEMP TABLE just_a_temp_table (a int);
+-- Temp schema should be created for each segment
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Save default_tablespace GUC to gp_guc_restore_list
+SELECT set_conf_param();
+-- Trigger default_tablespace GUC restore from gp_guc_restore_list
+SELECT 1;
+
+-- When search_path GUC is restored from gp_guc_restore_list
+-- successfully no RemoveTempRelationsCallback is called.
+-- So check that segments still have temp schemas
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+-- Cleanup
+DROP TABLE just_a_temp_table;
+RESET search_path;
+

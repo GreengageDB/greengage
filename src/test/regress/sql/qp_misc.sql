@@ -8,6 +8,7 @@ SET standard_conforming_strings = off;
 SET check_function_bodies = false;
 SET client_min_messages = warning;
 SET escape_string_warning = off;
+SET optimizer_trace_fallback = on;
 
 SET default_with_oids = false;
 
@@ -9609,6 +9610,8 @@ group by
 f1,f2,f3
 ) Q ) P;
 -- JoinCoreSimpleAndJoinedTable_p1
+SET optimizer_trace_fallback = off;
+-- FIXME: ORCA CHistogram.cpp:793: Failed assertion: result_histogram->IsValid()
 select 'JoinCoreSimpleAndJoinedTable_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
 select f1,f2,f3,f4, count(*) c  from (
@@ -9619,6 +9622,7 @@ select tjoin2.rnum, tjoin1.c1, tjoin1.c2, tjoin2.c2 as c2j2 from tjoin1 left out
 group by
 f1,f2,f3,f4
 ) Q ) P;
+SET optimizer_trace_fallback = on;
 -- JoinCoreTwoSidedJoinRestrictionFilter_p1
 select 'JoinCoreTwoSidedJoinRestrictionFilter_p1' test_name_part, case when c = 1 then 1 else 0 end pass_ind from (
 select count(distinct c) c from (
@@ -15603,3 +15607,10 @@ WITH cte_coll AS
 SELECT *
 FROM   cte_coll
 WHERE  tkn_arr <> '{nullout}' ;
+-- Test paramcollid is correctly set
+SET optimizer_enable_hashjoin=false;
+CREATE TABLE tparam (a varchar(100) PRIMARY KEY);
+INSERT INTO tparam VALUES ('a_value');
+
+SELECT * FROM tparam t1 JOIN tparam t2 ON UPPER(t1.a) = t2.a;
+RESET optimizer_enable_hashjoin;

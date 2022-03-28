@@ -2551,6 +2551,8 @@ IndexBuildScan(Relation parentRelation,
 		if (!RelationIsAppendOptimized(parentRelation))
 			/* okay to ignore lazy VACUUMs here */
 			OldestXmin = GetOldestXmin(parentRelation, true);
+		else
+			OldestXmin = InvalidTransactionId;
 	}
 
 	if (RelationIsHeap(parentRelation))

@@ -1909,9 +1909,11 @@ results_differ(const char *testname, const char *resultsfile, const char *defaul
     char		diff_opts[MAXPGPATH];
 	char	   *diff_opts_st = diff_opts;
 	char	   *diff_opts_en = diff_opts + sizeof(diff_opts);
-    char		m_pretty_diff_opts[MAXPGPATH];
-    char	   *pretty_diff_opts_st = m_pretty_diff_opts;
-    char	   *pretty_diff_opts_en = m_pretty_diff_opts + sizeof(m_pretty_diff_opts);
+	char		m_pretty_diff_opts[MAXPGPATH];
+	char		generated_initfile[MAXPGPATH];
+	char	   *pretty_diff_opts_st = m_pretty_diff_opts;
+	char	   *pretty_diff_opts_en = m_pretty_diff_opts + sizeof(m_pretty_diff_opts);
+	char		buf[MAXPGPATH];
 	FILE	   *difffile;
 	int			best_line_count;
 	int			i;
@@ -1959,10 +1961,22 @@ results_differ(const char *testname, const char *resultsfile, const char *defaul
 										" --gpd_init %s", sl->str);
 	}
 
+	/* Add auto generated init file if it is generated */
+	snprintf(buf, sizeof(buf), "%s.ini", resultsfile);
+	if (file_exists(buf))
+	{
+		snprintf(generated_initfile, sizeof(generated_initfile),
+				 "--gpd_init %s", buf);
+	}
+	else
+	{
+		memset(generated_initfile, '\0', sizeof(generated_initfile));
+	}
+
 	/* OK, run the diff */
 	snprintf(cmd, sizeof(cmd),
-			 "%s %s \"%s\" \"%s\" > \"%s\"",
-			 gpdiffprog, diff_opts, expectfile, resultsfile, diff);
+			 "%s %s %s \"%s\" \"%s\" > \"%s\"",
+			 gpdiffprog, diff_opts, generated_initfile, expectfile, resultsfile, diff);
 
 	/* Is the diff file empty? */
 	if (run_diff(cmd, diff) == 0)
@@ -1994,8 +2008,8 @@ results_differ(const char *testname, const char *resultsfile, const char *defaul
 		}
 
 		snprintf(cmd, sizeof(cmd),
-				 "%s %s \"%s\" \"%s\" > \"%s\"",
-				 gpdiffprog, diff_opts, alt_expectfile, resultsfile, diff);
+				 "%s %s %s \"%s\" \"%s\" > \"%s\"",
+				 gpdiffprog, diff_opts, generated_initfile, alt_expectfile, resultsfile, diff);
 
 		if (run_diff(cmd, diff) == 0)
 		{
@@ -2030,8 +2044,8 @@ results_differ(const char *testname, const char *resultsfile, const char *defaul
 	if (platform_expectfile)
 	{
 		snprintf(cmd, sizeof(cmd),
-				 "%s %s \"%s\" \"%s\" > \"%s\"",
-				 gpdiffprog, diff_opts, default_expectfile, resultsfile, diff);
+				 "%s %s %s \"%s\" \"%s\" > \"%s\"",
+				 gpdiffprog, diff_opts, generated_initfile, default_expectfile, resultsfile, diff);
 
 		if (run_diff(cmd, diff) == 0)
 		{
@@ -2054,8 +2068,8 @@ results_differ(const char *testname, const char *resultsfile, const char *defaul
 	 * append to the diffs summary file.
 	 */
 	snprintf(cmd, sizeof(cmd),
-			 "%s %s \"%s\" \"%s\" >> \"%s\"",
-			 gpdiffprog, m_pretty_diff_opts, best_expect_file, resultsfile, difffilename);
+			 "%s %s %s \"%s\" \"%s\" >> \"%s\"",
+			 gpdiffprog, m_pretty_diff_opts, generated_initfile, best_expect_file, resultsfile, difffilename);
 	run_diff(cmd, difffilename);
 
 	/* And append a separator */

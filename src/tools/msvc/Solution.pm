@@ -763,7 +763,7 @@ sub GetFakeConfigure
 	$cfg .= ' --enable-tap-tests' if ($self->{options}->{tap_tests});
 	$cfg .= ' --with-ldap'  if ($self->{options}->{ldap});
 	$cfg .= ' --without-zlib' unless ($self->{options}->{zlib});
-	$cfg .= ' --with-openssl'   if ($self->{options}->{ssl});
+	$cfg .= ' --with-openssl'   if ($self->{options}->{openssl});
 	$cfg .= ' --with-ossp-uuid' if ($self->{options}->{uuid});
 	$cfg .= ' --with-libxml'    if ($self->{options}->{xml});
 	$cfg .= ' --with-libxslt'   if ($self->{options}->{xslt});

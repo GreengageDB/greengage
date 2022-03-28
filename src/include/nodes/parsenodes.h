@@ -2661,6 +2661,7 @@ typedef struct SecLabelStmt
  * CURRENT OF. It can be passed to SPI_prepare_cursor.
  */
 #define CURSOR_OPT_UPDATABLE	0x0200	/* updateable with CURRENT OF, if possible */
+#define CURSOR_OPT_PARALLEL_RETRIEVE 0x0400	/* Cursor for parallel retrieving */
 
 typedef struct DeclareCursorStmt
 {
@@ -3386,5 +3387,13 @@ typedef struct AlterTSConfigurationStmt
 	bool		replace;		/* if true - replace dictionary by another */
 	bool		missing_ok;		/* for DROP - skip error if missing? */
 } AlterTSConfigurationStmt;
+
+typedef struct RetrieveStmt
+{
+	NodeTag		type;
+	char		*endpoint_name;
+	int64		count;
+	bool		is_all;
+} RetrieveStmt;
 
 #endif   /* PARSENODES_H */

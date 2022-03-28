@@ -74,6 +74,7 @@
 
 #include "access/distributedlog.h"
 #include "cdb/cdbdistributedsnapshot.h"
+#include "cdb/cdbendpoint.h"
 #include "cdb/cdbgang.h"
 #include "cdb/cdblocaldistribxact.h"
 #include "cdb/cdbtm.h"
@@ -3300,6 +3301,7 @@ AbortTransaction(void)
 	 * do abort processing
 	 */
 	AfterTriggerEndXact(false); /* 'false' means it's abort */
+	AtAbort_EndpointExecState();
 	AtAbort_Portals();
 	AtAbort_DispatcherState();
 	AtEOXact_SharedSnapshot();

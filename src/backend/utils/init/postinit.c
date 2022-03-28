@@ -38,6 +38,7 @@
 #include "libpq/auth.h"
 #include "libpq/hba.h"
 #include "libpq/libpq-be.h"
+#include "cdb/cdbendpoint.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
@@ -824,7 +825,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	}
 	else if (am_mirror)
 	{
-		Assert(am_ftshandler || IsFaultHandler);
+		Assert(am_ftshandler || am_faulthandler);
 		/*
 		 * A mirror must receive and act upon FTS messages.  Performing proper
 		 * authentication involves reading pg_authid.  Heap access is not
@@ -914,7 +915,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 					 errmsg("must be superuser or replication role to start walsender")));
 	}
 
-	if ((am_ftshandler || IsFaultHandler) && !am_superuser)
+	if ((am_ftshandler || am_faulthandler) && !am_superuser)
 		ereport(FATAL,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser role to handle FTS request")));
@@ -925,7 +926,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * backend startup by processing any options from the startup packet, and
 	 * we're done.
 	 */
-	if ((am_walsender && !am_db_walsender) || am_ftshandler || IsFaultHandler)
+	if ((am_walsender && !am_db_walsender) || am_ftshandler || am_faulthandler)
 	{
 		/* process any options passed in the startup packet */
 		if (MyProcPort != NULL)
@@ -1131,6 +1132,23 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 */
 	if (MyProcPort != NULL)
 		process_startup_options(MyProcPort, am_superuser);
+
+	/*
+	 * am_cursor_retrieve_handler is set by GUC so need to judge after calling
+	 * process_startup_options().
+	 */
+	if (am_cursor_retrieve_handler)
+	{
+		Gp_role = GP_ROLE_UTILITY;
+		Gp_session_role = GP_ROLE_UTILITY;
+
+		/* Sanity check for security: This should not happen but in case ... */
+		if (!retrieve_conn_authenticated)
+			ereport(FATAL,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("retrieve connection was not authenticated for unknown reason")));
+		InitRetrieveCtl();
+	}
 
 	/*
 	 * Maintenance Mode: allow superuser to connect when

@@ -109,12 +109,12 @@
                 <xref href="guc-list.xml#max_prepared_transactions" type="section"
                   >max_prepared_transactions</xref>
               </p>
+            </stentry>
+            <stentry>
               <p>
                 <xref href="guc-list.xml#superuser_reserved_connections" type="section"
                   >superuser_reserved_connections</xref>
               </p>
-            </stentry>
-            <stentry>
               <p>
                 <xref href="guc-list.xml#tcp_keepalives_count" type="section"
                   >tcp_keepalives_count</xref>
@@ -319,8 +319,7 @@
     <title>GPORCA Parameters</title>
     <body>
       <p>These parameters control the usage of GPORCA by Greenplum Database. For information about
-        GPORCA, see <xref href="../../admin_guide/query/topics/query-piv-optimizer.xml">About
-          GPORCA</xref><ph otherprops="op-print"> in the <cite>Greenplum Database Administrator
+        GPORCA, see <xref href="../../admin_guide/query/topics/query-piv-optimizer.html" format="html" scope="external">About GPORCA</xref> <ph otherprops="op-print"> in the <cite>Greenplum Database Administrator
             Guide</cite></ph>. </p>
       <simpletable frame="none" id="simpletable_nq5_z2c_kr">
         <strow>
@@ -359,6 +358,8 @@
                 >optimizer_enable_master_only_queries</xref></p>
             <p><xref href="guc-list.xml#optimizer_enable_multiple_distinct_aggs" type="section"
               >optimizer_enable_multiple_distinct_aggs</xref></p>
+            <p><xref href="guc-list.xml#optimizer_enable_orderedagg" type="section"
+                >optimizer_enable_orderedagg</xref></p>
             <p><xref href="guc-list.xml#optimizer_force_agg_skew_avoidance" type="section"
                 >optimizer_force_agg_skew_avoidance</xref></p>
             <p><xref href="guc-list.xml#optimizer_force_comprehensive_join_implementation" type="section"
@@ -1571,6 +1572,9 @@
               </p>
               <p>
                 <xref href="guc-list.xml#gp_dbid" type="section">gp_dbid</xref>
+              </p>
+              <p>
+                <xref href="guc-list.xml#gp_retrieve_conn" type="section">gp_retrieve_conn</xref>
               </p>
             </stentry>
             <stentry>

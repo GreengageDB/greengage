@@ -3213,6 +3213,52 @@ DROP TABLE IF EXISTS dist_tab_a;
 DROP TABLE IF EXISTS dist_tab_b;
 DROP TABLE IF EXISTS result_tab;
 
+-- Test if orca produces bitmap scan on mixed partitions
+create table mixed_part( a int) distributed randomly
+partition by range (a)
+( partition a1 start (1) end (100) with (appendonly='true'),
+partition a2 start (100) end (200) with (appendonly='false'));
+create index idx_mixed_part on mixed_part using btree(a);
+
+insert into mixed_part select i from generate_series(1,199)i;
+insert into mixed_part select 12 from generate_series(1,100)i;
+analyze mixed_part;
+
+explain select * from mixed_part where a=3;
+select * from mixed_part where a=3;
+
+-- Test that orca still produces index scan on heap partitions
+create table heap_part( a int) distributed randomly
+partition by range (a)
+( partition a1 start (1) end (100) with (appendonly='false'),
+partition a2 start (100) end (200) with (appendonly='false'));
+create index idx_heap_part on heap_part using btree(a);
+
+insert into heap_part select i from generate_series(1,199)i;
+insert into heap_part select 12 from generate_series(1,100)i;
+analyze heap_part;
+
+explain select * from heap_part where a=3;
+select * from heap_part where a=3;
+
+-- Generate bitmap scan for mixed index types
+create table part_table13(a int, b int, c int)
+partition by range(b)
+(
+partition p1 start(1) end(10),
+partition p2 start(10) end (20) with (appendonly=true),
+partition p3 start(20) end (30) with (appendonly=true,orientation=column),
+partition p4 start(30) end (40)
+);
+
+create index part_table13_1_idx on part_table13_1_prt_p1 using btree(c);
+create index part_table13_2_idx on part_table13_1_prt_p2 using btree(c);
+create index part_table13_3_idx on part_table13_1_prt_p3 using bitmap(c);
+create index part_table13_4_idx on part_table13_1_prt_p4 using bitmap(c);
+
+explain select * from part_table13 where c=7;
+select * from part_table13 where c=7;
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore

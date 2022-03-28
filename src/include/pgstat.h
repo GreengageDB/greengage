@@ -763,6 +763,20 @@ typedef enum BackendState
 } BackendState;
 
 /* ----------
+ * Command type for progress reporting purposes
+ * ----------
+ */
+typedef enum ProgressCommandType
+{
+	PROGRESS_COMMAND_INVALID,
+	PROGRESS_COMMAND_VACUUM,
+	PROGRESS_COMMAND_CLUSTER,
+	PROGRESS_COMMAND_CREATE_INDEX
+} ProgressCommandType;
+
+#define PGSTAT_NUM_PROGRESS_PARAM	20
+
+/* ----------
  * Shared-memory data structures
  * ----------
  */

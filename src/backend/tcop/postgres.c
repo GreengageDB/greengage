@@ -90,6 +90,7 @@
 #include "cdb/cdbdtxcontextinfo.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
+#include "cdb/cdbendpoint.h"
 #include "cdb/cdbgang.h"
 #include "cdb/ml_ipc.h"
 #include "utils/guc.h"
@@ -1575,10 +1576,6 @@ restore_guc_to_QE(void )
 		}
 		PG_CATCH();
 		{
-
-#ifdef FAULT_INJECTOR
-			SIMPLE_FAULT_INJECTOR("restore_string_guc");
-#endif
 			/* if some guc can not restore successful
 			 * we can not keep alive gang anymore.
 			 */
@@ -3984,29 +3981,32 @@ ProcessInterrupts(const char* filename, int lineno)
 		 */
 		if (!DoingCommandRead)
 		{
+			StringInfoData cancel_msg_str;
+
 			ImmediateInterruptOK = false;		/* not idle anymore */
+
 			LockErrorCleanup();
 			DisableNotifyInterrupt();
 			DisableCatchupInterrupt();
 
+			initStringInfo(&cancel_msg_str);
+			if (HasCancelMessage())
+			{
+				char *buffer = palloc0(MAX_CANCEL_MSG);
+
+				GetCancelMessage(&buffer, MAX_CANCEL_MSG);
+				appendStringInfo(&cancel_msg_str, ": \"%s\"", buffer);
+				pfree(buffer);
+			}
+
 			if (Gp_role == GP_ROLE_EXECUTE)
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_OPERATION_CANCELED),
-						 errmsg("canceling MPP operation")));
-			else if (HasCancelMessage())
-			{
-				char   *buffer = palloc0(MAX_CANCEL_MSG);
-
-				GetCancelMessage(&buffer, MAX_CANCEL_MSG);
-				ereport(ERROR,
-						(errcode(ERRCODE_QUERY_CANCELED),
-						 errmsg("canceling statement due to user request: \"%s\"",
-								buffer)));
-			}
+						 errmsg("canceling MPP operation%s", cancel_msg_str.data)));
 			else
 				ereport(ERROR,
 						(errcode(ERRCODE_QUERY_CANCELED),
-						 errmsg("canceling statement due to user request")));
+						 errmsg("canceling statement due to user request%s", cancel_msg_str.data)));
 		}
 	}
 	/* If we get here, do nothing (probably, QueryCancelPending was reset) */
@@ -4612,7 +4612,7 @@ process_postgres_switches(int argc, char *argv[], GucContext ctx,
 static void
 check_forbidden_in_gpdb_handlers(int firstchar)
 {
-	if (am_ftshandler || IsFaultHandler)
+	if (am_ftshandler || am_faulthandler)
 	{
 		switch (firstchar)
 		{
@@ -4629,6 +4629,15 @@ check_forbidden_in_gpdb_handlers(int firstchar)
 	}
 }
 
+static void
+forbidden_in_retrieve_handler(char firstchar)
+{
+	if (am_cursor_retrieve_handler)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROTOCOL_VIOLATION),
+				 errmsg("protocol '%c' is not supported in a GPDB parallel retrieve cursor connection",
+						firstchar)));
+}
 
 /* ----------------------------------------------------------------
  * PostgresMain
@@ -4941,7 +4950,7 @@ PostgresMain(int argc, char *argv[],
 	}
 
 	/* Also send GPDB QE-backend startup info (motion listener, version). */
-	if (!(am_ftshandler || IsFaultHandler) && Gp_role == GP_ROLE_EXECUTE)
+	if (!(am_ftshandler || am_faulthandler) && Gp_role == GP_ROLE_EXECUTE)
 	{
 #ifdef FAULT_INJECTOR
 		if (SIMPLE_FAULT_INJECTOR("send_qe_details_init_backend") != FaultInjectorTypeSkip)
@@ -5181,14 +5190,25 @@ PostgresMain(int argc, char *argv[],
 		 */
 		if (send_ready_for_query)
 		{
+			char activity[50];
+			memset(activity, 0, sizeof(activity));
+			int remain = sizeof(activity);
+
+			if (am_cursor_retrieve_handler)
+			{
+				strncpy(activity, "[retrieve] ", sizeof(activity));
+				remain -= strlen(activity);
+			}
 			if (IsAbortedTransactionBlockState())
 			{
-				set_ps_display("idle in transaction (aborted)", false);
+				strncat(activity, "idle in transaction (aborted)", remain);
+				set_ps_display(activity, false);
 				pgstat_report_activity(STATE_IDLEINTRANSACTION_ABORTED, NULL);
 			}
 			else if (IsTransactionOrTransactionBlock())
 			{
-				set_ps_display("idle in transaction", false);
+				strncat(activity, "idle in transaction", remain);
+				set_ps_display(activity, false);
 				pgstat_report_activity(STATE_IDLEINTRANSACTION, NULL);
 			}
 			else
@@ -5197,7 +5217,8 @@ PostgresMain(int argc, char *argv[],
 				pgstat_report_stat(false);
 				pgstat_report_queuestat();
 
-				set_ps_display("idle", false);
+				strncat(activity, "idle", remain);
+				set_ps_display(activity, false);
 				pgstat_report_activity(STATE_IDLE, NULL);
 			}
 
@@ -5299,7 +5320,7 @@ PostgresMain(int argc, char *argv[],
 						exec_replication_command(query_string);
 					else if (am_ftshandler)
 						HandleFtsMessage(query_string);
-					else if (IsFaultHandler)
+					else if (am_faulthandler)
 						HandleFaultMessage(query_string);
 					else
 						exec_simple_query(query_string);
@@ -5579,6 +5600,7 @@ PostgresMain(int argc, char *argv[],
 
 			case 'F':			/* fastpath function call */
 				forbidden_in_wal_sender(firstchar);
+				forbidden_in_retrieve_handler(firstchar);
 
 				/* Set statement_timestamp() */
 				SetCurrentStatementStartTimestamp();

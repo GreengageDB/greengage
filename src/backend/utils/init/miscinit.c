@@ -471,7 +471,7 @@ InitializeSessionUserIdStandalone(void)
 	 */
 	AssertState(!IsUnderPostmaster || IsAutoVacuumWorkerProcess() || IsBackgroundWorker
 				|| am_startup
-				|| (IsFaultHandler && am_mirror)
+				|| (am_faulthandler && am_mirror)
 				|| (am_ftshandler && am_mirror));
 
 	/* call only once */

@@ -1472,7 +1472,7 @@ setup_config(void)
 	 * have to run on a machine without.
 	 */
 	{
-		struct addrinfo *gai_result;
+		struct addrinfo *gai_result = NULL;
 		struct addrinfo hints;
 		int			err = 0;
 
@@ -1495,14 +1495,24 @@ setup_config(void)
 
 		if (err != 0 ||
 			getaddrinfo("::1", NULL, &hints, &gai_result) != 0)
+		{
 			conflines = replace_token(conflines,
 							   "host    all             all             ::1",
 							 "#host    all             all             ::1");
+			if (gai_result != NULL)
+				freeaddrinfo(gai_result);
+			gai_result = NULL;
+		}
 		if (err != 0 ||
 			getaddrinfo("fe80::1", NULL, &hints, &gai_result) != 0)
+		{
 			conflines = replace_token(conflines,
 							   "host    all             all             fe80::1",
 							 "#host    all             all             fe80::1");
+			if (gai_result != NULL)
+				freeaddrinfo(gai_result);
+			gai_result = NULL;
+		}
 	}
 #else							/* !HAVE_IPV6 */
 	/* If we didn't compile IPV6 support at all, always comment it out */
@@ -2308,6 +2318,7 @@ setup_cdb_schema(void)
 		sprintf(path, "%s/cdb_init.d/%s", share_path, scriptnames[i]);
 
 		lines = readfile(path);
+		pg_free(path);
 
 		/*
 		 * We use -j here to avoid backslashing stuff in
