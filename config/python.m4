@@ -16,7 +16,7 @@
 # "python2" and "python3", in which case it's reasonable to prefer the
 # newer version.
 AC_DEFUN([PGAC_PATH_PYTHON],
-[PGAC_PATH_PROGS(PYTHON, [python python2])
+[PGAC_PATH_PROGS(PYTHON, [python python3 python2])
 if test x"$PYTHON" = x""; then
   AC_MSG_ERROR([Python not found])
 fi
