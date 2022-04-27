@@ -33,7 +33,6 @@ extern CommandDest whereToSendOutput;
 extern PGDLLIMPORT const char *debug_query_string;
 extern int	max_stack_depth;
 extern int	PostAuthDelay;
-extern int  client_connection_check_interval;
 
 /* GUC-configurable parameters */
 

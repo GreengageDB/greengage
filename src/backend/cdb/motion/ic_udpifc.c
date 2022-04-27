@@ -5888,12 +5888,16 @@ dispatcherAYT(void)
 static void
 checkQDConnectionAlive(void)
 {
-	if (Gp_role == GP_ROLE_EXECUTE)
+	if (!dispatcherAYT())
 	{
-		if (!dispatcherAYT())
+		if (Gp_role == GP_ROLE_EXECUTE)
 			ereport(ERROR,
 					(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 					 errmsg("interconnect error segment lost contact with master (recv)")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+					 errmsg("interconnect error master lost contact with client (recv)")));
 	}
 }
 

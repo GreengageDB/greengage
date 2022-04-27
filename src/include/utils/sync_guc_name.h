@@ -1,6 +1,5 @@
 		"bytea_output",
 		"check_function_bodies",
-		"client_connection_check_interval",
 		"client_min_messages",
 		"commit_delay",
 		"commit_siblings",
