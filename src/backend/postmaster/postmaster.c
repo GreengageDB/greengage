@@ -220,6 +220,12 @@ char	   *Unix_socket_directories;
 char	   *ListenAddresses;
 
 /*
+ * The interconnect address. We assume the interconnect is the address
+ * in gp_segment_configuration. And it's never changed at runtime.
+ */
+char	   *interconnect_address = NULL;
+
+/*
  * ReservedBackends is the number of backends reserved for superuser use.
  * This number is taken out of the pool size given by MaxBackends so
  * number of backend slots available to non-superusers is
@@ -2067,6 +2073,19 @@ ServerLoop(void)
 			AbortStartTime != 0 &&
 			(now - AbortStartTime) >= SIGKILL_CHILDREN_AFTER_SECS)
 		{
+#ifdef FAULT_INJECTOR
+			if (SIMPLE_FAULT_INJECTOR("postmaster_server_loop_no_sigkill") == FaultInjectorTypeSkip)
+			{
+				/* 
+				 * This prevents sending SIGKILL to child processes for testing purpose.
+				 * Since each time hitting this fault will print a log, let's wait 0.1s just 
+				 * not to overwhelm the logs. Reaching here means we are shutting down so 
+				 * making postmaster slower should be OK (only for testing anyway).
+				 */
+				pg_usleep(100000L); 
+				continue;
+			}
+#endif
 			/* We were gentle with them before. Not anymore */
 			TerminateChildren(SIGKILL);
 			/* reset flag so we don't SIGKILL again */
@@ -2585,6 +2604,11 @@ retry1:
 					 errdetail(POSTMASTER_IN_RECOVERY_DETAIL_MSG " %X/%X",
 						   (uint32) (recptr >> 32), (uint32) recptr)));
 			break;
+		case CAC_RESET:
+			ereport(FATAL,
+					(errcode(ERRCODE_CANNOT_CONNECT_NOW),
+					 errmsg(POSTMASTER_IN_RESET_MSG)));
+			break;
 		case CAC_TOOMANY:
 			ereport(FATAL,
 					(errcode(ERRCODE_TOO_MANY_CONNECTIONS),
@@ -2777,8 +2801,14 @@ canAcceptConnections(void)
 		else if (!FatalError &&
 				 pmState == PM_HOT_STANDBY)
 			result = CAC_OK;	/* connection OK during hot standby */
-		else
+		else if (pmState == PM_STARTUP || pmState == PM_RECOVERY)
 			return CAC_RECOVERY;	/* else must be crash recovery */
+		else
+			/* 
+			 * otherwise must be resetting: could be PM_WAIT_BACKENDS, 
+			 * PM_WAIT_DEAD_END or PM_NO_CHILDREN.
+			 */
+			return CAC_RESET;
 	}
 
 	/*

@@ -422,6 +422,7 @@ class SQLIsolationExecutor(object):
                         self.create_exception = e
                         break
                     elif (("the database system is starting up" in str(e) or
+                         "the database system is resetting" in str(e) or
                          "the database system is in recovery mode" in str(e)) and
                         retry > 1):
                         retry -= 1
@@ -676,6 +677,11 @@ class SQLIsolationExecutor(object):
         if not flag:
             if sql.startswith('!'):
                 sql = sql[1:]
+                # Support run command in background
+                bg_mode = False
+                if sql.startswith('&'):
+                    bg_mode = True
+                    sql = sql[1:]
 
                 # Check for execution mode. E.g.
                 #     !\retcode path/to/executable --option1 --option2 ...
@@ -690,14 +696,15 @@ class SQLIsolationExecutor(object):
                         raise Exception('Invalid execution mode: {}'.format(mode))
 
                 cmd_output = subprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
-                stdout, _ = cmd_output.communicate()
-                print >> output_file
-                if mode == '\\retcode':
-                    print >> output_file, '-- start_ignore'
-                print >> output_file, stdout
-                if mode == '\\retcode':
-                    print >> output_file, '-- end_ignore'
-                    print >> output_file, '(exited with code {})'.format(cmd_output.returncode)
+                if not bg_mode:
+                    stdout, _ = cmd_output.communicate()
+                    print >> output_file
+                    if mode == '\\retcode':
+                        print >> output_file, '-- start_ignore'
+                    print >> output_file, stdout
+                    if mode == '\\retcode':
+                        print >> output_file, '-- end_ignore'
+                        print >> output_file, '(exited with code {})'.format(cmd_output.returncode)
             elif sql.startswith('include:'):
                 helper_file = parse_include_statement(sql)
 

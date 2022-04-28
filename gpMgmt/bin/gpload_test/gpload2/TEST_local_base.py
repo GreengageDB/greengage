@@ -505,6 +505,15 @@ class AnsFile():
     def __eq__(self, other):
         return isFileEqual(self.path, other.path, '-U3', outputPath="")
 
+
+def do_assert(f1, f2, num, ifile):
+    # this will help print the diff message in the screen if case fail
+    assert f1 == f2 , read_diff(ifile, "")
+    if num==54:
+        assert f1==AnsFile(mkpath('54tmp.log'))
+    return True
+
+
 def check_result(ifile,  optionalFlags = "-U3", outputPath = "", num=None):
     """
     PURPOSE: compare the actual and expected output files and report an
@@ -523,10 +532,7 @@ def check_result(ifile,  optionalFlags = "-U3", outputPath = "", num=None):
     f1 = AnsFile(f1)
     f2 = outFile(ifile, outputPath=outputPath)
     f2 = AnsFile(f2)
-    assert f1 == f2 #, read_diff(ifile, "")
-    if num==54:
-        assert f1==AnsFile(mkpath('54tmp.log'))
-    return True
+    do_assert(f1, f2, num, ifile)
 
 
 def ModifyOutFile(file,old_str,new_str):
@@ -562,8 +568,9 @@ def doTest(num):
         newpat4='ext_gpload_table'
         pat5 = r'[a-zA-Z0-9/\_-]*/gpload.py'  # file location
         newpat5 = 'pathto/gpload.py'
-        ModifyOutFile(str(num), [pat1,pat2,pat3,pat4,pat5], [newpat1,newpat2,newpat3,newpat4,newpat5])  # some strings in outfile are different each time, such as host and file location
+        # some strings in outfile are different each time, such as host and file location
         # we modify the out file here to make it match the ans file
+        ModifyOutFile(str(num), [pat1,pat2,pat3,pat4,pat5], [newpat1,newpat2,newpat3,newpat4,newpat5])
 
     check_result(file,num=num)
 

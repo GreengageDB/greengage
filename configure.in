@@ -1705,9 +1705,9 @@ fi
 if test "$with_gssapi" = yes ; then
   AC_CHECK_HEADERS(gssapi/gssapi.h, [],
 	[AC_CHECK_HEADERS(gssapi.h, [], [AC_MSG_ERROR([gssapi.h header file is required for GSSAPI])])])
-  AC_CHECK_DECLS(gs_store_cred_into,
-      [AC_DEFINE(HAVE_GSSAPI_PROXY, 1, [Define to 1 if you have GSSAPI extension support. ])],
-      [AC_MSG_ERROR([gssapi_ext.h header file is required for GSSAPI proxy])],
+  AC_CHECK_DECLS(gss_store_cred_into,
+      [AC_DEFINE(HAVE_GSSAPI_PROXY, 1, [Define to 1 if you have GSSAPI extension support.])],
+      [AC_DEFINE(HAVE_GSSAPI_PROXY, 0, [Define to 0 if you do not have GSSAPI extension support.])],
   [#include <gssapi/gssapi_ext.h>])
 fi
 

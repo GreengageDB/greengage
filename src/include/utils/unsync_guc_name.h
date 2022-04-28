@@ -31,6 +31,7 @@
 		"checkpoint_segments",
 		"checkpoint_timeout",
 		"checkpoint_warning",
+		"client_connection_check_interval",
 		"client_encoding",
 		"config_file",
 		"constraint_exclusion",

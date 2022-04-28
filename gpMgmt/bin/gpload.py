@@ -24,6 +24,7 @@ Options:
 '''
 
 import sys
+
 if sys.hexversion<0x2040400:
     sys.stderr.write("gpload needs python 2.4.4 or higher\n")
     sys.exit(2)
@@ -2130,7 +2131,7 @@ class gpload:
                          pg_namespace pgns
                          on(pg_class.relnamespace = pgns.oid)
                       """
-            conditionStr = "pgns.nspname = '%s'" % schemaName
+            conditionStr = "pgns.nspname = '%s'" % self.get_sql_name(schemaName)
 
         sql = sqlFormat % (joinStr, conditionStr)
 
@@ -2218,7 +2219,7 @@ class gpload:
             joinStr = """join
                     pg_namespace pgns
                     on(pg_class.relnamespace = pgns.oid)"""
-            conditionStr = "pgns.nspname = '%s'" % schemaName
+            conditionStr = "pgns.nspname = '%s'" % self.get_sql_name(schemaName)
 
         sql = sqlFormat % (joinStr, conditionStr)
 
@@ -2275,20 +2276,39 @@ class gpload:
 		
         return '%s:%s:%s:%s' % (target_table_name, columns_num, staging_cols_str, distribution_cols_str)
 
-		
-    #
-    # This function will return the SQL to run in order to find out whether
-    # we have an existing staging table in the catalog which could be reused for this
-    # operation, according to the method and the encoding conditions.
-    #
-    def get_reuse_staging_table_query(self, encoding_conditions):
-		
-        sql = """SELECT oid::regclass \
-FROM pg_class \
-WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
+
+    def get_sql_name(self, name):
+        '''
+        this function return the sql name without double quotes and in right lower or upper case
+        if name is double quoted, then return the content in it
+        if not, returen the name in lower case
+        '''
+        if isDelimited(name):
+            # if the name is double quoted, we keep the capital letters
+            name = quote_unident(name)
+        else:
+            # if not, table name should be lower letters
+            name = name.lower()
+        return name
+
+
+    def get_reuse_staging_table_query(self, table_name):
+        '''
+        This function will return the SQL to run in order to find out whether
+        we have an existing staging table in the catalog which could be reused for this
+        operation, according to the method and the encoding conditions.
+        return:
+            sql(string)
+        '''
+        if self.extSchemaName:
+            schema_name = self.get_sql_name(self.extSchemaName)
+            sql = "SELECT * FROM pg_catalog.pg_tables WHERE schemaname = '%s' AND tablename = '%s'" % (schema_name, table_name)
+        else:
+            sql = "SELECT oid::regclass FROM pg_class WHERE relname = '%s';" % (table_name)
 
         self.log(self.DEBUG, "query used to identify reusable temporary relations: %s" % sql)
         return sql
+
 
     #
     # get oid for table from pg_class, None if not exist
@@ -2490,7 +2510,9 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
             if self.staging_table:
                 if '.' in self.staging_table:
                     self.log(self.ERROR, "Character '.' is not allowed in staging_table parameter. Please use EXTERNAL->SCHEMA to set the schema of external table")
-                self.extTableName = quote_unident(self.staging_table) 
+                self.extTableName = self.staging_table
+                # we need a name without double quotes and in right upper or lower case
+                sql_table_name = self.get_sql_name(self.extTableName)
                 if self.extSchemaName is None:
                     sql = """SELECT n.nspname as Schema,
                             c.relname as Name
@@ -2503,12 +2525,12 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
                             AND n.nspname !~ '^pg_toast'
                             AND c.relname = '%s'
                             AND pg_catalog.pg_table_is_visible(c.oid)
-                        ORDER BY 1,2;""" % self.extTableName
+                        ORDER BY 1,2;""" % sql_table_name
                 else:
-                    sql = "select * from pg_catalog.pg_tables where schemaname = '%s' and tablename = '%s'" % (quote_unident(self.extSchemaName),  self.extTableName)
+                    sql = "select * from pg_catalog.pg_tables where schemaname = '%s' and tablename = '%s'" % (quote_unident(self.extSchemaName),  sql_table_name)
                 result = self.db.query(sql.encode('utf-8')).getresult()
                 if len(result) > 0:
-                    self.extSchemaTable = self.get_schematable(quote_unident(self.extSchemaName), self.extTableName)
+                    self.extSchemaTable = self.get_schematable(self.extSchemaName, self.extTableName)
                     self.log(self.INFO, "reusing external staging table %s" % self.extSchemaTable)
                     return
             else:
@@ -2527,7 +2549,7 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
                     self.extTableName = (resultList[0])[0]
                     # fast match result is only table name, so we need add schema info
                     if self.fast_match:
-                        self.extSchemaTable = self.get_schematable(quote_unident(self.extSchemaName), self.extTableName)
+                        self.extSchemaTable = self.get_schematable(self.extSchemaName, self.extTableName)
                     else:
                         self.extSchemaTable = self.extTableName
                     self.log(self.INFO, "reusing external table %s" % self.extSchemaTable)
@@ -2585,7 +2607,30 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
         if self.reuse_tables == False:
             self.cleanupSql.append('drop external table if exists %s'%self.extSchemaTable)
 
-		
+    #
+    # get distribution key for staging table, default is the DK for target table
+    # if it is not setted, we use the match columns for DK
+    #
+    def get_distribution_key(self):
+        
+        sql = '''select * from pg_get_table_distributedby('%s.%s'::regclass::oid)'''% (self.schema, self.table)
+        try:
+            dk_text = self.db.query(sql.encode('utf-8')).getresult()
+        except Exception as e:
+            self.log(self.ERROR, 'could not run SQL "%s": %s ' % (sql, unicode(e)))
+
+        if dk_text[0][0] == 'DISTRIBUTED RANDOMLY':
+            # target table doesn't have dk, we use match column
+            dk = self.getconfig('gpload:output:match_columns', list)
+            dk_text = " DISTRIBUTED BY (%s)" % ', '.join(dk)
+            return dk_text
+        else:
+            # use dk of target table
+            # result from db is a text, we need to make it unicode
+            return dk_text[0][0].decode("utf-8")
+
+
+
     #
     # Create a new staging table or find a reusable staging table to use for this operation
     # (only valid for update/merge operations).
@@ -2593,7 +2638,7 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
     def create_staging_table(self):
 
         # make sure we set the correct distribution policy
-        distcols = self.getconfig('gpload:output:match_columns', list)
+        distcols = self.get_distribution_key()
 
         sql = "SELECT * FROM pg_class WHERE relname LIKE 'temp_gpload_reusable_%%';"
         resultList = self.db.query(sql.encode('utf-8')).getresult()
@@ -2617,14 +2662,14 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
             # create a string from all reuse conditions for staging tables and ancode it
             conditions_str = self.get_staging_conditions_string(target_table_name, target_columns, distcols)
             encoding_conditions = hashlib.md5(conditions_str.encode('utf-8')).hexdigest()
-					
-            sql = self.get_reuse_staging_table_query(encoding_conditions)
+            table_name = 'staging_gpload_reusable_%s'% (encoding_conditions)
+            sql = self.get_reuse_staging_table_query(table_name)
             resultList = self.db.query(sql.encode('utf-8')).getresult()
 
             if len(resultList) > 0:
 
                 # found a temp table to reuse. no need to create one. we're done here.
-                self.staging_table_name = (resultList[0])[0]
+                self.staging_table_name = self.get_schematable(self.extSchemaName, table_name)
                 self.log(self.INFO, "reusing staging table %s" % self.staging_table_name)
 
                 # truncate it so we don't use old data
@@ -2646,11 +2691,14 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
         sql = 'CREATE %sTABLE %s ' % (is_temp_table, self.staging_table_name)
         cols = map(lambda a:'"%s" %s' % (a[0], a[1]), target_columns)
         sql += "(%s)" % ','.join(cols)
-        #sql += " DISTRIBUTED BY (%s)" % ', '.join(distcols)
+        sql += distcols
         self.log(self.LOG, sql)
 
         if not self.options.D:
-            self.db.query(sql.encode('utf-8'))
+            try:
+                self.db.query(sql.encode('utf-8'))
+            except Exception as e:
+                self.log(self.ERROR,  'could not run SQL "%s": %s ' % (sql, unicode(e)))
             if not self.reuse_tables:
                 self.cleanupSql.append('DROP TABLE IF EXISTS %s' % self.staging_table_name)
 
@@ -2716,7 +2764,6 @@ WHERE relname = 'staging_gpload_reusable_%s';""" % (encoding_conditions)
                 strE = unicode(str(e), errors = 'ignore')
                 strF = unicode(str(sql), errors = 'ignore')
                 self.log(self.ERROR, strE + ' encountered while running ' + strF)
-
         #progress.condition.acquire()
         #progress.number = 1
         #progress.condition.wait()
