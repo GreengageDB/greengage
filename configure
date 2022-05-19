@@ -6438,7 +6438,7 @@ fi
 $as_echo "checking whether to build with gpcloud... $enable_gpcloud" >&6; }
 
 
-if test "$enable_orca" = yes || test "$enable_gpcloud" = yes; then :
+if test "$enable_gpcloud" = yes; then :
    # then
     ax_cxx_compile_alternatives="11 0x"    ax_cxx_compile_cxx11_required=true
   ac_ext=cpp
