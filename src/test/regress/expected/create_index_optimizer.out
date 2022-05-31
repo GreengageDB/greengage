@@ -3199,3 +3199,70 @@ explain (costs off)
  Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
 (4 rows)
 
+--
+-- Check spgist index work with AO tables
+--
+-- insert to AO table with spgist index
+create table spgist_ao_test(idx_col int4range)
+with (appendonly=true);
+create index spgist_ao_test_idx on spgist_ao_test
+using spgist(idx_col);
+--insert should not fall with spgutils.c:724 assertion
+insert into spgist_ao_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+-- insert to AOCS table with spgist index
+create table spgist_aocs_test(idx_col int4range)
+with (appendonly=true, orientation=column);
+create index spgist_aocs_test_idx on spgist_aocs_test
+using spgist(idx_col);
+insert into spgist_aocs_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+--second insert call not triggers aocsam.c:770 condition
+--insert should not fall with spgutils.c:724 assertion
+insert into spgist_aocs_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+-- update to AO table with spgist index
+create table spgist_ao_upd_test(idx_col int4range)
+with (appendonly=true);
+insert into spgist_ao_upd_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+create index spgist_ao_upd_test_idx on spgist_ao_upd_test
+using spgist(idx_col);
+--update should not fall with spgutils.c:724 assertion
+update spgist_ao_upd_test set idx_col = int4range(1, 2, '[]');
+-- update to AOCS table with spgist index
+create table spgist_aocs_upd_test(idx_col int4range)
+with (appendonly=true, orientation=column);
+create index spgist_aocs_upd_test_idx on spgist_aocs_upd_test
+using spgist(idx_col);
+insert into spgist_aocs_upd_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+--second update should not fall with spgutils.c:724 assertion
+update spgist_ao_upd_test set idx_col = int4range(1, 2, '[]');
+-- copy to AO table with spgist index
+create table spgist_ao_copy_test(idx_col int4range)
+with (appendonly=true);
+insert into spgist_ao_copy_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+create index spgist_ao_copy_test_idx on spgist_ao_copy_test
+using spgist(idx_col);
+copy spgist_ao_copy_test to '/tmp/spgist_test';
+--copy should not fall with spgutils.c:724 assertion or any segment failures
+copy spgist_ao_copy_test from '/tmp/spgist_test';
+-- copy to AOCS table with spgist index
+create table spgist_aocs_copy_test(idx_col int4range)
+with (appendonly=true, orientation=column);
+insert into spgist_aocs_copy_test
+select int4range(i, i, '[]')
+from generate_series(0,10000) i;
+create index spgist_aocs_copy_test_idx on spgist_aocs_copy_test
+using spgist(idx_col);
+copy spgist_aocs_copy_test to '/tmp/spgist_test';
+--copy should not fall with spgutils.c:724 assertion or any segment failures
+copy spgist_aocs_copy_test from '/tmp/spgist_test';
