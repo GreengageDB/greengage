@@ -671,10 +671,10 @@ getCdbProcessesForQD(int isPrimary)
 	proc = makeNode(CdbProcess);
 
 	/*
-	 * Set QD listener address to the ADDRESS of the master, so the motions that connect to
-	 * the master knows what the interconnect address of the peer is.
+	 * Set QD listener address to NULL. This will be filled during starting up
+	 * outgoing interconnect connection.
 	 */
-	proc->listenerAddr = pstrdup(qdinfo->config->hostip);
+	proc->listenerAddr = NULL;
 
 	if (Gp_interconnect_type == INTERCONNECT_TYPE_UDPIFC)
 		proc->listenerPort = (Gp_listener_port >> 16) & 0x0ffff;
