@@ -293,6 +293,9 @@ test: run_utility_gpexpand_phase1
 # check correct error message when create extension error on segment
 test: create_extension_fail
 
+# test if motion sockets are created with the gp_segment_configuration.address
+test: motion_socket
+
 # check the row/block statistics is gathered for auxiliary relations of AO table
 test: aux_ao_rels_stat
 
