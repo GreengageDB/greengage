@@ -1286,8 +1286,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -1313,8 +1313,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -1910,8 +1910,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -1937,8 +1937,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -2534,8 +2534,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -2561,8 +2561,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -3158,8 +3158,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
@@ -3185,8 +3185,8 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort

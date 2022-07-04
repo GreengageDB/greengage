@@ -520,7 +520,7 @@ cdbdisp_buildUtilityQueryParms(struct Node *stmt,
 	QueryDispatchDesc *qddesc;
 	Query *q;
 	DispatchCommandQueryParms *pQueryParms;
-	Oid save_userid;
+	Oid	save_userid;
 
 	Assert(stmt != NULL);
 	Assert(stmt->type < 1000);
@@ -592,7 +592,7 @@ cdbdisp_buildPlanQueryParms(struct QueryDesc *queryDesc,
 				sddesc_len,
 				sparams_len,
 				rootIdx;
-	Oid         save_userid;
+	Oid			save_userid;
 
 	rootIdx = RootSliceIndex(queryDesc->estate);
 
