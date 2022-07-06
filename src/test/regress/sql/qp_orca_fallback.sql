@@ -130,7 +130,3 @@ t2 AS (SELECT id, refrcode FROM tbl2 WHERE REFERENCEID = 101991)
   JOIN t2 r1
    ON p.isCalcDetail = r1.RefrCode
  LIMIT 1;
--- Orca should fallback for functions returning composite types
-create type compType as (a int, b int);
-create function myfunc5() returns compType IMMUTABLE as $$ select 2,3 $$ language sql;
-select a from myfunc5();

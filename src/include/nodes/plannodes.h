@@ -150,6 +150,9 @@ typedef struct PlannedStmt
  	 * GPDB: whether a query is a SPI inner query for extension usage 
  	 */
 	int8		metricsQueryType;
+
+	int			total_memory_master;	/* GPDB: The total usable virtual memory on master node in MB */
+	int			nsegments_master;		/* GPDB: The number of primary segments on master node  */
 } PlannedStmt;
 
 /*

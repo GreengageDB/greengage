@@ -135,6 +135,9 @@ _copyPlannedStmt(const PlannedStmt *from)
 	COPY_NODE_FIELD(refreshClause);
 	COPY_SCALAR_FIELD(metricsQueryType);
 
+	COPY_SCALAR_FIELD(total_memory_master);
+	COPY_SCALAR_FIELD(nsegments_master);
+
 	return newnode;
 }
 
@@ -4699,6 +4702,7 @@ _copyLockStmt(const LockStmt *from)
 	COPY_NODE_FIELD(relations);
 	COPY_SCALAR_FIELD(mode);
 	COPY_SCALAR_FIELD(nowait);
+	COPY_SCALAR_FIELD(masteronly);
 
 	return newnode;
 }

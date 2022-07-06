@@ -26,7 +26,7 @@ This topic includes the following subtopics:
 -   [Moving a Query to a Different Resource Group](#moverg)
 -   [Resource Group Frequently Asked Questions](#topic777999)
 
-**Parent topic:**[Managing Resources](wlmgmt.html)
+**Parent topic:** [Managing Resources](wlmgmt.html)
 
 ## <a id="topic8339intro"></a>Understanding Role and Component Resource Groups 
 
@@ -224,6 +224,21 @@ When `MEMORY_SPILL_RATIO` is 0, Greenplum Database uses the [`statement_mem`](..
 
 You can selectively set the `MEMORY_SPILL_RATIO` on a per-query basis at the session level with the [memory\_spill\_ratio](../ref_guide/config_params/guc-list.html) server configuration parameter.
 
+
+##### <a id="topic833maxalloc"></a>About How Greenplum Database Allocates Transaction Memory
+
+The query planner pre-computes the maximum amount of memory that each node in the plan tree can use. When resource group-based resource management is active and the `MEMORY_SPILL_RATIO` for the resource group is non-zero, the following formula roughly specifies the maximum amount of memory that Greenplum Database allocates to a transaction:
+
+``` pre
+query_mem = (rg_perseg_mem * memory_limit) * memory_spill_ratio / concurrency
+```
+
+Where `memory_limit`, `memory_spill_ratio`, and `concurrency` are specified by the resource group under which the transaction runs.
+
+By default, Greenplum Database calculates the maximum amount of segment host memory allocated to a transaction based on the `rg_perseg_mem` and the number of primary segments on the *master host*.
+
+If the memory configuration on your Greenplum Database master and segment hosts differ, you may prefer that the maximum per-transaction memory calculation be based on the segment host configuration. To instruct Greenplum Database to recalculate the maximum memory allocation per-transaction based on the `rg_perseg_mem` and the number of primary segments *on the segment host*, set the [gp_resource_group_enable_recalculate_query_mem](../ref_guide/config_params/guc-list.html#gp_resource_group_enable_recalculate_query_mem) server configuration parameter to `true`.
+
 ##### <a id="topic833low"></a>memory\_spill\_ratio and Low Memory Queries 
 
 A low `statement_mem` setting \(for example, in the 10MB range\) has been shown to increase the performance of queries with low memory requirements. Use the `memory_spill_ratio` and `statement_mem` server configuration parameters to override the setting on a per-query basis. For example:
@@ -254,7 +269,7 @@ Using Tanzu Greenplum Command Center, an administrator can create and manage res
 
 Workload management assignment rules assign transactions to different resource groups based on user-defined criteria. If no assignment rule is matched, Greenplum Database assigns the transaction to the role's default resource group.
 
-Refer to the [Greenplum Command Center documentation](http://gpcc.docs.pivotal.io/latest) for more information about creating and managing resource groups and workload management rules.
+Refer to the [Greenplum Command Center documentation](http://docs.vmware.com/en/VMware-Tanzu-Greenplum-Command-Center/index.html) for more information about creating and managing resource groups and workload management rules.
 
 ## <a id="topic71717999"></a>Configuring and Using Resource Groups 
 

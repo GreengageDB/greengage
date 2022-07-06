@@ -48,7 +48,7 @@
 -1U: VACUUM;
 -1Uq:
 
--- Validate wal records
+-- Validate wal records (mirrorless setting has alternative answer file for this since wal_level is already minimal)
 ! last_wal_file=$(psql -At -c "SELECT pg_xlogfile_name(pg_current_xlog_location())" postgres) && pg_xlogdump ${last_wal_file} -p ${MASTER_DATA_DIRECTORY}/pg_xlog -r appendonly;
 
 -- *********** Set wal_level=minimal **************

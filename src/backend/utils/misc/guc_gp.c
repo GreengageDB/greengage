@@ -33,7 +33,7 @@
 #include "cdb/memquota.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
-#include "libpq/password_hash.h"
+#include "libpq/crypt.h"
 #include "optimizer/cost.h"
 #include "optimizer/planmain.h"
 #include "pgstat.h"
@@ -227,6 +227,7 @@ double		gp_resource_group_cpu_limit;
 bool		gp_resource_group_cpu_ceiling_enforcement;
 double		gp_resource_group_memory_limit;
 bool		gp_resource_group_bypass;
+bool		gp_resource_group_enable_recalculate_query_mem;
 
 /* Perfmon segment GUCs */
 int			gp_perfmon_segment_interval;
@@ -255,7 +256,7 @@ bool		gp_ignore_window_exclude = false;
 char	   *gp_auth_time_override_str = NULL;
 
 /* Password hashing */
-int			password_hash_algorithm = PASSWORD_HASH_MD5;
+int			password_hash_algorithm = PASSWORD_TYPE_MD5;
 
 /* include file/line information to stack traces */
 bool		gp_log_stack_trace_lines;
@@ -458,6 +459,11 @@ bool		gp_enable_motion_mk_sort = true;
 /* Enable GDD */
 bool		gp_enable_global_deadlock_detector = false;
 
+bool		gp_log_endpoints = false;
+
+/* optional reject to  parse ambigous 5-digits date in YYYMMDD format */
+bool		gp_allow_date_field_width_5digits = false;
+
 static const struct config_enum_entry gp_log_format_options[] = {
 	{"text", 0},
 	{"csv", 1},
@@ -549,6 +555,12 @@ static const struct config_enum_entry gp_interconnect_types[] = {
 	{NULL, 0}
 };
 
+static const struct config_enum_entry gp_interconnect_address_types[] = {
+	{"wildcard", INTERCONNECT_ADDRESS_TYPE_WILDCARD},
+	{"unicast", INTERCONNECT_ADDRESS_TYPE_UNICAST},
+	{NULL, 0}
+};
+
 static const struct config_enum_entry gp_log_verbosity[] = {
 	{"terse", GPVARS_VERBOSITY_TERSE},
 	{"off", GPVARS_VERBOSITY_OFF},
@@ -575,8 +587,9 @@ static const struct config_enum_entry gp_gpperfmon_log_alert_level[] = {
 
 static const struct config_enum_entry password_hash_algorithm_options[] = {
 	/* {"none", PASSWORD_HASH_NONE}, * this option is not exposed */
-	{"MD5", PASSWORD_HASH_MD5},
-	{"SHA-256", PASSWORD_HASH_SHA_256},
+	{"MD5", PASSWORD_TYPE_MD5},
+	{"SHA-256", PASSWORD_TYPE_SHA256},
+	{"SCRAM-SHA-256", PASSWORD_TYPE_SCRAM_SHA_256},
 	{NULL, 0}
 };
 
@@ -3040,6 +3053,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"gp_resource_group_enable_recalculate_query_mem", PGC_USERSET, RESOURCES,
+			 gettext_noop("Enable resource group re-calculate the query_mem on QE"),
+			 NULL
+		},
+		&gp_resource_group_enable_recalculate_query_mem,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"stats_queue_level", PGC_SUSET, STATS_COLLECTOR,
 			gettext_noop("Collects resource queue-level statistics on database activity."),
 			NULL
@@ -3066,6 +3089,27 @@ struct config_bool ConfigureNamesBool_gp[] =
 		false, NULL, NULL
     },
 
+	{
+		{"gp_log_endpoints", PGC_SUSET, LOGGING_WHAT,
+			gettext_noop("Prints endpoints information to server log."),
+			NULL,
+			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_log_endpoints,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_allow_date_field_width_5digits", PGC_USERSET, COMPAT_OPTIONS_PREVIOUS,
+			gettext_noop("Allow parsing input date field with exactly continous 5 digits in non-standard YYYMMDD timeformat (follow pg12+ behave)"),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_allow_date_field_width_5digits,
+		false,
+		NULL, NULL, NULL
+	},
 	{
 		{"optimizer_enable_eageragg", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enable Eager Agg transform for pushing aggregate below an innerjoin."),
@@ -4889,7 +4933,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 			GUC_SUPERUSER_ONLY
 		},
 		&password_hash_algorithm,
-		PASSWORD_HASH_MD5, password_hash_algorithm_options,
+		PASSWORD_TYPE_MD5, password_hash_algorithm_options,
 		NULL, NULL, NULL
 	},
 
@@ -4977,6 +5021,16 @@ struct config_enum ConfigureNamesEnum_gp[] =
 		},
 		&Gp_interconnect_type,
 		INTERCONNECT_TYPE_UDPIFC, gp_interconnect_types,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_interconnect_address_type", PGC_BACKEND, GP_ARRAY_TUNING,
+		 gettext_noop("Sets the interconnect address type used for inter-node communication."),
+		 gettext_noop("Valid values are \"unicast\" and \"wildcard\"")
+		},
+		&Gp_interconnect_address_type,
+		INTERCONNECT_ADDRESS_TYPE_WILDCARD, gp_interconnect_address_types,
 		NULL, NULL, NULL
 	},
 

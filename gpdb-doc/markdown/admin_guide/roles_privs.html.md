@@ -14,7 +14,7 @@ Roles are defined at the system level, meaning they are valid for all databases 
 
 In order to bootstrap the Greenplum Database system, a freshly initialized system always contains one predefined *superuser* role \(also referred to as the system user\). This role will have the same name as the operating system user that initialized the Greenplum Database system. Customarily, this role is named `gpadmin`. In order to create more roles you first have to connect as this initial role.
 
-**Parent topic:**[Managing Greenplum Database Access](partIII.html)
+**Parent topic:** [Managing Greenplum Database Access](partIII.html)
 
 ## <a id="topic2"></a>Security Best Practices for Roles and Privileges 
 
@@ -53,8 +53,8 @@ A database role may have a number of attributes that define what sort of tasks t
 See [Protecting Passwords in Greenplum Database](#topic9) for additional information about protecting login passwords.
 
 |
-|`VALID UNTIL '*timestamp*'`|Sets a date and time after which the role's password is no longer valid. If omitted the password will be valid for all time.|
-|`RESOURCE QUEUE *queue\_name*`|Assigns the role to the named resource queue for workload management. Any statement that role issues is then subject to the resource queue's limits. Note that the `RESOURCE QUEUE` attribute is not inherited; it must be set on each user-level \(`LOGIN`\) role.|
+|`VALID UNTIL 'timestamp'`|Sets a date and time after which the role's password is no longer valid. If omitted the password will be valid for all time.|
+|`RESOURCE QUEUE queue_name`|Assigns the role to the named resource queue for workload management. Any statement that role issues is then subject to the resource queue's limits. Note that the `RESOURCE QUEUE` attribute is not inherited; it must be set on each user-level \(`LOGIN`\) role.|
 |`DENY {deny_interval | deny_point}`|Restricts access during an interval, specified by day or day and time. For more information see [Time-based Authentication](#topic13).|
 
 You can set these attributes when you create the role, or later using the `ALTER ROLE` command. For example:
@@ -360,9 +360,17 @@ See [pgcrypto](https://www.postgresql.org/docs/9.4/pgcrypto.html) in the Postgre
 
 ## <a id="topic9"></a>Protecting Passwords in Greenplum Database 
 
-In its default configuration, Greenplum Database saves MD5 hashes of login users' passwords in the `pg_authid` system catalog rather than saving clear text passwords. Anyone who is able to view the `pg_authid` table can see hash strings, but no passwords. This also ensures that passwords are obscured when the database is dumped to backup files.
+In its default configuration, Greenplum Database saves MD5 hashes of login users' passwords in the [pg_authid](../ref_guide/system_catalogs/pg_authid.html) system catalog rather than saving clear text passwords. Anyone who is able to view the `pg_authid` table can see hash strings, but no passwords. This also ensures that passwords are obscured when the database is dumped to backup files.
 
-The hash function runs when the password is set by using any of the following commands:
+Greenplum Database supports SHA-256 and SCRAM-SHA-256 password hash algorithms as well. The [password_hash_algorithm](../ref_guide/config_params/guc-list.html#password_hash_algorithm) server configuration parameter value and pg_hba.conf settings determine how passwords are hashed and what authentication method is in effect.
+
+| password_hash_algorithm Parameter Value | pg_hba.conf Authentication Method | Comments |
+|-----------|-------|-------------------|
+| MD5 | md5 | The default Greenplum Database password hash algorithm. |
+| SCRAM-SHA-256 | scram-sha-256 | The most secure method, **but is not supported by Greenplum Database version 6.20.x and older clients**. |
+| SHA-256 | password | Clear text passwords are sent over the network, SSL-secured client connections are recommended. |
+
+The password hash function runs when the password is set by using any of the following commands:
 
 -   `CREATE USER name WITH ENCRYPTED PASSWORD 'password'`
 -   `CREATE ROLE name WITH LOGIN ENCRYPTED PASSWORD 'password'`
@@ -373,9 +381,7 @@ The `ENCRYPTED` keyword may be omitted when the `password_encryption` system con
 
 **Note:** The SQL command syntax and `password_encryption` configuration variable include the term *encrypt*, but the passwords are not technically encrypted. They are *hashed* and therefore cannot be decrypted.
 
-The hash is calculated on the concatenated clear text password and role name. The MD5 hash produces a 32-byte hexadecimal string prefixed with the characters `md5`. The hashed password is saved in the `rolpassword` column of the `pg_authid` system table.
-
-Although it is not recommended, passwords may be saved in clear text in the database by including the `UNENCRYPTED` keyword in the command or by setting the `password_encryption` configuration variable to `off`. Note that changing the configuration value has no effect on existing passwords, only newly created or updated passwords.
+Although it is not recommended, passwords may be saved in clear text in the database by including the `UNENCRYPTED` keyword in the command or by setting the `password_encryption` configuration variable to `off`. Note that changing the configuration value has no effect on existing passwords, only newly-created or updated passwords.
 
 To set `password_encryption` globally, run these commands in a shell as the `gpadmin` user:
 
@@ -390,23 +396,54 @@ To set `password_encryption` in a session, use the SQL `SET` command:
 =# SET password_encryption = 'on';
 ```
 
-Passwords may be hashed using the SHA-256 hash algorithm instead of the default MD5 hash algorithm. The algorithm produces a 64-byte hexadecimal string prefixed with the characters `sha256`.
+### <a id="topic9_default"></a> About MD5 Password Hashing
 
-**Note:**
+In its default configuration, Greenplum Database saves MD5 hashes of login users' passwords.
 
-Although SHA-256 uses a stronger cryptographic algorithm and produces a longer hash string, it cannot be used with the MD5 authentication method. To use SHA-256 password hashing the authentication method must be set to `password` in the `pg_hba.conf` configuration file so that clear text passwords are sent to Greenplum Database. Because clear text passwords are sent over the network, it is very important to use SSL for client connections when you use SHA-256. The default `md5` authentication method, on the other hand, hashes the password twice before sending it to Greenplum Database, once on the password and role name and then again with a salt value shared between the client and server, so the clear text password is never sent on the network.
+The hash is calculated on the concatenated clear text password and role name. The MD5 hash produces a 32-byte hexadecimal string prefixed with the characters `md5`. The hashed password is saved in the `rolpassword` column of the `pg_authid` system table.
 
-To enable SHA-256 hashing, change the `password_hash_algorithm` configuration parameter from its default value, `md5`, to `sha-256`. The parameter can be set either globally or at the session level. To set `password_hash_algorithm` globally, execute these commands in a shell as the `gpadmin` user:
+The default `md5` authentication method hashes the password twice before sending it to Greenplum Database, once on the password and role name and then again with a salt value shared between the client and server, so the clear text password is never sent on the network.
+
+### <a id="topic9_scram-sha-256"></a> About SCRAM-SHA-256 Password Hashing
+
+Passwords may be hashed using the SCRAM-SHA-256 hash algorithm instead of the default MD5 hash algorithm. When a password is encrypted with SCRAM-SHA-256, it has the format:
 
 ```
-$ gpconfig -c password_hash_algorithm -v 'sha-256'
+SCRAM-SHA-256$<iteration count>:<salt>$<StoredKey>:<ServerKey>
+```
+
+where `<salt>`, `<StoredKey>`, and `<ServerKey>` are in base64-encoded format. This format is the same as that specified by RFC 5803.
+
+To enable SCRAM-SHA-256 hashing, change the `password_hash_algorithm` configuration parameter from its default value, `MD5`, to `SCRAM-SHA-256`. The parameter can be set either globally or at the session level. To set `password_hash_algorithm` globally, execute these commands in a shell as the `gpadmin` user:
+
+```
+$ gpconfig -c password_hash_algorithm -v 'SCRAM-SHA-256'
 $ gpstop -u
 ```
 
 To set `password_hash_algorithm` in a session, use the SQL `SET` command:
 
 ```
-=# SET password_hash_algorithm = 'sha-256';
+=# SET password_hash_algorithm = 'SCRAM-SHA-256';
+```
+
+### <a id="topic9_sha-256"></a> About SHA-256 Password Hashing
+
+Passwords may be hashed using the SHA-256 hash algorithm instead of the default MD5 hash algorithm. The algorithm produces a 64-byte hexadecimal string prefixed with the characters `sha256`.
+
+**Note:** Although SHA-256 uses a stronger cryptographic algorithm and produces a longer hash string for password hashing, it does not include SHA-256 password hashing over the network during client authentication. To use SHA-256 password hashing, the authentication method must be set to `password` in the `pg_hba.conf` configuration file so that clear text passwords are sent to Greenplum Database. SHA-256 password hashing cannot be used with the `md5` authentication method. **Because clear text passwords are sent over the network, it is very important to use SSL-secured client connections when you use SHA-256.**
+
+To enable SHA-256 hashing, change the `password_hash_algorithm` configuration parameter from its default value, `MD5`, to `SHA-256`. The parameter can be set either globally or at the session level. To set `password_hash_algorithm` globally, execute these commands in a shell as the `gpadmin` user:
+
+```
+$ gpconfig -c password_hash_algorithm -v 'SHA-256'
+$ gpstop -u
+```
+
+To set `password_hash_algorithm` in a session, use the SQL `SET` command:
+
+```
+=# SET password_hash_algorithm = 'SHA-256';
 ```
 
 ## <a id="topic13"></a>Time-based Authentication 

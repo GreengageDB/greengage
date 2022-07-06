@@ -3292,6 +3292,43 @@ SELECT (
     WHERE t2.i < join_null_rej_func()
 );
 
+-- Check Sort node placed under GatherMerge in case we use Update from Select
+-- with window function. Placing Sort node upper and executing it on one
+-- segment can lead to slow query execution and can consume all spills for
+-- heavy datasets. Sort node should be on it's place for both, Postgres
+-- optimizer and ORCA.
+create table window_agg_test(i int, j int) distributed randomly;
+explain
+update window_agg_test t
+set i = tt.i 
+from (select (min(i) over (order by j)) as i, j from window_agg_test) tt
+where t.j = tt.j;
+
+----------------------------------
+-- Test ORCA support for const TVF
+----------------------------------
+create type complex_t as (r float8, i float8);
+-- Nested composite
+create type quad as (c1 complex_t, c2 complex_t);
+create function quad_func_cast() returns quad immutable as $$ select ((1.1,null),(2.2,null))::quad $$ language sql;
+explain select c1 from quad_func_cast();
+explain select c2 from quad_func_cast();
+explain select (c1).r from quad_func_cast();
+explain select (c2).i from quad_func_cast();
+select c1 from quad_func_cast();
+select c2 from quad_func_cast();
+select (c1).r from quad_func_cast();
+select (c2).i from quad_func_cast();
+
+create type mix_type as (a text, b integer, c bool);
+create function mix_func_cast() returns mix_type immutable as $$ select ('column1', 1, true)::mix_type $$ language sql;
+explain select a from mix_func_cast();
+explain select b from mix_func_cast();
+explain select c from mix_func_cast();
+select a from mix_func_cast();
+select b from mix_func_cast();
+select c from mix_func_cast();
+
 -- start_ignore
 DROP SCHEMA orca CASCADE;
 -- end_ignore
