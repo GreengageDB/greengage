@@ -387,10 +387,6 @@ explain_ExecutorEnd(QueryDesc *queryDesc)
 		MemoryContext oldcxt;
 		double		msec;
 
-		/* Wait for completion of all qExec processes. */
-		if (queryDesc->estate->dispatcherState && queryDesc->estate->dispatcherState->primaryResults)
-			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
-
 		/*
 		 * Make sure we operate in the per-query context, so any cruft will be
 		 * discarded later during ExecutorEnd.
