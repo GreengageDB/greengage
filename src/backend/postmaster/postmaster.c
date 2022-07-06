@@ -414,7 +414,7 @@ static BackgroundWorker PMAuxProcList[MaxPMAuxProc] =
 	 BackoffSweeperStartRule},
 
 	{"perfmon process",
-	 BGWORKER_SHMEM_ACCESS,
+	 0,
 	 BgWorkerStart_RecoveryFinished,
 	 0, /* restart immediately if perfmon process exits with non-zero code */
 	 PerfmonMain, {0}, {0}, 0, 0,
