@@ -1227,6 +1227,25 @@ standard_ExecutorFinish(QueryDesc *queryDesc)
 	if (queryDesc->totaltime)
 		InstrStopNode(queryDesc->totaltime, 0);
 
+	/*
+	 * if needed, collect mpp dispatch results and tear down
+	 * all mpp specific resources (e.g. interconnect).
+	 */
+	PG_TRY();
+	{
+		mppExecutorFinishup(queryDesc);
+	}
+	PG_CATCH();
+	{
+		/*
+		 * we got an error. do all the necessary cleanup.
+		 */
+		mppExecutorCleanup(queryDesc);
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
 	MemoryContextSwitchTo(oldcontext);
 
 	estate->es_finished = true;
@@ -1321,44 +1340,14 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
         cdbexplain_sendExecStats(queryDesc);
 
 	/*
-	 * if needed, collect mpp dispatch results and tear down
-	 * all mpp specific resources (e.g. interconnect).
+	 * Free the results of all gangs.
 	 */
-	PG_TRY();
+	if (estate->dispatcherState && estate->dispatcherState->primaryResults)
 	{
-		mppExecutorFinishup(queryDesc);
+		CdbDispatcherState *ds = estate->dispatcherState;
+		estate->dispatcherState = NULL;
+		cdbdisp_destroyDispatcherState(ds);
 	}
-	PG_CATCH();
-	{
-		/*
-		 * we got an error. do all the necessary cleanup.
-		 */
-		mppExecutorCleanup(queryDesc);
-
-		/*
-		 * Remove our own query's motion layer.
-		 */
-		RemoveMotionLayer(estate->motionlayer_context);
-
-		/*
-		 * GPDB specific
-		 * Clean the special resources created by INITPLAN.
-		 * The resources have long life cycle and are used by the main plan.
-		 * It's too early to clean them in preprocess_initplans.
-		 */
-		if (queryDesc->plannedstmt->nParamExec > 0)
-		{
-			postprocess_initplans(queryDesc);
-		}
-
-		/*
-		 * Release EState and per-query memory context.
-		 */
-		FreeExecutorState(estate);
-
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
 
 	/*
 	 * GPDB specific
@@ -3089,6 +3078,7 @@ ExecutePlan(EState *estate,
 {
 	TupleTableSlot *slot;
 	long		current_tuple_count;
+	ListCell *lc;
 
 	/*
 	 * For holdable cursor, the plan is executed without rewinding on gpdb. We
@@ -3110,6 +3100,12 @@ ExecutePlan(EState *estate,
 	/*
 	 * Make sure slice dependencies are met
 	 */
+	foreach(lc, estate->es_subplanstates)
+	{
+		PlanState	   *splanstate = (PlanState *) lfirst(lc);
+
+		ExecSliceDependencyNode(splanstate);
+	}
 	ExecSliceDependencyNode(planstate);
 
 #ifdef FAULT_INJECTOR
