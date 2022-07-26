@@ -40,18 +40,6 @@ function _main() {
 				exit 1
 		fi
 
-		time install_gpdb
-		time ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash
-
-
-		local hosts="sdw1 sdw2 sdw3 mdw"
-		for host in $hosts
-		do
-			ssh -oStrictHostKeyChecking=no -i /home/gpadmin/.ssh/id_rsa gpadmin@$host /bin/bash -c \
-				"getent hosts ${hosts/$host/} | sudo tee -a /etc/hosts &&
-				ssh-keyscan ${hosts/$host/} >> /home/gpadmin/.ssh/known_hosts"
-		done
-
 		# Run inside a subshell so it does not pollute the environment after
 		# sourcing greenplum_path
 		time (make_cluster)
