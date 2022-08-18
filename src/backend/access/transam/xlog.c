@@ -93,7 +93,7 @@ int			CheckPointSegments = 3;
 int			wal_keep_segments = 0;
 int			XLOGbuffers = -1;
 int			XLogArchiveTimeout = 0;
-bool		XLogArchiveMode = false;
+int			XLogArchiveMode = ARCHIVE_MODE_OFF;
 char	   *XLogArchiveCommand = NULL;
 bool		EnableHotStandby = false;
 bool		fullPageWrites = true;
@@ -147,6 +147,24 @@ const struct config_enum_entry sync_method_options[] = {
 #ifdef OPEN_DATASYNC_FLAG
 	{"open_datasync", SYNC_METHOD_OPEN_DSYNC, false},
 #endif
+	{NULL, 0, false}
+};
+
+
+/*
+ * Although only "on", "off", and "always" are documented,
+ * we accept all the likely variants of "on" and "off".
+ */
+const struct config_enum_entry archive_mode_options[] = {
+	{"always", ARCHIVE_MODE_ALWAYS, false},
+	{"on", ARCHIVE_MODE_ON, false},
+	{"off", ARCHIVE_MODE_OFF, false},
+	{"true", ARCHIVE_MODE_ON, true},
+	{"false", ARCHIVE_MODE_OFF, true},
+	{"yes", ARCHIVE_MODE_ON, true},
+	{"no", ARCHIVE_MODE_OFF, true},
+	{"1", ARCHIVE_MODE_ON, true},
+	{"0", ARCHIVE_MODE_OFF, true},
 	{NULL, 0, false}
 };
 
@@ -829,7 +847,7 @@ static bool holdingAllLocks = false;
 static XLogRecPtr ControlFileOldCheckpointCopyRedo = InvalidXLogRecPtr;
 
 static void readRecoveryCommandFile(void);
-static void exitArchiveRecovery(TimeLineID endTLI, XLogSegNo endLogSegNo);
+static void exitArchiveRecovery(TimeLineID endTLI, XLogRecPtr endOfLog);
 static bool recoveryStopsBefore(XLogRecord *record);
 static bool recoveryStopsAfter(XLogRecord *record);
 static void recoveryPausesHere(void);
@@ -1636,30 +1654,50 @@ CopyXLogRecordToWAL(int write_len, bool isLogSwitch, XLogRecData *rdata,
 
 	/*
 	 * If this was an xlog-switch, it's not enough to write the switch record,
-	 * we also have to consume all the remaining space in the WAL segment. We
-	 * have already reserved it for us, but we still need to make sure it's
-	 * allocated and zeroed in the WAL buffers so that when the caller (or
-	 * someone else) does XLogWrite(), it can really write out all the zeros.
+	 * we also have to consume all the remaining space in the WAL segment.  We
+	 * have already reserved that space, but we need to actually fill it.
 	 */
 	if (isLogSwitch && CurrPos % XLOG_SEG_SIZE != 0)
 	{
 		/* An xlog-switch record doesn't contain any data besides the header */
 		Assert(write_len == SizeOfXLogRecord);
 
-		/*
-		 * We do this one page at a time, to make sure we don't deadlock
-		 * against ourselves if wal_buffers < XLOG_SEG_SIZE.
-		 */
+		/* Assert that we did reserve the right amount of space */
 		Assert(EndPos % XLogSegSize == 0);
 
-		/* Use up all the remaining space on the first page */
+		/* Use up all the remaining space on the current page */
 		CurrPos += freespace;
 
+		/*
+		 * Cause all remaining pages in the segment to be flushed, leaving the
+		 * XLog position where it should be, at the start of the next segment.
+		 * We do this one page at a time, to make sure we don't deadlock
+		 * against ourselves if wal_buffers < wal_segment_size.
+		 */
 		while (CurrPos < EndPos)
 		{
-			/* initialize the next page (if not initialized already) */
-			WALInsertLockUpdateInsertingAt(CurrPos);
-			AdvanceXLInsertBuffer(CurrPos, false);
+			/*
+			 * The minimal action to flush the page would be to call
+			 * WALInsertLockUpdateInsertingAt(CurrPos) followed by
+			 * AdvanceXLInsertBuffer(...).  The page would be left initialized
+			 * mostly to zeros, except for the page header (always the short
+			 * variant, as this is never a segment's first page).
+			 *
+			 * The large vistas of zeros are good for compressibility, but the
+			 * headers interrupting them every XLOG_BLCKSZ (with values that
+			 * differ from page to page) are not.  The effect varies with
+			 * compression tool, but bzip2 for instance compresses about an
+			 * order of magnitude worse if those headers are left in place.
+			 *
+			 * Rather than complicating AdvanceXLInsertBuffer itself (which is
+			 * called in heavily-loaded circumstances as well as this lightly-
+			 * loaded one) with variant behavior, we just use GetXLogBuffer
+			 * (which itself calls the two methods we need) to get the pointer
+			 * and zero most of the page.  Then we just zero the page header.
+			 */
+			currpos = GetXLogBuffer(CurrPos);
+			MemSet(currpos, 0, SizeOfXLogShortPHD);
+
 			CurrPos += XLOG_BLCKSZ;
 		}
 	}
