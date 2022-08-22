@@ -13729,6 +13729,7 @@ and first_id in (select first_id from mat_w);
                      ->  Shared Scan (share slice:id 1:0)  (cost=0.00..431.00 rows=4 width=4)
                            Output: share0_ref2.first_id
  Optimizer: Pivotal Optimizer (GPORCA)
+ Settings: optimizer=on
 (31 rows)
 
 with mat_w as (
@@ -13773,13 +13774,13 @@ select m1.i
 from mat m1 join mat m2 on m1.j = m2.j;
                                                                                       QUERY PLAN                                                                                       
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+ Sequence
    Output: share0_ref3.i
-   ->  Sequence
-         Output: share0_ref3.i
-         ->  Shared Scan (share slice:id 1:0)
-               Output: share0_ref1.i, share0_ref1.j
-               ->  Materialize
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1.i, share0_ref1.j
+         ->  Materialize
+               Output: material_bitmapscan.i, material_bitmapscan.j
+               ->  Gather Motion 1:1  (slice1; segments: 1)
                      Output: material_bitmapscan.i, material_bitmapscan.j
                      ->  Bitmap Heap Scan on orca.material_bitmapscan
                            Output: material_bitmapscan.i, material_bitmapscan.j
@@ -13787,21 +13788,21 @@ from mat m1 join mat m2 on m1.j = m2.j;
                            Filter: ((material_bitmapscan.i = 2) AND (material_bitmapscan.j = 2) AND (material_bitmapscan.l = 'Thu Jun 03 00:00:00 2021'::timestamp without time zone))
                            ->  Bitmap Index Scan on material_bitmapscan_idx
                                  Index Cond: (material_bitmapscan.k = 'Thu Jun 03 00:00:00 2021'::timestamp without time zone)
-         ->  Hash Join
-               Output: share0_ref3.i
-               Hash Cond: (share0_ref3.j = share0_ref2.j)
-               ->  Result
+   ->  Hash Join
+         Output: share0_ref3.i
+         Hash Cond: (share0_ref3.j = share0_ref2.j)
+         ->  Result
+               Output: share0_ref3.i, share0_ref3.j
+               Filter: (share0_ref3.j = 2)
+               ->  Shared Scan (share slice:id 0:0)
                      Output: share0_ref3.i, share0_ref3.j
-                     Filter: (share0_ref3.j = 2)
-                     ->  Shared Scan (share slice:id 1:0)
-                           Output: share0_ref3.i, share0_ref3.j
-               ->  Hash
+         ->  Hash
+               Output: share0_ref2.j
+               ->  Result
                      Output: share0_ref2.j
-                     ->  Result
-                           Output: share0_ref2.j
-                           Filter: (share0_ref2.j = 2)
-                           ->  Shared Scan (share slice:id 1:0)
-                                 Output: share0_ref2.i, share0_ref2.j
+                     Filter: (share0_ref2.j = 2)
+                     ->  Shared Scan (share slice:id 0:0)
+                           Output: share0_ref2.i, share0_ref2.j
  Optimizer: Pivotal Optimizer (GPORCA)
 (30 rows)
 

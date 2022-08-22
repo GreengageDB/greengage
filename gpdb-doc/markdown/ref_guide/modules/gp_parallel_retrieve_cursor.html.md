@@ -263,7 +263,7 @@ Refer to the [gp\_segment\_endpoints](../system_catalogs/gp_segment_endpoints.ht
 
 The `gp_parallel_retrieve_cursor` module has the following limitations:
 
--   The Pivotal Query Optimizer \(GPORCA\) does not support queries on a parallel retrieve cursor.
+-   The Tanzu Greenplum Query Optimizer \(GPORCA\) does not support queries on a parallel retrieve cursor.
 -   Greenplum Database ignores the `BINARY` clause when you declare a parallel retrieve cursor.
 -   Parallel retrieve cursors cannot be declared `WITH HOLD`.
 -   Parallel retrieve cursors do not support the `FETCH` and `MOVE` cursor operations.

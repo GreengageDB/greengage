@@ -162,7 +162,7 @@ Setting this option at the foreign table-level overrides a foreign server-level 
 
 The `greenplum_fdw` module has the following known issues and limitations:
 
--   The Pivotal Query Optimizer \(GPORCA\) does not support queries on foreign tables that you create with the `greenplum_fdw` foreign-data wrapper.
+-   The Tanzu Greenplum Query Optimizer \(GPORCA\) does not support queries on foreign tables that you create with the `greenplum_fdw` foreign-data wrapper.
 -   `greenplum_fdw` does not support `UPDATE` and `DELETE` operations on foreign tables.
 
 ## <a id="topic_compat"></a>Compatibility 
