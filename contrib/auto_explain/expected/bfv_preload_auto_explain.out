@@ -21,7 +21,7 @@ LOG:  duration: 0.002 ms  plan:
 Query Text: CREATE TABLE t1 as select generate_series(1, 1);
 Redistribute Motion 1:3  (slice1; segments: 1)  (cost=0.00..5.01 rows=1000 width=0)
   Hash Key: (generate_series(1, 1))
-  ->  Result  (cost=0.00..5.01 rows=334 width=0)
+  ->  Result  (cost=0.00..5.01 rows=1000 width=0)
 DROP TABLE t1;
 LOG:  statement: DROP TABLE t1;
 -- check that auto_explain doesn't work on coordinator with Gp_role is not a GP_ROLE_DISPATCH
