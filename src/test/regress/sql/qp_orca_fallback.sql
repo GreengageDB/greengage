@@ -101,32 +101,3 @@ explain select count(*) from foo group by a;
 set optimizer_enable_hashagg = off;
 set optimizer_enable_groupagg = off;
 explain select count(*) from foo group by a;
-
--- ORCA should fallback in case there are any CTE Consumers beneath a duplicate-hazard motion
--- Should be removed after issue#13039 is fixed
--- start_ignore
-DROP TABLE IF EXISTS tbl1, tbl2;
-CREATE TABLE tbl2 (
-	id numeric NULL,
-	refrcode varchar(255) NULL,
-	referenceid numeric NULL
-)
-DISTRIBUTED REPLICATED;
-
-CREATE TABLE tbl1 (
-	id bigserial NOT NULL,
-	iscalctrg varchar(15) NOT NULL,
-	iscalcdetail varchar(15) NULL
-)
-DISTRIBUTED REPLICATED;
--- end_ignore
-
-EXPLAIN WITH
-t1 AS (SELECT * FROM tbl1),
-t2 AS (SELECT id, refrcode FROM tbl2 WHERE REFERENCEID = 101991)
- SELECT p.*FROM t1 p
-  JOIN t2 r
-   ON p.isCalcTRG = r.RefrCode
-  JOIN t2 r1
-   ON p.isCalcDetail = r1.RefrCode
- LIMIT 1;

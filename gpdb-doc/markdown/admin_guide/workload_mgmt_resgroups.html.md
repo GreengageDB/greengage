@@ -42,7 +42,7 @@ Within a resource group for roles, transactions are evaluated on a first in, fir
 
 You can also use resource groups to manage the CPU and memory resources of external components such as PL/Container. Resource groups for external components use Linux cgroups to manage both the total CPU and total memory resources for the component.
 
-**Note:** Containerized deployments of Greenplum Database, such as Greenplum for Kubernetes, might create a hierarchical set of nested cgroups to manage host system resources. The nesting of cgroups affects the Greenplum Database resource group limits for CPU percentage, CPU cores, and memory \(except for Greenplum Database external components\). The Greenplum Database resource group system resource limit is based on the quota for the parent group.
+**Note:** Containerized deployments of Greenplum Database might create a hierarchical set of nested cgroups to manage host system resources. The nesting of cgroups affects the Greenplum Database resource group limits for CPU percentage, CPU cores, and memory \(except for Greenplum Database external components\). The Greenplum Database resource group system resource limit is based on the quota for the parent group.
 
 For example, Greenplum Database is running in a cgroup demo, and the Greenplum Database cgroup is nested in the cgroup demo. If the cgroup demo is configured with a CPU limit of 60% of system CPU resources and the Greenplum Database resource group CPU limit is set 90%, the Greenplum Database limit of host system CPU resources is 54% \(0.6 x 0.9\).
 
@@ -285,13 +285,25 @@ For detailed information about cgroups, refer to the Control Groups documentatio
 
 Complete the following tasks on each node in your Greenplum Database cluster to set up cgroups for use with resource groups:
 
-1.  Create the Greenplum Database cgroups configuration file `/etc/cgconfig.d/gpdb.conf`. You must be the superuser or have `sudo` access to create this file:
+1.  If not already installed, install the Control Groups operating system package on each Greenplum Database node. The command that you run to perform this task will differ based on the operating system installed on the node. You must be the superuser or have `sudo` access to run the command:
+    -   Redhat/CentOS 7.x/8.x systems:
+
+        ```
+        sudo yum install libcgroup-tools
+        ```
+    -   Redhat/CentOS 6.x systems:
+
+        ```
+        sudo yum install libcgroup
+        ```
+
+1.  Locate the cgroups configuration file `/etc/cgconfig.conf`. You must be the superuser or have `sudo` access to edit this file:
 
     ```
-    sudo vi /etc/cgconfig.d/gpdb.conf
+    sudo vi /etc/cgconfig.conf
     ```
 
-2.  Add the following configuration information to `/etc/cgconfig.d/gpdb.conf`:
+2.  Add the following configuration information to the file:
 
     ```
     group gpdb {
@@ -318,17 +330,15 @@ Complete the following tasks on each node in your Greenplum Database cluster to 
 
     This content configures CPU, CPU accounting, CPU core set, and memory control groups managed by the `gpadmin` user. Greenplum Database uses the memory control group only for those resource groups created with the `cgroup` `MEMORY_AUDITOR`.
 
-3.  If not already installed and running, install the Control Groups operating system package and start the cgroups service on each Greenplum Database node. The commands that you run to perform these tasks will differ based on the operating system installed on the node. You must be the superuser or have `sudo` access to run these commands:
+3.  Start the cgroups service on each Greenplum Database node. The command that you run to perform this task will differ based on the operating system installed on the node. You must be the superuser or have `sudo` access to run the command:
     -   Redhat/CentOS 7.x/8.x systems:
 
         ```
-        sudo yum install libcgroup-tools
-        sudo cgconfigparser -l /etc/cgconfig.d/gpdb.conf 
+        sudo cgconfigparser -l /etc/cgconfig.conf 
         ```
     -   Redhat/CentOS 6.x systems:
 
         ```
-        sudo yum install libcgroup
         sudo service cgconfig start 
         ```
 
@@ -340,7 +350,7 @@ Complete the following tasks on each node in your Greenplum Database cluster to 
 
     The first line of output identifies the `cgroup` mount point.
 
-5.  Verify that you set up the Greenplum Database cgroups configuration correctly by running the following commands. Replace <cgroup\_mount\_point\> with the mount point that you identified in the previous step:
+5.  Verify that you set up the Greenplum Database cgroups configuration correctly by running the following commands. Replace \<cgroup\_mount\_point\> with the mount point that you identified in the previous step:
 
     ```
     ls -l <cgroup_mount_point>/cpu/gpdb
@@ -351,7 +361,7 @@ Complete the following tasks on each node in your Greenplum Database cluster to 
 
     If these directories exist and are owned by `gpadmin:gpadmin`, you have successfully configured cgroups for Greenplum Database CPU resource management.
 
-6.  To automatically recreate Greenplum Database required cgroup hierarchies and parameters when your system is restarted, configure your system to enable the Linux cgroup service daemon `cgconfig.service` \(Redhat/CentOS 7.x\) or `cgconfig` \(Redhat/CentOS 6.x\) at node start-up. For example, configure one of the following cgroup service commands in your preferred service auto-start tool:
+6.  To automatically recreate Greenplum Database required cgroup hierarchies and parameters when your system is restarted, configure your system to enable the Linux cgroup service daemon `cgconfig.service` \(Redhat/CentOS 7.x/8.x\) or `cgconfig` \(Redhat/CentOS 6.x\) at node start-up. For example, configure one of the following cgroup service commands in your preferred service auto-start tool:
     -   Redhat/CentOS 7.x/8.x systems:
 
         ```

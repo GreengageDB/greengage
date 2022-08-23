@@ -3328,6 +3328,7 @@ explain select c from mix_func_cast();
 select a from mix_func_cast();
 select b from mix_func_cast();
 select c from mix_func_cast();
+
 -- the query with empty CTE producer target list should fall back to Postgres
 -- optimizer without any error on build without asserts
 drop table if exists empty_cte_tl_test;
