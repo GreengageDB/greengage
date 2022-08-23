@@ -801,7 +801,7 @@ ldelete:;
 
 			AOTupleId *aoTupleId = (AOTupleId *) tupleid;
 			result = appendonly_delete(resultRelInfo->ri_deleteDesc, aoTupleId);
-		} 
+		}
 		else if (isAOColsTable)
 		{
 			if (IsolationUsesXactSnapshot())
@@ -904,6 +904,27 @@ ldelete:;
 				break;
 
 			case HeapTupleUpdated:
+
+				/*
+				 * AO/AOCS relations don't support the chain of tuple versions
+				 * as it's done for heap relations and update/delete on these
+				 * types of relation is protected by Exclusive lock therefore
+				 * the scenario when transaction have to seek a live newer
+				 * version to update/delete is not possible.
+				 * TODO: If it occurs then most likely we work with wrong
+				 * partition. How it's possible is described in
+				 * https://github.com/greenplum-db/gpdb/pull/13860
+				 */
+				if (isAORowsTable || isAOColsTable)
+					ereport(ERROR,
+							(errcode(ERRCODE_DATA_CORRUPTED),
+							 errmsg("tuple to be %s was already removed",
+									isUpdate ? "updated": "deleted"),
+							 errdetail("for AO/AOCS table this scenario is impossible"),
+							 errhint("perhaps, modification is occuring on wrong partition")));
+
+				Assert(isHeapTable);
+
 				if (IsolationUsesXactSnapshot())
 					ereport(ERROR,
 							(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
@@ -932,9 +953,24 @@ ldelete:;
 							 errmsg("concurrent updates distribution keys on the same row is not allowed")));
 				}
 
+				/*
+				 * Check whether we have the newer version for target row after
+				 * concurrent update in heap table
+				 */
 				if (!ItemPointerEquals(tupleid, &hufd.ctid))
 				{
 					TupleTableSlot *epqslot;
+
+					/*
+					 * TODO: DML node doesn't initialize `epqstate` parameter so
+					 * we exclude EPQ routine for this type of modification and
+					 * act as in RR and upper isolation levels.
+					 */
+					if (!epqstate)
+						ereport(ERROR,
+								(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
+								 errmsg("could not serialize access due to concurrent update"),
+								 errhint("Use PostgreSQL Planner instead of Optimizer for this query via optimizer=off GUC setting")));
 
 					epqslot = EvalPlanQual(estate,
 										   epqstate,

@@ -35,6 +35,20 @@ return result
 $$
 language plpythonu;
 
+create or replace function get_executor_mem(query text) returns int as
+$$
+import re
+rv = plpy.execute('EXPLAIN ANALYZE '+ query)
+comp_regex = re.compile("Executor memory: (\d+)K")
+mem = 0
+for i in range(len(rv)):
+    cur_line = rv[i]['QUERY PLAN']
+    m = comp_regex.search(cur_line)
+    if m is not None:
+        mem = mem + int(m.group(1))
+return mem
+$$
+language plpythonu;
 
 -- Test UPDATE that moves row from one partition to another. The partitioning
 -- key is also the distribution key in this case.
@@ -619,6 +633,41 @@ select count_operator('delete from mpp6247_foo using mpp6247_bar where mpp6247_f
 
 drop table mpp6247_bar;
 drop table mpp6247_foo;
+
+-- Test executor memory consumption for high partitioned column oriented tables
+drop table if exists aocs_part1;
+drop table if exists aocs_part2;
+create table aocs_part1 (i0 int, i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8 int, i9 int)
+with (appendonly=true, orientation=column) distributed by (i0)
+partition by range (i0) (start (0) end(1) every (1));
+create table aocs_part2 (i0 int, i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8 int, i9 int)
+with (appendonly=true, orientation=column) distributed by (i0)
+partition by range (i0) (start (0) end(50) every (1));
+-- For ORCA, this queries use Dynamic Seq Scan over the different number
+-- of partitions (1 and 50). Before, second query executor consumed high amount
+-- of memory (51126K). From now, it should consume far less memory (3035K),
+-- even less than 5x memory consumption of first query (1339K).
+-- As it's true for ORCA only, we use xor(#) to get final result.
+with vals as(
+  select
+  get_executor_mem('select i0, i1, i2, i3, i4, i5, i6, i7, i8, i9 
+  from (
+    select *,
+    row_number() over (partition by i0 order by i1) as seq
+    from aocs_part1
+  ) as p
+  where seq=1') as v1,
+  get_executor_mem('select i0, i1, i2, i3, i4, i5, i6, i7, i8, i9 
+  from (
+    select *,
+    row_number() over (partition by i0 order by i1) as seq
+    from aocs_part2
+  ) as p
+  where seq=1') as v2
+)
+select (select setting='off' from pg_settings where name = 'optimizer')::int::bit #
+    (v2 < v1 * 5)::int::bit as should_true
+from vals;
 
 -- CLEANUP
 -- start_ignore
