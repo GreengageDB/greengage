@@ -6,6 +6,7 @@ set search_path to memconsumption;
 -- end_ignore
 
 create table test (i int, j int);
+create table t1 (a int, b int, c int) distributed by (a);
 
 set explain_memory_verbosity=detail;
 set execute_pruned_plan=on;
@@ -16,30 +17,77 @@ insert into test select i, i % 100 from generate_series(1,1000) as i;
 create language plpythonu;
 -- end_ignore
 
-create or replace function sum_owner_consumption(query text, owner text) returns int as
+create or replace function sum_owner_consumption(query text, owner text)
+returns table (slice text, mem_consumption int, is_entry_db boolean) as
 $$
 import re
 rv = plpy.execute('EXPLAIN ANALYZE '+ query)
 search_text = owner
 total_consumption = 0
-count = 0
+memory_consumption_per_slice = {}
 comp_regex = re.compile("[^0-9]+(\d+)\/(\d+).+")
+slice_regex = re.compile(".+\((slice\d+)")
+entry_db_regex = re.compile("\s+\((slice\d+)\).+\(entry db\)")
+entry_db_slices = set()
+after_planning_time = False
 for i in range(len(rv)):
     cur_line = rv[i]['QUERY PLAN']
+    if "Planning time" in cur_line:
+        # Summary begins here, look for entry db slice
+        after_planning_time = True
+    if after_planning_time:
+        m = entry_db_regex.match(cur_line)
+        if m is not None:
+            entry_db_slices.add(m.group(1))
+    else:
+        m = slice_regex.match(cur_line)
+        if m is not None:
+            current_slice = m.group(1)
+            slice_consumption = 0
+            memory_consumption_per_slice[current_slice] = 0
     if search_text.lower() in cur_line.lower():
         print search_text
         m = comp_regex.match(cur_line)
         if m is not None:
-            count = count + 1
+            memory_consumption_per_slice[current_slice] = memory_consumption_per_slice[current_slice] + int(m.group(2))
             total_consumption = total_consumption + int(m.group(2))
-return total_consumption
+
+return [
+        {
+            'slice': slice,
+            'mem_consumption': memory_consumption,
+            'is_entry_db': (slice in entry_db_slices)
+        } for slice, memory_consumption in  memory_consumption_per_slice.items()
+       ]
 $$
 language plpythonu;
 
-select sum_owner_consumption('SELECT t1.i, t2.j FROM test as t1 join test as t2 on t1.i = t2.j', 'X_Alien') = 0;
+select sum(mem_consumption) = 0 from sum_owner_consumption('SELECT t1.i, t2.j FROM test as t1 join test as t2 on t1.i = t2.j', 'X_Alien');
+
+-- Special handling for entry db: there is no entry db for legacy optimizer, so just return true.
+select
+case
+	when settings.is_orca
+	then query_result.check
+	else 'true'
+end result
+from
+(select sum(mem_consumption) = 0 as check from sum_owner_consumption('SELECT * FROM t1, (SELECT * FROM t1 LIMIT 1) a WHERE a.a = t1.a', 'X_Alien') where is_entry_db) query_result,
+(select setting='on' as is_orca from pg_settings where name = 'optimizer') settings;
 
 set execute_pruned_plan=off;
-select sum_owner_consumption('SELECT t1.i, t2.j FROM test as t1 join test as t2 on t1.i = t2.j', 'X_Alien') > 0;
+select sum(mem_consumption) > 0 from sum_owner_consumption('SELECT t1.i, t2.j FROM test as t1 join test as t2 on t1.i = t2.j', 'X_Alien');
+
+-- Special handling for entry db: there is no entry db for legacy optimizer, so just return true.
+select
+case
+	when settings.is_orca
+	then query_result.check
+	else 'true'
+end result
+from
+(select sum(mem_consumption) > 0 as check from sum_owner_consumption('SELECT * FROM t1, (SELECT * FROM t1 LIMIT 1) a WHERE a.a = t1.a', 'X_Alien') where is_entry_db) query_result,
+(select setting='on' as is_orca from pg_settings where name = 'optimizer') settings;
 
 create or replace function has_account_type(query text, search_text text) returns int as
 $$
@@ -180,7 +228,7 @@ insert into bar_part select 1, 1 from generate_series(1,100000)i;
 insert into foo select 1, 1 from generate_series(1,80000)i;
 analyze foo;
 analyze bar_part;
-select sum_owner_consumption('select * from bar_part where exists (select 1 from foo where foo.b = bar_part.b and bar_part.b > 0);', 'X_PartitionSelector') between 1 and 1000000;
+select sum(mem_consumption) between 1 and 1000000 from sum_owner_consumption('select * from bar_part where exists (select 1 from foo where foo.b = bar_part.b and bar_part.b > 0);', 'X_PartitionSelector');
 -- We expect, one slice in the plan for the top Gather Motion. Corresponding to
 -- each segment, there will be 1 instance of the slice, thus total 3 Executor
 -- accounts for 3 segments
@@ -189,6 +237,6 @@ select has_account_type('select simple_sql_function(i) from all_tuples_on_seg0',
 -- should be independent of the tuples. However, before the fix, it increased with
 -- more rows. Check the memory for X_PartitionSelector owner does not go above 1 MB.
 insert into foo select 1, 1 from generate_series(1,80000)i;
-select sum_owner_consumption('select * from bar_part where exists (select 1 from foo where foo.b = bar_part.b and bar_part.b > 0);', 'X_PartitionSelector') between 1 and 1000000;
+select sum(mem_consumption) between 1 and 1000000 from sum_owner_consumption('select * from bar_part where exists (select 1 from foo where foo.b = bar_part.b and bar_part.b > 0);', 'X_PartitionSelector');
 insert into foo select 1, 1 from generate_series(1,80000)i;
-select sum_owner_consumption('select * from bar_part where exists (select 1 from foo where foo.b = bar_part.b and bar_part.b > 0);', 'X_PartitionSelector') between 1 and 1000000;
+select sum(mem_consumption) between 1 and 1000000 from sum_owner_consumption('select * from bar_part where exists (select 1 from foo where foo.b = bar_part.b and bar_part.b > 0);', 'X_PartitionSelector');
