@@ -32,6 +32,8 @@
 #include "cdb/cdbpartition.h"
 #include "cdb/cdbvars.h"
 #include "cdb/partitionselection.h"
+#include "cdb/cdbappendonlyam.h"
+#include "cdb/cdbaocsam.h"
 
 static void CleanupOnePartition(DynamicSeqScanState *node);
 
@@ -305,9 +307,17 @@ static void
 CleanupOnePartition(DynamicSeqScanState *scanState)
 {
 	Assert(NULL != scanState);
+	SeqScanState *sstate = scanState->seqScanState;
 
-	if (scanState->seqScanState)
+	if (sstate)
 	{
+		if (sstate->ss_currentScanDesc_heap)
+			heap_afterscan(sstate->ss_currentScanDesc_heap);
+		if (sstate->ss_currentScanDesc_ao)
+			appendonly_afterscan(sstate->ss_currentScanDesc_ao);
+		if (sstate->ss_currentScanDesc_aocs)
+			aocs_afterscan(sstate->ss_currentScanDesc_aocs);
+
 		/*
 		 * Since we use the cache hack, we cannot end the subscan
 		 * just set it to NULL and this will lead to the logic

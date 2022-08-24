@@ -335,6 +335,7 @@ extern AppendOnlyScanDesc appendonly_beginrangescan(Relation relation,
 		Snapshot appendOnlyMetaDataSnapshot, 
 		int *segfile_no_arr, int segfile_count,
 		int nkeys, ScanKey keys);
+extern void appendonly_afterscan(AppendOnlyScanDesc scan);
 extern void appendonly_rescan(AppendOnlyScanDesc scan, ScanKey key);
 extern void appendonly_endscan(AppendOnlyScanDesc scan);
 extern bool appendonly_getnext(AppendOnlyScanDesc scan,
