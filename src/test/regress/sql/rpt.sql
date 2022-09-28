@@ -424,6 +424,16 @@ explain (costs off) insert into t_replicate_volatile select random(), a, a from 
 create sequence seq_for_insert_replicated_table;
 explain (costs off) insert into t_replicate_volatile select nextval('seq_for_insert_replicated_table');
 explain (costs off) select a from t_replicate_volatile union all select * from nextval('seq_for_insert_replicated_table');
+
+-- insert into table with serial column
+create table t_replicate_dst(id serial, i integer) distributed replicated;
+create table t_replicate_src(i integer) distributed replicated;
+insert into t_replicate_src select i from generate_series(1, 5) i;
+explain (costs off, verbose) insert into t_replicate_dst (i) select i from t_replicate_src;
+explain (costs off, verbose) with s as (select i from t_replicate_src group by i having random() > 0) insert into t_replicate_dst (i) select i from s;
+insert into t_replicate_dst (i) select i from t_replicate_src;
+select distinct id from gp_dist_random('t_replicate_dst') order by id;
+
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();
 explain (costs off) update t_replicate_volatile set a = 1 from t_replicate_volatile x where x.a + random() = t_replicate_volatile.b;
@@ -548,6 +558,32 @@ explain (costs off) select j, (select j) AS "Correlated Field" from t;
 select j, (select j) AS "Correlated Field" from t;
 explain (costs off) select j, (select 5) AS "Uncorrelated Field" from t;
 select j, (select 5) AS "Uncorrelated Field" from t;
+
+--
+-- Check sub-selects with distributed replicated tables and volatile functions
+--
+drop table if exists t;
+create table t (i int) distributed replicated;
+create table t1 (a int) distributed by (a);
+create table t2 (a int, b float) distributed replicated;
+create or replace function f(i int) returns int language sql security definer as $$ select i; $$;
+-- ensure we make gather motion when volatile functions in subplan
+explain (costs off, verbose) select (select f(i) from t);
+explain (costs off, verbose) select (select f(i) from t group by f(i));
+explain (costs off, verbose) select (select i from t group by i having f(i) > 0);
+-- ensure we do not make broadcast motion
+explain (costs off, verbose) select * from t1 where a in (select random() from t where i=a group by i);
+explain (costs off, verbose) select * from t1 where a in (select random() from t where i=a);
+-- ensure we make broadcast motion when volatile function in deleting motion flow
+explain (costs off, verbose) insert into t2 (a, b) select i, random() from t;
+-- ensure we make broadcast motion when volatile function in correlated subplan qual
+explain (costs off, verbose) select * from t1 where a in (select f(i) from t where i=a and f(i) > 0);
+-- ensure we do not break broadcast motion
+explain (costs off, verbose) select * from t1 where 1 <= ALL (select i from t group by i having random() > 0);
+drop table if exists t;
+drop table if exists t1;
+drop table if exists t2;
+drop function if exists f(i int);
 
 -- start_ignore
 drop schema rpt cascade;
