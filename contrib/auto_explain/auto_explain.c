@@ -52,8 +52,7 @@ static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
 #define auto_explain_enabled() \
 	(auto_explain_log_min_duration >= 0 && \
-	 (nesting_level == 0 || auto_explain_log_nested_statements) && \
-	 (Gp_role == GP_ROLE_DISPATCH))
+	 (nesting_level == 0 || auto_explain_log_nested_statements))
 
 void		_PG_init(void);
 void		_PG_fini(void);
@@ -73,7 +72,7 @@ void
 _PG_init(void)
 {
 	/* Only run auto_explain on the Query Dispatcher node */
-	if (!IS_QUERY_DISPATCHER())
+	if (Gp_role != GP_ROLE_DISPATCH)
 		return;
 
 	/* Define custom GUC variables. */
