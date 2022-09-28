@@ -206,6 +206,7 @@ StartupProcessMain(void)
 	pqsignal(SIGUSR1, StartupProcSigUsr1Handler);
 	pqsignal(SIGUSR2, StartupProcTriggerHandler);
 
+	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 #ifdef SIGBUS
 	pqsignal(SIGBUS, HandleCrash);
 #endif

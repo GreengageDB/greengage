@@ -5501,7 +5501,7 @@ ATAddToastIfNeeded(List **wqueue, LOCKMODE lockmode)
 		if (tab->relkind == RELKIND_RELATION ||
 			tab->relkind == RELKIND_MATVIEW)
 		{
-			bool is_part = !rel_needs_long_lock(tab->relid);
+			bool is_part;
 
 			/*
 			 * FIXME: we've passed false as is_part_parent to make_new_heap().
@@ -5513,6 +5513,7 @@ ATAddToastIfNeeded(List **wqueue, LOCKMODE lockmode)
 			 * relation's OID, whether an auxiliary table needs valid
 			 * relfrozenxid or not?
 			 */
+			is_part = rel_is_part_child(tab->relid);
 			AlterTableCreateToastTable(tab->relid, (Datum) 0, lockmode,
 									   is_part, false);
 		}
@@ -14829,59 +14830,24 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 			rel->rd_rel->relhasindex)
 			cs->buildAoBlkdir = true;
 
-		if (RelationIsAoCols(rel))
+		cs->options = opts;
+
+		if (RelationIsAoRows(rel))
 		{
-			if (useExistingColumnAttributes)
-			{
-				/*
-				 * Need to remove table level compression settings for the
-				 * AOCO case since they're set at the column level.
-				 */
-				ListCell *lc;
-
-				foreach(lc, opts)
-				{
-					DefElem *de = lfirst(lc);
-
-					if (de->defname &&
-						(strcmp("compresstype", de->defname) == 0 ||
-						 strcmp("compresslevel", de->defname) == 0 ||
-						 strcmp("blocksize", de->defname) == 0))
-						continue;
-					else
-						cs->options = lappend(cs->options, de);
-				}
-				col_encs = RelationGetUntransformedAttributeOptions(rel);
-			}
-			else
-			{
-				ListCell *lc;
-
-				foreach(lc, opts)
-				{
-					DefElem *de = lfirst(lc);
-					cs->options = lappend(cs->options, de);
-				}
-			}
+			/*
+			* In order to avoid being affected by the GUC of gp_default_storage_options,
+			* we should re-build storage options from original table.
+			*
+			* The reason is that when we use the default parameters to create a table,
+			* the configuration will not be written to pg_class.reloptions, and then if
+			* gp_default_storage_options is modified, the newly created table will be
+			* inconsistent with the original table.
+			*/
+			cs->options = build_ao_rel_storage_opts(cs->options, rel);
 		}
-		else
-		{
-			cs->options = opts;
 
-			if (RelationIsAoRows(rel))
-			{
-				/*
-				 * In order to avoid being affected by the GUC of gp_default_storage_options,
-				 * we should re-build storage options from original table.
-				 *
-				 * The reason is that when we use the default parameters to create a table,
-				 * the configuration will not be written to pg_class.reloptions, and then if
-				 * gp_default_storage_options is modified, the newly created table will be
-				 * inconsistent with the original table.
-				 */
-				cs->options = build_ao_rel_storage_opts(cs->options, rel);
-			}
-		}
+		if (RelationIsAoCols(rel) && useExistingColumnAttributes)
+			col_encs = RelationGetUntransformedAttributeOptions(rel);
 
 		for (attno = 0; attno < tupdesc->natts; attno++)
 		{
@@ -16102,14 +16068,12 @@ rel_is_parent(Oid relid)
 }
 
 /*
- * partition children, toast tables and indexes, and indexes on partition
- * children do not need long lived locks because the lock on the partition master
- * protects us.
+ * Is the given relation a partition of a partitioned table?
  */
 bool
-rel_needs_long_lock(Oid relid)
+rel_is_part_child(Oid relid)
 {
-	bool needs_lock = true;
+	bool result = false;
 	Relation rel = relation_open(relid, NoLock);
 
 	relid = rel_get_table_oid(rel);
@@ -16117,7 +16081,7 @@ rel_needs_long_lock(Oid relid)
 	relation_close(rel, NoLock);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
-		needs_lock = !rel_is_child_partition(relid);
+		result = rel_is_child_partition(relid);
 	else
 	{
 		Relation inhrel;
@@ -16139,12 +16103,12 @@ rel_needs_long_lock(Oid relid)
 								   true, NULL, 2, scankey);
 
 		if (systable_getnext(sscan))
-			needs_lock = false;
+			result = true;
 
 		systable_endscan(sscan);
 		heap_close(inhrel, AccessShareLock);
 	}
-	return needs_lock;
+	return result;
 }
 
 

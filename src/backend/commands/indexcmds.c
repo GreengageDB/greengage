@@ -435,7 +435,6 @@ DefineIndex(Oid relationId,
 	LOCKTAG		heaplocktag;
 	LOCKMODE	lockmode;
 	Snapshot	snapshot;
-	bool		need_longlock = true;
 	bool		shouldDispatch;
 	int			i;
 
@@ -848,14 +847,6 @@ DefineIndex(Oid relationId,
 		 */
 	}
 
-	if (rel_needs_long_lock(RelationGetRelid(rel)))
-		need_longlock = true;
-	/* if this is a concurrent build, we must lock you long time */
-	else if (stmt->concurrent)
-		need_longlock = true;
-	else
-		need_longlock = false;
-
 	/*
 	 * A valid stmt->oldNode implies that we already have a built form of the
 	 * index.  The caller should also decline any index build.
@@ -940,10 +931,7 @@ DefineIndex(Oid relationId,
 			for (i = 0; i < numberOfAttributes; i++)
 				opfamOids[i] = get_opclass_family(classObjectId[i]);
 
-			if (need_longlock)
-				heap_close(rel, NoLock);
-			else
-				heap_close(rel, lockmode);
+			heap_close(rel, NoLock);
 
 			/*
 			 * For each partition, scan all existing indexes; if one matches
@@ -1151,10 +1139,7 @@ DefineIndex(Oid relationId,
 		 */
 		else
 		{
-			if (need_longlock)
-				heap_close(rel, NoLock);
-			else
-				heap_close(rel, lockmode);
+			heap_close(rel, NoLock);
 		}
 		/*
 		 * Indexes on partitioned tables are not themselves built, so we're
@@ -1166,10 +1151,7 @@ DefineIndex(Oid relationId,
 	if (!concurrent)
 	{
 		/* Close the heap and we're done, in the non-concurrent case */
-		if (need_longlock)
-			heap_close(rel, NoLock);
-		else
-			heap_close(rel, lockmode);
+		heap_close(rel, NoLock);
 		return indexRelationId;
 	}
 
@@ -1187,10 +1169,7 @@ DefineIndex(Oid relationId,
 	/* save lockrelid and locktag for below, then close rel */
 	heaprelid = rel->rd_lockInfo.lockRelId;
 	SET_LOCKTAG_RELATION(heaplocktag, heaprelid.dbId, heaprelid.relId);
-	if (need_longlock)
-		heap_close(rel, NoLock);
-	else
-		heap_close(rel, lockmode);
+	heap_close(rel, NoLock);
 
 	/*
 	 * For a concurrent build, it's important to make the catalog entries
@@ -2468,7 +2447,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation,
  *		Recreate all indexes of a table (and of its toast table, if any)
  */
 Oid
-ReindexTable(ReindexStmt *stmt)
+ReindexTable(ReindexStmt *stmt, bool isTopLevel)
 {
 	MemoryContext	private_context, oldcontext;
 	List	   *prels = NIL, *relids = NIL;
@@ -2517,6 +2496,46 @@ ReindexTable(ReindexStmt *stmt)
 	relids = lappend_oid(relids, heapOid);
 	relids = list_concat_unique_oid(relids, prels);
 	MemoryContextSwitchTo(oldcontext);
+
+	if (list_length(relids) == 1)
+	{
+		bool result;
+
+		MemoryContextDelete(private_context);
+		result = reindex_relation(heapOid,
+								  REINDEX_REL_PROCESS_TOAST |
+									REINDEX_REL_CHECK_CONSTRAINTS);
+		if (!result)
+			ereport(NOTICE,
+					(errmsg("table \"%s\" has no indexes to reindex",
+							stmt->relation->relname)));
+
+		if (result && Gp_role == GP_ROLE_DISPATCH)
+		{
+			ReindexStmt    *qestmt;
+			qestmt = makeNode(ReindexStmt);
+			qestmt->relid = heapOid;
+			qestmt->kind = OBJECT_TABLE;
+
+			CdbDispatchUtilityStatement((Node *) qestmt,
+										DF_CANCEL_ON_ERROR |
+											DF_WITH_SNAPSHOT,
+										GetAssignedOidsForDispatch(),
+										NULL);
+		}
+
+		return heapOid;
+	}
+
+	/*
+	 * We cannot run REINDEX TABLE on partitioned table inside a user
+	 * transaction block; if we were inside a transaction, then our commit-
+	 * and start-transaction-command calls would not have the intended effect!
+	 * For example, if it gets called under pl language, it'll mess up
+	 * pl language's transaction management which may cause panic.
+	 */
+	PreventTransactionChain(isTopLevel,
+							"REINDEX TABLE <partitioned_table>");
 
 	/* various checks on each partition */
 	foreach (lc, prels)

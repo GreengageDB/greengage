@@ -1717,6 +1717,27 @@ appendonly_beginscan(Relation relation,
 }
 
 /* ----------------
+ *		appendonly_afterscan	- perform after scan actions
+ *
+ * Release some structures, which is safe to free after initial scan, but
+ * before rescan.
+ * ----------------
+ */
+void
+appendonly_afterscan(AppendOnlyScanDesc scan)
+{
+	CloseScannedFileSeg(scan);
+
+	AppendOnlyStorageRead_FinishSession(&scan->storageRead);
+
+	scan->initedStorageRoutines = false;
+
+	AppendOnlyExecutorReadBlock_Finish(&scan->executorReadBlock);
+
+	scan->aos_need_new_segfile = true;
+}
+
+/* ----------------
  *		appendonly_rescan		- restart a relation scan
  *
  *
@@ -1729,15 +1750,7 @@ void
 appendonly_rescan(AppendOnlyScanDesc scan,
 				  ScanKey key)
 {
-	CloseScannedFileSeg(scan);
-
-	AppendOnlyStorageRead_FinishSession(&scan->storageRead);
-
-	scan->initedStorageRoutines = false;
-
-	AppendOnlyExecutorReadBlock_Finish(&scan->executorReadBlock);
-
-	scan->aos_need_new_segfile = true;
+	appendonly_afterscan(scan);
 
 	/*
 	 * reinitialize scan descriptor

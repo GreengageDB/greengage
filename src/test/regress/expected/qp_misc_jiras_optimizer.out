@@ -3153,12 +3153,12 @@ NOTICE:  CREATE TABLE will create partition "tbl8258_1_prt_4" for table "tbl8258
 NOTICE:  CREATE TABLE will create partition "tbl8258_1_prt_5" for table "tbl8258"
 NOTICE:  CREATE TABLE will create partition "tbl8258_1_prt_p1" for table "tbl8258"
 select pg_get_partition_def('qp_misc_jiras.tbl8258'::regclass, true);
-                                       pg_get_partition_def                                       
---------------------------------------------------------------------------------------------------
- PARTITION BY RANGE(b)                                                                           +
-           (                                                                                     +
-           START (1::double precision) END (100::double precision) EVERY (20::double precision), +
-           PARTITION p1 START (100::double precision) END (150::double precision)                +
+                                         pg_get_partition_def                                         
+------------------------------------------------------------------------------------------------------
+ PARTITION BY RANGE(b)                                                                               +
+           (                                                                                         +
+           START ('1'::double precision) END ('100'::double precision) EVERY (20::double precision), +
+           PARTITION p1 START ('100'::double precision) END ('150'::double precision)                +
            )
 (1 row)
 
@@ -4509,21 +4509,18 @@ set optimizer_metadata_caching to off;
 insert into tbl_z select i from generate_series(1,100) i;
 -- plan with no relsize collection
 explain select 1 as t1 where 1 <= ALL (select x from tbl_z);
-                                                                                                                                                           QUERY PLAN                                                                                                                                                            
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Result  (cost=0.00..882688.11 rows=1 width=4)
-   ->  Nested Loop  (cost=0.00..882688.11 rows=1 width=1)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Result  (cost=0.00..882688.07 rows=1 width=4)
+   ->  Nested Loop Left Anti Semi (Not-In) Join  (cost=0.00..882688.07 rows=1 width=1)
          Join Filter: true
-         ->  Result  (cost=0.00..431.00 rows=1 width=1)
-               Filter: ((CASE WHEN ((sum((CASE WHEN (1 > x) THEN 1 ELSE 0 END))) IS NULL) THEN true WHEN ((sum((CASE WHEN (x IS NULL) THEN 1 ELSE 0 END))) > 0::bigint) THEN NULL::boolean WHEN (1 IS NULL) THEN NULL::boolean WHEN ((sum((CASE WHEN (1 > x) THEN 1 ELSE 0 END))) = 0::bigint) THEN true ELSE false END) = true)
-               ->  Result  (cost=0.00..431.00 rows=1 width=1)
-                     ->  Aggregate  (cost=0.00..431.00 rows=1 width=16)
-                           ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
-                                 ->  Result  (cost=0.00..431.00 rows=1 width=8)
-                                       ->  Seq Scan on tbl_z  (cost=0.00..431.00 rows=1 width=4)
          ->  Result  (cost=0.00..0.00 rows=1 width=1)
- Optimizer: Pivotal Optimizer (GPORCA)
-(12 rows)
+         ->  Materialize  (cost=0.00..431.00 rows=1 width=1)
+               ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=1)
+                     ->  Seq Scan on tbl_z  (cost=0.00..431.00 rows=1 width=1)
+                           Filter: 1 > x
+ Optimizer: Pivotal Optimizer (GPORCA) version 2.65.1
+(9 rows)
 
 set gp_enable_relsize_collection = on;
 -- plan with relsize collection

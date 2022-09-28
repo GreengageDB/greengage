@@ -12,8 +12,8 @@ explain
 WITH cte1 AS ( SELECT *,ROW_NUMBER() OVER ( PARTITION BY i) AS RANK_DESC FROM with_test1),
  cte2 AS ( SELECT 'COL1' TBLNM,COUNT(*) DIFFCNT FROM ( SELECT * FROM cte1) X)
 select * FROM ( SELECT 'COL1' TBLNM FROM cte1) A LEFT JOIN cte2 C ON A.TBLNM=C.TBLNM;
-                                             QUERY PLAN                                             
-----------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
  Sequence  (cost=0.00..1293.00 rows=1 width=24)
    ->  Shared Scan (share slice:id 0:0)  (cost=0.00..431.00 rows=1 width=1)
          ->  Materialize  (cost=0.00..431.00 rows=1 width=1)
@@ -24,7 +24,7 @@ select * FROM ( SELECT 'COL1' TBLNM FROM cte1) A LEFT JOIN cte2 C ON A.TBLNM=C.T
                                  Sort Key: with_test1.i
                                  ->  Seq Scan on with_test1  (cost=0.00..431.00 rows=1 width=10)
    ->  Hash Left Join  (cost=0.00..862.00 rows=1 width=24)
-         Hash Cond: ("outer".tblnm = pg_catalog.textin(unknownout("outer".tblnm), ''::void, (-1)))
+         Hash Cond: ("outer".tblnm = pg_catalog.textin(unknownout("outer".tblnm), ''::void, '-1'::integer))
          ->  Result  (cost=0.00..431.00 rows=1 width=8)
                ->  Shared Scan (share slice:id 0:0)  (cost=0.00..431.00 rows=1 width=1)
          ->  Hash  (cost=431.00..431.00 rows=1 width=16)
@@ -63,15 +63,15 @@ SELECT p.*FROM t1 p JOIN t2 r ON p.isc = r.rc JOIN t2 r1 ON p.iscd = r1.rc LIMIT
                Hash Cond: ((with_test2.iscd)::text = (r1.rc)::text)
                ->  Hash Join  (cost=0.03..0.16 rows=4 width=104)
                      Hash Cond: ((r.rc)::text = (with_test2.isc)::text)
-                     ->  Subquery Scan on r  (cost=0.00..0.08 rows=4 width=516)
+                     ->  Subquery Scan on r  (cost=0.00..1.09 rows=4 width=19)
                            ->  Seq Scan on with_test3  (cost=0.00..1.05 rows=4 width=19)
-                                 Filter: (ri = 101991::numeric)
-                     ->  Hash  (cost=0.02..0.02 rows=1 width=104)
+                                 Filter: (ri = '101991'::numeric)
+                     ->  Hash  (cost=1.02..1.02 rows=1 width=32)
                            ->  Seq Scan on with_test2  (cost=0.00..1.01 rows=1 width=32)
-               ->  Hash  (cost=0.08..0.08 rows=2 width=516)
-                     ->  Subquery Scan on r1  (cost=0.00..0.08 rows=4 width=516)
+               ->  Hash  (cost=1.09..1.09 rows=2 width=19)
+                     ->  Subquery Scan on r1  (cost=0.00..1.09 rows=4 width=19)
                            ->  Seq Scan on with_test3 with_test3_1  (cost=0.00..1.05 rows=4 width=19)
-                                 Filter: (ri = 101991::numeric)
+                                 Filter: (ri = '101991'::numeric)
  Optimizer: Postgres query optimizer
 (16 rows)
 
@@ -1122,28 +1122,33 @@ create index idx_t2_13532 on t2_13532(b);
 explain (costs off) select * from t1_13532 x, t2_13532 y where y.a < random() and x.b = y.b;
                         QUERY PLAN                        
 ----------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   ->  Nested Loop
-         Join Filter: true
-         ->  Seq Scan on t1_13532
-         ->  Index Scan using idx_t2_13532 on t2_13532
-               Index Cond: (b = t1_13532.b)
-               Filter: ((a)::double precision < random())
- Optimizer: Pivotal Optimizer (GPORCA)
+ Hash Join
+   Hash Cond: (x.b = y.b)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on t1_13532 x
+   ->  Hash
+         ->  Result
+               ->  Gather Motion 1:1  (slice2; segments: 1)
+                     ->  Bitmap Heap Scan on t2_13532 y
+                           Filter: ((a)::double precision < random())
+                           ->  Bitmap Index Scan on idx_t2_13532
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 set enable_bitmapscan = off;
 explain (costs off) select * from t1_13532 x, t2_13532 y where y.a < random() and x.b = y.b;
                         QUERY PLAN                        
 ----------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   ->  Nested Loop
-         Join Filter: true
-         ->  Seq Scan on t1_13532
-         ->  Index Scan using idx_t2_13532 on t2_13532
-               Index Cond: (b = t1_13532.b)
-               Filter: ((a)::double precision < random())
- Optimizer: Pivotal Optimizer (GPORCA)
+ Hash Join
+   Hash Cond: (x.b = y.b)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on t1_13532 x
+   ->  Hash
+         ->  Result
+               ->  Gather Motion 1:1  (slice2; segments: 1)
+                     ->  Index Scan using idx_t2_13532 on t2_13532 y
+                           Filter: ((a)::double precision < random())
+ Optimizer: Postgres query optimizer
 (8 rows)
 
 -- ORCA

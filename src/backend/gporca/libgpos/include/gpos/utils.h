@@ -19,9 +19,6 @@
 #include "gpos/io/COstreamBasic.h"
 #include "gpos/types.h"
 
-#define GPOS_ASMFP asm volatile("movq %%rbp, %0" : "=g"(ulp));
-#define GPOS_ASMSP asm volatile("movq %%rsp, %0" : "=g"(ulp));
-
 #define ALIGNED_16(x) \
 	(((ULONG_PTR) x >> 1) << 1 == (ULONG_PTR) x)  // checks 16-bit alignment
 #define ALIGNED_32(x) \
@@ -32,21 +29,6 @@
 #define MAX_ALIGNED(x) ALIGNED_64(x)
 
 #define ALIGN_STORAGE __attribute__((aligned(8)))
-
-#define GPOS_GET_FRAME_POINTER(x) \
-	do                            \
-	{                             \
-		ULONG_PTR ulp;            \
-		GPOS_ASMFP;               \
-		x = ulp;                  \
-	} while (0)
-#define GPOS_GET_STACK_POINTER(x) \
-	do                            \
-	{                             \
-		ULONG_PTR ulp;            \
-		GPOS_ASMSP;               \
-		x = ulp;                  \
-	} while (0)
 
 #define GPOS_MSEC_IN_SEC ((ULLONG) 1000)
 #define GPOS_USEC_IN_MSEC ((ULLONG) 1000)
