@@ -1,32 +1,14 @@
 -- start_ignore
 \! gpconfig -c shared_preload_libraries -v 'auto_explain';
-20220719:16:46:40:026759 gpconfig:evgeniy-pc:evgeniy-[INFO]:-completed successfully with parameters '-c shared_preload_libraries -v auto_explain'
+20220725:08:28:26:008391 gpconfig:evgeniy-pc:evgeniy-[INFO]:-completed successfully with parameters '-c shared_preload_libraries -v auto_explain'
+\! gpconfig -c auto_explain.log_min_duration -v 0 --skipvalidation;
+20220725:08:28:27:008476 gpconfig:evgeniy-pc:evgeniy-[INFO]:-completed successfully with parameters '-c auto_explain.log_min_duration -v 0 --skipvalidation'
+\! gpconfig -c auto_explain.log_analize -v true --skipvalidation;
+20220725:08:28:27:008560 gpconfig:evgeniy-pc:evgeniy-[INFO]:-completed successfully with parameters '-c auto_explain.log_analize -v true --skipvalidation'
 \! gpstop -raiq;
 \c
 -- end_ignore
-SET auto_explain.log_min_duration = 0;
 SET CLIENT_MIN_MESSAGES = LOG;
--- auto_axplain must work only at coordinator with Gp_role is GP_ROLE_DISPATCH
--- check that auto_explain doesn't work on segments which are executors.
--- Query 'CREATE TABLE t1 as select generate_series(1, 1)' and query 'CREATE TABLE t1 as select generate_series(1, 10*1000*1000)'
--- are equally got segfault because it has intermediate executor's slice:
---   Result
---     Output: (generate_series(1, 1))
---       ->  Redistribute Motion 3:3  (slice1; segments: 3)
-CREATE TABLE t1 as select generate_series(1, 1);
-LOG:  statement: CREATE TABLE t1 as select generate_series(1, 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
-LOG:  duration: 0.005 ms  plan:
-Query Text: CREATE TABLE t1 as select generate_series(1, 1);
-Result  (cost=0.00..0.00 rows=0 width=0)
-  ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..0.01 rows=1 width=4)
-        ->  Result  (cost=0.00..0.00 rows=1 width=8)
-              ->  Result  (cost=0.00..0.00 rows=1 width=4)
-                    One-Time Filter: (gp_execution_segment() = 0)
-                    ->  Result  (cost=0.00..0.00 rows=1 width=4)
-                          ->  Result  (cost=0.00..0.00 rows=1 width=1)
-DROP TABLE t1;
-LOG:  statement: DROP TABLE t1;
 -- check that auto_explain doesn't work on coordinator with Gp_role is not a GP_ROLE_DISPATCH
 -- Query 'SELECT count(1) from (select i from t1 limit 10) t join t2 using (i)' generate executor's slice on coordinator:
 --             ->  Redistribute Motion 1:3  (slice2)
@@ -46,20 +28,25 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT count(1) from (select i from t1 limit 10) t join t2 using (i);
 LOG:  statement: SELECT count(1) from (select i from t1 limit 10) t join t2 using (i);
-LOG:  statement: SELECT count(1) from (select i from t1 limit 10) t join t2 using (i);  (entry db 127.0.1.1:6000 pid=27339)
-LOG:  duration: 2.660 ms  plan:
+LOG:  statement: SELECT count(1) from (select i from t1 limit 10) t join t2 using (i);  (entry db 127.0.1.1:7000 pid=9001)
+LOG:  duration: 2.940 ms  plan:
 Query Text: SELECT count(1) from (select i from t1 limit 10) t join t2 using (i);
-Aggregate  (cost=0.00..862.00 rows=1 width=8)
-  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..862.00 rows=1 width=1)
-        ->  Hash Join  (cost=0.00..862.00 rows=1 width=1)
+Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=5.106..5.106 rows=1 loops=1)
+  ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..862.00 rows=1 width=1) (actual time=5.099..5.099 rows=0 loops=1)
+        ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (never executed)
               Hash Cond: (t1.i = t2.i)
-              ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..431.00 rows=1 width=4)
+              ->  Redistribute Motion 1:3  (slice2)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                     Hash Key: t1.i
-                    ->  Limit  (cost=0.00..431.00 rows=1 width=4)
-                          ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
-                                ->  Seq Scan on t1  (cost=0.00..431.00 rows=1 width=4)
-              ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-                    ->  Seq Scan on t2  (cost=0.00..431.00 rows=1 width=4)
+                    ->  Limit  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                          ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                ->  Seq Scan on t1  (cost=0.00..431.00 rows=1 width=4) (never executed)
+              ->  Hash  (cost=431.00..431.00 rows=1 width=4) (never executed)
+                    ->  Seq Scan on t2  (cost=0.00..431.00 rows=1 width=4) (never executed)
+  (slice0)    Executor memory: 135K bytes.
+  (slice1)    Executor memory: 60K bytes avg x 3 workers, 60K bytes max (seg0).
+  (slice2)    Executor memory: 96K bytes (entry db).
+  (slice3)    Executor memory: 4172K bytes avg x 3 workers, 4172K bytes max (seg0).
+Memory used:  128000kB
  count 
 -------
      0
@@ -71,6 +58,6 @@ DROP TABLE t2;
 LOG:  statement: DROP TABLE t2;
 -- start_ignore
 \! gpconfig -r shared_preload_libraries;
-20220719:16:46:44:027342 gpconfig:evgeniy-pc:evgeniy-[INFO]:-completed successfully with parameters '-r shared_preload_libraries'
+20220725:08:28:31:009010 gpconfig:evgeniy-pc:evgeniy-[INFO]:-completed successfully with parameters '-r shared_preload_libraries'
 \! gpstop -raiq;
 -- end_ignore
