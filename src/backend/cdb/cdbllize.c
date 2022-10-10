@@ -573,6 +573,14 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		if (ctx->movement == MOVEMENT_BROADCAST)
 		{
 			Assert (NULL != ctx->currentPlanFlow);
+
+			if (scanPlan->flow->locustype == CdbLocusType_SegmentGeneral &&
+				contain_volatile_functions((Node *) scanPlan->qual))
+			{
+				scanPlan->flow->locustype = CdbLocusType_SingleQE;
+				scanPlan->flow->flotype = FLOW_SINGLETON;
+			}
+
 			broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */,
 						  ctx->currentPlanFlow->numsegments /* numsegments */);
 		}

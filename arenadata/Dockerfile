@@ -5,7 +5,7 @@ ARG sigar_headers=https://ci.arenadata.io/artifactory/ADB/6.7.1_arenadata4/cento
 
 # Install some basic utilities and build tools
 RUN yum makecache && yum update -y ca-certificates && \
-    rpm --import http://mirror.centos.org/centos/RPM-GPG-KEY-CentOS-7 && \
+    rpm --import https://mirror.yandex.ru/centos/RPM-GPG-KEY-CentOS-7 && \
     yum -y install epel-release java-1.8.0-openjdk-devel && \
     yum -y install git iproute net-tools openssh-server rsync sudo time vim wget unzip \
                    ant-junit autoconf bison cmake3 flex gperf indent jq libtool gcc-c++ \
