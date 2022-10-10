@@ -85,9 +85,9 @@ for segment_role in MASTER PRIMARY1 PRIMARY2 PRIMARY3; do
   DATADIR_VAR=$segment_role
   echo "wal_level = hot_standby
 archive_mode = on
-archive_command = 'cp %p ${ARCHIVE_PREFIX}%c/%f'" >> ${!DATADIR_VAR}/postgresql.conf
+archive_command = 'cp %p ${ARCHIVE_PREFIX}%c/%d/%f'" >> ${!DATADIR_VAR}/postgresql.conf
 done
-mkdir -p ${ARCHIVE_PREFIX}{-1,0,1,2}
+mkdir -p ${ARCHIVE_PREFIX}{-1/1,0/2,1/3,2/4}
 gpstop -ar -q
 
 # Create the basebackups which will be our replicas for Point-In-Time
@@ -99,6 +99,14 @@ for segment_role in MASTER PRIMARY1 PRIMARY2 PRIMARY3; do
   REPLICA_DBID_VAR=REPLICA_${segment_role}_DBID
   pg_basebackup -h localhost -p ${!PORT_VAR} -D ${!REPLICA_VAR} --target-gp-dbid ${!REPLICA_DBID_VAR}
 done
+
+# New instances will have new dbid's (--target-gp-dbid parameter upper and
+# gp_segment_configuration manipulations below). Let's create symliks with new
+# dbid's to older archieves.
+ln -s ${ARCHIVE_PREFIX}-1/1 ${ARCHIVE_PREFIX}-1/${REPLICA_MASTER_DBID}
+ln -s ${ARCHIVE_PREFIX}0/2 ${ARCHIVE_PREFIX}0/${REPLICA_PRIMARY1_DBID}
+ln -s ${ARCHIVE_PREFIX}1/3 ${ARCHIVE_PREFIX}1/${REPLICA_PRIMARY2_DBID}
+ln -s ${ARCHIVE_PREFIX}2/4 ${ARCHIVE_PREFIX}2/${REPLICA_PRIMARY3_DBID}
 
 # Run setup test. This will create the tables, create the restore
 # points, and demonstrate the commit blocking.
@@ -121,7 +129,7 @@ echo "Creating recovery.conf files in the replicas and starting them up..."
 for segment_role in MASTER PRIMARY1 PRIMARY2 PRIMARY3; do
   REPLICA_VAR=REPLICA_$segment_role
   echo "standby_mode = 'on'
-restore_command = 'cp ${ARCHIVE_PREFIX}%c/%f %p'
+restore_command = 'cp ${ARCHIVE_PREFIX}%c/%d/%f %p'
 recovery_target_name = 'test_restore_point'
 recovery_end_command = 'touch ${!REPLICA_VAR}/recovery_finished'
 primary_conninfo = ''" > ${!REPLICA_VAR}/recovery.conf
