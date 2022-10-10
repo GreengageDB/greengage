@@ -42,7 +42,7 @@ REPLICA_PRIMARY2_DBID=12
 REPLICA_PRIMARY3_DBID=13
 
 # The options for pg_regress and pg_isolation2_regress.
-REGRESS_OPTS="--dbname=gpdb_pitr_database --use-existing --init-file=../regress/init_file --init-file=init_file --load-extension=gp_inject_fault"
+REGRESS_OPTS="--dbname=gpdb_pitr_database --use-existing --init-file=../regress/init_file --init-file=./init_file_gpdb_pitr --load-extension=gp_inject_fault"
 ISOLATION2_REGRESS_OPTS="${REGRESS_OPTS} --init-file=../isolation2/init_file_isolation2"
 
 # Run test via pg_regress with given test name.
@@ -67,6 +67,15 @@ run_test_isolation2()
 
 # Remove temporary test directory if it already exists.
 [ -d $TEMP_DIR ] && rm -rf $TEMP_DIR
+
+# Create our test database.
+createdb gpdb_pitr_database
+
+# Test gp_create_restore_point()
+run_test test_gp_create_restore_point
+
+# Test output of gp_switch_wal()
+run_test_isolation2 test_gp_switch_wal
 
 # Set up WAL Archiving by updating the postgresql.conf files of the
 # master and primary segments. Afterwards, restart the cluster to load
@@ -98,9 +107,6 @@ ln -s ${ARCHIVE_PREFIX}-1/1 ${ARCHIVE_PREFIX}-1/${REPLICA_MASTER_DBID}
 ln -s ${ARCHIVE_PREFIX}0/2 ${ARCHIVE_PREFIX}0/${REPLICA_PRIMARY1_DBID}
 ln -s ${ARCHIVE_PREFIX}1/3 ${ARCHIVE_PREFIX}1/${REPLICA_PRIMARY2_DBID}
 ln -s ${ARCHIVE_PREFIX}2/4 ${ARCHIVE_PREFIX}2/${REPLICA_PRIMARY3_DBID}
-
-# Create our test database.
-createdb gpdb_pitr_database
 
 # Run setup test. This will create the tables, create the restore
 # points, and demonstrate the commit blocking.

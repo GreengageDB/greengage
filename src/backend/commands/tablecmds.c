@@ -60,6 +60,7 @@
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
 #include "catalog/toasting.h"
+#include "catalog/gp_fastsequence.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbappendonlyxlog.h"
 #include "cdb/cdbaocsam.h"
@@ -1459,6 +1460,14 @@ ao_aux_tables_safe_truncate(Relation rel)
 	relid_set_new_relfilenode(aoseg_relid, RecentXmin);
 	relid_set_new_relfilenode(aoblkdir_relid, RecentXmin);
 	relid_set_new_relfilenode(aovisimap_relid, RecentXmin);
+
+	/*
+	 * Reset existing gp_fastsequence entries for the segrel to an initial entry.
+	 * This mimics the state of the gp_fastsequence row when an empty AO/AOCS
+	 * table is created.
+	 */
+	RemoveFastSequenceEntry(aoseg_relid);
+	InsertInitialFastSequenceEntries(aoseg_relid);
 }
 
 /*
@@ -20572,6 +20581,34 @@ AttachPartitionEnsureIndexes(Relation rel, Relation attachrel)
 	}
 
 	/*
+	 * If we're attaching an external table, we must fail if any of the indexes
+	 * is a constraint index; otherwise, there's nothing to do here.  Do this
+	 * before starting work, to avoid wasting the effort of building a few
+	 * non-unique indexes before coming across a unique one.
+	 */
+	if (RelationIsExternal(attachrel))
+	{
+		foreach(cell, idxes)
+		{
+			Oid			idx = lfirst_oid(cell);
+			Relation	idxRel = index_open(idx, AccessShareLock);
+
+			if (idxRel->rd_index->indisunique ||
+				idxRel->rd_index->indisprimary)
+				ereport(ERROR,
+						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+								errmsg("cannot attach external table \"%s\" as partition of partitioned table \"%s\"",
+									   RelationGetRelationName(attachrel),
+									   RelationGetRelationName(rel)),
+								errdetail("Table \"%s\" contains unique indexes.",
+										  RelationGetRelationName(rel))));
+			index_close(idxRel, AccessShareLock);
+		}
+
+		goto out;
+	}
+
+	/*
 	 * For each index on the partitioned table, find a matching one in the
 	 * partition-to-be; if one is not found, create one.
 	 */
@@ -20663,7 +20700,7 @@ AttachPartitionEnsureIndexes(Relation rel, Relation attachrel)
 
 		index_close(idxRel, AccessShareLock);
 	}
-
+out:
 	/* Clean up. */
 	for (i = 0; i < list_length(attachRelIdxs); i++)
 		index_close(attachrelIdxRels[i], AccessShareLock);

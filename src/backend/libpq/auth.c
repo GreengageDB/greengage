@@ -333,6 +333,18 @@ auth_failed(Port *port, int status, char *logdetail)
 
 	cdetail = psprintf(_("Connection matched pg_hba.conf line %d: \"%s\""),
 					   port->hba->linenumber, port->hba->rawline);
+
+    /*
+     * Avoid leak user infomations when failed to connect database using LDAP,
+     * and we need hide failed details return by LDAP.
+     * */
+    if (port->hba->auth_method == uaLDAP)
+    {
+        pfree(cdetail);
+        cdetail = NULL;
+        logdetail = NULL;
+    }
+
 	if (logdetail)
 		logdetail = psprintf("%s\n%s", logdetail, cdetail);
 	else
@@ -2639,6 +2651,34 @@ InitializeLDAPConnection(Port *port, LDAP **ldap)
 	return STATUS_OK;
 }
 
+/* Placeholders recognized by FormatSearchFilter.  For now just one. */
+#define LPH_USERNAME "$username"
+#define LPH_USERNAME_LEN (sizeof(LPH_USERNAME) - 1)
+
+/*
+ * Return a newly allocated C string copied from "pattern" with all
+ * occurrences of the placeholder "$username" replaced with "user_name".
+ */
+static char *
+FormatSearchFilter(const char *pattern, const char *user_name)
+{
+	StringInfoData output;
+
+	initStringInfo(&output);
+	while (*pattern != '\0')
+	{
+		if (strncmp(pattern, LPH_USERNAME, LPH_USERNAME_LEN) == 0)
+		{
+			appendStringInfoString(&output, user_name);
+			pattern += LPH_USERNAME_LEN;
+		}
+		else
+			appendStringInfoChar(&output, *pattern++);
+	}
+
+	return output.data;
+}
+
 /*
  * Perform LDAP authentication
  */
@@ -2729,9 +2769,10 @@ CheckLDAPAuth(Port *port)
 		attributes[0] = port->hba->ldapsearchattribute ? port->hba->ldapsearchattribute : "uid";
 		attributes[1] = NULL;
 
-		filter = psprintf("(%s=%s)",
-						  attributes[0],
-						  port->user_name);
+		if (port->hba->ldapsearchfilter)
+			filter = FormatSearchFilter(port->hba->ldapsearchfilter, port->user_name);
+		else
+			filter = psprintf("(%s=%s)", attributes[0], port->user_name);
 
 		r = ldap_search_s(ldap,
 						  port->hba->ldapbasedn,
@@ -2834,8 +2875,7 @@ CheckLDAPAuth(Port *port)
 	if (r != LDAP_SUCCESS)
 	{
 		ereport(LOG,
-			(errmsg("LDAP login failed for user \"%s\" on server \"%s\": %s",
-					fulluser, port->hba->ldapserver, ldap_err2string(r))));
+			(errmsg("LDAP login failed for user on server.")));
 		pfree(passwd);
 		pfree(fulluser);
 		return STATUS_ERROR;

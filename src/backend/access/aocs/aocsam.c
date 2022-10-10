@@ -541,7 +541,9 @@ aocs_endscan(AOCSScanDesc scan)
 	close_ds_read(scan->ds, scan->relationTupleDesc->natts);
 
 	pfree(scan->proj_atts);
+	scan->proj_atts = NULL;
 	pfree(scan->ds);
+	scan->ds = NULL;
 
 	for (i = 0; i < scan->total_seg; ++i)
 	{
@@ -552,7 +554,10 @@ aocs_endscan(AOCSScanDesc scan)
 		}
 	}
 	if (scan->seginfo)
+	{
 		pfree(scan->seginfo);
+		scan->seginfo = NULL;
+	}
 
 	AppendOnlyVisimap_Finish(&scan->visibilityMap, AccessShareLock);
 
@@ -1543,7 +1548,9 @@ aocs_fetch_finish(AOCSFetchDesc aocsFetchDesc)
 			Assert(datumStreamFetchDesc->datumStream != NULL);
 			datumstreamread_close_file(datumStreamFetchDesc->datumStream);
 			destroy_datumstreamread(datumStreamFetchDesc->datumStream);
+			datumStreamFetchDesc->datumStream = NULL;
 			pfree(datumStreamFetchDesc);
+			aocsFetchDesc->datumStreamFetchDesc[colno] = NULL;
 		}
 	}
 	pfree(aocsFetchDesc->datumStreamFetchDesc);
@@ -2041,6 +2048,7 @@ aocs_addcol_finish(AOCSAddColumnDesc desc)
 	for (i = 0; i < desc->num_newcols; ++i)
 		destroy_datumstreamwrite(desc->dsw[i]);
 	pfree(desc->dsw);
+	desc->dsw = NULL;
 
 	pfree(desc);
 }
