@@ -960,7 +960,7 @@ standard_ProcessUtility(Node *parsetree,
 						break;
 					case OBJECT_TABLE:
 					case OBJECT_MATVIEW:
-						ReindexTable(stmt, isTopLevel);
+						ReindexTable(stmt);
 						break;
 					case OBJECT_DATABASE:
 
