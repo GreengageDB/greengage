@@ -198,16 +198,6 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 	 */
 	if (stmt->if_not_exists && OidIsValid(existing_relid))
 	{
-		/*
-		 * If we are in an extension script, insist that the pre-existing
-		 * object be a member of the extension, to avoid security risks.
-		 */
-		ObjectAddress address;
-
-		ObjectAddressSet(address, RelationRelationId, existing_relid);
-		checkMembershipInCurrentExtension(&address);
-
-		/* OK to skip */
 		ereport(NOTICE,
 				(errcode(ERRCODE_DUPLICATE_TABLE),
 				 errmsg("relation \"%s\" already exists, skipping",
@@ -3324,17 +3314,9 @@ transformIndexStmt(Oid relid, IndexStmt *stmt, const char *queryString)
 	free_parsestate(pstate);
 
 	/*
-	 * Close relation. Unless this is a CREATE INDEX
-	 * for a partitioned table, and we're processing a partition. In that
-	 * case, we want to release the lock on the partition early, so that
-	 * you don't run out of space in the lock manager if there are a lot
-	 * of partitions. Holding the lock on the parent table should be
-	 * enough.
+	 * Close relation but keep the lock.
 	 */
-	if (!rel_needs_long_lock(RelationGetRelid(rel)))
-		heap_close(rel, lockmode);
-	else
-		heap_close(rel, NoLock);
+	heap_close(rel, NoLock);
 
 	return stmt;
 }

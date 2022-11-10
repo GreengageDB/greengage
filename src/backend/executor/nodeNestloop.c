@@ -698,13 +698,14 @@ splitJoinQualExpr(NestLoopState *nlstate)
 			break;
 		}
 		case T_ExprState:
-			/* For constant expression we don't need to split */
-			if (exprstate->xprstate.expr->type == T_Const)
+			/* For constant and distinct expression we don't need to split */
+			if ((exprstate->xprstate.expr->type == T_Const) ||
+				(exprstate->xprstate.expr->type == T_DistinctExpr))
 			{
 				/*
-				 * Constant expressions do not need to be splitted into left and
-				 * right as they don't need to be considered for NULL value special
-				 * cases
+				 * Distinct and constant expressions do not need to be
+				 * splitted into left and right as they don't need to be
+				 * considered for NULL value special cases
 				 */
 				continue;
 			}

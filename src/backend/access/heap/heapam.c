@@ -1678,6 +1678,26 @@ heap_beginscan_internal(Relation relation, Snapshot snapshot,
 }
 
 /* ----------------
+ *		heap_beginscan	- perform after scan actions
+ *
+ * Release some structures, which is safe to free after initial scan, but
+ * before rescan.
+ * ----------------
+ */
+void
+heap_afterscan(HeapScanDesc scan)
+{
+	/*
+	 * unpin scan buffers
+	 */
+	if (BufferIsValid(scan->rs_cbuf))
+	{
+		ReleaseBuffer(scan->rs_cbuf);
+		scan->rs_cbuf = InvalidBuffer;
+	}
+}
+
+/* ----------------
  *		heap_rescan		- restart a relation scan
  * ----------------
  */
@@ -1685,11 +1705,7 @@ void
 heap_rescan(HeapScanDesc scan,
 			ScanKey key)
 {
-	/*
-	 * unpin scan buffers
-	 */
-	if (BufferIsValid(scan->rs_cbuf))
-		ReleaseBuffer(scan->rs_cbuf);
+	heap_afterscan(scan);
 
 	/*
 	 * reinitialize scan descriptor
@@ -4331,7 +4347,7 @@ l2:
 	if (have_tuple_lock)
 		UnlockTupleTuplock(relation, &(oldtup.t_self), *lockmode);
 
-	pgstat_count_heap_update(relation, false);
+	pgstat_count_heap_update(relation, use_hot_update);
 
 	/*
 	 * If heaptup is a private copy, release it.  Don't forget to copy t_self

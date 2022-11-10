@@ -306,3 +306,10 @@ from get_explain_analyze_xml_output($$
 
 reset optimizer_enable_dynamictablescan;
 reset enable_seqscan;
+
+-- explain should not hide error from segment
+-- error must be handled by executor earlier
+CREATE TABLE t1 (a int);
+EXPLAIN ANALYZE INSERT INTO t1 SELECT 1/gp_segment_id
+FROM gp_dist_random('gp_id');
+DROP TABLE t1;

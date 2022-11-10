@@ -61,7 +61,7 @@ static Oid get_other_operator(List *otherOp,
 				   Oid leftTypeId, Oid rightTypeId,
 				   bool isCommutator);
 
-static void makeOperatorDependencies(HeapTuple tuple, bool isUpdate);
+static void makeOperatorDependencies(HeapTuple tuple);
 
 
 /*
@@ -270,7 +270,7 @@ OperatorShellMake(const char *operatorName,
 	CatalogUpdateIndexes(pg_operator_desc, tup);
 
 	/* Add dependencies for the entry */
-	makeOperatorDependencies(tup, false);
+	makeOperatorDependencies(tup);
 
 	heap_freetuple(tup);
 
@@ -340,7 +340,6 @@ OperatorCreate(const char *operatorName,
 {
 	Relation	pg_operator_desc;
 	HeapTuple	tup;
-	bool		isUpdate;
 	bool		nulls[Natts_pg_operator];
 	bool		replaces[Natts_pg_operator];
 	Datum		values[Natts_pg_operator];
@@ -515,8 +514,6 @@ OperatorCreate(const char *operatorName,
 	 */
 	if (operatorObjectId)
 	{
-		isUpdate = true;
-
 		tup = SearchSysCacheCopy1(OPEROID,
 								  ObjectIdGetDatum(operatorObjectId));
 		if (!HeapTupleIsValid(tup))
@@ -533,8 +530,6 @@ OperatorCreate(const char *operatorName,
 	}
 	else
 	{
-		isUpdate = false;
-
 		tupDesc = pg_operator_desc->rd_att;
 		tup = heap_form_tuple(tupDesc, values, nulls);
 
@@ -545,7 +540,7 @@ OperatorCreate(const char *operatorName,
 	CatalogUpdateIndexes(pg_operator_desc, tup);
 
 	/* Add dependencies for the entry */
-	makeOperatorDependencies(tup, isUpdate);
+	makeOperatorDependencies(tup);
 
 	/* Post creation hook for new operator */
 	InvokeObjectPostCreateHook(OperatorRelationId, operatorObjectId, 0);
@@ -764,14 +759,13 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 
 /*
  * Create dependencies for a new operator (either a freshly inserted
- * complete operator, a new shell operator, or a just-updated shell,
- * or an operator that's being modified by ALTER OPERATO).
+ * complete operator, a new shell operator, or a just-updated shell).
  *
  * NB: the OidIsValid tests in this routine are necessary, in case
  * the given operator is a shell.
  */
 static void
-makeOperatorDependencies(HeapTuple tuple, bool isUpdate)
+makeOperatorDependencies(HeapTuple tuple)
 {
 	Form_pg_operator oper = (Form_pg_operator) GETSTRUCT(tuple);
 	ObjectAddress myself,
@@ -782,14 +776,11 @@ makeOperatorDependencies(HeapTuple tuple, bool isUpdate)
 	myself.objectSubId = 0;
 
 	/*
-	 * If we are updating the operator, delete any existing entries, except
+	 * In case we are updating a shell, delete any existing entries, except
 	 * for extension membership which should remain the same.
 	 */
-	if (isUpdate)
-	{
-		deleteDependencyRecordsFor(myself.classId, myself.objectId, true);
-		deleteSharedDependencyRecordsFor(myself.classId, myself.objectId, 0);
-	}
+	deleteDependencyRecordsFor(myself.classId, myself.objectId, true);
+	deleteSharedDependencyRecordsFor(myself.classId, myself.objectId, 0);
 
 	/* Dependency on namespace */
 	if (OidIsValid(oper->oprnamespace))
@@ -868,6 +859,5 @@ makeOperatorDependencies(HeapTuple tuple, bool isUpdate)
 							oper->oprowner);
 
 	/* Dependency on extension */
-	recordDependencyOnCurrentExtension(&myself, isUpdate);
-
+	recordDependencyOnCurrentExtension(&myself, true);
 }

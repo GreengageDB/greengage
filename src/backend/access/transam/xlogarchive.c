@@ -72,8 +72,6 @@ RestoreArchivedFile(char *path, const char *xlogfname,
 	XLogRecPtr	restartRedoPtr;
 	TimeLineID	restartTli;
 
-	char        contentid[12];  /* sign, 10 digits and '\0' */
-
 	/* In standby mode, restore_command might not be supplied */
 	if (recoveryRestoreCommand == NULL)
 		goto not_available;
@@ -183,14 +181,18 @@ RestoreArchivedFile(char *path, const char *xlogfname,
 					StrNCpy(dp, lastRestartPointFname, endp - dp);
 					dp += strlen(dp);
 					break;
-				case 'c':
-					/* GPDB: %c: contentId of segment */
-					Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
+				case 'c': /* GPDB: %c: contentId of segment */
+				case 'd': /* GPDB: %d: dbid of segment */
+				{
+					char	buf[12];  /* sign, 10 digits and '\0' */
+					int32	val = (sp[1] == 'c') ? GpIdentity.segindex : GpIdentity.dbid;
+					Assert(val != UNINITIALIZED_GP_IDENTITY_VALUE);
 					sp++;
-					pg_ltoa(GpIdentity.segindex, contentid);
-					StrNCpy(dp, contentid, endp - dp);
+					pg_ltoa(val, buf);
+					strlcpy(dp, buf, endp - dp);
 					dp += strlen(dp);
 					break;
+				}
 				case '%':
 					/* convert %% to a single % */
 					sp++;
@@ -491,7 +493,10 @@ KeepFileRestoredFromArchive(char *path, char *xlogfname)
 	 * Create .done file forcibly to prevent the restored segment from being
 	 * archived again later.
 	 */
-	XLogArchiveForceDone(xlogfname);
+	if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
+		XLogArchiveForceDone(xlogfname);
+	else
+		XLogArchiveNotify(xlogfname);
 
 	/*
 	 * If the existing file was replaced, since walsenders might have it open,
