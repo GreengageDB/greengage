@@ -53,6 +53,7 @@ DEPENDENCY_EXCLUSION = [
     'pg_compression',
     'pg_conversion',
     'pg_database',
+    'pg_default_acl',
     'pg_enum',
     'pg_namespace',
     'pg_partition',

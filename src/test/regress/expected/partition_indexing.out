@@ -1242,7 +1242,7 @@ select relhassubclass from pg_class where relname = 'idxpart_idx';
 (1 row)
 
 drop index idxpart_idx;
--- GPDB: Prevent REINDEX TABLE on partitioned table run in transaction block.
+-- GPDB: Prevent REINDEX TABLE on partitioned table run in function call.
 -- Since we expand partitioned table when do the reindex, and try to reindex
 -- each table in its own transaction.
 create table reindex_part(id int, r int) partition by range (r)
@@ -1252,10 +1252,9 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 NOTICE:  CREATE TABLE will create partition "reindex_part_1_prt_1" for table "reindex_part"
 NOTICE:  CREATE TABLE will create partition "reindex_part_1_prt_2" for table "reindex_part"
 create index reidx_idx on reindex_part (id);
--- This should raise error
+-- This should success
 begin;
 reindex table reindex_part;
-ERROR:  REINDEX TABLE <partitioned_table> cannot run inside a transaction block
 end;
 -- This should success
 begin;

@@ -4004,6 +4004,10 @@ RemoveOldXlogFiles(XLogSegNo segno, XLogRecPtr endptr)
 	}
 
 	FreeDir(xldir);
+
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("finished_removing_old_xlog_files");
+#endif
 }
 
 /*

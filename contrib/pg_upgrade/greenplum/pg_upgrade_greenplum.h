@@ -34,31 +34,20 @@ typedef enum
 	DONE
 } progress_type;
 
-typedef enum
-{
-	CHECKSUM_NONE = 0,
-	CHECKSUM_ADD,
-	CHECKSUM_REMOVE
-} checksumMode;
-
 typedef enum {
 	GREENPLUM_MODE_OPTION = 1,
 	GREENPLUM_PROGRESS_OPTION = 2,
-	GREENPLUM_ADD_CHECKSUM_OPTION = 3,
-	GREENPLUM_REMOVE_CHECKSUM_OPTION = 4,
-	GREENPLUM_OLD_GP_DBID = 5,
-	GREENPLUM_NEW_GP_DBID = 6,
-	GREENPLUM_OLD_TABLESPACES_FILE = 7,
-	GREENPLUM_CONTINUE_CHECK_ON_FATAL = 8,
-	GREENPLUM_SKIP_TARGET_CHECK = 9
+	GREENPLUM_OLD_GP_DBID = 3,
+	GREENPLUM_NEW_GP_DBID = 4,
+	GREENPLUM_OLD_TABLESPACES_FILE = 5,
+	GREENPLUM_CONTINUE_CHECK_ON_FATAL = 6,
+	GREENPLUM_SKIP_TARGET_CHECK = 7
 } greenplumOption;
 
 
 #define GREENPLUM_OPTIONS \
 	{"mode", required_argument, NULL, GREENPLUM_MODE_OPTION}, \
 	{"progress", no_argument, NULL, GREENPLUM_PROGRESS_OPTION}, \
-	{"add-checksum", no_argument, NULL, GREENPLUM_ADD_CHECKSUM_OPTION}, \
-	{"remove-checksum", no_argument, NULL, GREENPLUM_REMOVE_CHECKSUM_OPTION}, \
 	{"old-gp-dbid", required_argument, NULL, GREENPLUM_OLD_GP_DBID}, \
 	{"new-gp-dbid", required_argument, NULL, GREENPLUM_NEW_GP_DBID}, \
 	{"old-tablespaces-file", required_argument, NULL, GREENPLUM_OLD_TABLESPACES_FILE}, \
@@ -68,8 +57,6 @@ typedef enum {
 #define GREENPLUM_USAGE "\
 	--mode=TYPE               designate node type to upgrade, \"segment\" or \"dispatcher\" (default \"segment\")\n\
 	--progress                enable progress reporting\n\
-	--remove-checksum         remove data checksums when creating new cluster\n\
-	--add-checksum            add data checksumming to the new cluster\n\
 	--old-gp-dbid             greenplum database id of the old segment\n\
 	--new-gp-dbid             greenplum database id of the new segment\n\
 	--old-tablespaces-file    file containing the tablespaces from an old gpdb five cluster\n\
@@ -81,7 +68,6 @@ typedef enum {
 void initialize_greenplum_user_options(void);
 bool process_greenplum_option(greenplumOption option);
 bool is_greenplum_dispatcher_mode(void);
-bool is_checksum_mode(checksumMode mode);
 bool is_show_progress_mode(void);
 void validate_greenplum_options(void);
 bool is_continue_check_on_fatal(void);
@@ -102,24 +88,9 @@ void		restore_aosegment_tables(void);
 bool        is_appendonly(char relstorage);
 
 
-/* gpdb4_heap_convert.c */
-
-const char *convert_gpdb4_heap_file(const char *src, const char *dst,
-                                    bool has_numerics, AttInfo *atts, int natts);
-void		finish_gpdb4_page_converter(void);
-
-/* file_gp.c */
-
-const char * rewriteHeapPageChecksum( const char *fromfile, const char *tofile,
-                                      const char *schemaName, const char *relName);
-
 /* version_gp.c */
 
-void old_GPDB4_check_for_money_data_type_usage(void);
-void old_GPDB4_check_no_free_aoseg(void);
 void check_hash_partition_usage(void);
-void new_gpdb5_0_invalidate_indexes(void);
-Oid *get_numeric_types(PGconn *conn);
 void old_GPDB5_check_for_unsupported_distribution_key_data_types(void);
 void invalidate_indexes(void);
 void reset_invalid_indexes(void);
