@@ -58,6 +58,14 @@ if (COMPILER_HAS_G3)
   SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g3")
 endif()
 
+# Do not omit frame pointer. Even with RELEASE builds, it is used for
+# backtracing.
+check_cxx_compiler_flag("-fno-omit-frame-pointer"
+                        COMPILER_HAS_FNO_OMIT_FRAME_POINTER)
+if (COMPILER_HAS_FNO_OMIT_FRAME_POINTER)
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
+endif()
+
 # Turn on GPOS_DEBUG define for DEBUG builds.
 cmake_policy(SET CMP0043 NEW)
 
