@@ -47,7 +47,7 @@ rhel6_x86_64_BLD_CFLAGS=-m64 -gdwarf-2 -gstrict-dwarf
 rhel7_x86_64_BLD_CFLAGS=-m64
 rhel8_x86_64_BLD_CFLAGS=-m64
 rhel7_ppc64le_BLD_CFLAGS=-m64 -fasynchronous-unwind-tables -fsigned-char
-altlinux8.2_x86_64_BLD_CFLAGS=-m64
+altlinux8.4_x86_64_BLD_CFLAGS=-m64
 astra1.7_x86_64_BLD_CFLAGS=-m64
 BLD_CFLAGS=$($(BLD_ARCH)_BLD_CFLAGS)
 
