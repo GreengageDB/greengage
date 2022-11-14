@@ -429,14 +429,14 @@ set sql_inheritance to on;
 select relhassubclass from pg_class where relname = 'idxpart_idx';
 drop index idxpart_idx;
 
--- GPDB: Prevent REINDEX TABLE on partitioned table run in transaction block.
+-- GPDB: Prevent REINDEX TABLE on partitioned table run in function call.
 -- Since we expand partitioned table when do the reindex, and try to reindex
 -- each table in its own transaction.
 create table reindex_part(id int, r int) partition by range (r)
     ( start (1) end (21) every (10) );
 create index reidx_idx on reindex_part (id);
 
--- This should raise error
+-- This should success
 begin;
 reindex table reindex_part;
 end;

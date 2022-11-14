@@ -700,6 +700,16 @@ Enables plans that can dynamically eliminate the scanning of partitions.
 |-----------|-------|-------------------|
 |Boolean|on|master, session, reload|
 
+## <a id="gp_eager_two_phase_agg"></a>gp\_eager\_two\_phase\_agg
+
+Activates or deactivates two-phase aggregation for the Postgres Planner.
+
+The default value is `off`; the Planner chooses the best aggregate path for a query based on the cost. When set to `on`, the Planner adds a disable cost to each of the first stage aggregate paths, which in turn forces the Planner to generate and choose a multi-stage aggregate path.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|Boolean|off|master, session, reload|
+
 ## <a id="gp_enable_agg_distinct"></a>gp\_enable\_agg\_distinct 
 
  Activates or deactivates  two-phase aggregation to compute a single distinct-qualified aggregate. This applies only to subqueries that include a single distinct-qualified aggregate function.
@@ -971,6 +981,14 @@ The information is written to the server log.
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
 |Boolean|false|master, session, reload|
+
+## <a id="gp_log_suboverflow_statements"></a>gp\_log\_suboverflowed\_statements
+
+Controls whether Greenplum logs statements that cause subtransaction overflow. See [Checking for and Terminating Overflowed Backends](/oss/admin_guide/managing/monitor.html).
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|Boolean|off|master, session, reload, superuser|
 
 ## <a id="gp_gpperfmon_send_interval"></a>gp\_gpperfmon\_send\_interval 
 
@@ -1300,7 +1318,7 @@ Identifies the maximum percentage of system CPU resources to allocate to resourc
 
 **Note:** The `gp_resource_group_enable_recalculate_query_mem` server configuration parameter is enforced only when resource group-based resource management is active.
 
-Specifies whether or not Greenplum Database recalculates the maximum amount of memory to allocate per query running in a resource group. The default value is `false`, Greenplum database calculates the maximum per-query memory based on the memory configuration and the number of primary segments on the master host. When set to `true`, Greenplum Database recalculates the maximum per-query memory based on the memory configuration and the number of primary segments on the segment host.
+Specifies whether or not Greenplum Database recalculates the maximum amount of memory to allocate on a segment host per query running in a resource group. The default value is `false`, Greenplum database calculates the maximum per-query memory on a segment host based on the memory configuration and the number of primary segments on the master host. When set to `true`, Greenplum Database recalculates the maximum per-query memory on a segment host based on the memory and the number of primary segments configured for that segment host.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -1965,7 +1983,7 @@ Increasing the limit allocates more shared memory on the master host at server s
 
 The maximum number of concurrent connections to the database server. In a Greenplum Database system, user client connections go through the Greenplum master instance only. Segment instances should allow 5-10 times the amount as the master. When you increase this parameter, [max\_prepared\_transactions](#max_prepared_transactions) must be increased as well. For more information about limiting concurrent connections, see "Configuring Client Authentication" in the *Greenplum Database Administrator Guide*.
 
-Increasing this parameter may cause Greenplum Database to request more shared memory. Increasing this parameter might cause Greenplum Database to request more shared memory. See [shared\_buffers](#shared_buffers) for information about Greenplum server instance shared memory buffers.
+Increasing this parameter may cause Greenplum Database to request more shared memory. See [shared\_buffers](#shared_buffers) for information about Greenplum server instance shared memory buffers.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -2847,7 +2865,7 @@ Determines the number of connection slots that are reserved for Greenplum Databa
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
-|integer < *max\_connections*|3|local, system, restart|
+|integer < *max\_connections*|10|local, system, restart|
 
 ## <a id="tcp_keepalives_count"></a>tcp\_keepalives\_count 
 
