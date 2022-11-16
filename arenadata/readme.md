@@ -39,6 +39,15 @@ docker run --name gpdb6_opt_on --rm -it -e TEST_OS=centos \
 * we need to increase semaphore amount to be able to run demo cluster
 * we need running ssh server to be able to run demo cluster
 
+## ORCA linter
+
+```bash
+docker build -t orca-linter:test -f arenadata/Dockerfile.linter .
+docker run --rm -it orca-linter:test
+```
+
+The work directory must be clean to pass this test. Please, stage or even commit your changes.
+
 ## ORCA unit test run
 
 ```bash
