@@ -23,6 +23,11 @@ function os_id() {
 function os_version() {
 	if [[ ! -f "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
 		echo "$(sed </etc/redhat-release 's/.*release *//' | cut -d. -f1)"
+	elif [ -f /etc/astra_version ]; then
+		echo "$(
+			. /etc/os-release
+			echo "${VERSION_ID}" | cut -d_ -f1
+		)"
 	else
 		echo "$(
 			. /etc/os-release

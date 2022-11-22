@@ -13,7 +13,7 @@ override CPPFLAGS := -I$(top_builddir)/src/backend/gporca/libgpopt/include $(CPP
 override CPPFLAGS := -I$(top_builddir)/src/backend/gporca/libnaucrates/include $(CPPFLAGS)
 override CPPFLAGS := -I$(top_builddir)/src/backend/gporca/libgpdbcost/include $(CPPFLAGS)
 # FIXME: Would be better to include gporca.mk, but hitting a warning
-override CPPFLAGS := -Wno-variadic-macros $(CPPFLAGS)
+override CPPFLAGS := -Wno-variadic-macros -fno-omit-frame-pointer $(CPPFLAGS)
 override CPPFLAGS := -std=gnu++98 $(CPPFLAGS)
 
 OBJS        = CAutoTimer.o \
