@@ -818,6 +818,7 @@ extern bool gp_enable_gpperfmon;
 extern int gp_gpperfmon_send_interval;
 extern bool gp_enable_query_metrics;
 extern int gp_instrument_shmem_size;
+extern int gp_max_scan_on_shmem;
 
 extern bool dml_ignore_target_partition_check;
 
