@@ -224,6 +224,7 @@
 		"gp_max_plan_size",
 		"gp_max_slices",
 		"gp_max_system_slices",
+		"gp_max_scan_on_shmem",
 		"gp_motion_cost_per_row",
 		"gp_perfmon_segment_interval",
 		"gp_print_create_gang_time",
