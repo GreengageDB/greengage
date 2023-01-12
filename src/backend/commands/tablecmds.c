@@ -6600,6 +6600,9 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 
 		table_finish_bulk_insert(newrel, ti_options);
 
+		if (newrel->rd_tableam)
+			table_dml_finish(newrel);
+
 		table_close(newrel, NoLock);
 	}
 }
