@@ -845,7 +845,13 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 	if (IsA(newnode, Motion) &&flow->req_move != MOVEMENT_NONE)
 	{
 		plan = ((Motion *) newnode)->plan.lefttree;
-		flow = plan->flow;
+
+		/* We'll recreate this motion later below. But we should save motion
+		 * request to create appropriate motion above the child node.
+		 * Original flow for the child node will be restored
+		 * after motion creation. */
+		flow->flow_before_req_move = plan->flow;
+		plan->flow = flow;
 		newnode = (Node *) plan;
 	}
 
@@ -1807,10 +1813,15 @@ shareinput_walker(Node *node, ShareInputContext *ctx)
 		 * Save old values all at once to make it uniform and to avoid
 		 * copypaste. 'root' is already saved above.
 		 */
-		Plan	   *plan = (Plan *) node;
 		List	   *save_rtable = glob->share.curr_rtable;
-		Plan	   *save_lefttree = plan->lefttree;
-		Plan	   *save_righttree = plan->righttree;
+		Plan	   *save_lefttree = NULL;
+		Plan	   *save_righttree = NULL;
+
+		if (is_plan_node(node))
+		{
+			save_lefttree = ((Plan *) node)->lefttree;
+			save_righttree = ((Plan *) node)->righttree;
+		}
 
 		/*
 		 * The general comment to all SubPlan nodes. Before, we walked through
@@ -1897,14 +1908,16 @@ shareinput_walker(Node *node, ShareInputContext *ctx)
 
 			if (nl->join.prefetch_inner)
 			{
-				plan->lefttree = save_righttree;
-				plan->righttree = save_lefttree;
+				nl->join.plan.lefttree = save_righttree;
+				nl->join.plan.righttree = save_lefttree;
 			}
 		}
 		else if (IsA(node, HashJoin))
 		{
-			plan->lefttree = save_righttree;
-			plan->righttree = save_lefttree;
+			HashJoin   *hj = (HashJoin *) node;
+
+			hj->join.plan.lefttree = save_righttree;
+			hj->join.plan.righttree = save_lefttree;
 		}
 		else if (IsA(node, MergeJoin))
 		{
@@ -1912,8 +1925,8 @@ shareinput_walker(Node *node, ShareInputContext *ctx)
 
 			if (mj->unique_outer)
 			{
-				plan->lefttree = save_righttree;
-				plan->righttree = save_lefttree;
+				mj->join.plan.lefttree = save_righttree;
+				mj->join.plan.righttree = save_lefttree;
 			}
 		}
 
@@ -1922,8 +1935,11 @@ shareinput_walker(Node *node, ShareInputContext *ctx)
 		/* Restore all values which could be changed above */
 		ctx->base.node = (Node *) root;
 		glob->share.curr_rtable = save_rtable;
-		plan->lefttree = save_lefttree;
-		plan->righttree = save_righttree;
+		if (is_plan_node(node))
+		{
+			((Plan *) node)->lefttree = save_lefttree;
+			((Plan *) node)->righttree = save_righttree;
+		}
 	}
 
 	if (is_plan_node(node))

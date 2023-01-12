@@ -503,46 +503,46 @@ CHK_PARAMS () {
 		# being made that the locales available on the master are available on the
 		# segment hosts.
 		if [ x"" != x"$REQ_LOCALE_SETTING" ]; then
-			IN_ARRAY $REQ_LOCALE_SETTING "`locale -a`"
+			LOCALE_IS_AVAILABLE $REQ_LOCALE_SETTING
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $REQ_LOCALE_SETTING is not a valid value for --locale on this system." 2
 			fi
 		fi
 		if [ x"" != x"$LCCOLLATE" ]; then
-			IN_ARRAY $LCCOLLATE "`locale -a`"
+			LOCALE_IS_AVAILABLE $LCCOLLATE
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $LCCOLLATE is not a valid value for --lc-collate on this system." 2
 			fi	
 		fi
 		if [ x"" != x"$LCCTYPE" ]; then
-			IN_ARRAY $LCCTYPE "`locale -a`"
+			LOCALE_IS_AVAILABLE $LCCTYPE
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $LCCTYPE is not a valid value for --lc-ctype on this system." 2
 			fi
 		fi
 		if [ x"" != x"$LCMESSAGES" ]; then
-			IN_ARRAY $LCMESSAGES "`locale -a`"
+			LOCALE_IS_AVAILABLE $LCMESSAGES
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $LCMESSAGES is not a valid value for --lc-messages on this system." 2
 			fi
 		fi
 
 		if [ x"" != x"$LCMONETARY" ]; then
-			IN_ARRAY $LCMONETARY "`locale -a`"
+			LOCALE_IS_AVAILABLE $LCMONETARY
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $LCMONETARY is not a valid value for --lc-monetary on this system." 2
 			fi
 		fi
 
 		if [ x"" != x"$LCNUMERIC" ]; then
-			IN_ARRAY $LCNUMERIC "`locale -a`"
+			LOCALE_IS_AVAILABLE $LCNUMERIC
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $LCNUMERIC is not a valid value for --lc-numeric on this system." 2
 			fi
 		fi
 
 		if [ x"" != x"$LCTIME" ]; then
-			IN_ARRAY $LCTIME "`locale -a`"
+			LOCALE_IS_AVAILABLE $LCTIME
 			if [ $? -eq 0 ]; then
 				ERROR_EXIT "[FATAL]-Value $LCTIME is not a valid value for --lc-time on this system." 2
 			fi
@@ -689,7 +689,8 @@ END_PYTHON_CODE
 CHK_LOCALE_KNOWN () {
 	LOG_MSG "[INFO]:-Start Function $FUNCNAME"
 	if [ $# -eq 0 ];then
-		if [ `$LOCALE -a |$GREP -ic $LOCALE_SETTING` -eq 0 ];then
+		if [ `$LOCALE -a |$GREP -ic $(NORMALIZE_CODESET_IN_LOCALE $LOCALE_SETTING)` -eq 0 ] \
+			&& [ `$LOCALE -a |$GREP -ic $LOCALE_SETTING` -eq 0 ];then
 			LOG_MSG "[INFO]:-Master host available locale values"
 			$LOCALE -a >> $LOG_FILE
 			LOG_MSG "[FATAL]:-Unable to locate locale value $LOCALE_SETTING on this host" 1
@@ -701,7 +702,8 @@ CHK_LOCALE_KNOWN () {
 		fi
 	else
 		# Hostname has been passed so check remote locale value
-		if [ $( REMOTE_EXECUTE_AND_GET_OUTPUT $1 "$LOCALE -a|$GREP -ic '$LOCALE_SETTING'" ) -eq 0 ];then
+		if [ $( REMOTE_EXECUTE_AND_GET_OUTPUT $1 "$LOCALE -a|$GREP -ic '$(NORMALIZE_CODESET_IN_LOCALE $LOCALE_SETTING)'" ) -eq 0 ] \
+			&& [ $( REMOTE_EXECUTE_AND_GET_OUTPUT $1 "$LOCALE -a|$GREP -ic '$LOCALE_SETTING'" ) -eq 0 ];then
 			LOG_MSG "[INFO]:-Host $1 available locale values"
 			`$TRUSTED_SHELL $1 "$LOCALE -a"` >> $LOG_FILE
 			LOG_MSG "[FATAL]:-Unable to locate locale value $LOCALE_SETTING on $1" 1

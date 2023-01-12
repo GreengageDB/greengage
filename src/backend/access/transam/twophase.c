@@ -1486,6 +1486,8 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 
 	ProcArrayRemove(proc, latestXid);
 
+	SIMPLE_FAULT_INJECTOR("finish_prepared_after_pgproc_removal_before_cache_invalidation");
+
 	/*
 	 * In case we fail while running the callbacks, mark the gxact invalid so
 	 * no one else will try to commit/rollback, and so it will be recycled
