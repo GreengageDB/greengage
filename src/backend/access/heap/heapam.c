@@ -1678,26 +1678,6 @@ heap_beginscan_internal(Relation relation, Snapshot snapshot,
 }
 
 /* ----------------
- *		heap_beginscan	- perform after scan actions
- *
- * Release some structures, which is safe to free after initial scan, but
- * before rescan.
- * ----------------
- */
-void
-heap_afterscan(HeapScanDesc scan)
-{
-	/*
-	 * unpin scan buffers
-	 */
-	if (BufferIsValid(scan->rs_cbuf))
-	{
-		ReleaseBuffer(scan->rs_cbuf);
-		scan->rs_cbuf = InvalidBuffer;
-	}
-}
-
-/* ----------------
  *		heap_rescan		- restart a relation scan
  * ----------------
  */
@@ -1705,7 +1685,11 @@ void
 heap_rescan(HeapScanDesc scan,
 			ScanKey key)
 {
-	heap_afterscan(scan);
+	/*
+	 * unpin scan buffers
+	 */
+	if (BufferIsValid(scan->rs_cbuf))
+		ReleaseBuffer(scan->rs_cbuf);
 
 	/*
 	 * reinitialize scan descriptor
