@@ -895,3 +895,68 @@ SELECT * FROM gp_toolkit.__gp_aocsseg('aoco_insert_empty_row'::regclass);
 --------+-------+------------+----------------+----------+-----+------------------+----------+---------------+-------
 (0 rows)
 
+-- test case: Ensure that reads don't fail after aborting an add column + insert operation and we don't project the aborted column
+CREATE TABLE aocs_addcol_abort(a int, b int) WITH (APPENDONLY=TRUE, ORIENTATION=COLUMN);
+INSERT INTO aocs_addcol_abort SELECT i,i FROM generate_series(1,10)i;
+BEGIN;
+ALTER TABLE aocs_addcol_abort ADD COLUMN c int;
+INSERT INTO aocs_addcol_abort SELECT i,i,i FROM generate_series(1,10)i;
+-- check state of aocsseg for entries of add column + insert
+SELECT * FROM gp_toolkit.__gp_aocsseg('aocs_addcol_abort') ORDER BY column_num;
+ gp_tid | segno | column_num | physical_segno | tupcount | eof | eof_uncompressed | modcount | formatversion | state 
+--------+-------+------------+----------------+----------+-----+------------------+----------+---------------+-------
+ (0,4)  |     1 |          0 |              1 |       20 |   0 |                0 |        3 |             3 |     1
+ (0,4)  |     1 |          1 |            129 |       20 |   0 |                0 |        3 |             3 |     1
+ (0,4)  |     1 |          2 |            257 |       20 |   0 |                0 |        3 |             3 |     1
+(3 rows)
+
+SELECT * FROM aocs_addcol_abort;
+ a  | b  | c  
+----+----+----
+  5 |  5 |  5
+  6 |  6 |  6
+  9 |  9 |  9
+ 10 | 10 | 10
+  5 |  5 |   
+  6 |  6 |   
+  9 |  9 |   
+ 10 | 10 |   
+  1 |  1 |  1
+  1 |  1 |   
+  2 |  2 |  2
+  3 |  3 |  3
+  4 |  4 |  4
+  7 |  7 |  7
+  8 |  8 |  8
+  2 |  2 |   
+  3 |  3 |   
+  4 |  4 |   
+  7 |  7 |   
+  8 |  8 |   
+(20 rows)
+
+ABORT;
+-- check state of aocsseg if entries for new column are rolled back correctly
+SELECT * FROM gp_toolkit.__gp_aocsseg('aocs_addcol_abort') ORDER BY column_num;
+ gp_tid | segno | column_num | physical_segno | tupcount | eof | eof_uncompressed | modcount | formatversion | state 
+--------+-------+------------+----------------+----------+-----+------------------+----------+---------------+-------
+ (0,2)  |     1 |          0 |              1 |       10 |   0 |                0 |        1 |             3 |     1
+ (0,2)  |     1 |          1 |            129 |       10 |   0 |                0 |        1 |             3 |     1
+(2 rows)
+
+SELECT * FROM aocs_addcol_abort;
+ a  | b  
+----+----
+  5 |  5
+  6 |  6
+  9 |  9
+ 10 | 10
+  1 |  1
+  2 |  2
+  3 |  3
+  4 |  4
+  7 |  7
+  8 |  8
+(10 rows)
+
+DROP TABLE aocs_addcol_abort;
