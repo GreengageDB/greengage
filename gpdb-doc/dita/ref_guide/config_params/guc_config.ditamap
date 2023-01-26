@@ -126,6 +126,7 @@
             <topicref href="guc-list.xml#gp_ignore_error_table"/>
             <topicref href="guc-list.xml#topic_lvm_ttc_3p"/>
             <topicref href="guc-list.xml#gp_instrument_shmem_size"/>
+            <topicref href="guc-list.xml#gp_max_scan_on_shmem"/>
             <topicref href="guc-list.xml#gp_interconnect_debug_retry_interval"/>
             <topicref href="guc-list.xml#gp_interconnect_fc_method"/>
             <topicref href="guc-list.xml#gp_interconnect_proxy_addresses"/>

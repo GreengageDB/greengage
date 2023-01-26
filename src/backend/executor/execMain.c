@@ -1397,6 +1397,7 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 			&& queryDesc->gpmon_pkt)
 	{			
 		gpmon_qlog_query_end(queryDesc->gpmon_pkt);
+		pfree(queryDesc->gpmon_pkt);
 		queryDesc->gpmon_pkt = NULL;
 	}
 
