@@ -1,17 +1,15 @@
 ## credcheck - PostgreSQL username/password checks
 
-
-
 - [credcheck - PostgreSQL username/password checks](#credcheck---postgresql-usernamepassword-checks)
 	- [Description](#description)
 	- [Installation](#installation)
 	- [Checks](#checks)
+	- [Password reuse policy](#password_reuse_policy)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
 	- [License](#license)
 	- [Credits](#credits)
-
 
 
 ### [Description](#description)
@@ -22,6 +20,7 @@ This extension provides all the checks as configurable parameters. The default c
 
 ### [Installation](#installation)
 - Minimum version of PostgreSQL required is 10.0.
+- For the Password Reuse Policy feature the minimum version required is 12.0.
 - Make sure the `pg_config` binary is set in the current `PATH`.
 - Clone or download this repository into a directory, and run the `make install` command.
 - If there are any permission issues, then use the `sudo make install` command.
@@ -188,8 +187,50 @@ postgres=# CREATE USER abcd$ WITH PASSWORD 'straaangepaasssword';
 CREATE ROLE
 ```
 
+### [Password reuse policy](#password_reuse_policy)
+
+PostgreSQL supports natively password expiration, all other kinds of password policy enforcement comes with extensions.
+With the credcheck extension, password can be forced to be of a certain length, contain amounts of various types of characters and be checked against the user account name itself.
+
+But one thing was missing, there was no password reuse policy enforcement. That mean that when user were required to change their password, they could just reuse their current password!
+
+The credcheck extension adds the "Password Reuse Policy" in release 1.0.0.
+
+All users passwords are historicized in a dedicated table (`credcheck.pg_auth_history`) together with the timestamps of when these passwords were set.
+
+Two settings allow to control the behavior of this feature:
+
+* `credcheck.password_reuse_history`: number of distinct passwords set before a password can be reused.
+* `credcheck.password_reuse_interval`: amount of time it takes before a password can be reused again.
+
+The default value for these settings are 0 which means that all password reuse policies are disabled.
+
+The password history consists of passwords a user has been assigned in the past. credcheck can
+restrict new passwords from being chosen from this history:
+
+* If an account is restricted on the basis of number of password changes, a new password cannot be chosen from the `password_reuse_history` most recent passwords. For example, minimum number of password changes is set to 3, a new password cannot be the same as any of the most recent 3 passwords.
+
+* If an account is restricted based on time elapsed, a new password cannot be chosen from passwords in the history that are newer than `password_reuse_interval` days. For example, if the password reuse interval is set to 365, a new password must not be among those previously chosen within the last year. 
+
+Example:
+```
+SET credcheck.password_reuse_history = 2;
+CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+SELECT rolename, password_text FROM credcheck.pg_auth_history ;
+ rolename |                          password_text
+----------+------------------------------------------------------------------
+ credtest | 7488570b80076cf9da26644d5eeb316c4768ff5bee7bf319344e7bb328032098
+ credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+(2 rows)
+
+-- fail, the credential is still in the history
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+ERROR:  Cannot use this credential following the password reuse policy
+```
 
 ### [Limitations](#limitations)
+
 This extension only works for the plain text passwords.
 
 Example
@@ -226,6 +267,7 @@ postgres=# ALTER USER user1 RENAME to test_user;
 
 ### [Authors](#authors)
 - Dinesh Kumar
+- Gilles Darold
 
 ### [License](#license)
 
@@ -235,6 +277,6 @@ License.
     Copyright (c) 2021 MigOps Inc.
 ### [Credits](#credits)
 - Thanks to Gilles Darold for suggestions and improvements
-- Thanks to the [passwordcheck extension author](https://www.postgresql.org/docs/current/passwordcheck.html)
-- Thanks to the [password policy extension author](https://github.com/eendroroy/passwordpolicy)
-- Thanks to the [blog author](https://paquier.xyz/postgresql-2/postgres-module-highlight-customize-passwordcheck-to-secure-your-database/)
+- Thanks to the [passwordcheck](https://www.postgresql.org/docs/current/passwordcheck.html) extension author
+- Thanks to the [password policy](https://github.com/eendroroy/passwordpolicy) extension author
+- Thanks to the [blog author](https://paquier.xyz/postgresql-2/postgres-module-highlight-customize-passwordcheck-to-secure-your-database/) Mickael Paquier

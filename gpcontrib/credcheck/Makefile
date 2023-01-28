@@ -16,3 +16,12 @@ REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+ifeq ($(MAJORVERSION),$(filter $(MAJORVERSION), 14 15))
+	REGRESS += 05_reuse_history
+	REGRESS += 06_reuse_interval
+else
+	REGRESS += 05_pg13_reuse_history
+	REGRESS += 06_pg13_reuse_interval
+endif
+

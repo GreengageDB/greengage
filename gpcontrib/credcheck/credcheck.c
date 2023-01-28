@@ -13,25 +13,42 @@
 #include <ctype.h>
 #include <limits.h>
 
+//#undef OPENSSL_API_COMPAT
+
 #include "postgres.h"
 
-#if PG_VERSION_NUM < 120000
 #include "access/heapam.h"
 #include "access/htup_details.h"
-#else
+#include "access/genam.h"
+#include "access/sysattr.h"
+#if PG_VERSION_NUM >= 120000
 #include "access/table.h"
 #endif
 
 #include "catalog/catalog.h"
+#include "catalog/indexing.h"
 #include "catalog/pg_authid.h"
 #include "commands/user.h"
+#if PG_VERSION_NUM >= 140000
+#include "common/hmac.h"
+#endif
+#include "common/sha2.h"
+#include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
+#include "nodes/pg_list.h"
 #include "tcop/utility.h"
+#include "utils/acl.h"
+#include "utils/builtins.h"
+#include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-#include "nodes/pg_list.h"
+#include "utils/timestamp.h"
 
+#include "utils/inval.h"
+
+#define Password_encryption = PASSWORD_TYPE_SCRAM_SHA_256;
 
 #if PG_VERSION_NUM < 120000
 #define table_open(r,l)         heap_open(r,l)
@@ -101,6 +118,39 @@ static char *password_not_contain = NULL;
 static char *password_contain = NULL;
 static bool password_contain_username = true;
 static bool password_ignore_case = false;
+
+#if PG_VERSION_NUM >= 120000
+/*
+ password_reuse_history:
+	number of distinct passwords set before a password can be reused.
+ password_reuse_interval:
+	amount of time it takes before a password can be reused again.
+*/
+static int password_reuse_history = 0;
+static int password_reuse_interval = 0;
+
+typedef struct FormData_password_reuse_history
+{
+        NameData rolename;
+        TimestampTz password_date;
+        text password_text;
+} FormData_password_reuse_history;
+
+typedef FormData_password_reuse_history *Form_password_reuse_history;
+
+#define CATALOG_PASSWORD_HIST  "pg_auth_history"
+#define CREDCHECK_SCHEMA       "credcheck"
+#define PASSWORD_HIST_DATE_IDX "pg_auth_history_password_date_rolename_idx"
+
+enum Anum_pg_auth_history
+{
+	Anum_pgauthist_rolename = 1,
+	Anum_pgauthist_date,
+	Anum_pgauthist_password,
+};
+
+char *str_to_sha256(const char *str, const char *salt);
+#endif
 
 static char *to_nlower(const char *str, size_t max) {
   char *lower_str;
@@ -540,7 +590,310 @@ static void password_guc() {
       "credcheck.password_contain",
       gettext_noop("password should contain these characters"), NULL,
       &password_contain, "", PGC_USERSET, 0, NULL, NULL, NULL);
+
+#if PG_VERSION_NUM >= 120000
+  DefineCustomIntVariable("credcheck.password_reuse_history",
+                          gettext_noop("minimum number of password changes before permitting reuse"),
+                          NULL, &password_reuse_history, 0, 0, 100,
+                          PGC_USERSET, 0, NULL, NULL, NULL);
+
+  DefineCustomIntVariable("credcheck.password_reuse_interval",
+                          gettext_noop("minimum number of days elapsed before permitting reuse"),
+                          NULL, &password_reuse_interval, 0, 0, 730, /* max 2 years */
+                          PGC_USERSET, 0, NULL, NULL, NULL);
+#endif
 }
+
+#if PG_VERSION_NUM >= 120000
+static void
+save_password_in_history(const char *username, const char *password)
+{
+	RangeVar     *rv;
+	Relation      rel;
+	HeapTuple     tuple;
+	Datum         new_record[3] = {0};
+	bool          new_record_nulls[3] = {false};
+	NameData      uname;
+	char         *encrypted_password;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
+
+	/* Encrypt the password to the requested format. */
+	encrypted_password = strdup(str_to_sha256(password, username));
+
+	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
+	rel = table_openrv(rv, RowExclusiveLock);
+	elog(DEBUG1, "Insert new record in history table: (%s, '%s', '%s')",
+							username, encrypted_password,
+							timestamptz_to_str(GetCurrentTimestamp()));
+
+	/* Build a tuple to insert */
+	namestrcpy(&uname, username);
+	new_record[Anum_pgauthist_rolename - 1] = NameGetDatum(&uname);
+	new_record[Anum_pgauthist_date - 1] = TimestampGetDatum(GetCurrentTimestamp());
+	new_record[Anum_pgauthist_password - 1] = CStringGetTextDatum(encrypted_password);
+	tuple = heap_form_tuple(RelationGetDescr(rel), new_record, new_record_nulls);
+	CatalogTupleInsert(rel, tuple);
+
+	table_close(rel, RowExclusiveLock);
+	free(encrypted_password);
+}
+
+static void
+rename_user_in_history(const char *username, const char *newname)
+{
+	RangeVar     *rv;
+	Relation      rel;
+	HeapTuple     tuple;
+	ScanKeyData   key[1];
+	SysScanDesc   scan;
+
+	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
+	rel = table_openrv(rv, RowExclusiveLock);
+
+	/* Define scanning */
+	ScanKeyInit(&key[0], Anum_pgauthist_rolename, BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(username));
+
+	/* Start search of user entries into relation ordered by creation date */
+	scan = systable_beginscan(rel, 0, true, NULL, lengthof(key), key);
+	/* Remove all entries from the history table for this user */
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
+	{
+		FormData_password_reuse_history *ph = (FormData_password_reuse_history *) GETSTRUCT(tuple);
+		NameData        uname;
+		Datum           new_values[3];
+		bool            new_values_nulls[3] = {false};
+		HeapTuple       new_tuple;
+		const char     *passwd;
+
+		passwd = text_to_cstring(&(ph->password_text));
+
+		elog(DEBUG1, "Renaming user %s with password '%s' into password history table with new username: %s", username, passwd, newname);
+
+		namestrcpy(&uname, newname);
+		new_values[Anum_pgauthist_rolename - 1] = NameGetDatum(&uname);
+		new_values[Anum_pgauthist_date - 1] = TimestampTzGetDatum(ph->password_date);
+		new_values[Anum_pgauthist_password - 1] = CStringGetDatum(passwd);
+		new_tuple = heap_form_tuple(RelationGetDescr(rel), new_values, new_values_nulls);
+		simple_heap_update(rel, &tuple->t_self, new_tuple);
+	}
+	/* Cleanup */
+	systable_endscan(scan);
+
+	table_close(rel, RowExclusiveLock);
+}
+
+static void
+remove_password_from_history(const char *username, const char *password, int numentries)
+{
+	RangeVar     *rv;
+	RangeVar     *irv;
+	Relation      rel;
+	Relation      irel;
+	HeapTuple     tuple;
+	ScanKeyData   key[1];
+	SysScanDesc   scan;
+	int           i = 0;
+	char         *encrypted_password;
+
+	/* Encrypt the password to the requested format. */
+	encrypted_password = strdup(str_to_sha256(password, username));
+
+	elog(DEBUG1, "Looking for removing password = '%s' for username = '%s'", encrypted_password, username);
+
+	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
+	irv = makeRangeVar(CREDCHECK_SCHEMA, PASSWORD_HIST_DATE_IDX, -1);
+	rel = table_openrv(rv, RowExclusiveLock);
+	irel = relation_openrv(irv, RowExclusiveLock);
+
+	/* Define scanning */
+	ScanKeyInit(&key[0], Anum_pgauthist_rolename, BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(username));
+
+	/* Start search of user entries into relation ordered by creation date */
+	scan = systable_beginscan_ordered(rel, irel, NULL, lengthof(key), key);
+	/*
+	 * Remove the oldest tuples when password_reuse_history is reached
+	 * until password_reuse_history size is respected for this user,
+	 * except if password_reuse_interval is enabled and not reached.
+	 *
+	 * A ascending index must exits on the date column of the table,
+	 * we use this index to treat the oldest entries first in the scan.
+	 */
+	while (HeapTupleIsValid(tuple = systable_getnext_ordered(scan, ForwardScanDirection)))
+	{
+		FormData_password_reuse_history *ph = (FormData_password_reuse_history *) GETSTRUCT(tuple);
+		bool keep = false;
+
+		/* if we have a retention delay remove entries that has expired */
+		if (password_reuse_interval > 0)
+		{
+			Timestamp       dt_now = GetCurrentTimestamp();
+			float8          result;
+			result = ((float8) (dt_now - ph->password_date)) / 1000000.0; /* in seconds */
+			result /= 86400; /* in days */
+
+			elog(DEBUG1, "password_reuse_interval: %d, entry age: %d",
+										password_reuse_interval,
+										(int) result);
+			/*
+			 * if the delay have not expired keep the tuple if the
+			 * number of entry exceed password_reuse_history
+			 */
+			if (password_reuse_interval >= (int) result)
+				keep = true;
+			else
+				elog(DEBUG1, "remove_password_from_history(): this history entry has expired");
+		}
+		if (!keep)
+		{
+			/* we need to remove the entries that exceed history size */
+			if ((numentries - i) >= password_reuse_history)
+			{
+				elog(DEBUG1, "removing the entry from the history (%s, %s)",
+												username,
+												encrypted_password);
+				simple_heap_delete(rel, &tuple->t_self);
+			}
+		}
+		i++;
+	}
+	/* Cleanup */
+	systable_endscan_ordered(scan);
+
+	table_close(rel, RowExclusiveLock);
+	relation_close(irel, RowExclusiveLock);
+}
+
+static void
+remove_user_from_history(const char *username)
+{
+	RangeVar     *rv;
+	Relation      rel;
+	HeapTuple     tuple;
+	ScanKeyData   key[1];
+	SysScanDesc   scan;
+
+	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
+	rel = table_openrv(rv, RowExclusiveLock);
+
+	/* Define scanning */
+	ScanKeyInit(&key[0], Anum_pgauthist_rolename, BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(username));
+
+	/* Start search of user entries into relation ordered by creation date */
+	scan = systable_beginscan(rel, 0, true, NULL, lengthof(key), key);
+	/* Remove all entries from the history table for this user */
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
+	{
+		FormData_password_reuse_history *ph = (FormData_password_reuse_history *) GETSTRUCT(tuple);
+		elog(DEBUG1, "Removing user from password history table tuple (%s, '%s')", username, timestamptz_to_str(TimestampTzGetDatum(ph->password_date)));
+		simple_heap_delete(rel, &tuple->t_self);
+	}
+	/* Cleanup */
+	systable_endscan(scan);
+
+	table_close(rel, RowExclusiveLock);
+}
+
+/* Check if the password can be reused */
+static void
+check_password_reuse(const char *username, const char *password)
+{
+	RangeVar     *rv;
+	Relation      rel;
+	ScanKeyData   key[1];
+	SysScanDesc   scan;
+	HeapTuple     tuple;
+	int           count_in_history;
+	bool          found;
+	char         *encrypted_password;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
+
+	/* Encrypt the password to the requested format. */
+	encrypted_password = strdup(str_to_sha256(password, username));
+
+	elog(DEBUG1, "Looking for registered password = '%s' for username = '%s'", encrypted_password, username);
+
+	/* open the password history relation */
+	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
+	rel = table_openrv(rv, RowExclusiveLock);
+
+	/* Define scanning */
+	ScanKeyInit(&key[0], Anum_pgauthist_rolename, BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(username));
+
+	/* Start search of user/password pair into relation */
+	scan = systable_beginscan(rel, 0, true, NULL, lengthof(key), key);
+	count_in_history = 0;
+	found = false;
+	/* Loop through all tuples to count the number of entries in the history for this user */
+	while (HeapTupleIsValid(tuple = systable_getnext(scan)))
+	{
+		FormData_password_reuse_history *ph = (FormData_password_reuse_history *) GETSTRUCT(tuple);
+		const char *passwd;
+
+		Assert(ph->rolename != NULL);
+		Assert(ph->password_date != NULL);
+		Assert(ph->password_text != NULL);
+
+		passwd = text_to_cstring(&(ph->password_text));
+
+		elog(DEBUG1, "Found in password history tuple with username = '%s',"
+			     " password: '%s' cmp '%s', at date: '%s'", username, encrypted_password,
+			     passwd, timestamptz_to_str(TimestampTzGetDatum(ph->password_date)));
+
+		/* if the password is found in the history remove it if the interval is passed */
+		if (strcmp(encrypted_password, passwd) == 0)
+		{
+			elog(DEBUG1, "password found in history");
+
+			/* mark that the password hash was found in the history */
+			found = true;
+
+			if (password_reuse_interval > 0)
+			{
+				Timestamp       dt_now = GetCurrentTimestamp();
+				float8          result;
+				result = ((float8) (dt_now - ph->password_date)) / 1000000.0; /* in seconds */
+				result /= 86400; /* in days */
+				elog(DEBUG1, "password_reuse_interval: %d, entry age: %d",
+											password_reuse_interval,
+											(int) result);
+
+				/* if the delay have expired skip the entry, it will be removed */
+				if (password_reuse_interval < (int) result)
+				{
+					elog(DEBUG1, "this history entry has expired");
+					found = false;
+					count_in_history--;
+				}
+			}
+		}
+
+		/*
+		 * Even if the password was found we continue to count the number of
+		 * password stored in the history for this user. This count is used
+		 * to remove the oldest password that exceed the password_reuse_history
+		 */
+		count_in_history++;
+	}
+	/* Cleanup. */
+	systable_endscan(scan);
+
+	table_close(rel, RowExclusiveLock);
+	free(encrypted_password);
+
+	if (found)
+		elog(ERROR, "Cannot use this credential following the password reuse policy");
+
+	/* Password not found, remove passwords exceeding the history size */
+	remove_password_from_history(username, password, count_in_history);
+
+	/* The password was not found, add the password to the history */
+	save_password_in_history(username, password);
+}
+#endif
 
 static void
 check_password(const char *username, const char *password,
@@ -638,10 +991,66 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					break;
 				/* check the validity of the username */
 				username_check(stmt->newname, NULL);
+
+#if PG_VERSION_NUM >= 120000
+				/* rename the user in the history table */
+				rename_user_in_history(stmt->subname, stmt->newname);
+#endif
 			}
 			break;
 		}
 
+#if PG_VERSION_NUM >= 120000
+		case T_AlterRoleStmt:
+		{
+			AlterRoleStmt *stmt = (AlterRoleStmt *)parsetree;
+			ListCell      *option;
+
+			/* Extract options from the statement node tree */
+			foreach(option, stmt->options)
+			{
+				DefElem    *defel = (DefElem *) lfirst(option);
+
+				if (strcmp(defel->defname, "password") == 0)
+				{
+					check_password_reuse(stmt->role->rolename, strVal(defel->arg));
+				}
+			}
+			break;
+		}
+
+		case T_CreateRoleStmt:
+		{
+			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
+			ListCell      *option;
+
+			/* Extract options from the statement node tree */
+			foreach(option, stmt->options)
+			{
+				DefElem    *defel = (DefElem *) lfirst(option);
+
+				if (strcmp(defel->defname, "password") == 0)
+				{
+					check_password_reuse(stmt->role, strVal(defel->arg));
+				}
+			}
+			break;
+		}
+
+		case T_DropRoleStmt:
+		{
+			DropRoleStmt *stmt = (DropRoleStmt *)parsetree;
+			ListCell   *item;
+
+			foreach(item, stmt->roles)
+			{
+				RoleSpec   *rolspec = lfirst(item);
+
+				remove_user_from_history(rolspec->rolename);
+			}
+			break;
+		}
+#endif
 		default:
 			break;
 	}
@@ -652,3 +1061,55 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	else
 		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
 }
+
+#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= 140000
+char *
+str_to_sha256(const char *password, const char *salt)
+{
+	int          password_len = strlen(password);
+	int          saltlen = strlen(salt);
+	uint8        checksumbuf[PG_SHA256_DIGEST_LENGTH];
+	char        *result = palloc0(sizeof (char) * PG_SHA256_DIGEST_STRING_LENGTH);
+	pg_hmac_ctx *hmac_ctx = pg_hmac_create(PG_SHA256);
+
+	if (hmac_ctx == NULL)
+	{
+		pfree(result);
+		elog(ERROR, "credcheck could not initialize checksum context");
+	}
+
+	if (pg_hmac_init(hmac_ctx, (uint8 *) password, password_len) < 0 ||
+			pg_hmac_update(hmac_ctx, (uint8 *) salt, saltlen) < 0 ||
+			pg_hmac_final(hmac_ctx, checksumbuf, sizeof(checksumbuf)) < 0)
+	{
+		pfree(result);
+		pg_hmac_free(hmac_ctx);
+		elog(ERROR, "credcheck could not initialize checksum");
+	}
+	hex_encode((char *) checksumbuf, sizeof checksumbuf, result);
+	result[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
+
+	pg_hmac_free(hmac_ctx);
+
+	return result;
+}
+#else
+char *
+str_to_sha256(const char *password, const char *salt)
+{
+	int          password_len = strlen(password);
+	uint8        checksumbuf[PG_SHA256_DIGEST_LENGTH];
+	char        *result = palloc0(sizeof (char) * PG_SHA256_DIGEST_STRING_LENGTH);
+	pg_sha256_ctx sha256_ctx;
+
+	pg_sha256_init(&sha256_ctx);
+	pg_sha256_update(&sha256_ctx, (uint8 *) password, password_len);
+	pg_sha256_final(&sha256_ctx, checksumbuf);
+	hex_encode((char *) checksumbuf, sizeof checksumbuf, result);
+	result[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
+
+	return result;
+}
+#endif
+#endif

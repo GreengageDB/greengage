@@ -1,0 +1,42 @@
+DROP USER IF EXISTS credtest;
+NOTICE:  role "credtest" does not exist, skipping
+DROP EXTENSION credcheck CASCADE;
+CREATE EXTENSION credcheck;
+LOAD 'credcheck';
+SET credcheck.password_reuse_history = 2;
+-- When creating user the password must be stored in the history
+CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+SELECT rolename, password_text FROM credcheck.pg_auth_history ;
+ rolename |                          password_text                           
+----------+------------------------------------------------------------------
+ credtest | 7488570b80076cf9da26644d5eeb316c4768ff5bee7bf319344e7bb328032098
+ credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+(2 rows)
+
+-- fail, the credential is still in the history
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+ERROR:  Cannot use this credential following the password reuse policy
+-- eject the first credential from the history and add a new one
+ALTER USER credtest PASSWORD 'AJ8YuRe=6O0';
+SELECT rolename, password_text FROM credcheck.pg_auth_history ;
+ rolename |                          password_text                           
+----------+------------------------------------------------------------------
+ credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
+ credtest | 79320cea69ba581d5e17255c02ae08060f412f79a7c14d0e24ffca51fc03ec74
+(2 rows)
+
+-- fail, the credential is still in the history
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+ERROR:  Cannot use this credential following the password reuse policy
+-- success, eject the second credential from the history and reuse the first one
+ALTER USER credtest PASSWORD 'H8Hdre=S2';
+-- success, the second credential has been removed from the history
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+-- Dropping the user must empty the record in history table
+DROP USER credtest;
+SELECT * FROM credcheck.pg_auth_history;
+ rolename | password_date | password_text 
+----------+---------------+---------------
+(0 rows)
+
