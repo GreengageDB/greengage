@@ -33,6 +33,10 @@ CREATE USER a WITH PASSWORD 'dummy';
 ERROR:  username length should match the configured credcheck.username_min_length
 DROP USER IF EXISTS a;
 NOTICE:  role "a" does not exist, skipping
+CREATE USER a;
+ERROR:  username length should match the configured credcheck.username_min_length
+DROP USER IF EXISTS a;
+NOTICE:  role "a" does not exist, skipping
 --
 --min user repeat
 --
@@ -144,4 +148,6 @@ ERROR:  password length should match the configured credcheck.password_min_lengt
 DROP USER "a$user1";
 ERROR:  role "a$user1" does not exist
 CREATE USER aa;
+ERROR:  username does not contain the configured credcheck.username_min_digit characters
 DROP USER aa;
+ERROR:  role "aa" does not exist

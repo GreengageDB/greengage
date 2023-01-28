@@ -1024,6 +1024,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
 			ListCell      *option;
 
+			/* check the validity of the username */
+			username_check(stmt->role, NULL);
+
 			/* Extract options from the statement node tree */
 			foreach(option, stmt->options)
 			{

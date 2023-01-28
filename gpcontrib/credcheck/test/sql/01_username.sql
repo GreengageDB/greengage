@@ -31,6 +31,8 @@ SET credcheck.username_min_length TO 2;
 DROP USER IF EXISTS a;
 CREATE USER a WITH PASSWORD 'dummy';
 DROP USER IF EXISTS a;
+CREATE USER a;
+DROP USER IF EXISTS a;
 --
 --min user repeat
 --
