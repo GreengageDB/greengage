@@ -118,6 +118,7 @@ static char *password_not_contain = NULL;
 static char *password_contain = NULL;
 static bool password_contain_username = true;
 static bool password_ignore_case = false;
+static int password_valid_until = 0;
 
 #if PG_VERSION_NUM >= 120000
 /*
@@ -602,6 +603,12 @@ static void password_guc() {
                           NULL, &password_reuse_interval, 0, 0, 730, /* max 2 years */
                           PGC_USERSET, 0, NULL, NULL, NULL);
 #endif
+
+  DefineCustomIntVariable("credcheck.password_valid_until",
+                          gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
+				  " with a minimum number of days"),
+                          NULL, &password_valid_until, 0, 0, INT_MAX,
+                          PGC_USERSET, 0, NULL, NULL, NULL);
 }
 
 #if PG_VERSION_NUM >= 120000
@@ -648,6 +655,9 @@ rename_user_in_history(const char *username, const char *newname)
 	HeapTuple     tuple;
 	ScanKeyData   key[1];
 	SysScanDesc   scan;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
 
 	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
 	rel = table_openrv(rv, RowExclusiveLock);
@@ -696,6 +706,9 @@ remove_password_from_history(const char *username, const char *password, int num
 	SysScanDesc   scan;
 	int           i = 0;
 	char         *encrypted_password;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
 
 	/* Encrypt the password to the requested format. */
 	encrypted_password = strdup(str_to_sha256(password, username));
@@ -773,6 +786,9 @@ remove_user_from_history(const char *username)
 	HeapTuple     tuple;
 	ScanKeyData   key[1];
 	SysScanDesc   scan;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
 
 	rv = makeRangeVar(CREDCHECK_SCHEMA, CATALOG_PASSWORD_HIST, -1);
 	rel = table_openrv(rv, RowExclusiveLock);
@@ -895,6 +911,36 @@ check_password_reuse(const char *username, const char *password)
 }
 #endif
 
+static int
+check_valid_until(char *valid_until_date)
+{
+	int days = 0;
+
+	elog(DEBUG1, "option VALID UNTIL date: %s", valid_until_date);
+
+	if (valid_until_date)
+	{
+		Datum           validUntil_datum;
+		Timestamp       dt_now = GetCurrentTimestamp();
+		Timestamp       valid_date;
+		float8          result;
+
+		validUntil_datum = DirectFunctionCall3(timestamptz_in,
+									CStringGetDatum(valid_until_date),
+									ObjectIdGetDatum(InvalidOid),
+									Int32GetDatum(-1));
+		valid_date = DatumGetTimestamp(validUntil_datum);
+
+		result = ((float8) (valid_date - dt_now)) / 1000000.0; /* in seconds */
+		result /= 86400; /* in days */
+		days = (int) result;
+
+		elog(DEBUG1, "option VALID UNTIL in days: %d", days);
+	}
+
+	return days;
+}
+
 static void
 check_password(const char *username, const char *password,
                            PasswordType password_type, Datum validuntil_time,
@@ -1000,7 +1046,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			break;
 		}
 
-#if PG_VERSION_NUM >= 120000
 		case T_AlterRoleStmt:
 		{
 			AlterRoleStmt *stmt = (AlterRoleStmt *)parsetree;
@@ -1011,9 +1056,17 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			{
 				DefElem    *defel = (DefElem *) lfirst(option);
 
+#if PG_VERSION_NUM >= 120000
 				if (strcmp(defel->defname, "password") == 0)
 				{
 					check_password_reuse(stmt->role->rolename, strVal(defel->arg));
+				}
+#endif
+				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
+				{
+					int valid_until = check_valid_until(strVal(defel->arg));
+					if (valid_until < password_valid_until)
+						elog(ERROR, "the VALID UNTIL option must have a date older than %d days", password_valid_until);
 				}
 			}
 			break;
@@ -1023,6 +1076,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		{
 			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
 			ListCell      *option;
+			int          valid_until = 0;
 
 			/* check the validity of the username */
 			username_check(stmt->role, NULL);
@@ -1032,14 +1086,28 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			{
 				DefElem    *defel = (DefElem *) lfirst(option);
 
+#if PG_VERSION_NUM >= 120000
 				if (strcmp(defel->defname, "password") == 0)
 				{
 					check_password_reuse(stmt->role, strVal(defel->arg));
+				}
+#endif
+				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
+				{
+					valid_until = check_valid_until(strVal(defel->arg));
+				}
+			}
+			if (password_valid_until > 0)
+			{
+				if (valid_until < password_valid_until)
+				{
+					elog(ERROR, "require a VALID UNTIL option with a date older than %d days", password_valid_until);
 				}
 			}
 			break;
 		}
 
+#if PG_VERSION_NUM >= 120000
 		case T_DropRoleStmt:
 		{
 			DropRoleStmt *stmt = (DropRoleStmt *)parsetree;

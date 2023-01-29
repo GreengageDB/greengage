@@ -14,11 +14,19 @@
 
 ### [Description](#description)
 
-The `credcheck` PostgreSQL extension provides few general credential checks, which will be evaluated during the user creation, during the password change and user renaming. By using this extension, we can define a set of rules to allow a specific set of credentials, and a set of rules to reject a certain type of credentials. This extension is developed based on the PostgreSQL's `check_password_hook` hook.
+The `credcheck` PostgreSQL extension provides few general credential checks, which will be evaluated during the user creation, during the password change and user renaming. By using this extension, we can define a set of rules:
+
+- allow a specific set of credentials
+- reject a certain type of credentials
+- enforce use of an expiration date with a minimum of day for a password
+- define a password reuse policy
+
+This extension is developed based on the PostgreSQL's `check_password_hook` hook.
 
 This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks.
 
 ### [Installation](#installation)
+
 - Minimum version of PostgreSQL required is 10.0.
 - For the Password Reuse Policy feature the minimum version required is 12.0.
 - Make sure the `pg_config` binary is set in the current `PATH`.
@@ -32,6 +40,7 @@ This extension provides all the checks as configurable parameters. The default c
 
 
 ### [Checks](#checks)
+
 Please find the below list of general checks, which we can enforce on credentials.
 
 | Check                     | Type     | Description                                         | Setting Value | Accepted                    | Not Accepted                 |
@@ -56,6 +65,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_contain          | password | password should contain these characters            | a,b,c         | &check; ade                 | &#10008; xfg                 |
 | password_not_contain      | password | password should not contain these characters        | x,y,z         | &check; abc                 | &#10008; axf                 |
 | password_ignore_case      | password | ignore case while performing above checks           | on            | &check; Abc                 | &#10008; aXf                 |
+| password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days   | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
 
 
 ### [Examples](#examples)
@@ -185,6 +195,21 @@ ERROR:  password characters are repeated more than the configured credcheck.pass
 
 postgres=# CREATE USER abcd$ WITH PASSWORD 'straaangepaasssword';
 CREATE ROLE
+```
+
+credcheck can also enforce the use of an expiration date for the password by checking option VALID UNTIL used in CREATE or ALTER ROLE.
+```
+postgres=# SET credcheck.password_valid_until = 30;
+SET
+
+postgres=# CREATE USER abcd$;
+ERROR:  require a VALID UNTIL option with a date older than 30 days
+
+postgres=# CREATE USER abcd$ VALID UNTIL '2022-12-21';
+ERROR:  require a VALID UNTIL option with a date older than 30 days
+
+postgres=# ALTER USER abcd$ VALID UNTIL '2022-12-21';
+ERROR:  require a VALID UNTIL option with a date older than 30 days
 ```
 
 ### [Password reuse policy](#password_reuse_policy)
