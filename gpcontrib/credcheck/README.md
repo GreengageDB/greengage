@@ -4,7 +4,7 @@
 	- [Description](#description)
 	- [Installation](#installation)
 	- [Checks](#checks)
-	- [Password reuse policy](#password-reuse-policy)
+	- [Password reuse policy](#password-reuse-policy) WIP: experimental
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -212,7 +212,7 @@ postgres=# ALTER USER abcd$ VALID UNTIL '2022-12-21';
 ERROR:  require a VALID UNTIL option with a date older than 30 days
 ```
 
-### [Password reuse policy](#password-reuse-policy)
+### [Password reuse policy](#password-reuse-policy) WIP: experimental
 
 PostgreSQL supports natively password expiration, all other kinds of password policy enforcement comes with extensions.
 With the credcheck extension, password can be forced to be of a certain length, contain amounts of various types of characters and be checked against the user account name itself.
