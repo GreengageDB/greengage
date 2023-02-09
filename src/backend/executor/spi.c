@@ -2315,7 +2315,11 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 				else
 				{
 					/* Otherwise, we do not record information about internal queries */
-					qdesc->gpmon_pkt = NULL;
+					if (qdesc->gpmon_pkt != NULL)
+					{
+						pfree(qdesc->gpmon_pkt);
+						qdesc->gpmon_pkt = NULL;
+					}
 				}
 
 				res = _SPI_pquery(qdesc, fire_triggers,

@@ -944,7 +944,11 @@ postquel_start(execution_state *es, SQLFunctionCachePtr fcache)
 		else
 		{
 			/* Otherwise, we do not record information about internal queries. */
-			es->qd->gpmon_pkt = NULL;
+			if (es->qd->gpmon_pkt != NULL)
+			{
+				pfree(es->qd->gpmon_pkt);
+				es->qd->gpmon_pkt = NULL;
+			}
 		}
 	}
 	else
