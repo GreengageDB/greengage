@@ -56,7 +56,6 @@
 #include "replication/walsender.h"
 #include "storage/ipc.h"
 #include "storage/pmsignal.h"
-#include "storage/proc.h"
 #include "storage/procarray.h"
 #include "utils/guc.h"
 #include "utils/ps_status.h"
@@ -241,12 +240,12 @@ WalReceiverMain(void)
 	walrcv->lastMsgSendTime =
 		walrcv->lastMsgReceiptTime = walrcv->latestWalEndTime = now;
 
-	walrcv->latch = &MyProc->procLatch;
-
 	SpinLockRelease(&walrcv->mutex);
 
 	/* Arrange to clean up at walreceiver exit */
 	on_shmem_exit(WalRcvDie, 0);
+
+	OwnLatch(&walrcv->latch);
 
 	/*
 	 * If possible, make this process a group leader, so that the postmaster
@@ -614,7 +613,7 @@ WalRcvWaitForStartPosition(XLogRecPtr *startpoint, TimeLineID *startpointTLI)
 	WakeupRecovery();
 	for (;;)
 	{
-		ResetLatch(walrcv->latch);
+		ResetLatch(&walrcv->latch);
 
 		/*
 		 * Emergency bailout if postmaster has died.  This is to avoid the
@@ -649,7 +648,7 @@ WalRcvWaitForStartPosition(XLogRecPtr *startpoint, TimeLineID *startpointTLI)
 		}
 		SpinLockRelease(&walrcv->mutex);
 
-		WaitLatch(walrcv->latch, WL_LATCH_SET | WL_POSTMASTER_DEATH, 0);
+		WaitLatch(&walrcv->latch, WL_LATCH_SET | WL_POSTMASTER_DEATH, 0);
 	}
 
 	if (update_process_title)
@@ -723,6 +722,8 @@ WalRcvDie(int code, Datum arg)
 	/* Ensure that all WAL records received are flushed to disk */
 	XLogWalRcvFlush(true);
 
+	DisownLatch(&walrcv->latch);
+
 	SpinLockAcquire(&walrcv->mutex);
 	Assert(walrcv->walRcvState == WALRCV_STREAMING ||
 		   walrcv->walRcvState == WALRCV_RESTARTING ||
@@ -732,7 +733,6 @@ WalRcvDie(int code, Datum arg)
 	Assert(walrcv->pid == MyProcPid);
 	walrcv->walRcvState = WALRCV_STOPPED;
 	walrcv->pid = 0;
-	walrcv->latch = NULL;
 	SpinLockRelease(&walrcv->mutex);
 
 	/* Terminate the connection gracefully. */
@@ -769,7 +769,7 @@ WalRcvShutdownHandler(SIGNAL_ARGS)
 
 	got_SIGTERM = true;
 
-	SetLatch(&MyProc->procLatch);
+	SetLatch(&WalRcv->latch);
 
 	errno = save_errno;
 }
