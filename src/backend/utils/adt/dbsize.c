@@ -32,6 +32,7 @@
 #include "storage/fd.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/int8.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -556,7 +557,9 @@ calculate_table_size(Relation rel)
 		Relation ao_rel;
 
 		Assert(OidIsValid(rel->rd_appendonly->segrelid));
+		SIMPLE_FAULT_INJECTOR("pg_calculate_table_size_before_pg_aoseg_estimation");
 		ao_rel = try_relation_open(rel->rd_appendonly->segrelid, AccessShareLock, false);
+		Assert(PointerIsValid(ao_rel));
 		size += calculate_total_relation_size(ao_rel);
 		relation_close(ao_rel, AccessShareLock);
 

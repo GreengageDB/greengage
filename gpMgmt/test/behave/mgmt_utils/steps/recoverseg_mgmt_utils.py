@@ -409,6 +409,50 @@ def impl(context, before, after):
     compare_gparray_with_expected(context.saved_array[before], context.saved_array[after])
 
 
+
+def _segment_prefix(seg):
+    if seg not in ("primary", "mirror"):
+        raise Exception("Got invalid segment type: %s" % seg)
+    return "pseg" if seg == "primary" else "mseg"
+
+
+def _get_pg_log_content(context, seg):
+    prefix = _segment_prefix(seg)
+    datadir = getattr(context, "%s_data_dir" % prefix)
+    run_command(context, "ls -1 %s/pg_log" % datadir)
+    return context.stdout_message.splitlines()
+
+
+@given('the "{seg}" segment pg_log dir content saved')
+def impl(context, seg):
+    context.pg_log_content = _get_pg_log_content(context, seg)
+
+
+@when('user kills "{seg}" segment process with signal "{signal}"')
+def impl(context, seg, signal):
+    prefix = _segment_prefix(seg)
+    datadir = getattr(context, "%s_data_dir" % prefix)
+    seghost = getattr(context, "%s_hostname" % prefix)
+    grep = "[" + datadir[0] + "]" + datadir[1:]
+    cmd = "ps ux | grep %s | awk '{print $2}' | xargs kill -s %s" % (grep, signal)
+    subprocess.check_call(["ssh", seghost, cmd])
+
+
+@then('the "{seg}" segment pg_log directory content preserved')
+def impl(context, seg):
+    expected = set(context.pg_log_content)
+    actual = set(_get_pg_log_content(context, seg))
+    if not actual >= expected:
+        parts = (
+            "not all expected entries in pg_log directory were found: ",
+            ">>> actual <<<",
+            "\n".join(actual),
+            ">>> expected <<<",
+            "\n".join(expected),
+        )
+        raise Exception("\n".join(parts))
+
+
 # This test explicitly compares the actual before and after gparrays with what we
 # expect.  While such a test is not extensible, it is easy to debug and does exactly
 # what we need to right now.  Besides, the calling Scenario requires a specific cluster

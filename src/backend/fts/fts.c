@@ -139,6 +139,7 @@ FtsProbeMain(Datum main_arg)
 	main_tid = pthread_self();
 
 #ifdef SIGSEGV
+	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 	pqsignal(SIGSEGV, CdbProgramErrorHandler);
 #endif
 
