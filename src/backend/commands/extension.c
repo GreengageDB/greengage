@@ -69,9 +69,6 @@
 bool		creating_extension = false;
 Oid			CurrentExtensionObject = InvalidOid;
 
-/* File visible "segment" variable for GUCs state */
-static int 	segment_nestlevel = 0;
-
 /*
  * Internal data structure to hold the results of parsing a control file
  */
@@ -794,10 +791,38 @@ is_begin_state(const Node *stmt)
 }
 
 /*
- * Execute the appropriate script file for installing or updating the extension
+ * Set up the search path to contain the target schema, then the schemas
+ * of any prerequisite extensions, and nothing else.  In particular this
+ * makes the target schema be the default creation target namespace.
  *
- * This function executes on QD and QE's. On QE's this function only sets up
- * necessary GUC's and state variables, needed for further execution.
+ * Note: it might look tempting to use PushOverrideSearchPath for this,
+ * but we cannot do that.  We have to actually set the search_path GUC in
+ * case the extension script examines or changes it.  In any case, the
+ * GUC_ACTION_SAVE method is just as convenient.
+ */
+static void
+set_serach_path_for_extension(List *requiredSchemas, const char *schemaName)
+{
+	StringInfoData pathbuf;
+	ListCell *lc;
+	initStringInfo(&pathbuf);
+	appendStringInfoString(&pathbuf, quote_identifier(schemaName));
+	foreach(lc, requiredSchemas)
+	{
+		Oid			reqschema = lfirst_oid(lc);
+		char	   *reqname = get_namespace_name(reqschema);
+
+		if (reqname)
+			appendStringInfo(&pathbuf, ", %s", quote_identifier(reqname));
+	}
+
+	(void) set_config_option("search_path", pathbuf.data,
+							 PGC_USERSET, PGC_S_SESSION,
+							 GUC_ACTION_SAVE, true, 0);
+}
+
+/*
+ * Execute the appropriate script file for installing or updating the extension
  *
  * If from_version isn't NULL, it's an update
  *
@@ -809,14 +834,12 @@ execute_extension_script(Node *stmt,
 						 Oid extensionOid, ExtensionControlFile *control,
 						 const char *from_version,
 						 const char *version,
-						 List *requiredSchemas,
 						 const char *schemaName, Oid schemaOid)
 {
 	char	   *filename;
 	int			save_nestlevel;
-	StringInfoData pathbuf;
-	ListCell   *lc;
 
+	AssertState(Gp_role != GP_ROLE_EXECUTE);
 	AssertImply(Gp_role == GP_ROLE_DISPATCH, stmt != NULL &&
 			(nodeTag(stmt) == T_CreateExtensionStmt || nodeTag(stmt) == T_AlterExtensionStmt) &&
 			is_begin_state(stmt));
@@ -865,47 +888,12 @@ execute_extension_script(Node *stmt,
 								 GUC_ACTION_SAVE, true, 0);
 
 	/*
-	 * Set up the search path to contain the target schema, then the schemas
-	 * of any prerequisite extensions, and nothing else.  In particular this
-	 * makes the target schema be the default creation target namespace.
-	 *
-	 * Note: it might look tempting to use PushOverrideSearchPath for this,
-	 * but we cannot do that.  We have to actually set the search_path GUC in
-	 * case the extension script examines or changes it.  In any case, the
-	 * GUC_ACTION_SAVE method is just as convenient.
-	 */
-	initStringInfo(&pathbuf);
-	appendStringInfoString(&pathbuf, quote_identifier(schemaName));
-	foreach(lc, requiredSchemas)
-	{
-		Oid			reqschema = lfirst_oid(lc);
-		char	   *reqname = get_namespace_name(reqschema);
-
-		if (reqname)
-			appendStringInfo(&pathbuf, ", %s", quote_identifier(reqname));
-	}
-
-	(void) set_config_option("search_path", pathbuf.data,
-							 PGC_USERSET, PGC_S_SESSION,
-							 GUC_ACTION_SAVE, true, 0);
-
-	/*
 	 * Set creating_extension and related variables so that
 	 * recordDependencyOnCurrentExtension and other functions do the right
 	 * things.  On failure, ensure we reset these variables.
 	 */
 	creating_extension = true;
 	CurrentExtensionObject = extensionOid;
-
-	/*
-	 * All necessary variables at segment is set up.
-	 */
-	if (Gp_role == GP_ROLE_EXECUTE)
-	{
-		segment_nestlevel = save_nestlevel;
-		return;
-	}
-
 	PG_TRY();
 	{
 		char	   *c_sql = read_extension_script_file(control, filename);
@@ -1296,12 +1284,12 @@ CreateExtension(CreateExtensionStmt *stmt)
 				elog(ERROR, "invalid CREATE EXTENSION state");
 				return InvalidOid;
 
-			case CREATE_EXTENSION_BEGIN:
+			case CREATE_EXTENSION_BEGIN:	/* Mark creating_extension flag and add pg_extension catalog tuple */
+				creating_extension = true;
 				break;
 			case CREATE_EXTENSION_END:		/* Mark creating_extension flag = false */
-				Assert(segment_nestlevel > 0);
-				AtEOXact_GUC(true, segment_nestlevel);
-				ResetExtensionCreatingGlobalVarsOnQE();
+				creating_extension = false;
+				CurrentExtensionObject = InvalidOid;
 				return get_extension_oid(stmt->extname, true);
 
 			default:
@@ -1313,8 +1301,10 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * We use global variables to track the extension being created, so we can
 	 * create only one extension at the same time.
+	 * Except that QE do CREATE_EXTENSION_BEGIN.
 	 */
-	if (creating_extension)
+	if (creating_extension && !(stmt->create_ext_state == CREATE_EXTENSION_BEGIN &&
+				Gp_role == GP_ROLE_EXECUTE))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("nested CREATE EXTENSION is not supported")));
@@ -1568,20 +1558,19 @@ CreateExtension(CreateExtensionStmt *stmt)
 									GetAssignedOidsForDispatch(),
 									NULL);
 	}
+	else
+	{
+		CurrentExtensionObject = extensionOid;
+	}
 
-	execute_extension_script((Node*)stmt, extensionOid, control,
-							 oldVersionName, versionName,
-							 requiredSchemas,
-							 schemaName, schemaOid);
+	set_serach_path_for_extension(requiredSchemas, schemaName);
 
-	/*
-	 * On the QD and the QE's updateVersions list is calculated
-	 * and this lists are the same. Thus ApplyExtensionUpdates
-	 * call for must be forbidden at QE. (It would be dispatchered
-	 * from QD a bit later)
-	 */
 	if (Gp_role != GP_ROLE_EXECUTE)
 	{
+		execute_extension_script((Node*)stmt, extensionOid, control,
+							 oldVersionName, versionName,
+							 schemaName, schemaOid);
+
 		/*
 		 * If additional update scripts have to be executed, apply the updates as
 		 * though a series of ALTER EXTENSION UPDATE commands were given
@@ -2728,9 +2717,8 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 			case UPDATE_EXTENSION_BEGIN:
 				break;
 			case UPDATE_EXTENSION_END:		/* Mark creating_extension flag = false */
-				Assert(segment_nestlevel > 0);
-				AtEOXact_GUC(true, segment_nestlevel);
-				ResetExtensionCreatingGlobalVarsOnQE();
+				creating_extension = false;
+				CurrentExtensionObject = InvalidOid;
 				return get_extension_oid(stmt->extname, true);
 
 			default:
@@ -3006,27 +2994,40 @@ ApplyExtensionUpdates(Oid extensionOid,
 
 		InvokeObjectPostAlterHook(ExtensionRelationId, extensionOid, 0);
 
-		Node *stmt = NULL;
-		if (Gp_role == GP_ROLE_DISPATCH)
-		{
-			AlterExtensionStmt *update_stmt = makeNode(AlterExtensionStmt);
-			update_stmt->extname = pcontrol->name;
-			update_stmt->options = lappend(NIL, makeDefElem("new_version", (Node*)makeString(versionName)));
-			update_stmt->update_ext_state = UPDATE_EXTENSION_BEGIN;
-			stmt = (Node*)update_stmt;
-			CdbDispatchUtilityStatement(stmt,
-										DF_WITH_SNAPSHOT | DF_CANCEL_ON_ERROR | DF_NEED_TWO_PHASE,
-										NIL  /* We don't create any object in UPDATE EXTENSION, so NIL here. */,
-										NULL);
-		}
+		set_serach_path_for_extension(requiredSchemas, schemaName);
 
-		/*
-		 * Finally, execute the update script file
-		 */
-		execute_extension_script(stmt, extensionOid, control,
-								 oldVersionName, versionName,
-								 requiredSchemas,
-								 schemaName, schemaOid);
+		if (Gp_role != GP_ROLE_EXECUTE)
+		{
+			Node *stmt = NULL;
+
+			if (Gp_role == GP_ROLE_DISPATCH)
+			{
+				AlterExtensionStmt *update_stmt = makeNode(AlterExtensionStmt);
+				update_stmt->extname = pcontrol->name;
+				update_stmt->options = lappend(NIL, makeDefElem("new_version", (Node*)makeString(versionName)));
+				update_stmt->update_ext_state = UPDATE_EXTENSION_BEGIN;
+				stmt = (Node*)update_stmt;
+				CdbDispatchUtilityStatement(stmt,
+											DF_WITH_SNAPSHOT | DF_CANCEL_ON_ERROR | DF_NEED_TWO_PHASE,
+											NIL  /* We don't create any object in UPDATE EXTENSION, so NIL here. */,
+											NULL);
+			}
+
+			/*
+			 * Finally, execute the update script file
+			 */
+			execute_extension_script(stmt, extensionOid, control,
+									 oldVersionName, versionName,
+									 schemaName, schemaOid);
+		}
+		else
+		{
+			/* GP_ROLE_EXECUTE */
+			/* Set these global states for the execute_extension_script() that is called next in QD. */
+			creating_extension = true;
+			CurrentExtensionObject = extensionOid;
+			/* break */
+		}
 
 		/*
 		 * Update prior-version name and loop around.  Since
@@ -3228,5 +3229,4 @@ ResetExtensionCreatingGlobalVarsOnQE(void)
 {
 	creating_extension = false;
 	CurrentExtensionObject = InvalidOid;
-	segment_nestlevel = 0;
 }
