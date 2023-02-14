@@ -2210,7 +2210,8 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 	 * the dispatch results in order to tell we no longer
 	 * need any more tuples.
 	 */
-	if (Gp_role == GP_ROLE_DISPATCH && !estate->es_got_eos)
+	if (Gp_role == GP_ROLE_DISPATCH && !estate->es_got_eos &&
+		!(estate->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY))
 	{
 		ExecSquelchNode(queryDesc->planstate);
 	}

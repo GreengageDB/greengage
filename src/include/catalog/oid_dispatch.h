@@ -32,6 +32,7 @@ extern Oid GetPreassignedOidForDatabase(const char *datname);
 
 /* Functions used in master and QE nodes */
 extern void RestoreOidAssignments(List *oid_assignments);
+extern List *SaveOidAssignments(void);
 
 /* Functions used in binary upgrade */
 extern bool IsOidAcceptable(Oid oid);

@@ -125,7 +125,7 @@ static void vac_truncate_clog(TransactionId frozenXID,
 							  MultiXactId lastSaneMinMulti);
 static bool vacuum_rel(Relation onerel, Oid relid, VacuumStmt *vacstmt, LOCKMODE lmode,
 		   bool for_wraparound);
-static void scan_index(Relation indrel, double num_tuples, bool check_stats, int elevel);
+static void scan_index(Relation indrel, Relation aorel, bool check_stats, int elevel);
 static bool appendonly_tid_reaped(ItemPointer itemptr, void *state);
 static void dispatchVacuum(VacuumStmt *vacstmt, VacuumStatsContext *ctx);
 static void vacuumStatement_Relation(VacuumStmt *vacstmt, Oid relid,
@@ -144,7 +144,7 @@ static void
 vacuum_combine_stats(VacuumStatsContext *stats_context,
 					CdbPgResults* cdb_pgresults);
 
-static void vacuum_appendonly_index(Relation indexRelation, double rel_tuple_count,
+static void vacuum_appendonly_index(Relation indexRelation, Relation aoRelation,
 									Bitmapset *dead_segs, int elevel);
 
 static void
@@ -2646,7 +2646,7 @@ vacuum_appendonly_indexes(Relation aoRelation, VacuumStmt *vacstmt, Bitmapset *d
 			for (i = 0; i < nindexes; i++)
 			{
 				scan_index(Irel[i],
-						   aoRelation->rd_rel->reltuples,
+						   aoRelation,
 						   true,
 						   elevel);
 			}
@@ -2656,7 +2656,7 @@ vacuum_appendonly_indexes(Relation aoRelation, VacuumStmt *vacstmt, Bitmapset *d
 			for (i = 0; i < nindexes; i++)
 			{
 				vacuum_appendonly_index(Irel[i],
-										aoRelation->rd_rel->reltuples,
+										aoRelation,
 										dead_segs,
 										elevel);
 			}
@@ -2693,15 +2693,9 @@ vac_is_partial_index(Relation indrel)
  *	scan_index() -- scan one index relation to update pg_class statistics.
  *
  * We use this when we have no deletions to do.
- * 
- * We used to pass an argument num_tuples with value of table->reltuples to
- * ivinfo.num_heap_tuples, now with the new VACUUM strategy,  we cannot get
- * exact table->reltuples in the calling context. We able to use existing
- * value from pg_class for table. Therefore, ivinfo.num_heap_tuples is not an
- * accurate value, so we need to set estimated_count to true.
  */
 static void
-scan_index(Relation indrel, double num_tuples, bool check_stats, int elevel)
+scan_index(Relation indrel, Relation aorel, bool check_stats, int elevel)
 {
 	IndexBulkDeleteResult *stats;
 	IndexVacuumInfo ivinfo;
@@ -2711,9 +2705,13 @@ scan_index(Relation indrel, double num_tuples, bool check_stats, int elevel)
 
 	ivinfo.index = indrel;
 	ivinfo.analyze_only = false;
-	ivinfo.estimated_count = true;
 	ivinfo.message_level = elevel;
-	ivinfo.num_heap_tuples = num_tuples;
+	/* 
+	 * We can only provide the AO rel's reltuples as an estimate
+	 * (similar to heapam. See: lazy_vacuum_index()).
+	 */
+	ivinfo.num_heap_tuples = aorel->rd_rel->reltuples;
+	ivinfo.estimated_count = true;
 	ivinfo.strategy = vac_strategy;
 
 	stats = index_vacuum_cleanup(&ivinfo, NULL);
@@ -2773,17 +2771,10 @@ scan_index(Relation indrel, double num_tuples, bool check_stats, int elevel)
  *
  * This is called after an append-only segment file compaction to move
  * all tuples from the compacted segment files.
- * The segmentFileList is an
- *
- * We used to pass an argument rel_tuple_count with value of table->reltuples to
- * ivinfo.num_heap_tuples, now with the new VACUUM strategy,  we cannot get
- * exact table->reltuples in the calling context. We able to use existing
- * value from pg_class for table. Therefore, ivinfo.num_heap_tuples is not an
- * accurate value, so we need to set estimated_count to true.
  */
 static void
 vacuum_appendonly_index(Relation indexRelation,
-						double rel_tuple_count,
+						Relation aoRelation,
 						Bitmapset *dead_segs,
 						int elevel)
 {
@@ -2797,9 +2788,13 @@ vacuum_appendonly_index(Relation indexRelation,
 
 	ivinfo.index = indexRelation;
 	ivinfo.analyze_only = false;
-	ivinfo.estimated_count = true;
 	ivinfo.message_level = elevel;
-	ivinfo.num_heap_tuples = rel_tuple_count;
+	/* 
+	 * We can only provide the AO rel's reltuples as an estimate
+	 * (similar to heapam. See: lazy_vacuum_index()).
+	 */
+	ivinfo.num_heap_tuples = aoRelation->rd_rel->reltuples;
+	ivinfo.estimated_count = true;
 	ivinfo.strategy = vac_strategy;
 
 	/* Do bulk deletion */

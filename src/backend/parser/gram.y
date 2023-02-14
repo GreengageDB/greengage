@@ -3193,7 +3193,16 @@ reloption_elem:
 				}
 			| ColLabel
 				{
-					$$ = makeDefElem($1, NULL);
+					/*
+					 * Similarly to the above, translate 'appendoptimized' to
+					 * 'appendonly'. Also, adding the implicit 'true' in case 
+					 * we don't handle that properly in parse analysis.
+					 * See: https://github.com/greenplum-db/gpdb/issues/14510.
+					 */
+					if (strcmp($1, "appendonly") == 0 || strcmp($1, "appendoptimized") == 0)
+						$$ = makeDefElem("appendonly", (Node *) makeString(pstrdup("true")));
+					else
+						$$ = makeDefElem($1, NULL);
 				}
 			| ColLabel '.' ColLabel '=' def_arg
 				{
@@ -12425,6 +12434,7 @@ group_elem:
 					GroupingClause *n = makeNode(GroupingClause);
 					n->groupType = GROUPINGTYPE_ROLLUP;
 					n->groupsets = $3;
+					n->location = @1;
 					$$ = list_make1 ((Node*)n);
 				}
             | CUBE '(' expr_list ')'
@@ -12432,6 +12442,7 @@ group_elem:
 					GroupingClause *n = makeNode(GroupingClause);
 					n->groupType = GROUPINGTYPE_CUBE;
 					n->groupsets = $3;
+					n->location = @1;
 					$$ = list_make1 ((Node*)n);
 				}
             | GROUPING SETS '(' group_elem_list ')'
@@ -12439,6 +12450,7 @@ group_elem:
 					GroupingClause *n = makeNode(GroupingClause);
 					n->groupType = GROUPINGTYPE_GROUPING_SETS;
 					n->groupsets = $4;
+					n->location = @1;
 					$$ = list_make1 ((Node*)n);
 				}
             | '(' ')'

@@ -7072,7 +7072,7 @@ StartupXLOG(void)
 		CheckRequiredParameterValues();
 
 		UtilityModeFindOrCreateDtmRedoFile();
-		
+
 		/*
 		 * We're in recovery, so unlogged relations may be trashed and must be
 		 * reset.  This should be done BEFORE allowing Hot Standby
@@ -7395,7 +7395,7 @@ StartupXLOG(void)
 				/* Now apply the WAL record itself */
 				RmgrTable[record->xl_rmid].rm_redo(ReadRecPtr, EndRecPtr, record);
 
-				/* 
+				/*
 				 * Verify once if there's a conrecord being overwritten.
 				 * We do it here instead of xlog_redo like 7X because we need
 				 * xlogreader in this function.

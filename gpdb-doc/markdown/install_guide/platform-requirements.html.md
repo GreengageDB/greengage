@@ -103,7 +103,7 @@ On Ubuntu systems, Greenplum Database 6 requires the following software packages
 -   less
 -   iproute2
 
-Greenplum Database 6 uses Python 2.7.12, which is included with the product installation \(and not installed as a package dependency\).
+Greenplum Database 6 uses Python 2.7.18, which is included with the product installation \(and not installed as a package dependency\).
 
 **Important:** SSL is supported only on the Greenplum Database master host system. It cannot be used on the segment host systems.
 
@@ -221,7 +221,7 @@ This table lists the versions of the Greenplum Extensions that are compatible wi
 </tr>
 <tr class="row">
 <td class="entry nocellnorowborder" style="vertical-align:top;" headers="d78288e683 "><a class="xref" href="../install_guide/install_python_dsmod.html">Python Data Science Module Package</a></td>
-<td class="entry nocellnorowborder" style="vertical-align:top;" headers="d78288e686 ">2.0.2</td>
+<td class="entry nocellnorowborder" style="vertical-align:top;" headers="d78288e686 ">2.0.6</td>
 <td class="entry cell-norowborder" style="vertical-align:top;" headers="d78288e689 "> </td>
 </tr>
 <tr class="row">
@@ -248,7 +248,7 @@ This table lists the versions of the Greenplum Extensions that are compatible wi
 <tr class="row">
 <td class="entry nocellnorowborder" style="vertical-align:top;" headers="d78288e683 ">PL/Container Images for Python </td>
 <td class="entry nocellnorowborder" style="vertical-align:top;" headers="d78288e686 ">2.1.2</td>
-<td class="entry cell-norowborder" style="vertical-align:top;" headers="d78288e689 ">Python 2.7.12<p class="p">Python 3.7</p>
+<td class="entry cell-norowborder" style="vertical-align:top;" headers="d78288e689 ">Python 2.7.18<p class="p">Python 3.7</p>
 </td>
 </tr>
 <tr class="row">
@@ -301,6 +301,8 @@ These Greenplum Database extensions are installed with Greenplum Database
 -   Progress DataDirect JDBC Drivers v5.1.4+275, v6.0.0+181 - The Progress DataDirect JDBC drivers are compliant with the Type 4 architecture, but provide advanced features that define them as Type 5 drivers.
 -   Progress DataDirect ODBC Drivers v7.1.6+7.16.389 - The Progress DataDirect ODBC drivers enable third party applications to connect via a common interface to the Tanzu Greenplum system.
 -   R2B X-LOG v5.x and v6.x - Real-time data replication solution that achieves high-speed database replication through the use of Redo Log Capturing method.
+
+**Note:** Greenplum 5.x clients (gpload, gpfdist) are supported with Greenplum 6.x Server and Informatica PowerCenter and PowerExchange 10.4.
 
 **Note:** Tanzu Greenplum 6 does not support the ODBC driver for Cognos Analytics V11.
 

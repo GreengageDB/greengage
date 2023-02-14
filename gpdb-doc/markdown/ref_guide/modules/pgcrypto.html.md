@@ -20,7 +20,7 @@ When this parameter is enabled, these changes occur:
 
 -   FIPS mode is initialized in the OpenSSL library
 -   The functions `digest()` and `hmac()` allow only the SHA encryption algorithm \(MD5 is not allowed\)
--   The functions for the crypt and gen\_salt algorithms are disabled
+-   The functions for the crypt and gen\_salt algorithms are deactivated
 -   PGP encryption and decryption functions support only AES and 3DES encryption algorithms \(other algorithms such as blowfish are not allowed\)
 -   RAW encryption and decryption functions support only AES and 3DES \(other algorithms such as blowfish are not allowed\)
 
@@ -68,9 +68,9 @@ When this parameter is enabled, these changes occur:
     ```
 
 
-**To disable `pgcrypto.fips`**
+**To deactivate `pgcrypto.fips`**
 
-1.  If the database does not use `pgcrypto` functions, disable the `pgcrypto` extension. This example `psql` command drops the `pgcrypto` extension in the database `testdb`.
+1.  If the database does not use `pgcrypto` functions, deactivate the `pgcrypto` extension. This example `psql` command drops the `pgcrypto` extension in the database `testdb`.
 
     ```
     psql -d testdb -c 'DROP EXTENSION pgcrypto'

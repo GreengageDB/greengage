@@ -1,10 +1,6 @@
 [submodule "gpAux/extensions/pgbouncer/source"]
 	path = gpAux/extensions/pgbouncer/source
 	url = https://github.com/greenplum-db/pgbouncer.git
-[submodule "gpMgmt/bin/pythonSrc/ext"]
-	path = gpMgmt/bin/pythonSrc/ext
-	url = https://github.com/greenplum-db/pythonsrc-ext.git
-	branch = master
 [submodule "gpcontrib/gpcloud/test/googletest"]
 	path = gpcontrib/gpcloud/test/googletest
 	url = https://github.com/google/googletest.git

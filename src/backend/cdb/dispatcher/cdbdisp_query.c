@@ -53,6 +53,7 @@
 
 extern bool Test_print_direct_dispatch_info;
 
+extern bool gp_print_create_gang_time;
 /*
  * We need an array describing the relationship between a slice and
  * the number of "child" slices which depend on it.
@@ -299,6 +300,8 @@ CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
 	queryText = buildGpQueryString(pQueryParms, &queryTextLength);
 
 	primaryGang = AllocateGang(ds, GANGTYPE_PRIMARY_WRITER, cdbcomponent_getCdbComponentsList());
+	if (gp_print_create_gang_time)
+		printCreateGangTime(-1, primaryGang);
 
 	/* put all idle segment to a gang so QD can send SET command to them */
 	AllocateGang(ds, GANGTYPE_PRIMARY_READER, formIdleSegmentIdList());
@@ -454,6 +457,8 @@ cdbdisp_dispatchCommandInternal(DispatchCommandQueryParms *pQueryParms,
 	 */
 	primaryGang = AllocateGang(ds, GANGTYPE_PRIMARY_WRITER, segments);
 	Assert(primaryGang);
+	if (gp_print_create_gang_time)
+		printCreateGangTime(-1, primaryGang);
 
 	cdbdisp_makeDispatchResults(ds, 1, flags & DF_CANCEL_ON_ERROR);
 	cdbdisp_makeDispatchParams (ds, 1, queryText, queryTextLength);
@@ -1172,6 +1177,8 @@ cdbdisp_dispatchX(QueryDesc* queryDesc,
 		}
 
 		primaryGang = slice->primaryGang;
+		if (gp_print_create_gang_time)
+			printCreateGangTime(-1, primaryGang);
 		Assert(primaryGang != NULL);
 		AssertImply(queryDesc->extended_query,
 					primaryGang->type == GANGTYPE_PRIMARY_READER ||
@@ -1361,7 +1368,11 @@ serializeParamListInfo(ParamListInfo paramLI, int *len_p)
 	 * If there were any record types, include the transient record type cache.
 	 */
 	if (found_records)
-		sparams = lcons(build_tuple_node_list(0), sparams);
+	{
+		List *transientTypeList = build_tuple_node_list(0);
+		if (transientTypeList != NULL)
+			sparams = lcons(transientTypeList, sparams);
+	}
 
 	return nodeToBinaryStringFast(sparams, len_p);
 }
@@ -1481,6 +1492,8 @@ CdbDispatchCopyStart(struct CdbCopy *cdbCopy, Node *stmt, int flags)
 	 */
 	primaryGang = AllocateGang(ds, GANGTYPE_PRIMARY_WRITER, cdbCopy->seglist);
 	Assert(primaryGang);
+	if (gp_print_create_gang_time)
+		printCreateGangTime(-1, primaryGang);
 
 	cdbdisp_makeDispatchResults(ds, 1, flags & DF_CANCEL_ON_ERROR);
 	cdbdisp_makeDispatchParams (ds, 1, queryText, queryTextLength);

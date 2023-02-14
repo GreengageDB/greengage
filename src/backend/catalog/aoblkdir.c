@@ -43,7 +43,18 @@ AlterTableCreateAoBlkdirTable(Oid relOid, bool is_part_child, bool is_part_paren
 	if (is_part_child)
 		rel = heap_open(relOid, NoLock);
 	else
-		rel = heap_open(relOid, AccessExclusiveLock);
+	{
+		/*
+		 * Block directory creation must block any transactions that may create
+		 * or update indexes such as insert, vacuum and create-index. Concurrent
+		 * sequential scans (select) transactions need not be blocked. Index scans
+		 * cannot happen because the fact that we are creating block directory
+		 * implies no index is yet defined on this appendoptimized table.
+		 * Using ShareRowExclusiveLock for this purpose as we allow read-only transactions
+		 * being running concurrently.
+		 */
+		rel = heap_open(relOid, ShareRowExclusiveLock);
+	}
 
 	if (!RelationIsAppendOptimized(rel))
 	{

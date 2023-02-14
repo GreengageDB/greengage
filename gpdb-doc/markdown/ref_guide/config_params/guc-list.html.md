@@ -326,7 +326,7 @@ Set this parameter to a number of [block\_size](#backslash_quote) blocks \(defau
 
 ## <a id="enable_implicit_timeformat_YYYYMMDDHH24MISS"></a>enable\_implicit\_timeformat\_YYYYMMDDHH24MISS 
 
-Enables or disables the deprecated implicit conversion of a string with the *YYYYMMDDHH24MISS* timestamp format to a valid date/time type.
+Activates or deactivates the deprecated implicit conversion of a string with the *YYYYMMDDHH24MISS* timestamp format to a valid date/time type.
 
 The default value is `off`. When this parameter is set to `on`, Greenplum Database converts a string with the timestamp format *YYYYMMDDHH24MISS* into a valid date/time type. You may require this conversion when loading data from Greenplum Database 5.
 
@@ -704,7 +704,7 @@ Enables plans that can dynamically eliminate the scanning of partitions.
 
 Activates or deactivates two-phase aggregation for the Postgres Planner.
 
-The default value is `off`; the Planner chooses the best aggregate path for a query based on the cost. When set to `on`, the Planner adds a disable cost to each of the first stage aggregate paths, which in turn forces the Planner to generate and choose a multi-stage aggregate path.
+The default value is `off`; the Planner chooses the best aggregate path for a query based on the cost. When set to `on`, the Planner adds a deactivation cost to each of the first stage aggregate paths, which in turn forces the Planner to generate and choose a multi-stage aggregate path.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -768,7 +768,7 @@ If the Global Deadlock Detector is enabled, concurrent updates are permitted and
 
 ## <a id="gp_enable_gpperfmon"></a>gp\_enable\_gpperfmon 
 
-Enables or disables the data collection agents that populate the `gpperfmon` database.
+Activates or deactivates the data collection agents that populate the `gpperfmon` database.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -1000,7 +1000,7 @@ Sets the frequency that the Greenplum Database server processes send query execu
 
 ## <a id="gpfdist_retry_timeout"></a>gpfdist\_retry\_timeout 
 
-Controls the time \(in seconds\) that Greenplum Database waits before returning an error when Greenplum Database is attempting to connect or write to a [gpfdist](../../utility_guide/ref/gpfdist.html) server and `gpfdist` does not respond. The default value is 300 \(5 minutes\). A value of 0 disables the timeout.
+Controls the time \(in seconds\) that Greenplum Database waits before returning an error when Greenplum Database is attempting to connect or write to a [gpfdist](../../utility_guide/ref/gpfdist.html) server and `gpfdist` does not respond. The default value is 300 \(5 minutes\). A value of 0 deactivates the timeout.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -1240,6 +1240,17 @@ Sets the Postgres Planner cost estimate for a Motion operator to transfer a row 
 |-----------|-------|-------------------|
 |floating point|0|master, session, reload|
 
+## <a id="gp_print_create_gang_time"></a>gp\_print\_create\_gang\_time 
+
+When a user starts a session with Greenplum Database and issues a query, the system creates groups or 'gangs' of worker processes on each segment to do the work. `gp_print_create_gang_time` controls the display of additional information about gang creation, including gang reuse status and the shortest and longest connection establishment time to the segment.
+
+The default value is `false`, Greenplum Database does not display the additional gang creation information.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|Boolean|false|master, session, reload|
+
+
 ## <a id="gp_recursive_cte"></a>gp\_recursive\_cte 
 
 Controls the availability of the `RECURSIVE` keyword in the `WITH` clause of a `SELECT [INTO]` command, or a `DELETE`, `INSERT` or `UPDATE` command. The keyword allows a subquery in the `WITH` clause of a command to reference itself. The default value is `true`, the `RECURSIVE` keyword is allowed in the `WITH` clause of a command.
@@ -1344,11 +1355,11 @@ Identifies the maximum percentage of system memory resources to allocate to reso
 
 **Note:** When resource group-based resource management is active, the memory allotted to a segment host is equally shared by active primary segments. Greenplum Database assigns memory to primary segments when the segment takes the primary role. The initial memory allotment to a primary segment does not change, even in a failover situation. This may result in a segment host utilizing more memory than the `gp_resource_group_memory_limit` setting permits.
 
-For example, suppose your Greenplum Database cluster is utilizing the default `gp_resource_group_memory_limit` of `0.7` and a segment host named `seghost1` has 4 primary segments and 4 mirror segments. Greenplum Database assigns each primary segment on `seghost1` `(0.7 / 4 = 0.175%)` of overall system memory. If failover occurs and two mirrors on `seghost1` fail over to become primary segments, each of the original 4 primaries retain their memory allotment of `0.175`, and the two new primary segments are each allotted `(0.7 / 6 = 0.116%)` of system memory. `seghost1`'s overall memory allocation in this scenario is
+For example, suppose your Greenplum Database cluster is utilizing the default `gp_resource_group_memory_limit` of `0.7` and a segment host named `seghost1` has 4 primary segments and 4 mirror segments. Greenplum Database assigns each primary segment on `seghost1` `(0.7 / 4 = 0.175)` of overall system memory. If failover occurs and two mirrors on `seghost1` fail over to become primary segments, each of the original 4 primaries retain their memory allotment of `0.175`, and the two new primary segments are each allotted `(0.7 / 6 = 0.116)` of system memory. `seghost1`'s overall memory allocation in this scenario is
 
 ```
 
-0.7 + (0.116 * 2) = 0.932%
+0.7 + (0.116 * 2) = 0.932
 ```
 
 which is above the percentage configured in the `gp_resource_group_memory_limit` setting.
@@ -1989,7 +2000,7 @@ Increasing the limit allocates more shared memory on the master host at server s
 
 ## <a id="max_connections"></a>max\_connections 
 
-The maximum number of concurrent connections to the database server. In a Greenplum Database system, user client connections go through the Greenplum master instance only. Segment instances should allow 5-10 times the amount as the master. When you increase this parameter, [max\_prepared\_transactions](#max_prepared_transactions) must be increased as well. For more information about limiting concurrent connections, see "Configuring Client Authentication" in the *Greenplum Database Administrator Guide*.
+The maximum number of concurrent connections to the database server. In a Greenplum Database system, user client connections go through the Greenplum master instance only. Segment instances should allow 3-10 times the amount as the master. When you increase this parameter, [max\_prepared\_transactions](#max_prepared_transactions) must be increased as well. For more information about limiting concurrent connections, see "Configuring Client Authentication" in the *Greenplum Database Administrator Guide*.
 
 Increasing this parameter may cause Greenplum Database to request more shared memory. See [shared\_buffers](#shared_buffers) for information about Greenplum server instance shared memory buffers.
 
@@ -2269,7 +2280,7 @@ For information about GPORCA, see [About GPORCA](../../admin_guide/query/topics/
 
 ## <a id="optimizer_enable_orderedagg"></a>optimizer\_enable\_orderedagg 
 
-When GPORCA is enabled \(the default\), this parameter determines whether or not GPORCA generates a query plan for ordered aggregates. This parameter is disabled by default; GPORCA does not generate a plan for a query that includes an ordered aggregate, and the query falls back to the Postgres Planner.
+When GPORCA is enabled \(the default\), this parameter determines whether or not GPORCA generates a query plan for ordered aggregates. This parameter is deactivated by default; GPORCA does not generate a plan for a query that includes an ordered aggregate, and the query falls back to the Postgres Planner.
 
 You can set this parameter for a database system, an individual database, or a session or query.
 ## <a id="optimizer_enable_replicated_table"></a>optimizer\_enable\_replicated\_table 
@@ -3102,7 +3113,11 @@ If Greenplum Database detects a corruption in the free TID list, the free TID li
 
 ## <a id="verify_gpfdists_cert"></a>verify\_gpfdists\_cert 
 
-When a Greenplum Database external table is defined with the `gpfdists` protocol to use SSL security, this parameter controls whether SSL certificate authentication is enabled. The default is `true`, SSL authentication is enabled when Greenplum Database communicates with the `gpfdist` utility to either read data from or write data to an external data source.
+When a Greenplum Database external table is defined with the `gpfdists` protocol to use SSL security, this parameter controls whether SSL certificate authentication is enabled.
+
+Regardless of the setting of this server configuration parameter, Greenplum Database always encrypts data that you read from or write to an external table that specifies the `gpfdists` protocol.
+
+The default is `true`, SSL authentication is enabled when Greenplum Database communicates with the `gpfdist` utility to either read data from or write data to an external data source.
 
 The value `false` deactivates SSL certificate authentication. These SSL exceptions are ignored:
 

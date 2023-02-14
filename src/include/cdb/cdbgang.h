@@ -129,5 +129,6 @@ typedef struct CdbProcess
 } CdbProcess;
 
 typedef Gang *(*CreateGangFunc)(List *segments, SegmentType segmentType);
+extern void printCreateGangTime(int sliceId, Gang *gang);
 
 #endif   /* _CDBGANG_H_ */

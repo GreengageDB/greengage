@@ -4766,13 +4766,11 @@ CTranslatorExprToDXL::PdxlnPartitionSelectorDML(
 		false /*fRemap*/, false /*fRoot*/);
 
 	// construct project list
-	IMDId *mdid = popSelector->MDId();
 	GPOS_ASSERT(1 <= child_dxlnode->Arity());
 	CDXLNode *pdxlnPrL = CTranslatorExprToDXLUtils::PdxlnPrLPartitionSelector(
-		m_mp, m_pmda, m_pcf, m_phmcrdxln,
+		m_mp, m_pcf, m_phmcrdxln,
 		true,  //fUseChildProjList
-		(*child_dxlnode)[0], popSelector->PcrOid(), popSelector->UlPartLevels(),
-		CUtils::FGeneratePartOid(mdid));
+		(*child_dxlnode)[0]);
 
 	// translate filters
 	CDXLNode *pdxlnEqFilters = NULL;
@@ -4996,11 +4994,8 @@ CTranslatorExprToDXL::PdxlnPartitionSelectorExpand(
 	IMDId *mdid = popSelector->MDId();
 	const IMDRelation *pmdrel = (IMDRelation *) m_pmda->RetrieveRel(mdid);
 	CDXLNode *pdxlnPrL = CTranslatorExprToDXLUtils::PdxlnPrLPartitionSelector(
-		m_mp, m_pmda, m_pcf, m_phmcrdxln,
-		false,	//fUseChildProjList
-		NULL,	//pdxlnPrLchild
-		NULL,	//pcrOid
-		ulLevels, CUtils::FGeneratePartOid(mdid));
+		m_mp, m_pcf, m_phmcrdxln, false /*fUseChildProjList*/,
+		NULL /*pdxlnPrLchild*/);
 
 	// translate filters
 	CDXLNode *pdxlnEqFilters = NULL;
@@ -5117,8 +5112,7 @@ CTranslatorExprToDXL::PdxlnPartitionSelectorFilter(
 	IMDId *mdid = popSelector->MDId();
 	const IMDRelation *pmdrel = (IMDRelation *) m_pmda->RetrieveRel(mdid);
 	CDXLNode *pdxlnPrL = CTranslatorExprToDXLUtils::PdxlnPrLPartitionSelector(
-		m_mp, m_pmda, m_pcf, m_phmcrdxln, !fNeedSequence, pdxlnPrLChild,
-		NULL /*pcrOid*/, ulLevels, CUtils::FGeneratePartOid(mdid));
+		m_mp, m_pcf, m_phmcrdxln, !fNeedSequence, pdxlnPrLChild);
 
 	// translate filters
 	CDXLNode *pdxlnEqFilters = NULL;
@@ -5743,7 +5737,6 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	GPOS_ASSERT(1 == pexpr->Arity());
 
 	ULONG action_colid = 0;
-	ULONG oid_colid = 0;
 	ULONG ctid_colid = 0;
 	ULONG segid_colid = 0;
 
@@ -5764,12 +5757,6 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	CColRef *pcrAction = popDML->PcrAction();
 	GPOS_ASSERT(NULL != pcrAction);
 	action_colid = pcrAction->Id();
-
-	CColRef *pcrOid = popDML->PcrTableOid();
-	if (pcrOid != NULL)
-	{
-		oid_colid = pcrOid->Id();
-	}
 
 	CColRef *pcrCtid = popDML->PcrCtid();
 	CColRef *pcrSegmentId = popDML->PcrSegmentId();
@@ -5800,9 +5787,8 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	CDXLDirectDispatchInfo *dxl_direct_dispatch_info =
 		GetDXLDirectDispatchInfo(pexpr);
 	CDXLPhysicalDML *pdxlopDML = GPOS_NEW(m_mp) CDXLPhysicalDML(
-		m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid, oid_colid,
-		ctid_colid, segid_colid, preserve_oids, tuple_oid,
-		dxl_direct_dispatch_info, popDML->IsInputSortReq());
+		m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid, ctid_colid,
+		segid_colid, preserve_oids, tuple_oid, dxl_direct_dispatch_info);
 
 	// project list
 	CColRefSet *pcrsOutput = pexpr->Prpp()->PcrsRequired();

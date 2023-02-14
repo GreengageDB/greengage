@@ -1290,10 +1290,8 @@ CTranslatorExprToDXLUtils::PdxlnProjListFromChildProjList(
 //---------------------------------------------------------------------------
 CDXLNode *
 CTranslatorExprToDXLUtils::PdxlnPrLPartitionSelector(
-	CMemoryPool *mp, CMDAccessor *md_accessor, CColumnFactory *col_factory,
-	ColRefToDXLNodeMap *phmcrdxln, BOOL fUseChildProjList,
-	CDXLNode *pdxlnPrLChild, CColRef *pcrOid, ULONG ulPartLevels,
-	BOOL fGeneratePartOid)
+	CMemoryPool *mp, CColumnFactory *col_factory, ColRefToDXLNodeMap *phmcrdxln,
+	BOOL fUseChildProjList, CDXLNode *pdxlnPrLChild)
 {
 	GPOS_ASSERT_IMP(fUseChildProjList, NULL != pdxlnPrLChild);
 
@@ -1307,25 +1305,6 @@ CTranslatorExprToDXLUtils::PdxlnPrLPartitionSelector(
 	{
 		pdxlnPrL =
 			GPOS_NEW(mp) CDXLNode(mp, GPOS_NEW(mp) CDXLScalarProjList(mp));
-	}
-
-	if (fGeneratePartOid)
-	{
-		// add to it the Oid column
-		if (NULL == pcrOid)
-		{
-			const IMDTypeOid *pmdtype = md_accessor->PtMDType<IMDTypeOid>();
-			pcrOid = col_factory->PcrCreate(pmdtype, default_type_modifier);
-		}
-
-		CMDName *mdname = GPOS_NEW(mp) CMDName(mp, pcrOid->Name().Pstr());
-		CDXLScalarProjElem *pdxlopPrEl =
-			GPOS_NEW(mp) CDXLScalarProjElem(mp, pcrOid->Id(), mdname);
-		CDXLNode *pdxlnPrEl = GPOS_NEW(mp) CDXLNode(mp, pdxlopPrEl);
-		CDXLNode *pdxlnPartOid = GPOS_NEW(mp)
-			CDXLNode(mp, GPOS_NEW(mp) CDXLScalarPartOid(mp, ulPartLevels - 1));
-		pdxlnPrEl->AddChild(pdxlnPartOid);
-		pdxlnPrL->AddChild(pdxlnPrEl);
 	}
 
 	return pdxlnPrL;
@@ -1938,6 +1917,7 @@ CTranslatorExprToDXLUtils::GetDXLDirectDispatchInfo(
 	GPOS_ASSERT(NULL != pdrgpexprHashed);
 	GPOS_ASSERT(NULL != pcnstr);
 
+
 	const ULONG ulHashExpr = pdrgpexprHashed->Size();
 	GPOS_ASSERT(0 < ulHashExpr);
 
@@ -2020,18 +2000,21 @@ CTranslatorExprToDXLUtils::PdxlddinfoSingleDistrKey(CMemoryPool *mp,
 	BOOL useRawValues = false;
 	CConstraint *pcnstrDistrCol = pcnstr->Pcnstr(mp, pcrDistrCol);
 	CConstraintInterval *pcnstrInterval;
-	if (pcnstrDistrCol == NULL &&
-		(pcnstrInterval = dynamic_cast<CConstraintInterval *>(pcnstr)))
+	// Avoid direct dispatch when pcnstrDistrCol specifies a constant column
+	if (!CPredicateUtils::FConstColumn(pcnstrDistrCol, pcrDistrCol) &&
+		(pcnstrInterval = dynamic_cast<CConstraintInterval *>(
+			 pcnstr->GetConstraintOnSegmentId())) != NULL)
 	{
-		if (pcnstrInterval->FConstraintOnSegmentId())
+		if (pcnstrDistrCol != NULL)
 		{
-			// If the constraint is on gp_segment_id then we trick ourselves into
-			// considering the constraint as being on a distribution column.
-			pcnstrDistrCol = pcnstr;
-			pcnstrDistrCol->AddRef();
-			pcrDistrCol = pcnstrInterval->Pcr();
-			useRawValues = true;
+			pcnstrDistrCol->Release();
 		}
+		// If the constraint is on gp_segment_id then we trick ourselves into
+		// considering the constraint as being on a distribution column.
+		pcnstrDistrCol = pcnstrInterval;
+		pcnstrDistrCol->AddRef();
+		pcrDistrCol = pcnstrInterval->Pcr();
+		useRawValues = true;
 	}
 
 	CDXLDatum2dArray *pdrgpdrgpdxldatum = NULL;
