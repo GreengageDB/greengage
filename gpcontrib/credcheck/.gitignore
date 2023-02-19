@@ -6,3 +6,4 @@
 .project
 *.bc
 results/*
+regression.*

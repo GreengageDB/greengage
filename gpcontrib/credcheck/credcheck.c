@@ -6,7 +6,7 @@
  * This program is open source, licensed under the PostgreSQL license.
  * For license terms, see the LICENSE file.
  *
- * Copyright (C) 2021: MigOps Inc
+ * Copyright (C) 2021-2023: MigOps Inc
  *
  *-------------------------------------------------------------------------
  */

@@ -299,7 +299,7 @@ postgres=# ALTER USER user1 RENAME to test_user;
 This extension is free software distributed under the PostgreSQL
 License.
 
-    Copyright (c) 2021 MigOps Inc.
+    Copyright (c) 2021-2023 MigOps Inc.
 ### [Credits](#credits)
 - Thanks to Gilles Darold for suggestions and improvements
 - Thanks to the [passwordcheck](https://www.postgresql.org/docs/current/passwordcheck.html) extension author
