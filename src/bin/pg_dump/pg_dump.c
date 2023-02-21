@@ -4804,7 +4804,8 @@ getTables(Archive *fout, int *numTables)
 	 * composite type (pg_depend entries for columns of the composite type
 	 * link to the pg_class entry not the pg_type entry).
 	 */
-	appendPQExpBufferStr(query,
+	if (fout->remoteVersion >= GPDB6_MAJOR_PGVERSION)
+		appendPQExpBufferStr(query,
 						  "WHERE c.relkind IN ("
 						  CppAsString2(RELKIND_RELATION) ", "
 						  CppAsString2(RELKIND_SEQUENCE) ", "
@@ -4812,6 +4813,13 @@ getTables(Archive *fout, int *numTables)
 						  CppAsString2(RELKIND_COMPOSITE_TYPE) ", "
 						  CppAsString2(RELKIND_MATVIEW) ", "
 						  CppAsString2(RELKIND_FOREIGN_TABLE) ")\n");
+	else
+		appendPQExpBufferStr(query,
+						  "WHERE c.relkind IN ("
+						  CppAsString2(RELKIND_RELATION) ", "
+						  CppAsString2(RELKIND_SEQUENCE) ", "
+						  CppAsString2(RELKIND_VIEW) ", "
+						  CppAsString2(RELKIND_COMPOSITE_TYPE) ")\n");
 
   if (fout->remoteVersion >= 80400)
 		appendPQExpBufferStr(query,
@@ -4912,6 +4920,7 @@ getTables(Archive *fout, int *numTables)
 		tblinfo[i].reltype = atooid(PQgetvalue(res, i, i_reltype));
 		tblinfo[i].relstorage = *(PQgetvalue(res, i, i_relstorage));
 		tblinfo[i].relpersistence = *(PQgetvalue(res, i, i_relpersistence));
+		tblinfo[i].ncheck = atoi(PQgetvalue(res, i, i_relchecks));
 		tblinfo[i].hasindex = (strcmp(PQgetvalue(res, i, i_relhasindex), "t") == 0);
 		tblinfo[i].hasrules = (strcmp(PQgetvalue(res, i, i_relhasrules), "t") == 0);
 		tblinfo[i].hastriggers = (strcmp(PQgetvalue(res, i, i_relhastriggers), "t") == 0);
@@ -6839,7 +6848,8 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		int			i_conislocal;
 		int			i_convalidated;
 
-		write_msg(NULL, "finding table check constraints\n");
+		if (g_verbose)
+			write_msg(NULL, "finding table check constraints\n");
 
 		resetPQExpBuffer(q);
 		appendPQExpBufferStr(q,

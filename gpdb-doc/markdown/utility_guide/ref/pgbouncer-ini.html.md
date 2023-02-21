@@ -360,7 +360,7 @@ server\_reset\_query
 
     The query should clean any changes made to a database session so that the next client gets a connection in a well-defined state. Default is `DISCARD ALL` which cleans everything, but that leaves the next client no pre-cached state. It can be made lighter, e.g. `DEALLOCATE ALL` to just drop prepared statements, if the application does not break when some state is kept around.
 
-    **Note:** Greenplum Database does not support `DISCARD ALL`.
+    > **Note** Greenplum Database does not support `DISCARD ALL`.
 
     When transaction pooling is used, the `server_reset_query` is not used, as clients must not use any session-based features as each transaction ends up in a different connection and thus gets a different session state.
 

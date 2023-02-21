@@ -34,7 +34,7 @@ A backup, standby master instance serves as a 'warm standby' in the event of the
 
 The activated standby master effectively becomes the Greenplum Database master, accepting client connections on the master port and performing normal master operations such as SQL command processing and resource management.
 
-**Important:** If the `gpinitstandby` utility previously failed to initialize the standby master, you must delete the files in the standby master data directory before running `gpinitstandby` again. The standby master data directory is not cleaned up after an initialization failure because it contains log files that can help in determining the reason for the failure.
+> **Important** If the `gpinitstandby` utility previously failed to initialize the standby master, you must delete the files in the standby master data directory before running `gpinitstandby` again. The standby master data directory is not cleaned up after an initialization failure because it contains log files that can help in determining the reason for the failure.
 
 If an initialization failure occurs, a summary report file is generated in the standby host directory `/tmp`. The report file lists the directories on the standby host that require clean up.
 
@@ -94,7 +94,7 @@ Start an existing standby master instance and synchronize the data with the curr
 gpinitstandby -n
 ```
 
-**Note:** Do not specify the -n and -s options in the same command.
+> **Note** Do not specify the -n and -s options in the same command.
 
 Add a standby master instance to your Greenplum Database system specifying a different port:
 

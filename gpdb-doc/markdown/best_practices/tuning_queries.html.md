@@ -121,7 +121,7 @@ A `ROLLUP` grouping creates aggregate subtotals that roll up from the most detai
 
 A `CUBE` grouping creates subtotals for all of the possible combinations of the given list of grouping columns \(or expressions\). In multidimensional analysis terms, `CUBE` generates all the subtotals that could be calculated for a data cube with the specified dimensions.
 
-**Note:**  Greenplum Database supports specifying a maximum of 12 `CUBE` grouping columns.
+> **Note**  Greenplum Database supports specifying a maximum of 12 `CUBE` grouping columns.
 
 You can selectively specify the set of groups that you want to create using a `GROUPING SETS` expression. This allows precise specification across multiple dimensions without computing a whole `ROLLUP` or `CUBE`.
 

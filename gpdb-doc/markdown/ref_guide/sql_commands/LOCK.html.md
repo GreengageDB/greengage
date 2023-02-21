@@ -46,7 +46,7 @@ lockmode
     -   EXCLUSIVE — Conflicts with the `ROW SHARE`, `ROW EXCLUSIVE`, `SHARE UPDATE EXCLUSIVE`, `SHARE`, `SHARE ROW EXCLUSIVE`, `EXCLUSIVE`, and `ACCESS EXCLUSIVE` lock modes. This mode allows only concurrent `ACCESS SHARE` locks, i.e., only reads from the table can proceed in parallel with a transaction holding this lock mode. This lock mode is automatically acquired for `UPDATE`, `SELECT FOR UPDATE`, and `DELETE` in Greenplum Database \(which is more restrictive locking than in regular PostgreSQL\). See [Note](#lock_note).
     -   ACCESS EXCLUSIVE — Conflicts with locks of all modes \(`ACCESS SHARE`, `ROW SHARE`, `ROW EXCLUSIVE`, `SHARE UPDATE EXCLUSIVE`, `SHARE`, `SHARE``ROW EXCLUSIVE`, `EXCLUSIVE`, and `ACCESS EXCLUSIVE`\). This mode guarantees that the holder is the only transaction accessing the table in any way. Acquired automatically by the `ALTER TABLE`, `DROP TABLE`, `TRUNCATE`, `REINDEX`, `CLUSTER`, and `VACUUM FULL` commands. This is the default lock mode for `LOCK TABLE` statements that do not specify a mode explicitly. This lock is also briefly acquired by `VACUUM` \(without `FULL`\) on append-optimized tables during processing.
 
-    **Note:** By default Greenplum Database acquires the more restrictive `EXCLUSIVE` lock \(rather than `ROW EXCLUSIVE` in PostgreSQL\) for `UPDATE`, `DELETE`, and `SELECT...FOR UPDATE` operations on heap tables. When the Global Deadlock Detector is enabled the lock mode for `UPDATE` and `DELETE` operations on heap tables is `ROW EXCLUSIVE`. See [Global Deadlock Detector](../../admin_guide/dml.html#topic_gdd). Greenplum always holds a table-level lock with `SELECT...FOR UPDATE` statements.
+    > **Note** By default Greenplum Database acquires the more restrictive `EXCLUSIVE` lock \(rather than `ROW EXCLUSIVE` in PostgreSQL\) for `UPDATE`, `DELETE`, and `SELECT...FOR UPDATE` operations on heap tables. When the Global Deadlock Detector is enabled the lock mode for `UPDATE` and `DELETE` operations on heap tables is `ROW EXCLUSIVE`. See [Global Deadlock Detector](../../admin_guide/dml.html#topic_gdd). Greenplum always holds a table-level lock with `SELECT...FOR UPDATE` statements.
 
 NOWAIT
 :   Specifies that `LOCK TABLE` should not wait for any conflicting locks to be released: if the specified lock\(s\) cannot be acquired immediately without waiting, the transaction is cancelled.
@@ -54,7 +54,7 @@ NOWAIT
 MASTER ONLY
 :   Specifies that when a `LOCK TABLE` command is issued, Greenplum Database will lock tables on the master only, rather than on the master and all of the segments. This is particularly useful for metadata-only operations. 
 
-    **Note:** This option is only supported in `ACCESS SHARE MODE`.
+    > **Note** This option is only supported in `ACCESS SHARE MODE`.
 
 ## <a id="section5"></a>Notes 
 

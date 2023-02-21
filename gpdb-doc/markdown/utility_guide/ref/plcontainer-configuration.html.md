@@ -92,7 +92,7 @@ command
 
 :   You should modify the value only if you build a custom container and want to implement some additional initialization logic before the container starts.
 
-    **Note:** This element cannot be set with the `plcontainer` utility. You can update the configuration file with the `plcontainer runtime-edit` command.
+    > **Note** This element cannot be set with the `plcontainer` utility. You can update the configuration file with the `plcontainer runtime-edit` command.
 
 shared\_directory
 :   Optional. This element specifies a shared Docker shared volume for a container with access information. Multiple `shared_directory` elements are allowed. Each `shared_directory` element specifies a single shared volume. XML attributes for the `shared_directory` element:

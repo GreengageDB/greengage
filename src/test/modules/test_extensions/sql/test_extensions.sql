@@ -72,6 +72,7 @@ ALTER EXTENSION test_ext_cine UPDATE TO '1.1';
 \dx+ test_ext_cine
 
 
+
 --
 -- Test cases from Issue: https://github.com/greenplum-db/gpdb/issues/6716
 --

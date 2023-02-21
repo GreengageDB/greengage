@@ -1540,7 +1540,7 @@ def impl(context, seg):
         if not hasattr(context, 'pseg_hostname'):
             raise Exception("primary seg host is not saved in the context")
         hostname = context.pseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1574,7 +1574,7 @@ def impl(context, seg):
         if not hasattr(context, 'pseg_hostname'):
             raise Exception("primary seg host is not saved in the context")
         hostname = context.pseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1595,7 +1595,7 @@ def impl(context, seg):
             raise Exception("primary seg host is not saved in the context")
         hostname = context.pseg_hostname
         data_dir = context.pseg_data_dir
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1632,7 +1632,7 @@ def impl(context, seg):
     elif seg == "mirror":
         data_dir = context.mseg_data_dir
         hostname = context.mseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1703,7 +1703,7 @@ def impl(context, seg):
     elif seg == "mirror":
         data_dir = context.mseg_data_dir
         hostname = context.mseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1724,7 +1724,7 @@ def impl(context, seg):
     elif seg == "mirror":
         data_dir = context.mseg_data_dir
         hostname = context.mseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         data_dir = context.standby_host_data_dir
         hostname = context.standby_host
 
@@ -3777,8 +3777,14 @@ def impl(context, command, input):
     context.error_message = stderr
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
-    primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
-    mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
+    x = platform.linux_distribution()
+    name = x[0].lower()
+    if 'ubuntu' in name:
+        primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
+        mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
+    else:
+        primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
+        mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
     if not primary_broadcast:
         raise Exception("primary hostname %s has no broadcast address" % primary_hostname)
     if not mirror_broadcast:

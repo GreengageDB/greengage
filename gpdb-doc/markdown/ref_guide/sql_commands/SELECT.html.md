@@ -312,7 +312,7 @@ CUBE
 
 Notice that n elements of a `CUBE` translate to 2n grouping sets. Consider using `CUBE` in any situation requiring cross-tabular reports. `CUBE` is typically most suitable in queries that use columns from multiple dimensions rather than columns representing different levels of a single dimension. For instance, a commonly requested cross-tabulation might need subtotals for all the combinations of month, state, and product.
 
-**Note:** Greenplum Database supports specifying a maximum of 12 `CUBE` grouping columns.
+> **Note** Greenplum Database supports specifying a maximum of 12 `CUBE` grouping columns.
 
 GROUPING SETS
 :   You can selectively specify the set of groups that you want to create using a `GROUPING SETS` expression within a `GROUP BY` clause. This allows precise specification across multiple dimensions without computing a whole `ROLLUP` or `CUBE`. For example:
@@ -362,7 +362,7 @@ PARTITION BY
 :   Similarly, the elements of the `ORDER BY` list are interpreted in much the same fashion as elements of an `ORDER BY` clause, except that the expressions are always taken as simple expressions and never the name or number of an output column.
 
 ORDER BY
-:   The elements of the `ORDER BY` clause define how to sort the rows in each partition of the result set. If omitted, rows are returned in whatever order is most efficient and may vary. **Note:** Columns of data types that lack a coherent ordering, such as `time`, are not good candidates for use in the `ORDER BY` clause of a window specification. Time, with or without time zone, lacks a coherent ordering because addition and subtraction do not have the expected effects. For example, the following is not generally true: `x::time < x::time + '2 hour'::interval`
+:   The elements of the `ORDER BY` clause define how to sort the rows in each partition of the result set. If omitted, rows are returned in whatever order is most efficient and may vary. > **Note** Columns of data types that lack a coherent ordering, such as `time`, are not good candidates for use in the `ORDER BY` clause of a window specification. Time, with or without time zone, lacks a coherent ordering because addition and subtraction do not have the expected effects. For example, the following is not generally true: `x::time < x::time + '2 hour'::interval`
 
 frame\_clause
 :   The optional `frame\_clause` defines the *window frame* for window functions that depend on the frame \(not all do\). The window frame is a set of related rows for each row of the query \(called the *current row*\). The `frame\_clause` can be one of
@@ -539,7 +539,7 @@ where lock\_strength can be one of
 -   `FOR SHARE` - Locks the table with a `ROW SHARE` lock.
 -   `FOR KEY SHARE` - Locks the table with a `ROW SHARE` lock.
 
-**Note:** By default Greenplum Database acquires the more restrictive `EXCLUSIVE` lock \(rather than `ROW EXCLUSIVE` in PostgreSQL\) for `UPDATE`, `DELETE`, and `SELECT...FOR UPDATE` operations on heap tables. When the Global Deadlock Detector is enabled the lock mode for `UPDATE` and `DELETE` operations on heap tables is `ROW EXCLUSIVE`. See [Global Deadlock Detector](../../admin_guide/dml.html). Greenplum always holds a table-level lock with `SELECT...FOR UPDATE` statements.
+> **Note** By default Greenplum Database acquires the more restrictive `EXCLUSIVE` lock \(rather than `ROW EXCLUSIVE` in PostgreSQL\) for `UPDATE`, `DELETE`, and `SELECT...FOR UPDATE` operations on heap tables. When the Global Deadlock Detector is enabled the lock mode for `UPDATE` and `DELETE` operations on heap tables is `ROW EXCLUSIVE`. See [Global Deadlock Detector](../../admin_guide/dml.html). Greenplum always holds a table-level lock with `SELECT...FOR UPDATE` statements.
 
 For more information on each row-level lock mode, refer to [Explicit Locking](https://www.postgresql.org/docs/9.4/explicit-locking.html) in the PostgreSQL documentation.
 

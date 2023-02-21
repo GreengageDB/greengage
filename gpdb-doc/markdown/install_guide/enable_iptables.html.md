@@ -4,7 +4,7 @@ title: Enabling iptables (Optional)
 
 On Linux systems, you can configure and enable the `iptables` firewall to work with Greenplum Database.
 
-**Note:** Greenplum Database performance might be impacted when `iptables` is enabled. You should test the performance of your application with `iptables` enabled to ensure that performance is acceptable.
+> **Note** Greenplum Database performance might be impacted when `iptables` is enabled. You should test the performance of your application with `iptables` enabled to ensure that performance is acceptable.
 
 For more information about `iptables` see the `iptables` and firewall documentation for your operating system. See also [Deactivating SELinux and Firewall Software](prep_os.html).
 

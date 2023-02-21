@@ -130,6 +130,41 @@ ExecutorEnd_hook_type ExecutorEnd_hook = NULL;
 /* Hook for plugin to get control in ExecCheckRTPerms() */
 ExecutorCheckPerms_hook_type ExecutorCheckPerms_hook = NULL;
 
+/*
+ * Greenplum specific code:
+ *   Greenplum introduces auto_stats for a long time, please refer to
+ *   https://groups.google.com/a/greenplum.org/g/gpdb-dev/c/bAyw2KBP6yE/m/hmoWikrPAgAJ
+ *   for details and decision of auto_stats.
+ *
+ *  auto_stats() now is invoked at the following 7 places:
+ *    1. ProcessQuery()
+ *    2. _SPI_pquery()
+ *    3. postquel_end()
+ *    4. ATExecExpandTableCTAS()
+ *    5. ATExecSetDistributedBy()
+ *    6. DoCopy()
+ *    7. ExecCreateTableAs()
+ *
+ *  Previously, Place 2, 3 is hard-coded as inside function,
+ *  Place 1, 4~7 is hard-coded as not-inside function.
+ *  Place 4~7 does not cover the case that COPY or CTAS
+ *  is called inside procedure language.
+ *
+ *  Since in future auto_stats will be removed, for now let's
+ *  just to do some simple fix instead of big refactor.
+ *
+ *  To correctly pass the inFunction parameter for auto_stats()
+ *  at Place 4~7 we introduce executor_run_nesting_level to mark
+ *  if the program is already under ExecutorRun(). Place 4~7 is
+ *  directly taken as Utility and will not call ExecutorRun() if
+ *  they are not inside procedure language. This skill is like
+ *  the extension `auto_explain`.
+ *
+ *  For Place 1~3, the context is clear we do not need to check
+ *  executor_run_nesting_level.
+ */
+static int executor_run_nesting_level = 0;
+
 /* decls for local routines only used within this module */
 static void InitPlan(QueryDesc *queryDesc, int eflags);
 static void CheckValidRowMarkRel(Relation rel, RowMarkType markType);
@@ -384,8 +419,10 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 		if (!should_skip_operator_memory_assign)
 		{
-			switch(*gp_resmanager_memory_policy)
+			PG_TRY();
 			{
+				switch (*gp_resmanager_memory_policy)
+				{
 				case RESMANAGER_MEMORY_POLICY_AUTO:
 					PolicyAutoAssignOperatorMemoryKB(queryDesc->plannedstmt,
 													 queryDesc->plannedstmt->query_mem);
@@ -397,7 +434,17 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 				default:
 					Assert(IsResManagerMemoryPolicyNone());
 					break;
+				}
 			}
+			PG_CATCH();
+			{
+				/* GPDB hook for collecting query info */
+				if (query_info_collect_hook)
+					(*query_info_collect_hook)(QueryCancelCleanup ? METRICS_QUERY_CANCELED : METRICS_QUERY_ERROR, queryDesc);
+
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
 		}
 	}
 
@@ -930,10 +977,27 @@ void
 ExecutorRun(QueryDesc *queryDesc,
 			ScanDirection direction, long count)
 {
-	if (ExecutorRun_hook)
-		(*ExecutorRun_hook) (queryDesc, direction, count);
-	else
-		standard_ExecutorRun(queryDesc, direction, count);
+	/*
+	 * Greenplum specific code:
+	 * auto_stats() needs to know if it is inside procedure call so
+	 * we maintain executor_run_nesting_level here. See detailed comments
+	 * at the definition of the static variable executor_run_nesting_level.
+	 */
+	executor_run_nesting_level++;
+	PG_TRY();
+	{
+		if (ExecutorRun_hook)
+			(*ExecutorRun_hook) (queryDesc, direction, count);
+		else
+			standard_ExecutorRun(queryDesc, direction, count);
+		executor_run_nesting_level--;
+	}
+	PG_CATCH();
+	{
+		executor_run_nesting_level--;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 void
@@ -5382,4 +5446,14 @@ check_epq_safe_on_qes(Plan *plan)
 				(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
 				 errmsg("EvalPlanQual can not handle subPlan with Motion node")));
 	}
+}
+
+/*
+ * Greenplum specific code:
+ * For details, see comments at the definition of static var executor_run_nesting_level
+ */
+bool
+already_under_executor_run(void)
+{
+	return executor_run_nesting_level > 0;
 }

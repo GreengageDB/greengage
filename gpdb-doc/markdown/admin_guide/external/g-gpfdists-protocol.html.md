@@ -18,7 +18,7 @@ To use it, you run the [gpfdist](../../utility_guide/ref/gpfdist.html) utility w
 -   Private keys containing a passphrase are not supported for the `gpfdist` file server \(server.key\) and for the Greenplum Database \(client.key\).
 -   Issuing certificates that are appropriate for the operating system in use is the user's responsibility. Generally, converting certificates as shown in [https://www.sslshopper.com/ssl-converter.html](https://www.sslshopper.com/ssl-converter.html) is supported.
 
-    **Note:** A server started with the `gpfdist --ssl` option can only communicate with the `gpfdists` protocol. A server that was started with `gpfdist` without the `--ssl` option can only communicate with the `gpfdist` protocol.
+    > **Note** A server started with the `gpfdist --ssl` option can only communicate with the `gpfdists` protocol. A server that was started with `gpfdist` without the `--ssl` option can only communicate with the `gpfdist` protocol.
 
 -   The client certificate file, client.crt
 -   The client private key file, client.key

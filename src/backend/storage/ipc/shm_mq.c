@@ -804,14 +804,31 @@ shm_mq_send_bytes(shm_mq_handle *mqh, Size nbytes, void *data, bool nowait,
 			 * through the loop.  It's worth it to avoid resetting the latch
 			 * at top of loop, because setting an already-set latch is much
 			 * cheaper than setting one that has been reset.
+			 *
+			 * set set_latch_on_sigusr1 = true to allow latch to be set.
 			 */
-			WaitLatch(&MyProc->procLatch, WL_LATCH_SET, 0);
 
-			/* Reset the latch so we don't spin. */
-			ResetLatch(&MyProc->procLatch);
+			bool		save_set_latch_on_sigusr1;
+			save_set_latch_on_sigusr1 = set_latch_on_sigusr1;
+			set_latch_on_sigusr1 = true;
 
-			/* An interrupt may have occurred while we were waiting. */
-			CHECK_FOR_INTERRUPTS();
+			PG_TRY();
+			{
+				WaitLatch(&MyProc->procLatch, WL_LATCH_SET, 0);
+
+				/* Reset the latch so we don't spin. */
+				ResetLatch(&MyProc->procLatch);
+
+				/* An interrupt may have occurred while we were waiting. */
+				CHECK_FOR_INTERRUPTS();
+			}
+			PG_CATCH();
+			{
+				set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
+			set_latch_on_sigusr1 = save_set_latch_on_sigusr1;
 		}
 		else
 		{
@@ -970,8 +987,11 @@ shm_mq_wait_internal(volatile shm_mq *mq, PGPROC *volatile * ptr,
 	bool		result = false;
 
 	save_set_latch_on_sigusr1 = set_latch_on_sigusr1;
-	if (handle != NULL)
-		set_latch_on_sigusr1 = true;
+	/*
+	 * When close cursor we receive SIGUSR1, whether the process is attached,
+	 * setLatch should be called in process handler and exit here.
+	 */
+	set_latch_on_sigusr1 = true;
 
 	PG_TRY();
 	{
@@ -1011,8 +1031,7 @@ shm_mq_wait_internal(volatile shm_mq *mq, PGPROC *volatile * ptr,
 			}
 
 			/* Wait to be signalled. */
-			/* Add WL_TIMEOUT to wakeEvents to check QueryFinishPending. */
-			WaitLatch(&MyProc->procLatch, WL_LATCH_SET|WL_TIMEOUT, 100);
+			WaitLatch(&MyProc->procLatch, WL_LATCH_SET, 0);
 
 			/* Reset the latch so we don't spin. */
 			ResetLatch(&MyProc->procLatch);

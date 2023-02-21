@@ -2007,6 +2007,10 @@ ServerLoop(void)
 				start_autovac_launcher = false; /* signal processed */
 		}
 
+		/* If we have lost the archiver, try to start a new one */
+		if (XLogArchivingActive() && PgArchPID == 0 && pmState == PM_RUN)
+			PgArchPID = pgarch_start();
+
 		/* If we have lost the stats collector, try to start a new one */
 		if (PgStatPID == 0 &&
 			(pmState == PM_RUN || pmState == PM_HOT_STANDBY))

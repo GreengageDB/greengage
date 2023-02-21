@@ -2,7 +2,7 @@
 title: Migrating PXF from Greenplum 5.x to 6.x
 ---
 
-**Note**: PXF also supports `gpupgrade`-based Greenplum upgrade in additional to the manual migration described in this topic.
+> **Note** PXF also supports `gpupgrade`-based Greenplum upgrade in additional to the manual migration described in this topic.
 
 If you are using PXF in your Greenplum Database 5.x installation, upgrade Greenplum Database to version **5.21.2** or newer before you migrate PXF to Greenplum Database **6.10.1** or newer.
 
@@ -110,7 +110,12 @@ After you upgrade to Greenplum Database 6.x, and table definitions and data from
     gpadmin@gp6master$ scp -r gpadmin@<gp5master>:/usr/local/greenplum-pxf /usr/local/
     ```
 
-3. Initialize PXF on each segment host as described in [Initializing PXF](https://docs.vmware.com/en/VMware-Tanzu-Greenplum-Platform-Extension-Framework/6.3/tanzu-greenplum-platform-extension-framework/GUID-init_pxf.html), specifying the `PXF_CONF` directory that you copied in the step above.
+3. Initialize PXF on each segment host, specifying the `PXF_CONF` directory that you copied in the step above. For example:
+
+    ``` shell
+    gpadmin@gp6master$ export JAVA_HOME=<system-java-home>
+    gpadmin@gp6master$ PXF_CONF=/usr/local/greenplum-pxf pxf cluster init
+    ```
 
 5. **If you are migrating PXF from Greenplum Database version 5.23 or earlier** and you have configured any JDBC servers that access Kerberos-secured Hive, you must now set the `hadoop.security.authentication` property in the `jdbc-site.xml` file to explicitly identify use of the Kerberos authentication method. Perform the following for each of these server configs:
 

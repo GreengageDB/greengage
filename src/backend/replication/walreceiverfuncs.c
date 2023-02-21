@@ -247,7 +247,7 @@ RequestXLogStreaming(TimeLineID tli, XLogRecPtr recptr, const char *conninfo,
 	volatile WalRcvData *walrcv = WalRcv;
 	bool		launch = false;
 	pg_time_t	now = (pg_time_t) time(NULL);
-	Latch	   *latch;
+	Latch		*latch;
 
 	/*
 	 * We always start at the beginning of the segment. That prevents a broken

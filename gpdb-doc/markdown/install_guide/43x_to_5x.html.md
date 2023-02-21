@@ -28,7 +28,7 @@ Greenplum Database 6 does not automatically implicitly cast between text and oth
 
     The following examples demonstrate certain types of text comparison queries that will fail on Greenplum Database 6.
 
-    **Note:** This is not an exhaustive list of failure scenarios.
+    > **Note** This is not an exhaustive list of failure scenarios.
 
     -   Queries that reference `text` type and non-text type columns in an expression. In this example query, the comparison expression returns a cast error.
 

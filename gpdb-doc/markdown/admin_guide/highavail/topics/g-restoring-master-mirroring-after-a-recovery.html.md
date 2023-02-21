@@ -8,7 +8,7 @@ You must initialize a new standby master to continue providing master mirroring 
 
 You can restore the primary and standby master instances on the original hosts. This process swaps the roles of the primary and standby master hosts, and it should be performed only if you strongly prefer to run the master instances on the same hosts they occupied prior to the recovery scenario.
 
-**Important:** Restoring the primary and standby master instances to their original hosts is not an online operation. The master host must be stopped to perform the operation.
+> **Important** Restoring the primary and standby master instances to their original hosts is not an online operation. The master host must be stopped to perform the operation.
 
 For information about the Greenplum Database utilities, see the *Greenplum Database Utility Guide*.
 
@@ -42,7 +42,7 @@ For information about the Greenplum Database utilities, see the *Greenplum Datab
 
 ## <a id="topic_dr3_ld4_npb"></a>To restore the master and standby instances on original hosts \(optional\) 
 
-**Note:** Before performing the steps in this section, be sure you have followed the steps to restore master mirroring after a recovery, as described in the [To restore the master mirroring after a recovery](#topic_us3_md4_npb)previous section.
+> **Note** Before performing the steps in this section, be sure you have followed the steps to restore master mirroring after a recovery, as described in the [To restore the master mirroring after a recovery](#topic_us3_md4_npb)previous section.
 
 1.  Stop the Greenplum Database master instance on the standby master. For example:
 

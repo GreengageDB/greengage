@@ -9,7 +9,7 @@ include $(top_builddir)/src/Makefile.global
 
 REGRESS = setup
 REGRESS += replication_views_mirrored missing_xlog walreceiver generate_ao_xlog generate_aoco_xlog
-REGRESS_OPTS = --load-extension=gp_inject_fault
+REGRESS_OPTS = --load-extension=gp_inject_fault --init-file=$(top_builddir)/src/test/regress/init_file
 
 NO_PGXS = 1
 include $(top_srcdir)/src/makefiles/pgxs.mk

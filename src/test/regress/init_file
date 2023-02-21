@@ -116,6 +116,10 @@ m/ERROR:  invalid partition constraint on "[^"]+".*/
 s/ERROR:  invalid partition constraint on "[^"]+".*/ERROR:  invalid partition constraint on "[^"]+".*(cdbpartition.c:XXX)/
 m/ERROR:  FIPS enabled OpenSSL is required for strict FIPS mode .*/
 s/ERROR:  FIPS enabled OpenSSL is required for strict FIPS mode .*/ERROR:  FIPS enabled OpenSSL is required for strict FIPS mode (openssl.c:XXX)/
+m/ERROR:  could not receive data from WAL stream: connection pointer is NULL.*/
+s/ERROR:  could not receive data from WAL stream: connection pointer is NULL.*/ERROR:  could not receive data from WAL stream: connection pointer is NULL (libpqwalreceiver.c:XXX)/
+m/ERROR:  could not send data to WAL stream: connection pointer is NULL.*/
+s/ERROR:  could not send data to WAL stream: connection pointer is NULL.*/ERROR:  could not send data to WAL stream: connection pointer is NULL (libpqwalreceiver.c:XXX)/
 
 # Mask out OpenSSL behavior change in different version
 m/ERROR:  Cannot use "md5": No such hash algorithm/

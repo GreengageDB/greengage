@@ -141,7 +141,7 @@ PARTITION BY LIST (gender)
 
 ```
 
-**Note:** The current Postgres Planner allows list partitions with multi-column \(composite\) partition keys. A range partition only allows a single column as the partition key. GPORCA does not support composite keys, so you should not use composite partition keys.
+> **Note** The current Postgres Planner allows list partitions with multi-column \(composite\) partition keys. A range partition only allows a single column as the partition key. GPORCA does not support composite keys, so you should not use composite partition keys.
 
 For more information about default partitions, see [Adding a Default Partition](#topic80).
 
@@ -209,7 +209,7 @@ GRANT SELECT ON sales TO guest;
 
 ```
 
-**Note:** The `LIKE` clause does not copy over partition structures when creating a new table.
+> **Note** The `LIKE` clause does not copy over partition structures when creating a new table.
 
 ### <a id="topic72"></a>Limitations of Partitioned Tables 
 
@@ -339,7 +339,7 @@ To maintain a partitioned table, use the `ALTER TABLE` command against the top-l
 -   [Modifying a Subpartition Template](#topic85)
 -   [Exchanging a Leaf Child Partition with an External Table](#topic_yhz_gpn_qs)
 
-**Important:** When defining and altering partition designs, use the given partition name, not the table object name. The given partition name is the `partitionname` column value in the *[pg\_partitions](../../ref_guide/system_catalogs/pg_partitions.html)* system view. Although you can query and load any table \(including partitioned tables\) directly using SQL commands, you can only modify the structure of a partitioned table using the `ALTER TABLE...PARTITION` clauses.
+> **Important** When defining and altering partition designs, use the given partition name, not the table object name. The given partition name is the `partitionname` column value in the *[pg\_partitions](../../ref_guide/system_catalogs/pg_partitions.html)* system view. Although you can query and load any table \(including partitioned tables\) directly using SQL commands, you can only modify the structure of a partitioned table using the `ALTER TABLE...PARTITION` clauses.
 
 Partitions are not required to have names. If a partition does not have a name, use one of the following expressions to specify a partition: `PARTITION FOR (value)` or `PARTITION FOR (RANK(number))`.
 
@@ -382,7 +382,7 @@ ALTER TABLE sales ALTER PARTITION FOR (RANK(12))
 
 ```
 
-**Note:** You cannot add a partition to a partition design that has a default partition. You must split the default partition to add a partition. See [Splitting a Partition](#topic84).
+> **Note** You cannot add a partition to a partition design that has a default partition. You must split the default partition to add a partition. See [Splitting a Partition](#topic84).
 
 ### <a id="topic79"></a>Renaming a Partition 
 
@@ -432,7 +432,7 @@ sales_1_prt_jan16
 
 When altering partitioned tables with the `ALTER TABLE` command, always refer to the tables by their partition name \(*jan16*\) and not their full table name \(*sales\_1\_prt\_jan16*\).
 
-**Note:** The table name cannot be a partition name in an `ALTER TABLE` statement. For example, `ALTER TABLE sales...` is correct, `ALTER TABLE sales_1_part_jan16...` is not allowed.
+> **Note** The table name cannot be a partition name in an `ALTER TABLE` statement. For example, `ALTER TABLE sales...` is correct, `ALTER TABLE sales_1_part_jan16...` is not allowed.
 
 ### <a id="topic80"></a>Adding a Default Partition 
 
@@ -493,7 +493,7 @@ WITH TABLE jan12;
 
 ```
 
-**Note:** This example refers to the single-level definition of the table `sales`, before partitions were added and altered in the previous examples.
+> **Note** This example refers to the single-level definition of the table `sales`, before partitions were added and altered in the previous examples.
 
 **Warning:** If you specify the `WITHOUT VALIDATION` clause, you must ensure that the data in table that you are exchanging for an existing partition is valid against the constraints on the partition. Otherwise, queries against the partitioned table might return incorrect results or even end up to data corruption after UPDATE/DELETE operation.
 

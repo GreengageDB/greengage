@@ -62,3 +62,20 @@ ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(i, k);
 
 DROP TABLE tbl_create_index;
 
+-- before dispatch stmt to QEs, switching user to login user,
+-- so that the connection to QEs use the same user as the connection to QD.
+-- pass the permission check of schema on QEs.
+CREATE ROLE regress_minimal;
+CREATE SCHEMA s;
+create table s.t(tc1 int);
+alter table s.t owner to regress_minimal;
+create index idx on s.t(tc1);
+
+--partition table
+create table s.part_table(a int, b varchar(40), c timestamp)
+partition by range (a) (start (1) end (1001) every (200));
+alter table s.part_table owner to regress_minimal;
+create index idx_part1 on s.part_table_1_prt_2(a);
+create index idx_part on s.part_table(a);
+drop schema s cascade;
+drop role regress_minimal;

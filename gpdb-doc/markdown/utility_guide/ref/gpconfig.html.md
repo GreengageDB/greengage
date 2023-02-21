@@ -19,7 +19,7 @@ gpconfig --help
 
 The `gpconfig` utility allows you to set, unset, or view configuration parameters from the `postgresql.conf` files of all instances \(master, segments, and mirrors\) in your Greenplum Database system. When setting a parameter, you can also specify a different value for the master if necessary. For example, parameters such as `max_connections` require a different setting on the master than what is used for the segments. If you want to set or unset a global or master only parameter, use the `--masteronly` option.
 
-**Note:** For configuration parameters of vartype `string`, you may not pass values enclosed in single quotes to `gpconfig -c`.
+> **Note** For configuration parameters of vartype `string`, you may not pass values enclosed in single quotes to `gpconfig -c`.
 
 `gpconfig` can only be used to manage certain parameters. For example, you cannot use it to set parameters such as `port`, which is required to be distinct for every segment instance. Use the `-l` \(list\) option to see a complete list of configuration parameters supported by `gpconfig`.
 

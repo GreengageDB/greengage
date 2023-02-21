@@ -56,8 +56,8 @@
 #include "replication/walsender.h"
 #include "storage/ipc.h"
 #include "storage/pmsignal.h"
-#include "storage/proc.h"
 #include "storage/procarray.h"
+#include "storage/proc.h"
 #include "utils/guc.h"
 #include "utils/ps_status.h"
 #include "utils/resowner.h"
@@ -769,6 +769,12 @@ WalRcvShutdownHandler(SIGNAL_ARGS)
 
 	got_SIGTERM = true;
 
+	/*
+	 * The call of SetLatch(&WalRcv->latch) in SIGTERM handler
+	 * is changed to SetLatch(&MyProc->procLatch) due to it
+	 * can't be protected by SpinLock in the signal handler as
+	 * it could cause a deadlock.
+	 */
 	SetLatch(&MyProc->procLatch);
 
 	errno = save_errno;

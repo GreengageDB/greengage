@@ -213,7 +213,7 @@ main(int argc, char **argv)
 	 * Otherwise, vacuuming those tables once data is copied/linked will error out.
 	 */
 	if (!is_greenplum_dispatcher_mode())
-		update_segment_db_xids();
+		update_db_xids();
 
 	/*
 	 * In a segment, the data directory already contains all the objects,
@@ -224,12 +224,6 @@ main(int argc, char **argv)
 	 * server.
 	 */
 	restore_aosegment_tables();
-
-	if (is_greenplum_dispatcher_mode())
-	{
-		/* freeze master data *right before* stopping */
-		freeze_master_data();
-	}
 
 	stop_postmaster(false);
 
@@ -244,6 +238,22 @@ main(int argc, char **argv)
 
 	transfer_all_new_tablespaces(&old_cluster.dbarr, &new_cluster.dbarr,
 								 old_cluster.pgdata, new_cluster.pgdata);
+
+	/*
+	 * Tuples of gp_fastsequence are being upgraded using relfilenode transfer.
+	 * Freezing coordinator's data must happen after relfilenodes land. We also
+	 * need to fix the tuple's xmin to ensure they are lower than the
+	 * relfrozenxid. Otherwise subsequent vacuums may fail.
+	 */
+	if (is_greenplum_dispatcher_mode())
+	{
+		start_postmaster(&new_cluster, true);
+
+		update_db_xids();
+		freeze_master_data();
+
+		stop_postmaster(false);
+	}
 
 	/*
 	 * Assuming OIDs are only used in system tables, there is no need to

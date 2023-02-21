@@ -68,7 +68,7 @@ The Greenplum Database built-in function `gp_tablespace_location(tablespace\_oid
 SELECT * FROM gp_tablespace_location(16385) 
 ```
 
-**Note:** Greenplum Database does not support different tablespace locations for a primary-mirror pair with the same content ID. It is only possible to configure different locations for different content IDs. Do not modify symbolic links under the `pg_tblspc` directory so that primary-mirror pairs point to different file locations; this will lead to erroneous behavior.
+> **Note** Greenplum Database does not support different tablespace locations for a primary-mirror pair with the same content ID. It is only possible to configure different locations for different content IDs. Do not modify symbolic links under the `pg_tblspc` directory so that primary-mirror pairs point to different file locations; this will lead to erroneous behavior.
 
 ## <a id="section6"></a>Examples 
 
