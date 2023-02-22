@@ -35,9 +35,13 @@ endif
 	$(MAKE) -C contrib/pg_upgrade all
 	$(MAKE) -C contrib/pg_xlogdump all
 	$(MAKE) -C contrib/hstore all
+	$(MAKE) -C contrib/ltree all
 	$(MAKE) -C contrib/pgcrypto all
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo all
+endif
+ifneq ($(with_uuid),no)
+	$(MAKE) -C contrib/uuid-ossp all
 endif
 	$(MAKE) -C gpAux/extensions all
 	$(MAKE) -C gpAux/gpperfmon all
@@ -81,9 +85,13 @@ endif
 	$(MAKE) -C contrib/pg_upgrade $@
 	$(MAKE) -C contrib/pg_xlogdump $@
 	$(MAKE) -C contrib/hstore $@
+	$(MAKE) -C contrib/ltree $@
 	$(MAKE) -C contrib/pgcrypto $@
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo $@
+endif
+ifneq ($(with_uuid),no)
+	$(MAKE) -C contrib/uuid-ossp $@
 endif
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C gpAux/extensions $@
@@ -171,10 +179,13 @@ ICW_TARGETS += contrib/tablefunc
 ifneq ($(OS),Darwin)
 	ICW_TARGETS += contrib/dblink contrib/postgres_fdw
 endif
-ICW_TARGETS += contrib/indexscan contrib/hstore contrib/pgcrypto
+ICW_TARGETS += contrib/indexscan contrib/hstore contrib/ltree contrib/pgcrypto
 # sslinfo depends on openssl
 ifeq ($(with_openssl), yes)
 ICW_TARGETS += contrib/sslinfo
+endif
+ifneq ($(with_uuid),no)
+ICW_TARGETS += contrib/uuid-ossp
 endif
 ICW_TARGETS += gpcontrib src/bin gpMgmt/bin
 

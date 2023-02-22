@@ -7,7 +7,7 @@ This tool collects Greenplum and system log files, along with the relevant confi
 ```
 gpmt gp_log_collector [-failed-segs | -c <ID1,ID2,...>| -hostfile <file> | -h <host1, host2,...>]
 [ -start <YYYY-MM-DD> ] [ -end <YYYY-MM-DD> ]
-[ -dir <path> ] [ -segdir <path> ] [ -a ] [-skip-master] [-with-gpbackup] [-with-gptext] [-with-gptext-only] [-with-pxf] [-with-pxf-only] [-with-gpupgrade]
+[ -dir <path> ] [ -segdir <path> ] [ -a ] [-skip-master] [-with-gpbackup] [-with-gptext] [-with-gptext-only] [-with-gpcc] [-with-gpss] [-gpss_logdir <gpss_log_directory>] [-with-pxf] [-with-pxf-only] [-with-gpupgrade]
 ```
 
 ## <a id="opts"></a>Options 
@@ -72,6 +72,18 @@ Also, the `pg_log` file is collected from the master and segment hosts.
 -with-gptext-only
 :   Collect only GPText logs.
 
+-with-gpcc
+:   Collect log files related to Greenplum Command Center. Log files are collected from the following locations:
+
+- `$GPCC_HOME/logs/*`
+- `$GPCC_HOME/conf/app.conf`
+- `$HOME/gpmetrics/*` (Greenplum Command Center 6.8.0 and later on Greenplum Database 6.x or Greenplum Command Center 4.16.0 and later on Greenplum Database 5.x)
+- `$MASTER_DATA_DIRECTORY/gpmetrics` (Greenplum Command Center 6.7.0 and earlier on Greenplum Database 6.x or Greenplum Command Center 4.15.0 and earlier on Greenplum Database 5.x)
+- The output of the `gppkg -q --all` command
+
+-with-gpss 
+:  Collect log files related to Greenplum Streaming Server. If you do not specify a directory with the `-gpsslogdir` option, gpmt collects logs from the `gpAdminLogs` directory. Log files are of the format `gpss_<date>.log`.
+
 -with-pxf
 :   Collect all PXF logs along with Greenplum logs.
 
@@ -82,7 +94,7 @@ Also, the `pg_log` file is collected from the master and segment hosts.
 :   Collect all `gpupgrade` logs along with Greenplum logs.
 
 
-**Note**: Hostnames provided through `-hostfile` or `-h` must match the hostname column in `gp_segment_configuration`.
+> **Note** Hostnames provided through `-hostfile` or `-h` must match the hostname column in `gp_segment_configuration`.
 
 The tool also collects the following information:
 
@@ -96,7 +108,7 @@ The tool also collects the following information:
 | PXF files | <ul><li>`pxf cluster status`</li><li>`pxf status`</li><li>PXF version</li><li>`Logs/`</li><li>`CONF/`</li><li>`Run/`</li></ul> |
 | gpupgrade files | <ul><li>`~/gpAdminLogs` on all hosts</li><li>`$HOME/gpupgrade` on master host</li><li>`$HOME/.gpupgrade` on all hosts</li><li>Source cluster's `pg_log` files located in `$MASTER_DATA_DIRECTORY/pg_log` on master host</li><li>Target cluster's `pg_log` files located in `$(gpupgrade config show --target-datadir)/pg_log` on master host</li><li>Target cluster's master data directory</li></ul> |
 
-**NOTE**: Some commands might not be able to be run if user does not have the correct permissions.
+> **Note** Some commands might not be able to be run if user does not have the correct permissions.
 
 ## <a id="exs"></a>Examples 
 

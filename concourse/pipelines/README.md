@@ -57,14 +57,14 @@ gen_pipeline.py -h|--help
 ### Create Production Pipeline
 
 The `./gen_pipeline.py -t prod` command will generate the production
-pipeline (`gpdb_6X_STABLE-generated.yml`). All supported platforms and
+pipeline (`gpdb_6X_STABLE-generated.yml`). Only default platform and
 test sections are included. The pipeline release jobs will be
 validated. The output of the utility will provide details of the
 pipeline generated. Following standard conventions, two `fly`
 commands are provided as output so the engineer can copy and
 paste this into their terminal to set the production pipelines.
 
-Example:
+Create and update 6X_STABLE and 6X_STABLE_without_asserts pipelines:
 
 ```
 $ ./gen_pipeline.py -t prod
@@ -74,12 +74,15 @@ Validate Pipeline Release Jobs
 Pipeline validated: all jobs accounted for
 
 ======================================================================
-  Generate Pipeline type: .. : prod
+  Pipeline target: ......... : prod
   Pipeline file ............ : ~/workspace/gpdb/concourse/pipelines/gpdb_6X_STABLE-generated.yml
   Template file ............ : gpdb-tpl.yml
-  OS Types ................. : ['centos6', 'centos7', 'win']
+  OS Type .................. : rocky8
   Test sections ............ : ['ICW', 'Replication', 'ResourceGroups', 'Interconnect', 'CLI', 'UD', 'AA', 'Extensions', 'Gpperfmon']
   test_trigger ............. : True
+  use_ICW_workers .......... : True
+  build_test_rc_rpm ........ : False
+  directed_release ......... : False
 ======================================================================
 
 NOTE: You can set the production pipelines with the following:
@@ -108,18 +111,27 @@ The generated pipeline file `gpdb_6X_STABLE-generated.yml` will be set,
 validated and ultimately committed (including the updated pipeline
 template) to the source repository.
 
+Create and update 6X_STABLE_centos7, 6X_STABLE_centos6, 6X_STABLE_rhel8, 6X_STABLE_ubuntu18.04 pipelines:
+
+```
+$ ./gen_pipeline.py -t prod -O centos7
+
+$ ./gen_pipeline.py -t prod -O centos6
+
+$ ./gen_pipeline.py -t prod -O rhel8
+
+$ ./gen_pipeline.py -t prod -O ubuntu18.04
+```
+
 ### Creating Developer pipelines
 
 As an example of generating a pipeline with a targeted test subset,
 the following can be used to generate a pipeline with supporting
-builds (default: centos6 platform) and `CLI` only jobs.
+builds (default: rocky8 platform) and `CLI` only jobs.
 
 The generated pipeline and helper `fly` command are intended encourage
 engineers to set the pipeline with a team-name-string (-t) and engineer
 (-u) identifiable names.
-
-NOTE: The majority of jobs are only available for the `centos6`
-      platform.
 
 ```
 $ ./gen_pipeline.py -t dpm -u curry -a CLI
@@ -128,7 +140,7 @@ $ ./gen_pipeline.py -t dpm -u curry -a CLI
   Generate Pipeline type: .. : dpm
   Pipeline file ............ : ~/workspace/gpdb/concourse/pipelines/gpdb-dpm-curry.yml
   Template file ............ : gpdb-tpl.yml
-  OS Types ................. : ['centos6']
+  OS Types .................. : rocky8
   Test sections ............ : ['CLI']
   test_trigger ............. : True
 ======================================================================
@@ -147,16 +159,16 @@ fly -t dev \
 ```
 
 Use the following to generate a pipeline with `ICW` and `CLI` test jobs
-for `centos6` and `ubuntu18.04` platforms.
+for `centos6` platform.
 
 ```
-$ ./gen_pipeline.py -t cli -u durant -O {centos6,ubuntu18.04} -a {ICW,CLI}
+$ ./gen_pipeline.py -t cli -u durant -O centos6 -a {ICW,CLI}
 
 ======================================================================
   Generate Pipeline type: .. : cli
   Pipeline file ............ : ~/workspace/gpdb/concourse/pipelines/gpdb-cli-durant.yml
   Template file ............ : gpdb-tpl.yml
-  OS Types ................. : ['centos6', 'ubuntu18.04']
+  OS Type. ................. : centos6]
   Test sections ............ : ['ICW', 'CLI']
   test_trigger ............. : True
 ======================================================================

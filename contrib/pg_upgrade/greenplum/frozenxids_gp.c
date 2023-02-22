@@ -14,24 +14,24 @@
  * Segment database contains data, and the tuples should not have
  * any entry with a xmin > relfrozenxid for the table in pg_class.
  * Instead of vacuum freezing the entire data, update the relfrozenxid
- * of the relation in pg_class with the datafrozenxid from the corresponding
+ * of the relation in pg_class with the datfrozenxid from the corresponding
  * database in the old cluster. This ensures that the xmin is not > relfrozenxid
  * for any of the tuple.
- * Also, update the new segment database with the datafrozenxid
+ * Coordinator contains data entries in GPDB catalog tables like gp_fastsequence,
+ * pg_aoseg, pg_aocsseg, and pg_aovisimap that also need relfrozenxid correction.
+ * Also, update the new database with the datfrozenxid
  * from the old cluster as that indicates the lowest xid available.
  *
  * In GPDB5 datminmxid does not exist, so use the chkpnt_nxtmulti to update
  * the value in the GPDB6 cluster.
  */
 void
-update_segment_db_xids(void)
+update_db_xids(void)
 {
-	Assert(!is_greenplum_dispatcher_mode());
-
 	int			dbnum;
 	PGconn	   *conn;
 
-	prep_status("Updating xid's in new cluster segment databases");
+	prep_status("Updating xid's in new cluster databases");
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{

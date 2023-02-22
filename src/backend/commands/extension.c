@@ -70,7 +70,7 @@ bool		creating_extension = false;
 Oid			CurrentExtensionObject = InvalidOid;
 
 /* File visible "segment" variable for GUCs state */
-static int 	segment_nestlevel = 0;
+static int	segment_nestlevel = 0;
 
 /*
  * Internal data structure to hold the results of parsing a control file
@@ -892,7 +892,7 @@ execute_extension_script(Node *stmt,
 	/*
 	 * Set creating_extension and related variables so that
 	 * recordDependencyOnCurrentExtension and other functions do the right
-	 * things.  On failure, ensure we reset these variables.
+	 * things. On failure, ensure we reset these variables.
 	 */
 	creating_extension = true;
 	CurrentExtensionObject = extensionOid;
@@ -1569,7 +1569,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 									NULL);
 	}
 
-	execute_extension_script((Node*)stmt, extensionOid, control,
+	execute_extension_script((Node *) stmt, extensionOid, control,
 							 oldVersionName, versionName,
 							 requiredSchemas,
 							 schemaName, schemaOid);
@@ -1577,7 +1577,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * On the QD and the QE's updateVersions list is calculated
 	 * and this lists are the same. Thus ApplyExtensionUpdates
-	 * call for must be forbidden at QE. (It would be dispatchered
+	 * call must be forbidden at QE. (It would be dispatchered
 	 * from QD a bit later)
 	 */
 	if (Gp_role != GP_ROLE_EXECUTE)

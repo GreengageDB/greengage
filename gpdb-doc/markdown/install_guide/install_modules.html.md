@@ -16,7 +16,7 @@ To remove a module from a database, drop the associated extension. For example, 
 $ psql -d testdb -c 'DROP EXTENSION dblink;'
 ```
 
-**Note:** When you drop a module extension from a database, any user-defined function that you created in the database that references functions defined in the module will no longer work. If you created any database objects that use data types defined in the module, Greenplum Database will notify you of these dependencies when you attempt to drop the module extension.
+> **Note** When you drop a module extension from a database, any user-defined function that you created in the database that references functions defined in the module will no longer work. If you created any database objects that use data types defined in the module, Greenplum Database will notify you of these dependencies when you attempt to drop the module extension.
 
 You can register the following modules in this manner:
 
@@ -32,13 +32,14 @@ You can register the following modules in this manner:
 <li class="li"><a class="xref" href="../ref_guide/modules/gp_parallel_retrieve_cursor.html">gp_parallel_retrieve_cursor</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/gp_percentile_agg.html">gp_percentile_agg</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/gp_sparse_vector.html">gp_sparse_vector</a></li>
+<li class="li"><a class="xref" href="../ref_guide/modules/greenplum_fdw.html">greenplum_fdw</a></li>
 </ul>
 </td>
 <td style="vertical-align:top;">
 <ul class="ul">
-<li class="li"><a class="xref" href="../ref_guide/modules/greenplum_fdw.html">greenplum_fdw</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/hstore.html">hstore</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/ip4r.html">ip4r</a></li>
+<li class="li"><a class="xref" href="../ref_guide/modules/ltree.html">ltree</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/orafce_ref.html">orafce</a> (Tanzu Greenplum only)</li>
 <li class="li"><a class="xref" href="../ref_guide/modules/pageinspect.html">pageinspect</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/pg_trgm.html">pg_trgm</a></li>
@@ -46,6 +47,8 @@ You can register the following modules in this manner:
 <li class="li"><a class="xref" href="../ref_guide/modules/postgres_fdw.html">postgres_fdw</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/postgresql-hll.html">postgresql-hll</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/sslinfo.html">sslinfo</a></li>
+<li class="li"><a class="xref" href="../ref_guide/modules/timestamp9.html">timestamp9</a></li>
+<li class="li"><a class="xref" href="../ref_guide/modules/uuid-ossp.html">uuid-ossp</a></li>
 </ul>
 </td>
 </tr>

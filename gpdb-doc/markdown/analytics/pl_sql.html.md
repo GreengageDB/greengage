@@ -49,7 +49,7 @@ Each declaration and each statement within a block is terminated by a semicolon 
 
 A label is required only if you want to identify the block for use in an `EXIT` statement, or to qualify the names of variables declared in the block. If you provide a label after `END`, it must match the label at the block's beginning.
 
-**Important:** Do not confuse the use of the `BEGIN` and `END` keywords for grouping statements in PL/pgSQL with the database commands for transaction control. The PL/pgSQL `BEGIN` and `END` keywords are only for grouping; they do not start or end a transaction. Functions are always run within a transaction established by an outer query — they cannot start or commit that transaction, since there would be no context for them to run in. However, a PL/pgSQL block that contains an `EXCEPTION` clause effectively forms a subtransaction that can be rolled back without affecting the outer transaction. For more about the `EXCEPTION` clause, see the PostgreSQL documentation on trapping errors at [https://www.postgresql.org/docs/9.4/plpgsql-control-structures.html\#PLPGSQL-ERROR-TRAPPING](https://www.postgresql.org/docs/9.4/plpgsql-control-structures.html#PLPGSQL-ERROR-TRAPPING).
+> **Important** Do not confuse the use of the `BEGIN` and `END` keywords for grouping statements in PL/pgSQL with the database commands for transaction control. The PL/pgSQL `BEGIN` and `END` keywords are only for grouping; they do not start or end a transaction. Functions are always run within a transaction established by an outer query — they cannot start or commit that transaction, since there would be no context for them to run in. However, a PL/pgSQL block that contains an `EXCEPTION` clause effectively forms a subtransaction that can be rolled back without affecting the outer transaction. For more about the `EXCEPTION` clause, see the PostgreSQL documentation on trapping errors at [https://www.postgresql.org/docs/9.4/plpgsql-control-structures.html\#PLPGSQL-ERROR-TRAPPING](https://www.postgresql.org/docs/9.4/plpgsql-control-structures.html#PLPGSQL-ERROR-TRAPPING).
 
 Keywords are case-insensitive. Identifiers are implicitly converted to lowercase unless double-quoted, just as they are in ordinary SQL commands.
 
@@ -92,7 +92,7 @@ $$ LANGUAGE plpgsql;
 
 You can run SQL commands with PL/pgSQL statements such as `EXECUTE`, `PERFORM`, and `SELECT ... INTO`. For information about the PL/pgSQL statements, see [https://www.postgresql.org/docs/9.4/plpgsql-statements.html](https://www.postgresql.org/docs/9.4/plpgsql-statements.html).
 
-**Note:** The PL/pgSQL statement `SELECT INTO` is not supported in the `EXECUTE` statement.
+> **Note** The PL/pgSQL statement `SELECT INTO` is not supported in the `EXECUTE` statement.
 
 ## <a id="topic67"></a>PL/pgSQL Plan Caching 
 
@@ -210,7 +210,7 @@ END;
 $$ LANGUAGE plpgsql VOLATILE;
 ```
 
-**Note:** The previous function is classified as a `VOLATILE` function because function values could change within a single table scan.
+> **Note** The previous function is classified as a `VOLATILE` function because function values could change within a single table scan.
 
 The following `SELECT` command uses the function.
 
@@ -218,7 +218,7 @@ The following `SELECT` command uses the function.
 select t1_calc( 'test1' );
 ```
 
-**Note:** The example PL/pgSQL function uses `SELECT` with the `INTO` clause. It is different from the SQL command `SELECT INTO`. If you want to create a table from a `SELECT` result inside a PL/pgSQL function, use the SQL command `CREATE TABLE AS`.
+> **Note** The example PL/pgSQL function uses `SELECT` with the `INTO` clause. It is different from the SQL command `SELECT INTO`. If you want to create a table from a `SELECT` result inside a PL/pgSQL function, use the SQL command `CREATE TABLE AS`.
 
 ### <a id="topic_lsh_5n5_2z1717"></a>Example: Using a Variable Number of Arguments 
 

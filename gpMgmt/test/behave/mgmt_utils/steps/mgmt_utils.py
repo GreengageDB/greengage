@@ -12,6 +12,7 @@ import socket
 import tempfile
 import thread
 import time
+from contextlib import closing
 try:
     from subprocess32 import check_output, Popen, PIPE
 except:
@@ -27,6 +28,7 @@ from os import path
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
 from gppylib.commands.gp import SegmentStart, GpStandbyStart, MasterStop
 from gppylib.commands import gp
+from gppylib.commands.pg import PgBaseBackup
 from gppylib.commands.unix import findCmdInPath, Scp
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
 from gppylib.operations.buildMirrorSegments import get_recovery_progress_pattern
@@ -49,7 +51,7 @@ def show_all_installed(gphome):
     name = x[0].lower()
     if 'ubuntu' in name:
         return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \$1}'" % gphome
-    elif 'centos' in name or 'red hat enterprise linux' in name:
+    elif 'centos' in name or 'red hat enterprise linux' in name or 'rocky linux' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
     else:
         raise Exception('UNKNOWN platform: %s' % str(x))
@@ -59,7 +61,7 @@ def remove_native_package_command(gphome, full_gppkg_name):
     name = x[0].lower()
     if 'ubuntu' in name:
         return 'fakeroot dpkg --force-not-root --log=/dev/null --instdir=%s --admindir=%s/share/packages/database/deb -r %s' % (gphome, gphome, full_gppkg_name)
-    elif 'centos' in name or 'red hat enterprise linux' in name:
+    elif 'centos' in name or 'red hat enterprise linux' in name or 'rocky linux' in name:
         return 'rpm -e %s --dbpath %s/share/packages/database' % (full_gppkg_name, gphome)
     else:
         raise Exception('UNKNOWN platform: %s' % str(x))
@@ -426,10 +428,12 @@ def impl(context, content):
     dburl = dbconn.DbURL(hostname=host, port=port, dbname='template1')
     wait_for_desired_query_result(dburl, query, desired_result, utility=True)
 
+@given('the user waits until recovery_progress.file is created in {logdir} and verifies its format')
+@when('the user waits until recovery_progress.file is created in {logdir} and verifies its format')
 @then('the user waits until recovery_progress.file is created in {logdir} and verifies its format')
 def impl(context, logdir):
     attempt = 0
-    num_retries = 60000
+    num_retries = 6000
     log_dir = _get_gpAdminLogs_directory() if logdir == 'gpAdminLogs' else logdir
     recovery_progress_file = '{}/recovery_progress.file'.format(log_dir)
     while attempt < num_retries:
@@ -445,10 +449,25 @@ def impl(context, logdir):
                     return
                 else:
                     raise Exception('File present but incorrect format line "{}"'.format(line))
-        time.sleep(0.01)
+        time.sleep(0.1)
         if attempt == num_retries:
             raise Exception('Timed out after {} retries'.format(num_retries))
 
+@given('the user just waits until recovery_progress.file is created in {logdir}')
+@when('the user just waits until recovery_progress.file is created in {logdir}')
+@then('the user just waits until recovery_progress.file is created in {logdir}')
+def impl(context, logdir):
+    attempt = 0
+    num_retries = 6000
+    log_dir = _get_gpAdminLogs_directory() if logdir == 'gpAdminLogs' else logdir
+    recovery_progress_file = '{}/recovery_progress.file'.format(log_dir)
+    while attempt < num_retries:
+        attempt += 1
+        if os.path.exists(recovery_progress_file):
+            return
+        time.sleep(0.1)
+        if attempt == num_retries:
+            raise Exception('Timed out after {} retries'.format(num_retries))
 
 @then('verify that lines from recovery_progress.file are present in segment progress files in {logdir}')
 def impl(context, logdir):
@@ -612,7 +631,9 @@ def impl(context, kill_process_name, log_msg, logfile_name):
     run_async_command(context, command)
 
 
+@given('the user asynchronously sets up to end {process_name} process with SIGINT')
 @when('the user asynchronously sets up to end {process_name} process with SIGINT')
+@then('the user asynchronously sets up to end {process_name} process with SIGINT')
 def impl(context, process_name):
     command = "ps ux | grep bin/%s | awk '{print $2}' | xargs kill -2" % (process_name)
     run_async_command(context, command)
@@ -1461,7 +1482,8 @@ def impl(context):
 
     return
 
-
+@given('verify that mirror on content {content_ids} is {expected_status}')
+@when('verify that mirror on content {content_ids} is {expected_status}')
 @then('verify that mirror on content {content_ids} is {expected_status}')
 def impl(context, content_ids, expected_status):
     if content_ids == 'None':
@@ -1518,7 +1540,7 @@ def impl(context, seg):
         if not hasattr(context, 'pseg_hostname'):
             raise Exception("primary seg host is not saved in the context")
         hostname = context.pseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1552,7 +1574,7 @@ def impl(context, seg):
         if not hasattr(context, 'pseg_hostname'):
             raise Exception("primary seg host is not saved in the context")
         hostname = context.pseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1573,7 +1595,7 @@ def impl(context, seg):
             raise Exception("primary seg host is not saved in the context")
         hostname = context.pseg_hostname
         data_dir = context.pseg_data_dir
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1610,7 +1632,7 @@ def impl(context, seg):
     elif seg == "mirror":
         data_dir = context.mseg_data_dir
         hostname = context.mseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1681,7 +1703,7 @@ def impl(context, seg):
     elif seg == "mirror":
         data_dir = context.mseg_data_dir
         hostname = context.mseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         if not hasattr(context, 'standby_host'):
             raise Exception("Standby host is not saved in the context")
         hostname = context.standby_host
@@ -1702,7 +1724,7 @@ def impl(context, seg):
     elif seg == "mirror":
         data_dir = context.mseg_data_dir
         hostname = context.mseg_hostname
-    elif seg == "smdw":
+    elif seg == "scdw":
         data_dir = context.standby_host_data_dir
         hostname = context.standby_host
 
@@ -3755,8 +3777,14 @@ def impl(context, command, input):
     context.error_message = stderr
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
-    primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
-    mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
+    x = platform.linux_distribution()
+    name = x[0].lower()
+    if 'ubuntu' in name:
+        primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
+        mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
+    else:
+        primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
+        mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show eth0 | grep 'inet .* brd' | awk '{ print $4 }'"])
     if not primary_broadcast:
         raise Exception("primary hostname %s has no broadcast address" % primary_hostname)
     if not mirror_broadcast:
@@ -3793,3 +3821,150 @@ def impl(context, content, desired_state):
 
     if len(rows) == 0:
         raise Exception("Expected content %s to be %s." % (content, desired_state))
+
+@given('the user asynchronously runs pg_basebackup with {segment} of content {contentid} as source and the process is saved')
+@when('the user asynchronously runs pg_basebackup with {segment} of content {contentid} as source and the process is saved')
+@then('the user asynchronously runs pg_basebackup with {segment} of content {contentid} as source and the process is saved')
+def impl(context, segment, contentid):
+    if segment == 'mirror':
+        role = 'm'
+    elif segment == 'primary':
+        role = 'p'
+
+    all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+
+    basebackup_target = all_segments[0]
+    basebackup_source = all_segments[0]
+    for seg in all_segments:
+        if role == seg.role and str(seg.content) == contentid:
+            basebackup_source = seg
+        elif str(seg.content) == contentid:
+            basebackup_target = seg
+
+    make_temp_dir(context, '/tmp')
+
+    cmd = PgBaseBackup(target_datadir=context.temp_base_dir,
+                       source_host=basebackup_source.getSegmentHostName(),
+                       source_port=str(basebackup_source.getSegmentPort()),
+                       replication_slot_name="replication_slot",
+                       forceoverwrite=True,
+                       target_gp_dbid=basebackup_target.getSegmentDbId())
+    asyncproc = cmd.runNoWait()
+    context.asyncproc = asyncproc
+
+
+@given('gp_stat_replication table has pg_basebackup entry for content {contentid}')
+@when('gp_stat_replication table has pg_basebackup entry for content {contentid}')
+@then('gp_stat_replication table has pg_basebackup entry for content {contentid}')
+def impl(context, contentid):
+    sql = "select gp_segment_id from gp_stat_replication where application_name = 'pg_basebackup'"
+
+    try:
+        with closing(dbconn.connect(dbconn.DbURL())) as conn:
+            res = dbconn.execSQL(conn, sql)
+            rows = res.fetchall()
+    except Exception as e:
+        raise Exception("Failed to query gp_stat_replication: %s" % str(e))
+
+    segments_with_running_basebackup = {str(row[0]) for row in rows}
+
+    if str(contentid) not in segments_with_running_basebackup:
+        raise Exception("pg_basebackup entry was not found for content %s in gp_stat_replication" % contentid)
+
+@given('user waits until gp_stat_replication table has no pg_basebackup entries for content {contentids}')
+@when('user waits until gp_stat_replication table has no pg_basebackup entries for content {contentids}')
+@then('user waits until gp_stat_replication table has no pg_basebackup entries for content {contentids}')
+def impl(context, contentids):
+    retries = 600
+    content_ids = contentids.split(',')
+    content_ids = ', '.join(c for c in content_ids)
+    sql = "select count(*) from gp_stat_replication where application_name = 'pg_basebackup' and gp_segment_id in (%s)" %(content_ids)
+    no_basebackup = False
+
+    for i in range(retries):
+        try:
+            with closing(dbconn.connect(dbconn.DbURL())) as conn:
+                res = dbconn.execSQLForSingleton(conn, sql)
+        except Exception as e:
+            raise Exception("Failed to query gp_stat_replication: %s" % str(e))
+        if res == 0:
+            no_basebackup = True
+            break
+        time.sleep(1)
+
+    if not no_basebackup:
+        raise Exception("pg_basebackup entry was found for contents %s in gp_stat_replication after %d retries" % (contentids, retries))
+    
+@given('backup /etc/hosts file and update hostname entry for localhost')
+def impl(context):
+     # Backup current /etc/hosts file
+     cmd = Command(name='backup the hosts file', cmdStr='sudo cp /etc/hosts /tmp/hosts_orig')
+     cmd.run(validateAfter=True)
+     # Get the host-name
+     cmd = Command(name='get hostname', cmdStr='hostname')
+     cmd.run(validateAfter=True)
+     hostname = cmd.get_stdout()
+     # Update entry in current /etc/hosts file to add new host-address
+     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts; sudo cp -f /tmp/hosts /etc/hosts;rm /tmp/hosts"
+                                                        %(hostname, hostname, hostname))
+     cmd.run(validateAfter=True)
+
+@given('update hostlist file with updated host-address')
+def impl(context):
+     cmd = Command(name='get hostname', cmdStr='hostname')
+     cmd.run(validateAfter=True)
+     hostname = cmd.get_stdout()
+     # Update entry in hostfile to replace with address
+     cmd = Command(name='update temp hosts file', cmdStr= "sed 's/%s/%s__1/g' < ../gpAux/gpdemo/hostfile >> /tmp/hostfile--1" % (hostname, hostname))
+     cmd.run(validateAfter=True)
+
+@given('update clusterConfig file with new port and host-address')
+def impl(context):
+     cmd = Command(name='get hostname', cmdStr='hostname')
+     cmd.run(validateAfter=True)
+     hostname = cmd.get_stdout()
+
+     # Create a copy of config file
+     cmd = Command(name='create a copy of config file',
+                   cmdStr= "cp ../gpAux/gpdemo/clusterConfigFile /tmp/clusterConfigFile-1;")
+     cmd.run(validateAfter=True)
+
+     # Update hostfile location
+     cmd = Command(name='update master hostname in config file',
+                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\/tmp\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
+     cmd.run(validateAfter=True)
+
+
+@then('verify that cluster config has host-name populated correctly')
+def impl(context):
+     cmd = Command(name='get hostname', cmdStr='hostname')
+     cmd.run(validateAfter=True)
+     hostname_orig = cmd.get_stdout().strip()
+     hostname_new = "{}__1".format(hostname_orig)
+     # Verift host-address not populated in the config
+     with dbconn.connect(dbconn.DbURL(), unsetSearchPath=False) as conn:
+         sql = "SELECT count(*) FROM gp_segment_configuration WHERE hostname='%s'" % hostname_new
+         num_matching = dbconn.execSQL(conn, sql).fetchone()
+         if(num_matching[0] != 0):
+             raise Exception("Found entries in gp_segment_configuration is host-address popoulated as host-name")
+     # Verify correct host-name is populated in the config
+     with dbconn.connect(dbconn.DbURL(), unsetSearchPath=False) as conn:
+         sql = "SELECT count( distinct hostname) FROM gp_segment_configuration WHERE hostname='%s'" % hostname_orig
+         num_matching = dbconn.execSQL(conn, sql).fetchone()
+         if(num_matching[0] != 1):
+             raise Exception("Found no entries in gp_segment_configuration is host-address popoulated as host-name")
+
+@given('update the private keys for the new host address')
+def impl(context):
+     cmd = Command(name='get hostname', cmdStr='hostname')
+     cmd.run(validateAfter=True)
+     hostname = "{}__1".format(cmd.get_stdout().strip())
+     cmd_str = "rm -f ~/.ssh/id_rsa ~/.ssh/id_rsa.pub ~/.ssh/known_hosts; $GPHOME/bin/gpssh-exkeys -h {}".format(hostname)
+     cmd = Command(name='update ssh private keys', cmdStr=cmd_str)
+     cmd.run(validateAfter=True)
+
+@then('restore /etc/hosts file and cleanup hostlist file')
+def impl(context):
+    cmd =  "sudo mv -f /tmp/hosts_orig /etc/hosts; rm -f /tmp/clusterConfigFile-1; rm -f /tmp/hostfile--1"
+    context.execute_steps(u'''Then the user runs command "%s"''' % cmd)
+

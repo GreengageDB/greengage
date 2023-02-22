@@ -4,7 +4,7 @@ title: Transforming External Data with gpfdist and gpload
 
 The `gpfdist` parallel file server allows you to set up transformations that enable Greenplum Database external tables to read and write files in formats that are not supported with the `CREATE EXTERNAL TABLE` command's `FORMAT` clause. An *input* transformation reads a file in the foreign data format and outputs rows to `gpfdist` in the CSV or other text format specified in the external table's `FORMAT` clause. An *output* transformation receives rows from `gpfdist` in text format and converts them to the foreign data format.
 
-**Note:** `gpfdist` and `gpload` are compatible only with the Greenplum Database major version in which they are shipped. For example, a `gpfdist` utility that is installed with Greenplum Database 4.x cannot be used with Greenplum Database 5.x or 6.x.
+> **Note** `gpfdist` and `gpload` are compatible only with the Greenplum Database major version in which they are shipped. For example, a `gpfdist` utility that is installed with Greenplum Database 4.x cannot be used with Greenplum Database 5.x or 6.x.
 
 This topic describes the tasks to set up data transformations that work with `gpfdist` to read or write external data files with formats that Greenplum Database does not support.
 
@@ -28,7 +28,7 @@ If you want to load the external data into a table in the Greenplum database, yo
 
 Accessing data in external XML files from within the database is a common example requiring transformation. The following diagram shows *gpfdist* performing a transformation on XML files on an ETL server.
 
-![](../../graphics/ext-tables-xml.png "External Tables using XML Transformations")
+![External Tables using XML Transformations](../../graphics/ext-tables-xml.png "External Tables using XML Transformations")
 
 Following are the high-level steps to set up a `gpfdist` transformation for external data files. The process is illustrated with an XML example.
 
@@ -173,7 +173,7 @@ java \
 
 The `input_transform.sh` file uses the Joost STX engine with the AWK interpreter. The following diagram shows the process flow as gpfdist runs the transformation.
 
-![](../../graphics/02-pipeline.png)
+![gpfdist process flow](../../graphics/02-pipeline.png)
 
 ## <a id="topic80"></a>Transfer the Data 
 
@@ -230,7 +230,7 @@ In the `gpload` control file, the optional parameter `MAX_LINE_LENGTH` specifies
 
 The following diagram shows the relationships between the `gpload` control file, the gpfdist configuration file, and the XML data file.
 
-![](../../graphics/03-gpload-files.jpg)
+![Relationships between gpload files](../../graphics/03-gpload-files.jpg)
 
 ### <a id="topic82"></a>Transforming with gpfdist and INSERT INTO SELECT FROM 
 
@@ -405,7 +405,7 @@ Load the data into Greenplum Database.
 
 This example demonstrates loading sample data describing an oil rig using a Joost STX transformation. The data is in the form of a complex XML file downloaded from energistics.org.
 
-The Wellsite Information Transfer Standard Markup Language \(WITSML™\) is an oil industry initiative to provide open, non-proprietary, standard interfaces for technology and software to share information among oil companies, service companies, drilling contractors, application vendors, and regulatory agencies. For more information about WITSML™, see [http://www.energistics.org/](http://www.energistics.org/).
+The Wellsite Information Transfer Standard Markup Language \(WITSML™\) is an oil industry initiative to provide open, non-proprietary, standard interfaces for technology and software to share information among oil companies, service companies, drilling contractors, application vendors, and regulatory agencies. For more information about WITSML™, see [https://www.energistics.org/](https://www.energistics.org/).
 
 The oil rig information consists of a top level `<rigs>` element with multiple child elements such as `<documentInfo>, <rig>`, and so on. The following excerpt from the file shows the type of information in the `<rig>` tag.
 
@@ -413,9 +413,9 @@ The oil rig information consists of a top level `<rigs>` element with multiple c
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet href="../stylesheets/rig.xsl" type="text/xsl" media="screen"?>
 <rigs 
- xmlns="http://www.energistics.org/schemas/131" 
- xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
- xsi:schemaLocation="http://www.energistics.org/schemas/131 ../obj_rig.xsd" 
+ xmlns="https://www.energistics.org/schemas/131" 
+ xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" 
+ xsi:schemaLocation="https://www.energistics.org/schemas/131 ../obj_rig.xsd" 
  version="1.3.1.1">
  <documentInfo>
  ... misc data ...

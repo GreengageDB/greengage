@@ -519,7 +519,8 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "    n.nspname NOT IN ('gp_toolkit', 'pg_bitmapindex') AND "
 			 "	  c.oid >= %u) "
 			 "  OR (n.nspname = 'pg_catalog' AND "
-	"    relname IN ('pg_largeobject', 'pg_largeobject_loid_pn_index'%s) ));",
+	"    relname IN ('pg_largeobject', 'pg_largeobject_loid_pn_index'%s, "
+	"                'gp_fastsequence', 'gp_fastsequence_objid_objmod_index') ));",
 	/* Greenplum 5X use 'm' as aovisimap which is now matview in 6X and above. */
 			 (GET_MAJOR_VERSION(old_cluster.major_version) == 803) ?
 			 ", 'm'" : ", 'M'",

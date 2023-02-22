@@ -53,6 +53,7 @@
 
 #include "access/fileam.h"
 #include "access/transam.h"
+#include "catalog/aocatalog.h"
 #include "catalog/pg_statistic.h"
 #include "cdb/cdbaocsam.h"
 #include "cdb/cdbappendonlyam.h"
@@ -172,6 +173,37 @@ ExecProcessReturning(ProjectionInfo *projectReturning,
 	return ExecProject(projectReturning, NULL);
 }
 
+/* update parentslot if slot has been modified */
+static void
+update_parentslot(TupleTableSlot *parentslot, TupleTableSlot *slot)
+{
+	int natts = slot->tts_tupleDescriptor->natts;
+	slot_getallattrs(slot);
+	Datum *values = slot_get_values(slot);
+	bool *isnull = slot_get_isnull(slot);
+
+	/* make sure the parentslot is clear */
+	ExecClearTuple(parentslot);
+
+	/* update parentslot */
+	memcpy(parentslot->PRIVATE_tts_values, values, natts * sizeof(Datum));
+	memcpy(parentslot->PRIVATE_tts_isnull, isnull, natts * sizeof(bool));
+
+	/* mark parentslot as containing a virtual tuple */
+	ExecStoreVirtualTuple(parentslot);
+
+	/* set parentslot's tableoid and ctid */
+	parentslot->tts_tableOid = slot->tts_tableOid;
+	/*
+	 * We need to check if the slot has a valid ctid when it has a HeapTuple
+	 * before calling slot_get_ctid, otherwise the Assert in slot_get_ctid will fail
+	 */
+	if (TupHasHeapTuple(slot) && ItemPointerIsValid((&(slot->PRIVATE_tts_heaptuple->t_self))))
+	{
+		slot_set_ctid(parentslot, slot_get_ctid(slot));
+	}
+}
+
 /* ----------------------------------------------------------------
  *		ExecInsert
  *
@@ -217,7 +249,6 @@ ExecInsert(TupleTableSlot *parentslot,
 	 * that before looking up the ResultRelInfo of the target partition.
 	 */
 	projectReturning = estate->es_result_relation_info->ri_projectReturning;
-
 	/*
 	 * get information on the (current) result relation
 	 */
@@ -411,7 +442,6 @@ ExecInsert(TupleTableSlot *parentslot,
 															   resultRelInfo,
 															   slot,
 															   planSlot);
-
 		if (slot == NULL)		/* "do nothing" */
 			return NULL;
 
@@ -443,31 +473,7 @@ ExecInsert(TupleTableSlot *parentslot,
 			/* The values in slot may have been updated by FDW or
 			 * not, anyway we update the parentslot here.
 			 */
-			int         natts = slot->tts_tupleDescriptor->natts;
-			slot_getallattrs(slot);
-			Datum *values = slot_get_values(slot);
-			bool *isnull = slot_get_isnull(slot);
-
-			/* make sure the parentslot is clear */
-			ExecClearTuple(parentslot);
-
-			/* update parentslot */
-			memcpy(parentslot->PRIVATE_tts_values, values, natts * sizeof(Datum));
-			memcpy(parentslot->PRIVATE_tts_isnull, isnull, natts * sizeof(bool));
-
-			/* mark parentslot as containing a virtual tuple */
-			ExecStoreVirtualTuple(parentslot);
-
-			/* set parentslot's tableoid and ctid */
-			parentslot->tts_tableOid = slot->tts_tableOid;
-			/*
-			 * We need to check if the slot has a valid ctid when it has a HeapTuple
-			 * before calling slot_get_ctid, otherwise the Assert in slot_get_ctid will fail
-			 */
-			if (TupHasHeapTuple(slot) && ItemPointerIsValid((&(slot->PRIVATE_tts_heaptuple->t_self))))
-			{
-				slot_set_ctid(parentslot, slot_get_ctid(slot));
-			}
+			update_parentslot(parentslot, slot);
 		}
 		newId = InvalidOid;
 	}
@@ -512,6 +518,7 @@ ExecInsert(TupleTableSlot *parentslot,
 
 			mtuple = ExecFetchSlotMemTuple(slot);
 			newId = appendonly_insert(resultRelInfo->ri_aoInsertDesc, mtuple, tuple_oid, (AOTupleId *) &lastTid);
+			slot_set_ctid(slot, (ItemPointer)&lastTid);
 			(resultRelInfo->ri_aoprocessed)++;
 		}
 		else if (rel_is_aocols)
@@ -600,9 +607,15 @@ ExecInsert(TupleTableSlot *parentslot,
 
 	/* Process RETURNING if present */
 	if (projectReturning)
+	{
+		/* slot has been modified by trigger and it is not from partition table */
+		if (slot != parentslot && NULL == resultRelInfo->ri_partInsertMap)
+		{
+			update_parentslot(parentslot, slot);
+		}
 		return ExecProcessReturning(projectReturning,
 									parentslot, planSlot);
-
+	}
 	return NULL;
 }
 
@@ -1852,7 +1865,8 @@ ExecModifyTable(ModifyTableState *node)
 				bool		isNull;
 
 				relkind = resultRelInfo->ri_RelationDesc->rd_rel->relkind;
-				if (relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW)
+				if (relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
+					IsAppendonlyMetadataRelkind(relkind))
 				{
 					datum = ExecGetJunkAttribute(slot,
 												 junkfilter->jf_junkAttNo,
@@ -2347,7 +2361,8 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 
 					relkind = resultRelInfo->ri_RelationDesc->rd_rel->relkind;
 					if (relkind == RELKIND_RELATION ||
-						relkind == RELKIND_MATVIEW)
+						relkind == RELKIND_MATVIEW ||
+						IsAppendonlyMetadataRelkind(relkind))
 					{
 						j->jf_junkAttNo = ExecFindJunkAttribute(j, "ctid");
 						if (!AttributeNumberIsValid(j->jf_junkAttNo))

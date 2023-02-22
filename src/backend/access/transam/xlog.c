@@ -841,12 +841,6 @@ static bool bgwriterLaunched = false;
 static int	MyLockNo = 0;
 static bool holdingAllLocks = false;
 
-/*
- * gpdb: backup of ControlFile->checkPointCopy.redo.  This is used by
- * KeepLogSeg() to avoid pg_rewind failure due to missing xlog file.
- */
-static XLogRecPtr ControlFileOldCheckpointCopyRedo = InvalidXLogRecPtr;
-
 static void readRecoveryCommandFile(void);
 static void exitArchiveRecovery(TimeLineID endTLI, XLogRecPtr endOfLog);
 static bool recoveryStopsBefore(XLogRecord *record);
@@ -7072,7 +7066,7 @@ StartupXLOG(void)
 		CheckRequiredParameterValues();
 
 		UtilityModeFindOrCreateDtmRedoFile();
-		
+
 		/*
 		 * We're in recovery, so unlogged relations may be trashed and must be
 		 * reset.  This should be done BEFORE allowing Hot Standby
@@ -7395,7 +7389,7 @@ StartupXLOG(void)
 				/* Now apply the WAL record itself */
 				RmgrTable[record->xl_rmid].rm_redo(ReadRecPtr, EndRecPtr, record);
 
-				/* 
+				/*
 				 * Verify once if there's a conrecord being overwritten.
 				 * We do it here instead of xlog_redo like 7X because we need
 				 * xlogreader in this function.
@@ -9154,12 +9148,6 @@ CreateCheckPoint(int flags)
 				(errmsg("concurrent transaction log activity while database system is shutting down")));
 
 	/*
-	 * ControlFile->checkPointCopy.redo will be updated soon so let's store it
-	 * for later use in KeepLogSeg().
-	 */
-	ControlFileOldCheckpointCopyRedo = ControlFile->checkPointCopy.redo;
-
-	/*
 	 * Select point at which we can truncate the log, which we base on the
 	 * prior checkpoint's earliest info or the oldest prepared transaction xlog record's info.
 	 */
@@ -9217,6 +9205,7 @@ CreateCheckPoint(int flags)
 	 * have trouble while fooling with old log segments.
 	 */
 	END_CRIT_SECTION();
+	SIMPLE_FAULT_INJECTOR("checkpoint_control_file_updated");
 
 	/*
 	 * Now that the checkpoint is safely on disk, we can update the point to
@@ -9763,7 +9752,6 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 	XLogSegNo	currSegNo;
 	XLogSegNo	segno;
 	XLogRecPtr	keep;
-	static XLogRecPtr CkptRedoBeforeMinLSN = InvalidXLogRecPtr;
 
 	XLByteToSeg(recptr, currSegNo);
 	segno = currSegNo;
@@ -9793,22 +9781,6 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 #endif
 	if (keep != InvalidXLogRecPtr)
 	{
-		if (!XLogRecPtrIsInvalid(ControlFileOldCheckpointCopyRedo))
-		{
-			/*
-			 * basically with this logic, GPDB never uses restart_lsn as
-			 * lowest cut-off point. Instead always will use Checkpoint redo
-			 * location prior to restart_lsn as cut-off point.
-			 */
-			if (ControlFileOldCheckpointCopyRedo < keep)
-			{
-				keep = ControlFileOldCheckpointCopyRedo;
-				CkptRedoBeforeMinLSN = ControlFileOldCheckpointCopyRedo;
-			}
-			else if (!XLogRecPtrIsInvalid(CkptRedoBeforeMinLSN))
-				keep = CkptRedoBeforeMinLSN;
-		}
-
 		XLByteToSeg(keep, segno);
 
 		/* Cap by max_slot_wal_keep_size ... */

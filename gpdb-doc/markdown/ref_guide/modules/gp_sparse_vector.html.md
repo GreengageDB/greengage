@@ -14,7 +14,7 @@ The `gp_sparse_vector` module is installed when you install Greenplum Database. 
 
 You must upgrade the `gp_sparse_vector` module to obtain bug fixes.
 
-**Note:** Starting in Greenplum Database 6.16, `gp_sparse_vector` functions and objects are installed in the schema named `sparse_vector`. Upgrading the module requires that you update any scripts that reference the module's objects. You must also adjust how you reference these objects in a client session. **If you have not done this already, you will need to** either add the `sparse_vector` schema to a `search_path`, or alternatively you can choose to prepend `sparse_vector.` to all non-`CAST` `gp_sparse_vector` function or object name references.
+> **Note** Starting in Greenplum Database 6.16, `gp_sparse_vector` functions and objects are installed in the schema named `sparse_vector`. Upgrading the module requires that you update any scripts that reference the module's objects. You must also adjust how you reference these objects in a client session. **If you have not done this already, you will need to** either add the `sparse_vector` schema to a `search_path`, or alternatively you can choose to prepend `sparse_vector.` to all non-`CAST` `gp_sparse_vector` function or object name references.
 
 Update the `gp_sparse_vector` module in each database in which you are using the module:
 
@@ -51,7 +51,7 @@ The Greenplum Database built-in `array` datatype utilizes a bitmap for null valu
 
 The Greenplum Database `gp_sparse_vector` module defines a data type and a simple RLE-based scheme that is biased toward being efficient for zero value bitmaps. This scheme uses only 6 bytes for bitmap storage.
 
-**Note:** The sparse vector data type defined by the `gp_sparse_vector` module is named `svec`. `svec` supports only `float8` vector values.
+> **Note** The sparse vector data type defined by the `gp_sparse_vector` module is named `svec`. `svec` supports only `float8` vector values.
 
 You can construct an `svec` directly from a float array as follows:
 

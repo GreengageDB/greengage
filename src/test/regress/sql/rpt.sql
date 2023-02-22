@@ -542,14 +542,6 @@ select c from rep_tab where c in (select distinct a from dist_tab);
 explain select c from rep_tab where c in (select distinct d from rand_tab);
 select c from rep_tab where c in (select distinct d from rand_tab);
 
--- test for optimizer_enable_replicated_table
-explain (costs off) select * from rep_tab;
-set optimizer_enable_replicated_table=off;
-set optimizer_trace_fallback=on;
-explain (costs off) select * from rep_tab;
-reset optimizer_trace_fallback;
-reset optimizer_enable_replicated_table;
-
 --
 -- Check sub-selects with distributed replicated tables and volatile functions
 --

@@ -58,7 +58,8 @@ select generate_recover_config_file(
 	(select port from gp_segment_configuration c where c.role='m' and c.content=1)::text);
 
 -- recover from config file, only seg with content=1 will be recovered
-!\retcode gprecoverseg -a -i /tmp/recover_config_file;
+-- use udpifc to avoid motion hangs when running in ic_proxy envs due to change in dbid
+!\retcode PGOPTIONS='-c gp_interconnect_type=udpifc' gprecoverseg -a -i /tmp/recover_config_file;
 
 -- after gprecoverseg -i, the down segemnt should be up
 -- in mirror mode
@@ -69,6 +70,7 @@ where role='m' and content=1;
 select dbid from gp_segment_configuration where dbid=2;
 
 update gp_segment_configuration set dbid=2 where dbid=9;
+
 set allow_system_table_mods to false;
 
 -- we manually change dbid from 2 to 9, which causes the

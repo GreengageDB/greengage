@@ -15,8 +15,6 @@ test: select_dropped_table
 test: update_hash_col_utilitymode execute_on_utilitymode
 
 # Tests for crash recovery
-test: uao_crash_compaction_column
-test: uao_crash_compaction_row
 test: crash_recovery
 test: crash_recovery_redundant_dtx
 test: crash_recovery_dtm
@@ -25,6 +23,8 @@ test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios
 test: ao_same_trans_truncate_crash
 test: ao_fsync_panic
+test: uao_crash_compaction_column
+test: uao_crash_compaction_row
 
 test: prevent_ao_wal
 
@@ -159,6 +159,7 @@ test: uao/vacuum_cleanup_row
 test: uao/vacuum_index_stats_row
 test: uao/insert_should_not_use_awaiting_drop_row
 test: uao/bitmapindex_rescan_row
+test: uao/create_index_allows_readonly_row
 test: reorganize_after_ao_vacuum_skip_drop truncate_after_ao_vacuum_skip_drop mark_all_aoseg_await_drop
 # below test(s) inject faults so each of them need to be in a separate group
 test: segwalrep/master_xlog_switch
@@ -213,6 +214,7 @@ test: uao/vacuum_cleanup_column
 test: uao/vacuum_index_stats_column
 test: uao/insert_should_not_use_awaiting_drop_column
 test: uao/bitmapindex_rescan_column
+test: uao/create_index_allows_readonly_column
 test: add_column_after_vacuum_skip_drop_column
 test: vacuum_after_vacuum_skip_drop_column
 
@@ -315,6 +317,3 @@ test: alter_partition_table_owner
 
 # test copy/insert in utility mode on partition/inheritance hierarchies
 test: copy_insert_utility_mode_hierarchies
-
-# test TCP interconnect teardown bounded wait
-test: tcp_ic_teardown

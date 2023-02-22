@@ -66,17 +66,7 @@ JOBS_THAT_ARE_GATES = [
     'gate_release_candidate_start'
 ]
 
-JOBS_THAT_SHOULD_NOT_BLOCK_RELEASE = (
-    [
-        'prepare_binary_swap_gpdb_centos6',
-        'compile_gpdb_clients_windows',
-        'compile_gpdb_photon3',
-        'test_gpdb_clients_windows',
-        'walrep_2',
-        'Publish Server Builds',
-    ] + RELEASE_VALIDATOR_JOB + JOBS_THAT_ARE_GATES
-)
-
+default_os_type = 'rocky8'
 
 def suggested_git_remote():
     """Try to guess the current git remote"""
@@ -101,7 +91,7 @@ def suggested_git_remote():
 def suggested_git_branch():
     """Try to guess the current git branch"""
     branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode('utf-8').rstrip()
-    if branch == "master" or is_a_base_branch(branch):
+    if branch == "main" or is_a_base_branch(branch):
         return "<branch-name>"
     return branch
 
@@ -117,9 +107,9 @@ def render_template(template_filename, context):
     return TEMPLATE_ENVIRONMENT.get_template(template_filename).render(context)
 
 
-def validate_pipeline_release_jobs(raw_pipeline_yml):
+def validate_pipeline_release_jobs(raw_pipeline_yml, jobs_that_should_not_block_release):
     """Make sure all jobs in specified pipeline that don't block release are accounted
-    for (they should belong to JOBS_THAT_SHOULD_NOT_BLOCK_RELEASE, defined above)"""
+    for (they should belong to jobs_that_should_not_block_release, defined above)"""
     print("======================================================================")
     print("Validate Pipeline Release Jobs")
     print("----------------------------------------------------------------------")
@@ -139,7 +129,7 @@ def validate_pipeline_release_jobs(raw_pipeline_yml):
     non_release_blocking_jobs = [j for j in all_job_names if j not in release_blocking_jobs]
 
     unaccounted_for_jobs = \
-        [j for j in non_release_blocking_jobs if j not in JOBS_THAT_SHOULD_NOT_BLOCK_RELEASE]
+        [j for j in non_release_blocking_jobs if j not in jobs_that_should_not_block_release]
 
     if unaccounted_for_jobs:
         print("Please add the following jobs as a Release_Candidate dependency or ignore them")
@@ -158,16 +148,38 @@ def create_pipeline(args, git_remote, git_branch):
     else:
         test_trigger = "false"
 
-    if args.pipeline_target == 'prod':
-        variables_type = "prod"
-    else:
-        variables_type = "dev"
-
+    variables_type = args.pipeline_target
+    os_username = {
+        "centos6" : "centos",
+        "centos7" : "centos",
+        "rhel8" : "rhel",
+        "ubuntu18.04" : "ubuntu",
+        "rocky8" : "rocky",
+    }
+    test_os = {
+        "centos6" : "centos",
+        "centos7" : "centos",
+        "rhel8" : "centos",
+        "ubuntu18.04" : "ubuntu",
+        "rocky8" : "centos",
+    }
+    dist = {
+        "centos6" : "rhel6",
+        "centos7" : "rhel7",
+        "rhel8" : "rhel8",
+        "ubuntu18.04" : "ubuntu18.04",
+        "rocky8" : "rocky8",
+    }
     context = {
         'template_filename': args.template_filename,
         'generator_filename': os.path.basename(__file__),
         'timestamp': datetime.datetime.now(),
-        'os_types': args.os_types,
+        'os_type': args.os_type,
+        'default_os_type': default_os_type,
+        'os_username': os_username[args.os_type],
+        'test_os': test_os[args.os_type],
+        'dist': dist[args.os_type],
+        'pipeline_target': args.pipeline_target,
         'test_sections': args.test_sections,
         'pipeline_configuration': args.pipeline_configuration,
         'test_trigger': test_trigger,
@@ -179,9 +191,20 @@ def create_pipeline(args, git_remote, git_branch):
         'variables_type': variables_type
     }
 
+    jobs_that_should_not_block_release = (
+            [
+                'prepare_binary_swap_gpdb_' + args.os_type,
+                'compile_gpdb_clients_windows',
+                'compile_gpdb_photon3',
+                'test_gpdb_clients_windows',
+                'walrep_2',
+                'Publish Server Builds',
+            ] + RELEASE_VALIDATOR_JOB + JOBS_THAT_ARE_GATES
+    )
+
     pipeline_yml = render_template(args.template_filename, context)
     if args.pipeline_target == 'prod':
-        validated = validate_pipeline_release_jobs(pipeline_yml)
+        validated = validate_pipeline_release_jobs(pipeline_yml, jobs_that_should_not_block_release)
         if not validated:
             print("Refusing to update the pipeline file")
             return False
@@ -226,7 +249,7 @@ def header(args):
   Pipeline target: ......... : %s
   Pipeline file ............ : %s
   Template file ............ : %s
-  OS Types ................. : %s
+  OS Type .................. : %s
   Test sections ............ : %s
   test_trigger ............. : %s
   use_ICW_workers .......... : %s
@@ -236,7 +259,7 @@ def header(args):
 ''' % (args.pipeline_target,
        args.output_filepath,
        args.template_filename,
-       args.os_types,
+       args.os_type,
        args.test_sections,
        args.test_trigger_false,
        args.use_ICW_workers,
@@ -257,16 +280,18 @@ def print_fly_commands(args, git_remote, git_branch):
 
     if args.pipeline_target == 'prod':
         print('NOTE: You can set the production pipelines with the following:\n')
-        pipeline_name = "gpdb_%s" % BASE_BRANCH if BASE_BRANCH == "master" else BASE_BRANCH
+        pipeline_name = "gpdb_%s" % BASE_BRANCH if BASE_BRANCH == "main" else BASE_BRANCH
+        if args.os_type != default_os_type:
+            pipeline_name += "_" + args.os_type
         print(gen_pipeline(args, pipeline_name, ["common_prod.yml"],
                            "https://github.com/greenplum-db/gpdb.git", BASE_BRANCH))
         print(gen_pipeline(args, "%s_without_asserts" % pipeline_name, ["common_prod.yml", "without_asserts_common_prod.yml"],
                            "https://github.com/greenplum-db/gpdb.git", BASE_BRANCH))
         return
 
-    print('NOTE: You can set the developer pipeline with the following:\n')
-    print(gen_pipeline(args, pipeline_name, ["common_prod.yml", "common_dev.yml"], git_remote, git_branch))
-
+    else:
+        print('NOTE: You can set the developer pipeline with the following:\n')
+        print(gen_pipeline(args, pipeline_name, ["common_prod.yml", "common_" + args.pipeline_target + ".yml"], git_remote, git_branch))
 
 def main():
     """main: parse args and create pipeline"""
@@ -296,13 +321,12 @@ def main():
 
     parser.add_argument(
         '-O',
-        '--os_types',
+        '--os_type',
         action='store',
-        dest='os_types',
-        default=['centos6'],
-        choices=['centos6', 'centos7', 'rhel8', 'oracle7', 'photon3', 'sles12', 'ubuntu18.04', 'win'],
-        nargs='+',
-        help='List of OS values to support'
+        dest='os_type',
+        default=default_os_type,
+        choices=['centos6', 'centos7', 'rhel8','ubuntu18.04', 'rocky8'],
+        help='OS value to support'
     )
 
     parser.add_argument(
@@ -311,8 +335,9 @@ def main():
         action='store',
         dest='pipeline_target',
         default='dev',
-        help='Concourse target to use either: prod, dev, or <team abbreviation> '
-             'where abbreviation is found from the team\'s ccp secrets file name ending.'
+        help='Concourse target supported: prod, dev, dev2, cm, ud, or dp. '
+             'The Pipeline target value is also used to identify the CI '
+             'project specific common file in the vars directory.'
     )
 
     parser.add_argument(
@@ -333,11 +358,9 @@ def main():
         dest='test_sections',
         choices=[
             'ICW',
-            'Replication',
             'ResourceGroups',
             'Interconnect',
             'CLI',
-            'UD',
             'AA',
             'Extensions',
             'Gpperfmon'
@@ -414,7 +437,6 @@ def main():
         args.use_ICW_workers = True
 
     if args.pipeline_configuration == 'prod' or args.pipeline_configuration == 'full' or args.directed_release:
-        args.os_types = ['centos6', 'centos7', 'rhel8', 'oracle7', 'sles12', 'ubuntu18.04', 'photon3', 'win']
         args.test_sections = [
             'ICW',
             'Replication',
@@ -426,10 +448,6 @@ def main():
             'Extensions',
             'Gpperfmon'
         ]
-    # currently, ICW tests for oracle7 consumes the artifact produced by centos7
-    if 'oracle7' in args.os_types and not 'centos7' in args.os_types:
-        print("oracle7 depends on centos7")
-        args.os_types.append('centos7')
 
     git_remote = suggested_git_remote()
     git_branch = suggested_git_branch()

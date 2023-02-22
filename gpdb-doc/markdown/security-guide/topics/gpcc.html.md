@@ -4,7 +4,7 @@ title: Greenplum Command Center Security
 
 Greenplum Command Center is a web-based application for monitoring and managing Greenplum clusters. Command Center works with data collected by agents running on the segment hosts and saved to the gpperfmon database. Installing Command Center creates the gpperfmon database and the `gpmon` database role if they do not already exist. It creates the `gpmetrics` schema in the gpperfmon database, which contains metrics and query history tables populated by the Greenplum Database metrics collector module.
 
-**Note:** The `gpperfmon_install` utility also creates the gpperfmon database and `gpmon` role, but Command Center no longer requires the history tables it creates in the database. Do not use `gpperfmon_install` unless you need the old query history tables for some other purpose. `gpperfmon_install` enables the `gpmmon` and `gpsmon` agents, which add unnecessary load to the Greenplum Database system if you do not need the old history tables.
+> **Note** The `gpperfmon_install` utility also creates the gpperfmon database and `gpmon` role, but Command Center no longer requires the history tables it creates in the database. Do not use `gpperfmon_install` unless you need the old query history tables for some other purpose. `gpperfmon_install` enables the `gpmmon` and `gpsmon` agents, which add unnecessary load to the Greenplum Database system if you do not need the old history tables.
 
 ## <a id="gpmon"></a>The gpmon User 
 

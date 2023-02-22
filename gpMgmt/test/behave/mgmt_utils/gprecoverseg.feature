@@ -270,6 +270,174 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And the cluster is rebalanced
 
+  @demo_cluster
+  Scenario: gprecoverseg should not give warning if pg_basebackup is running for the up segments
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And user immediately stops all primary processes for content 0,1
+    And user can start transactions
+    And an FTS probe is triggered
+    And the user suspend the walsender on the primary on content 2
+    And the user asynchronously runs pg_basebackup with primary of content 2 as source and the process is saved
+    And an FTS probe is triggered
+    And gp_stat_replication table has pg_basebackup entry for content 2
+    When the user runs "gprecoverseg -avF"
+    Then gprecoverseg should return a return code of 0
+    And gprecoverseg should not print "No basebackup running" to stdout
+    And verify that mirror on content 0,1 is up
+    And an FTS probe is triggered
+    And gp_stat_replication table has pg_basebackup entry for content 2
+    And the user reset the walsender on the primary on content 2
+    And the user waits until saved async process is completed
+    And the user waits until mirror on content 2 is up
+    And user can start transactions
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And the cluster is rebalanced
+
+  @demo_cluster
+  @concourse_cluster
+  Scenario: gprecoverseg gives warning if pg_basebackup already running for one of the failed segments
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And user immediately stops all primary processes for content 0,1,2
+    And user can start transactions
+    And the user suspend the walsender on the primary on content 0
+    And the user asynchronously runs "gprecoverseg -aF" and the process is saved
+    And the user just waits until recovery_progress.file is created in gpAdminLogs
+    And user waits until gp_stat_replication table has no pg_basebackup entries for content 1,2
+    And an FTS probe is triggered
+    And the user waits until mirror on content 1,2 is up
+    And verify that mirror on content 0 is down
+    And the gprecoverseg lock directory is removed
+    And user immediately stops all primary processes for content 1,2
+    And the user waits until mirror on content 1,2 is down
+    When the user runs "gprecoverseg -avF"
+    Then gprecoverseg should return a return code of 0
+    And gprecoverseg should print "Found pg_basebackup running for segments with contentIds [0], skipping recovery of these segments" to logfile
+    And verify that mirror on content 1,2 is up
+    And verify that mirror on content 0 is down
+    And an FTS probe is triggered
+    And the user reset the walsender on the primary on content 0
+    And the user waits until saved async process is completed
+    And recovery_progress.file should not exist in gpAdminLogs
+    And verify that mirror on content 0 is up
+    And the user runs "gprecoverseg -avF"
+    Then gprecoverseg should print "No basebackup running" to stdout
+    And gprecoverseg should return a return code of 0
+    And the cluster is rebalanced
+
+  @demo_cluster
+  @concourse_cluster
+  Scenario: gprecoverseg gives warning if pg_basebackup already running for some of the failed segments
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And user immediately stops all primary processes for content 0,1,2
+    And user can start transactions
+    And the user suspend the walsender on the primary on content 0
+    And the user suspend the walsender on the primary on content 1
+    And the user asynchronously runs "gprecoverseg -aF" and the process is saved
+    And the user just waits until recovery_progress.file is created in gpAdminLogs
+    And user waits until gp_stat_replication table has no pg_basebackup entries for content 2
+    And an FTS probe is triggered
+    And the user waits until mirror on content 2 is up
+    And verify that mirror on content 0,1 is down
+    And the gprecoverseg lock directory is removed
+    And user immediately stops all primary processes for content 2
+    And the user waits until mirror on content 2 is down
+    When the user runs "gprecoverseg -avF"
+    Then gprecoverseg should return a return code of 0
+    And gprecoverseg should print "Found pg_basebackup running for segments with contentIds [0, 1], skipping recovery of these segments" to logfile
+    And verify that mirror on content 2 is up
+    And verify that mirror on content 0,1 is down
+    And an FTS probe is triggered
+    And the user reset the walsender on the primary on content 0
+    And the user reset the walsender on the primary on content 1
+    And the user waits until saved async process is completed
+    And recovery_progress.file should not exist in gpAdminLogs
+    And verify that mirror on content 0,1 is up
+    And the user runs "gprecoverseg -avF"
+    Then gprecoverseg should print "No basebackup running" to stdout
+    And gprecoverseg should return a return code of 0
+    And the cluster is rebalanced
+
+  @demo_cluster
+  @concourse_cluster
+  Scenario: gprecoverseg -aF gives warning if pg_basebackup already running for all of the failed segments
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And user immediately stops all primary processes for content 0,1,2
+    And user can start transactions
+    And the user suspend the walsender on the primary on content 0
+    And the user suspend the walsender on the primary on content 1
+    And the user suspend the walsender on the primary on content 2
+    And the user asynchronously runs "gprecoverseg -aF" and the process is saved
+    And the user just waits until recovery_progress.file is created in gpAdminLogs
+    And verify that mirror on content 0,1,2 is down
+    And the gprecoverseg lock directory is removed
+    When the user runs "gprecoverseg -aF"
+    Then gprecoverseg should return a return code of 0
+    And gprecoverseg should print "Found pg_basebackup running for segments with contentIds [0, 1, 2], skipping recovery of these segments" to logfile
+    And gprecoverseg should print "No segments to recover" to stdout
+    And verify that mirror on content 0,1,2 is down
+    And an FTS probe is triggered
+    And the user reset the walsender on the primary on content 0
+    And the user reset the walsender on the primary on content 1
+    And the user reset the walsender on the primary on content 2
+    And the user waits until saved async process is completed
+    And recovery_progress.file should not exist in gpAdminLogs
+    And verify that mirror on content 0,1,2 is up
+    And the user runs "gprecoverseg -avF"
+    Then gprecoverseg should print "No basebackup running" to stdout
+    And gprecoverseg should return a return code of 0
+    And verify that mirror on content 0,1,2 is up
+    And the cluster is rebalanced
+
+  @demo_cluster
+  @concourse_cluster
+  Scenario: gprecoverseg -i gives warning if pg_basebackup already running for all failed segments
+    Given the database is running
+    And all the segments are running
+    And the segments are synchronized
+    And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+    And user immediately stops all primary processes for content 0,1,2
+    And user can start transactions
+    And the user suspend the walsender on the primary on content 0
+    And the user suspend the walsender on the primary on content 1
+    And the user suspend the walsender on the primary on content 2
+    And a gprecoverseg directory under '/tmp' with mode '0700' is created
+    And a gprecoverseg input file is created
+    And edit the input file to recover mirror with content 0 full inplace
+    And edit the input file to recover mirror with content 1 full inplace
+    And edit the input file to recover mirror with content 2 full inplace
+    When the user asynchronously runs gprecoverseg with input file and additional args "-a" and the process is saved
+    Then the user just waits until recovery_progress.file is created in gpAdminLogs
+    And verify that mirror on content 0,1,2 is down
+    And the gprecoverseg lock directory is removed
+    When the user runs gprecoverseg with input file and additional args "-a"
+    Then gprecoverseg should print "Found pg_basebackup running for segments with contentIds [0, 1, 2], skipping recovery of these segments" to logfile
+    And gprecoverseg should print "No segments to recover" to stdout
+    And gprecoverseg should return a return code of 0
+    And verify that mirror on content 0,1,2 is down
+    And an FTS probe is triggered
+    And the user reset the walsender on the primary on content 0
+    And the user reset the walsender on the primary on content 1
+    And the user reset the walsender on the primary on content 2
+    And the user waits until saved async process is completed
+    And recovery_progress.file should not exist in gpAdminLogs
+    And verify that mirror on content 0,1,2 is up
+    When the user runs gprecoverseg with input file and additional args "-av"
+    Then gprecoverseg should print "No basebackup running" to stdout
+    And gprecoverseg should return a return code of 0
+    Then the cluster is rebalanced
+
     Scenario: gprecoverseg keeps segment logs
       Given the database is running
       And all the segments are running
@@ -416,6 +584,7 @@ Feature: gprecoverseg tests
     Then the user waits until recovery_progress.file is created in gpAdminLogs and verifies its format
     And the user waits until saved async process is completed
     And recovery_progress.file should not exist in gpAdminLogs
+    And an FTS probe is triggered
     And the user waits until mirror on content 0,1,2 is up
     And user can start transactions
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -430,7 +599,9 @@ Feature: gprecoverseg tests
 #      | \S+     | [0-9]+ | incremental    | [0-9]+                 | [0-9]+             | [0-9]+\%             |
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
+    And the cluster is rebalanced
     And user immediately stops all primary processes for content 0,1,2
+    And the user waits until mirror on content 0,1,2 is down
     And user can start transactions
     When the user asynchronously runs "gprecoverseg -aF" and the process is saved
     And the user suspend the walsender on the primary on content 0
@@ -440,6 +611,7 @@ Feature: gprecoverseg tests
     And the user reset the walsender on the primary on content 0
     And the user waits until saved async process is completed
     And recovery_progress.file should not exist in gpAdminLogs
+    And an FTS probe is triggered
     And the user waits until mirror on content 0,1,2 is up
     And user can start transactions
 
@@ -533,6 +705,7 @@ Feature: gprecoverseg tests
     Then recovery_progress.file should not exist in gpAdminLogs
     Then the user reset the walsender on the primary on content 0
     And the gprecoverseg lock directory is removed
+    And an FTS probe is triggered
     And the user waits until mirror on content 0,1,2 is up
     And verify that lines from recovery_progress.file are present in segment progress files in gpAdminLogs
     And the cluster is rebalanced
@@ -556,6 +729,8 @@ Feature: gprecoverseg tests
     And edit the input file to recover mirror with content 2 incremental
     When the user asynchronously runs gprecoverseg with input file and additional args "-a" and the process is saved
     Then the user waits until recovery_progress.file is created in gpAdminLogs and verifies its format
+    And user waits until gp_stat_replication table has no pg_basebackup entries for content 1
+    And an FTS probe is triggered
     And the user waits until mirror on content 1,2 is up
     And verify that mirror on content 0 is down
     And user can start transactions
@@ -846,7 +1021,7 @@ Feature: gprecoverseg tests
          When user kills a "mirror" process with the saved information
           And user can start transactions
          Then the saved "mirror" segment is marked down in config
-         When the user runs "gprecoverseg -a -p mdw"
+         When the user runs "gprecoverseg -a -p cdw"
          Then gprecoverseg should return a return code of 0
          When user kills a "primary" process with the saved information
           And user can start transactions
@@ -896,7 +1071,7 @@ Feature: gprecoverseg tests
       And all the segments are running
       And the segments are synchronized
       And the information of contents 0,1,2 is saved
-      And all files in gpAdminLogs directory are deleted on hosts mdw,sdw1,sdw2
+      And all files in gpAdminLogs directory are deleted on hosts cdw,sdw1,sdw2
       And the "primary" segment information is saved
 
       And the primary on content 0 is stopped

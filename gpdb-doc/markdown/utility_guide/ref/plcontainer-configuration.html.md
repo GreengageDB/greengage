@@ -44,6 +44,7 @@ This is an example file. Note that all XML elements, names, and attributes are c
         <command>/clientdir/rclient.sh</command>
         <shared_directory access="ro" container="/clientdir" host="/usr/local/greenplum-db/bin/plcontainer_clients"/>
         <setting use_container_logging="yes"/>
+        <setting enable_network="no"/>
         <setting roles="gpadmin,user1"/>
     </runtime>
     <runtime>
@@ -91,7 +92,7 @@ command
 
 :   You should modify the value only if you build a custom container and want to implement some additional initialization logic before the container starts.
 
-    **Note:** This element cannot be set with the `plcontainer` utility. You can update the configuration file with the `plcontainer runtime-edit` command.
+    > **Note** This element cannot be set with the `plcontainer` utility. You can update the configuration file with the `plcontainer runtime-edit` command.
 
 shared\_directory
 :   Optional. This element specifies a shared Docker shared volume for a container with access information. Multiple `shared_directory` elements are allowed. Each `shared_directory` element specifies a single shared volume. XML attributes for the `shared_directory` element:
@@ -138,6 +139,9 @@ settings
 
     use\_container\_logging="\{yes \| no\}"
     :   Optional.  Activates or deactivates  Docker logging for the container. The attribute value `yes` enables logging. The attribute value `no` deactivates logging \(the default\).
+
+    enable\_network="\{yes \| no\}"
+    :   Optional. Available starting with PL/Container version 2.2, this attribute activates or deactivates network access for the UDF container. The attribute value `yes` enables UDFs to access the network. The attribute value `no` deactivates network access \(the default\).
 
     The Greenplum Database server configuration parameter [log\_min\_messages](../../ref_guide/config_params/guc-list.html) controls the PL/Container log level. The default log level is `warning`. For information about PL/Container log information, see [Notes](../../analytics/pl_container_using.html).
 

@@ -1298,16 +1298,11 @@ CXformUtils::PexprLogicalPartitionSelector(CMemoryPool *mp,
 	IMDId *rel_mdid = ptabdesc->MDId();
 	rel_mdid->AddRef();
 
-	// create an oid column
-	CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-	const IMDTypeOid *pmdtype = md_accessor->PtMDType<IMDTypeOid>();
-	CColRef *pcrOid = col_factory->PcrCreate(pmdtype, default_type_modifier);
 	CExpressionArray *pdrgpexprFilters =
 		PdrgpexprPartEqFilters(mp, ptabdesc, colref_array);
 
-	CLogicalPartitionSelector *popSelector = GPOS_NEW(mp)
-		CLogicalPartitionSelector(mp, rel_mdid, pdrgpexprFilters, pcrOid);
+	CLogicalPartitionSelector *popSelector =
+		GPOS_NEW(mp) CLogicalPartitionSelector(mp, rel_mdid, pdrgpexprFilters);
 
 	return GPOS_NEW(mp) CExpression(mp, popSelector, pexprChild);
 }
@@ -1336,54 +1331,12 @@ CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
 		val = CScalarDMLAction::EdmlactionDelete;
 	}
 
-	// new expressions to project
+	// generate one project node with new column: action
 	IMDId *rel_mdid = ptabdesc->MDId();
-	CExpression *pexprProject = NULL;
-	CColRef *pcrAction = NULL;
-	CColRef *pcrOid = NULL;
-
-	if (ptabdesc->IsPartitioned())
-	{
-		// generate a PartitionSelector node which generates OIDs, then add a project
-		// on top of that to add the action column
-		CExpression *pexprSelector = PexprLogicalPartitionSelector(
-			mp, ptabdesc, colref_array, pexprChild);
-		if (CUtils::FGeneratePartOid(ptabdesc->MDId()))
-		{
-			pcrOid = CLogicalPartitionSelector::PopConvert(pexprSelector->Pop())
-						 ->PcrOid();
-		}
-		pexprProject = CUtils::PexprAddProjection(
-			mp, pexprSelector, CUtils::PexprScalarConstInt4(mp, val));
-		CExpression *pexprPrL = (*pexprProject)[1];
-		pcrAction = CUtils::PcrFromProjElem((*pexprPrL)[0]);
-	}
-	else
-	{
-		CExpressionArray *pdrgpexprProjected =
-			GPOS_NEW(mp) CExpressionArray(mp);
-		// generate one project node with two new columns: action, oid (based on the traceflag)
-		pdrgpexprProjected->Append(CUtils::PexprScalarConstInt4(mp, val));
-
-		BOOL fGeneratePartOid = CUtils::FGeneratePartOid(ptabdesc->MDId());
-		if (fGeneratePartOid)
-		{
-			OID oidTable = CMDIdGPDB::CastMdid(rel_mdid)->Oid();
-			pdrgpexprProjected->Append(
-				CUtils::PexprScalarConstOid(mp, oidTable));
-		}
-
-		pexprProject =
-			CUtils::PexprAddProjection(mp, pexprChild, pdrgpexprProjected);
-		pdrgpexprProjected->Release();
-
-		CExpression *pexprPrL = (*pexprProject)[1];
-		pcrAction = CUtils::PcrFromProjElem((*pexprPrL)[0]);
-		if (fGeneratePartOid)
-		{
-			pcrOid = CUtils::PcrFromProjElem((*pexprPrL)[1]);
-		}
-	}
+	CExpression *pexprProject = CUtils::PexprAddProjection(
+		mp, pexprChild, CUtils::PexprScalarConstInt4(mp, val));
+	CExpression *pexprPrL = (*pexprProject)[1];
+	CColRef *pcrAction = CUtils::PcrFromProjElem((*pexprPrL)[0]);
 
 	GPOS_ASSERT(NULL != pcrAction);
 
@@ -1411,7 +1364,7 @@ CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
 		GPOS_NEW(mp)
 			CLogicalDML(mp, edmlop, ptabdesc, colref_array,
 						GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/, pcrAction,
-						pcrOid, pcrCtid, pcrSegmentId, NULL /*pcrTupleOid*/),
+						pcrCtid, pcrSegmentId, NULL /*pcrTupleOid*/),
 		pexprProject);
 
 	CExpression *pexprOutput = pexprDML;
@@ -2384,8 +2337,8 @@ CXformUtils::PexprRowNumber(CMemoryPool *mp)
 							 ->OidRowNumber();
 
 	CScalarWindowFunc *popRowNumber = GPOS_NEW(mp) CScalarWindowFunc(
-		mp, GPOS_NEW(mp) CMDIdGPDB(row_number_oid),
-		GPOS_NEW(mp) CMDIdGPDB(GPDB_INT8_OID),
+		mp, GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, row_number_oid),
+		GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidGeneral, GPDB_INT8_OID),
 		GPOS_NEW(mp) CWStringConst(mp, GPOS_WSZ_LIT("row_number")),
 		CScalarWindowFunc::EwsImmediate, false /* is_distinct */,
 		false /* is_star_arg */, false /* is_simple_agg */
@@ -2757,7 +2710,7 @@ CXformUtils::FProcessGPDBAntiSemiHashJoin(
 			if (FExtractEquality(
 					pexprPred, &pexprEquality,
 					&pexprFalse) &&	 // extracted equality expression
-				IMDId::EmdidGPDB ==
+				IMDId::EmdidGeneral ==
 					CScalarConst::PopConvert(pexprFalse->Pop())
 						->GetDatum()
 						->MDId()

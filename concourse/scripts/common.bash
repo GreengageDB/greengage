@@ -39,9 +39,9 @@ function os_version() {
 function build_arch() {
 	local id=$(os_id)
 	local version=$(os_version)
-	# BLD_ARCH expects rhel{6,7,8}_x86_64 || photon3_x86_64 || sles12_x86_64 || ubuntu18.04_x86_64
+	# BLD_ARCH expects rhel{6,7,8}_x86_64 || rocky8_x86_64 || photon3_x86_64 || sles12_x86_64 || ubuntu18.04_x86_64
 	case ${id} in
-	photon | sles) version=$(os_version | cut -d. -f1) ;;
+	photon | sles | rocky) version=$(os_version | cut -d. -f1) ;;
 	centos) id="rhel" ;;
 	*) ;;
 	esac
@@ -71,7 +71,7 @@ function configure() {
 	# The full set of configure options which were used for building the
 	# tree must be used here as well since the toplevel Makefile depends
 	# on these options for deciding what to test. Since we don't ship
-	./configure --prefix=/usr/local/greenplum-db-devel --with-perl --with-python --with-libxml --enable-mapreduce --enable-orafce --enable-tap-tests --disable-orca --with-openssl ${CONFIGURE_FLAGS}
+	./configure --prefix=/usr/local/greenplum-db-devel --with-perl --with-python --with-libxml --with-uuid=e2fs --enable-mapreduce --enable-orafce --enable-tap-tests --disable-orca --with-openssl ${CONFIGURE_FLAGS}
 
 	popd
 }
@@ -92,22 +92,22 @@ function make_cluster() {
 	if [[ "$MAKE_TEST_COMMAND" =~ gp_interconnect_type=proxy ]]; then
 		# generate the addresses for proxy mode
 		su gpadmin -c bash -- -e <<EOF
-      source /usr/local/greenplum-db-devel/greenplum_path.sh
-      source $PWD/gpdemo-env.sh
+			source /usr/local/greenplum-db-devel/greenplum_path.sh
+			source $PWD/gpdemo-env.sh
 
-      delta=-3000
+			delta=-3000
 
-      psql -tqA -d postgres -P pager=off -F: -R, \
-          -c "select dbid, content, address, port+\$delta as port
-                from gp_segment_configuration
-               order by 1" \
-      | xargs -rI'{}' \
-        gpconfig --skipvalidation -c gp_interconnect_proxy_addresses -v "'{}'"
+			psql -tqA -d postgres -P pager=off -F: -R, \
+					-c "select dbid, content, address, port+\$delta as port
+								from gp_segment_configuration
+								order by 1" \
+			| xargs -rI'{}' \
+				gpconfig --skipvalidation -c gp_interconnect_proxy_addresses -v "'{}'"
 
-      # also have to enlarge gp_interconnect_tcp_listener_backlog
-      gpconfig -c gp_interconnect_tcp_listener_backlog -v 1024
+			# also have to enlarge gp_interconnect_tcp_listener_backlog
+			gpconfig -c gp_interconnect_tcp_listener_backlog -v 1024
 
-      gpstop -u
+			gpstop -u
 EOF
 	fi
 

@@ -137,6 +137,8 @@ create_gang_retry:
 			if (segdbDesc->conn != NULL && !cdbconn_isBadConnection(segdbDesc))
 			{
 				connStatusDone[i] = true;
+				/* -1 means this connection is cached */
+				segdbDesc->establishConnTime = -1;
 				successful_connections++;
 				continue;
 			}
@@ -183,6 +185,9 @@ create_gang_retry:
 		 * all completed or we reach timeout.
 		 */
 		gettimeofday(&startTS, NULL);
+
+		instr_time              starttime, endtime;
+		INSTR_TIME_SET_CURRENT(starttime); /* record starttime of create gang */
 		fds = (struct pollfd *) palloc0(sizeof(struct pollfd) * size);
 
 		for (;;)
@@ -213,7 +218,10 @@ create_gang_retry:
 											errdetail("Internal error: No motion listener port (%s)", segdbDesc->whoami)));
 						successful_connections++;
 						connStatusDone[i] = true;
-
+						/* the connection of segdbDesc is established successfully, calculate the time of establishConnTime */
+						INSTR_TIME_SET_CURRENT(endtime);
+						INSTR_TIME_SUBTRACT(endtime, starttime);
+						segdbDesc->establishConnTime = INSTR_TIME_GET_MILLISEC(endtime);
 						continue;
 
 					case PGRES_POLLING_READING:

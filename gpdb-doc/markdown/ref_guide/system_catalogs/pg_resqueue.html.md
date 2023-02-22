@@ -2,7 +2,7 @@
 title: pg_resqueue 
 ---
 
-**Note:** The `pg_resqueue` system catalog table is valid only when resource queue-based resource management is active.
+> **Note** The `pg_resqueue` system catalog table is valid only when resource queue-based resource management is active.
 
 The `pg_resqueue` system catalog table contains information about Greenplum Database resource queues, which are used for the resource management feature. This table is populated only on the master. This table is defined in the `pg_global` tablespace, meaning it is globally shared across all databases in the system.
 

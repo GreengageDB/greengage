@@ -8,7 +8,7 @@ which can cause query performance degradation in the system, including catalog q
 |`segid`|integer|The id of the segment containing the suboverflowed backend.|
 |`pids`|integer[]|A list of the pids of all suboverflowed backends on this segment.|
 
-**NOTE**: As this is not a `pg_catalog` view, you must run the following command to make this view available:
+> **Note** As this is not a `pg_catalog` view, you must run the following command to make this view available:
 
 ```
 CREATE EXTENSION gp_subtransaction_overflow;

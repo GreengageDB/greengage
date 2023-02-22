@@ -140,7 +140,7 @@ listen\_port
     Default: 6432
 
 unix\_socket\_dir
-:   Specifies the location for the Unix sockets. Applies to both listening socket and server connections. If set to an empty string, Unix sockets are disabled. A value that starts with @ specifies that a Unix socket in the abstract namespace should be created.
+:   Specifies the location for the Unix sockets. Applies to both listening socket and server connections. If set to an empty string, Unix sockets are deactivated. A value that starts with @ specifies that a Unix socket in the abstract namespace should be created.
 
 :   For online reboot (`-R`) to work, a Unix socket needs to be configured, and it needs to be in the file-system namespace.
 
@@ -231,15 +231,15 @@ default\_pool\_size
 min\_pool\_size
 :   Add more server connections to the pool when it is lower than this number. This improves behavior when the usual load drops and then returns suddenly after a period of total inactivity. The value is effectively capped at the pool size.
 
-    Default: 0 \(disabled\)
+    Default: 0 \(deactivated\)
 
 reserve\_pool\_size
-:   The number of additional connections to allow for a pool (see `reserve_pool_timeout`). `0` disables.
+:   The number of additional connections to allow for a pool (see `reserve_pool_timeout`). `0` deactivates.
 
-    Default: 0 \(disabled\)
+    Default: 0 \(deactivated\)
 
 reserve\_pool\_timeout
-:   If a client has not been serviced in this many seconds, PgBouncer enables use of additional connections from the reserve pool. `0` disables.
+:   If a client has not been serviced in this many seconds, PgBouncer enables use of additional connections from the reserve pool. `0` deactivates.
 
     Default: 5.0
 
@@ -272,7 +272,7 @@ ignore\_startup\_parameters
     Default: empty
 
 disable\_pqexec
-:   Disable Simple Query protocol \(PQexec\). Unlike Extended Query protocol, Simple Query protocol allows multiple queries in one packet, which allows some classes of SQL-injection attacks. Disabling it can improve security. This means that only clients that exclusively use Extended Query protocol will work.
+:   Deactivates Simple Query protocol \(PQexec\). Unlike Extended Query protocol, Simple Query protocol allows multiple queries in one packet, which allows some classes of SQL-injection attacks. Deactivating it can improve security. This means that only clients that exclusively use Extended Query protocol will work.
 
     Default: 0
 
@@ -332,7 +332,7 @@ log\_pooler\_errors
     Default: 1
 
 log\_stats
-:   Write aggregated statistics into the log, every `stats_period`. This can be disabled if external monitoring tools are used to grab the same data from `SHOW` commands.
+:   Write aggregated statistics into the log, every `stats_period`. This can be deactivated if external monitoring tools are used to grab the same data from `SHOW` commands.
 
     Default: 1
 
@@ -360,7 +360,7 @@ server\_reset\_query
 
     The query should clean any changes made to a database session so that the next client gets a connection in a well-defined state. Default is `DISCARD ALL` which cleans everything, but that leaves the next client no pre-cached state. It can be made lighter, e.g. `DEALLOCATE ALL` to just drop prepared statements, if the application does not break when some state is kept around.
 
-    **Note:** Greenplum Database does not support `DISCARD ALL`.
+    > **Note** Greenplum Database does not support `DISCARD ALL`.
 
     When transaction pooling is used, the `server_reset_query` is not used, as clients must not use any session-based features as each transaction ends up in a different connection and thus gets a different session state.
 
@@ -381,7 +381,7 @@ server\_check\_delay
 server\_check\_query
 :   A simple do-nothing query to test the server connection.
 
-    If an empty string, then sanity checking is disabled.
+    If an empty string, then sanity checking is deactivated.
 
     Default: SELECT 1;
 
@@ -400,7 +400,7 @@ server\_lifetime
     Default: 3600.0
 
 server\_idle\_timeout
-:   If a server connection has been idle more than this many seconds it is dropped. If this parameter is set to `0`, timeout is disabled. \[seconds\]
+:   If a server connection has been idle more than this many seconds it is dropped. If this parameter is set to `0`, timeout is deactivated. \[seconds\]
 
     Default: 600.0
 
@@ -441,7 +441,7 @@ dns\_zone\_check\_period
 
     Works only with UDNS and c-ares backend \(`--with-udns` or `--with-cares` to configure\).
 
-    Default: 0.0 \(disabled\)
+    Default: 0.0 \(deactivated\)
 
 resolv\_conf
 :   The location of a custom `resolv.conf` file. This is to allow specifying custom DNS servers and perhaps other name resolution options, independent of the global operating system configuration.
@@ -456,7 +456,7 @@ resolv\_conf
 ### <a id="tlsset"></a>TLS settings 
 
 client\_tls\_sslmode
-:   TLS mode to use for connections from clients. TLS connections are disabled by default. When enabled, `client_tls_key_file` and `client_tls_cert_file` must be also configured to set up the key and certificate PgBouncer uses to accept client connections.
+:   TLS mode to use for connections from clients. TLS connections are deactivated by default. When enabled, `client_tls_key_file` and `client_tls_cert_file` must be also configured to set up the key and certificate PgBouncer uses to accept client connections.
 
     -   `disable`: Plain TCP. If client requests TLS, it’s ignored. Default.
     -   `allow`: If client requests TLS, it is used. If not, plain TCP is used. If client uses client-certificate, it is not validated.
@@ -499,19 +499,19 @@ client\_tls\_ciphers
 client\_tls\_ecdhcurve
 :   Elliptic Curve name to use for ECDH key exchanges.
 
-:   Allowed values: `none` \(DH is disabled\), `auto` \(256-bit ECDH\), curve name.
+:   Allowed values: `none` \(DH is deactivated\), `auto` \(256-bit ECDH\), curve name.
 
 :   Default: `auto`
 
 client\_tls\_dheparams
 :   DHE key exchange type.
 
-:   Allowed values: `none` \(DH is disabled\), `auto` \(2048-bit DH\), `legacy` \(1024-bit DH\).
+:   Allowed values: `none` \(DH is deactivated\), `auto` \(2048-bit DH\), `legacy` \(1024-bit DH\).
 
 :   Default: `auto`
 
 server\_tls\_sslmode
-:   TLS mode to use for connections to Greenplum Database and PostgreSQL servers. TLS connections are disabled by default.
+:   TLS mode to use for connections to Greenplum Database and PostgreSQL servers. TLS connections are deactivated by default.
 
     -   `disable`: Plain TCP. TLS is not requested from the server. Default.
     -   `allow`: If server rejects plain, try TLS. \(*PgBouncer Documentation is speculative on this.*\)
@@ -554,7 +554,7 @@ Setting the following timeouts can cause unexpected errors.
 query\_timeout
 :   Queries running longer than this \(seconds\) are canceled. This parameter should be used only with a slightly smaller server-side `statement_timeout`, to apply only for network problems. \[seconds\]
 
-    Default: 0.0 \(disabled\)
+    Default: 0.0 \(deactivated\)
 
 query\_wait\_timeout
 :   The maximum time, in seconds, queries are allowed to wait for execution. If the query is not assigned to a server during that time, the client is disconnected. This is used to prevent unresponsive servers from grabbing up connections. \[seconds\]
@@ -564,12 +564,12 @@ query\_wait\_timeout
 client\_idle\_timeout
 :   Client connections idling longer than this many seconds are closed. This should be larger than the client-side connection lifetime settings, and only used for network problems. \[seconds\]
 
-    Default: 0.0 \(disabled\)
+    Default: 0.0 \(deactivated\)
 
 idle\_transaction\_timeout
 :   If client has been in "idle in transaction" state longer than this \(seconds\), it is disconnected. \[seconds\]
 
-    Default: 0.0 \(disabled\)
+    Default: 0.0 \(deactivated\)
 
 suspend\_timeout
 :   How many seconds to wait for buffer flush during `SUSPEND` or reboot (`-R`). A connection is dropped if the flush does not succeed.
@@ -643,14 +643,19 @@ tcp\_user\_timeout
 
 This section contains `key`=`value` pairs, where the `key` is a user name and the `value` is a `libpq` connect-string list of `key`=`value` pairs of configuration settings specific for this user. Only a few settings are available here.
 
-**Pool configuration**
-
 pool\_mode
 :   Set the pool mode for all connections from this user. If not set, the database or default `pool_mode` is used.
 
 max\_user\_connection
 :   Configure a maximum for the user (i.e. all pools with the user will not have more than this many server connections).
 
+For example:
+
+```
+[users]
+
+user1 = pool_mode=transaction max_user_connections=10
+```
 
 ## <a id="topic_xw4_dtc_gs"></a>Example Configuration Files 
 

@@ -421,7 +421,11 @@ static BackgroundWorker PMAuxProcList[MaxPMAuxProc] =
 
 #ifdef ENABLE_IC_PROXY
 	{"ic proxy process",
+#ifdef FAULT_INJECTOR
+	 BGWORKER_SHMEM_ACCESS,
+#else
 	 0,
+#endif
 	 BgWorkerStart_RecoveryFinished,
 	 0, /* restart immediately if ic proxy process exits with non-zero code */
 	 ICProxyMain, {0}, {0}, 0, 0,
@@ -2003,6 +2007,10 @@ ServerLoop(void)
 				start_autovac_launcher = false; /* signal processed */
 		}
 
+		/* If we have lost the archiver, try to start a new one */
+		if (XLogArchivingActive() && PgArchPID == 0 && pmState == PM_RUN)
+			PgArchPID = pgarch_start();
+
 		/* If we have lost the stats collector, try to start a new one */
 		if (PgStatPID == 0 &&
 			(pmState == PM_RUN || pmState == PM_HOT_STANDBY))
@@ -3534,9 +3542,9 @@ CleanupBackgroundWorker(int pid,
 						int exitstatus) /* child's exit status */
 {
 	char		namebuf[MAXPGPATH];
-	slist_iter	iter;
+	slist_mutable_iter	iter;
 
-	slist_foreach(iter, &BackgroundWorkerList)
+	slist_foreach_modify(iter, &BackgroundWorkerList)
 	{
 		RegisteredBgWorker *rw;
 
@@ -3610,9 +3618,10 @@ CleanupBackgroundWorker(int pid,
 		rw->rw_backend = NULL;
 		rw->rw_pid = 0;
 		rw->rw_child_slot = 0;
-		ReportBackgroundWorkerPID(rw);	/* report child death */
+		ReportBackgroundWorkerExit(&iter);	/* report child death */
 
-		LogChildExit(LOG, namebuf, pid, exitstatus);
+		LogChildExit(EXIT_STATUS_0(exitstatus) ? DEBUG1 : LOG,
+							    namebuf, pid, exitstatus);
 
 		return true;
 	}
@@ -6085,7 +6094,7 @@ do_start_bgworker(RegisteredBgWorker *rw)
 		return false;
 	}
 
-	ereport(LOG,
+	ereport(DEBUG1,
 			(errmsg("starting background worker process \"%s\"",
 					rw->rw_worker.bgw_name)));
 

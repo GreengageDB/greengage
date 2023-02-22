@@ -629,8 +629,6 @@ transformRelOptions(Datum oldOptions, List *defList, char *namspace,
 		int			noldoptions;
 		int			i;
 
-		Assert(ARR_ELEMTYPE(array) == TEXTOID);
-
 		deconstruct_array(array, TEXTOID, -1, false, 'i',
 						  &oldoptions, NULL, &noldoptions);
 
@@ -786,8 +784,6 @@ untransformRelOptions(Datum options)
 
 	array = DatumGetArrayTypeP(options);
 
-	Assert(ARR_ELEMTYPE(array) == TEXTOID);
-
 	deconstruct_array(array, TEXTOID, -1, false, 'i',
 					  &optiondatums, NULL, &noptions);
 
@@ -921,13 +917,9 @@ parseRelOptions(Datum options, bool validate, relopt_kind kind,
 	/* Done if no options */
 	if (PointerIsValid(DatumGetPointer(options)))
 	{
-		ArrayType  *array;
+		ArrayType  *array = DatumGetArrayTypeP(options);
 		Datum	   *optiondatums;
 		int			noptions;
-
-		array = DatumGetArrayTypeP(options);
-
-		Assert(ARR_ELEMTYPE(array) == TEXTOID);
 
 		deconstruct_array(array, TEXTOID, -1, false, 'i',
 						  &optiondatums, NULL, &noptions);
@@ -968,6 +960,11 @@ parseRelOptions(Datum options, bool validate, relopt_kind kind,
 						 errmsg("unrecognized parameter \"%s\"", s)));
 			}
 		}
+
+		/* It's worth avoiding memory leaks in this function */
+		pfree(optiondatums);
+		if (((void *) array) != DatumGetPointer(options))
+			pfree(array);
 	}
 
 	*numrelopts = numoptions;
@@ -1226,7 +1223,9 @@ default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 		{"autovacuum_analyze_scale_factor", RELOPT_TYPE_REAL,
 		offsetof(StdRdOptions, autovacuum) +offsetof(AutoVacOpts, analyze_scale_factor)},
 		{"user_catalog_table", RELOPT_TYPE_BOOL,
-		offsetof(StdRdOptions, user_catalog_table)}
+		offsetof(StdRdOptions, user_catalog_table)},
+		{SOPT_ANALYZEHLL, RELOPT_TYPE_BOOL,
+		offsetof(StdRdOptions, analyze_hll_non_part_table)}
 	};
 
 	options = parseRelOptions(reloptions, validate, kind, &numoptions);
@@ -1242,7 +1241,7 @@ default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 
 	validate_and_refill_options(rdopts, options, numoptions, kind, validate);
 
-	pfree(options);
+	free_options_deep(options, numoptions);
 
 	return (bytea *) rdopts;
 }
@@ -1274,7 +1273,7 @@ view_reloptions(Datum reloptions, bool validate)
 	fillRelOptions((void *) vopts, sizeof(ViewOptions), options, numoptions,
 				   validate, tab, lengthof(tab));
 
-	pfree(options);
+	free_options_deep(options, numoptions);
 
 	return (bytea *) vopts;
 }
@@ -1374,8 +1373,7 @@ attribute_reloptions(Datum reloptions, bool validate)
 	fillRelOptions((void *) aopts, sizeof(AttributeOpts), options, numoptions,
 				   validate, tab, lengthof(tab));
 
-	pfree(options);
-
+	free_options_deep(options, numoptions);
 	return (bytea *) aopts;
 }
 
@@ -1405,7 +1403,7 @@ tablespace_reloptions(Datum reloptions, bool validate)
 	fillRelOptions((void *) tsopts, sizeof(TableSpaceOpts), options, numoptions,
 				   validate, tab, lengthof(tab));
 
-	pfree(options);
+	free_options_deep(options, numoptions);
 
 	return (bytea *) tsopts;
 }

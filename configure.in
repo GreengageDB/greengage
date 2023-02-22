@@ -946,6 +946,13 @@ PGAC_ARG_BOOL(with, gssapi, no, [build with GSSAPI support],
 AC_MSG_RESULT([$with_gssapi])
 AC_SUBST(with_gssapi)
 
+#
+# Optionally build Python modules for gpMgmt
+#
+AC_MSG_CHECKING([whether to build Python modules for gpMgmt])
+PGAC_ARG_BOOL(with, pythonsrc-ext, no, [build Python modules for gpMgmt])
+AC_MSG_RESULT([$with_pythonsrc_ext])
+AC_SUBST(with_pythonsrc_ext)
 
 AC_SUBST(krb_srvtab)
 

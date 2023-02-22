@@ -317,6 +317,8 @@ MemoryContextSetParent(MemoryContext context, MemoryContext new_parent)
 	{
 		MemoryContext parent = context->parent;
 
+		MemoryContextNoteFree(parent, context->allBytesAlloc - context->allBytesFreed);
+
 		if (context == parent->firstchild)
 			parent->firstchild = context->nextchild;
 		else
@@ -332,8 +334,6 @@ MemoryContextSetParent(MemoryContext context, MemoryContext new_parent)
 				}
 			}
 		}
-
-		MemoryContextNoteFree(context->parent, context->allBytesAlloc - context->allBytesFreed);
 	}
 
 	/* And relink */

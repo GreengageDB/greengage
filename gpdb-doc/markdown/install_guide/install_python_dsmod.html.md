@@ -48,7 +48,6 @@ Packages required for Deep Learning features of MADlib are now included. Note th
 |future|Compatibility layer between Python 2 and Python 3|
 |futures|Backport of the `concurrent.futures` package from Python 3|
 |Gensim|Topic modeling and document indexing|
-|GluonTS \(Python 3 only\)|Probabilistic time series modeling|
 |h5py|Read and write HDF5 files|
 |idna|Internationalized Domain Names in Applications \(IDNA\)|
 |importlib-metadata|Read metadata from Python packages|
@@ -59,7 +58,7 @@ Packages required for Deep Learning features of MADlib are now included. Note th
 |Keras \(RHEL/CentOS 7 only\)|Deep learning|
 |Keras Applications|Reference implementations of popular deep learning models|
 |Keras Preprocessing|Easy data preprocessing and data augmentation for deep learning models|
-|Kiwi|A fast implementation of the Cassowary constraint solver|
+| kiwisolver | A fast implementation of the Cassowary constraint solver |
 |Lifelines|Survival analysis|
 |lxml|XML and HTML processing|
 |MarkupSafe|Safely add untrusted strings to HTML/XML markup|
@@ -276,7 +275,7 @@ The following table lists the modules that are provided in the Data Science Pack
 
 Before you install a Data Science Package for Python, make sure that your Greenplum Database is running, you have sourced `greenplum_path.sh`, and that the `$MASTER_DATA_DIRECTORY` and `$GPHOME` environment variables are set.
 
-**Note:** The `PyMC3` module depends on `Tk`. If you want to use `PyMC3`, you must install the `tk` OS package on every node in your cluster. For example:
+> **Note** The `PyMC3` module depends on `Tk`. If you want to use `PyMC3`, you must install the `tk` OS package on every node in your cluster. For example:
 
 ```
 $ sudo yum install tk
@@ -338,5 +337,5 @@ $ . /usr/local/greenplum-db/greenplum_path.sh
 $ gpstop -r 
 ```
 
-**Note:** After you uninstall a Data Science Package for Python from your Greenplum Database cluster, any UDFs that you have created that import Python modules installed with this package will return an error.
+> **Note** After you uninstall a Data Science Package for Python from your Greenplum Database cluster, any UDFs that you have created that import Python modules installed with this package will return an error.
 

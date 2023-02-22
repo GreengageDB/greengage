@@ -29,7 +29,7 @@ These steps assume a standby master host is configured for the system. See [Enab
 
 3.  Optional: If you have not already done so while activating the prior standby master, you can run `gpinitstandby` on the active master host to configure a new standby master.
 
-    **Important:** You must initialize a new standby master to continue providing master mirroring.
+    > **Important** You must initialize a new standby master to continue providing master mirroring.
 
     For information about restoring the original master and standby master configuration, see [Restoring Master Mirroring After a Recovery](g-restoring-master-mirroring-after-a-recovery.html).
 

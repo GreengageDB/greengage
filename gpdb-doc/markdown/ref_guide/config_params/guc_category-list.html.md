@@ -99,6 +99,11 @@ You can configure the execution cost of `VACUUM` and `ANALYZE` commands to reduc
 - [xid_stop_limit](guc-list.html#xid_stop_limit)
 - [xid_warn_limit](guc-list.html#xid_warn_limit)
 
+### <a id="topic20other"></a>Other Parameters 
+
+- [gp\_max\_parallel\_cursors](guc-list.html#gp_max_parallel_cursors)
+
+
 ## <a id="topic57"></a>GPORCA Parameters 
 
 These parameters control the usage of GPORCA by Greenplum Database. For information about GPORCA, see [About GPORCA](../../admin_guide/query/topics/query-piv-optimizer.html) in the *Greenplum Database Administrator Guide*.
@@ -131,6 +136,7 @@ These parameters control the usage of GPORCA by Greenplum Database. For informat
 - [optimizer_penalize_skew](guc-list.html#optimizer_penalize_skew)
 - [optimizer_print_missing_stats](guc-list.html#optimizer_print_missing_stats)
 - [optimizer_print_optimization_stats](guc-list.html#optimizer_print_optimization_stats)
+- [optimizer_skew_factor](guc-list.html#optimizer_skew_factor)
 - [optimizer_sort_factor](guc-list.html#optimizer_sort_factor)
 - [optimizer_use_gpdb_allocators](guc-list.html#optimizer_use_gpdb_allocators)
 - [optimizer_xform_bind_threshold](guc-list.html#optimizer_xform_bind_threshold)
@@ -265,6 +271,7 @@ These configuration parameters control Greenplum Database logging.
 - [log_hostname](guc-list.html#log_hostname)
 - [gp_log_endpoints](guc-list.html#gp_log_endpoints)
 - [gp_log_interconnect](guc-list.html#gp_log_interconnect)
+- [gp_print_create_gang_time](guc-list.html#gp_print_create_gang_time)
 - [log_parser_stats](guc-list.html#log_parser_stats)
 - [log_planner_stats](guc-list.html#log_planner_stats)
 - [log_statement](guc-list.html#log_statement)
@@ -473,7 +480,7 @@ The parameters in this topic control the configuration of the Greenplum Database
 - [gp_max_packet_size](guc-list.html#gp_max_packet_size)
 
 
-**Note:** Greenplum Database supports only the UDPIFC \(default\) and TCP interconnect types.
+> **Note** Greenplum Database supports only the UDPIFC \(default\) and TCP interconnect types.
 
 ### <a id="topic51"></a>Dispatch Configuration Parameters 
 

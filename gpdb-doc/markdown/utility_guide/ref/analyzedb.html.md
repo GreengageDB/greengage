@@ -107,7 +107,7 @@ Running the `ANALYZE` command on a table, not using the `analyzedb` utility, doe
 :   This option is no longer used, you may remove it from your scripts.
 
 `--skip_orca_root_stats`
-:   **Note:** Do not use this option if GPORCA is enabled.
+:   > **Note** Do not use this option if GPORCA is enabled.
 
 :   Use this option if you find that `ANALYZE ROOTPARTITION` commands take a very long time to complete.
 
@@ -191,7 +191,7 @@ When this `SELECT` command is run by the gpadmin user, the `analyzedb` utility p
 SELECT analyzedb('-d mytest -t public.mytable') ;
 ```
 
-**Note:** To create a PL/Python function, the PL/Python procedural language must be registered as a language in the database. For example, this `CREATE LANGUAGE` command run as gpadmin registers PL/Python as an untrusted language:
+> **Note** To create a PL/Python function, the PL/Python procedural language must be registered as a language in the database. For example, this `CREATE LANGUAGE` command run as gpadmin registers PL/Python as an untrusted language:
 
 ```
 CREATE LANGUAGE plpythonu;

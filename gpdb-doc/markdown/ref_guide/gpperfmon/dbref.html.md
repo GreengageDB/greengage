@@ -14,7 +14,7 @@ The `gpperfmon` database consists of three sets of tables that capture query and
 
 The data for `_now` and `_tail` tables are stored as text files on the master host file system, and are accessed in the `gpperfmon` database via external tables. The `history` tables are regular heap database tables in the `gpperfmon` database. History is saved only for queries that run for a minimum number of seconds, 20 by default. You can set this threshold to another value by setting the `min_query_time` parameter in the `$MASTER_DATA_DIRECTORY/gpperfmon/conf/gpperfmon.conf` configuration file. Setting the value to 0 saves history for all queries.
 
-**Note:** `gpperfmon` does not support SQL `ALTER` commands. `ALTER` queries are not recorded in the `gpperfmon` query history tables.
+> **Note** `gpperfmon` does not support SQL `ALTER` commands. `ALTER` queries are not recorded in the `gpperfmon` query history tables.
 
 The `history` tables are partitioned by month. See [History Table Partition Retention](#section_et2_wmt_n1b) for information about removing old partitions.
 
@@ -59,7 +59,7 @@ When Greenplum Database starts up with gpperfmon support enabled, it forks a `gp
 
 The `gpmmon` process runs in a loop and at configurable intervals retrieves data accumulated by the `gpsmon` processes, adds it to the data files for the `_now` and `_tail` external database tables, and then into the `_history` regular heap database tables.
 
-**Note:** The `log_alert` tables in the `gpperfmon` database follow a different process, since alert messages are delivered by the Greenplum Database system logger instead of through `gpsmon`. See [Alert Log Processing and Log Rotation](#section_ok2_wd1_41b) for more information.
+> **Note** The `log_alert` tables in the `gpperfmon` database follow a different process, since alert messages are delivered by the Greenplum Database system logger instead of through `gpsmon`. See [Alert Log Processing and Log Rotation](#section_ok2_wd1_41b) for more information.
 
 Two configuration parameters in the `$MASTER_DATA_DIRECTORY/gpperfmon/conf/gpperfmon.conf` configuration file control how often `gpmmon` activities are triggered:
 

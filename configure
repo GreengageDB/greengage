@@ -582,8 +582,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='Greenplum Database'
 PACKAGE_TARNAME='greenplum-database'
-PACKAGE_VERSION='6.22.1'
-PACKAGE_STRING='Greenplum Database 6.22.1'
+PACKAGE_VERSION='6.23.1'
+PACKAGE_STRING='Greenplum Database 6.23.1'
 PACKAGE_BUGREPORT='support@greenplum.org'
 PACKAGE_URL=''
 
@@ -738,6 +738,7 @@ with_uuid
 with_selinux
 with_openssl
 krb_srvtab
+with_pythonsrc_ext
 with_gssapi
 with_python
 with_perl
@@ -873,6 +874,7 @@ with_tclconfig
 with_perl
 with_python
 with_gssapi
+with_pythonsrc_ext
 with_krb_srvnam
 with_pam
 with_ldap
@@ -1577,6 +1579,7 @@ Optional Packages:
   --with-perl             build Perl modules (PL/Perl)
   --with-python           build Python modules (PL/Python)
   --with-gssapi           build with GSSAPI support
+  --with-pythonsrc-ext    build Python modules for gpMgmt
   --with-krb-srvnam=NAME  default service principal name in Kerberos (GSSAPI)
                           [postgres]
   --with-pam              build with PAM support
@@ -7368,6 +7371,38 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_gssapi" >&5
 $as_echo "$with_gssapi" >&6; }
 
+
+#
+# Optionally build Python modules for gpMgmt
+#
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build Python modules for gpMgmt" >&5
+$as_echo_n "checking whether to build Python modules for gpMgmt... " >&6; }
+
+
+
+# Check whether --with-pythonsrc-ext was given.
+if test "${with_pythonsrc_ext+set}" = set; then :
+  withval=$with_pythonsrc_ext;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-pythonsrc-ext option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_pythonsrc_ext=no
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_pythonsrc_ext" >&5
+$as_echo "$with_pythonsrc_ext" >&6; }
 
 
 

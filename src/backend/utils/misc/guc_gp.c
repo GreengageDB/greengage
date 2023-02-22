@@ -154,6 +154,7 @@ bool		Debug_datumstream_read_print_varlena_info = false;
 bool		Debug_datumstream_write_use_small_initial_buffers = false;
 bool		gp_create_table_random_default_distribution = true;
 bool		gp_allow_non_uniform_partitioning_ddl = true;
+bool		gp_print_create_gang_time = false;
 bool		gp_enable_exchange_default_partition = false;
 int			dtx_phase2_retry_count = 0;
 bool		gp_log_suboverflow_statement = false;
@@ -396,6 +397,7 @@ int			optimizer_join_order;
 int			optimizer_cte_inlining_bound;
 int			optimizer_push_group_by_below_setop_threshold;
 int			optimizer_xform_bind_threshold;
+int			optimizer_skew_factor;
 bool		optimizer_force_multistage_agg;
 bool		optimizer_force_three_stage_scalar_dqa;
 bool		optimizer_force_expanded_distinct_aggs;
@@ -2014,6 +2016,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_allow_non_uniform_partitioning_ddl,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_print_create_gang_time", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Allow print information about create gang time."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_print_create_gang_time,
+		false,
 		NULL, NULL, NULL
 	},
 
@@ -4393,6 +4406,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 
+    {
+            {"optimizer_skew_factor", PGC_USERSET, DEVELOPER_OPTIONS,
+             gettext_noop("Coefficient of skew ratio computed from sample stastics. Default 0: skew computation from sample statistics turned off. [1,100]: skew ratio computed from sample statistics. The skewness used for costing is the product of the optimizer_skew_factor and the skew ratio."),
+             NULL,
+             GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+            },
+            &optimizer_skew_factor,
+            0, 0, 100,
+            NULL, NULL, NULL
+    },
+
 	{
 		{"optimizer_join_order_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Maximum number of join children to use dynamic programming based join ordering algorithm."),
@@ -4570,6 +4594,16 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_dispatch_keepalives_count,
 		0, 0, MAX_GP_DISPATCH_KEEPALIVES_COUNT,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_max_parallel_cursors", PGC_SUSET, RESOURCES,
+			gettext_noop("Parallel cursor concurrency control, -1 means no limit, which is the default"),
+			NULL, GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_max_parallel_cursors,
+		-1, -1, 1024,
 		NULL, NULL, NULL
 	},
 

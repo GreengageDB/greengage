@@ -148,7 +148,7 @@ $ sudo update-alternatives --config java
 
 The `update-alternatives` command is not required on Ubuntu systems.
 
-**Note:** When configuring host systems, you can use the [gpssh](../utility_guide/ref/gpssh.html) utility to run bash shell commands on multiple remote hosts.
+> **Note** When configuring host systems, you can use the [gpssh](../utility_guide/ref/gpssh.html) utility to run bash shell commands on multiple remote hosts.
 
 ## <a id="topic4"></a>Installing PL/Java 
 
@@ -214,7 +214,7 @@ Perform the following steps as the Greenplum Database administrator `gpadmin`.
     $ psql -d testdb -c 'CREATE EXTENSION pljava;'
     ```
 
-    **Note:** The PL/Java `install.sql` script, used in previous releases to register the language, is deprecated.
+    > **Note** The PL/Java `install.sql` script, used in previous releases to register the language, is deprecated.
 
 2.  Copy your Java archives \(JAR files\) to the same directory on all Greenplum Database hosts. This example uses the Greenplum Database `gpscp` utility to copy the file `myclasses.jar` to the directory `$GPHOME/lib/postgresql/java/`:
 
@@ -233,7 +233,7 @@ Perform the following steps as the Greenplum Database administrator `gpadmin`.
 
     The file `examples.jar` is installed when you install the PL/Java extension package with the `gppkg` utility.
 
-    **Note:** If you install JAR files in a directory other than `$GPHOME/lib/postgresql/java/`, you must specify the absolute path to the JAR file. Each JAR file must be in the same location on all Greenplum Database hosts. For more information about specifying the location of JAR files, see the information about the `pljava_classpath` server configuration parameter in the *Greenplum Database Reference Guide*.
+    > **Note** If you install JAR files in a directory other than `$GPHOME/lib/postgresql/java/`, you must specify the absolute path to the JAR file. Each JAR file must be in the same location on all Greenplum Database hosts. For more information about specifying the location of JAR files, see the information about the `pljava_classpath` server configuration parameter in the *Greenplum Database Reference Guide*.
 
 4.  Reload the `postgresql.conf` file.
 
@@ -263,7 +263,7 @@ $ psql -d testdb -c 'DROP EXTENSION pljava;'
 
 The default command fails if any existing objects \(such as functions\) depend on the language. Specify the `CASCADE` option to also drop all dependent objects, including functions that you created with PL/Java.
 
-**Note:** The PL/Java `uninstall.sql` script, used in previous releases to remove the language registration, is deprecated.
+> **Note** The PL/Java `uninstall.sql` script, used in previous releases to remove the language registration, is deprecated.
 
 ### <a id="topic_tgt_nfg_mjb"></a>Uninstall the Java JAR files and Software Package 
 
@@ -620,7 +620,7 @@ After obtaining a connection, you can prepare and run statements similar to othe
 
 You can catch and handle an exception in the Greenplum Database backend just like any other exception. The backend ErrorData structure is exposed as a property in a class called `org.postgresql.pljava.ServerException` \(derived from `java.sql.SQLException`\) and the Java try/catch mechanism is synchronized with the backend mechanism.
 
-**Important:** You will not be able to continue running backend functions until your function has returned and the error has been propagated when the backend has generated an exception unless you have used a savepoint. When a savepoint is rolled back, the exceptional condition is reset and you can continue your execution.
+> **Important** You will not be able to continue running backend functions until your function has returned and the error has been propagated when the backend has generated an exception unless you have used a savepoint. When a savepoint is rolled back, the exceptional condition is reset and you can continue your execution.
 
 ## <a id="topic26"></a>Savepoints 
 
@@ -640,7 +640,7 @@ Date(System.currentTimeMillis()));
 
 At present, the logger uses a handler that maps the current state of the Greenplum Database configuration setting `log_min_messages` to a valid Logger level and that outputs all messages using the Greenplum Database backend function `elog()`.
 
-**Note:** The `log_min_messages` setting is read from the database the first time a PL/Java function in a session is run. On the Java side, the setting does not change after the first PL/Java function execution in a specific session until the Greenplum Database session that is working with PL/Java is restarted.
+> **Note** The `log_min_messages` setting is read from the database the first time a PL/Java function in a session is run. On the Java side, the setting does not change after the first PL/Java function execution in a specific session until the Greenplum Database session that is working with PL/Java is restarted.
 
 The following mapping apply between the Logger levels and the Greenplum Database backend levels.
 
@@ -709,7 +709,7 @@ The PL/Java contains code that ensures that stale pointers are cleared when the 
 
 The following simple Java example creates a JAR file that contains a single method and runs the method.
 
-**Note:** The example requires Java SDK to compile the Java file.
+> **Note** The example requires Java SDK to compile the Java file.
 
 The following method returns a substring.
 
