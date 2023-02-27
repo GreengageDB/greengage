@@ -21,6 +21,8 @@
 #include "access/genam.h"
 #include "access/htup.h"
 #include "access/heapam.h"
+#include "access/xact.h"
+#include "utils/faultinjector.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 #include "access/appendonlywriter.h"
@@ -179,7 +181,27 @@ insert_or_update_fastsequence(Relation gp_fastsequence_rel,
 
 		newTuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
 
-		CatalogTupleInsertFrozen(gp_fastsequence_rel, newTuple);
+		/* insert the tuple */
+		CatalogTupleInsert(gp_fastsequence_rel, newTuple);
+
+#ifdef FAULT_INJECTOR
+		FaultInjector_InjectFaultIfSet(
+								"insert_fastsequence_before_freeze",
+								DDLNotSpecified,
+								"", //databaseName
+								RelationGetRelationName(gp_fastsequence_rel));
+#endif
+
+		/* freeze the tuple */
+		heap_freeze_tuple_wal_logged(gp_fastsequence_rel, newTuple);
+
+#ifdef FAULT_INJECTOR
+		FaultInjector_InjectFaultIfSet(
+								"insert_fastsequence_after_freeze",
+								DDLNotSpecified,
+								"", //databaseName
+								RelationGetRelationName(gp_fastsequence_rel));
+#endif
 
 		heap_freetuple(newTuple);
 	}
