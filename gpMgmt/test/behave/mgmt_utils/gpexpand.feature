@@ -588,3 +588,26 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand with a static inputfile for a single-node cluster with mirrors without ret code check
         Then gpexpand should return a return code of 0
         And gpexpand should print "One or more segments are either down or not in preferred role." to stdout
+
+    @gpexpand_mirrors
+    @gpexpand_segment
+    @gpexpand_verify_catalogs
+    Scenario: expand a cluster that has mirrors and check that gpexpand does not copy extra data directories from master
+        Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And the user runs command "analyzedb -d gptest -a"
+        And there are no gpexpand_inputfiles
+        And the cluster is setup for an expansion on hosts "cdw,sdw1"
+        And the number of segments have been saved
+        When the user runs gpexpand with a static inputfile for a single-node cluster with mirrors
+        Then verify that the cluster has 4 new segments
+        And verify that the path "db_dumps" in each segment data directory does not exist
+        And verify that the path "gpperfmon/data" in each segment data directory does not exist
+        And verify that the path "gpperfmon/logs" in each segment data directory does not exist
+        And verify that the path "promote" in each segment data directory does not exist
+        And verify that the path "db_analyze" in each segment data directory does not exist
