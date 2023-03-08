@@ -216,3 +216,10 @@ Feature: gpstop behave tests
         Then a sample gpstop.lock directory is created using the background pid in master_data_directory
         And the user runs "gpstop -a"
         And gpstop should return a return code of 0
+
+	@demo_cluster
+    Scenario: gpstop gpstop should not print "Failed to kill processes for segment" when locale is different from English
+        Given the database is running
+        And "LC_ALL" is different from English
+        When the user runs "gpstop -a"
+        Then gpstop should not print "Failed to kill processes for segment"
