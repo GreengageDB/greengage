@@ -3,6 +3,12 @@ FROM centos:centos7 as base
 ARG sigar=https://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-1.6.5-1056.git2932df5.el7.x86_64.rpm
 ARG sigar_headers=http://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-headers-1.6.5-1056.git2932df5.el7.x86_64.rpm
 
+# Reinstall glibc-common. This is necessary to get langpacks in docker
+# because docker images don't contain them.
+RUN sed -i 's/\(override_install_langs*\)/# \1/' /etc/yum.conf && \
+    yum -y reinstall glibc-common && \
+	yum clean all
+
 # Install some basic utilities and build tools
 RUN yum makecache && yum update -y ca-certificates && \
     rpm --import https://mirror.yandex.ru/centos/RPM-GPG-KEY-CentOS-7 && \

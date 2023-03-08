@@ -189,3 +189,9 @@ Feature: gpstop behave tests
         And the user runs gpstop -a and selects f
         And gpstop should return a return code of 0
 
+	@demo_cluster
+    Scenario: gpstop gpstop should not print "Failed to kill processes for segment" when locale is different from English
+        Given the database is running
+        And "LC_ALL" is different from English
+        When the user runs "gpstop -a"
+        Then gpstop should not print "Failed to kill processes for segment"
