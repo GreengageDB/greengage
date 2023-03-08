@@ -41,7 +41,7 @@ from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 
-
+default_locale = None
 master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
 if master_data_dir is None:
     raise Exception('Please set MASTER_DATA_DIRECTORY in environment')
@@ -3995,3 +3995,21 @@ def impl(context):
     cmd =  "sudo mv -f /tmp/hosts_orig /etc/hosts; rm -f /tmp/clusterConfigFile-1; rm -f /tmp/hostfile--1"
     context.execute_steps(u'''Then the user runs command "%s"''' % cmd)
 
+@given('"LC_ALL" is different from English')
+def step_impl(context):
+	default_locale = os.environ.get('LC_ALL')
+
+	try:
+		os.system('sudo localedef -i ru_RU -f UTF-8 ru_RU.UTF-8 > /dev/null')
+	except FileNotFoundError:
+		raise Exception("Failed to generate Russian locale")
+
+	os.environ['LC_ALL'] = 'ru_RU.utf8'
+
+@then('gpstop should not print "Failed to kill processes for segment"')
+def impl(context):
+	check_string_not_present_stdout(context, 'Failed to kill processes for segment')
+	if default_locale is not None:
+		os.environ['LC_ALL'] = default_locale
+	else:
+		del os.environ['LC_ALL']
