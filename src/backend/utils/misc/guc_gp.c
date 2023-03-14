@@ -437,6 +437,7 @@ static char *gp_server_version_string;
 /* Query Metrics */
 bool		gp_enable_query_metrics = false;
 int			gp_instrument_shmem_size = 5120;
+int			gp_max_scan_on_shmem = 300;
 
 /* Security */
 bool		gp_reject_internal_tcp_conn = true;
@@ -4118,6 +4119,16 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"gp_max_scan_on_shmem", PGC_POSTMASTER, UNGROUPED,
+			gettext_noop("Sets the limit of shmem slots used by scan nodes for each backend."),
+			NULL,
+		},
+		&gp_max_scan_on_shmem,
+		300, 0, 3072,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_vmem_protect_limit", PGC_POSTMASTER, RESOURCES_MEM,
 			gettext_noop("Virtual memory limit (in MB) of Greenplum memory protection."),
 			NULL,
@@ -4217,6 +4228,16 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_resource_group_queuing_timeout,
 		0, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+	{
+		{"gp_resource_group_move_timeout", PGC_USERSET, RESOURCES_MGM,
+			gettext_noop("Wait up to the specified time (in ms) while moving process to another resource group (after queuing on it) before give up."),
+			NULL,
+			GUC_UNIT_MS
+		},
+		&gp_resource_group_move_timeout,
+		30000, 10, INT_MAX,
 		NULL, NULL, NULL
 	},
 	{

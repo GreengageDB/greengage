@@ -916,6 +916,12 @@
                   >gp_instrument_shmem_size</xref>
               </p>
             </stentry>
+            <stentry>
+              <p>
+                <xref href="guc-list.xml#gp_max_scan_on_shmem" type="section"
+                  >gp_max_scan_on_shmem</xref>
+              </p>
+            </stentry>
           </strow>
         </simpletable>
       </body>
@@ -1232,6 +1238,9 @@
             </p><p>
               <xref href="guc-list.xml#gp_resource_group_queuing_timeout" type="section"
                 >gp_resource_group_queuing_timeout</xref>
+            </p><p>
+              <xref href="guc-list.xml#gp_resource_group_move_timeout" type="section"
+                >gp_resource_group_move_timeout</xref>
             </p><p>
               <xref href="guc-list.xml#gp_resource_manager" type="section"
                 >gp_resource_manager</xref>
