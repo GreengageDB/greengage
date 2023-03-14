@@ -30,21 +30,21 @@ explain analyze select count(*) from test_gang_reuse_t1 a
  Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=4.447..4.447 rows=1 loops=1)
    ->  Gather Motion 3:1  (slice4; gang0; segments: 3)  (cost=0.00..1293.00 rows=1 width=8) (actual time=3.563..4.437 rows=3 loops=1)
          ->  Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=4.334..4.334 rows=1 loops=1)
-               ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1) (never executed)
+               ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1) (actual time=0.000..8.561 rows=0 loops=1)
                      Hash Cond: (test_gang_reuse_t1.c2 = test_gang_reuse_t1_1.c2)
                      ->  Redistribute Motion 3:3  (slice1; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                            Hash Key: test_gang_reuse_t1.c2
-                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (never executed)
-                     ->  Hash  (cost=862.00..862.00 rows=1 width=4) (never executed)
-                           ->  Hash Join  (cost=0.00..862.00 rows=1 width=4) (never executed)
+                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.002 rows=0 loops=1)
+                     ->  Hash  (cost=862.00..862.00 rows=1 width=4) (actual time=0.000..3.516 rows=0 loops=1)
+                           ->  Hash Join  (cost=0.00..862.00 rows=1 width=4) (actual time=0.000..3.510 rows=0 loops=1)
                                  Hash Cond: (test_gang_reuse_t1_1.c2 = test_gang_reuse_t1_2.c2)
                                  ->  Redistribute Motion 3:3  (slice2; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                                        Hash Key: test_gang_reuse_t1_1.c2
-                                       ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (never executed)
-                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4) (never executed)
-                                       ->  Redistribute Motion 3:3  (slice3; gang9; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                       ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.002 rows=0 loops=1)
+                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.000..0.038 rows=0 loops=1)
+                                       ->  Redistribute Motion 3:3  (slice3; gang9; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.033 rows=0 loops=1)
                                              Hash Key: test_gang_reuse_t1_2.c2
-                                             ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_2  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                             ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_2  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.003 rows=0 loops=1)
  Planning time: 82.403 ms
    (slice0)    Executor memory: 127K bytes.
    (slice1)    Executor memory: 60K bytes avg x 3 workers, 60K bytes max (seg0).
@@ -52,7 +52,7 @@ explain analyze select count(*) from test_gang_reuse_t1 a
    (slice3)    Executor memory: 60K bytes avg x 3 workers, 60K bytes max (seg0).
    (slice4)    Executor memory: 4192K bytes avg x 3 workers, 4192K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA) version 3.55.0
+ Optimizer: Pivotal Optimizer (GPORCA)
  Execution time: 26.149 ms
 (27 rows)
 
@@ -65,22 +65,22 @@ explain analyze select count(*) from test_gang_reuse_t1 a
  Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=4.706..4.706 rows=1 loops=1)
    ->  Gather Motion 3:1  (slice3; gang0; segments: 3)  (cost=0.00..862.00 rows=1 width=8) (actual time=4.697..4.700 rows=3 loops=1)
          ->  Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=3.688..3.688 rows=1 loops=1)
-               ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (never executed)
+               ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (actual time=0.000..9.612 rows=0 loops=1)
                      Hash Cond: (test_gang_reuse_t1.c2 = test_gang_reuse_t1_1.c2)
                      ->  Redistribute Motion 3:3  (slice1; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                            Hash Key: test_gang_reuse_t1.c2
-                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (never executed)
-                     ->  Hash  (cost=431.00..431.00 rows=1 width=4) (never executed)
-                           ->  Redistribute Motion 3:3  (slice2; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.003 rows=0 loops=1)
+                     ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.000..0.035 rows=0 loops=1)
+                           ->  Redistribute Motion 3:3  (slice2; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.030 rows=0 loops=1)
                                  Hash Key: test_gang_reuse_t1_1.c2
-                                 ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                 ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.001 rows=0 loops=1)
  Planning time: 12.168 ms
    (slice0)    Executor memory: 127K bytes.
    (slice1)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
    (slice2)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
    (slice3)    Executor memory: 4176K bytes avg x 3 workers, 4176K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA) version 3.55.0
+ Optimizer: Pivotal Optimizer (GPORCA)
  Execution time: 5.858 ms
 (20 rows)
 
@@ -94,21 +94,21 @@ explain analyze select count(*) from test_gang_reuse_t1 a
  Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=3.645..3.645 rows=1 loops=1)
    ->  Gather Motion 3:1  (slice4; gang0; segments: 3)  (cost=0.00..1293.00 rows=1 width=8) (actual time=2.705..3.632 rows=3 loops=1)
          ->  Aggregate  (cost=0.00..1293.00 rows=1 width=8) (actual time=4.024..4.024 rows=1 loops=1)
-               ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1) (never executed)
+               ->  Hash Join  (cost=0.00..1293.00 rows=1 width=1) (actual time=0.000..9.516 rows=0 loops=1)
                      Hash Cond: (test_gang_reuse_t1.c2 = test_gang_reuse_t1_1.c2)
                      ->  Redistribute Motion 3:3  (slice1; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                            Hash Key: test_gang_reuse_t1.c2
-                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (never executed)
-                     ->  Hash  (cost=862.00..862.00 rows=1 width=4) (never executed)
-                           ->  Hash Join  (cost=0.00..862.00 rows=1 width=4) (never executed)
+                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.003 rows=0 loops=1)
+                     ->  Hash  (cost=862.00..862.00 rows=1 width=4) (actual time=0.000..4.456 rows=0 loops=1)
+                           ->  Hash Join  (cost=0.00..862.00 rows=1 width=4) (actual time=0.000..4.449 rows=0 loops=1)
                                  Hash Cond: (test_gang_reuse_t1_1.c2 = test_gang_reuse_t1_2.c2)
                                  ->  Redistribute Motion 3:3  (slice2; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                                        Hash Key: test_gang_reuse_t1_1.c2
-                                       ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (never executed)
-                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4) (never executed)
-                                       ->  Redistribute Motion 3:3  (slice3; gang9; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                       ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.002 rows=0 loops=1)
+                                 ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.000..0.025 rows=0 loops=1)
+                                       ->  Redistribute Motion 3:3  (slice3; gang9; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.023 rows=0 loops=1)
                                              Hash Key: test_gang_reuse_t1_2.c2
-                                             ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_2  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                             ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_2  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.002 rows=0 loops=1)
  Planning time: 44.030 ms
    (slice0)    Executor memory: 127K bytes.
    (slice1)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
@@ -116,7 +116,7 @@ explain analyze select count(*) from test_gang_reuse_t1 a
    (slice3)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
    (slice4)    Executor memory: 4192K bytes avg x 3 workers, 4192K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA) version 3.55.0
+ Optimizer: Pivotal Optimizer (GPORCA)
  Execution time: 6.743 ms
 (27 rows)
 
@@ -129,22 +129,22 @@ explain analyze select count(*) from test_gang_reuse_t1 a
  Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=3.480..3.480 rows=1 loops=1)
    ->  Gather Motion 3:1  (slice3; gang0; segments: 3)  (cost=0.00..862.00 rows=1 width=8) (actual time=3.201..3.473 rows=3 loops=1)
          ->  Aggregate  (cost=0.00..862.00 rows=1 width=8) (actual time=2.975..2.976 rows=1 loops=1)
-               ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (never executed)
+               ->  Hash Join  (cost=0.00..862.00 rows=1 width=1) (actual time=0.000..8.591 rows=0 loops=1)
                      Hash Cond: (test_gang_reuse_t1.c2 = test_gang_reuse_t1_1.c2)
                      ->  Redistribute Motion 3:3  (slice1; gang3; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
                            Hash Key: test_gang_reuse_t1.c2
-                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (never executed)
-                     ->  Hash  (cost=431.00..431.00 rows=1 width=4) (never executed)
-                           ->  Redistribute Motion 3:3  (slice2; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                           ->  Seq Scan on test_gang_reuse_t1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.002 rows=0 loops=1)
+                     ->  Hash  (cost=431.00..431.00 rows=1 width=4) (actual time=0.000..0.702 rows=0 loops=1)
+                           ->  Redistribute Motion 3:3  (slice2; gang6; segments: 3)  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.696 rows=0 loops=1)
                                  Hash Key: test_gang_reuse_t1_1.c2
-                                 ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (never executed)
+                                 ->  Seq Scan on test_gang_reuse_t1 test_gang_reuse_t1_1  (cost=0.00..431.00 rows=1 width=4) (actual time=0.000..0.006 rows=0 loops=1)
  Planning time: 9.705 ms
    (slice0)    Executor memory: 127K bytes.
    (slice1)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
    (slice2)    Executor memory: 44K bytes avg x 3 workers, 44K bytes max (seg0).
    (slice3)    Executor memory: 4176K bytes avg x 3 workers, 4176K bytes max (seg0).
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA) version 3.55.0
+ Optimizer: Pivotal Optimizer (GPORCA)
  Execution time: 4.820 ms
 (20 rows)
 
