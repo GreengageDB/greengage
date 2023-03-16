@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/ERROR:  missing operator 3\(\d+,\d+\) in opfamily \d+ \(parse_partition.c:\d+\)/
+-- s/ERROR:  missing operator 3\(\d+,\d+\) in opfamily \d+ \(parse_partition.c:\d+\)/ERROR:  missing operator 3(XX,XX) in opfamily XX (parse_partition.c:XX)/
+-- end_matchsubs
 
 drop table if exists d;
 drop table if exists c;
@@ -4253,3 +4257,190 @@ alter table tbl_default_distribution exchange partition for (rank(2)) with table
 create table rnd_distribution(a1 int, a int, b int, c int) distributed randomly;
 alter table rnd_distribution drop column a1;
 alter table tbl_default_distribution exchange partition for (rank(2)) with table rnd_distribution;
+
+--
+-- Test that we are able to partition a table by custom created data types.
+--
+-- Create data types and operators under spefic schema.
+-- Historically, Greenplum hardcoded the operators search_path when looking up operators for partitioned tables. However, at the moment that the partitioned table is defined,
+-- the opclass used for defining the partitioned table has been recorded in the parclass column of pg_catalog.pg_partition table. We should retrieve operators according to
+-- parclass just like the behavior Greenplum 7 or PostgreSQL.
+create schema part_op_test;
+set search_path = 'part_op_test';
+create type myint;
+create function myint_in(cstring) returns myint as 'int4in' language internal immutable strict;
+create function myint_out(myint) returns cstring as 'int4out' language internal immutable strict;
+create function myint_send(myint) returns bytea as 'int4send' language internal immutable strict;
+create function myint_recv(internal) returns myint as 'int4recv' language internal immutable strict;
+create type myint (input=myint_in, output=myint_out, receive=myint_recv, send=myint_send, passedbyvalue, internallength=4);
+create function myint_lt(myint, myint) returns boolean as 'int4lt' language internal immutable strict;
+create function myint_le(myint, myint) returns boolean as 'int4le' language internal immutable strict;
+create function myint_gt(myint, myint) returns boolean as 'int4gt' language internal immutable strict;
+create function myint_ge(myint, myint) returns boolean as 'int4ge' language internal immutable strict;
+create function myint_eq(myint, myint) returns boolean as 'int4eq' language internal immutable strict;
+create function myint_ne(myint, myint) returns boolean as 'int4ne' language internal immutable strict;
+create operator < (leftarg=myint, rightarg=myint, procedure=myint_lt, commutator= >, negator= >=, restrict=scalarltsel, join=scalarltjoinsel);
+create operator > (leftarg=myint, rightarg=myint, procedure=myint_gt, commutator= <, negator= <=, restrict=scalargtsel, join=scalargtjoinsel);
+create operator <= (leftarg=myint, rightarg=myint, procedure=myint_le, commutator= >=, negator= >, restrict=scalarltsel, join=scalarltjoinsel);
+create operator >= (leftarg=myint, rightarg=myint, procedure=myint_ge, commutator= <=, negator= <, restrict=scalargtsel, join=scalargtjoinsel);
+create operator = (leftarg=myint, rightarg=myint, procedure=myint_eq, commutator= =, negator= <>, restrict=eqsel, join=eqjoinsel, hashes, merges);
+create operator <> (leftarg=myint, rightarg=myint, procedure=myint_ne, commutator= <>, negator= =, restrict=neqsel, join=neqjoinsel, merges);
+create function bt_myint_cmp (myint, myint) returns int as 'btint4cmp' language internal immutable strict;
+create operator class bt_myint_ops default for type myint using btree family integer_ops as
+  operator 1 <,
+  operator 2 <=,
+  operator 3 =,
+  operator 4 >=,
+  operator 5 >,
+  function 1 bt_myint_cmp (myint, myint);
+create cast (int as myint) without function as implicit;
+
+-- Case 1: Test table partitioned by range.
+create table issue_14941_range_part (i myint) partition by range (i) (start ('1') end ('10'));
+alter table issue_14941_range_part add partition p2 start ('11') end ('20');
+-- Test that we're able to insert data into the partition table.
+insert into issue_14941_range_part select i from generate_series(1, 9)i;
+-- Test that we're able to do partition pruning.
+select * from issue_14941_range_part where i >= 1 and i <= 5 order by i;
+explain (costs off) select * from issue_14941_range_part where i >= 1 and i <= 5 order by i;
+-- Change search_path, test that we're still able to insert some data into the table.
+set search_path = '';
+insert into part_op_test.issue_14941_range_part select i from generate_series(1, 9)i;
+-- Test that we're still able to do partition pruning even if the search_path has been changed.
+select * from part_op_test.issue_14941_range_part where i operator(part_op_test.>=) 1 and i operator(part_op_test.<=) 5 order by i;
+explain (costs off) select * from part_op_test.issue_14941_range_part where i operator(part_op_test.>=) 1 and i operator(part_op_test.<=) 5 order by i;
+
+-- Case 2: Test table partitioned by list.
+set search_path = 'part_op_test';
+create table issue_14941_list_part (i myint)
+  partition by list (i)
+    (partition one values (1),
+     partition two values (2),
+     partition three values (3),
+     partition four values (4));
+-- Test that we're able to insert data into the partition table.
+insert into issue_14941_list_part select i from generate_series(1, 3)i;
+-- Test that we're able to do partition pruning.
+select * from issue_14941_list_part where i >= 1 and i <= 2 order by i;
+explain (costs off) select * from issue_14941_list_part where i >= 1 and i <= 2 order by i;
+
+-- Change search_path, test that we're still able to insert some data into the table.
+set search_path = '';
+insert into part_op_test.issue_14941_list_part select i from generate_series(1, 3)i;
+-- Test that we're still able to do partition pruning even if the search_path has been changed.
+select * from part_op_test.issue_14941_list_part where i operator(part_op_test.>=) 1 and i operator(part_op_test.<=) 2 order by i;
+explain (costs off) select * from part_op_test.issue_14941_list_part where i operator(part_op_test.>=) 1 and i operator(part_op_test.<=) 2 order by i;
+
+-- Case 3: Test multiple level partitioned table.
+set search_path = 'part_op_test';
+create table issue_14941_multi_level_part (i1 myint, i2 myint)
+  partition by range (i1)
+  subpartition by list (i2)
+    (partition p1
+      start(1) end(2)
+      (subpartition sp11
+        values(1),
+       subpartition sp12
+        values(2)),
+     partition p2
+      start(2) end(3)
+      (subpartition sp21
+        values(1),
+       subpartition sp22
+        values(2)));
+-- Test that we're able to insert data into the partition table.
+insert into issue_14941_multi_level_part select i,i from generate_series(1, 2)i;
+-- Test that we're able to do partition pruning.
+select * from issue_14941_multi_level_part where i1<=1 and i2<=1;
+explain (costs off) select * from issue_14941_multi_level_part where i1<=1 and i2<=1;
+-- Change search_path, test that we're still able to insert some data into the table.
+set search_path = '';
+insert into part_op_test.issue_14941_multi_level_part select i, i from generate_series(1, 2)i;
+-- Test that we're still able to do partition pruning even if the search_path has been changed.
+select * from part_op_test.issue_14941_multi_level_part where i1 operator(part_op_test.<=) 1 and i2 operator(part_op_test.<=) 1;
+explain (costs off) select * from part_op_test.issue_14941_multi_level_part where i1 operator(part_op_test.<=) 1 and i2 operator(part_op_test.<=) 1;
+
+-- Case 4: Test table partitioned by multiple partition keys (range partition table doesn't support multiple partition keys).
+set search_path = 'part_op_test';
+create table issue_14941_multi_level_multi_key_part (i1 myint, i2 myint, i3 int)
+  partition by list (i1, i2)
+  subpartition by list (i3)
+    (partition p1
+      values((1, 1), (1, 2))
+      (subpartition sp11
+        values(1),
+       subpartition sp12
+        values(2)),
+     partition p2
+      values((2, 1), (2, 2))
+      (subpartition sp21
+        values(1),
+       subpartition sp22
+        values(2)));
+-- Test that we're able to insert data into the partition table.
+insert into issue_14941_multi_level_multi_key_part values (1, 1, 1), (2, 2, 2);
+-- Test that we're able to do partition pruning.
+select * from issue_14941_multi_level_multi_key_part where i1=2 and i2 >= 1 and i3 >= 2;
+explain (costs off) select * from issue_14941_multi_level_multi_key_part where i1=2 and i2 >= 1 and i3 >= 2;
+-- Change search_path, test that we're still able to insert some data into the table.
+set search_path = '';
+insert into part_op_test.issue_14941_multi_level_multi_key_part values (1, 1, 1), (2, 2, 2);
+-- Test that we're still able to do partition pruning even if the search_path has been changed.
+select * from part_op_test.issue_14941_multi_level_multi_key_part
+  where i1 operator(part_op_test.=) 2 and i2 operator(part_op_test.>=) 1 and i3 operator(part_op_test.>=) 2;
+explain (costs off) select * from part_op_test.issue_14941_multi_level_multi_key_part
+  where i1 operator(part_op_test.=) 2 and i2 operator(part_op_test.>=) 1 and i3 operator(part_op_test.>=) 2;
+
+reset search_path;
+drop schema part_op_test cascade;
+
+-- Test that we can list partition by a custom type where its equality
+-- operator is in a different schema.
+CREATE TYPE equal_operator_not_in_search_path_type AS (a int, b int);
+CREATE FUNCTION equal_operator_not_in_search_path_func (equal_operator_not_in_search_path_type, equal_operator_not_in_search_path_type) RETURNS boolean
+  AS 'SELECT $1.a = $2.a;'
+  LANGUAGE SQL IMMUTABLE
+  RETURNS NULL ON NULL INPUT;
+CREATE FUNCTION less_than_operator_not_in_search_path_func (equal_operator_not_in_search_path_type, equal_operator_not_in_search_path_type) RETURNS boolean
+  AS 'SELECT $1.a < $2.a;'
+  LANGUAGE SQL IMMUTABLE
+  RETURNS NULL ON NULL INPUT;
+
+CREATE SCHEMA equal_operator_not_in_search_path_schema;
+CREATE OPERATOR equal_operator_not_in_search_path_schema.= (
+        LEFTARG = equal_operator_not_in_search_path_type,
+        RIGHTARG = equal_operator_not_in_search_path_type,
+        PROCEDURE = equal_operator_not_in_search_path_func
+);
+CREATE OPERATOR equal_operator_not_in_search_path_schema.< (
+        LEFTARG = equal_operator_not_in_search_path_type,
+        RIGHTARG = equal_operator_not_in_search_path_type,
+        PROCEDURE = less_than_operator_not_in_search_path_func
+);
+
+CREATE OPERATOR CLASS equal_operator_not_in_search_path_opclass
+  DEFAULT FOR TYPE equal_operator_not_in_search_path_type
+  USING btree AS
+  OPERATOR 1 equal_operator_not_in_search_path_schema.<;
+
+-- this should fail because no equality operator is found for the opclass
+CREATE TABLE equal_operator_not_in_search_path_table (a int, b equal_operator_not_in_search_path_type)
+DISTRIBUTED BY (a) PARTITION BY LIST(b)
+(
+  PARTITION part1 VALUES('(1,1)')
+);
+
+ALTER OPERATOR FAMILY equal_operator_not_in_search_path_opclass USING btree ADD
+  OPERATOR 3 equal_operator_not_in_search_path_schema.= (equal_operator_not_in_search_path_type, equal_operator_not_in_search_path_type);
+
+CREATE TABLE equal_operator_not_in_search_path_table (a int, b equal_operator_not_in_search_path_type)
+DISTRIBUTED BY (a) PARTITION BY LIST(b)
+(
+  PARTITION part1 VALUES('(1,1)')
+);
+
+CREATE TABLE equal_operator_not_in_search_path_table_multi_key (a int, b equal_operator_not_in_search_path_type, c int)
+DISTRIBUTED BY (a) PARTITION BY LIST(b, c)
+(
+  PARTITION part1 VALUES(('(1,1)', 1))
+);

@@ -37,6 +37,7 @@
 #include "cdb/cdbutil.h"
 
 #include "executor/executor.h"
+#include "commands/defrem.h"
 
 #define PRINT_DISPATCH_DECISIONS_STRING ("print_dispatch_decisions")
 
@@ -226,8 +227,10 @@ GetContentIdsFromPlanForSingleRelation(List *rtable, Plan *plan, int rangeTableI
 		seg_id_var = makeVar(rangeTableIndex,
 							 GpSegmentIdAttributeNumber,
 							 vartypeid, type_mod, type_coll, 0);
+		Oid opclass = GetDefaultOpClass(vartypeid, HASH_AM_OID);
+		Oid opfamily = get_opclass_family(opclass);
 		pvs_segids = DeterminePossibleValueSet((Node *) qualification,
-											   (Node *) seg_id_var);
+											   (Node *) seg_id_var, opfamily);
 		if (!pvs_segids.isAnyValuePossible)
 		{
 			seg_ids = GetPossibleValuesAsArray(&pvs_segids, &len);
@@ -273,6 +276,8 @@ GetContentIdsFromPlanForSingleRelation(List *rtable, Plan *plan, int rangeTableI
 		{
 			Var		   *var;
 			PossibleValueSet pvs;
+			Oid policy_opclass = policy->opclasses[i];
+			Oid policy_opfamily = get_opclass_family(policy_opclass);
 
 			var = makeVar(rangeTableIndex,
 						  policy->attrs[i],
@@ -286,7 +291,7 @@ GetContentIdsFromPlanForSingleRelation(List *rtable, Plan *plan, int rangeTableI
 			 *   quals on the plan then those would be ANDed with the qual, which can only narrow our choice
 			 *   of segment and not expand it.
 			 */
-			pvs = DeterminePossibleValueSet(qualification, (Node *) var);
+			pvs = DeterminePossibleValueSet(qualification, (Node *) var, policy_opfamily);
 
 			if (pvs.isAnyValuePossible)
 			{

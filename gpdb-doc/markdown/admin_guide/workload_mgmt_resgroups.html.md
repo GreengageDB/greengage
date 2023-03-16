@@ -16,7 +16,7 @@ This topic includes the following subtopics:
     -   [Transaction Concurrency Limit](#topic8339717179)
     -   [CPU Limits](#topic833971717)
     -   [Memory Limits](#topic8339717)
--   [Using VMware Tanzu Greenplum Command Center to Manage Resource Groups](#topic999)
+-   [Using VMware Greenplum Command Center to Manage Resource Groups](#topic999)
 -   [Configuring and Using Resource Groups](#topic71717999)
     -   [Enabling Resource Groups](#topic8)
     -   [Creating Resource Groups](#topic10)
@@ -266,13 +266,13 @@ To reduce the risk of OOM for a query running in an important resource group, co
 
 Resource groups for roles track all Greenplum Database memory allocated via the `palloc()` function. Memory that you allocate using the Linux `malloc()` function is not managed by these resource groups. To ensure that resource groups for roles are accurately tracking memory usage, avoid using `malloc()` to allocate large amounts of memory in custom Greenplum Database user-defined functions.
 
-## <a id="topic999"></a>Using VMware Tanzu Greenplum Command Center to Manage Resource Groups 
+## <a id="topic999"></a>Using VMware Greenplum Command Center to Manage Resource Groups 
 
-Using Tanzu Greenplum Command Center, an administrator can create and manage resource groups, change roles' resource groups, and create workload management rules.
+Using VMware Greenplum Command Center, an administrator can create and manage resource groups, change roles' resource groups, and create workload management rules.
 
 Workload management assignment rules assign transactions to different resource groups based on user-defined criteria. If no assignment rule is matched, Greenplum Database assigns the transaction to the role's default resource group.
 
-Refer to the [Greenplum Command Center documentation](http://docs.vmware.com/en/VMware-Tanzu-Greenplum-Command-Center/index.html) for more information about creating and managing resource groups and workload management rules.
+Refer to the [Greenplum Command Center documentation](http://docs.vmware.com/en/VMware-Greenplum-Command-Center/index.html) for more information about creating and managing resource groups and workload management rules.
 
 ## <a id="topic71717999"></a>Configuring and Using Resource Groups 
 
@@ -283,6 +283,8 @@ If you use RedHat 6 and the performance with resource groups is acceptable for y
 ### <a id="topic833"></a>Prerequisite 
 
 Greenplum Database resource groups use Linux Control Groups \(cgroups\) to manage CPU resources. Greenplum Database also uses cgroups to manage memory for resource groups for external components. With cgroups, Greenplum isolates the CPU and external component memory usage of your Greenplum processes from other processes on the node. This allows Greenplum to support CPU and external component memory usage restrictions on a per-resource-group basis.
+
+> **Note** Redhat 8.x supports two versions of cgroups: cgroup v1 and cgroup v2. Greenplum Database only supports cgroup v1. Follow the steps below to make sure that your system is mounting the `cgroups-v1` filesystem at startup.
 
 For detailed information about cgroups, refer to the Control Groups documentation for your Linux distribution.
 
@@ -299,6 +301,28 @@ Complete the following tasks on each node in your Greenplum Database cluster to 
         ```
         sudo yum install libcgroup
         ```
+
+1. If you are using Redhat 8.x, make sure that you configured the system to mount the `cgroups-v1` filesystem by default during system boot by running the following command:
+
+    ```
+    stat -fc %T /sys/fs/cgroup/
+    ```
+
+    For cgroup v1, the output is `tmpfs`.  
+    If your output is `cgroup2fs`, configure the system to mount `cgroups-v1` by default during system boot by the `systemd` system and service manager:
+
+    ```
+    grubby --update-kernel=/boot/vmlinuz-$(uname -r) --args="systemd.unified_cgroup_hierarchy=0 systemd.legacy_systemd_cgroup_controller"
+    ```
+
+    To add the same parameters to all kernel boot entries:
+
+    ```
+    grubby --update-kernel=ALL --args="systemd.unified_cgroup_hierarchy=0 systemd.legacy_systemd_cgroup_controller"
+    ```
+
+    Reboot the system for the changes to take effect.
+
 
 1.  Locate the cgroups configuration file `/etc/cgconfig.conf`. You must be the superuser or have `sudo` access to edit this file:
 
