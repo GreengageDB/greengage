@@ -160,7 +160,7 @@ RECONFIG :
 	rm -f $(GPPGDIR)/GNUmakefile
 
 $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	mkdir -p $(GPPGDIR)
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd $(GPPGDIR) && \
@@ -170,7 +170,7 @@ $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
                          --mandir=$(INSTLOC)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	mkdir -p Debug
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd Debug && \
@@ -180,7 +180,7 @@ Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
                     --mandir=$(INSTLOC)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	mkdir -p Release
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd Release && \
@@ -229,7 +229,7 @@ endef
 
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greenplum_path_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
@@ -535,8 +535,8 @@ mgmtcopy :
 libcopy=(cd $(1) && $(TAR) cf - $(2)) | (cd $(3) && $(TAR) xvf -)$(check_pipe_for_errors)
 
 copylibs : thirdparty-dist
-	mkdir -p $(INSTLOC)/etc
-	mkdir -p $(INSTLOC)/include
+	mkdir -p $(DESTDIR)$(INSTLOC)/etc
+	mkdir -p $(DESTDIR)$(INSTLOC)/include
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \
