@@ -903,17 +903,20 @@ CUtils::FHasCTEAnchor(CExpression *pexpr)
 // return CTEConsumers' and a set of CTEProducers' CTE ids in the given subtree
 void
 CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
-									 ULongPtrArray *cteConsumers, UlongCteIdHashSet *cteProducerSet)
+									 ULongPtrArray *cteConsumers,
+									 UlongCteIdHashSet *cteProducerSet)
 {
 	COperator *pop = pexpr->Pop();
 
 	if (COperator::EopPhysicalCTEConsumer == pexpr->Pop()->Eopid())
 	{
-		cteConsumers->Append(GPOS_NEW(mp) ULONG(CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId()));
+		cteConsumers->Append(GPOS_NEW(mp) ULONG(
+			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId()));
 	}
 	else if (COperator::EopPhysicalCTEProducer == pexpr->Pop()->Eopid())
 	{
-		cteProducerSet->Insert(GPOS_NEW(mp) ULONG(CPhysicalCTEProducer::PopConvert(pop)->UlCTEId()));
+		cteProducerSet->Insert(GPOS_NEW(mp) ULONG(
+			CPhysicalCTEProducer::PopConvert(pop)->UlCTEId()));
 	}
 
 	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
@@ -922,7 +925,8 @@ CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
 
 		if (!pexprChild->Pop()->FScalar())
 		{
-			CollectConsumersAndProducers(mp, pexprChild, cteConsumers, cteProducerSet);
+			CollectConsumersAndProducers(mp, pexprChild, cteConsumers,
+										 cteProducerSet);
 		}
 	}
 }
@@ -938,7 +942,7 @@ CUtils::hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
 	CollectConsumersAndProducers(mp, pexpr, cteConsumers, cteProducerSet);
 
 	// check if every consumer's producer is in ProducerSet
-	for(ULONG ul = 0; ul < cteConsumers->Size(); ul++)
+	for (ULONG ul = 0; ul < cteConsumers->Size(); ul++)
 	{
 		if (!cteProducerSet->Contains((*cteConsumers)[ul]))
 		{
