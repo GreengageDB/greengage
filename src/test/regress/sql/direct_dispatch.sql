@@ -360,6 +360,25 @@ explain (costs off) select gp_segment_id, id from t_test_dd_via_segid where gp_s
 
 explain (costs off) select gp_segment_id, id from t_test_dd_via_segid where gp_segment_id=1 or gp_segment_id=2 or gp_segment_id=3;
 
+-- https://github.com/greenplum-db/gpdb/issues/14887
+-- If opno of clause does not belong to opfamily of distributed key,
+-- do not use direct dispatch to resolve wrong result
+create table t_14887(a varchar);
+insert into t_14887 values('a   ');
+explain select * from t_14887 where a = 'a'::bpchar;
+select * from t_14887 where a = 'a'::bpchar;
+
+-- texteq does not belong to the hash opfamily of the table's citext distkey.
+-- But from the implementation can deduce: texteq ==> citext_eq, and we can
+-- do the direct dispatch.
+-- But we do not have the kind of implication rule in Postgres: texteq ==> citext_eq.
+CREATE EXTENSION if not exists citext;
+drop table t_14887;
+create table t_14887(a citext);
+insert into t_14887 values('A'),('a');
+explain select * from t_14887 where a = 'a'::text;
+select * from t_14887 where a = 'a'::text;
+
 -- cleanup
 set test_print_direct_dispatch_info=off;
 
@@ -371,6 +390,8 @@ drop table if exists direct_test_partition;
 drop table if exists direct_test_range_partition;
 drop table if exists direct_dispatch_foo;
 drop table if exists direct_dispatch_bar;
+drop table if exists t_14887;
+drop EXTENSION citext;
 
 drop table if exists MPP_22019_a;
 drop table if exists MPP_22019_b;

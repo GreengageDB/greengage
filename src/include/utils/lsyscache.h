@@ -120,6 +120,7 @@ extern Oid	get_opclass_family(Oid opclass);
 extern Oid	get_opclass_input_type(Oid opclass);
 extern RegProcedure get_opcode(Oid opno);
 extern char *get_opname(Oid opno);
+extern Oid	get_opnamespace(Oid opno);
 extern void op_input_types(Oid opno, Oid *lefttype, Oid *righttype);
 extern bool op_mergejoinable(Oid opno, Oid inputtype);
 extern bool op_hashjoinable(Oid opno, Oid inputtype);
@@ -185,6 +186,7 @@ extern char get_typtype(Oid typid);
 extern bool type_is_rowtype(Oid typid);
 extern bool type_is_enum(Oid typid);
 extern bool type_is_range(Oid typid);
+extern bool type_is_domain(Oid typid);
 extern void get_type_category_preferred(Oid typid,
 							char *typcategory,
 							bool *typispreferred);

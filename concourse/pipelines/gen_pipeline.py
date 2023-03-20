@@ -155,6 +155,8 @@ def create_pipeline(args, git_remote, git_branch):
         "rhel8" : "rhel",
         "ubuntu18.04" : "ubuntu",
         "rocky8" : "rocky",
+        "oel8" : "oel",
+        "oel7" : "oel"
     }
     test_os = {
         "centos6" : "centos",
@@ -162,6 +164,8 @@ def create_pipeline(args, git_remote, git_branch):
         "rhel8" : "centos",
         "ubuntu18.04" : "ubuntu",
         "rocky8" : "centos",
+        "oel8" : "centos",
+        "oel7" : "centos"
     }
     dist = {
         "centos6" : "rhel6",
@@ -169,6 +173,8 @@ def create_pipeline(args, git_remote, git_branch):
         "rhel8" : "rhel8",
         "ubuntu18.04" : "ubuntu18.04",
         "rocky8" : "rocky8",
+        "oel8" : "oel8",
+        "oel7" : "oel7"
     }
     context = {
         'template_filename': args.template_filename,
@@ -325,7 +331,7 @@ def main():
         action='store',
         dest='os_type',
         default=default_os_type,
-        choices=['centos6', 'centos7', 'rhel8','ubuntu18.04', 'rocky8'],
+        choices=['centos6', 'centos7', 'rhel8','ubuntu18.04', 'rocky8', 'oel8', 'oel7'],
         help='OS value to support'
     )
 

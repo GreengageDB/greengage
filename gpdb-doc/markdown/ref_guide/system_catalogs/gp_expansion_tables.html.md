@@ -18,6 +18,7 @@ In a normal expansion operation it is not necessary to modify the data stored in
 |`expansion_started`|timestamp without time zone| |Timestamp for the start of the expansion of this table. This field is only populated after a table is successfully expanded.|
 |`expansion_finished`|timestamp without time zone| |Timestamp for the completion of expansion of this table.|
 |`source_bytes`| | |The size of disk space associated with the source table. Due to table bloat in heap tables and differing numbers of segments after expansion, it is not expected that the final number of bytes will equal the source number. This information is tracked to help provide progress measurement to aid in duration estimation for the end-to-end expansion operation.|
+|`rel_storage`|text|Storage type of a relation.|
 
 **Parent topic:** [System Catalogs Definitions](../system_catalogs/catalog_ref-html.html)
 
