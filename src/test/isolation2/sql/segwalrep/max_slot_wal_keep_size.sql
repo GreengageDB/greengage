@@ -5,24 +5,24 @@
 
 include: helpers/server_helpers.sql;
 
-CREATE OR REPLACE FUNCTION advance_xlog_on_seg0(num int) RETURNS void AS
-$$
-DECLARE
-	i int; 
-BEGIN 
-    i := 0; 
-	CREATE TABLE t_dummy_switch(i int) DISTRIBUTED BY (i); 
-	LOOP 
-		IF i >= num THEN 
-			DROP TABLE t_dummy_switch; 
-			RETURN; 
-		END IF; 
-		PERFORM pg_switch_xlog() FROM gp_dist_random('gp_id') WHERE gp_segment_id=0; 
-		INSERT INTO t_dummy_switch SELECT generate_series(1,10); 
-		i := i + 1; 
-	END LOOP; 
-	DROP TABLE t_dummy_switch; 
-END; 
+CREATE OR REPLACE FUNCTION advance_xlog_on_seg0(num int) RETURNS void AS /*in func*/
+$$ /*in func*/
+DECLARE /*in func*/
+	i int; /*in func*/
+BEGIN /*in func*/
+   i := 0; /*in func*/
+	CREATE TABLE t_dummy_switch(i int) DISTRIBUTED BY (i); /*in func*/
+	LOOP /*in func*/
+		IF i >= num THEN /*in func*/
+			DROP TABLE t_dummy_switch; /*in func*/
+			RETURN; /*in func*/
+		END IF; /*in func*/
+		PERFORM pg_switch_xlog() FROM gp_dist_random('gp_id') WHERE gp_segment_id=0; /*in func*/
+		INSERT INTO t_dummy_switch SELECT generate_series(1,10); /*in func*/
+		i := i + 1; /*in func*/
+	END LOOP; /*in func*/
+	DROP TABLE t_dummy_switch; /*in func*/
+END; /*in func*/
 $$ language plpgsql;
 
 -- On content 0 primary, retain max 128MB (2 WAL files) for
