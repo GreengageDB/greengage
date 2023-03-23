@@ -11,11 +11,11 @@
 
 #include "gpos/common/CStackDescriptor.h"
 
+#include <execinfo.h>
+
 #include "gpos/string/CWString.h"
 #include "gpos/task/IWorker.h"
 #include "gpos/utils.h"
-
-#include <execinfo.h>
 
 #define GPOS_STACK_DESCR_TRACE_BUF (4096)
 

@@ -821,19 +821,20 @@ explain analyze select * from t, pt where tid = ptid;
          ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=19) (actual time=0.208..0.358 rows=2 loops=1)
                ->  Seq Scan on t  (cost=0.00..431.00 rows=1 width=19) (actual time=0.020..0.021 rows=2 loops=1)
          ->  Sequence  (cost=0.00..54.00 rows=3 width=31) (actual time=0.048..0.075 rows=4 loops=2)
-               ->  Partition Selector for pt (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4) (never executed)
+               ->  Partition Selector for pt (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4) (actual time=0.000..0.006 rows=0 loops=2)
                      Partitions selected: 6 (out of 6)
                ->  Dynamic Index Scan on pt (dynamic scan id: 1)  (cost=0.00..54.00 rows=3 width=31) (actual time=0.046..0.073 rows=4 loops=2)
-                     Index Cond: ptid = $0
+                     Index Cond: (ptid = t.tid)
                      Partitions scanned:  Avg 6.0 (out of 6) x 3 workers of 2 scans.  Max 6 parts (seg0).
+ Planning time: 20.481 ms
    (slice0)    Executor memory: 386K bytes.
    (slice1)    Executor memory: 60K bytes avg x 3 workers, 62K bytes max (seg0).
    (slice2)    Executor memory: 155K bytes avg x 3 workers, 155K bytes max (seg0).
    (slice3)    
  Memory used:  128000kB
- Optimizer: Pivotal Optimizer (GPORCA) version 2.55.21
- Total runtime: 2.810 ms
-(17 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+ Execution time: 6.685 ms
+(19 rows)
 
 --
 -- Partitioned table on both sides of the join. This will create a result node as Append node is

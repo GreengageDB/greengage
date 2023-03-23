@@ -6,6 +6,7 @@
 #include "common/relpath.h"
 #include "utils/faultinjector.h"
 #include "storage/lmgr.h"
+#include "storage/md.h"
 
 typedef struct PendingDbDelete
 {
@@ -164,6 +165,14 @@ static void
 dropDatabaseDirectory(DbDirNode *deldb, bool isRedo)
 {
 	char *dbpath = GetDatabasePath(deldb->database, deldb->tablespace);
+
+	/*
+	 * Checkpointer has already proccessed all requests on primary segments. So
+	 * the requests should be canceled on mirrors only
+	 */
+	if (isRedo)
+		ForgetDatabaseFsyncRequests(deldb->database);
+
 	/*
 	 * Remove files from the old tablespace
 	 */
@@ -171,6 +180,7 @@ dropDatabaseDirectory(DbDirNode *deldb, bool isRedo)
 		ereport(WARNING,
 				(errmsg("some useless files may be left behind in old database directory \"%s\"",
 						dbpath)));
+	pfree(dbpath);
 
 	if (isRedo)
 		XLogDropDatabase(deldb->database);
