@@ -25,3 +25,5 @@ else
 	REGRESS += 06_pg13_reuse_interval
 endif
 
+REGRESS += 07_valid_until
+
