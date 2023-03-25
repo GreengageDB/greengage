@@ -1097,6 +1097,9 @@ _PG_fini(void)
 	/* Uninstall hooks */
 	check_password_hook = prev_check_password_hook;
 	ProcessUtility_hook = prev_ProcessUtility;
+#if PG_VERSION_NUM >= 150000
+	shmem_request_hook = prev_shmem_request_hook;
+#endif
 	shmem_startup_hook = prev_shmem_startup_hook;
 }
 
