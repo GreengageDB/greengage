@@ -1194,8 +1194,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		case T_CreateRoleStmt:
 		{
 			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
-			ListCell      *option;
-			int          valid_until = 0;
+			ListCell       *option;
+			int             valid_until = 0;
+			bool            has_valid_until = false; 
 
 			/* check the validity of the username */
 			username_check(stmt->role, NULL);
@@ -1214,11 +1215,12 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
 				{
 					valid_until = check_valid_until(strVal(defel->arg));
+					has_valid_until = true;
 				}
 			}
 			if (password_valid_until > 0)
 			{
-				if (valid_until < password_valid_until)
+				if (valid_until < password_valid_until || !has_valid_until)
 				{
 					elog(ERROR, "require a VALID UNTIL option with a date older than %d days", password_valid_until);
 				}
