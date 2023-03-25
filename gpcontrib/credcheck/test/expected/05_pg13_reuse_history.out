@@ -2,13 +2,23 @@ DROP USER IF EXISTS credtest;
 NOTICE:  role "credtest" does not exist, skipping
 DROP EXTENSION credcheck CASCADE;
 CREATE EXTENSION credcheck;
-LOAD 'credcheck';
+SELECT pg_password_history_reset();
+ pg_password_history_reset 
+---------------------------
+                         0
+(1 row)
+
+SELECT * FROM pg_password_history WHERE rolename = 'credtest';
+ rolename | password_date | password_hash 
+----------+---------------+---------------
+(0 rows)
+
 SET credcheck.password_reuse_history = 2;
 -- When creating user the password must be stored in the history
 CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
-SELECT rolename, password_text FROM credcheck.pg_auth_history ;
- rolename |                          password_text                           
+SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date;
+ rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
  credtest | 5302ee28c0fde94ab3a23a6f660d5983bf8147397def105427d0f37e810c134c
  credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
@@ -19,8 +29,8 @@ ALTER USER credtest PASSWORD 'J8YuRe=6O';
 ERROR:  Cannot use this credential following the password reuse policy
 -- eject the first credential from the history and add a new one
 ALTER USER credtest PASSWORD 'AJ8YuRe=6O0';
-SELECT rolename, password_text FROM credcheck.pg_auth_history ;
- rolename |                          password_text                           
+SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
+ rolename |                          password_hash                           
 ----------+------------------------------------------------------------------
  credtest | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
  credtest | c0b37cb82bc2b8a2aae606362754072224fe01651aabc688c4aa240ab450f916
@@ -35,8 +45,15 @@ ALTER USER credtest PASSWORD 'H8Hdre=S2';
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
 -- Dropping the user must empty the record in history table
 DROP USER credtest;
-SELECT * FROM credcheck.pg_auth_history;
- rolename | password_date | password_text 
+SELECT * FROM pg_password_history WHERE rolename = 'credtest';
+ rolename | password_date | password_hash 
 ----------+---------------+---------------
 (0 rows)
+
+-- Reset the password history
+SELECT pg_password_history_reset();
+ pg_password_history_reset 
+---------------------------
+                         0
+(1 row)
 

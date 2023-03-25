@@ -2,21 +2,58 @@
 -- Copyright (c) 2021-2023 MigOps Inc - All rights reserved.
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "ALTER EXTENSION credcheck" to load this file. \quit
+\echo Use "CREATE EXTENSION credcheck" to load this file. \quit
 
 CREATE SCHEMA credcheck;
 
 ----
--- Table used to store the password reuse historic
+-- Remove all entries from password history.
+-- Returns the number of entries removed.
 ----
-CREATE TABLE credcheck.pg_auth_history
-(
-	rolename name NOT NULL,
-	password_date timestamp without time zone NOT NULL,
-	password_text text NOT NULL,
-	PRIMARY KEY (rolename, password_text)
-);
-CREATE INDEX ON credcheck.pg_auth_history(password_date, rolename);
+CREATE FUNCTION pg_password_history_reset( )
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C VOLATILE;
 
--- Include the table into pg_dump
-SELECT pg_catalog.pg_extension_config_dump('credcheck.pg_auth_history', '');
+----
+-- Remove entries of the specified user from password history.
+-- Returns the number of entries removed.
+----
+CREATE FUNCTION pg_password_history_reset( IN username name )
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT VOLATILE;
+
+----
+-- Look at password history entries
+----
+CREATE FUNCTION pg_password_history (
+	OUT rolename name,
+	OUT password_date timestamp,
+	OUT password_hash text
+)
+RETURNS SETOF record
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT VOLATILE;
+
+-- Register a view on the function for ease of use.
+CREATE VIEW pg_password_history AS
+  SELECT * FROM pg_password_history();
+
+----
+-- Change password creation timestamp for all entries of the specified
+-- user in the password history. Proposed for testing purpose only.
+-- Returns the number of entries changed.
+----
+CREATE FUNCTION pg_password_history_timestamp( IN username name, IN new_timestamp timestamp)
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT VOLATILE;
+
+GRANT SELECT ON pg_password_history TO PUBLIC;
+
+-- Don't want this to be available to non-superusers.
+REVOKE ALL ON FUNCTION pg_password_history_reset() FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_password_history_reset(name) FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_password_history_timestamp(name, timestamp) FROM PUBLIC;
+

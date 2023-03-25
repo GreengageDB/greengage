@@ -4,7 +4,7 @@
 	- [Description](#description)
 	- [Installation](#installation)
 	- [Checks](#checks)
-	- [Password reuse policy](#password-reuse-policy) WIP: experimental
+	- [Password reuse policy](#password-reuse-policy)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -212,16 +212,16 @@ postgres=# ALTER USER abcd$ VALID UNTIL '2022-12-21';
 ERROR:  require a VALID UNTIL option with a date older than 30 days
 ```
 
-### [Password reuse policy](#password-reuse-policy) WIP: experimental
+### [Password reuse policy](#password-reuse-policy)
 
 PostgreSQL supports natively password expiration, all other kinds of password policy enforcement comes with extensions.
 With the credcheck extension, password can be forced to be of a certain length, contain amounts of various types of characters and be checked against the user account name itself.
 
 But one thing was missing, there was no password reuse policy enforcement. That mean that when user were required to change their password, they could just reuse their current password!
 
-The credcheck extension adds the "Password Reuse Policy" in release 1.0.0.
+The credcheck extension adds the "Password Reuse Policy" in release 1.0.0. To used this feature, the credcheck extension MUST be added to `shared_preload_libraries` configuration option.
 
-All users passwords are historicized in a dedicated table (`credcheck.pg_auth_history`) together with the timestamps of when these passwords were set.
+All users passwords are historicized in shared memory together with the timestamps of when these passwords were set. The passwords history is saved into a file named `$PGDATA/global/pg_password_history` to be reloaded in shared memory at startup. This file must be part of your backups if you don't want to loose the password history, hopefully pg_basebackup will take care of it.
 
 Two settings allow to control the behavior of this feature:
 
@@ -237,13 +237,18 @@ restrict new passwords from being chosen from this history:
 
 * If an account is restricted based on time elapsed, a new password cannot be chosen from passwords in the history that are newer than `password_reuse_interval` days. For example, if the password reuse interval is set to 365, a new password must not be among those previously chosen within the last year. 
 
+To be able to list the content of the history a view is provided in the database you have created
+the credcheck extension. The view is named `public.pg_password_history`. This view is visible by everyone.
+
+A superuser can also reset the content of the password history by calling a function named `public.pg_password_history_reset()`. If it is called without an argument, all the passords history will be cleared. To only remove the records registered for a single user, just pass his name as parameter. This function returns the number of records removed from the history.
+
 Example:
 ```
 SET credcheck.password_reuse_history = 2;
 CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
-SELECT rolename, password_text FROM credcheck.pg_auth_history ;
- rolename |                          password_text
+SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date;
+ rolename |                          password_hash
 ----------+------------------------------------------------------------------
  credtest | 7488570b80076cf9da26644d5eeb316c4768ff5bee7bf319344e7bb328032098
  credtest | e61e58c22aa6bf31a92b385932f7d0e4dbaba24fa3fdb2982510d6c72a961335
@@ -252,7 +257,54 @@ SELECT rolename, password_text FROM credcheck.pg_auth_history ;
 -- fail, the credential is still in the history
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
 ERROR:  Cannot use this credential following the password reuse policy
+
+-- Reset the password history
+SELECT pg_password_history_reset();
+ pg_password_history_reset
+---------------------------
+                         2
+(1 row)
 ```
+
+Example for password reuse interval:
+```
+SET credcheck.password_reuse_history = 1;
+SET credcheck.password_reuse_interval = 365;
+-- Add a new password in the history and set its age to 100 days
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+SELECT pg_password_history_timestamp('credtest', now()::timestamp - '100 days'::interval);
+ pg_password_history_timestamp
+-------------------------------
+                             1
+(1 row)
+
+SELECT * FROM pg_password_history WHERE rolename = 'credtest';
+ rolename |         password_date         |                          password_hash                           
+----------+-------------------------------+------------------------------------------------------------------
+ credtest | 2022-12-15 13:41:06.736775+03 | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
+(1 row)
+
+-- fail, the password is in the history for less than 1 year
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+ERROR:  Cannot use this credential following the password reuse policy
+-- Change the age of the password to exceed the 1 year interval
+SELECT pg_password_history_timestamp('credtest', now()::timestamp - '380 days'::interval);
+ pg_password_history_timestamp
+-------------------------------
+                             2
+(1 row)
+
+-- success, the old password present in the history has expired and will be removed
+ALTER USER credtest PASSWORD 'J8YuRe=6O';
+SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest';
+ rolename |         password_date         |                          password_hash                           
+----------+-------------------------------+------------------------------------------------------------------
+ credtest | 2023-03-25 13:42:37.387629+03 | c38cf85ca6c3e5ee72c09cf0bfb42fb29b0f0a3e8ba335637941d60f86512508
+(1 row)
+```
+
+Function `pg_password_history_timestamp()` is provided for testing purpose only and allow a superuer
+to change the timestamp of all registered passwords in the history.
 
 ### [Limitations](#limitations)
 
@@ -291,17 +343,20 @@ postgres=# ALTER USER user1 RENAME to test_user;
 ```
 
 ### [Authors](#authors)
+
 - Dinesh Kumar
 - Gilles Darold
 
+Maintainer: Gilles Darold
+
 ### [License](#license)
 
-This extension is free software distributed under the PostgreSQL
-License.
+This extension is free software distributed under the PostgreSQL License.
 
     Copyright (c) 2021-2023 MigOps Inc.
+
 ### [Credits](#credits)
-- Thanks to Gilles Darold for suggestions and improvements
+
 - Thanks to the [passwordcheck](https://www.postgresql.org/docs/current/passwordcheck.html) extension author
 - Thanks to the [password policy](https://github.com/eendroroy/passwordpolicy) extension author
 - Thanks to the [blog author](https://paquier.xyz/postgresql-2/postgres-module-highlight-customize-passwordcheck-to-secure-your-database/) Mickael Paquier
