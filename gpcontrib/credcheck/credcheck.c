@@ -520,53 +520,53 @@ username_guc()
 {
 	DefineCustomIntVariable("credcheck.username_min_length",
 				gettext_noop("minimum username length"), NULL,
-				&username_min_length, 1, 1, INT_MAX, PGC_USERSET, 0,
+				&username_min_length, 1, 1, INT_MAX, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.username_min_special",
 				gettext_noop("minimum username special characters"),
 				NULL, &username_min_special, 0, 0, INT_MAX,
-				PGC_USERSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.username_min_digit",
 				gettext_noop("minimum username digits"), NULL,
-				&username_min_digit, 0, 0, INT_MAX, PGC_USERSET, 0,
+				&username_min_digit, 0, 0, INT_MAX, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.username_min_upper",
 				gettext_noop("minimum username uppercase letters"),
-				NULL, &username_min_upper, 0, 0, INT_MAX, PGC_USERSET,
+				NULL, &username_min_upper, 0, 0, INT_MAX, PGC_SUSET,
 				0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.username_min_lower",
 				gettext_noop("minimum username lowercase letters"),
-				NULL, &username_min_lower, 0, 0, INT_MAX, PGC_USERSET,
+				NULL, &username_min_lower, 0, 0, INT_MAX, PGC_SUSET,
 				0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.username_min_repeat",
 				gettext_noop("minimum username characters repeat"),
 				NULL, &username_min_repeat, 0, 0, INT_MAX,
-				PGC_USERSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("credcheck.username_contain_password",
 				gettext_noop("username contains password"), NULL,
-				&username_contain_password, true, PGC_USERSET, 0,
+				&username_contain_password, true, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("credcheck.username_ignore_case",
 				gettext_noop("ignore case while username checking"),
-				NULL, &username_ignore_case, false, PGC_USERSET, 0,
+				NULL, &username_ignore_case, false, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
 				"credcheck.username_not_contain",
 				gettext_noop("username should not contain these characters"), NULL,
-				&username_not_contain, "", PGC_USERSET, 0, NULL, NULL, NULL);
+				&username_not_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
 				"credcheck.username_contain",
 				gettext_noop("password should contain these characters"), NULL,
-				&username_contain, "", PGC_USERSET, 0, NULL, NULL, NULL);
+				&username_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
 }
 
 static void
@@ -574,71 +574,71 @@ password_guc()
 {
 	DefineCustomIntVariable("credcheck.password_min_length",
 				gettext_noop("minimum password length"), NULL,
-				&password_min_length, 1, 1, INT_MAX, PGC_USERSET, 0,
+				&password_min_length, 1, 1, INT_MAX, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_min_special",
 				gettext_noop("minimum special characters"), NULL,
-				&password_min_special, 0, 0, INT_MAX, PGC_USERSET, 0,
+				&password_min_special, 0, 0, INT_MAX, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_min_digit",
 				gettext_noop("minimum password digits"), NULL,
-				&password_min_digit, 0, 0, INT_MAX, PGC_USERSET, 0,
+				&password_min_digit, 0, 0, INT_MAX, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_min_upper",
 				gettext_noop("minimum password uppercase letters"),
-				NULL, &password_min_upper, 0, 0, INT_MAX, PGC_USERSET,
+				NULL, &password_min_upper, 0, 0, INT_MAX, PGC_SUSET,
 				0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_min_lower",
 				gettext_noop("minimum password lowercase letters"),
-				NULL, &password_min_lower, 0, 0, INT_MAX, PGC_USERSET,
+				NULL, &password_min_lower, 0, 0, INT_MAX, PGC_SUSET,
 				0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_min_repeat",
 				gettext_noop("minimum password characters repeat"),
 				NULL, &password_min_repeat, 0, 0, INT_MAX,
-				PGC_USERSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("credcheck.password_contain_username",
 				gettext_noop("password contains username"), NULL,
-				&password_contain_username, true, PGC_USERSET, 0,
+				&password_contain_username, true, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("credcheck.password_ignore_case",
 				gettext_noop("ignore case while password checking"),
-				NULL, &password_ignore_case, false, PGC_USERSET, 0,
+				NULL, &password_ignore_case, false, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
 				"credcheck.password_not_contain",
 				gettext_noop("password should not contain these characters"), NULL,
-				&password_not_contain, "", PGC_USERSET, 0, NULL, NULL, NULL);
+				&password_not_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
 				"credcheck.password_contain",
 				gettext_noop("password should contain these characters"), NULL,
-				&password_contain, "", PGC_USERSET, 0, NULL, NULL, NULL);
+				&password_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
 
 #if PG_VERSION_NUM >= 120000
 	DefineCustomIntVariable("credcheck.password_reuse_history",
 				gettext_noop("minimum number of password changes before permitting reuse"),
 				NULL, &password_reuse_history, 0, 0, 100,
-				PGC_USERSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_reuse_interval",
 				gettext_noop("minimum number of days elapsed before permitting reuse"),
 				NULL, &password_reuse_interval, 0, 0, 730, /* max 2 years */
-				PGC_USERSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 0, NULL, NULL, NULL);
 #endif
 
 	DefineCustomIntVariable("credcheck.password_valid_until",
 				gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
 					" with a minimum number of days"),
 				NULL, &password_valid_until, 0, 0, INT_MAX,
-				PGC_USERSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 0, NULL, NULL, NULL);
 }
 
 #if PG_VERSION_NUM >= 120000
@@ -1065,7 +1065,7 @@ _PG_init(void)
 
 	DefineCustomIntVariable("credcheck.history_max_size",
 				gettext_noop("maximum of entries in the password history"), NULL,
-				&pgph_max, 65535, 64, (INT_MAX / 1024), PGC_USERSET, 0,
+				&pgph_max, 65535, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
 				NULL, NULL, NULL);
 
 #if PG_VERSION_NUM < 150000

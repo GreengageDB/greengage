@@ -23,7 +23,7 @@ The `credcheck` PostgreSQL extension provides few general credential checks, whi
 
 This extension is developed based on the PostgreSQL's `check_password_hook` hook.
 
-This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks.
+This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks. The settings can only be changed by a superuser.
 
 ### [Installation](#installation)
 
