@@ -55,6 +55,9 @@ static const uint32 PGPH_FILE_HEADER = 0x48504750;
 static const uint32 PGPH_VERSION = 100;
 #define PGPH_TRANCHE_NAME                "credcheck_history"
 
+static bool statement_has_password = false;
+static bool no_password_logging    = true;
+
 #if PG_VERSION_NUM < 120000
 #define table_open(r,l)         heap_open(r,l)
 #define table_openrv(r,l)       heap_openrv(r,l)
@@ -131,6 +134,9 @@ extern void _PG_init(void);
 extern void _PG_fini(void);
 static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
 
+/* Hold previous logging hook */
+static emit_log_hook_type prev_log_hook = NULL;
+
 static void flush_password_history(void);
 static pgphEntry *entry_alloc(pgphHashKey *key, TimestampTz password_date);
 #if PG_VERSION_NUM >= 150000
@@ -140,6 +146,7 @@ static void pgph_shmem_startup(void);
 static int entry_cmp(const void *lhs, const void *rhs);
 static Size pgph_memsize(void);
 static void pg_password_history_internal(FunctionCallInfo fcinfo);
+static void fix_log(ErrorData *edata);
 
 /* Username flags*/
 static int username_min_length = 1;
@@ -275,6 +282,9 @@ username_check(const char *username, const char *password)
 	char *tmp_user = NULL;
 	char *tmp_contains = NULL;
 	char *tmp_not_contains = NULL;
+
+	if (strcasestr(debug_query_string, "PASSWORD") != NULL)
+		statement_has_password = true;
 
 	/* checks has to be done by ignoring case */
 	if (username_ignore_case)
@@ -1043,9 +1053,11 @@ check_password(const char *username, const char *password,
                            PasswordType password_type, Datum validuntil_time,
                            bool validuntil_null)
 {
+
 	switch (password_type)
 	{
 		case PASSWORD_TYPE_PLAINTEXT:
+			statement_has_password = true;
 			username_check(username, password);
 			password_check(username, password);
 			break;
@@ -1066,6 +1078,11 @@ _PG_init(void)
 	DefineCustomIntVariable("credcheck.history_max_size",
 				gettext_noop("maximum of entries in the password history"), NULL,
 				&pgph_max, 65535, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.no_password_logging",
+				gettext_noop("prevent exposing the password in error messages logged"),
+				NULL, &no_password_logging, true, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 #if PG_VERSION_NUM < 150000
@@ -1089,6 +1106,9 @@ _PG_init(void)
 #endif
         prev_shmem_startup_hook = shmem_startup_hook;
         shmem_startup_hook = pgph_shmem_startup;
+
+	prev_log_hook = emit_log_hook;
+	emit_log_hook = fix_log;
 }
 
 void
@@ -1097,6 +1117,7 @@ _PG_fini(void)
 	/* Uninstall hooks */
 	check_password_hook = prev_check_password_hook;
 	ProcessUtility_hook = prev_ProcessUtility;
+	emit_log_hook = prev_log_hook;
 #if PG_VERSION_NUM >= 150000
 	shmem_request_hook = prev_shmem_request_hook;
 #endif
@@ -1107,6 +1128,8 @@ static void
 cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
 	Node *parsetree = pstmt->utilityStmt;
+
+	statement_has_password = false;
 
 	switch (nodeTag(parsetree))
 	{
@@ -1181,6 +1204,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 #if PG_VERSION_NUM >= 120000
 				if (strcmp(defel->defname, "password") == 0)
 				{
+					statement_has_password = true;
 					check_password_reuse(stmt->role->rolename, strVal(defel->arg));
 				}
 #endif
@@ -1212,6 +1236,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 #if PG_VERSION_NUM >= 120000
 				if (strcmp(defel->defname, "password") == 0)
 				{
+					statement_has_password = true;
 					check_password_reuse(stmt->role, strVal(defel->arg));
 				}
 #endif
@@ -1249,7 +1274,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		default:
 			break;
 	}
-	
+
 	/* Execute the utility command, we are not concerned */
 	if (prev_ProcessUtility)
 		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
@@ -1742,3 +1767,29 @@ pg_password_history_timestamp(PG_FUNCTION_ARGS)
 
         PG_RETURN_INT32(num_changed);
 }
+
+static void
+fix_log(ErrorData *edata)
+{
+	if (edata->elevel != ERROR)
+	{
+		/* Continue chain to previous hook */
+		if (prev_log_hook)
+			(*prev_log_hook) (edata);
+		return;
+	}
+
+        /*
+	 * Error should not expose the password in the log.
+	 */
+	if (statement_has_password && no_password_logging)
+		edata->hide_stmt = true;
+
+	statement_has_password = false;
+
+	/* Continue chain to previous hook */
+	if (prev_log_hook)
+		(*prev_log_hook) (edata);
+}
+
+
