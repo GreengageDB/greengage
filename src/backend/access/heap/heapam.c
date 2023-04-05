@@ -88,7 +88,7 @@ static HeapScanDesc heap_beginscan_internal(Relation relation,
 						bool allow_strat, bool allow_sync,
 						bool is_bitmapscan, bool temp_snap);
 static HeapTuple heap_prepare_insert(Relation relation, HeapTuple tup,
-					TransactionId xid, CommandId cid, int options, bool isFrozen);
+					TransactionId xid, CommandId cid, int options);
 static XLogRecPtr log_heap_update(Relation reln, Buffer oldbuf,
 				Buffer newbuf, HeapTuple oldtup,
 				HeapTuple newtup, HeapTuple old_key_tup,
@@ -2367,7 +2367,6 @@ Oid
 heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 			int options, BulkInsertState bistate, TransactionId xid)
 {
-	bool		isFrozen = (xid == FrozenTransactionId);
 	HeapTuple	heaptup;
 	Buffer		buffer;
 	Buffer		vmbuffer = InvalidBuffer;
@@ -2389,7 +2388,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 * Note: below this point, heaptup is the data we actually intend to store
 	 * into the relation; tup is the caller's original untoasted data.
 	 */
-	heaptup = heap_prepare_insert(relation, tup, xid, cid, options, isFrozen);
+	heaptup = heap_prepare_insert(relation, tup, xid, cid, options);
 
 	/*
 	 * Find buffer to insert this tuple into.  If the page is all visible,
@@ -2527,10 +2526,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 			rdata[1].buffer = rdata[2].buffer = rdata[3].buffer = InvalidBuffer;
 		}
 
-		if (!isFrozen)
-			recptr = XLogInsert(RM_HEAP_ID, info, rdata);
-		else
-			recptr = XLogInsert_OverrideXid(RM_HEAP_ID, info, rdata, FrozenTransactionId);
+		recptr = XLogInsert(RM_HEAP_ID, info, rdata);
 
 		PageSetLSN(page, recptr);
 	}
@@ -2586,7 +2582,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
  */
 static HeapTuple
 heap_prepare_insert(Relation relation, HeapTuple tup, TransactionId xid,
-					CommandId cid, int options, bool isFrozen)
+					CommandId cid, int options)
 {
 	Insist(RelationIsHeap(relation));
 
@@ -2632,8 +2628,6 @@ heap_prepare_insert(Relation relation, HeapTuple tup, TransactionId xid,
 	}
 
 	tup->t_data->t_infomask &= ~(HEAP_XACT_MASK);
-	if (isFrozen)
-		tup->t_data->t_infomask |= HEAP_XMIN_COMMITTED;
 	tup->t_data->t_infomask2 &= ~(HEAP2_XACT_MASK);
 	tup->t_data->t_infomask |= HEAP_XMAX_INVALID;
 	HeapTupleHeaderSetXmin(tup->t_data, xid);
@@ -2656,7 +2650,7 @@ heap_prepare_insert(Relation relation, HeapTuple tup, TransactionId xid,
 	}
 	else if (HeapTupleHasExternal(tup) || tup->t_len > TOAST_TUPLE_THRESHOLD)
 		return toast_insert_or_update(relation, tup, NULL,
-									  TOAST_TUPLE_TARGET, isFrozen,
+									  TOAST_TUPLE_TARGET,
 									  options);
 	else
 		return tup;
@@ -2677,7 +2671,6 @@ void
 heap_multi_insert(Relation relation, HeapTuple *tuples, int ntuples,
 				  CommandId cid, int options, BulkInsertState bistate, TransactionId xid)
 {
-	bool        isFrozen = (xid == FrozenTransactionId);
 	HeapTuple  *heaptuples;
 	int			i;
 	int			ndone;
@@ -2699,7 +2692,7 @@ heap_multi_insert(Relation relation, HeapTuple *tuples, int ntuples,
 	heaptuples = palloc(ntuples * sizeof(HeapTuple));
 	for (i = 0; i < ntuples; i++)
 		heaptuples[i] = heap_prepare_insert(relation, tuples[i],
-											xid, cid, options, isFrozen);
+											xid, cid, options);
 
 	/*
 	 * We're about to do the actual inserts -- but check for conflict first,
@@ -3408,7 +3401,7 @@ l1:
 				xlrec.flags |= XLOG_HEAP_CONTAINS_OLD_KEY;
 		}
 
-		recptr = XLogInsert_OverrideXid(RM_HEAP_ID, XLOG_HEAP_DELETE, rdata, xid);
+		recptr = XLogInsert(RM_HEAP_ID, XLOG_HEAP_DELETE, rdata);
 
 		PageSetLSN(page, recptr);
 	}
@@ -4111,7 +4104,7 @@ l2:
 		{
 			/* Note we always use WAL and FSM during updates */
 			heaptup = toast_insert_or_update(relation, newtup, &oldtup,
-											 TOAST_TUPLE_TARGET, false, 0);
+											 TOAST_TUPLE_TARGET, 0);
 			newtupsize = MAXALIGN(heaptup->t_len);
 		}
 		else
