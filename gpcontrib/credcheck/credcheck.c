@@ -307,8 +307,10 @@ username_check(const char *username, const char *password)
 	/* Rule 1: username length */
 	if (strnlen(tmp_user, INT_MAX) < username_min_length)
 	{
-		elog(ERROR, gettext_noop("username length should match the configured "
-				     "credcheck.username_min_length"));
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg(gettext_noop("username length should match the configured %s"), 
+				     "credcheck.username_min_length")));
 		goto clean;
 	}
 
@@ -320,7 +322,9 @@ username_check(const char *username, const char *password)
 	if (tmp_pass != NULL && username_contain_password)
 	{
 		if (strstr(tmp_user, tmp_pass)) {
-			elog(ERROR, gettext_noop("username should not contain password"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("username should not contain password"))));
 			goto clean;
 		}
 	}
@@ -330,8 +334,10 @@ username_check(const char *username, const char *password)
 	{
 		if (str_contains(tmp_contains, tmp_user) == false)
 		{
-			elog(ERROR, gettext_noop("username does not contain the configured "
-					       "credcheck.username_contain characters"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("username does not contain the configured %s characters"),
+	 						"credcheck.username_contain")));
 			goto clean;
 		}
 	}
@@ -341,8 +347,10 @@ username_check(const char *username, const char *password)
 	{
 		if (str_contains(tmp_not_contains, tmp_user) == true)
 		{
-			elog(ERROR, gettext_noop("username contains the configured "
-					       "credcheck.username_not_contain unauthorized characters"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("username contains the configured %s unauthorized characters"),
+					       "credcheck.username_not_contain")));
 			goto clean;
 		}
 	}
@@ -353,32 +361,40 @@ username_check(const char *username, const char *password)
 	/* Rule 5: total upper characters */
 	if (!username_ignore_case && user_total_upper < username_min_upper)
 	{
-		elog(ERROR, gettext_noop("username does not contain the configured "
-				     "credcheck.username_min_upper characters"));
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters",
+				     "credcheck.username_min_upper")));
 		goto clean;
 	}
 
 	/* Rule 6: total lower characters */
 	if (!username_ignore_case && user_total_lower < username_min_lower)
 	{
-		elog(ERROR, gettext_noop("username does not contain the configured "
-				     "credcheck.username_min_lower characters"));
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters",
+				     "credcheck.username_min_lower")));
 		goto clean;
 	}
 
 	/* Rule 7: total digits */
 	if (user_total_digit < username_min_digit)
 	{
-		elog(ERROR, gettext_noop("username does not contain the configured "
-				     "credcheck.username_min_digit characters"));
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters",
+				     "credcheck.username_min_digit")));
 		goto clean;
 	}
 
 	/* Rule 8: total special */
 	if (user_total_special < username_min_special)
 	{
-		elog(ERROR, gettext_noop("username does not contain the configured "
-				     "credcheck.username_min_special characters"));
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters",
+				     "credcheck.username_min_special")));
 		goto clean;
 	}
 
@@ -387,9 +403,10 @@ username_check(const char *username, const char *password)
 	{
 		if (char_repeat_exceeds(tmp_user, username_min_repeat))
 		{
-			elog(ERROR,
-			   gettext_noop("username characters are repeated more than the "
-					"configured credcheck.username_min_repeat times"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				   errmsg(gettext_noop("%s characters are repeated more than the "
+						"configured %s times"), "username", "credcheck.username_min_repeat")));
 			goto clean;
 		}
 	}
@@ -433,8 +450,10 @@ static void password_check(const char *username, const char *password)
 	/* Rule 1: password length */
 	if (strnlen(tmp_pass, INT_MAX) < password_min_length)
 	{
-		elog(ERROR, gettext_noop("password length should match the configured "
-				     "credcheck.password_min_length"));
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg(gettext_noop("password length should match the configured %s"),
+				     "credcheck.password_min_length")));
 		goto clean;
 	}
 
@@ -443,7 +462,9 @@ static void password_check(const char *username, const char *password)
 	{
 		if (strstr(tmp_pass, tmp_user))
 		{
-			elog(ERROR, gettext_noop("password should not contain username"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password should not contain username"))));
 			goto clean;
 		}
 	}
@@ -453,8 +474,10 @@ static void password_check(const char *username, const char *password)
 	{
 		if (str_contains(tmp_contains, tmp_pass) == false)
 		{
-			elog(ERROR, gettext_noop("password does not contain the configured "
-					       "credcheck.password_contain characters"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password does not contain the configured %s characters"), 
+					       "credcheck.password_contain")));
 			goto clean;
 		}
 	}
@@ -464,8 +487,10 @@ static void password_check(const char *username, const char *password)
 	{
 		if (str_contains(tmp_not_contains, tmp_pass) == true)
 		{
-			elog(ERROR, gettext_noop("password contains the configured "
-					       "credcheck.password_not_contain unauthorized characters"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password contains the configured %s unauthorized characters"),
+					       "credcheck.password_not_contain")));
 			goto clean;
 		}
 	}
@@ -476,32 +501,40 @@ static void password_check(const char *username, const char *password)
 	/* Rule 5: total upper characters */
 	if (!password_ignore_case && pass_total_upper < password_min_upper)
 	{
-		elog(ERROR, gettext_noop("password does not contain the configured "
-				     "credcheck.password_min_upper characters"));
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters",
+				     "credcheck.password_min_upper")));
 		goto clean;
 	}
 
 	/* Rule 6: total lower characters */
 	if (!password_ignore_case && pass_total_lower < password_min_lower)
 	{
-		elog(ERROR, gettext_noop("password does not contain the configured "
-				     "credcheck.password_min_lower characters"));
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters",
+				     "credcheck.password_min_lower")));
 		goto clean;
 	}
 
 	/* Rule 7: total digits */
 	if (pass_total_digit < password_min_digit)
 	{
-		elog(ERROR, gettext_noop("password does not contain the configured "
-				     "credcheck.password_min_digit characters"));
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters",
+				     "credcheck.password_min_digit")));
 		goto clean;
 	}
 
 	/* Rule 8: total special */
 	if (pass_total_special < password_min_special)
 	{
-		elog(ERROR, gettext_noop("password does not contain the configured "
-				     "credcheck.password_min_special characters"));
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters",
+				     "credcheck.password_min_special")));
 		goto clean;
 	}
 
@@ -510,9 +543,10 @@ static void password_check(const char *username, const char *password)
 	{
 		if (char_repeat_exceeds(tmp_pass, password_min_repeat))
 		{
-			elog(ERROR,
-			   gettext_noop("password characters are repeated more than the "
-					"configured credcheck.password_min_repeat times"));
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				   errmsg("%s characters are repeated more than the "
+						"configured %s times", "password", "credcheck.password_min_repeat")));
 			goto clean;
 		}
 	}
@@ -1008,7 +1042,9 @@ check_password_reuse(const char *username, const char *password)
 	free(encrypted_password);
 
 	if (found)
-		elog(ERROR, "Cannot use this credential following the password reuse policy");
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg(gettext_noop("Cannot use this credential following the password reuse policy"))));
 
 	/* Password not found, remove passwords exceeding the history size */
 	remove_password_from_history(username, password, count_in_history);
@@ -1063,7 +1099,9 @@ check_password(const char *username, const char *password,
 			break;
 
 		default:
-			elog(ERROR, "password type is not a plain text");
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password type is not a plain text"))));
 			break;
 	}
 }
@@ -1212,7 +1250,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				{
 					int valid_until = check_valid_until(strVal(defel->arg));
 					if (valid_until < password_valid_until)
-						elog(ERROR, "the VALID UNTIL option must have a date older than %d days", password_valid_until);
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
 				}
 			}
 			break;
@@ -1250,7 +1290,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			{
 				if (valid_until < password_valid_until || !has_valid_until)
 				{
-					elog(ERROR, "require a VALID UNTIL option with a date older than %d days", password_valid_until);
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
 				}
 			}
 			break;
@@ -1296,7 +1338,7 @@ str_to_sha256(const char *password, const char *salt)
 	if (hmac_ctx == NULL)
 	{
 		pfree(result);
-		elog(ERROR, "credcheck could not initialize checksum context");
+		elog(ERROR, gettext_noop("credcheck could not initialize checksum context"));
 	}
 
 	if (pg_hmac_init(hmac_ctx, (uint8 *) password, password_len) < 0 ||
@@ -1305,7 +1347,7 @@ str_to_sha256(const char *password, const char *salt)
 	{
 		pfree(result);
 		pg_hmac_free(hmac_ctx);
-		elog(ERROR, "credcheck could not initialize checksum");
+		elog(ERROR, gettext_noop("credcheck could not initialize checksum"));
 	}
 	hex_encode((char *) checksumbuf, sizeof checksumbuf, result);
 	result[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
