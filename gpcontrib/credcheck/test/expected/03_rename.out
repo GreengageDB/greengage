@@ -30,9 +30,12 @@ SET credcheck.password_min_repeat TO DEFAULT;
 SET credcheck.username_min_length TO 2;
 ALTER USER aaa RENAME TO b;
 ERROR:  username length should match the configured credcheck.username_min_length
--- Check that a user without password doesn't invoke the extension
+-- Check that renaiming a user without password also invoke the extension
 ALTER USER bbb RENAME TO b;
-DROP USER b;
+ERROR:  username length should match the configured credcheck.username_min_length
+DROP USER bbb;
+CREATE USER b;
+ERROR:  username length should match the configured credcheck.username_min_length
 --
 --min user repeat
 --

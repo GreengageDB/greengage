@@ -31,9 +31,10 @@ SET credcheck.password_min_repeat TO DEFAULT;
 --
 SET credcheck.username_min_length TO 2;
 ALTER USER aaa RENAME TO b;
--- Check that a user without password doesn't invoke the extension
+-- Check that renaiming a user without password also invoke the extension
 ALTER USER bbb RENAME TO b;
-DROP USER b;
+DROP USER bbb;
+CREATE USER b;
 
 --
 --min user repeat
