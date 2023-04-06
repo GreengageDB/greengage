@@ -219,9 +219,9 @@ With the credcheck extension, password can be forced to be of a certain length, 
 
 But one thing was missing, there was no password reuse policy enforcement. That mean that when user were required to change their password, they could just reuse their current password!
 
-The credcheck extension adds the "Password Reuse Policy" in release 1.0.0. To used this feature, the credcheck extension MUST be added to `shared_preload_libraries` configuration option.
+The credcheck extension adds the "Password Reuse Policy" in release 1.0. To used this feature, the credcheck extension MUST be added to `shared_preload_libraries` configuration option.
 
-All users passwords are historicized in shared memory together with the timestamps of when these passwords were set. The passwords history is saved into a file named `$PGDATA/global/pg_password_history` to be reloaded in shared memory at startup. This file must be part of your backups if you don't want to loose the password history, hopefully pg_basebackup will take care of it.
+All users passwords are historicized in shared memory together with the timestamps of when these passwords were set. The passwords history is saved into a file named `$PGDATA/global/pg_password_history` to be reloaded in shared memory at startup. This file must be part of your backups if you don't want to loose the password history, hopefully pg_basebackup will take care of it. Passwords are stored and compared as sha256 hashes, never in plain text.
 
 Two settings allow to control the behavior of this feature:
 
@@ -240,7 +240,7 @@ restrict new passwords from being chosen from this history:
 To be able to list the content of the history a view is provided in the database you have created
 the credcheck extension. The view is named `public.pg_password_history`. This view is visible by everyone.
 
-A superuser can also reset the content of the password history by calling a function named `public.pg_password_history_reset()`. If it is called without an argument, all the passords history will be cleared. To only remove the records registered for a single user, just pass his name as parameter. This function returns the number of records removed from the history.
+A superuser can also reset the content of the password history by calling a function named `public.pg_password_history_reset()`. If it is called without an argument, all the passwords history will be cleared. To only remove the records registered for a single user, just pass his name as parameter. This function returns the number of records removed from the history.
 
 Example:
 ```
