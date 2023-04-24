@@ -54,6 +54,13 @@ RUN yum -y install centos-release-scl && \
 
 RUN rpm -i $sigar && rpm -i $sigar_headers
 
+# Install pg_bsd_indent used by pgindent utility.
+# Remove sources (with artifacts) and archive.
+RUN wget https://ftp.postgresql.org/pub/dev/pg_bsd_indent-1.3.tar.gz && \
+    tar -xf pg_bsd_indent-1.3.tar.gz && \
+    make install -C pg_bsd_indent && \
+    rm -r pg_bsd_indent*
+
 WORKDIR /home/gpadmin
 
 FROM base as build
@@ -77,6 +84,10 @@ RUN rm -rf gpdb_src/.git/
 FROM base as test
 COPY --from=code /home/gpadmin/gpdb_src gpdb_src
 COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb
+
+# Install entab used by pgindent utility.
+# This should be done using gpdb sources.
+RUN make -C gpdb_src/src/tools/entab install clean
 
 # Volume for tests output
 VOLUME /home/gpadmin/gpdb_src/src/test
