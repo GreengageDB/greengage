@@ -12,6 +12,7 @@
  */
 #include <ctype.h>
 #include <limits.h>
+#include <unistd.h>
 
 #include "postgres.h"
 #include "funcapi.h"
