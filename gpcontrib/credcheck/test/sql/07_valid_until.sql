@@ -27,11 +27,17 @@ SET credcheck.password_reuse_interval = 0;
 
 -- VALID UNTIL clause checks
 SET credcheck.password_valid_until TO 4;
+SET credcheck.password_valid_max TO 0;
 -- fail, the VALID UNTIL clause must be present
 CREATE USER aaa PASSWORD 'DummY';
 -- Success, the VALID UNTIL clause is present and respect the delay
 CREATE USER aaa PASSWORD 'DummY' VALID UNTIL '2050-01-01 00:00:00';
 -- fail, the VALID UNTIL clause does not respect the delay
 ALTER USER aaa PASSWORD 'DummY2' VALID UNTIL '2022-01-01 00:00:00';
+SET credcheck.password_valid_max TO 180;
+-- fail, the VALID UNTIL clause can not exceed a maximum of 180 days
+ALTER USER aaa PASSWORD 'DummY2' VALID UNTIL '2050-01-01 00:00:00';
 -- Clear the user
 DROP USER aaa;
+-- fail, the VALID UNTIL clause can not exceed a maximum of 180 days
+CREATE USER aaa PASSWORD 'DummY2' VALID UNTIL '2050-01-01 00:00:00';

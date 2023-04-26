@@ -172,6 +172,7 @@ static char *password_contain = NULL;
 static bool password_contain_username = true;
 static bool password_ignore_case = false;
 static int password_valid_until = 0;
+static int password_valid_max = 0;
 
 #if PG_VERSION_NUM >= 120000
 /*
@@ -683,6 +684,12 @@ password_guc()
 					" with a minimum number of days"),
 				NULL, &password_valid_until, 0, 0, INT_MAX,
 				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_valid_max",
+				gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
+					" with a maximum number of days"),
+				NULL, &password_valid_max, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
 }
 
 #if PG_VERSION_NUM >= 120000
@@ -1054,6 +1061,7 @@ check_password_reuse(const char *username, const char *password)
 }
 #endif
 
+/* Return the number of days between current timestamp and the date given as parameter */
 static int
 check_valid_until(char *valid_until_date)
 {
@@ -1221,6 +1229,14 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 								errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
 				}
+				if (password_valid_max > 0 && strcmp(defel->defname, "validUntil") == 0)
+				{
+					int valid_max = check_valid_until(strVal(defel->arg));
+					if (valid_max > password_valid_max)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
+				}
 			}
 			break;
 		}
@@ -1230,6 +1246,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
 			ListCell       *option;
 			int             valid_until = 0;
+			int             valid_max = 0;
 			bool            has_valid_until = false; 
 
 			/* check the validity of the username */
@@ -1252,16 +1269,29 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					valid_until = check_valid_until(strVal(defel->arg));
 					has_valid_until = true;
 				}
-			}
-			if (password_valid_until > 0)
-			{
-				if (valid_until < password_valid_until || !has_valid_until)
+				if (password_valid_max > 0 && strcmp(defel->defname, "validUntil") == 0)
 				{
-					ereport(ERROR,
-						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
+					valid_max = check_valid_until(strVal(defel->arg));
+					has_valid_until = true;
 				}
 			}
+			/* check that a VALID UNTIL option is present */
+			if ( !has_valid_until && (password_valid_until > 0 || password_valid_max > 0) )
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+						errmsg(gettext_noop("require a VALID UNTIL option"))));
+
+			/* check that a minimum number of days for password validity is defined */
+			if (password_valid_until > 0 && valid_until < password_valid_until)
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+						errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
+
+			/* check that a maximum number of days for password validity is defined */
+			if (password_valid_max > 0 && valid_max > password_valid_max)
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+						errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
 			break;
 		}
 

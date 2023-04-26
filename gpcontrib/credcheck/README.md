@@ -66,6 +66,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_not_contain      | password | password should not contain these characters        | x,y,z         | &check; abc                 | &#10008; axf                 |
 | password_ignore_case      | password | ignore case while performing above checks           | on            | &check; Abc                 | &#10008; aXf                 |
 | password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days   | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
+| password_valid_max        | password | force use of VALID UNTIL clause in CREATE ROLE statement with a maximum number of days   | 365             | &check; CREATE ROLE abcd VALID UNTIL (now()+'6 months'::interval)::date | &#10008;  CREATE ROLE abcd VALID UNTIL (now()+'2 years'::interval)::date; |
 
 
 ### [Examples](#examples)
@@ -202,6 +203,9 @@ credcheck can also enforce the use of an expiration date for the password by che
 postgres=# SET credcheck.password_valid_until = 30;
 SET
 
+postgres=# SET credcheck.password_valid_max = 180;
+SET
+
 postgres=# CREATE USER abcd$;
 ERROR:  require a VALID UNTIL option with a date older than 30 days
 
@@ -210,6 +214,9 @@ ERROR:  require a VALID UNTIL option with a date older than 30 days
 
 postgres=# ALTER USER abcd$ VALID UNTIL '2022-12-21';
 ERROR:  require a VALID UNTIL option with a date older than 30 days
+
+postgres=# ALTER USER abcd$ VALID UNTIL '2025-12-21';
+ERROR:  require a VALID UNTIL option with a date not beyond 180 days
 ```
 
 ### [Password reuse policy](#password-reuse-policy)
