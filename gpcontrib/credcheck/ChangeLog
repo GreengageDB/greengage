@@ -1,3 +1,14 @@
+2023-04-27 - Version 1.1.0
+
+This release fixes some minor issues reported by users since last release
+and adds a new custom setting:
+
+ - credcheck.password_valid_max to force use of VALID UNTIL clause in
+   CREATE/ALTER ROLE statements with a maximum number of days. Thanks to
+   Gabriel Leroux for the feature report.
+ - Explicitely import unistd.h for unlink() calls. Thanks to Gabriel Leroux
+   for the report.
+
 2023-04-06 - Version 1.0.0
 
 This release adds a major feature called Password Reuse Policy and
