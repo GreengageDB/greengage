@@ -55,8 +55,6 @@ ExecSort(SortState *node)
 	PlanState  *outerNode = NULL;
 	TupleDesc	tupDesc = NULL;
 
-	SIMPLE_FAULT_INJECTOR("explain_analyze_sort_error");
-
 	/*
 	 * get state info from node
 	 */
