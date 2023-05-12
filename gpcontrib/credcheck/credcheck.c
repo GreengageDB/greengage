@@ -969,7 +969,7 @@ remove_user_from_history(const char *username)
 }
 
 /* Check if the password can be reused */
-static void
+static bool
 check_password_reuse(const char *username, const char *password)
 {
 	int           count_in_history = 0;
@@ -979,14 +979,14 @@ check_password_reuse(const char *username, const char *password)
 	HASH_SEQ_STATUS hash_seq;
 
 	if (password_reuse_history == 0 && password_reuse_interval == 0)
-		return;
+		return false;
 
 	Assert(username != NULL);
 	Assert(password != NULL);
 
 	/* Safety check... */
 	if (!pgph || !pgph_hash)
-		return;
+		return false;
 
 	/* Encrypt the password to the requested format. */
 	encrypted_password = strdup(str_to_sha256(password, username));
@@ -1058,7 +1058,7 @@ check_password_reuse(const char *username, const char *password)
 	remove_password_from_history(username, password, count_in_history);
 
 	/* The password was not found, add the password to the history */
-	save_password_in_history(username, password);
+	return true;
 }
 #endif
 
@@ -1209,6 +1209,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		{
 			AlterRoleStmt *stmt = (AlterRoleStmt *)parsetree;
 			ListCell      *option;
+			char          *password;
+			bool           save_password = false;
 
 			/* Extract options from the statement node tree */
 			foreach(option, stmt->options)
@@ -1219,7 +1221,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				if (strcmp(defel->defname, "password") == 0)
 				{
 					statement_has_password = true;
-					check_password_reuse(stmt->role->rolename, strVal(defel->arg));
+					password = strVal(defel->arg);
+					save_password = check_password_reuse(stmt->role->rolename, password);
 				}
 #endif
 				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
@@ -1239,6 +1242,10 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 								errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
 				}
 			}
+
+			/* The password can be saved into the history */
+			if (save_password)
+				save_password_in_history(stmt->role->rolename, password);
 			break;
 		}
 
@@ -1249,6 +1256,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			int             valid_until = 0;
 			int             valid_max = 0;
 			bool            has_valid_until = false; 
+			bool            save_password = false;
+			char           *password;
 
 			/* check the validity of the username */
 			username_check(stmt->role, NULL);
@@ -1262,7 +1271,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				if (strcmp(defel->defname, "password") == 0)
 				{
 					statement_has_password = true;
-					check_password_reuse(stmt->role, strVal(defel->arg));
+					password = strVal(defel->arg);
+					save_password = check_password_reuse(stmt->role, password);
 				}
 #endif
 				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
@@ -1293,6 +1303,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				ereport(ERROR,
 					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 						errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
+			/* The password can be saved into the history */
+			if (save_password)
+				save_password_in_history(stmt->role, password);
 			break;
 		}
 

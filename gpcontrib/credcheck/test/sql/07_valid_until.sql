@@ -41,3 +41,9 @@ ALTER USER aaa PASSWORD 'DummY2' VALID UNTIL '2050-01-01 00:00:00';
 DROP USER aaa;
 -- fail, the VALID UNTIL clause can not exceed a maximum of 180 days
 CREATE USER aaa PASSWORD 'DummY2' VALID UNTIL '2050-01-01 00:00:00';
+SET credcheck.password_valid_until to 60;
+SET credcheck.password_reuse_interval to 15;
+SET credcheck.password_reuse_history to 4;
+CREATE role credcheck_test with login password 'password'; 
+-- History must be empty
+SELECT count(*), '0' AS "expected" FROM pg_password_history ;
