@@ -158,7 +158,7 @@ ProjectRepeatedColumn1 ProjectRepeatedColumn2 NLJ-BC-Outer-Spool-Inner Self-Comp
 SelectCheckConstraint ExpandJoinOrder SelectOnBpchar EqualityJoin EffectsOfJoinFilter InnerJoin-With-OuterRefs
 UDA-AnyElement-1 UDA-AnyElement-2 Project-With-NonScalar-Func SixWayDPv2 Join-Varchar-Equality NLJ-Rewindability
 /* FIXME: is disabled until https://tracker.yandex.ru/ADBDEV-2629 not fixed
-NLJ-Rewindability-CTAS */;
+NLJ-Rewindability-CTAS */ DisableBroadcastThreshold;
 
 CJoinPredTest:
 MultipleDampedPredJoinCardinality MultipleIndependentPredJoinCardinality MultiDistKeyJoinCardinality

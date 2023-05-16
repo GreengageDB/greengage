@@ -3084,6 +3084,15 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"gp_count_host_segments_using_address", PGC_POSTMASTER, RESOURCES,
+		   gettext_noop("Count the number segments on a host using the address field in gp_segment_configuration"),
+		   gettext_noop("If false, count it using gp_segment_configuration.hostname instead")
+		},
+		&gp_count_host_segments_using_address,
+		false, NULL, NULL
+	},
+
+	{
 		{"stats_queue_level", PGC_SUSET, STATS_COLLECTOR,
 			gettext_noop("Collects resource queue-level statistics on database activity."),
 			NULL
@@ -4397,7 +4406,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"optimizer_xform_bind_threshold", PGC_USERSET, DEVELOPER_OPTIONS,
-			gettext_noop("Maximum number bindings per xform per group expression"),
+			gettext_noop("Maximum number bindings per xform per group expression. A value of 0 disables."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
@@ -4440,7 +4449,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"optimizer_penalize_broadcast_threshold", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Maximum number of rows of a relation that can be broadcasted without penalty."),
+			gettext_noop("Maximum number of rows of a relation that can be broadcasted without penalty. A value of 0 disables."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
