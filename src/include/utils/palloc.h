@@ -56,6 +56,15 @@
 */
 
 /*
+ * Add -DEXTRA_DYNAMIC_MEMORY_DEBUG to CFLAGS at ./configure to enable collecting
+ * additional data for each allocation at MemoryContexts (function, file and
+ * line where was executed allocation function).
+ * Execute MemoryContextStats(TopMemoryContext) to print top of allocations
+ * for each MemoryContexts after summary counters of context.
+ * Change DYN_MEM_TOP_COUNT for set how much items must be at top.
+ */
+
+/*
  * GPDB_93_MERGE_FIXME: This mechanism got broken. If this is resurrected and
  * and made working the --enable-testutils invocations should be readded to
  * gpAux/Makefile. For reference to where, the commit adding this comment has
@@ -217,5 +226,9 @@ extern void MemoryContextStats(MemoryContext context);
 		MemoryContextStats(TopMemoryContext);\
 	}\
 }
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug.h"
+#endif
 
 #endif   /* PALLOC_H */
