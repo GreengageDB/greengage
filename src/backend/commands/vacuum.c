@@ -595,10 +595,23 @@ vacuum(List *relations, VacuumParams *params,
 	if ((params->options & VACOPT_VACUUM) && !IsAutoVacuumWorkerProcess())
 	{
 		/*
-		 * Update pg_database.datfrozenxid, and truncate pg_xact if possible.
-		 * (autovacuum.c does this for itself.)
+		 * GPDB vacuums an Append-Optimized table in multiple sub phases, update
+		 * pg_database.datfrozenxid in the last phase (VACOPT_AO_POST_CLEANUP_PHASE)
+		 * as an ending task of the whole VACUUM operation, intead of doing it in very
+		 * sub phase.
+		 * 
+		 * More important, phase VACOPT_AO_COMPACT_PHASE requires two-phase commit
+		 * which could introduce distributed deadlock if acquiring DatabaseFrozenIds lock
+		 * in the case of multiple VACUUM sessions in the same database.
 		 */
-		vac_update_datfrozenxid();
+		if (!(params->options & (VACOPT_AO_PRE_CLEANUP_PHASE | VACOPT_AO_COMPACT_PHASE)))
+		{
+			/*
+			 * Update pg_database.datfrozenxid, and truncate pg_xact if possible.
+			 * (autovacuum.c does this for itself.)
+			 */
+			vac_update_datfrozenxid();
+		}
 	}
 
 	/*
