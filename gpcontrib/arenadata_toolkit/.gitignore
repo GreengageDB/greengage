@@ -1,0 +1,4 @@
+# Generated subdirectories and files
+/results/
+regression.diffs
+regression.out
