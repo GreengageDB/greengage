@@ -43,10 +43,11 @@ SUBDIRS = \
 		test_parser	\
 		test_shm_mq	\
 		tsearch2	\
-		unaccent	\
-		tablefunc
+		unaccent
 # GPDB_92_MERGE_FIXME: Why some files (especially Makefile) are missing under
 # these directories?
+#               seg         \
+#		tablefunc	\
 #		vacuumlo
 #		worker_spi 
 
