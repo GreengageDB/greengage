@@ -589,12 +589,14 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 		result_dxlnode = dxl_cte_anchor_top;
 	}
 
-	if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+	if (m_context->m_has_replicated_tables &&
+		m_context->m_has_volatile_functions)
 	{
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 			GPOS_WSZ_LIT("Volatile functions with replicated relations"));
 	}
-	
+
 	return result_dxlnode;
 }
 
@@ -722,11 +724,13 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 				   GPOS_WSZ_LIT("INSERT with triggers"));
 	}
 
-    if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
-    {
-        GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-            GPOS_WSZ_LIT("Volatile functions with replicated relations"));
-    }
+	if (m_context->m_has_replicated_tables &&
+		m_context->m_has_volatile_functions)
+	{
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+	}
 
 	BOOL rel_has_constraints = CTranslatorUtils::RelHasConstraints(md_rel);
 	if (!optimizer_enable_dml_constraints && rel_has_constraints)
@@ -907,9 +911,11 @@ CTranslatorQueryToDXL::TranslateCTASToDXL()
 		rel_distr_policy =
 			CTranslatorRelcacheToDXL::GetRelDistribution(m_query->intoPolicy);
 
-		if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
+		if (m_context->m_has_replicated_tables &&
+			m_context->m_has_volatile_functions)
 		{
-			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_RAISE(
+				gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				GPOS_WSZ_LIT("Volatile functions with replicated relations"));
 		}
 
@@ -1199,11 +1205,13 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 				   GPOS_WSZ_LIT("DELETE with triggers"));
 	}
 
-    if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
-    {
-        GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-            GPOS_WSZ_LIT("Volatile functions with replicated relations"));
-    }
+	if (m_context->m_has_replicated_tables &&
+		m_context->m_has_volatile_functions)
+	{
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+	}
 
 	// make note of the operator classes used in the distribution key
 	NoteDistributionPolicyOpclasses(rte);
@@ -1272,11 +1280,13 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 				   GPOS_WSZ_LIT("UPDATE with triggers"));
 	}
-    if (m_context->m_has_replicated_tables && m_context->m_has_volatile_functions)
-    {
-        GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-            GPOS_WSZ_LIT("Volatile functions with replicated relations"));
-    }
+	if (m_context->m_has_replicated_tables &&
+		m_context->m_has_volatile_functions)
+	{
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT("Volatile functions with replicated relations"));
+	}
 
 	if (!optimizer_enable_dml_constraints &&
 		CTranslatorUtils::RelHasConstraints(md_rel))

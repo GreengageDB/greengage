@@ -109,8 +109,8 @@ CDXLTableDescr *
 CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 								CIdGenerator *id_generator,
 								const RangeTblEntry *rte,
-								BOOL *is_distributed_table,	// output
-								BOOL *is_replicated_table	// output
+								BOOL *is_distributed_table,	 // output
+								BOOL *is_replicated_table	 // output
 )
 {
 	// generate an MDId for the table desc.
@@ -141,7 +141,8 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 	IMDRelation::Ereldistrpolicy distribution_policy =
 		rel->GetRelDistribution();
 
-	if (NULL != is_replicated_table && IMDRelation::EreldistrReplicated == distribution_policy)
+	if (NULL != is_replicated_table &&
+		IMDRelation::EreldistrReplicated == distribution_policy)
 	{
 		*is_replicated_table = true;
 	}
