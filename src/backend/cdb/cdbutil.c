@@ -73,15 +73,8 @@
 
 #define GPSEGCONFIGDUMPFILE "gpsegconfig_dump"
 #define GPSEGCONFIGDUMPFILETMP "gpsegconfig_dump_tmp"
-#define GPSEGCONFIGNUMATTR 9
+#define GPSEGCONFIGNUMATTR 9 
 
-#if INET6_ADDRSTRLEN > MAXHOSTNAMELEN
-#define GP_MAX_ADDR_LEN (INET6_ADDRSTRLEN+1)
-#else
-#define GP_MAX_ADDR_LEN (MAXHOSTNAMELEN+1)
-#endif
-
-bool gp_count_host_segments_using_address = false;
 MemoryContext CdbComponentsContext = NULL;
 static CdbComponentDatabases *cdb_component_dbs = NULL;
 
@@ -113,7 +106,7 @@ typedef struct SegIpEntry
 
 typedef struct HostSegsEntry
 {
-	char		hostinfo[GP_MAX_ADDR_LEN];
+	char		hostname[MAXHOSTNAMELEN];
 	int			segmentCount;
 } HostSegsEntry;
 
@@ -434,15 +427,10 @@ getCdbComponentInfo(void)
 		pRow->numIdleQEs = 0;
 		pRow->numActiveQEs = 0;
 
-		if (config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY ||
-			(gp_count_host_segments_using_address &&
-			 (config->hostip == NULL || strlen(config->hostip) == 0)))
+		if (config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
 			continue;
 
-		hsEntry = (HostSegsEntry *) hash_search(hostSegsHash,
-												gp_count_host_segments_using_address ? config->hostip : config->hostname,
-												HASH_ENTER,
-												&found);
+		hsEntry = (HostSegsEntry *) hash_search(hostSegsHash, config->hostname, HASH_ENTER, &found);
 		if (found)
 			hsEntry->segmentCount++;
 		else
@@ -553,15 +541,10 @@ getCdbComponentInfo(void)
 	{
 		cdbInfo = &component_databases->segment_db_info[i];
 
-		if (cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY ||
-			(gp_count_host_segments_using_address &&
-			 (cdbInfo->config->hostip == NULL || strlen(cdbInfo->config->hostip) == 0)))
+		if (cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
 			continue;
 
-		hsEntry = (HostSegsEntry *) hash_search(hostSegsHash,
-												gp_count_host_segments_using_address ? cdbInfo->config->hostip : cdbInfo->config->hostname,
-												HASH_FIND,
-												&found);
+		hsEntry = (HostSegsEntry *) hash_search(hostSegsHash, cdbInfo->config->hostname, HASH_FIND, &found);
 		Assert(found);
 		cdbInfo->hostSegs = hsEntry->segmentCount;
 	}
@@ -570,15 +553,10 @@ getCdbComponentInfo(void)
 	{
 		cdbInfo = &component_databases->entry_db_info[i];
 
-		if (cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY ||
-			(gp_count_host_segments_using_address &&
-			 (cdbInfo->config->hostip == NULL || strlen(cdbInfo->config->hostip) == 0)))
+		if (cdbInfo->config->role != GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY)
 			continue;
 
-		hsEntry = (HostSegsEntry *) hash_search(hostSegsHash,
-												gp_count_host_segments_using_address ? cdbInfo->config->hostip : cdbInfo->config->hostname,
-												HASH_FIND,
-												&found);
+		hsEntry = (HostSegsEntry *) hash_search(hostSegsHash, cdbInfo->config->hostname, HASH_FIND, &found);
 		Assert(found);
 		cdbInfo->hostSegs = hsEntry->segmentCount;
 	}
@@ -1457,7 +1435,7 @@ hostSegsHashTableInit(void)
 
 	/* Set key and entry sizes. */
 	MemSet(&info, 0, sizeof(info));
-	info.keysize = GP_MAX_ADDR_LEN;
+	info.keysize = MAXHOSTNAMELEN;
 	info.entrysize = sizeof(HostSegsEntry);
 
 	return hash_create("HostSegs", 32, &info, HASH_ELEM);
