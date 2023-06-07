@@ -1530,8 +1530,7 @@ CCostModelGPDB::CostMotion(CMemoryPool *mp, CExpressionHandle &exprhdl,
 		ULONG broadcast_threshold =
 			optimizer_config->GetHint()->UlBroadcastThreshold();
 
-		// if broadcast threshold is 0, don't penalize
-		if (broadcast_threshold > 0 && num_rows_outer > broadcast_threshold)
+		if (num_rows_outer > broadcast_threshold)
 		{
 			DOUBLE ulPenalizationFactor = 100000000000000.0;
 			costLocal = CCost(ulPenalizationFactor);
