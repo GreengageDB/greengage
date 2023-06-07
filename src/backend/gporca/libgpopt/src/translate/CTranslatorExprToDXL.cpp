@@ -8229,20 +8229,6 @@ CTranslatorExprToDXL::GetInputSegIdsArray(CExpression *pexprMotion)
 		// motion (which cannot be a result hash filter node) will read the
 		// input from one segment in order to ensure that data is consistent
 		// after bring read from operator delivering tainted replication.
-
-		// FIXME: If there is any 'unpaired' CTE Consumer beneath, fallback to Postgres
-		// optimizer, as reading from one segment in this case violates results of the
-		// previously made CTEProducerConsumerLocality check.
-		// Related to: https://github.com/greenplum-db/gpdb/issues/13039
-
-		if (CUtils::hasUnpairedCTEConsumer(m_mp, pexprMotion))
-		{
-			GPOS_RAISE(
-				gpdxl::ExmaDXL, gpdxl::ExmiExpr2DXLUnsupportedFeature,
-				GPOS_WSZ_LIT(
-					"CTE Consumer without the appropriate CTE Producer under a duplicate-hazard motion or a tainted replicated node"));
-		}
-
 		IntPtrArray *pdrgpi = GPOS_NEW(m_mp) IntPtrArray(m_mp);
 		INT iSegmentId = *((*m_pdrgpiSegments)[0]);
 		pdrgpi->Append(GPOS_NEW(m_mp) INT(iSegmentId));
