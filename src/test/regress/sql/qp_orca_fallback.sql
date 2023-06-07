@@ -101,3 +101,4 @@ explain select count(*) from foo group by a;
 set optimizer_enable_hashagg = off;
 set optimizer_enable_groupagg = off;
 explain select count(*) from foo group by a;
+

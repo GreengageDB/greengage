@@ -40,6 +40,7 @@
 #include "access/twophase_rmgr.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "catalog/aocatalog.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
 #include "executor/instrument.h"
@@ -1694,6 +1695,7 @@ pgstat_initstats(Relation rel)
 
 	/* We only count stats for things that have storage */
 	if (!(relkind == RELKIND_RELATION ||
+		  IsAppendonlyMetadataRelkind(relkind) ||
 		  relkind == RELKIND_MATVIEW ||
 		  relkind == RELKIND_INDEX ||
 		  relkind == RELKIND_TOASTVALUE ||
@@ -2630,6 +2632,7 @@ pgstat_bestart(void)
 	beentry->st_state_start_timestamp = 0;
 	beentry->st_xact_start_timestamp = 0;
 	beentry->st_resgroup_queue_start_timestamp = 0;
+	beentry->st_waiting_start_timestamp = 0;
 	beentry->st_databaseid = MyDatabaseId;
 	beentry->st_userid = userid;
 	beentry->st_session_id = gp_session_id;  /* GPDB only */
@@ -2740,6 +2743,7 @@ pgstat_report_activity(BackendState state, const char *cmd_str)
 			beentry->st_activity_start_timestamp = 0;
 			/* st_xact_start_timestamp and st_waiting are also disabled */
 			beentry->st_xact_start_timestamp = 0;
+			beentry->st_waiting_start_timestamp = 0;
 			beentry->st_waiting = false;
 			beentry->st_changecount++;
 			Assert((beentry->st_changecount & 1) == 0);
@@ -2906,11 +2910,19 @@ gpstat_report_waiting(char reason)
 		return;
 
 	/*
-	 * Since this is a single-byte field in a struct that only this process
-	 * may modify, there seems no need to bother with the st_changecount
-	 * protocol.  The update must appear atomic in any case.
+	 * Since we updating multiple fields, follow the protocol of bumping
+	 * st_changecount before and after.
 	 */
+	beentry->st_changecount++;
+
 	beentry->st_waiting = reason;
+	if (reason == PGBE_WAITING_NONE)
+		beentry->st_waiting_start_timestamp = 0;
+	else
+		beentry->st_waiting_start_timestamp = GetCurrentTimestamp();
+
+	beentry->st_changecount++;
+	Assert((beentry->st_changecount & 1) == 0);
 }
 
 

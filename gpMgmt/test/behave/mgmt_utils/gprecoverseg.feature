@@ -462,6 +462,18 @@ Feature: gprecoverseg tests
     And gprecoverseg should return a return code of 0
     Then the cluster is rebalanced
 
+    Scenario: gprecoverseg keeps segment logs
+      Given the database is running
+      And all the segments are running
+      And the segments are synchronized
+      And the "primary" segment information is saved
+      And the "primary" segment pg_log dir content saved
+      When user kills "primary" segment process with signal "SIGKILL"
+      And user can start transactions
+      And the user runs "gprecoverseg -a"
+      Then gprecoverseg should return a return code of 0
+      And the "primary" segment pg_log directory content preserved
+
 
 ########################### @concourse_cluster tests ###########################
 # The @concourse_cluster tag denotes the scenario that requires a remote cluster

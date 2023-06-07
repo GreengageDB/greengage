@@ -147,9 +147,4 @@ extern Instrumentation *GpInstrAlloc(const Plan *node, int instrument_options);
  */
 #define GetInstrumentNext(slot) (*((InstrumentationSlot **)((slot) + 1) - 1))
 
-/*
- * Limit the maximum scan node's instr per query in shmem
- */
-#define MAX_SCAN_ON_SHMEM 300
-
 #endif   /* INSTRUMENT_H */
