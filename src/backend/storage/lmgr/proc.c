@@ -443,10 +443,8 @@ InitProcess(void)
 	MyProc->waitLock = NULL;
 	MyProc->waitProcLock = NULL;
 	MyProc->resSlot = NULL;
-	SpinLockInit(&MyProc->movetoMutex);
 	MyProc->movetoResSlot = NULL;
 	MyProc->movetoGroupId = InvalidOid;
-	MyProc->movetoCallerPid = InvalidPid;
 
     /* 
      * mppLocalProcessSerial uniquely identifies this backend process among

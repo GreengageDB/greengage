@@ -187,18 +187,8 @@ struct PGPROC
 	void		*resSlot;	/* the resource group slot granted.
 							 * NULL indicates the resource group is
 							 * locked for drop. */
-	slock_t		movetoMutex; /* spinlock to protect moveto* fields below */
-	void		*movetoResSlot; /* the resource group slot move to, valid only
-								 * on QD; when slot become NULL, it means
-								 * target process got the control over it */
-	Oid 		movetoGroupId;  /* the resource group id move to; valid on
-								 * both QE and QD; when id become InvalidOid
-								 * on QD, it means target process attempted to
-								 * move process to this group and the result
-								 * of attemption is in movetoResSlot */
-	pid_t		movetoCallerPid; /* pid of moving initiator; valid only on QD;
-								  * guards current moving command from another
-								  * commands */
+	void		*movetoResSlot; /* the resource group slot move to, valid only on QD */
+	Oid			movetoGroupId;  /* the resource group id move to */
 
 	/* Per-backend LWLock.  Protects fields below. */
 	LWLock	   *backendLock;	/* protects the fields below */
