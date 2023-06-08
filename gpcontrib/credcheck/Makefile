@@ -17,7 +17,7 @@ PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
-ifeq ($(MAJORVERSION),$(filter $(MAJORVERSION), 14 15))
+ifeq ($(MAJORVERSION),$(filter $(MAJORVERSION), 14 15 16))
 	REGRESS += 05_reuse_history
 	REGRESS += 06_reuse_interval
 else
