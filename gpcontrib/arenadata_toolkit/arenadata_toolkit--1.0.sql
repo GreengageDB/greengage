@@ -5,8 +5,10 @@
 
 DO $$
 BEGIN
-	-- For new deployments create arenadata_toolkit schema, but disconnect it from extension,
-	-- since user's tables like arenadata_toolkit.db_files_history need to be out of extension.
+	/*
+	 For new deployments create arenadata_toolkit schema, but disconnect it from extension,
+	 since user's tables like arenadata_toolkit.db_files_history need to be out of extension.
+	 */
 	IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'arenadata_toolkit')
 	THEN
 		CREATE SCHEMA arenadata_toolkit;
@@ -14,7 +16,7 @@ BEGIN
 	END IF;
 END$$;
 
-GRANT ALL ON SCHEMA arenadata_toolkit TO public;
+GRANT USAGE ON SCHEMA arenadata_toolkit TO public;
 
 CREATE FUNCTION arenadata_toolkit.adb_relation_storage_size(reloid OID, forkName TEXT default 'main')
 RETURNS BIGINT
@@ -94,22 +96,39 @@ BEGIN
 		'p' || to_char(NOW(), 'YYYYMM'),
 		to_char(NOW(), 'YYYY-MM-01'),
 		to_char(NOW() + interval '1 month','YYYY-MM-01'));
+
+		/*
+		 Only for admin usage.
+		 */
 		REVOKE ALL ON TABLE arenadata_toolkit.db_files_history FROM public;
 	END IF;
 
-	CREATE TABLE IF NOT EXISTS arenadata_toolkit.daily_operation
-	(
-		schema_name TEXT,
-		table_name TEXT,
-		action TEXT,
-		status TEXT,
-		time BIGINT,
-		processed_dttm TIMESTAMP
-	)
-	WITH (appendonly=true, compresstype=zlib, compresslevel=1)
-	DISTRIBUTED RANDOMLY;
+	/*
+	 The reason of not using CREATE TABLE IF NOT EXISTS statement, is that these tables
+	 may exist from previous ADB installations. In theory there might be some custom user's grants
+	 for these tables, so revoking them here may lead to a problems with an access.
+	 For fresh new deployments we may set as we want.
+	 */
+	IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_tables
+					WHERE schemaname = 'arenadata_toolkit' AND tablename  = 'daily_operation')
+	THEN
+		CREATE TABLE arenadata_toolkit.daily_operation
+		(
+			schema_name TEXT,
+			table_name TEXT,
+			action TEXT,
+			status TEXT,
+			time BIGINT,
+			processed_dttm TIMESTAMP
+		)
+		WITH (appendonly=true, compresstype=zlib, compresslevel=1)
+		DISTRIBUTED RANDOMLY;
 
-	REVOKE ALL ON TABLE arenadata_toolkit.daily_operation FROM public;
+		/*
+		 Only for admin usage.
+		 */
+		REVOKE ALL ON TABLE arenadata_toolkit.daily_operation FROM public;
+	END IF;
 
 	IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_tables
 					WHERE schemaname = 'arenadata_toolkit' AND tablename  = 'operation_exclude')
@@ -119,6 +138,9 @@ BEGIN
 		WITH (appendonly=true, compresstype=zlib, compresslevel=1)
 		DISTRIBUTED RANDOMLY;
 
+		/*
+		 Only for admin usage.
+		 */
 		REVOKE ALL ON TABLE arenadata_toolkit.operation_exclude FROM public;
 
 		INSERT INTO arenadata_toolkit.operation_exclude (schema_name)
@@ -157,6 +179,11 @@ BEGIN
 
 	GRANT SELECT ON TABLE arenadata_toolkit.db_files_current TO public;
 
+	/*
+	 We don't use this external web table in arenadata_toolkit extension.
+	 collect_table_stats.sql deletes it in normal conditions,
+	 but we drop it here as a double check.
+	 */
 	IF EXISTS (SELECT 1 FROM pg_tables
 				WHERE schemaname = 'arenadata_toolkit' AND tablename = 'db_files')
 	THEN
@@ -165,3 +192,8 @@ BEGIN
 END$$
 LANGUAGE plpgsql VOLATILE
 EXECUTE ON MASTER;
+
+/*
+ Only for admin usage.
+ */
+REVOKE ALL ON FUNCTION arenadata_toolkit.adb_create_tables() FROM public;

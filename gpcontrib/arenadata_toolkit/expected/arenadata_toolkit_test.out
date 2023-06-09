@@ -87,11 +87,11 @@ SELECT arenadata_toolkit.adb_create_tables();
 SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY objname;
                objname               | objtype | objstorage |             objacl             
 -------------------------------------+---------+------------+--------------------------------
- adb_create_tables                   | proc    | -          | 
+ adb_create_tables                   | proc    | -          | {owner=X/owner}
  adb_relation_storage_size           | proc    | -          | {=X/owner,owner=X/owner}
  adb_skew_coefficients               | table   | v          | {owner=arwdDxt/owner,=r/owner}
- arenadata_toolkit                   | schema  | -          | {owner=UC/owner,=UC/owner}
- daily_operation                     | table   | a          | {owner=arwdDxt/owner}
+ arenadata_toolkit                   | schema  | -          | {owner=UC/owner,=U/owner}
+ daily_operation                     | table   | a          | 
  db_files_current                    | table   | h          | {owner=arwdDxt/owner,=r/owner}
  db_files_history                    | table   | a          | 
  db_files_history_1_prt_default_part | table   | a          | 
@@ -128,10 +128,10 @@ SELECT arenadata_toolkit.adb_create_tables();
 SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY objname;
                objname               | objtype | objstorage |             objacl             
 -------------------------------------+---------+------------+--------------------------------
- adb_create_tables                   | proc    | -          | 
+ adb_create_tables                   | proc    | -          | {owner=X/owner}
  adb_relation_storage_size           | proc    | -          | {=X/owner,owner=X/owner}
  adb_skew_coefficients               | table   | v          | {owner=arwdDxt/owner,=r/owner}
- arenadata_toolkit                   | schema  | -          | {owner=UC/owner,=UC/owner}
+ arenadata_toolkit                   | schema  | -          | {owner=UC/owner,=U/owner}
  daily_operation                     | table   | a          | {owner=arwdDxt/owner}
  db_files_current                    | table   | h          | {owner=arwdDxt/owner,=r/owner}
  db_files_history                    | table   | a          | {owner=arwdDxt/owner}
