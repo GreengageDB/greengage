@@ -1,3 +1,60 @@
+2023-06-10 - Version 2.0.0
+
+This release adds a major feature called Authentication Failure Ban and
+the compatibility with PostgreSQL 16. Upgrade require a PostgreSQL restart
+to reload the credcheck library.
+
+  - Add "Authentication failure ban" new feature
+    
+	PostgreSQL doesn't have any mechanism to limit the number of authentication
+	failure attempt before the user being banned.  With the credcheck extension,
+	after an amount of authentication failure defined by configuration directive
+	`credcheck.max_auth_failure` the user can be banned and never connect anymore
+	even if it gives the right password later. This feature requires that the
+	credcheck extension to be added to to `shared_preload_libraries` configuration
+	option.
+
+	All users authentication failures are registered in shared memory with the
+	timestamps of when the user have been banned. The authentication failures
+	history is saved into memory only, that mean that the history is lost at
+	PostgreSQL restart. I have not seen the interest for the moment to restore
+	the cache at startup.
+
+	The authentication failure cache size is set to 1024 records by default and
+	can be adjusted using the `credcheck.auth_failure_cache_size` configuration
+	directive. Change of this GUC require a PostgreSQL restart.
+
+	Two settings allow to control the behavior of this feature:
+
+	* `credcheck.max_auth_failure`: number of authentication failure allowed
+	for a user before being banned.
+	* `credcheck.reset_superuser` : force superuser to not be banned or reset
+	a banned superuser when set to true.
+
+	The default value for the first setting is `0` which means that authentication
+	failure ban feature is disabled. The default value for the second setting is
+	`false` which means that `postgres` superuser can be banned.
+
+	In case the `postgres` superuser was banned, he can not logged anymore. If
+	there is no other superuser account that can be used to reset the record of
+	the banned superuser, set the `credcheck.reset_superuser`configuration directive
+	to `true` into postgresql.conf file and send the SIGHUP signal to the PostgreSQL
+	process pid so that it will reread the configuration. Next time the superuser will
+	try to connect, its authentication failure cache entry will be removed.
+
+  - Fix Makefile for PG 16. Thanks to Devrim Gunduz for the report.
+  - Add missing SQL file for version 1.2.0
+
+2023-05-13 - Version 1.2.0
+
+This release fixes a major bug reported by users since last release:
+
+    Fix case where password was wrongly saved in the history after a
+    VALID UNTIL min/max error. Add a regression test for this case.
+    Thanks to Tushar Takate for the report.
+
+Upgrade require a PostgreSQL restart to reload the credcheck library.
+
 2023-04-27 - Version 1.1.0
 
 This release fixes some minor issues reported by users since last release
