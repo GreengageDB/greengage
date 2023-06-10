@@ -22,12 +22,16 @@
 #include "access/htup_details.h"
 
 #include "catalog/catalog.h"
+#include "catalog/indexing.h"
+#include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
 #include "commands/user.h"
 #if PG_VERSION_NUM >= 140000
 #include "common/hmac.h"
 #endif
 #include "common/sha2.h"
+#include "executor/spi.h"
+#include "libpq/auth.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
@@ -35,26 +39,29 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 
-//#include "utils/inval.h"
-
 /* Default passord encryption */
 #define Password_encryption = PASSWORD_TYPE_SCRAM_SHA_256;
 /* Name of external file to store password history in the PGDATA */
 #define PGPH_DUMP_FILE  "global/pg_password_history"
+
 /* Number of output arguments (columns) in the pg_password_history pseudo table */
 #define PG_PASSWORD_HISTORY_COLS	3
+/* Number of output arguments (columns) in the pg_banned_role pseudo table */
+#define PG_BANNED_ROLE_COLS		3
 
 /* Magic number identifying the stats file format */
 static const uint32 PGPH_FILE_HEADER = 0x48504750;
 /* credcheck password history version, changes in which invalidate all entries */
 static const uint32 PGPH_VERSION = 100;
 #define PGPH_TRANCHE_NAME                "credcheck_history"
+#define PGAF_TRANCHE_NAME                "credcheck_auth_failure"
 
 static bool statement_has_password = false;
 static bool no_password_logging    = true;
@@ -102,6 +109,11 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 #if PG_VERSION_NUM >= 150000
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
 #endif
+/* Hold previous client authent hook */
+static ClientAuthentication_hook_type prev_ClientAuthentication = NULL;
+/* Hold previous logging hook */
+static emit_log_hook_type prev_log_hook = NULL;
+
 
 /* In memory storage of password history */
 typedef struct pgphHashKey
@@ -128,6 +140,32 @@ typedef struct pgphSharedState
 static pgphSharedState *pgph = NULL;
 static HTAB *pgph_hash = NULL;
 static int pgph_max = 65535;
+static int pgaf_max = 1024;
+static int fail_max = 0;
+static bool reset_superuser = false;
+
+/* In memory storage of auth failure history */
+typedef struct pgafHashKey
+{
+	Oid  roleid;
+} pgafHashKey;
+
+typedef struct pgafEntry
+{
+	pgafHashKey key;                        /* hash key of entry - MUST BE FIRST */
+        float failure_count;
+        TimestampTz banned_date;
+} pgafEntry;
+
+/* Global shared state */
+typedef struct pgafSharedState
+{
+        LWLock     *lock;                   /* protects hashtable search/modification */
+	int	    num_entries;            /* number of entries in the auth failure history */
+} pgafSharedState;
+
+static pgafSharedState *pgaf = NULL;
+static HTAB *pgaf_hash = NULL;
 
 
 /* Functions */
@@ -135,19 +173,25 @@ extern void _PG_init(void);
 extern void _PG_fini(void);
 static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
 
-/* Hold previous logging hook */
-static emit_log_hook_type prev_log_hook = NULL;
-
 static void flush_password_history(void);
-static pgphEntry *entry_alloc(pgphHashKey *key, TimestampTz password_date);
+static pgphEntry *pgph_entry_alloc(pgphHashKey *key, TimestampTz password_date);
+static pgafEntry *pgaf_entry_alloc(pgafHashKey *key, float failure_count);
 #if PG_VERSION_NUM >= 150000
-static void pgph_shmem_request(void);
+static void pghist_shmem_request(void);
 #endif
+static void pghist_shmem_startup(void);
 static void pgph_shmem_startup(void);
-static int entry_cmp(const void *lhs, const void *rhs);
+static void pgaf_shmem_startup(void);
+static int  entry_cmp(const void *lhs, const void *rhs);
 static Size pgph_memsize(void);
 static void pg_password_history_internal(FunctionCallInfo fcinfo);
 static void fix_log(ErrorData *edata);
+static Size pgaf_memsize(void);
+static void credcheck_max_auth_failure(Port *port, int status);
+static float get_auth_failure(const char *username, Oid userid, int status);
+static float save_auth_failure(const char *username, Oid userid);
+static void remove_auth_failure(const char *username, Oid userid);
+static void pg_banned_role_internal(FunctionCallInfo fcinfo);
 
 /* Username flags*/
 static int username_min_length = 1;
@@ -697,7 +741,7 @@ password_guc()
 static void
 save_password_in_history(const char *username, const char *password)
 {
-	char         *encrypted_password;
+	char       *encrypted_password;
 	pgphHashKey key;
 	pgphEntry  *entry;
 	TimestampTz dt_now = GetCurrentTimestamp();
@@ -734,7 +778,7 @@ save_password_in_history(const char *username, const char *password)
 							timestamptz_to_str(dt_now));
 
 		/* OK to create a new hashtable entry */
-		entry = entry_alloc(&key, dt_now);
+		entry = pgph_entry_alloc(&key, dt_now);
 
 		/* Flush the new entry to disk */
 		if (entry)
@@ -1122,14 +1166,33 @@ _PG_init(void)
 	username_guc();
 	password_guc();
 
-	DefineCustomIntVariable("credcheck.history_max_size",
-				gettext_noop("maximum of entries in the password history"), NULL,
-				&pgph_max, 65535, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
-				NULL, NULL, NULL);
+	if (process_shared_preload_libraries_in_progress)
+	{
+		DefineCustomIntVariable("credcheck.history_max_size",
+					gettext_noop("maximum of entries in the password history"), NULL,
+					&pgph_max, 65535, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.auth_failure_cache_size",
+					gettext_noop("maximum of entries in the auth failure cache"), NULL,
+					&pgaf_max, 1024, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+	}
 
 	DefineCustomBoolVariable("credcheck.no_password_logging",
 				gettext_noop("prevent exposing the password in error messages logged"),
 				NULL, &no_password_logging, true, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.max_auth_failure",
+				gettext_noop("maximum number of authentication failure before"
+				" the user loggin account be invalidated"), NULL,
+				&fail_max, 0, 0, 64, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.reset_superuser",
+				gettext_noop("restore superuser acces when he have been banned."),
+				NULL, &reset_superuser, false, PGC_SIGHUP, 0,
 				NULL, NULL, NULL);
 
 #if PG_VERSION_NUM < 150000
@@ -1140,6 +1203,8 @@ _PG_init(void)
          */
         RequestAddinShmemSpace(pgph_memsize());
         RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
+        RequestAddinShmemSpace(pgaf_memsize());
+        RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
 #endif
 
 	/* Install hooks */
@@ -1149,13 +1214,16 @@ _PG_init(void)
 	check_password_hook = check_password;
 #if PG_VERSION_NUM >= 150000
 	prev_shmem_request_hook = shmem_request_hook;
-	shmem_request_hook = pgph_shmem_request;
+	shmem_request_hook = pghist_shmem_request;
 #endif
         prev_shmem_startup_hook = shmem_startup_hook;
-        shmem_startup_hook = pgph_shmem_startup;
+        shmem_startup_hook = pghist_shmem_startup;
 
 	prev_log_hook = emit_log_hook;
 	emit_log_hook = fix_log;
+
+	prev_ClientAuthentication = ClientAuthentication_hook;
+	ClientAuthentication_hook = credcheck_max_auth_failure;
 }
 
 void
@@ -1169,6 +1237,7 @@ _PG_fini(void)
 	shmem_request_hook = prev_shmem_request_hook;
 #endif
 	shmem_startup_hook = prev_shmem_startup_hook;
+	ClientAuthentication_hook = prev_ClientAuthentication;
 }
 
 static void
@@ -1386,7 +1455,7 @@ str_to_sha256(const char *password, const char *salt)
  ****/
 
 /*
- * Estimate shared memory space needed.
+ * Estimate shared memory space needed for password history.
  */
 static Size
 pgph_memsize(void)
@@ -1399,9 +1468,24 @@ pgph_memsize(void)
 	return size;
 }
 
+/*
+ * Estimate shared memory space needed for auth failure history.
+ */
+static Size
+pgaf_memsize(void)
+{
+	Size            size;
+
+	size = MAXALIGN(sizeof(pgafSharedState));
+	size = add_size(size, hash_estimate_size(pgaf_max, sizeof(pgafEntry)));
+
+	return size;
+}
+
+
 #if PG_VERSION_NUM >= 150000
 static void
-pgph_shmem_request(void)
+pghist_shmem_request(void)
 {
 	if (prev_shmem_request_hook)
 		prev_shmem_request_hook();
@@ -1412,8 +1496,22 @@ pgph_shmem_request(void)
 	 */
 	RequestAddinShmemSpace(pgph_memsize());
 	RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
+	RequestAddinShmemSpace(pgaf_memsize());
+	RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
 }
 #endif
+
+
+static void
+pghist_shmem_startup(void)
+{
+	if (prev_shmem_startup_hook)
+		prev_shmem_startup_hook();
+
+	pgph_shmem_startup();
+
+	pgaf_shmem_startup();
+}
 
 /*
  * shmem_startup hook: allocate or attach to shared memory,
@@ -1430,9 +1528,6 @@ pgph_shmem_startup(void)
 	int32       pgphver;
 	int32       num;
 	int32       i;
-
-	if (prev_shmem_startup_hook)
-		prev_shmem_startup_hook();
 
 	/* reset in case this is a restart within the postmaster */
 	pgph = NULL;
@@ -1509,7 +1604,7 @@ pgph_shmem_startup(void)
 		}
 
 		/* make the hashtable entry (discards old entries if too many) */
-		entry = entry_alloc(&temp.key, temp.password_date);
+		entry = pgph_entry_alloc(&temp.key, temp.password_date);
 		if (!entry)
 			goto fail;
 	}
@@ -1536,7 +1631,7 @@ fail:
 }
 
 static pgphEntry *
-entry_alloc(pgphHashKey *key, TimestampTz password_date)
+pgph_entry_alloc(pgphHashKey *key, TimestampTz password_date)
 {
 	pgphEntry  *entry;
 	bool        found;
@@ -1559,6 +1654,36 @@ entry_alloc(pgphHashKey *key, TimestampTz password_date)
 
 	return entry;
 }
+
+static pgafEntry *
+pgaf_entry_alloc(pgafHashKey *key, float failure_count)
+{
+	pgafEntry  *entry;
+	bool        found;
+
+	if (hash_get_num_entries(pgaf_hash) >= pgph_max)
+	{
+		ereport(LOG,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("can not allocate enough memory for new entry in auth failure cache."),
+				 errhint("You shoul increase credcheck.history_max_size.")));
+		return NULL;
+	}
+
+	/* Find or create an entry with desired hash code */
+	entry = (pgafEntry *) hash_search(pgaf_hash, key, HASH_ENTER, &found);
+
+	/* New entry */
+	if (!found)
+	{
+		entry->failure_count = failure_count;
+		if (failure_count >= fail_max)
+			entry->banned_date = GetCurrentTimestamp();
+	}
+
+	return entry;
+}
+
 
 /*
  * Flush password history to disk.
@@ -1628,6 +1753,42 @@ error:
                 FreeFile(file);
 
         unlink(PGPH_DUMP_FILE ".tmp");
+}
+
+static void
+pgaf_shmem_startup(void)
+{
+	bool        found;
+	HASHCTL     info;
+
+	/* reset in case this is a restart within the postmaster */
+	pgaf = NULL;
+	pgaf_hash = NULL;
+
+	/*
+	 * Create or attach to the shared memory state, including hash table
+	 */
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	pgaf = ShmemInitStruct("pg_auth_failure_history",
+						   sizeof(pgafSharedState),
+						   &found);
+
+	if (!found)
+	{
+		/* First time through ... */
+		pgaf->lock = &(GetNamedLWLockTranche(PGAF_TRANCHE_NAME))->lock;
+	}
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(pgafHashKey);
+	info.entrysize = sizeof(pgafEntry);
+	pgaf_hash = ShmemInitHash("pg_auth_failure_history hash",
+							  pgaf_max, pgaf_max,
+							  &info,
+							  HASH_ELEM | HASH_BLOBS);
+
+	LWLockRelease(AddinShmemInitLock);
 }
 
 PG_FUNCTION_INFO_V1(pg_password_history_reset);
@@ -1838,5 +1999,291 @@ fix_log(ErrorData *edata)
 	if (prev_log_hook)
 		(*prev_log_hook) (edata);
 }
+
+static void
+credcheck_max_auth_failure(Port *port, int status)
+{
+	if (fail_max > 0 && status != STATUS_EOF)
+	{
+		Oid userOid =  get_role_oid(port->user_name, true);
+
+		if (userOid != InvalidOid)
+		{
+			float fail_num = get_auth_failure(port->user_name, userOid, status);
+
+			/* register the auth failure if the we not reach allowed max failure */
+			if (status == STATUS_ERROR && fail_num <= fail_max)
+				fail_num = save_auth_failure(port->user_name, userOid);
+
+			/* reject, this account has been banned */
+			if (fail_num >= fail_max)
+			{
+				/*
+				 * if superuser have been banned, restore the access if requested
+				 * through credcheck.reset_superuser and a configuration reload
+				 */
+				if (reset_superuser && userOid == 10)
+					remove_auth_failure(port->user_name, userOid);
+				else
+					ereport(FATAL, (errmsg("rejecting connection, user '%s' has been banned", port->user_name)));
+			}
+			/* connection is ok and we have not reach the failure limit, let's reset the counter */
+			if (status == STATUS_OK  && fail_num < fail_max)
+				remove_auth_failure(port->user_name, userOid);
+		}
+	}
+
+	if (prev_ClientAuthentication)
+		prev_ClientAuthentication(port, status);
+
+}
+
+static float
+get_auth_failure(const char *username, Oid userid, int status)
+{
+	pgafHashKey key;
+	pgafEntry  *entry;
+	float fail_cnt = 0;
+
+	Assert(username != NULL);
+
+	if (fail_max == 0)
+		return 0;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		return 0;
+
+	/* Set up key for hashtable search */
+        key.roleid = userid ;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+	/* Create new entry, if not present */
+	entry = (pgafEntry *) hash_search(pgaf_hash, &key, HASH_FIND, NULL);
+	if (entry)
+		fail_cnt = entry->failure_count;
+
+	elog(DEBUG1, "Auth failure count for user %s is %f, fired by status: %d", username, fail_cnt, status);
+
+	LWLockRelease(pgaf->lock);
+
+	return fail_cnt;
+}
+
+static float
+save_auth_failure(const char *username, Oid userid)
+{
+	pgafHashKey key;
+	pgafEntry  *entry;
+	float fail_cnt = 0.5; /* we go there twice with an auth error this is a reason of this value, real is increase by one */
+#if PG_VERSION_NUM >= 160000
+	fail_cnt = 1;
+#endif
+
+	Assert(username != NULL);
+
+	if (fail_max == 0)
+		return 0;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		return 0;
+
+	/* Set up key for hashtable search */
+        key.roleid = userid ;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+	/* Create new entry, if not present */
+	entry = (pgafEntry *) hash_search(pgaf_hash, &key, HASH_FIND, NULL);
+	if (entry)
+	{
+#if PG_VERSION_NUM >= 160000
+		fail_cnt = entry->failure_count + 1;
+#else
+		fail_cnt = entry->failure_count + 0.5;
+#endif
+
+		elog(DEBUG1, "Remove entry in auth failure hash table for user %s", username);
+		hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
+	}
+	elog(DEBUG1, "Add new entry in auth failure hash table for user %s (%d, %f)", username, userid, fail_cnt);
+
+	/* OK to create a new hashtable entry */
+	entry = pgaf_entry_alloc(&key, fail_cnt);
+
+	LWLockRelease(pgaf->lock);
+
+	return fail_cnt;
+}
+
+static void
+remove_auth_failure(const char *username, Oid userid)
+{
+	pgafHashKey key;
+
+	Assert(username != NULL);
+
+	if (fail_max == 0)
+		return;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		return;
+
+	/* Set up key for hashtable search */
+        key.roleid = userid;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+	elog(WARNING, "Remove entry in auth failure hash table for user %s", username);
+	hash_search(pgaf_hash, &key, HASH_REMOVE, NULL);
+
+	LWLockRelease(pgaf->lock);
+}
+
+PG_FUNCTION_INFO_V1(pg_banned_role_reset);
+
+/*
+ * Reset banned role cache.
+ */
+Datum
+pg_banned_role_reset(PG_FUNCTION_ARGS)
+{
+	char       *username;
+	int         num_removed = 0;
+	HASH_SEQ_STATUS hash_seq;
+        pgafEntry  *entry;
+
+        /* Safety check... */
+        if (!pgaf || !pgaf_hash)
+                return 0;
+
+        /* Only superusers can reset the history */
+	if (!superuser())
+		ereport(ERROR, (errmsg("only superuser can reset banned roles cache")));
+
+	/* Get the username to filter the entries to remove if one specified */
+	if (PG_NARGS() > 0)
+		username = PG_GETARG_CSTRING(0);
+	else
+		username = NULL;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+        hash_seq_init(&hash_seq, pgaf_hash);
+
+	/* Sequential scan of the hash table to find the entries to remove */
+        while ((entry = hash_seq_search(&hash_seq)) != NULL)
+        {
+		if (username == NULL || (entry->key.roleid == get_role_oid(username, true)))
+		{
+			hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
+			num_removed++;
+		}
+	}
+
+	LWLockRelease(pgaf->lock);
+
+        PG_RETURN_INT32(num_removed);
+}
+
+PG_FUNCTION_INFO_V1(pg_banned_role);
+
+/*
+ * Show list of the banned role
+ */
+Datum
+pg_banned_role(PG_FUNCTION_ARGS)
+{
+	pg_banned_role_internal(fcinfo);
+
+	return (Datum) 0;
+}
+
+/* Common code for all versions of pg_banned_role() */
+static void
+pg_banned_role_internal(FunctionCallInfo fcinfo)
+{
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc       tupdesc;
+	Tuplestorestate *tupstore;
+	MemoryContext per_query_ctx;
+	MemoryContext oldcontext;
+	HASH_SEQ_STATUS hash_seq;
+	pgafEntry  *entry;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("credcheck must be loaded via shared_preload_libraries to use auth failure feature")));
+
+	/* check to see if caller supports us returning a tuplestore */
+	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+	if (!(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not allowed in this context")));
+
+	/* Switch into long-lived context to construct returned data structures */
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+
+	/* Build a tuple descriptor for our result type */
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+
+	MemoryContextSwitchTo(oldcontext);
+
+	/*
+	 * Get shared lock, iterate over the hashtable entries.
+	 *
+	 * With a large hash table, we might be holding the lock rather longer
+	 * than one could wish.  However, this only blocks creation of new hash
+	 * table entries, and the larger the hash table the less likely that is to
+	 * be needed.
+	 */
+	LWLockAcquire(pgaf->lock, LW_SHARED);
+
+	hash_seq_init(&hash_seq, pgaf_hash);
+	while ((entry = hash_seq_search(&hash_seq)) != NULL)
+	{
+		Datum           values[PG_BANNED_ROLE_COLS];
+		bool            nulls[PG_BANNED_ROLE_COLS];
+		int             i = 0;
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		values[i++] = Int8GetDatum(entry->key.roleid);
+		values[i++] = Int8GetDatum(entry->failure_count);
+		if (entry->banned_date)
+			values[i++] = TimestampTzGetDatum(entry->banned_date);
+		else
+			nulls[i++] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* clean up and return the tuplestore */
+	LWLockRelease(pgaf->lock);
+
+	tuplestore_donestoring(tupstore);
+}
+
 
 

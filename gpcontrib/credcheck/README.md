@@ -5,6 +5,7 @@
 	- [Installation](#installation)
 	- [Checks](#checks)
 	- [Password reuse policy](#password-reuse-policy)
+	- [Authentication failure ban](#authentication-failure-ban)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -20,8 +21,7 @@ The `credcheck` PostgreSQL extension provides few general credential checks, whi
 - reject a certain type of credentials
 - enforce use of an expiration date with a minimum of day for a password
 - define a password reuse policy
-
-This extension is developed based on the PostgreSQL's `check_password_hook` hook.
+- define the number of authentication failure allowed before a user is banned
 
 This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks. The settings can only be changed by a superuser.
 
@@ -315,6 +315,74 @@ SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credte
 Function `pg_password_history_timestamp()` is provided for testing purpose only and allow a superuer
 to change the timestamp of all registered passwords in the history.
 
+### [Authentication failure ban](#authentication-failure-ban)
+
+PostgreSQL doesn't have any mechanism to limit the number of authentication failure attempt before the user being banned.  With the credcheck extension, after an amount of authentication failure defined by configuration directive `credcheck.max_auth_failure` the user can be banned and never connect anymore even if it gives the right password later.
+
+The credcheck extension adds the "Authentication failure ban" feature in release 2.0. To used this feature, the credcheck extension MUST be added to `shared_preload_libraries` configuration option.
+
+All users authentication failures are registered in shared memory with the timestamps of when the user have been banned. The authentication failures history is saved into memory only, that mean that the history is lost at PostgreSQL restart. I have not seen the interest to restore the cache at startup
+
+The authentication failure cache size is set to 1024 records by default and can be adjusted using the `credcheck.auth_failure_cache_size` configuration directive. Change of this GUC require a PostgreSQL restart.
+
+Two settings allow to control the behavior of this feature:
+
+* `credcheck.max_auth_failure`: number of authentication failure allowed for a user before being banned.
+* `credcheck.reset_superuser` : force superuser to not be banned or reset a banned superuser when set to true.
+
+The default value for the first setting is `0` which means that the authentication failure ban feature is disabled.
+The default value for the second setting is `false` which means that `postgres` superuser can be banned.
+
+In case the `postgres` superuser was banned, he can not logged anymore. If there is no other superuser account that can be used to reset the record of the banned superuser, set the `credcheck.reset_superuser`configuration directive to `true` into postgresql.conf file and send the SIGHUP signal to the PostgreSQL process pid so that it will reread the configuration. Next time the superuser will try to connect, its authentication failure cache entry will be removed.
+
+Example: `kill -1 1234`
+
+A superuser can also reset the content of the banned user cache by calling a function named `public.pg_banned_role_reset()`. If it is called without an argument, all the banned cache will be cleared. To only remove the record registered for a single user, just pass his name as parameter. This function returns the number of records removed from the cache. A restart of PostgreSQL also clear the cache.
+
+Example:
+```
+$ psql -h localhost -U toban_user -d gilles
+Password for user toban_user: 
+psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
+connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
+
+$ psql -h localhost -U toban_user -d gilles
+Password for user toban_user: 
+psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
+connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
+
+$ psql -h localhost -U toban_user -d gilles
+Password for user toban_user: 
+psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  rejecting connection, user 'toban_user' has been banned
+connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  rejecting connection, user 'toban_user' has been banned
+```
+```
+test=# SELECT * FROM pg_banned_role;
+ roleid | failure_count |        banned_date         
+--------+---------------+----------------------------
+ 250362 |             2 | 2023-06-09 20:33:58.490273
+(1 row)
+
+test=# SELECT pg_banned_role_reset();
+ pg_banned_role_reset 
+----------------------
+                    1
+(1 row)
+
+test=# SELECT * FROM pg_banned_role;
+ roleid | failure_count | banned_date 
+--------+---------------+-------------
+(0 rows)
+```
+
+and then another login attempt is allowed:
+```
+$ psql -h localhost -U toban_user -d gilles
+Password for user toban_user: 
+psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
+connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
+```
+
 ### [Limitations](#limitations)
 
 This extension only works for the plain text passwords.
@@ -363,6 +431,7 @@ Maintainer: Gilles Darold
 This extension is free software distributed under the PostgreSQL License.
 
     Copyright (c) 2021-2023 MigOps Inc.
+    Copyright (c) 2023 Gilles Darold
 
 ### [Credits](#credits)
 
