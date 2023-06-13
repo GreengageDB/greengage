@@ -2221,9 +2221,9 @@ collect_shareinput_producers(PlannerInfo *root, Plan *plan)
 
 /* Some helper: implements a stack using List. */
 static void
-shareinput_pushmot(ApplyShareInputContext *ctxt, int motid)
+shareinput_pushmot(ApplyShareInputContext *ctxt, Motion *motion)
 {
-	ctxt->motStack = lcons_int(motid, ctxt->motStack);
+	ctxt->motStack = lcons(motion, ctxt->motStack);
 }
 static void
 shareinput_popmot(ApplyShareInputContext *ctxt)
@@ -2233,9 +2233,17 @@ shareinput_popmot(ApplyShareInputContext *ctxt)
 static int
 shareinput_peekmot(ApplyShareInputContext *ctxt)
 {
-	return linitial_int(ctxt->motStack);
-}
+	Motion	   *motion = linitial(ctxt->motStack);
 
+	return motion->motionID;
+}
+static Flow *
+shareinput_peekflow(ApplyShareInputContext *ctxt)
+{
+	Motion	   *motion = linitial(ctxt->motStack);
+
+	return motion->plan.lefttree->flow;
+}
 
 /*
  * Replace the target list of ShareInputScan nodes, with references
@@ -2405,7 +2413,7 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		return true;
 	}
 
@@ -2414,11 +2422,12 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 		ShareInputScan *sisc = (ShareInputScan *) plan;
 		int			motId = shareinput_peekmot(ctxt);
 		Plan	   *shared = plan->lefttree;
+		Flow	   *flow = shareinput_peekflow(ctxt);
 
-		Assert(sisc->scan.plan.flow);
-		if (sisc->scan.plan.flow->flotype == FLOW_SINGLETON)
+		Assert(flow);
+		if (flow->flotype == FLOW_SINGLETON)
 		{
-			if (sisc->scan.plan.flow->segindex < 0)
+			if (flow->segindex < 0)
 				ctxt->qdShares = list_append_unique_int(ctxt->qdShares, sisc->share_id);
 		}
 
@@ -2463,7 +2472,7 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		return true;
 	}
 
@@ -2523,7 +2532,7 @@ shareinput_mutator_xslice_3(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		return true;
 	}
 
@@ -2559,8 +2568,8 @@ shareinput_mutator_xslice_3(Node *node, PlannerInfo *root, bool fPop)
 
 		if (list_member_int(ctxt->qdShares, sisc->share_id))
 		{
-			Assert(sisc->scan.plan.flow);
-			Assert(sisc->scan.plan.flow->flotype == FLOW_SINGLETON);
+			Assert(shareinput_peekflow(ctxt));
+			Assert(shareinput_peekflow(ctxt)->flotype == FLOW_SINGLETON);
 			ctxt->qdSlices = list_append_unique_int(ctxt->qdSlices, motId);
 		}
 	}
@@ -2590,7 +2599,7 @@ shareinput_mutator_xslice_4(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		/* Do not return.  Motion need to be adjusted as well */
 	}
 
@@ -2610,12 +2619,119 @@ shareinput_mutator_xslice_4(Node *node, PlannerInfo *root, bool fPop)
 	return true;
 }
 
+static bool
+root_slice_is_executed_on_coordinator(Plan *plan, PlannerInfo *root)
+{
+	/*
+	 * By default, the root slice is executed on the coordinator.
+	 */
+	bool		result = true;
+	Query	   *query = root->parse;
+
+	if (query->parentStmtType != PARENTSTMTTYPE_NONE)
+	{
+		/*
+		 * For CTAS, SELECT INTO, COPY INTO, REFRESH MATERIALIZED VIEW, the
+		 * root slice is not executed on the coordinator.
+		 */
+		result = false;
+	}
+
+	if (IsA(plan, ModifyTable))
+	{
+		ModifyTable *mt = (ModifyTable *) plan;
+
+		if (list_length(mt->resultRelations) > 0)
+		{
+			ListCell   *lc = list_head(mt->resultRelations);
+			Oid			reloid = getrelid(lfirst_int(lc), query->rtable);
+
+			if (GpPolicyFetch(reloid)->ptype != POLICYTYPE_ENTRY)
+			{
+				/*
+				 * For the modification node by Postgres planner, if the table
+				 * distribution policy is not master-only, then the root slice
+				 * is not executed on the coordinator.
+				 */
+				result = false;
+			}
+		}
+	}
+
+	if (IsA(plan, DML))
+	{
+		DML		   *dml = (DML *) plan;
+		Oid			reloid = getrelid(dml->scanrelid, query->rtable);
+
+		if (GpPolicyFetch(reloid)->ptype != POLICYTYPE_ENTRY)
+		{
+			/*
+			 * For the modification node by ORCA planner, if the table
+			 * distribution policy is not master-only, then the root slice is
+			 * not executed on the coordinator.
+			 */
+			result = false;
+		}
+	}
+
+	if (plan->flow)
+	{
+		Flow	   *flow = plan->flow;
+
+		if (flow->flotype != FLOW_SINGLETON || flow->segindex >= 0)
+		{
+			/*
+			 * For non-singleton or singleton on segment, the root slice is
+			 * not executed on the coordinator.
+			 */
+			result = false;
+		}
+
+		if (root->glob->is_parallel_cursor)
+		{
+			if (flow->flotype == FLOW_SINGLETON &&
+				(flow->locustype == CdbLocusType_Entry ||
+				 flow->locustype == CdbLocusType_General ||
+				 flow->locustype == CdbLocusType_SingleQE))
+			{
+				/*
+				 * For these scenarios, parallel retrieve cursor needs to run
+				 * on coordinator, since endpoint QE needs to interact with
+				 * the retrieve connections.
+				 */
+				result = true;
+			}
+			else
+			{
+				result = false;
+			}
+		}
+	}
+
+	return result;
+}
+
 Plan *
 apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 {
 	PlannerGlobal *glob = root->glob;
 	ApplyShareInputContext *ctxt = &glob->share;
 	ShareInputContext walker_ctxt;
+	Motion	   *fakeMotion = makeNode(Motion);
+
+	fakeMotion->plan.lefttree = makeNode(Plan);
+	fakeMotion->plan.lefttree->flow = makeNode(Flow);
+
+	if (root_slice_is_executed_on_coordinator(plan, root))
+	{
+		fakeMotion->plan.lefttree->flow->flotype = FLOW_SINGLETON;
+		fakeMotion->plan.lefttree->flow->segindex = -1;
+	}
+	else
+	{
+		fakeMotion->plan.lefttree->flow->flotype = FLOW_UNDEFINED;
+		fakeMotion->plan.lefttree->flow->segindex = 0;
+	}
 
 	ctxt->motStack = NULL;
 	ctxt->qdShares = NULL;
@@ -2624,7 +2740,7 @@ apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 
 	ctxt->sliceMarks = palloc0(ctxt->producer_count * sizeof(int));
 
-	shareinput_pushmot(ctxt, 0);
+	shareinput_pushmot(ctxt, fakeMotion);
 
 	walker_ctxt.base.node = (Node *) root;
 

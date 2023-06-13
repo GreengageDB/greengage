@@ -96,6 +96,9 @@ typedef struct StandardChunkHeader
 	void *prev_chunk;
 	void *next_chunk;
 #endif
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	MemoryContextChunkInfo info;
+#endif
 } StandardChunkHeader;
 
 #define STANDARDCHUNKHEADERSIZE  MAXALIGN(sizeof(StandardChunkHeader))

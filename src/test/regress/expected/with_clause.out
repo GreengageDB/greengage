@@ -2214,3 +2214,60 @@ select * from rcte limit 10;
 ERROR:  window functions in the target list of a recursive query is not supported in Greenplum
 LINE 5:   select first_value(c) over (partition by b), a+x
                  ^
+-- ensure orca doesn't fail (on build with asserts) when one cte on the coordinator has the correct flow and another doesn't
+CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
+CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
+INSERT INTO d SELECT 1, generate_series(1,10), 1;
+INSERT INTO r SELECT 1, 2, generate_series(1,100);
+SET gp_cte_sharing TO on;
+EXPLAIN (ANALYZE off, COSTS off, VERBOSE off)
+WITH e AS (
+    SELECT DISTINCT b FROM d
+), h AS (
+    SELECT a FROM d JOIN e f USING (b) JOIN e USING (b)
+) SELECT * FROM r JOIN h USING (a) JOIN h i USING (a);
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice6; segments: 3)
+   ->  Hash Join
+         Hash Cond: (r.a = share0_ref2.a)
+         ->  Seq Scan on r
+         ->  Hash
+               ->  Hash Join
+                     Hash Cond: (share0_ref2.a = share0_ref1.a)
+                     ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                           Hash Key: share0_ref2.a
+                           ->  Shared Scan (share slice:id 1:0)
+                     ->  Hash
+                           ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                 Hash Key: share0_ref1.a
+                                 ->  Shared Scan (share slice:id 5:0)
+                                       ->  Materialize
+                                             ->  Hash Join
+                                                   Hash Cond: (d.b = d_2.b)
+                                                   ->  Hash Join
+                                                         Hash Cond: (d.b = d_1.b)
+                                                         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                                               Hash Key: d.b
+                                                               ->  Seq Scan on d
+                                                         ->  Hash
+                                                               ->  HashAggregate
+                                                                     Group Key: d_1.b
+                                                                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                                           Hash Key: d_1.b
+                                                                           ->  HashAggregate
+                                                                                 Group Key: d_1.b
+                                                                                 ->  Seq Scan on d d_1
+                                                   ->  Hash
+                                                         ->  HashAggregate
+                                                               Group Key: d_2.b
+                                                               ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                                     Hash Key: d_2.b
+                                                                     ->  HashAggregate
+                                                                           Group Key: d_2.b
+                                                                           ->  Seq Scan on d d_2
+ Optimizer: Postgres query optimizer
+(39 rows)
+
+DROP TABLE d;
+DROP TABLE r;
