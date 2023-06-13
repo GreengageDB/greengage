@@ -54,6 +54,13 @@
 /* Maximum allowed length of the name of a context including the parent names prepended */
 #define MAX_CONTEXT_NAME_SIZE 200
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug_undef.h"
+#include "utils/hsearch.h"
+
+HTAB *chunks_htable = NULL;
+#endif
+
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
  *****************************************************************************/
@@ -685,6 +692,11 @@ MemoryContextName(MemoryContext context, MemoryContext relativeTo,
     return cbp;
 }                               /* MemoryContextName */
 
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "../backend/utils/mmgr/mcxt_memory_debug.c"
+#endif
+
 /*
  * MemoryContext_LogContextStats
  *		Logs memory consumption details of a given context.
@@ -703,6 +715,10 @@ MemoryContext_LogContextStats(uint64 siblingCount, uint64 allAllocated,
 	write_stderr("context: " UINT64_FORMAT ", " UINT64_FORMAT ", " UINT64_FORMAT ", " UINT64_FORMAT ", " UINT64_FORMAT ", %s\n", \
 	siblingCount, (allAllocated - allFreed), curAvailable, \
 	allAllocated, allFreed, contextName);
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	MemoryContext_printTopListOfChunks();
+#endif
 }
 
 
@@ -770,10 +786,45 @@ MemoryContextStats_recur(MemoryContext topContext, MemoryContext rootContext,
 
 	for (child = topContext->firstchild; child != NULL; child = child->nextchild)
 	{
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+		HTAB *prev_chunk_htable = NULL;
+		HTAB *temp_chunks_htable = NULL;
+		bool is_need_to_print_logs;
+#endif
+
 		/* Get name and ancestry of this MemoryContext */
 		name = MemoryContextName(child, rootContext, nameBuffer, nameBufferSize);
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+		/*
+		   At this case we will get stats of next child,
+		   but after that, we will print stats of previous child.
+		   We must to save chunks_htable to other variable (prev_chunk_htable)
+		   to get correct stats of next child.
+		 */
+		is_need_to_print_logs = (child->firstchild != NULL ||
+		                         strcmp(name, prevChildName) != 0);
+		if (is_need_to_print_logs)
+		{
+			prev_chunk_htable = chunks_htable;
+			chunks_htable = NULL;
+		}
+#endif
+
 		(*child->methods.stats)(child, &nBlocks, &nChunks, &currentAvailable, &allAllocated, &allFreed, &maxHeld);
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+		/*
+		   Save current chunk_htable to temp_chunk_htab, restore
+		   prev_chunk_htable to chunk_htable, print logs and restore
+		   current chunk_htable from temp_chunk_htab.
+		 */
+		if (is_need_to_print_logs)
+		{
+			temp_chunks_htable = chunks_htable;
+			chunks_htable = prev_chunk_htable;
+		}
+#endif
 
 		if (child->firstchild == NULL)
 		{
@@ -801,6 +852,9 @@ MemoryContextStats_recur(MemoryContext topContext, MemoryContext rootContext,
 					 */
 
 					MemoryContext_LogContextStats(siblingCount, cumAllAllocated, cumAllFreed, cumCurAvailable, prevChildName);
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+					chunks_htable = temp_chunks_htable;
+#endif
 				}
 
 				cumBlocks = nBlocks;
@@ -829,6 +883,9 @@ MemoryContextStats_recur(MemoryContext topContext, MemoryContext rootContext,
 				 */
 
 				MemoryContext_LogContextStats(siblingCount, cumAllAllocated, cumAllFreed, cumCurAvailable, prevChildName);
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+				chunks_htable = temp_chunks_htable;
+#endif
 			}
 
 			MemoryContextStats_recur(child, rootContext, name, nameBuffer, nameBufferSize, nBlocks,

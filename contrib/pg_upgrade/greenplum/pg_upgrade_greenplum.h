@@ -11,6 +11,9 @@
 #include "pg_upgrade.h"
 #include <portability/instr_time.h>
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug_undef.h"
+#endif
 
 #define PG_OPTIONS_UTILITY_MODE " PGOPTIONS='-c gp_session_role=utility' "
 

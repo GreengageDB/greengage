@@ -403,9 +403,6 @@ private:
 	// Initialize spooling information
 	void InitializeSpoolingInfo(Plan *plan, ULONG share_id);
 
-	// retrieve the flow of the shared input scan of the cte consumers
-	Flow *GetFlowCTEConsumer(List *shared_scan_cte_consumer_list);
-
 	// translate a CTE producer into a GPDB share input scan
 	Plan *TranslateDXLCTEProducerToSharedScan(
 		const CDXLNode *cte_producer_dxlnode,

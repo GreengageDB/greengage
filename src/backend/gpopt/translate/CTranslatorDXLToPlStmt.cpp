@@ -3681,8 +3681,6 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 		m_dxl_to_plstmt_context->GetCTEConsumerList(share_id);
 	GPOS_ASSERT(NULL != shared_scan_cte_consumer_list);
 
-	Flow *flow = GetFlowCTEConsumer(shared_scan_cte_consumer_list);
-
 	const ULONG num_of_shared_scan =
 		gpdb::ListLength(shared_scan_cte_consumer_list);
 
@@ -3696,8 +3694,6 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 		share_type = SHARE_MATERIAL;
 		// the share_type is later reset to SHARE_MATERIAL_XSLICE (if needed) by the apply_shareinput_xslice
 		materialize->share_type = share_type;
-		GPOS_ASSERT(NULL == (materialize->plan).flow);
-		(materialize->plan).flow = flow;
 	}
 	else
 	{
@@ -3708,13 +3704,15 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 		share_type = SHARE_SORT;
 		// the share_type is later reset to SHARE_SORT_XSLICE (if needed) the apply_shareinput_xslice
 		sort->share_type = share_type;
-		GPOS_ASSERT(NULL == (sort->plan).flow);
-		(sort->plan).flow = flow;
 	}
 
 	GPOS_ASSERT(SHARE_NOTSHARED != share_type);
 
+	Flow *flow = NULL;
+
 	// set the share type of the consumer nodes based on the producer
+	// If multiple CTE consumers have a flow then ensure that they are of the
+	// same type
 	ListCell *lc_sh_scan_cte_consumer = NULL;
 	ForEach(lc_sh_scan_cte_consumer, shared_scan_cte_consumer_list)
 	{
@@ -3722,39 +3720,12 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 			(ShareInputScan *) lfirst(lc_sh_scan_cte_consumer);
 		share_input_scan_consumer->share_type = share_type;
 		share_input_scan_consumer->driver_slice = -1;  // default
-		if (NULL == (share_input_scan_consumer->scan.plan).flow)
-		{
-			(share_input_scan_consumer->scan.plan).flow =
-				(Flow *) gpdb::CopyObject(flow);
-		}
-	}
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorDXLToPlStmt::GetFlowCTEConsumer
-//
-//	@doc:
-//		Retrieve the flow of the shared input scan of the cte consumers. If
-//		multiple CTE consumers have a flow then ensure that they are of the
-//		same type
-//---------------------------------------------------------------------------
-Flow *
-CTranslatorDXLToPlStmt::GetFlowCTEConsumer(List *shared_scan_cte_consumer_list)
-{
-	Flow *flow = NULL;
-
-	ListCell *lc_sh_scan_cte_consumer = NULL;
-	ForEach(lc_sh_scan_cte_consumer, shared_scan_cte_consumer_list)
-	{
-		ShareInputScan *share_input_scan_consumer =
-			(ShareInputScan *) lfirst(lc_sh_scan_cte_consumer);
 		Flow *flow_cte = (share_input_scan_consumer->scan.plan).flow;
 		if (NULL != flow_cte)
 		{
 			if (NULL == flow)
 			{
-				flow = (Flow *) gpdb::CopyObject(flow_cte);
+				flow = flow_cte;
 			}
 			else
 			{
@@ -3762,14 +3733,6 @@ CTranslatorDXLToPlStmt::GetFlowCTEConsumer(List *shared_scan_cte_consumer_list)
 			}
 		}
 	}
-
-	if (NULL == flow)
-	{
-		flow = MakeNode(Flow);
-		flow->flotype = FLOW_UNDEFINED;	 // default flow
-	}
-
-	return flow;
 }
 
 //---------------------------------------------------------------------------
