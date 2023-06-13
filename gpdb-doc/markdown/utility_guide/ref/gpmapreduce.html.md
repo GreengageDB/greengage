@@ -2,6 +2,8 @@
 
 Runs Greenplum MapReduce jobs as defined in a YAML specification document.
 
+> *Note* Greenplum MapReduce is deprecated and will be removed in a future Greenplum Database release.
+
 ## <a id="section2"></a>Synopsis 
 
 ```

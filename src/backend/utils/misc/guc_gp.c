@@ -158,6 +158,7 @@ bool		gp_print_create_gang_time = false;
 bool		gp_enable_exchange_default_partition = false;
 int			dtx_phase2_retry_count = 0;
 bool		gp_log_suboverflow_statement = false;
+bool        gp_use_synchronize_seqscans_catalog_vacuum_full = false;
 
 bool		log_dispatch_stats = false;
 
@@ -236,6 +237,7 @@ int			gp_perfmon_segment_interval;
 
 /* Perfmon debug GUC */
 bool		gp_perfmon_print_packet_info;
+bool		gp_resource_group_bypass_catalog_query;
 
 bool		vmem_process_interrupt = false;
 bool		execute_pruned_plan = false;
@@ -340,6 +342,7 @@ bool		optimizer_enable_multiple_distinct_aggs;
 bool		optimizer_enable_direct_dispatch;
 bool		optimizer_enable_hashjoin_redistribute_broadcast_children;
 bool		optimizer_enable_broadcast_nestloop_outer_child;
+bool		optimizer_discard_redistribute_hashjoin;
 bool		optimizer_enable_streaming_material;
 bool		optimizer_enable_gather_on_segment_for_dml;
 bool		optimizer_enable_assert_maxonerow;
@@ -2638,6 +2641,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
+		{"optimizer_discard_redistribute_hashjoin", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Discard hash join plans with redistribute motion in the optimizer."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_discard_redistribute_hashjoin,
+		false,
+		NULL, NULL, NULL
+	},
+	{
 		{"optimizer_expand_fulljoin", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Enables the optimizer's support of expanding full outer joins using union all."),
 			NULL,
@@ -3084,6 +3097,15 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"gp_resource_group_bypass_catalog_query", PGC_USERSET, RESOURCES,
+			gettext_noop("Bypass all catalog only queries."),
+			NULL
+		},
+		&gp_resource_group_bypass_catalog_query,
+		false, NULL, NULL
+	},
+
+	{
 		{"gp_count_host_segments_using_address", PGC_POSTMASTER, RESOURCES,
 		   gettext_noop("Count the number segments on a host using the address field in gp_segment_configuration"),
 		   gettext_noop("If false, count it using gp_segment_configuration.hostname instead")
@@ -3264,6 +3286,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		 &gp_log_suboverflow_statement,
 		 false,
 		 NULL, NULL, NULL
+	},
+
+	{
+		{"gp_use_synchronize_seqscans_catalog_vacuum_full", PGC_USERSET, COMPAT_OPTIONS_PREVIOUS,
+		 gettext_noop("Enable synchronized sequential scans for VACUUM FULL for catalog tables. Given by default now syncscans are not used for VACUUM FULL on catalog tables, this GUC will help in-case wish to fix pre-existing catalog state"),
+		 NULL
+		},
+		&gp_use_synchronize_seqscans_catalog_vacuum_full,
+		false,
+		NULL, NULL, NULL
 	},
 
 	/* End-of-list marker */

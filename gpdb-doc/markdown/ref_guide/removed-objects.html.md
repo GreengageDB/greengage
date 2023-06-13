@@ -1,20 +1,20 @@
 ---
-title: Objects Deprecated in Greenplum 6 
+title: Objects Removed in Greenplum 6 
 ---
 
-Greenplum Database 6 has deprecated several database objects. These changes can effect the successful upgrade from one major version to another. Review these objects when using Geenplum Upgrade, or Greenplum Backup and Restore. This topic highlight these changes.
+Greenplum Database 6 removes several database objects. These changes can effect the successful upgrade from one major version to another. Review these objects when using Geenplum Upgrade, or Greenplum Backup and Restore. This topic highlight these changes.
 
--   [Deprecated Relations](#dep_relations)
--   [Deprecated Columns](#dep_columns)
--   [Deprecated Functions and Procedures](#dep_functions_procedures)
--   [Deprecated Types, Domains, and Composite Types](#dep_types_domains_composite)
--   [Deprecated Operators](#dep_operators)
+-   [Removed Relations](#rem_relations)
+-   [Removed Columns](#rem_columns)
+-   [Removed Functions and Procedures](#rem_functions_procedures)
+-   [Removed Types, Domains, and Composite Types](#rem_types_domains_composite)
+-   [Removed Operators](#rem_operators)
 
 **Parent topic:** [Greenplum Database Reference Guide](ref_guide.html)
 
-## <a id="dep_relations"></a>Deprecated Relations 
+## <a id="rem_relations"></a>Removed Relations 
 
-The following list includes the Greenplum Database 6 deprecated relations.
+The following list includes the removed relations in Greenplum Database 6.
 
 -   gp\_toolkit.\_\_gp\_localid
 -   gp\_toolkit.\_\_gp\_masterid
@@ -34,9 +34,9 @@ The following list includes the Greenplum Database 6 deprecated relations.
 -   pg\_catalog.pg\_listener
 -   pg\_catalog.pg\_window
 
-## <a id="dep_columns"></a>Deprecated Columns 
+## <a id="rem_columns"></a>Removed Columns 
 
-The following list includes the Greenplum Database 6 deprecated columns.
+The following list includes the removed columns in Greenplum Database 6.
 
 -   gp\_toolkit.gp\_resgroup\_config.proposed\_concurrency
 -   gp\_toolkit.gp\_resgroup\_config.proposed\_memory\_limit
@@ -90,9 +90,9 @@ The following list includes the Greenplum Database 6 deprecated columns.
 -   pg\_catalog.pg\_trigger.tgconstrname
 -   pg\_catalog.pg\_trigger.tgisconstraint
 
-## <a id="dep_functions_procedures"></a>Deprecated Functions and Procedures 
+## <a id="rem_functions_procedures"></a>Removed Functions and Procedures 
 
-The following list includes the Greenplum Database 6 deprecated functions and procedures.
+The following list includes the removed functions and procedures in Greenplum Database 6.
 
 -   gp\_toolkit.\_\_gp\_aocsseg
 -   gp\_toolkit.\_\_gp\_aocsseg\_history
@@ -457,9 +457,9 @@ The following list includes the Greenplum Database 6 deprecated functions and pr
 -   pg\_catalog.text\_pattern\_eq
 -   pg\_catalog.text\_pattern\_ne
 
-## <a id="dep_types_domains_composite"></a>Deprecated Types, Domains, and Composite Types 
+## <a id="rem_types_domains_composite"></a>Removed Types, Domains, and Composite Types 
 
-The following list includes the Greenplum Database 6 deprecated types, domains, and composite types.
+The following list includes the Greenplum Database 6 removed types, domains, and composite types.
 
 -   gp\_toolkit.\_\_gp\_localid
 -   gp\_toolkit.\_\_gp\_masterid
@@ -484,9 +484,9 @@ The following list includes the Greenplum Database 6 deprecated types, domains, 
 -   pg\_catalog.pg\_listener
 -   pg\_catalog.pg\_window
 
-## <a id="dep_operators"></a>Deprecated Operators 
+## <a id="rem_operators"></a>Removed Operators 
 
-The following list includes the Greenplum Database 6 deprecated operators.
+The following list includes the Greenplum Database 6 removed operators.
 
 |oprname|oprcode|
 |-------|-------|

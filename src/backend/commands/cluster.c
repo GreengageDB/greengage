@@ -1046,7 +1046,17 @@ copy_heap_data(Oid OIDNewHeap, Oid OIDOldHeap, Oid OIDOldIndex, bool verbose,
 	}
 	else
 	{
-		heapScan = heap_beginscan(OldHeap, SnapshotAny, 0, (ScanKey) NULL);
+		/*
+		 * For Catalog tables avoid syncscan, so that scan always starts from
+		 * block 0 during rewrite and helps retain bootstrap tuples in initial
+		 * pages only. If using syncscan, then bootstrap tuples may move to
+		 * higher blocks, which will lead to degraded performance for relcache
+		 * initialization during connection starts.
+		 */
+		if (IsCatalogRelation(OldHeap) && !gp_use_synchronize_seqscans_catalog_vacuum_full)
+			heapScan = heap_beginscan_strat(OldHeap, SnapshotAny, 0, (ScanKey) NULL, true, false);
+		else
+			heapScan = heap_beginscan(OldHeap, SnapshotAny, 0, (ScanKey) NULL);
 		indexScan = NULL;
 	}
 

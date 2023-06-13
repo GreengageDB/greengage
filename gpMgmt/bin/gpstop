@@ -532,6 +532,10 @@ class GpStop:
         e = GpEraFile(self.master_datadir, logger=get_logger_if_verbose())
         e.end_era()
 
+        # Get a list of postgres processes running before stopping the server
+        postgres_pids = gp.get_postgres_segment_processes(self.master_datadir, self.gparray.master.hostname)
+        logger.debug("Postgres processes running on master host: {0}".format(postgres_pids))
+
         try:
             if self.mode == 'smart':
                 self._stop_master_smart()
@@ -563,10 +567,10 @@ class GpStop:
                         if os.path.exists(lockfile):
                             logger.info("Clearing segment instance lock files")
                             os.remove(lockfile)
+
+        # Use the process list and make sure that all the processes are killed at the end
         logger.info('Attempting forceful termination of any leftover master process')
-        (succeeded, mypid, file_datadir) = pg.ReadPostmasterTempFile.local("Read master tmp file",
-                                                                           self.dburl.pgport).getResults()
-        unix.kill_9_segment_processes(self.master_datadir, self.dburl.pgport, mypid)
+        unix.kill_9_segment_processes(self.master_datadir, postgres_pids, self.gparray.master.hostname)
 
         logger.debug("Successfully shutdown the Master instance in admin mode")
 
@@ -583,7 +587,11 @@ class GpStop:
                 logger.warning("Standby is unreachable, skipping shutdown on standby")
                 return True
 
-            logger.info("Stopping master standby host %s mode=fast" % standby.hostname)
+            # Get a list of postgres processes running before stopping the server
+            postgres_pids = gp.get_postgres_segment_processes(standby.datadir, standby.hostname)
+            logger.debug("Postgres processes running on standby host: {0}".format(postgres_pids))
+
+            logger.info("Stopping master standby host %s mode=%s" % (standby.hostname, self.mode))
             try:
                 cmd = SegmentStop("stopping master standby",
                                      standby.datadir, mode='fast',
@@ -612,10 +620,10 @@ class GpStop:
                     return True
                 else:
                     logger.error('Failed to stop standby. Attempting forceful termination of standby process')
-                    (succeeded, mypid, file_datadir) = pg.ReadPostmasterTempFile.remote("Read standby tmp file",
-                                                                                        self.dburl.pgport,
-                                                                                        standby.hostname).getResults()
-                    unix.kill_9_segment_processes(self.master_datadir, self.dburl.pgport, mypid)
+
+                    # Use the process list and make sure that all the processes are killed at the end
+                    unix.kill_9_segment_processes(standby.datadir, postgres_pids, standby.hostname)
+
                     if not pg.DbStatus.remote('checking status of standby master instance', standby, standby.hostname):
                         logger.info("Successfully shutdown master standby process on %s" % standby.hostname)
                         return True
