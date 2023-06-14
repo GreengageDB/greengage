@@ -1022,6 +1022,8 @@ public:
 
 	static BOOL FScalarConstBoolNull(CExpression *pexpr);
 
+	static BOOL FScalarConstOrBinaryCoercible(CExpression *pexpr);
+
 	// hash set from CTE ids
 	typedef CHashSet<ULONG, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
 					 CleanupDelete<ULONG> >

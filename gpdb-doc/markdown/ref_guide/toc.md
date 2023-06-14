@@ -192,6 +192,7 @@ Doc Index
         - [postgres\_fdw](./modules/postgres_fdw.md)
         - [postgresql-hll](./modules/postgresql-hll.md)
         - [sslinfo](./modules/sslinfo.md)
+        - [tablefunc](./modules/tablefunc.md)
         - [timestamp9](./modules/timestamp9.md)
         - [uuid-ossp](./modules/uuid-ossp.md)
     - [Character Set Support](./character_sets.md)
@@ -325,4 +326,4 @@ Doc Index
         - [Summary of Greenplum Features](./feature_summary.md)
         - [Reserved Identifiers and SQL Key Words](./sql-keywords.md)
         - [SQL 2008 Optional Feature Compliance](./SQL2008_support.md)
-    - [Objects Deprecated in Greenplum 6](./deprecated-objects.md)
+    - [Objects Removed in Greenplum 6](./removed-objects.md)

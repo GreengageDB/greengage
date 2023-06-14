@@ -22,7 +22,7 @@ all:
 	$(MAKE) -C contrib/extprotocol all
 	$(MAKE) -C contrib/pg_trgm all
 	$(MAKE) -C contrib/btree_gin all
-	$(MAKE) -C contrib/tablefunc all
+	$(MAKE) -C contrib/isn all
 ifeq ($(OS),Darwin)
 	@echo "dblink and postgres_fdw can't be built on Mac"
 else
@@ -40,6 +40,7 @@ endif
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo all
 endif
+	$(MAKE) -C contrib/tablefunc all
 ifneq ($(with_uuid),no)
 	$(MAKE) -C contrib/uuid-ossp all
 endif
@@ -74,7 +75,7 @@ install:
 	$(MAKE) -C contrib/extprotocol $@
 	$(MAKE) -C contrib/pg_trgm $@
 	$(MAKE) -C contrib/btree_gin $@
-	$(MAKE) -C contrib/tablefunc $@
+	$(MAKE) -C contrib/isn $@
 ifneq ($(OS),Darwin)
 	$(MAKE) -C contrib/dblink $@
 	$(MAKE) -C contrib/postgres_fdw $@
@@ -90,6 +91,7 @@ endif
 ifeq ($(with_openssl), yes)
 	$(MAKE) -C contrib/sslinfo $@
 endif
+	$(MAKE) -C contrib/tablefunc $@
 ifneq ($(with_uuid),no)
 	$(MAKE) -C contrib/uuid-ossp $@
 endif
@@ -174,8 +176,7 @@ ICW_TARGETS  = src/test src/pl src/interfaces/gppc
 ICW_TARGETS += contrib/amcheck contrib/auto_explain contrib/citext
 ICW_TARGETS += contrib/formatter_fixedwidth
 ICW_TARGETS += contrib/extprotocol
-ICW_TARGETS += contrib/pg_trgm contrib/btree_gin
-ICW_TARGETS += contrib/tablefunc
+ICW_TARGETS += contrib/pg_trgm contrib/btree_gin contrib/isn
 ifneq ($(OS),Darwin)
 	ICW_TARGETS += contrib/dblink contrib/postgres_fdw
 endif
@@ -184,6 +185,7 @@ ICW_TARGETS += contrib/indexscan contrib/hstore contrib/ltree contrib/pgcrypto
 ifeq ($(with_openssl), yes)
 ICW_TARGETS += contrib/sslinfo
 endif
+ICW_TARGETS += contrib/tablefunc
 ifneq ($(with_uuid),no)
 ICW_TARGETS += contrib/uuid-ossp
 endif

@@ -3433,21 +3433,22 @@ XLogFileInit(XLogSegNo logsegno, bool *use_existent, bool use_lock)
 }
 
 /*
- * Create a new XLOG file segment by copying a pre-existing one.
+ * Copy a WAL segment file in pg_xlog directory.
  *
- * destsegno: identify segment to be created.
+ * dstfname		destination filename
+ * srcfname		source filename
+ * upto			how much of the source file to copy? (the rest is filled with
+ *				zeros)
  *
- * srcTLI, srcsegno: identify segment to be copied (could be from
- *		a different timeline)
+ * If dstfname is not given, the file is created with a temporary filename,
+ * which is returned.  Both filenames are relative to the pg_xlog directory.
  *
- * Currently this is only used during recovery, and so there are no locking
- * considerations.  But we should be just as tense as XLogFileInit to avoid
- * emplacing a bogus file.
+ * NB: Any existing file with the same name will be overwritten!
  */
-static void
-XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno)
+static char *
+XLogFileCopy(char *dstfname, char *srcfname, int upto)
 {
-	char		path[MAXPGPATH];
+	char		srcpath[MAXPGPATH];
 	char		tmppath[MAXPGPATH];
 	PGAlignedXLogBlock buffer;
 	int			srcfd;
@@ -3457,12 +3458,12 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno)
 	/*
 	 * Open the source file
 	 */
-	XLogFilePath(path, srcTLI, srcsegno);
-	srcfd = OpenTransientFile(path, O_RDONLY | PG_BINARY, 0);
+	snprintf(srcpath, MAXPGPATH, XLOGDIR "/%s", srcfname);
+	srcfd = OpenTransientFile(srcpath, O_RDONLY | PG_BINARY, 0);
 	if (srcfd < 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not open file \"%s\": %m", path)));
+				 errmsg("could not open file \"%s\": %m", srcpath)));
 
 	/*
 	 * Copy into a temp file name.
@@ -3484,16 +3485,33 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno)
 	 */
 	for (nbytes = 0; nbytes < XLogSegSize; nbytes += sizeof(buffer))
 	{
-		errno = 0;
-		if ((int) read(srcfd, buffer.data, sizeof(buffer)) != (int) sizeof(buffer))
+        int			nread;
+
+        nread = upto - nbytes;
+
+        /*
+         * The part that is not read from the source file is filled with zeros.
+         */
+        if (nread < sizeof(buffer))
+            memset(buffer.data, 0, sizeof(buffer));
+
+        if (nread > 0)
 		{
-			if (errno != 0)
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not read file \"%s\": %m", path)));
-			else
-				ereport(ERROR,
-						(errmsg("not enough data in file \"%s\"", path)));
+			if (nread > sizeof(buffer))
+				nread = sizeof(buffer);
+			errno = 0;
+			if (read(srcfd, buffer.data, nread) != nread)
+			{
+				if (errno != 0)
+					ereport(ERROR,
+							(errcode_for_file_access(),
+							 errmsg("could not read file \"%s\": %m",
+									srcpath)));
+				else
+					ereport(ERROR,
+							(errmsg("not enough data in file \"%s\"",
+									srcpath)));
+			}
 		}
 		errno = 0;
 		if ((int) write(fd, buffer.data, sizeof(buffer)) != (int) sizeof(buffer))
@@ -3526,10 +3544,24 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno)
 	CloseTransientFile(srcfd);
 
 	/*
-	 * Now move the segment into place with its final name.
+	 * Now move the segment into place with its final name.  (Or just return
+	 * the path to the file we created, if the caller wants to handle the
+	 * rest on its own.)
 	 */
-	if (!InstallXLogFileSegment(&destsegno, tmppath, false, NULL, false))
-		elog(ERROR, "InstallXLogFileSegment should not have failed");
+    if (dstfname)
+    {
+        char		dstpath[MAXPGPATH];
+
+        snprintf(dstpath, MAXPGPATH, XLOGDIR "/%s", dstfname);
+        if (rename(tmppath, dstpath) < 0)
+            ereport(ERROR,
+                    (errcode_for_file_access(),
+                            errmsg("could not rename file \"%s\" to \"%s\": %m",
+                                   tmppath, dstpath)));
+        return NULL;
+    }
+    else
+        return pstrdup(tmppath);
 }
 
 /*
@@ -3970,8 +4002,8 @@ RemoveOldXlogFiles(XLogSegNo segno, XLogRecPtr endptr)
 	while ((xlde = ReadDir(xldir, XLOGDIR)) != NULL)
 	{
 		/* Ignore files that are not XLOG segments */
-		if (strlen(xlde->d_name) != 24 ||
-			strspn(xlde->d_name, "0123456789ABCDEF") != 24)
+        if (!IsXLogFileName(xlde->d_name) &&
+            !IsPartialXLogFileName(xlde->d_name))
 			continue;
 
 		/*
@@ -5583,10 +5615,15 @@ readRecoveryCommandFile(void)
  * Exit archive-recovery state
  */
 static void
-exitArchiveRecovery(TimeLineID endTLI, XLogSegNo endLogSegNo)
+exitArchiveRecovery(TimeLineID endTLI, XLogRecPtr endOfLog)
 {
 	char		recoveryPath[MAXPGPATH];
 	char		xlogfname[MAXFNAMELEN];
+	XLogSegNo	endLogSegNo;
+	XLogSegNo	startLogSegNo;
+
+	/* we always switch to a new timeline after archive recovery */
+	Assert(endTLI != ThisTimeLineID);
 
 	/*
 	 * We are no longer in archive recovery state.
@@ -5609,32 +5646,53 @@ exitArchiveRecovery(TimeLineID endTLI, XLogSegNo endLogSegNo)
 	}
 
 	/*
-	 * If we are establishing a new timeline, we have to copy data from the
-	 * last WAL segment of the old timeline to create a starting WAL segment
-	 * for the new timeline.
-	 *
-	 * Notify the archiver that the last WAL segment of the old timeline is
-	 * ready to copy to archival storage if its .done file doesn't exist
-	 * (e.g., if it's the restored WAL file, it's expected to have .done file).
-	 * Otherwise, it is not archived for a while.
+	 * Calculate the last segment on the old timeline, and the first segment
+	 * on the new timeline. If the switch happens in the middle of a segment,
+	 * they are the same, but if the switch happens exactly at a segment
+	 * boundary, startLogSegNo will be endLogSegNo + 1.
 	 */
-	if (endTLI != ThisTimeLineID)
-	{
-		XLogFileCopy(endLogSegNo, endTLI, endLogSegNo);
+	XLByteToPrevSeg(endOfLog, endLogSegNo);
+	XLByteToSeg(endOfLog, startLogSegNo);
 
-		/* Create .ready file only when neither .ready nor .done files exist */
-		if (XLogArchivingActive())
-		{
-			XLogFileName(xlogfname, endTLI, endLogSegNo);
-			XLogArchiveCheckDone(xlogfname);
-		}
+	/*
+	 * Initialize the starting WAL segment for the new timeline. If the switch
+	 * happens in the middle of a segment, copy data from the last WAL segment
+	 * of the old timeline up to the switch point, to the starting WAL segment
+	 * on the new timeline.
+	 */
+	if (endLogSegNo == startLogSegNo)
+	{
+		char	   *tmpfname;
+
+		XLogFileName(xlogfname, endTLI, endLogSegNo);
+
+		/*
+		 * Make a copy of the file on the new timeline.
+		 *
+		 * Writing WAL isn't allowed yet, so there are no locking
+		 * considerations. But we should be just as tense as XLogFileInit to
+		 * avoid emplacing a bogus file.
+		 */
+		tmpfname = XLogFileCopy(NULL, xlogfname, endOfLog % XLOG_SEG_SIZE);
+		if (!InstallXLogFileSegment(&endLogSegNo, tmpfname, false, 0, false))
+			elog(ERROR, "InstallXLogFileSegment should not have failed");
+	}
+	else
+	{
+		/*
+		 * The switch happened at a segment boundary, so just create the next
+		 * segment on the new timeline.
+		 */
+		bool		use_existent = true;
+
+		XLogFileInit(startLogSegNo, &use_existent, true);
 	}
 
 	/*
 	 * Let's just make real sure there are not .ready or .done flags posted
 	 * for the new segment.
 	 */
-	XLogFileName(xlogfname, ThisTimeLineID, endLogSegNo);
+	XLogFileName(xlogfname, ThisTimeLineID, startLogSegNo);
 	XLogArchiveCleanup(xlogfname);
 
 	/*
@@ -6461,7 +6519,7 @@ StartupXLOG(void)
 	XLogRecPtr	RecPtr,
 				checkPointLoc,
 				EndOfLog;
-	XLogSegNo	endLogSegNo;
+    TimeLineID	EndOfLogTLI;
 	TimeLineID	PrevTimeLineID;
 	XLogRecord *record;
 	TransactionId oldestActiveXID;
@@ -7562,10 +7620,18 @@ StartupXLOG(void)
 	 */
 	record = ReadRecord(xlogreader, LastRec, PANIC, false);
 	EndOfLog = EndRecPtr;
-	XLByteToPrevSeg(EndOfLog, endLogSegNo);
 
 	elog(LOG,"end of transaction log location is %X/%X",
 		 (uint32) (EndOfLog >> 32), (uint32) EndOfLog);
+
+	/*
+	 * EndOfLogTLI is the TLI in the filename of the XLOG segment containing
+	 * the end-of-log. It could be different from the timeline that EndOfLog
+	 * nominally belongs to, if there was a timeline switch in that segment,
+	 * and we were reading the old wAL from a segment belonging to a higher
+	 * timeline.
+	 */
+	EndOfLogTLI = xlogreader->readPageTLI;
 
 	/*
 	 * Complain if we did not roll forward far enough to render the backup
@@ -7673,7 +7739,7 @@ StartupXLOG(void)
 	 * we will use that below.)
 	 */
 	if (ArchiveRecoveryRequested)
-		exitArchiveRecovery(xlogreader->readPageTLI, endLogSegNo);
+		exitArchiveRecovery(EndOfLogTLI, EndOfLog);
 
 	/*
 	 * Actually, if WAL ended in an incomplete record, skip the parts that
@@ -7692,9 +7758,6 @@ StartupXLOG(void)
 	 * buffer cache using the block containing the last record from the
 	 * previous incarnation.
 	 */
-	openLogSegNo = endLogSegNo;
-	openLogFile = XLogFileOpen(openLogSegNo);
-	openLogOff = 0;
 	Insert = &XLogCtl->Insert;
 	Insert->PrevBytePos = XLogRecPtrToBytePos(LastRec);
 	Insert->CurrBytePos = XLogRecPtrToBytePos(EndOfLog);
@@ -7831,11 +7894,81 @@ StartupXLOG(void)
 								   true);
 	}
 
-	/*
-	 * Clean up any (possibly bogus) future WAL segments on the old timeline.
-	 */
 	if (ArchiveRecoveryRequested)
+	{
+		/*
+		 * We switched to a new timeline. Clean up segments on the old
+		 * timeline.
+		 *
+		 * If there are any higher-numbered segments on the old timeline,
+		 * remove them. They might contain valid WAL, but they might also be
+		 * pre-allocated files containing garbage. In any case, they are not
+		 * part of the new timeline's history so we don't need them.
+		 */
 		RemoveNonParentXlogFiles(EndOfLog, ThisTimeLineID);
+
+		/*
+		 * If the switch happened in the middle of a segment, what to do with
+		 * the last, partial segment on the old timeline? If we don't archive
+		 * it, and the server that created the WAL never archives it either
+		 * (e.g. because it was hit by a meteor), it will never make it to the
+		 * archive. That's OK from our point of view, because the new segment
+		 * that we created with the new TLI contains all the WAL from the old
+		 * timeline up to the switch point. But if you later try to do PITR to
+		 * the "missing" WAL on the old timeline, recovery won't find it in
+		 * the archive. It's physically present in the new file with new TLI,
+		 * but recovery won't look there when it's recovering to the older
+		 * timeline. On the other hand, if we archive the partial segment, and
+		 * the original server on that timeline is still running and archives
+		 * the completed version of the same segment later, it will fail. (We
+		 * used to do that in 9.4 and below, and it caused such problems).
+		 *
+		 * As a compromise, we rename the last segment with the .partial
+		 * suffix, and archive it. Archive recovery will never try to read
+		 * .partial segments, so they will normally go unused. But in the odd
+		 * PITR case, the administrator can copy them manually to the pg_xlog
+		 * directory (removing the suffix). They can be useful in debugging,
+		 * too.
+		 *
+		 * If a .done or .ready file already exists for the old timeline,
+		 * however, we had already determined that the segment is complete,
+		 * so we can let it be archived normally. (In particular, if it was
+		 * restored from the archive to begin with, it's expected to have a
+		 * .done file).
+		 */
+		if (EndOfLog % XLOG_SEG_SIZE != 0 && XLogArchivingActive())
+		{
+			char		origfname[MAXFNAMELEN];
+			XLogSegNo	endLogSegNo;
+
+			XLByteToPrevSeg(EndOfLog, endLogSegNo);
+			XLogFileName(origfname, EndOfLogTLI, endLogSegNo);
+
+			if (!XLogArchiveIsReadyOrDone(origfname))
+			{
+				char		origpath[MAXPGPATH];
+				char		partialfname[MAXFNAMELEN];
+				char		partialpath[MAXPGPATH];
+
+				XLogFilePath(origpath, EndOfLogTLI, endLogSegNo);
+				snprintf(partialfname, MAXFNAMELEN, "%s.partial", origfname);
+				snprintf(partialpath, MAXPGPATH, "%s.partial", origpath);
+
+				/*
+				 * Make sure there's no .done or .ready file for the .partial
+				 * file.
+				 */
+				XLogArchiveCleanup(partialfname);
+
+				if (rename(origpath, partialpath) != 0)
+					ereport(ERROR,
+							(errcode_for_file_access(),
+							 errmsg("could not rename file \"%s\" to \"%s\": %m",
+									origpath, partialpath)));
+				XLogArchiveNotify(partialfname);
+			}
+		}
+	}
 
 	/*
 	 * Preallocate additional log files, if wanted.
@@ -9996,8 +10129,6 @@ XLogSaveBufferForHint(Buffer buffer, bool buffer_std)
 		rdata[1].next = NULL;
 
 		recptr = XLogInsert(RM_XLOG_ID, XLOG_FPI, rdata);
-
-		wait_to_avoid_large_repl_lag();
 	}
 
 	return recptr;
@@ -12554,10 +12685,17 @@ initialize_wal_bytes_written(void)
  * transactions starving concurrent transactions from commiting due to sync
  * rep. This interface provides a way for primary to avoid racing forward with
  * WAL generation and move at sustained speed with network and mirrors.
+ *
+ * NB: This function should never be called from inside a critical section,
+ * meaning caller should never have MyPgXact->delayChkpt set to true. Otherwise,
+ * if mirror is down, we will end up in a deadlock situation between the primary
+ * and the checkpointer process, because if MyPgXact->delayChkpt is set,
+ * checkpointer cannot proceed to unset WalSndCtl->sync_standbys_defined.
  */
 void
 wait_to_avoid_large_repl_lag(void)
 {
+	Assert(!MyPgXact->delayChkpt);
 	/* rep_lag_avoidance_threshold is defined in KB */
 	if (rep_lag_avoidance_threshold &&
 		wal_bytes_written > (rep_lag_avoidance_threshold * 1024))

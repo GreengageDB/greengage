@@ -3234,6 +3234,28 @@ binary_upgrade_set_type_oids_by_rel(Archive *fout,
 }
 
 static void
+binary_upgrade_set_type_oids_of_child_partition(Archive *fout,
+										PQExpBuffer upgrade_buffer,
+										const TableInfo *tblinfo)
+{
+	TypeInfo *tyinfo = findTypeByOid(tblinfo->reltype);
+	TableInfo *parenttblinfo = findTableByOid(tblinfo->parrelid);
+
+	simple_oid_list_append(&preassigned_oids, tyinfo->dobj.catId.oid);
+
+	/*
+	 * Child partitions may be in a different schema than it's parent,
+	 * but when they are initially created they have their parent's
+	 * schema.
+	 */
+	appendPQExpBufferStr(upgrade_buffer, "\n-- For binary upgrade, must preserve pg_type oid\n");
+	appendPQExpBuffer(upgrade_buffer,
+			"SELECT binary_upgrade.set_next_pg_type_oid('%u'::pg_catalog.oid, "
+			"'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
+			tyinfo->dobj.catId.oid, parenttblinfo->dobj.namespace->dobj.catId.oid, tyinfo->dobj.name);
+}
+
+static void
 binary_upgrade_set_pg_class_oids(Archive *fout,
 								 PQExpBuffer upgrade_buffer, Oid pg_class_oid,
 								 bool is_index)
@@ -3243,12 +3265,30 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 		TableInfo *tblinfo = findTableByOid(pg_class_oid);
 		Assert(tblinfo != NULL);
 		simple_oid_list_append(&preassigned_oids, pg_class_oid);
-		appendPQExpBufferStr(upgrade_buffer,
-						"\n-- For binary upgrade, must preserve pg_class oids\n");
-		appendPQExpBuffer(upgrade_buffer,
-						  "SELECT binary_upgrade.set_next_heap_pg_class_oid('%u'::pg_catalog.oid, "
-						  "'%u'::pg_catalog.oid, $$%s$$::text);\n",
-						  tblinfo->dobj.catId.oid, tblinfo->dobj.namespace->dobj.catId.oid, tblinfo->dobj.name);
+		if (tblinfo->parrelid)
+		{
+			/*
+			 * Child partitions may be in a different schema than it's parent,
+			 * but when they are initially created they have their parent's
+			 * schema.
+			 */
+			TableInfo *parenttblinfo = findTableByOid(tblinfo->parrelid);
+			appendPQExpBufferStr(upgrade_buffer,
+							"\n-- For binary upgrade, must preserve pg_class oids\n");
+			appendPQExpBuffer(upgrade_buffer,
+							  "SELECT binary_upgrade.set_next_heap_pg_class_oid('%u'::pg_catalog.oid, "
+							  "'%u'::pg_catalog.oid, $$%s$$::text);\n",
+							  tblinfo->dobj.catId.oid, parenttblinfo->dobj.namespace->dobj.catId.oid, tblinfo->dobj.name);
+		}
+		else
+		{
+			appendPQExpBufferStr(upgrade_buffer,
+							"\n-- For binary upgrade, must preserve pg_class oids\n");
+			appendPQExpBuffer(upgrade_buffer,
+							  "SELECT binary_upgrade.set_next_heap_pg_class_oid('%u'::pg_catalog.oid, "
+							  "'%u'::pg_catalog.oid, $$%s$$::text);\n",
+							  tblinfo->dobj.catId.oid, tblinfo->dobj.namespace->dobj.catId.oid, tblinfo->dobj.name);
+		}
 
 		/* Only tables have toast tables, not indexes */
 		if (OidIsValid(tblinfo->toast_oid))
@@ -6816,6 +6856,10 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				/* column will be suppressed, print default separately */
 				attrdefs[j].separate = true;
 			}
+			else if (tbinfo->relstorage == RELSTORAGE_EXTERNAL)
+			{
+				attrdefs[j].separate = true;
+			}
 			else
 			{
 				attrdefs[j].separate = false;
@@ -7005,9 +7049,10 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
  * Normally this is always true, but it's false for dropped columns, as well
  * as those that were inherited without any local definition.  (If we print
  * such a column it will mistakenly get pg_attribute.attislocal set to true.)
- * However, in binary_upgrade mode, we must print all such columns anyway and
- * fix the attislocal/attisdropped state later, so as to keep control of the
- * physical column order.
+ *
+ * In binary_upgrade mode, we must print all columns and fix the attislocal/
+ * attisdropped state later, so as to keep control of the physical column
+ * order.
  *
  * This function exists because there are scattered nonobvious places that
  * must be kept in sync with this decision.
@@ -7016,14 +7061,19 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
  * may or may not be printed depending on whether all the child partitions
  * have the dropped column reference OR all the child partitions do not have
  * the dropped column reference.
+ *
+ * GPDB: External partition tables are dumped by inheriting the parent partition
+ * attributes. This is done by setting the attributes as local. So don't print
+ * those columns. See commit 821b8e10.
  */
 bool
 shouldPrintColumn(TableInfo *tbinfo, int colno)
 {
 	if (binary_upgrade && !tbinfo->ignoreRootPartDroppedAttr)
 		return true;
-	return ((tbinfo->attislocal[colno] || tbinfo->relstorage == RELSTORAGE_EXTERNAL) &&
-	        !tbinfo->attisdropped[colno]);
+	if (tbinfo->attisdropped[colno])
+		return false;
+	return (tbinfo->attislocal[colno] || tbinfo->relstorage == RELSTORAGE_EXTERNAL);
 }
 
 
@@ -9862,8 +9912,8 @@ dumpFunc(Archive *fout, FuncInfo *finfo)
 	proexeclocation = PQgetvalue(res, 0, PQfnumber(res, "proexeclocation"));
 
 	/*
-	 * See backend/commands/define.c for details of how the 'AS' clause is
-	 * used. In GPDB Paris and up, an unused probin is NULL (here ""); previous8bc709b37411ba7ad0fd0f1f79c354714424af3d
+	 * See backend/commands/functioncmds.c for details of how the 'AS' clause
+	 * is used.  In 8.4 and up, an unused probin is NULL (here ""); previous
 	 * versions would set it to "-".  There are no known cases in which prosrc
 	 * is unused, so the tests below for "-" are probably useless.
 	 */
@@ -13058,35 +13108,23 @@ dumpExternal(Archive *fout, TableInfo *tbinfo, PQExpBuffer q, PQExpBuffer delq)
 		int j;
 		for (j = 0; j < tbinfo->numatts; j++)
 		{
-			/* Is the attribute not dropped? */
-			if (shouldPrintColumn(tbinfo, j))
-			{
-				/* Format properly if not first attr */
-				if (actual_atts > 0)
-					appendPQExpBufferChar(q, ',');
-				appendPQExpBufferStr(q, "\n    ");
+			/*
+			 * There is no need to preserve dropped columns for external tables
+			 * since they do not have an on-disk format.
+			 */
+			if (!shouldPrintColumn(tbinfo, j) || tbinfo->attisdropped[j])
+				continue;
 
-				/* Attribute name */
-				appendPQExpBuffer(q, "%s ", fmtId(tbinfo->attnames[j]));
+			/* Format properly if not first attr */
+			if (actual_atts > 0)
+				appendPQExpBufferChar(q, ',');
+			appendPQExpBufferStr(q, "\n    ");
 
-				/* Attribute type */
-				if (tbinfo->attisdropped[j])
-				{
-					/*
-					 * ALTER TABLE DROP COLUMN clears
-					 * pg_attribute.atttypid, so we will not have gotten a
-					 * valid type name; insert INTEGER as a stopgap. We'll
-					 * clean things up later.
-					 */
-					appendPQExpBufferStr(q, " INTEGER /* dummy */");
-				}
-				else
-				{
-					appendPQExpBufferStr(q, tbinfo->atttypnames[j]);
-				}
+			/* Attribute name */
+			appendPQExpBuffer(q, "%s ", fmtId(tbinfo->attnames[j]));
+			appendPQExpBufferStr(q, tbinfo->atttypnames[j]);
 
-				actual_atts++;
-			}
+			actual_atts++;
 		}
 
 		appendPQExpBufferStr(q, "\n)");
@@ -13521,7 +13559,7 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 							hasExternalPartitions = true;
 
 						binary_upgrade_set_pg_class_oids(fout, q, part_oid, false);
-						binary_upgrade_set_type_oids_by_rel(fout, q, tbinfo);
+						binary_upgrade_set_type_oids_of_child_partition(fout, q, tbinfo);
 					}
 				}
 
@@ -13596,7 +13634,15 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 						 * clean things up later.
 						 */
 						appendPQExpBufferStr(q, " INTEGER /* dummy */");
-						/* Skip all the rest, too */
+
+						/* Dropped columns are dumped during binary upgrade.
+						 * Dump the encoding clause also to maintain a consistent
+						 * catalog entry in pg_attribute_encoding post upgrade.
+						 */
+						if (tbinfo->attencoding[j] != NULL)
+							appendPQExpBuffer(q, " ENCODING (%s)", tbinfo->attencoding[j]);
+
+						/* Skip all the rest */
 						continue;
 					}
 
@@ -14281,6 +14327,52 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 			}
 		}
 
+		/*
+		 * Dump ALTER statements for child tables set to a schema that is
+		 * different than the parent.
+		 */
+		if (tbinfo->parparent)
+		{
+			int ntups = 0;
+			int i = 0;
+			int i_oldSchema = 0;
+			int i_newSchema = 0;
+			int i_relname = 0;
+			PQExpBuffer getAlteredChildPartitionSchemas = createPQExpBuffer();
+			PGresult   *res;
+
+			appendPQExpBuffer(getAlteredChildPartitionSchemas,
+							  "SELECT "
+							  "pg_catalog.quote_ident(pgn2.nspname) AS oldschema, "
+							  "pg_catalog.quote_ident(pgn.nspname) AS newschema, "
+							  "pg_catalog.quote_ident(pgc.relname) AS relname "
+							  "FROM pg_catalog.pg_partition_rule pgpr "
+							  "JOIN pg_catalog.pg_partition pgp ON pgp.oid = pgpr.paroid "
+							  "JOIN pg_catalog.pg_class pgc ON pgpr.parchildrelid = pgc.oid "
+							  "JOIN pg_catalog.pg_class pgc2 ON pgp.parrelid = pgc2.oid "
+							  "JOIN pg_catalog.pg_namespace pgn ON pgc.relnamespace = pgn.oid "
+							  "JOIN pg_catalog.pg_namespace pgn2 ON pgc2.relnamespace = pgn2.oid "
+							  "WHERE pgc.relnamespace != pgc2.relnamespace "
+							  "AND pgp.parrelid = %u", tbinfo->dobj.catId.oid);
+			res = ExecuteSqlQuery(fout, getAlteredChildPartitionSchemas->data, PGRES_TUPLES_OK);
+
+			ntups = PQntuples(res);
+			i_oldSchema = PQfnumber(res, "oldschema");
+			i_newSchema = PQfnumber(res, "newschema");
+			i_relname = PQfnumber(res, "relname");
+
+			for (i = 0; i < ntups; i++)
+			{
+				char* oldSchema = PQgetvalue(res, i, i_oldSchema);
+				char* newSchema = PQgetvalue(res, i, i_newSchema);
+				char* relname = PQgetvalue(res, i, i_relname);
+
+				appendPQExpBuffer(q, "\nALTER TABLE %s.%s SET SCHEMA %s;\n", oldSchema, relname, newSchema);
+			}
+
+			PQclear(res);
+			destroyPQExpBuffer(getAlteredChildPartitionSchemas);
+		}
 
 		/* MPP-1890 */
 

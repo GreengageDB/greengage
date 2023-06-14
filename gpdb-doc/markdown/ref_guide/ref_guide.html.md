@@ -26,6 +26,6 @@ Reference information for Greenplum Database systems including SQL commands, sys
 
 -   **[SQL Features, Reserved and Key Words, and Compliance](misc.html)**  
 
--   **[Objects Deprecated in Greenplum 6](deprecated-objects.html)**  
+-   **[Objects Removed in Greenplum 6](removed-objects.html)**  
 
 

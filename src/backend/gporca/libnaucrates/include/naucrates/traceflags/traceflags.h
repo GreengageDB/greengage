@@ -225,6 +225,9 @@ enum EOptTraceFlag
 	// Ordered Agg
 	EopttraceEnableOrderedAgg = 103043,
 
+	// Discard HashJoin with RedistributeMotion nodes
+	EopttraceDiscardRedistributeHashJoin = 103044,
+
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

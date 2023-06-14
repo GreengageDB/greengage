@@ -1,0 +1,77 @@
+--
+-- Test ISN extension on GPDB
+--
+CREATE EXTENSION isn;
+--
+-- test partition table
+--
+CREATE TABLE pt(id ISBN) PARTITION BY RANGE (id)
+(
+    PARTITION pt_1 START ('0-11-000533-3!') END ('0-14-121930-0!'),
+    PARTITION pt_2 START ('0-14-121930-0!') END ('0-393-04002-X'),
+    PARTITION pt_3 START ('0-393-04002-X') END ('2-205-00876-5!')
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  CREATE TABLE will create partition "pt_1_prt_pt_1" for table "pt"
+NOTICE:  CREATE TABLE will create partition "pt_1_prt_pt_2" for table "pt"
+NOTICE:  CREATE TABLE will create partition "pt_1_prt_pt_3" for table "pt"
+INSERT INTO pt VALUES ('0-11-000533-3!'), ('0-14-121930-0!'), ('0-393-04002-X');
+SELECT * FROM pt ORDER BY id;
+       id       
+----------------
+ 0-11-000533-3!
+ 0-14-121930-0!
+ 0-393-04002-X
+(3 rows)
+
+\d+ pt
+                        Table "public.pt"
+ Column | Type | Modifiers | Storage | Stats target | Description 
+--------+------+-----------+---------+--------------+-------------
+ id     | isbn |           | plain   |              | 
+Child tables: pt_1_prt_pt_1,
+              pt_1_prt_pt_2,
+              pt_1_prt_pt_3
+Distributed by: (id)
+Partition by: (id)
+
+explain (verbose) SELECT * FROM pt WHERE id >= '0-11-000533-3!'::ISBN AND id <= '0-14-121930-0!'::ISBN ORDER BY id;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+   Output: id
+   Merge Key: id
+   ->  Sort  (cost=0.00..431.00 rows=1 width=8)
+         Output: id
+         Sort Key: pt.id
+         ->  Sequence  (cost=0.00..431.00 rows=1 width=8)
+               Output: id
+               ->  Partition Selector for pt (dynamic scan id: 1)  (cost=10.00..100.00 rows=34 width=4)
+                     Partitions selected: 2 (out of 3)
+               ->  Dynamic Seq Scan on public.pt (dynamic scan id: 1)  (cost=0.00..431.00 rows=1 width=8)
+                     Output: id
+                     Filter: ((pt.id >= '0-11-000533-3!'::isbn) AND (pt.id <= '0-14-121930-0!'::isbn))
+ Optimizer: Pivotal Optimizer (GPORCA)
+(14 rows)
+
+DROP TABLE pt;
+--
+-- test distributed by
+--
+CREATE TABLE dt(id ISBN) DISTRIBUTED BY (id);
+INSERT INTO dt VALUES ('0-11-000533-3!'), ('0-14-121930-0!'), ('0-393-04002-X'), ('2-205-00876-5!');
+SELECT * FROM dt ORDER BY id;
+       id       
+----------------
+ 0-11-000533-3!
+ 0-14-121930-0!
+ 0-393-04002-X
+ 2-205-00876-5!
+(4 rows)
+
+DROP TABLE dt;
+--
+-- cleanup
+--
+DROP EXTENSION isn;

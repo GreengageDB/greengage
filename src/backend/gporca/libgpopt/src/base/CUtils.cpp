@@ -2472,6 +2472,13 @@ CUtils::FScalarConstBoolNull(CExpression *pexpr)
 	return false;
 }
 
+
+BOOL
+CUtils::FScalarConstOrBinaryCoercible(CExpression *pexpr)
+{
+	return CUtils::FScalarConst(pexpr) ||
+		   CCastUtils::FBinaryCoercibleCastedConst(pexpr);
+}
 // checks to see if the expression is a scalar const TRUE
 BOOL
 CUtils::FScalarConstTrue(CExpression *pexpr)

@@ -71,7 +71,7 @@ You would run the following commands to configure Greenplum Database to enforce 
 
 gpadmin@gpmaster$ gpconfig -c advanced_password_check.minimum_length -v 10
 gpadmin@gpmaster$ gpconfig -c advanced_password_check.maximum_length -v 18
-gpadmin@gpmaster$ gpconfig -c advanced_password_check.restrict_number -v false
+gpadmin@gpmaster$ gpconfig -c advanced_password_check.restrict_numbers -v false
 gpadmin@gpmaster$ gpstop -u
 ```
 

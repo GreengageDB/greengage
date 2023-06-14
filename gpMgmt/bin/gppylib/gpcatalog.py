@@ -26,15 +26,12 @@ MASTER_ONLY_TABLES = [
     'gp_segment_configuration',
     'gp_configuration_history',
     'gp_segment_configuration',
-    'pg_description',
     'pg_partition',
     'pg_partition_rule',
-    'pg_shdescription',
     'pg_stat_last_operation',
     'pg_stat_last_shoperation',
     'pg_statistic',
     'pg_partition_encoding',
-    'pg_auth_time_constraint',
     ]
 
 # Hard coded tables that have different values on every segment

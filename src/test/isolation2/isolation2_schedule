@@ -318,10 +318,17 @@ test: export_distributed_snapshot
 # gp_interconnect_address_type='unicast'
 test: motion_socket
 
+# test invalid connection to ic proxy when
+# gp_interconnect_type='proxy'
+test: ic_proxy_socket
+
 # test alter owner of partition table in utility mode
 test: alter_partition_table_owner
 
 # test copy/insert in utility mode on partition/inheritance hierarchies
 test: copy_insert_utility_mode_hierarchies
+
+# test for free remapper's memory correctly in FATAL
+test: free_remapper_fatal
 
 test: spilling_hashagg

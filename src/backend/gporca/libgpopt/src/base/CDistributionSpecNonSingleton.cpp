@@ -15,6 +15,7 @@
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/CDistributionSpecStrictRandom.h"
 #include "gpopt/base/CUtils.h"
+#include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalMotionRandom.h"
 #include "naucrates/traceflags/traceflags.h"
 
@@ -30,18 +31,7 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CDistributionSpecNonSingleton::CDistributionSpecNonSingleton()
-	: m_fAllowReplicated(true),
-	  m_fAllowEnforced(true),
-	  m_fProhibitReplicated(false)
-{
-}
-
-
-CDistributionSpecNonSingleton::CDistributionSpecNonSingleton(
-	BOOL fProhibitReplicated)
-	: m_fAllowReplicated(true),
-	  m_fAllowEnforced(true),
-	  m_fProhibitReplicated(fProhibitReplicated)
+	: m_fAllowReplicated(true), m_fAllowEnforced(true)
 {
 }
 
@@ -56,9 +46,7 @@ CDistributionSpecNonSingleton::CDistributionSpecNonSingleton(
 //---------------------------------------------------------------------------
 CDistributionSpecNonSingleton::CDistributionSpecNonSingleton(
 	BOOL fAllowReplicated, BOOL fAllowEnforced)
-	: m_fAllowReplicated(fAllowReplicated),
-	  m_fAllowEnforced(fAllowEnforced),
-	  m_fProhibitReplicated(false)
+	: m_fAllowReplicated(fAllowReplicated), m_fAllowEnforced(fAllowEnforced)
 {
 }
 
@@ -92,7 +80,7 @@ CDistributionSpecNonSingleton::FSatisfies(const CDistributionSpec *	 // pds
 //---------------------------------------------------------------------------
 void
 CDistributionSpecNonSingleton::AppendEnforcers(CMemoryPool *mp,
-											   CExpressionHandle &,	 // exprhdl
+											   CExpressionHandle &exprhdl,
 											   CReqdPropPlan *
 #ifdef GPOS_DEBUG
 												   prpp
@@ -117,12 +105,32 @@ CDistributionSpecNonSingleton::AppendEnforcers(CMemoryPool *mp,
 		return;
 	}
 
-	// add a random distribution enforcer
-	CDistributionSpecStrictRandom *pdsrandom =
-		GPOS_NEW(mp) CDistributionSpecStrictRandom();
+	CDistributionSpec *expr_dist_spec =
+		CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Pds();
+	CDistributionSpecRandom *random_dist_spec = NULL;
+
+	// random motions on top of universal specs are converted to hash filters,
+	// and shouldn't be strict random distributions or we may not properly distribute tuples.
+	// See comment in CDistributionSpecRandom::AppendEnforcers for details
+	if (CUtils::FDuplicateHazardDistributionSpec(expr_dist_spec))
+	{
+		// the motion node is enforced on top of a child
+		// deriving universal spec or replicated distribution, this motion node
+		// will be translated to a result node with hash filter to remove
+		// duplicates
+		random_dist_spec = GPOS_NEW(mp) CDistributionSpecRandom();
+	}
+	else
+	{
+		// the motion added in this enforcer will translate to
+		// a redistribute motion
+		random_dist_spec = GPOS_NEW(mp) CDistributionSpecStrictRandom();
+	}
+
+
 	pexpr->AddRef();
 	CExpression *pexprMotion = GPOS_NEW(mp) CExpression(
-		mp, GPOS_NEW(mp) CPhysicalMotionRandom(mp, pdsrandom), pexpr);
+		mp, GPOS_NEW(mp) CPhysicalMotionRandom(mp, random_dist_spec), pexpr);
 	pdrgpexpr->Append(pexprMotion);
 }
 
