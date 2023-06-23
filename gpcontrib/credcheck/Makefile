@@ -2,6 +2,11 @@ EXTENSION = credcheck
 EXTVERSION = $(shell grep default_version $(EXTENSION).control | \
 	       sed -e "s/default_version[[:space:]]*=[[:space:]]*'\([^']*\)'/\1/")
 
+# Uncomment the following two lines to enable cracklib support, adapt the path
+# to the cracklib dictionary following your distribution
+#PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
+#SHLIB_LINK = -lcrack
+
 MODULE_big = credcheck
 OBJS = credcheck.o $(WIN32RES)
 PGFILEDESC = "credcheck - postgresql credential checker"
@@ -27,3 +32,4 @@ endif
 
 REGRESS += 07_valid_until
 
+ifdef $PG_CPPFLAGS

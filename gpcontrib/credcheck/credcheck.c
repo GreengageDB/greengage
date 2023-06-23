@@ -14,6 +14,10 @@
 #include <limits.h>
 #include <unistd.h>
 
+#ifdef USE_CRACKLIB
+#include <crack.h>
+#endif
+
 #include "postgres.h"
 #include "funcapi.h"
 #include "miscadmin.h"
@@ -1147,11 +1151,23 @@ check_password(const char *username, const char *password,
 	switch (password_type)
 	{
 		case PASSWORD_TYPE_PLAINTEXT:
+		{
+#ifdef USE_CRACKLIB
+			const char *reason;
+#endif
 			statement_has_password = true;
 			username_check(username, password);
 			password_check(username, password);
+#ifdef USE_CRACKLIB
+			/* call cracklib to check password */
+			if ((reason = FascistCheck(password, CRACKLIB_DICTPATH)))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("password is easily cracked"),
+						 errdetail_log("cracklib diagnostic: %s", reason)));
+#endif
 			break;
-
+		}
 		default:
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),

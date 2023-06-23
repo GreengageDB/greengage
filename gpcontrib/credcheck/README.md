@@ -19,6 +19,7 @@ The `credcheck` PostgreSQL extension provides few general credential checks, whi
 
 - allow a specific set of credentials
 - reject a certain type of credentials
+- deny password that can be easily cracked
 - enforce use of an expiration date with a minimum of day for a password
 - define a password reuse policy
 - define the number of authentication failure allowed before a user is banned
@@ -27,17 +28,36 @@ This extension provides all the checks as configurable parameters. The default c
 
 ### [Installation](#installation)
 
-- Minimum version of PostgreSQL required is 10.0.
-- For the Password Reuse Policy feature the minimum version required is 12.0.
-- Make sure the `pg_config` binary is set in the current `PATH`.
-- Clone or download this repository into a directory, and run the `make install` command.
-- If there are any permission issues, then use the `sudo make install` command.
-- Perform the regression tests by running the `make installcheck` command.
-- Test this extension in one session by using `LOAD 'credcheck';` PostgreSQL command.
-- To enable this extension for all the sessions, then execute `CREATE EXTENSION credcheck;` command.
-- And append `credcheck` to `shared_preload_libraries` configuration parameter which is present in `postgresql.conf`.
-- Then restart the PostgreSQL database to reflect the changes.
+To install the credcheck extension you need a PostgreSQL version upper than 10
+but if you want to use the Password Reuse Policy feature the minimum version
+required is 12.
 
+This extension must be compiled with pgxs, so the `pg_config` tool must be
+available from your PATH environment variable.
+
+If you want to use the "deny password that can be easily cracked" feature you
+need to edit the `Makefile` to enable the following lines:
+
+	#PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
+	#SHLIB_LINK = -lcrack
+
+Following your distribution the cracklib dictionary might not be at the same place.
+For RedHat, CentOs and other rpm like distribution you should use
+
+	PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
+
+and for Debian, Ubuntu and other debian like distribution it should be:
+
+	PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/share/dict/cracklib-small"'
+
+Depending on your installation, you may need to install some devel packages.
+
+Once it is done, do "make", and then "sudo make install".
+
+Append `credcheck` to `shared_preload_libraries` configuration parameter in your
+`postgresql.conf` file then restart the PostgreSQL database to apply the changes.
+
+The regression tests can be run by using the `make installcheck` command.
 
 ### [Checks](#checks)
 
@@ -217,6 +237,13 @@ ERROR:  require a VALID UNTIL option with a date older than 30 days
 
 postgres=# ALTER USER abcd$ VALID UNTIL '2025-12-21';
 ERROR:  require a VALID UNTIL option with a date not beyond 180 days
+```
+
+If you have enabled the use of cracklib to check the easiness of a password
+you could have this kind of messages:
+```
+postgres=# CREATE USER my_easy_password with password 'pass123';
+ERROR:  password is easily cracked
 ```
 
 ### [Password reuse policy](#password-reuse-policy)
