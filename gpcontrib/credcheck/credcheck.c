@@ -35,6 +35,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
+#include "postmaster/postmaster.h"
 #include "tcop/utility.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -2027,6 +2028,7 @@ credcheck_max_auth_failure(Port *port, int status)
 				else
 					ereport(FATAL, (errmsg("rejecting connection, user '%s' has been banned", port->user_name)));
 			}
+
 			/* connection is ok and we have not reach the failure limit, let's reset the counter */
 			if (status == STATUS_OK  && fail_num < fail_max)
 				remove_auth_failure(port->user_name, userOid);
@@ -2077,10 +2079,10 @@ save_auth_failure(const char *username, Oid userid)
 {
 	pgafHashKey key;
 	pgafEntry  *entry;
-	float fail_cnt = 0.5; /* we go there twice with an auth error this is a reason of this value, real is increase by one */
-#if PG_VERSION_NUM >= 160000
-	fail_cnt = 1;
-#endif
+	float fail_cnt = 0.5;
+
+	if (!EnableSSL)
+		fail_cnt = 1;
 
 	Assert(username != NULL);
 
@@ -2101,11 +2103,10 @@ save_auth_failure(const char *username, Oid userid)
 	entry = (pgafEntry *) hash_search(pgaf_hash, &key, HASH_FIND, NULL);
 	if (entry)
 	{
-#if PG_VERSION_NUM >= 160000
-		fail_cnt = entry->failure_count + 1;
-#else
-		fail_cnt = entry->failure_count + 0.5;
-#endif
+		if (EnableSSL)
+			fail_cnt = entry->failure_count + 0.5;
+		else
+			fail_cnt = entry->failure_count + 1;
 
 		elog(DEBUG1, "Remove entry in auth failure hash table for user %s", username);
 		hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
