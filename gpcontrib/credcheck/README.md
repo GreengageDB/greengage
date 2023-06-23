@@ -41,16 +41,21 @@ need to edit the `Makefile` to enable the following lines:
 	#PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
 	#SHLIB_LINK = -lcrack
 
-Following your distribution the cracklib dictionary might not be at the same place.
-For RedHat, CentOs and other rpm like distribution you should use
+To creat the dictionary execute the following commands:
 
-	PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
-
-and for Debian, Ubuntu and other debian like distribution it should be:
-
-	PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/share/dict/cracklib-small"'
+	cracklib-format /usr/share/dict/* | sudo cracklib-packer /usr/lib/cracklib_dict
 
 Depending on your installation, you may need to install some devel packages.
+
+	sudo yum -y install cracklib cracklib-devel cracklib-dicts words
+or
+	sudo apt install libpam-cracklib libcrack2-dev
+
+You will also have to build the dictionary to be used, followiing your distribution:
+
+	mkdict /usr/share/dict/* | sudo packer /usr/lib/cracklib_dict
+or
+	cracklib-format /usr/share/dict/* | sudo cracklib-packer /usr/lib/cracklib_dic
 
 Once it is done, do "make", and then "sudo make install".
 

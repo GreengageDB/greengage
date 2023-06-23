@@ -31,5 +31,3 @@ else
 endif
 
 REGRESS += 07_valid_until
-
-ifdef $PG_CPPFLAGS

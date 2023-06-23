@@ -2157,7 +2157,7 @@ remove_auth_failure(const char *username, Oid userid)
 	/* Lookup the hash table entry with exclusive lock. */
 	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
 
-	elog(WARNING, "Remove entry in auth failure hash table for user %s", username);
+	elog(DEBUG1, "Remove entry in auth failure hash table for user %s", username);
 	hash_search(pgaf_hash, &key, HASH_REMOVE, NULL);
 
 	LWLockRelease(pgaf->lock);
