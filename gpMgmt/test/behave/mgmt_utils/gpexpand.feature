@@ -752,3 +752,33 @@ Feature: expand the cluster by adding more segments
         And waiting "1" seconds
         And the user runs psql with "-c 'drop table ttt;'" against database "gptest"
         Then verify that the cluster has 1 new segments
+
+    @gpexpand_no_mirrors
+    @gpexpand_segment
+    Scenario: gpexpand should skip already expanded/broken tables when redistributing
+        Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with no mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And the user runs psql with "-c 'CREATE TABLE test_good_1(a int)'" against database "gptest"
+        And the user runs psql with "-c 'CREATE TABLE test_already_expanded(a int)'" against database "gptest"
+        And the user runs psql with "-c 'CREATE TABLE test_broken(a int)'" against database "gptest"
+        And the user runs psql with "-c 'CREATE TABLE test_good_2(a int)'" against database "gptest"
+        And the user runs sql "DROP TABLE test_broken" in "gptest" on primary segment with content 0
+        And there are no gpexpand_inputfiles
+        And the cluster is setup for an expansion on hosts "cdw,sdw1"
+        When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
+        Then the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
+        Then verify that the cluster has 2 new segments
+        And the user runs psql with "-c 'ALTER TABLE test_already_expanded expand table'" against database "gptest"
+        When the user runs gpexpand to redistribute
+        Then gpexpand should print "[WARNING]:-Encountered unexpected issue when expanding table gptest.public.test_broken, skipping" escaped to stdout
+        And gpexpand should print "[INFO]:-Table gptest.public.test_already_expanded seems to be already expanded, marking as done" escaped to stdout
+        And table "test_good_1" should be marked as expanded
+        And table "test_good_2" should be marked as expanded
+        And table "test_already_expanded" should be marked as expanded
+        And table "test_broken" should not be marked as expanded
