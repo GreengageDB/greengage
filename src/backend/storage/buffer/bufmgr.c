@@ -361,6 +361,7 @@ ReadBufferWithoutRelcache(RelFileNode rnode, ForkNumber forkNum,
 	bool		hit;
 
 	SMgrRelation smgr = smgropen(rnode, InvalidBackendId);
+	smgr->smgr_which = 0;
 
 	Assert(InRecovery);
 
@@ -2121,6 +2122,7 @@ FlushBuffer(volatile BufferDesc *buf, SMgrRelation reln)
 
 		reln = smgropen(buf->tag.rnode,
 						istemp ? TempRelBackendId : InvalidBackendId);
+		reln->smgr_which = 0;
 	}
 
 	TRACE_POSTGRESQL_BUFFER_FLUSH_START(buf->tag.forkNum,

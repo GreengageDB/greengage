@@ -63,12 +63,14 @@ typedef struct SMgrRelationData
 
 	/* additional public fields may someday exist here */
 
+	/* Obsolete storage manager selector, should not be used for any particular purpose */
+	/* In GGDB, this field is used to store the table type: Heap or AO . */
+	int			smgr_which;
+
 	/*
 	 * Fields below here are intended to be private to smgr.c and its
 	 * submodules.  Do not touch them from elsewhere.
 	 */
-	/* Obsolete storage manager selector, should not be used for any particular purpose */
-	int			smgr_which;
 
 	/* for md.c; NULL for forks that are not open */
 	struct _MdfdVec *md_fd[MAX_FORKNUM + 1];

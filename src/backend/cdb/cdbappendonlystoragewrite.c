@@ -266,6 +266,7 @@ AppendOnlyStorageWrite_TransactionCreateFile(AppendOnlyStorageWrite *storageWrit
 	SMgrRelation reln;
 
 	reln = smgropen(relFileNode->node, relFileNode->backend);
+	reln->smgr_which = RELSTORAGE_AOROWS;
 
 	/* The file might already exist. that's OK */
 	// WALREP_FIXME: Pass isRedo == true, so that you don't get an error if it

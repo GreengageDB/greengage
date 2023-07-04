@@ -342,6 +342,9 @@ mdcreate(SMgrRelation reln, ForkNumber forkNum, bool isRedo)
 	reln->md_fd[forkNum]->mdfd_vfd = fd;
 	reln->md_fd[forkNum]->mdfd_segno = 0;
 	reln->md_fd[forkNum]->mdfd_chain = NULL;
+	
+	if (!SmgrIsTemp(reln) && reln->smgr_which == RELSTORAGE_HEAP)
+		register_dirty_segment(reln, forkNum, reln->md_fd[forkNum]);
 }
 
 /*
@@ -1326,6 +1329,7 @@ mdsync(void)
 					 * cases we couldn't safely do that.)
 					 */
 					reln = smgropen(entry->rnode, InvalidBackendId);
+					reln->smgr_which = 0;
 
 					if (entry->is_ao_segnos)
 					{
@@ -1914,6 +1918,7 @@ DropRelationFiles(RelFileNodePendingDelete *delrels, int ndelrels, bool isRedo)
 		 * given relfile since we don't tie temp relations to their backends. */
 		SMgrRelation srel = smgropen(delrels[i].node,
 			delrels[i].isTempRelation ? TempRelBackendId : InvalidBackendId);
+		srel->smgr_which = delrels[i].relstorage;
 
 		if (isRedo)
 		{
