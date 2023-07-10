@@ -2274,3 +2274,45 @@ WITH e AS (
 
 DROP TABLE d;
 DROP TABLE r;
+-- Test planner not pushing down quals to non-SELECT queries inside CTE. There
+-- can be a DML operation, and it's incorrect to push down upper quals to it.
+--start_ignore
+drop table if exists with_dml;
+NOTICE:  table "with_dml" does not exist, skipping
+--end_ignore
+create table with_dml (i int, j int) distributed by (i);
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice2; segments: 3)
+         ->  Aggregate
+               ->  Subquery Scan on cte
+                     Filter: (cte.i > 2)
+                     ->  Insert on with_dml
+                           ->  Redistribute Motion 1:3  (slice1; segments: 1)
+                                 Hash Key: i.i
+                                 ->  Function Scan on generate_series i
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+ count 
+-------
+     3
+(1 row)
+
+select count(*) c from with_dml;
+ c 
+---
+ 5
+(1 row)
+
+drop table with_dml;
