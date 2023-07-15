@@ -41,17 +41,13 @@ need to edit the `Makefile` to enable the following lines:
 	#PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
 	#SHLIB_LINK = -lcrack
 
-To creat the dictionary execute the following commands:
-
-	cracklib-format /usr/share/dict/* | sudo cracklib-packer /usr/lib/cracklib_dict
-
 Depending on your installation, you may need to install some devel packages.
 
 	sudo yum -y install cracklib cracklib-devel cracklib-dicts words
 or
 	sudo apt install libpam-cracklib libcrack2-dev
 
-You will also have to build the dictionary to be used, followiing your distribution:
+You will also have to build the dictionary to be used, following your distribution:
 
 	mkdict /usr/share/dict/* | sudo packer /usr/lib/cracklib_dict
 or
