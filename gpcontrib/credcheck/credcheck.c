@@ -7,6 +7,7 @@
  * For license terms, see the LICENSE file.
  *
  * Copyright (C) 2021-2023: MigOps Inc
+ * Copyright (C) 2023: Gilles Darold
  *
  *-------------------------------------------------------------------------
  */
@@ -148,6 +149,7 @@ static int pgph_max = 65535;
 static int pgaf_max = 1024;
 static int fail_max = 0;
 static bool reset_superuser = false;
+static bool encrypted_password_allowed = false;
 
 /* In memory storage of auth failure history */
 typedef struct pgafHashKey
@@ -1169,9 +1171,10 @@ check_password(const char *username, const char *password,
 			break;
 		}
 		default:
-			ereport(ERROR,
-				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-					errmsg(gettext_noop("password type is not a plain text"))));
+			if (!encrypted_password_allowed)
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+						errmsg(gettext_noop("password type is not a plain text"))));
 			break;
 	}
 }
@@ -1211,6 +1214,12 @@ _PG_init(void)
 				gettext_noop("restore superuser acces when he have been banned."),
 				NULL, &reset_superuser, false, PGC_SIGHUP, 0,
 				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.encrypted_password_allowed",
+				gettext_noop("allow encrypted password to be used or throw an error"),
+				NULL, &encrypted_password_allowed, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
 
 #if PG_VERSION_NUM < 150000
         /*
