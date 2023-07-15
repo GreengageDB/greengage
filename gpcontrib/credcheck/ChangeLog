@@ -1,3 +1,21 @@
+2023-07-15 - Version 2.1.0
+
+This release adds a two new features and fix issues reported by users
+since last release.
+
+  - Add custom configuration variable credcheck.encrypted_password
+    allowed to allow the use of encrypted password in CREATE or
+    ALTER ROLE statement. Default is to not allow encrypted password
+    and to fire an error. Thanks to ragaoua for the feature request.
+  - Add the possibility to check the easiness of a password by the use of
+    the cracklib tool. This work is simply a integration of a copy/paste
+    from the passwordcheck extension available in the contrib/ directory.
+    Credits to the author Laurenz Albe.
+  - Fix failure count issue when ssl is disabled. Thanks to yinzhishu for
+    the report.
+
+Upgrade require a PostgreSQL restart to reload the credcheck library.
+
 2023-06-10 - Version 2.0.0
 
 This release adds a major feature called Authentication Failure Ban and
