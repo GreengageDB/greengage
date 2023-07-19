@@ -14639,4 +14639,288 @@ where id in(select id from cte);
 ----
 (0 rows)
 
+-- check that ORCA plan, of the next query (the valid plan is generated after https://github.com/greenplum-db/gpdb/pull/14896 (1)),
+-- doesn't fallback to postgres like it was (due to https://github.com/arenadata/gpdb/pull/302 (2) which is applied above (1)).
+-- Previously there was a false-positive decision that plan contains an unpaired CTE consumer under the hazzard CPhysicalMotionRandom
+-- (from the physical plan below), but the motion doesn't contain any CTE consumer.
+-- +--CPhysicalMotionGather(master)   rows:100   width:305  rebinds:1   cost:1724.375078   origin: [Grp:11, GrpExpr:3]
+--    +--CPhysicalSequence   rows:100   width:305  rebinds:1   cost:1724.275576   origin: [Grp:11, GrpExpr:2]
+--       |--CPhysicalCTEProducer (0), Columns: ["b" (1)]   rows:9   width:4  rebinds:1   cost:431.000299   origin: [Grp:21, GrpExpr:1]
+--       |  +--CPhysicalStreamAgg( Global ) Grp Cols: ["b" (1)], Minimal Grp Cols:["b" (1)], Generates Duplicates :[ 0 ]    rows:9   width:4  rebinds:1   cost:431.000296   origin: [Grp:20, GrpExpr:4]
+--       |     |--CPhysicalSort  ( (0.97.1.0), "b" (1), NULLsLast )    rows:10   width:42  rebinds:1   cost:431.000275   origin: [Grp:18, GrpExpr:4]
+--       |     |  +--CPhysicalMotionHashDistribute HASHED: [ CScalarIdent "b" (1), nulls colocated ], opfamilies: (0.1977.1.0),   rows:10   width:42  rebinds:1   cost:431.000144   origin: [Grp:18, GrpExpr:2]
+--       |     |     +--CPhysicalTableScan "distr" ("distr")   rows:10   width:42  rebinds:1   cost:431.000077   origin: [Grp:18, GrpExpr:1]
+--       |     +--CScalarProjectList   origin: [Grp:19, GrpExpr:0]
+--       +--CPhysicalMotionRandom   rows:100   width:305  rebinds:1   cost:1293.266377   origin: [Grp:10, GrpExpr:21]
+--          +--CPhysicalInnerHashJoin   rows:100   width:305  rebinds:1   cost:1293.197046   origin: [Grp:10, GrpExpr:19]
+--             |--CPhysicalTableScan "repl" ("repl")   rows:100   width:297  rebinds:1   cost:431.016335   origin: [Grp:0, GrpExpr:1]
+--             |--CPhysicalMotionBroadcast    rows:9   width:8  rebinds:1   cost:862.002050   origin: [Grp:12, GrpExpr:6]
+--             |  +--CPhysicalInnerHashJoin   rows:9   width:8  rebinds:1   cost:862.001334   origin: [Grp:12, GrpExpr:3]
+--             |     |--CPhysicalCTEConsumer (0), Columns: ["b" (20)]   rows:9   width:4  rebinds:1   cost:431.000032   origin: [Grp:1, GrpExpr:1]
+--             |     |--CPhysicalCTEConsumer (0), Columns: ["b" (30)]   rows:9   width:4  rebinds:1   cost:431.000032   origin: [Grp:2, GrpExpr:1]
+--             |     +--CScalarCmp (=)   origin: [Grp:8, GrpExpr:0]
+--             |        |--CScalarIdent "b" (20)   origin: [Grp:4, GrpExpr:0]
+--             |        +--CScalarIdent "b" (30)   origin: [Grp:6, GrpExpr:0]
+--             +--CScalarCmp (=)   origin: [Grp:5, GrpExpr:0]
+--                |--CScalarIdent "b" (11)   origin: [Grp:3, GrpExpr:0]
+--                +--CScalarIdent "b" (20)   origin: [Grp:4, GrpExpr:0]
+-- start_matchsubs
+-- m/Executor [mM]emory: .*/
+-- s/Executor [mM]emory: .*/Executor Memory: /
+-- m/Extra Text:.*/
+-- s/Extra Text:.*/Extra Text:/
+-- m/Memory used:\s+[0-9]+kB.*/
+-- s/Memory used:\s+[0-9]+kB.*/Memory used:/
+-- m/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/
+-- s/\(actual time=\d+\.\d+..\d+\.\d+ rows=\d+ loops=\d+\)/(actual time=##.###..##.### rows=# loops=#)/
+-- m/Execution time: \d+\.\d+ ms/
+-- s/Execution time: \d+\.\d+ ms/Execution time: ##.### ms/
+-- m/Planning time: \d+\.\d+ ms/
+-- s/Planning time: \d+\.\d+ ms/Planning time: ##.### ms/
+-- end_matchsubs
+DROP TABLE r;
+CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
+CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
+INSERT INTO d SELECT 1, generate_series(1,10), 1;
+INSERT INTO r SELECT 1, 2, generate_series(1,100);
+EXPLAIN (ANALYZE, COSTS off, VERBOSE off)
+WITH e AS (
+    SELECT DISTINCT b FROM d
+) SELECT * FROM r JOIN e USING (b) JOIN e f USING (b);
+                                                                                                            QUERY PLAN                                                                                                             
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice3; segments: 3) (actual time=4.824..7.168 rows=100 loops=1)
+   ->  Hash Join (actual time=3.790..6.046 rows=100 loops=1)
+         Hash Cond: (r.b = d.b)
+         Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 5 of 262144 buckets.Hash chain length 1.0 avg, 1 max, using 5 of 131072 buckets.Hash chain length 1.2 avg, 2 max, using 4 of 32 buckets; total 0 expansions.
+ 
+         ->  Seq Scan on r (actual time=0.027..0.112 rows=100 loops=1)
+         ->  Hash (actual time=3.178..3.178 rows=5 loops=1)
+               ->  Hash Join (actual time=2.169..3.166 rows=5 loops=1)
+                     Hash Cond: (d.b = d_1.b)
+                     Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 5 of 131072 buckets.Hash chain length 1.2 avg, 2 max, using 4 of 32 buckets; total 0 expansions.
+ 
+                     ->  HashAggregate (actual time=0.043..0.056 rows=5 loops=1)
+                           Group Key: d.b
+                           Extra Text: (seg0)   Hash chain length 1.2 avg, 2 max, using 4 of 32 buckets; total 0 expansions.
+ 
+                           ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual time=0.009..0.013 rows=5 loops=1)
+                                 Hash Key: d.b
+                                 ->  HashAggregate (actual time=0.079..0.105 rows=10 loops=1)
+                                       Group Key: d.b
+                                       Extra Text: (seg1)   Hash chain length 1.1 avg, 2 max, using 9 of 32 buckets; total 0 expansions.
+ 
+                                       ->  Seq Scan on d (actual time=0.020..0.028 rows=10 loops=1)
+                     ->  Hash (actual time=1.760..1.760 rows=5 loops=1)
+                           ->  HashAggregate (actual time=1.722..1.749 rows=5 loops=1)
+                                 Group Key: d_1.b
+                                 Extra Text: (seg0)   Hash chain length 1.2 avg, 2 max, using 4 of 32 buckets; total 0 expansions.
+ 
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual time=1.662..1.666 rows=5 loops=1)
+                                       Hash Key: d_1.b
+                                       ->  HashAggregate (actual time=0.132..0.241 rows=10 loops=1)
+                                             Group Key: d_1.b
+                                             Extra Text: (seg1)   Hash chain length 1.1 avg, 2 max, using 9 of 32 buckets; total 0 expansions.
+ 
+                                             ->  Seq Scan on d d_1 (actual time=0.017..0.027 rows=10 loops=1)
+ Planning time: 4.014 ms
+   (slice0)    Executor memory: 279K bytes.
+   (slice1)    Executor memory: 78K bytes avg x 3 workers, 116K bytes max (seg1).
+   (slice2)    Executor memory: 78K bytes avg x 3 workers, 116K bytes max (seg1).
+   (slice3)    Executor memory: 3336K bytes avg x 3 workers, 3336K bytes max (seg0).  Work_mem: 1K bytes max.
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 10.493 ms
+(42 rows)
+
+DROP TABLE d, r;
+-- check the query fallback to postgres optimizer while ORCA generates an invalid plan
+-- Here is a physical plan the with hazard motion (`CPhysicalMotionRandom   rows:20`)
+-- Physical plan:
+-- +--CPhysicalMotionGather(master)   rows:20   width:305  rebinds:1   cost:3017.163596   origin: [Grp:12, GrpExpr:3]
+--    +--CPhysicalSequence   rows:20   width:305  rebinds:1   cost:3017.143696   origin: [Grp:12, GrpExpr:2]
+--       |--CPhysicalCTEProducer (0), Columns: ["b" (1)]   rows:9   width:4  rebinds:1   cost:431.000299   origin: [Grp:46, GrpExpr:1]
+--       |  +--CPhysicalStreamAgg( Global ) Grp Cols: ["b" (1)], Minimal Grp Cols:["b" (1)], Generates Duplicates :[ 0 ]    rows:9   width:4  rebinds:1   cost:431.000296   origin: [Grp:45, GrpExpr:4]
+--       |     |--CPhysicalSort  ( (0.97.1.0), "b" (1), NULLsLast )    rows:10   width:42  rebinds:1   cost:431.000275   origin: [Grp:44, GrpExpr:4]
+--       |     |  +--CPhysicalMotionHashDistribute HASHED: [ CScalarIdent "b" (1), nulls colocated ], opfamilies: (0.1977.1.0),   rows:10   width:42  rebinds:1   cost:431.000144   origin: [Grp:44, GrpExpr:2]
+--       |     |     +--CPhysicalTableScan "d" ("d")   rows:10   width:42  rebinds:1   cost:431.000077   origin: [Grp:44, GrpExpr:1]
+--       |     +--CScalarProjectList   origin: [Grp:30, GrpExpr:0]
+--       +--CPhysicalMotionRandom   rows:20   width:305  rebinds:1   cost:2586.141617   origin: [Grp:11, GrpExpr:3]
+--          +--CPhysicalSequence   rows:20   width:305  rebinds:1   cost:2586.127750   origin: [Grp:11, GrpExpr:2]
+--             |--CPhysicalCTEProducer (1), Columns: ["b" (11)]   rows:2   width:4  rebinds:1   cost:1293.002962   origin: [Grp:35, GrpExpr:1]
+--             |  +--CPhysicalMotionRandom   rows:2   width:4  rebinds:1   cost:1293.002961   origin: [Grp:34, GrpExpr:4]
+--             |     +--CPhysicalLimit <empty> global   rows:2   width:4  rebinds:1   cost:1293.002941   origin: [Grp:34, GrpExpr:2]
+--             |        |--CPhysicalMotionGather(master)   rows:2   width:4  rebinds:1   cost:1293.002933   origin: [Grp:43, GrpExpr:2]
+--             |        |  +--CPhysicalLimit <empty> local   rows:2   width:4  rebinds:1   cost:1293.002903   origin: [Grp:43, GrpExpr:1]
+--             |        |     |--CPhysicalStreamAgg( Global ) Grp Cols: ["b" (11)], Minimal Grp Cols:["b" (11)], Generates Duplicates :[ 0 ]    rows:9   width:4  rebinds:1   cost:1293.002900   origin: [Grp:31, GrpExpr:4]
+--             |        |     |  |--CPhysicalSort  ( (0.97.1.0), "b" (11), NULLsLast )    rows:10   width:50  rebinds:1   cost:1293.002879   origin: [Grp:29, GrpExpr:23]
+--             |        |     |  |  +--CPhysicalInnerHashJoin   rows:10   width:50  rebinds:1   cost:1293.002748   origin: [Grp:29, GrpExpr:19]
+--             |        |     |  |     |--CPhysicalMotionHashDistribute HASHED: [ CScalarIdent "b" (11), nulls colocated ], opfamilies: (0.1977.1.0),   rows:10   width:42  rebinds:1   cost:431.000144   origin: [Grp:19, GrpExpr:4]
+--             |        |     |  |     |  +--CPhysicalTableScan "d" ("d")   rows:10   width:42  rebinds:1   cost:431.000077   origin: [Grp:19, GrpExpr:1]
+--             |        |     |  |     |--CPhysicalInnerHashJoin   rows:9   width:8  rebinds:1   cost:862.001334   origin: [Grp:36, GrpExpr:3]
+--             |        |     |  |     |  |--CPhysicalCTEConsumer (0), Columns: ["b" (20)]   rows:9   width:4  rebinds:1   cost:431.000032   origin: [Grp:20, GrpExpr:1]
+--             |        |     |  |     |  |--CPhysicalCTEConsumer (0), Columns: ["b" (30)]   rows:9   width:4  rebinds:1   cost:431.000032   origin: [Grp:21, GrpExpr:1]
+--             |        |     |  |     |  +--CScalarCmp (=)   origin: [Grp:27, GrpExpr:0]
+--             |        |     |  |     |     |--CScalarIdent "b" (20)   origin: [Grp:23, GrpExpr:0]
+--             |        |     |  |     |     +--CScalarIdent "b" (30)   origin: [Grp:25, GrpExpr:0]
+--             |        |     |  |     +--CScalarCmp (=)   origin: [Grp:24, GrpExpr:0]
+--             |        |     |  |        |--CScalarIdent "b" (11)   origin: [Grp:22, GrpExpr:0]
+--             |        |     |  |        +--CScalarIdent "b" (20)   origin: [Grp:23, GrpExpr:0]
+--             |        |     |  +--CScalarProjectList   origin: [Grp:30, GrpExpr:0]
+--             |        |     |--CScalarConst (0)   origin: [Grp:32, GrpExpr:0]
+--             |        |     +--CScalarConst (2)   origin: [Grp:33, GrpExpr:0]
+--             |        |--CScalarConst (0)   origin: [Grp:32, GrpExpr:0]
+--             |        +--CScalarConst (2)   origin: [Grp:33, GrpExpr:0]
+--             +--CPhysicalInnerHashJoin   rows:20   width:305  rebinds:1   cost:1293.119448   origin: [Grp:10, GrpExpr:19]
+--                |--CPhysicalTableScan "r" ("r")   rows:100   width:297  rebinds:1   cost:431.016335   origin: [Grp:0, GrpExpr:1]
+--                |--CPhysicalMotionBroadcast    rows:2   width:8  rebinds:1   cost:862.000739   origin: [Grp:13, GrpExpr:6]
+--                |  +--CPhysicalInnerHashJoin   rows:2   width:8  rebinds:1   cost:862.000596   origin: [Grp:13, GrpExpr:3]
+--                |     |--CPhysicalMotionHashDistribute HASHED: [ CScalarIdent "b" (50), nulls colocated ], opfamilies: (0.1977.1.0),   rows:2   width:4  rebinds:1   cost:431.000016   origin: [Grp:1, GrpExpr:5]
+--                |     |  +--CPhysicalCTEConsumer (1), Columns: ["b" (50)]   rows:2   width:4  rebinds:1   cost:431.000006   origin: [Grp:1, GrpExpr:1]
+--                |     |--CPhysicalMotionHashDistribute HASHED: [ CScalarIdent "b" (80), nulls colocated ], opfamilies: (0.1977.1.0),   rows:2   width:4  rebinds:1   cost:431.000016   origin: [Grp:2, GrpExpr:5]
+--                |     |  +--CPhysicalCTEConsumer (1), Columns: ["b" (80)]   rows:2   width:4  rebinds:1   cost:431.000006   origin: [Grp:2, GrpExpr:1]
+--                |     +--CScalarCmp (=)   origin: [Grp:8, GrpExpr:0]
+--                |        |--CScalarIdent "b" (50)   origin: [Grp:4, GrpExpr:0]
+--                |        +--CScalarIdent "b" (80)   origin: [Grp:6, GrpExpr:0]
+--                +--CScalarCmp (=)   origin: [Grp:5, GrpExpr:0]
+--                   |--CScalarIdent "b" (41)   origin: [Grp:3, GrpExpr:0]
+--                   +--CScalarIdent "b" (50)   origin: [Grp:4, GrpExpr:0]
+-- The query plan after all transformations is listed below. The hazard CPhysicalMotionRandom was converted into Result node
+-- (which execution segments was cut down to 1) with child OneTimeFilter (gp_execution_segment() = 2) - as a result execution of such
+-- plan would produce an incorrect results: under the One-Time-Filter node the processing of data should be executed on all segments
+-- and the the data should be distributed across the cluster, but in fact there is a cut down, which would return only a part of data
+-- from one segment instead of full row-set from all segments. Besides the execution this query would hang (workers for slice1/2) on the
+-- function `shareinput_reader_waitready`. Thus the fallback is needed here.
+--                                                             QUERY PLAN                                                            
+-- ----------------------------------------------------------------------------------------------------------------------------------
+--  Gather Motion 3:1  (slice8; segments: 3)
+--    ->  Sequence
+--          ->  Shared Scan (share slice:id 8:0)
+--                ->  Materialize
+--                      ->  GroupAggregate
+--                            Group Key: d_1.b
+--                            ->  Sort
+--                                  Sort Key: d_1.b
+--                                  ->  Redistribute Motion 3:3  (slice7; segments: 3)
+--                                        Hash Key: d_1.b
+--                                        ->  Seq Scan on d d_1
+--          ->  Result
+--                One-Time Filter: (gp_execution_segment() = 2)
+--                ->  Sequence
+--                      ->  Shared Scan (share slice:id 8:1)
+--                            ->  Materialize
+--                                  ->  Redistribute Motion 1:3  (slice6)
+--                                        ->  Limit
+--                                              ->  Gather Motion 3:1  (slice5; segments: 3)
+--                                                    ->  Limit
+--                                                          ->  GroupAggregate
+--                                                                Group Key: d.b
+--                                                                ->  Sort
+--                                                                      Sort Key: d.b
+--                                                                      ->  Hash Join
+--                                                                            Hash Cond: (d.b = share0_ref3.b)
+--                                                                            ->  Redistribute Motion 3:3  (slice4; segments: 3)
+--                                                                                  Hash Key: d.b
+--                                                                                  ->  Seq Scan on d
+--                                                                            ->  Hash
+--                                                                                  ->  Hash Join
+--                                                                                        Hash Cond: (share0_ref3.b = share0_ref2.b)
+--                                                                                        ->  Shared Scan (share slice:id 5:0)
+--                                                                                        ->  Hash
+--                                                                                              ->  Shared Scan (share slice:id 5:0)
+--                      ->  Hash Join
+--                            Hash Cond: (r.b = share1_ref3.b)
+--                            ->  Seq Scan on r
+--                            ->  Hash
+--                                  ->  Broadcast Motion 3:3  (slice3; segments: 3)
+--                                        ->  Hash Join
+--                                              Hash Cond: (share1_ref3.b = share1_ref2.b)
+--                                              ->  Redistribute Motion 3:3  (slice1; segments: 3)
+--                                                    Hash Key: share1_ref3.b
+--                                                    ->  Shared Scan (share slice:id 1:1)
+--                                              ->  Hash
+--                                                    ->  Redistribute Motion 3:3  (slice2; segments: 3)
+--                                                          Hash Key: share1_ref2.b
+--                                                          ->  Shared Scan (share slice:id 2:1)
+--  Optimizer: Pivotal Optimizer (GPORCA)
+CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
+CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
+INSERT INTO d SELECT 1, generate_series(1,10), 1;
+INSERT INTO r SELECT 1, 2, generate_series(1,100);
+EXPLAIN (ANALYZE off, COSTS off, VERBOSE off)
+WITH e AS (
+    SELECT DISTINCT b FROM d
+), e1 as (
+    SELECT DISTINCT b FROM d  JOIN e USING (b) JOIN e f USING (b) LIMIT 2
+) SELECT * FROM r JOIN e1 USING (b) JOIN e1 f USING (b);
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
+ Hash Join
+   Hash Cond: (r.b = d.b)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on r
+   ->  Hash
+         ->  Hash Join
+               Hash Cond: (d.b = d_3.b)
+               ->  Limit
+                     ->  Gather Motion 3:1  (slice5; segments: 3)
+                           ->  Limit
+                                 ->  HashAggregate
+                                       Group Key: d.b
+                                       ->  Hash Join
+                                             Hash Cond: (d.b = d_2.b)
+                                             ->  Hash Join
+                                                   Hash Cond: (d.b = d_1.b)
+                                                   ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                                         Hash Key: d.b
+                                                         ->  Seq Scan on d
+                                                   ->  Hash
+                                                         ->  HashAggregate
+                                                               Group Key: d_1.b
+                                                               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                                                     Hash Key: d_1.b
+                                                                     ->  HashAggregate
+                                                                           Group Key: d_1.b
+                                                                           ->  Seq Scan on d d_1
+                                             ->  Hash
+                                                   ->  HashAggregate
+                                                         Group Key: d_2.b
+                                                         ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                                               Hash Key: d_2.b
+                                                               ->  HashAggregate
+                                                                     Group Key: d_2.b
+                                                                     ->  Seq Scan on d d_2
+               ->  Hash
+                     ->  Limit
+                           ->  Gather Motion 3:1  (slice9; segments: 3)
+                                 ->  Limit
+                                       ->  HashAggregate
+                                             Group Key: d_3.b
+                                             ->  Hash Join
+                                                   Hash Cond: (d_3.b = d_5.b)
+                                                   ->  Hash Join
+                                                         Hash Cond: (d_3.b = d_4.b)
+                                                         ->  Redistribute Motion 3:3  (slice6; segments: 3)
+                                                               Hash Key: d_3.b
+                                                               ->  Seq Scan on d d_3
+                                                         ->  Hash
+                                                               ->  HashAggregate
+                                                                     Group Key: d_4.b
+                                                                     ->  Redistribute Motion 3:3  (slice7; segments: 3)
+                                                                           Hash Key: d_4.b
+                                                                           ->  HashAggregate
+                                                                                 Group Key: d_4.b
+                                                                                 ->  Seq Scan on d d_4
+                                                   ->  Hash
+                                                         ->  HashAggregate
+                                                               Group Key: d_5.b
+                                                               ->  Redistribute Motion 3:3  (slice8; segments: 3)
+                                                                     Hash Key: d_5.b
+                                                                     ->  HashAggregate
+                                                                           Group Key: d_5.b
+                                                                           ->  Seq Scan on d d_5
+ Optimizer: Postgres query optimizer
+(65 rows)
+
+DROP TABLE d, r;
 reset optimizer_trace_fallback;
