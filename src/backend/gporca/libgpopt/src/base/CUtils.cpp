@@ -903,20 +903,25 @@ CUtils::FHasCTEAnchor(CExpression *pexpr)
 // return CTEConsumers' and a set of CTEProducers' CTE ids in the given subtree
 void
 CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
-									 ULongPtrArray *cteConsumers,
+									 UlongCteIdHashSet *cteConsumers,
 									 UlongCteIdHashSet *cteProducerSet)
 {
 	COperator *pop = pexpr->Pop();
 
 	if (COperator::EopPhysicalCTEConsumer == pexpr->Pop()->Eopid())
 	{
-		cteConsumers->Append(GPOS_NEW(mp) ULONG(
+		cteConsumers->Insert(GPOS_NEW(mp) ULONG(
 			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId()));
 	}
 	else if (COperator::EopPhysicalCTEProducer == pexpr->Pop()->Eopid())
 	{
 		cteProducerSet->Insert(GPOS_NEW(mp) ULONG(
 			CPhysicalCTEProducer::PopConvert(pop)->UlCTEId()));
+	}
+	else if (FPhysicalMotion(pexpr->Pop()))
+	{
+		// another slice met, exit from recursion
+		return;
 	}
 
 	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
@@ -932,28 +937,37 @@ CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
 }
 
 BOOL
-CUtils::hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
+CUtils::hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexprMotionChild)
 {
-	BOOL hasUnpairedConsumer = false;
-
-	ULongPtrArray *cteConsumers = GPOS_NEW(mp) ULongPtrArray(mp);
 	UlongCteIdHashSet *cteProducerSet = GPOS_NEW(mp) UlongCteIdHashSet(mp);
+	UlongCteIdHashSet *cteConsumerSet = GPOS_NEW(mp) UlongCteIdHashSet(mp);
 
-	CollectConsumersAndProducers(mp, pexpr, cteConsumers, cteProducerSet);
+	CollectConsumersAndProducers(mp, pexprMotionChild, cteConsumerSet,
+								 cteProducerSet);
 
-	// check if every consumer's producer is in ProducerSet
-	for (ULONG ul = 0; ul < cteConsumers->Size(); ul++)
+	// CTE consumers/producers are paired if sets of their ids (which was
+	// collected in the current hazzard motion bounds) are equal (or both empty)
+	BOOL res = false;
+	if (cteConsumerSet->Size() != cteProducerSet->Size())
 	{
-		if (!cteProducerSet->Contains((*cteConsumers)[ul]))
+		res = true;
+	}
+	else if (cteConsumerSet->Size() > 0)
+	{
+		UlongCteIdHashSetIter iter(cteConsumerSet);
+		while (iter.Advance())
 		{
-			hasUnpairedConsumer = true;
-			break;
+			if (!cteProducerSet->Contains(iter.Get()))
+			{
+				res = true;
+				break;
+			}
 		}
 	}
-	cteConsumers->Release();
+	cteConsumerSet->Release();
 	cteProducerSet->Release();
 
-	return hasUnpairedConsumer;
+	return res;
 }
 
 //---------------------------------------------------------------------------
