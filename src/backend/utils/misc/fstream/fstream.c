@@ -1011,7 +1011,7 @@ int fstream_write(fstream_t *fs,
 
 		if (last_delim == 0)
 		{
-			fs->ferror = "no complete data row found for writing or line is too long";
+			fs->ferror = "no complete data row found for writing";
 			return -1;
 		}
 				
