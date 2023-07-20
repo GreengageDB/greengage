@@ -315,6 +315,10 @@ explain_ExecutorEnd(QueryDesc *queryDesc)
 	{
 		double		msec;
 
+		/* Wait for completion of all qExec processes. */
+		if (queryDesc->estate->dispatcherState && queryDesc->estate->dispatcherState->primaryResults)
+			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
+
 		/*
 		 * Make sure stats accumulation is done.  (Note: it's okay if several
 		 * levels of hook all do this.)
