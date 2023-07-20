@@ -390,3 +390,18 @@ with recursive rcte(x,y) as
   where t.b = x
 )
 select * from rcte limit 10;
+
+-- ensure orca doesn't fail (on build with asserts) when one cte on the coordinator has the correct flow and another doesn't
+CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
+CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
+INSERT INTO d SELECT 1, generate_series(1,10), 1;
+INSERT INTO r SELECT 1, 2, generate_series(1,100);
+SET gp_cte_sharing TO on;
+EXPLAIN (ANALYZE off, COSTS off, VERBOSE off)
+WITH e AS (
+    SELECT DISTINCT b FROM d
+), h AS (
+    SELECT a FROM d JOIN e f USING (b) JOIN e USING (b)
+) SELECT * FROM r JOIN h USING (a) JOIN h i USING (a);
+DROP TABLE d;
+DROP TABLE r;

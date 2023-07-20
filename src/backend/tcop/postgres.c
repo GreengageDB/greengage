@@ -1148,6 +1148,10 @@ exec_mpp_query(const char *query_string,
 		ddesc = (QueryDispatchDesc *) deserializeNode(serializedQueryDispatchDesc,serializedQueryDispatchDesclen);
 		if (!ddesc || !IsA(ddesc, QueryDispatchDesc))
 			elog(ERROR, "MPPEXEC: received invalid QueryDispatchDesc with planned statement");
+		/*
+		 * Deserialize and apply security context from QD.
+		 */
+		SetUserIdAndSecContext(GetUserId(), ddesc->secContext);
 
 		/*
 		 * Deserialize and apply security context from QD.
@@ -4810,6 +4814,8 @@ PostgresMain(int argc, char *argv[],
 		 */
 		pqsignal(SIGCHLD, SIG_DFL);		/* system() requires this on some
 										 * platforms */
+
+		InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 #ifndef _WIN32
 #ifdef SIGILL
 		pqsignal(SIGILL, CdbProgramErrorHandler);

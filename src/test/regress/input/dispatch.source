@@ -578,7 +578,6 @@ select fault_exec_plan(false);
 -- Same query with explain analyze (should raise
 -- 'executor_pre_tuple_processed' not 'send_exec_stats')
 select fault_exec_plan(true);
-
 \c regression
 DROP DATABASE dispatch_test_db;
 

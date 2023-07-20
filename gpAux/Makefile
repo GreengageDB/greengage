@@ -124,17 +124,19 @@ DEFPORT=5432
 
 ORCA_CONFIG=--enable-orca
 
-rhel6_x86_64_CONFIGFLAGS=--with-quicklz  --enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-rhel7_x86_64_CONFIGFLAGS=--with-quicklz  --enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-rhel8_x86_64_CONFIGFLAGS=--with-quicklz  --disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-rocky8_x86_64_CONFIGFLAGS=--with-quicklz --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-pythonsrc-ext --with-uuid=e2fs
-rocky9_x86_64_CONFIGFLAGS=--with-quicklz --disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-rhel9_x86_64_CONFIGFLAGS=--with-quicklz  --disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel6_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+altlinux8.4_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+astra1.7_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel7_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel7_ppc64le_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel8_x86_64_CONFIGFLAGS=--disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rocky8_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-pythonsrc-ext --with-uuid=e2fs
+rocky9_x86_64_CONFIGFLAGS=--disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 linux_x86_64_CONFIGFLAGS=${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu18.04_x86_64_CONFIGFLAGS=--with-quicklz --enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu20.04_x86_64_CONFIGFLAGS=--with-quicklz --enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-sles12_x86_64_CONFIGFLAGS=--with-quicklz --enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-photon3_x86_64_CONFIGFLAGS=--with-quicklz --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu18.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu20.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+sles12_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+photon3_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 BLD_CONFIGFLAGS=$($(BLD_ARCH)_CONFIGFLAGS)
 
 CONFIGFLAGS=$(strip $(BLD_CONFIGFLAGS) --with-pgport=$(DEFPORT) $(BLD_DEPLOYMENT_SETTING))
@@ -153,7 +155,7 @@ endif
 # Configure in thirdparty libraries from the ext/ directory
 CONFIG_INCLUDES=$(BLD_THIRDPARTY_INCLUDE_DIR)
 CONFIG_LIBRARIES=$(strip $(BLD_THIRDPARTY_LIB_DIR) $(BLD_CXX_LIB_DIR))
-CONFIGFLAGS+= --with-openssl --with-pam --with-ldap --with-includes="$(CONFIG_INCLUDES)" --with-libraries="$(CONFIG_LIBRARIES)"
+CONFIGFLAGS+=  --with-libxslt --with-openssl --with-pam --with-ldap --with-includes="$(CONFIG_INCLUDES)" --with-libraries="$(CONFIG_LIBRARIES)"
 
 CONFIG_ADDITIONS=$($(BLD_ARCH)_CONFIG_ADDITIONS)
 
@@ -167,7 +169,7 @@ RECONFIG :
 	rm -f $(GPPGDIR)/GNUmakefile
 
 $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	mkdir -p $(GPPGDIR)
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd $(GPPGDIR) && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"    \
@@ -177,7 +179,7 @@ $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
                          --mandir=$(INSTLOC)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	mkdir -p Debug
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd Debug && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"        \
@@ -187,7 +189,7 @@ Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
                     --mandir=$(INSTLOC)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	mkdir -p Release
 	echo "Running ./configure with CONFIGFLAGS=$(CONFIGFLAGS)\n"
 	cd Release && CC="$(strip $(BLD_CC) $(BLD_CFLAGS))"     \
@@ -221,9 +223,9 @@ perl_archlibexp:=$(shell perl -MConfig -e 'print $$Config{archlibexp}')
 
 # set default build steps
 define BUILD_STEPS
-	@rm -rf $(INSTLOC)
-	cd $(BUILDDIR) && PYGRESQL_LDFLAGS='-Wl,-rpath,\$$$$ORIGIN/../../../lib -Wl,--enable-new-dtags' QUICKLZ_LDFLAGS='-Wl,-rpath,\$$$$ORIGIN/../../lib -Wl,--enable-new-dtags' $(MAKE) $(PARALLEL_MAKE_OPTS) install
-	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && echo 'LDFLAGS += -Wl,-rpath,\$$$$ORIGIN/../../ext/python/lib/ -Wl,--enable-new-dtags' >> Makefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
+	@rm -rf $(DESTDIR)$(INSTLOC)
+	cd $(BUILDDIR) && PYGRESQL_LDFLAGS='-Wl,-rpath,\$$$$ORIGIN/../../../lib -Wl,--enable-new-dtags' $(MAKE) $(PARALLEL_MAKE_OPTS) install
+	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	cd $(BUILDDIR)/src/pl/plperl && $(MAKE) clean && echo "LDFLAGS += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && echo "LDFLAGS_SL += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	#@$(MAKE) mgmtcopy INSTLOC=$(INSTLOC)
 	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
@@ -238,7 +240,7 @@ endef
 
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
-	rm -rf $(INSTLOC)
+	rm -rf $(DESTDIR)$(INSTLOC)
 	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greenplum_path_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
@@ -594,8 +596,8 @@ libcopy=(cd $(1) && tar cf - $(2)) | (cd $(3) && tar xvf -)$(check_pipe_for_erro
 
 copylibs :
 	# Create the python directory to flag to build scripts that python has been handled
-	mkdir -p $(INSTLOC)/ext/python
 	@if [ ! -z "$(PYTHONHOME)" ]; then \
+	    mkdir -p $(INSTLOC)/ext/python \
 	    echo "Copying python, ., from $(PYTHONHOME) into $(INSTLOC)/ext/python..."; \
 	    (cd $(PYTHONHOME) && tar cf - .) | (cd $(INSTLOC)/ext/python/ && tar xpf -); \
 		echo "...DONE"; \
@@ -615,8 +617,8 @@ copylibs :
 	mkdir -p $(INSTLOC)/include
 
 greenplum_path:
-	mkdir -p $(INSTLOC)
-	$(BUILDDIR)/gpMgmt/bin/generate-greenplum-path.sh yes > $(INSTLOC)/greenplum_path.sh
+	mkdir -p $(DESTDIR)$(INSTLOC)
+	$(BUILDDIR)/gpMgmt/bin/generate-greenplum-path.sh no > $(DESTDIR)$(INSTLOC)/greenplum_path.sh
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \

@@ -900,6 +900,62 @@ CUtils::FHasCTEAnchor(CExpression *pexpr)
 	return false;
 }
 
+// return CTEConsumers' and a set of CTEProducers' CTE ids in the given subtree
+void
+CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
+									 ULongPtrArray *cteConsumers,
+									 UlongCteIdHashSet *cteProducerSet)
+{
+	COperator *pop = pexpr->Pop();
+
+	if (COperator::EopPhysicalCTEConsumer == pexpr->Pop()->Eopid())
+	{
+		cteConsumers->Append(GPOS_NEW(mp) ULONG(
+			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId()));
+	}
+	else if (COperator::EopPhysicalCTEProducer == pexpr->Pop()->Eopid())
+	{
+		cteProducerSet->Insert(GPOS_NEW(mp) ULONG(
+			CPhysicalCTEProducer::PopConvert(pop)->UlCTEId()));
+	}
+
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+
+		if (!pexprChild->Pop()->FScalar())
+		{
+			CollectConsumersAndProducers(mp, pexprChild, cteConsumers,
+										 cteProducerSet);
+		}
+	}
+}
+
+BOOL
+CUtils::hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexpr)
+{
+	BOOL hasUnpairedConsumer = false;
+
+	ULongPtrArray *cteConsumers = GPOS_NEW(mp) ULongPtrArray(mp);
+	UlongCteIdHashSet *cteProducerSet = GPOS_NEW(mp) UlongCteIdHashSet(mp);
+
+	CollectConsumersAndProducers(mp, pexpr, cteConsumers, cteProducerSet);
+
+	// check if every consumer's producer is in ProducerSet
+	for (ULONG ul = 0; ul < cteConsumers->Size(); ul++)
+	{
+		if (!cteProducerSet->Contains((*cteConsumers)[ul]))
+		{
+			hasUnpairedConsumer = true;
+			break;
+		}
+	}
+	cteConsumers->Release();
+	cteProducerSet->Release();
+
+	return hasUnpairedConsumer;
+}
+
 //---------------------------------------------------------------------------
 //	@class:
 //		CUtils::FHasSubqueryOrApply
