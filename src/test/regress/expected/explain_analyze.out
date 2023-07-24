@@ -15,6 +15,8 @@
 -- s/Executor memory: (\d+)\w bytes\./Executor memory: (#####)K bytes./
 -- m/\(slice\d+\)    Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\)\./
 -- s/Executor memory: (\d+)\w bytes avg x \d+ workers, \d+\w bytes max \(seg\d+\)\./Executor memory: ####K bytes avg x #### workers, ####K bytes max (seg#)./
+-- m/\(slice\d+\)    Executor memory: (\d+)\w bytes \(seg\d+\)\.  Work_mem: \d+\w bytes max\./
+-- s/Executor memory: (\d+)\w bytes \(seg\d+\)\.  Work_mem: \d+\w bytes max\./Executor memory: ####K bytes (seg#).  Work_mem: ####K bytes max./
 -- m/Memory used:  \d+\w?B/
 -- s/Memory used:  \d+\w?B/Memory used: ###B/
 -- end_matchsubs
@@ -91,3 +93,70 @@ EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) SELECT a FROM empty_table WHERE b = 2;
 (9 rows)
 
 -- explain_processing_on
+-- The statistics for modifying CTEs used to be reported as "never executed",
+-- when all plan nodes were executed and some stat information was expected.
+-- Test QD recieving the stats from all slices and showing it in explain output.
+--start_ignore
+DROP TABLE IF EXISTS with_dml;
+NOTICE:  table "with_dml" does not exist, skipping
+--end_ignore
+CREATE TABLE with_dml (i int, j int) DISTRIBUTED BY (i);
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF)
+WITH cte AS (
+    INSERT INTO with_dml SELECT i, i * 100 FROM generate_series(1,5) i
+    RETURNING i
+) SELECT * FROM cte;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3) (actual rows=5 loops=1)
+   ->  Insert on with_dml (actual rows=3 loops=1)
+         ->  Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=3 loops=1)
+               Hash Key: i.i
+               ->  Function Scan on generate_series i (actual rows=5 loops=1)
+ Planning time: 20.649 ms
+   (slice0)    Executor memory: 59K bytes.
+   (slice1)    Executor memory: 58K bytes (seg1).  Work_mem: 17K bytes max.
+   (slice2)    Executor memory: 42K bytes avg x 3 workers, 42K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 21.314 ms
+(12 rows)
+
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF)
+WITH cte AS (
+    UPDATE with_dml SET j = j + 1
+    RETURNING i
+) SELECT * FROM cte;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=5 loops=1)
+   ->  Update on with_dml (actual rows=3 loops=1)
+         ->  Seq Scan on with_dml (actual rows=3 loops=1)
+ Planning time: 13.933 ms
+   (slice0)    Executor memory: 59K bytes.
+   (slice1)    Executor memory: 58K bytes avg x 3 workers, 58K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 4.397 ms
+(9 rows)
+
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF)
+WITH cte AS (
+    DELETE FROM with_dml WHERE i > 0
+    RETURNING i
+) SELECT * FROM cte;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=5 loops=1)
+   ->  Delete on with_dml (actual rows=3 loops=1)
+         ->  Seq Scan on with_dml (actual rows=3 loops=1)
+               Filter: (i > 0)
+ Planning time: 8.322 ms
+   (slice0)    Executor memory: 59K bytes.
+   (slice1)    Executor memory: 57K bytes avg x 3 workers, 57K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 9.462 ms
+(10 rows)
+
+DROP TABLE with_dml;
