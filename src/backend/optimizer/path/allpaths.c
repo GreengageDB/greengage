@@ -2033,6 +2033,15 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	if (!root->config->gp_cte_sharing || cte->cterefcount == 1)
 	{
+		/*
+		 * If plan sharing is disabled, we avoid performing DML inside CTE for
+		 * each reference. It'll cause duplicated DML operations or mutation
+		 * errors during cdbparallelize().
+		 */
+		if (cte->cterefcount > 1 &&
+			((Query *) cte->ctequery)->commandType != CMD_SELECT)
+			elog(ERROR, "Too much references to non-SELECT CTE");
+
 		PlannerConfig *config = CopyPlannerConfig(root->config);
 
 		/*
