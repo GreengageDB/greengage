@@ -447,4 +447,37 @@ with cte as (
     delete from with_dml where i > 0
     returning i
 ) select count(*) from cte where i < (select avg(i) from cte);
+
+-- Greenplum fails to execute SELECT INTO and CREATE TABLE AS statements, whose
+-- queries contain modifying CTEs, because Greenplum cannot have two writer
+-- segworker groups, and during execution an error is thrown. Showing
+-- the error during planning stage would be more effective, therefore this test
+-- checks this behaviour.
+--start_ignore
+drop table if exists t_new;
+--end_ignore
+explain (costs off)
+with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select into t_new from cte;
+explain (costs off)
+with cte as
+(update with_dml set j = j + 1 returning *)
+select into t_new from cte;
+explain (costs off)
+with cte as
+(delete from with_dml where i > 0 returning *)
+select into t_new from cte;
+explain (costs off)
+create table t_new as (with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select * from cte);
+explain (costs off)
+create table t_new as (with cte as
+(update with_dml set j = j + 1 returning *)
+select * from cte);
+explain (costs off)
+create table t_new as (with cte as
+(delete from with_dml where i > 0 returning *)
+select * from cte);
 drop table with_dml;
