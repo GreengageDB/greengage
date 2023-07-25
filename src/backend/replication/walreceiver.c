@@ -277,6 +277,7 @@ WalReceiverMain(void)
 	pqsignal(SIGCONT, SIG_DFL);
 	pqsignal(SIGWINCH, SIG_DFL);
 
+	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 #ifdef SIGILL
 	pqsignal(SIGILL, WalRcvCrashHandler);
 #endif
@@ -565,7 +566,10 @@ WalReceiverMain(void)
 			 * being archived later.
 			 */
 			XLogFileName(xlogfname, recvFileTLI, recvSegNo);
-			XLogArchiveForceDone(xlogfname);
+			if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
+				XLogArchiveForceDone(xlogfname);
+			else
+				XLogArchiveNotify(xlogfname);
 		}
 		recvFile = -1;
 
@@ -921,7 +925,10 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr)
 				 * from being archived later.
 				 */
 				XLogFileName(xlogfname, recvFileTLI, recvSegNo);
-				XLogArchiveForceDone(xlogfname);
+				if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
+					XLogArchiveForceDone(xlogfname);
+				else
+					XLogArchiveNotify(xlogfname);
 			}
 			recvFile = -1;
 

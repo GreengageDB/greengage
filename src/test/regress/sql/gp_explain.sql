@@ -322,3 +322,10 @@ select gp_inject_fault('explain_analyze_sort_error', 'reset', dbid)
     from gp_segment_configuration where role = 'p' and content > -1;
 drop table sort_error_test1;
 drop table sort_error_test2;
+
+-- explain should not hide error from segment
+-- error must be handled by executor earlier
+CREATE TABLE t1 (a int);
+EXPLAIN ANALYZE INSERT INTO t1 SELECT 1/gp_segment_id
+FROM gp_dist_random('gp_id');
+DROP TABLE t1;

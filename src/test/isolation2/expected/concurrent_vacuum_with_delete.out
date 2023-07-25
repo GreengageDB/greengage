@@ -162,3 +162,4 @@ EXECUTE 1000
 2q: ... <quitting>
 
 drop table sales_row;
+DROP

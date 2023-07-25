@@ -41,7 +41,7 @@ from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 
-
+default_locale = None
 master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
 if master_data_dir is None:
     raise Exception('Please set MASTER_DATA_DIRECTORY in environment')
@@ -2079,6 +2079,33 @@ def impl(context, filename, contain, output):
                 raise Exception('File %s on host %s does not contain "%s"' % (filepath, host, output))
         if (not valuesShouldExist) and (output in actual):
             raise Exception('File %s on host %s contains "%s"' % (filepath, host, output))
+
+@given('verify that the path "{filename}" in each segment data directory does not exist')
+@then('verify that the path "{filename}" in each segment data directory does not exist')
+def impl(context, filename):
+    try:
+        with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
+            curs = dbconn.execSQL(conn, "SELECT hostname, datadir FROM gp_segment_configuration WHERE content > -1;")
+            result = curs.fetchall()
+            segment_info = [(result[s][0], result[s][1]) for s in range(len(result))]
+    except Exception as e:
+        raise Exception("Could not retrieve segment information: %s" % e.message)
+
+    for info in segment_info:
+        host, datadir = info
+        filepath = os.path.join(datadir, filename)
+        cmd_str = 'test -d "%s" && echo 1 || echo 0' % (filepath)
+        cmd = Command(name='check exists directory or not',
+                      cmdStr=cmd_str,
+                      ctxt=REMOTE,
+                      remoteHost=host)
+        cmd.run(validateAfter=False)
+        try:
+            val = int(cmd.get_stdout().strip())
+            if val:
+                raise Exception('Path %s on host %s exists (val %s) (cmd "%s")' % (filepath, host, val, cmd_str))
+        except:
+            raise Exception('Path %s on host %s exists (cmd "%s")' % (filepath, host, cmd_str))
 
 
 @given('the gpfdists occupying port {port} on host "{hostfile}"')
@@ -4167,3 +4194,22 @@ def impl(context):
             continue
         else:
             raise Exception("segment process not running in execute mode for DBID:{0}".format(dbid))
+
+@given('"LC_ALL" is different from English')
+def step_impl(context):
+	default_locale = os.environ.get('LC_ALL')
+
+	try:
+		os.system('sudo localedef -i ru_RU -f UTF-8 ru_RU.UTF-8 > /dev/null')
+	except FileNotFoundError:
+		raise Exception("Failed to generate Russian locale")
+
+	os.environ['LC_ALL'] = 'ru_RU.utf8'
+
+@then('gpstop should not print "Failed to kill processes for segment"')
+def impl(context):
+	check_string_not_present_stdout(context, 'Failed to kill processes for segment')
+	if default_locale is not None:
+		os.environ['LC_ALL'] = default_locale
+	else:
+		del os.environ['LC_ALL']

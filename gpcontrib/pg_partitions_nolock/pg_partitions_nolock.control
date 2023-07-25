@@ -1,0 +1,3 @@
+comment = 'Implementation of pg_partitions without locks'
+default_version = '1.0'
+relocatable = false
