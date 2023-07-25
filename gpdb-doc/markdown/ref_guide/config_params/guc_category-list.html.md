@@ -84,7 +84,7 @@ These parameters control system memory usage.
 
 ### <a id="topic19"></a>Cost-Based Vacuum Delay Parameters 
 
-**Warning:** Do not use cost-based vacuum delay because it runs asynchronously among the segment instances. The vacuum cost limit and delay is invoked at the segment level without taking into account the state of the entire Greenplum Database array
+> **Caution** Do not use cost-based vacuum delay because it runs asynchronously among the segment instances. The vacuum cost limit and delay is invoked at the segment level without taking into account the state of the entire Greenplum Database array
 
 You can configure the execution cost of `VACUUM` and `ANALYZE` commands to reduce the I/O impact on concurrent database activity. When the accumulated cost of I/O operations reaches the limit, the process performing the operation sleeps for a while, Then resets the counter and continues execution
 
@@ -177,7 +177,7 @@ The following parameters control the types of plan operations the Postgres Plann
 
 ### <a id="topic23"></a>Postgres Planner Costing Parameters 
 
-**Warning:** Do not adjust these query costing parameters. They are tuned to reflect Greenplum Database hardware configurations and typical workloads. All of these parameters are related. Changing one without changing the others can have adverse affects on performance.
+> **Caution** Do not adjust these query costing parameters. They are tuned to reflect Greenplum Database hardware configurations and typical workloads. All of these parameters are related. Changing one without changing the others can have adverse affects on performance.
 
 - [cpu_index_tuple_cost](guc-list.html#cpu_index_tuple_cost)
 - [cpu_operator_cost](guc-list.html#cpu_operator_cost)
@@ -323,7 +323,7 @@ When automatic statistics collection is enabled, you can run `ANALYZE` automatic
 - [log_autostats](guc-list.html#log_autostats)
 
 
-**Warning:** Depending on the specific nature of your database operations, automatic statistics collection can have a negative performance impact. Carefully evaluate whether the default setting of `on_no_stats` is appropriate for your system.
+> **Caution** Depending on the specific nature of your database operations, automatic statistics collection can have a negative performance impact. Carefully evaluate whether the default setting of `on_no_stats` is appropriate for your system.
 
 ## <a id="topic39"></a>Client Connection Default Parameters 
 
@@ -514,8 +514,8 @@ The parameters in this topic control the configuration of the Greenplum Database
 - [gp_content](guc-list.html#gp_content)
 - [gp_dbid](guc-list.html#gp_dbid)
 - [gp_retrieve_conn](guc-list.html#gp_retrieve_conn)
-- [gp_role](guc-list.html#gp_role)
 - [gp_session_id](guc-list.html#gp_session_id)
+- [gp_session_role](guc-list.html#gp_session_role)
 - [gp_server_version](guc-list.html#gp_server_version)
 - [gp_server_version_num](guc-list.html#gp_server_version_num)
 

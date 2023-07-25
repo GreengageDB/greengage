@@ -36,5 +36,5 @@ gpmt analyze_session -session 12345
 
 The tool prompt gives a high-level list of only the servers that are running busy processes and how processes are distributed across the Greenplum hosts. This gives an idea of what hosts are busier than others, which might be caused by processing skew or other environmental issue with the affected hosts.
 
-Note: `lsof, strace, pstack, gcore, gdb` must be installed on all hosts. `gcore` will perform a memory dump of the Greenplum process and the size could be anywhere from 300MB to several Gigabytes. Isolating which hosts to collect using the `gpmt` global option `-hostfile` to limit the collection size.
+> **Note** `lsof, strace, pstack, gcore, gdb` must be installed on all hosts. `gcore` will perform a memory dump of the Greenplum process and the size could be anywhere from 300MB to several Gigabytes. Isolating which hosts to collect using the `gpmt` global option `-hostfile` to limit the collection size.
 

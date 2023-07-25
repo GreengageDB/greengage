@@ -3187,7 +3187,7 @@ binary_upgrade_set_namespace_oid(Archive *fout, PQExpBuffer upgrade_buffer,
 	appendPQExpBuffer(upgrade_buffer, "\n-- For binary upgrade, must preserve pg_namespace oid\n");
 	appendPQExpBuffer(upgrade_buffer,
 	 "SELECT binary_upgrade.set_next_pg_namespace_oid('%u'::pg_catalog.oid, "
-													 "$$%s$$::text);\n\n",
+													 "$_GPDB_$%s$_GPDB_$::text);\n\n",
 					  pg_namespace_oid, pg_nspname);
 	PQclear(upgrade_res);
 	destroyPQExpBuffer(upgrade_query);
@@ -3205,7 +3205,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 	appendPQExpBufferStr(upgrade_buffer, "\n-- For binary upgrade, must preserve pg_type oid\n");
 	appendPQExpBuffer(upgrade_buffer,
 						"SELECT binary_upgrade.set_next_pg_type_oid('%u'::pg_catalog.oid, "
-						"'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
+						"'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 						tyinfo->dobj.catId.oid, tyinfo->dobj.namespace->dobj.catId.oid, tyinfo->dobj.name);
 
 	if (OidIsValid(pg_type_array_oid))
@@ -3215,7 +3215,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 							 "\n-- For binary upgrade, must preserve pg_type array oid\n");
 		appendPQExpBuffer(upgrade_buffer,
 						  "SELECT binary_upgrade.set_next_array_pg_type_oid('%u'::pg_catalog.oid, "
-						  "'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
+						  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 						  pg_type_array_oid, tyinfo->typarrayns,
 						  tyinfo->typarrayname);
 	}
@@ -3251,7 +3251,7 @@ binary_upgrade_set_type_oids_of_child_partition(Archive *fout,
 	appendPQExpBufferStr(upgrade_buffer, "\n-- For binary upgrade, must preserve pg_type oid\n");
 	appendPQExpBuffer(upgrade_buffer,
 			"SELECT binary_upgrade.set_next_pg_type_oid('%u'::pg_catalog.oid, "
-			"'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
+			"'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 			tyinfo->dobj.catId.oid, parenttblinfo->dobj.namespace->dobj.catId.oid, tyinfo->dobj.name);
 }
 
@@ -3277,7 +3277,7 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 							"\n-- For binary upgrade, must preserve pg_class oids\n");
 			appendPQExpBuffer(upgrade_buffer,
 							  "SELECT binary_upgrade.set_next_heap_pg_class_oid('%u'::pg_catalog.oid, "
-							  "'%u'::pg_catalog.oid, $$%s$$::text);\n",
+							  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n",
 							  tblinfo->dobj.catId.oid, parenttblinfo->dobj.namespace->dobj.catId.oid, tblinfo->dobj.name);
 		}
 		else
@@ -3286,7 +3286,7 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 							"\n-- For binary upgrade, must preserve pg_class oids\n");
 			appendPQExpBuffer(upgrade_buffer,
 							  "SELECT binary_upgrade.set_next_heap_pg_class_oid('%u'::pg_catalog.oid, "
-							  "'%u'::pg_catalog.oid, $$%s$$::text);\n",
+							  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n",
 							  tblinfo->dobj.catId.oid, tblinfo->dobj.namespace->dobj.catId.oid, tblinfo->dobj.name);
 		}
 
@@ -3305,7 +3305,7 @@ binary_upgrade_set_pg_class_oids(Archive *fout,
 		simple_oid_list_append(&preassigned_oids, pg_class_oid);
 		appendPQExpBuffer(upgrade_buffer,
 						  "SELECT binary_upgrade.set_next_index_pg_class_oid('%u'::pg_catalog.oid, "
-							"'%u'::pg_catalog.oid, $$%s$$::text);\n",
+							"'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n",
 						  idxinfo->dobj.catId.oid, idxinfo->dobj.namespace->dobj.catId.oid, idxinfo->dobj.name);
 
 		/* Set up bitmap index auxiliary tables */
@@ -4682,8 +4682,6 @@ getTables(Archive *fout, int *numTables)
 	int			i_toast_type_oid;
 	int			i_toast_index_oid;
 	int			i_distclause;
-	int			i_partclause;
-	int			i_parttemplate;
 
 	/*
 	 * Find all the tables and table-like objects.
@@ -4718,11 +4716,7 @@ getTables(Archive *fout, int *numTables)
 						"tc.oid AS toid, "
 						"c.relstorage, "
 						"p.parrelid as parrelid, "
-						"pl.parlevel as parlevel, "
-						"CASE WHEN pl.parlevel = 0 THEN "
-						"(SELECT pg_get_partition_def(c.oid, true, true)) END AS partclause, "
-						"CASE WHEN pl.parlevel = 0 THEN "
-						"(SELECT pg_get_partition_template_def(c.oid, true, true)) END as parttemplate, ");
+						"pl.parlevel as parlevel, ");
 
 	if (binary_upgrade)
 		appendPQExpBufferStr(query,
@@ -4921,8 +4915,6 @@ getTables(Archive *fout, int *numTables)
 	i_toast_index_oid = PQfnumber(res, "toast_index_oid");
 	i_reltype = PQfnumber(res, "reltype");
 	i_distclause = PQfnumber(res, "distclause");
-	i_partclause = PQfnumber(res, "partclause");
-	i_parttemplate = PQfnumber(res, "parttemplate");
 
 	if (lockWaitTimeout)
 	{
@@ -4994,8 +4986,6 @@ getTables(Archive *fout, int *numTables)
 			tblinfo[i].checkoption = pg_strdup(PQgetvalue(res, i, i_checkoption));
 		tblinfo[i].toast_reloptions = pg_strdup(PQgetvalue(res, i, i_toastreloptions));
 		tblinfo[i].parrelid = atooid(PQgetvalue(res, i, i_parrelid));
-		tblinfo[i].partclause = pg_strdup(PQgetvalue(res, i, i_partclause));
-		tblinfo[i].parttemplate = pg_strdup(PQgetvalue(res, i, i_parttemplate));
 		if (PQgetisnull(res, i, i_parlevel))
 			tblinfo[i].parlevel = -1;
 		else
@@ -5318,6 +5308,86 @@ getInherits(Archive *fout, int *numInherits)
 	destroyPQExpBuffer(query);
 
 	return inhinfo;
+}
+
+
+/*
+ * getPartitionDefs
+ *	get information about partition definitions on a dumpable table
+ */
+
+void
+getPartitionDefs(Archive *fout, TableInfo tblinfo[], int numTables)
+{
+
+	PQExpBuffer query = createPQExpBuffer();
+	PQExpBuffer tbloids = createPQExpBuffer();
+	PGresult   *res;
+	int			ntups;
+	int			i_oid;
+	int			i_partclause;
+	int			i_parttemplate;
+
+	/*
+	 * We want to perform just one query against pg_class.
+	 * However, we mustn't try to select every row of those catalogs and then
+	 * sort it out on the client side, because some of the server-side functions
+	 * we need would be unsafe to apply to tables we don't have lock on.
+	 * Hence, we build an array of the OIDs of tables we care about
+	 * (and now have lock on!), and use a WHERE clause to constrain which rows are selected.
+	 */
+	appendPQExpBufferChar(tbloids, '{');
+	for (int i = 0; i < numTables; i++)
+	{
+		TableInfo  *tbinfo = &tblinfo[i];
+
+		/* We're only interested in dumping the partition definition for parent partitions */
+		if (!tbinfo->parparent)
+			continue;
+
+		/*
+		 * We can ignore uninteresting tables, i.e. tables that will not be dumped.
+		 */
+		if (!tbinfo->interesting)
+			continue;
+
+		/* OK, we need info for this table */
+		if (tbloids->len > 1)	/* do we have more than the '{'? */
+			appendPQExpBufferChar(tbloids, ',');
+		appendPQExpBuffer(tbloids, "%u", tbinfo->dobj.catId.oid);
+	}
+
+	appendPQExpBufferChar(tbloids, '}');
+	resetPQExpBuffer(query);
+
+	appendPQExpBuffer(query,
+						"SELECT src.oid,\n"
+						"(SELECT pg_get_partition_def(src.oid, true, true)) AS partclause,\n"
+						"(SELECT pg_get_partition_template_def(src.oid, true, true)) AS parttemplate\n"
+						"FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n", tbloids->data);
+
+	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
+
+	ntups = PQntuples(res);
+
+	i_oid = PQfnumber(res, "oid");
+	i_partclause = PQfnumber(res, "partclause");
+	i_parttemplate = PQfnumber(res, "parttemplate");
+
+	for (int i = 0; i < ntups; i++)
+	{
+		TableInfo *tbinfo = findTableByOid(atooid(PQgetvalue(res, i, i_oid)));
+		if (tblinfo)
+		{
+			tbinfo->partclause = pg_strdup(PQgetvalue(res, i, i_partclause));
+			tbinfo->parttemplate = pg_strdup(PQgetvalue(res, i, i_parttemplate));
+		}
+
+	}
+	PQclear(res);
+
+	destroyPQExpBuffer(query);
+	destroyPQExpBuffer(tbloids);
 }
 
 /*
@@ -8469,7 +8539,7 @@ dumpEnumType(Archive *fout, TypeInfo *tyinfo)
 			if (i == 0)
 				appendPQExpBufferStr(q, "\n-- For binary upgrade, must preserve pg_enum oids\n");
 			appendPQExpBuffer(q,
-							  "SELECT binary_upgrade.set_next_pg_enum_oid('%u'::pg_catalog.oid, '%u'::pg_catalog.oid, $$%s$$::text);\n",
+							  "SELECT binary_upgrade.set_next_pg_enum_oid('%u'::pg_catalog.oid, '%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n",
 							  enum_oid, tyinfo->dobj.catId.oid, label);
 
 			appendPQExpBuffer(q, "ALTER TYPE %s.",
@@ -14160,7 +14230,21 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 		 * TOAST tables semi-independently, here we see them only as children
 		 * of other relations; so this "if" lacks RELKIND_TOASTVALUE, and the
 		 * child toast table is handled below.)
+		 *
+		 * GPDB: We don't need to restore old relfrozenxid since the
+		 * pg_restore will only occur on the target coordinator segment which
+		 * will not have any user data. Either way, pg_upgrade runs a bulk
+		 * update of the target coordinator segment's pg_class to set all
+		 * applicable rows to have relfrozenxid be equal to the source
+		 * coordinator segment's datfrozenxid for each respective database
+		 * (mainly to set the relfrozenxid for the reconstructed catalog
+		 * tables but user tables are touched too) so not doing the below
+		 * logic should be okay. The logic is ifdef'd out instead of deleted
+		 * to help preserve context, make Postgres merges easier, and to make
+		 * it easy to fallback to if the pg_upgrade logic is removed or
+		 * changed.
 		 */
+#ifdef NOT_USED
 		if (binary_upgrade &&
 			(tbinfo->relkind == RELKIND_RELATION ||
 			 tbinfo->relkind == RELKIND_MATVIEW))
@@ -14196,6 +14280,7 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 			 */
 			appendPQExpBuffer(q, "RESET allow_system_table_mods;\n");
 		}
+#endif
 
 		/*
 		 * In binary_upgrade mode, restore matviews' populated status by

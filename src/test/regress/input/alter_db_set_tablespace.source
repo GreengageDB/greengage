@@ -761,11 +761,14 @@ SELECT force_mirrors_to_catch_up();
 CREATE OR REPLACE FUNCTION mirror0() RETURNS gp_segment_configuration.dbid%type
 AS $$
     SELECT dbid FROM gp_segment_configuration WHERE content = 0 AND role = 'm'
-$$ LANGUAGE SQL EXECUTE ON MASTER;
+$$ LANGUAGE SQL;
 --- end_ignore
 
 -- Checkpointer must not start processing requests until database is moved to another tablespace
 SELECT gp_inject_fault('ckpt_loop_begin', 'infinite_loop', mirror0());
+
+-- Check the initial value. It will be restored after the test.
+show fsync;
 
 --- start_ignore
 -- Set fsync on since we need to test the fsync code logic
@@ -822,3 +825,10 @@ SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration;
 
 \!rm -rf @testtablespace@/adst_source
 \!rm -rf @testtablespace@/adst_dest
+
+--- start_ignore
+-- Set fsync off because it is the value before the test
+\! gpconfig -c fsync -v off --skipvalidation;
+-- Apply settings
+\! gpstop -u;
+--- end_ignore

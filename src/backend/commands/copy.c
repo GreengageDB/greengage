@@ -5167,8 +5167,14 @@ NextCopyFromX(CopyState cstate, ExprContext *econtext,
 			field_strings = cstate->raw_fields;
 		}
 
-		/* check for overflowing fields */
-		if (nfields > 0 && fldct > nfields)
+		/* 
+		 * Check for overflowing fields.
+		 * GPDB: Change below condition compared to upstream to 
+		 * greater than or equal to 0 as in QE, 
+		 * attr_count may be equal to 0, 
+		 * when all fields are processed in the QD.
+		 */
+		if (fldct > nfields)
 			ereport(ERROR,
 					(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
 					 errmsg("extra data after last expected column")));

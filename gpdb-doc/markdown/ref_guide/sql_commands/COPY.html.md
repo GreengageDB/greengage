@@ -51,7 +51,7 @@ Using `COPY TO` with a replicated table \(`DISTRIBUTED REPLICATED`\) as source c
 
 The `ON SEGMENT` clause allows you to copy table data to files on segment hosts for use in operations such as migrating data between clusters or performing a backup. Segment data created by the `ON SEGMENT` clause can be restored by tools such as `gpfdist`, which is useful for high speed data loading.
 
-**Warning:** Use of the `ON SEGMENT` clause is recommended for expert users only.
+> **Caution** Use of the `ON SEGMENT` clause is recommended for expert users only.
 
 When `PROGRAM` is specified, the server runs the given command and reads from the standard output of the program, or writes to the standard input of the program. The command must be specified from the viewpoint of the server, and be executable by the `gpadmin` user.
 

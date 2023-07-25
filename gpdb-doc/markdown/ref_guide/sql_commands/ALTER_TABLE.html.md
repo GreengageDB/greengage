@@ -155,6 +155,9 @@ where storage\_parameter is:
    [oids=FALSE]
 ```
 
+>**Note**
+>Support for the QuickLZ compression algorithm is deprecated and will be removed in the next major release of VMware Greenplum.
+
 ## <a id="section3"></a>Description 
 
 `ALTER TABLE` changes the definition of an existing table. There are several subforms:
@@ -207,7 +210,7 @@ where storage\_parameter is:
 
 -   **SET WITHOUT OIDS** — Removes the OID system column from the table.
 
-    **Warning:** VMware does not support using `SET WITH OIDS` or `oids=TRUE` to assign an OID system column.On large tables, such as those in a typical Greenplum Database system, using OIDs for table rows can cause wrap-around of the 32-bit OID counter. Once the counter wraps around, OIDs can no longer be assumed to be unique, which not only makes them useless to user applications, but can also cause problems in the Greenplum Database system catalog tables. In addition, excluding OIDs from a table reduces the space required to store the table on disk by 4 bytes per row, slightly improving performance. You cannot create OIDS on a partitioned or column-oriented table \(an error is displayed\). This syntax is deprecated and will be removed in a future Greenplum release.
+    > **Caution** VMware does not support using `SET WITH OIDS` or `oids=TRUE` to assign an OID system column.On large tables, such as those in a typical Greenplum Database system, using OIDs for table rows can cause wrap-around of the 32-bit OID counter. Once the counter wraps around, OIDs can no longer be assumed to be unique, which not only makes them useless to user applications, but can also cause problems in the Greenplum Database system catalog tables. In addition, excluding OIDs from a table reduces the space required to store the table on disk by 4 bytes per row, slightly improving performance. You cannot create OIDS on a partitioned or column-oriented table \(an error is displayed\). This syntax is deprecated and will be removed in a future Greenplum release.
 
 -   **SET \( FILLFACTOR = value\) / RESET \(FILLFACTOR\)** — Changes the fillfactor for the table. The fillfactor for a table is a percentage between 10 and 100. 100 \(complete packing\) is the default. When a smaller fillfactor is specified, `INSERT` operations pack table pages only to the indicated percentage; the remaining space on each page is reserved for updating rows on that page. This gives `UPDATE` a chance to place the updated copy of a row on the same page as the original, which is more efficient than placing it on a different page. For a table whose entries are never updated, complete packing is the best choice, but in heavily updated tables smaller fillfactors are appropriate. Note that the table contents will not be modified immediately by this command. You will need to rewrite the table to get the desired effects. That can be done with [VACUUM](VACUUM.html) or one of the forms of `ALTER TABLE` that forces a table rewrite. For information about the forms of `ALTER TABLE` that perform a table rewrite, see [Notes](#section5).
 -   **SET DISTRIBUTED** — Changes the distribution policy of a table. Changing a hash distribution policy, or changing to or from a replicated policy, will cause the table data to be physically redistributed on disk, which can be resource intensive. *Greenplum Database does not permit changing the distribution policy of a writable external table.*
@@ -347,7 +350,7 @@ EXCHANGE \[DEFAULT\] PARTITION
 
 :   For information about the parameter, see [Server Configuration Parameters](../config_params/guc_config.html).
 
-    **Warning:** Before you exchange the default partition, you must ensure the data in the table to be exchanged, the new default partition, is valid for the default partition. For example, the data in the new default partition must not contain data that would be valid in other leaf child partitions of the partitioned table. Otherwise, queries against the partitioned table with the exchanged default partition that are run by GPORCA might return incorrect results.
+    > **Caution** Before you exchange the default partition, you must ensure the data in the table to be exchanged, the new default partition, is valid for the default partition. For example, the data in the new default partition must not contain data that would be valid in other leaf child partitions of the partitioned table. Otherwise, queries against the partitioned table with the exchanged default partition that are run by GPORCA might return incorrect results.
 
 :   **WITH TABLE** table\_name - The name of the table you are swapping into the partition design. You can exchange a table where the table data is stored in the database. For example, the table is created with the `CREATE TABLE` command. The table must have the same number of columns, column order, column names, column types, and distribution policy as the parent table.
 
@@ -359,7 +362,7 @@ EXCHANGE \[DEFAULT\] PARTITION
 
 :   **WITH** \| **WITHOUT VALIDATION** - Validates that the data in the table matches the `CHECK` constraint of the partition you are exchanging. The default is to validate the data against the `CHECK` constraint.
 
-    **Warning:** If you specify the `WITHOUT VALIDATION` clause, you must ensure that the data in table that you are exchanging for an existing child leaf partition is valid against the `CHECK` constraints on the partition. Otherwise, queries against the partitioned table might return incorrect results.
+    > **Caution** If you specify the `WITHOUT VALIDATION` clause, you must ensure that the data in table that you are exchanging for an existing child leaf partition is valid against the `CHECK` constraints on the partition. Otherwise, queries against the partitioned table might return incorrect results.
 
 SET SUBPARTITION TEMPLATE
 :   Modifies the subpartition template for an existing partition. After a new subpartition template is set, all new partitions added will have the new subpartition design \(existing partitions are not modified\).

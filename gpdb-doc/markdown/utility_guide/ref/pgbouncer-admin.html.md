@@ -324,7 +324,7 @@ Like `SHOW STATS` but aggregated across all databases.
 
 Display PgBouncer version information.
 
-<div class="note><b>Note:</b> This reference documentation is based on the PgBouncer 1.16 documentation.</div>
+> **Note** This reference documentation is based on the PgBouncer 1.16 documentation.
 
 ## <a id="signals"></a>Signals
 

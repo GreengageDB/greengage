@@ -2,7 +2,7 @@
 
 The Greenplum Database utility `plcontainer` manages the PL/Container configuration files in a Greenplum Database system. The utility ensures that the configuration files are consistent across the Greenplum Database master and segment instances.
 
-**Warning:** Modifying the configuration files on the segment instances without using the utility might create different, incompatible configurations on different Greenplum Database segments that could cause unexpected behavior.
+> **Caution** Modifying the configuration files on the segment instances without using the utility might create different, incompatible configurations on different Greenplum Database segments that could cause unexpected behavior.
 
 ## <a id="topic_ojn_r2s_dw"></a>PL/Container Configuration File 
 
@@ -109,10 +109,9 @@ shared\_directory
 
 :   For each `runtime` element, the `container` attribute of the `shared_directory` elements must be unique. For example, a `runtime` element cannot have two `shared_directory` elements with attribute `container="/clientdir"`.
 
-    **Warning:** Allowing read-write access to a host directory requires special consideration.
-
-    -   When specifying read-write access to host directory, ensure that the specified host directory has the correct permissions.
-    -   When running PL/Container user-defined functions, multiple concurrent Docker containers that are running on a host could change data in the host directory. Ensure that the functions support multiple concurrent access to the data in the host directory.
+    > **Caution** Allowing read-write access to a host directory requires special consideration.
+    > -   When specifying read-write access to host directory, ensure that the specified host directory has the correct permissions.
+    > -   When running PL/Container user-defined functions, multiple concurrent Docker containers that are running on a host could change data in the host directory. Ensure that the functions support multiple concurrent access to the data in the host directory.
 
 settings
 :   Optional. This element specifies Docker container configuration information. Each `setting` element contains one attribute. The element attribute specifies logging, memory, or networking information. For example, this element enables logging.

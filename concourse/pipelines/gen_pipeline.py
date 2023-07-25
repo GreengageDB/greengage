@@ -29,6 +29,7 @@ from __future__ import print_function
 
 import argparse
 import datetime
+import getpass
 import os
 import re
 import subprocess
@@ -101,46 +102,61 @@ def create_pipeline(args, git_remote, git_branch):
         "centos6" : "centos",
         "centos7" : "centos",
         "rhel8" : "rhel",
-        "ubuntu18.04" : "ubuntu",
+        "ubuntu20.04" : "ubuntu",
         "rocky8" : "rocky",
+        "rocky9" : "rocky",
         "oel8" : "oel",
-        "oel7" : "oel"
+        "oel7" : "oel",
+        "rhel9" : "rhel",
+        "oel9" : "oel"
     }
     test_os = {
         "centos6" : "centos",
         "centos7" : "centos",
         "rhel8" : "centos",
-        "ubuntu18.04" : "ubuntu",
+        "ubuntu20.04" : "ubuntu",
         "rocky8" : "centos",
+        "rocky9" : "centos",
         "oel8" : "centos",
-        "oel7" : "centos"
+        "oel7" : "centos",
+        "rhel9" : "centos",
+        "oel9": "centos"
     }
     dist = {
         "centos6" : "rhel6",
         "centos7" : "rhel7",
         "rhel8" : "rhel8",
-        "ubuntu18.04" : "ubuntu18.04",
+        "ubuntu20.04" : "ubuntu20.04",
         "rocky8" : "rhel8",
+        "rocky9" : "rhel9",
         "oel8" : "rhel8",
-        "oel7" : "oel7"
+        "oel7" : "oel7",
+        "rhel9" : "rhel9",
+        "oel9": "rhel9"
     }
     rpm_platform = {
         "centos6" : "rhel6",
         "centos7" : "rhel7",
         "rhel8" : "rhel8",
-        "ubuntu18.04" : "ubuntu18.04",
+        "ubuntu20.04" : "ubuntu20.04",
         "rocky8" : "rocky8",
+        "rocky9" : "rocky9",
         "oel8" : "oel8",
-        "oel7" : "oel7"
+        "oel7" : "oel7",
+        "rhel9" : "rhel9",
+        "oel9": "oel9"
     }
     compile_platform = {
         "centos6": "centos6",
         "centos7": "centos7",
         "rhel8": "rocky8",
-        "ubuntu18.04": "ubuntu18.04",
+        "ubuntu20.04": "ubuntu20.04",
         "rocky8": "rocky8",
+        "rocky9": "rocky9",
         "oel8": "rocky8",
-        "oel7": "oel7"
+        "oel7": "oel7",
+        "rhel9" : "rocky9",
+        "oel9": "rocky9"
     }
     context = {
         'template_filename': args.template_filename,
@@ -279,7 +295,7 @@ def main():
         action='store',
         dest='os_type',
         default=default_os_type,
-        choices=['centos6', 'centos7', 'rhel8','ubuntu18.04', 'rocky8', 'oel8', 'oel7'],
+        choices=['centos6', 'centos7', 'rhel8','ubuntu20.04', 'rocky8', 'oel8', 'oel7', 'rhel9', "oel9", 'rocky9'],
         help='OS value to support'
     )
 
@@ -315,7 +331,7 @@ def main():
         '--user',
         action='store',
         dest='user',
-        default=os.getlogin(),
+        default=getpass.getuser(),
         help='Developer userid to use for pipeline name and filename.'
     )
 
@@ -356,7 +372,7 @@ def main():
         raise Exception('--directed flag can be used only with prod target')
 
     output_path_is_set = os.path.basename(args.output_filepath) != default_output_filename
-    if (args.user != os.getlogin() and output_path_is_set):
+    if (args.user != getpass.getuser() and output_path_is_set):
         print("You can only use one of --output or --user.")
         exit(1)
 
@@ -364,6 +380,8 @@ def main():
     # correspond to dedicated concourse workers to increase performance.
     if args.pipeline_target in ['prod', 'dev', 'cm']:
         args.use_ICW_workers = True
+
+    if args.pipeline_target in ['prod'] and args.os_type not in ["rhel9", "oel9", "rocky9"]:
         args.test_sections = [
             'ICW',
             'CLI',
@@ -386,7 +404,7 @@ def main():
     # don't overwrite the 6X_STABLE pipeline
     if args.pipeline_target != 'prod' and not output_path_is_set:
         pipeline_file_suffix = suggested_git_branch()
-        if args.user != os.getlogin():
+        if args.user != getpass.getuser():
             pipeline_file_suffix = args.user
         default_dev_output_filename = 'gpdb-' + args.pipeline_target + '-' + pipeline_file_suffix + '-' + args.os_type + '.yml'
         args.output_filepath = os.path.join(PIPELINES_DIR, default_dev_output_filename)

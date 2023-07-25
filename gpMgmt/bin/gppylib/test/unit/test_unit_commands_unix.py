@@ -1,9 +1,11 @@
 import os
+import StringIO
 
 from mock import patch
 
-from commands.unix import RemoveFile, RemoveDirectory, RemoveDirectoryContents, RemoveGlob, REMOTE, Command
+from commands.unix import RemoveFile, RemoveDirectory, RemoveDirectoryContents, RemoveGlob, REMOTE,Command,isScpEnabled
 from gp_unittest import *
+from gppylib.commands.base import CommandResult
 
 
 class CommandsUnix(GpTestCase):
@@ -118,6 +120,15 @@ class CommandsUnix(GpTestCase):
     #     self.assertFalse(os.path.exists(self.filepath))
     #     self.assertTrue(os.path.exists(self.dir))
 
+    @patch('gppylib.commands.unix.Command.run')
+    def test_isScpEnabled_when_executable_is_present(self, mock_cmd_run):
+        self.assertTrue(isScpEnabled(["localhost"]))
+
+    @patch('sys.stdout', new_callable=StringIO.StringIO)
+    @patch('gppylib.commands.unix.Command.run', side_effect=[None, Exception()])
+    def test_isScpEnabled_when_executable_is_not_present(self, mock_cmd_run, mock_stdout):
+        self.assertFalse(isScpEnabled(["localhost", "invalid_host"]))
+        self.assertIn("[Warning] Either scp is not available or does not have execute permission on host:invalid_host", mock_stdout.getvalue())
 
 if __name__ == '__main__':
     run_tests()

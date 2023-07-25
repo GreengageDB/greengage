@@ -683,14 +683,18 @@ class GpSystemStateProgram:
 
         self.__addClusterDownWarning(gpArray, data)
 
-        recovery_progress_file = get_recovery_progress_file(gplog)
-        recovery_progress_segs = self._parse_recovery_progress_data(data, recovery_progress_file, gpArray)
-        if recovery_progress_segs:
-            logger.info("----------------------------------------------------")
-            logger.info("Segments in recovery")
-            logSegments(recovery_progress_segs, False, [VALUE_RECOVERY_TYPE, VALUE_RECOVERY_COMPLETED_BYTES, VALUE_RECOVERY_TOTAL_BYTES,
-                                                          VALUE_RECOVERY_PERCENTAGE])
-            exitCode = 1
+        # Check if gprecoverseg process is running. We do not want to
+        # show the progress if the gprecoverseg process is not running.
+        if gp.is_gprecoverseg_running():
+            recovery_progress_file = get_recovery_progress_file(gplog)
+            segments_under_recovery = self._parse_recovery_progress_data(data, recovery_progress_file, gpArray)
+
+            if segments_under_recovery:
+                logger.info("----------------------------------------------------")
+                logger.info("Segments in recovery")
+                logSegments(segments_under_recovery, False, [VALUE_RECOVERY_TYPE, VALUE_RECOVERY_COMPLETED_BYTES, VALUE_RECOVERY_TOTAL_BYTES,
+                                                            VALUE_RECOVERY_PERCENTAGE])
+                exitCode = 1
 
         # final output -- no errors, then log this message
         if exitCode == 0:

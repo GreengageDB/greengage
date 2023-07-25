@@ -97,7 +97,7 @@ grep "^+:" /etc/passwd /etc/shadow /etc/group
 
 ```
 
-Note: We strongly recommend that customers change their passwords after initial setup.
+> **Caution** Change your passwords after initial setup.
 
 ```
 

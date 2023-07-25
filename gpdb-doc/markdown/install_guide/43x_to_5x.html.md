@@ -100,7 +100,7 @@ The workaround to re-create the implicit casts is not recommended as it breaks c
 
 ## <a id="temp_workaround"></a>Workaround: Manually Creating Missing Operators 
 
-**Warning:** Use this workaround only to aid migration to Greenplum Database 6 for evaluation purposes. Do not use this workaround in a production environment.
+> **Caution** Use this workaround only to aid migration to Greenplum Database 6 for evaluation purposes. Do not use this workaround in a production environment.
 
 When you create an operator, you identify the data types of the left operand and the right operand. You also identify the name of a function that Greenplum Database invokes to evaluate the operator expression between the specified data types. The operator function evaluates the expression by performing either to-text or from-text conversion using the INPUT/OUTPUT methods of the data types involved. By creating operators for each \(text type, other data type\) and \(other data type, text type\) combination, you effectively implement the casts that are missing in Greenplum Database 6.
 

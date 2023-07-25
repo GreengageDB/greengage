@@ -61,6 +61,35 @@ class GpCheckPerf(GpTestCase):
         self.subject.parseCommandLine()
         self.assertEqual(self.subject.GV.opt['-S'], 246.0)
 
+    @patch('gppylib.commands.unix.isScpEnabled', return_value=False)
+    @patch('gpcheckperf.gpsync', return_value=(False, None))
+    @patch('gpcheckperf.getHostList', return_value=['localhost'])
+    def test_scp_not_enabled(self, mock_hostlist, mock_gpsync, mock_isScpEnabled):
+        src = '%s/lib/multidd' % os.path.abspath(os.path.dirname(__file__) + "/../../../")
+        target = '/tmp/gpcheckperf_$USER/multidd'
+        sys.argv = ["gpcheckperf", "-h", "locahost", "-r", "d", "-d", "/tmp"]
+
+        self.subject.main()
+        mock_gpsync.assert_called_with(src, target)
+
+    @patch('gppylib.commands.unix.isScpEnabled', return_value=True)
+    @patch('gpcheckperf.gpscp', return_value=(False, None))
+    @patch('gpcheckperf.getHostList', return_value=['localhost'])
+    def test_scp_enabled(self, mock_hostlist, mock_gpscp, mock_isScpEnabled):
+        src = '%s/lib/multidd' % os.path.abspath(os.path.dirname(__file__) + "/../../../")
+        target = '=:/tmp/gpcheckperf_$USER/multidd'
+        sys.argv = ["gpcheckperf", "-h", "locahost", "-r", "d", "-d", "/tmp"]
+
+        self.subject.main()
+        mock_gpscp.assert_called_with(src, target)
+
+    def test_gpsync_failed_to_copy(self):
+        src = '%s/lib/multidd' % os.path.abspath(os.path.dirname(__file__) + "/../../../")
+        target = '=:tmp/'
+        self.subject.GV.opt['-h'] = ['localhost', "invalid_host"]
+        with self.assertRaises(SystemExit) as e:
+            self.subject.gpsync(src, target)
+        self.assertIn('[Error] command failed for host:invalid_host', e.exception.code)
 
 if __name__ == '__main__':
     run_tests()

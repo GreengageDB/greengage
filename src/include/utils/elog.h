@@ -290,6 +290,7 @@ errcontext_msg(const char *fmt,...)
 __attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)));
 
 extern int	errhidestmt(bool hide_stmt);
+extern int	errhidecontext(bool hide_ctx);
 
 extern int	errfunction(const char *funcname);
 extern int	errposition(int cursorpos);
@@ -497,6 +498,7 @@ typedef struct ErrorData
 
 	/* context containing associated non-constant strings */
 	struct MemoryContextData *assoc_context;
+	bool		hide_ctx;		/* true to prevent CONTEXT: inclusion */
 } ErrorData;
 
 extern void EmitErrorReport(void);
@@ -504,6 +506,7 @@ extern ErrorData *CopyErrorData(void);
 extern void FreeErrorData(ErrorData *edata);
 extern void FlushErrorState(void);
 extern void ReThrowError(ErrorData *edata)  __attribute__((__noreturn__));
+extern void ThrowErrorData(ErrorData *edata);
 extern void pg_re_throw(void) __attribute__((noreturn));
 
 extern char *GetErrorContextStack(void);

@@ -72,7 +72,7 @@ Examples of database extensions and packages software that are delivered using t
 -u package \| --update=package
 :   Updates the given package.
 
-    **Warning:** The process of updating a package includes removing all previous versions of the system objects related to the package. For example, previous versions of shared libraries are removed. After the update process, a database function will fail when it is called if the function references a package file that has been removed.
+> **Caution** The process of updating a package includes removing all previous versions of the system objects related to the package. For example, previous versions of shared libraries are removed. After the update process, a database function will fail when it is called if the function references a package file that has been removed.
 
 :   --version \(show utility version\)
 :   Displays the version of this utility.

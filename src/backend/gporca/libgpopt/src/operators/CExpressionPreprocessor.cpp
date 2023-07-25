@@ -16,6 +16,7 @@
 #include "gpos/common/CAutoRef.h"
 #include "gpos/common/CAutoTimer.h"
 
+#include "gpopt/base/CCastUtils.h"
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/CColRefTable.h"
 #include "gpopt/base/CConstraintInterval.h"
@@ -73,7 +74,8 @@ static CExpression *SubstituteConstantIdentifier(
 // eliminate self comparisons in the given expression
 CExpression *
 CExpressionPreprocessor::PexprEliminateSelfComparison(CMemoryPool *mp,
-													  CExpression *pexpr)
+													  CExpression *pexpr,
+													  CColRefSet *pcrsNotNull)
 {
 	// protect against stack overflow during recursion
 	GPOS_CHECK_STACK_SIZE;
@@ -82,7 +84,8 @@ CExpressionPreprocessor::PexprEliminateSelfComparison(CMemoryPool *mp,
 
 	if (CUtils::FScalarCmp(pexpr))
 	{
-		return CPredicateUtils::PexprEliminateSelfComparison(mp, pexpr);
+		return CPredicateUtils::PexprEliminateSelfComparison(mp, pexpr,
+															 pcrsNotNull);
 	}
 
 	// recursively process children
@@ -91,7 +94,7 @@ CExpressionPreprocessor::PexprEliminateSelfComparison(CMemoryPool *mp,
 	for (ULONG ul = 0; ul < arity; ul++)
 	{
 		CExpression *pexprChild =
-			PexprEliminateSelfComparison(mp, (*pexpr)[ul]);
+			PexprEliminateSelfComparison(mp, (*pexpr)[ul], pcrsNotNull);
 		pdrgpexprChildren->Append(pexprChild);
 	}
 
@@ -2607,7 +2610,8 @@ CExpressionPreprocessor::PexprPruneProjListProjectOrGbAgg(
 	return pexprResult;
 }
 
-// reorder the child for scalar comparision to ensure that left child is a scalar ident and right child is a scalar const if not
+// reorder the child for scalar comparision to ensure that left child is a scalar ident
+// or cast(ident) and right child is a scalar const
 CExpression *
 CExpressionPreprocessor::PexprReorderScalarCmpChildren(CMemoryPool *mp,
 													   CExpression *pexpr)
@@ -2622,7 +2626,11 @@ CExpressionPreprocessor::PexprReorderScalarCmpChildren(CMemoryPool *mp,
 		CExpression *pexprLeft = (*pexpr)[0];
 		CExpression *pexprRight = (*pexpr)[1];
 
-		if (CUtils::FScalarConst(pexprLeft) && CUtils::FScalarIdent(pexprRight))
+		// left side is const
+		// right side is either ident, or, cast of ident
+		if (CUtils::FScalarConst(pexprLeft) &&
+			(CUtils::FScalarIdent(pexprRight) ||
+			 CCastUtils::FScalarCastIdent(pexprRight)))
 		{
 			CScalarCmp *popScalarCmpCommuted =
 				(dynamic_cast<CScalarCmp *>(pop))->PopCommutedOp(mp, pop);
@@ -3142,8 +3150,8 @@ CExpressionPreprocessor::PexprPreprocess(
 	pexprConvert2In->Release();
 
 	// (12) eliminate self comparisons
-	CExpression *pexprSelfCompEliminated =
-		PexprEliminateSelfComparison(mp, pexprInferredPreds);
+	CExpression *pexprSelfCompEliminated = PexprEliminateSelfComparison(
+		mp, pexprInferredPreds, pexprInferredPreds->DeriveNotNullColumns());
 	GPOS_CHECK_ABORT;
 	pexprInferredPreds->Release();
 

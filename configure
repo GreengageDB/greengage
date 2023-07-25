@@ -582,8 +582,8 @@ MAKEFLAGS=
 # Identity of this package.
 PACKAGE_NAME='Greenplum Database'
 PACKAGE_TARNAME='greenplum-database'
-PACKAGE_VERSION='6.24.3'
-PACKAGE_STRING='Greenplum Database 6.24.3'
+PACKAGE_VERSION='6.0.0-beta.1'
+PACKAGE_STRING='Greenplum Database 6.0.0-beta.1'
 PACKAGE_BUGREPORT='support@greenplum.org'
 PACKAGE_URL=''
 

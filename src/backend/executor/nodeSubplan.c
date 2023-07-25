@@ -1230,7 +1230,7 @@ PG_TRY();
 		{
 			queryDesc->estate->dispatcherState = NULL;
 			FlushErrorState();
-			ReThrowError(qeError);
+			ThrowErrorData(qeError);
 		}
 
 		/* If EXPLAIN ANALYZE, collect execution stats from qExecs. */

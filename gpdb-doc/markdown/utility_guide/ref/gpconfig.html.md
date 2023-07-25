@@ -83,7 +83,7 @@ To show the currently set values for a parameter across the system, use the `-s`
 --skipvalidation
 :   Overrides the system validation checks of `gpconfig` and allows you to operate on any server configuration parameter, including hidden parameters and restricted parameters that cannot be changed by `gpconfig`. When used with the `-l` option \(list\), it shows the list of restricted parameters.
 
-    **Warning:** Use extreme caution when setting configuration parameters with this option.
+> **Caution** Use extreme caution when setting configuration parameters with this option.
 
 --verbose
 :   Displays additional log information during `gpconfig` command execution.

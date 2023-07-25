@@ -8746,40 +8746,6 @@ ATExecDropColumn(List **wqueue, Relation rel, const char *colName,
 
 	ReleaseSysCache(tuple);
 
-	if (GpPolicyIsPartitioned(rel->rd_cdbpolicy))
-	{
-		int			ia = 0;
-
-		for (ia = 0; ia < rel->rd_cdbpolicy->nattrs; ia++)
-		{
-			if (attnum == rel->rd_cdbpolicy->attrs[ia])
-			{
-				MemoryContext oldcontext;
-				GpPolicy *policy;
-
-				/* force a random distribution */
-				rel->rd_cdbpolicy->nattrs = 0;
-
-				oldcontext = MemoryContextSwitchTo(GetMemoryChunkContext(rel));
-				policy = GpPolicyCopy(rel->rd_cdbpolicy);
-				MemoryContextSwitchTo(oldcontext);
-
-				/*
-				 * replace policy first in catalog and then assign to
-				 * rd_cdbpolicy to make sure we have intended policy in relcache
-				 * even with relcache invalidation. Otherwise rd_cdbpolicy can
-				 * become invalid soon after assignment.
-				 */
-				GpPolicyReplace(RelationGetRelid(rel), policy);
-				rel->rd_cdbpolicy = policy;
-				if (Gp_role != GP_ROLE_EXECUTE)
-				    ereport(NOTICE,
-							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg("dropping a column that is part of the distribution policy forces a NULL distribution policy")));
-			}
-		}
-	}
-
 	/*
 	 * Propagate to children as appropriate.  Unlike most other ALTER
 	 * routines, we have to do this one level of recursion at a time; we can't
@@ -8875,7 +8841,9 @@ ATExecDropColumn(List **wqueue, Relation rel, const char *colName,
 	object.objectId = RelationGetRelid(rel);
 	object.objectSubId = attnum;
 
-	performDeletion(&object, behavior, 0);
+	/* Set flag to avoid partition key check inside deleteOneObject()
+	 * for every drop column command as its already checked above. */
+	performDeletion(&object, behavior, PERFORM_DELETION_AVOID_PARTKEY_CHK);
 
 	/*
 	 * If we dropped the OID column, must adjust pg_class.relhasoids and tell

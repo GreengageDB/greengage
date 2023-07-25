@@ -12,6 +12,7 @@ from steps.gpconfig_mgmt_utils import GpConfigContext
 from steps.gpssh_exkeys_mgmt_utils import GpsshExkeysMgmtContext
 from steps.mgmt_utils import backup_bashrc, restore_bashrc
 from gppylib.db import dbconn
+from gppylib.commands.base import Command, REMOTE
 
 def before_all(context):
     if map(int, behave.__version__.split('.')) < [1,2,6]:
@@ -172,10 +173,12 @@ def after_scenario(context, scenario):
     if 'gpssh' in context.feature.tags:
         run_command(context, 'sudo tc qdisc del dev lo root netem')
 
-    # for cleaning up after @given('"{path}" has its permissions set to "{perm}"')
+    # for cleaning up after @given('"{path}" has its permissions set to "{perm}" on {host}')
     if (hasattr(context, 'path_for_which_to_restore_the_permissions') and
-            hasattr(context, 'permissions_to_restore_path_to')):
-        os.chmod(context.path_for_which_to_restore_the_permissions, context.permissions_to_restore_path_to)
+            hasattr(context, 'permissions_to_restore_path_to') and hasattr(context, 'host_to_restore_path_to')):
+        cmd_str = "sudo chmod {0} {1}".format(context.permissions_to_restore_path_to, context.path_for_which_to_restore_the_permissions)
+        cmd = Command("restore permission", cmdStr=cmd_str, ctxt=REMOTE, remoteHost=context.host_to_restore_path_to)
+        cmd.run(validateAfter=True)
     elif hasattr(context, 'path_for_which_to_restore_the_permissions'):
         raise Exception('Missing permissions_to_restore_path_to for %s' %
                         context.path_for_which_to_restore_the_permissions)
@@ -188,3 +191,7 @@ def after_scenario(context, scenario):
         execute_sql('postgres', create_fault_query)
         reset_fault_query = "SELECT gp_inject_fault_infinite('all', 'reset', dbid) FROM gp_segment_configuration WHERE status='u';"
         execute_sql('postgres', reset_fault_query)
+
+    if os.getenv('SUSPEND_PG_REWIND') is not None:
+        del os.environ['SUSPEND_PG_REWIND']
+

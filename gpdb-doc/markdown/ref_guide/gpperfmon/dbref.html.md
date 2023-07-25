@@ -25,7 +25,7 @@ The database contains the following categories of tables:
 -   The [log\_alert\_\*](db-log-alert.html) tables store error and warning messages from `pg_log`.
 -   The [queries\_\*](db-queries.html) tables store high-level query status information.
 -   The [segment\_\*](db-segment.html) tables store memory allocation statistics for the Greenplum Database segment instances.
--   The [socket\_stats\_\*](db-socket-stats.html) tables store statistical metrics about socket usage for a Greenplum Database instance. Note: These tables are in place for future use and are not currently populated.
+-   The [socket\_stats\_\*](db-socket-stats.html) tables store statistical metrics about socket usage for a Greenplum Database instance. These tables are in place for future use and are not currently populated.
 -   The [system\_\*](db-system.html) tables store system utilization metrics.
 
 The `gpperfmon` database also contains the following views:

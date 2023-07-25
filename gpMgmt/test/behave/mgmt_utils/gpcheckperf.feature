@@ -84,6 +84,27 @@ Feature: Tests for gpcheckperf
     | matrix test | M        |
     | network test| N        |
 
+
+  @concourse_cluster
+  Scenario: gpcheckperf runs successfully when scp is not available or does not have execute permission on master host
+    Given the database is running
+    And   "/usr/bin/scp" has its permissions set to "664" on "cdw"
+    When  the user runs "gpcheckperf -h sdw1 -r ds -d /tmp -S 10MB -v"
+    Then  gpcheckperf should return a return code of 0
+    And   gpcheckperf should print "\[Warning] Either scp is not available or does not have execute permission on host:cdw" to stdout
+    And   gpcheckperf should print "rsync -P -a -c -e * .*multidd sdw1:*" to stdout
+    And   rely on environment.py to restore path permissions
+
+  @concourse_cluster
+  Scenario: gpcheckperf runs successfully when scp is not available or does not have execute permission on segment host
+    Given the database is running
+    And   "/usr/bin/scp" has its permissions set to "664" on "sdw1"
+    When  the user runs "gpcheckperf -h cdw -h sdw1 -r ds -d /data/gpdata/ -S 10MB -v"
+    Then  gpcheckperf should return a return code of 0
+    And   gpcheckperf should print "\[Warning] Either scp is not available or does not have execute permission on host:sdw1" to stdout
+    And   gpcheckperf should print "rsync -P -a -c -e * .*multidd cdw:*" to stdout
+    And   rely on environment.py to restore path permissions
+
   @concourse_cluster
   Scenario: gpcheckperf runs sequential network test with buffer size flag
     Given the database is running

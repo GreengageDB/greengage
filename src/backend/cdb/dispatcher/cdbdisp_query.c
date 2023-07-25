@@ -339,7 +339,7 @@ CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
 	{
 
 		FlushErrorState();
-		ReThrowError(qeError);
+		ThrowErrorData(qeError);
 	}
 
 	cdbdisp_destroyDispatcherState(ds);
@@ -477,7 +477,7 @@ cdbdisp_dispatchCommandInternal(DispatchCommandQueryParms *pQueryParms,
 	if (qeError)
 	{
 		FlushErrorState();
-		ReThrowError(qeError);
+		ThrowErrorData(qeError);
 	}
 
 	cdbdisp_returnResults(pr, cdb_pgresults);
@@ -1239,7 +1239,7 @@ cdbdisp_dispatchX(QueryDesc* queryDesc,
 		if (qeError)
 		{
 			FlushErrorState();
-			ReThrowError(qeError);
+			ThrowErrorData(qeError);
 		}
 
 		/*
@@ -1509,7 +1509,7 @@ CdbDispatchCopyStart(struct CdbCopy *cdbCopy, Node *stmt, int flags)
 	if (!cdbdisp_getDispatchResults(ds, &error))
 	{
 		FlushErrorState();
-		ReThrowError(error);
+		ThrowErrorData(error);
 	}
 
 	/*

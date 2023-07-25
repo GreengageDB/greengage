@@ -109,7 +109,7 @@ If non-superusers need to create `dblink` connections that do not require a pass
 
 `dblink_connect_u()` is initially installed with all privileges revoked from `PUBLIC`, making it un-callable except by superusers. In some situations, it may be appropriate to grant `EXECUTE` permission on `dblink_connect_u()` to specific users who are considered trustworthy, but this should be done with care.
 
-**Warning:** If a Greenplum Database system has configured users with an authentication method that does not involve a password, then impersonation and subsequent escalation of privileges can occur when a non-superuser runs `dblink_connect_u()`. The `dblink` connection will appear to have originated from the user specified by the function. For example, a non-superuser can run `dblink_connect_u()` and specify a user that is configured with `trust` authentication.
+> **Caution** If a Greenplum Database system has configured users with an authentication method that does not involve a password, then impersonation and subsequent escalation of privileges can occur when a non-superuser runs `dblink_connect_u()`. The `dblink` connection will appear to have originated from the user specified by the function. For example, a non-superuser can run `dblink_connect_u()` and specify a user that is configured with `trust` authentication.
 
 Also, even if the `dblink` connection requires a password, it is possible for the password to be supplied from the server environment, such as a `~/.pgpass` file belonging to the server's user. It is recommended that any `~/.pgpass` file belonging to the server's user not contain any records specifying a wildcard host name.
 
@@ -139,7 +139,7 @@ Also, even if the `dblink` connection requires a password, it is possible for th
 
 In rare cases you may need to allow non-superusers to acccess to `dblink` without making any authentication checks. The function `dblink_connect_no_auth()` provides this functionality as it bypasses the `pg_hba.conf` file.
 
-**Warning:** Using this function introduces a security risk; ensure that you grant unauthorized access only to trusted user accounts. Also note that `dblink_connect_no_auth()` functions limit connections to the local cluster, and do not permit connections to a remote database.
+> **Caution** Using this function introduces a security risk; ensure that you grant unauthorized access only to trusted user accounts. Also note that `dblink_connect_no_auth()` functions limit connections to the local cluster, and do not permit connections to a remote database.
 
 These functions are not available by default; the `gpadmin` superuser must grant permission to the non-superuser beforehand:
 
