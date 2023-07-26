@@ -17,7 +17,10 @@ gpactivatestandby -? | -h | --help
 
 The `gpactivatestandby` utility activates a backup, standby master host and brings it into operation as the active master instance for a Greenplum Database system. The activated standby master effectively becomes the Greenplum Database master, accepting client connections on the master port.
 
-When you initialize a standby master, the default is to use the same port as the active master. For information about the master port for the standby master, see [gpinitstandby](gpinitstandby.html).
+>**NOTE**
+>Before running `gpactivatestandby`, be sure to run `gpstate -f` to confirm that the standby master is synchronized with the current master node. If synchronized, the final line of the `gpstate -f` output will look similar to this: `20230607:06:50:06:004205 gpstate:test1-m:gpadmin-[INFO]:--Sync state: sync`
+
+When you initialize a standby master, the default is to use the same port as the active master. For information about the master port for the standby master, see [gpinitstandby](gpinitstandby.html). 
 
 You must run this utility from the master host you are activating, not the failed master host you are deactivating. Running this utility assumes you have a standby master host configured for the system \(see [gpinitstandby](gpinitstandby.html)\).
 
