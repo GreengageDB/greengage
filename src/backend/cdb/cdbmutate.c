@@ -438,6 +438,10 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 			/* If the query comes from 'CREATE TABLE AS' or 'SELECT INTO' */
 			if (query->parentStmtType != PARENTSTMTTYPE_NONE)
 			{
+				if (query->hasModifyingCTE)
+					ereport(ERROR,
+							(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+					errmsg("cannot create plan with several writing gangs")));
 				if (query->intoPolicy != NULL)
 				{
 					targetPolicy = query->intoPolicy;

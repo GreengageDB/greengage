@@ -1,3 +1,9 @@
+-- start_matchsubs
+--
+-- m/ERROR:  Too much references to non-SELECT CTE \(allpaths\.c:\d+\)/
+-- s/\d+/XXX/g
+--
+-- end_matchsubs
 drop table if exists with_test1 cascade;
 NOTICE:  table "with_test1" does not exist, skipping
 create table with_test1 (i int, t text, value int) distributed by (i);
@@ -2274,3 +2280,104 @@ WITH e AS (
 
 DROP TABLE d;
 DROP TABLE r;
+-- Test planner not pushing down quals to non-SELECT queries inside CTE. There
+-- can be a DML operation, and it's incorrect to push down upper quals to it.
+--start_ignore
+drop table if exists with_dml;
+NOTICE:  table "with_dml" does not exist, skipping
+--end_ignore
+create table with_dml (i int, j int) distributed by (i);
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice2; segments: 3)
+         ->  Aggregate
+               ->  Subquery Scan on cte
+                     Filter: (cte.i > 2)
+                     ->  Insert on with_dml
+                           ->  Redistribute Motion 1:3  (slice1; segments: 1)
+                                 Hash Key: i.i
+                                 ->  Function Scan on generate_series i
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+ count 
+-------
+     3
+(1 row)
+
+select count(*) c from with_dml;
+ c 
+---
+ 5
+(1 row)
+
+-- Test one cannot use DML CTE if multiple CTE references found.
+-- Otherwise it will cause duplicated DML operations or planner errors.
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+ERROR:  Too much references to non-SELECT CTE (allpaths.c:2043)
+explain (costs off)
+with cte as (
+    update with_dml set j = j + 1
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+ERROR:  Too much references to non-SELECT CTE (allpaths.c:2043)
+explain (costs off)
+with cte as (
+    delete from with_dml where i > 0
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+ERROR:  Too much references to non-SELECT CTE (allpaths.c:2043)
+-- Greenplum fails to execute SELECT INTO and CREATE TABLE AS statements, whose
+-- queries contain modifying CTEs, because Greenplum cannot have two writer
+-- segworker groups, and during execution an error is thrown. Showing
+-- the error during planning stage would be more effective, therefore this test
+-- checks this behaviour.
+--start_ignore
+drop table if exists t_new;
+NOTICE:  table "t_new" does not exist, skipping
+--end_ignore
+explain (costs off)
+with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select into t_new from cte;
+ERROR:  cannot create plan with several writing gangs
+explain (costs off)
+with cte as
+(update with_dml set j = j + 1 returning *)
+select into t_new from cte;
+ERROR:  cannot create plan with several writing gangs
+explain (costs off)
+with cte as
+(delete from with_dml where i > 0 returning *)
+select into t_new from cte;
+ERROR:  cannot create plan with several writing gangs
+explain (costs off)
+create table t_new as (with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select * from cte);
+ERROR:  cannot create plan with several writing gangs
+explain (costs off)
+create table t_new as (with cte as
+(update with_dml set j = j + 1 returning *)
+select * from cte);
+ERROR:  cannot create plan with several writing gangs
+explain (costs off)
+create table t_new as (with cte as
+(delete from with_dml where i > 0 returning *)
+select * from cte);
+ERROR:  cannot create plan with several writing gangs
+drop table with_dml;
