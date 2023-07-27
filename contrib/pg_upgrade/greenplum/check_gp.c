@@ -17,6 +17,11 @@
 #include "pg_upgrade_greenplum.h"
 #include "check_gp.h"
 
+#include <sys/wait.h>
+
+static int check_greenplum_parallel_jobs;
+typedef void (*check_function)(void);
+
 static void check_covering_aoindex(void);
 static void check_parent_partitions_with_seg_entries(void);
 static void check_partition_indexes(void);
@@ -25,16 +30,18 @@ static void check_online_expansion(void);
 static void check_gphdfs_external_tables(void);
 static void check_gphdfs_user_roles(void);
 static void check_unique_primary_constraint(void);
-static void check_for_array_of_partition_table_types(ClusterInfo *cluster);
+static void check_for_array_of_partition_table_types(void);
 static void check_large_objects(void);
 static void check_invalid_indexes(void);
 static void check_foreign_key_constraints_on_root_partition(void);
+static void check_distributed_on_duplicate_columns(void);
 static void check_views_with_unsupported_lag_lead_function(void);
 static void check_views_with_fabricated_anyarray_casts(void);
 static void check_views_with_fabricated_unknown_casts(void);
 static void check_views_referencing_deprecated_tables(void);
 static void check_views_referencing_deprecated_columns(void);
-
+static void parallel_check_greenplum(check_function check_func);
+static bool parallel_checks_reap_child(bool wait_for_child);
 
 /*
  *	check_greenplum
@@ -47,24 +54,113 @@ static void check_views_referencing_deprecated_columns(void);
 void
 check_greenplum(void)
 {
-	check_online_expansion();
-	check_covering_aoindex();
-	check_parent_partitions_with_seg_entries();
-    check_heterogeneous_partition();
-	check_partition_indexes();
-	check_foreign_key_constraints_on_root_partition();
-	check_orphaned_toastrels();
-	check_gphdfs_external_tables();
-	check_gphdfs_user_roles();
-	check_unique_primary_constraint();
-	check_for_array_of_partition_table_types(&old_cluster);
-	check_large_objects();
-	check_invalid_indexes();
-	check_views_with_unsupported_lag_lead_function();
-	check_views_with_fabricated_anyarray_casts();
-	check_views_with_fabricated_unknown_casts();
-	check_views_referencing_deprecated_tables();
-	check_views_referencing_deprecated_columns();
+	int i = 0;
+	check_function check_functions[64] = {
+		check_online_expansion,
+		check_covering_aoindex,
+		check_parent_partitions_with_seg_entries,
+		check_heterogeneous_partition,
+		check_partition_indexes,
+		check_foreign_key_constraints_on_root_partition,
+		check_orphaned_toastrels,
+		check_gphdfs_external_tables,
+		check_gphdfs_user_roles,
+		check_unique_primary_constraint,
+		check_for_array_of_partition_table_types,
+		check_large_objects,
+		check_invalid_indexes,
+		check_distributed_on_duplicate_columns,
+		check_views_with_unsupported_lag_lead_function,
+		check_views_with_fabricated_anyarray_casts,
+		check_views_with_fabricated_unknown_casts,
+		check_views_referencing_deprecated_tables,
+		check_views_referencing_deprecated_columns,
+		NULL /* indicator for end of check functions */
+	};
+
+	pg_log(PG_REPORT, "\nStarting Parallel Greenplum Checks\n");
+	pg_log(PG_REPORT, "==================================\n");
+
+	while (check_functions[i])
+	{
+		parallel_check_greenplum(check_functions[i]);
+		i++;
+	}
+
+	/* wait for all children to finish */
+	while (parallel_checks_reap_child(true) == true);
+	pg_log(PG_REPORT, "==================================\n\n");
+}
+
+/*
+ *	parallel_check_greenplum
+ *
+ *	Do given check in parallel execution.
+ */
+static void
+parallel_check_greenplum(check_function check_func)
+{
+	pid_t		child;
+
+	if (user_opts.jobs <= 1)
+		check_func();
+	else /* parallel */
+	{
+		/* clear any finished children */
+		while (parallel_checks_reap_child(false) == true);
+
+		/* must we wait for a finished child? */
+		if (check_greenplum_parallel_jobs >= user_opts.jobs)
+			parallel_checks_reap_child(true);
+
+		/* set this before we start the job */
+		check_greenplum_parallel_jobs++;
+
+		/* Ensure stdio state is quiesced before forking */
+		fflush(NULL);
+
+		child = fork();
+		if (child == 0)
+		{
+			/* do the parallel work */
+			check_func();
+
+			/* if we take another exit path, it will be non-zero */
+			/* use _exit to skip atexit() functions */
+			_exit(get_check_fatal_occurred() ? 1 : 0);
+		}
+		else if (child < 0)
+			/* fork failed */
+			pg_fatal("could not create worker process: %s\n", strerror(errno));
+	}
+
+	return;
+}
+
+/*
+ *	collect status from a completed worker child
+ */
+static bool
+parallel_checks_reap_child(bool wait_for_child)
+{
+	int			work_status;
+	pid_t		child;
+
+	if (user_opts.jobs <= 1 || check_greenplum_parallel_jobs == 0)
+		return false;
+
+	child = waitpid(-1, &work_status, wait_for_child ? 0 : WNOHANG);
+	if (child == (pid_t) -1)
+		pg_fatal("waitpid() failed: %s\n", strerror(errno));
+	if (child == 0)
+		return false; /* no children, or no finished children */
+	if (work_status != 0)
+		set_check_fatal_occured();
+
+	/* do this after job has been removed */
+	check_greenplum_parallel_jobs--;
+
+	return true;
 }
 
 /*
@@ -76,6 +172,7 @@ check_greenplum(void)
 static void
 check_online_expansion(void)
 {
+	char	   *check_name = "Checking for online expansion status";
 	bool		expansion = false;
 	int			dbnum;
 
@@ -92,7 +189,7 @@ check_online_expansion(void)
 	if (!is_greenplum_dispatcher_mode())
 		return;
 
-	prep_status("Checking for online expansion status");
+	start_parallel_check(check_name);
 
 	/* Check if the cluster is in expansion status */
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
@@ -126,13 +223,13 @@ check_online_expansion(void)
 
 	if (expansion)
 	{
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation is in progress of online expansion,\n"
-			   "| must complete that job before the upgrade.\n\n");
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation is in progress of online expansion,\n"
+				"| must complete that job before the upgrade.\n\n");
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 /*
@@ -153,12 +250,13 @@ check_online_expansion(void)
 static void
 check_unique_primary_constraint(void)
 {
+	char	   *check_name = "Checking for unique or primary key constraints";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
 	int			dbnum;
 
-	prep_status("Checking for unique or primary key constraints");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "unique_primary_key_constraint.txt");
 
@@ -211,16 +309,16 @@ check_unique_primary_constraint(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains unique or primary key constraints\n"
-			   "| on tables.  These constraints need to be removed\n"
-			   "| from the tables before the upgrade.  A list of\n"
-			   "| constraints to remove is in the file:\n"
-			   "| \t%s\n\n", output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains unique or primary key constraints\n"
+				"| on tables.  These constraints need to be removed\n"
+				"| from the tables before the upgrade.  A list of\n"
+				"| constraints to remove is in the file:\n"
+				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 /*
@@ -265,12 +363,13 @@ check_unique_primary_constraint(void)
 static void
 check_covering_aoindex(void)
 {
+	char		   *check_name = "Checking for non-covering indexes on partitioned AO tables";
 	char			output_path[MAXPGPATH];
 	FILE		   *script = NULL;
 	bool			found = false;
 	int				dbnum;
 
-	prep_status("Checking for non-covering indexes on partitioned AO tables");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "mismatched_aopartition_indexes.txt");
 
@@ -319,29 +418,30 @@ check_covering_aoindex(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains partitioned append-only tables\n"
-			   "| with an index defined on the partition parent which isn't\n"
-			   "| present on all partition members.  These indexes must be\n"
-			   "| dropped before the upgrade.  A list of relations, and the\n"
-			   "| partitions in question is in the file:\n"
-			   "| \t%s\n\n", output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains partitioned append-only tables\n"
+				"| with an index defined on the partition parent which isn't\n"
+				"| present on all partition members.  These indexes must be\n"
+				"| dropped before the upgrade.  A list of relations, and the\n"
+				"| partitions in question is in the file:\n"
+				"| \t%s\n\n", output_path);
 
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_orphaned_toastrels(void)
 {
+	char		   *check_name = "Checking for orphaned TOAST relations";
 	bool			found = false;
 	int				dbnum;
 	char			output_path[MAXPGPATH];
 	FILE		   *script = NULL;
 
-	prep_status("Checking for orphaned TOAST relations");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "orphaned_toast_tables.txt");
 
@@ -383,15 +483,15 @@ check_orphaned_toastrels(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains orphaned toast tables which\n"
-			   "| must be dropped before upgrade.\n"
-			   "| A list of the problem databases is in the file:\n"
-			   "| \t%s\n\n", output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains orphaned toast tables which\n"
+				"| must be dropped before upgrade.\n"
+				"| A list of the problem databases is in the file:\n"
+				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 
 }
 
@@ -427,12 +527,13 @@ check_orphaned_toastrels(void)
 void
 check_heterogeneous_partition(void)
 {
+	char		   *check_name = "Checking for heterogeneous partitioned tables";
 	int				dbnum;
 	FILE		   *script = NULL;
 	bool			found = false;
 	char			output_path[MAXPGPATH];
 
-	prep_status("Checking for heterogeneous partitioned tables");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "heterogeneous_partitioned_tables.txt");
 
@@ -502,24 +603,24 @@ check_heterogeneous_partition(void)
 
 	if (found)
 	{
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains heterogeneous partition tables. Either one or more\n"
-			   "| child partitions have invalid dropped column references or the columns are\n"
-			   "| misaligned compared to the root partition. Upgrade cannot output partition\n"
-			   "| table DDL to preserve the dropped columns for the detected child partitions\n"
-			   "| since ALTER statements can only be applied from the root partition (which will\n"
-			   "| cascade down the partition hierarchy). Preservation of these columns is\n"
-			   "| necessary for on-disk compatibility of the child partitions. In order to\n"
-			   "| correct the child partitions, create a new staging table with the same schema\n"
-			   "| as the child partition, insert the old data into the staging table, exchange\n"
-			   "| the child partition with the staging table, and drop the staging table.\n"
-			   "| Alternatively, the entire partition table can be recreated.\n"
-			   "| A list of the problem tables is in the file:\n" "| \t%s\n\n",
-			   output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains heterogeneous partition tables. Either one or more\n"
+				"| child partitions have invalid dropped column references or the columns are\n"
+				"| misaligned compared to the root partition. Upgrade cannot output partition\n"
+				"| table DDL to preserve the dropped columns for the detected child partitions\n"
+				"| since ALTER statements can only be applied from the root partition (which will\n"
+				"| cascade down the partition hierarchy). Preservation of these columns is\n"
+				"| necessary for on-disk compatibility of the child partitions. In order to\n"
+				"| correct the child partitions, create a new staging table with the same schema\n"
+				"| as the child partition, insert the old data into the staging table, exchange\n"
+				"| the child partition with the staging table, and drop the staging table.\n"
+				"| Alternatively, the entire partition table can be recreated.\n"
+				"| A list of the problem tables is in the file:\n"
+				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 /*
@@ -534,12 +635,13 @@ check_heterogeneous_partition(void)
 static void
 check_partition_indexes(void)
 {
+	char		   *check_name = "Checking for indexes on partitioned tables";
 	int				dbnum;
 	FILE		   *script = NULL;
 	bool			found = false;
 	char			output_path[MAXPGPATH];
 
-	prep_status("Checking for indexes on partitioned tables");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "partitioned_tables_indexes.txt");
 
@@ -605,16 +707,16 @@ check_partition_indexes(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains partitioned tables with\n"
-			   "| indexes defined on them.  Indexes on partition parents,\n"
-			   "| as well as children, must be dropped before upgrade.\n"
-			   "| A list of the problem tables is in the file:\n"
-			   "| \t%s\n\n", output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains partitioned tables with\n"
+				"| indexes defined on them.  Indexes on partition parents,\n"
+				"| as well as children, must be dropped before upgrade.\n"
+				"| A list of the problem tables is in the file:\n"
+				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 /*
@@ -627,6 +729,7 @@ check_partition_indexes(void)
 static void
 check_gphdfs_external_tables(void)
 {
+	char	   *check_name = "Checking for gphdfs external tables";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
@@ -636,10 +739,9 @@ check_gphdfs_external_tables(void)
 	if (!(old_cluster.major_version >= 80215 && old_cluster.major_version < 80400))
 		return;
 
-	prep_status("Checking for gphdfs external tables");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "gphdfs_external_tables.txt");
-
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -683,15 +785,15 @@ check_gphdfs_external_tables(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains gphdfs external tables.  These \n"
-			   "| tables need to be dropped before upgrade.  A list of\n"
-			   "| external gphdfs tables to remove is provided in the file:\n"
-			   "| \t%s\n\n", output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains gphdfs external tables.  These \n"
+				"| tables need to be dropped before upgrade.  A list of\n"
+				"| external gphdfs tables to remove is provided in the file:\n"
+				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 /*
@@ -703,6 +805,7 @@ check_gphdfs_external_tables(void)
 static void
 check_gphdfs_user_roles(void)
 {
+	char	   *check_name = "Checking for users assigned the gphdfs role";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	PGresult   *res;
@@ -716,7 +819,7 @@ check_gphdfs_user_roles(void)
 	if (!(old_cluster.major_version >= 80215 && old_cluster.major_version < 80400))
 		return;
 
-	prep_status("Checking for users assigned the gphdfs role");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "gphdfs_user_roles.txt");
 
@@ -760,35 +863,36 @@ check_gphdfs_user_roles(void)
 	if (ntups > 0)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			   "| Your installation contains roles that have gphdfs privileges.\n"
-			   "| These privileges need to be revoked before upgrade.  A list\n"
-			   "| of roles and their corresponding gphdfs privileges that\n"
-			   "| must be revoked is provided in the file:\n"
-			   "| \t%s\n\n", output_path);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains roles that have gphdfs privileges.\n"
+				"| These privileges need to be revoked before upgrade.  A list\n"
+				"| of roles and their corresponding gphdfs privileges that\n"
+				"| must be revoked is provided in the file:\n"
+				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
-check_for_array_of_partition_table_types(ClusterInfo *cluster)
+check_for_array_of_partition_table_types(void)
 {
+	char	   *check_name = "Checking array types derived from partitions";
 	const char *const SEPARATOR = "\n";
 	int			dbnum;
 	char	   *dependee_partition_report = palloc0(1);
 
-	prep_status("Checking array types derived from partitions");
+	start_parallel_check(check_name);
 
-	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
 		PGresult   *res;
 		int			n_tables_to_check;
 		int			i;
 
-		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
-		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(&old_cluster, active_db->db_name);
 
 		/* Find the arraytypes derived from partitions of partitioned tables */
 		res = executeQueryOrDie(conn,
@@ -827,14 +931,15 @@ check_for_array_of_partition_table_types(ClusterInfo *cluster)
 
 	if (strlen(dependee_partition_report))
 	{
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			"| Array types derived from partitions of a partitioned table must not have dependants.\n"
-			"| OIDs of such types found and their original partitions:\n%s", dependee_partition_report);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Array types derived from partitions of a partitioned table must not have dependants.\n"
+				"| OIDs of such types found and their original partitions:\n%s\n\n",
+				dependee_partition_report);
 	}
 	pfree(dependee_partition_report);
 
-	check_ok();
+	parallel_check_ok(check_name);
 }
 
 /*
@@ -843,12 +948,13 @@ check_for_array_of_partition_table_types(ClusterInfo *cluster)
 static void
 check_large_objects(void)
 {
+	char	   *check_name = "Checking for large objects";
 	int			dbnum;
 	FILE	   *script = NULL;
 	bool		found = false;
 	char		output_path[MAXPGPATH];
 
-	prep_status("Checking for large objects");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "pg_largeobject.txt");
 
@@ -884,15 +990,15 @@ check_large_objects(void)
 
 	if (found)
 	{
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains large objects.  These objects are not supported\n"
 				"| by the new cluster and must be dropped.\n"
 				"| A list of databases which contains large objects is in the file:\n"
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 /*
@@ -912,6 +1018,7 @@ check_large_objects(void)
 static void
 check_invalid_indexes(void)
 {
+	char	   *check_name = "Checking for invalid indexes";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
@@ -919,10 +1026,9 @@ check_invalid_indexes(void)
 	int			i_indexname;
 	int			i_relname;
 
-	prep_status("Checking for invalid indexes");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "invalid_indexes.txt");
-
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -964,20 +1070,21 @@ check_invalid_indexes(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains invalid indexes.  These indexes either \n"
 				"| need to be dropped or reindexed before proceeding to upgrade.\n"
 				"| A list of invalid indexes is provided in the file:\n"
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_foreign_key_constraints_on_root_partition(void)
 {
+	char	   *check_name = "Checking for foreign key constraints on root partitions";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
@@ -985,7 +1092,7 @@ check_foreign_key_constraints_on_root_partition(void)
 	int			i_relname;
 	int			i_constraintname;
 
-	prep_status("Checking for foreign key constraints on root partitions");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "foreign_key_constraints.txt");
 
@@ -1034,8 +1141,8 @@ check_foreign_key_constraints_on_root_partition(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains foreign key constraint on root \n"
 				"| partition tables. These constraints need to be dropped before \n"
 				"| proceeding to upgrade. A list of foreign key constraints is \n"
@@ -1043,7 +1150,7 @@ check_foreign_key_constraints_on_root_partition(void)
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
@@ -1055,13 +1162,14 @@ check_views_with_unsupported_lag_lead_function(void)
 	if (GET_MAJOR_VERSION(old_cluster.major_version) >= 804)
 		return;
 
+	char		*check_name = "Checking for views with lead/lag functions using bigint";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
 	int			dbnum;
 	int			i_viewname;
 
-	prep_status("Checking for views with lead/lag functions using bigint");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "view_lead_lag_functions.txt");
 
@@ -1107,8 +1215,8 @@ check_views_with_unsupported_lag_lead_function(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains views using lag or lead \n"
 				"| functions with the second parameter as bigint. These views \n"
 				"| need to be dropped before proceeding to upgrade. \n"
@@ -1116,19 +1224,20 @@ check_views_with_unsupported_lag_lead_function(void)
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_views_with_fabricated_anyarray_casts()
 {
+	char		*check_name = "Checking for non-dumpable views with anyarray casts";
 	char		output_path[MAXPGPATH];
 	FILE		*script = NULL;
 	bool		found = false;
 	int			dbnum;
 	int			i_viewname;
 
-	prep_status("Checking for non-dumpable views with anyarray casts");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "view_anyarray_casts.txt");
 
@@ -1183,8 +1292,8 @@ check_views_with_fabricated_anyarray_casts()
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains views having anyarray\n"
 				"| casts. Drop the view or recreate the view without explicit \n"
 				"| array-type type casts before running the upgrade. Alternatively, drop the view \n"
@@ -1193,19 +1302,20 @@ check_views_with_fabricated_anyarray_casts()
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_views_with_fabricated_unknown_casts()
 {
+	char		*check_name = "Checking for non-dumpable views with unknown casts";
 	char		output_path[MAXPGPATH];
 	FILE		*script = NULL;
 	bool		found = false;
 	int			dbnum;
 	int			i_viewname;
 
-	prep_status("Checking for non-dumpable views with unknown casts");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "view_unknown_casts.txt");
 
@@ -1260,8 +1370,8 @@ check_views_with_fabricated_unknown_casts()
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains views having unknown\n"
 				"| casts. Drop the view or recreate the view without explicit \n"
 				"| unknown::cstring type casts before running the upgrade.\n"
@@ -1269,12 +1379,13 @@ check_views_with_fabricated_unknown_casts()
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_views_referencing_deprecated_tables()
 {
+	char		*check_name = "Checking for views referencing deprecated tables";
 	char		output_path[MAXPGPATH];
 	FILE		*script = NULL;
 	bool		found = false;
@@ -1289,7 +1400,7 @@ check_views_referencing_deprecated_tables()
 		GET_MAJOR_VERSION(new_cluster.major_version))
 		return;
 
-	prep_status("Checking for views referencing deprecated tables");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "view_deprecated_tables.txt");
 
@@ -1345,8 +1456,8 @@ check_views_referencing_deprecated_tables()
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains views referencing catalog\n"
 				"| tables that no longer exist in the target cluster.\n"
 				"| Drop these views before running the upgrade. Please refer to\n"
@@ -1355,12 +1466,13 @@ check_views_referencing_deprecated_tables()
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_views_referencing_deprecated_columns()
 {
+	char		*check_name = "Checking for views referencing deprecated columns";
 	char		output_path[MAXPGPATH];
 	FILE		*script = NULL;
 	bool		found = false;
@@ -1375,7 +1487,7 @@ check_views_referencing_deprecated_columns()
 		GET_MAJOR_VERSION(new_cluster.major_version))
 		return;
 
-	prep_status("Checking for views referencing deprecated columns");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "view_deprecated_columns.txt");
 
@@ -1431,8 +1543,8 @@ check_views_referencing_deprecated_columns()
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
+		parallel_gp_fatal_log(
+				check_name,
 				"| Your installation contains views referencing columns\n"
 				"| in catalog tables that no longer exist in the target cluster.\n"
 				"| Drop these views before running the upgrade. Please refer to\n"
@@ -1441,18 +1553,19 @@ check_views_referencing_deprecated_columns()
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
 }
 
 static void
 check_parent_partitions_with_seg_entries(void)
 {
+	char	   *check_name = "Checking AO/CO parent partitions with pg_aoseg entries";
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
 	int			dbnum;
 
-	prep_status("Checking AO/CO parent partitions with pg_aoseg entries");
+	start_parallel_check(check_name);
 
 	snprintf(output_path, sizeof(output_path), "parent_partitions_with_seg_entries.txt");
 
@@ -1507,14 +1620,100 @@ check_parent_partitions_with_seg_entries(void)
 	if (found)
 	{
 		fclose(script);
-		pg_log(PG_REPORT, "fatal\n");
-		gp_fatal_log(
-			"| Your installation contains append-only or column-oriented\n"
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains append-only or column-oriented\n"
 				"| parent partitions that contain entries in their pg_aoseg or pg_aocsseg\n"
 				"| tables respectively. Delete all rows from these pg_aoseg or pg_aocsseg \n"
 				"| tables before upgrading. A list of the problem tables is in the file:\n"
 				"| \t%s\n\n", output_path);
 	}
 	else
-		check_ok();
+		parallel_check_ok(check_name);
+}
+
+static void
+check_distributed_on_duplicate_columns(void)
+{
+	/*
+	 * Distribution on duplicate columns is already fixed in GPDB6+. Also, the
+	 * column attrnums in gp_distribution_policy does not exist on GPDB6+.
+	 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) >= 804)
+		return;
+
+	char	   *check_name = "Checking for tables distributed on duplicated columns";
+	int			dbnum;
+	FILE	   *script = NULL;
+	bool		found = false;
+	char		output_path[MAXPGPATH];
+
+	start_parallel_check(check_name);
+
+	snprintf(output_path, sizeof(output_path), "duplicate_column_distribution.txt");
+
+	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
+	{
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_tablename,
+					i_attrnums;
+		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(&old_cluster, active_db->db_name);
+
+		res = executeQueryOrDie(conn,
+								"WITH subquery1 AS ("
+								"    SELECT localoid::regclass AS tablename, "
+								"           unnest(attrnums) AS attrnum "
+								"    FROM gp_distribution_policy dp "
+								"    GROUP BY localoid, attrnum "
+								"    HAVING count(*) > 1 "
+								"), subquery2 AS ( "
+								"    SELECT tablename, array_agg(attrnum ORDER BY attrnum) AS sorted_attrnums "
+								"    FROM subquery1 "
+								"    GROUP BY tablename "
+								"    ORDER BY tablename "
+								")"
+								"SELECT tablename, replace(array_to_string(sorted_attrnums, ', '), '{', '') AS attrnums "
+								"FROM subquery2;");
+
+		ntups = PQntuples(res);
+		i_tablename = PQfnumber(res, "tablename");
+		i_attrnums = PQfnumber(res, "attrnums");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("Could not open file \"%s\": %s\n",
+						 output_path, getErrorText());
+			if (!db_used)
+			{
+				fprintf(script, "Database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s: %s\n",
+					PQgetvalue(res, rowno, i_tablename),
+					PQgetvalue(res, rowno, i_attrnums));
+		}
+
+		PQclear(res);
+		PQfinish(conn);
+	}
+
+	if (found)
+	{
+		fclose(script);
+		parallel_gp_fatal_log(
+				check_name,
+				"| Your installation contains tables distributed on duplicated columns.\n"
+				"| Update the distribution policy of the tables so there are no duplicated\n"
+				"| columns and restart the upgrade. A list of the problem tables and its\n"
+				"| duplicated columns is in the file:\n"
+				"| \t%s\n\n", output_path);
+	}
+	else
+		parallel_check_ok(check_name);
+
 }

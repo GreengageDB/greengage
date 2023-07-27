@@ -308,7 +308,7 @@ There can be at most one `proxy` parameter in the configuration file. The URL sp
 
 Setting the value to `false` can be useful in testing and development environments to allow communication without changing certificates.
 
-**Warning:** Setting the value to `false` exposes a security risk by ignoring invalid credentials when establishing communication between a client and a S3 data store.
+> **Caution** Setting the value to `false` exposes a security risk by ignoring invalid credentials when establishing communication between a client and a S3 data store.
 
 `version`
 :   Specifies the version of the information specified in the `LOCATION` clause of the `CREATE EXTERNAL TABLE` command. The value is either `1` or `2`. The default value is `1`.

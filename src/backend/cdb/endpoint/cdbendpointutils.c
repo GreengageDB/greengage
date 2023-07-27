@@ -90,7 +90,7 @@ check_parallel_retrieve_cursor_errors(EState *estate)
 		estate->dispatcherState = NULL;
 		cdbdisp_cancelDispatch(ds);
 		FlushErrorState();
-		ReThrowError(qeError);
+		ThrowErrorData(qeError);
 	}
 }
 

@@ -102,3 +102,24 @@ set optimizer_enable_hashagg = off;
 set optimizer_enable_groupagg = off;
 explain select count(*) from foo group by a;
 
+-- Test DROP TYPE..CASCADE on a user type associated with partition key doesn't drop
+-- the column and error's out instead
+CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');
+CREATE TABLE partition_key_dropped(a int, b bug_status) PARTITION BY LIST(b)
+( PARTITION p1 VALUES ('new'),
+  PARTITION p2 VALUES ('open'));
+INSERT INTO partition_key_dropped VALUES(1, 'new');
+INSERT INTO partition_key_dropped VALUES(2, 'open');
+DROP TYPE bug_status CASCADE;
+
+EXPLAIN SELECT * FROM partition_key_dropped;
+SELECT * FROM partition_key_dropped;
+
+EXPLAIN DELETE FROM partition_key_dropped WHERE a=1;
+DELETE FROM partition_key_dropped WHERE a=1;
+
+EXPLAIN UPDATE partition_key_dropped SET a=21 where a=2;
+UPDATE partition_key_dropped SET a=21 where a=2;
+
+EXPLAIN INSERT INTO partition_key_dropped VALUES(3);
+INSERT INTO partition_key_dropped VALUES(3);

@@ -307,9 +307,11 @@ ExecDynamicIndexScan(DynamicIndexScanState *node)
 	 * Scan index to find next tuple to return. If the current index
 	 * is exhausted, close it and open the next index for scan.
 	 */
-	while (TupIsNull(slot) &&
-		   initNextIndexToScan(node))
+	for (;;)
 	{
+		if (!initNextIndexToScan(node))
+			return NULL;
+
 		slot = ExecIndexScan(node->indexScanState);
 
 		/*
@@ -326,6 +328,8 @@ ExecDynamicIndexScan(DynamicIndexScanState *node)
 
 			node->scan_state = SCAN_INIT;
 		}
+		else
+			break;
 	}
 	return slot;
 }

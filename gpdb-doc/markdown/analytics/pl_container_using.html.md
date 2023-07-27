@@ -214,7 +214,7 @@ If a normal \(non-superuser\) Greenplum Database user runs the function, the fun
 
 When Greenplum Database runs a PL/Container UDF, Query Executer \(QE\) processes start Docker containers and reuse them as needed. After a certain amount of idle time, a QE process quits and destroys its Docker containers. You can control the amount of idle time with the Greenplum Database server configuration parameter [gp\_vmem\_idle\_resource\_timeout](../ref_guide/config_params/guc-list.html). Controlling the idle time might help with Docker container reuse and avoid the overhead of creating and starting a Docker container.
 
-**Warning:** Changing `gp_vmem_idle_resource_timeout` value, might affect performance due to resource issues. The parameter also controls the freeing of Greenplum Database resources other than Docker containers.
+> **Caution** Changing `gp_vmem_idle_resource_timeout` value, might affect performance due to resource issues. The parameter also controls the freeing of Greenplum Database resources other than Docker containers.
 
 ### <a id="function_examples"></a>Basic Function Examples 
 

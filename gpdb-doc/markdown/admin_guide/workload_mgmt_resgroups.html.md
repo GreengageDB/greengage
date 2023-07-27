@@ -116,7 +116,7 @@ The [gp\_resource\_group\_cpu\_limit](../ref_guide/config_params/guc-list.html) 
 
 > **Note** The default `gp_resource_group_cpu_limit` value may not leave sufficient CPU resources if you are running other workloads on your Greenplum Database cluster nodes, so be sure to adjust this server configuration parameter accordingly.
 
-**Warning:** Avoid setting `gp_resource_group_cpu_limit` to a value higher than .9. Doing so may result in high workload queries taking near all CPU resources, potentially starving Greenplum Database auxiliary processes.
+> **Caution** Avoid setting `gp_resource_group_cpu_limit` to a value higher than .9. Doing so may result in high workload queries taking near all CPU resources, potentially starving Greenplum Database auxiliary processes.
 
 ### <a id="cpuset"></a>Assigning CPU Resources by Core 
 

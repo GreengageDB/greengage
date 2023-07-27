@@ -1142,6 +1142,7 @@ typedef struct SubPlanState
 	FmgrInfo   *cur_eq_funcs;	/* equality functions for LHS vs. table */
 	void	   *ts_pos;
 	GenericTupStore *ts_state;
+	bool        prefetch_subplan_done; /* Greenplum specific */
 } SubPlanState;
 
 /* ----------------
@@ -2467,6 +2468,7 @@ typedef struct MaterialState
 	void	   *ts_markpos;
 	void	   *share_lk_ctxt;
 	char	   *share_bufname_prefix;
+	bool        cdb_strict;
 } MaterialState;
 
 /* ----------------

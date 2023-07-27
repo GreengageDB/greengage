@@ -43,7 +43,7 @@ To revoke privileges, use the `REVOKE` command. For example:
 =# REVOKE ALL PRIVILEGES ON mytable FROM jsmith; 
 ```
 
-You can also use the `DROP OWNED` and `REASSIGN OWNED` commands for managing objects owned by deprecated roles. \(Note: only an object's owner or a superuser can drop an object or reassign ownership.\) For example:
+You can also use the `DROP OWNED` and `REASSIGN OWNED` commands for managing objects owned by deprecated roles. Only an object's owner or a superuser can drop an object or reassign ownership.) For example:
 
 ```
  =# REASSIGN OWNED BY sally TO bob;

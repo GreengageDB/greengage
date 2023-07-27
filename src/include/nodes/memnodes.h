@@ -73,6 +73,7 @@ typedef struct MemoryContextData
     const char *callerFile;     /* __FILE__ of most recent caller */
     int         callerLine;     /* __LINE__ of most recent caller */
 #endif
+	MemoryContextCallback *reset_cbs;	/* list of reset/delete callbacks */
 } MemoryContextData;
 
 /* utils/palloc.h contains typedef struct MemoryContextData *MemoryContext */

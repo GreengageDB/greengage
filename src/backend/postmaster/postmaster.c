@@ -641,6 +641,7 @@ static void ShmemBackendArrayRemove(Backend *bn);
 /* Macros to check exit status of a child process */
 #define EXIT_STATUS_0(st)  ((st) == 0)
 #define EXIT_STATUS_1(st)  (WIFEXITED(st) && WEXITSTATUS(st) == 1)
+#define EXIT_STATUS_3(st)  (WIFEXITED(st) && WEXITSTATUS(st) == 3)
 
 /* if we are a QD postmaster or not */
 bool Gp_entry_postmaster = false;
@@ -3246,6 +3247,17 @@ reaper(SIGNAL_ARGS)
 				(EXIT_STATUS_0(exitstatus) || EXIT_STATUS_1(exitstatus)))
 			{
 				StartupStatus = STARTUP_NOT_RUNNING;
+				pmState = PM_WAIT_BACKENDS;
+				/* PostmasterStateMachine logic does the rest */
+				continue;
+			}
+
+			if (EXIT_STATUS_3(exitstatus))
+			{
+				ereport(LOG,
+					(errmsg("shutdown at recovery target")));
+				Shutdown = SmartShutdown;
+				TerminateChildren(SIGTERM);
 				pmState = PM_WAIT_BACKENDS;
 				/* PostmasterStateMachine logic does the rest */
 				continue;

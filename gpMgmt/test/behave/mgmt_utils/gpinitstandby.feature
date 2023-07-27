@@ -60,7 +60,7 @@ Feature: Tests for gpinitstandby feature
     Scenario: gpinitstandby should not throw stacktrace when $GPHOME/share directory is non-writable
         Given the database is running
         And the standby is not initialized
-        And "$GPHOME/share" has its permissions set to "555"
+        And "$GPHOME/share" has its permissions set to "555" on "localhost"
         And the user runs gpinitstandby with options " "
         Then gpinitstandby should return a return code of 0
         And gpinitstandby should not print "Traceback" to stdout

@@ -31,8 +31,7 @@ For more information about `iptables` see the `iptables` and firewall documentat
     $ gpstart -a
     ```
 
-
-**Warning:** After enabling `iptables`, this error in the `/var/log/messages` file indicates that the setting for the `iptables` table is too low and needs to be increased.
+> **Caution** After enabling `iptables`, this error in the `/var/log/messages` file indicates that the setting for the `iptables` table is too low and needs to be increased.
 
 ```
 ip_conntrack: table full, dropping packet.

@@ -10,7 +10,7 @@ Greenplum Database provides an administrative schema called `gp_toolkit` that yo
 
 This documentation describes the most useful views in `gp_toolkit`. You may notice other objects \(views, functions, and external tables\) within the `gp_toolkit` schema that are not described in this documentation \(these are supporting objects to the views described in this section\).
 
-**Warning:** Do not change database objects in the gp\_toolkit schema. Do not create database objects in the schema. Changes to objects in the schema might affect the accuracy of administrative information returned by schema objects. Any changes made in the gp\_toolkit schema are lost when the database is backed up and then restored with the `gpbackup` and `gprestore` utilities.
+> **Caution** Do not change database objects in the gp\_toolkit schema. Do not create database objects in the schema. Changes to objects in the schema might affect the accuracy of administrative information returned by schema objects. Any changes made in the gp\_toolkit schema are lost when the database is backed up and then restored with the `gpbackup` and `gprestore` utilities.
 
 These are the categories for views in the `gp_toolkit` schema.
 

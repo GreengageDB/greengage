@@ -721,7 +721,7 @@ cdbCopyEndInternal(CdbCopy *c, char *abort_msg,
 		if (first_error)
 		{
 			FlushErrorState();
-			ReThrowError(first_error);
+			ThrowErrorData(first_error);
 		}
 
 		/* errors that occurred in the COPY itself */

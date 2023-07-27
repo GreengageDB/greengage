@@ -2657,6 +2657,9 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 		return;
 
 	ns = ((PlanState *) sortstate)->instrument->cdbNodeSummary;
+	/* Might not have received stats from qExecs if they hit errors. */
+	if (!ns)
+		return;
 	for (i = 0; i < NUM_SORT_METHOD; i++)
 	{
 		CdbExplain_Agg	*agg;

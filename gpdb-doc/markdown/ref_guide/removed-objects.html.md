@@ -2,7 +2,7 @@
 title: Objects Removed in Greenplum 6 
 ---
 
-Greenplum Database 6 removes several database objects. These changes can effect the successful upgrade from one major version to another. Review these objects when using Geenplum Upgrade, or Greenplum Backup and Restore. This topic highlight these changes.
+Greenplum Database 6 removes several database objects. These changes can effect the successful upgrade from one major version to another. Review these objects when using Greenplum Upgrade, or Greenplum Backup and Restore. This topic highlight these changes.
 
 -   [Removed Relations](#rem_relations)
 -   [Removed Columns](#rem_columns)

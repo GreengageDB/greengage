@@ -17,6 +17,8 @@
 
 test: pg_dump_binary_upgrade
 
+test: pg_dump_locking
+
 test: gp_dispatch_keepalives
 
 # copy command
@@ -58,10 +60,11 @@ test: gpcopy
 # this test fiddles with relfrozenxid, so run independently as any
 # parallel test running vacuum could have trouble
 test: matview_ao
-
-test: filter gp_combocid gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix toast sublink table_functions olap_setup complex opclass_ddl information_schema guc_env_var gp_explain distributed_transactions explain_format direct_dispatch_explain_analyze explain_analyze
+test: table_functions
+test: filter gp_combocid gpctas gpdist gpdist_opclasses gpdist_legacy_opclasses matrix toast sublink olap_setup complex opclass_ddl information_schema guc_env_var distributed_transactions explain_format direct_dispatch_explain_analyze explain_analyze
 
 # below test(s) inject faults so each of them need to be in a separate group
+test: gp_explain
 test: guc_gp
 test: misc_jiras
 test: statement_mem_for_windowagg
@@ -87,7 +90,7 @@ test: event_trigger_gp
 
 # deadlock tests run separately - because we don't know which one gets stuck.
 test: deadlock
-test: deadlock2
+test: motion_deadlock
 
 # test workfiles
 test: workfile/hashagg_spill workfile/hashjoin_spill workfile/materialize_spill workfile/sisc_mat_sort workfile/sisc_sort_spill workfile/sort_spill workfile/spilltodisk
@@ -160,7 +163,7 @@ test: gp_toolkit_ao_funcs trig auth_constraint role portals_updatable plpgsql_ca
 test: rle rle_delta dsp not_out_of_shmem_exit_slots
 
 # direct dispatch tests
-test: direct_dispatch bfv_dd bfv_dd_multicolumn bfv_dd_types
+test: direct_dispatch bfv_dd bfv_dd_multicolumn bfv_dd_types interrupt_holdoff_count
 
 # catalog test uses pg_get_constraintdef which may report ERROR when executed
 # concurrently with other tests. Cause pg_get_constraintdef() looks up

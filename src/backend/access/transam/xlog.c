@@ -277,7 +277,7 @@ static char *recoveryEndCommand = NULL;
 static char *archiveCleanupCommand = NULL;
 static RecoveryTargetType recoveryTarget = RECOVERY_TARGET_UNSET;
 static bool recoveryTargetInclusive = true;
-static bool recoveryPauseAtTarget = true;
+static RecoveryTargetAction recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
 static TransactionId recoveryTargetXid;
 static TimestampTz recoveryTargetTime;
 static char *recoveryTargetName;
@@ -5349,6 +5349,8 @@ readRecoveryCommandFile(void)
 	ConfigVariable *item,
 			   *head = NULL,
 			   *tail = NULL;
+	bool		recoveryTargetActionSet = false;
+
 
 	fd = AllocateFile(RECOVERY_COMMAND_FILE, "r");
 	if (fd == NULL)
@@ -5394,13 +5396,31 @@ readRecoveryCommandFile(void)
 		}
 		else if (strcmp(item->name, "pause_at_recovery_target") == 0)
 		{
-			if (!parse_bool(item->value, &recoveryPauseAtTarget))
+			ereport(WARNING,
+					(errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+					 errmsg("pause_at_recovery_target is deprecated and no longer has function"),
+					 errhint("Use recovery parameter \"recovery_target_action\" instead.")));
+		}
+		else if (strcmp(item->name, "recovery_target_action") == 0)
+		{
+			if (strcmp(item->value, "pause") == 0)
+				recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
+			else if (strcmp(item->value, "promote") == 0)
+				recoveryTargetAction = RECOVERY_TARGET_ACTION_PROMOTE;
+			else if (strcmp(item->value, "shutdown") == 0)
+				recoveryTargetAction = RECOVERY_TARGET_ACTION_SHUTDOWN;
+			else
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("parameter \"%s\" requires a Boolean value", "pause_at_recovery_target")));
+						 errmsg("invalid value for recovery parameter \"%s\"",
+								"recovery_target_action"),
+						 errhint("The allowed values are \"pause\", \"promote\" and \"shutdown\".")));
+
 			ereport(DEBUG2,
-					(errmsg_internal("pause_at_recovery_target = '%s'",
+					(errmsg_internal("recovery_target_action = '%s'",
 									 item->value)));
+
+			recoveryTargetActionSet = true;
 		}
 		else if (strcmp(item->name, "recovery_target_timeline") == 0)
 		{
@@ -5577,6 +5597,16 @@ readRecoveryCommandFile(void)
 		ereport(FATAL,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			errmsg("standby mode is not supported by single-user servers")));
+
+	/*
+	 * Override any inconsistent requests. Not that this is a change
+	 * of behaviour in 9.5; prior to this we simply ignored a request
+	 * to pause if hot_standby = off, which was surprising behaviour.
+	 */
+	if (recoveryTargetAction == RECOVERY_TARGET_ACTION_PAUSE &&
+		recoveryTargetActionSet &&
+		!EnableHotStandby)
+		recoveryTargetAction = RECOVERY_TARGET_ACTION_SHUTDOWN;
 
 	/* Enable fetching from archive recovery area */
 	ArchiveRecoveryRequested = true;
@@ -7529,10 +7559,37 @@ StartupXLOG(void)
 			 * end of main redo apply loop
 			 */
 
-			if (recoveryPauseAtTarget && reachedStopPoint)
+			if (reachedStopPoint)
 			{
-				SetRecoveryPause(true);
-				recoveryPausesHere();
+				if (!reachedConsistency)
+					ereport(FATAL,
+						(errmsg("requested recovery stop point is before consistent recovery point")));
+
+				/*
+				 * This is the last point where we can restart recovery with a
+				 * new recovery target, if we shutdown and begin again. After
+				 * this, Resource Managers may choose to do permanent corrective
+				 * actions at end of recovery.
+				 */
+				switch (recoveryTargetAction)
+				{
+					case RECOVERY_TARGET_ACTION_SHUTDOWN:
+							/*
+							 * exit with special return code to request shutdown
+							 * of postmaster.  Log messages issued from
+							 * postmaster.
+							 */
+							proc_exit(3);
+
+					case RECOVERY_TARGET_ACTION_PAUSE:
+							SetRecoveryPause(true);
+							recoveryPausesHere();
+
+							/* drop into promote */
+
+					case RECOVERY_TARGET_ACTION_PROMOTE:
+							break;
+				}
 			}
 
 			/* Allow resource managers to do any required cleanup. */
@@ -7550,6 +7607,7 @@ StartupXLOG(void)
 				ereport(LOG,
 					 (errmsg("last completed transaction was at log time %s",
 							 timestamptz_to_str(xtime))));
+
 			InRedo = false;
 		}
 		else
@@ -7644,13 +7702,6 @@ StartupXLOG(void)
 		(EndOfLog < minRecoveryPoint ||
 		 !XLogRecPtrIsInvalid(ControlFile->backupStartPoint)))
 	{
-		if (reachedStopPoint)
-		{
-			/* stopped because of stop request */
-			ereport(FATAL,
-					(errmsg("requested recovery stop point is before consistent recovery point")));
-		}
-
 		/*
 		 * Ran off end of WAL before reaching end-of-backup WAL record, or
 		 * minRecoveryPoint. That's usually a bad sign, indicating that you

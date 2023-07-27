@@ -37,7 +37,7 @@ For information about the supported Greenplum extension packages and software ve
 
 There are significant changes in PostGIS 2.5.4 compared with 2.1.5. For a list of new and enhanced functions in PostGIS 2.5, see the PostGIS documentation [PostGIS Functions new or enhanced in 2.5](https://postgis.net/docs/manual-2.5/PostGIS_Special_Functions_Index.html#NewFunctions_2_5) and [Release 2.5.4](https://postgis.net/docs/manual-2.5/release_notes.html).
 
-<p class="note"><strong>Note:</strong> To upgrade PostGIS refer to  <a href="./postgis-upgrade.html">Upgrading PostGIS 2.1.5 or 2.5.4</a>.</p>
+> **Note** To upgrade PostGIS refer to  [Upgrading PostGIS 2.1.5 or 2.5.4](./postgis-upgrade.html).
 
 This table lists the PostGIS extensions support by Greenplum PostGIS.
 
@@ -233,7 +233,7 @@ You use the `DROP EXTENSION` command to remove support for the PostGIS extension
 
 Removing PostGIS support from a database does not remove these PostGIS Raster environment variables from the `greenplum_path.sh` file: `GDAL_DATA`, `POSTGIS_ENABLE_OUTDB_RASTERS`, `POSTGIS_GDAL_ENABLED_DRIVERS`. The environment variables are removed when you uninstall the PostGIS extension package.
 
-**Warning:** Removing PostGIS support from a database drops PostGIS database objects from the database without warning. Users accessing PostGIS objects might interfere with the dropping of PostGIS objects. See [Notes](#postgis_note).
+> **Caution** Removing PostGIS support from a database drops PostGIS database objects from the database without warning. Users accessing PostGIS objects might interfere with the dropping of PostGIS objects. See [Notes](#postgis_note).
 
 #### <a id="drop_postgis_cmd"></a>Using the DROP EXTENSION Command 
 

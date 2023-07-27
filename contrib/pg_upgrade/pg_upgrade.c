@@ -170,6 +170,31 @@ main(int argc, char **argv)
 	copy_clog_xlog_xid();
 
 	/*
+	 * GPDB: This used to be right before syncing the data directory to disk
+	 * but is needed here before create_new_objects() due to our usage of a
+	 * preserved oid list. When creating new objects on the target cluster,
+	 * objects that do not have a preassigned oid will try to get a new oid
+	 * from the oid counter. This works in upstream Postgres but can be slow
+	 * in GPDB because the new oid is checked against the preserved oid
+	 * list. If the new oid is in the preserved oid list, a new oid is
+	 * generated from the oid counter until a valid oid is found. In
+	 * production scenarios, it would be very common to have a very, very
+	 * large preserved oid list and starting the oid counter from
+	 * FirstNormalObjectId (16384) would make object creation slower than
+	 * usual near the beginning of pg_restore. To prevent pg_restore
+	 * performance degradation from so many invalid new oids from the oid
+	 * counter, bump the oid counter to what the source cluster has via
+	 * pg_resetxlog. If the preserved oid list logic is removed from
+	 * pg_upgrade, move this step back to where it was before.
+	 */
+	prep_status("Setting next OID for new cluster");
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
+			  "\"%s/pg_resetxlog\" --binary-upgrade -o %u \"%s\"",
+			  new_cluster.bindir, old_cluster.controldata.chkpnt_nxtoid,
+			  new_cluster.pgdata);
+	check_ok();
+
+	/*
 	 * In upgrading from GPDB4, copy the pg_distributedlog over in vanilla.
 	 * The assumption that this works needs to be verified
 	 */
@@ -189,12 +214,15 @@ main(int argc, char **argv)
 	else
 	{
 		/*
-		 * Restore scripts contains statements to update relfrozenxid and relminxmid
-		 * for the relations according to the master, and the same data is copied to the
-		 * segments but on segments those should reflect the values from the corresponding
-		 * segment database. So, update the xids on the segments for user and catalog tables.
-		 * If this step is not done on segment, subsequent vacuum freeze can complain that
-		 * the xmin <some low number> from before relfrozenxid <some higher number>
+		 * GPDB: We run set_frozenxids, update_db_xids, and freeze_master_data
+		 * to update relfrozenxid and relminmxid for all applicable relations
+		 * according to the master. This same catalog was copied over to the
+		 * segments to initialize their catalog but the relfrozenxid and
+		 * relminmxid should reflect the values from the corresponding segment
+		 * database. So, update the xids on the segments for user and catalog
+		 * tables. If this step is not done on segments, subsequent vacuum
+		 * freeze can complain that the xmin <some low number> from before
+		 * relfrozenxid <some higher number>.
 		 */
 		set_frozenxids(false);
 	}
@@ -244,19 +272,6 @@ main(int argc, char **argv)
 
 		stop_postmaster(false);
 	}
-
-	/*
-	 * Assuming OIDs are only used in system tables, there is no need to
-	 * restore the OID counter because we have not transferred any OIDs from
-	 * the old system, but we do it anyway just in case.  We do it late here
-	 * because there is no need to have the schema load use new oids.
-	 */
-	prep_status("Setting next OID for new cluster");
-	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-			  "\"%s/pg_resetxlog\" --binary-upgrade -o %u \"%s\"",
-			  new_cluster.bindir, old_cluster.controldata.chkpnt_nxtoid,
-			  new_cluster.pgdata);
-	check_ok();
 
 	/* For non-master segments, uniquify the system identifier. */
 	if (!is_greenplum_dispatcher_mode())
@@ -823,6 +838,10 @@ copy_clog_xlog_xid(void)
  * pre-9.3 database, which does not store per-table or per-DB minmxid, then
  * the relminmxid/datminmxid values filled in by the restore script will just
  * be zeroes.
+ *
+ * GPDB: We've disabled the relfrozenxid/relminmxid preservation in the
+ * binary-upgrade restore scripts in favor of doing bulk pg_class updates
+ * mainly via update_db_xids().
  *
  * Hence, with a pre-9.3 source database, a second call occurs after
  * everything is restored, with minmxid_only = true.  This pass will

@@ -1,12 +1,14 @@
 import pipes
 import tempfile
+import time
 
 from behave import given, then
 from pygresql import pg
 
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray
-from test.behave_utils.utils import run_cmd
+from test.behave_utils.utils import run_cmd,wait_for_database_dropped
+from gppylib.commands.base import Command, REMOTE
 
 class Tablespace:
     def __init__(self, name):
@@ -36,6 +38,7 @@ class Tablespace:
         with dbconn.connect(dbconn.DbURL(dbname="postgres"), unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             db.query("DROP DATABASE IF EXISTS %s" % self.dbname)
+            wait_for_database_dropped(self.dbname)
             db.query("DROP TABLESPACE IF EXISTS %s" % self.name)
 
             # Without synchronous_commit = 'remote_apply' introduced in 9.6, there

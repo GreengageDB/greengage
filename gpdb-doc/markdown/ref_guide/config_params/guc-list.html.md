@@ -670,11 +670,11 @@ gpconfig -s 'gp_default_storage_options'
 
 |Value Range|Default|Set Classifications<sup>1</sup>|
 |-----------|-------|---------------------|
-|`appendoptimized`= `TRUE` or `FALSE`<br/><br/>`blocksize`= integer between 8192 and 2097152<br/><br/>`checksum`= `TRUE` or `FALSE`<br/><br/>`compresstype`= `ZLIB` or `ZSTD` or `QUICKLZ`<sup>2</sup> or `RLE`\_`TYPE` or `NONE`<br/><br/>`compresslevel`= integer between 0 and 19<br/><br/>`orientation`= `ROW` \| `COLUMN`|`appendoptimized`=`FALSE`<br/><br/>`blocksize`=`32768`<br/><br/>`checksum`=`TRUE`<br/><br/>`compresstype`=`none`<br/><br/>`compresslevel`=`0`<br/><br/>`orientation`=`ROW`|master, session, reload|
+|`appendoptimized`= `TRUE` or `FALSE`<br/><br/>`blocksize`= integer between 8192 and 2097152<br/><br/>`checksum`= `TRUE` or `FALSE`<br/><br/>`compresstype`= `ZLIB` or `ZSTD` or `QUICKLZ` or `RLE`\_`TYPE` or `NONE`<br/><br/>`compresslevel`= integer between 0 and 19<br/><br/>`orientation`= `ROW` \| `COLUMN`|`appendoptimized`=`FALSE`<br/><br/>`blocksize`=`32768`<br/><br/>`checksum`=`TRUE`<br/><br/>`compresstype`=`none`<br/><br/>`compresslevel`=`0`<br/><br/>`orientation`=`ROW`|master, session, reload|
 
 > **Note** <sup>1</sup>The set classification when the parameter is set at the system level with the `gpconfig` utility.
 
-> **Note** <sup>2</sup>QuickLZ compression is available only in the commercial release of VMware Greenplum.
+> **Note** QuickLZ compression is available only in the commercial release of VMware Greenplum. Support for the QuickLZ compression algorithm is deprecated and will be removed in the next major release of VMware Greenplum.
 
 ## <a id="gp_dispatch_keepalives_count"></a>gp\_dispatch\_keepalives\_count 
 
@@ -748,7 +748,7 @@ Controls availability of the `EXCHANGE DEFAULT PARTITION` clause for `ALTER TABL
 
 If the value is `on`, Greenplum Database returns a warning stating that exchanging the default partition might result in incorrect results due to invalid data in the default partition.
 
-**Warning:** Before you exchange the default partition, you must ensure the data in the table to be exchanged, the new default partition, is valid for the default partition. For example, the data in the new default partition must not contain data that would be valid in other leaf child partitions of the partitioned table. Otherwise, queries against the partitioned table with the exchanged default partition that are run by GPORCA might return incorrect results.
+> **Caution** Before you exchange the default partition, you must ensure the data in the table to be exchanged, the new default partition, is valid for the default partition. For example, the data in the new default partition must not contain data that would be valid in other leaf child partitions of the partitioned table. Otherwise, queries against the partitioned table with the exchanged default partition that are run by GPORCA might return incorrect results.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -1339,7 +1339,9 @@ This parameter can be set for a session. The parameter cannot be set within a tr
 > **Note** 
 >The `gp_resource_group_bypass_catalog_query` server configuration parameter is enforced only when resource group-based resource management is active.
 
-When set to `true` -- the default -- Greenplum Database's resource group scheduler bypasses all queries that fulfill both of the following criteria:
+The default value for this configuration parameter is `false`, Greenplum Database's resource group scheduler enforces resource group limits on catalog queries. Note that when `false` and the database has reached the maximum amount of concurrent transactions, the scheduler can block queries that exclusively read from system catalogs.
+
+When set to `true` Greenplum Database's resource group scheduler bypasses all queries that fulfill both of the following criteria:
 
 - They read exclusively from system catalogs
 - They contain in their query text `pg_catalog` schema tables only
@@ -1347,11 +1349,9 @@ When set to `true` -- the default -- Greenplum Database's resource group schedul
 >**Note**
 >If a query contains a mix of `pg_catalog` and any other schema tables the scheduler will **not** bypass the query.
 
-When this configuration parameter is set to `false` and the database has reached the maximum amount of concurrent transactions, the scheduler can block queries that exclusively read from system catalogs. 
-
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
-|Boolean|true|local, session, reload|
+|Boolean|false|local, session, reload|
 
 ## <a id="gp_resource_group_cpu_ceiling_enforcement"></a>gp\_resource\_group\_cpu\_ceiling\_enforcement 
 
@@ -1490,14 +1490,6 @@ The default value is `false`.
 |-----------|-------|-------------------|
 |Boolean|false|read only|
 
-## <a id="gp_role"></a>gp\_role 
-
-The role of this server process is set to *dispatch* for the master and *execute* for a segment.
-
-|Value Range|Default|Set Classifications|
-|-----------|-------|-------------------|
-|dispatch<br/><br/>execute<br/><br/>utility| |read only|
-
 ## <a id="gp_safefswritesize"></a>gp\_safefswritesize 
 
 Specifies a minimum size for safe write operations to append-optimized tables in a non-mature file system. When a number of bytes greater than zero is specified, the append-optimized writer adds padding data up to that number in order to prevent data corruption due to file system errors. Each non-mature file system has a known safe write size that must be specified here when using Greenplum Database with that type of file system. This is commonly set to a multiple of the extent size of the file system; for example, Linux ext3 is 4096 bytes, so a value of 32768 is commonly used.
@@ -1545,6 +1537,14 @@ A system assigned ID number for a client session. Starts counting from 1 when th
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
 |1-*n*|14|read only|
+
+## <a id="gp_session_role"></a>gp_session_role
+
+The role of this server process is set to *dispatch* for the master and *execute* for a segment.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|dispatch<br/><br/>execute<br/><br/>utility| |read only|
 
 ## <a id="gp_set_proc_affinity"></a>gp\_set\_proc\_affinity 
 
@@ -1722,7 +1722,7 @@ Greenplum Database uses checksums to prevent loading data that has been corrupte
 
 By default, when a checksum verify error occurs when reading a heap data page, Greenplum Database generates an error and prevents the page from being loaded into managed memory. When `ignore_checksum_failure` is set to on and a checksum verify failure occurs, Greenplum Database generates a warning, and allows the page to be read into managed memory. If the page is then updated it is saved to disk and replicated to the mirror. If the page header is corrupt an error is reported even if this option is enabled.
 
-**Warning:** Setting `ignore_checksum_failure` to on may propagate or hide data corruption or lead to other serious problems. However, if a checksum failure has already been detected and the page header is uncorrupted, setting `ignore_checksum_failure` to on may allow you to bypass the error and recover undamaged tuples that may still be present in the table.
+> **Caution** Setting `ignore_checksum_failure` to on may propagate or hide data corruption or lead to other serious problems. However, if a checksum failure has already been detected and the page header is uncorrupted, setting `ignore_checksum_failure` to on may allow you to bypass the error and recover undamaged tuples that may still be present in the table.
 
 The default setting is off, and it can only be changed by a superuser.
 
@@ -2664,7 +2664,7 @@ If [pljava\_classpath\_insecure](#pljava_classpath_insecure) is `false`, setting
 
 Controls whether the server configuration parameter [pljava\_classpath](#pljava_classpath) can be set by a user without Greenplum Database superuser privileges. When `true`, `pljava_classpath` can be set by a regular user. Otherwise, [pljava\_classpath](#pljava_classpath) can be set only by a database superuser. The default is `false`.
 
-**Warning:** Enabling this parameter exposes a security risk by giving non-administrator database users the ability to run unauthorized Java methods.
+> **Caution** Enabling this parameter exposes a security risk by giving non-administrator database users the ability to run unauthorized Java methods.
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
@@ -3211,7 +3211,7 @@ The value `false` deactivates SSL certificate authentication. These SSL exceptio
 
 You can set the value to `false` to deactivate authentication when testing the communication between the Greenplum Database external table and the `gpfdist` utility that is serving the external data.
 
-**Warning:** Deactivating SSL certificate authentication exposes a security risk by not validating the `gpfdists` SSL certificate.
+> **Caution** Deactivating SSL certificate authentication exposes a security risk by not validating the `gpfdists` SSL certificate.
 
 For information about the `gpfdists` protocol, see [gpfdists:// Protocol](../../admin_guide/external/g-gpfdists-protocol.html). For information about running the `gpfdist` utility, see [gpfdist](../../utility_guide/ref/gpfdist.html).
 

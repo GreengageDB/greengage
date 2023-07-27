@@ -259,18 +259,12 @@ def getRow(dbname, exec_sql):
 
 
 def check_db_exists(dbname, host=None, port=0, user=None):
-    LIST_DATABASE_SQL = 'SELECT datname FROM pg_database'
-
-    results = []
     with dbconn.connect(dbconn.DbURL(hostname=host, username=user, port=port, dbname='template1'), unsetSearchPath=False) as conn:
-        curs = dbconn.execSQL(conn, LIST_DATABASE_SQL)
-        results = curs.fetchall()
+        count = dbconn.execSQLForSingleton(conn, "SELECT count(*) FROM pg_database WHERE datname='{}'" .format(dbname))
+        if count == 0:
+            return False
 
-    for result in results:
-        if result[0] == dbname:
-            return True
-
-    return False
+    return True
 
 
 def create_database_if_not_exists(context, dbname, host=None, port=0, user=None):
@@ -865,3 +859,18 @@ def wait_for_desired_query_result(dburl, query, desired_result, utility=False):
 
     if attempt == num_retries:
         raise Exception('Timed out after %s retries' % num_retries)
+
+
+
+def wait_for_database_dropped(dbname, remaining_attempt = 3000):
+    """
+    Tries once a decisecond to check for the database exist.
+    Raises an Exception after failing <remaining_attempt> times.
+    """
+    while remaining_attempt:
+        if not check_db_exists(dbname):
+            break
+        remaining_attempt -= 1
+        if remaining_attempt == 0:
+            raise Exception('Unable to drop the database %s !!!') % dbname
+        time.sleep(0.1)

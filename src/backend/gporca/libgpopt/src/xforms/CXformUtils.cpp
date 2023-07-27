@@ -158,12 +158,6 @@ CXformUtils::ExfpExpandJoinOrder(CExpressionHandle &exprhdl,
 		return CXform::ExfpNone;
 	}
 
-#ifdef GPOS_DEBUG
-	CAutoMemoryPool amp;
-	GPOS_ASSERT(!FJoinPredOnSingleChild(amp.Pmp(), exprhdl) &&
-				"join predicates are not pushed down");
-#endif	// GPOS_DEBUG
-
 	if (NULL != exprhdl.Pgexpr())
 	{
 		// if handle is attached to a group expression, transformation is applied
@@ -4408,6 +4402,11 @@ CXformUtils::MapPrjElemsWithDistinctAggs(
 		{
 			// use first argument of Distinct Agg as key
 			pexprKey = (*pexprChild)[0];
+		}
+		else if (is_distinct && COperator::EopScalarAggFunc == eopidChild)
+		{
+			// use first argument of AggFunc args list as key
+			pexprKey = (*(pexprChild->PdrgPexpr()))[EaggfuncIndexArgs];
 		}
 		else
 		{

@@ -111,7 +111,7 @@ Running the `ANALYZE` command on a table, not using the `analyzedb` utility, doe
 
 :   Use this option if you find that `ANALYZE ROOTPARTITION` commands take a very long time to complete.
 
-:   **Warning:** After you run `analyzedb` with this option, subsequent `analyzedb` executions will not update root partition statistics except when changes have been made to the table.
+> **Caution** After you run `analyzedb` with this option, subsequent `analyzedb` executions will not update root partition statistics except when changes have been made to the table.
 
 -s schema
 :   Specify a schema to analyze. All tables in the schema will be analyzed. Only a single schema name can be specified on the command line.

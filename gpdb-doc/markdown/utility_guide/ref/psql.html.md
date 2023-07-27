@@ -292,7 +292,7 @@ The following meta-commands are defined:
 \\deu\[+\] \[user\_mapping\_pattern\]
 :   Lists user mappings. If a pattern is specified, only those mappings whose user names match the pattern are listed. If the form `\deu+` is used, additional information about each mapping is shown.
 
-    **Warning:** `\deu+` might also display the user name and password of the remote user, so care should be taken not to disclose them.
+> **Caution** `\deu+` might also display the user name and password of the remote user, so care should be taken not to disclose them.
 
 \\dew\[+\] \[foreign\_data\_wrapper\_pattern\]
 :   Lists foreign-data wrappers. If a pattern is specified, only those foriegn-data wrappers whose name matches the pattern are listed. If the form `\dew+` is used, the ACL, options, and description of the foreign-data wrapper are also shown.

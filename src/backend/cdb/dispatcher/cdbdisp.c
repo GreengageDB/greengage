@@ -277,7 +277,7 @@ CdbDispatchHandleError(struct CdbDispatcherState *ds)
 			if (error != NULL)
 			{
 				FlushErrorState();
-				ReThrowError(error);
+				ThrowErrorData(error);
 			}
 		}
 		PG_CATCH();

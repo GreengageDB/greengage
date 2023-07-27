@@ -169,7 +169,9 @@ serialfunc
 :   An aggregate function whose state\_data\_type is `internal` can participate in parallel aggregation only if it has a serialfunc function, which must serialize the aggregate state into a `bytea` value for transmission to another process. This function must take a single argument of type `internal` and return type `bytea`. A corresponding deserialfunc is also required.
 
 deserialfunc
-:   Deserialize a previously serialized aggregate state back into state\_data\_type. This function must take two arguments of types `bytea` and `internal`, and produce a result of type `internal`. \(Note: the second, `internal` argument is unused, but is required for type safety reasons.\)
+:   Deserialize a previously serialized aggregate state back into state\_data\_type. This function must take two arguments of types `bytea` and `internal`, and produce a result of type `internal`. 
+
+> **Note** The second, `internal` argument is unused, but is required for type safety reasons.
 
 initial\_condition
 :   The initial setting for the state value. This must be a string constant in the form accepted for the data type state\_data\_type. If not specified, the state value starts out null.

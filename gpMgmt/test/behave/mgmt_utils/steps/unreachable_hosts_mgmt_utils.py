@@ -1,10 +1,12 @@
 import subprocess
 import tempfile
+import platform
 
 from behave import given, when, then
 
 from gppylib.gparray import GpArray
 from gppylib.db import dbconn
+from gppylib.commands.base import Command, REMOTE
 
 # These utilities are intended to help various Behave tests handle disconnecting
 # and reconnecting hosts from the current GPDB cluster.  They are not intended to be
@@ -98,6 +100,29 @@ def impl(context, disconnected):
     for host in disconnected_hosts:
         for cmd in cmds:
             subprocess.check_output(["ssh", host, cmd])
+
+
+@given('An entry to {action} {env} env var is added on all hosts of cluster')
+@when('An entry to {action} {env} env var is added on all hosts of cluster')
+def impl(context, action, env):
+    if action == "send":
+        cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/ssh_config".format("SendEnv", env)
+    else:
+        cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/sshd_config".format("AcceptEnv", env)
+
+    # if it is a centos6 machine, use service command to restart sshd
+    os, version, _ = platform.linux_distribution()
+    major_version = version.split('.')[0].strip()
+    if 'centos' in os.lower() and '6' == major_version:
+            cmds = [cmdstr, "sudo service sshd restart"]
+    else:
+        cmds = [cmdstr, "sudo systemctl restart sshd.service"]
+
+    hosts = GpArray.initFromCatalog(dbconn.DbURL()).getHostList()
+    for host in hosts:
+        for cmd in cmds:
+            subprocess.check_output(["ssh", host, cmd])
+
 
 # This step is very specific to the CCP CI cluster.
 @given('the original cluster state is recreated for "{test_case}"')
