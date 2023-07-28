@@ -1028,12 +1028,16 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * create child partition create stmts which would only include explicitly
 	 * specified column encodings from the current root partition
 	 *
+	 * For RELKIND_FOREIGN_TABLE the attribute encoding clauses are not used,
+	 * but we add it here to produce an error message for the user inside
+	 * transformColumnEncoding().
+	 *
 	 * This is done in dispatcher (and in utility mode). In QE, we receive
 	 * the already-processed options from the QD.
 	 */
 
 	if ((relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
-		 relkind == RELKIND_PARTITIONED_TABLE) &&
+		 relkind == RELKIND_PARTITIONED_TABLE || relkind == RELKIND_FOREIGN_TABLE ) &&
 		Gp_role != GP_ROLE_EXECUTE)
 	{
 		/*

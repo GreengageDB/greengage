@@ -865,7 +865,56 @@ ALTER TABLE temp_parted ATTACH PARTITION foreign_part DEFAULT;  -- ERROR
 DROP FOREIGN TABLE foreign_part;
 DROP TABLE temp_parted;
 
+------------------------------------------------------------------------------
+-- Test to check column encoding at foreign tables.
+-- Not use column encoding at foreign tables.
+------------------------------------------------------------------------------
+
+CREATE DATABASE foreign_tables_test_db;
+\c foreign_tables_test_db
+
+CREATE FOREIGN DATA WRAPPER dummy;
+CREATE SERVER test FOREIGN DATA WRAPPER dummy;
+
+-- Do not create foreign tables with encoding clause
+-- Expect: failure
+CREATE FOREIGN TABLE foreign_table (
+    a integer ENCODING (compresstype=zstd,blocksize=32768,compresslevel=3)
+) SERVER test;
+
+SET default_table_access_method = 'ao_column';
+SET gp_default_storage_options = 'blocksize=32768,compresstype=zstd,compresslevel=3,checksum=true';
+CREATE FOREIGN TABLE foreign_table (
+    a integer ENCODING (compresstype=zstd,blocksize=32768,compresslevel=3)
+) SERVER test;
+
+-- Check that created foreign table does not apply gp_default_storage_options
+-- Expect: success
+CREATE FOREIGN TABLE foreign_table (
+    a integer
+) SERVER test;
+ALTER FOREIGN TABLE public.foreign_table OWNER to regress_foreign_data_user;
+\d+ foreign_table
+
+-- Check that pg_dump generates valid table definition
+-- Expect: success
+\! pg_dump -t public.foreign_table foreign_tables_test_db
+-- End of pg_dump output
+
+-- Check that pg_dump generates valid table definition after resetting gp_default_storage_options
+-- Expect: success
+RESET default_table_access_method;
+RESET gp_default_storage_options;
+\! pg_dump -t public.foreign_table foreign_tables_test_db
+-- End of pg_dump output
+
 -- Cleanup
+DROP FOREIGN TABLE foreign_table;
+DROP SERVER test;
+DROP FOREIGN DATA WRAPPER dummy;
+\c regression
+DROP DATABASE foreign_tables_test_db;
+
 DROP SCHEMA foreign_schema CASCADE;
 DROP ROLE regress_test_role;                                -- ERROR
 DROP SERVER t1 CASCADE;
