@@ -66,3 +66,16 @@ WITH cte AS (
     RETURNING i
 ) SELECT * FROM cte;
 DROP TABLE with_dml;
+
+--
+-- Test EXPLAIN ANALYZE with DECLARE CURSOR.
+-- Cursor should not be opened if we have ANALYZE in query.
+--
+
+BEGIN;
+EXPLAIN (ANALYZE ON, TIMING OFF, COSTS off) DECLARE c CURSOR FOR SELECT * FROM empty_table;
+CLOSE c;
+END;
+
+-- The query works without transaction block, because it doesn't open cursor
+EXPLAIN (ANALYZE ON, TIMING OFF, COSTS off) DECLARE c CURSOR FOR SELECT * FROM empty_table;

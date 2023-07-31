@@ -160,3 +160,38 @@ WITH cte AS (
 (10 rows)
 
 DROP TABLE with_dml;
+--
+-- Test EXPLAIN ANALYZE with DECLARE CURSOR.
+-- Cursor should not be opened if we have ANALYZE in query.
+--
+BEGIN;
+EXPLAIN (ANALYZE ON, TIMING OFF, COSTS off) DECLARE c CURSOR FOR SELECT * FROM empty_table;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1000 loops=1)
+   ->  Seq Scan on empty_table (actual rows=340 loops=1)
+ Planning time: 5.057 ms
+   (slice0)    Executor memory: 87K bytes.
+   (slice1)    Executor memory: 58K bytes avg x 3 workers, 58K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 2.178 ms
+(8 rows)
+
+CLOSE c;
+ERROR:  cursor "c" does not exist
+END;
+-- The query works without transaction block, because it doesn't open cursor
+EXPLAIN (ANALYZE ON, TIMING OFF, COSTS off) DECLARE c CURSOR FOR SELECT * FROM empty_table;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1000 loops=1)
+   ->  Seq Scan on empty_table (actual rows=340 loops=1)
+ Planning time: 9.745 ms
+   (slice0)    Executor memory: 87K bytes.
+   (slice1)    Executor memory: 43K bytes avg x 3 workers, 43K bytes max (seg0).
+ Memory used:  128000kB
+ Optimizer: Postgres query optimizer
+ Execution time: 1.539 ms
+(8 rows)
+
