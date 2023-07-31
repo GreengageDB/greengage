@@ -4,10 +4,13 @@
 #
 
 import unittest
-from mock import call, Mock, patch
+from mock import call, Mock, patch, MagicMock
 from gppylib.commands import pg
 from test.unit.gp_unittest import GpTestCase, run_tests
-from pgdb import DatabaseError
+from psycopg2 import DatabaseError
+
+from gppylib.test.unit.gp_unittest import GpTestCase
+from gppylib.commands.base import CommandResult
 
 class TestUnitPgReplicationSlot(GpTestCase):
     def setUp(self):
