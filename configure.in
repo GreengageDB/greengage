@@ -1402,7 +1402,7 @@ Use --without-zlib to disable zlib support.])])
 fi
 
 if test "$with_zstd" = yes; then
-  AC_CHECK_LIB(zstd, ZSTD_compressCCtx, [],
+  AC_CHECK_LIB(:libzstd.a, ZSTD_compressCCtx, [],
                [AC_MSG_ERROR([zstd library not found
 If you have libzstd already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
