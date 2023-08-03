@@ -13709,7 +13709,8 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 						 * Dump the encoding clause also to maintain a consistent
 						 * catalog entry in pg_attribute_encoding post upgrade.
 						 */
-						if (tbinfo->attencoding[j] != NULL)
+						if (tbinfo->relkind != RELKIND_FOREIGN_TABLE &&
+							tbinfo->attencoding[j] != NULL)
 							appendPQExpBuffer(q, " ENCODING (%s)", tbinfo->attencoding[j]);
 
 						/* Skip all the rest */
@@ -13746,7 +13747,8 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 						appendPQExpBufferStr(q, " NOT NULL");
 
 					/* Column Storage attributes */
-					if (tbinfo->attencoding[j] != NULL)
+					if (tbinfo->relkind != RELKIND_FOREIGN_TABLE &&
+						tbinfo->attencoding[j] != NULL)
 						appendPQExpBuffer(q, " ENCODING (%s)",
 										  tbinfo->attencoding[j]);
 				}

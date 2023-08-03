@@ -4493,7 +4493,7 @@ transformAttributeEncoding(List *stenc, CreateStmt *stmt, CreateStmtContext *cxt
 {
 	ListCell *lc;
 	bool found_enc = stenc != NIL;
-	bool can_enc = is_aocs(stmt->options);
+	bool can_enc = is_aocs(stmt->options) && !cxt->isforeign;
 	ColumnReferenceStorageDirective *deflt = NULL;
 	List *newenc = NIL;
 	List *tmpenc;

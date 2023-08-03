@@ -1028,10 +1028,13 @@ public:
 	typedef CHashSet<ULONG, gpos::HashValue<ULONG>, gpos::Equals<ULONG>,
 					 CleanupDelete<ULONG> >
 		UlongCteIdHashSet;
+	typedef CHashSetIter<ULONG, HashValue<ULONG>, gpos::Equals<ULONG>,
+						 CleanupDelete<ULONG> >
+		UlongCteIdHashSetIter;
 
 	static void CollectConsumersAndProducers(CMemoryPool *mp,
 											 CExpression *pexpr,
-											 ULongPtrArray *cteConsumers,
+											 UlongCteIdHashSet *cteConsumers,
 											 UlongCteIdHashSet *cteProducerSet);
 
 	static BOOL hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexpr);
