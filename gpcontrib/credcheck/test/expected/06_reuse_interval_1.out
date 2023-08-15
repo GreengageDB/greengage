@@ -1,5 +1,5 @@
+SET client_min_messages TO warning;
 DROP USER IF EXISTS credtest;
-NOTICE:  role "credtest" does not exist, skipping
 DROP EXTENSION credcheck CASCADE;
 CREATE EXTENSION credcheck;
 SELECT pg_password_history_reset();
@@ -75,7 +75,6 @@ SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credte
 
 -- Rename user, all entries in the history table must follow the change
 ALTER USER credtest RENAME TO credtest2;
-NOTICE:  MD5 password cleared because of role rename
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest2' ORDER BY password_date ;
  rolename  |                          password_hash                           
 -----------+------------------------------------------------------------------

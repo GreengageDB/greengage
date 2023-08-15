@@ -1,3 +1,5 @@
+SET client_min_messages TO warning;
+
 DROP USER IF EXISTS credtest;
 DROP EXTENSION credcheck CASCADE;
 CREATE EXTENSION credcheck;

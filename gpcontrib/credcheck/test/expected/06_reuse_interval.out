@@ -1,5 +1,5 @@
+SET client_min_messages TO warning;
 DROP USER IF EXISTS credtest;
-NOTICE:  role "credtest" does not exist, skipping
 DROP EXTENSION credcheck CASCADE;
 CREATE EXTENSION credcheck;
 SELECT pg_password_history_reset();
