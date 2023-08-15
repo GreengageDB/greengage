@@ -1,3 +1,5 @@
+--suppress "MD5 password cleared because of role rename" messages
+SET client_min_messages TO warning;
 CREATE USER aaa PASSWORD 'DummY';
 CREATE USER bbb;
 LOAD 'credcheck';
