@@ -14,20 +14,11 @@ PGFILEDESC = "credcheck - postgresql credential checker"
 DATA = $(wildcard updates/*--*.sql) $(EXTENSION)--$(EXTVERSION).sql
 
 REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
-TESTS = 01_username 02_password 03_rename 04_alter_pwd
+TESTS = 01_username 02_password 03_rename 04_alter_pwd \
+	05_reuse_history 06_reuse_interval 07_valid_until
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
-
-ifeq ($(MAJORVERSION),$(filter $(MAJORVERSION), 14 15 16))
-	REGRESS += 05_reuse_history
-	REGRESS += 06_reuse_interval
-else
-	REGRESS += 05_pg13_reuse_history
-	REGRESS += 06_pg13_reuse_interval
-endif
-
-REGRESS += 07_valid_until
