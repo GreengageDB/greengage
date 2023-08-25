@@ -517,3 +517,40 @@ fetch backward all in c1;
 
 commit;
 --end_ignore
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink, which contains attributes referenced in query's GROUP BY clause.
+-- The inner part of SubPlan should contain only t.j.
+-- start_ignore
+drop table if exists t;
+-- end_ignore
+create table t (i int, j int) distributed by (i);
+insert into t values (1, 2);
+
+explain (verbose, costs off)
+select j,
+(select j from (select j) q2)
+from t
+group by i, j;
+
+select j,
+(select j from (select j) q2)
+from t
+group by i, j;
+
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink when this SubLink is inside the GROUP BY clause. Attribute, which is
+-- not grouping column, is added to query targetList to make ORCA perform query
+-- normalization. For ORCA the fallback shouldn't occur.
+explain (verbose, costs off)
+select j, 1 as c,
+(select j from (select j) q2) q1
+from t
+group by j, q1;
+
+select j, 1 as c,
+(select j from (select j) q2) q1
+from t
+group by j, q1;
+
+drop table t;
