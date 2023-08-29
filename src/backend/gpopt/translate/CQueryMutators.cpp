@@ -687,22 +687,26 @@ CQueryMutators::RunExtractAggregatesMutator(Node *node,
 		// Handle other top-level outer references in the project element.
 		if (var->varlevelsup == context->m_current_query_level)
 		{
-			if (var->varlevelsup == context->m_agg_levels_up)
+			if (var->varlevelsup >= context->m_agg_levels_up)
 			{
-				// If Var references the top level query inside an Aggref that also
-				// references top level query, the Aggref is moved to the derived query
-				// (see comments in Aggref if-case above). Thus, these Var references
-				// are brought up to the top-query level.
+				// We previously started to mutate the Aggref, that references
+				// the top level query. This Aggref is going to be moved to the
+				// derived query (see comments in Aggref if-case above).
+				// Therefore, if we are mutating Vars inside the Aggref, and
+				// these Vars reference the top level query (varlevelsup = m_current_query_level)
+				// as well, we must change their varlevelsup field in order to preserve
+				// correct reference level. i.e these Vars are pulled up as the part of
+				// the Aggref by the m_agg_levels_up.
 				// e.g:
-				// explain select (select sum(foo.a) from jazz) from foo group by a, b;
+				// select (select max((select foo.a))) from foo;
 				// is transformed into
-				// select (select fnew.sum_t from jazz)
-				// from (select foo.a, foo.b, sum(foo.a) sum_t
-				//       from foo group by foo.a, foo.b) fnew;
-				//
-				// Note the foo.a var which is in sum() in a subquery must now become a
-				// var referencing the current query level.
-				var->varlevelsup = 0;
+				// select (select fnew.max_t)
+				// from (select max((select foo.a)) max_t from foo) fnew;
+				// Here the foo.a inside max referenced top level RTE foo at
+				// varlevelsup = 2 inside the Aggref at agglevelsup 1. Then the
+				// Aggref is brought up to the top-query-level of fnew and foo.a
+				// inside Aggref is decreased by original Aggref's level.
+				var->varlevelsup -= context->m_agg_levels_up;
 				return (Node *) var;
 			}
 
