@@ -110,6 +110,15 @@ SELECT table_schema, table_tablespace, content,
 (0 rows)
 
 DROP TABLE arenadata_toolkit_table;
+-- Check that expectation of rows at function adb_get_relfilenodes is 30000000
+EXPLAIN SELECT * from arenadata_toolkit.adb_get_relfilenodes(1);
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..300000.00 rows=30000000 width=76)
+   ->  Function Scan on adb_get_relfilenodes  (cost=0.00..300000.00 rows=10000000 width=76)
+ Optimizer: Postgres query optimizer
+(3 rows)
+
 -- Cleanup
 DROP TABLESPACE arenadata_test;
 \! rm -rf /tmp/arenadata_toolkit_test

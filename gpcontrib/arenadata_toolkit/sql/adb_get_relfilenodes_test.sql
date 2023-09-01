@@ -70,6 +70,9 @@ SELECT table_schema, table_tablespace, content,
 		content ASC;
 DROP TABLE arenadata_toolkit_table;
 
+-- Check that expectation of rows at function adb_get_relfilenodes is 30000000
+EXPLAIN SELECT * from arenadata_toolkit.adb_get_relfilenodes(1);
+
 -- Cleanup
 DROP TABLESPACE arenadata_test;
 \! rm -rf /tmp/arenadata_toolkit_test
