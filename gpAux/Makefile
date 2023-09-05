@@ -120,6 +120,8 @@ DEFPORT=5432
 
 ORCA_CONFIG=--enable-orca
 
+altlinux8.2_x86_64_CONFIGFLAGS=--with-gssapi --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-uuid=e2fs --with-llvm
+astra1.7_x86_64_CONFIGFLAGS=--with-gssapi --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-uuid=e2fs --with-llvm
 rhel6_x86_64_CONFIGFLAGS=--with-gssapi --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-uuid=e2fs --with-llvm
 rhel7_x86_64_CONFIGFLAGS=--with-gssapi --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-uuid=e2fs --with-llvm
 rhel8_x86_64_CONFIGFLAGS=--with-gssapi --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-uuid=e2fs --with-llvm
