@@ -1279,3 +1279,107 @@ select * from t1;
 
 drop table t2;
 drop table t1;
+
+-- Test correlated SubPlans containing writable operation are
+-- planned and executed correctly. The result of modifying operations
+-- should be broadcasted (or focused) and materialized.
+-- start_ignore
+drop table if exists t1;
+drop table if exists t2;
+--end_ignore
+create table t1(i int) distributed by (i);
+create table t2(i int) distributed by (i);
+insert into t2 values (1), (2);
+
+explain (costs off)
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t2
+where t2.i in (select i from cte where t2.i = cte.i and cte.i > 0)
+order by i;
+
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t2
+where t2.i in (select i from cte where t2.i = cte.i and cte.i > 0)
+order by i;
+
+select count(*) from t1;
+
+--start_ignore
+drop table if exists t_repl;
+--end_ignore
+create table t_repl (i int) distributed replicated;
+insert into t_repl values (1), (2);
+
+explain (costs off)
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t_repl
+where t_repl.i in (select i from cte where t_repl.i = cte.i and cte.i > 0)
+order by i;
+
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t_repl
+where t_repl.i in (select i from cte where t_repl.i = cte.i and cte.i > 0)
+order by i;
+
+select count(*) from t1;
+
+--start_ignore
+drop table if exists t3;
+--end_ignore
+create table t3 (i int, j int) distributed randomly;
+insert into t3 values (1, 1), (2, 2);
+
+explain (costs off)
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t2
+where t2.i in (select i from cte join t3 using (i) where t3.j = t2.i)
+order by i;
+
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t2
+where t2.i in (select i from cte join t3 using (i) where t3.j = t2.i)
+order by i;
+
+select count(*) from t1;
+
+explain (costs off)
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t_repl
+where t_repl.i in (select i from cte join t3 using (i) where t3.j = t_repl.i)
+order by i;
+
+with cte as
+(insert into t1
+ select i from generate_series(1, 5) i
+ returning *)
+select * from t_repl
+where t_repl.i in (select i from cte join t3 using (i) where t3.j = t_repl.i)
+order by i;
+
+select count(*) from t1;
+
+drop table t3;
+drop table t_repl;
+drop table t2;
+drop table t1;
