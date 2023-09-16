@@ -111,3 +111,18 @@ ALTER USER aa PASSWORD NULL;
 DROP USER IF EXISTS aa;
 CREATE USER aa PASSWORD NULL;
 DROP USER IF EXISTS aa;
+--
+-- Check whitlisted users
+SET credcheck.password_min_repeat TO 2;
+SET credcheck.whitelist = 'nocheck1,nocheck2';
+DROP USER IF EXISTS nocheck1;
+CREATE USER nocheck1 WITH PASSWORD 'aaaa';
+DROP USER IF EXISTS nocheck1;
+CREATE USER nocheck1;
+DROP USER IF EXISTS nocheck2;
+CREATE USER nocheck2 WITH PASSWORD 'aaaa';
+ALTER USER nocheck2 WITH PASSWORD 'bbbb';
+DROP USER IF EXISTS nocheck1;
+DROP USER IF EXISTS nocheck2;
+
+

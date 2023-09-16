@@ -51,6 +51,7 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
+#include "utils/varlena.h"
 
 /* Default passord encryption */
 #define Password_encryption = PASSWORD_TYPE_SCRAM_SHA_256;
@@ -211,6 +212,7 @@ static char *username_not_contain = NULL;
 static char *username_contain = NULL;
 static bool username_contain_password = true;
 static bool username_ignore_case = false;
+static char *username_whitelist = NULL;
 
 /* Password flags*/
 static int password_min_length = 1;
@@ -238,6 +240,9 @@ static int password_reuse_interval = 0;
 
 char *str_to_sha256(const char *str, const char *salt);
 #endif
+
+bool check_whitelist(char **newval, void **extra, GucSource source);
+bool is_in_whitelist(char *username);
 
 static char *to_nlower(const char *str, size_t max) {
   char *lower_str;
@@ -335,8 +340,6 @@ username_check(const char *username, const char *password)
 	char *tmp_user = NULL;
 	char *tmp_contains = NULL;
 	char *tmp_not_contains = NULL;
-
-	Assert(username != NULL);
 
 	if (strcasestr(debug_query_string, "PASSWORD") != NULL)
 		statement_has_password = true;
@@ -471,6 +474,71 @@ username_check(const char *username, const char *password)
 	free(tmp_user);
 	free(tmp_contains);
 	free(tmp_not_contains);
+}
+
+/* We just check that the list is valid, no username existing check */
+bool
+check_whitelist(char **newval, void **extra, GucSource source)
+{
+	char       *rawstring;
+	List       *elemlist;
+
+	/* Need a modifiable copy of string */
+	rawstring = pstrdup(*newval);
+	/* Parse string into list of identifiers */
+	if (!SplitIdentifierString(rawstring, ',', &elemlist))
+	{
+		/* syntax error in list */
+		GUC_check_errdetail("List syntax is invalid.");
+		pfree(rawstring);
+		list_free(elemlist);
+		return false;
+	}
+
+	pfree(rawstring);
+	list_free(elemlist);
+
+	return true;
+}
+
+/* check if the username is in the whitelist */
+bool
+is_in_whitelist(char *username)
+{
+	char       rawstring[NAMEDATALEN];
+	List       *elemlist;
+	ListCell   *l;
+
+	Assert(username != NULL);
+
+	/* Need a modifiable copy of string */
+	strcpy(rawstring, username_whitelist);
+	/* Parse string into list of identifiers */
+	if (!SplitIdentifierString(rawstring, ',', &elemlist))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("%s username list is invalid: %s",
+				     "credcheck.password_min_length", username_whitelist)));
+		list_free(elemlist);
+		return false;
+	}
+
+        foreach(l, elemlist)
+        {
+                char       *tok = (char *) lfirst(l);
+
+		/* the username is in the list */
+                if (pg_strcasecmp(tok, username) == 0)
+		{
+                        list_free(elemlist);
+                        return true;
+                }
+        }
+
+	list_free(elemlist);
+
+	return false;
 }
 
 static void password_check(const char *username, const char *password)
@@ -1164,6 +1232,9 @@ check_password(const char *username, const char *password,
 #ifdef USE_CRACKLIB
 			const char *reason;
 #endif
+			if (is_in_whitelist((char *)username))
+				break;
+
 			statement_has_password = true;
 			username_check(username, password);
 			if (password != NULL)
@@ -1229,6 +1300,11 @@ _PG_init(void)
 				gettext_noop("allow encrypted password to be used or throw an error"),
 				NULL, &encrypted_password_allowed, false, PGC_SUSET, 0,
 				NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.whitelist",
+				gettext_noop("comma separated list of username to exclude from password policy check"), NULL,
+				&username_whitelist, "", PGC_SUSET, 0, check_whitelist, NULL, NULL);
 
 
 #if PG_VERSION_NUM < 150000
@@ -1298,7 +1374,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			/* We only take care of user renaming */
 			if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
 			{
-
+				if (is_in_whitelist(stmt->newname) || is_in_whitelist(stmt->subname))
+					break;
+			
 				/* check the validity of the username */
 				username_check(stmt->newname, NULL);
 
@@ -1318,6 +1396,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			bool           save_password = false;
 			DefElem    *dpassword = NULL;
 			DefElem    *dvalidUntil = NULL;
+
+			if (is_in_whitelist(stmt->role->rolename))
+				break;
 
 			/* Extract options from the statement node tree */
 			foreach(option, stmt->options)
@@ -1376,6 +1457,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			char           *password;
 			DefElem    *dpassword = NULL;
 			DefElem    *dvalidUntil = NULL;
+
+			if (is_in_whitelist(stmt->role))
+				break;
 
 			/* check the validity of the username */
 			username_check(stmt->role, NULL);
