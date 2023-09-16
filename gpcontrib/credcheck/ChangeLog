@@ -1,3 +1,29 @@
+2023-09-16 - Version 2.2.0
+
+This release adds a new feature, fixes a major bug with null password and fixes
+some issues reported by users since last release.
+
+  - Add new GUC variable credcheck.whitelist that can be used to set a comma
+    separated list of username to exclude from the password policy check.
+    For example:
+        credcheck.whitelist = 'admin,supuser'
+    will disable any credcheck policy for the user named admin and supuser.
+    Thanks to Nikolai for the feature request.
+  - Add -Wno-ignored-attributes to CPPFLAGS to avoid compilation warning on
+    pg_vsnprintf call.
+  - Fix PG crash when password was set to NULL. Thanks to ragaoua for the
+    report.
+  - Suppress "MD5 password cleared because of role rename" messages. This
+    makes the tests pass on PG12 and 13. Thanks to Christoph Berg for the patch.
+  - Use pg_regress' variant comparison files mechanism. Instead of manually
+    selecting the tests to run on PG13 in the Makefile, simply let pg_regress
+    choose the matching output file from .out and _1.out. Thanks to Christoph
+    Berg for the patch.
+  - Add missing file credcheck--2.1.0.sql. Thanks to Jeff Janes for the report.
+
+Extension upgrade requires a PostgreSQL restart to reload the credcheck library.
+
+
 2023-07-15 - Version 2.1.0
 
 This release adds a two new features and fix issues reported by users
