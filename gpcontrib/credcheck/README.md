@@ -89,7 +89,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days   | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
 | password_valid_max        | password | force use of VALID UNTIL clause in CREATE ROLE statement with a maximum number of days   | 365             | &check; CREATE ROLE abcd VALID UNTIL (now()+'6 months'::interval)::date | &#10008;  CREATE ROLE abcd VALID UNTIL (now()+'2 years'::interval)::date; |
 
-There is also the `credcheck.whitelist` that can be used to set a comma separated list of username to exclude from the password policy check. For example:
+There is also the `credcheck.whitelist` GUC that can be used to set a comma separated list of username to exclude from the password policy check. For example:
 ```
 credcheck.whitelist = 'admin,supuser'
 ```
