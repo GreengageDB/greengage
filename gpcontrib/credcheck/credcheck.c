@@ -336,6 +336,8 @@ username_check(const char *username, const char *password)
 	char *tmp_contains = NULL;
 	char *tmp_not_contains = NULL;
 
+	Assert(username != NULL);
+
 	if (strcasestr(debug_query_string, "PASSWORD") != NULL)
 		statement_has_password = true;
 
@@ -483,6 +485,9 @@ static void password_check(const char *username, const char *password)
 	char *tmp_user = NULL;
 	char *tmp_contains = NULL;
 	char *tmp_not_contains = NULL;
+
+	Assert(username != NULL);
+	Assert(password != NULL);
 
 	/* checks has to be done by ignoring case */
 	if (password_ignore_case)
@@ -1029,11 +1034,13 @@ check_password_reuse(const char *username, const char *password)
 	char         *encrypted_password;
 	HASH_SEQ_STATUS hash_seq;
 
-	if (password_reuse_history == 0 && password_reuse_interval == 0)
+	Assert(username != NULL);
+
+	if (password == NULL)
 		return false;
 
-	Assert(username != NULL);
-	Assert(password != NULL);
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return false;
 
 	/* Safety check... */
 	if (!pgph || !pgph_hash)
@@ -1159,15 +1166,18 @@ check_password(const char *username, const char *password,
 #endif
 			statement_has_password = true;
 			username_check(username, password);
-			password_check(username, password);
+			if (password != NULL)
+			{
+				password_check(username, password);
 #ifdef USE_CRACKLIB
-			/* call cracklib to check password */
-			if ((reason = FascistCheck(password, CRACKLIB_DICTPATH)))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("password is easily cracked"),
-						 errdetail_log("cracklib diagnostic: %s", reason)));
+				/* call cracklib to check password */
+				if ((reason = FascistCheck(password, CRACKLIB_DICTPATH)))
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							 errmsg("password is easily cracked"),
+							 errdetail_log("cracklib diagnostic: %s", reason)));
 #endif
+			}
 			break;
 		}
 		default:
@@ -1306,36 +1316,47 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			ListCell      *option;
 			char          *password;
 			bool           save_password = false;
+			DefElem    *dpassword = NULL;
+			DefElem    *dvalidUntil = NULL;
 
 			/* Extract options from the statement node tree */
 			foreach(option, stmt->options)
 			{
 				DefElem    *defel = (DefElem *) lfirst(option);
 
-#if PG_VERSION_NUM >= 120000
 				if (strcmp(defel->defname, "password") == 0)
 				{
-					statement_has_password = true;
-					password = strVal(defel->arg);
-					save_password = check_password_reuse(stmt->role->rolename, password);
+					dpassword = defel;
 				}
+				else if (strcmp(defel->defname, "validUntil") == 0)
+				{
+					dvalidUntil = defel;
+				}
+			}
+
+#if PG_VERSION_NUM >= 120000
+			if (dpassword && dpassword->arg)
+			{
+				statement_has_password = true;
+				password = strVal(dpassword->arg);
+				save_password = check_password_reuse(stmt->role->rolename, password);
+			}
 #endif
-				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
-				{
-					int valid_until = check_valid_until(strVal(defel->arg));
-					if (valid_until < password_valid_until)
-						ereport(ERROR,
-							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-								errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
-				}
-				if (password_valid_max > 0 && strcmp(defel->defname, "validUntil") == 0)
-				{
-					int valid_max = check_valid_until(strVal(defel->arg));
-					if (valid_max > password_valid_max)
-						ereport(ERROR,
-							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-								errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
-				}
+			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
+			{
+				int valid_until = check_valid_until(strVal(dvalidUntil->arg));
+				if (valid_until < password_valid_until)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
+			}
+			if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
+			{
+				int valid_max = check_valid_until(strVal(dvalidUntil->arg));
+				if (valid_max > password_valid_max)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
 			}
 
 			/* The password can be saved into the history */
@@ -1353,6 +1374,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			bool            has_valid_until = false; 
 			bool            save_password = false;
 			char           *password;
+			DefElem    *dpassword = NULL;
+			DefElem    *dvalidUntil = NULL;
 
 			/* check the validity of the username */
 			username_check(stmt->role, NULL);
@@ -1362,25 +1385,35 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			{
 				DefElem    *defel = (DefElem *) lfirst(option);
 
-#if PG_VERSION_NUM >= 120000
 				if (strcmp(defel->defname, "password") == 0)
 				{
-					statement_has_password = true;
-					password = strVal(defel->arg);
-					save_password = check_password_reuse(stmt->role, password);
+					dpassword = defel;
 				}
-#endif
-				if (password_valid_until > 0 && strcmp(defel->defname, "validUntil") == 0)
+				else if (strcmp(defel->defname, "validUntil") == 0)
 				{
-					valid_until = check_valid_until(strVal(defel->arg));
-					has_valid_until = true;
-				}
-				if (password_valid_max > 0 && strcmp(defel->defname, "validUntil") == 0)
-				{
-					valid_max = check_valid_until(strVal(defel->arg));
-					has_valid_until = true;
+					dvalidUntil = defel;
 				}
 			}
+
+#if PG_VERSION_NUM >= 120000
+			if (dpassword && dpassword->arg)
+			{
+				statement_has_password = true;
+				password = strVal(dpassword->arg);
+				save_password = check_password_reuse(stmt->role, password);
+			}
+#endif
+			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
+			{
+				valid_until = check_valid_until(strVal(dvalidUntil->arg));
+				has_valid_until = true;
+			}
+			if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
+			{
+				valid_max = check_valid_until(strVal(dvalidUntil->arg));
+				has_valid_until = true;
+			}
+
 			/* check that a VALID UNTIL option is present */
 			if ( !has_valid_until && (password_valid_until > 0 || password_valid_max > 0) )
 				ereport(ERROR,
