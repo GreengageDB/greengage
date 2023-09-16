@@ -7,6 +7,8 @@ EXTVERSION = $(shell grep default_version $(EXTENSION).control | \
 #PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
 #SHLIB_LINK = -lcrack
 
+PG_CPPFLAGS += -Wno-ignored-attributes
+
 MODULE_big = credcheck
 OBJS = credcheck.o $(WIN32RES)
 PGFILEDESC = "credcheck - postgresql credential checker"
