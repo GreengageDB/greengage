@@ -279,7 +279,7 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	//	pplstmt->intoClause = m_pctxdxltoplstmt->Pintocl();
 	planned_stmt->intoPolicy = m_dxl_to_plstmt_context->GetDistributionPolicy();
 
-	SetInitPlanVariables(planned_stmt);
+	SetSubPlanVariables(planned_stmt);
 
 	if (CMD_SELECT == m_cmd_type && NULL != dxlnode->GetDXLDirectDispatchInfo())
 	{
@@ -344,14 +344,16 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorDXLToPlStmt::SetInitPlanVariables
+//		CTranslatorDXLToPlStmt::SetSubPlanVariables
 //
 //	@doc:
 //		Iterates over the plan to set the qDispSliceId that is found in the plan
 //		as well as its subplans. Set the number of parameters used in the plan.
+//		Simultaneously fills rewindPlanIDs bitmapset in PlannedStmt with plan_id
+//		of all SubPlans, except InitPlans.
 //---------------------------------------------------------------------------
 void
-CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
+CTranslatorDXLToPlStmt::SetSubPlanVariables(PlannedStmt *planned_stmt)
 {
 	if (1 !=
 		m_dxl_to_plstmt_context
@@ -368,6 +370,9 @@ CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
 	List *subplan_list =
 		gpdb::ExtractNodesPlan(planned_stmt->planTree, T_SubPlan, true);
 
+	// set of plan_ids of any SubPlan except InitPLan
+	Bitmapset *planIds = NULL;
+
 	ListCell *lc = NULL;
 
 	ForEach(lc, subplan_list)
@@ -377,6 +382,8 @@ CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
 		{
 			SetInitPlanSliceInformation(subplan);
 		}
+		else
+			planIds = gpdb::BmsAddMember(planIds, subplan->plan_id);
 	}
 
 	// InitPlans can also be defined in subplans. We therefore have to iterate
@@ -397,8 +404,12 @@ CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
 			{
 				SetInitPlanSliceInformation(subplan);
 			}
+			else
+				planIds = gpdb::BmsAddMember(planIds, subplan->plan_id);
 		}
 	}
+
+	planned_stmt->rewindPlanIDs = planIds;
 }
 
 //---------------------------------------------------------------------------

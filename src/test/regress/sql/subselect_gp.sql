@@ -1369,3 +1369,34 @@ select count(*) from t1;
 drop table t_repl;
 drop table t2;
 drop table t1;
+
+-- Test that executor does not treat InitPlans as rescannable
+-- while initializing executor state. Otherwise, for InitPlan containing
+-- non-rescannable operations (like Split Update node) executor may
+-- fail with an assertion error.
+-- start_ignore
+drop table if exists t1;
+drop table if exists t2;
+--end_ignore
+create table t1(i int) distributed by (i);
+create table t2(i int) distributed by (i);
+insert into t1 values (1);
+insert into t2 values (1);
+
+explain (costs off)
+with cte as
+(update t1 set i = 0
+ returning i)
+select i from t2
+where 0 = (select i from cte);
+
+with cte as
+(update t1 set i = 0
+ returning i)
+select i from t2
+where 0 = (select i from cte);
+
+select * from t1;
+
+drop table t2;
+drop table t1;

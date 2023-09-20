@@ -3595,3 +3595,57 @@ select count(*) from t1;
 drop table t_repl;
 drop table t2;
 drop table t1;
+-- Test that executor does not treat InitPlans as rescannable
+-- while initializing executor state. Otherwise, for InitPlan containing
+-- non-rescannable operations (like Split Update node) executor may
+-- fail with an assertion error.
+-- start_ignore
+drop table if exists t1;
+NOTICE:  table "t1" does not exist, skipping
+drop table if exists t2;
+NOTICE:  table "t2" does not exist, skipping
+--end_ignore
+create table t1(i int) distributed by (i);
+create table t2(i int) distributed by (i);
+insert into t1 values (1);
+insert into t2 values (1);
+explain (costs off)
+with cte as
+(update t1 set i = 0
+ returning i)
+select i from t2
+where 0 = (select i from cte);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice3; segments: 3)
+   ->  Result
+         One-Time Filter: (0 = $1)
+         InitPlan 1 (returns $1)  (slice4)
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Update on t1
+                       ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                             Hash Key: "outer".i
+                             ->  Split
+                                   ->  Seq Scan on t1
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+with cte as
+(update t1 set i = 0
+ returning i)
+select i from t2
+where 0 = (select i from cte);
+ i 
+---
+ 1
+(1 row)
+
+select * from t1;
+ i 
+---
+ 0
+(1 row)
+
+drop table t2;
+drop table t1;
