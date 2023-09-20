@@ -2264,11 +2264,13 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			/*
 			 * A subplan will never need to do BACKWARD scan nor MARK/RESTORE.
 			 *
-			 * GPDB: We always set the REWIND flag, to delay eagerfree.
+			 * GPDB: We always set the REWIND flag, except InitPlans,
+			 * to delay eagerfree.
 			 */
 			sp_eflags = eflags
 				& (EXEC_FLAG_EXPLAIN_ONLY | EXEC_FLAG_WITH_NO_DATA);
-			sp_eflags |= EXEC_FLAG_REWIND;
+			if (bms_is_member(subplan_idx + 1, plannedstmt->rewindPlanIDs))
+				sp_eflags |= EXEC_FLAG_REWIND;
 
 			Plan	   *subplan = (Plan *) lfirst(l);
 			subplanstate = ExecInitNode(subplan, estate, sp_eflags);
