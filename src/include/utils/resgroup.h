@@ -106,7 +106,6 @@ extern double gp_resource_group_memory_limit;
 extern bool gp_resource_group_bypass;
 extern int gp_resource_group_queuing_timeout;
 extern bool gp_resource_group_bypass_catalog_query;
-extern int gp_resource_group_move_timeout;
 
 /*
  * Non-GUC global variables.
@@ -169,7 +168,7 @@ extern void DeserializeResGroupInfo(struct ResGroupCaps *capsOut,
 extern bool ShouldAssignResGroupOnMaster(void);
 extern bool ShouldUnassignResGroup(void);
 extern void AssignResGroupOnMaster(void);
-extern void UnassignResGroup(void);
+extern void UnassignResGroup(bool releaseSlot);
 extern void SwitchResGroupOnSegment(const char *buf, int len);
 
 extern bool ResGroupIsAssigned(void);
