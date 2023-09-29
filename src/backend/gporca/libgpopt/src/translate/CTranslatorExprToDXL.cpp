@@ -8235,7 +8235,7 @@ CTranslatorExprToDXL::GetInputSegIdsArray(CExpression *pexprMotion)
 		// previously made CTEProducerConsumerLocality check.
 		// Related to: https://github.com/greenplum-db/gpdb/issues/13039
 
-		if (CUtils::hasUnpairedCTEConsumer(m_mp, pexprChild))
+		if (CUtils::hasUnpairedCTEConsumer(m_mp, pexprMotion))
 		{
 			GPOS_RAISE(
 				gpdxl::ExmaDXL, gpdxl::ExmiExpr2DXLUnsupportedFeature,
