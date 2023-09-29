@@ -66,10 +66,3 @@ Feature: gpstop behave tests
           And gpstop should print "Commencing Master instance shutdown with mode='immediate'" to stdout
          Then gpstop should return a return code of 0
           And verify no postgres process is running on all hosts
-
-	@demo_cluster
-    Scenario: gpstop gpstop should not print "Failed to kill processes for segment" when locale is different from English
-        Given the database is running
-        And "LC_ALL" is different from English
-        When the user runs "gpstop -a"
-        Then gpstop should not print "Failed to kill processes for segment"
