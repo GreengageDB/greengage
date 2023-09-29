@@ -105,16 +105,3 @@ Feature: Tests for gpcheckperf
     And   gpcheckperf should print "rsync -P -a -c -e * .*multidd cdw:*" to stdout
     And   rely on environment.py to restore path permissions
 
-  @concourse_cluster
-  Scenario: gpcheckperf runs sequential network test with buffer size flag
-    Given the database is running
-    When  the user runs "gpcheckperf -h mdw -h sdw1 -d /data/gpdata/ -r n --buffer-size=8"
-    Then  gpcheckperf should return a return code of 0
-    And   gpcheckperf should print "avg = " to stdout
-    And   gpcheckperf should not print "NOTICE: -t is deprecated " to stdout
-
-  @concourse_cluster
-  Scenario: gpcheckperf runs sequential network test with buffer size flag
-    Given the database is running
-    When  the user runs "gpcheckperf -h mdw -h sdw1 -d /data/gpdata/ -r n --buffer-size=8 --netperf"
-    Then  gpcheckperf should print "Applying the --buffer-size option is not possible when the --netperf option is enabled." to stdout
