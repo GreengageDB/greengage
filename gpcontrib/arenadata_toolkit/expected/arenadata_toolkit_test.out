@@ -85,41 +85,43 @@ SELECT arenadata_toolkit.adb_create_tables();
 -- show toolkit objects (and their grants) that belongs to arenadata_toolkit schema after creating
 -- extension and calling adb_create_tables
 SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY objname;
-               objname               | objtype | objstorage |             objacl             
--------------------------------------+---------+------------+--------------------------------
- __db_files_current                  | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_files_current_unmapped         | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_segment_files                  | table   | v          | {owner=arwdDxt/owner,=r/owner}
- adb_collect_table_stats             | proc    | -          | {owner=X/owner}
- adb_create_tables                   | proc    | -          | {owner=X/owner}
- adb_get_relfilenodes                | proc    | -          | {=X/owner,owner=X/owner}
- adb_relation_storage_size           | proc    | -          | {=X/owner,owner=X/owner}
- adb_skew_coefficients               | table   | v          | {owner=arwdDxt/owner,=r/owner}
- arenadata_toolkit                   | schema  | -          | {owner=UC/owner,=U/owner}
- daily_operation                     | table   | a          | 
- db_files_current                    | table   | h          | {owner=arwdDxt/owner,=r/owner}
- db_files_history                    | table   | a          | 
- db_files_history_1_prt_default_part | table   | a          | 
- db_files_history_1_prt_p202306      | table   | a          | 
- operation_exclude                   | table   | a          | 
-(15 rows)
+                objname                | objtype | objstorage |             objacl             
+---------------------------------------+---------+------------+--------------------------------
+ __db_files_current                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_files_current_unmapped           | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_segment_files                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ adb_collect_table_stats               | proc    | -          | {owner=X/owner}
+ adb_create_tables                     | proc    | -          | {owner=X/owner}
+ adb_get_relfilenodes                  | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size             | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size_on_segments | proc    | -          | {=X/owner,owner=X/owner}
+ adb_skew_coefficients                 | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ arenadata_toolkit                     | schema  | -          | {owner=UC/owner,=U/owner}
+ daily_operation                       | table   | a          | 
+ db_files_current                      | table   | h          | {owner=arwdDxt/owner,=r/owner}
+ db_files_history                      | table   | a          | 
+ db_files_history_1_prt_default_part   | table   | a          | 
+ db_files_history_1_prt_pYYYYMM        | table   | a          | 
+ operation_exclude                     | table   | a          | 
+(16 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
 	toolkit_objects_info objs ON d.objid = objs.objid JOIN
 	pg_extension e ON d.refobjid = e.oid
 WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
-           objname           | objtype |      extname      | deptype 
------------------------------+---------+-------------------+---------
- __db_files_current          | table   | arenadata_toolkit | e
- __db_files_current_unmapped | table   | arenadata_toolkit | e
- __db_segment_files          | table   | arenadata_toolkit | e
- adb_collect_table_stats     | proc    | arenadata_toolkit | e
- adb_create_tables           | proc    | arenadata_toolkit | e
- adb_get_relfilenodes        | proc    | arenadata_toolkit | e
- adb_relation_storage_size   | proc    | arenadata_toolkit | e
- adb_skew_coefficients       | table   | arenadata_toolkit | e
-(8 rows)
+                objname                | objtype |      extname      | deptype 
+---------------------------------------+---------+-------------------+---------
+ __db_files_current                    | table   | arenadata_toolkit | e
+ __db_files_current_unmapped           | table   | arenadata_toolkit | e
+ __db_segment_files                    | table   | arenadata_toolkit | e
+ adb_collect_table_stats               | proc    | arenadata_toolkit | e
+ adb_create_tables                     | proc    | arenadata_toolkit | e
+ adb_get_relfilenodes                  | proc    | arenadata_toolkit | e
+ adb_relation_storage_size             | proc    | arenadata_toolkit | e
+ adb_relation_storage_size_on_segments | proc    | arenadata_toolkit | e
+ adb_skew_coefficients                 | table   | arenadata_toolkit | e
+(9 rows)
 
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit cascade;
@@ -136,41 +138,43 @@ SELECT arenadata_toolkit.adb_create_tables();
 -- show toolkit objects (and their grants) that belongs to arenadata_toolkit schema after creating
 -- extension and calling adb_create_tables
 SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY objname;
-               objname               | objtype | objstorage |             objacl             
--------------------------------------+---------+------------+--------------------------------
- __db_files_current                  | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_files_current_unmapped         | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_segment_files                  | table   | v          | {owner=arwdDxt/owner,=r/owner}
- adb_collect_table_stats             | proc    | -          | {owner=X/owner}
- adb_create_tables                   | proc    | -          | {owner=X/owner}
- adb_get_relfilenodes                | proc    | -          | {=X/owner,owner=X/owner}
- adb_relation_storage_size           | proc    | -          | {=X/owner,owner=X/owner}
- adb_skew_coefficients               | table   | v          | {owner=arwdDxt/owner,=r/owner}
- arenadata_toolkit                   | schema  | -          | {owner=UC/owner,=U/owner}
- daily_operation                     | table   | a          | {owner=arwdDxt/owner}
- db_files_current                    | table   | h          | {owner=arwdDxt/owner,=r/owner}
- db_files_history                    | table   | a          | {owner=arwdDxt/owner}
- db_files_history_1_prt_default_part | table   | a          | {owner=arwdDxt/owner}
- db_files_history_1_prt_p202306      | table   | a          | {owner=arwdDxt/owner}
- operation_exclude                   | table   | a          | {owner=arwdDxt/owner}
-(15 rows)
+                objname                | objtype | objstorage |             objacl             
+---------------------------------------+---------+------------+--------------------------------
+ __db_files_current                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_files_current_unmapped           | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_segment_files                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ adb_collect_table_stats               | proc    | -          | {owner=X/owner}
+ adb_create_tables                     | proc    | -          | {owner=X/owner}
+ adb_get_relfilenodes                  | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size             | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size_on_segments | proc    | -          | {=X/owner,owner=X/owner}
+ adb_skew_coefficients                 | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ arenadata_toolkit                     | schema  | -          | {owner=UC/owner,=U/owner}
+ daily_operation                       | table   | a          | {owner=arwdDxt/owner}
+ db_files_current                      | table   | h          | {owner=arwdDxt/owner,=r/owner}
+ db_files_history                      | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_1_prt_default_part   | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_1_prt_pYYYYMM        | table   | a          | {owner=arwdDxt/owner}
+ operation_exclude                     | table   | a          | {owner=arwdDxt/owner}
+(16 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
 	toolkit_objects_info objs ON d.objid = objs.objid JOIN
 	pg_extension e ON d.refobjid = e.oid
 WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
-           objname           | objtype |      extname      | deptype 
------------------------------+---------+-------------------+---------
- __db_files_current          | table   | arenadata_toolkit | e
- __db_files_current_unmapped | table   | arenadata_toolkit | e
- __db_segment_files          | table   | arenadata_toolkit | e
- adb_collect_table_stats     | proc    | arenadata_toolkit | e
- adb_create_tables           | proc    | arenadata_toolkit | e
- adb_get_relfilenodes        | proc    | arenadata_toolkit | e
- adb_relation_storage_size   | proc    | arenadata_toolkit | e
- adb_skew_coefficients       | table   | arenadata_toolkit | e
-(8 rows)
+                objname                | objtype |      extname      | deptype 
+---------------------------------------+---------+-------------------+---------
+ __db_files_current                    | table   | arenadata_toolkit | e
+ __db_files_current_unmapped           | table   | arenadata_toolkit | e
+ __db_segment_files                    | table   | arenadata_toolkit | e
+ adb_collect_table_stats               | proc    | arenadata_toolkit | e
+ adb_create_tables                     | proc    | arenadata_toolkit | e
+ adb_get_relfilenodes                  | proc    | arenadata_toolkit | e
+ adb_relation_storage_size             | proc    | arenadata_toolkit | e
+ adb_relation_storage_size_on_segments | proc    | arenadata_toolkit | e
+ adb_skew_coefficients                 | table   | arenadata_toolkit | e
+(9 rows)
 
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit cascade;
