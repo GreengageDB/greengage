@@ -1,5 +1,5 @@
 # arenadata_toolkit extension
 comment = 'extension is used for manipulation of objects created by adb-bundle'
-default_version = '1.1'
+default_version = '1.2'
 module_pathname = '$libdir/arenadata_toolkit'
 relocatable = false
