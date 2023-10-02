@@ -233,6 +233,9 @@ typedef struct AllocChunkData
 	void *prev_chunk;
 	void *next_chunk;
 #endif
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	MemoryContextChunkInfo info;
+#endif
 }	AllocChunkData;
 
 /*
@@ -1888,6 +1891,10 @@ AllocSetIsEmpty(MemoryContext context)
 	return false;
 }
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "../backend/utils/mmgr/aset_memory_debug.c"
+#endif
+
 /*
  * AllocSet_GetStats
  *		Returns stats about memory consumption of an AllocSet.
@@ -1949,6 +1956,10 @@ AllocSet_GetStats(MemoryContext context, uint64 *nBlocks, uint64 *nChunks,
 			*currentAvailable += chunk->size;
 		}
 	}
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	AllocSetGetAllocatedChunkStats(set);
+#endif
 }
 
 #ifdef MEMORY_CONTEXT_CHECKING

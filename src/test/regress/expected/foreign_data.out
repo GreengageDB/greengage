@@ -1268,7 +1268,123 @@ ERROR:  cannot drop desired object(s) because other objects depend on them
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP OWNED BY regress_test_role2 CASCADE;
 NOTICE:  drop cascades to user mapping for regress_test_role on server s5
+------------------------------------------------------------------------------
+-- Test to check column encoding at foreign tables.
+-- Not use column encoding at foreign tables.
+------------------------------------------------------------------------------
+CREATE DATABASE foreign_tables_test_db;
+\c foreign_tables_test_db
+CREATE FOREIGN DATA WRAPPER dummy;
+CREATE SERVER test FOREIGN DATA WRAPPER dummy;
+-- Do not create foreign tables with encoding clause
+-- Expect: failure
+CREATE FOREIGN TABLE foreign_table (
+    a integer ENCODING (compresstype=zstd,blocksize=32768,compresslevel=3)
+) SERVER test;
+ERROR:  ENCODING clause only supported with column oriented tables
+SET gp_default_storage_options = 'appendonly=true,blocksize=32768,compresstype=zstd,compresslevel=3,checksum=true,orientation=column';
+CREATE FOREIGN TABLE foreign_table (
+    a integer ENCODING (compresstype=zstd,blocksize=32768,compresslevel=3)
+) SERVER test;
+ERROR:  ENCODING clause only supported with column oriented tables
+-- Check that created foreign table does not apply gp_default_storage_options
+-- Expect: success
+CREATE FOREIGN TABLE foreign_table (
+    a integer
+) SERVER test;
+ALTER FOREIGN TABLE public.foreign_table OWNER to foreign_data_user;
+\d+ foreign_table
+                       Foreign table "public.foreign_table"
+ Column |  Type   | Modifiers | FDW Options | Storage | Stats target | Description 
+--------+---------+-----------+-------------+---------+--------------+-------------
+ a      | integer |           |             | plain   |              | 
+Server: test
+
+-- Check that pg_dump generates valid table definition
+-- Expect: success
+\! pg_dump -t public.foreign_table foreign_tables_test_db
+--
+-- Greenplum Database database dump
+--
+
+SET gp_default_storage_options = '';
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+--
+-- Name: foreign_table; Type: FOREIGN TABLE; Schema: public; Owner: foreign_data_user; Tablespace: 
+--
+
+CREATE FOREIGN TABLE public.foreign_table (
+    a integer
+)
+SERVER test
+;
+
+
+ALTER FOREIGN TABLE public.foreign_table OWNER TO foreign_data_user;
+
+--
+-- Greenplum Database database dump complete
+--
+
+-- End of pg_dump output
+-- Check that pg_dump generates valid table definition after resetting gp_default_storage_options
+-- Expect: success
+RESET gp_default_storage_options;
+\! pg_dump -t public.foreign_table foreign_tables_test_db
+--
+-- Greenplum Database database dump
+--
+
+SET gp_default_storage_options = '';
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+--
+-- Name: foreign_table; Type: FOREIGN TABLE; Schema: public; Owner: foreign_data_user; Tablespace: 
+--
+
+CREATE FOREIGN TABLE public.foreign_table (
+    a integer
+)
+SERVER test
+;
+
+
+ALTER FOREIGN TABLE public.foreign_table OWNER TO foreign_data_user;
+
+--
+-- Greenplum Database database dump complete
+--
+
+-- End of pg_dump output
 -- Cleanup
+DROP FOREIGN TABLE foreign_table;
+DROP SERVER test;
+DROP FOREIGN DATA WRAPPER dummy;
+\c regression
+DROP DATABASE foreign_tables_test_db;
 DROP SCHEMA foreign_schema CASCADE;
 DROP ROLE regress_test_role;                                -- ERROR
 ERROR:  role "regress_test_role" cannot be dropped because some objects depend on it

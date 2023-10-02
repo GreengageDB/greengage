@@ -3337,17 +3337,9 @@ transformIndexStmt(Oid relid, IndexStmt *stmt, const char *queryString)
 	free_parsestate(pstate);
 
 	/*
-	 * Close relation. Unless this is a CREATE INDEX
-	 * for a partitioned table, and we're processing a partition. In that
-	 * case, we want to release the lock on the partition early, so that
-	 * you don't run out of space in the lock manager if there are a lot
-	 * of partitions. Holding the lock on the parent table should be
-	 * enough.
+	 * Close relation but keep the lock.
 	 */
-	if (!rel_needs_long_lock(RelationGetRelid(rel)))
-		heap_close(rel, lockmode);
-	else
-		heap_close(rel, NoLock);
+	heap_close(rel, NoLock);
 
 	return stmt;
 }
@@ -4514,7 +4506,7 @@ transformAttributeEncoding(List *stenc, CreateStmt *stmt, CreateStmtContext *cxt
 {
 	ListCell *lc;
 	bool found_enc = stenc != NIL;
-	bool can_enc = is_aocs(stmt->options);
+	bool can_enc = is_aocs(stmt->options) && !cxt->isforeign;
 	ColumnReferenceStorageDirective *deflt = NULL;
 	List *newenc = NIL;
 	List *tmpenc;

@@ -92,6 +92,9 @@ sub Catalogs
 				$bki_values = ProcessDataLine(\%catalog, $bki_values, \%coldefaults, \%extra_values);
 
 				push @{ $catalog{data} }, { oid => $2, bki_values => $bki_values };
+
+				# Clear GPDB_EXTRA_COL settings to further reinitialize their for successive DATA definitions
+				%extra_values = ();
 			}
 			elsif (/^DESCR\(\"(.*)\"\)$/)
 			{
