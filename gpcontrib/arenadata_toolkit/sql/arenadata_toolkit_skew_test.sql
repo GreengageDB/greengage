@@ -161,6 +161,52 @@ SELECT skcnamespace, skcrelname, round(skccoeff, 2) as skccoeff_round FROM adb_s
 
 DROP TABLE heap, ao, co;
 
+----------------------------------------------------------------------------------------------------------
+-- test adb_skew_coefficients view on partitioned table
+----------------------------------------------------------------------------------------------------------
+
+CREATE TABLE part_table (id INT, a INT, b INT, c INT, d INT, str TEXT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (a)
+	SUBPARTITION BY RANGE (b)
+		SUBPARTITION TEMPLATE (START (1) END (3) EVERY (1))
+	SUBPARTITION BY RANGE (c)
+		SUBPARTITION TEMPLATE (START (1) END (3) EVERY (1))
+	SUBPARTITION BY RANGE (d)
+		SUBPARTITION TEMPLATE (START (1) END (3) EVERY (1))
+	SUBPARTITION BY LIST (str)
+		SUBPARTITION TEMPLATE (
+			SUBPARTITION sub_prt1 VALUES ('sub_prt1'),
+			SUBPARTITION sub_prt2 VALUES ('sub_prt2'))
+	(START (1) END (3) EVERY (1));
+
+-- check that adb_skew_coefficients works on empty table
+SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round
+	FROM adb_skew_coefficients
+	WHERE skcrelname LIKE 'part_table%'
+	ORDER BY skcrelname;
+
+-- add small data to all parts of table
+INSERT INTO part_table
+	SELECT i+1, mod(i/16,2)+1, mod(i/8,2)+1, mod(i/4,2)+1, mod(i/2,2)+1, 'sub_prt' || mod(i,2)+1
+	FROM generate_series(0,399) as i;
+
+SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round
+	FROM adb_skew_coefficients
+	WHERE skcrelname LIKE 'part_table%'
+	ORDER BY skcrelname;
+
+-- add a lot of data for one part to generate big skew coefficient
+-- distributing by first columnt is helps to us to put all data to one segment
+INSERT INTO part_table SELECT 1,1,1,1,1,'sub_prt1' FROM generate_series(1,10000) AS i;
+
+SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round
+	FROM adb_skew_coefficients
+	WHERE skcrelname LIKE 'part_table%' AND skccoeff != 0
+	ORDER BY skcrelname;
+
+DROP TABLE part_table;
+
 DROP FUNCTION compare_table_and_forks_size_calculation(OID);
 DROP FUNCTION check_size_diff(OID);
 

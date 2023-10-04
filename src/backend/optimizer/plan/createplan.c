@@ -5751,7 +5751,15 @@ make_material(Plan *lefttree)
 	Plan	   *plan = &node->plan;
 
 	/* cost should be inserted by caller */
-	plan->targetlist = lefttree->targetlist;
+	if (lefttree->targetlist != NIL)
+		plan->targetlist = lefttree->targetlist;
+	else if (IsA(lefttree, ModifyTable))
+	{
+		ModifyTable *mt = (ModifyTable *)lefttree;
+		Assert(mt->returningLists);
+		plan->targetlist = copyObject(linitial(mt->returningLists));
+	}
+
 	plan->qual = NIL;
 	plan->lefttree = lefttree;
 	plan->righttree = NULL;
