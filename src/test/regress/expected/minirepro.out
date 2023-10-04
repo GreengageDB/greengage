@@ -3,7 +3,8 @@ drop database if exists gpsd_db_with_hll;
 -- end_ignore
 create database gpsd_db_with_hll;
 \c gpsd_db_with_hll
-create table minirepro_foo(a int, b int[]);
+create sequence minirepro_foo_c_seq cache 1;
+create table minirepro_foo(a int, b int[], c int default nextval('minirepro_foo_c_seq'::regclass), d serial);
 insert into minirepro_foo values(1, '{10000, 10000, 10000, 10000}');
 insert into minirepro_foo values(1, '{10000, 10000, 10000, 10000}');
 insert into minirepro_foo values(1, '{10000, 10000, 10000, 10000}');
@@ -26,6 +27,7 @@ WARNING: This tool collects statistics about your data, including most common va
 Please review output file to ensure it is within corporate policy to transport the output file.
 -- end_ignore
 drop table minirepro_foo;
+drop sequence minirepro_foo_c_seq;
 \! psql -f data/minirepro.sql gpsd_db_with_hll
 You are now connected to database "gpsd_db_with_hll" as user "gpadmin".
 SET
@@ -42,10 +44,18 @@ SET
 SET
 SET
 SET
+CREATE SEQUENCE
 SET
 SET
 CREATE TABLE
+CREATE SEQUENCE
+ALTER SEQUENCE
+ALTER TABLE
 SET
 UPDATE 1
+UPDATE 1
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
 INSERT 0 1
 INSERT 0 1

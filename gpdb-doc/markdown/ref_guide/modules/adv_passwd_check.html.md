@@ -44,18 +44,19 @@ The `advanced_password_check` module defines server configuration parameters tha
 
 |Parameter Name|Type|Default Value|Description|
 |--------------|----|-------------|-----------|
-|lockout_duration|int|0|The number of minutes a user is locked after reaching password_login_attempts. If set to 0, the user is locked indefinitely.|
 |minimum\_length|int|8|The minimum allowable length of a Greenplum Database password.|
 |maximum\_length|int|15|The maximum allowable length of a Greenplum Database password.|
-|password_login_attempts|int|0|The number of consecutive failed login attempts before a user is locked. If set to 0, this feature is disabled.|
-|password_max_age|int|0|The maximum number of days before the password expires. If set to 0, the password does not expire.|
-|password_reuse_days|int|0|The number of days before a user can reuse a password. If set to 0, the user can reuse any password.|
-|password_reuse_history|int|0|The number of previous passwords a user cannot reuse. If set to 0, the user can reuse any password.|
 |special\_chars|string|!@\#$%^&\*\(\)\_+\{\}\|<\>?=|The set of characters that Greenplum Database considers to be special characters in a password.|
 |restrict\_upper|bool|true|Specifies whether or not the password string must contain at least one upper case character.|
 |restrict\_lower|bool|true|Specifies whether or not the password string must contain at least one lower case character.|
 |restrict\_numbers|bool|true|Specifies whether or not the password string must contain at least one number.|
 |restrict\_special|bool|true|Specifies whether or not the password string must contain at least one special character.|
+|password_login_attempts|int|0|The number of consecutive failed login attempts before a user is locked. If set to 0, this feature is disabled.|
+|password_max_age|int|0|The maximum number of days before the password expires. If set to 0, the password does not expire.|
+|password_reuse_days|int|0|The number of days before a user can reuse a password. If set to 0, the user can reuse any password.|
+|password_reuse_history|int|0|The number of previous passwords a user cannot reuse. If set to 0, the user can reuse any password.|
+|lockout_duration|int|0|The number of minutes a user is locked after reaching password_login_attempts. If set to 0, the user is locked indefinitely.|
+
 
 After you define your password policies, you run the `gpconfig` command for each configuration parameter that you must set. When you run the command, you must qualify the parameter with the module name. For example, to configure Greenplum Database to remove any requirements for a lower case letter in the password string, you run the following command:
 
@@ -170,6 +171,23 @@ After loading the new configuration, passwords that the Greenplum superuser sets
 ERROR:  Incorrect password format: lower-case character missing, upper-case character
 missing, special character missing (needs to be one listed in "<list-of-special-chars>")
 ```
+
+## <a id="topic_upgrade"></a>Upgrading the Module
+
+You may upgrade the module from a previous version by following the steps below.
+
+1. Check your existing version of the module by running `\dx` from your database.
+
+1. Verify that `advanced_password_check` is listed as one of the preloaded shared libraries by running the following command:
+
+    ``` 
+    gpconfig -s shared_preload_libraries
+    ``` 
+1. Update the extension from your database prompt. The following example upgrades to version 1.2:
+    ```
+    ALTER EXTENSION advanced_password_check UPDATE TO ‘1.2’;
+    ```
+
 
 ## <a id="topic_info"></a>Additional Module Documentation 
 

@@ -62,6 +62,32 @@ ALTER TABLE tbl_create_index ADD CONSTRAINT PKEY PRIMARY KEY(i, k);
 
 DROP TABLE tbl_create_index;
 
+-- create partition table with dist keys (a,b,c)
+CREATE TABLE foo1 (a int, b int, c int)  DISTRIBUTED BY (a,b,c) PARTITION BY RANGE(a)
+(PARTITION p1 START (1) END (10000) INCLUSIVE,
+PARTITION p2 START (10001) END (100000) INCLUSIVE,
+PARTITION p3 START (100001) END (1000000) INCLUSIVE);
+
+-- create unique index with same keys but different order (a,c,b)
+create unique index acb_idx on public.foo1 using btree(a,c,b);
+
+-- alter table by add partition
+alter table public.foo1 add partition p4 START (1000001) END (2000000) INCLUSIVE;
+
+-- check the status of the new partition: new dist keys should be consistent
+-- to the parent table
+\d+ foo1_1_prt_p4
+
+-- alter table by split partition
+alter table public.foo1 split partition p1 at(500) into (partition p1_0, partition p1_1);
+
+-- check the status of the split partitions: new dist keys should be consistent
+-- to the parent table
+\d+ foo1_1_prt_p1_0
+\d+ foo1_1_prt_p1_1
+
+DROP TABLE foo1;
+
 -- before dispatch stmt to QEs, switching user to login user,
 -- so that the connection to QEs use the same user as the connection to QD.
 -- pass the permission check of schema on QEs.

@@ -1765,3 +1765,8 @@ FROM dml_heap_int t1
 		SELECT a+1
 		FROM dml_heap_int)) t2 ON (t1.a = t2.a);
 SELECT * FROM dml_heap_int;
+
+-- Insert with constant columns from join
+CREATE TABLE dml_insert_t1(a int, b varchar(10));
+CREATE TABLE dml_select_t2(a int);
+INSERT INTO dml_insert_t1 SELECT col1,col2 FROM (SELECT x.a AS col1, '100' AS col2 FROM dml_select_t2 x LEFT JOIN dml_select_t2 y ON x.a<y.a) AS t LEFT JOIN dml_select_t2 ON 1=1 WHERE t.col2::int<20;

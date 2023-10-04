@@ -664,7 +664,7 @@ After Greenplum moves the query, there is no way to guarantee that a query curre
 
 Successful return of `pg_resgroup_move_query()` doesn't mean target process was successfully moved. Process movement is asynchronous. The current resource group can be checked via `pg_stat_activity` system view.
 
-> **Note** Greenplum Database version 6.8 introduced support for moving a query to a different resource group.
+**Note:** Greenplum Database version 6.8 introduced support for moving a query to a different resource group.
 
 -   If you upgraded from a previous Greenplum 6.x installation, you must manually register the supporting functions for this feature, and grant access to the functions as follows:
 

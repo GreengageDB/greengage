@@ -568,6 +568,17 @@ Feature: gpcheckcat tests
         And the user runs "dropdb check_dependency_error"
         And the user runs "psql -c "DROP ROLE foo""
 
+    Scenario: gpcheckcat should discover missing attributes of pg_description catalogue table
+        Given there is a "heap" table "public.heap_table" in "miss_attr_db5" with data and description
+        When the user runs "gpcheckcat -v miss_attr_db5"
+        And gpcheckcat should return a return code of 0
+        Then gpcheckcat should not print "Missing" to stdout
+        And the user runs "psql miss_attr_db5 -c "SET allow_system_table_mods=true; DELETE FROM pg_description where objoid='heap_table'::regclass::oid;""
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -v miss_attr_db5"
+        Then gpcheckcat should print "Missing description metadata of {.*} on content -1" to stdout
+        And gpcheckcat should not print "Execution error:" to stdout
+        And gpcheckcat should print "Name of test which found this issue: missing_extraneous_pg_description" to stdout
 
 ########################### @concourse_cluster tests ###########################
 # The @concourse_cluster tag denotes the scenario that requires a remote cluster
@@ -609,3 +620,35 @@ Feature: gpcheckcat tests
         Examples:
             | attrname   | tablename     |
             | conrelid   | pg_constraint |
+
+
+    Scenario: set multiple GUC at session level in gpcheckcat
+        Given database "all_good" is dropped and recreated
+        Then the user runs "gpcheckcat -x disable_cost=3e15 -x log_min_messages=debug5 -R foreign_key"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should print "foreign_key" to stdout
+        And the user runs "dropdb all_good"
+
+
+    Scenario: set GUC with invalid value at session level in gpcheckcat
+        Given database "all_good" is dropped and recreated
+        Then the user runs "gpcheckcat -x disable_cost=invalid -R foreign_key"
+        Then gpcheckcat should return a return code of 1
+        And gpcheckcat should print ".* parameter "disable_cost" requires a numeric value"" to stdout
+        And the user runs "dropdb all_good"
+
+
+    Scenario: validate session GUC passed with -x is set
+        Given the database is not running
+          And the user runs "gpstart -ma"
+          And "gpstart -ma" should return a return code of 0
+         Then the user runs "gpcheckcat -R foreign_key"
+         Then gpcheckcat should return a return code of 1
+          And gpcheckcat should print ".* System was started in master-only utility mode - only utility mode connections are allowed" to stdout
+         Then the user runs "gpcheckcat -x gp_session_role=utility -R foreign_key"
+         Then gpcheckcat should return a return code of 0
+          And the user runs "gpstop -ma"
+          And "gpstop -m" should return a return code of 0
+          And the user runs "gpstart -a"
+
+
