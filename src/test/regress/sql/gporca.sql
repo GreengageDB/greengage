@@ -2908,6 +2908,7 @@ reset optimizer_enable_hashjoin;
 reset optimizer_trace_fallback;
 
 -- Make sure materialize projects child's tlist, not what is requested
+set optimizer_enable_indexscan to off;
 create table material_test(first_id int, second_id int);
 create index material_test_idx on material_test using btree (second_id);
 create table material_test2(first_id int, second_id int);
@@ -2939,6 +2940,7 @@ select first_id
 from material_test2
 where first_id in (select first_id from mat_w)
 and first_id in (select first_id from mat_w);
+reset optimizer_enable_indexscan;
 
 -- Test Bitmap Heap Scan's targetlist contains only necessary attrs, not
 -- including ones from Recheck and Filter conditions.
@@ -3367,6 +3369,28 @@ CREATE INDEX i_ab ON index_confusion_1_prt_2 (a, b);
 -- Select should return one row
 EXPLAIN (COSTS OFF) SELECT * FROM index_confusion WHERE l = '1';
 SELECT * FROM index_confusion WHERE l = '1';
+
+-- Test that the preprocessor step where
+-- IN subquery is converted to EXIST subquery with a predicate,
+-- is not happening if inner sub query is SRF
+-- Fixed as part of github issue #15644
+
+explain verbose SELECT a IN (SELECT generate_series(1,a)) AS x FROM (SELECT generate_series(1, 3) AS a) AS s;
+SELECT a IN (SELECT generate_series(1,a)) AS x FROM (SELECT generate_series(1, 3) AS a) AS s;
+
+SELECT a FROM (values(1),(2),(3)) as t(a) where a IN (SELECT generate_series(1,a));
+EXPLAIN (VERBOSE, COSTS OFF)
+  SELECT a FROM (values(1),(2),(3)) as t(a) where a IN (SELECT generate_series(1,a));
+
+CREATE TABLE t_outer_srf (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO t_outer_srf SELECT i, i+1 FROM generate_series(1,3) as i;  
+CREATE TABLE t_inner_srf (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO t_inner_srf SELECT i, i+1 FROM generate_series(1,3) as i;
+
+SELECT * FROM t_outer_srf WHERE t_outer_srf.b IN (SELECT generate_series(1, t_outer_srf.b) FROM t_inner_srf);
+EXPLAIN (VERBOSE, COSTS OFF)
+  SELECT * FROM t_outer_srf WHERE t_outer_srf.b IN (SELECT generate_series(1, t_outer_srf.b)  FROM t_inner_srf);
+DROP TABLE t_outer_srf, t_inner_srf;
 
 -- check that ORCA plan, of the next query (the valid plan is generated after https://github.com/greenplum-db/gpdb/pull/14896 (1)),
 -- doesn't fallback to postgres like it was (due to https://github.com/arenadata/gpdb/pull/302 (2) which is applied above (1)).

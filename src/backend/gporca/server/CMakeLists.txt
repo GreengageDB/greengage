@@ -53,7 +53,8 @@ InSubqWithPrjListOuterRefNoInnerRefColumnIn InSubqWithPrjListOuterRefNoInnerRefC
 NestedInSubqWithPrjListOuterRefNoInnerRef  InEqualityJoin Correlated-SemiJoin
 CorrelatedSemiJoin-True CorrelatedIN-LeftSemiJoin-True CorrelatedIN-LeftSemiNotIn-True
 InSubqWithPrjListOuterRefNoInnerRefColumnPlusConstIn CorrelatedIN-LeftSemiJoin-Limit
-CorrelatedLeftSemiNLJoinWithLimit PushFilterToSemiJoinLeftChild SubqOuterReferenceInClause;
+CorrelatedLeftSemiNLJoinWithLimit PushFilterToSemiJoinLeftChild SubqOuterReferenceInClause
+InSubqWithPrjListReturnSet;
 
 CAntiSemiJoinTest:
 AntiSemiJoin2Select-1 AntiSemiJoin2Select-2 NOT-IN-NotNullBoth NOT-IN-NullInner NOT-IN-NullOuter
@@ -75,7 +76,7 @@ InferredPredicatesConstraintSimplification NoPushdownPredicateWithCTEAnchor
 InferPredicatesForPartSQ InferPredicatesForQuantifiedSQ DoubleNDVCardinalityEquals
 NotWellDefinedDisjunctConjunctPredicates InferPredicatesIntFromSubquery InferPredicatesFromExistsSubquery
 InferPredicatesIntFromExistsSubquery InferPredicatesFromMultiSubquery InferPredicatesMultiColumns
-InferPredicatesJoinSubquery;
+InferPredicatesJoinSubquery JoinPredFalseFilter;
 
 CLikeIDFTest:
 LIKE-Pattern-green LIKE-Pattern-green-2 LIKE-Pattern-Empty Nested-Or-Predicates Join-IDF
@@ -255,7 +256,8 @@ CSetop3Test:
 UnionWithOuterRefs UnionAll
 Union-Distributed-Table-With-Const-Table ExceptAllCompatibleDataType
 UnionAllCompatibleDataType UnionOfDQAQueries Union-Volatile-Func
-Intersect-Volatile-Func Except-Volatile-Func UnionWithCTE;
+Intersect-Volatile-Func Except-Volatile-Func UnionWithCTE ExceptHashCompatibleRange
+ExceptHashIncompatibleRange;
 
 CSetop4Test:
 PushSelectDownUnionAllOfCTG Push-Subplan-Below-Union Intersect-OuterRefs

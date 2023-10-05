@@ -9,6 +9,7 @@ Feature: gprecoverseg tests
          When the user runs "gprecoverseg <args>"
          Then gprecoverseg should return a return code of 0
           And the segments are synchronized
+          And verify replication slot internal_wal_replication_slot is available on all the segments
           And the tablespace is valid
           And the database segments are in execute mode
 
@@ -16,6 +17,7 @@ Feature: gprecoverseg tests
          When the user runs "gprecoverseg -ra"
          Then gprecoverseg should return a return code of 0
           And the segments are synchronized
+          And verify replication slot internal_wal_replication_slot is available on all the segments
           And the tablespace is valid
           And the other tablespace is valid
           And the database segments are in execute mode
@@ -81,6 +83,7 @@ Feature: gprecoverseg tests
          When the user runs "gprecoverseg -a --differential"
          Then gprecoverseg should return a return code of 0
           And verify that mirror on content 0,1,2 is up
+          And verify replication slot internal_wal_replication_slot is available on all the segments
           And the cluster is rebalanced
 
     @demo_cluster
@@ -102,6 +105,7 @@ Feature: gprecoverseg tests
          When the user runs "gprecoverseg -a --differential"
          Then gprecoverseg should return a return code of 0
           And verify that mirror on content 0,1,2 is up
+          And verify replication slot internal_wal_replication_slot is available on all the segments
           And the cluster is rebalanced
 
     Scenario: full recovery works with tablespaces
@@ -219,6 +223,7 @@ Feature: gprecoverseg tests
         Then gprecoverseg should return a return code of 0
         And gprecoverseg should print "Successfully finished pg_controldata.* for dbid.*" to stdout
         And the segments are synchronized
+        And verify replication slot internal_wal_replication_slot is available on all the segments
         And check segment conf: postgresql.conf
      Examples:
         | scenario     | args               |
@@ -310,6 +315,7 @@ Feature: gprecoverseg tests
         And gpAdminLogs directory has "gpsegsetuprecovery*" files
         And all the segments are running
         And the segments are synchronized
+        And verify replication slot internal_wal_replication_slot is available on all the segments
         And check segment conf: postgresql.conf
 
   Scenario: gprecoverseg does not display rsync progress to the user when --no-progress option is specified
@@ -666,6 +672,7 @@ Feature: gprecoverseg tests
     When the user runs "gprecoverseg -ra"
     Then gprecoverseg should return a return code of 0
     And the segments are synchronized
+    And verify replication slot internal_wal_replication_slot is available on all the segments
     And the tablespace is valid
     And the other tablespace is valid
     And the database segments are in execute mode
@@ -1516,6 +1523,7 @@ Feature: gprecoverseg tests
         And gprecoverseg should print "Heap checksum setting is consistent between master and the segments that are candidates for recoverseg" to stdout
         And all the segments are running
         And the segments are synchronized
+        And verify replication slot internal_wal_replication_slot is available on all the segments
         Then the saved primary segment reports the same value for sql "show data_checksums" db "template1" as was saved
 
 
@@ -1880,3 +1888,24 @@ Feature: gprecoverseg tests
     And the user runs "gprecoverseg -a -v"
     Then gprecoverseg should return a return code of 0
     And the cluster is rebalanced
+
+    @remove_rsync_bash
+    @concourse_cluster
+    Scenario: None of the accumulated wal (after running pg_start_backup and before copying the pg_control file) is lost during differential
+      Given the database is running
+        And all the segments are running
+        And the segments are synchronized
+        And all files in gpAdminLogs directory are deleted on all hosts in the cluster
+        And sql "DROP TABLE IF EXISTS test_recoverseg; CREATE TABLE test_recoverseg AS SELECT generate_series(1,1000) AS a;" is executed in "postgres" db
+        And user immediately stops all mirror processes for content 0
+        And the user waits until mirror on content 0 is down
+        And user can start transactions
+        And user creates a new executable rsync script which inserts data into table and runs checkpoint along with doing rsync
+       When the user runs "gprecoverseg -av --differential"
+       Then gprecoverseg should return a return code of 0
+        And verify that mirror on content 0 is up
+       Then the row count of table test_recoverseg in "postgres" should be 2000
+      Given user immediately stops all primary processes for content 0
+        And user can start transactions
+       Then the row count of table test_recoverseg in "postgres" should be 2000
+       And the cluster is recovered in full and rebalanced

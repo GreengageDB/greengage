@@ -2,7 +2,7 @@
 title: greenplum_fdw
 ---
 
-The `greenplum_fdw` module is a foreign-data wrapper \(FDW\) that you can use to run queries across one or more Greenplum Database version 6.20+ clusters.
+The `greenplum_fdw` module is a foreign-data wrapper \(FDW\) that you can use to run queries between one or more Greenplum Database version 6.20+ and 7 clusters.
 
 The Greenplum Database `greenplum_fdw` module is an MPP extension of the PostgreSQL `postgres_fdw` module.
 
@@ -173,7 +173,7 @@ The `greenplum_fdw` module has the following known issues and limitations:
 
 ## <a id="topic_compat"></a>Compatibility 
 
-You can use `greenplum_fdw` to access other remote Greenplum Database clusters running version 6.20+.
+You can use `greenplum_fdw` to access other remote Greenplum Database clusters running version 6.20+ and 7.
 
 ## <a id="topic_examples"></a>Example 
 

@@ -4569,6 +4569,19 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 
+	/**
+	 * In previous code, the default value of dtx_phase2_retry_count is 10.
+	 * If the command cannot be dispatched successfully within this period, a PANIC happens
+	 * (Details are in doNotifyingCommitPrepared()).
+	 * Then the postmaster will restart and goes into recovery process.
+	 *
+	 * So, a small value may make user confused: why my postmaster restarts; but a big value
+	 * is also not good: the txn keeps retrying in dispatch, it may block other txns.
+	 *
+	 * After a long discussion: https://github.com/greenplum-db/gpdb/pull/15632, we choose a
+	 * compromise default value: 60 (based on previous user log: the retry interval is 10s,
+	 * so totol 10min) here.
+	 */
 	{
 		{"dtx_phase2_retry_count", PGC_SUSET, DEVELOPER_OPTIONS,
 			gettext_noop("Maximum number of attempts to finish a prepared transaction."),
@@ -4577,7 +4590,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_SUPERUSER_ONLY |  GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&dtx_phase2_retry_count,
-		10, 0, INT_MAX,
+		60, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 

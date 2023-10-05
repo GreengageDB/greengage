@@ -423,8 +423,14 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 	/*
 	 * Transform DISTRIBUTED BY (or constuct a default one, if not given
 	 *  explicitly). Not for foreign tables, though.
+	 * If it is to add a part to a partition table, the new partition must
+	 * has exact same distribution keys to root partition. So the transformation
+	 * is unnecessary.
+	 * Note: when we perform "split partition", we actually perform "add
+	 * partition" multiple times to create new partitions, and is_split_part
+	 * is never set. So we don't need to care about is_split_part here.
 	 */
-	if (stmt->relKind == RELKIND_RELATION)
+	if (stmt->relKind == RELKIND_RELATION && !stmt->is_add_part)
 	{
 		int			numsegments = -1;
 
@@ -465,6 +471,13 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 		if (stmt->is_part_child)
 			stmt->distributedBy->numsegments = numsegments;
 	}
+
+	/*
+	 * If it is to add a part to a partition table, the DistributedBy info
+	 * must have been given.
+	 */
+	AssertImply(stmt->is_add_part,
+				stmt->distributedBy != NULL);
 
 	if (stmt->partitionBy != NULL &&
 		stmt->distributedBy &&

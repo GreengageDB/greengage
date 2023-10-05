@@ -32,9 +32,11 @@ CREATE OR REPLACE FUNCTION is_session_in_group(pid integer, groupname text) RETU
 conn = pg.connect(dbname="isolation2resgrouptest") pt = re.compile(r'con(\d+)') 
 sql = "select sess_id from pg_stat_activity where pid = '%d'" % pid result = conn.query(sql).getresult() session_id = result[0][0] 
 sql = "select groupid from gp_toolkit.gp_resgroup_config where groupname='%s'" % groupname result = conn.query(sql).getresult() groupid = result[0][0] 
-process = subprocess.Popen("ps -ef | grep postgres | grep con%d | grep -v grep | awk '{print $2}'" % session_id, shell=True, stdout=subprocess.PIPE) session_pids = process.communicate()[0].split('\n')[:-1] 
-cgroups_pids = [] path = "@cgroup_mnt_point@/cpu/gpdb/%d/cgroup.procs" % groupid fd = open(path) for line in fd.readlines(): cgroups_pids.append(line.strip('\n')) 
-return set(session_pids).issubset(set(cgroups_pids)) $$ LANGUAGE plpythonu;
+sql = "select hostname from gp_segment_configuration group by hostname" result = conn.query(sql).getresult() hosts = result[0] 
+def get_result(host): stdout = subprocess.check_output(["ssh", "{}".format(host), "ps -ef | grep postgres | grep con{} | grep -v grep | awk '{{print $2}}'".format(session_id)]) session_pids = stdout.split('\n') 
+path = "@cgroup_mnt_point@/cpu/gpdb/{}/cgroup.procs".format(groupid) stdout= subprocess.check_output(["ssh", "{}".format(host), "cat {}".format(path)]) cgroups_pids = stdout.split('\n') 
+return set(session_pids).issubset(set(cgroups_pids)) 
+for host in hosts: if not get_result(host): return False return True $$ LANGUAGE plpythonu;
 CREATE
 
 DROP ROLE IF EXISTS role_move_query;
@@ -459,7 +461,7 @@ SET
 (1 row)
 1: BEGIN;
 BEGIN
-1&: SELECT pg_sleep(3) FROM gp_dist_random('gp_id');  <waiting ...>
+1&: SELECT pg_sleep(3) FROM gp_dist_random('gp_id') LIMIT 1;  <waiting ...>
 2: SELECT gp_inject_fault('resource_group_give_away_after_latch', 'reset', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
  gp_inject_fault 
 -----------------
@@ -502,9 +504,7 @@ SET
  pg_sleep 
 ----------
           
-          
-          
-(3 rows)
+(1 row)
 2<:  <... completed>
  pg_resgroup_move_query 
 ------------------------
@@ -547,7 +547,7 @@ SET
 (1 row)
 1: BEGIN;
 BEGIN
-1&: SELECT pg_sleep(5) FROM gp_dist_random('gp_id');  <waiting ...>
+1&: SELECT pg_sleep(5) FROM gp_dist_random('gp_id') LIMIT 1;  <waiting ...>
 2&: SELECT gp_toolkit.pg_resgroup_move_query(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_mem_small';  <waiting ...>
 3: SELECT gp_wait_until_triggered_fault('resource_group_move_handler_before_qd_control', 1, dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
  gp_wait_until_triggered_fault 
@@ -565,9 +565,7 @@ ERROR:  cannot send signal to process
  pg_sleep 
 ----------
           
-          
-          
-(3 rows)
+(1 row)
 2<:  <... completed>
  pg_resgroup_move_query 
 ------------------------

@@ -29,7 +29,7 @@ Usage: gpcheckperf <options>
     -f file    : a file listing all hosts to connect to
     --duration : how long to run network test (default 5 seconds)
     --netperf  : use netperf instead of gpnetbenchServer/gpnetbenchClient
-    --buffer-size=size : size of the send buffer in kilobytes, which is used by gpnetbenchClient
+    --buffer-size : the size of the send buffer in kilobytes ( default 32 kilobytes)
 """
 
 import datetime
@@ -268,7 +268,7 @@ def parseCommandLine():
             GV.opt['--netserver'] = 'netserver'
             GV.opt['--netclient'] = 'netperf'
         elif switch == '--buffer-size':
-            GV.opt[switch] = val
+            GV.opt[switch] = int(val)
 
     # run default tests (if not specified)
     if GV.opt['-r'] == '':
@@ -318,11 +318,13 @@ def parseCommandLine():
         GV.opt['--duration'] = 15
         print '[INFO] Invalid network duration specified.  Using default (15 seconds)'
 
-    if GV.opt['--buffer-size'] > 0 and GV.opt['--netclient'].find('netperf') >= 0:
-        print '[Warning] Applying the --buffer-size option is not possible when the --netperf option is enabled.'
-
-    if GV.opt['--buffer-size'] <= 0:
-        GV.opt['--buffer-size'] = 8;
+    if GV.opt['--netclient'].find('netperf') >= 0:
+        if GV.opt['--buffer-size']:
+            print('[Warning] --buffer-size option will be ignored when the --netperf option is enabled')
+    else:
+        if GV.opt['--buffer-size'] <= 0:
+            print('[INFO] --buffer-size value is not specified or invalid. Using default (32 kilobytes)')
+            GV.opt['--buffer-size'] = 32
 
     # strip the last '/' from the dir
     dd = []

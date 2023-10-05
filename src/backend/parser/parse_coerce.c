@@ -644,9 +644,12 @@ coerce_unknown_var(ParseState *pstate, Var *var,
             cell = list_nth_cell(rte->joinaliasvars, var->varattno - 1);
             joinvar = (Var *)lfirst(cell);
 
-            /* If still untyped, try to replace it with a properly typed Var */
-            if (joinvar->vartype == UNKNOWNOID &&
-                targetTypeId != UNKNOWNOID)
+			/*
+			 * If still untyped, try to replace it with a properly typed Var.
+			 * Don't need to consider targetTypeId here, the joinvar must refs
+			 * to a leaf RTE, always descend through leaf RTEs.
+			 */
+            if (joinvar->vartype == UNKNOWNOID)
             {
                 joinvar = coerce_unknown_var(pstate, joinvar,
                                              targetTypeId, targetTypeMod,

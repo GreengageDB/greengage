@@ -27,7 +27,9 @@ from os import path
 
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
 from gppylib.commands.gp import SegmentStart, GpStandbyStart, MasterStop
+from gppylib.commands.gp import get_masterdatadir
 from gppylib.commands import gp, unix
+from gppylib.commands.unix import CMD_CACHE
 from gppylib.commands.pg import PgBaseBackup
 from gppylib.commands.unix import findCmdInPath, Scp
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
@@ -483,6 +485,7 @@ def impl(context, logdir):
         time.sleep(0.1)
         if attempt == num_retries:
             raise Exception('Timed out after {} retries'.format(num_retries))
+
 
 @then('verify that lines from recovery_progress.file are present in segment progress files in {logdir}')
 def impl(context, logdir):
@@ -1610,7 +1613,6 @@ def impl(context, seg):
         raise Exception("Unable to obtain the pid of the background script. Seg Host: %s, get_results: %s" %
                         (hostname, cmd.get_stdout()))
 
-
 @when('the background pid is killed on "{seg}" segment')
 @then('the background pid is killed on "{seg}" segment')
 def impl(context, seg):
@@ -2197,14 +2199,20 @@ def impl(context):
 
 @given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
 def impl(context, tabletype, tablename, dbname, numrows):
-    populate_regular_table_data(context, tabletype, tablename, 'None', dbname, with_data=True, rowcount=int(numrows))
+    populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, rowcount=int(numrows))
 
 
 @given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
 @then('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
 @when('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
 def impl(context, tabletype, tablename, dbname):
-    populate_regular_table_data(context, tabletype, tablename, 'None', dbname, with_data=True)
+    populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True)
+
+@given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data and description')
+@then('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data and description')
+@when('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data and description')
+def impl(context, tabletype, tablename, dbname):
+	populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, with_desc=True)
 
 
 @given('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with data')
@@ -3888,7 +3896,10 @@ def impl(context):
 
 
 @when('the user runs {command} and selects {input}')
+@then('the user runs {command} and selects {input}')
 def impl(context, command, input):
+    if input == "no mode but presses enter":
+        input = os.linesep
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate(input=input)
 
@@ -3897,6 +3908,17 @@ def impl(context, command, input):
     context.ret_code = p.returncode
     context.stdout_message = stdout
     context.error_message = stderr
+
+@when('the user runs {command}, selects {input} and interrupt the process')
+def impl(context, command, input):
+    p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
+    p.stdin.write(input.encode())
+    p.stdin.flush()
+    time.sleep(120)
+    # interrupt the process.
+    p.terminate()
+    p.communicate(input=input.encode())
+
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
     x = platform.linux_distribution()
@@ -3982,7 +4004,7 @@ def impl(context, slot):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
     segments = gparray.getDbList()
     dbname = "template1"
-    query = "SELECT count(*) FROM pg_catalog.pg_replication_slots WHERE slot_name = '{}'".format(slot)
+    query = "SELECT count(*) FROM pg_catalog.pg_replication_slots WHERE slot_name = '{}' and active = 't'".format(slot)
 
     for seg in segments:
         if seg.isSegmentPrimary(current_role=True):
@@ -3992,7 +4014,7 @@ def impl(context, slot):
                                         utility=True, unsetSearchPath=False)) as conn:
                 result = dbconn.execSQLForSingleton(conn, query)
                 if result == 0:
-                    raise Exception("Slot does not exist for host:{}, port:{}".format(host, port))
+                    raise Exception("Slot either does not exist or is inactive for host:{}, port:{}".format(host, port))
 
 
 @given('gp_stat_replication table has pg_basebackup entry for content {contentid}')
@@ -4161,11 +4183,11 @@ def impl(context):
                 raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
 
 
-@then( 'verify if the gprecoverseg.lock directory is present in master_data_directory')
-def impl(context):
-    gprecoverseg_lock_file = "%s/gprecoverseg.lock" % gp.get_masterdatadir()
-    if not os.path.exists(gprecoverseg_lock_file):
-        raise Exception('gprecoverseg.lock directory does not exist')
+@then('verify if the {lock_file} directory is present in master_data_directory')
+def impl(context, lock_file):
+    utility_lock_file = "%s/%s" % (gp.get_masterdatadir(), lock_file)
+    if not os.path.exists(utility_lock_file):
+        raise Exception('{0} directory does not exist'.format(utility_lock_file))
     else:
         return
 
@@ -4194,6 +4216,70 @@ def impl(context):
             continue
         else:
             raise Exception("segment process not running in execute mode for DBID:{0}".format(dbid))
+
+
+@given('user creates a new executable rsync script which inserts data into table and runs checkpoint along with doing '
+       'rsync')
+def impl(context):
+
+    rsync_script = """
+cat >/usr/local/bin/rsync <<EOL
+#!/usr/bin/env bash
+arguments="\$@"
+# Insert data into table and run checkpoint just before syncing pg_control
+if [[ "\$arguments" == *"pg_xlog"* ]]
+then
+    ssh cdw "source /usr/local/greenplum-db-devel/greenplum_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p 5432 -h cdw"
+    # run checkpoint
+    ssh cdw "source /usr/local/greenplum-db-devel/greenplum_path.sh; psql -c "CHECKPOINT" -d postgres -p 5432 -h cdw"
+fi
+/usr/bin/rsync \$arguments
+EOL
+"""
+    clear_cmd_cache_script = """
+cat >/tmp/clear_cmd_cache.py <<EOL
+#!/usr/bin/env python
+# clear the cmd cache
+global CMD_CACHE
+CMD_CACHE = {}
+EOL
+"""
+
+    with closing(dbconn.connect(dbconn.DbURL(port=os.environ.get("PGPORT")), unsetSearchPath=False)) as conn:
+        query = "select distinct hostname from gp_segment_configuration where status='d';"
+        result = dbconn.execSQL(conn, query).fetchall()
+        host_list = [result[s][0] for s in range(len(result))]
+        context.hosts_with_rsync_bash = host_list
+
+    cmd = Command(name='create a file for new rsync script',
+                  cmdStr="sudo touch /usr/local/bin/rsync;sudo chmod 777 /usr/local/bin/rsync")
+    cmd.run(validateAfter=True)
+
+    cmd = Command(name='update rsync bash script', cmdStr=rsync_script)
+    cmd.run(validateAfter=True)
+
+    for host in host_list:
+        cmd = Command(name='create a file for new rsync script', cmdStr="sudo touch /usr/local/bin/rsync;sudo chmod 777 /usr/local/bin/rsync", remoteHost=host, ctxt=REMOTE)
+        cmd.run(validateAfter=True)
+
+        cmd = Command(name='update rsync bash script', cmdStr="scp /usr/local/bin/rsync {}:/usr/local/bin/rsync".format(host))
+        cmd.run(validateAfter=True)
+
+        cmd = Command(name='create script to clear cmd_cache', cmdStr=clear_cmd_cache_script,
+                      remoteHost=host, ctxt=REMOTE)
+        cmd.run(validateAfter=True)
+
+        cmd = Command(name='run script to clear cmd_cache', cmdStr="chmod +x /tmp/clear_cmd_cache.py;/tmp/clear_cmd_cache.py",
+                      remoteHost=host, ctxt=REMOTE)
+        cmd.run(validateAfter=True)
+
+
+@then('the row count of table {table} in "{dbname}" should be {count}')
+def impl(context, table, dbname, count):
+    current_row_count = _get_row_count_per_segment(table, dbname)
+    if int(count) != sum(current_row_count):
+        raise Exception(
+            "%s table in %s has %d rows, expected %d rows." % (table, dbname, sum(current_row_count), int(count)))
 
 @given('"LC_ALL" is different from English')
 def step_impl(context):
