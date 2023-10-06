@@ -816,6 +816,7 @@ execute_extension_script(Node *stmt,
 	int			save_nestlevel;
 	StringInfoData pathbuf;
 	ListCell   *lc;
+	bool orig_gp_enable_gpperfmon = gp_enable_gpperfmon;
 
 	AssertImply(Gp_role == GP_ROLE_DISPATCH, stmt != NULL &&
 			(nodeTag(stmt) == T_CreateExtensionStmt || nodeTag(stmt) == T_AlterExtensionStmt) &&
@@ -908,6 +909,8 @@ execute_extension_script(Node *stmt,
 
 	PG_TRY();
 	{
+		gp_enable_gpperfmon = false;
+
 		char	   *c_sql = read_extension_script_file(control, filename);
 		Datum		t_sql;
 
@@ -959,9 +962,13 @@ execute_extension_script(Node *stmt,
 		c_sql = text_to_cstring(DatumGetTextPP(t_sql));
 
 		execute_sql_string(c_sql, filename);
+
+		gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
 	}
 	PG_CATCH();
 	{
+		gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
+
 		/*
 		 * For QEs, the two global variables will be reset
 		 * during abort transaction. (refer: AtAbort_Extension_QE()).

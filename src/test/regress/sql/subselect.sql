@@ -553,4 +553,12 @@ select j, 1 as c,
 from t
 group by j, q1;
 
+-- Ensure that both planners produce valid plans for the query with the nested
+-- SubLink, and this SubLink is under the aggregation. For ORCA the fallback
+-- shouldn't occur.
+explain (verbose, costs off)
+select (select max((select t.i))) from t;
+
+select (select max((select t.i))) from t;
+
 drop table t;
