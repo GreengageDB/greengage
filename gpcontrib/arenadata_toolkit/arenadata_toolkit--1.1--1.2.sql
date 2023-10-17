@@ -45,7 +45,7 @@ BEGIN
 				'p'||to_char(now(), 'YYYYMM'));
 	END IF;
 
-	CREATE TEMPORARY TABLE IF NOT EXISTS db_files_current
+	CREATE TEMPORARY TABLE IF NOT EXISTS pg_temp.db_files_current
 	(
 		oid BIGINT,
 		table_name TEXT,
@@ -70,7 +70,7 @@ BEGIN
 		Since this table is temporary and user can call this several times in a session
 		then we need to truncate it (an alternative will be to drop it).
 	 */
-	TRUNCATE TABLE db_files_current;
+	TRUNCATE TABLE pg_temp.db_files_current;
 
 	/* We use temporary table in this case, because we don't want to add own own unmapped
 	   relfilenode oids in a db_files_current and db_files_history tables. The downside of
@@ -78,7 +78,7 @@ BEGIN
 	   then checkpointing interval (there will be no unlink peformed), than these unmapped
 	   files will still go to db_files_current and db_files_history as unmapped.
 	*/
-	INSERT INTO db_files_current
+	INSERT INTO pg_temp.db_files_current
 	SELECT
 		f.oid,
 		f.table_name,
@@ -109,7 +109,7 @@ BEGIN
 
 	INSERT INTO arenadata_toolkit.db_files_current
 	SELECT *
-	FROM db_files_current;
+	FROM pg_temp.db_files_current;
 
 	INSERT INTO arenadata_toolkit.db_files_history
 	SELECT *, now() AS collecttime
