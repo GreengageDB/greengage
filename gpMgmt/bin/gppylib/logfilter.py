@@ -57,6 +57,14 @@ timestampPattern = re.compile(r'\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d(\.\d*)?')
 # A timezone specifier may follow the timestamp, but we ignore that.
 
 
+# This pattern matches the date and time stamp at the log file name of a
+# GPDB log file. The timestamp format is: YYYY-MM-DD_HHMMSS or the
+# YYYY-MM-DD (to preserve an old behaviour).
+logNameTSPattern = re.compile(
+    '^.*gpdb-(?P<datetime>\d+-\d+-\d+(?P<time>_\d+)?)\.csv$'
+)
+
+
 def FilterLogEntries(iterable,
                      msgfile=sys.stderr,
                      verbose=False,
@@ -981,3 +989,116 @@ def spiffInterval(begin=None, end=None, duration=None):
 
     return begin, end
 
+class LogNameInfo(object):
+    """
+    Object to store main information about log file name:
+    - name of log file
+    - parsed time stamp from name, if exists
+    - belonging to user specified time range
+    """
+    def __init__(self, name, dateTime=None, belongsToTimeRangeFilter=True):
+        self.name = name
+        self.dateTime = dateTime
+        self.belongsToTimeRangeFilter = belongsToTimeRangeFilter
+
+    def __eq__(self, other):
+        if type(self) != type(other):
+            raise TypeError('comparing different types: %s and %s' % (type(self), type(other)))
+
+        return (self.name == other.name and self.dateTime == other.dateTime
+                and self.belongsToTimeRangeFilter == other.belongsToTimeRangeFilter)
+
+def _parseLogFileName(name):
+    """
+    Parses log file into LogNameInfo. The log name may contain the time
+    stamp, when it was created, so if log name matches `logNameTSPattern`
+    the result LogNameInfo would contain this time stamp, but there may be
+    other log files that doesn't match such format (for ex. startup.log) in
+    such case result won't contain time stamp.
+    """
+
+    # matchedGroup in case of match would be not None and contains next
+    # groups:
+    # - group(0) - whole file name
+    # - group('datetime') - timestamp of log (may be without time suffix)
+    # - group('time') - not None if time suffix exists
+    matchedGroup = logNameTSPattern.match(name)
+
+    if not matchedGroup:
+        return LogNameInfo(name)
+
+    pattern = '%Y-%m-%d'
+    if matchedGroup.group('time'):
+        # we have time preix, so use extended pattern
+        pattern = '%Y-%m-%d_%H%M%S'
+
+    dt = None
+    try:
+        dt = datetime.strptime(matchedGroup.group('datetime'), pattern)
+    except:
+        pass
+
+    return LogNameInfo(name, dt)
+
+def _getOrderedLogNameInfoArrByNameTS(fileNames):
+    """
+    By the given array of log names this function returns ordered LogNameInfo
+    array. The returned array is a concatenation of two LogNameInfo arrays
+    with time stamp in log name and without. Both arrays are ordered:
+    - first part is ordered by the time stamp of log name and after by the log
+    name. Ordering by name is used for test purposes, because under the normal
+    conditions log directory shouldn't contain different log files with the same
+    time stamp, but with different string representation of time stamp (for ex.
+    gpdb-2023-1-1_000000.csv and gpdb-2023-01-01_000000.csv, the last variant is
+    a correct representation of log name with time stamp).
+    - the second part is ordered only by name.
+    """
+
+    withTS = []
+    withoutTS = []
+    for name in fileNames:
+        info = _parseLogFileName(name)
+        if info.dateTime:
+            withTS.append(info)
+        else:
+            withoutTS.append(info)
+
+    withTS.sort(key = lambda x: (x.dateTime, x.name))
+    withoutTS.sort(key = lambda x: x.name)
+    return withTS + withoutTS
+
+
+def getLogInfoArrayByNamesOrderedAndMarkedInTSRange(logNames, begin, end):
+    """
+    By the given array of log names and time range filters `begin` (inclusive)
+    and `end` (exclusive) this function returns the ordered array of LogNameInfo,
+    where each LogNameInfo is marked for belonging to the given range.
+    Array is ordered by the log time stamp (and in case of equaltiy by the name)
+    log file names without time stamp is ordered by name and lays out at the end
+    of array.
+    """
+
+    orderedInfoArr = _getOrderedLogNameInfoArrByNameTS(logNames)
+
+    # we should find the nearest date before (or equal) the user-specified
+    # `begin` inside dates from log file names, because of each file with time
+    # stamp contain log entries with time stamp, matching next range:
+    # time stamp of log name <= time stamp of log entry AND
+    # time stamp of log entry < (log name time stamp + GUC:`log_rotation_age`) or restart time
+    beginDateRounded = begin
+    if beginDateRounded:
+        for info in orderedInfoArr:
+            if info.dateTime is None or begin < info.dateTime:
+                break
+            beginDateRounded = info.dateTime
+
+    for info in orderedInfoArr:
+        dt = info.dateTime
+        if dt is None:
+            # file names without time stamp - no need to process
+            break
+
+        if (beginDateRounded and dt < beginDateRounded) or (end and end <= dt):
+            info.belongsToTimeRangeFilter = False
+
+    return orderedInfoArr
