@@ -987,14 +987,30 @@ rollbackDtxTransaction(void)
 			break;
 
 		case DTX_STATE_NOTIFYING_ABORT_NO_PREPARED:
-
-			/*
-			 * By deallocating the gang, we will force a new gang to connect
-			 * to all the segment instances.  And, we will abort the
-			 * transactions in the segments.
-			 */
-			elog(NOTICE, "Releasing segworker groups to finish aborting the transaction.");
-			DisconnectAndDestroyAllGangs(true);
+			if (!proc_exit_inprogress)
+			{
+				/*
+				 * By deallocating the gang, we will force a new gang to connect
+				 * to all the segment instances.  And, we will abort the
+				 * transactions in the segments.
+				 *
+				 * Reset session ID and drop temp tables only when process does *not* exits,
+				 * because otherwise, proc_exit will do that eventually anyway.
+				 */
+				elog(NOTICE, "Releasing segworker groups to finish aborting the transaction.");
+				DisconnectAndDestroyAllGangs(true);
+			}
+			else
+			{
+				/*
+				 * Destroy all gangs early, so that they won't block any other QEs due to 2PC lock
+				 * when QD might be just retrying `rollbackDtxTransaction` for a prolonged time.
+				 *
+				 * Do not reset session just yet, because we want to keep myTempNamespace untouched
+				 * and let RemoveTempRelationsCallback() drops temp tables as part of proc_exit.
+				 */
+				DisconnectAndDestroyAllGangs(false);
+			}
 
 			/*
 			 * This call will at a minimum change the session id so we will
@@ -1059,18 +1075,13 @@ rollbackDtxTransaction(void)
 		Assert(MyTmGxactLocal->state == DTX_STATE_NOTIFYING_ABORT_NO_PREPARED);
 
 		/*
-		 * By deallocating the gang, we will force a new gang to connect to
-		 * all the segment instances.  And, we will abort the transactions in
-		 * the segments.
+		 * Destroy all gangs early, so that they won't block any other QEs due to 2PC lock
+		 * when QD might be just retrying `rollbackDtxTransaction` for a prolonged time.
+		 *
+		 * Do not reset session just yet, because we want to keep myTempNamespace untouched
+		 * and let RemoveTempRelationsCallback() drops temp tables as part of proc_exit.
 		 */
-		DisconnectAndDestroyAllGangs(true);
-
-		/*
-		 * This call will at a minimum change the session id so we will not
-		 * have SharedSnapshotAdd colissions.
-		 */
-		CheckForResetSession();
-
+		DisconnectAndDestroyAllGangs(false);
 		clearAndResetGxact();
 		return;
 	}
