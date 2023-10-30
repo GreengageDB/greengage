@@ -29,6 +29,13 @@ Feature: gpperfmon
         Given the database "gpperfmon" does not exist
         Then gpperfmon is configured and running in qamode
 
+    @gpperfmon_query_now
+    Scenario: get info about current queries
+        Given gpperfmon is configured and running in qamode
+        Then run query for 20 seconds
+        And wait until the results from boolean sql "select count(*) > 0 from queries_now" is "true"
+        And wait until the results from boolean sql "select count(*) > 0 from queries_now_fast" is "true"
+
     @gpperfmon_database_history
     Scenario: gpperfmon adds to database_history table
         Given gpperfmon is configured and running in qamode
