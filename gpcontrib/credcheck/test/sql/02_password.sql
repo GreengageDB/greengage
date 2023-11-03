@@ -114,7 +114,7 @@ DROP USER IF EXISTS aa;
 --
 -- Check whitlisted users
 SET credcheck.password_min_repeat TO 2;
-SET credcheck.whitelist = 'nocheck1,nocheck2';
+SET credcheck.whitelist = 'nocheck1,nocheck2,aaaaaaaa,bbbbbbbb,cccccccc,dddddddd,eeeeeeee,ffffffff,gggggggg';
 DROP USER IF EXISTS nocheck1;
 CREATE USER nocheck1 WITH PASSWORD 'aaaa';
 DROP USER IF EXISTS nocheck1;

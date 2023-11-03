@@ -505,13 +505,18 @@ check_whitelist(char **newval, void **extra, GucSource source)
 bool
 is_in_whitelist(char *username)
 {
-	char       rawstring[NAMEDATALEN];
+	char       *rawstring;
 	List       *elemlist;
 	ListCell   *l;
+	int len =  strlen(username_whitelist);
 
 	Assert(username != NULL);
 
+	if (len == 0)
+		return false;
+
 	/* Need a modifiable copy of string */
+	rawstring = palloc0(sizeof(char) * (len+1));
 	strcpy(rawstring, username_whitelist);
 	/* Parse string into list of identifiers */
 	if (!SplitIdentifierString(rawstring, ',', &elemlist))
@@ -521,6 +526,7 @@ is_in_whitelist(char *username)
 				errmsg("%s username list is invalid: %s",
 				     "credcheck.password_min_length", username_whitelist)));
 		list_free(elemlist);
+		pfree(rawstring);
 		return false;
 	}
 
@@ -532,11 +538,13 @@ is_in_whitelist(char *username)
                 if (pg_strcasecmp(tok, username) == 0)
 		{
                         list_free(elemlist);
+			pfree(rawstring);
                         return true;
                 }
         }
 
 	list_free(elemlist);
+	pfree(rawstring);
 
 	return false;
 }
