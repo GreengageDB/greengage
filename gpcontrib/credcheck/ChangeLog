@@ -1,3 +1,13 @@
+2023-11-03 - Version 2.3.0
+
+This release is a maintenance release to fix a major issue with the
+"whitelist" feature.
+
+  - Fix crash when length of the credcheck.whitelist value was > NAMEDATALEN.
+    Thanks to zobnin for the report.
+
+Extension upgrade requires a PostgreSQL restart to reload the credcheck library.
+
 2023-09-16 - Version 2.2.0
 
 This release adds a new feature, fixes a major bug with null password and fixes
@@ -22,7 +32,6 @@ some issues reported by users since last release.
   - Add missing file credcheck--2.1.0.sql. Thanks to Jeff Janes for the report.
 
 Extension upgrade requires a PostgreSQL restart to reload the credcheck library.
-
 
 2023-07-15 - Version 2.1.0
 
