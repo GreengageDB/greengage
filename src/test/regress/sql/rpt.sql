@@ -562,6 +562,54 @@ explain (costs off, verbose) insert into t2 (a, b) select i, random() from t;
 explain (costs off, verbose) select * from t1 where a in (select f(i) from t where i=a and f(i) > 0);
 -- ensure we do not break broadcast motion
 explain (costs off, verbose) select * from t1 where 1 <= ALL (select i from t group by i having random() > 0);
+
+set gp_cte_sharing = on;
+
+-- ensure that the volatile function is executed on one segment if it is in the CTE target list
+explain (costs off, verbose) with cte as (
+    select a * random() as a from t2
+)
+select * from cte join (select * from t1 join cte using(a)) b using(a);
+
+set gp_cte_sharing = off;
+
+explain (costs off, verbose) with cte as (
+    select a, a * random() from t2
+)
+select * from cte join t1 using(a);
+
+reset gp_cte_sharing;
+
+-- ensure that the volatile function is executed on one segment if it is in target list of subplan of multiset function
+explain (costs off, verbose) select * from (
+    SELECT count(*) as a FROM anytable_out( TABLE( SELECT random()::int from t2 ) )
+) a join t1 using(a);
+
+-- if there is a volatile function in the target list of a plan with the locus type
+-- General or Segment General, then such a plan should be executed on single
+-- segment, since it is assumed that nodes with such locus types will give the same
+-- result on all segments, which is impossible for a volatile function.
+-- start_ignore
+drop table if exists d;
+drop table if exists r;
+-- end_ignore
+create table r (a int, b int) distributed replicated;
+create table d (b int, a int default 1) distributed by (b);
+
+insert into d select * from generate_series(0, 20) j;
+-- change distribution without reorganize
+alter table d set distributed randomly;
+
+insert into r values (1, 1), (2, 2), (3, 3);
+
+with cte as (
+    select a, b * random() as rand from r
+)
+select count(distinct(rand)) from cte join d on cte.a = d.a;
+
+drop table r;
+drop table d;
+
 drop table if exists t;
 drop table if exists t1;
 drop table if exists t2;

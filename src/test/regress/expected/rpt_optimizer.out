@@ -1513,6 +1513,130 @@ explain (costs off, verbose) select * from t1 where 1 <= ALL (select i from t gr
  Settings: enable_bitmapscan=off, enable_seqscan=off
 (20 rows)
 
+set gp_cte_sharing = on;
+-- ensure that the volatile function is executed on one segment if it is in the CTE target list
+explain (costs off, verbose) with cte as (
+    select a * random() as a from t2
+)
+select * from cte join (select * from t1 join cte using(a)) b using(a);
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice4; segments: 3)
+   Output: share0_ref1.a
+   ->  Hash Join
+         Output: share0_ref1.a
+         Hash Cond: (share0_ref2.a = share0_ref1.a)
+         ->  Hash Join
+               Output: share0_ref2.a
+               Hash Cond: ((t1.a)::double precision = share0_ref2.a)
+               ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                     Output: t1.a
+                     Hash Key: (t1.a)::double precision
+                     ->  Seq Scan on rpt.t1
+                           Output: t1.a
+               ->  Hash
+                     Output: share0_ref2.a
+                     ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                           Output: share0_ref2.a
+                           Hash Key: share0_ref2.a
+                           ->  Shared Scan (share slice:id 2:0)
+                                 Output: share0_ref2.a
+         ->  Hash
+               Output: share0_ref1.a
+               ->  Redistribute Motion 1:3  (slice3; segments: 1)
+                     Output: share0_ref1.a
+                     Hash Key: share0_ref1.a
+                     ->  Shared Scan (share slice:id 3:0)
+                           Output: share0_ref1.a
+                           ->  Materialize
+                                 Output: (((t2.a)::double precision * random()))
+                                 ->  Seq Scan on rpt.t2
+                                       Output: ((t2.a)::double precision * random())
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=off, enable_seqscan=off, gp_cte_sharing=on
+(33 rows)
+
+set gp_cte_sharing = off;
+explain (costs off, verbose) with cte as (
+    select a, a * random() from t2
+)
+select * from cte join t1 using(a);
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: t2.a, (((t2.a)::double precision * random()))
+   ->  Hash Join
+         Output: t2.a, (((t2.a)::double precision * random()))
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Hash
+               Output: t2.a, (((t2.a)::double precision * random()))
+               ->  Redistribute Motion 1:3  (slice1; segments: 1)
+                     Output: t2.a, (((t2.a)::double precision * random()))
+                     Hash Key: t2.a
+                     ->  Seq Scan on rpt.t2
+                           Output: t2.a, ((t2.a)::double precision * random())
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=off, enable_seqscan=off, gp_cte_sharing=off
+(16 rows)
+
+reset gp_cte_sharing;
+-- ensure that the volatile function is executed on one segment if it is in target list of subplan of multiset function
+explain (costs off, verbose) select * from (
+    SELECT count(*) as a FROM anytable_out( TABLE( SELECT random()::int from t2 ) )
+) a join t1 using(a);
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: (count(*))
+   ->  Hash Join
+         Output: (count(*))
+         Hash Cond: (t1.a = (count(*)))
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Hash
+               Output: (count(*))
+               ->  Redistribute Motion 1:3  (slice1; segments: 1)
+                     Output: (count(*))
+                     Hash Key: (count(*))
+                     ->  Aggregate
+                           Output: count(*)
+                           ->  Table Function Scan on pg_catalog.anytable_out
+                                 Output: anytable_out
+                                 ->  Seq Scan on rpt.t2
+                                       Output: (random())::integer
+ Optimizer: Postgres query optimizer
+ Settings: enable_bitmapscan=off, enable_seqscan=off
+(20 rows)
+
+-- if there is a volatile function in the target list of a plan with the locus type
+-- General or Segment General, then such a plan should be executed on single
+-- segment, since it is assumed that nodes with such locus types will give the same
+-- result on all segments, which is impossible for a volatile function.
+-- start_ignore
+drop table if exists d;
+NOTICE:  table "d" does not exist, skipping
+drop table if exists r;
+NOTICE:  table "r" does not exist, skipping
+-- end_ignore
+create table r (a int, b int) distributed replicated;
+create table d (b int, a int default 1) distributed by (b);
+insert into d select * from generate_series(0, 20) j;
+-- change distribution without reorganize
+alter table d set distributed randomly;
+insert into r values (1, 1), (2, 2), (3, 3);
+with cte as (
+    select a, b * random() as rand from r
+)
+select count(distinct(rand)) from cte join d on cte.a = d.a;
+ count 
+-------
+     1
+(1 row)
+
+drop table r;
+drop table d;
 drop table if exists t;
 drop table if exists t1;
 drop table if exists t2;
