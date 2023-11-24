@@ -541,6 +541,18 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	else
 		dest = None_Receiver;
 
+	/*
+	 * In case of ANALYZE query we should discard the UtilityStmt field
+	 * if it contains the DeclareCursorStmt node to execute the query
+	 * on segments instead of opening a cursor.
+	 */
+	if (es->analyze &&
+		plannedstmt->utilityStmt &&
+		IsA(plannedstmt->utilityStmt, DeclareCursorStmt))
+	{
+		plannedstmt->utilityStmt = NULL;
+	}
+
 	/* Create a QueryDesc for the query */
 	queryDesc = CreateQueryDesc(plannedstmt, queryString,
 								GetActiveSnapshot(), InvalidSnapshot,
@@ -596,24 +608,6 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 
 		/* run the plan */
 		ExecutorRun(queryDesc, dir, 0L);
-
-		/* Wait for completion of all qExec processes. */
-		if (queryDesc->estate->dispatcherState && queryDesc->estate->dispatcherState->primaryResults)
-		{
-			cdbdisp_checkDispatchResult(queryDesc->estate->dispatcherState, DISPATCH_WAIT_NONE);
-			/*
-			 * If some QE throw errors, we might not receive stats from QEs,
-			 * In ExecutorEnd we will reThrow QE's error, In this situation,
-			 * there is no need to execute ExplainPrintPlan. reThrow error in advance.
-			 */
-			ErrorData  *qeError = NULL;
-			cdbdisp_getDispatchResults(queryDesc->estate->dispatcherState, &qeError);
-			if (qeError)
-			{
-				FlushErrorState();
-				ThrowErrorData(qeError);
-			}
-		}
 
 		/* run cleanup too */
 		ExecutorFinish(queryDesc);

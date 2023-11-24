@@ -21,7 +21,7 @@ OBJS = guc.o help_config.o pg_rusage.o ps_status.o rbtree.o \
        gpexpand.o \
        faultinjector.o uriparser.o \
        bitstream.o bitmap_compression.o guc_gp.o backend_cancel.o \
-       superuser.o timeout.o tzparser.o
+       queryjumble.o superuser.o timeout.o tzparser.o
 
 # This location might depend on the installation directories. Therefore
 # we can't substitute it into pg_config.h.

@@ -1,3 +1,10 @@
+-- start_matchsubs
+--
+-- m/ERROR:  Too much references to non-SELECT CTE \(allpaths\.c:\d+\)/
+-- s/\d+/XXX/g
+--
+-- end_matchsubs
+
 drop table if exists with_test1 cascade;
 create table with_test1 (i int, t text, value int) distributed by (i);
 insert into with_test1 select i%10, 'text' || i%20, i%30 from generate_series(0, 99) i;
@@ -390,3 +397,87 @@ with recursive rcte(x,y) as
   where t.b = x
 )
 select * from rcte limit 10;
+
+-- ensure orca doesn't fail (on build with asserts) when one cte on the coordinator has the correct flow and another doesn't
+CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
+CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
+INSERT INTO d SELECT 1, generate_series(1,10), 1;
+INSERT INTO r SELECT 1, 2, generate_series(1,100);
+SET gp_cte_sharing TO on;
+EXPLAIN (ANALYZE off, COSTS off, VERBOSE off)
+WITH e AS (
+    SELECT DISTINCT b FROM d
+), h AS (
+    SELECT a FROM d JOIN e f USING (b) JOIN e USING (b)
+) SELECT * FROM r JOIN h USING (a) JOIN h i USING (a);
+DROP TABLE d;
+DROP TABLE r;
+
+-- Test planner not pushing down quals to non-SELECT queries inside CTE. There
+-- can be a DML operation, and it's incorrect to push down upper quals to it.
+--start_ignore
+drop table if exists with_dml;
+--end_ignore
+create table with_dml (i int, j int) distributed by (i);
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+select count(*) c from with_dml;
+
+-- Test one cannot use DML CTE if multiple CTE references found.
+-- Otherwise it will cause duplicated DML operations or planner errors.
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+explain (costs off)
+with cte as (
+    update with_dml set j = j + 1
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+explain (costs off)
+with cte as (
+    delete from with_dml where i > 0
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+
+-- Greenplum fails to execute SELECT INTO and CREATE TABLE AS statements, whose
+-- queries contain modifying CTEs, because Greenplum cannot have two writer
+-- segworker groups, and during execution an error is thrown. Showing
+-- the error during planning stage would be more effective, therefore this test
+-- checks this behaviour.
+--start_ignore
+drop table if exists t_new;
+--end_ignore
+explain (costs off)
+with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select into t_new from cte;
+explain (costs off)
+with cte as
+(update with_dml set j = j + 1 returning *)
+select into t_new from cte;
+explain (costs off)
+with cte as
+(delete from with_dml where i > 0 returning *)
+select into t_new from cte;
+explain (costs off)
+create table t_new as (with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select * from cte);
+explain (costs off)
+create table t_new as (with cte as
+(update with_dml set j = j + 1 returning *)
+select * from cte);
+explain (costs off)
+create table t_new as (with cte as
+(delete from with_dml where i > 0 returning *)
+select * from cte);
+drop table with_dml;

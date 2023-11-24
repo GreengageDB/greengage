@@ -901,6 +901,76 @@ CUtils::FHasCTEAnchor(CExpression *pexpr)
 	return false;
 }
 
+// return CTEConsumers' and a set of CTEProducers' CTE ids in the given subtree
+void
+CUtils::CollectConsumersAndProducers(CMemoryPool *mp, CExpression *pexpr,
+									 UlongCteIdHashSet *cteConsumers,
+									 UlongCteIdHashSet *cteProducerSet)
+{
+	COperator *pop = pexpr->Pop();
+
+	if (COperator::EopPhysicalCTEConsumer == pexpr->Pop()->Eopid())
+	{
+		cteConsumers->Insert(GPOS_NEW(mp) ULONG(
+			CPhysicalCTEConsumer::PopConvert(pop)->UlCTEId()));
+	}
+	else if (COperator::EopPhysicalCTEProducer == pexpr->Pop()->Eopid())
+	{
+		cteProducerSet->Insert(GPOS_NEW(mp) ULONG(
+			CPhysicalCTEProducer::PopConvert(pop)->UlCTEId()));
+	}
+	else if (FPhysicalMotion(pexpr->Pop()))
+	{
+		// another slice met, exit from recursion
+		return;
+	}
+
+	for (ULONG ul = 0; ul < pexpr->Arity(); ul++)
+	{
+		CExpression *pexprChild = (*pexpr)[ul];
+
+		if (!pexprChild->Pop()->FScalar())
+		{
+			CollectConsumersAndProducers(mp, pexprChild, cteConsumers,
+										 cteProducerSet);
+		}
+	}
+}
+
+BOOL
+CUtils::hasUnpairedCTEConsumer(CMemoryPool *mp, CExpression *pexprMotionChild)
+{
+	UlongCteIdHashSet *cteProducerSet = GPOS_NEW(mp) UlongCteIdHashSet(mp);
+	UlongCteIdHashSet *cteConsumerSet = GPOS_NEW(mp) UlongCteIdHashSet(mp);
+
+	CollectConsumersAndProducers(mp, pexprMotionChild, cteConsumerSet,
+								 cteProducerSet);
+
+	// CTE consumers/producers are paired if sets of their ids (which was
+	// collected in the current hazzard motion bounds) are equal (or both empty)
+	BOOL res = false;
+	if (cteConsumerSet->Size() != cteProducerSet->Size())
+	{
+		res = true;
+	}
+	else if (cteConsumerSet->Size() > 0)
+	{
+		UlongCteIdHashSetIter iter(cteConsumerSet);
+		while (iter.Advance())
+		{
+			if (!cteProducerSet->Contains(iter.Get()))
+			{
+				res = true;
+				break;
+			}
+		}
+	}
+	cteConsumerSet->Release();
+	cteProducerSet->Release();
+
+	return res;
+}
+
 //---------------------------------------------------------------------------
 //	@class:
 //		CUtils::FHasSubqueryOrApply
