@@ -193,8 +193,8 @@ private:
 	// Set the qDispSliceId in the subplans defining an initplan
 	void SetInitPlanSliceInformation(SubPlan *);
 
-	// Set InitPlanVariable and fill rewindPlanIDs in PlannedStmt
-	void SetSubPlanVariables(PlannedStmt *);
+	// Set InitPlanVariable in PlannedStmt
+	void SetInitPlanVariables(PlannedStmt *);
 
 	// translate DXL table scan node into a SeqScan node
 	Plan *TranslateDXLTblScan(

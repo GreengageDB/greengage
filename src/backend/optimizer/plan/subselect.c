@@ -979,12 +979,13 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		root->init_plans = lappend(root->init_plans, splan);
 
 	/*
-	 * Executor passes EXEC_REWIND flag to the plan nodes in order to indicate
-	 * that underlying node or subplan are likely to be rescanned. Moreover,
-	 * for any SubPlan, except InitPlans, rescan is expected and EXEC_REWIND
-	 * should be set for them. EXEC_REWIND also allows to delay the eager free.
+	 * A parameterless subplan (not initplan) should be prepared to handle
+	 * REWIND efficiently.  If it has direct parameters then there's no point
+	 * since it'll be reset on each scan anyway; and if it's an initplan then
+	 * there's no point since it won't get re-run without parameter changes
+	 * anyway.  The input of a hashed subplan doesn't need REWIND either.
 	 */
-	if (!splan->is_initplan)
+	if (splan->parParam == NIL && !splan->is_initplan && !splan->useHashTable)
 		root->glob->rewindPlanIDs = bms_add_member(root->glob->rewindPlanIDs,
 												   splan->plan_id);
 
