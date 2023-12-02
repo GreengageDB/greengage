@@ -1879,7 +1879,16 @@ flush_password_history(void)
                         goto error;
                 }
         }
+	/*
+	 * Fill the file until a size divisible by page size 8192
+	 * to fix a complain of pgBackRest backup: file size X is
+	 * not divisible by page size 8192
+	 */
+	fseek(file, 0, SEEK_END);
+	while ((ftell(file) % BLCKSZ) != 0)
+		putc(0, file);
 
+	/* close the file */
         if (FreeFile(file))
         {
                 file = NULL;
