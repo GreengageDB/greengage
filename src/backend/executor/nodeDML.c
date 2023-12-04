@@ -85,6 +85,38 @@ ExecDML(DMLState *node)
 	/* remove 'junk' columns from tuple */
 	node->cleanedUpSlot = ExecFilterJunk(node->junkfilter, projectedSlot);
 
+	/*
+	 * If we are modifying a leaf partition we have to ensure that partition
+	 * selection operation will consider leaf partition's attributes as
+	 * coherent with root partition's attribute numbers, because partition
+	 * selection is performed using root's attribute numbers (all partition
+	 * rules are based on the parent relation's tuple descriptor). In case
+	 * when child partition has different attribute numbers from root's due to
+	 * dropped columns, the partition selection may go wrong without extra
+	 * validation.
+	 */
+	if (node->ps.state->es_result_partitions)
+	{
+		ResultRelInfo *relInfo = node->ps.state->es_result_relations;
+
+		/*
+		 * The DML is done on a leaf partition. In order to reuse the map,
+		 * it will be allocated at es_result_relations.
+		 */
+		if (RelationGetRelid(relInfo->ri_RelationDesc) !=
+			node->ps.state->es_result_partitions->part->parrelid)
+			makePartitionCheckMap(node->ps.state, relInfo);
+
+		/*
+		 * DML node always performs partition selection, and if we want to
+		 * reuse the map built in makePartitionCheckMap, we are allowed to
+		 * reassign es_result_relation_info, because ExecInsert, ExecDelete
+		 * changes it with target partition anyway. Moreover, without
+		 * inheritance plan (ORCA never builds such plans) the
+		 * es_result_relations will contain the only relation.
+		 */
+		node->ps.state->es_result_relation_info = relInfo;
+	}
 	/* GPDB_91_MERGE_FIXME:
 	 * This kind of node is used by ORCA only. If in the future ORCA still uses
 	 * DML node, canSetTag should be saved in DML plan node and init-ed by

@@ -4591,6 +4591,7 @@ targetid_get_partition(Oid targetid, EState *estate, bool openIndices)
 	{
 		int			natts;
 		Relation	resultRelation;
+		Oid			parentRelid = estate->es_result_partitions->part->parrelid;
 
 		natts = parentInfo->ri_RelationDesc->rd_att->natts; /* in base relation */
 
@@ -4603,10 +4604,27 @@ targetid_get_partition(Oid targetid, EState *estate, bool openIndices)
 		if (openIndices)
 			ExecOpenIndices(childInfo);
 
-		map_part_attrs(parentInfo->ri_RelationDesc,
-					   childInfo->ri_RelationDesc,
-					   &(childInfo->ri_partInsertMap),
-					   TRUE); /* throw on error, so result not needed */
+		/*
+		 * es_result_relations does not always represent the parent relation.
+		 * E.g. planner's UPDATE command on parent partition leads to multiple
+		 * subplans and result relations due to preceding inheritance planning.
+		 * In this case es_result_relations points to one of the partitions, not
+		 * to the parent. Thus, the descriptor mapping should be performed only
+		 * for the case if es_result_relations really corresponds to the parent.
+		 * Otherwise, there is a chance to reconstruct already valid tuple and
+		 * get the wrong results (e.g. target partition relation descriptor is
+		 * different from parentInfo's, but it's UPDATE (legacy planner) and
+		 * parentInfo represents another partition, which is not the true
+		 * parent). Moreover, if we are initially modify a leaf partition,
+		 * i.e we called a DML command straight on child partition, or it's
+		 * inheritance plan execution, the tuple descriptor already matches
+		 * the partition's, and the extra mapping is unnecessary.
+		 */
+		if (RelationGetRelid(parentInfo->ri_RelationDesc) == parentRelid)
+			map_part_attrs(parentInfo->ri_RelationDesc,
+						   childInfo->ri_RelationDesc,
+						   &(childInfo->ri_partInsertMap),
+						   TRUE); /* throw on error, so result not needed */
 	}
 	return childInfo;
 }
@@ -4631,21 +4649,59 @@ values_get_partition(Datum *values, bool *nulls, TupleDesc tupdesc,
 ResultRelInfo *
 slot_get_partition(TupleTableSlot *slot, EState *estate)
 {
-	ResultRelInfo *resultRelInfo;
-	AttrNumber max_attr;
+	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+	TupleDesc	tupdesc;
 	Datum *values;
 	bool *nulls;
 
 	Assert(PointerIsValid(estate->es_result_partitions));
 
-	max_attr = estate->es_partition_state->max_partition_attr;
+	/*
+	 * If we previously found out that we need to map attribute numbers
+	 * (in case if child part has physically-different attribute numbers from
+	 * parent's), we must extract slot values according to that mapping.
+	 */
+	if (resultRelInfo->ri_PartCheckMap != NULL)
+	{
+		Datum	   *slot_values;
+		bool	   *slot_nulls;
+		Relation	parentRel = resultRelInfo->ri_PartitionParent;
+		AttrMap	   *map;
 
-	slot_getsomeattrs(slot, max_attr);
-	values = slot_get_values(slot);
-	nulls = slot_get_isnull(slot);
+		Assert(parentRel != NULL);
+		tupdesc = RelationGetDescr(parentRel);
 
-	resultRelInfo = get_part(estate, values, nulls, slot->tts_tupleDescriptor,
+		slot_getallattrs(slot);
+		slot_values = slot_get_values(slot);
+		slot_nulls = slot_get_isnull(slot);
+		values = palloc(tupdesc->natts * sizeof(Datum));
+		nulls = palloc0(tupdesc->natts * sizeof(bool));
+
+		/* Now we have values/nulls in parent's view. */
+		map = resultRelInfo->ri_PartCheckMap;
+		reconstructTupleValues(map, slot_values, slot_nulls, slot->tts_tupleDescriptor->natts,
+							   values, nulls, tupdesc->natts);
+	}
+	else
+	{
+		AttrNumber	max_attr = estate->es_partition_state->max_partition_attr;
+
+		slot_getsomeattrs(slot, max_attr);
+		/* values/nulls pointing to partslot's array. */
+		values = slot_get_values(slot);
+		nulls = slot_get_isnull(slot);
+		tupdesc = slot->tts_tupleDescriptor;
+	}
+
+	resultRelInfo = get_part(estate, values, nulls, tupdesc,
 							 true);
+
+	/* Free up if we allocated mapped attributes. */
+	if (values != slot_get_values(slot))
+		pfree(values);
+
+	if (nulls != slot_get_isnull(slot))
+		pfree(nulls);
 
 	return resultRelInfo;
 }

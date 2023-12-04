@@ -24,6 +24,9 @@ reconstructTupleValues(AttrMap *map,
 extern TupleTableSlot *
 reconstructMatchingTupleSlot(TupleTableSlot *slot, ResultRelInfo *resultRelInfo);
 
+extern void
+makePartitionCheckMap(EState *estate, ResultRelInfo *resultRelInfo);
+
 /*
  * In PostgreSQL, ExecInsert, ExecDelete and ExecUpdate are static in nodeModifyTable.c.
  * In GPDB, they're exported.
