@@ -542,9 +542,27 @@ select c from rep_tab where c in (select distinct a from dist_tab);
 explain select c from rep_tab where c in (select distinct d from rand_tab);
 select c from rep_tab where c in (select distinct d from rand_tab);
 
+-- test for optimizer_enable_replicated_table
+explain (costs off) select * from rep_tab;
+set optimizer_enable_replicated_table=off;
+set optimizer_trace_fallback=on;
+explain (costs off) select * from rep_tab;
+reset optimizer_trace_fallback;
+reset optimizer_enable_replicated_table;
+
+-- Ensure plan with Gather Motion node is generated.
+drop table if exists t;
+create table t (i int, j int) distributed replicated;
+insert into t values (1, 2);
+explain (costs off) select j, (select j) AS "Correlated Field" from t;
+select j, (select j) AS "Correlated Field" from t;
+explain (costs off) select j, (select 5) AS "Uncorrelated Field" from t;
+select j, (select 5) AS "Uncorrelated Field" from t;
+
 --
 -- Check sub-selects with distributed replicated tables and volatile functions
 --
+drop table if exists t;
 create table t (i int) distributed replicated;
 create table t1 (a int) distributed by (a);
 create table t2 (a int, b float) distributed replicated;

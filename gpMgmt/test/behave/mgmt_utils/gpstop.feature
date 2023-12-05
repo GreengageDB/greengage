@@ -10,6 +10,26 @@ Feature: gpstop behave tests
          Then gpstop should return a return code of 0
          And verify no postgres process is running on all hosts
 
+    @demo_cluster
+    Scenario: gpstop runs with given master data directory option
+        Given the database is running
+          And running postgres processes are saved in context
+          And "MASTER_DATA_DIRECTORY" environment variable is not set
+         Then the user runs utility "gpstop" with master data directory and "-a"
+          And gpstop should return a return code of 0
+          And "MASTER_DATA_DIRECTORY" environment variable should be restored
+          And verify no postgres process is running on all hosts
+
+    @demo_cluster
+    Scenario: gpstop priorities given master data directory over env option
+        Given the database is running
+          And running postgres processes are saved in context
+          And the environment variable "MASTER_DATA_DIRECTORY" is set to "/tmp/"
+         Then the user runs utility "gpstop" with master data directory and "-a"
+          And gpstop should return a return code of 0
+          And "MASTER_DATA_DIRECTORY" environment variable should be restored
+          And verify no postgres process is running on all hosts
+
     @concourse_cluster
     @demo_cluster
     Scenario: when there are user connections gpstop waits to shutdown until user switches to fast mode

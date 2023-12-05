@@ -1177,12 +1177,27 @@ def get_gphome():
         raise GpError('Environment Variable GPHOME not set')
     return gphome
 
+'''
+gprecoverseg, gpstart, gpstate, gpstop, gpaddmirror have -d option to give the master data directory.
+but its value was not used throughout the utilities. to fix this the best possible way is
+to set and retrieve that set master dir when we call get_masterdatadir().
+'''
+option_master_datadir = None
+def set_masterdatadir(master_datadir=None):
+    global option_master_datadir
+    option_master_datadir = master_datadir
 
 ######
+# if -d <master_datadir> is provided with utility, it will be prioritiese over other options.
 def get_masterdatadir():
-    master_datadir = os.environ.get('MASTER_DATA_DIRECTORY')
+    if option_master_datadir is not None:
+        master_datadir = option_master_datadir
+    else:
+        master_datadir = os.environ.get('MASTER_DATA_DIRECTORY')
+
     if not master_datadir:
         raise GpError("Environment Variable MASTER_DATA_DIRECTORY not set!")
+
     return master_datadir
 
 ######

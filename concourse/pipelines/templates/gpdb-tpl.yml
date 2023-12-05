@@ -849,8 +849,8 @@ resources:
   type: time
   source:
     location: America/Los_Angeles
-    start: ((reduced-frequency-trigger-start-[[ os_type ]]))
-    stop: ((reduced-frequency-trigger-stop-[[ os_type ]]))
+    start: (("reduced-frequency-trigger-start-[[ os_type ]]"))
+    stop: (("reduced-frequency-trigger-stop-[[ os_type ]]"))
     {% if os_type != "centos7" %}
     days: [Monday]
     {% else %}
@@ -1718,7 +1718,7 @@ jobs:
         <<: *ccp_default_params
         vars:
           <<: *ccp_default_vars
-          instance_type: n1-standard-4
+          instance_type: n1-highmem-4
           number_of_nodes: 2
     - task: gen_cluster
       file: ccp_src/ci/tasks/gen_cluster.yml
@@ -1811,7 +1811,6 @@ jobs:
         - unit_tests_gporca_[[ os_type ]]
         - gpdb_pitr_[[ os_type ]]
         - interconnect_[[ os_type ]]
-        - icw_extensions_gpcloud_[[ os_type ]]
         - gpexpand_[[ os_type ]]
         - pg_upgrade_[[ os_type ]]
       - get: gpdb_src
@@ -1835,7 +1834,6 @@ jobs:
         - unit_tests_gporca_[[ os_type ]]
         - gpdb_pitr_[[ os_type ]]
         - interconnect_[[ os_type ]]
-        - icw_extensions_gpcloud_[[ os_type ]]
         - gpexpand_[[ os_type ]]
         - pg_upgrade_[[ os_type ]]
         trigger: true

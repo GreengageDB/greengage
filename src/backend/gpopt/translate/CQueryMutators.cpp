@@ -689,14 +689,12 @@ CQueryMutators::RunExtractAggregatesMutator(Node *node,
 		{
 			if (var->varlevelsup >= context->m_agg_levels_up)
 			{
-				// We previously started to mutate the Aggref, that references
-				// the top level query. This Aggref is going to be moved to the
-				// derived query (see comments in Aggref if-case above).
-				// Therefore, if we are mutating Vars inside the Aggref, and
-				// these Vars reference the top level query (varlevelsup = m_current_query_level)
-				// as well, we must change their varlevelsup field in order to preserve
-				// correct reference level. i.e these Vars are pulled up as the part of
-				// the Aggref by the m_agg_levels_up.
+				// If Var references the top level query (varlevelsup = m_current_query_level)
+				// inside an Aggref that also references top level query, the Aggref is moved
+				// to the derived query (see comments in Aggref if-case above).
+				// And, therefore, if we are mutating such Vars inside the Aggref, we must
+				// change their varlevelsup field in order to preserve correct reference level.
+				// i.e these Vars are pulled up as the part of the Aggref by the m_agg_levels_up.
 				// e.g:
 				// select (select max((select foo.a))) from foo;
 				// is transformed into
@@ -705,7 +703,17 @@ CQueryMutators::RunExtractAggregatesMutator(Node *node,
 				// Here the foo.a inside max referenced top level RTE foo at
 				// varlevelsup = 2 inside the Aggref at agglevelsup 1. Then the
 				// Aggref is brought up to the top-query-level of fnew and foo.a
-				// inside Aggref is decreased by original Aggref's level.
+				// inside Aggref is bumped up by original Aggref's level.
+				// We may visualize that logic with the following diagram:
+				// Query <------┐  <--------------------┐
+				//              |                       |
+				//              | m_agg_levels_up = 1   |
+				//              |                       |
+				//     Aggref --┘                       | varlevelsup = 2
+				//                                      |
+				//                                      |
+				//                                      |
+				//         Var -------------------------┘
 				var->varlevelsup -= context->m_agg_levels_up;
 				return (Node *) var;
 			}
@@ -817,6 +825,8 @@ CQueryMutators::RunExtractAggregatesMutator(Node *node,
 
 	if (IsA(node, Query))
 	{
+		// Mutate Query tree and ignore rtable subqueries in order to modify
+		// m_current_query_level properly when mutating them below.
 		Query *query = gpdb::MutateQueryTree(
 			(Query *) node, (MutatorWalkerFn) RunExtractAggregatesMutator,
 			context, QTW_IGNORE_RT_SUBQUERIES);

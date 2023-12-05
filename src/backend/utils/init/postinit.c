@@ -90,6 +90,7 @@ static void CheckMyDatabase(const char *name, bool am_superuser);
 static void InitCommunication(void);
 static void ShutdownPostgres(int code, Datum arg);
 static void StatementTimeoutHandler(void);
+static void GpParallelRetrieveCursorCheckTimeoutHandler(void);
 static void LockTimeoutHandler(void);
 static void ClientCheckTimeoutHandler(void);
 static bool ThereIsAtLeastOneRole(void);
@@ -689,6 +690,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	{
 		RegisterTimeout(DEADLOCK_TIMEOUT, CheckDeadLock);
 		RegisterTimeout(STATEMENT_TIMEOUT, StatementTimeoutHandler);
+		RegisterTimeout(GP_PARALLEL_RETRIEVE_CURSOR_CHECK_TIMEOUT, GpParallelRetrieveCursorCheckTimeoutHandler);
 		RegisterTimeout(LOCK_TIMEOUT, LockTimeoutHandler);
 		RegisterTimeout(GANG_TIMEOUT, IdleGangTimeoutHandler);
 		RegisterTimeout(CLIENT_CONNECTION_CHECK_TIMEOUT, ClientCheckTimeoutHandler);
@@ -1443,6 +1445,36 @@ StatementTimeoutHandler(void)
 	kill(-MyProcPid, SIGINT);
 #endif
 	kill(MyProcPid, SIGINT);
+}
+extern bool DoingCommandRead;
+static void
+GpParallelRetrieveCursorCheckTimeoutHandler(void)
+{
+	/*
+	 * issue: https://github.com/greenplum-db/gpdb/issues/15143
+	 *
+	 * handle errors of parallel retrieve cursor's non-root slices
+	 */
+	if (DoingCommandRead)
+	{
+		Assert(Gp_role == GP_ROLE_DISPATCH);
+
+		/* It calls cdbdisp_checkForCancel(), which doesn't raise error */
+		gp_check_parallel_retrieve_cursor_error();
+		int num = GetNumOfParallelRetrieveCursors();
+
+		/* Reset the alarm to check after a timeout */
+		if (num > 0)
+		{
+			elog(DEBUG1, "There are still %d parallel retrieve cursors alive", num);
+			enable_parallel_retrieve_cursor_check_timeout();
+		}
+	}
+	else
+	{
+		elog(DEBUG1, "DoingCommandRead is false, check parallel cursor timeout delay");
+		enable_parallel_retrieve_cursor_check_timeout();
+	}
 }
 
 /*

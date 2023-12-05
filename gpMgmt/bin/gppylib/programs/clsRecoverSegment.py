@@ -98,7 +98,7 @@ class GpRecoverSegmentProgram:
 
     def getRecoveryActionsBasedOnOptions(self, gpEnv, gpArray):
         if self.__options.rebalanceSegments:
-            return GpSegmentRebalanceOperation(gpEnv, gpArray, self.__options.parallelDegree, self.__options.parallelPerHost)
+            return GpSegmentRebalanceOperation(gpEnv, gpArray, self.__options.parallelDegree, self.__options.parallelPerHost, self.__options.replayLag)
         else:
             instance = RecoveryTripletsFactory.instance(gpArray, self.__options.recoveryConfigFile, self.__options.newRecoverHosts, self.__options.parallelDegree)
             segs = [GpMirrorToBuild(t.failed, t.live, t.failover, self.__options.forceFullResynchronization, self.__options.differentialResynchronization)
@@ -252,6 +252,17 @@ class GpRecoverSegmentProgram:
         # verify differential supported options
         if self.__options.differentialResynchronization and self.__options.outputSampleConfigFile:
             raise ProgramArgumentValidationException("Invalid -o provided with --differential argument")
+
+        if self.__options.replayLag and not self.__options.rebalanceSegments:
+            raise ProgramArgumentValidationException("--replay-lag should be used only with -r")
+
+        # Checking rsync version before performing a differential recovery operation.
+        # the --info=progress2 option, which provides whole file transfer progress, requires rsync 3.1.0 or above
+        min_rsync_ver = "3.1.0"
+        if self.__options.differentialResynchronization and not unix.validate_rsync_version(min_rsync_ver):
+            raise ProgramArgumentValidationException("To perform a differential recovery, a minimum rsync version "
+                                                         "of {0} is required. Please ensure that rsync is updated to "
+                                                         "version {0} or higher.".format(min_rsync_ver))
 
         faultProberInterface.getFaultProber().initializeProber(gpEnv.getMasterPort())
 
@@ -461,6 +472,9 @@ class GpRecoverSegmentProgram:
 
         addTo.add_option("-r", None, default=False, action='store_true',
                          dest='rebalanceSegments', help='Rebalance synchronized segments.')
+        addTo.add_option("--replay-lag", None, type="float",
+                         dest="replayLag",
+                         metavar="<replayLag>", help='Allowed replay lag on mirror, lag should be provided in GBs')
         addTo.add_option('', '--hba-hostnames', action='store_true', dest='hba_hostnames',
                          help='use hostnames instead of CIDR in pg_hba.conf')
 

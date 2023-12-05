@@ -23,6 +23,38 @@ INSERT INTO test_zlib_hashjoin SELECT i,i,i,i,i,i,i,i FROM
 	(select generate_series(1, nsegments * 333333) as i from 
 	(select count(*) as nsegments from gp_segment_configuration where role='p' and content >= 0) foo) bar;
 
+-- start_ignore
+create language plpythonu;
+-- end_ignore
+
+-- Check if compressed work file count is limited to file_count_limit
+-- If the parameter is_comp_buff_limit is true, it means the comp_workfile_created
+-- must be smaller than file_count_limit because some work files are not compressed;
+-- If the parameter is_comp_buff_limit is false, it means the comp_workfile_created
+-- must be equal to file_count_limit because all work files are compressed.
+create or replace function check_workfile_compressed(explain_query text,
+    is_comp_buff_limit bool)
+returns setof int as
+$$
+import re
+rv = plpy.execute(explain_query)
+search_text = 'Work file set'
+result = []
+for i in range(len(rv)):
+    cur_line = rv[i]['QUERY PLAN']
+    if search_text.lower() in cur_line.lower():
+        p = re.compile('(\d+) files \((\d+) compressed\)')
+        m = p.search(cur_line)
+        workfile_created = int(m.group(1))
+        comp_workfile_created = int(m.group(2))
+        if is_comp_buff_limit:
+            result.append(int(comp_workfile_created < workfile_created))
+        else:
+            result.append(int(comp_workfile_created == workfile_created))
+return result
+$$
+language plpythonu;
+
 SET statement_mem=5000;
 
 --Fail after workfile creation and before add it to workfile set
@@ -86,3 +118,86 @@ drop table test_zlib;
 drop table test_zlib_t1;
 
 select gp_inject_fault('workfile_creation_failure', 'reset', 2);
+
+-- Test gp_workfile_compression_overhead_limit to control the memory limit used by
+-- compressed temp file
+
+DROP TABLE IF EXISTS test_zlib_memlimit;
+create table test_zlib_memlimit(a int, b text, c timestamp) distributed by (a);
+insert into test_zlib_memlimit select id, 'test ' || id, clock_timestamp() from
+   (select generate_series(1, nsegments * 30000) as id from
+   (select count(*) as nsegments from gp_segment_configuration where role='p' and content >= 0) foo) bar;
+insert into test_zlib_memlimit select 1,'test', now() from
+   (select generate_series(1, nsegments * 2000) as id from
+   (select count(*) as nsegments from gp_segment_configuration where role='p' and content >= 0) foo) bar;
+insert into test_zlib_memlimit select id, 'test ' || id, clock_timestamp() from
+   (select generate_series(1, nsegments * 3000) as id from
+   (select count(*) as nsegments from gp_segment_configuration where role='p' and content >= 0) foo) bar;
+analyze test_zlib_memlimit;
+
+set statement_mem='4500kB';
+set gp_workfile_compression=on;
+set gp_workfile_limit_files_per_query=0;
+
+-- Run the query with a large value of gp_workfile_compression_overhead_limit
+-- The compressed file number should be equal to total work file number
+
+set gp_workfile_compression_overhead_limit=2048000;
+
+select * from check_workfile_compressed('
+explain (analyze)
+with B as (select distinct a+1 as a,b,c from test_zlib_memlimit)
+,C as (select distinct a+2 as a,b,c from test_zlib_memlimit)
+,D as (select a+3 as a,b,c from test_zlib_memlimit)
+,E as (select a+4 as a,b,c from test_zlib_memlimit)
+,F as (select (a+5)::text as a,b,c from test_zlib_memlimit)
+select count(*) from test_zlib_memlimit A
+inner join  B on A.a = B.a
+inner join  C on A.a = C.a
+inner join  D on A.a = D.a
+inner join  E on A.a = E.a
+inner join  F on A.a::text = F.a ;',
+false) limit 6;
+
+-- Run the query with a smaller value of gp_workfile_compression_overhead_limit
+-- The compressed file number should be less than total work file number
+
+set gp_workfile_compression_overhead_limit=1000;
+
+select * from check_workfile_compressed('
+explain (analyze)
+with B as (select distinct a+1 as a,b,c from test_zlib_memlimit)
+,C as (select distinct a+2 as a,b,c from test_zlib_memlimit)
+,D as (select a+3 as a,b,c from test_zlib_memlimit)
+,E as (select a+4 as a,b,c from test_zlib_memlimit)
+,F as (select (a+5)::text as a,b,c from test_zlib_memlimit)
+select count(*) from test_zlib_memlimit A
+inner join  B on A.a = B.a
+inner join  C on A.a = C.a
+inner join  D on A.a = D.a
+inner join  E on A.a = E.a
+inner join  F on A.a::text = F.a ;',
+true) limit 6;
+
+-- Run the query with gp_workfile_compression_overhead_limit=0, which means
+-- no limit
+-- The compressed file number should be equal to total work file number
+
+set gp_workfile_compression_overhead_limit=0;
+
+select * from check_workfile_compressed('
+explain (analyze)
+with B as (select distinct a+1 as a,b,c from test_zlib_memlimit)
+,C as (select distinct a+2 as a,b,c from test_zlib_memlimit)
+,D as (select a+3 as a,b,c from test_zlib_memlimit)
+,E as (select a+4 as a,b,c from test_zlib_memlimit)
+,F as (select (a+5)::text as a,b,c from test_zlib_memlimit)
+select count(*) from test_zlib_memlimit A
+inner join  B on A.a = B.a
+inner join  C on A.a = C.a
+inner join  D on A.a = D.a
+inner join  E on A.a = E.a
+inner join  F on A.a::text = F.a ;',
+false) limit 6;
+
+DROP TABLE test_zlib_memlimit;

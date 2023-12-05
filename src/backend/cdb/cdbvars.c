@@ -104,6 +104,8 @@ int			gp_reject_percent_threshold;	/* SREH reject % kicks off only
 bool		gp_select_invisible = false;	/* debug mode to allow select to
 											 * see "invisible" rows */
 
+bool 		gp_detect_data_correctness; /* Detect if the current data distribution is correct */
+
 /*
  * Configurable timeout for snapshot add: exceptionally busy systems may take
  * longer than our old hard-coded version -- so here is a tuneable version.
@@ -197,6 +199,7 @@ int			Gp_interconnect_queue_depth = 4;	/* max number of messages
 												 * waiting in rx-queue before
 												 * we drop. */
 int			Gp_interconnect_snd_queue_depth = 2;
+int			Gp_interconnect_cursor_ic_table_size = 128;
 int			Gp_interconnect_timer_period = 5;
 int			Gp_interconnect_timer_checking_period = 20;
 int			Gp_interconnect_default_rtt = 20;
@@ -311,6 +314,12 @@ int			gp_workfile_limit_per_query = 0;
 
 /* Maximum number of workfiles to be created by a query */
 int			gp_workfile_limit_files_per_query = 0;
+
+/*
+ * The overhead memory (kB) used by all compressed workfiles of a single
+ * workfile_set
+ */
+int         gp_workfile_compression_overhead_limit = 0;
 
 /* Gpmon */
 bool		gp_enable_gpperfmon = false;

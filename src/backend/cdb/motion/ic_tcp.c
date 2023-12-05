@@ -1277,6 +1277,16 @@ SetupTCPInterconnect(EState *estate)
 	interconnect_context->doSendStopMessage = doSendStopMessageTCP;
 
 #ifdef ENABLE_IC_PROXY
+	/* check if current Segment's ICProxy listener failed */
+	if (pg_atomic_read_u32(ic_proxy_peer_listener_failed) > 0)
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+			 errmsg("Failed to setup ic_proxy interconnect"),
+			 errdetail("The ic_proxy process failed to bind or listen."),
+			 errhint("Please check the server log for related WARNING messages.")));
+	}
+
 	ic_proxy_backend_init_context(interconnect_context);
 #endif /* ENABLE_IC_PROXY */
 

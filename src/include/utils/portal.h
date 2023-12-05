@@ -253,5 +253,7 @@ extern bool ThereAreNoReadyPortals(void);
 extern void AtExitCleanup_ResPortals(void);
 extern void TotalResPortalIncrements(int pid, Oid queueid,
 									 Cost *totalIncrements, int *num);
+extern List *GetAllParallelRetrieveCursorPortals(void);
+extern int GetNumOfParallelRetrieveCursors(void);
 
 #endif   /* PORTAL_H */

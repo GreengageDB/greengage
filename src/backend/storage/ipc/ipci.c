@@ -67,6 +67,7 @@
 #include "utils/session_state.h"
 #include "cdb/cdbendpoint.h"
 #include "replication/gp_replication.h"
+#include "cdb/ic_proxy_bgworker.h"
 
 shmem_startup_hook_type shmem_startup_hook = NULL;
 
@@ -184,6 +185,10 @@ CreateSharedMemoryAndSemaphores(int port)
 #ifdef FAULT_INJECTOR
 		size = add_size(size, FaultInjector_ShmemSize());
 #endif			
+
+#ifdef ENABLE_IC_PROXY
+		size = add_size(size, ICProxyShmemSize());
+#endif
 
 		/* This elog happens before we know the name of the log file we are supposed to use */
 		elog(DEBUG1, "Size not including the buffer pool %lu",
@@ -335,6 +340,10 @@ CreateSharedMemoryAndSemaphores(int port)
 
 #ifdef FAULT_INJECTOR
 	FaultInjector_ShmemInit();
+#endif
+
+#ifdef ENABLE_IC_PROXY
+	ICProxyShmemInit();
 #endif
 
 	/*

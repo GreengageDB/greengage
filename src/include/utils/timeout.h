@@ -16,6 +16,9 @@
 
 #include "datatype/timestamp.h"
 
+/* GPDB: the period of parallel retrieve cursor check */
+#define GP_PARALLEL_RETRIEVE_CURSOR_CHECK_PERIOD_MS (10000)
+
 /*
  * Identifiers for timeout reasons.  Note that in case multiple timeouts
  * trigger at the same time, they are serviced in the order of this enum.
@@ -33,8 +36,14 @@ typedef enum TimeoutId
 	CLIENT_CONNECTION_CHECK_TIMEOUT,
 	/* First user-definable timeout reason */
 	USER_TIMEOUT,
-	/* Maximum number of timeout reasons */
-	MAX_TIMEOUTS = 16
+	/*
+	 * GP_ABI_BUMP_FIXME
+	 * To not break ABI, we have to reserve the timeouts from the **original**
+	 * USER_TIMEOUT (included) and the **original** MAX_TIMEOUTS, [9, 16) in
+	 * this case.
+	 */
+	GP_PARALLEL_RETRIEVE_CURSOR_CHECK_TIMEOUT = 16,
+	MAX_TIMEOUTS
 } TimeoutId;
 
 /* callback function signature */

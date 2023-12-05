@@ -208,6 +208,12 @@ typedef struct HashJoinTableData
 
     HashJoinState * hjstate; /* reference to the enclosing HashJoinState */
     bool first_pass; /* Is this the first pass (pre-rescan) */
+
+	/* Statistic info of work file set, copied from work_set */
+	uint32      workset_num_files;
+	uint32      workset_num_files_compressed;
+	uint64      workset_avg_file_size;
+	uint64      workset_compression_buf_total;
 }	HashJoinTableData;
 
 #endif   /* HASHJOIN_H */
