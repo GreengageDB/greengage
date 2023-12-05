@@ -1406,7 +1406,7 @@ SetDefaultACL(InternalDefaultACL *iacls)
 			values[Anum_pg_default_acl_defaclacl - 1] = PointerGetDatum(new_acl);
 
 			newtuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
-			simple_heap_insert(rel, newtuple);
+			CatalogTupleInsert(rel, newtuple);
 		}
 		else
 		{
@@ -1416,11 +1416,8 @@ SetDefaultACL(InternalDefaultACL *iacls)
 
 			newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
 										 values, nulls, replaces);
-			simple_heap_update(rel, &newtuple->t_self, newtuple);
+			CatalogTupleUpdate(rel, &newtuple->t_self, newtuple);
 		}
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(rel, newtuple);
 
 		/* these dependencies don't change in an update */
 		if (isNew)
@@ -1583,6 +1580,9 @@ RemoveRoleFromObjectACL(Oid roleid, Oid classid, Oid objid)
 			case ForeignDataWrapperRelationId:
 				istmt.objtype = ACL_OBJECT_FDW;
 				break;
+			case ExtprotocolRelationId:
+				istmt.objtype = ACL_OBJECT_EXTPROTOCOL;
+				break;
 			default:
 				elog(ERROR, "unexpected object class %u", classid);
 				break;
@@ -1627,7 +1627,7 @@ RemoveDefaultACLById(Oid defaclOid)
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "could not find tuple for default ACL %u", defaclOid);
 
-	simple_heap_delete(rel, &tuple->t_self);
+	CatalogTupleDelete(rel, &tuple->t_self);
 
 	systable_endscan(scan);
 	heap_close(rel, RowExclusiveLock);
@@ -1851,10 +1851,7 @@ ExecGrant_Attribute(InternalGrant *istmt, Oid relOid, const char *relname,
 		newtuple = heap_modify_tuple(attr_tuple, RelationGetDescr(attRelation),
 									 values, nulls, replaces);
 
-		simple_heap_update(attRelation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(attRelation, newtuple);
+		CatalogTupleUpdate(attRelation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(RelationRelationId, relOid, attnum,
@@ -2112,10 +2109,7 @@ ExecGrant_Relation(InternalGrant *istmt)
 			newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation),
 										 values, nulls, replaces);
 
-			simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-			/* keep the catalog indexes up to date */
-			CatalogUpdateIndexes(relation, newtuple);
+			CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 			/* Update the shared dependency ACL info */
 			updateAclDependencies(RelationRelationId, relOid, 0,
@@ -2302,10 +2296,7 @@ CopyRelationAcls(Oid srcId, Oid destId)
 	newTuple = heap_modify_tuple(destTuple, RelationGetDescr(pg_class_rel),
 								 values, nulls, replaces);
 
-	simple_heap_update(pg_class_rel, &newTuple->t_self, newTuple);
-
-	/* keep the catalog indexes up to date */
-	CatalogUpdateIndexes(pg_class_rel, newTuple);
+	CatalogTupleUpdate(pg_class_rel, &newTuple->t_self, newTuple);
 
 	/* Update the shared dependency ACL info */
 	ownerId = pg_class_tuple->relowner;
@@ -2361,10 +2352,7 @@ CopyRelationAcls(Oid srcId, Oid destId)
 		newTuple = heap_modify_tuple(attDestTuple, RelationGetDescr(pg_attribute_rel),
 									 values, nulls, replaces);
 
-		simple_heap_update(pg_attribute_rel, &newTuple->t_self, newTuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(pg_attribute_rel, newTuple);
+		CatalogTupleUpdate(pg_attribute_rel, &newTuple->t_self, newTuple);
 
 		/* Update the shared dependency ACL info */
 		ownerId = pg_class_tuple->relowner;
@@ -2486,10 +2474,7 @@ ExecGrant_Database(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* MPP-6929: metadata tracking */
 		if (Gp_role == GP_ROLE_DISPATCH)
@@ -2620,10 +2605,7 @@ ExecGrant_Fdw(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(ForeignDataWrapperRelationId,
@@ -2745,10 +2727,7 @@ ExecGrant_ForeignServer(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(ForeignServerRelationId,
@@ -2869,10 +2848,7 @@ ExecGrant_Function(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(ProcedureRelationId, funcId, 0,
@@ -2999,10 +2975,7 @@ ExecGrant_Language(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(LanguageRelationId, HeapTupleGetOid(tuple), 0,
@@ -3138,10 +3111,7 @@ ExecGrant_Largeobject(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation),
 									 values, nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(LargeObjectRelationId,
@@ -3263,10 +3233,7 @@ ExecGrant_Namespace(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* MPP-6929: metadata tracking */
 		if (Gp_role == GP_ROLE_DISPATCH)
@@ -3396,10 +3363,7 @@ ExecGrant_Tablespace(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* MPP-6929: metadata tracking */
 		if (Gp_role == GP_ROLE_DISPATCH)
@@ -3542,10 +3506,7 @@ ExecGrant_Type(InternalGrant *istmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
 									 nulls, replaces);
 
-		simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-		/* keep the catalog indexes up to date */
-		CatalogUpdateIndexes(relation, newtuple);
+		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
 		/* Update the shared dependency ACL info */
 		updateAclDependencies(TypeRelationId, typId, 0,
@@ -3710,10 +3671,7 @@ ExecGrant_ExtProtocol(InternalGrant *istmt)
         newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values,
                                      nulls, replaces);
 
-        simple_heap_update(relation, &newtuple->t_self, newtuple);
-
-        /* keep the catalog indexes up to date */
-        CatalogUpdateIndexes(relation, newtuple);
+        CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
         /* Update the shared dependency ACL info */
         updateAclDependencies(ExtprotocolRelationId,

@@ -1717,21 +1717,6 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		/* XXX rel->onerow = ??? */
 	}
 
-	if (rel->subplan->flow->locustype == CdbLocusType_General &&
-		(contain_volatile_functions((Node *) rel->subplan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		rel->subplan->flow->locustype = CdbLocusType_SingleQE;
-		rel->subplan->flow->flotype = FLOW_SINGLETON;
-	}
-
-	if (rel->subplan->flow->locustype == CdbLocusType_SegmentGeneral &&
-		(contain_volatile_functions((Node *) rel->subplan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		rel->subplan = (Plan *) make_motion_gather(subroot, rel->subplan, NIL, CdbLocusType_SingleQE);
-	}
-
 	rel->subroot = subroot;
 
 	/* Isolate the params needed by this specific subplan */

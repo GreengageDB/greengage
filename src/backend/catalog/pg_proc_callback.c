@@ -109,8 +109,7 @@ addProcCallback(Oid profnoid, Oid procallback, char promethod)
 	tup = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 	
 	/* Insert tuple into the relation */
-	simple_heap_insert(rel, tup);
-	CatalogUpdateIndexes(rel, tup);
+	CatalogTupleInsert(rel, tup);
 
 	heap_close(rel, RowExclusiveLock);
 }

@@ -48,7 +48,7 @@
 
 static void toast_delete_datum(Relation rel, Datum value);
 static Datum toast_save_datum(Relation rel, Datum value,
-				 struct varlena * oldexternal, bool isFrozen, int options);
+				 struct varlena * oldexternal, int options);
 static bool toastrel_valueid_exists(Relation toastrel, Oid valueid);
 static bool toastid_valueid_exists(Oid toastrelid, Oid valueid);
 static struct varlena *toast_fetch_datum(struct varlena * attr);
@@ -623,8 +623,7 @@ compute_dest_tuplen(TupleDesc tupdesc, MemTupleBinding *pbind, bool hasnull, Dat
 
 static GenericTuple
 toast_insert_or_update_generic(Relation rel, GenericTuple newtup, GenericTuple oldtup,
-					   MemTupleBinding *pbind, int toast_tuple_target,
-					   bool isFrozen, int options)
+					   MemTupleBinding *pbind, int toast_tuple_target, int options)
 {
 	GenericTuple result_gtuple;
 	TupleDesc	tupleDesc;
@@ -919,7 +918,7 @@ toast_insert_or_update_generic(Relation rel, GenericTuple newtup, GenericTuple o
 			old_value = toast_values[i];
 			toast_action[i] = 'p';
 			toast_values[i] = toast_save_datum(rel, toast_values[i],
-											   toast_oldexternal[i], isFrozen, options);
+											   toast_oldexternal[i], options);
 			if (toast_free[i])
 				pfree(DatumGetPointer(old_value));
 			toast_free[i] = true;
@@ -970,7 +969,7 @@ toast_insert_or_update_generic(Relation rel, GenericTuple newtup, GenericTuple o
 		old_value = toast_values[i];
 		toast_action[i] = 'p';
 		toast_values[i] = toast_save_datum(rel, toast_values[i],
-										   toast_oldexternal[i], isFrozen, options);
+										   toast_oldexternal[i], options);
 		if (toast_free[i])
 			pfree(DatumGetPointer(old_value));
 		toast_free[i] = true;
@@ -1092,7 +1091,7 @@ toast_insert_or_update_generic(Relation rel, GenericTuple newtup, GenericTuple o
 		old_value = toast_values[i];
 		toast_action[i] = 'p';
 		toast_values[i] = toast_save_datum(rel, toast_values[i],
-										   toast_oldexternal[i], isFrozen, options);
+										   toast_oldexternal[i], options);
 		if (toast_free[i])
 			pfree(DatumGetPointer(old_value));
 		toast_free[i] = true;
@@ -1207,28 +1206,26 @@ toast_insert_or_update_generic(Relation rel, GenericTuple newtup, GenericTuple o
 HeapTuple
 toast_insert_or_update(Relation rel, HeapTuple newtup, HeapTuple oldtup,
 					   int toast_tuple_target,
-					   bool isFrozen, int options)
+					   int options)
 {
 	return (HeapTuple) toast_insert_or_update_generic(rel,
 													  (GenericTuple) newtup,
 													  (GenericTuple) oldtup,
 													  NULL,
 													  toast_tuple_target,
-													  isFrozen,
 													  options);
 }
 
 MemTuple
 toast_insert_or_update_memtup(Relation rel, MemTuple newtup, MemTuple oldtup,
 					   MemTupleBinding *pbind, int toast_tuple_target,
-					   bool isFrozen, int options)
+					   int options)
 {
 	return (MemTuple) toast_insert_or_update_generic(rel,
 													 (GenericTuple) newtup,
 													 (GenericTuple) oldtup,
 													 pbind,
 													 toast_tuple_target,
-													 isFrozen,
 													 options);
 }
 
@@ -1555,7 +1552,7 @@ toast_get_valid_index(Oid toastoid, LOCKMODE lock)
  */
 static Datum
 toast_save_datum(Relation rel, Datum value,
-				 struct varlena * oldexternal, bool isFrozen, int options)
+				 struct varlena * oldexternal, int options)
 {
 	Relation	toastrel;
 	Relation   *toastidxs;
@@ -1788,17 +1785,9 @@ toast_save_datum(Relation rel, Datum value,
 		memcpy(VARDATA(&chunk_data), data_p, chunk_size);
 		toasttup = heap_form_tuple(toasttupDesc, t_values, t_isnull);
 
-		if (!isFrozen)
-		{
-			/* the normal case. regular insert */
-			heap_insert(toastrel, toasttup, mycid, options, NULL, myxid);
-		}
-		else
-		{
-			/* insert and freeze the tuple. used for errtables and their related toast data */
-			frozen_heap_insert(toastrel, toasttup);
-		}
-			
+		/* the normal case. regular insert */
+		heap_insert(toastrel, toasttup, mycid, options, NULL, myxid);
+
 		/*
 		 * Create the index entry.  We cheat a little here by not using
 		 * FormIndexDatum: this relies on the knowledge that the index columns

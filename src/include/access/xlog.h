@@ -305,7 +305,6 @@ typedef struct CheckpointStatsData
 extern CheckpointStatsData CheckpointStats;
 
 extern XLogRecPtr XLogInsert(RmgrId rmid, uint8 info, XLogRecData *rdata);
-extern XLogRecPtr XLogInsert_OverrideXid(RmgrId rmid, uint8 info, XLogRecData *rdata, TransactionId overrideXid);
 extern XLogRecPtr XLogLastInsertBeginLoc(void);
 extern bool XLogCheckBufferNeedsBackup(Buffer buffer);
 

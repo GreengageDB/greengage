@@ -1655,8 +1655,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 
 	tuple = heap_form_tuple(rel->rd_att, values, nulls);
 
-	extensionOid = simple_heap_insert(rel, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	extensionOid = CatalogTupleInsert(rel, tuple);
 
 	heap_freetuple(tuple);
 	heap_close(rel, RowExclusiveLock);
@@ -1737,7 +1736,7 @@ RemoveExtensionById(Oid extId)
 
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(tuple))
-		simple_heap_delete(rel, &tuple->t_self);
+		CatalogTupleDelete(rel, &tuple->t_self);
 
 	systable_endscan(scandesc);
 
@@ -2336,8 +2335,7 @@ pg_extension_config_dump(PG_FUNCTION_ARGS)
 	extTup = heap_modify_tuple(extTup, RelationGetDescr(extRel),
 							   repl_val, repl_null, repl_repl);
 
-	simple_heap_update(extRel, &extTup->t_self, extTup);
-	CatalogUpdateIndexes(extRel, extTup);
+	CatalogTupleUpdate(extRel, &extTup->t_self, extTup);
 
 	systable_endscan(extScan);
 
@@ -2514,8 +2512,7 @@ extension_config_remove(Oid extensionoid, Oid tableoid)
 	extTup = heap_modify_tuple(extTup, RelationGetDescr(extRel),
 							   repl_val, repl_null, repl_repl);
 
-	simple_heap_update(extRel, &extTup->t_self, extTup);
-	CatalogUpdateIndexes(extRel, extTup);
+	CatalogTupleUpdate(extRel, &extTup->t_self, extTup);
 
 	systable_endscan(extScan);
 
@@ -2690,8 +2687,7 @@ AlterExtensionNamespace(List *names, const char *newschema)
 	/* Now adjust pg_extension.extnamespace */
 	extForm->extnamespace = nspOid;
 
-	simple_heap_update(extRel, &extTup->t_self, extTup);
-	CatalogUpdateIndexes(extRel, extTup);
+	CatalogTupleUpdate(extRel, &extTup->t_self, extTup);
 
 	heap_close(extRel, RowExclusiveLock);
 
@@ -2954,8 +2950,7 @@ ApplyExtensionUpdates(Oid extensionOid,
 		extTup = heap_modify_tuple(extTup, RelationGetDescr(extRel),
 								   values, nulls, repl);
 
-		simple_heap_update(extRel, &extTup->t_self, extTup);
-		CatalogUpdateIndexes(extRel, extTup);
+		CatalogTupleUpdate(extRel, &extTup->t_self, extTup);
 
 		systable_endscan(extScan);
 

@@ -33,7 +33,8 @@ CLogicalRowTrigger::CLogicalRowTrigger(CMemoryPool *mp)
 	  m_rel_mdid(NULL),
 	  m_type(0),
 	  m_pdrgpcrOld(NULL),
-	  m_pdrgpcrNew(NULL)
+	  m_pdrgpcrNew(NULL),
+	  m_efs(IMDFunction::EfsImmutable)
 {
 	m_fPattern = true;
 }
@@ -53,7 +54,8 @@ CLogicalRowTrigger::CLogicalRowTrigger(CMemoryPool *mp, IMDId *rel_mdid,
 	  m_rel_mdid(rel_mdid),
 	  m_type(type),
 	  m_pdrgpcrOld(pdrgpcrOld),
-	  m_pdrgpcrNew(pdrgpcrNew)
+	  m_pdrgpcrNew(pdrgpcrNew),
+	  m_efs(IMDFunction::EfsImmutable)
 {
 	GPOS_ASSERT(rel_mdid->IsValid());
 	GPOS_ASSERT(0 != type);

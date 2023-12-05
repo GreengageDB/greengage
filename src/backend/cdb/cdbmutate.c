@@ -2086,7 +2086,24 @@ shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
 	Plan	   *plan = (Plan *) node;
 
 	if (fPop)
+	{
+		/*
+		 * If there is a shared scan under HashJoin, producer is in the inner
+		 * subplan and consumer is in the outer, then we need to enable
+		 * prefetch_inner to avoid deadlock. The deadlock can occur when
+		 * prefetch_inner is disabled and the executor can start performing the
+		 * join from the outer part. In the case of bottleneck, we can turn off
+		 * prefetch_inner for optimization reasons in the create_join_plan
+		 * function. So we need to turn it back on. To simplify the logic, we
+		 * enable prefetch_inner for all hash joins located on bottleneck if
+		 * there is a shared scan in the plan.
+		 */
+		if (IsA(plan, HashJoin) && ctxt->producer_count > 0 &&
+			CdbPathLocus_IsBottleneck(*(plan->flow)))
+			((Join*) plan)->prefetch_inner = true;
+
 		return true;
+	}
 
 	if (IsA(plan, ShareInputScan))
 	{

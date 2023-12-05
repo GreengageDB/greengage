@@ -21,6 +21,8 @@
 #include "access/genam.h"
 #include "access/htup.h"
 #include "access/heapam.h"
+#include "access/xact.h"
+#include "utils/faultinjector.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 #include "access/appendonlywriter.h"
@@ -77,15 +79,13 @@ InsertInitialFastSequenceEntries(Oid objid)
 	/* Insert enrty for segfile 0 */
 	values[Anum_gp_fastsequence_objmod - 1] = Int64GetDatum(RESERVED_SEGNO);
 	tuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
-	simple_heap_insert(gp_fastsequence_rel, tuple);
-	CatalogUpdateIndexes(gp_fastsequence_rel, tuple);
+	CatalogTupleInsert(gp_fastsequence_rel, tuple);
 	heap_freetuple(tuple);
 
 	/* Insert entry for segfile 1 */
 	values[Anum_gp_fastsequence_objmod - 1] = Int64GetDatum(1);
 	tuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
-	simple_heap_insert(gp_fastsequence_rel, tuple);
-	CatalogUpdateIndexes(gp_fastsequence_rel, tuple);
+	CatalogTupleInsert(gp_fastsequence_rel, tuple);
 	heap_freetuple(tuple);
 
 	heap_close(gp_fastsequence_rel, RowExclusiveLock);
@@ -181,8 +181,27 @@ insert_or_update_fastsequence(Relation gp_fastsequence_rel,
 
 		newTuple = heaptuple_form_to(tupleDesc, values, nulls, NULL, NULL);
 
-		frozen_heap_insert(gp_fastsequence_rel, newTuple);
-		CatalogUpdateIndexes(gp_fastsequence_rel, newTuple);
+		/* insert the tuple */
+		CatalogTupleInsert(gp_fastsequence_rel, newTuple);
+
+#ifdef FAULT_INJECTOR
+		FaultInjector_InjectFaultIfSet(
+								"insert_fastsequence_before_freeze",
+								DDLNotSpecified,
+								"", //databaseName
+								RelationGetRelationName(gp_fastsequence_rel));
+#endif
+
+		/* freeze the tuple */
+		heap_freeze_tuple_wal_logged(gp_fastsequence_rel, newTuple);
+
+#ifdef FAULT_INJECTOR
+		FaultInjector_InjectFaultIfSet(
+								"insert_fastsequence_after_freeze",
+								DDLNotSpecified,
+								"", //databaseName
+								RelationGetRelationName(gp_fastsequence_rel));
+#endif
 
 		heap_freetuple(newTuple);
 	}
@@ -329,7 +348,7 @@ RemoveFastSequenceEntry(Oid objid)
 
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(rel, &tuple->t_self);
+		CatalogTupleDelete(rel, &tuple->t_self);
 	}
 
 	systable_endscan(sscan);

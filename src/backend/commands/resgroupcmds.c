@@ -190,8 +190,7 @@ CreateResourceGroup(CreateResourceGroupStmt *stmt)
 	/*
 	 * Insert new record in the pg_resgroup table
 	 */
-	groupid = simple_heap_insert(pg_resgroup_rel, tuple);
-	CatalogUpdateIndexes(pg_resgroup_rel, tuple);
+	groupid = CatalogTupleInsert(pg_resgroup_rel, tuple);
 
 	/* process the WITH (...) list items */
 	validateCapabilities(pg_resgroupcapability_rel, groupid, &caps, true);
@@ -1269,8 +1268,7 @@ updateResgroupCapabilityEntry(Relation rel,
 	newTuple = heap_modify_tuple(oldTuple, RelationGetDescr(rel),
 								 values, isnull, repl);
 
-	simple_heap_update(rel, &oldTuple->t_self, newTuple);
-	CatalogUpdateIndexes(rel, newTuple);
+	CatalogTupleUpdate(rel, &oldTuple->t_self, newTuple);
 
 	systable_endscan(sscan);
 }
@@ -1469,8 +1467,7 @@ insertResgroupCapabilityEntry(Relation rel,
 	new_record[Anum_pg_resgroupcapability_value - 1] = CStringGetTextDatum(value);
 
 	tuple = heap_form_tuple(tupleDesc, new_record, new_record_nulls);
-	simple_heap_insert(rel, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	CatalogTupleInsert(rel, tuple);
 }
 
 /*

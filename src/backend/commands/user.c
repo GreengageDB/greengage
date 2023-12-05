@@ -599,8 +599,7 @@ CreateRole(CreateRoleStmt *stmt)
 	/*
 	 * Insert new record in the pg_authid table
 	 */
-	roleid = simple_heap_insert(pg_authid_rel, tuple);
-	CatalogUpdateIndexes(pg_authid_rel, tuple);
+	roleid = CatalogTupleInsert(pg_authid_rel, tuple);
 
 	/*
 	 * Advance command counter so we can see new record; else tests in
@@ -1277,10 +1276,7 @@ AlterRole(AlterRoleStmt *stmt)
 
 	new_tuple = heap_modify_tuple(tuple, pg_authid_dsc, new_record,
 								  new_record_nulls, new_record_repl);
-	simple_heap_update(pg_authid_rel, &tuple->t_self, new_tuple);
-
-	/* Update indexes */
-	CatalogUpdateIndexes(pg_authid_rel, new_tuple);
+	CatalogTupleUpdate(pg_authid_rel, &tuple->t_self, new_tuple);
 
 	InvokeObjectPostAlterHook(AuthIdRelationId, roleid, 0);
 
@@ -1561,7 +1557,7 @@ DropRole(DropRoleStmt *stmt)
 		/*
 		 * Remove the role from the pg_authid table
 		 */
-		simple_heap_delete(pg_authid_rel, &tuple->t_self);
+		CatalogTupleDelete(pg_authid_rel, &tuple->t_self);
 
 		ReleaseSysCache(tuple);
 
@@ -1581,7 +1577,7 @@ DropRole(DropRoleStmt *stmt)
 
 		while (HeapTupleIsValid(tmp_tuple = systable_getnext(sscan)))
 		{
-			simple_heap_delete(pg_auth_members_rel, &tmp_tuple->t_self);
+			CatalogTupleDelete(pg_auth_members_rel, &tmp_tuple->t_self);
 		}
 
 		systable_endscan(sscan);
@@ -1596,7 +1592,7 @@ DropRole(DropRoleStmt *stmt)
 
 		while (HeapTupleIsValid(tmp_tuple = systable_getnext(sscan)))
 		{
-			simple_heap_delete(pg_auth_members_rel, &tmp_tuple->t_self);
+			CatalogTupleDelete(pg_auth_members_rel, &tmp_tuple->t_self);
 		}
 
 		systable_endscan(sscan);
@@ -1751,9 +1747,7 @@ RenameRole(const char *oldname, const char *newname)
 	}
 
 	newtuple = heap_modify_tuple(oldtuple, dsc, repl_val, repl_null, repl_repl);
-	simple_heap_update(rel, &oldtuple->t_self, newtuple);
-
-	CatalogUpdateIndexes(rel, newtuple);
+	CatalogTupleUpdate(rel, &oldtuple->t_self, newtuple);
 
 	InvokeObjectPostAlterHook(AuthIdRelationId, roleid, 0);
 
@@ -2081,16 +2075,14 @@ AddRoleMems(const char *rolename, Oid roleid,
 			tuple = heap_modify_tuple(authmem_tuple, pg_authmem_dsc,
 									  new_record,
 									  new_record_nulls, new_record_repl);
-			simple_heap_update(pg_authmem_rel, &tuple->t_self, tuple);
-			CatalogUpdateIndexes(pg_authmem_rel, tuple);
+			CatalogTupleUpdate(pg_authmem_rel, &tuple->t_self, tuple);
 			ReleaseSysCache(authmem_tuple);
 		}
 		else
 		{
 			tuple = heap_form_tuple(pg_authmem_dsc,
 									new_record, new_record_nulls);
-			simple_heap_insert(pg_authmem_rel, tuple);
-			CatalogUpdateIndexes(pg_authmem_rel, tuple);
+			CatalogTupleInsert(pg_authmem_rel, tuple);
 		}
 
 		/* CCI after each change, in case there are duplicates in list */
@@ -2468,7 +2460,7 @@ DelRoleMems(const char *rolename, Oid roleid,
 		if (!admin_opt)
 		{
 			/* Remove the entry altogether */
-			simple_heap_delete(pg_authmem_rel, &authmem_tuple->t_self);
+			CatalogTupleDelete(pg_authmem_rel, &authmem_tuple->t_self);
 		}
 		else
 		{
@@ -2489,8 +2481,7 @@ DelRoleMems(const char *rolename, Oid roleid,
 			tuple = heap_modify_tuple(authmem_tuple, pg_authmem_dsc,
 									  new_record,
 									  new_record_nulls, new_record_repl);
-			simple_heap_update(pg_authmem_rel, &tuple->t_self, tuple);
-			CatalogUpdateIndexes(pg_authmem_rel, tuple);
+			CatalogTupleUpdate(pg_authmem_rel, &tuple->t_self, tuple);
 		}
 
 		ReleaseSysCache(authmem_tuple);
@@ -2614,8 +2605,7 @@ AddRoleDenials(const char *rolename, Oid roleid, List *addintervals)
 		tuple = heap_form_tuple(pg_auth_time_dsc, new_record, new_record_nulls);
 
 		/* Insert tuple into the relation */
-		simple_heap_insert(pg_auth_time_rel, tuple);
-		CatalogUpdateIndexes(pg_auth_time_rel, tuple);
+		CatalogTupleInsert(pg_auth_time_rel, tuple);
 	}
 
 	CommandCounterIncrement();
@@ -2681,14 +2671,14 @@ DelRoleDenials(const char *rolename, Oid roleid, List *dropintervals)
 										DatumGetCString(DirectFunctionCall1(time_out, TimeADTGetDatum(existing->start.time))),
 										daysofweek[existing->end.day],
 										DatumGetCString(DirectFunctionCall1(time_out, TimeADTGetDatum(existing->end.time))))));
-					simple_heap_delete(pg_auth_time_rel, &tmp_tuple->t_self);
+					CatalogTupleDelete(pg_auth_time_rel, &tmp_tuple->t_self);
 					dropped_matching_interval = true;
 					break;
 				}
 			}
 		}
 		else
-			simple_heap_delete(pg_auth_time_rel, &tmp_tuple->t_self);
+			CatalogTupleDelete(pg_auth_time_rel, &tmp_tuple->t_self);
 	}
 
 	/* if intervals were specified and none was found, raise error */
