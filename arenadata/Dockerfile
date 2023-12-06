@@ -57,7 +57,8 @@ RUN yum -y install centos-release-scl && \
     echo -e 'source /opt/rh/devtoolset-7/enable' >> /opt/gcc_env.sh && \
     echo -e '#!/bin/sh' >> /etc/profile.d/jdk_home.sh && \
     echo -e 'export JAVA_HOME=/etc/alternatives/java_sdk' >> /etc/profile.d/jdk_home.sh && \
-    echo -e 'export PATH=$JAVA_HOME/bin:$PATH' >> /etc/profile.d/jdk_home.sh
+    echo -e 'export PATH=$JAVA_HOME/bin:$PATH' >> /etc/profile.d/jdk_home.sh && \
+    echo -e 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
 
 RUN rpm -i $sigar && rpm -i $sigar_headers
 
