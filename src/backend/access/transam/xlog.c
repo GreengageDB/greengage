@@ -6537,7 +6537,7 @@ StartupXLOG(void)
 	XLogCtlInsert *Insert;
 	CheckPoint	checkPoint;
 	bool		wasShutdown;
-	bool		reachedStopPoint = false;
+	bool		reachedRecoveryTarget = false;
 	bool		haveBackupLabel = false;
 	XLogRecPtr	RecPtr,
 				checkPointLoc,
@@ -7364,7 +7364,7 @@ StartupXLOG(void)
 				 */
 				if (recoveryStopsBefore(record))
 				{
-					reachedStopPoint = true;	/* see below */
+					reachedRecoveryTarget = true;
 					break;
 				}
 
@@ -7540,7 +7540,7 @@ StartupXLOG(void)
 				/* Exit loop if we reached inclusive recovery target */
 				if (recoveryStopsAfter(record))
 				{
-					reachedStopPoint = true;
+					reachedRecoveryTarget = true;
 					break;
 				}
 
@@ -7552,7 +7552,7 @@ StartupXLOG(void)
 			 * end of main redo apply loop
 			 */
 
-			if (reachedStopPoint)
+			if (reachedRecoveryTarget)
 			{
 				if (!reachedConsistency)
 					ereport(FATAL,
@@ -7608,7 +7608,18 @@ StartupXLOG(void)
 			/* there are no WAL records following the checkpoint */
 			ereport(LOG,
 					(errmsg("redo is not required")));
+
 		}
+
+		/*
+		 * This check is intentionally after the above log messages that
+		 * indicate how far recovery went.
+		 */
+		if (ArchiveRecoveryRequested &&
+			recoveryTarget != RECOVERY_TARGET_UNSET &&
+			!reachedRecoveryTarget)
+			ereport(FATAL,
+					(errmsg("recovery ended before configured recovery target was reached")));
 	}
 	else
 	{

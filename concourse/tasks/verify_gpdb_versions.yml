@@ -4,8 +4,8 @@ platform: linux
 image_resource:
   type: registry-image
   source:
-    repository: centos
-    tag: 7
+    repository: gcr.io/data-gpdb-public-images/gpdb6-rocky8-build
+    tag: latest
 
 inputs:
   - name: gpdb_src

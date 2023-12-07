@@ -63,6 +63,8 @@ static void SpillCurrentBatch(HashJoinState *node);
 static bool ExecHashJoinReloadHashTable(HashJoinState *hjstate);
 static void ExecEagerFreeHashJoin(HashJoinState *node);
 
+static inline void SaveWorkFileSetStatsInfo(HashJoinTable hashtable);
+
 /* ----------------------------------------------------------------
  *		ExecHashJoin
  *
@@ -287,6 +289,16 @@ ExecHashJoin_guts(HashJoinState *node)
 					}
 					else
 						node->hj_JoinState = HJ_NEED_NEW_BATCH;
+
+					/*
+					 * When all the tuples of outer table have been read,
+					 * and we are ready to process the first batch, it means
+					 * a good time to collect statistic info of all temp
+					 * files.
+					 */
+					if (hashtable->curbatch == 0)
+						SaveWorkFileSetStatsInfo(hashtable);
+
 					continue;
 				}
 
@@ -1478,6 +1490,18 @@ ExecHashJoinReloadHashTable(HashJoinState *hjstate)
 	}
 
 	return true;
+}
+
+static inline void SaveWorkFileSetStatsInfo(HashJoinTable hashtable)
+{
+	workfile_set *work_set = hashtable->work_set;
+	if (work_set)
+	{
+		hashtable->workset_num_files = work_set->num_files;
+		hashtable->workset_num_files_compressed = work_set->num_files_compressed;
+		hashtable->workset_avg_file_size = work_set->total_bytes / work_set->num_files;
+		hashtable->workset_compression_buf_total = work_set->compression_buf_total;
+	}
 }
 
 /* EOF */

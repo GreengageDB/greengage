@@ -1216,6 +1216,67 @@ select * from r where b in (select b from s where c=10 order by c);
 explain (costs off) select * from r where b in (select b from s where c=10 order by c limit 2);
 select * from r where b in (select b from s where c=10 order by c limit 2);
 
+-- Test nested query with aggregate inside a sublink,
+-- ORCA should correctly normalize the aggregate expression inside the
+-- sublink's nested query and the column variable accessed in aggregate should
+-- be accessible to the aggregate after the normalization of query.
+-- If the query is not supported, ORCA should gracefully fallback to postgres
+explain (COSTS OFF) with t0 AS (
+    SELECT
+       ROW_TO_JSON((SELECT x FROM (SELECT max(t.b)) x))
+       AS c
+    FROM r
+        JOIN s ON true
+        JOIN s as t ON  true
+   )
+SELECT c FROM t0;
+
+--
+-- Test case for ORCA semi join with random table
+-- See https://github.com/greenplum-db/gpdb/issues/16611
+--
+--- case for random distribute 
+create table table_left (l1 int, l2 int) distributed by (l1);
+create table table_right (r1 int, r2 int) distributed randomly;
+create index table_right_idx on table_right(r1);
+insert into table_left values (1,1);
+insert into table_right select i, i from generate_series(1, 300) i;
+insert into table_right select 1, 1 from generate_series(1, 100) i;
+
+--- make sure the same value (1,1) rows are inserted into different segments
+select count(distinct gp_segment_id) > 1 from table_right where r1 = 1;
+analyze table_left;
+analyze table_right;
+
+-- two types of semi join tests
+explain (costs off) select * from table_left where exists (select 1 from table_right where l1 = r1);
+select * from table_left where exists (select 1 from table_right where l1 = r1);
+explain (costs off) select * from table_left where l1 in (select r1 from table_right);
+select * from table_left where exists (select 1 from table_right where l1 = r1);
+
+--- case for replicate distribute
+alter table table_right set distributed replicated;
+explain (costs off) select * from table_left where exists (select 1 from table_right where l1 = r1);
+select * from table_left where exists (select 1 from table_right where l1 = r1);
+explain (costs off) select * from table_left where l1 in (select r1 from table_right);
+select * from table_left where exists (select 1 from table_right where l1 = r1);
+
+--- case for partition table with random distribute
+drop table table_right;
+create table table_right (r1 int, r2 int) distributed randomly partition by range (r1) ( start (0) end (300) every (100));
+create index table_right_idx on table_right(r1);
+insert into table_right select i, i from generate_series(1, 299) i;
+insert into table_right select 1, 1 from generate_series(1, 100) i;
+analyze table_right;
+explain (costs off) select * from table_left where exists (select 1 from table_right where l1 = r1);
+select * from table_left where exists (select 1 from table_right where l1 = r1);
+explain (costs off) select * from table_left where l1 in (select r1 from table_right);
+select * from table_left where exists (select 1 from table_right where l1 = r1);
+
+-- clean up
+drop table table_left;
+drop table table_right;
+
 -- Test that Explicit Redistribute Motion is applied properly for
 -- queries that have modifying operation inside a SubPlan. That
 -- requires the ModifyTable's top Flow node to be copied correctly inside

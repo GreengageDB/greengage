@@ -266,9 +266,12 @@ CXformJoin2IndexApplyGeneric::Transform(CXformContext *pxfctxt,
 				pexprGet = pexprCurrInnerChild;
 
 				if (NULL != groupingColsToCheck.Value() &&
-					!groupingColsToCheck->ContainsAll(distributionCols))
+					(!groupingColsToCheck->ContainsAll(distributionCols) ||
+					 ptabdescInner->GetRelDistribution() ==
+						 IMDRelation::EreldistrRandom))
 				{
-					// the grouping columns are not a superset of the distribution columns
+					// the grouping columns are not a superset of the distribution columns,
+					// or distribution columns are empty when the table is randomly distributed
 					return;
 				}
 			}
@@ -281,6 +284,16 @@ CXformJoin2IndexApplyGeneric::Transform(CXformContext *pxfctxt,
 				ptabdescInner = popDynamicGet->Ptabdesc();
 				distributionCols = popDynamicGet->PcrsDist();
 				pexprGet = pexprCurrInnerChild;
+
+				if (NULL != groupingColsToCheck.Value() &&
+					(!groupingColsToCheck->ContainsAll(distributionCols) ||
+					 ptabdescInner->GetRelDistribution() ==
+						 IMDRelation::EreldistrRandom))
+				{
+					// the grouping columns are not a superset of the distribution columns,
+					// or distribution columns are empty when the table is randomly distributed
+					return;
+				}
 			}
 			break;
 

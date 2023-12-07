@@ -634,6 +634,8 @@ workfile_mgr_create_set_internal(const char *operator_name, const char *prefix)
 	work_set->total_bytes = 0;
 	work_set->active = true;
 	work_set->pinned = false;
+	work_set->compression_buf_total = 0;
+	work_set->num_files_compressed = 0;
 
 	/* Track all workfile_sets created in current process */
 	if (!localCtl.initialized)

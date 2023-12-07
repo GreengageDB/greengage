@@ -362,7 +362,7 @@ def impl(context, dbname):
     drop_database(context, dbname)
 
 
-@given('{env_var} environment variable is not set')
+@given('"{env_var}" environment variable is not set')
 def impl(context, env_var):
     if not hasattr(context, 'orig_env'):
         context.orig_env = dict()
@@ -459,7 +459,7 @@ def impl(context, logdir):
             with open(recovery_progress_file, 'r') as fp:
                 context.recovery_lines = fp.readlines()
             for line in context.recovery_lines:
-                recovery_type, dbid, progress = line.strip().split(':', 2)
+                recovery_type, dbid, progress = line.strip().split(':')[:3]
                 progress_pattern = re.compile(get_recovery_progress_pattern(recovery_type))
                 # TODO: assert progress line in the actual hosts bb/rewind progress file
                 if re.search(progress_pattern, progress) and dbid.isdigit() and recovery_type in ['full', 'differential', 'incremental']:
@@ -1199,6 +1199,15 @@ def impl(context, options):
 def impl(context, options):
     context.execute_steps(u'''Then the user runs command "gpactivatestandby -a %s" from standby master''' % options)
     context.standby_was_activated = True
+
+
+@given('the user runs utility "{utility}" with master data directory and "{options}"')
+@when('the user runs utility "{utility}" with master data directory and "{options}"')
+@then('the user runs utility "{utility}" with master data directory and "{options}"')
+def impl(context, utility, options):
+    cmd = "{} -d {} {}".format(utility, master_data_dir, options)
+    context.execute_steps(u'''then the user runs command "%s"''' % cmd )
+
 
 @then('gpintsystem logs should {contain} lines about running backout script')
 def impl(context, contain):
@@ -2874,6 +2883,20 @@ def impl(context, command, target):
     if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
+
+@then('{command} should print "{target}" regex to logfile')
+def impl(context, command, target):
+    log_dir = _get_gpAdminLogs_directory()
+    filename = glob.glob('%s/%s_*.log' % (log_dir, command))[0]
+    contents = ''
+    with open(filename) as fr:
+        for line in fr:
+            contents += line
+
+    pat = re.compile(target)
+    if not pat.search(contents):
+        raise Exception("cannot find %s in %s" % (target, filename))
+
 @given('verify that a role "{role_name}" exists in database "{dbname}"')
 @then('verify that a role "{role_name}" exists in database "{dbname}"')
 def impl(context, role_name, dbname):
@@ -3040,6 +3063,17 @@ def impl(context, num_of_segments, num_of_hosts, hostnames):
 @given('there are no gpexpand_inputfiles')
 def impl(context):
     map(os.remove, glob.glob("gpexpand_inputfile*"))
+
+@given('there are no gpexpand tablespace input configuration files')
+def impl(context):
+    list(map(os.remove, glob.glob("{}/*.ts".format(context.working_directory))))
+    if len(glob.glob('{}/*.ts'.format(context.working_directory))) != 0:
+        raise Exception("expected no gpexpand tablespace input configuration files")
+
+@then('verify if a gpexpand tablespace input configuration file is created')
+def impl(context):
+    if len(glob.glob('{}/*.ts'.format(context.working_directory))) != 1:
+        raise Exception("expected gpexpand tablespace input configuration file to be created")
 
 @when('the user runs gpexpand with the latest gpexpand_inputfile with additional parameters {additional_params}')
 def impl(context, additional_params=''):
@@ -4280,6 +4314,69 @@ def impl(context, table, dbname, count):
     if int(count) != sum(current_row_count):
         raise Exception(
             "%s table in %s has %d rows, expected %d rows." % (table, dbname, sum(current_row_count), int(count)))
+
+@then('{command} should print the following lines {num} times to stdout')
+def impl(context, command, num):
+    """
+    Verify that each pattern occurs a specific number of times in the output.
+    """
+    expected_lines = context.text.strip().split('\n')
+    for expected_pattern in expected_lines:
+        match_count = len(re.findall(re.escape(expected_pattern), context.stdout_message))
+        if match_count != int(num):
+            raise Exception(
+                "Expected %s to occur %s times but Found %d times" .format(expected_pattern, num, match_count))
+
+
+
+
+@given('save the information of the database "{dbname}"')
+def impl(context, dbname):
+    with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
+        query = """SELECT datname,oid  FROM pg_database WHERE datname='{0}';""" .format(dbname)
+        datname, oid = dbconn.execSQLForSingletonRow(conn, query)
+        context.db_name = datname
+        context.db_oid = oid
+
+
+
+
+@then('the user waits until recovery_progress.file is created in {logdir} and verifies that all dbids progress with {stage} are present')
+def impl(context, logdir, stage):
+    all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
+    stage_patterns = []
+    for seg in failed_segments:
+        dbid = seg.getSegmentDbId()
+        if stage == "tablespace":
+            pat = "Syncing tablespace of dbid {} for oid".format(dbid)
+        else:
+            pat = "differential:{}" .format(dbid)
+        stage_patterns.append(pat)
+    if len(stage_patterns) == 0:
+        raise Exception('Failed to get the details of down segment')
+    attempt = 0
+    num_retries = 9000
+    log_dir = _get_gpAdminLogs_directory() if logdir == 'gpAdminLogs' else logdir
+    recovery_progress_file = '{}/recovery_progress.file'.format(log_dir)
+    while attempt < num_retries:
+        attempt += 1
+        if os.path.exists(recovery_progress_file):
+            if verify_elements_in_file(recovery_progress_file, stage_patterns):
+                return
+        time.sleep(0.1)
+        if attempt == num_retries:
+            raise Exception('Timed out after {} retries'.format(num_retries))
+
+
+def verify_elements_in_file(filename, elements):
+    with open(filename, 'r') as file:
+        content = file.read()
+        for element in elements:
+            if element not in content:
+                return False
+
+        return True
 
 @given('"LC_ALL" is different from English')
 def step_impl(context):

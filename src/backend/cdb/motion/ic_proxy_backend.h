@@ -13,7 +13,7 @@
 #define IC_PROXY_BACKEND_H
 
 #include "postgres.h"
-
+#include "port/atomics.h"
 #include "cdb/cdbinterconnect.h"
 
 #include <uv.h>
@@ -37,6 +37,8 @@ typedef struct ICProxyBackendContext
 	/* Pointer to ChunkTransportState * */
 	ChunkTransportState   *transportState;
 } ICProxyBackendContext;
+
+extern pg_atomic_uint32 *ic_proxy_peer_listener_failed;
 
 extern void ic_proxy_backend_connect(ICProxyBackendContext *context,
 									 ChunkTransportStateEntry *pEntry,

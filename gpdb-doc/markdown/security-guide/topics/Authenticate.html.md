@@ -369,7 +369,6 @@ For more details on how to create your server private key and certificate, refer
 The following Server settings need to be specified in the `postgresql.conf` configuration file:
 
 -   `ssl` *boolean*. Enables SSL connections.
--   `ssl_renegotiation_limit` *integer*. Specifies the data limit before key renegotiation.
 -   `ssl_ciphers` *string*. Configures the list SSL ciphers that are allowed. `ssl_ciphers` *overrides* any ciphers string specified in `/etc/openssl.cnf`. The default value `ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH` enables all ciphers except for ADH, LOW, EXP, and MD5 ciphers, and prioritizes ciphers by their strength.
 
     <br/>> **Note** With TLS 1.2 some ciphers in MEDIUM and HIGH strength still use NULL encryption \(no encryption for transport\), which the default `ssl_ciphers` string allows. To bypass NULL ciphers with TLS 1.2 use a string such as `TLSv1.2:!eNULL:!aNULL`.

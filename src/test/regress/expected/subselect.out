@@ -962,7 +962,11 @@ commit;
 --end_ignore
 -- Ensure that both planners produce valid plans for the query with the nested
 -- SubLink, which contains attributes referenced in query's GROUP BY clause.
--- The inner part of SubPlan should contain only t.j.
+-- Due to presence of non-grouping columns in targetList, ORCA performs query
+-- normalization, during which ORCA establishes a correspondence between vars
+-- from targetlist entries to grouping attributes. And this process should
+-- correctly handle nested structures. The inner part of SubPlan in the test
+-- should contain only t.j.
 -- start_ignore
 drop table if exists t;
 NOTICE:  table "t" does not exist, skipping
@@ -1000,8 +1004,12 @@ group by i, j;
 
 -- Ensure that both planners produce valid plans for the query with the nested
 -- SubLink when this SubLink is inside the GROUP BY clause. Attribute, which is
--- not grouping column, is added to query targetList to make ORCA perform query
--- normalization. For ORCA the fallback shouldn't occur.
+-- not grouping column (1 as c), is added to query targetList to make ORCA
+-- perform query normalization. During normalization ORCA modifies the vars of
+-- the grouping elements of targetList in order to produce a new Query tree.
+-- The modification of vars inside nested part of SubLinks should be handled
+-- correctly. ORCA shouldn't fall back due to missing variable entry as a result
+-- of incorrect query normalization.
 explain (verbose, costs off)
 select j, 1 as c,
 (select j from (select j) q2) q1
@@ -1038,8 +1046,9 @@ group by j, q1;
 (1 row)
 
 -- Ensure that both planners produce valid plans for the query with the nested
--- SubLink, and this SubLink is under the aggregation. For ORCA the fallback
--- shouldn't occur.
+-- SubLink, and this SubLink is under aggregation. ORCA shouldn't fall back due
+-- to missing variable entry as a result of incorrect query normalization. ORCA
+-- should correctly process args of the aggregation during normalization.
 explain (verbose, costs off)
 select (select max((select t.i))) from t;
                    QUERY PLAN                   

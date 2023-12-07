@@ -3298,6 +3298,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+			{"gp_detect_data_correctness", PGC_USERSET, UNGROUPED,
+			 gettext_noop("Detect if the current partitioning of the table or data distribution is correct."),
+			 NULL,
+			 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+			},
+			&gp_detect_data_correctness,
+			false,
+			NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL
@@ -3508,6 +3519,17 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"gp_workfile_compression_overhead_limit", PGC_USERSET, RESOURCES,
+			gettext_noop("The overhead memory (kB) limit for all compressed workfiles of a single workfile_set."),
+			gettext_noop("0 for no limit. Once the limit is hit, the following files will not be compressed."),
+			GUC_UNIT_KB
+		},
+		&gp_workfile_compression_overhead_limit,
+		2048 * 1024, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_workfile_limit_per_segment", PGC_POSTMASTER, RESOURCES,
 			gettext_noop("Maximum disk space (in KB) used for workfiles per segment."),
 			gettext_noop("0 for no limit. Current query is terminated when limit is exceeded."),
@@ -3668,6 +3690,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&Gp_interconnect_snd_queue_depth,
 		2, 1, 4096,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_interconnect_cursor_ic_table_size", PGC_USERSET, GP_ARRAY_TUNING,
+			gettext_noop("Sets the size of Cursor Table in the UDP interconnect"),
+			gettext_noop("You can try to increase it when a UDF which contains many concurrent "
+						 "cursor queries hangs. The default value is 128.")
+		},
+		&Gp_interconnect_cursor_ic_table_size,
+		128, 128, 102400,
 		NULL, NULL, NULL
 	},
 

@@ -18,6 +18,8 @@
 #include "storage/ipc.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "storage/shmem.h"
+#include "port/atomics.h"
 
 #include "ic_proxy_server.h"
 #include "ic_proxy_addr.h"
@@ -36,6 +38,8 @@ static uv_timer_t	ic_proxy_server_timer;
 
 static uv_tcp_t		ic_proxy_peer_listener;
 static bool			ic_proxy_peer_listening;
+/* flag (in SHM) for incidaing if peer listener bind/listen failed */
+pg_atomic_uint32 	*ic_proxy_peer_listener_failed;
 
 static uv_pipe_t	ic_proxy_client_listener;
 static bool			ic_proxy_client_listening;
@@ -144,8 +148,12 @@ ic_proxy_server_peer_listener_init(uv_loop_t *loop)
 	if (ic_proxy_addrs == NIL)
 		return;
 
+	Assert(ic_proxy_peer_listener_failed != NULL);
 	if (ic_proxy_peer_listening)
+	{
+		Assert(pg_atomic_read_u32(ic_proxy_peer_listener_failed) == 0);
 		return;
+	}
 
 	/* Get the addr from the gp_interconnect_proxy_addresses */
 	addr = ic_proxy_get_my_addr();
@@ -185,6 +193,7 @@ ic_proxy_server_peer_listener_init(uv_loop_t *loop)
 	{
 		elog(WARNING, "ic-proxy: tcp: fail to bind: %s",
 					 uv_strerror(ret));
+		pg_atomic_exchange_u32(ic_proxy_peer_listener_failed, 1);
 		return;
 	}
 
@@ -194,6 +203,7 @@ ic_proxy_server_peer_listener_init(uv_loop_t *loop)
 	{
 		elog(WARNING, "ic-proxy: tcp: fail to listen: %s",
 					 uv_strerror(ret));
+		pg_atomic_exchange_u32(ic_proxy_peer_listener_failed, 1);
 		return;
 	}
 
@@ -201,6 +211,7 @@ ic_proxy_server_peer_listener_init(uv_loop_t *loop)
 	elogif(gp_log_interconnect >= GPVARS_VERBOSITY_VERBOSE, LOG,
 		   "ic-proxy: tcp: listening on socket %d", fd);
 
+	pg_atomic_exchange_u32(ic_proxy_peer_listener_failed, 0);
 	ic_proxy_peer_listening = true;
 }
 
@@ -431,10 +442,10 @@ int
 ic_proxy_server_main(void)
 {
 	char		path[MAXPGPATH];
-
 	elogif(gp_log_interconnect >= GPVARS_VERBOSITY_TERSE,
 		   LOG, "ic-proxy: server setting up");
 
+	pg_atomic_exchange_u32(ic_proxy_peer_listener_failed, 0);
 	ic_proxy_pkt_cache_init(IC_PROXY_MAX_PKT_SIZE);
 
 	uv_loop_init(&ic_proxy_server_loop);

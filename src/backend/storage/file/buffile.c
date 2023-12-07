@@ -134,7 +134,19 @@ struct BufFile
 	/* This holds holds compressed input, during decompression. */
 	ZSTD_inBuffer compressed_buffer;
 	bool		decompression_finished;
+
+	/* Memory usage by ZSTD compression buffer */
+	size_t      compressed_buffer_size;
 #endif
+
+	/*
+	 * workfile_set for the files in current buffile. The workfile_set creator
+	 * should take care of the workfile_set's lifecycle. So, no need to call
+	 * workfile_mgr_close_set under the buffile logic.
+	 * If the workfile_set is created in BufFileCreateTemp. The workfile_set
+	 * should get freed once all the files in it are closed in BufFileClose.
+	 */
+	workfile_set *work_set;
 };
 
 /*
@@ -176,6 +188,10 @@ makeBufFile(File firstfile)
 	file->nbytes = 0;
 	file->maxoffset = 0L;
 	file->buffer = palloc(BLCKSZ);
+
+#ifdef USE_ZSTD
+	file->compressed_buffer_size = 0;
+#endif
 
 	return file;
 }
@@ -227,6 +243,7 @@ BufFileCreateTempInSet(workfile_set *work_set, bool interXact)
 	file = makeBufFile(pfile);
 	file->isTemp = true;
 
+	file->work_set = work_set;
 	FileSetIsWorkfile(file->file);
 	RegisterFileWithSet(file->file, work_set);
 
@@ -288,6 +305,7 @@ BufFileCreateNamedTemp(const char *fileName, bool interXact, workfile_set *work_
 
 	if (work_set)
 	{
+		file->work_set = work_set;
 		FileSetIsWorkfile(file->file);
 		RegisterFileWithSet(file->file, work_set);
 	}
@@ -986,11 +1004,26 @@ bool gp_workfile_compression;		/* GUC */
 void
 BufFilePledgeSequential(BufFile *buffile)
 {
+	workfile_set *work_set = buffile->work_set;
+
 	if (buffile->maxoffset != 0)
 		elog(ERROR, "cannot pledge sequential access to a temporary file after writing it");
 
-	if (gp_workfile_compression)
+	AssertImply(work_set->compression_buf_total > 0, gp_workfile_compression);
+
+	/*
+	 * If gp_workfile_compression_overhead_limit is 0, it means no limit for
+	 * memory used by compressed work files. Othersize, compress the work file
+	 * only when the used memory size is under the limit.
+	 */
+	if (gp_workfile_compression &&
+		(gp_workfile_compression_overhead_limit == 0 ||
+		 work_set->compression_buf_total <
+			gp_workfile_compression_overhead_limit * 1024UL))
+	{
 		BufFileStartCompression(buffile);
+		work_set->num_files_compressed++;
+	}
 }
 
 /*
@@ -1072,6 +1105,7 @@ static void
 BufFileDumpCompressedBuffer(BufFile *file, const void *buffer, Size nbytes)
 {
 	ZSTD_inBuffer input;
+	size_t compressed_buffer_size = 0;
 
 	file->uncompressed_bytes += nbytes;
 
@@ -1104,6 +1138,32 @@ BufFileDumpCompressedBuffer(BufFile *file, const void *buffer, Size nbytes)
 			file->maxoffset += wrote;
 		}
 	}
+
+	/*
+	 * Calculate the delta of buffer used by ZSTD stream and take it into
+	 * account to work_set->comp_buf_total.
+	 * On GPDB 7X, we call ZSTD API ZSTD_sizeof_CStream() to get the buffer
+	 * size. However, the API is unavaliable on 6X (marked as
+	 * ZSTD_STATIC_LINKING_ONLY) due to different version of ZSTD lib.
+	 * After some experiments, it's proved that the compression buffer size
+	 * per file is pretty stable (about 1.3MB) regard of the temp file size,
+	 * so we simply use the hard-coded value here.
+	 * We may use the API ZSTD_sizeof_CStream() in future if the ZSTD lib
+	 * version is updated on 6X.
+	 */
+
+	compressed_buffer_size = 1.3 * 1024 * 1024;
+
+	/*
+	 * As ZSTD comments said, the memory usage can evolve (increase or
+	 * decrease) over time. We update work_set->compressed_buffer_size only
+	 * when compressed_buffer_size increases. It means we apply the comp buff
+	 * limit to max ever memory usage and ignore the case of memory decreasing.
+	 */
+	if (compressed_buffer_size > file->compressed_buffer_size)
+		file->work_set->compression_buf_total
+			+= compressed_buffer_size - file->compressed_buffer_size;
+	file->compressed_buffer_size = compressed_buffer_size;
 }
 
 /*

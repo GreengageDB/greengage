@@ -4,8 +4,6 @@ title: Configuring Your Systems
 
 Describes how to prepare your operating system environment for Greenplum Database software installation.
 
-> **Caution** Do not install anti-virus software of any type on Greenplum Database hosts. VMware Greenplum is not supported for use with anti-virus software because the additional CPU and IO load interferes with Greenplum Database operations.
-
 Perform the following tasks in order:
 
 1.  Make sure your host systems meet the requirements described in [Platform Requirements](platform-requirements-overview.html).
@@ -64,7 +62,7 @@ If you choose to enable SELinux in `Enforcing` mode, then Greenplum processes an
 
 ## <a id="topic_et2_y22_4nb"></a>Deactivate or Configure Firewall Software 
 
-You should also deactivate firewall software such as `iptables` \(on systems such as RHEL 6.x and CentOS 6.x \), `firewalld` \(on systems such as RHEL 7.x and CentOS 7.x\), or `ufw` \(on Ubuntu systems, deactivated by default\). If firewall software is not deactivated, you must instead configure your software to allow required communication between Greenplum hosts.
+You should also deactivate firewall software such as `iptables` \(on systems such as RHEL 6.x and CentOS 6.x \), `firewalld` \(on systems such as RHEL 7.x and CentOS 7.x and later\), or `ufw` \(on Ubuntu systems, deactivated by default\). If firewall software is not deactivated, you must instead configure your software to allow required communication between Greenplum hosts.
 
 To deactivate `iptables`:
 
@@ -302,7 +300,7 @@ Set the following parameters in the `/etc/security/limits.conf` file:
 * hard nproc 131072
 ```
 
-For Red Hat Enterprise Linux \(RHEL\) and CentOS systems, parameter values in the `/etc/security/limits.d/90-nproc.conf` file \(RHEL/CentOS 6\) or `/etc/security/limits.d/20-nproc.conf` file \(RHEL/CentOS 7\) override the values in the `limits.conf` file. Ensure that any parameters in the override file are set to the required value. The Linux module `pam_limits` sets user limits by reading the values from the `limits.conf` file and then from the override file. For information about PAM and user limits, see the documentation on PAM and `pam_limits`.
+For Red Hat Enterprise Linux \(RHEL\) and CentOS systems, parameter values in the `/etc/security/limits.d/90-nproc.conf` file \(RHEL/CentOS 6\) or `/etc/security/limits.d/20-nproc.conf` file \(RHEL/CentOS 7 and later\) override the values in the `limits.conf` file. Ensure that any parameters in the override file are set to the required value. The Linux module `pam_limits` sets user limits by reading the values from the `limits.conf` file and then from the override file. For information about PAM and user limits, see the documentation on PAM and `pam_limits`.
 
 Run the `ulimit -u` command on each segment host to display the maximum number of processes that are available to each user. Validate that the return value is 131072.
 
@@ -335,7 +333,7 @@ XFS is the preferred data storage file system on Linux platforms. Use the `mount
 rw,nodev,noatime,nobarrier,inode64
 ```
 
-The `nobarrier` option is not supported on RHEL 8 or Ubuntu systems. Use only the options:
+The `nobarrier` option is not supported on RHEL 8 or Ubuntu systems or later. Use only the options:
 
 ```
 rw,nodev,noatime,inode64
@@ -414,7 +412,7 @@ The XFS options can also be set in the `/etc/fstab` file. This example entry fro
       <tbody>
         <tr>
           <td>Non-Volatile Memory Express (NVMe)</td>
-          <td>RHEL 7</br>RHEL 8</br>Ubuntu</td>
+          <td>RHEL 7</br>RHEL 8</br>RHEL 9</br>Ubuntu</td>
           <td><code>none</code></td>
         </tr>
         <tr>
@@ -423,7 +421,7 @@ The XFS options can also be set in the `/etc/fstab` file. This example entry fro
           <td><code>noop</code></td>
         </tr>
         <tr>
-          <td>RHEL 8</br>Ubuntu</td>
+          <td>RHEL 8</br>RHEL 9</br>Ubuntu</td>
           <td><code>none</code></td>
         </tr>
         <tr>
@@ -432,7 +430,7 @@ The XFS options can also be set in the `/etc/fstab` file. This example entry fro
           <td><code>deadline</code></td>
         </tr>
         <tr>
-          <td>RHEL 8</br>Ubuntu</td>
+          <td>RHEL 8</br>RHEL 9</br>Ubuntu</td>
           <td><code>mq-deadline</code></td>
         </tr>
       </tbody>
@@ -452,7 +450,7 @@ The XFS options can also be set in the `/etc/fstab` file. This example entry fro
 
     > **Note** Using the `echo` command to set the disk I/O scheduler policy is not persistent; you must ensure that you run the command whenever the system reboots. How to run the command will vary based on your system.
 
-    To specify the I/O scheduler at boot time on systems that use `grub2` such as RHEL 7.x or CentOS 7.x, use the system utility `grubby`. This command adds the parameter when run as `root`:
+    To specify the I/O scheduler at boot time on systems that use `grub2` such as RHEL 7.x or CentOS 7.x and later, use the system utility `grubby`. This command adds the parameter when run as `root`:
 
     ```
     # grubby --update-kernel=ALL --args="elevator=deadline"
@@ -466,9 +464,9 @@ The XFS options can also be set in the `/etc/fstab` file. This example entry fro
     # grubby --info=ALL
     ```
 
-    Refer to your operating system documentation for more information about the `grubby` utility. If you used the `grubby` command to configure the disk scheduler on a RHEL or CentOS 7.x system and it does not update the kernels, see the [Note](#grubby_note) at the end of the section.
+    Refer to your operating system documentation for more information about the `grubby` utility. If you used the `grubby` command to configure the disk scheduler on a RHEL or CentOS 7.x system and later and it does not update the kernels, see the [Note](#grubby_note) at the end of the section.
 
-    For additional information about configuring the disk scheduler, refer to the RedHat Enterprise Linux documentation for [RHEL 7](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-storage_and_file_systems-configuration_tools#sect-Red_Hat_Enterprise_Linux-Performance_Tuning_Guide-Configuration_tools-Setting_the_default_IO_scheduler) or [RHEL 8](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/monitoring_and_managing_system_status_and_performance/setting-the-disk-scheduler_monitoring-and-managing-system-status-and-performance). The Ubuntu wiki [IOSchedulers](https://wiki.ubuntu.com/Kernel/Reference/IOSchedulers) topic describes the I/O schedulers available on Ubuntu systems.
+    For additional information about configuring the disk scheduler, refer to the RedHat Enterprise Linux documentation for [RHEL 7](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/performance_tuning_guide/sect-red_hat_enterprise_linux-performance_tuning_guide-storage_and_file_systems-configuration_tools#sect-Red_Hat_Enterprise_Linux-Performance_Tuning_Guide-Configuration_tools-Setting_the_default_IO_scheduler), [RHEL 8](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/monitoring_and_managing_system_status_and_performance/setting-the-disk-scheduler_monitoring-and-managing-system-status-and-performance), or [RHEL 9](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/monitoring_and_managing_system_status_and_performance/setting-the-disk-scheduler_monitoring-and-managing-system-status-and-performance). The Ubuntu wiki [IOSchedulers](https://wiki.ubuntu.com/Kernel/Reference/IOSchedulers) topic describes the I/O schedulers available on Ubuntu systems.
 
 
 ### <a id="networking"></a>Networking
@@ -498,7 +496,7 @@ kernel /vmlinuz-2.6.18-274.3.1.el5 ro root=LABEL=/
            initrd /initrd-2.6.18-274.3.1.el5.img
 ```
 
-On systems that use `grub2` such as RHEL 7.x or CentOS 7.x, use the system utility `grubby`. This command adds the parameter when run as root.
+On systems that use `grub2` such as RHEL 7.x or CentOS 7.x and later, use the system utility `grubby`. This command adds the parameter when run as root.
 
 ```
 # grubby --update-kernel=ALL --args="transparent_hugepage=never"

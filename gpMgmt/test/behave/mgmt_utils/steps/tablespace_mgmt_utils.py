@@ -1,6 +1,6 @@
 import pipes
 import tempfile
-import time
+import os
 
 from behave import given, then
 from pygresql import pg
@@ -9,6 +9,8 @@ from gppylib.db import dbconn
 from gppylib.gparray import GpArray
 from test.behave_utils.utils import run_cmd,wait_for_database_dropped
 from gppylib.commands.base import Command, REMOTE
+from gppylib.commands.unix import get_remote_link_path
+from contextlib import closing
 
 class Tablespace:
     def __init__(self, name):
@@ -72,6 +74,32 @@ class Tablespace:
             raise Exception("Tablespace data is not identically distributed. Expected:\n%r\n but found:\n%r" % (
                 sorted(self.initial_data), sorted(data)))
 
+    def verify_symlink(self, hostname=None, port=0):
+        url = dbconn.DbURL(hostname=hostname, port=port, dbname=self.dbname)
+        gparray = GpArray.initFromCatalog(url)
+        all_segments = gparray.getDbList()
+
+        # fetching oid of available user created tablespaces
+        with closing(dbconn.connect(url, unsetSearchPath=False)) as conn:
+            tblspc_oids = dbconn.execSQL(conn, "SELECT oid FROM pg_tablespace WHERE spcname NOT IN ('pg_default', 'pg_global')").fetchall()
+
+        if not tblspc_oids:
+            return None  # no table space is present
+
+        # keeping a list to check if any of the symlink has duplicate entry
+        tblspc = []
+        for seg in all_segments:
+            for tblspc_oid in tblspc_oids:
+                symlink_path = os.path.join(seg.getSegmentTableSpaceDirectory(), str(tblspc_oid[0]))
+                target_path = get_remote_link_path(symlink_path, seg.getSegmentHostName())
+                segDbId = seg.getSegmentDbId()
+                #checking for duplicate and wrong symlink target
+                if target_path in tblspc or os.path.basename(target_path) != str(segDbId):
+                    raise Exception("tablespac has invalid/duplicate symlink for oid {0} in segment dbid {1}".\
+                        format(str(tblspc_oid[0]),str(segDbId)))
+
+                tblspc.append(target_path)
+
     def verify_for_gpexpand(self, hostname=None, port=0):
         """
         For gpexpand, we need make sure:
@@ -98,6 +126,14 @@ class Tablespace:
             raise Exception("Tablespace data is not identically distributed after running gp_expand. "
                             "Expected pre-gpexpand data:\n%\n but found post-gpexpand data:\n%r" % (
                                 sorted(self.initial_data), sorted(data)))
+
+    def insert_more_data(self):
+        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+            db = pg.DB(conn)
+            db.query("CREATE TABLE tbl_1 (i int) DISTRIBUTED RANDOMLY")
+            db.query("INSERT INTO tbl_1 VALUES (GENERATE_SERIES(0, 100000000))")
+            db.query("CREATE TABLE tbl_2 (i int) DISTRIBUTED RANDOMLY")
+            db.query("INSERT INTO tbl_2 VALUES (GENERATE_SERIES(0, 100000000))")
 
 
 def _checkpoint_and_wait_for_replication_replay(db):
@@ -191,6 +227,9 @@ def _create_tablespace_with_data(context, name):
 def impl(context):
     context.tablespaces["outerspace"].verify()
 
+@then('the tablespace has valid symlink')
+def impl(context):
+    context.tablespaces["outerspace"].verify_symlink()
 
 @then('the tablespace is valid on the standby master')
 def impl(context):
@@ -212,3 +251,8 @@ def impl(context):
     for tablespace in context.tablespaces.values():
         tablespace.cleanup()
     context.tablespaces = {}
+
+@given('insert additional data into the tablespace')
+def impl(context):
+    context.tablespaces["outerspace"].insert_more_data()
+

@@ -34,6 +34,7 @@
 #include "cdb/cdbvars.h"
 #include "cdb/ml_ipc.h"
 #include "executor/execdesc.h"
+#include "storage/shmem.h"
 
 #include "ic_proxy.h"
 #include "ic_proxy_backend.h"
