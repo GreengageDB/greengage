@@ -291,9 +291,7 @@ CreateOpFamily(char *amname, char *opfname, Oid namespaceoid, Oid amoid)
 
 	tup = heap_form_tuple(rel->rd_att, values, nulls);
 
-	opfamilyoid = simple_heap_insert(rel, tup);
-
-	CatalogUpdateIndexes(rel, tup);
+	opfamilyoid = CatalogTupleInsert(rel, tup);
 
 	heap_freetuple(tup);
 
@@ -661,9 +659,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 
 	tup = heap_form_tuple(rel->rd_att, values, nulls);
 
-	opclassoid = simple_heap_insert(rel, tup);
-
-	CatalogUpdateIndexes(rel, tup);
+	opclassoid = CatalogTupleInsert(rel, tup);
 
 	heap_freetuple(tup);
 
@@ -1368,9 +1364,7 @@ storeOperators(List *opfamilyname, Oid amoid,
 
 		tup = heap_form_tuple(rel->rd_att, values, nulls);
 
-		entryoid = simple_heap_insert(rel, tup);
-
-		CatalogUpdateIndexes(rel, tup);
+		entryoid = CatalogTupleInsert(rel, tup);
 
 		heap_freetuple(tup);
 
@@ -1479,9 +1473,7 @@ storeProcedures(List *opfamilyname, Oid amoid,
 
 		tup = heap_form_tuple(rel->rd_att, values, nulls);
 
-		entryoid = simple_heap_insert(rel, tup);
-
-		CatalogUpdateIndexes(rel, tup);
+		entryoid = CatalogTupleInsert(rel, tup);
 
 		heap_freetuple(tup);
 
@@ -1620,7 +1612,7 @@ RemoveOpFamilyById(Oid opfamilyOid)
 	if (!HeapTupleIsValid(tup)) /* should not happen */
 		elog(ERROR, "cache lookup failed for opfamily %u", opfamilyOid);
 
-	simple_heap_delete(rel, &tup->t_self);
+	CatalogTupleDelete(rel, &tup->t_self);
 
 	ReleaseSysCache(tup);
 
@@ -1639,7 +1631,7 @@ RemoveOpClassById(Oid opclassOid)
 	if (!HeapTupleIsValid(tup)) /* should not happen */
 		elog(ERROR, "cache lookup failed for opclass %u", opclassOid);
 
-	simple_heap_delete(rel, &tup->t_self);
+	CatalogTupleDelete(rel, &tup->t_self);
 
 	ReleaseSysCache(tup);
 
@@ -1669,7 +1661,7 @@ RemoveAmOpEntryById(Oid entryOid)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "could not find tuple for amop entry %u", entryOid);
 
-	simple_heap_delete(rel, &tup->t_self);
+	CatalogTupleDelete(rel, &tup->t_self);
 
 	systable_endscan(scan);
 	heap_close(rel, RowExclusiveLock);
@@ -1698,7 +1690,7 @@ RemoveAmProcEntryById(Oid entryOid)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "could not find tuple for amproc entry %u", entryOid);
 
-	simple_heap_delete(rel, &tup->t_self);
+	CatalogTupleDelete(rel, &tup->t_self);
 
 	systable_endscan(scan);
 	heap_close(rel, RowExclusiveLock);

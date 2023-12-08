@@ -394,6 +394,16 @@ SELECT encoding from gp_dist_random('pg_exttable') where urilocation='{gpfdist:/
 
 DROP EXTERNAL TABLE issue_9727;
 RESET client_encoding;
+-- Test "DROP OWNED BY" when everything of the protocol is granted to some user.
+-- GitHub Issue #12748: https://github.com/greenplum-db/gpdb/issues/12748
+CREATE TRUSTED PROTOCOL dummy_protocol_issue_12748 (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE ROLE test_role_issue_12748;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+GRANT ALL ON PROTOCOL dummy_protocol_issue_12748 TO test_role_issue_12748;
+DROP OWNED BY test_role_issue_12748;
+-- Clean up.
+DROP ROLE test_role_issue_12748;
+DROP PROTOCOL dummy_protocol_issue_12748;
 --
 -- WET tests
 --

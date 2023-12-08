@@ -361,6 +361,12 @@ if (options.zip is None and
     options.zip = '9'
 
 try:
+    if (begin and end) and begin >= end:
+        raise IOError(
+            'Invalid arguments: "begin" date (%s) is >= "end" date (%s)'
+            % (begin, end)
+        )
+
     # If no inputfile arg, try MASTER_DATA_DIRECTORY environment variable
     if len(args) == 0:
         s = os.getenv('MASTER_DATA_DIRECTORY')
@@ -400,44 +406,27 @@ try:
                    % (begin or 'beginning of data', end or 'end of data'))
             print >> sys.stderr, msg
 
-        # Loop over input files
-        for ifn in args:
-            """ 
-            Open each file in the logs directory. Check to see if the file name
-            looks anything like a log file name with a time stamp that we 
-            recognize. If true, and the user specified a time range, skip the
-            file if it is outside the range. That is, close the file and any
-            associated temporary files.
+        # transform given array of log names (args array) into corresponding
+        # array of LogNameInfo structures. Final array is concatenation of
+        # LogNameInfo arrays with and without timestamps in log names.
+        # Both arrays are ordered:
+        # - first part is ordered by the time stamp of log name and after by
+        #   name (in case of time stamp equality)
+        # - second part is ordered by name and lays out at the end
+        # All LogNameInfo structures are marked for belonging to the user
+        # specified time range. Log names without time stamp always should
+        # be processed, because them may contain log entries inside specified
+        # range, so LogNameInfo for such names always marked as belonging to
+        # the range.
+        logsInfoArr = getLogInfoArrayByNamesOrderedAndMarkedInTSRange(args, begin, end)
 
-            All other files with names that do not look like time stamps are
-            processed. That is, their log information is extracted, and if 
-            the user specified a time range, only those entries that are
-            within that range are kept.
-            """
+        for logInfo in logsInfoArr:
+            if not logInfo.belongsToTimeRangeFilter:
+                print >> sys.stderr, "SKIP file: %s" % logInfo.name
+                continue
+
             # Open next input file
-            fileIn, inputFilesToClose, ifn, zname = openInputFile(ifn, options)
-
-            # if we can skip the whole file, let's do so
-            if zname.startswith('gpdb') and zname.endswith('.csv'):
-                goodFormat = True
-                try:
-                    # try format YYYY-MM-DD_HHMMSS
-                    filedate = datetime.strptime(zname[5:-4], '%Y-%m-%d_%H%M%S')
-                except:
-                    try:
-                        # try format YYYY-MM-DD
-                        filedate = datetime.strptime(zname[5:-4], '%Y-%m-%d')
-                    except:
-                        # the format isn't anything I understand
-                        goodFormat = False
-
-                if goodFormat and begin and filedate < begin:
-                    if end and filedate > end:
-                        print >> sys.stderr, "SKIP file: %s" % zname
-                        for f in inputFilesToClose:
-                            f.close()
-                        inputFilesToClose = []
-                        continue
+            fileIn, inputFilesToClose, ifn, zname = openInputFile(logInfo.name, options)
 
             # Announce each input file *before* its output file if --out is dir
             if options.verbose and outputFilePerInputFile:

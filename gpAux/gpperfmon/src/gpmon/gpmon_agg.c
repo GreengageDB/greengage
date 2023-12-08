@@ -1304,7 +1304,6 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 	char timfinished[GPMON_DATE_BUF_SIZE];
 	double cpu_skew = 0.0f;
 	double row_skew = 0.0f;
-	int query_hash = 0;
 	apr_int64_t rowsout = 0;
 	float cpu_current;
 	cpu_skew = get_cpu_skew(qdnode);
@@ -1340,7 +1339,7 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 		snprintf(timfinished, GPMON_DATE_BUF_SIZE,  "null");
 	}
 
-	snprintf(line, line_size, "%s|%d|%d|%d|%s|%s|%d|%s|%s|%s|%s|%" FMT64 "|%" FMT64 "|%.4f|%.2f|%.2f|%d",
+	snprintf(line, line_size, "%s|%d|%d|%d|%s|%s|%d|%s|%s|%s|%s|%" FMT64 "|%" FMT64 "|%.4f|%.2f|%.2f",
 		nowstr,
 		qdnode->qlog.key.tmid,
 		qdnode->qlog.key.ssid,
@@ -1356,8 +1355,7 @@ static void fmt_qlog(char* line, const int line_size, qdnode_t* qdnode, const ch
 		qdnode->qlog.cpu_elapsed,
 		cpu_current,
 		cpu_skew,
-		row_skew,
-		query_hash);
+		row_skew);
 }
 
 
@@ -1377,8 +1375,8 @@ static apr_uint32_t write_qlog(FILE* fp, qdnode_t *qdnode, const char* nowstr, a
 	}
 	else
 	{
-		/* Query text "joined" by python script */
-		fprintf(fp, "%s|||||\n", line);
+		fputs(line, fp);
+		fputc('\n', fp);
 		return bytes_written;
 	}
 }
@@ -1476,7 +1474,9 @@ static apr_uint32_t write_qlog_full(FILE* fp, qdnode_t *qdnode, const char* nows
 		return 0;
 	}
 
-	fprintf(fp, "%s", line);
+	/* The query hash column is always 0 */
+	fprintf(fp, "%s|0", line);
+	bytes_written += 2;
 
 	snprintf(qfname, qfname_size, GPMON_DIR "q%d-%d-%d.txt", qdnode->qlog.key.tmid,
             qdnode->qlog.key.ssid, qdnode->qlog.key.ccnt);

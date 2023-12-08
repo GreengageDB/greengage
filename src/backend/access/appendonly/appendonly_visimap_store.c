@@ -149,14 +149,12 @@ AppendOnlyVisimapStore_Store(
 	 */
 	if (ItemPointerIsValid(&visiMapEntry->tupleTid))
 	{
-		simple_heap_update(visimapRelation, &visiMapEntry->tupleTid, tuple);
+		CatalogTupleUpdate(visimapRelation, &visiMapEntry->tupleTid, tuple);
 	}
 	else
 	{
-		simple_heap_insert(visimapRelation, tuple);
+		CatalogTupleInsert(visimapRelation, tuple);
 	}
-
-	CatalogUpdateIndexes(visimapRelation, tuple);
 
 	heap_freetuple(tuple);
 
@@ -333,7 +331,7 @@ AppendOnlyVisimapStore_DeleteSegmentFile(
 										  NULL,
 										  &tid))
 	{
-		simple_heap_delete(visiMapStore->visimapRelation,
+		CatalogTupleDelete(visiMapStore->visimapRelation,
 						   &tid);
 	}
 	AppendOnlyVisimapStore_EndScan(visiMapStore, indexScan);

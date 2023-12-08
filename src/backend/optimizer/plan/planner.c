@@ -923,6 +923,24 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 		SS_finalize_plan(root, plan, true);
 	}
 
+	/*
+	 * If plan contains volatile functions in the target list, then we need
+	 * bring it to SingleQE
+	 */
+	if (plan->flow->locustype == CdbLocusType_General &&
+		(contain_volatile_functions((Node *) plan->targetlist) ||
+		 contain_volatile_functions(parse->havingQual)))
+	{
+		plan->flow->locustype = CdbLocusType_SingleQE;
+		plan->flow->flotype = FLOW_SINGLETON;
+	}
+	else if (plan->flow->locustype == CdbLocusType_SegmentGeneral &&
+		(contain_volatile_functions((Node *) plan->targetlist) ||
+		 contain_volatile_functions(parse->havingQual)))
+	{
+		plan = (Plan *) make_motion_gather(root, plan, NIL, CdbLocusType_SingleQE);
+	}
+
 	/* Return internal info if caller wants it */
 	if (subroot)
 		*subroot = root;

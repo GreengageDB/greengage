@@ -382,11 +382,11 @@ typedef struct ResultRelInfo
 	uint64		ri_aoprocessed; /* tuples added/deleted for AO */
 	struct AttrMap *ri_partInsertMap;
 	TupleTableSlot *ri_resultSlot;
-	/* Parent relation in checkPartitionUpdate */
+	/* Parent relation in makePartitionCheckMap */
 	Relation	ri_PartitionParent;
-	/* tupdesc_match for checkPartitionUpdate */
+	/* tupdesc_match for makePartitionCheckMap */
 	int			ri_PartCheckTupDescMatch;
-	/* Attribute map in checkPartitionUpdate */
+	/* Attribute map in makePartitionCheckMap */
 	struct AttrMap *ri_PartCheckMap;
 
 	/*

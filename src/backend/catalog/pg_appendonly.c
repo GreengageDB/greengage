@@ -91,8 +91,7 @@ InsertAppendOnlyEntry(Oid relid,
 	pg_appendonly_tuple = heap_form_tuple(RelationGetDescr(pg_appendonly_rel), values, nulls);
 
 	/* insert a new tuple */
-	simple_heap_insert(pg_appendonly_rel, pg_appendonly_tuple);
-	CatalogUpdateIndexes(pg_appendonly_rel, pg_appendonly_tuple);
+	CatalogTupleInsert(pg_appendonly_rel, pg_appendonly_tuple);
 
 	/*
      * Close the pg_appendonly_rel relcache entry without unlocking.
@@ -308,8 +307,7 @@ UpdateAppendOnlyEntryAuxOids(Oid relid,
 	}
 	newTuple = heap_modify_tuple(tuple, RelationGetDescr(pg_appendonly),
 								 newValues, newNulls, replace);
-	simple_heap_update(pg_appendonly, &newTuple->t_self, newTuple);
-	CatalogUpdateIndexes(pg_appendonly, newTuple);
+	CatalogTupleUpdate(pg_appendonly, &newTuple->t_self, newTuple);
 
 	heap_freetuple(newTuple);
 
@@ -528,8 +526,7 @@ TransferAppendonlyEntry(Oid sourceRelId, Oid targetRelId)
 	tupleCopy = heap_modify_tuple(tupleCopy, pg_appendonly_dsc,
 								  newValues, newNulls, replace);
 
-	simple_heap_insert(pg_appendonly_rel, tupleCopy);
-	CatalogUpdateIndexes(pg_appendonly_rel, tupleCopy);
+	CatalogTupleInsert(pg_appendonly_rel, tupleCopy);
 
 	heap_freetuple(tupleCopy);
 
@@ -622,8 +619,7 @@ SwapAppendonlyEntries(Oid entryRelId1, Oid entryRelId2)
 	tupleCopy1 = heap_modify_tuple(tupleCopy1, pg_appendonly_dsc,
 								  newValues, newNulls, replace);
 
-	simple_heap_insert(pg_appendonly_rel, tupleCopy1);
-	CatalogUpdateIndexes(pg_appendonly_rel, tupleCopy1);
+	CatalogTupleInsert(pg_appendonly_rel, tupleCopy1);
 
 	heap_freetuple(tupleCopy1);
 
@@ -632,8 +628,7 @@ SwapAppendonlyEntries(Oid entryRelId1, Oid entryRelId2)
 	tupleCopy2 = heap_modify_tuple(tupleCopy2, pg_appendonly_dsc,
 								  newValues, newNulls, replace);
 
-	simple_heap_insert(pg_appendonly_rel, tupleCopy2);
-	CatalogUpdateIndexes(pg_appendonly_rel, tupleCopy2);
+	CatalogTupleInsert(pg_appendonly_rel, tupleCopy2);
 
 	heap_freetuple(tupleCopy2);
 

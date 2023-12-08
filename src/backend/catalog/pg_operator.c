@@ -265,9 +265,7 @@ OperatorShellMake(const char *operatorName,
 	/*
 	 * insert our "shell" operator tuple
 	 */
-	operatorObjectId = simple_heap_insert(pg_operator_desc, tup);
-
-	CatalogUpdateIndexes(pg_operator_desc, tup);
+	operatorObjectId = CatalogTupleInsert(pg_operator_desc, tup);
 
 	/* Add dependencies for the entry */
 	makeOperatorDependencies(tup, false);
@@ -529,7 +527,7 @@ OperatorCreate(const char *operatorName,
 								nulls,
 								replaces);
 
-		simple_heap_update(pg_operator_desc, &tup->t_self, tup);
+		CatalogTupleUpdate(pg_operator_desc, &tup->t_self, tup);
 	}
 	else
 	{
@@ -538,11 +536,8 @@ OperatorCreate(const char *operatorName,
 		tupDesc = pg_operator_desc->rd_att;
 		tup = heap_form_tuple(tupDesc, values, nulls);
 
-		operatorObjectId = simple_heap_insert(pg_operator_desc, tup);
+		operatorObjectId = CatalogTupleInsert(pg_operator_desc, tup);
 	}
-
-	/* Must update the indexes in either case */
-	CatalogUpdateIndexes(pg_operator_desc, tup);
 
 	/* Add dependencies for the entry */
 	makeOperatorDependencies(tup, isUpdate);
@@ -705,9 +700,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 										nulls,
 										replaces);
 
-				simple_heap_update(pg_operator_desc, &tup->t_self, tup);
-
-				CatalogUpdateIndexes(pg_operator_desc, tup);
+				CatalogTupleUpdate(pg_operator_desc, &tup->t_self, tup);
 			}
 		}
 
@@ -730,9 +723,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 								nulls,
 								replaces);
 
-		simple_heap_update(pg_operator_desc, &tup->t_self, tup);
-
-		CatalogUpdateIndexes(pg_operator_desc, tup);
+		CatalogTupleUpdate(pg_operator_desc, &tup->t_self, tup);
 
 		values[Anum_pg_operator_oprcom - 1] = (Datum) NULL;
 		replaces[Anum_pg_operator_oprcom - 1] = false;
@@ -754,9 +745,7 @@ OperatorUpd(Oid baseId, Oid commId, Oid negId)
 								nulls,
 								replaces);
 
-		simple_heap_update(pg_operator_desc, &tup->t_self, tup);
-
-		CatalogUpdateIndexes(pg_operator_desc, tup);
+		CatalogTupleUpdate(pg_operator_desc, &tup->t_self, tup);
 	}
 
 	heap_close(pg_operator_desc, RowExclusiveLock);
