@@ -3134,6 +3134,21 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		List *exprList = lappend(list_make1(subquery->havingQual),
 								 subpath->pathtarget->exprs);
 		path = turn_volatile_seggen_to_singleqe(root, path, (Node *) exprList);
+
+		/*
+		 * Sharing General and SegmentGeneral paths may lead to deadlock
+		 * when executed with 1-gang and joined with N-gang.
+		 */
+		if (is_shared && 
+			(CdbPathLocus_IsGeneral(path->locus) ||
+			 CdbPathLocus_IsSegmentGeneral(path->locus)))
+		{
+			Assert(IsA(path, CtePath));
+			CtePath *ctePath = (CtePath *) path;
+			ctePath->subpath = subpath;
+			cteplaninfo->subroot = NULL;
+		}
+
 		add_path(rel, path);
 	}
 }

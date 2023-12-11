@@ -2581,3 +2581,82 @@ SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (
   2 |  0
 (2 rows)
 
+-- Test if sharing is disabled for a SegmentGeneral CTE to avoid deadlock if CTE is
+-- executed with 1-gang and joined with n-gang
+--start_ignore
+DROP TABLE IF EXISTS d;
+DROP TABLE IF EXISTS r;
+NOTICE:  table "r" does not exist, skipping
+--end_ignore
+CREATE TABLE d (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO d VALUES ( 1, 2 ),( 2, 3 );
+CREATE TABLE r (a int, b int) DISTRIBUTED REPLICATED;
+INSERT INTO r VALUES ( 1, 2 ),( 3, 4 );
+EXPLAIN (COSTS off)
+WITH cte AS (
+    SELECT a FROM r
+) SELECT * FROM cte JOIN (SELECT * FROM d JOIN cte USING (a) LIMIT 1) d_join_cte USING (a);
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Hash Join
+   Hash Cond: (r.a = d_join_cte.a)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on r
+   ->  Hash
+         ->  Subquery Scan on d_join_cte
+               ->  Limit
+                     ->  Gather Motion 3:1  (slice2; segments: 3)
+                           ->  Limit
+                                 ->  Hash Join
+                                       Hash Cond: (r_1.a = d.a)
+                                       ->  Seq Scan on r r_1
+                                       ->  Hash
+                                             ->  Seq Scan on d
+ Optimizer: Postgres-based planner
+(15 rows)
+
+WITH cte AS (
+    SELECT a FROM r
+) SELECT * FROM cte JOIN (SELECT * FROM d JOIN cte USING (a) LIMIT 1) d_join_cte USING (a);
+ a | b 
+---+---
+ 1 | 2
+(1 row)
+
+-- Test if sharing is disabled for a General CTE to avoid deadlock if CTE is
+-- executed with coordinator gang and joined with n-gang
+EXPLAIN (COSTS OFF)
+WITH cte AS (
+    SELECT count(*) a FROM (VALUES ( 1, 2 ),( 3, 4 )) v
+)
+SELECT * FROM cte JOIN (SELECT * FROM d JOIN cte USING (a) LIMIT 1) d_join_cte USING (a);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Hash Join
+   Hash Cond: ((count(*)) = (count(*)))
+   ->  Limit
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Limit
+                     ->  Hash Join
+                           Hash Cond: (d.a = (count(*)))
+                           ->  Seq Scan on d
+                           ->  Hash
+                                 ->  Aggregate
+                                       ->  Values Scan on "*VALUES*"
+   ->  Hash
+         ->  Aggregate
+               ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres-based planner
+(15 rows)
+
+WITH cte AS (
+    SELECT count(*) a FROM (VALUES ( 1, 2 ),( 3, 4 )) v
+)
+SELECT * FROM cte JOIN (SELECT * FROM d JOIN cte USING (a) LIMIT 1) d_join_cte USING (a);
+ a | b 
+---+---
+ 2 | 3
+(1 row)
+
+DROP TABLE d;
+DROP TABLE r;
