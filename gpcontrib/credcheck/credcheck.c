@@ -2171,7 +2171,7 @@ credcheck_max_auth_failure(Port *port, int status)
 		{
 			float fail_num = get_auth_failure(port->user_name, userOid, status);
 
-			/* register the auth failure if the we not reach allowed max failure */
+			/* register the auth failure if we not reach allowed max failure */
 			if (status == STATUS_ERROR && fail_num <= fail_max)
 				fail_num = save_auth_failure(port->user_name, userOid);
 
