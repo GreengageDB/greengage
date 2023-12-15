@@ -241,7 +241,6 @@ optimize_query(Query *parse, ParamListInfo boundParams)
 	result->relationOids = glob->relationOids;
 	result->invalItems = glob->invalItems;
 	result->oneoffPlan = glob->oneoffPlan;
-	result->transientPlan = glob->transientPlan;
 
 	return result;
 }
