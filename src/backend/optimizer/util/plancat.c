@@ -832,7 +832,7 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 static int32
 get_rel_data_width(Relation rel, int32 *attr_widths)
 {
-	int32		tuple_width = 0;
+	int64		tuple_width = 0;
 	int			i;
 
 	for (i = 1; i <= RelationGetNumberOfAttributes(rel); i++)
@@ -862,7 +862,7 @@ get_rel_data_width(Relation rel, int32 *attr_widths)
 		tuple_width += item_width;
 	}
 
-	return tuple_width;
+	return clamp_width_est(tuple_width);
 }
 
 /*

@@ -16,6 +16,7 @@
 #include "postgres.h"
 
 #include "nodes/nodeFuncs.h"
+#include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/placeholder.h"
 #include "optimizer/planmain.h"
@@ -447,6 +448,7 @@ void
 add_placeholders_to_joinrel(PlannerInfo *root, RelOptInfo *joinrel)
 {
 	Relids		relids = joinrel->relids;
+	int64		tuple_width = joinrel->width;
 	ListCell   *lc;
 
 	foreach(lc, root->placeholder_list)
@@ -462,8 +464,10 @@ add_placeholders_to_joinrel(PlannerInfo *root, RelOptInfo *joinrel)
 				/* Yup, add it to the output */
 				joinrel->reltargetlist = lappend(joinrel->reltargetlist,
 												 phinfo->ph_var);
-				joinrel->width += phinfo->ph_width;
+				tuple_width += phinfo->ph_width;
 			}
 		}
 	}
+
+	joinrel->width = clamp_width_est(tuple_width);
 }
