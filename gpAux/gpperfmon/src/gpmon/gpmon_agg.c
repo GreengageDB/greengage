@@ -81,8 +81,6 @@ extern mmon_options_t opt;
 extern apr_queue_t* message_queue;
 
 extern void incremement_tail_bytes(apr_uint64_t bytes);
-static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid,
-			apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool);
 
 /**
  * Disk space check helper function
@@ -165,43 +163,6 @@ static apr_status_t  check_disk_space(mmon_fsinfo_t* rec)
 		rec->sent_error_flag = DISK_SPACE_NO_MESSAGE_SENT;
 	}
 	return 0;
-}
-
-static bool is_query_not_active(apr_int32_t tmid, apr_int32_t ssid, apr_int32_t ccnt, apr_hash_t *hash, apr_pool_t *pool)
-{
-	// get active query of session
-	char *key = apr_psprintf(pool, "%d", ssid);
-	char *active_query = apr_hash_get(hash, key, APR_HASH_KEY_STRING);
-	if (active_query == NULL)
-	{
-		TR0(("Found orphan query, tmid:%d, ssid:%d, ccnt:%d\n", tmid, ssid, ccnt));
-		return true;
-	}
-
-	// read query text from q file
-	char *query = get_query_text(tmid, ssid, ccnt, pool);
-	if (query == NULL)
-	{
-		TR0(("Found error while reading query text in file '%sq%d-%d-%d.txt'\n", GPMON_DIR, tmid, ssid, ccnt));
-		return true;
-	}
-	// if the current active query of session (ssid) is not the same
-	// as the one we are checking, we assume q(tmid)-(ssid)-(ccnt).txt
-	// has wrong status. This is a bug in execMain.c, which too hard to
-	// fix it there.
-	int qlen = strlen(active_query);
-	if (qlen > MAX_QUERY_COMPARE_LENGTH)
-	{
-		qlen = MAX_QUERY_COMPARE_LENGTH;
-	}
-	int res = strncmp(query, active_query, qlen);
-	if (res != 0)
-	{
-		TR0(("Found orphan query, tmid:%d, ssid:%d, ccnt:%d\n", tmid, ssid, ccnt));
-		return true;
-	}
-
-	return false;
 }
 
 static apr_status_t agg_put_fsinfo(agg_t* agg, const gpmon_fsinfo_t* met)
@@ -481,8 +442,8 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 		return e;
 	}
 
-	apr_hash_t *active_query_tab = get_active_queries(newagg->pool);
-	if (! active_query_tab)
+	apr_hash_t *active_session_set = get_active_sessions(newagg->pool);
+	if (!active_session_set)
 	{
 		agg_destroy(newagg);
 		return APR_EINVAL;
@@ -508,8 +469,8 @@ apr_status_t agg_dup(agg_t** retagg, agg_t* oldagg, apr_pool_t* parent_pool, apr
 			if (  (status != GPMON_QLOG_STATUS_SUBMIT
 			       && status != GPMON_QLOG_STATUS_CANCELING
 			       && status != GPMON_QLOG_STATUS_START)
-			   || ((age % 5 == 0) /* don't call is_query_not_active every time because it's expensive */
-			       && is_query_not_active(dp->qlog.key.tmid, dp->qlog.key.ssid, dp->qlog.key.ccnt, active_query_tab, newagg->pool)))
+			       || apr_hash_get(active_session_set, &dp->qlog.key.ssid, 
+							 sizeof(dp->qlog.key.ssid)) == NULL)
 			{
 				if (0 != strcmp(dp->qlog.db, GPMON_DB))
 				{
