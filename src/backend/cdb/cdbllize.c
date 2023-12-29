@@ -590,8 +590,16 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 				scanPlan->flow->flotype = FLOW_SINGLETON;
 			}
 
-			broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */,
-						  ctx->currentPlanFlow->numsegments /* numsegments */);
+			/*
+			 * Broadcasting Replicated locus leads to data duplicates.
+			 */
+			if (scanPlan->flow->locustype == CdbLocusType_Replicated &&
+				scanPlan->flow->numsegments != ctx->currentPlanFlow->numsegments)
+				elog(ERROR, "could not parallelize SubPlan");
+
+			if (scanPlan->flow->locustype != CdbLocusType_Replicated)
+				broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
+					   ctx->currentPlanFlow->numsegments /* numsegments */ );
 		}
 		else
 		{
@@ -758,8 +766,17 @@ ParallelizeSubplan(SubPlan *spExpr, PlanProfile *context)
 		if (containingPlanDistributed)
 		{
 			Assert(NULL != context->currentPlanFlow);
-			broadcastPlan(newPlan, false /* stable */ , false /* rescannable */,
-						  context->currentPlanFlow->numsegments /* numsegments */);
+
+			/*
+			 * Broadcasting Replicated locus leads to data duplicates.
+			 */
+			if (newPlan->flow->locustype == CdbLocusType_Replicated &&
+				newPlan->flow->numsegments != context->currentPlanFlow->numsegments)
+				elog(ERROR, "could not parallelize SubPlan");
+
+			if (newPlan->flow->locustype != CdbLocusType_Replicated)
+				broadcastPlan(newPlan, false /* stable */ , false /* rescannable */,
+							  context->currentPlanFlow->numsegments /* numsegments */);
 		}
 		else
 		{

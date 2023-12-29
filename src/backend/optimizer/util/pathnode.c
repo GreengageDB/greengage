@@ -1522,8 +1522,14 @@ set_append_path_locus(PlannerInfo *root, Path *pathnode, RelOptInfo *rel,
 			/*
 			 * Align numsegments to be the common segments among the children.
 			 * Partitioned children will need to be motioned, so ignore them.
+			 * If target locus type is Replicated, we can allow to align
+			 * numsegments only to subpath with locus Replicated, because
+			 * locus Replicated is executed strictly on its number of
+			 * segments.
 			 */
-			if (!CdbPathLocus_IsPartitioned(subpath->locus))
+			if (!CdbPathLocus_IsPartitioned(subpath->locus) &&
+				(targetlocustype != CdbLocusType_Replicated ||
+				 CdbPathLocus_IsReplicated(subpath->locus)))
 			{
 				/* When there are multiple SingleQE, use the common segments */
 				numsegments = Min(numsegments,
