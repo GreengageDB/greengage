@@ -3,9 +3,9 @@ FROM centos:centos7 as base
 # Install some basic utilities and build tools
 RUN yum makecache && yum update -y ca-certificates && \
     rpm --import https://mirror.yandex.ru/centos/RPM-GPG-KEY-CentOS-7 && \
-    yum -y install epel-release java-1.8.0-openjdk-devel && \
+    yum -y install epel-release java-11-openjdk-devel && \
     yum -y install git iproute net-tools openssh-server rsync sudo time vim wget unzip \
-                   ant-junit autoconf bison cmake3 flex gperf indent jq libtool gcc-c++ \
+                   autoconf bison cmake3 flex gperf indent jq libtool gcc-c++ \
                    krb5-server krb5-workstation xerces-c-devel file && \
     yum clean all
 
@@ -15,7 +15,7 @@ RUN yum makecache && \
     yum -y install apr-devel bzip2-devel expat-devel libcurl-devel && \
     yum -y install libevent-devel libuuid-devel libxml2-devel libyaml-devel libzstd-devel && \
     yum -y install openssl-devel pam-devel readline-devel snappy-devel libuv-devel && \
-    yum -y install apache-ivy libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
+    yum -y install libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     yum -y install perl-IPC-Run perl-Test-Base libxslt-devel openldap-devel && \
     yum clean all
 
