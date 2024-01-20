@@ -227,6 +227,7 @@ static bool password_contain_username = true;
 static bool password_ignore_case = false;
 static int password_valid_until = 0;
 static int password_valid_max = 0;
+static int auth_delay_milliseconds = 0;
 
 #if PG_VERSION_NUM >= 120000
 /*
@@ -1314,6 +1315,19 @@ _PG_init(void)
 				gettext_noop("comma separated list of username to exclude from password policy check"), NULL,
 				&username_whitelist, "", PGC_SUSET, 0, check_whitelist, NULL, NULL);
 
+	DefineCustomIntVariable("credcheck.auth_delay_ms",
+				"Milliseconds to delay before reporting authentication failure",
+				NULL,
+				&auth_delay_milliseconds,
+				0,
+				0, INT_MAX / 1000,
+				PGC_SIGHUP,
+				GUC_UNIT_MS,
+				NULL,
+				NULL,
+				NULL);
+
+	MarkGUCPrefixReserved("credcheck");
 
 #if PG_VERSION_NUM < 150000
         /*
@@ -2163,6 +2177,12 @@ fix_log(ErrorData *edata)
 static void
 credcheck_max_auth_failure(Port *port, int status)
 {
+
+	/* Inject a short delay if authentication failed. */
+	if (status != STATUS_OK)
+		pg_usleep(1000L * auth_delay_milliseconds);
+
+	/* check for max auth failure */
 	if (fail_max > 0 && status != STATUS_EOF)
 	{
 		Oid userOid =  get_role_oid(port->user_name, true);

@@ -6,6 +6,7 @@
 	- [Checks](#checks)
 	- [Password reuse policy](#password-reuse-policy)
 	- [Authentication failure ban](#authentication-failure-ban)
+	- [Authentication delay](#authentication-delay)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -415,6 +416,10 @@ Password for user toban_user:
 psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
 connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
 ```
+
+### [Authentication delay](#authentication-delay)
+
+This feature allow a pause on authentication failure. Setting `credcheck.auth_delay_ms` causes the server to pause for a given number of milliseconds before reporting authentication failure. This makes brute-force attacks on database passwords more difficult. 
 
 ### [Limitations](#limitations)
 
