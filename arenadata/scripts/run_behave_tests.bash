@@ -61,7 +61,7 @@ run_feature() {
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
       -o /tmp/allure-results"  \
-    mdw gpdb_src/arenadata/scripts/behave_gpdb.bash
+    cdw gpdb_src/arenadata/scripts/behave_gpdb.bash
   status=$?
 
   docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env down -v
