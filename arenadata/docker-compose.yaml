@@ -2,12 +2,12 @@
 
 version: "3"
 services:
-  #image can be either hub.adsw.io/library/gpdb6_regress:${BRANCH_NAME}-x86-64 or
-  #hub.adsw.io/library/gpdb6_regress:${BRANCH_NAME}-ppc64le depending on the arch
-  mdw:
+  #image can be either hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME}-x86-64 or
+  #hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME}-ppc64le depending on the arch
+  cdw:
     image: "${IMAGE}"
     working_dir: /home/gpadmin
-    hostname: mdw
+    hostname: cdw
     volumes:
       - "$PWD/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa"
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
@@ -15,8 +15,9 @@ services:
     privileged: true
     sysctls:
       kernel.sem: 500 1024000 200 4096
+    init: true
     entrypoint: >
-      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
+      sleep infinity
   sdw1:
     image: "${IMAGE}"
     privileged: true
@@ -26,8 +27,9 @@ services:
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
     sysctls:
       kernel.sem: 500 1024000 200 4096
+    init: true
     entrypoint: >
-      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
+      sleep infinity
   sdw2:
     image: "${IMAGE}"
     privileged: true
@@ -37,8 +39,9 @@ services:
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
     sysctls:
       kernel.sem: 500 1024000 200 4096
+    init: true
     entrypoint: >
-      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
+      sleep infinity
   sdw3:
     image: "${IMAGE}"
     privileged: true
@@ -48,5 +51,6 @@ services:
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
     sysctls:
       kernel.sem: 500 1024000 200 4096
+    init: true
     entrypoint: >
-      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
+      sleep infinity

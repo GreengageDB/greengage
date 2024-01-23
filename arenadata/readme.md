@@ -22,16 +22,15 @@ We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_g
 
 ```bash
  docker run --name gpdb7_opt_on --rm -it -e TEST_OS=centos \
-  -e MAKE_TEST_COMMAND=-k PGOPTIONS='-c optimizer=on' installcheck-world \
-  --sysctl kernel.sem=500 1024000 200 4096 gpdb7_regress:latest \
-  scl enable devtoolset-7 llvm-toolset-7 \
+  -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on' installcheck-world" \
+  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_regress:latest \
   /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
 ```
 
 * we need to modify `MAKE_TEST_COMMAND` environment variable to run different suite. e.g. we may run test againt Postgres optimizer or ORCA with altering `PGOPTIONS` environment variable;
-* we need to run container as `--privileged` to run debugger inside it
 * we need to increase semaphore amount to be able to run demo cluster
-* we need running ssh server to be able to run demo cluster
+
+To use gdb inside the container, add the `--privileged` flag to the run command.
 
 ## ORCA linter
 
@@ -54,7 +53,7 @@ docker run --rm -it gpdb7_regress:latest bash -c "gpdb_src/concourse/scripts/uni
 1. Start container with
    ```bash
    docker run --name gpdb7_demo --rm -it --sysctl 'kernel.sem=500 1024000 200 4096' gpdb7_regress:latest \
-     scl enable devtoolset-7 llvm-toolset-7 bash
+     bash
    ```
 1. Run the next commands in container
    ```bash
@@ -89,15 +88,10 @@ bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
 ```
 
 
-Tests use `allure-behave` package and store allure output files in `allure-results` folder
-**NOTE** that `allure-behave` has too old a version because it is compatible with `python2`.
-Also, the allure report for each failed test has gpdb logs attached files. See `gpMgmt/test/behave_utils/arenadata/formatter.py`
-It required to add `gpMgmt/tests` directory to `PYTHONPATH`.
+Tests use `allure-behave` package and store allure output files in `allure-results` folder.
 
 Greenplum cluster in Docker containers has its own peculiarities in preparing a cluster for tests.
 All tests are run in one way or another on the demo cluster, wherever possible.
 For example, cross_subnet tests or tests with tag `concourse_cluster` currently not worked because of too complex cluster preconditions.
 
 Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
-
-Docker containers have installed `sigar` libraries. It is required only for `gpperfmon` tests.
