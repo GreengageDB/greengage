@@ -7,6 +7,8 @@ EXTENSION = pg_stat_statements
 DATA = pg_stat_statements--1.2.sql pg_stat_statements--1.1--1.2.sql \
 	pg_stat_statements--1.0--1.1.sql pg_stat_statements--unpackaged--1.0.sql
 
+REGRESS = test_pg_stat_statements
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
