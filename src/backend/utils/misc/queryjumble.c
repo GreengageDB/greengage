@@ -185,6 +185,7 @@ JumbleRangeTable(JumbleState *jstate, List *rtable)
 				APP_JUMB(rte->jointype);
 				break;
 			case RTE_FUNCTION:
+			case RTE_TABLEFUNCTION:
 				JumbleExpr(jstate, (Node *) rte->functions);
 				break;
 			case RTE_TABLEFUNC:
@@ -646,6 +647,7 @@ JumbleExpr(JumbleState *jstate, Node *node)
 			{
 				GroupingSet *gsnode = (GroupingSet *) node;
 
+				APP_JUMB(gsnode->kind);
 				JumbleExpr(jstate, (Node *) gsnode->content);
 			}
 			break;
@@ -704,6 +706,13 @@ JumbleExpr(JumbleState *jstate, Node *node)
 				APP_JUMB(tsc->tsmhandler);
 				JumbleExpr(jstate, (Node *) tsc->args);
 				JumbleExpr(jstate, (Node *) tsc->repeatable);
+			}
+			break;
+		case T_TableValueExpr:
+			{
+				TableValueExpr *tve = (TableValueExpr *) node;
+
+				JumbleQueryInternal(jstate, (Query *) tve->subquery);
 			}
 			break;
 		default:

@@ -1,0 +1,142 @@
+CREATE TABLE t(a int, b text) DISTRIBUTED BY (a);
+-- Known issue: query is not added to pg_stat_statements statistics in
+-- case it is planned by GPORCA. So disable GPORCA during tests.
+SET optimizer=off;
+SELECT pg_stat_statements_reset();
+ pg_stat_statements_reset 
+--------------------------
+ 
+(1 row)
+
+SELECT GROUPING (a) FROM t GROUP BY ROLLUP(a, b);
+ grouping 
+----------
+        1
+(1 row)
+
+-- launch not equivalent query
+SELECT GROUPING (b) FROM t GROUP BY ROLLUP(a, b);
+ grouping 
+----------
+        1
+(1 row)
+
+-- check group_id() in a query
+SELECT group_id() FROM t GROUP BY ROLLUP(a, b);
+ group_id 
+----------
+        0
+(1 row)
+
+-- check that queries have separate entries
+SELECT query, calls FROM pg_stat_statements ORDER BY query;
+                      query                       | calls 
+--------------------------------------------------+-------
+ SELECT group_id() FROM t GROUP BY ROLLUP(a, b)   |     1
+ SELECT GROUPING (a) FROM t GROUP BY ROLLUP(a, b) |     1
+ SELECT GROUPING (b) FROM t GROUP BY ROLLUP(a, b) |     1
+ SELECT pg_stat_statements_reset()                |     1
+(4 rows)
+
+SELECT pg_stat_statements_reset();
+ pg_stat_statements_reset 
+--------------------------
+ 
+(1 row)
+
+-- check that different grouping options result in separate entries
+SELECT COUNT (*) FROM t GROUP BY ROLLUP(a, b);
+ count 
+-------
+     0
+(1 row)
+
+SELECT COUNT (*) FROM t GROUP BY CUBE(a, b);
+ count 
+-------
+     0
+(1 row)
+
+SELECT COUNT (*) FROM t GROUP BY GROUPING SETS(a, b);
+ count 
+-------
+(0 rows)
+
+SELECT COUNT (*) FROM t GROUP BY GROUPING SETS((a), (a, b));
+ count 
+-------
+(0 rows)
+
+SELECT COUNT (*) FROM t GROUP BY a, b;
+ count 
+-------
+(0 rows)
+
+SELECT query, calls FROM pg_stat_statements ORDER BY query;
+                            query                            | calls 
+-------------------------------------------------------------+-------
+ SELECT COUNT (*) FROM t GROUP BY a, b                       |     1
+ SELECT COUNT (*) FROM t GROUP BY CUBE(a, b)                 |     1
+ SELECT COUNT (*) FROM t GROUP BY GROUPING SETS((a), (a, b)) |     1
+ SELECT COUNT (*) FROM t GROUP BY GROUPING SETS(a, b)        |     1
+ SELECT COUNT (*) FROM t GROUP BY ROLLUP(a, b)               |     1
+ SELECT pg_stat_statements_reset()                           |     1
+(6 rows)
+
+-- check several parameters options in ROLLUP
+-- all should result in separate entries
+SELECT pg_stat_statements_reset();
+ pg_stat_statements_reset 
+--------------------------
+ 
+(1 row)
+
+SELECT COUNT (*) FROM t GROUP BY ROLLUP(a, b);
+ count 
+-------
+     0
+(1 row)
+
+SELECT COUNT (*) FROM t GROUP BY ROLLUP(b);
+ count 
+-------
+     0
+(1 row)
+
+SELECT query, calls FROM pg_stat_statements ORDER BY query;
+                     query                     | calls 
+-----------------------------------------------+-------
+ SELECT COUNT (*) FROM t GROUP BY ROLLUP(a, b) |     1
+ SELECT COUNT (*) FROM t GROUP BY ROLLUP(b)    |     1
+ SELECT pg_stat_statements_reset()             |     1
+(3 rows)
+
+--- check anytable parameter for a function
+SELECT pg_stat_statements_reset();
+ pg_stat_statements_reset 
+--------------------------
+ 
+(1 row)
+
+-- call of anytable_out will cause an error,
+-- thus prevent actual call by adding FALSE condition
+SELECT * FROM anytable_out(TABLE(SELECT * FROM t)) WHERE 1 = 0;
+ anytable_out 
+--------------
+(0 rows)
+
+SELECT * FROM anytable_out(TABLE(SELECT * FROM t WHERE a=0)) WHERE 1 = 0;
+ anytable_out 
+--------------
+(0 rows)
+
+SELECT query, calls FROM pg_stat_statements ORDER BY query;
+                                    query                                    | calls 
+-----------------------------------------------------------------------------+-------
+ SELECT * FROM anytable_out(TABLE(SELECT * FROM t)) WHERE $1 = $2            |     1
+ SELECT * FROM anytable_out(TABLE(SELECT * FROM t WHERE a=$1)) WHERE $2 = $3 |     1
+ SELECT pg_stat_statements_reset()                                           |     1
+(3 rows)
+
+DROP TABLE t;
+RESET optimizer;
