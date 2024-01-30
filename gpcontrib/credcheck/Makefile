@@ -21,6 +21,6 @@ TESTS = 01_username 02_password 03_rename 04_alter_pwd \
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
-PG_CONFIG = /usr/lib/postgresql/15/bin/pg_config
+PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
