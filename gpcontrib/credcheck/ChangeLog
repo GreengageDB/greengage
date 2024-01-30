@@ -1,7 +1,13 @@
+2024-01-30 - Version 2.5.0
+
+This release is a quick maintenance release to fix compîlation issue with
+PostgreSQL prior 15.0 on custom variable prefix restriction. Thanks to Devrim
+Gunduz for the report.
+
 2024-01-30 - Version 2.4.0
 
 This release is a maintenance release to fix a major issue with the backup of the
-history file iwith pgBackRest and adds an authentication delay feature.
+history file with pgBackRest and adds an authentication delay feature.
 
   - Add authentication delay feature to be able to add a pause on authentication
     failure. Setting `credcheck.auth_delay_ms` causes the server to pause for a
@@ -10,7 +16,7 @@ history file iwith pgBackRest and adds an authentication delay feature.
     This patch is purely a copy/paste from the auth_delay extension to avoid
     loading other extension. See https://www.postgresql.org/docs/current/auth-delay.html
     for more information about the origin of this feature.
-  - Force size of file global/pg_password_history to be a multiple of 8192
+  - Force size of file $PGDATA/global/pg_password_history to be a multiple of 8192
     to fix pgBackRest error caused by the error message: "page misalignment in file
     /.../global/pg_password_history: file size 2604 is not divisible by page size 8192"
     Thanks to did16 for the report.
