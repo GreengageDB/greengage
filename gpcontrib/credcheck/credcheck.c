@@ -6,8 +6,9 @@
  * This program is open source, licensed under the PostgreSQL license.
  * For license terms, see the LICENSE file.
  *
- * Copyright (C) 2021-2023: MigOps Inc
- * Copyright (C) 2023: Gilles Darold
+ * Copyright (c) 2021-2023: MigOps Inc
+ * Copyright (c) 2023: Gilles Darold
+ * Copyright (c) 2024: HexaCluster Corp
  *
  *-------------------------------------------------------------------------
  */
