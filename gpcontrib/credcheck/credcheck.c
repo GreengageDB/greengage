@@ -1328,8 +1328,6 @@ _PG_init(void)
 				NULL,
 				NULL);
 
-	MarkGUCPrefixReserved("credcheck");
-
 #if PG_VERSION_NUM < 150000
         /*
          * Request additional shared resources.  (These are no-ops if we're not in
@@ -1340,6 +1338,9 @@ _PG_init(void)
         RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
         RequestAddinShmemSpace(pgaf_memsize());
         RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
+#else
+	MarkGUCPrefixReserved("credcheck");
+
 #endif
 
 	/* Install hooks */
