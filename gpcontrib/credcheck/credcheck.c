@@ -1329,6 +1329,8 @@ _PG_init(void)
 				NULL);
 
 #if PG_VERSION_NUM < 150000
+	EmitWarningsOnPlaceholders("credcheck");
+
         /*
          * Request additional shared resources.  (These are no-ops if we're not in
          * the postmaster process.)  We'll allocate or attach to the shared
