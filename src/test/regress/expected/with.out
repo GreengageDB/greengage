@@ -2278,6 +2278,48 @@ WITH cte AS (
   2 |  0
 (1 row)
 
+-- Test cross slice Shared Scan with consumer in slice 0.
+-- The consumer should be in slice 0
+EXPLAIN (COSTS OFF) WITH cte AS (
+	SELECT c1 FROM d LIMIT 2
+)
+SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (c1);
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Hash Join
+   Hash Cond: (share0_ref2.c1 = b.c1)
+   ->  Shared Scan (share slice:id 0:0)
+   ->  Hash
+         ->  Subquery Scan on b
+               ->  Limit
+                     ->  Gather Motion 3:1  (slice3; segments: 3)
+                           ->  Limit
+                                 ->  Hash Join
+                                       Hash Cond: (d.c1 = share0_ref1.c1)
+                                       ->  Seq Scan on d
+                                       ->  Hash
+                                             ->  Redistribute Motion 1:3  (slice2)
+                                                   Hash Key: share0_ref1.c1
+                                                   ->  Shared Scan (share slice:id 2:0)
+                                                         ->  Materialize
+                                                               ->  Limit
+                                                                     ->  Gather Motion 3:1  (slice1; segments: 3)
+                                                                           ->  Limit
+                                                                                 ->  Seq Scan on d d_1
+ Optimizer: Postgres query optimizer
+(21 rows)
+
+-- Deadlock shouldn't happen
+WITH cte AS (
+	SELECT c1 FROM d LIMIT 2
+)
+SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (c1);
+ c1 | c2 
+----+----
+  2 |  0
+  2 |  0
+(2 rows)
+
 RESET optimizer;
 DROP TABLE d;
 -- Test if sharing is disabled for a SegmentGeneral CTE to avoid deadlock if CTE is
