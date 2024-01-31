@@ -682,6 +682,9 @@ typedef struct EState
 	 */
 	bool		gp_bypass_unique_check;
 
+	/* List of cross-slice SharedScan consumers in the current slice */
+	List	   *sharedScanConsumers;
+
 } EState;
 
 struct PlanState;

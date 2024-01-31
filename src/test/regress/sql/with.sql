@@ -1227,3 +1227,29 @@ SELECT i FROM cte a
 JOIN cte b USING (i);
 
 DROP TABLE with_test;
+
+-- Test cross slice Shared Scan with consumer in slice 0.
+--start_ignore
+SET enable_nestloop = ON;
+DROP TABLE IF EXISTS d;
+--end_ignore
+
+CREATE TABLE d (c1 int, c2 int) DISTRIBUTED BY (c1);
+INSERT INTO d (VALUES ( 2, 0 ),( 2 , 0 ));
+
+-- The consumer should be in slice 0
+EXPLAIN (COSTS OFF) WITH cte AS (
+	SELECT c1 FROM d LIMIT 2
+)
+SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (c1);
+
+-- Deadlock shouldn't happen
+WITH cte AS (
+	SELECT c1 FROM d LIMIT 2
+)
+SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (c1);
+
+--start_ignore
+DROP TABLE d;
+--end_ignore
+

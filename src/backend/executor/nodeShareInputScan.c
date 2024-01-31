@@ -312,6 +312,7 @@ init_tuplestore_state(ShareInputScanState *node)
 
 			Assert(sisc->cross_slice);
 
+			estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
 			shareinput_reader_waitready(node->ref);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
@@ -1009,6 +1010,20 @@ shareinput_reader_notifydone(shareinput_Xslice_reference *ref, int nconsumers)
 
 	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): wrote notify_done",
 		 ref->share_id, currentSliceId);
+}
+
+void
+ShareInputReaderNotifyDone(ShareInputScanState *node)
+{
+	shareinput_local_state *local_state = node->local_state;
+	ShareInputScan *sisc = (ShareInputScan *) node->ss.ps.plan;
+
+	if (node->ref == NULL || local_state->closed)
+		return;
+
+	shareinput_reader_notifydone(node->ref, sisc->nconsumers);
+
+	local_state->closed = true;
 }
 
 /*

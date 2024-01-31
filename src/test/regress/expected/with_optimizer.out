@@ -2555,3 +2555,52 @@ JOIN cte b USING (i);
 (1 row)
 
 DROP TABLE with_test;
+-- Test cross slice Shared Scan with consumer in slice 0.
+--start_ignore
+SET enable_nestloop = ON;
+DROP TABLE IF EXISTS d;
+--end_ignore
+CREATE TABLE d (c1 int, c2 int) DISTRIBUTED BY (c1);
+INSERT INTO d (VALUES ( 2, 0 ),( 2 , 0 ));
+-- The consumer should be in slice 0
+EXPLAIN (COSTS OFF) WITH cte AS (
+	SELECT c1 FROM d LIMIT 2
+)
+SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (c1);
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Sequence
+   ->  Shared Scan (share slice:id 0:0)
+         ->  Limit
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     ->  Seq Scan on d
+   ->  Hash Join
+         Hash Cond: (d_1.c1 = share0_ref2.c1)
+         ->  Result
+               Filter: (d_1.c1 = share0_ref3.c1)
+               ->  Limit
+                     ->  Hash Join
+                           Hash Cond: (d_1.c1 = share0_ref3.c1)
+                           ->  Gather Motion 3:1  (slice2; segments: 3)
+                                 ->  Seq Scan on d d_1
+                           ->  Hash
+                                 ->  Shared Scan (share slice:id 0:0)
+         ->  Hash
+               ->  Shared Scan (share slice:id 0:0)
+ Optimizer: GPORCA
+(19 rows)
+
+-- Deadlock shouldn't happen
+WITH cte AS (
+	SELECT c1 FROM d LIMIT 2
+)
+SELECT * FROM cte a JOIN (SELECT * FROM d JOIN cte USING (c1) LIMIT 1) b USING (c1);
+ c1 | c2 
+----+----
+  2 |  0
+  2 |  0
+(2 rows)
+
+--start_ignore
+DROP TABLE d;
+--end_ignore
