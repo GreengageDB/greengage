@@ -233,3 +233,4 @@ VACUUM
  1 | 1 | 2 
 (1 row)
 DROP TABLE foo_part;
+DROP
