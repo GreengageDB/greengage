@@ -11010,7 +11010,7 @@ get_partition_recursive(PartitionNode *pn, deparse_context *head,
 			{
 				if (!bLeafTablename && rule->parrangeevery)
 				{
-					if (!strlen(rule->parname))
+					if (rule->parname == NULL || !strlen(rule->parname))
 					{
 						first_every_rule = rule;
 						prev_rule		 = NULL;
@@ -11117,7 +11117,7 @@ get_partition_recursive(PartitionNode *pn, deparse_context *head,
 					{
 						first_every_rule = NULL;
 
-						if (!strlen(rule->parname))
+						if (rule->parname == NULL || !strlen(rule->parname))
 							prev_rule = first_every_rule = rule;
 						else
 						{
