@@ -2623,6 +2623,15 @@ pg_inserttable(pgobject * self, PyObject * args)
 			else if (PyInt_Check(item) || PyLong_Check(item))
 			{
 				PyObject* s = PyObject_Str(item);
+
+				if (s == NULL)
+				{
+					free(buffer);
+					PyErr_SetString(PyExc_MemoryError,
+						"fail to compute a string representation.");
+					return NULL;
+				}
+
 				const char* t = PyString_AsString(s);
 				while (*t && bufsiz)
 				{
