@@ -1845,6 +1845,9 @@ pgquery_listfields(pgqueryobject * self, PyObject * args)
 	n = PQnfields(self->last_result);
 	fieldstuple = PyTuple_New(n);
 
+	if (fieldstuple == NULL)
+		return NULL;
+
 	for (i = 0; i < n; i++)
 	{
 		name = PQfname(self->last_result, i);
