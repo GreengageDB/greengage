@@ -181,9 +181,9 @@ getaddrinfo_unix(const char *path, const struct addrinfo * hintsp,
 	MemSet(&hints, 0, sizeof(hints));
 
 #if defined(_AIX) && (_SS_MAXSIZE == 1025 || _SS_MAX_SIZE == 1280)
-	if (strlen(path) >= 108)
+	if (path == NULL || strlen(path) >= 108)
 #else
-	if (strlen(path) >= sizeof(unp->sun_path))
+	if (path == NULL || strlen(path) >= sizeof(unp->sun_path))
 #endif
 		return EAI_FAIL;
 
