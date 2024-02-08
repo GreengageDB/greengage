@@ -177,3 +177,10 @@ SET debug_dtm_action_target=protocol;
 SET debug_dtm_action_protocol=commit_prepared;
 SET debug_dtm_action=fail_begin_command;
 DROP TABLE foo_stg;
+
+-- start_ignore
+-- After each attempts, schemas for temporary table still exist (like 'pg_temp'
+-- and 'pg_toast_temp').
+-- Lets remove all such temporary schemas for inactive connections
+\i sql/remove_temp_schemas.sql
+-- end_ignore

@@ -317,6 +317,8 @@ select count(*) from gp_segment_configuration where status = 'd';
  0     
 (1 row)
 
+-- start_ignore
+-- end_ignore
 !\retcode gpconfig -r gp_fts_probe_retries --masteronly;
 -- start_ignore
 20180920:05:00:42:031183 gpconfig:gpdbvm:gpadmin-[INFO]:-completed successfully with parameters '-r gp_fts_probe_retries --masteronly'
