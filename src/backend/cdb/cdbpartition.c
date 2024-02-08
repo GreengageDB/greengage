@@ -7041,8 +7041,8 @@ atpxPartAddList(Relation rel,
 
 				skipTableRelid = RangeVarGetRelid(t->relation, NoLock, true);
 			}
-		}
 
+		/* FIXME: indent this */
 		for_each_cell(lc, lnext(lc))
 		{
 			Node	   *q = lfirst(lc);
@@ -7192,7 +7192,7 @@ atpxPartAddList(Relation rel,
 
 			ii++;
 		}						/* end for each cell */
-
+		}
 	}
 
 	if (par_prule && par_prule->topRule)
