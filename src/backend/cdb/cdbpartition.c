@@ -5693,10 +5693,11 @@ atpxPartAddList(Relation rel,
 			heap_open(par_prule->topRule->parchildrelid, AccessShareLock);
 
 	Assert((PARTTYP_LIST == part_type) || (PARTTYP_RANGE == part_type));
+	Assert(pelem);
 
 	/* XXX XXX: handle case of missing boundary spec for range with EVERY */
 
-	if (pelem && pelem->boundSpec)
+	if (pelem->boundSpec)
 	{
 		if (PARTTYP_RANGE == part_type)
 		{
@@ -6736,7 +6737,7 @@ atpxPartAddList(Relation rel,
 
 			free_parsestate(pstate);
 		}						/* end if parttype_range */
-	}							/* end if pelem && pelem->boundspec */
+	}							/* end if pelem->boundspec */
 
 	/*
 	 * Create a phony CREATE TABLE statement for the parent table. The
@@ -6816,7 +6817,7 @@ atpxPartAddList(Relation rel,
 	(void) atpxPart_validate_spec(pBy, rel, ct, pelem, pNode, partName,
 								  isDefault, part_type, "");
 
-	if (pelem && pelem->boundSpec)
+	if (pelem->boundSpec)
 	{
 		if (PARTTYP_LIST == part_type)
 		{
