@@ -510,6 +510,7 @@ HasLockForSegmentFileDrop(Relation aorel)
 Bitmapset *
 AppendOnlyCollectDeadSegments(Relation aorel, List *compaction_segno)
 {
+	const char *relname;
 	int total_segfiles;
 	FileSegInfo **segfile_array;
 	Snapshot appendOnlyMetaDataSnapshot = SnapshotSelf;
@@ -519,8 +520,10 @@ AppendOnlyCollectDeadSegments(Relation aorel, List *compaction_segno)
 	Assert(Gp_role == GP_ROLE_EXECUTE || Gp_role == GP_ROLE_UTILITY);
 	Assert(RelationIsAoRows(aorel));
 
+	relname = RelationGetRelationName(aorel);
+
 	elogif(Debug_appendonly_print_compaction, LOG,
-		   "Collect AO relation %s", RelationGetRelationName(aorel));
+		   "Collect AO relation %s", relname);
 
 	/* Get information about all the file segments we need to scan */
 	segfile_array = GetAllFileSegInfo(aorel, appendOnlyMetaDataSnapshot, &total_segfiles);
@@ -530,6 +533,20 @@ AppendOnlyCollectDeadSegments(Relation aorel, List *compaction_segno)
 		int segno = segfile_array[i]->segno;
 
 		FileSegInfo *fsinfo = GetFileSegInfo(aorel, appendOnlyMetaDataSnapshot, segno);
+
+		/*
+		 * This should not occur since this segfile info was found by the
+		 * "all" method, but better to catch for trouble shooting (possibly
+		 * index corruption?)
+		 */
+		if (fsinfo == NULL)
+			elog(ERROR, "file seginfo for AO relation %s %u/%u/%u (segno=%u) is missing",
+				 relname,
+				 aorel->rd_node.spcNode,
+				 aorel->rd_node.dbNode,
+				 aorel->rd_node.relNode,
+				 segno);
+
 		if (fsinfo->state == AOSEG_STATE_AWAITING_DROP)
 			dead_segs = bms_add_member(dead_segs, segno);
 
