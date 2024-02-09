@@ -396,6 +396,13 @@ static void dump_mc_for(FILE *file, MemoryContext mc)
 void dump_mc(const char *fname, MemoryContext mc)
 {
 	FILE *ofile = fopen(fname, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	dump_mc_for(ofile, mc);
 	fclose(ofile);
 }
@@ -410,6 +417,13 @@ void dump_mc(const char *fname, MemoryContext mc)
 void dump_memory_allocation(const char* fname)
 {
 	FILE *ofile = fopen(fname, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	dump_memory_allocation_ctxt(ofile, TopMemoryContext);
 	fclose(ofile);
 }
