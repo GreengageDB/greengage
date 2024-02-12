@@ -3316,7 +3316,7 @@ RenameRelation(RenameStmt *stmt)
 	oldrelname = RelationGetRelationName(targetrelation);
 
 	/* if this is a child table of a partitioning configuration, complain */
-	if (stmt && rel_is_child_partition(relid) && !stmt->bAllowPartn)
+	if (rel_is_child_partition(relid) && !stmt->bAllowPartn)
 	{
 		Oid		 master = rel_partition_get_master(relid);
 		char	*pretty	= rel_get_part_path_pretty(relid,
@@ -3341,7 +3341,7 @@ RenameRelation(RenameStmt *stmt)
 	 * the rename of each partition is allowed, but this block doesn't
 	 * get invoked recursively.
 	 */
-	if (stmt && !rel_is_child_partition(relid) && !stmt->bAllowPartn &&
+	if (!rel_is_child_partition(relid) && !stmt->bAllowPartn &&
 		(Gp_role == GP_ROLE_DISPATCH))
 	{
 		PartitionNode *pNode;
