@@ -7071,7 +7071,7 @@ atpxPartAddList(Relation rel,
 			 * XXX XXX: fix the first Alter Table Statement to have the
 			 * correct maxpartno.  Whoohoo!!
 			 */
-			if (bFixFirstATS && q && IsA(q, AlterTableStmt))
+			if (bFixFirstATS && IsA(q, AlterTableStmt))
 			{
 				PartitionSpec *spec = NULL;
 				AlterTableStmt *ats;
