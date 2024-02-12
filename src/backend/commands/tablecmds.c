@@ -17921,6 +17921,7 @@ ATPExecPartSplit(Relation *rel,
 		prule = get_part_rule(*rel, pid, true, true, NULL, false);
 
 		/* Error out on external partition */
+		Assert(prule->topRule != NULL);
 		existrel = heap_open(prule->topRule->parchildrelid, NoLock);
 		if (RelationIsExternal(existrel))
 		{
@@ -18384,8 +18385,7 @@ ATPExecPartSplit(Relation *rel,
 						/* MPP-6589: if the partition has an "open"
 						 * START, pass a NULL partStart
 						 */
-						if (prule->topRule &&
-							prule->topRule->parrangestart)
+						if (prule->topRule->parrangestart)
 						{
 							ri = makeNode(PartitionRangeItem);
 							ri->location = -1;
@@ -18423,8 +18423,7 @@ ATPExecPartSplit(Relation *rel,
 						/* MPP-6589: if the partition has an "open"
 						 * END, pass a NULL partEnd
 						 */
-						if (prule->topRule &&
-							prule->topRule->parrangeend)
+						if (prule->topRule->parrangeend)
 						{
 							ri = makeNode(PartitionRangeItem);
 							ri->location = -1;
