@@ -5377,7 +5377,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 								 * to re-order the ALTER statements */
 
 	/* fixup the pnode_tmpl to get the right parlevel */
-	if (pNode && (pNode->rules || pNode->default_part))
+	if (pNode->rules || pNode->default_part)
 	{
 		pNode_tmpl = get_parts(pNode->part->parrelid,
 							   pNode->part->parlevel + 1,
