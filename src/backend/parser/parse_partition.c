@@ -2074,7 +2074,6 @@ validate_partition_spec(CreateStmtContext *cxt,
 		 */
 		pElem->partno = ++partno;
 
-		if (pElem)
 		{
 			pBSpec = (PartitionBoundSpec *) pElem->boundSpec;
 			vstate->spec = (Node *) pBSpec;
@@ -2153,13 +2152,6 @@ validate_partition_spec(CreateStmtContext *cxt,
 				else
 					snprintf(namBuf, sizeof(namBuf), " number %d", partno);
 			}
-		}
-		else
-		{
-			if (pElem->AddPartDesc)
-				snprintf(namBuf, sizeof(namBuf), "%s", pElem->AddPartDesc);
-			else
-				snprintf(namBuf, sizeof(namBuf), " number %d", partno);
 		}
 
 		/* don't have to validate default partition boundary specs */
