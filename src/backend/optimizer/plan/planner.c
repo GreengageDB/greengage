@@ -1935,6 +1935,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 		/* Obtain canonical grouping sets */
 		canonical_grpsets = make_canonical_groupingsets(parse->groupClause);
+		Assert(canonical_grpsets);
 		numGroupCols = canonical_grpsets->num_distcols;
 
 		/*
@@ -2403,8 +2404,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												0, /* rollup_gs_times */
 												result_plan);
 
-				if (canonical_grpsets != NULL &&
-					canonical_grpsets->grpset_counts != NULL &&
+				if (canonical_grpsets->grpset_counts != NULL &&
 					canonical_grpsets->grpset_counts[0] > 1)
 				{
 					result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);
