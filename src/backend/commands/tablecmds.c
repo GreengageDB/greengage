@@ -17126,6 +17126,7 @@ ATPExecPartRename(Relation rel,
 								lrelname,
 								NULL);
 
+		Assert(prule->topRule != NULL);
 		targetrelation = relation_open(prule->topRule->parchildrelid,
 									   AccessExclusiveLock);
 
@@ -17180,7 +17181,7 @@ ATPExecPartRename(Relation rel,
 		renStmt->newname = relname;
 		renStmt->bAllowPartn = true; /* allow rename of partitions */
 
-		if (prule && prule->topRule && prule->topRule->children)
+		if (prule->topRule->children)
 				pNode = prule->topRule->children;
 		else
 				pNode = NULL;
