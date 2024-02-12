@@ -19356,6 +19356,7 @@ ATPExecPartTruncate(Relation rel,
 		DestReceiver 	*dest = None_Receiver;
 		Relation	  	 rel2;
 
+		Assert(prule->topRule != NULL);
 		rel2 = heap_open(prule->topRule->parchildrelid, AccessShareLock);
 		if (RelationIsExternal(rel2))
 			ereport(ERROR,
@@ -19386,7 +19387,7 @@ ATPExecPartTruncate(Relation rel,
 					   NULL);
 
 		/* Notify of name if did not use name for partition id spec */
-		if (prule && prule->topRule && prule->topRule->children
+		if (prule->topRule->children
 			&& (ts->behavior != DROP_CASCADE ))
 		{
 			ereport(NOTICE,
