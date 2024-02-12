@@ -7810,7 +7810,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * If we are adding an OID column, we have to tell Phase 3 to rewrite the
 	 * table to fix that.
 	 */
-	if (isOid)
+	if (tab && isOid)
 		tab->rewrite = true;
 
 	/*
@@ -7886,7 +7886,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * We have to do it while processing the root partition because that's the
 	 * only level where the `ADD COLUMN` subcommands are populated.
 	 */
-	if (!recursing && tab->relkind == RELKIND_RELATION)
+	if (!recursing && tab && tab->relkind == RELKIND_RELATION)
 	{
 		bool	aocs_write_new_columns_only;
 		/*
