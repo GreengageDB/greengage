@@ -819,10 +819,9 @@ Oid
 GetIntoRelOid(QueryDesc *queryDesc)
 {
 	DR_intorel *myState = (DR_intorel *) queryDesc->dest;
-	Relation    into_rel = myState->rel;
 
-	if (myState && myState->pub.mydest == DestIntoRel && into_rel)
-		return RelationGetRelid(into_rel);
+	if (myState && myState->pub.mydest == DestIntoRel && myState->rel)
+		return RelationGetRelid(myState->rel);
 	else
 		return InvalidOid;
 }
