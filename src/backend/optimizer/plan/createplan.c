@@ -3683,6 +3683,7 @@ create_hashjoin_plan(PlannerInfo *root,
 	 * Rearrange hashclauses, if needed, so that the outer variable is always
 	 * on the left.
 	 */
+	Assert(best_path->jpath.outerjoinpath != NULL);
 	hashclauses = get_switched_clauses(best_path->path_hashclauses,
 							 best_path->jpath.outerjoinpath->parent->relids);
 
@@ -3764,8 +3765,7 @@ create_hashjoin_plan(PlannerInfo *root,
 	 * (allowing us to check the outer for rows before building the
 	 * hash-table).
 	 */
-	if (best_path->jpath.outerjoinpath == NULL ||
-		best_path->jpath.outerjoinpath->motionHazard ||
+	if (best_path->jpath.outerjoinpath->motionHazard ||
 		best_path->jpath.innerjoinpath->motionHazard)
 	{
 		join_plan->join.prefetch_inner = true;
