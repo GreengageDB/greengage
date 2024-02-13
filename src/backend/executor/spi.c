@@ -1947,9 +1947,7 @@ _SPI_prepare_plan(const char *src, SPIPlanPtr plan)
 		 * Parameter datatypes are driven by parserSetup hook if provided,
 		 * otherwise we use the fixed parameter list.
 		 */
-		if (parsetree == NULL)
-			stmt_list = NIL;
-		else if (plan->parserSetup != NULL)
+		if (plan->parserSetup != NULL)
 		{
 			Assert(plan->nargs == 0);
 			stmt_list = pg_analyze_and_rewrite_params(parsetree,
@@ -2157,9 +2155,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 			 * Parameter datatypes are driven by parserSetup hook if provided,
 			 * otherwise we use the fixed parameter list.
 			 */
-			if (parsetree == NULL)
-				stmt_list = NIL;
-			else if (plan->parserSetup != NULL)
+			if (plan->parserSetup != NULL)
 			{
 				Assert(plan->nargs == 0);
 				stmt_list = pg_analyze_and_rewrite_params(parsetree,
