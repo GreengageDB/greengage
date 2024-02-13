@@ -1056,9 +1056,6 @@ parserOpenTable(ParseState *pstate, const RangeVar *relation,
 /*
  * Add an entry for a relation to the pstate's range table (p_rtable).
  *
- * If pstate is NULL, we just build an RTE and return it without adding it
- * to an rtable list.
- *
  * Note: formerly this checked for refname conflicts, but that's wrong.
  * Caller is responsible for checking for conflicts in the appropriate scope.
  */
@@ -1075,6 +1072,8 @@ addRangeTableEntry(ParseState *pstate,
 	LockingClause *locking;
 	Relation	rel;
 	ParseCallbackState pcbstate;
+
+	Assert(pstate != NULL);
 
 	rte->alias = alias;
 	rte->rtekind = RTE_RELATION;
@@ -1158,8 +1157,7 @@ addRangeTableEntry(ParseState *pstate,
 	 * Add completed RTE to pstate's range table list, but not to join list
 	 * nor namespace --- caller must do that if appropriate.
 	 */
-	if (pstate != NULL)
-		pstate->p_rtable = lappend(pstate->p_rtable, rte);
+	pstate->p_rtable = lappend(pstate->p_rtable, rte);
 
 	return rte;
 }
