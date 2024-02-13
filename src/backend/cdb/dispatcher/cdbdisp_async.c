@@ -1232,8 +1232,7 @@ processResults(CdbDispatchResult *dispatchResult)
 		else
 		{
 			/* Got an unknown PGnotify, just record it in log */
-			if (qnotifies->relname)
-				elog(LOG, "got an unknown notify message : %s", qnotifies->relname);
+			elog(LOG, "got an unknown notify message : %s", qnotifies->relname);
 		}
 
 		if (qnotifies)
