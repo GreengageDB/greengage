@@ -514,8 +514,7 @@ create_scan_plan(PlannerInfo *root, Path *best_path)
 	/* Decorate the top node of the plan with a Flow node. */
 	plan->flow = cdbpathtoplan_create_flow(root,
 										   best_path->locus,
-								best_path->parent ? best_path->parent->relids
-										   : NULL,
+										   best_path->parent->relids,
 										   plan);
 
 	/*
@@ -1319,7 +1318,7 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path)
 		copy_path_costsize(root, plan, (Path *) best_path);
 		plan->flow = cdbpathtoplan_create_flow(root,
 											   best_path->path.locus,
-											   best_path->path.parent ? best_path->path.parent->relids : NULL,
+											   best_path->path.parent->relids,
 											   plan);
 	}
 
