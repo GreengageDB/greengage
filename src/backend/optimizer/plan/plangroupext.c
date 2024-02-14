@@ -430,11 +430,7 @@ plan_grouping_extension(PlannerInfo *root,
 	context.qual = qual;
 	context.numGroupCols = *p_numGroupCols;
 	context.grpColIdx = palloc0(context.numGroupCols * sizeof(AttrNumber));
-	memcpy(context.grpColIdx, *p_grpColIdx,
-		   context.numGroupCols * sizeof(AttrNumber));
 	context.grpOperators = palloc0(context.numGroupCols * sizeof(Oid));
-	memcpy(context.grpOperators, *p_grpOperators,
-		   context.numGroupCols * sizeof(Oid));
 	context.numDistinctCols = 0;
 	context.distinctColIdx = NULL;
 	context.agg_costs = agg_costs;
@@ -445,6 +441,17 @@ plan_grouping_extension(PlannerInfo *root,
 	context.querynode_changed = false;
 	context.canonical_rollups = NIL;
 	context.curr_grpset_no = 0;
+
+	if (*p_numGroupCols > 0)
+	{
+		Assert(*p_grpColIdx);
+		Assert(*p_grpOperators);
+
+		memcpy(context.grpColIdx, *p_grpColIdx,
+			   context.numGroupCols * sizeof(AttrNumber));
+		memcpy(context.grpOperators, *p_grpOperators,
+			   context.numGroupCols * sizeof(Oid));
+	}
 
 	/*
 	 * GPDB_91_MERGE_FIXME: The code in this file assumes that there is a
