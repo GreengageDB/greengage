@@ -2771,7 +2771,7 @@ partition_policies_equal(GpPolicy *p, PartitionNode *pn)
 				if (p->attrs == 0)
 					/* random policy, skip */
 					;
-				if (memcmp(p->attrs, rel->rd_cdbpolicy->attrs,
+				else if (memcmp(p->attrs, rel->rd_cdbpolicy->attrs,
 						   (sizeof(AttrNumber) * p->nattrs)))
 				{
 					heap_close(rel, NoLock);
