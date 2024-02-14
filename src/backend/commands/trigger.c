@@ -3466,7 +3466,7 @@ afterTriggerAddEvent(AfterTriggerEventList *events,
 
 		if (events->head == NULL)
 			events->head = chunk;
-		else
+		else if (events->tail != NULL)
 			events->tail->next = chunk;
 		events->tail = chunk;
 		/* events->tailfree is now out of sync, but we'll fix it below */
