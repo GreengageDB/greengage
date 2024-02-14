@@ -42,6 +42,7 @@
 #include "common/relpath.h"
 #include "pgstat.h"
 #include "storage/bufmgr.h"
+#include "storage/md.h"
 #include "storage/sync.h"
 #include "utils/faultinjector.h"
 #include "utils/guc.h"
@@ -369,6 +370,13 @@ mdunlink_ao_perFile(const int segno, void *ctx)
 	INIT_FILETAG(tag, unlinkFiles->rnode, MAIN_FORKNUM, segno,
 				 SYNC_HANDLER_AO);
 	RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
+
+	/*
+	 * unlink is not enough to return disk space to the OS immediately, because
+	 * the file can be still opened by other process
+	 */
+	if (do_truncate(segPath) < 0 && errno == ENOENT)
+		return false;
 
 	/* Next unlink the file */
 	if (unlink(segPath) != 0)

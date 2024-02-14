@@ -16,6 +16,8 @@ static bool file_present[MAX_SEGNO_FILES];
 static int num_unlink_called = 0;
 static bool unlink_passing = true;
 
+int __wrap_do_truncate(const char *path);
+
 static void
 setup_test_structures()
 {
@@ -58,6 +60,17 @@ mock_unlink(const char *path)
 		path, segfile, num_unlink_called, unlink_passing);
 #endif
 	return ec;
+}
+
+/*
+ * Make do_truncate return always Ok during unit test,
+ * because otherwise mdunlink_ao will return before actual invoke of unlink,
+ * if called with test file names.
+ */
+int
+__wrap_do_truncate(const char *path)
+{
+	return 0;
 }
 /*
  *******************************************************************************
