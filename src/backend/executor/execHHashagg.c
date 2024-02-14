@@ -571,7 +571,8 @@ lookup_agg_hash_entry(AggState *aggstate,
 			++hashtable->num_ht_groups;
 			++hashtable->num_entries;
 
-			*p_isnew = true; /* created a new entry */
+			if (p_isnew != NULL)
+				*p_isnew = true; /* created a new entry */
 		}
 		/*
 		  else no matching entry, and no room to create one. 
