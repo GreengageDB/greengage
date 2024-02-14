@@ -59,4 +59,6 @@ extern void ForgetDatabaseFsyncRequests(Oid dbid);
 extern void DropRelationFiles(RelFileNodePendingDelete *delrels, int ndelrels, bool isRedo);
 
 extern int	aosyncfiletag(const FileTag *ftag, char *path);
+
+extern int	do_truncate(const char *path);
 #endif							/* MD_H */

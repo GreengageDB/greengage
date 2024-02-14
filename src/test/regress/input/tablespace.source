@@ -146,3 +146,24 @@ DROP SCHEMA testschema CASCADE;
 
 DROP ROLE tablespace_testuser1;
 DROP ROLE tablespace_testuser2;
+
+-- Create a new tablespace and check that within this tablespace,
+-- after dropping the table, the size of all deleted (but still opened) files is 0.
+CREATE TABLESPACE testspace LOCATION '@testtablespace@';
+-- start_ignore
+DROP TABLE IF EXISTS t;
+-- end_ignore
+
+-- Checking that the AO row-oriented table doesn't leave non-zero files.
+CREATE TABLE t(a int, b int) WITH (appendoptimized=true, orientation=row) TABLESPACE testspace;
+INSERT INTO t SELECT i, i FROM generate_series(1, 1000) i;
+DROP TABLE t;
+\! find /proc/[0-9]*/fd -lname '@testtablespace@*(deleted)' -exec stat -Lc '%s' {} \; 2>/dev/null | awk 'BEGIN {sum=0} {sum += $1} END {print "size:",  sum}';
+
+-- Checking that the AO column-oriented table doesn't leave non-zero files.
+CREATE TABLE t(a int, b int) WITH (appendoptimized=true, orientation=column) TABLESPACE testspace;
+INSERT INTO t SELECT i, i FROM generate_series(1, 1000) i;
+DROP TABLE t;
+\! find /proc/[0-9]*/fd -lname '@testtablespace@*(deleted)' -exec stat -Lc '%s' {} \; 2>/dev/null | awk 'BEGIN {sum=0} {sum += $1} END {print "size:",  sum}';
+
+DROP TABLESPACE testspace;

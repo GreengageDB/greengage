@@ -36,6 +36,7 @@
 #include "cdb/cdbappendonlystorage.h"
 #include "cdb/cdbappendonlyxlog.h"
 #include "common/relpath.h"
+#include "storage/md.h"
 #include "utils/guc.h"
 
 #define SEGNO_SUFFIX_LENGTH 12
@@ -250,6 +251,14 @@ mdunlink_ao_perFile(const int segno, void *ctx)
 	char *segPathSuffixPosition = unlinkFiles->segpathSuffixPosition;
 
 	sprintf(segPathSuffixPosition, ".%u", segno);
+
+	/*
+	 * unlink is not enough to return disk space to the OS immediately, because
+	 * the file can be still opened by other process
+	 */
+	if (do_truncate(segPath) < 0 && errno == ENOENT)
+		return false;
+
 	if (unlink(segPath) != 0)
 	{
 		/* ENOENT is expected after the end of the extensions */

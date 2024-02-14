@@ -471,7 +471,7 @@ mdunlink(RelFileNodeBackend rnode, ForkNumber forkNum, bool isRedo, char relstor
 /*
  * Truncate a file to release disk space.
  */
-static int
+int
 do_truncate(const char *path)
 {
 	int			save_errno;
