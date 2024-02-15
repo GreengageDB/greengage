@@ -5,6 +5,8 @@ SET client_min_messages=WARNING;
 -- start_matchsubs
 -- m/(.*)prt_p\d{6}/
 -- s/(.*)prt_p\d{6}/$1prt_pYYYYMM/
+-- m/(.*)backup_\d{8}t\d{6}/
+-- s/(.*)backup_\d{8}t\d{6}/$1backup_YYYYMMDDtHHMMSS/
 -- end_matchsubs
 -- function that mocks manual installation of arenadata_toolkit from bundle
 CREATE FUNCTION mock_manual_installation() RETURNS VOID AS $$
@@ -85,28 +87,31 @@ SELECT arenadata_toolkit.adb_create_tables();
 -- show toolkit objects (and their grants) that belongs to arenadata_toolkit schema after creating
 -- extension and calling adb_create_tables
 SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY objname;
-                objname                | objtype | objstorage |             objacl             
----------------------------------------+---------+------------+--------------------------------
- __db_files_current                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_files_current_unmapped           | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_segment_files                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
- adb_collect_table_stats               | proc    | -          | {owner=X/owner}
- adb_create_tables                     | proc    | -          | {owner=X/owner}
- adb_get_relfilenodes                  | proc    | -          | {=X/owner,owner=X/owner}
- adb_relation_storage_size             | proc    | -          | {=X/owner,owner=X/owner}
- adb_relation_storage_size_on_segments | proc    | -          | {=X/owner,owner=X/owner}
- adb_skew_coefficients                 | table   | v          | {owner=arwdDxt/owner,=r/owner}
- adb_vacuum_strategy                   | proc    | -          | {owner=X/owner}
- adb_vacuum_strategy_newest_first      | proc    | -          | {owner=X/owner}
- adb_vacuum_strategy_newest_last       | proc    | -          | {owner=X/owner}
- arenadata_toolkit                     | schema  | -          | {owner=UC/owner,=U/owner}
- daily_operation                       | table   | a          | 
- db_files_current                      | table   | h          | {owner=arwdDxt/owner,=r/owner}
- db_files_history                      | table   | a          | 
- db_files_history_1_prt_default_part   | table   | a          | 
- db_files_history_1_prt_pYYYYMM        | table   | a          | 
- operation_exclude                     | table   | a          | 
-(19 rows)
+                          objname                           | objtype | objstorage |             objacl             
+------------------------------------------------------------+---------+------------+--------------------------------
+ __db_files_current                                         | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_files_current_unmapped                                | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_segment_files                                         | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ adb_collect_table_stats                                    | proc    | -          | {owner=X/owner}
+ adb_create_tables                                          | proc    | -          | {owner=X/owner}
+ adb_get_relfilenodes                                       | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size                                  | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size_on_segments                      | proc    | -          | {=X/owner,owner=X/owner}
+ adb_skew_coefficients                                      | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ adb_vacuum_strategy                                        | proc    | -          | {owner=X/owner}
+ adb_vacuum_strategy_newest_first                           | proc    | -          | {owner=X/owner}
+ adb_vacuum_strategy_newest_last                            | proc    | -          | {owner=X/owner}
+ arenadata_toolkit                                          | schema  | -          | {owner=UC/owner,=U/owner}
+ daily_operation                                            | table   | a          | 
+ db_files_current                                           | table   | h          | {owner=arwdDxt/owner,=r/owner}
+ db_files_history                                           | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_1_prt_default_part                        | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_1_prt_pYYYYMM                             | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_backup_YYYYMMDDtHHMMSS                    | table   | a          | 
+ db_files_history_backup_YYYYMMDDtHHMMSS_1_prt_default_part | table   | a          | 
+ db_files_history_backup_YYYYMMDDtHHMMSS_1_prt_pYYYYMM      | table   | a          | 
+ operation_exclude                                          | table   | a          | 
+(22 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN

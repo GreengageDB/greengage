@@ -212,3 +212,4 @@ DROP FUNCTION check_size_diff(OID);
 
 RESET search_path;
 DROP EXTENSION arenadata_toolkit;
+DROP SCHEMA arenadata_toolkit CASCADE;

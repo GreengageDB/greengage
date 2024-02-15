@@ -1,4 +1,6 @@
 # Generated subdirectories and files
+/expected/tablespace_location.out
+/sql/tablespace_location.sql
 /results/
 regression.diffs
 regression.out

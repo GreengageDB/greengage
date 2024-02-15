@@ -5,6 +5,8 @@ SET client_min_messages=WARNING;
 -- start_matchsubs
 -- m/(.*)prt_p\d{6}/
 -- s/(.*)prt_p\d{6}/$1prt_pYYYYMM/
+-- m/(.*)backup_\d{8}t\d{6}/
+-- s/(.*)backup_\d{8}t\d{6}/$1backup_YYYYMMDDtHHMMSS/
 -- end_matchsubs
 -- function that mocks manual installation of arenadata_toolkit from bundle
 CREATE FUNCTION mock_manual_installation() RETURNS VOID AS $$
