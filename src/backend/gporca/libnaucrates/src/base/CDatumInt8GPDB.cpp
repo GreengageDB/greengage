@@ -203,6 +203,12 @@ CDatumInt8GPDB::Matches(const IDatum *datum) const
 	const CDatumInt8GPDB *datum_cast =
 		dynamic_cast<const CDatumInt8GPDB *>(datum);
 
+	// type mismatch
+	if (NULL == datum_cast)
+	{
+		return false;
+	}
+
 	if (!datum_cast->IsNull() && !IsNull())
 	{
 		return (datum_cast->Value() == Value());
