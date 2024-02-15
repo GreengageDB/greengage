@@ -6504,6 +6504,8 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 
 		econtext = GetPerTupleExprContext(estate);
 
+		Assert(newTupDesc && oldTupDesc);
+
 		/*
 		 * Make tuple slots for old and new tuples.  Note that even when the
 		 * tuples are the same, the tupDescs might not be (consider ADD COLUMN
@@ -6798,13 +6800,9 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 			 * We use the old tuple descriptor instead of oldrel's tuple descriptor,
 			 * which may already contain altered column.
 			 */
-			if (oldTupDesc)
-			{
-				Assert(oldTupDesc->natts <= nvp);
-				memset(proj, true, oldTupDesc->natts);
-			}
-			else
-				memset(proj, true, nvp);
+			
+			Assert(oldTupDesc->natts <= nvp);
+			memset(proj, true, oldTupDesc->natts);
 
 			if(newrel)
 				idesc = aocs_insert_init(newrel, segno, false);
