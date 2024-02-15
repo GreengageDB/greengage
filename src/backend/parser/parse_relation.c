@@ -592,6 +592,29 @@ scanRTEForColumn(ParseState *pstate, RangeTblEntry *rte, char *colname,
 	 */
 	if (rte->rtekind == RTE_RELATION)
 	{
+		/* quick check to see if name could be a system column */
+		attnum = specialAttNum(colname);
+
+		/*
+		 * AO tables by nature do not have special system columns like xmin,
+		 * xmax, cmin, cmax. Here we can check for that columns access and
+		 * provide meaningfull message to the user. We want to do this before
+		 * check for replicated tables, so replicated AO tables also covered
+		 * with this logic.
+		 */
+		if ((attnum == MinTransactionIdAttributeNumber ||
+			 attnum == MinCommandIdAttributeNumber ||
+			 attnum == MaxTransactionIdAttributeNumber ||
+			 attnum == MaxCommandIdAttributeNumber) &&
+			relstorage_is_ao(get_rel_relstorage(rte->relid)))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_COLUMN),
+					 errmsg("AO-table has no \"%s\" column",
+							colname),
+					 parser_errposition(pstate, location)));
+		}
+
 		/* In GPDB, system columns like gp_segment_id, ctid, xmin/xmax seem to be
 		 * ambiguous for replicated table, replica in each segment has different
 		 * value of those columns, between sessions, different replicas are choosen
@@ -602,9 +625,6 @@ scanRTEForColumn(ParseState *pstate, RangeTblEntry *rte, char *colname,
 		if (GpPolicyIsReplicated(GpPolicyFetch(rte->relid)) &&
 			Gp_role != GP_ROLE_UTILITY)
 			return result;
-
-		/* quick check to see if name could be a system column */
-		attnum = specialAttNum(colname);
 
 		/* In constraint check, no system column is allowed except tableOid */
 		/*
