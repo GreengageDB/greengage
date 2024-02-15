@@ -5228,7 +5228,9 @@ get_part_rule(Relation rel,
 
 		lc = list_head(l1);
 		prule2 = (PgPartRule *) lfirst(lc);
-		if (prule2 && prule2->topRule && prule2->topRule->children)
+
+		Assert(prule2);
+		if (prule2->topRule && prule2->topRule->children)
 			pNode = prule2->topRule->children;
 
 		lc = lnext(lc);
@@ -5261,12 +5263,14 @@ get_part_rule(Relation rel,
 									pid2,
 									bExistError, bMustExist,
 									pSearch, pNode, sid1.data, &pNode2);
+			if (!prule2)
+				return NULL;
 
 			pNode = pNode2;
 
 			if (!pNode)
 			{
-				if (prule2 && prule2->topRule && prule2->topRule->children)
+				if (prule2->topRule && prule2->topRule->children)
 					pNode = prule2->topRule->children;
 			}
 
