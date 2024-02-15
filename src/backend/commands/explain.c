@@ -1535,7 +1535,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 						/* In Gather Motion always display receiver size as 1 */
 						motion_recv = 1;
 					}
-					else
+					else if (plan->flow != NULL)
 					{
 						/* Otherwise find out receiver size from plan */
 						motion_recv = plan->flow->numsegments;
