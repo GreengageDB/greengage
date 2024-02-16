@@ -10867,6 +10867,8 @@ write_out_rule(PartitionRule *rule, PartitionNode *pn, Node *start,
 {
 	char *str;
 
+	Assert(first_rule);
+
 	if (!*first_rule)
 	{
 		appendStringInfoString(body->buf, ", ");
@@ -10893,7 +10895,7 @@ write_out_rule(PartitionRule *rule, PartitionNode *pn, Node *start,
 
 	if (str && strlen(str))
 	{
-		if (strlen(body->buf->data) && !first_rule &&
+		if (strlen(body->buf->data) && !*first_rule &&
 			!PRETTY_INDENT(body))
 			appendStringInfoString(body->buf, " ");
 
@@ -10931,8 +10933,7 @@ write_out_rule(PartitionRule *rule, PartitionNode *pn, Node *start,
 
 	get_partition_recursive(children, head, body, leveldone, bLeafTablename);
 
-	if (*first_rule)
-		*first_rule = false;
+	*first_rule = false;
 }
 
 
