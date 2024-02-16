@@ -16055,10 +16055,11 @@ wack_pid_relname(AlterPartitionId 		 *pid,
 		*ppar_prule = (PgPartRule*) lfirst(lc);
 
 		par_prule = *ppar_prule;
+		Assert(par_prule);
 
 		*plrelname = par_prule->relname;
 
-		if (par_prule && par_prule->topRule && par_prule->topRule->children)
+		if (par_prule->topRule && par_prule->topRule->children)
 			*ppNode = par_prule->topRule->children;
 
 		lc = lnext(lc);
