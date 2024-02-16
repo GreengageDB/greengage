@@ -1377,13 +1377,14 @@ check_primary_key(PG_FUNCTION_ARGS)
 
 		/*
 		 * Remember that SPI_prepare places plan in current memory context -
-		 * so, we have to save plan in Top memory context for latter use.
+		 * so, we have to save plan in TopMemoryContext for latter use.
 		 */
 		pplan = SPI_saveplan(pplan);
 		if (pplan == NULL)
 			/* internal error */
 			elog(ERROR, "check_primary_key: SPI_saveplan returned %d", SPI_result);
-		plan->splan = (void **) malloc(sizeof(void *));
+		plan->splan = (void **) MemoryContextAlloc(TopMemoryContext,
+												   sizeof(void *));
 		*(plan->splan) = pplan;
 		plan->nplans = 1;
 	}
@@ -1607,7 +1608,8 @@ check_foreign_key(PG_FUNCTION_ARGS)
 		char		sql[8192];
 		char	  **args2 = args;
 
-		plan->splan = (void **) malloc(nrefs * sizeof(void *));
+		plan->splan = (void **) MemoryContextAlloc(TopMemoryContext,
+												   nrefs * sizeof(void *));
 
 		for (r = 0; r < nrefs; r++)
 		{
@@ -1914,6 +1916,13 @@ find_plan(char *ident, EPlan ** eplan, int *nplans)
 {
 	EPlan	   *newp;
 	int			i;
+	MemoryContext oldcontext;
+
+	/*
+	 * All allocations done for the plans need to happen in a session-safe
+	 * context.
+	 */
+	oldcontext = MemoryContextSwitchTo(TopMemoryContext);
 
 	if (*nplans > 0)
 	{
@@ -1923,22 +1932,25 @@ find_plan(char *ident, EPlan ** eplan, int *nplans)
 				break;
 		}
 		if (i != *nplans)
+		{
+			MemoryContextSwitchTo(oldcontext);
 			return (*eplan + i);
-		*eplan = (EPlan *) realloc(*eplan, (i + 1) * sizeof(EPlan));
+		}
+		*eplan = (EPlan *) repalloc(*eplan, (i + 1) * sizeof(EPlan));
 		newp = *eplan + i;
 	}
 	else
 	{
-		newp = *eplan = (EPlan *) malloc(sizeof(EPlan));
+		newp = *eplan = (EPlan *) palloc(sizeof(EPlan));
 		(*nplans) = i = 0;
 	}
 
-	newp->ident = (char *) malloc(strlen(ident) + 1);
-	strcpy(newp->ident, ident);
+	newp->ident = pstrdup(ident);
 	newp->nplans = 0;
 	newp->splan = NULL;
 	(*nplans)++;
 
+	MemoryContextSwitchTo(oldcontext);
 	return (newp);
 }
 
