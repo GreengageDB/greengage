@@ -1273,7 +1273,7 @@ make_partition_rules(CreateStmtContext *cxt, CreateStmt *stmt,
 			ListCell   *lc_anp = NULL;
 
 			/* check the list of "all new partitions" */
-			if (pp_lc_anp)
+			Assert(pp_lc_anp);
 			{
 				lc_anp = *pp_lc_anp;
 				if (lc_anp)
