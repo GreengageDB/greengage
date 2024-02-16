@@ -585,6 +585,8 @@ ExecReScanNestLoop(NestLoopState *node)
 {
 	PlanState  *outerPlan = outerPlanState(node);
 
+	Insist(outerPlan);
+
 	/*
 	 * If outerPlan->chgParam is not null then plan will be automatically
 	 * re-scanned by first ExecProcNode.
