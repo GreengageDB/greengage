@@ -1099,13 +1099,13 @@ DoCopy(const CopyStmt *stmt, const char *queryString, uint64 *processed)
 			{
 				cstate->errMode = SREH_IGNORE;
 			}
+			Assert(stmt->relation);
 			cstate->cdbsreh = makeCdbSreh(sreh->rejectlimit,
 										  sreh->is_limit_in_rows,
 										  cstate->filename,
 										  stmt->relation->relname,
 										  log_to_file);
-			if (rel)
-				cstate->cdbsreh->relid = RelationGetRelid(rel);
+			cstate->cdbsreh->relid = RelationGetRelid(rel);
 		}
 		else
 		{
