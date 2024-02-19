@@ -2594,6 +2594,7 @@ CTranslatorQueryToDXL::DXLDummyConstTableGet() const
 
 	const CMDTypeBoolGPDB *md_type_bool = dynamic_cast<const CMDTypeBoolGPDB *>(
 		m_md_accessor->PtMDType<IMDTypeBool>(m_sysid));
+	GPOS_ASSERT(NULL != md_type_bool);
 	const CMDIdGPDB *mdid = CMDIdGPDB::CastMdid(md_type_bool->MDId());
 
 	// empty column name

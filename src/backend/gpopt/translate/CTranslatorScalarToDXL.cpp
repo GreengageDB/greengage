@@ -1756,6 +1756,7 @@ CTranslatorScalarToDXL::CreateQuantifiedSubqueryFromSublink(
 		dynamic_cast<CDXLScalarIdent *>(dxl_sc_ident->GetOperator());
 
 	// get the dxl column reference
+	GPOS_ASSERT(NULL != scalar_ident);
 	const CDXLColRef *dxl_colref = scalar_ident->GetDXLColRef();
 	const ULONG colid = dxl_colref->Id();
 
