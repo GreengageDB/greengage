@@ -104,7 +104,8 @@ ExecDML(DMLState *node)
 		 * it will be allocated at es_result_relations.
 		 */
 		if (RelationGetRelid(relInfo->ri_RelationDesc) !=
-			node->ps.state->es_result_partitions->part->parrelid)
+			node->ps.state->es_result_partitions->part->parrelid &&
+			action != DML_DELETE)
 			makePartitionCheckMap(node->ps.state, relInfo);
 
 		/*
@@ -159,8 +160,25 @@ ExecDML(DMLState *node)
 	{
 		int32 segid = GpIdentity.segindex;
 		Datum ctid = slot_getattr(slot, plannode->ctidColIdx, &isnull);
+		Oid tableoid = InvalidOid;
 
 		Assert(!isnull);
+
+		if (AttributeNumberIsValid(plannode->tableoidColIdx))
+		{
+			Datum dtableoid = slot_getattr(slot, plannode->tableoidColIdx, &isnull);
+			tableoid = isnull ? InvalidOid : DatumGetObjectId(dtableoid);
+		}
+
+		/*
+		 * If tableoid is valid, it means that we are executing UPDATE/DELETE
+		 * on partitioned table (root partition). In order to avoid partition
+		 * pruning in ExecDelete one can use tableoid to build target
+		 * ResultRelInfo for the leaf partition.
+		 */
+		if (OidIsValid(tableoid) && node->ps.state->es_result_partitions)
+			node->ps.state->es_result_relation_info =
+				targetid_get_partition(tableoid, node->ps.state, true);
 
 		ItemPointer  tupleid = (ItemPointer) DatumGetPointer(ctid);
 		ItemPointerData tuple_ctid = *tupleid;

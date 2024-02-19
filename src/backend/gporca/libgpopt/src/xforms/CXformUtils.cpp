@@ -1310,12 +1310,10 @@ CXformUtils::PexprLogicalPartitionSelector(CMemoryPool *mp,
 //
 //---------------------------------------------------------------------------
 CExpression *
-CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
-										CExpression *pexprChild,
-										CLogicalDML::EDMLOperator edmlop,
-										CTableDescriptor *ptabdesc,
-										CColRefArray *colref_array,
-										CColRef *pcrCtid, CColRef *pcrSegmentId)
+CXformUtils::PexprLogicalDMLOverProject(
+	CMemoryPool *mp, CExpression *pexprChild, CLogicalDML::EDMLOperator edmlop,
+	CTableDescriptor *ptabdesc, CColRefArray *colref_array, CColRef *pcrCtid,
+	CColRef *pcrSegmentId, CColRef *pcrTableOid)
 {
 	GPOS_ASSERT(CLogicalDML::EdmlInsert == edmlop ||
 				CLogicalDML::EdmlDelete == edmlop);
@@ -1355,10 +1353,10 @@ CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
 
 	CExpression *pexprDML = GPOS_NEW(mp) CExpression(
 		mp,
-		GPOS_NEW(mp)
-			CLogicalDML(mp, edmlop, ptabdesc, colref_array,
-						GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/, pcrAction,
-						pcrCtid, pcrSegmentId, NULL /*pcrTupleOid*/),
+		GPOS_NEW(mp) CLogicalDML(mp, edmlop, ptabdesc, colref_array,
+								 GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/,
+								 pcrAction, pcrCtid, pcrSegmentId,
+								 NULL /*pcrTupleOid*/, pcrTableOid),
 		pexprProject);
 
 	CExpression *pexprOutput = pexprDML;

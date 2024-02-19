@@ -96,7 +96,9 @@ const CHAR *rgszDMLFileNames[] = {
 	"../data/dxl/minidump/DML-Volatile-Function.mdp",
 	"../data/dxl/minidump/UpdateWindowGatherMerge.mdp",
 	"../data/dxl/minidump/UpdateDistKeyWithNestedJoin.mdp",
-};
+	"../data/dxl/minidump/PartitionedInsert.mdp",
+	"../data/dxl/minidump/PartitionedDelete.mdp",
+	"../data/dxl/minidump/PartitionedUpdate.mdp"};
 
 //---------------------------------------------------------------------------
 //	@function:

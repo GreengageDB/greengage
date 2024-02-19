@@ -52,6 +52,9 @@ private:
 	// tuple oid column id
 	ULONG m_tuple_oid_col_oid;
 
+	// table oid column (has value 0 in case of non partitioned tables)
+	ULONG m_table_oid_col_oid;
+
 	// private copy ctor
 	CParseHandlerLogicalUpdate(const CParseHandlerLogicalUpdate &);
 

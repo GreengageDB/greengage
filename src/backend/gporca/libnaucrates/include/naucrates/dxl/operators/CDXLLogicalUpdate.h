@@ -55,6 +55,9 @@ private:
 	// tuple oid column id
 	ULONG m_tuple_oid;
 
+	// table oid column (has value 0 in case of non partitioned tables)
+	ULONG m_table_oid;
+
 	// private copy ctor
 	CDXLLogicalUpdate(const CDXLLogicalUpdate &);
 
@@ -64,7 +67,7 @@ public:
 					  ULONG ctid_colid, ULONG segid_colid,
 					  ULongPtrArray *delete_colid_array,
 					  ULongPtrArray *insert_colid_array, BOOL preserve_oids,
-					  ULONG tuple_oid);
+					  ULONG tuple_oid, ULONG table_oid);
 
 	// dtor
 	virtual ~CDXLLogicalUpdate();
@@ -122,6 +125,13 @@ public:
 	GetTupleOid() const
 	{
 		return m_tuple_oid;
+	}
+
+	// table oid column
+	ULONG
+	GetTableOidColId() const
+	{
+		return m_table_oid;
 	}
 
 #ifdef GPOS_DEBUG

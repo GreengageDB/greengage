@@ -1121,51 +1121,22 @@ CTranslatorQueryToDXL::ExtractStorageOptionStr(DefElem *def_elem)
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorQueryToDXL::GetCtidAndSegmentId
+//		CTranslatorUtils::GetSystemColId
 //
 //	@doc:
-//		Obtains the ids of the ctid and segmentid columns for the target
-//		table of a DML query
-//
-//---------------------------------------------------------------------------
-void
-CTranslatorQueryToDXL::GetCtidAndSegmentId(ULONG *ctid, ULONG *segment_id)
-{
-	// ctid column id
-	IMDId *mdid = CTranslatorUtils::GetSystemColType(
-		m_mp, SelfItemPointerAttributeNumber);
-	*ctid = CTranslatorUtils::GetColId(m_query_level, m_query->resultRelation,
-									   SelfItemPointerAttributeNumber, mdid,
-									   m_var_to_colid_map);
-	mdid->Release();
-
-	// segmentid column id
-	mdid = CTranslatorUtils::GetSystemColType(m_mp, GpSegmentIdAttributeNumber);
-	*segment_id = CTranslatorUtils::GetColId(
-		m_query_level, m_query->resultRelation, GpSegmentIdAttributeNumber,
-		mdid, m_var_to_colid_map);
-	mdid->Release();
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorQueryToDXL::GetTupleOidColId
-//
-//	@doc:
-//		Obtains the id of the tuple oid column for the target table of a DML
-//		update
+//		returns the corresponding ColId for the given system
+//		attribute number
 //
 //---------------------------------------------------------------------------
 ULONG
-CTranslatorQueryToDXL::GetTupleOidColId()
+CTranslatorQueryToDXL::GetSystemColId(INT attribute_number)
 {
-	IMDId *mdid =
-		CTranslatorUtils::GetSystemColType(m_mp, ObjectIdAttributeNumber);
-	ULONG tuple_oid_colid = CTranslatorUtils::GetColId(
-		m_query_level, m_query->resultRelation, ObjectIdAttributeNumber, mdid,
-		m_var_to_colid_map);
+	IMDId *mdid = CTranslatorUtils::GetSystemColType(m_mp, attribute_number);
+	ULONG res =
+		CTranslatorUtils::GetColId(m_query_level, m_query->resultRelation,
+								   attribute_number, mdid, m_var_to_colid_map);
 	mdid->Release();
-	return tuple_oid_colid;
+	return res;
 }
 
 //---------------------------------------------------------------------------
@@ -1216,9 +1187,14 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 	// make note of the operator classes used in the distribution key
 	NoteDistributionPolicyOpclasses(rte);
 
-	ULONG ctid_colid = 0;
-	ULONG segid_colid = 0;
-	GetCtidAndSegmentId(&ctid_colid, &segid_colid);
+	ULONG ctid_colid = GetSystemColId(SelfItemPointerAttributeNumber);
+	ULONG segid_colid = GetSystemColId(GpSegmentIdAttributeNumber);
+
+	ULONG tableoid_colid = 0;
+	if (gpdb::RelPartIsRoot(rte->relid))
+	{
+		tableoid_colid = GetSystemColId(TableOidAttributeNumber);
+	}
 
 	ULongPtrArray *delete_colid_array = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
 
@@ -1237,8 +1213,9 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 		delete_colid_array->Append(GPOS_NEW(m_mp) ULONG(colid));
 	}
 
-	CDXLLogicalDelete *delete_dxlop = GPOS_NEW(m_mp) CDXLLogicalDelete(
-		m_mp, table_descr, ctid_colid, segid_colid, delete_colid_array);
+	CDXLLogicalDelete *delete_dxlop = GPOS_NEW(m_mp)
+		CDXLLogicalDelete(m_mp, table_descr, ctid_colid, segid_colid,
+						  delete_colid_array, tableoid_colid);
 
 	return GPOS_NEW(m_mp) CDXLNode(m_mp, delete_dxlop, query_dxlnode);
 }
@@ -1298,17 +1275,20 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 	// make note of the operator classes used in the distribution key
 	NoteDistributionPolicyOpclasses(rte);
 
-	ULONG ctid_colid = 0;
-	ULONG segmentid_colid = 0;
-	GetCtidAndSegmentId(&ctid_colid, &segmentid_colid);
+	ULONG ctid_colid = GetSystemColId(SelfItemPointerAttributeNumber);
+	ULONG segmentid_colid = GetSystemColId(GpSegmentIdAttributeNumber);
+
+	ULONG tableoid_colid = 0;
+	if (gpdb::RelPartIsRoot(rte->relid))
+	{
+		tableoid_colid = GetSystemColId(TableOidAttributeNumber);
+	}
 
 	ULONG tuple_oid_colid = 0;
-
-
 	BOOL has_oids = md_rel->HasOids();
 	if (has_oids)
 	{
-		tuple_oid_colid = GetTupleOidColId();
+		tuple_oid_colid = GetSystemColId(ObjectIdAttributeNumber);
 	}
 
 	// get (resno -> colId) mapping of columns to be updated
@@ -1350,7 +1330,7 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 	update_column_map->Release();
 	CDXLLogicalUpdate *pdxlopupdate = GPOS_NEW(m_mp) CDXLLogicalUpdate(
 		m_mp, table_descr, ctid_colid, segmentid_colid, delete_colid_array,
-		insert_colid_array, has_oids, tuple_oid_colid);
+		insert_colid_array, has_oids, tuple_oid_colid, tableoid_colid);
 
 	return GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopupdate, query_dxlnode);
 }

@@ -43,6 +43,9 @@ private:
 	// segmentId column
 	CColRef *m_pcrSegmentId;
 
+	// table oid column (has value NULL in case of on non partitioned tables)
+	CColRef *m_pcrTableOid;
+
 	// private copy ctor
 	CLogicalDelete(const CLogicalDelete &);
 
@@ -53,7 +56,7 @@ public:
 	// ctor
 	CLogicalDelete(CMemoryPool *mp, CTableDescriptor *ptabdesc,
 				   CColRefArray *colref_array, CColRef *pcrCtid,
-				   CColRef *pcrSegmentId);
+				   CColRef *pcrSegmentId, CColRef *pcrTableOid);
 
 	// dtor
 	virtual ~CLogicalDelete();
@@ -91,6 +94,13 @@ public:
 	PcrSegmentId() const
 	{
 		return m_pcrSegmentId;
+	}
+
+	// table oid column
+	CColRef *
+	PcrTableOid() const
+	{
+		return m_pcrTableOid;
 	}
 
 	// return table's descriptor

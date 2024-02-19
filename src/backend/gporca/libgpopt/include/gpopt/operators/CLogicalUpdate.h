@@ -49,6 +49,9 @@ private:
 	// tuple oid column
 	CColRef *m_pcrTupleOid;
 
+	// table oid column (has value NULL in case of on non partitioned tables)
+	CColRef *m_pcrTableOid;
+
 	// private copy ctor
 	CLogicalUpdate(const CLogicalUpdate &);
 
@@ -60,7 +63,7 @@ public:
 	CLogicalUpdate(CMemoryPool *mp, CTableDescriptor *ptabdesc,
 				   CColRefArray *pdrgpcrDelete, CColRefArray *pdrgpcrInsert,
 				   CColRef *pcrCtid, CColRef *pcrSegmentId,
-				   CColRef *pcrTupleOid);
+				   CColRef *pcrTupleOid, CColRef *pcrTableOid);
 
 	// dtor
 	virtual ~CLogicalUpdate();
@@ -112,6 +115,13 @@ public:
 	PcrTupleOid() const
 	{
 		return m_pcrTupleOid;
+	}
+
+	// table oid column
+	CColRef *
+	PcrTableOid() const
+	{
+		return m_pcrTableOid;
 	}
 
 	// return table's descriptor

@@ -390,14 +390,6 @@ private:
 	// return resno -> colId mapping of columns to be updated
 	IntToUlongMap *UpdatedColumnMapping();
 
-	// obtain the ids of the ctid and segmentid columns for the target
-	// table of a DML query
-	void GetCtidAndSegmentId(ULONG *ctid, ULONG *segment_id);
-
-	// obtain the column id for the tuple oid column of the target table
-	// of a DML statement
-	ULONG GetTupleOidColId();
-
 	// translate a grouping func expression
 	CDXLNode *TranslateGroupingFuncToDXL(
 		const Expr *expr, CBitSet *bitset,
@@ -427,6 +419,9 @@ private:
 
 	// true iff this query or one of its ancestors is a DML query
 	BOOL IsDMLQuery();
+
+	// returns the corresponding ColId for the given system attribute numbber
+	ULONG GetSystemColId(INT attribute_number);
 
 public:
 	// dtor

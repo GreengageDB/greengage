@@ -41,6 +41,10 @@ private:
 	// source col ids
 	ULongPtrArray *m_src_colids_array;
 
+	// table oid column (has value 0 for Update/Delete operations on non partitioned
+	// tables and for all Insert operations)
+	ULONG m_table_oid_colid;
+
 	// action column id
 	ULONG m_action_colid;
 

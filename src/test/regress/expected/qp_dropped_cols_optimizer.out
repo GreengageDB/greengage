@@ -16342,23 +16342,23 @@ EXPLAIN (COSTS OFF, VERBOSE) UPDATE t_part_dropped_1_prt_p2 SET c1 = 2;
 
 UPDATE t_part_dropped_1_prt_p2 SET c1 = 2;
 EXPLAIN (COSTS OFF, VERBOSE) UPDATE t_part_dropped SET c1 = 3;
-                                                                     QUERY PLAN                                                                     
-----------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Update
-   Output: t_part_dropped.c1, NULL::integer, t_part_dropped.c3, t_part_dropped.c4, (DMLAction), t_part_dropped.ctid
+   Output: t_part_dropped.c1, NULL::integer, t_part_dropped.c3, t_part_dropped.c4, (DMLAction), t_part_dropped.ctid, t_part_dropped.tableoid
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id, (DMLAction)
+         Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id, (DMLAction)
          Hash Key: t_part_dropped.c1
          ->  Split
-               Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id, DMLAction
+               Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id, DMLAction
                ->  Result
-                     Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, 3, t_part_dropped.ctid, t_part_dropped.gp_segment_id
+                     Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, 3, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id
                      ->  Sequence
-                           Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id
+                           Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id
                            ->  Partition Selector for t_part_dropped (dynamic scan id: 1)
                                  Partitions selected: 2 (out of 2)
                            ->  Dynamic Seq Scan on public.t_part_dropped (dynamic scan id: 1)
-                                 Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id
+                                 Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
 
@@ -16377,23 +16377,23 @@ SELECT count(*) FROM t_part_dropped_1_prt_p2;
 -- at insert (executor doesn't put the tuple to wrong partition for legacy
 -- planner case).
 EXPLAIN (COSTS OFF, VERBOSE) UPDATE t_part_dropped SET c1 = 3 WHERE c4 = 0;
-                                                                     QUERY PLAN                                                                     
-----------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Update
-   Output: t_part_dropped.c1, NULL::integer, t_part_dropped.c3, t_part_dropped.c4, (DMLAction), t_part_dropped.ctid
+   Output: t_part_dropped.c1, NULL::integer, t_part_dropped.c3, t_part_dropped.c4, (DMLAction), t_part_dropped.ctid, t_part_dropped.tableoid
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id, (DMLAction)
+         Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id, (DMLAction)
          Hash Key: t_part_dropped.c1
          ->  Split
-               Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id, DMLAction
+               Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id, DMLAction
                ->  Result
-                     Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, 3, t_part_dropped.ctid, t_part_dropped.gp_segment_id
+                     Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, 3, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id
                      ->  Sequence
-                           Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id
+                           Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id
                            ->  Partition Selector for t_part_dropped (dynamic scan id: 1)
                                  Partitions selected: 2 (out of 2)
                            ->  Dynamic Seq Scan on public.t_part_dropped (dynamic scan id: 1)
-                                 Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.gp_segment_id
+                                 Output: t_part_dropped.c1, t_part_dropped.c3, t_part_dropped.c4, t_part_dropped.ctid, t_part_dropped.tableoid, t_part_dropped.gp_segment_id
                                  Filter: (t_part_dropped.c4 = 0)
  Optimizer: Pivotal Optimizer (GPORCA)
 (17 rows)
@@ -16493,23 +16493,23 @@ EXPLAIN (COSTS OFF, VERBOSE) UPDATE t_part_1_prt_p2 SET c1 = 2;
 
 UPDATE t_part_1_prt_p2 SET c1 = 2;
 EXPLAIN (COSTS OFF, VERBOSE) UPDATE t_part SET c1 = 3;
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
  Update
-   Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, (DMLAction), t_part.ctid
+   Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, (DMLAction), t_part.ctid, t_part.tableoid
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id, (DMLAction)
+         Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id, (DMLAction)
          Hash Key: t_part.c1
          ->  Split
-               Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id, DMLAction
+               Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id, DMLAction
                ->  Result
-                     Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, 3, t_part.ctid, t_part.gp_segment_id
+                     Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, 3, t_part.ctid, t_part.tableoid, t_part.gp_segment_id
                      ->  Sequence
-                           Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id
+                           Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id
                            ->  Partition Selector for t_part (dynamic scan id: 1)
                                  Partitions selected: 2 (out of 2)
                            ->  Dynamic Seq Scan on public.t_part (dynamic scan id: 1)
-                                 Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id
+                                 Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
 
@@ -16569,23 +16569,23 @@ ALTER TABLE t_part EXCHANGE PARTITION FOR (2) WITH TABLE t_new_part2;
 -- tuple at insert.
 INSERT INTO t_part VALUES (1, 4, 2, 2);
 EXPLAIN (COSTS OFF, VERBOSE) UPDATE t_part SET c1 = 3;
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+                                                               QUERY PLAN                                                               
+----------------------------------------------------------------------------------------------------------------------------------------
  Update
-   Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, (DMLAction), t_part.ctid
+   Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, (DMLAction), t_part.ctid, t_part.tableoid
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
-         Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id, (DMLAction)
+         Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id, (DMLAction)
          Hash Key: t_part.c1
          ->  Split
-               Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id, DMLAction
+               Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id, DMLAction
                ->  Result
-                     Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, 3, t_part.ctid, t_part.gp_segment_id
+                     Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, 3, t_part.ctid, t_part.tableoid, t_part.gp_segment_id
                      ->  Sequence
-                           Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id
+                           Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id
                            ->  Partition Selector for t_part (dynamic scan id: 1)
                                  Partitions selected: 2 (out of 2)
                            ->  Dynamic Seq Scan on public.t_part (dynamic scan id: 1)
-                                 Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.gp_segment_id
+                                 Output: t_part.c1, t_part.c2, t_part.c3, t_part.c4, t_part.ctid, t_part.tableoid, t_part.gp_segment_id
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
 

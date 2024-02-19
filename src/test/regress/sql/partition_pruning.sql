@@ -1162,5 +1162,152 @@ SELECT * FROM issue_14982_t1_part_range t1, issue_14982_t2_part_range t2
   WHERE t1.a = t2.a AND t1.b = t2.b AND t2.b |=| 1;
 
 DROP SCHEMA issue_14982 CASCADE;
+-- restore environment
+SET enable_hashjoin TO 'OFF';
+SET enable_mergejoin TO 'ON';
+SET search_path TO partition_pruning;
+
+-- Tests of partition pruning for case when default partition was exchanged without validation
+-- and contains rows, that satisfy constraints of other partition
+
+--
+-- Simple delete test case from default partition. Delete operation has
+-- not to perform partition pruning.
+--
+create table test(i int, j int) partition by range(j) (start (1) end(3) every(2), default partition extra);
+
+-- check that insert into partition table won't fallback in pg optimizer and won't request tableoid
+explain verbose insert into test values (0, 1);
+insert into test values (0, 1);
+
+-- Create table for exchange with default partition and insert another possible
+-- value corresponding to range partition
+create table test_extra_exchanged(like test);
+insert into test_extra_exchanged values (0, 2);
+
+-- Perform exchange without validation
+set gp_enable_exchange_default_partition to on;
+alter table test exchange default partition with table test_extra_exchanged without validation;
+
+-- Check tuples in partitioned table. Two tuples have the same tupleid and value in partitioning
+-- key corresponding to `test_1_prt_2` partition
+select tableoid::regclass, ctid, i, j from test;
+
+-- We have to delete the row (0, 2) from default partition
+explain (verbose, costs off) delete from test_1_prt_extra where j = 2;
+delete from test_1_prt_extra where j = 2;
+
+-- Check that deletion performed correctly
+select tableoid::regclass, ctid, i, j from test;
+
+drop table test, test_extra_exchanged;
+
+--
+-- Delete test case with predicate from partitioned table. Delete operation has
+-- to perform partition pruning
+--
+create table test(i int, j int) partition by range(j) (start (1) end(3) every(2), default partition extra);
+insert into test values (0, 1);
+
+-- Create table for exchange with default partition and insert another possible
+-- value corresponding to range partition
+create table test_extra_exchanged(like test);
+insert into test_extra_exchanged values (0, 2);
+
+-- Perform exchange without validation
+set gp_enable_exchange_default_partition to on;
+alter table test exchange default partition with table test_extra_exchanged without validation;
+
+-- Check tuples in partitioned table. Two tuples have the same tupleid and value in partitioning
+-- key corresponding to `test_1_prt_2` partition
+select tableoid::regclass, ctid, i, j from test;
+
+-- Create test table that will be used in delete query inside `NOT EXISTS` predicate
+create table test_in_predicate(i int, j int);
+insert into test_in_predicate values (0, 1);
+
+-- We have to delete the row (0, 2) from default partition
+explain (verbose, costs off) delete from test where not exists(
+  select 1 from test_in_predicate where test.i = test_in_predicate.i and test.j = test_in_predicate.j
+);
+delete from test where not exists(
+  select 1 from test_in_predicate where test.i = test_in_predicate.i and test.j = test_in_predicate.j
+);
+
+-- Check that deletion performed correctly
+select tableoid::regclass, ctid, i, j from test;
+
+drop table test, test_extra_exchanged, test_in_predicate;
+
+--
+-- Simple update test case from default partition. Update operation has
+-- not to perform partition pruning
+--
+create table test(i int, j int, k int) partition by range(j) (start (1) end(3) every(2), default partition extra);
+insert into test values (0, 1, 0);
+
+-- Create table for exchange with default partition and insert another possible
+-- value corresponding to range partition
+create table test_extra_exchanged(like test);
+insert into test_extra_exchanged values (0, 2, 0);
+
+-- Perform exchange without validation
+set gp_enable_exchange_default_partition to on;
+alter table test exchange default partition with table test_extra_exchanged without validation;
+
+-- Check tuples in partitioned table. Two tuples have the same tupleid and value in partitioning
+-- key corresponding to `test_1_prt_2` partition
+select tableoid::regclass, ctid, i, j, k from test;
+
+-- start_matchsubs
+-- m/'\d+'::oid/
+-- s/'\d+'::oid/'table_oid'::oid/
+-- end_matchsubs
+
+-- We have to update the row (0, 2) from default partition
+explain (verbose, costs off) update test_1_prt_extra set k = 10 where j = 2; 
+update test_1_prt_extra set k = 10 where j = 2;
+
+-- Check that update performed correctly and tuple moved to correct partition
+select tableoid::regclass, ctid, i, j, k from test;
+
+drop table test, test_extra_exchanged;
+
+--
+-- Update test case with predicate from partitioned table. Update operation has
+-- to perform partition pruning
+--
+create table test(i int, j int, k int) partition by range(j) (start (1) end(3) every(2), default partition extra);
+insert into test values (0, 1, 0);
+
+-- Create table for exchange with default partition and insert another possible
+-- value corresponding to range partition
+create table test_extra_exchanged(like test);
+insert into test_extra_exchanged values (0, 2, 0);
+
+-- Perform exchange without validation
+set gp_enable_exchange_default_partition to on;
+alter table test exchange default partition with table test_extra_exchanged without validation;
+
+-- Create test table that will be used in delete query inside `NOT EXISTS` predicate
+create table test_in_predicate(i int, j int, k int);
+insert into test_in_predicate values (0, 1, 0);
+
+-- Check tuples in partitioned table. Two tuples have the same tupleid and value in partitioning
+-- key corresponding to `test_1_prt_2` partition
+select tableoid::regclass, ctid, i, j, k from test;
+
+-- We have to update the row (0, 2) from default partition
+explain (verbose, costs off) update test set k = 10  where not exists(
+  select 1 from test_in_predicate where test.i = test_in_predicate.i and test.j = test_in_predicate.j
+);
+update test set k = 10  where not exists(
+  select 1 from test_in_predicate where test.i = test_in_predicate.i and test.j = test_in_predicate.j
+);
+
+-- Check that update performed correctly and tuple moved to correct partition
+select tableoid::regclass, ctid, i, j, k from test;
+
+drop table test, test_extra_exchanged, test_in_predicate;
 
 RESET ALL;

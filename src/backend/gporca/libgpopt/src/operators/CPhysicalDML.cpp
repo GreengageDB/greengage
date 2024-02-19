@@ -38,13 +38,15 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 						   CTableDescriptor *ptabdesc,
 						   CColRefArray *pdrgpcrSource, CBitSet *pbsModified,
 						   CColRef *pcrAction, CColRef *pcrCtid,
-						   CColRef *pcrSegmentId, CColRef *pcrTupleOid)
+						   CColRef *pcrSegmentId, CColRef *pcrTupleOid,
+						   CColRef *pcrTableOid)
 	: CPhysical(mp),
 	  m_edmlop(edmlop),
 	  m_ptabdesc(ptabdesc),
 	  m_pdrgpcrSource(pdrgpcrSource),
 	  m_pbsModified(pbsModified),
 	  m_pcrAction(pcrAction),
+	  m_pcrTableOid(pcrTableOid),
 	  m_pcrCtid(pcrCtid),
 	  m_pcrSegmentId(pcrSegmentId),
 	  m_pcrTupleOid(pcrTupleOid),
@@ -403,6 +405,7 @@ CPhysicalDML::HashValue() const
 	ULONG ulHash = gpos::CombineHashes(COperator::HashValue(),
 									   m_ptabdesc->MDId()->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrAction));
+	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrTableOid));
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrSource));
 
@@ -433,6 +436,7 @@ CPhysicalDML::Matches(COperator *pop) const
 		CPhysicalDML *popDML = CPhysicalDML::PopConvert(pop);
 
 		return m_pcrAction == popDML->PcrAction() &&
+			   m_pcrTableOid == popDML->PcrTableOid() &&
 			   m_pcrCtid == popDML->PcrCtid() &&
 			   m_pcrSegmentId == popDML->PcrSegmentId() &&
 			   m_pcrTupleOid == popDML->PcrTupleOid() &&
@@ -540,6 +544,11 @@ CPhysicalDML::ComputeRequiredLocalColumns(CMemoryPool *mp)
 	m_pcrsRequiredLocal->Include(m_pdrgpcrSource);
 	m_pcrsRequiredLocal->Include(m_pcrAction);
 
+	if (NULL != m_pcrTableOid)
+	{
+		m_pcrsRequiredLocal->Include(m_pcrTableOid);
+	}
+
 	if (CLogicalDML::EdmlDelete == m_edmlop ||
 		CLogicalDML::EdmlUpdate == m_edmlop)
 	{
@@ -578,6 +587,13 @@ CPhysicalDML::OsPrint(IOstream &os) const
 	m_pcrAction->OsPrint(os);
 	os << ")";
 
+	if (NULL != m_pcrTableOid)
+	{
+		os << ", Oid: (";
+		m_pcrTableOid->OsPrint(os);
+		os << ")";
+	}
+
 	if (CLogicalDML::EdmlDelete == m_edmlop ||
 		CLogicalDML::EdmlUpdate == m_edmlop)
 	{
@@ -586,7 +602,6 @@ CPhysicalDML::OsPrint(IOstream &os) const
 		os << ", ";
 		m_pcrSegmentId->OsPrint(os);
 	}
-
 
 	return os;
 }
