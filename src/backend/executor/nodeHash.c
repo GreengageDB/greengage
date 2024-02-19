@@ -731,6 +731,10 @@ ExecHashIncreaseNumBatches(HashJoinTable hashtable)
 	if (oldnbatch > Min(INT_MAX / 2, MaxAllocSize / (sizeof(void *) * 2)))
 		return;
 
+	/* avoid repalloc_huge overflow on 32 bit systems */
+	if (stats && oldnbatch > MaxAllocHugeSize / (sizeof(HashJoinBatchStats) * 2))
+		return;
+
 	/* A reusable hash table can only respill during first pass */
 	AssertImply(hashtable->hjstate->reuse_hashtable, hashtable->first_pass);
 
@@ -770,8 +774,17 @@ ExecHashIncreaseNumBatches(HashJoinTable hashtable)
 	{
 		Size		sz = nbatch * sizeof(stats->batchstats[0]);
 
+		/*
+		 * We use repalloc_huge because the condition in the beginning assumes
+		 * that oldnbatches and nbatches will be used to index values of size 8
+		 * or less (size of void*), but the size of HashJoinBatchStats
+		 * structure is 80 bytes, so even if we pass that check, this still
+		 * might not fit in the MaxAllocSize. The maximum amount of memory we
+		 * can request here is slightly less than 5GB, estimated for
+		 * MaxAllocSize = 1GB.
+		 */
 		stats->batchstats =
-			(HashJoinBatchStats *) repalloc(stats->batchstats, sz);
+			(HashJoinBatchStats *) repalloc_huge(stats->batchstats, sz);
 		sz = (nbatch - stats->nbatchstats) * sizeof(stats->batchstats[0]);
 		memset(stats->batchstats + stats->nbatchstats, 0, sz);
 		stats->nbatchstats = nbatch;

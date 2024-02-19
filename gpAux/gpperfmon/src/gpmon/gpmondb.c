@@ -1335,24 +1335,22 @@ static void convert_tuples_to_hash(PGresult *result, apr_hash_t *hash, apr_pool_
 	int i = 0;
 	for (; i < rowcount; i++)
 	{
-		char* sessid = PQgetvalue(result, i, 0);
-		char* query  = PQgetvalue(result, i, 1);
-
-		char *sessid_copy = apr_pstrdup(pool, sessid);
-		char *query_copy  = apr_pstrdup(pool, query);
-		if (sessid_copy == NULL || query_copy == NULL)
+		apr_int32_t* ssid = apr_palloc(pool, sizeof(apr_int32_t));
+		if (ssid == NULL)
 		{
 			gpmon_warning(FLINE, "Out of memory");
 			continue;
 		}
-		apr_hash_set(hash, sessid_copy, APR_HASH_KEY_STRING, query_copy);
+		*ssid = atoi(PQgetvalue(result, i, 0));
+
+		apr_hash_set(hash, ssid, sizeof(apr_int32_t), "");
 	}
 }
 
-apr_hash_t *get_active_queries(apr_pool_t *pool)
+apr_hash_t *get_active_sessions(apr_pool_t *pool)
 {
 	PGresult   *result = NULL;
-	apr_hash_t *active_query_tab = NULL;
+	apr_hash_t *active_session_set = NULL;
 
 	PGconn *conn = PQconnectdb(GPDB_CONNECTION_STRING);
 	if (PQstatus(conn) != CONNECTION_OK)
@@ -1366,7 +1364,7 @@ apr_hash_t *get_active_queries(apr_pool_t *pool)
 		return NULL;
 	}
 
-	const char *qry= "SELECT sess_id, query FROM pg_stat_activity;";
+	const char *qry= "SELECT sess_id FROM pg_stat_activity;";
 	const char *errmsg = gpdb_exec_only(conn, &result, qry);
 	if (errmsg)
 	{
@@ -1374,21 +1372,21 @@ apr_hash_t *get_active_queries(apr_pool_t *pool)
 	}
 	else
 	{
-		active_query_tab = apr_hash_make(pool);
-		if (! active_query_tab)
+		active_session_set = apr_hash_make(pool);
+		if (!active_session_set)
 		{
 			gpmon_warning(FLINE, "Out of memory");
 		}
 		else
 		{
-			convert_tuples_to_hash(result, active_query_tab, pool);
+			convert_tuples_to_hash(result, active_session_set, pool);
 		}
 	}
 
 	PQclear(result);
 	PQfinish(conn);
 
-	return active_query_tab;
+	return active_session_set;
 }
 
 const char *iconv_encodings[] = {
