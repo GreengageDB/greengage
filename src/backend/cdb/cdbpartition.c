@@ -5698,6 +5698,7 @@ atpxPartAddList(Relation rel,
 
 	Assert((PARTTYP_LIST == part_type) || (PARTTYP_RANGE == part_type));
 	Assert(pelem);
+	Assert(pNode);
 
 	/* XXX XXX: handle case of missing boundary spec for range with EVERY */
 
@@ -6173,7 +6174,7 @@ atpxPartAddList(Relation rel,
 				}				/* end if prule */
 
 				/* check for basic case of START > last partition */
-				if (pNode && pNode->rules && list_length(pNode->rules))
+				if (pNode->rules && list_length(pNode->rules))
 				{
 					bool		bstat;
 					PartitionRule *a_rule = /* get last rule */
@@ -6405,7 +6406,7 @@ atpxPartAddList(Relation rel,
 				}				/* end if prule */
 
 				/* check for case of END < first partition */
-				if (pNode && pNode->rules && list_length(pNode->rules))
+				if (pNode->rules && list_length(pNode->rules))
 				{
 					bool		bstat;
 					PartitionRule *a_rule = /* get first rule */
@@ -6865,7 +6866,7 @@ atpxPartAddList(Relation rel,
 			}
 
 			/* give a new maxpartno for the list partition */
-			if (pNode && pNode->rules && list_length(pNode->rules))
+			if (pNode->rules && list_length(pNode->rules))
 			{
 				ListCell   *lc;
 				PartitionRule *rule = NULL;
@@ -6890,7 +6891,7 @@ atpxPartAddList(Relation rel,
 			errmsg("too many partitions, parruleord overflow")));
 	}
 
-	if (newPos == FIRST && pNode && list_length(pNode->rules) > 0)
+	if (newPos == FIRST && list_length(pNode->rules) > 0)
 	{
 		/*
 		 * Adding new partition at the beginning.  Find a hole in existing
@@ -6924,7 +6925,7 @@ atpxPartAddList(Relation rel,
 								false /* closegap */ );
 		}
 	}
-	else if (newPos == LAST && pNode && list_length(pNode->rules) > 0)
+	else if (newPos == LAST && list_length(pNode->rules) > 0)
 	{
 		/*
 		 * Adding the new partition at the end.	 Find the hole closest to the
