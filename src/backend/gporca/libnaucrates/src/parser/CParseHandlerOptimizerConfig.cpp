@@ -236,6 +236,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 		{
 			CParseHandlerHint *pphHint =
 				dynamic_cast<CParseHandlerHint *>((*this)[5]);
+			GPOS_ASSERT(NULL != pphHint);
 			phint = pphHint->GetHint();
 			GPOS_ASSERT(NULL != phint);
 			phint->AddRef();
