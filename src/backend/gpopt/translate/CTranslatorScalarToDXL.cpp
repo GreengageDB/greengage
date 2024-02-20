@@ -1029,6 +1029,7 @@ CTranslatorScalarToDXL::CreateScalarIfStmtFromCaseExpr(
 		CDXLNode *default_result_node =
 			TranslateScalarToDXL(case_expr->defresult, var_colid_mapping);
 		GPOS_ASSERT(NULL != default_result_node);
+		GPOS_ASSERT(NULL != cur_node);
 		cur_node->AddChild(default_result_node);
 	}
 
