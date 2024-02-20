@@ -363,7 +363,7 @@ CLogicalDynamicGetBase::PstatsDeriveFilter(CMemoryPool *mp,
 
 	CStatistics *pstatsFullTable = dynamic_cast<CStatistics *>(
 		PstatsBaseTable(mp, exprhdl, m_ptabdesc, pcrsStat));
-
+	GPOS_ASSERT(NULL != pstatsFullTable);
 	pcrsStat->Release();
 
 	if (NULL == pexprFilterNew || pexprFilterNew->DeriveHasSubquery())
