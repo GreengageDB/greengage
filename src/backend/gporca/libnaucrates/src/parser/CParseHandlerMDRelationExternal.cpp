@@ -193,6 +193,7 @@ CParseHandlerMDRelationExternal::EndElement(
 		//		{
 		CParseHandlerScalarOp *pphPartCnstr =
 			dynamic_cast<CParseHandlerScalarOp *>((*this)[Length() - 1]);
+		GPOS_ASSERT(NULL != pphPartCnstr);
 		CDXLNode *pdxlnPartConstraint = pphPartCnstr->CreateDXLNode();
 		pdxlnPartConstraint->AddRef();
 		m_part_constraint = GPOS_NEW(m_mp) CMDPartConstraintGPDB(
@@ -227,6 +228,11 @@ CParseHandlerMDRelationExternal::EndElement(
 	CParseHandlerMetadataIdList *mdid_check_constraint_parse_handler =
 		dynamic_cast<CParseHandlerMetadataIdList *>((*this)[3]);
 
+	GPOS_ASSERT(NULL != md_cols_parse_handler);
+	GPOS_ASSERT(NULL != md_index_info_list_parse_handler);
+	GPOS_ASSERT(NULL != mdid_triggers_parse_list);
+	GPOS_ASSERT(NULL != mdid_check_constraint_parse_handler);
+
 	GPOS_ASSERT(NULL != md_cols_parse_handler->GetMdColArray());
 	GPOS_ASSERT(NULL !=
 				md_index_info_list_parse_handler->GetMdIndexInfoArray());
@@ -252,6 +258,7 @@ CParseHandlerMDRelationExternal::EndElement(
 		distr_opfamilies = dynamic_cast<CParseHandlerMetadataIdList *>(
 							   m_opfamilies_parse_handler)
 							   ->GetMdIdArray();
+		GPOS_ASSERT(NULL != distr_opfamilies);
 		distr_opfamilies->AddRef();
 	}
 

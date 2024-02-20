@@ -189,6 +189,7 @@ CParseHandlerMDIndex::EndElement(const XMLCh *const,  // element_uri,
 
 		CParseHandlerScalarOp *pphPartCnstr =
 			dynamic_cast<CParseHandlerScalarOp *>((*this)[1]);
+		GPOS_ASSERT(NULL != pphPartCnstr);
 		CDXLNode *pdxlnPartConstraint = pphPartCnstr->CreateDXLNode();
 		pdxlnPartConstraint->AddRef();
 		m_part_constraint = GPOS_NEW(m_mp) CMDPartConstraintGPDB(
