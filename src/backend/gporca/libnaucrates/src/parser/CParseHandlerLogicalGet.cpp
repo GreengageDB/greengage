@@ -113,6 +113,7 @@ CParseHandlerLogicalGet::EndElement(const XMLCh *const element_local_name,
 	CParseHandlerTableDescr *table_descr_parse_handler =
 		dynamic_cast<CParseHandlerTableDescr *>((*this)[0]);
 
+	GPOS_ASSERT(NULL != table_descr_parse_handler);
 	GPOS_ASSERT(NULL != table_descr_parse_handler->GetDXLTableDescr());
 
 	CDXLTableDescr *table_descr = table_descr_parse_handler->GetDXLTableDescr();

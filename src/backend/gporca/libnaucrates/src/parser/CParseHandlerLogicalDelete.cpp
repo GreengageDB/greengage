@@ -128,6 +128,9 @@ CParseHandlerLogicalDelete::EndElement(const XMLCh *const,	// element_uri,
 	CParseHandlerLogicalOp *logical_op_parse_handler =
 		dynamic_cast<CParseHandlerLogicalOp *>((*this)[1]);
 
+	GPOS_ASSERT(NULL != table_descr_parse_handler);
+	GPOS_ASSERT(NULL != logical_op_parse_handler);
+
 	GPOS_ASSERT(NULL != table_descr_parse_handler->GetDXLTableDescr());
 	GPOS_ASSERT(NULL != logical_op_parse_handler->CreateDXLNode());
 
