@@ -663,6 +663,7 @@ CGroup::PgexprAnyCTEConsumer()
 	{
 		CGroupProxy gp(this);
 		pgexprCurrent = gp.PgexprNextLogical(NULL /*pgexpr*/);
+		GPOS_ASSERT(NULL != pgexprCurrent);
 		fFoundCTEConsumer =
 			(COperator::EopLogicalCTEConsumer == pgexprCurrent->Pop()->Eopid());
 	}
