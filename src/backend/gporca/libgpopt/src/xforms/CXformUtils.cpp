@@ -3466,6 +3466,7 @@ CXformUtils::CreateBitmapIndexProbesWithOrWithoutPredBreakdown(
 	CExpressionArray *pdrgpexprRecheckTemp =
 		GPOS_NEW(pmp) CExpressionArray(pmp);
 
+	GPOS_ASSERT(pexprPred);
 	pexprPred->AddRef();
 
 	while (NULL != pexprPred)
