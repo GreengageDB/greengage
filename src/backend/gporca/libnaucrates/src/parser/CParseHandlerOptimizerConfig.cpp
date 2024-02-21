@@ -193,11 +193,13 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 
 	CParseHandlerEnumeratorConfig *pphEnumeratorConfig =
 		dynamic_cast<CParseHandlerEnumeratorConfig *>((*this)[0]);
+	GPOS_ASSERT(NULL != pphEnumeratorConfig);
 	CEnumeratorConfig *pec = pphEnumeratorConfig->GetEnumeratorCfg();
 	pec->AddRef();
 
 	CParseHandlerStatisticsConfig *pphStatisticsConfig =
 		dynamic_cast<CParseHandlerStatisticsConfig *>((*this)[1]);
+	GPOS_ASSERT(NULL != pphStatisticsConfig);
 	CStatisticsConfig *stats_config = pphStatisticsConfig->GetStatsConf();
 	stats_config->AddRef();
 
@@ -226,6 +228,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 	{
 		CParseHandlerCostModel *pphCostModelConfig =
 			dynamic_cast<CParseHandlerCostModel *>((*this)[4]);
+		GPOS_ASSERT(NULL != pphCostModelConfig);
 		pcm = pphCostModelConfig->GetCostModel();
 		GPOS_ASSERT(NULL != pcm);
 		pcm->AddRef();

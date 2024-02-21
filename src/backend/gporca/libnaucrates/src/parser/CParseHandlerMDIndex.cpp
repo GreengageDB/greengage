@@ -209,6 +209,7 @@ CParseHandlerMDIndex::EndElement(const XMLCh *const,  // element_uri,
 
 	CParseHandlerMetadataIdList *pphMdidOpfamilies =
 		dynamic_cast<CParseHandlerMetadataIdList *>((*this)[0]);
+	GPOS_ASSERT(NULL != pphMdidOpfamilies);
 	IMdIdArray *mdid_opfamilies_array = pphMdidOpfamilies->GetMdIdArray();
 	mdid_opfamilies_array->AddRef();
 
