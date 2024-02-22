@@ -638,12 +638,15 @@ COptTasks::OptimizeTask(void *ptr)
 		CRefCount::SafeRelease(plan_dxl);
 		CMDCache::Shutdown();
 
-		IErrorContext *errctxt = CTask::Self()->GetErrCtxt();
+		CTask *task = CTask::Self();
+		IErrorContext *errctxt = (NULL != task) ? task->GetErrCtxt() : NULL;
 
 		opt_ctxt->m_should_error_out = ShouldErrorOut(ex);
 		opt_ctxt->m_is_unexpected_failure = IsLoggableFailure(ex);
 		opt_ctxt->m_error_msg =
-			CreateMultiByteCharStringFromWCString(errctxt->GetErrorMsg());
+			(NULL != errctxt)
+				? CreateMultiByteCharStringFromWCString(errctxt->GetErrorMsg())
+				: NULL;
 
 		GPOS_RETHROW(ex);
 	}
