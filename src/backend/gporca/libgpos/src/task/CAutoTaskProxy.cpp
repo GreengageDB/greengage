@@ -131,8 +131,10 @@ CAutoTaskProxy::Create(void *(*pfunc)(void *), void *arg, BOOL *cancel)
 	// auto pointer to hold new task context
 	CAutoP<CTaskContext> task_ctxt;
 
+	CWorker *worker = CWorker::Self();
+	GPOS_ASSERT(NULL != worker);
 	// check if caller is a task
-	ITask *task_parent = CWorker::Self()->GetTask();
+	ITask *task_parent = worker->GetTask();
 	if (NULL == task_parent)
 	{
 		// create new task context
