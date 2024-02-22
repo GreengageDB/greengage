@@ -696,12 +696,12 @@ Expr *
 CTranslatorDXLToScalar::TranslateDXLScalarSubplanToScalar(
 	const CDXLNode *scalar_subplan_node, CMappingColIdVar *colid_var)
 {
-	CDXLTranslateContext *output_context =
-		(dynamic_cast<CMappingColIdVarPlStmt *>(colid_var))->GetOutputContext();
+	CMappingColIdVarPlStmt *plstmt =
+		dynamic_cast<CMappingColIdVarPlStmt *>(colid_var);
+	GPOS_ASSERT(NULL != plstmt);
 
-	CContextDXLToPlStmt *dxl_to_plstmt_ctxt =
-		(dynamic_cast<CMappingColIdVarPlStmt *>(colid_var))
-			->GetDXLToPlStmtContext();
+	CDXLTranslateContext *output_context = plstmt->GetOutputContext();
+	CContextDXLToPlStmt *dxl_to_plstmt_ctxt = plstmt->GetDXLToPlStmtContext();
 
 	CDXLScalarSubPlan *dxlop =
 		CDXLScalarSubPlan::Cast(scalar_subplan_node->GetOperator());
@@ -761,9 +761,7 @@ CTranslatorDXLToScalar::TranslateDXLScalarSubplanToScalar(
 	// generate the child plan,
 	// Translate DXL->PlStmt translator to handle subplan's relational children
 	CTranslatorDXLToPlStmt dxl_to_plstmt_translator(
-		m_mp, m_md_accessor,
-		(dynamic_cast<CMappingColIdVarPlStmt *>(colid_var))
-			->GetDXLToPlStmtContext(),
+		m_mp, m_md_accessor, plstmt->GetDXLToPlStmtContext(),
 		m_num_of_segments);
 	CDXLTranslationContextArray *prev_siblings_ctxt_arr =
 		GPOS_NEW(m_mp) CDXLTranslationContextArray(m_mp);

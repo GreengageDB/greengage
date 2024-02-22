@@ -312,18 +312,22 @@ CParseHandlerMDRelation::EndElement(const XMLCh *const,	 // element_uri,
 	if (m_rel_distr_policy == IMDRelation::EreldistrHash &&
 		m_opfamilies_parse_handler != NULL)
 	{
-		distr_opfamilies = dynamic_cast<CParseHandlerMetadataIdList *>(
-							   m_opfamilies_parse_handler)
-							   ->GetMdIdArray();
+		CParseHandlerMetadataIdList *md_id_list =
+			dynamic_cast<CParseHandlerMetadataIdList *>(
+				m_opfamilies_parse_handler);
+		GPOS_ASSERT(NULL != md_id_list);
+		distr_opfamilies = md_id_list->GetMdIdArray();
 		distr_opfamilies->AddRef();
 	}
 
 	IMdIdArray *external_partitions = NULL;
 	if (NULL != m_external_partitions_parse_handler)
 	{
-		external_partitions = dynamic_cast<CParseHandlerMetadataIdList *>(
-								  m_external_partitions_parse_handler)
-								  ->GetMdIdArray();
+		CParseHandlerMetadataIdList *md_id_list =
+			dynamic_cast<CParseHandlerMetadataIdList *>(
+				m_external_partitions_parse_handler);
+		GPOS_ASSERT(NULL != md_id_list);
+		external_partitions = md_id_list->GetMdIdArray();
 		external_partitions->AddRef();
 	}
 
