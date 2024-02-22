@@ -255,10 +255,11 @@ CParseHandlerMDRelationExternal::EndElement(
 	if (m_rel_distr_policy == IMDRelation::EreldistrHash &&
 		m_opfamilies_parse_handler != NULL)
 	{
-		distr_opfamilies = dynamic_cast<CParseHandlerMetadataIdList *>(
-							   m_opfamilies_parse_handler)
-							   ->GetMdIdArray();
-		GPOS_ASSERT(NULL != distr_opfamilies);
+		CParseHandlerMetadataIdList *copfamilies_parse_handler =
+			dynamic_cast<CParseHandlerMetadataIdList *>(
+				m_opfamilies_parse_handler);
+		GPOS_ASSERT(NULL != copfamilies_parse_handler);
+		distr_opfamilies = copfamilies_parse_handler->GetMdIdArray();
 		distr_opfamilies->AddRef();
 	}
 

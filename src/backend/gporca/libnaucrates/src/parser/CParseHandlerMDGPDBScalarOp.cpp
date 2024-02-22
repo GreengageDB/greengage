@@ -260,6 +260,7 @@ CParseHandlerMDGPDBScalarOp::EndElement(const XMLCh *const,	 // element_uri,
 		{
 			CParseHandlerMetadataIdList *mdid_list_parse_handler =
 				dynamic_cast<CParseHandlerMetadataIdList *>((*this)[0]);
+			GPOS_ASSERT(NULL != mdid_list_parse_handler);
 			mdid_opfamilies_array = mdid_list_parse_handler->GetMdIdArray();
 			mdid_opfamilies_array->AddRef();
 		}

@@ -108,6 +108,7 @@ CParseHandlerNLJIndexParamList::EndElement(
 	{
 		CParseHandlerNLJIndexParam *nest_param_parse_handler =
 			dynamic_cast<CParseHandlerNLJIndexParam *>((*this)[idx]);
+		GPOS_ASSERT(NULL != nest_param_parse_handler);
 
 		CDXLColRef *nest_param_colref_dxl =
 			nest_param_parse_handler->GetNestParamColRefDxl();
