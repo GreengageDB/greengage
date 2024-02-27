@@ -637,8 +637,10 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 		/* Is the tablespace oid non-zero? */
 		if (tablespace_oid != 0)
 		{
+			char	   *value = PQgetvalue(res, relnum, i_spclocation);
+
 			tablespace = determine_db_tablespace_path(cluster,
-			                                          PQgetvalue(res, relnum, i_spclocation),
+			                                          value,
 			                                          tablespace_oid);
 
 			/* Can we reuse the previous string allocation? */
@@ -649,6 +651,9 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 				last_tablespace = curr->tablespace = pg_strdup(tablespace);
 				curr->tblsp_alloc = true;
 			}
+
+			if (tablespace != value)
+				pg_free(tablespace);
 		}
 		else
 			/* A zero reltablespace oid indicates the database tablespace. */
