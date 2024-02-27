@@ -275,4 +275,61 @@ INSERT INTO t SELECT i, i FROM generate_series(1, 1000) i;
 DROP TABLE t;
 \! find /proc/[0-9]*/fd -lname '@testtablespace@*(deleted)' -exec stat -Lc '%s' {} \; 2>/dev/null | awk 'BEGIN {sum=0} {sum += $1} END {print "size:",  sum}';
 size: 0
+-- Enable gp_inject_fault extension.
+-- This extension will be used in test below to force flushing of all dirty
+-- pages by the bg writer process.
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+-- Start with a clean state (no dirty buffers) by performing a checkpoint.
+-- It will also protect from a random timed checkpoint during the test, that could lead to not stable test result.
+CHECKPOINT;
+-- Force flushing all dirty pages by the bg writer process.
+SELECT gp_inject_fault_infinite('bg_buffer_sync_default_logic', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+-- Checking that the temp heap table doesn't leave non-zero files.
+CREATE TEMP TABLE t(a int, b int) TABLESPACE testspace;
+INSERT INTO t SELECT i, i FROM generate_series(1, 1000) i;
+-- Wait while the bg writer process flushes the data.
+-- Check that fault_in_background_writer_main occured at least twice to ensure
+-- one full loop of the bg writer process is done.
+SELECT gp_inject_fault('fault_in_background_writer_main', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+SELECT gp_wait_until_triggered_fault('fault_in_background_writer_main', 2, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+SELECT gp_inject_fault('fault_in_background_writer_main', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
+DROP TABLE t;
+\! find /proc/[0-9]*/fd -lname '@testtablespace@*(deleted)' -exec stat -Lc '%s' {} \; 2>/dev/null | awk 'BEGIN {sum=0} {sum += $1} END {print "size:",  sum}';
+size: 0
+SELECT gp_inject_fault('bg_buffer_sync_default_logic', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content > -1;
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
 DROP TABLESPACE testspace;
