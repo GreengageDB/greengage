@@ -4300,6 +4300,15 @@ def impl(context, logdir, stage):
         if attempt == num_retries:
             raise Exception('Timed out after {} retries'.format(num_retries))
 
+@when('add {seconds} seconds sleep after first table expand')
+def impl(context, seconds):
+    create_fault_query = "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"
+    execute_sql(context.dbname, create_fault_query)
+    # We use the after_swap_relation_files fault injector to simulate a long
+    # table expansion time because during the expansion of the table, we swap
+    # the relation files.
+    inject_fault_query = f"SELECT gp_inject_fault('after_swap_relation_files', 'sleep', '', '', '', 1, 1, {seconds}, 2);"
+    execute_sql(context.dbname, inject_fault_query)
 
 def verify_elements_in_file(filename, elements):
     with open(filename, 'r') as file:
