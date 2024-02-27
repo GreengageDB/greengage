@@ -17,6 +17,7 @@ Feature: expand the cluster by adding more segments
         And user has created expansiontest tables
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
+         And add 5 seconds sleep after first table expand
          And the user runs gpexpand to redistribute with duration "00:00:02"
         Then gpexpand should print "End time reached.  Stopping expansion." to stdout
         And verify that the cluster has 2 new segments
@@ -40,6 +41,7 @@ Feature: expand the cluster by adding more segments
         Then user has created expansiontest tables
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
+        And add 5 seconds sleep after first table expand
         When the user runs gpexpand to redistribute with duration "00:00:02"
         Then gpexpand should print "End time reached.  Stopping expansion." to stdout
 
@@ -58,6 +60,7 @@ Feature: expand the cluster by adding more segments
         And user has created expansiontest tables
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
+         And add 5 seconds sleep after first table expand
          And the user runs gpexpand to redistribute with the --end flag
         Then gpexpand should print "End time reached.  Stopping expansion." to stdout
         And verify that the cluster has 2 new segments
