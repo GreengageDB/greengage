@@ -1018,6 +1018,7 @@ Feature: gprecoverseg tests
     And the segments are synchronized
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
     And user immediately stops all primary processes for content 0,1
+    And user can start transactions
     And the user suspend the walsender on the primary on content 2
     And the user asynchronously runs pg_basebackup with primary of content 2 as source and the process is saved
     And an FTS probe is triggered
