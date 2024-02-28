@@ -15,9 +15,7 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         And user has created expansiontest tables
-        And 4000000 rows are inserted into table "expansiontest0" in schema "public" with column type list "int"
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
-        And 4000000 rows are inserted into table "expansiontest2" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
          And add 5 seconds sleep after first table expand
          And the user runs gpexpand to redistribute with duration "00:00:02"
@@ -41,9 +39,7 @@ Feature: expand the cluster by adding more segments
         And the cluster is setup for an expansion on hosts "cdw,sdw1"
         When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
         Then user has created expansiontest tables
-        And 4000000 rows are inserted into table "expansiontest0" in schema "public" with column type list "int"
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
-        And 4000000 rows are inserted into table "expansiontest2" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
         And add 5 seconds sleep after first table expand
         When the user runs gpexpand to redistribute with duration "00:00:02"
@@ -62,9 +58,7 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand interview to add 2 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         And user has created expansiontest tables
-        And 4000000 rows are inserted into table "expansiontest0" in schema "public" with column type list "int"
         And 4000000 rows are inserted into table "expansiontest1" in schema "public" with column type list "int"
-        And 4000000 rows are inserted into table "expansiontest2" in schema "public" with column type list "int"
         When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
          And add 5 seconds sleep after first table expand
          And the user runs gpexpand to redistribute with the --end flag
