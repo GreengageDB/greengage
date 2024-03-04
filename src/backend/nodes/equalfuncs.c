@@ -769,7 +769,6 @@ _equalFlow(const Flow *a, const Flow *b)
 	COMPARE_SCALAR_FIELD(numsegments);
 	COMPARE_NODE_FIELD(hashExprs);
 	COMPARE_NODE_FIELD(hashOpfamilies);
-	COMPARE_SCALAR_FIELD(segidColIdx);
 
 	return true;
 }
