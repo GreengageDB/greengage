@@ -221,7 +221,6 @@
 		"gp_max_local_distributed_cache",
 		"gp_max_parallel_cursors",
 		"gp_max_plan_size",
-		"gp_max_scan_on_shmem",
 		"gp_motion_cost_per_row",
 		"gp_perfmon_segment_interval",
 		"gp_print_create_gang_time",

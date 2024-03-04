@@ -305,9 +305,9 @@ shouldPickInstrInShmem(NodeTag tag)
 			 * partitions are too many, this plan will occupy too many slots.
 			 * Here is a limitation on number of shmem slots used by scan
 			 * nodes for each backend. Instruments exceeding the limitation
-			 * are allocated in local memory.
+			 * are allocated local memory.
 			 */
-			if (scanNodeCounter >= gp_max_scan_on_shmem)
+			if (scanNodeCounter >= MAX_SCAN_ON_SHMEM)
 				return false;
 			scanNodeCounter++;
 			break;
