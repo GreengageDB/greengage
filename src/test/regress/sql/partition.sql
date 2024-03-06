@@ -4444,3 +4444,14 @@ DISTRIBUTED BY (a) PARTITION BY LIST(b, c)
 (
   PARTITION part1 VALUES(('(1,1)', 1))
 );
+
+-- Make sure that we do not copy ACLs from dropped columns (which led to segfault)
+CREATE ROLE user_prt_acl;
+CREATE TABLE public.t_part_acl (b INT, c INT, d TEXT) DISTRIBUTED BY (b) PARTITION BY RANGE (c)
+  (PARTITION "10" START (1) INCLUSIVE END (10) EXCLUSIVE,
+   PARTITION "20" START (11) INCLUSIVE END (20) EXCLUSIVE);
+GRANT SELECT(d) ON public.t_part_acl TO user_prt_acl;
+ALTER TABLE public.t_part_acl DROP COLUMN d;
+ALTER TABLE public.t_part_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLUSIVE;
+DROP TABLE public.t_part_acl;
+DROP ROLE user_prt_acl;
