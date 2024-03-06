@@ -51,10 +51,18 @@ run_feature() {
     docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
       $service bash -c "mkdir -p /data/gpdata && chmod -R 777 /data &&
         source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
-       ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash &&
-       ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts" &
+       ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
   done
   wait
+
+  # Add host keys to known_hosts after containers setup
+  for service in $services
+  do
+    docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
+      $service bash -c "ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts" &
+  done
+  wait
+
   docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.arenadata.formatter:CustomFormatter \
