@@ -153,7 +153,7 @@ int mapred_obj_error(mapred_object_t *obj, char *fmt, ...)
 	va_start(arg, fmt);
 	vfprintf(stderr, fmt, arg);
 	va_end(arg);
-	if (obj->line > 0)
+	if (obj && obj->line > 0)
 		fprintf(stderr, ", at line %d\n", obj->line);
 	else
 		fprintf(stderr, "\n");

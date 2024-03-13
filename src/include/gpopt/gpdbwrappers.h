@@ -683,8 +683,19 @@ FaultInjectorType_e InjectFaultInOptTasks(const char *fault_name);
 gpos::ULONG CountLeafPartTables(Oid oidRelation);
 
 // Does the metadata cache need to be reset (because of a catalog
-// table has been changed?)
+// table has been changed or TransactionXmin changed from that we saved)?
 bool MDCacheNeedsReset(void);
+
+// Check that the index is usable in the current snapshot and if not, save the
+// xmin of the current snapshot. Returns true if the index is not usable and
+// should be skipped.
+bool MDCacheSetTransientState(Relation index_rel);
+
+// reset TransactionXmin value that we saved
+void MDCacheResetTransientState(void);
+
+// returns true if cache is in transient state
+bool MDCacheInTransientState(void);
 
 // returns true if a query cancel is requested in GPDB
 bool IsAbortRequested(void);

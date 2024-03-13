@@ -48,6 +48,10 @@ private:
 	// action column
 	CColRef *m_pcrAction;
 
+	// table oid column (has value NULL for Update/Delete operations on non partitioned
+	// tables and for all Insert operations)
+	CColRef *m_pcrTableOid;
+
 	// ctid column
 	CColRef *m_pcrCtid;
 
@@ -80,7 +84,8 @@ public:
 	CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 				 CTableDescriptor *ptabdesc, CColRefArray *pdrgpcrSource,
 				 CBitSet *pbsModified, CColRef *pcrAction, CColRef *pcrCtid,
-				 CColRef *pcrSegmentId, CColRef *pcrTupleOid);
+				 CColRef *pcrSegmentId, CColRef *pcrTupleOid,
+				 CColRef *prcTableOid);
 
 	// dtor
 	virtual ~CPhysicalDML();
@@ -118,6 +123,13 @@ public:
 	PcrAction() const
 	{
 		return m_pcrAction;
+	}
+
+	// table oid column
+	CColRef *
+	PcrTableOid() const
+	{
+		return m_pcrTableOid;
 	}
 
 	// ctid column

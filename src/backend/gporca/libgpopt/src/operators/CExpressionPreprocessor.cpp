@@ -210,8 +210,13 @@ CExpressionPreprocessor::PexprSimplifyQuantifiedSubqueries(CMemoryPool *mp,
 	GPOS_ASSERT(NULL != pexpr);
 
 	COperator *pop = pexpr->Pop();
-	if (CUtils::FQuantifiedSubquery(pop) &&
-		1 == (*pexpr)[0]->DeriveMaxCard().Ull())
+	BOOL quantified = CUtils::FQuantifiedSubquery(pop);
+	if (quantified)
+	{
+		GPOS_ASSERT(NULL != (*pexpr)[0]);
+	}
+
+	if (quantified && 1 == (*pexpr)[0]->DeriveMaxCard().Ull())
 	{
 		CExpression *pexprInner = (*pexpr)[0];
 

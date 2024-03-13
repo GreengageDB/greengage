@@ -830,3 +830,10 @@ SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration;
 -- Apply settings
 \! gpstop -u;
 --- end_ignore
+
+-- start_ignore
+-- After error, schemas for temporary table still exist (like 'pg_temp'
+-- and 'pg_toast_temp').
+-- Lets remove all such temporary schemas for inactive connections
+\i sql/remove_temp_schemas.sql
+-- end_ignore

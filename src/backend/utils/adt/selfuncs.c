@@ -1241,6 +1241,8 @@ patternsel(PG_FUNCTION_ARGS, Pattern_Type ptype, bool negate)
 
 		if (eqopr == InvalidOid)
 			elog(ERROR, "no = operator for opfamily %u", opfamily);
+
+		Insist(prefix != NULL);
 		result = var_eq_const(&vardata, eqopr, prefix->constvalue,
 							  false, true);
 	}
@@ -1282,8 +1284,11 @@ patternsel(PG_FUNCTION_ARGS, Pattern_Type ptype, bool negate)
 			Selectivity prefixsel;
 
 			if (pstatus == Pattern_Prefix_Partial)
+			{
+				Insist(prefix != NULL);
 				prefixsel = prefix_selectivity(root, &vardata, vartype,
 											   opfamily, prefix);
+			}
 			else
 				prefixsel = 1.0;
 			heursel = prefixsel * rest_selec;

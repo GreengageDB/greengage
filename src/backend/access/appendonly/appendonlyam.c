@@ -148,7 +148,7 @@ initscan(AppendOnlyScanDesc scan, ScanKey key)
 	/*
 	 * copy the scan key, if appropriate
 	 */
-	if (key != NULL)
+	if (key != NULL && scan->aos_key != NULL && scan->aos_nkeys > 0)
 		memcpy(scan->aos_key, key, scan->aos_nkeys * sizeof(ScanKeyData));
 
 	scan->aos_filenamepath[0] = '\0';

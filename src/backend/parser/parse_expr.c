@@ -1992,8 +1992,6 @@ transformTableValueExpr(ParseState *pstate, TableValueExpr *t)
 	/* Analyze and transform the subquery */
 	query = parse_sub_analyze(t->subquery, pstate, NULL, NULL);
 
-	query->isTableValueSelect = true;
-
 	/* 
 	 * Check that we got something reasonable.  Most of these conditions
 	 * are probably impossible given restrictions in the grammar.
@@ -2009,6 +2007,8 @@ transformTableValueExpr(ParseState *pstate, TableValueExpr *t)
 				 errmsg("subquery in TABLE value expression cannot have SELECT INTO"),
 				 parser_errposition(pstate, t->location)));
 	t->subquery = (Node*) query;
+
+	query->isTableValueSelect = true;
 
 	/*
 	 * Insist that the TABLE value expression does not contain references to the outer

@@ -231,6 +231,7 @@ CParseHandlerPartitionSelector::EndElement(
 
 	CParseHandlerProperties *prop_parse_handler =
 		dynamic_cast<CParseHandlerProperties *>((*this)[0]);
+	GPOS_ASSERT(NULL != prop_parse_handler);
 
 	// set statistics and physical properties
 	CParseHandlerUtils::SetProperties(m_dxl_node, prop_parse_handler);
@@ -240,6 +241,7 @@ CParseHandlerPartitionSelector::EndElement(
 	{
 		CParseHandlerScalarOp *child_parse_handler =
 			dynamic_cast<CParseHandlerScalarOp *>((*this)[idx]);
+		GPOS_ASSERT(NULL != child_parse_handler);
 		AddChildFromParseHandler(child_parse_handler);
 	}
 
@@ -248,6 +250,7 @@ CParseHandlerPartitionSelector::EndElement(
 	{
 		CParseHandlerPhysicalOp *child_parse_handler =
 			dynamic_cast<CParseHandlerPhysicalOp *>((*this)[7]);
+		GPOS_ASSERT(NULL != child_parse_handler);
 		AddChildFromParseHandler(child_parse_handler);
 	}
 

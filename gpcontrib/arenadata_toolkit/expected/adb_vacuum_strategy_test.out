@@ -1,10 +1,13 @@
 CREATE EXTENSION arenadata_toolkit;
+-- Change log level to disable notice messages from PL/pgSQL
+SET client_min_messages=WARNING;
 SELECT arenadata_toolkit.adb_create_tables();
  adb_create_tables 
 -------------------
  
 (1 row)
 
+RESET client_min_messages;
 CREATE SCHEMA test_vacuum;
 CREATE TABLE test_vacuum.vacuumed (a int) DISTRIBUTED BY (a);
 CREATE TABLE test_vacuum.not_vacuumed (a int) DISTRIBUTED BY (a);
@@ -54,3 +57,8 @@ DETAIL:  drop cascades to table test_vacuum.vacuumed
 drop cascades to table test_vacuum.not_vacuumed
 drop cascades to table test_vacuum.part_table
 DROP EXTENSION arenadata_toolkit;
+-- Change log level to disable notice messages of dropped objects from
+-- "DROP SCHEMA arenadata_toolkit CASCADE;"
+SET client_min_messages=WARNING;
+DROP SCHEMA arenadata_toolkit CASCADE;
+RESET client_min_messages;

@@ -803,7 +803,7 @@ DefineIndex(Oid relationId,
 											indexInfo->ii_NumIndexAttrs,
 											stmt->primary);
 
-	if (Gp_role == GP_ROLE_EXECUTE && stmt)
+	if (Gp_role == GP_ROLE_EXECUTE)
 		quiet = true;
 
 	/*

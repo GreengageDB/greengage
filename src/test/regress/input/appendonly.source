@@ -811,3 +811,37 @@ insert into fix_ao_truncate_last_sequence select 1, 1 from generate_series(1, 5)
 select count(*) from fix_ao_truncate_last_sequence;
 abort;
 
+-- check reporting of missing attributes for AO table
+-- start_ignore
+drop table if exists test_reporting;
+drop table if exists test_reporting_r;
+drop table if exists test_reporting_c;
+-- end_ignore
+
+create table test_reporting (id int) with (appendonly=true) distributed by (id);
+explain select xmin, * from test_reporting;
+explain select xmax, * from test_reporting;
+explain select cmin, * from test_reporting;
+explain select cmax, * from test_reporting;
+
+-- Check column oriented tables as well
+create table test_reporting_c (id int) 
+    with (appendonly=true, orientation=column) 
+    distributed by (id);
+
+explain select xmin, * from test_reporting_c;
+explain select xmax, * from test_reporting_c;
+explain select cmin, * from test_reporting_c;
+explain select cmax, * from test_reporting_c;
+
+-- Replicated tables using different code pathes and we want to be sure than 
+-- all code pathes are covered by tests.
+create table test_reporting_r (id int) with (appendonly=true) distributed replicated;
+explain select xmin, * from test_reporting_r;
+explain select xmax, * from test_reporting_r;
+explain select cmin, * from test_reporting_r;
+explain select cmax, * from test_reporting_r;
+
+drop table test_reporting;
+drop table test_reporting_r;
+drop table test_reporting_c;

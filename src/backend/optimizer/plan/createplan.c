@@ -514,8 +514,7 @@ create_scan_plan(PlannerInfo *root, Path *best_path)
 	/* Decorate the top node of the plan with a Flow node. */
 	plan->flow = cdbpathtoplan_create_flow(root,
 										   best_path->locus,
-								best_path->parent ? best_path->parent->relids
-										   : NULL,
+										   best_path->parent->relids,
 										   plan);
 
 	/*
@@ -1319,7 +1318,7 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path)
 		copy_path_costsize(root, plan, (Path *) best_path);
 		plan->flow = cdbpathtoplan_create_flow(root,
 											   best_path->path.locus,
-											   best_path->path.parent ? best_path->path.parent->relids : NULL,
+											   best_path->path.parent->relids,
 											   plan);
 	}
 
@@ -2900,10 +2899,6 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 								  scan_relid,
 								  best_path->parent->subplan);
 
-	/* If subplan is not NULL, all costs copied inside make_subqueryscan() */
-	if (!best_path->parent->subplan)
-		copy_path_costsize(root, &scan_plan->scan.plan, best_path);
-
 	return scan_plan;
 }
 
@@ -3687,6 +3682,7 @@ create_hashjoin_plan(PlannerInfo *root,
 	 * Rearrange hashclauses, if needed, so that the outer variable is always
 	 * on the left.
 	 */
+	Assert(best_path->jpath.outerjoinpath != NULL);
 	hashclauses = get_switched_clauses(best_path->path_hashclauses,
 							 best_path->jpath.outerjoinpath->parent->relids);
 
@@ -3695,8 +3691,8 @@ create_hashjoin_plan(PlannerInfo *root,
 	 * either!
 	 */
 	disuse_physical_tlist(root, inner_plan, best_path->jpath.innerjoinpath);
-	if (outer_plan)
-		disuse_physical_tlist(root, outer_plan, best_path->jpath.outerjoinpath);
+	Assert(outer_plan);
+	disuse_physical_tlist(root, outer_plan, best_path->jpath.outerjoinpath);
 
 	/* If we expect batching, suppress excess columns in outer tuples too */
 	if (best_path->num_batches > 1)
@@ -3768,8 +3764,7 @@ create_hashjoin_plan(PlannerInfo *root,
 	 * (allowing us to check the outer for rows before building the
 	 * hash-table).
 	 */
-	if (best_path->jpath.outerjoinpath == NULL ||
-		best_path->jpath.outerjoinpath->motionHazard ||
+	if (best_path->jpath.outerjoinpath->motionHazard ||
 		best_path->jpath.innerjoinpath->motionHazard)
 	{
 		join_plan->join.prefetch_inner = true;

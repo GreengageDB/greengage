@@ -124,6 +124,7 @@ CParseHandlerWindowKey::EndElement(const XMLCh *const,	// element_uri,
 
 	CParseHandlerSortColList *sort_col_list_parse_handler =
 		dynamic_cast<CParseHandlerSortColList *>((*this)[0]);
+	GPOS_ASSERT(NULL != sort_col_list_parse_handler);
 	CDXLNode *sort_col_list_dxlnode =
 		sort_col_list_parse_handler->CreateDXLNode();
 	sort_col_list_dxlnode->AddRef();
@@ -133,6 +134,7 @@ CParseHandlerWindowKey::EndElement(const XMLCh *const,	// element_uri,
 	{
 		CParseHandlerWindowFrame *window_frame_parse_handler_base =
 			dynamic_cast<CParseHandlerWindowFrame *>((*this)[1]);
+		GPOS_ASSERT(NULL != window_frame_parse_handler_base);
 		CDXLWindowFrame *window_frame =
 			window_frame_parse_handler_base->GetWindowFrame();
 		m_dxl_window_key_gen->SetWindowFrame(window_frame);

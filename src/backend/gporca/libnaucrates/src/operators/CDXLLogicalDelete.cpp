@@ -32,12 +32,14 @@ using namespace gpdxl;
 CDXLLogicalDelete::CDXLLogicalDelete(CMemoryPool *mp,
 									 CDXLTableDescr *table_descr,
 									 ULONG ctid_colid, ULONG segid_colid,
-									 ULongPtrArray *delete_colid_array)
+									 ULongPtrArray *delete_colid_array,
+									 ULONG table_oid_colid)
 	: CDXLLogical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_ctid_colid(ctid_colid),
 	  m_segid_colid(segid_colid),
-	  m_deletion_colid_array(delete_colid_array)
+	  m_deletion_colid_array(delete_colid_array),
+	  m_table_oid_colid(table_oid_colid)
 {
 	GPOS_ASSERT(NULL != table_descr);
 	GPOS_ASSERT(NULL != delete_colid_array);
@@ -111,6 +113,12 @@ CDXLLogicalDelete::SerializeToDXL(CXMLSerializer *xml_serializer,
 								 m_ctid_colid);
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenGpSegmentIdColId), m_segid_colid);
+
+	if (0 != m_table_oid_colid)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenOidColId), m_table_oid_colid);
+	}
 
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	node->SerializeChildrenToDXL(xml_serializer);

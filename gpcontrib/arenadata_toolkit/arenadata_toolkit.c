@@ -39,6 +39,7 @@ static int64 get_ao_storage_total_bytes(Relation rel, char *relpath);
 static bool calculate_ao_storage_perSegFile(const int segno, void *ctx);
 static void fill_relation_seg_path(char *buf, int bufLen,
 					   const char *relpath, int segNo);
+static int64 calculate_toast_table_size(Oid toastrelid, ForkNumber forknum);
 
 /*
  * Structure used to accumulate the size of AO/CO relation from callback.
@@ -84,6 +85,9 @@ adb_relation_storage_size(PG_FUNCTION_ARGS)
 
 		size += get_size_from_segDBs(sql);
 	}
+
+	if (OidIsValid(rel->rd_rel->reltoastrelid))
+		size += calculate_toast_table_size(rel->rd_rel->reltoastrelid, forkNumber);
 
 	relation_close(rel, AccessShareLock);
 
@@ -145,6 +149,23 @@ calculate_ao_storage_perSegFile(const int segno, void *ctx)
 	calcCtx->total_size += fst.st_size;
 
 	return true;
+}
+
+/*
+ * Calculate total on-disk size of a TOAST relation.
+ * Must not be applied to non-TOAST relations.
+ *
+ * The code is based on calculate_toast_table_size from dbsize.c, but without
+ * calculating size of toast's indexes.
+ */
+static int64
+calculate_toast_table_size(Oid toastrelid, ForkNumber forknum)
+{
+	Relation toastRel = relation_open(toastrelid, AccessShareLock);
+	int64    size = calculate_relation_size(toastRel, forknum);
+
+	relation_close(toastRel, AccessShareLock);
+	return size;
 }
 
 /*

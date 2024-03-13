@@ -592,6 +592,29 @@ scanRTEForColumn(ParseState *pstate, RangeTblEntry *rte, char *colname,
 	 */
 	if (rte->rtekind == RTE_RELATION)
 	{
+		/* quick check to see if name could be a system column */
+		attnum = specialAttNum(colname);
+
+		/*
+		 * AO tables by nature do not have special system columns like xmin,
+		 * xmax, cmin, cmax. Here we can check for that columns access and
+		 * provide meaningfull message to the user. We want to do this before
+		 * check for replicated tables, so replicated AO tables also covered
+		 * with this logic.
+		 */
+		if ((attnum == MinTransactionIdAttributeNumber ||
+			 attnum == MinCommandIdAttributeNumber ||
+			 attnum == MaxTransactionIdAttributeNumber ||
+			 attnum == MaxCommandIdAttributeNumber) &&
+			relstorage_is_ao(get_rel_relstorage(rte->relid)))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_COLUMN),
+					 errmsg("AO-table has no \"%s\" column",
+							colname),
+					 parser_errposition(pstate, location)));
+		}
+
 		/* In GPDB, system columns like gp_segment_id, ctid, xmin/xmax seem to be
 		 * ambiguous for replicated table, replica in each segment has different
 		 * value of those columns, between sessions, different replicas are choosen
@@ -602,9 +625,6 @@ scanRTEForColumn(ParseState *pstate, RangeTblEntry *rte, char *colname,
 		if (GpPolicyIsReplicated(GpPolicyFetch(rte->relid)) &&
 			Gp_role != GP_ROLE_UTILITY)
 			return result;
-
-		/* quick check to see if name could be a system column */
-		attnum = specialAttNum(colname);
 
 		/* In constraint check, no system column is allowed except tableOid */
 		/*
@@ -1036,9 +1056,6 @@ parserOpenTable(ParseState *pstate, const RangeVar *relation,
 /*
  * Add an entry for a relation to the pstate's range table (p_rtable).
  *
- * If pstate is NULL, we just build an RTE and return it without adding it
- * to an rtable list.
- *
  * Note: formerly this checked for refname conflicts, but that's wrong.
  * Caller is responsible for checking for conflicts in the appropriate scope.
  */
@@ -1055,6 +1072,8 @@ addRangeTableEntry(ParseState *pstate,
 	LockingClause *locking;
 	Relation	rel;
 	ParseCallbackState pcbstate;
+
+	Assert(pstate != NULL);
 
 	rte->alias = alias;
 	rte->rtekind = RTE_RELATION;
@@ -1138,8 +1157,7 @@ addRangeTableEntry(ParseState *pstate,
 	 * Add completed RTE to pstate's range table list, but not to join list
 	 * nor namespace --- caller must do that if appropriate.
 	 */
-	if (pstate != NULL)
-		pstate->p_rtable = lappend(pstate->p_rtable, rte);
+	pstate->p_rtable = lappend(pstate->p_rtable, rte);
 
 	return rte;
 }
@@ -1355,7 +1373,8 @@ addRangeTableEntryForFunction(ParseState *pstate,
 		 * mark this here because this is where we know that the function is being
 		 * used as a RangeTableEntry.
 		 */
-		if (funcexpr && IsA(funcexpr, FuncExpr))
+		Assert(funcexpr);
+		if (IsA(funcexpr, FuncExpr))
 		{
 			FuncExpr		*func = (FuncExpr *) funcexpr;
 

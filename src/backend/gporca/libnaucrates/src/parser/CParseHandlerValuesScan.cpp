@@ -109,6 +109,7 @@ CParseHandlerValuesScan::EndElement(const XMLCh *const,	 // element_uri,
 	// valuesscan has properties element as its first child
 	CParseHandlerProperties *prop_parse_handler =
 		dynamic_cast<CParseHandlerProperties *>((*this)[0]);
+	GPOS_ASSERT(NULL != prop_parse_handler);
 
 	// set statistics and physical properties
 	CParseHandlerUtils::SetProperties(m_dxl_node, prop_parse_handler);
@@ -116,6 +117,7 @@ CParseHandlerValuesScan::EndElement(const XMLCh *const,	 // element_uri,
 	// valuesscan has project list element as its second child
 	CParseHandlerProjList *proj_list_parse_handler =
 		dynamic_cast<CParseHandlerProjList *>((*this)[1]);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
 	AddChildFromParseHandler(proj_list_parse_handler);
 
 	// valuesscan child value list begins with third child
@@ -123,6 +125,7 @@ CParseHandlerValuesScan::EndElement(const XMLCh *const,	 // element_uri,
 	{
 		CParseHandlerScalarValuesList *scalar_values_list_parse_handler =
 			dynamic_cast<CParseHandlerScalarValuesList *>((*this)[idx]);
+		GPOS_ASSERT(NULL != scalar_values_list_parse_handler);
 		AddChildFromParseHandler(scalar_values_list_parse_handler);
 	}
 

@@ -700,8 +700,8 @@ ExecDelete(ItemPointer tupleid,
 		   PlanGenerator planGen,
 		   bool isUpdate)
 {
-	ResultRelInfo *resultRelInfo;
-	Relation	resultRelationDesc;
+	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+	Relation	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 	HTSU_Result result;
 	HeapUpdateFailureData hufd;
 	TupleTableSlot *slot = NULL;
@@ -719,33 +719,6 @@ ExecDelete(ItemPointer tupleid,
 			 BlockIdGetBlockNumber(&(tupleid->ip_blkid)),
 			 tupleid->ip_posid,
 			 segid);
-
-	/*
-	 * get information on the (current) result relation
-	 */
-	if (estate->es_result_partitions && planGen == PLANGEN_OPTIMIZER)
-	{
-		Assert(estate->es_result_partitions->part->parrelid);
-
-#ifdef USE_ASSERT_CHECKING
-		Oid parent = estate->es_result_partitions->part->parrelid;
-#endif
-
-		/* Obtain part for current tuple. */
-		resultRelInfo = slot_get_partition(planSlot, estate);
-		estate->es_result_relation_info = resultRelInfo;
-
-#ifdef USE_ASSERT_CHECKING
-		Oid part = RelationGetRelid(resultRelInfo->ri_RelationDesc);
-#endif
-
-		Assert(parent != part);
-	}
-	else
-	{
-		resultRelInfo = estate->es_result_relation_info;
-	}
-	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
 	if (planGen == PLANGEN_PLANNER)
 	{

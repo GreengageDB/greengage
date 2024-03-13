@@ -1273,7 +1273,7 @@ make_partition_rules(CreateStmtContext *cxt, CreateStmt *stmt,
 			ListCell   *lc_anp = NULL;
 
 			/* check the list of "all new partitions" */
-			if (pp_lc_anp)
+			Assert(pp_lc_anp);
 			{
 				lc_anp = *pp_lc_anp;
 				if (lc_anp)
@@ -2074,7 +2074,6 @@ validate_partition_spec(CreateStmtContext *cxt,
 		 */
 		pElem->partno = ++partno;
 
-		if (pElem)
 		{
 			pBSpec = (PartitionBoundSpec *) pElem->boundSpec;
 			vstate->spec = (Node *) pBSpec;
@@ -2153,13 +2152,6 @@ validate_partition_spec(CreateStmtContext *cxt,
 				else
 					snprintf(namBuf, sizeof(namBuf), " number %d", partno);
 			}
-		}
-		else
-		{
-			if (pElem->AddPartDesc)
-				snprintf(namBuf, sizeof(namBuf), "%s", pElem->AddPartDesc);
-			else
-				snprintf(namBuf, sizeof(namBuf), " number %d", partno);
 		}
 
 		/* don't have to validate default partition boundary specs */
@@ -3004,7 +2996,7 @@ partition_range_every(ParseState *pstate, PartitionBy *pBy, List *coltypes,
 						   *ltop;
 				Oid			restypid;
 				Type		typ;
-				char	   *outputstr;
+				char	   *outputstr = NULL;
 				int32		coltypmod;
 				Oid			coltypid;
 
@@ -3216,10 +3208,11 @@ partition_range_every(ParseState *pstate, PartitionBy *pBy, List *coltypes,
 				}
 				else
 				{
-					allNewCols = lappend(allNewCols, pstrdup(outputstr));
-
 					if (outputstr)
+					{
+						allNewCols = lappend(allNewCols, pstrdup(outputstr));
 						pfree(outputstr);
+					}
 
 					sqlRc = 1;
 				}

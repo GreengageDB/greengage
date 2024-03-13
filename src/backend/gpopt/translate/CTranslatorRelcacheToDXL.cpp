@@ -308,7 +308,11 @@ CTranslatorRelcacheToDXL::RetrieveRelIndexInfoForPartTable(CMemoryPool *mp,
 
 		GPOS_TRY
 		{
-			if (IsIndexSupported(index_rel))
+			// If the index is supported, but cannot yet be used, ignore it; but
+			// mark the plan we are generating and cache as transient.
+			// See src/backend/access/heap/README.HOT for discussion.
+			if (IsIndexSupported(index_rel) &&
+				!gpdb::MDCacheSetTransientState(index_rel))
 			{
 				CMDIdGPDB *mdid_index =
 					GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidInd, index_oid);
@@ -364,7 +368,11 @@ CTranslatorRelcacheToDXL::RetrieveRelIndexInfoForNonPartTable(CMemoryPool *mp,
 
 		GPOS_TRY
 		{
-			if (IsIndexSupported(index_rel))
+			// If the index is supported, but cannot yet be used, ignore it; but
+			// mark the plan we are generating and cache as transient.
+			// See src/backend/access/heap/README.HOT for discussion.
+			if (IsIndexSupported(index_rel) &&
+				!gpdb::MDCacheSetTransientState(index_rel))
 			{
 				CMDIdGPDB *mdid_index =
 					GPOS_NEW(mp) CMDIdGPDB(IMDId::EmdidInd, index_oid);

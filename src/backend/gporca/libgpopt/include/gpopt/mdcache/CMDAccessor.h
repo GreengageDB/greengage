@@ -309,7 +309,9 @@ public:
 	{
 		IMDType::ETypeInfo type_info = T::GetTypeInfo();
 		GPOS_ASSERT(IMDType::EtiGeneric != type_info);
-		return dynamic_cast<const T *>(RetrieveType(type_info));
+		const T *md_type = dynamic_cast<const T *>(RetrieveType(type_info));
+		GPOS_ASSERT(NULL != md_type);
+		return md_type;
 	}
 
 	// obtain the specified base type given by the template parameter
@@ -319,7 +321,10 @@ public:
 	{
 		IMDType::ETypeInfo type_info = T::GetTypeInfo();
 		GPOS_ASSERT(IMDType::EtiGeneric != type_info);
-		return dynamic_cast<const T *>(RetrieveType(sysid, type_info));
+		const T *md_type =
+			dynamic_cast<const T *>(RetrieveType(sysid, type_info));
+		GPOS_ASSERT(NULL != md_type);
+		return md_type;
 	}
 
 	// interface to a scalar operator from the MD cache

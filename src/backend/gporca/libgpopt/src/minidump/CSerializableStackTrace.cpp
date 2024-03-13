@@ -60,7 +60,7 @@ CSerializableStackTrace::~CSerializableStackTrace()
 void
 CSerializableStackTrace::Serialize(COstream &oos)
 {
-	if (!ITask::Self()->HasPendingExceptions())
+	if (NULL == CTask::Self() || !CTask::Self()->HasPendingExceptions())
 	{
 		// no pending exception: no need to serialize stack trace
 		return;

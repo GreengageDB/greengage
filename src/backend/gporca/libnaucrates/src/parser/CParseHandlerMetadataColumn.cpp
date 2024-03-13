@@ -170,6 +170,7 @@ CParseHandlerMetadataColumn::EndElement(const XMLCh *const,	 // element_uri,
 	// get node for default value expression from child parse handler
 	CParseHandlerScalarOp *op_parse_handler =
 		dynamic_cast<CParseHandlerScalarOp *>((*this)[0]);
+	GPOS_ASSERT(NULL != op_parse_handler);
 
 	m_dxl_default_val = op_parse_handler->CreateDXLNode();
 

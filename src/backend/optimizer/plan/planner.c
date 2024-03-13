@@ -908,6 +908,15 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 											 list_make1_int(root->is_split_update),
 											 rowMarks,
 											 SS_assign_special_param(root));
+
+			/*
+			 * Currently, we prohibit applying volatile functions
+			 * to the result of modifying CTE with locus Replicated.
+			 */
+			if (parent_root && parent_root->parse->hasModifyingCTE &&
+				plan->flow->locustype == CdbLocusType_Replicated &&
+				contain_volatile_functions((Node *) parse->returningList))
+				elog(ERROR, "could not devise a plan");
 		}
 	}
 
@@ -939,6 +948,16 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 		 contain_volatile_functions(parse->havingQual)))
 	{
 		plan = (Plan *) make_motion_gather(root, plan, NIL, CdbLocusType_SingleQE);
+	}
+	else if (plan->flow->locustype == CdbLocusType_Replicated &&
+			 (contain_volatile_functions((Node *) plan->targetlist) ||
+			  contain_volatile_functions(parse->havingQual)))
+	{
+		/*
+		 * Replicated locus is not supported yet in context of volatile
+		 * functions handling.
+		 */
+		elog(ERROR, "could not devise a plan");
 	}
 
 	/* Return internal info if caller wants it */
@@ -1916,6 +1935,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 		/* Obtain canonical grouping sets */
 		canonical_grpsets = make_canonical_groupingsets(parse->groupClause);
+		Assert(canonical_grpsets);
 		numGroupCols = canonical_grpsets->num_distcols;
 
 		/*
@@ -2384,8 +2404,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												0, /* rollup_gs_times */
 												result_plan);
 
-				if (canonical_grpsets != NULL &&
-					canonical_grpsets->grpset_counts != NULL &&
+				if (canonical_grpsets->grpset_counts != NULL &&
 					canonical_grpsets->grpset_counts[0] > 1)
 				{
 					result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);

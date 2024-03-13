@@ -757,8 +757,12 @@ ginVacuumPostingTreeLeaf(Relation indexrel, Buffer buffer, GinVacuumState *gvs)
 		int			ncleaned;
 
 		if (!seginfo->items)
+		{
+			Insist(seginfo->seg != NULL);
 			seginfo->items = ginPostingListDecode(seginfo->seg,
 												  &seginfo->nitems);
+		}
+
 		if (seginfo->seg)
 			oldsegsize = SizeOfGinPostingList(seginfo->seg);
 		else

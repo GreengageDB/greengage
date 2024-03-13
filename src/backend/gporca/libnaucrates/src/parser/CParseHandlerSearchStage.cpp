@@ -150,6 +150,7 @@ CParseHandlerSearchStage::EndElement(const XMLCh *const,  // element_uri,
 	{
 		CParseHandlerXform *xform_set_parse_handler =
 			dynamic_cast<CParseHandlerXform *>((*this)[idx]);
+		GPOS_ASSERT(NULL != xform_set_parse_handler);
 #ifdef GPOS_DEBUG
 		BOOL fSet =
 #endif	// GPOS_DEBUG

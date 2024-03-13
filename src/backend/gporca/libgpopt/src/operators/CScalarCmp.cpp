@@ -172,6 +172,7 @@ IMDId *
 CScalarCmp::PmdidCommuteOp(CMDAccessor *md_accessor, COperator *pop)
 {
 	CScalarCmp *popScalarCmp = dynamic_cast<CScalarCmp *>(pop);
+	GPOS_ASSERT(NULL != popScalarCmp);
 	const IMDScalarOp *pmdScalarCmpOp =
 		md_accessor->RetrieveScOp(popScalarCmp->MdIdOp());
 

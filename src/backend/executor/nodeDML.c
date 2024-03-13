@@ -104,7 +104,8 @@ ExecDML(DMLState *node)
 		 * it will be allocated at es_result_relations.
 		 */
 		if (RelationGetRelid(relInfo->ri_RelationDesc) !=
-			node->ps.state->es_result_partitions->part->parrelid)
+			node->ps.state->es_result_partitions->part->parrelid &&
+			action != DML_DELETE)
 			makePartitionCheckMap(node->ps.state, relInfo);
 
 		/*
@@ -159,8 +160,25 @@ ExecDML(DMLState *node)
 	{
 		int32 segid = GpIdentity.segindex;
 		Datum ctid = slot_getattr(slot, plannode->ctidColIdx, &isnull);
+		Oid tableoid = InvalidOid;
 
 		Assert(!isnull);
+
+		if (AttributeNumberIsValid(plannode->tableoidColIdx))
+		{
+			Datum dtableoid = slot_getattr(slot, plannode->tableoidColIdx, &isnull);
+			tableoid = isnull ? InvalidOid : DatumGetObjectId(dtableoid);
+		}
+
+		/*
+		 * If tableoid is valid, it means that we are executing UPDATE/DELETE
+		 * on partitioned table (root partition). In order to avoid partition
+		 * pruning in ExecDelete one can use tableoid to build target
+		 * ResultRelInfo for the leaf partition.
+		 */
+		if (OidIsValid(tableoid) && node->ps.state->es_result_partitions)
+			node->ps.state->es_result_relation_info =
+				targetid_get_partition(tableoid, node->ps.state, true);
 
 		ItemPointer  tupleid = (ItemPointer) DatumGetPointer(ctid);
 		ItemPointerData tuple_ctid = *tupleid;
@@ -263,17 +281,28 @@ ExecInitDML(DML *node, EState *estate, int eflags)
 			dmlstate->cleanedUpSlot);
 
 	/*
-	 * We don't maintain typmod in the targetlist, so we should fixup the
-	 * junkfilter to use the same tuple descriptor as the result relation.
-	 * Otherwise the mismatch of tuple descriptor will cause a break in
-	 * ExecInsert()->reconstructMatchingTupleSlot().
+	 * The comment below is related to ExecInsert(). The code works correctly,
+	 * because insert operations always translate full set of attrs to
+	 * targetlist. So, tupledesc below has the same number of attrs after
+	 * replacing. ExecDelete() doesn't reconstruct a slot, and more, can work
+	 * with subset of table attrs. In order to avoid unnecessary job and
+	 * execution error, the code below is not executed for DELETE.
 	 */
-	TupleDesc cleanTupType = CreateTupleDescCopy(dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att);
+	if (estate->es_plannedstmt->commandType != CMD_DELETE)
+	{
+		/*
+		 * We don't maintain typmod in the targetlist, so we should fixup the
+		 * junkfilter to use the same tuple descriptor as the result relation.
+		 * Otherwise the mismatch of tuple descriptor will cause a break in
+		 * ExecInsert()->reconstructMatchingTupleSlot().
+		 */
+		TupleDesc	cleanTupType = CreateTupleDescCopy(dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att);
 
-	ExecSetSlotDescriptor(dmlstate->junkfilter->jf_resultSlot, cleanTupType);
+		ExecSetSlotDescriptor(dmlstate->junkfilter->jf_resultSlot, cleanTupType);
 
-	ReleaseTupleDesc(dmlstate->junkfilter->jf_cleanTupType);
-	dmlstate->junkfilter->jf_cleanTupType = cleanTupType;
+		ReleaseTupleDesc(dmlstate->junkfilter->jf_cleanTupType);
+		dmlstate->junkfilter->jf_cleanTupType = cleanTupType;
+	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
 	{

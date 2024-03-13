@@ -151,6 +151,7 @@ CParseHandlerProperties::EndElement(const XMLCh *const,	 // element_uri,
 	// assemble the properties container from the cost
 	CParseHandlerCost *parse_handler_cost =
 		dynamic_cast<CParseHandlerCost *>((*this)[0]);
+	GPOS_ASSERT(NULL != parse_handler_cost);
 
 	CDXLOperatorCost *cost = parse_handler_cost->GetDXLOperatorCost();
 	cost->AddRef();
@@ -159,6 +160,7 @@ CParseHandlerProperties::EndElement(const XMLCh *const,	 // element_uri,
 	{
 		CParseHandlerStatsDerivedRelation *parse_handler_stats =
 			dynamic_cast<CParseHandlerStatsDerivedRelation *>((*this)[1]);
+		GPOS_ASSERT(NULL != parse_handler_stats);
 
 		CDXLStatsDerivedRelation *dxl_stats_derived_relation =
 			parse_handler_stats->GetDxlStatsDrvdRelation();

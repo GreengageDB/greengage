@@ -4490,9 +4490,10 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 		{
 			CPhysicalMotionRoutedDistribute *popMotion =
 				CPhysicalMotionRoutedDistribute::PopConvert(pexprMotion->Pop());
-			CColRef *pcrSegmentId =
-				dynamic_cast<const CDistributionSpecRouted *>(popMotion->Pds())
-					->Pcr();
+			const CDistributionSpecRouted *spec =
+				dynamic_cast<const CDistributionSpecRouted *>(popMotion->Pds());
+			GPOS_ASSERT(NULL != spec);
+			CColRef *pcrSegmentId = spec->Pcr();
 
 			motion = GPOS_NEW(m_mp)
 				CDXLPhysicalRoutedDistributeMotion(m_mp, pcrSegmentId->Id());
@@ -5737,6 +5738,7 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	GPOS_ASSERT(1 == pexpr->Arity());
 
 	ULONG action_colid = 0;
+	ULONG tableoid_colid = 0;
 	ULONG ctid_colid = 0;
 	ULONG segid_colid = 0;
 
@@ -5757,6 +5759,12 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	CColRef *pcrAction = popDML->PcrAction();
 	GPOS_ASSERT(NULL != pcrAction);
 	action_colid = pcrAction->Id();
+
+	CColRef *pcrTableOid = popDML->PcrTableOid();
+	if (NULL != pcrTableOid)
+	{
+		tableoid_colid = pcrTableOid->Id();
+	}
 
 	CColRef *pcrCtid = popDML->PcrCtid();
 	CColRef *pcrSegmentId = popDML->PcrSegmentId();
@@ -5786,9 +5794,10 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 
 	CDXLDirectDispatchInfo *dxl_direct_dispatch_info =
 		GetDXLDirectDispatchInfo(pexpr);
-	CDXLPhysicalDML *pdxlopDML = GPOS_NEW(m_mp) CDXLPhysicalDML(
-		m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid, ctid_colid,
-		segid_colid, preserve_oids, tuple_oid, dxl_direct_dispatch_info);
+	CDXLPhysicalDML *pdxlopDML = GPOS_NEW(m_mp)
+		CDXLPhysicalDML(m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid,
+						ctid_colid, segid_colid, preserve_oids, tuple_oid,
+						tableoid_colid, dxl_direct_dispatch_info);
 
 	// project list
 	CColRefSet *pcrsOutput = pexpr->Prpp()->PcrsRequired();

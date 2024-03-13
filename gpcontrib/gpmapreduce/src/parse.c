@@ -15,8 +15,11 @@ int mapred_verify_object(mapred_parser_t *parser, mapred_object_t *obj);
 /* -------------------------------------------------------------------------- */
 int mapred_parse_error(mapred_parser_t *parser, char *fmt, ...)
 {
-	mapred_object_t *obj = parser->current_obj;
+	mapred_object_t *obj = NULL;
 	va_list arg;
+
+	if (parser)
+		obj = parser->current_obj;
 
 	if (parser && parser->current_doc)
 	{
@@ -1366,6 +1369,12 @@ void parser_add_file(mapred_parser_t *parser, char *value)
 				return;
 			default:
 				XASSERT(false);
+				/*
+				 * If function is executed out of XTRY block, function will
+				 * continue to work, using incorrect "value".
+				 * Let's do return to avoid this.
+				 */
+				return;
 		}
 	}
 	/* Todo: improved regex checking on files */

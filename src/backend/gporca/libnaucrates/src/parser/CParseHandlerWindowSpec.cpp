@@ -163,12 +163,14 @@ CParseHandlerWindowSpec::EndElement(const XMLCh *const,	 // element_uri,
 			// adds a window frame that is unbounded.
 			CParseHandlerWindowFrame *window_frame_parse_handler =
 				dynamic_cast<CParseHandlerWindowFrame *>((*this)[0]);
+			GPOS_ASSERT(NULL != window_frame_parse_handler);
 			window_frame = window_frame_parse_handler->GetWindowFrame();
 		}
 		else
 		{
 			CParseHandlerSortColList *sort_col_list_parse_handler =
 				dynamic_cast<CParseHandlerSortColList *>((*this)[0]);
+			GPOS_ASSERT(NULL != sort_col_list_parse_handler);
 			sort_col_list_dxlnode =
 				sort_col_list_parse_handler->CreateDXLNode();
 			sort_col_list_dxlnode->AddRef();
@@ -178,11 +180,13 @@ CParseHandlerWindowSpec::EndElement(const XMLCh *const,	 // element_uri,
 	{
 		CParseHandlerSortColList *sort_col_list_parse_handler =
 			dynamic_cast<CParseHandlerSortColList *>((*this)[0]);
+		GPOS_ASSERT(NULL != sort_col_list_parse_handler);
 		sort_col_list_dxlnode = sort_col_list_parse_handler->CreateDXLNode();
 		sort_col_list_dxlnode->AddRef();
 
 		CParseHandlerWindowFrame *window_frame_parse_handler =
 			dynamic_cast<CParseHandlerWindowFrame *>((*this)[1]);
+		GPOS_ASSERT(NULL != window_frame_parse_handler);
 		window_frame = window_frame_parse_handler->GetWindowFrame();
 	}
 	m_dxl_window_spec_gen =

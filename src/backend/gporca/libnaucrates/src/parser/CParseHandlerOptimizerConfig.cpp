@@ -193,21 +193,25 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 
 	CParseHandlerEnumeratorConfig *pphEnumeratorConfig =
 		dynamic_cast<CParseHandlerEnumeratorConfig *>((*this)[0]);
+	GPOS_ASSERT(NULL != pphEnumeratorConfig);
 	CEnumeratorConfig *pec = pphEnumeratorConfig->GetEnumeratorCfg();
 	pec->AddRef();
 
 	CParseHandlerStatisticsConfig *pphStatisticsConfig =
 		dynamic_cast<CParseHandlerStatisticsConfig *>((*this)[1]);
+	GPOS_ASSERT(NULL != pphStatisticsConfig);
 	CStatisticsConfig *stats_config = pphStatisticsConfig->GetStatsConf();
 	stats_config->AddRef();
 
 	CParseHandlerCTEConfig *pphCTEConfig =
 		dynamic_cast<CParseHandlerCTEConfig *>((*this)[2]);
+	GPOS_ASSERT(NULL != pphCTEConfig);
 	CCTEConfig *pcteconfig = pphCTEConfig->GetCteConf();
 	pcteconfig->AddRef();
 
 	CParseHandlerWindowOids *pphDefoidsGPDB =
 		dynamic_cast<CParseHandlerWindowOids *>((*this)[3]);
+	GPOS_ASSERT(NULL != pphDefoidsGPDB);
 	CWindowOids *pwindowoidsGPDB = pphDefoidsGPDB->GetWindowOids();
 	GPOS_ASSERT(NULL != pwindowoidsGPDB);
 	pwindowoidsGPDB->AddRef();
@@ -224,6 +228,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 	{
 		CParseHandlerCostModel *pphCostModelConfig =
 			dynamic_cast<CParseHandlerCostModel *>((*this)[4]);
+		GPOS_ASSERT(NULL != pphCostModelConfig);
 		pcm = pphCostModelConfig->GetCostModel();
 		GPOS_ASSERT(NULL != pcm);
 		pcm->AddRef();
@@ -236,6 +241,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 		{
 			CParseHandlerHint *pphHint =
 				dynamic_cast<CParseHandlerHint *>((*this)[5]);
+			GPOS_ASSERT(NULL != pphHint);
 			phint = pphHint->GetHint();
 			GPOS_ASSERT(NULL != phint);
 			phint->AddRef();
@@ -247,6 +253,7 @@ CParseHandlerOptimizerConfig::EndElement(const XMLCh *const,  // element_uri,
 
 	CParseHandlerTraceFlags *pphTraceFlags =
 		dynamic_cast<CParseHandlerTraceFlags *>((*this)[this->Length() - 1]);
+	GPOS_ASSERT(NULL != pphTraceFlags);
 	pphTraceFlags->GetTraceFlagBitSet()->AddRef();
 	m_pbs = pphTraceFlags->GetTraceFlagBitSet();
 

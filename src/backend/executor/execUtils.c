@@ -201,6 +201,7 @@ CreateExecutorState(void)
 	estate->currentSubplanLevel = 0;
 	estate->rootSliceId = 0;
 	estate->eliminateAliens = false;
+	estate->sharedScanConsumers = NIL;
 
 	/*
 	 * Return the executor state structure
@@ -2096,6 +2097,23 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 		!(estate->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY))
 	{
 		ExecSquelchNode(queryDesc->planstate);
+	}
+
+	/*
+	 * Notify corresponding producer that the reading is completed. We need to
+	 * do notification before processing the results in order to avoid a
+	 * deadlock. Deadlock could occur when the consumer of a cross slice Shared
+	 * Scan was in slice 0 and the producer was in another slice. QE with
+	 * producer couldn't complete until the consumer sent the notification,
+	 * however that didn't happen because consumer at slice 0 send a
+	 * notification after all QEs are completed.
+	 */
+	ListCell   *cell;
+	foreach (cell, estate->sharedScanConsumers)
+	{
+		ShareInputScanState *state = lfirst(cell);
+		ShareInputScan *sisc = (ShareInputScan *) state->ss.ps.plan;
+		shareinput_reader_notifydone(state->share_lk_ctxt, sisc->share_id);
 	}
 
 	/*

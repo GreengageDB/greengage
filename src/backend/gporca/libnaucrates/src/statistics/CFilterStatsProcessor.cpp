@@ -109,9 +109,13 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 		md_accessor->Pstats(mp, ptabdesc->MDId(), used_local_col_refs,
 							dummy_width_set, stats_config);
 
+	CStatistics *cbase_table_stats =
+		dynamic_cast<CStatistics *>(base_table_stats);
+	GPOS_ASSERT(cbase_table_stats);
+
 	// derive stats based on local filter
 	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(
-		mp, dynamic_cast<CStatistics *>(base_table_stats), pred_stats, false);
+		mp, cbase_table_stats, pred_stats, false);
 
 	CDouble result = result_stats->Rows() / base_table_stats->Rows();
 	BOOL have_local_preds = (result < 1.0);

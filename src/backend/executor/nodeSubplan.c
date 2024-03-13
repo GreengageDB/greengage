@@ -979,7 +979,6 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 	volatile bool explainRecvStats = false;
 
 	if (Gp_role == GP_ROLE_DISPATCH &&
-		planstate != NULL &&
 		planstate->plan != NULL &&
 		subplan->initPlanParallel)
 		shouldDispatch = true;

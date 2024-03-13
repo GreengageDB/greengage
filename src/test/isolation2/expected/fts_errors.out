@@ -214,6 +214,8 @@ select count(*) from gp_segment_configuration where status = 'd';
  0     
 (1 row)
 
+-- start_ignore
+-- end_ignore
 !\retcode gpconfig -r gp_fts_probe_retries --masteronly;
 -- start_ignore
 -- end_ignore

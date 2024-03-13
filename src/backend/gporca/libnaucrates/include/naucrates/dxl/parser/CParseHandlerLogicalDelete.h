@@ -40,6 +40,9 @@ private:
 	// segmentId column id
 	ULONG m_segid_colid;
 
+	// table oid column (has value 0 in case of non partitioned tables)
+	ULONG m_table_oid_colid;
+
 	// delete col ids
 	ULongPtrArray *m_deletion_colid_array;
 

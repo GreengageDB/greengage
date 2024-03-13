@@ -46,6 +46,9 @@ private:
 	// list of deletion column ids
 	ULongPtrArray *m_deletion_colid_array;
 
+	// table oid column (has value 0 in case of non partitioned tables)
+	ULONG m_table_oid_colid;
+
 	// private copy ctor
 	CDXLLogicalDelete(const CDXLLogicalDelete &);
 
@@ -53,7 +56,7 @@ public:
 	// ctor
 	CDXLLogicalDelete(CMemoryPool *mp, CDXLTableDescr *table_descr,
 					  ULONG ctid_colid, ULONG segid_colid,
-					  ULongPtrArray *delete_colid_array);
+					  ULongPtrArray *delete_colid_array, ULONG table_oid_colid);
 
 	// dtor
 	virtual ~CDXLLogicalDelete();
@@ -83,6 +86,13 @@ public:
 	GetSegmentIdColId() const
 	{
 		return m_segid_colid;
+	}
+
+	// table oid column
+	ULONG
+	GeTableOidColId() const
+	{
+		return m_table_oid_colid;
 	}
 
 	// deletion column ids

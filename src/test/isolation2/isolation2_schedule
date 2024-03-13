@@ -15,6 +15,8 @@ test: select_dropped_table
 test: update_hash_col_utilitymode execute_on_utilitymode
 
 # Tests for crash recovery
+test: uao_crash_compaction_column
+test: uao_crash_compaction_row
 test: crash_recovery
 test: crash_recovery_redundant_dtx
 test: crash_recovery_dtm
@@ -24,8 +26,6 @@ test: udf_exception_blocks_panic_scenarios
 test: ao_same_trans_truncate_crash
 test: frozen_insert_crash
 test: ao_fsync_panic
-test: uao_crash_compaction_column
-test: uao_crash_compaction_row
 
 test: prevent_ao_wal
 

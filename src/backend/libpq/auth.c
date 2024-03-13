@@ -261,7 +261,7 @@ static void
 auth_failed(Port *port, int status, char *logdetail)
 {
 	const char *errstr;
-	char	   *cdetail;
+	char	   *cdetail = NULL;
 	int			errcode_return = ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION;
 
 	/*
@@ -329,8 +329,8 @@ auth_failed(Port *port, int status, char *logdetail)
 			errstr = gettext_noop("authentication failed for user \"%s\": invalid authentication method");
 			break;
 	  }
-	}
 
+	/* FIXME: indent this */
 	cdetail = psprintf(_("Connection matched pg_hba.conf line %d: \"%s\""),
 					   port->hba->linenumber, port->hba->rawline);
 
@@ -344,6 +344,7 @@ auth_failed(Port *port, int status, char *logdetail)
         cdetail = NULL;
         logdetail = NULL;
     }
+	}
 
 	if (logdetail)
 		logdetail = psprintf("%s\n%s", logdetail, cdetail);

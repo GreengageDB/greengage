@@ -116,6 +116,7 @@ CParseHandlerWindowSpecList::EndElement(const XMLCh *const,	 // element_uri,
 	{
 		CParseHandlerWindowSpec *window_spec_parse_handler =
 			dynamic_cast<CParseHandlerWindowSpec *>((*this)[idx]);
+		GPOS_ASSERT(NULL != window_spec_parse_handler);
 		m_window_spec_array->Append(
 			window_spec_parse_handler->GetWindowKeyAt());
 	}

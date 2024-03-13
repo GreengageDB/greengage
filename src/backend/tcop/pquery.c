@@ -282,7 +282,6 @@ ProcessQuery(Portal portal,
 	 * Call ExecutorStart to prepare the plan for execution
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE &&
-		queryDesc->plannedstmt &&
 		queryDesc->plannedstmt->intoClause != NULL)
 		eflag = GetIntoRelEFlags(queryDesc->plannedstmt->intoClause);
 

@@ -1388,11 +1388,11 @@ deserializeParamListInfo(const char *str, int slen)
 	int			iparam;
 
 	sparams = (List *) readNodeFromBinaryString(str, slen);
+	if (!sparams)
+		return NULL;
+
 	if (!IsA(sparams, List))
 		elog(ERROR, "could not deserialize query parameters");
-
-	if (!sparams)
-		return NULL;;
 
 	/*
 	 * If a transient record type cache was included, load it into

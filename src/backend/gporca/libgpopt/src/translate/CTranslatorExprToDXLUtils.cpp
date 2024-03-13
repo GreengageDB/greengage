@@ -1356,6 +1356,8 @@ CTranslatorExprToDXLUtils::PdxlnProjElem(CMemoryPool *mp,
 	CDXLScalarProjElem *pdxlopPrElChild =
 		dynamic_cast<CDXLScalarProjElem *>(pdxlnChildProjElem->GetOperator());
 
+	GPOS_ASSERT(NULL != pdxlopPrElChild);
+
 	// find the col ref corresponding to this element's id through column factory
 	CColRef *colref = col_factory->LookupColRef(pdxlopPrElChild->Id());
 	if (NULL == colref)

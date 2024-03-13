@@ -62,11 +62,8 @@ lo_open(PGconn *conn, Oid lobjId, int mode)
 	PQArgBlock	argv[2];
 	PGresult   *res;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	argv[0].isint = 1;
 	argv[0].len = 4;
@@ -104,11 +101,8 @@ lo_close(PGconn *conn, int fd)
 	int			retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	argv[0].isint = 1;
 	argv[0].len = 4;
@@ -142,11 +136,8 @@ lo_truncate(PGconn *conn, int fd, size_t len)
 	int			retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	/* Must check this on-the-fly because it's not there pre-8.3 */
 	if (conn->lobjfuncs->fn_lo_truncate == 0)
@@ -210,11 +201,8 @@ lo_truncate64(PGconn *conn, int fd, pg_int64 len)
 	int			retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	if (conn->lobjfuncs->fn_lo_truncate64 == 0)
 	{
@@ -262,11 +250,8 @@ lo_read(PGconn *conn, int fd, char *buf, size_t len)
 	PGresult   *res;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	/*
 	 * Long ago, somebody thought it'd be a good idea to declare this function
@@ -317,11 +302,8 @@ lo_write(PGconn *conn, int fd, const char *buf, size_t len)
 	int			result_len;
 	int			retval;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	/*
 	 * Long ago, somebody thought it'd be a good idea to declare this function
@@ -370,11 +352,8 @@ lo_lseek(PGconn *conn, int fd, int offset, int whence)
 	int			retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	argv[0].isint = 1;
 	argv[0].len = 4;
@@ -414,11 +393,8 @@ lo_lseek64(PGconn *conn, int fd, pg_int64 offset, int whence)
 	pg_int64	retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	if (conn->lobjfuncs->fn_lo_lseek64 == 0)
 	{
@@ -470,11 +446,8 @@ lo_creat(PGconn *conn, int mode)
 	int			retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return InvalidOid;
-	}
+	if (lo_initialize(conn) < 0)
+		return InvalidOid;
 
 	argv[0].isint = 1;
 	argv[0].len = 4;
@@ -509,11 +482,8 @@ lo_create(PGconn *conn, Oid lobjId)
 	int			retval;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return InvalidOid;
-	}
+	if (lo_initialize(conn) < 0)
+		return InvalidOid;
 
 	/* Must check this on-the-fly because it's not there pre-8.1 */
 	if (conn->lobjfuncs->fn_lo_create == 0)
@@ -553,11 +523,8 @@ lo_tell(PGconn *conn, int fd)
 	PGresult   *res;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	argv[0].isint = 1;
 	argv[0].len = 4;
@@ -589,11 +556,8 @@ lo_tell64(PGconn *conn, int fd)
 	PGresult   *res;
 	int			result_len;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	if (conn->lobjfuncs->fn_lo_tell64 == 0)
 	{
@@ -633,11 +597,8 @@ lo_unlink(PGconn *conn, Oid lobjId)
 	int			result_len;
 	int			retval;
 
-	if (conn == NULL || conn->lobjfuncs == NULL)
-	{
-		if (lo_initialize(conn) < 0)
-			return -1;
-	}
+	if (lo_initialize(conn) < 0)
+		return -1;
 
 	argv[0].isint = 1;
 	argv[0].len = 4;
@@ -869,9 +830,11 @@ lo_export(PGconn *conn, Oid lobjId, const char *filename)
 /*
  * lo_initialize
  *
- * Initialize the large object interface for an existing connection.
- * We ask the backend about the functions OID's in pg_proc for all
- * functions that are required for large object operations.
+ * Initialize for a new large-object operation on an existing connection.
+ * Return 0 if OK, -1 on failure.
+ *
+ * If we haven't previously done so, we collect the function OIDs from
+ * pg_proc for all functions that are required for large object operations.
  */
 static int
 lo_initialize(PGconn *conn)
@@ -883,11 +846,17 @@ lo_initialize(PGconn *conn)
 	const char *fname;
 	Oid			foid;
 
-	if (!conn)
+	/* Nothing we can do with no connection */
+	if (conn == NULL)
 		return -1;
 
+	/* Nothing else to do if we already collected info */
+	if (conn->lobjfuncs != NULL)
+		return 0;
+
 	/*
-	 * Allocate the structure to hold the functions OID's
+	 * Allocate the structure to hold the function OIDs.  We don't store it
+	 * into the PGconn until it's successfully filled.
 	 */
 	lobjfuncs = (PGlobjfuncs *) malloc(sizeof(PGlobjfuncs));
 	if (lobjfuncs == NULL)

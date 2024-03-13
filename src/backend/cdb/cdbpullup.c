@@ -349,7 +349,7 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 		 * tlist_member_match_var() does exactly what we need.
 		 *-------
 		 */
-		while (IsA(key, RelabelType))
+		while (key && IsA(key, RelabelType))
 			key = (Expr *) ((RelabelType *) key)->arg;
 
 		foreach(lc_tle, targetlist)
@@ -367,9 +367,9 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 			while (tlexpr && IsA(tlexpr, RelabelType))
 				tlexpr = (Node *) ((RelabelType *) tlexpr)->arg;
 
-			if (IsA(key, Var))
+			if (key && IsA(key, Var))
 			{
-				if (IsA(tlexpr, Var))
+				if (tlexpr && IsA(tlexpr, Var))
 				{
 					Var		   *keyvar = (Var *) key;
 					Var		   *tlvar = (Var *) tlexpr;
@@ -382,17 +382,13 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 			}
 			else
 			{
-				/* ignore RelabelType nodes on both sides */
-				while (key && IsA(key, RelabelType))
-					key = (Expr *) ((RelabelType *) key)->arg;
-
 				if (equal(tlexpr, key))
 					return key;
 			}
 		}
 
 		/* Return this item if all referenced Vars are in targetlist. */
-		if (!IsA(key, Var) &&
+		if (key && !IsA(key, Var) &&
 			!cdbpullup_missingVarWalker((Node *) key, targetlist))
 		{
 			return key;

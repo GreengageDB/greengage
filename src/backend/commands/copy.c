@@ -1099,13 +1099,13 @@ DoCopy(const CopyStmt *stmt, const char *queryString, uint64 *processed)
 			{
 				cstate->errMode = SREH_IGNORE;
 			}
+			Assert(stmt->relation);
 			cstate->cdbsreh = makeCdbSreh(sreh->rejectlimit,
 										  sreh->is_limit_in_rows,
 										  cstate->filename,
 										  stmt->relation->relname,
 										  log_to_file);
-			if (rel)
-				cstate->cdbsreh->relid = RelationGetRelid(rel);
+			cstate->cdbsreh->relid = RelationGetRelid(rel);
 		}
 		else
 		{
@@ -4552,6 +4552,9 @@ BeginCopyFrom(Relation rel,
 	MemoryContext oldcontext;
 	bool		volatile_defexprs;
 
+	/* rel will need be copied to cstate->rel and must not be NULL */
+	Assert(rel);
+
 	cstate = BeginCopy(true, rel, NULL, NULL, attnamelist, options, NULL);
 	oldcontext = MemoryContextSwitchTo(cstate->copycontext);
 
@@ -4560,8 +4563,7 @@ BeginCopyFrom(Relation rel,
 	 */
 	if (cstate->on_segment || data_source_cb)
 		cstate->dispatch_mode = COPY_DIRECT;
-	else if (Gp_role == GP_ROLE_DISPATCH &&
-			 cstate->rel && cstate->rel->rd_cdbpolicy)
+	else if (Gp_role == GP_ROLE_DISPATCH && cstate->rel->rd_cdbpolicy)
 		cstate->dispatch_mode = COPY_DISPATCH;
 	else if (Gp_role == GP_ROLE_EXECUTE)
 		cstate->dispatch_mode = COPY_EXECUTOR;

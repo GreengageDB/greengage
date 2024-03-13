@@ -223,6 +223,12 @@ CDatumGenericGPDB::Matches(const IDatum *datum) const
 	const CDatumGenericGPDB *datum_generic =
 		dynamic_cast<const CDatumGenericGPDB *>(datum);
 
+	// type mismatch
+	if (NULL == datum_generic)
+	{
+		return false;
+	}
+
 	if (datum_generic->IsNull() && IsNull())
 	{
 		return true;

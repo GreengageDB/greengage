@@ -1544,8 +1544,8 @@ slot_getsysattr(TupleTableSlot *slot, int attnum, Datum *result, bool *isnull)
 
 		*result = 0;
         /* Currently, no sys attribute ever reads as NULL. */
-        if (isnull)
-                *isnull = false;
+        Assert(isnull != NULL);
+        *isnull = false;
 
         /* HeapTuple */
         if (slot->PRIVATE_tts_heaptuple)
