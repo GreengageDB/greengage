@@ -281,17 +281,28 @@ ExecInitDML(DML *node, EState *estate, int eflags)
 			dmlstate->cleanedUpSlot);
 
 	/*
-	 * We don't maintain typmod in the targetlist, so we should fixup the
-	 * junkfilter to use the same tuple descriptor as the result relation.
-	 * Otherwise the mismatch of tuple descriptor will cause a break in
-	 * ExecInsert()->reconstructMatchingTupleSlot().
+	 * The comment below is related to ExecInsert(). The code works correctly,
+	 * because insert operations always translate full set of attrs to
+	 * targetlist. So, tupledesc below has the same number of attrs after
+	 * replacing. ExecDelete() doesn't reconstruct a slot, and more, can work
+	 * with subset of table attrs. In order to avoid unnecessary job and
+	 * execution error, the code below is not executed for DELETE.
 	 */
-	TupleDesc cleanTupType = CreateTupleDescCopy(dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att);
+	if (estate->es_plannedstmt->commandType != CMD_DELETE)
+	{
+		/*
+		 * We don't maintain typmod in the targetlist, so we should fixup the
+		 * junkfilter to use the same tuple descriptor as the result relation.
+		 * Otherwise the mismatch of tuple descriptor will cause a break in
+		 * ExecInsert()->reconstructMatchingTupleSlot().
+		 */
+		TupleDesc	cleanTupType = CreateTupleDescCopy(dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att);
 
-	ExecSetSlotDescriptor(dmlstate->junkfilter->jf_resultSlot, cleanTupType);
+		ExecSetSlotDescriptor(dmlstate->junkfilter->jf_resultSlot, cleanTupType);
 
-	ReleaseTupleDesc(dmlstate->junkfilter->jf_cleanTupType);
-	dmlstate->junkfilter->jf_cleanTupType = cleanTupType;
+		ReleaseTupleDesc(dmlstate->junkfilter->jf_cleanTupType);
+		dmlstate->junkfilter->jf_cleanTupType = cleanTupType;
+	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
 	{

@@ -3492,11 +3492,11 @@ explain (verbose, costs off) delete from test_1_prt_extra where j = 2;
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------------------------------------------------------
  Delete
-   Output: test_1_prt_extra.i, test_1_prt_extra.j, "outer".ColRef_0009, test_1_prt_extra.ctid
+   Output: "outer".ColRef_0009, test_1_prt_extra.ctid
    ->  Result
-         Output: test_1_prt_extra.i, test_1_prt_extra.j, test_1_prt_extra.ctid, test_1_prt_extra.gp_segment_id, 0
+         Output: test_1_prt_extra.ctid, test_1_prt_extra.gp_segment_id, 0
          ->  Seq Scan on partition_pruning.test_1_prt_extra
-               Output: test_1_prt_extra.i, test_1_prt_extra.j, test_1_prt_extra.ctid, test_1_prt_extra.gp_segment_id
+               Output: test_1_prt_extra.ctid, test_1_prt_extra.gp_segment_id
                Filter: (test_1_prt_extra.j = 2)
  Optimizer: Pivotal Optimizer (GPORCA)
  Settings: enable_bitmapscan=on, enable_hashjoin=off, enable_indexscan=on, enable_mergejoin=on, enable_seqscan=off
@@ -3558,11 +3558,11 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
                                                     QUERY PLAN                                                     
 -------------------------------------------------------------------------------------------------------------------
  Delete
-   Output: test.i, test.j, "outer".ColRef_0025, test.ctid, test.tableoid
+   Output: "outer".ColRef_0025, test.ctid, test.tableoid
    ->  Result
-         Output: test.i, test.j, test.ctid, test.tableoid, test.gp_segment_id, 0
+         Output: test.ctid, test.tableoid, test.gp_segment_id, 0
          ->  Hash Anti Join
-               Output: test.i, test.j, test.ctid, test.tableoid, test.gp_segment_id
+               Output: test.ctid, test.tableoid, test.gp_segment_id
                Hash Cond: ((test.i = test_in_predicate.i) AND (test.j = test_in_predicate.j))
                ->  Sequence
                      Output: test.i, test.j, test.ctid, test.tableoid, test.gp_segment_id

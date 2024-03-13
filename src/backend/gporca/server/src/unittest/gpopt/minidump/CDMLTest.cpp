@@ -61,6 +61,7 @@ const CHAR *rgszDMLFileNames[] = {
 	"../data/dxl/minidump/DML-Replicated-Input.mdp",
 	"../data/dxl/minidump/InsertWithTriggers.mdp",
 	"../data/dxl/minidump/DeleteWithTriggers.mdp",
+	"../data/dxl/minidump/DeleteWithAfterTriggerDroppedCol.mdp",
 	"../data/dxl/minidump/UpdateWithTriggers.mdp",
 	"../data/dxl/minidump/InsertNotNullCols.mdp",
 	"../data/dxl/minidump/InsertCheckConstraint.mdp",

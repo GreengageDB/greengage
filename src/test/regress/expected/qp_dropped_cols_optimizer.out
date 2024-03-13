@@ -16415,11 +16415,11 @@ EXPLAIN (COSTS OFF, VERBOSE) DELETE FROM t_part_dropped_1_prt_p2;
                                                                                   QUERY PLAN                                                                                   
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Delete
-   Output: t_part_dropped_1_prt_p2.c1, t_part_dropped_1_prt_p2.c3, t_part_dropped_1_prt_p2.c4, "outer".ColRef_0010, t_part_dropped_1_prt_p2.ctid
+   Output: "outer".ColRef_0010, t_part_dropped_1_prt_p2.ctid
    ->  Result
-         Output: t_part_dropped_1_prt_p2.c1, t_part_dropped_1_prt_p2.c3, t_part_dropped_1_prt_p2.c4, t_part_dropped_1_prt_p2.ctid, t_part_dropped_1_prt_p2.gp_segment_id, 0
+         Output: t_part_dropped_1_prt_p2.ctid, t_part_dropped_1_prt_p2.gp_segment_id, 0
          ->  Seq Scan on public.t_part_dropped_1_prt_p2
-               Output: t_part_dropped_1_prt_p2.c1, t_part_dropped_1_prt_p2.c3, t_part_dropped_1_prt_p2.c4, t_part_dropped_1_prt_p2.ctid, t_part_dropped_1_prt_p2.gp_segment_id
+               Output: t_part_dropped_1_prt_p2.ctid, t_part_dropped_1_prt_p2.gp_segment_id
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
@@ -16529,11 +16529,11 @@ EXPLAIN (COSTS OFF, VERBOSE) DELETE FROM t_part_1_prt_p2;
                                                                         QUERY PLAN                                                                         
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
  Delete
-   Output: t_part_1_prt_p2.c1, NULL::integer, t_part_1_prt_p2.c2, t_part_1_prt_p2.c3, t_part_1_prt_p2.c4, "outer".ColRef_0011, t_part_1_prt_p2.ctid
+   Output: "outer".ColRef_0011, t_part_1_prt_p2.ctid
    ->  Result
-         Output: t_part_1_prt_p2.c1, t_part_1_prt_p2.c2, t_part_1_prt_p2.c3, t_part_1_prt_p2.c4, t_part_1_prt_p2.ctid, t_part_1_prt_p2.gp_segment_id, 0
+         Output: t_part_1_prt_p2.ctid, t_part_1_prt_p2.gp_segment_id, 0
          ->  Seq Scan on public.t_part_1_prt_p2
-               Output: t_part_1_prt_p2.c1, t_part_1_prt_p2.c2, t_part_1_prt_p2.c3, t_part_1_prt_p2.c4, t_part_1_prt_p2.ctid, t_part_1_prt_p2.gp_segment_id
+               Output: t_part_1_prt_p2.ctid, t_part_1_prt_p2.gp_segment_id
  Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
