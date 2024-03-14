@@ -285,8 +285,6 @@ void serializeSparseData(char *target, SparseData source)
 	memcpy(SDATA_INDEX_SINFO(target),source->index,sizeof(StringInfoData));
 	/* The unique data values */
 	memcpy(SDATA_VALS_PTR(target),source->vals->data,source->vals->maxlen);
-	/* The index values */
-	memcpy(SDATA_INDEX_PTR(target),source->index->data,source->index->maxlen);
 
 	/*
 	 * Set pointers to the data areas of the serialized structure
@@ -298,6 +296,8 @@ void serializeSparseData(char *target, SparseData source)
 	((StringInfo)(SDATA_DATA_SINFO(target)))->data  = SDATA_VALS_PTR(target);
 	if (source->index->data != NULL)
 	{
+		/* The index values */
+		memcpy(SDATA_INDEX_PTR(target),source->index->data,source->index->maxlen);
 		((StringInfo)(SDATA_INDEX_SINFO(target)))->data = SDATA_INDEX_PTR(target);
 	} else
 	{

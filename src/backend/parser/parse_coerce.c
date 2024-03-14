@@ -538,7 +538,7 @@ coerce_type(ParseState *pstate, Node *node,
 		return result;
 	}
 	if (inputTypeId == RECORDOID &&
-		ISCOMPLEX(targetTypeId))
+		ISCOMPLEX(targetTypeId) && pstate != NULL)
 	{
 		/* Coerce a RECORD to a specific complex type */
 		return coerce_record_to_complex(pstate, node, targetTypeId,

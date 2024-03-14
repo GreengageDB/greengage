@@ -200,6 +200,12 @@ CDatumOidGPDB::Matches(const IDatum *datum) const
 	const CDatumOidGPDB *datum_cast =
 		dynamic_cast<const CDatumOidGPDB *>(datum);
 
+	// type mismatch
+	if (NULL == datum_cast)
+	{
+		return false;
+	}
+
 	if (!datum_cast->IsNull() && !IsNull())
 	{
 		return (datum_cast->OidValue() == OidValue());

@@ -1486,6 +1486,8 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 
 	ProcArrayRemove(proc, latestXid);
 
+	SIMPLE_FAULT_INJECTOR("finish_prepared_after_pgproc_removal_before_cache_invalidation");
+
 	/*
 	 * In case we fail while running the callbacks, mark the gxact invalid so
 	 * no one else will try to commit/rollback, and so it will be recycled
@@ -1706,8 +1708,6 @@ PrescanPreparedTransactions(TransactionId **xids_p, int *nxids_p)
 		TransactionId xid;
 
 		tfRecord = XLogReadRecord(xlogreader, tfXLogRecPtr, &errormsg);
-		hdr = (TwoPhaseFileHeader *) XLogRecGetData(tfRecord);
-		xid = hdr->xid;
 
 		if (tfRecord == NULL)
 		{
@@ -1728,6 +1728,9 @@ PrescanPreparedTransactions(TransactionId **xids_p, int *nxids_p)
 						(errcode(ERRCODE_DATA_CORRUPTED),
 						 errmsg("xlog record is invalid")));
 		}
+
+		hdr = (TwoPhaseFileHeader *) XLogRecGetData(tfRecord);
+		xid = hdr->xid;
 
 		if (TransactionIdDidCommit(xid) == false && TransactionIdDidAbort(xid) == false)
 		{

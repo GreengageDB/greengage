@@ -87,6 +87,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRef *pcrCtid = popUpdate->PcrCtid();
 	CColRef *pcrSegmentId = popUpdate->PcrSegmentId();
 	CColRef *pcrTupleOid = popUpdate->PcrTupleOid();
+	CColRef *pcrTableOid = popUpdate->PcrTableOid();
 
 	// child of update operator
 	CExpression *pexprChild = (*pexpr)[0];
@@ -163,7 +164,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		mp,
 		GPOS_NEW(mp) CLogicalDML(mp, CLogicalDML::EdmlUpdate, ptabdesc,
 								 pdrgpcrDelete, pbsModified, pcrAction, pcrCtid,
-								 pcrSegmentId, pcrTupleOid),
+								 pcrSegmentId, pcrTupleOid, pcrTableOid),
 		pexprAssertConstraints);
 
 	// TODO:  - Oct 30, 2012; detect and handle AFTER triggers on update

@@ -104,6 +104,7 @@ CXformExpandDynamicGetWithExternalPartitions::Transform(
 	CPartConstraint *ppartcnstrRel = CUtils::PpartcnstrFromMDPartCnstr(
 		mp, mda, popGet->PdrgpdrgpcrPart(), relation->MDPartConstraint(),
 		popGet->PdrgpcrOutput());
+	GPOS_ASSERT(NULL != ppartcnstrCovered);
 	ppartcnstrRest = ppartcnstrRel->PpartcnstrRemaining(mp, ppartcnstrCovered);
 
 	// PpartcnstrRemaining() returns NULL if ppartcnstrCovered has no constraint

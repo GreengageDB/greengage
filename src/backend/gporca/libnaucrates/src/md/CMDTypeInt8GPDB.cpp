@@ -301,6 +301,7 @@ CDXLDatum *
 CMDTypeInt8GPDB::GetDatumVal(CMemoryPool *mp, IDatum *datum) const
 {
 	CDatumInt8GPDB *int8_datum = dynamic_cast<CDatumInt8GPDB *>(datum);
+	GPOS_ASSERT(int8_datum);
 
 	m_mdid->AddRef();
 	return GPOS_NEW(mp)
@@ -319,6 +320,7 @@ CDXLScalarConstValue *
 CMDTypeInt8GPDB::GetDXLOpScConst(CMemoryPool *mp, IDatum *datum) const
 {
 	CDatumInt8GPDB *int8gpdb_datum = dynamic_cast<CDatumInt8GPDB *>(datum);
+	GPOS_ASSERT(int8gpdb_datum);
 
 	m_mdid->AddRef();
 	CDXLDatumInt8 *dxl_datum = GPOS_NEW(mp) CDXLDatumInt8(

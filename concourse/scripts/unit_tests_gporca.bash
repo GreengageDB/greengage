@@ -36,7 +36,6 @@ function _main
     ln -s "${PYTHONHOME}"/bin/python2 /usr/bin/python
   fi
   mkdir gpdb_src/gpAux/ext
-  build_xerces
   test_orca
 }
 

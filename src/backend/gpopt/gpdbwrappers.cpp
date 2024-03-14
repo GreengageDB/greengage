@@ -31,6 +31,7 @@
 extern "C" {
 #include "catalog/pg_collation.h"
 #include "utils/memutils.h"
+#include "utils/snapmgr.h"
 }
 #define GP_WRAP_START                                            \
 	sigjmp_buf local_sigjmp_buf;                                 \
@@ -2509,6 +2510,13 @@ static bool mdcache_invalidation_counter_registered = false;
 static int64 mdcache_invalidation_counter = 0;
 static int64 last_mdcache_invalidation_counter = 0;
 
+// If we have cached a relation without an index, because that index cannot
+// be used in the current snapshot (for more info see
+// src/backend/access/heap/README.HOT), we save TransactionXmin. If
+// TransactionXmin changes later, the cache will be reset and the relation will
+// be reloaded with that index.
+static TransactionId mdcache_transaction_xmin = InvalidTransactionId;
+
 static void
 mdsyscache_invalidation_counter_callback(Datum arg, int cacheid,
 										 uint32 hashvalue)
@@ -2590,7 +2598,8 @@ register_mdcache_invalidation_callbacks(void)
 								  (Datum) 0);
 }
 
-// Has there been any catalog changes since last call?
+// We reset the cache in case of a catalog change or if TransactionXmin changed
+// from that we save in mdcache_transaction_xmin.
 bool
 gpdb::MDCacheNeedsReset(void)
 {
@@ -2602,7 +2611,11 @@ gpdb::MDCacheNeedsReset(void)
 			mdcache_invalidation_counter_registered = true;
 		}
 		if (last_mdcache_invalidation_counter == mdcache_invalidation_counter)
-			return false;
+		{
+			return TransactionIdIsValid(mdcache_transaction_xmin) &&
+				   !TransactionIdEquals(TransactionXmin,
+										mdcache_transaction_xmin);
+		}
 		else
 		{
 			last_mdcache_invalidation_counter = mdcache_invalidation_counter;
@@ -2612,6 +2625,42 @@ gpdb::MDCacheNeedsReset(void)
 	GP_WRAP_END;
 
 	return true;
+}
+
+bool
+gpdb::MDCacheSetTransientState(Relation index_rel)
+{
+	GP_WRAP_START;
+	{
+		bool result =
+			index_rel->rd_index->indcheckxmin &&
+			!TransactionIdPrecedes(
+				HeapTupleHeaderGetXmin(index_rel->rd_indextuple->t_data),
+				TransactionXmin);
+		if (result)
+			mdcache_transaction_xmin = TransactionXmin;
+		return result;
+	}
+	GP_WRAP_END;
+	// ignore index if we can't check it visibility for some reason
+	return true;
+}
+
+void
+gpdb::MDCacheResetTransientState(void)
+{
+	mdcache_transaction_xmin = InvalidTransactionId;
+}
+
+bool
+gpdb::MDCacheInTransientState(void)
+{
+	GP_WRAP_START;
+	{
+		return TransactionIdIsValid(mdcache_transaction_xmin);
+	}
+	GP_WRAP_END;
+	return false;
 }
 
 // returns true if a query cancel is requested in GPDB

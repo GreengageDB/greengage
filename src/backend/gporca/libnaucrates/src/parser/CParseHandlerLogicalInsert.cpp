@@ -119,6 +119,9 @@ CParseHandlerLogicalInsert::EndElement(const XMLCh *const,	// element_uri,
 	CParseHandlerLogicalOp *child_parse_handler =
 		dynamic_cast<CParseHandlerLogicalOp *>((*this)[1]);
 
+	GPOS_ASSERT(NULL != pphTabDesc);
+	GPOS_ASSERT(NULL != child_parse_handler);
+
 	GPOS_ASSERT(NULL != pphTabDesc->GetDXLTableDescr());
 	GPOS_ASSERT(NULL != child_parse_handler->CreateDXLNode());
 

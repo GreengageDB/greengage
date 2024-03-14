@@ -177,6 +177,12 @@ dotnode(void *node, const char *fname)
 	List *nodelist = NULL;
 	FILE *ofile = fopen(fname, "w+");
 
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	/* Print dot header */
 
 	fprintf(ofile, "digraph g {\n");
@@ -209,6 +215,12 @@ void dump_tupdesc(TupleDesc tupdesc, const char *fname)
 	FILE *ofile = fopen(fname, "w+");
     int i;
 
+    if (ofile == NULL)
+    {
+        elog(WARNING, "could not open dump file %s", fname);
+        return;
+    }
+
     fprintf(ofile, "TupleDesc: natts %d, hasoid %s\n", tupdesc->natts, tupdesc->tdhasoid ? "true" : "false");
     fprintf(ofile, "Name\t\tattlen\tattbyval\tattalign\n");
     fprintf(ofile, "==================================\n");
@@ -232,6 +244,12 @@ void dump_mt_bind(MemTupleBinding *mt_bind, const char *fname)
 {
     FILE *ofile = fopen(fname, "w+");
     int i;
+
+    if (ofile == NULL)
+    {
+        elog(WARNING, "could not open dump file %s", fname);
+        return;
+    }
 
     fprintf(ofile, "Mt_bind: column_align %d, nbm_extra_size %d\n",
             mt_bind->column_align, mt_bind->null_bitmap_extra_size);

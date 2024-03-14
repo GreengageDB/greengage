@@ -23,6 +23,7 @@
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/optimizer/COptimizerConfig.h"
+#include "gpopt/xforms/CXformUtils.h"
 
 using namespace gpopt;
 
@@ -38,13 +39,15 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 						   CTableDescriptor *ptabdesc,
 						   CColRefArray *pdrgpcrSource, CBitSet *pbsModified,
 						   CColRef *pcrAction, CColRef *pcrCtid,
-						   CColRef *pcrSegmentId, CColRef *pcrTupleOid)
+						   CColRef *pcrSegmentId, CColRef *pcrTupleOid,
+						   CColRef *pcrTableOid)
 	: CPhysical(mp),
 	  m_edmlop(edmlop),
 	  m_ptabdesc(ptabdesc),
 	  m_pdrgpcrSource(pdrgpcrSource),
 	  m_pbsModified(pbsModified),
 	  m_pcrAction(pcrAction),
+	  m_pcrTableOid(pcrTableOid),
 	  m_pcrCtid(pcrCtid),
 	  m_pcrSegmentId(pcrSegmentId),
 	  m_pcrTupleOid(pcrTupleOid),
@@ -112,6 +115,25 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 			m_pds = GPOS_NEW(mp) CDistributionSpecRandom();
 		}
 	}
+
+	// Source array contains only user-defined attrs. In most cases delete
+	// operation doesn't need such attrs. There is nothing to output from
+	// delete and it's often enough to passthrough just system attrs, which is
+	// done separately. At this point, all necessary jobs are done, m_pds is
+	// computed, any underlying nodes, including "before" triggers, got full
+	// source list to operate. So, in most cases it's safe to pass empty source
+	// list for DML delete node, but there is one exception. "After" trigger
+	// needs a full array of attrs to work.
+	//
+	// NB: This should be reworked for possible implementation of "returning"
+	// queries.
+	if (CLogicalDML::EdmlDelete == edmlop &&
+		!CXformUtils::FTriggersExist(edmlop, ptabdesc, false /*fBefore*/))
+	{
+		m_pdrgpcrSource->Release();
+		m_pdrgpcrSource = GPOS_NEW(mp) CColRefArray(mp);
+	}
+
 	m_pos = PosComputeRequired(mp, ptabdesc);
 	ComputeRequiredLocalColumns(mp);
 }
@@ -403,6 +425,7 @@ CPhysicalDML::HashValue() const
 	ULONG ulHash = gpos::CombineHashes(COperator::HashValue(),
 									   m_ptabdesc->MDId()->HashValue());
 	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrAction));
+	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrTableOid));
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrSource));
 
@@ -433,6 +456,7 @@ CPhysicalDML::Matches(COperator *pop) const
 		CPhysicalDML *popDML = CPhysicalDML::PopConvert(pop);
 
 		return m_pcrAction == popDML->PcrAction() &&
+			   m_pcrTableOid == popDML->PcrTableOid() &&
 			   m_pcrCtid == popDML->PcrCtid() &&
 			   m_pcrSegmentId == popDML->PcrSegmentId() &&
 			   m_pcrTupleOid == popDML->PcrTupleOid() &&
@@ -540,6 +564,11 @@ CPhysicalDML::ComputeRequiredLocalColumns(CMemoryPool *mp)
 	m_pcrsRequiredLocal->Include(m_pdrgpcrSource);
 	m_pcrsRequiredLocal->Include(m_pcrAction);
 
+	if (NULL != m_pcrTableOid)
+	{
+		m_pcrsRequiredLocal->Include(m_pcrTableOid);
+	}
+
 	if (CLogicalDML::EdmlDelete == m_edmlop ||
 		CLogicalDML::EdmlUpdate == m_edmlop)
 	{
@@ -578,6 +607,13 @@ CPhysicalDML::OsPrint(IOstream &os) const
 	m_pcrAction->OsPrint(os);
 	os << ")";
 
+	if (NULL != m_pcrTableOid)
+	{
+		os << ", Oid: (";
+		m_pcrTableOid->OsPrint(os);
+		os << ")";
+	}
+
 	if (CLogicalDML::EdmlDelete == m_edmlop ||
 		CLogicalDML::EdmlUpdate == m_edmlop)
 	{
@@ -586,7 +622,6 @@ CPhysicalDML::OsPrint(IOstream &os) const
 		os << ", ";
 		m_pcrSegmentId->OsPrint(os);
 	}
-
 
 	return os;
 }

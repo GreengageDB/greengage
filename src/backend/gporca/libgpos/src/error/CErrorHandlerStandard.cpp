@@ -39,6 +39,7 @@ CErrorHandlerStandard::Process(CException exception)
 	IErrorContext *err_ctxt = task->GetErrCtxt();
 	CLogger *log = dynamic_cast<CLogger *>(task->GetErrorLogger());
 
+	GPOS_ASSERT(NULL != log && "No logger in current context");
 	GPOS_ASSERT(err_ctxt->IsPending() && "No error to process");
 	GPOS_ASSERT(err_ctxt->GetException() == exception &&
 				"Exception processed different from pending");

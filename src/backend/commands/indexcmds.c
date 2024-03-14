@@ -170,8 +170,7 @@ cdb_sync_indcheckxmin_with_segments(Oid indexRelationId)
 		if (!indexForm->indcheckxmin)
 		{
 			indexForm->indcheckxmin = true;
-			simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-			CatalogUpdateIndexes(pg_index, indexTuple);
+			CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 		}
 
 		heap_freetuple(indexTuple);
@@ -435,7 +434,6 @@ DefineIndex(Oid relationId,
 	LOCKTAG		heaplocktag;
 	LOCKMODE	lockmode;
 	Snapshot	snapshot;
-	bool		need_longlock = true;
 	bool		shouldDispatch;
 	int			i;
 
@@ -805,7 +803,7 @@ DefineIndex(Oid relationId,
 											indexInfo->ii_NumIndexAttrs,
 											stmt->primary);
 
-	if (Gp_role == GP_ROLE_EXECUTE && stmt)
+	if (Gp_role == GP_ROLE_EXECUTE)
 		quiet = true;
 
 	/*
@@ -847,14 +845,6 @@ DefineIndex(Oid relationId,
 		 * dispatched
 		 */
 	}
-
-	if (rel_needs_long_lock(RelationGetRelid(rel)))
-		need_longlock = true;
-	/* if this is a concurrent build, we must lock you long time */
-	else if (stmt->concurrent)
-		need_longlock = true;
-	else
-		need_longlock = false;
 
 	/*
 	 * A valid stmt->oldNode implies that we already have a built form of the
@@ -948,10 +938,7 @@ DefineIndex(Oid relationId,
 			for (i = 0; i < numberOfAttributes; i++)
 				opfamOids[i] = get_opclass_family(classObjectId[i]);
 
-			if (need_longlock)
-				heap_close(rel, NoLock);
-			else
-				heap_close(rel, lockmode);
+			heap_close(rel, NoLock);
 
 			/*
 			 * For each partition, scan all existing indexes; if one matches
@@ -1159,10 +1146,7 @@ DefineIndex(Oid relationId,
 		 */
 		else
 		{
-			if (need_longlock)
-				heap_close(rel, NoLock);
-			else
-				heap_close(rel, lockmode);
+			heap_close(rel, NoLock);
 		}
 		/*
 		 * Indexes on partitioned tables are not themselves built, so we're
@@ -1174,10 +1158,7 @@ DefineIndex(Oid relationId,
 	if (!concurrent)
 	{
 		/* Close the heap and we're done, in the non-concurrent case */
-		if (need_longlock)
-			heap_close(rel, NoLock);
-		else
-			heap_close(rel, lockmode);
+		heap_close(rel, NoLock);
 		return indexRelationId;
 	}
 
@@ -1195,10 +1176,7 @@ DefineIndex(Oid relationId,
 	/* save lockrelid and locktag for below, then close rel */
 	heaprelid = rel->rd_lockInfo.lockRelId;
 	SET_LOCKTAG_RELATION(heaplocktag, heaprelid.dbId, heaprelid.relId);
-	if (need_longlock)
-		heap_close(rel, NoLock);
-	else
-		heap_close(rel, lockmode);
+	heap_close(rel, NoLock);
 
 	/*
 	 * For a concurrent build, it's important to make the catalog entries
@@ -2772,8 +2750,7 @@ IndexSetParentIndex(Relation partitionIdx, Oid parentOid)
 			tuple = heap_form_tuple(RelationGetDescr(pg_inherits),
 									values, isnull);
 
-			simple_heap_insert(pg_inherits, tuple);
-			CatalogUpdateIndexes(pg_inherits, tuple);
+			CatalogTupleInsert(pg_inherits, tuple);
 
 			fix_dependencies = true;
 		}
@@ -2787,7 +2764,7 @@ IndexSetParentIndex(Relation partitionIdx, Oid parentOid)
 			/*
 			 * There exists a pg_inherits row, which we want to clear; do so.
 			 */
-			simple_heap_delete(pg_inherits, &tuple->t_self);
+			CatalogTupleDelete(pg_inherits, &tuple->t_self);
 			fix_dependencies = true;
 		}
 		else

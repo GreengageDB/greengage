@@ -133,6 +133,7 @@ CParseHandlerMDGPDBCheckConstraint::EndElement(
 	// get node for default value expression from child parse handler
 	CParseHandlerScalarOp *op_parse_handler =
 		dynamic_cast<CParseHandlerScalarOp *>((*this)[0]);
+	GPOS_ASSERT(NULL != op_parse_handler);
 
 	CDXLNode *dxlnode_scalar_expr = op_parse_handler->CreateDXLNode();
 	GPOS_ASSERT(NULL != dxlnode_scalar_expr);

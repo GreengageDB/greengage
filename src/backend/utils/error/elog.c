@@ -192,24 +192,6 @@ static void write_eventlog(int level, const char *line, int len);
 #define ADDRESS_SIZE     20
 #define STACK_DEPTH_MAX  100
 
-/*
- * Assembly code, gets the values of the frame pointer.
- * It only works for x86 processors.
- */
-#if defined(__i386)
-#define ASMFP asm volatile ("movl %%ebp, %0" : "=g" (ulp));
-#define GET_PTR_FROM_VALUE(value) ((uint32)value)
-#define GET_FRAME_POINTER(x) do { uint64 ulp; ASMFP; x = ulp; } while (0)
-#elif defined(__x86_64__)
-#define ASMFP asm volatile ("movq %%rbp, %0" : "=g" (ulp));
-#define GET_PTR_FROM_VALUE(value) (value)
-#define GET_FRAME_POINTER(x) do { uint64 ulp; ASMFP; x = ulp; } while (0)
-#else
-#define ASMFP
-#define GET_PTR_FROM_VALUE(value) (value)
-#define GET_FRAME_POINTER(x)
-#endif
-
 
 static ErrorData errordata[ERRORDATA_STACK_SIZE];
 
@@ -5445,59 +5427,9 @@ debug_backtrace(void)
  */
 uint32 gp_backtrace(void **stackAddresses, uint32 maxStackDepth)
 {
-#if defined(__i386) || defined(__x86_64__)
-
-	/*
-	 * Stack base pointer has not been initialized by PostmasterMain,
-	 * or PostgresMain/AuxiliaryProcessMain is called directly by main
-	 * rather than forked by PostmasterMain (such as when initdb).
-	 *
-	 * In this case, just return depth as 0 to indicate that we have not
-	 * stored any frame addresses.
-	 */
-	if (stack_base_ptr == NULL)
-		return 0;
-
-	/* get base pointer of current frame */
-	uint64 framePtrValue = 0;
-	GET_FRAME_POINTER(framePtrValue);
-
-	uint32 depth = 0;
-	void **pFramePtr = (void**) GET_PTR_FROM_VALUE(framePtrValue);
-
-	/* check if the frame pointer is valid */
-	if (pFramePtr != NULL && (void *) &depth < (void *) pFramePtr)
-	{
-		/* consider the first maxStackDepth frames only, below the stack base pointer */
-		for (depth = 0; depth < maxStackDepth; depth++)
-		{
-			/* check if next frame is within stack */
-			if (pFramePtr == NULL ||
-				(void *) pFramePtr > *pFramePtr ||
-				(void *) stack_base_ptr < *pFramePtr)
-			{
-				break;
-			}
-
-			/* get return address (one above the frame pointer) */
-			const uintptr_t *returnAddr = (uintptr_t *)(pFramePtr + 1);
-
-			/* store return address */
-			stackAddresses[depth] = (void *) *returnAddr;
-
-			/* move to next frame */
-			pFramePtr = (void**)*pFramePtr;
-		}
-	}
-	else
-	{
-		depth  = backtrace(stackAddresses, maxStackDepth);
-	}
-
-	Assert(depth > 0);
-
-	return depth;
-
+#ifdef WIN32
+	/* backtrace is not available for this platform */
+	return 0;
 #else
 	return backtrace(stackAddresses, maxStackDepth);
 #endif
@@ -5556,6 +5488,22 @@ SegvBusIllName(int signal)
 	}
 
 	return NULL;
+}
+
+/*
+ * StandardHandlerForSigillSigsegvSigbus_OnMainThread must be async-safe to be
+ * used as a signal handler. Under hood it calls backtrace() to collect frame
+ * addresses, that is known to be async-unsafe on the first run, while all the
+ * next runs are async-safe. This function must be called before setting
+ * StandardHandlerForSigillSigsegvSigbus_OnMainThread as a signal handler.
+ */
+void
+InitStandardHandlerForSigillSigsegvSigbus_OnMainThread(void)
+{
+	void *singleFrame[1];
+
+	/* Make gp_backtrace() async-safe */
+	gp_backtrace(singleFrame, 1);
 }
 
 /*

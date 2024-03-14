@@ -363,6 +363,7 @@ enum Edxltoken
 	EdxltokenGpSegmentIdColName,
 
 	EdxltokenActionColId,
+	EdxltokenOidColId,
 	EdxltokenCtidColId,
 	EdxltokenGpSegmentIdColId,
 	EdxltokenTupleOidColId,

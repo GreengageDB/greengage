@@ -891,6 +891,12 @@ dumpTransProtoStats()
 	snprintf(tmpbuf, 32, "%d." UINT64_FORMAT "txt", MyProcPid, getCurrentTime());
 	FILE	   *ofile = fopen(tmpbuf, "w+");
 
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", tmpbuf);
+		return;
+	}
+
 	pthread_mutex_lock(&trans_proto_stats.lock);
 	while (trans_proto_stats.head)
 	{
@@ -1196,6 +1202,16 @@ setupUDPListeningSocket(int *listenerSocketFd, uint16 *listenerPort, int *txFami
 	hints.ai_family = AF_UNSPEC;	/* Allow IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
 	hints.ai_protocol = 0;		/* Any protocol */
+
+	/*
+	 * Use AI_ADDRCONFIG to avoid returning IPv6 addresses if IPv6 is disabled.
+	 * We cannot really detect IPv6 availability only with a bind(), because
+	 * bind() to an IPv6 wildcard (::) will result in a special behavior on
+	 * Linux, binding to both IPv6 and IPv4. In case IPv6 is disabled, only
+	 * IPv4 will be bound, but bind() will not fail. We may cache the address,
+	 * and any connect() or sendto() to this cached address will cause errors.
+	 */
+	hints.ai_flags = AI_ADDRCONFIG;
 
 #ifdef USE_ASSERT_CHECKING
 	if (gp_udpic_network_disable_ipv6)
@@ -6756,6 +6772,12 @@ dumpICBufferList(ICBufferList *list, const char *fname)
 {
 	FILE	   *ofile = fopen(fname, "w+");
 
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	dumpICBufferList_Internal(list, ofile);
 	fclose(ofile);
 }
@@ -6769,6 +6791,12 @@ dumpUnackQueueRing(const char *fname)
 {
 	FILE	   *ofile = fopen(fname, "w+");
 	int			i;
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
 
 	fprintf(ofile, "UnackQueueRing: currentTime " UINT64_FORMAT ", idx %d numOutstanding %d numSharedOutstanding %d\n",
 			unack_queue_ring.currentTime, unack_queue_ring.idx,
@@ -6797,6 +6825,12 @@ dumpConnections(ChunkTransportStateEntry *pEntry, const char *fname)
 	MotionConn *conn;
 
 	FILE	   *ofile = fopen(fname, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
 
 	fprintf(ofile, "Entry connections: conn num %d \n", pEntry->numConns);
 	fprintf(ofile, "==================================\n");

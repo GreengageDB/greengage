@@ -1947,9 +1947,7 @@ _SPI_prepare_plan(const char *src, SPIPlanPtr plan)
 		 * Parameter datatypes are driven by parserSetup hook if provided,
 		 * otherwise we use the fixed parameter list.
 		 */
-		if (parsetree == NULL)
-			stmt_list = NIL;
-		else if (plan->parserSetup != NULL)
+		if (plan->parserSetup != NULL)
 		{
 			Assert(plan->nargs == 0);
 			stmt_list = pg_analyze_and_rewrite_params(parsetree,
@@ -2157,9 +2155,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 			 * Parameter datatypes are driven by parserSetup hook if provided,
 			 * otherwise we use the fixed parameter list.
 			 */
-			if (parsetree == NULL)
-				stmt_list = NIL;
-			else if (plan->parserSetup != NULL)
+			if (plan->parserSetup != NULL)
 			{
 				Assert(plan->nargs == 0);
 				stmt_list = pg_analyze_and_rewrite_params(parsetree,
@@ -2278,6 +2274,19 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 
 			dest = CreateDestReceiver(canSetTag ? DestSPI : DestNone);
 
+			bool orig_gp_enable_gpperfmon = gp_enable_gpperfmon;
+			
+PG_TRY();
+{
+			/*
+			* Temporarily disable gpperfmon since we don't send information for internal queries in
+			* most cases, except when the debugging level is set to DEBUG4 or DEBUG5.
+			*/
+			if (log_min_messages > DEBUG4)
+			{
+				gp_enable_gpperfmon = false;
+			}
+
 			if (IsA(stmt, PlannedStmt) &&
 				((PlannedStmt *) stmt)->utilityStmt == NULL)
 			{
@@ -2299,9 +2308,7 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 				if (query_info_collect_hook)
 					(*query_info_collect_hook)(METRICS_QUERY_SUBMIT, qdesc);
 			
-				if (gp_enable_gpperfmon 
-						&& Gp_role == GP_ROLE_DISPATCH 
-						&& log_min_messages < DEBUG4)
+				if (gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH)
 				{
 					/* For log level of DEBUG4, gpmon is sent information about SPI internal queries as well */
 					Assert(plansource->query_string);
@@ -2376,6 +2383,15 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 													  NULL, 10);
 				}
 			}
+
+			gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
+}
+PG_CATCH();
+{
+			gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
+			PG_RE_THROW();
+}
+PG_END_TRY();
 
 			/*
 			 * The last canSetTag query sets the status values returned to the
@@ -2606,28 +2622,16 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, int64 tcount)
 		ResetUsage();
 #endif
 
-	bool orig_gp_enable_gpperfmon = gp_enable_gpperfmon;
-
 	/* Select execution options */
 	if (fire_triggers)
 		eflags = 0;				/* default run-to-completion flags */
 	else
 		eflags = EXEC_FLAG_SKIP_TRIGGERS;
 
-	PG_TRY();
 	{
 		Oid			relationOid = InvalidOid; 	/* relation that is modified */
 		AutoStatsCmdType cmdType = AUTOSTATS_CMDTYPE_SENTINEL; 	/* command type */
 		bool		checkTuples;
-
-		/*
-		 * Temporarily disable gpperfmon since we don't send information for internal queries in
-		 * most cases, except when the debugging level is set to DEBUG4 or DEBUG5.
-		 */
-		if (log_min_messages > DEBUG4)
-		{
-			gp_enable_gpperfmon = false;
-		}
 
 		ExecutorStart(queryDesc, 0);
 
@@ -2679,18 +2683,10 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, int64 tcount)
 #endif /* FAULT_INJECTOR */
 		}
 
-		gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
-
 		/* MPP-14001: Running auto_stats */
 		if (Gp_role == GP_ROLE_DISPATCH)
 			auto_stats(cmdType, relationOid, queryDesc->es_processed, true /* inFunction */);
 	}
-	PG_CATCH();
-	{
-		gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
 
 	_SPI_current->processed = queryDesc->es_processed;	/* Mpp: Dispatched
 														 * queries fill in this

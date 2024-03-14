@@ -278,3 +278,5 @@ WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one 
 DETAIL:  gid=1561095062-0000014522, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
 WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 161)
+-- start_ignore
+-- end_ignore

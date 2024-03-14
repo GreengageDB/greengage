@@ -470,7 +470,8 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 * unnest(array[typoutput, typsend]) from pg_type) then 'upg_catalog.'
 		 * else 'pg_catalog.' end) FROM pg_proc p;
 		 **/
-		if (scanPlan->flow && (scanPlan->flow->locustype == CdbLocusType_Entry))
+		Assert(scanPlan->flow);
+		if (scanPlan->flow->locustype == CdbLocusType_Entry)
 			return (Node *) node;
 
 		/**
@@ -573,8 +574,24 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		if (ctx->movement == MOVEMENT_BROADCAST)
 		{
 			Assert (NULL != ctx->currentPlanFlow);
-			broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */,
-						  ctx->currentPlanFlow->numsegments /* numsegments */);
+
+			if (scanPlan->flow->locustype == CdbLocusType_SegmentGeneral &&
+				contain_volatile_functions((Node *) scanPlan->qual))
+			{
+				scanPlan->flow->locustype = CdbLocusType_SingleQE;
+				scanPlan->flow->flotype = FLOW_SINGLETON;
+			}
+
+			/*
+			 * Broadcasting Replicated locus leads to data duplicates.
+			 */
+			if (scanPlan->flow->locustype == CdbLocusType_Replicated &&
+				scanPlan->flow->numsegments != ctx->currentPlanFlow->numsegments)
+				elog(ERROR, "could not parallelize SubPlan");
+
+			if (scanPlan->flow->locustype != CdbLocusType_Replicated)
+				broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
+					   ctx->currentPlanFlow->numsegments /* numsegments */ );
 		}
 		else
 		{
@@ -741,8 +758,17 @@ ParallelizeSubplan(SubPlan *spExpr, PlanProfile *context)
 		if (containingPlanDistributed)
 		{
 			Assert(NULL != context->currentPlanFlow);
-			broadcastPlan(newPlan, false /* stable */ , false /* rescannable */,
-						  context->currentPlanFlow->numsegments /* numsegments */);
+
+			/*
+			 * Broadcasting Replicated locus leads to data duplicates.
+			 */
+			if (newPlan->flow->locustype == CdbLocusType_Replicated &&
+				newPlan->flow->numsegments != context->currentPlanFlow->numsegments)
+				elog(ERROR, "could not parallelize SubPlan");
+
+			if (newPlan->flow->locustype != CdbLocusType_Replicated)
+				broadcastPlan(newPlan, false /* stable */ , false /* rescannable */,
+							  context->currentPlanFlow->numsegments /* numsegments */);
 		}
 		else
 		{
@@ -1123,13 +1149,11 @@ broadcastPlan(Plan *plan, bool stable, bool rescannable, int numsegments)
 
 	/*
 	 * Already focused and flow is CdbLocusType_SegmentGeneral and data
-	 * is replicated on every segment of target and no volatile functions in
-	 * target list, do nothing.
+	 * is replicated on every segment of target, do nothing.
 	 */
 	if (plan->flow->flotype == FLOW_SINGLETON &&
 		plan->flow->locustype == CdbLocusType_SegmentGeneral &&
-		plan->flow->numsegments >= numsegments &&
-		!contain_volatile_functions((Node *)plan->targetlist))
+		plan->flow->numsegments >= numsegments)
 		return true;
 
 	return adjustPlanFlow(plan, stable, rescannable, MOVEMENT_BROADCAST, NIL, NIL,

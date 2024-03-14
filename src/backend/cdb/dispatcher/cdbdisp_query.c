@@ -531,7 +531,7 @@ cdbdisp_buildUtilityQueryParms(struct Node *stmt,
 	QueryDispatchDesc *qddesc;
 	Query *q;
 	DispatchCommandQueryParms *pQueryParms;
-	Oid save_userid;
+	Oid	save_userid;
 
 	Assert(stmt != NULL);
 	Assert(stmt->type < 1000);
@@ -603,7 +603,7 @@ cdbdisp_buildPlanQueryParms(struct QueryDesc *queryDesc,
 				sddesc_len,
 				sparams_len,
 				rootIdx;
-	Oid         save_userid;
+	Oid			save_userid;
 
 	rootIdx = RootSliceIndex(queryDesc->estate);
 
@@ -1394,11 +1394,11 @@ deserializeParamListInfo(const char *str, int slen)
 	int			iparam;
 
 	sparams = (List *) readNodeFromBinaryString(str, slen);
+	if (!sparams)
+		return NULL;
+
 	if (!IsA(sparams, List))
 		elog(ERROR, "could not deserialize query parameters");
-
-	if (!sparams)
-		return NULL;;
 
 	/*
 	 * If a transient record type cache was included, load it into

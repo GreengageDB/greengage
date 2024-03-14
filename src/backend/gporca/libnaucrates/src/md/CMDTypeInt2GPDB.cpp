@@ -294,6 +294,7 @@ CMDTypeInt2GPDB::GetDatumVal(CMemoryPool *mp, IDatum *datum) const
 {
 	m_mdid->AddRef();
 	CDatumInt2GPDB *int2_datum = dynamic_cast<CDatumInt2GPDB *>(datum);
+	GPOS_ASSERT(int2_datum);
 
 	return GPOS_NEW(mp)
 		CDXLDatumInt2(mp, m_mdid, int2_datum->IsNull(), int2_datum->Value());
@@ -311,6 +312,7 @@ CDXLScalarConstValue *
 CMDTypeInt2GPDB::GetDXLOpScConst(CMemoryPool *mp, IDatum *datum) const
 {
 	CDatumInt2GPDB *int2gpdb_datum = dynamic_cast<CDatumInt2GPDB *>(datum);
+	GPOS_ASSERT(int2gpdb_datum);
 
 	m_mdid->AddRef();
 	CDXLDatumInt2 *dxl_datum = GPOS_NEW(mp) CDXLDatumInt2(

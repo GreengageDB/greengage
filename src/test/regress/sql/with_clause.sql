@@ -1,3 +1,22 @@
+-- start_matchsubs
+--
+-- m/ERROR:  Too much references to non-SELECT CTE \(allpaths\.c:\d+\)/
+-- s/\d+/XXX/g
+--
+-- m/ERROR:  could not devise a plan \(planner\.c:\d+\)/
+-- s/\d+/XXX/g
+--
+-- m/ERROR:  could not devise a plan \(cdbpath\.c:\d+\)/
+-- s/\d+/XXX/g
+--
+-- m/ERROR:  could not parallelize SubPlan \(cdbllize\.c:\d+\)/
+-- s/\d+/XXX/g
+--
+-- end_matchsubs
+-- start_ignore
+create extension if not exists gp_debug_numsegments;
+-- end_ignore
+
 drop table if exists with_test1 cascade;
 create table with_test1 (i int, t text, value int) distributed by (i);
 insert into with_test1 select i%10, 'text' || i%20, i%30 from generate_series(0, 99) i;
@@ -390,3 +409,591 @@ with recursive rcte(x,y) as
   where t.b = x
 )
 select * from rcte limit 10;
+
+-- ensure orca doesn't fail (on build with asserts) when one cte on the coordinator has the correct flow and another doesn't
+CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
+CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
+INSERT INTO d SELECT 1, generate_series(1,10), 1;
+INSERT INTO r SELECT 1, 2, generate_series(1,100);
+SET gp_cte_sharing TO on;
+EXPLAIN (ANALYZE off, COSTS off, VERBOSE off)
+WITH e AS (
+    SELECT DISTINCT b FROM d
+), h AS (
+    SELECT a FROM d JOIN e f USING (b) JOIN e USING (b)
+) SELECT * FROM r JOIN h USING (a) JOIN h i USING (a);
+DROP TABLE d;
+DROP TABLE r;
+
+-- Test planner not pushing down quals to non-SELECT queries inside CTE. There
+-- can be a DML operation, and it's incorrect to push down upper quals to it.
+--start_ignore
+drop table if exists with_dml;
+--end_ignore
+create table with_dml (i int, j int) distributed by (i);
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i > 2;
+select count(*) c from with_dml;
+
+-- Test one cannot use DML CTE if multiple CTE references found.
+-- Otherwise it will cause duplicated DML operations or planner errors.
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+explain (costs off)
+with cte as (
+    update with_dml set j = j + 1
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+explain (costs off)
+with cte as (
+    delete from with_dml where i > 0
+    returning i
+) select count(*) from cte where i < (select avg(i) from cte);
+
+-- Greenplum fails to execute SELECT INTO and CREATE TABLE AS statements, whose
+-- queries contain modifying CTEs, because Greenplum cannot have two writer
+-- segworker groups, and during execution an error is thrown. Showing
+-- the error during planning stage would be more effective, therefore this test
+-- checks this behaviour.
+--start_ignore
+drop table if exists t_new;
+--end_ignore
+explain (costs off)
+with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select into t_new from cte;
+explain (costs off)
+with cte as
+(update with_dml set j = j + 1 returning *)
+select into t_new from cte;
+explain (costs off)
+with cte as
+(delete from with_dml where i > 0 returning *)
+select into t_new from cte;
+explain (costs off)
+create table t_new as (with cte as
+(insert into with_dml select i, i * 100 from generate_series(1, 5) i returning *)
+select * from cte);
+explain (costs off)
+create table t_new as (with cte as
+(update with_dml set j = j + 1 returning *)
+select * from cte);
+explain (costs off)
+create table t_new as (with cte as
+(delete from with_dml where i > 0 returning *)
+select * from cte);
+drop table with_dml;
+
+-- Test various SELECT statements from CTE with
+-- modifying DML operations over replicated tables
+--start_ignore
+drop table if exists with_dml_dr;
+--end_ignore
+create table with_dml_dr(i int, j int) distributed replicated;
+
+-- Test plain SELECT from CTE with modifying DML queries on replicated table.
+-- Explicit Gather Motion should present at the top of the plan.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte;
+
+explain (costs off)
+with cte as (
+    update with_dml_dr
+    set j = j + 1 where i <= 5
+    returning j
+) select count(*) from cte;
+
+with cte as (
+    update with_dml_dr
+    set j = j + 1 where i <= 5
+    returning j
+) select count(*) from cte;
+
+explain (costs off)
+with cte as (
+    delete from with_dml_dr where i > 0
+    returning i
+) select count(*) from cte;
+
+with cte as (
+    delete from with_dml_dr where i > 0
+    returning i
+) select count(*) from cte;
+
+-- Test ORDER BY clause is applied correctly to the result of modifying
+-- CTE over replicated table.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select * from cte order by i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select * from cte order by i;
+
+-- Test join operations between CTE conaining various modifying DML operations
+-- over replicated table and other tables. Ensure that CdbLocusType_Replicated
+-- is compatible with other type of locuses during joins.
+-- Test join CdbLocusType_Replicated with CdbLocusType_SegmentGeneral.
+--start_ignore
+drop table if exists t_repl;
+--end_ignore
+create table t_repl (i int, j int) distributed replicated;
+
+insert into t_repl values (1, 1), (2, 2), (3, 3);
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_repl using (i);
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_repl using (i);
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_SegmentGeneral
+-- in case when relations are propagated on different number of segments.
+--start_ignore
+drop table if exists with_dml_dr_seg2;
+--end_ignore
+select gp_debug_set_create_table_default_numsegments(2);
+create table with_dml_dr_seg2 (i int, j int) distributed replicated;
+select gp_debug_reset_create_table_default_numsegments();
+
+
+-- SegmentGeneral's number of segments is larger than Replicated's,
+-- the join is performed at number of segments of Replicated locus.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr_seg2
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_repl using (i);
+
+with cte as (
+    insert into with_dml_dr_seg2
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_repl using (i);
+
+-- SegmentGeneral's number of segments is less than Replicated's,
+-- the join is performed at SingleQE.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join with_dml_dr_seg2 using (i);
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join with_dml_dr_seg2 using (i);
+
+drop table with_dml_dr_seg2;
+drop table t_repl;
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_SingleQE.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte left join
+  (select random() * 0 v from generate_series(1,5)) x on cte.i = x.v;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte left join
+  (select random() * 0 v from generate_series(1,5)) x on cte.i = x.v;
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_Entry.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(-5,-1) i
+    returning i
+) select count(*) from cte left join gp_segment_configuration on cte.i = port;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(-5,-1) i
+    returning i
+) select count(*) from cte left join gp_segment_configuration on cte.i = port;
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_General.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i)
+select count(*) from cte join
+(select a from generate_series(1,5) a) x on cte.i = x.a;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i)
+select count(*) from cte join
+(select a from generate_series(1,5) a) x on cte.i = x.a;
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_Hashed
+-- and CdbLocusType_Strewn.
+--start_ignore
+drop table if exists t_hashed;
+drop table if exists t_strewn;
+--end_ignore
+create table t_hashed (i int, j int) distributed by (i);
+create table t_strewn (i int, j int) distributed randomly;
+insert into t_hashed select i, i * 2 from generate_series(1, 10) i;
+insert into t_strewn select i, i * 2 from generate_series(1, 10) i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_hashed on cte.i = t_hashed.i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_hashed on cte.i = t_hashed.i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte left join t_hashed on cte.i = t_hashed.i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte left join t_hashed on cte.i = t_hashed.i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_strewn on cte.i = t_strewn.i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_strewn on cte.i = t_strewn.i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte left join t_strewn on cte.i = t_strewn.i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte left join t_strewn on cte.i = t_strewn.i;
+
+drop table t_strewn;
+drop table t_hashed;
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_Hashed and
+-- CdbLocusType_Strewn in case when relations are propagated on
+-- different number of segments.
+select gp_debug_set_create_table_default_numsegments(2);
+create table t_hashed_seg2 (i int, j int) distributed by (i);
+create table t_strewn_seg2 (i int, j int) distributed randomly;
+select gp_debug_reset_create_table_default_numsegments();
+
+insert into t_hashed_seg2 select i, i * 2 from generate_series(1, 10) i;
+insert into t_strewn_seg2 select i, i * 2 from generate_series(1, 10) i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_hashed_seg2 on cte.i = t_hashed_seg2.i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_hashed_seg2 on cte.i = t_hashed_seg2.i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_strewn_seg2 on cte.i = t_strewn_seg2.i;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_strewn_seg2 on cte.i = t_strewn_seg2.i;
+
+drop table t_strewn_seg2;
+drop table t_hashed_seg2;
+
+-- Test join CdbLocusType_Replicated with CdbLocusType_Replicated.
+-- Join can be performed correctly only when CTE is shared.
+set gp_cte_sharing = 1;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte a join cte b using (i);
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte a join cte b using (i);
+
+reset gp_cte_sharing;
+
+-- Test prohibition of volatile functions applied to the
+-- locus Replicated. The appropriate error should be thrown.
+--start_ignore
+drop table if exists t_repl;
+--end_ignore
+create table t_repl (i int, j int) distributed replicated;
+
+-- Prohibit volatile qualifications.
+explain (costs off, verbose)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select * from cte where cte.j > random();
+
+-- Prohibit volatile returning list
+explain (costs off, verbose)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i, j * random()
+) select * from cte;
+
+-- Prohibit volatile targetlist.
+explain (costs off, verbose)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select i, j * random() from cte;
+
+-- Prohibit volatile having qualifications.
+explain (costs off, verbose)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select i, sum(j) from cte group by i having sum(j) > random();
+
+-- Prohibit volatile join qualifications.
+explain (costs off, verbose)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select * from cte join t_repl on cte.i = t_repl.j * random();
+
+drop table t_repl;
+
+-- Test that node with locus Replicated is not boradcasted inside
+-- a correlated/uncorrlated SubPlan. In case of different number of
+-- segments between replicated node inside the SubPlan and main plan
+-- the proper error should be thrown.
+--start_ignore
+drop table if exists t1;
+drop table if exists with_dml_dr_seg2;
+--end_ignore
+
+create table t1 (i int, j int) distributed by (i);
+select gp_debug_set_create_table_default_numsegments(2);
+create table with_dml_dr_seg2 (i int, j int) distributed replicated;
+select gp_debug_reset_create_table_default_numsegments();
+
+insert into t1 select i, i from generate_series(1, 6) i;
+
+-- Case when number of segments is equal, no Broadcast at the top of CTE plan.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte)
+order by 1;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte)
+order by 1;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte where cte.i = t1.j)
+order by 1;
+
+with cte as (
+    insert into with_dml_dr
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte where cte.i = t1.j)
+order by 1;
+
+-- Case with unequal number of segments between replicated node inside the
+-- SubPlan and main plan, the error should be thrown.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr_seg2
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte)
+order by 1;
+
+with cte as (
+    insert into with_dml_dr_seg2
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte)
+order by 1;
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr_seg2
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte where cte.i = t1.j)
+order by 1;
+
+with cte as (
+    insert into with_dml_dr_seg2
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t1
+where t1.i in (select i from cte where cte.i = t1.j)
+order by 1;
+
+drop table t1;
+
+-- Test UNION ALL command when combining SegmentGeneral locus and Replicated.
+--start_ignore
+drop table if exists t_repl;
+drop table if exists t_repl_seg2;
+--end_ignore
+create table t_repl (i int, j int) distributed replicated;
+
+select gp_debug_set_create_table_default_numsegments(2);
+create table t_repl_seg2 (i int, j int) distributed replicated;
+select gp_debug_reset_create_table_default_numsegments();
+
+insert into t_repl values (2, 2);
+insert into t_repl_seg2 values (2, 2);
+
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    values (1,1)
+    returning i, j
+) select * from cte union all select * from t_repl
+order by 1;
+
+with cte as (
+    insert into with_dml_dr
+    values (1,1)
+    returning i, j
+) select * from cte union all select * from t_repl
+order by 1;
+
+-- Case when SegmentGeneral is originally propagated at less number
+-- of segments.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr
+    values (1,1)
+    returning i, j
+) select * from cte union all select * from t_repl_seg2
+order by 1;
+
+with cte as (
+    insert into with_dml_dr
+    values (1,1)
+    returning i, j
+) select * from cte union all select * from t_repl_seg2
+order by 1;
+
+-- Case when final number of segments is aligned to Replicated subplan.
+explain (costs off)
+with cte as (
+    insert into with_dml_dr_seg2
+    values (1,1)
+    returning i, j
+) select * from cte union all select * from t_repl
+order by 1;
+
+with cte as (
+    insert into with_dml_dr_seg2
+    values (1,1)
+    returning i, j
+) select * from cte union all select * from t_repl
+order by 1;
+
+drop table t_repl_seg2;
+drop table t_repl;
+drop table with_dml_dr_seg2;
+drop table with_dml_dr;

@@ -1717,21 +1717,6 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		/* XXX rel->onerow = ??? */
 	}
 
-	if (rel->subplan->flow->locustype == CdbLocusType_General &&
-		(contain_volatile_functions((Node *) rel->subplan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		rel->subplan->flow->locustype = CdbLocusType_SingleQE;
-		rel->subplan->flow->flotype = FLOW_SINGLETON;
-	}
-
-	if (rel->subplan->flow->locustype == CdbLocusType_SegmentGeneral &&
-		(contain_volatile_functions((Node *) rel->subplan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		rel->subplan = (Plan *) make_motion_gather(subroot, rel->subplan, NIL, CdbLocusType_SingleQE);
-	}
-
 	rel->subroot = subroot;
 
 	/* Isolate the params needed by this specific subplan */
@@ -2033,6 +2018,15 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	if (!root->config->gp_cte_sharing || cte->cterefcount == 1)
 	{
+		/*
+		 * If plan sharing is disabled, we avoid performing DML inside CTE for
+		 * each reference. It'll cause duplicated DML operations or mutation
+		 * errors during cdbparallelize().
+		 */
+		if (cte->cterefcount > 1 &&
+			((Query *) cte->ctequery)->commandType != CMD_SELECT)
+			elog(ERROR, "Too much references to non-SELECT CTE");
+
 		PlannerConfig *config = CopyPlannerConfig(root->config);
 
 		/*
@@ -2049,7 +2043,12 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 		config->honor_order_by = false;
 
-		if (!cte->cterecursive)
+		/*
+		 * Additionally to recursive CTE queries, don't try to push down quals
+		 * to non-SELECT queries. There can be DML operation with RETURNING
+		 * clause, and it's incorrect to push down upper quals to it.
+		*/
+		if (!cte->cterecursive && subquery->commandType == CMD_SELECT)
 		{
 			/*
 			 * Adjust the subquery so that 'root', i.e. this subquery, is the
@@ -2090,7 +2089,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * subplan will not be used by InitPlans, so that they can be shared
 		 * if this CTE is referenced multiple times (excluding in InitPlans).
 		 */
-		if (cteplaninfo->shared_plan == NULL)
+		if (cteplaninfo->subplan == NULL)
 		{
 			PlannerConfig *config = CopyPlannerConfig(root->config);
 
@@ -2111,15 +2110,44 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			subplan = subquery_planner(cteroot->glob, subquery, cteroot, cte->cterecursive,
 									   tuple_fraction, &subroot, config);
 
-			cteplaninfo->shared_plan = prepare_plan_for_sharing(cteroot, subplan);
+			/*
+			 * Sharing General and SegmentGeneral subplan may lead to deadlock
+			 * when executed with 1-gang and joined with N-gang.
+			 */
+			if (CdbPathLocus_IsGeneral(*subplan->flow) ||
+				CdbPathLocus_IsSegmentGeneral(*subplan->flow))
+			{
+				cteplaninfo->subplan = subplan;
+			}
+			else
+			{
+				cteplaninfo->subplan = prepare_plan_for_sharing(cteroot, subplan);
+			}
+
 			cteplaninfo->subroot = subroot;
 		}
 
 		/*
 		 * Create another ShareInputScan to reference the already-created
-		 * subplan.
+		 * subplan if not avoiding sharing for General and SegmentGeneral
+		 * subplans.
 		 */
-		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
+		if (CdbPathLocus_IsGeneral(*cteplaninfo->subplan->flow) ||
+			CdbPathLocus_IsSegmentGeneral(*cteplaninfo->subplan->flow))
+		{
+			/*
+			 * If we are not sharing and subplan was created just now, use it.
+			 * Otherwise, make a copy of it to avoid construction of DAG
+			 * instead of a tree.
+			 */
+			if (subplan == NULL)
+				subplan = (Plan *) copyObject(cteplaninfo->subplan);
+		}
+		else
+		{
+			subplan = share_prepared_plan(cteroot, cteplaninfo->subplan);
+		}
+
 		subroot = cteplaninfo->subroot;
 	}
 

@@ -716,10 +716,7 @@ UpdateIndexRelation(Oid indexoid,
 	/*
 	 * insert the tuple into the pg_index catalog
 	 */
-	simple_heap_insert(pg_index, tuple);
-
-	/* update the indexes on pg_index */
-	CatalogUpdateIndexes(pg_index, tuple);
+	CatalogTupleInsert(pg_index, tuple);
 
 	/*
 	 * close the relation and free the tuple
@@ -1249,18 +1246,8 @@ index_create(Relation heapRelation,
 	/*
 	 * Close the index; but we keep the lock that we acquired above until end
 	 * of transaction.  Closing the heap is caller's responsibility.
-	 *
-	 * GPDB: if we're dealing with a child of a partitioned table, also release
-	 * the lock. We should be holding a lock on the master, which is sufficient.
 	 */
-	if (rel_needs_long_lock(RelationGetRelid(heapRelation)))
-	{
-		index_close(indexRelation, NoLock);
-	}
-	else
-	{
-		index_close(indexRelation, AccessExclusiveLock);
-	}
+	index_close(indexRelation, NoLock);
 
 	return indexRelationId;
 }
@@ -1492,8 +1479,7 @@ index_constraint_create(Relation heapRelation,
 
 		if (dirty)
 		{
-			simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-			CatalogUpdateIndexes(pg_index, indexTuple);
+			CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 			InvokeObjectPostAlterHookArg(IndexRelationId, indexRelationId, 0,
 										 InvalidOid, is_internal);
@@ -1521,7 +1507,6 @@ index_drop(Oid indexId, bool concurrent)
 	Relation	indexRelation;
 	HeapTuple	tuple;
 	bool		hasexprs;
-	bool		need_long_lock;
 	LockRelId	heaprelid,
 				indexrelid;
 	LOCKTAG		heaplocktag;
@@ -1740,11 +1725,7 @@ index_drop(Oid indexId, bool concurrent)
 	 * try to rebuild it while we're deleting catalog entries. We keep the
 	 * lock though.
 	 */
-	need_long_lock = rel_needs_long_lock(RelationGetRelid(userIndexRelation));
-	if (need_long_lock)
-		index_close(userIndexRelation, NoLock);
-	else
-		index_close(userIndexRelation, AccessExclusiveLock);
+	index_close(userIndexRelation, NoLock);
 
 	RelationForgetRelation(indexId);
 
@@ -1759,7 +1740,7 @@ index_drop(Oid indexId, bool concurrent)
 
 	hasexprs = !heap_attisnull(tuple, Anum_pg_index_indexprs);
 
-	simple_heap_delete(indexRelation, &tuple->t_self);
+	CatalogTupleDelete(indexRelation, &tuple->t_self);
 
 	ReleaseSysCache(tuple);
 	heap_close(indexRelation, RowExclusiveLock);
@@ -1803,7 +1784,7 @@ index_drop(Oid indexId, bool concurrent)
 	/*
 	 * Close owning rel, but keep lock
 	 */
-	heap_close(userHeapRelation, need_long_lock ? NoLock : AccessExclusiveLock);
+	heap_close(userHeapRelation, NoLock);
 
 
 	/*
@@ -2164,8 +2145,8 @@ index_update_stats(Relation rel,
 	 * 1. In bootstrap mode, we have no choice --- UPDATE wouldn't work.
 	 *
 	 * 2. We could be reindexing pg_class itself, in which case we can't move
-	 * its pg_class row because CatalogUpdateIndexes might not know about all
-	 * the indexes yet (see reindex_relation).
+	 * its pg_class row because CatalogTupleInsert/CatalogTupleUpdate might
+	 * not know about all the indexes yet (see reindex_relation).
 	 *
 	 * 3. Because we execute CREATE INDEX with just share lock on the parent
 	 * rel (to allow concurrent index creations), an ordinary update could
@@ -2426,8 +2407,7 @@ index_build(Relation heapRelation,
 		Assert(!indexForm->indcheckxmin);
 
 		indexForm->indcheckxmin = true;
-		simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-		CatalogUpdateIndexes(pg_index, indexTuple);
+		CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 		heap_freetuple(indexTuple);
 		heap_close(pg_index, RowExclusiveLock);
@@ -4009,8 +3989,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks)
 			indexForm->indisvalid = true;
 			indexForm->indisready = true;
 			indexForm->indislive = true;
-			simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-			CatalogUpdateIndexes(pg_index, indexTuple);
+			CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 			/*
 			 * Invalidate the relcache for the table, so that after we commit

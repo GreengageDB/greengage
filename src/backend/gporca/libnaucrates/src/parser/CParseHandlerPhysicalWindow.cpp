@@ -152,6 +152,13 @@ CParseHandlerPhysicalWindow::EndElement(const XMLCh *const,	 // element_uri,
 
 	CParseHandlerWindowKeyList *window_key_list_parse_handler =
 		dynamic_cast<CParseHandlerWindowKeyList *>((*this)[4]);
+
+	GPOS_ASSERT(NULL != prop_parse_handler);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
+	GPOS_ASSERT(NULL != filter_parse_handler);
+	GPOS_ASSERT(NULL != child_parse_handler);
+	GPOS_ASSERT(NULL != window_key_list_parse_handler);
+
 	CDXLWindowKeyArray *window_key_array_dxlnode =
 		window_key_list_parse_handler->GetDxlWindowKeyArray();
 	CDXLPhysicalWindow *window_op_dxlnode = GPOS_NEW(m_mp) CDXLPhysicalWindow(

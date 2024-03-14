@@ -382,11 +382,11 @@ typedef struct ResultRelInfo
 	uint64		ri_aoprocessed; /* tuples added/deleted for AO */
 	struct AttrMap *ri_partInsertMap;
 	TupleTableSlot *ri_resultSlot;
-	/* Parent relation in checkPartitionUpdate */
+	/* Parent relation in makePartitionCheckMap */
 	Relation	ri_PartitionParent;
-	/* tupdesc_match for checkPartitionUpdate */
+	/* tupdesc_match for makePartitionCheckMap */
 	int			ri_PartCheckTupDescMatch;
-	/* Attribute map in checkPartitionUpdate */
+	/* Attribute map in makePartitionCheckMap */
 	struct AttrMap *ri_PartCheckMap;
 
 	/*
@@ -661,6 +661,9 @@ typedef struct EState
 
 	/* Should the executor skip past the alien plan nodes */
 	bool eliminateAliens;
+
+	/* List of cross-slice SharedScan consumers in the current slice */
+	List	   *sharedScanConsumers;
 } EState;
 
 struct PlanState;

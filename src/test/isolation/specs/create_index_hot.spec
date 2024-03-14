@@ -23,7 +23,9 @@ teardown
 
 # Update a row, and create an index on the updated column. This produces
 # a broken HOT chain.
+#FIXME do not turn off the optimizer when ORCA stops always using Split Update.
 session "s1"
+step "s1optimizeroff" { set optimizer = off; }
 step "s1update" { update hot set c = '$' where c = '#'; }
 step "s1createindexonc" { create index idx_c on hot (c); }
 
@@ -39,6 +41,7 @@ permutation
   "s2begin"
   "s2select"
 
+  "s1optimizeroff"
   "s1update"
   "s1createindexonc"
 

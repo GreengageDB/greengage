@@ -1029,6 +1029,7 @@ CTranslatorScalarToDXL::CreateScalarIfStmtFromCaseExpr(
 		CDXLNode *default_result_node =
 			TranslateScalarToDXL(case_expr->defresult, var_colid_mapping);
 		GPOS_ASSERT(NULL != default_result_node);
+		GPOS_ASSERT(NULL != cur_node);
 		cur_node->AddChild(default_result_node);
 	}
 
@@ -1210,6 +1211,9 @@ CTranslatorScalarToDXL::TranslateFuncExprToDXL(
 	const IMDFunction *md_func = m_md_accessor->RetrieveFunc(mdid_func);
 	if (IMDFunction::EfsVolatile == md_func->GetFuncStability())
 	{
+		if (m_context)
+			m_context->m_has_volatile_functions = true;
+
 		ListCell *lc = NULL;
 		ForEach(lc, func_expr->args)
 		{
@@ -1753,6 +1757,7 @@ CTranslatorScalarToDXL::CreateQuantifiedSubqueryFromSublink(
 		dynamic_cast<CDXLScalarIdent *>(dxl_sc_ident->GetOperator());
 
 	// get the dxl column reference
+	GPOS_ASSERT(NULL != scalar_ident);
 	const CDXLColRef *dxl_colref = scalar_ident->GetDXLColRef();
 	const ULONG colid = dxl_colref->Id();
 
@@ -2430,8 +2435,10 @@ CTranslatorScalarToDXL::CreateIDatumFromGpdbDatum(CMemoryPool *mp,
 	ULONG length = md_type->Length();
 	if (!md_type->IsPassedByValue() && !is_null)
 	{
-		INT len =
-			dynamic_cast<const CMDTypeGenericGPDB *>(md_type)->GetGPDBLength();
+		const CMDTypeGenericGPDB *md_gpdb_type =
+			dynamic_cast<const CMDTypeGenericGPDB *>(md_type);
+		GPOS_ASSERT(NULL != md_gpdb_type);
+		INT len = md_gpdb_type->GetGPDBLength();
 		length = (ULONG) gpdb::DatumSize(gpdb_datum, md_type->IsPassedByValue(),
 										 len);
 	}

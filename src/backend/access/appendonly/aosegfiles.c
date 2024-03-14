@@ -39,6 +39,7 @@
 #include "storage/lmgr.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/int8.h"
 #include "utils/lsyscache.h"
@@ -141,7 +142,9 @@ InsertInitialSegnoEntry(Relation parentrel, int segno)
 	if (!HeapTupleIsValid(pg_aoseg_tuple))
 		elog(ERROR, "failed to build AO file segment tuple");
 
-	frozen_heap_insert(pg_aoseg_rel, pg_aoseg_tuple);
+	simple_heap_insert(pg_aoseg_rel, pg_aoseg_tuple);
+	SIMPLE_FAULT_INJECTOR("insert_aoseg_before_freeze");
+	heap_freeze_tuple_wal_logged(pg_aoseg_rel, pg_aoseg_tuple);
 
 	heap_freetuple(pg_aoseg_tuple);
 
@@ -1677,7 +1680,7 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 	funcctx = SRF_PERCALL_SETUP();
 
 	query_block = (QueryInfo *) funcctx->user_fctx;
-	if (query_block->index < query_block->rows)
+	if (query_block != NULL && query_block->index < query_block->rows)
 	{
 		/*
 		 * Get heaptuple from SPI, then deform it, and reform it using our
@@ -1710,7 +1713,8 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 	/*
 	 * do when there is no more left
 	 */
-	pfree(query_block);
+	if (query_block != NULL)
+		pfree(query_block);
 
 	SPI_finish();
 

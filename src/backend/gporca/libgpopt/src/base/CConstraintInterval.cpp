@@ -312,6 +312,7 @@ CConstraintInterval::PcnstrIntervalFromScalarArrayCmp(CMemoryPool *mp,
 				pprevdatum = datum;
 			}
 
+			GPOS_ASSERT(NULL != pprevdatum);
 			// add the last datum, making range (last, inf)
 			IMDId *mdid = pprevdatum->MDId();
 			pprevdatum->AddRef();

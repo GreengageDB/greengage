@@ -322,11 +322,13 @@ typedef struct PlannerInfo
 typedef struct CtePlanInfo
 {
 	/*
-	 * A subplan, prepared for sharing among many CTE references by
-	 * prepare_plan_for_sharing(), that implements the CTE. NULL if the
-	 * CTE is not shared among references.
+	 * A subplan, that implements the CTE and which is prepared either for
+	 * sharing among many CTE references by prepare_plan_for_sharing() or
+	 * for inlining in cases, when sharing produces invalid plans. NULL if
+	 * the CTE is not shared among references (gp_cte_sharing is off), or to
+	 * be planned or inlined and has not been planned yet.
 	 */
-	Plan *shared_plan;
+	Plan *subplan;
 
 	/*
 	 * The subroot corresponding to the subplan.

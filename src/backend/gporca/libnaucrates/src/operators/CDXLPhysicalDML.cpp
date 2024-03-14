@@ -32,12 +32,14 @@ CDXLPhysicalDML::CDXLPhysicalDML(
 	CMemoryPool *mp, const EdxlDmlType dxl_dml_type,
 	CDXLTableDescr *table_descr, ULongPtrArray *src_colids_array,
 	ULONG action_colid, ULONG ctid_colid, ULONG segid_colid, BOOL preserve_oids,
-	ULONG tuple_oid, CDXLDirectDispatchInfo *dxl_direct_dispatch_info)
+	ULONG tuple_oid, ULONG table_oid,
+	CDXLDirectDispatchInfo *dxl_direct_dispatch_info)
 	: CDXLPhysical(mp),
 	  m_dxl_dml_type(dxl_dml_type),
 	  m_dxl_table_descr(table_descr),
 	  m_src_colids_array(src_colids_array),
 	  m_action_colid(action_colid),
+	  m_table_oid_colid(table_oid),
 	  m_ctid_colid(ctid_colid),
 	  m_segid_colid(segid_colid),
 	  m_preserve_oids(preserve_oids),
@@ -127,6 +129,13 @@ CDXLPhysicalDML::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenActionColId), m_action_colid);
 	xml_serializer->AddAttribute(CDXLTokens::GetDXLTokenStr(EdxltokenCtidColId),
 								 m_ctid_colid);
+
+	if (0 != m_table_oid_colid)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenOidColId), m_table_oid_colid);
+	}
+
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenGpSegmentIdColId), m_segid_colid);
 

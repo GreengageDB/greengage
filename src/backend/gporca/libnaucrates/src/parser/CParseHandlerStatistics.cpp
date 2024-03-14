@@ -156,6 +156,7 @@ CParseHandlerStatistics::EndElement(const XMLCh *const,	 // element_uri,
 		CParseHandlerStatsDerivedRelation *stats_derived_rel_parse_handler =
 			dynamic_cast<CParseHandlerStatsDerivedRelation *>((*this)[idx]);
 
+		GPOS_ASSERT(NULL != stats_derived_rel_parse_handler);
 		CDXLStatsDerivedRelation *dxl_stats_derived_relation =
 			stats_derived_rel_parse_handler->GetDxlStatsDrvdRelation();
 		dxl_stats_derived_relation->AddRef();

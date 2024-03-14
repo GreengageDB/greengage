@@ -116,6 +116,7 @@ CParseHandlerWindowKeyList::EndElement(const XMLCh *const,	// element_uri,
 	{
 		CParseHandlerWindowKey *window_key_parse_handler =
 			dynamic_cast<CParseHandlerWindowKey *>((*this)[idx]);
+		GPOS_ASSERT(NULL != window_key_parse_handler);
 		m_dxl_window_key_array->Append(
 			window_key_parse_handler->GetDxlWindowKeyGen());
 	}

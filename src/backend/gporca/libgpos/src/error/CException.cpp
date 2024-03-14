@@ -105,7 +105,7 @@ CException::Raise(const CHAR *filename, ULONG line, ULONG major, ULONG minor,
 
 	// during bootstrap there's no context object otherwise, record
 	// all details in the context object
-	if (NULL != ITask::Self())
+	if (NULL != CTask::Self())
 	{
 		CErrorContext *err_ctxt = CTask::Self()->ConvertErrCtxt();
 
@@ -132,7 +132,7 @@ CException::Raise(const CHAR *filename, ULONG line, ULONG major, ULONG minor,
 
 	// during bootstrap there's no context object otherwise, record
 	// all details in the context object
-	if (NULL != ITask::Self())
+	if (NULL != CTask::Self())
 	{
 		CErrorContext *err_ctxt = CTask::Self()->ConvertErrCtxt();
 
@@ -162,7 +162,7 @@ CException::Raise(const CHAR *filename, ULONG line, ULONG major, ULONG minor,
 void
 CException::Reraise(CException exc, BOOL propagate)
 {
-	if (NULL != ITask::Self())
+	if (NULL != CTask::Self())
 	{
 		CErrorContext *err_ctxt = CTask::Self()->ConvertErrCtxt();
 		GPOS_ASSERT(err_ctxt->IsPending());

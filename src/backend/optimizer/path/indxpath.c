@@ -2195,6 +2195,13 @@ match_clause_to_indexcol(IndexOptInfo *index,
 	bool		plain_op;
 
 	/*
+	 * Historically this code has coped with NULL clauses.  That's probably
+	 * not possible anymore, but we might as well continue to cope.
+	 */
+	if (clause == NULL)
+		return false;
+
+	/*
 	 * Never match pseudoconstants to indexes.  (Normally this could not
 	 * happen anyway, since a pseudoconstant clause couldn't contain a Var,
 	 * but what if someone builds an expression index on a constant? It's not
@@ -2228,7 +2235,7 @@ match_clause_to_indexcol(IndexOptInfo *index,
 		expr_coll = ((OpExpr *) clause)->inputcollid;
 		plain_op = true;
 	}
-	else if (clause && IsA(clause, ScalarArrayOpExpr))
+	else if (IsA(clause, ScalarArrayOpExpr))
 	{
 		ScalarArrayOpExpr *saop = (ScalarArrayOpExpr *) clause;
 
@@ -2243,7 +2250,7 @@ match_clause_to_indexcol(IndexOptInfo *index,
 		expr_coll = saop->inputcollid;
 		plain_op = false;
 	}
-	else if (clause && IsA(clause, RowCompareExpr))
+	else if (IsA(clause, RowCompareExpr))
 	{
 		return match_rowcompare_to_indexcol(index, indexcol,
 											opfamily, idxcollation,

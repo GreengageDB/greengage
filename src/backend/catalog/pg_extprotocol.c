@@ -144,9 +144,7 @@ ExtProtocolCreate(const char *protocolName,
 	tup = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 
 	/* insert a new tuple */
-	protOid = simple_heap_insert(rel, tup);
-
-	CatalogUpdateIndexes(rel, tup);
+	protOid = CatalogTupleInsert(rel, tup);
 
 	heap_close(rel, RowExclusiveLock);
 

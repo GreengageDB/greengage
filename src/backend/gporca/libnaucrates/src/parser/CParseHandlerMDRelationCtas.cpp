@@ -177,6 +177,11 @@ CParseHandlerMDRelationCtas::EndElement(const XMLCh *const,	 // element_uri,
 	CParseHandlerMetadataIdList *opclasses_parse_handler =
 		dynamic_cast<CParseHandlerMetadataIdList *>((*this)[3]);
 
+	GPOS_ASSERT(NULL != md_cols_parse_handler);
+	GPOS_ASSERT(NULL != ctas_options_parse_handler);
+	GPOS_ASSERT(NULL != opfamilies_parse_handler);
+	GPOS_ASSERT(NULL != opclasses_parse_handler);
+
 	GPOS_ASSERT(NULL != md_cols_parse_handler->GetMdColArray());
 	GPOS_ASSERT(NULL != ctas_options_parse_handler->GetDxlCtasStorageOption());
 	GPOS_ASSERT(NULL != opfamilies_parse_handler->GetMdIdArray());
@@ -189,14 +194,9 @@ CParseHandlerMDRelationCtas::EndElement(const XMLCh *const,	 // element_uri,
 	md_col_array->AddRef();
 	dxl_ctas_storage_options->AddRef();
 
-	IMdIdArray *distr_opfamilies =
-		dynamic_cast<CParseHandlerMetadataIdList *>(opfamilies_parse_handler)
-			->GetMdIdArray();
+	IMdIdArray *distr_opfamilies = opfamilies_parse_handler->GetMdIdArray();
 	distr_opfamilies->AddRef();
-
-	IMdIdArray *distr_opclasses =
-		dynamic_cast<CParseHandlerMetadataIdList *>(opclasses_parse_handler)
-			->GetMdIdArray();
+	IMdIdArray *distr_opclasses = opclasses_parse_handler->GetMdIdArray();
 	distr_opclasses->AddRef();
 
 

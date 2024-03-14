@@ -1234,6 +1234,7 @@ SetupTCPInterconnect(EState *estate)
 {
 	int			i,
 				index,
+				numConns,
 				n;
 	ListCell   *cell;
 	Slice	   *mySlice;
@@ -1462,9 +1463,9 @@ SetupTCPInterconnect(EState *estate)
 
 		/* Outgoing connections */
 		outgoing_count = 0;
-		n = sendingChunkTransportState ? sendingChunkTransportState->numConns : 0;
+		numConns = sendingChunkTransportState ? sendingChunkTransportState->numConns : 0;
 
-		for (i = 0; i < n; i++)
+		for (i = 0; i < numConns; i++)
 		{
 			index = i;
 
@@ -1773,9 +1774,10 @@ SetupTCPInterconnect(EState *estate)
 		 * Check our outgoing connections.
 		 */
 		i = 0;
+		numConns = sendingChunkTransportState ? sendingChunkTransportState->numConns : 0;
 		while (n > 0 &&
 			   outgoing_count < expectedTotalOutgoing &&
-			   i < sendingChunkTransportState->numConns)
+			   i < numConns)
 		{						/* loop to check outgoing connections */
 			conn = &sendingChunkTransportState->conns[i++];
 			switch (conn->state)
