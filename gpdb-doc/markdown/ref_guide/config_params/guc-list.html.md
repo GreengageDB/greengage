@@ -1070,7 +1070,7 @@ The amount of shared memory, in kilobytes, allocated for query metrics. The defa
 |-----------|-------|-------------------|
 |integer `0 - 131072`|5120|master, system, restart|
 
-## <a id="gp_max_scan_on_shmem"></a>gp\_max\_scan\_on\_shmem 
+## <a id="gp_max_scan_on_shmem"></a>gp\_max\_scan\_on\_shmem
 
 Specifies the limit of maximum scan node's instrumentations per query in shmem. If table has many partitions, Postgres planner will generate a plan with many SCAN nodes under a APPEND node. If the number of partitions are too many, this plan will occupy too many slots. Here is a limitation on number of shmem slots used by scan nodes for each backend. Instruments exceeding the limitation are allocated in local memory.
 

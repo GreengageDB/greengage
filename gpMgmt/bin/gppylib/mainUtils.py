@@ -26,7 +26,7 @@ if sys.version_info < (2, 5, 0):
 
 from gppylib import gplog
 from gppylib.commands import gp, unix
-from gppylib.commands.base import ExecutionError
+from gppylib.commands.base import ExecutionError, Command
 from gppylib.system import configurationInterface, configurationImplGpdb, fileSystemInterface, \
     fileSystemImplOs, osInterface, osImplNative, faultProberInterface, faultProberImplGpdb
 from optparse import OptionGroup, OptionParser, SUPPRESS_HELP
@@ -83,6 +83,13 @@ class PIDLockFile:
             if self.PID == self.read_pid():
                 # remove the dir and PID file inside of it
                 shutil.rmtree(self.path)
+
+                # Eventhough we remove the directory, it is not guaranteed that the directory is removed
+                # at the disk level. So it is necessary to make this call to sync the changes at the disk level.
+                # Refer https://stackoverflow.com/questions/7127075/what-exactly-is-file-flush-doing for more context.
+                cmd = Command("run sync command", unix.findCmdInPath('sync'))
+                cmd.run()
+
         except EnvironmentError as e:
             if e.errno == errno.ENOENT:
                 pass
@@ -162,7 +169,11 @@ class SimpleMainLock:
             return None
 
         # look for a lock file
-        self.pidfilepid = self.pidlockfile.read_pid()
+        try:
+            self.pidfilepid = self.pidlockfile.read_pid()
+        except ValueError:
+            shutil.rmtree(self.ppath)
+
         if self.pidfilepid is not None:
 
             # we found a lock file

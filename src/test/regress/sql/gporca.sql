@@ -2822,6 +2822,12 @@ analyze roj2;
 set optimizer_enable_motion_redistribute=off;
 select count(*), t2.c from roj1 t1 left join roj2 t2 on t1.a = t2.c group by t2.c;
 explain (costs off) select count(*), t2.c from roj1 t1 left join roj2 t2 on t1.a = t2.c group by t2.c;
+
+-- check that ROJ can be disabled via GUC
+set optimizer_enable_right_outer_join=off;
+explain (costs off) select count(*), t2.c from roj1 t1 left join roj2 t2 on t1.a = t2.c group by t2.c;
+reset optimizer_enable_right_outer_join;
+
 reset optimizer_enable_motion_redistribute;
 
 reset optimizer_trace_fallback;
@@ -3391,6 +3397,40 @@ SELECT * FROM t_outer_srf WHERE t_outer_srf.b IN (SELECT generate_series(1, t_ou
 EXPLAIN (VERBOSE, COSTS OFF)
   SELECT * FROM t_outer_srf WHERE t_outer_srf.b IN (SELECT generate_series(1, t_outer_srf.b)  FROM t_inner_srf);
 DROP TABLE t_outer_srf, t_inner_srf;
+
+-- Testcases to validate the behavior of the GUC gp_max_system_slices
+
+-- start_ignore
+drop table if exists foo;
+drop table if exists bar;
+-- end_ignore
+
+create table foo (a int, b int) distributed by(a);
+create table bar (a int, b int) distributed by(a);
+
+-- gp_max_slices : 0 (unlimited) and gp_max_system_slices : 0 (unlimited)
+explain (costs off) select foo.a, foo.b from foo, bar where foo.b=bar.b;
+
+-- gp_max_slices : 1 and gp_max_system_slices : 0 (unlimited)
+-- Query should generate an error because the number of slices in the query exceeds the gp_max_slices
+set gp_max_slices=1;
+explain (costs off) select foo.a, foo.b from foo, bar where foo.b=bar.b;
+
+-- gp_max_slices : 0 (unlimited) and gp_max_system_slices : 1
+-- Query should generate an error because the number of slices in the query exceeds the gp_max_system_slices
+set gp_max_system_slices=1;
+reset gp_max_slices;
+explain (costs off) select foo.a, foo.b from foo, bar where foo.b=bar.b;
+reset gp_max_system_slices;
+
+-- Ensure that a regular user cannot set the GUC gp_max_system_slices
+create user ruser;
+set session authorization ruser;
+set gp_max_system_slices=10;
+reset session authorization;
+
+drop user ruser;
+drop table foo, bar;
 
 -- check that ORCA plan, of the next query (the valid plan is generated after https://github.com/greenplum-db/gpdb/pull/14896 (1)),
 -- doesn't fallback to postgres like it was (due to https://github.com/arenadata/gpdb/pull/302 (2) which is applied above (1)).

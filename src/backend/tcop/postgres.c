@@ -3521,13 +3521,7 @@ StatementCancelHandler(SIGNAL_ARGS)
 		 * interrupt, service the interrupt immediately
 		 */
 		if (ImmediateInterruptOK)
-		{
-			/* Print out stack for immediate interruption */
-			ereport(LOG,
-					(errmsg("immediate interruption"),
-					errprintstack(true)));
 			ProcessInterrupts(__FILE__, __LINE__);
-		}
 	}
 
 	/* If we're still here, waken anything waiting on the process latch */
@@ -3885,8 +3879,6 @@ ProcessInterrupts(const char* filename, int lineno)
 	{
 		bool		lock_timeout_occurred;
 		bool		stmt_timeout_occurred;
-
-		elog(LOG,"Process interrupt for 'query cancel pending' (%s:%d)", filename, lineno);
 
 		/*
 		 * Don't allow query cancel interrupts while reading input from the

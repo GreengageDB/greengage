@@ -58,7 +58,6 @@
 		"gp_log_suboverflow_statement",
 		"gp_max_packet_size",
 		"gp_max_partition_level",
-		"gp_max_slices",
 		"gp_mk_sort_check",
 		"gp_motion_slice_noop",
 		"gp_partitioning_dynamic_selection_log",

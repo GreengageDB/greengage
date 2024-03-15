@@ -28,10 +28,12 @@ BEGIN
 
 -- session1 will fatal
 1: select count(*) > 0 from gp_dist_random('pg_class');
-FATAL:  could not allocate resources for segworker communication (cdbdisp_async.c:301)
-HINT:  Process 91151 will wait for gp_debug_linger=1 seconds before termination.
+FATAL:  could not allocate resources for segworker communication (cdbdisp_async.c:322)
+HINT:  Process 832339 will wait for gp_debug_linger=1 seconds before termination.
 Note that its locks and other resources will not be released until then.
 server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 
 -- session 2 should be ok
 2: select count(*) > 0 from gp_dist_random('pg_class');
@@ -49,6 +51,39 @@ select gp_inject_fault('make_dispatch_result_error', 'reset', dbid) from gp_segm
 -----------------
  Success:        
 (1 row)
+
+-- Test for dispatch is interrupted at the send process of shared query
+-- https://github.com/greenplum-db/gpdb/pull/16920
+-- If no PR-16920, you will get a warning like (memory context is broken):
+-- WARNING:  problem in alloc set Dispatch Context: detected write past chunk end in block XXX, chunk YYY
+1: create table tpr16920(i int);
+CREATE
+1: insert into tpr16920 select generate_series(1,1000);
+INSERT 1000
+1: select gp_inject_fault('before_flush_shared_query', 'fatal', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: select count(*) from tpr16920;
+FATAL:  fault triggered, fault name:'before_flush_shared_query' fault type:'fatal'
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+2: select gp_inject_fault('before_flush_shared_query', 'reset', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: select count(*) from tpr16920;
+ count 
+-------
+ 1000  
+(1 row)
+2: drop table tpr16920;
+DROP
+1q: ... <quitting>
+2q: ... <quitting>
 
 --
 -- Test for issue https://github.com/greenplum-db/gpdb/issues/12703
@@ -71,13 +106,15 @@ DECLARE
  Success:        
 (1 row)
 2: create table t_12703_2(a int);
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'  (seg0 127.0.1.1:7002 pid=18359)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'  (seg0 127.0.1.1:6000 pid=832397)
 
 -- this will go to cdbgang_createGang_async's code path
 -- for some segments are DOWN. It should not PANIC even
 -- with a named portal existing.
 1: select * from t_12703;
-ERROR:  gang was lost due to cluster reconfiguration (cdbgang_async.c:98)
+ERROR:  Error on receive from seg0 slice1 127.0.1.1:6000 pid=832381: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
 1: abort;
 ABORT
 
@@ -109,7 +146,7 @@ select gp_wait_until_triggered_fault('cdb_copy_end_internal_start', 1, dbid) fro
  Success:        
 (1 row)
 4: create table t_12703_2(a int);
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'  (seg0 127.0.1.1:7002 pid=18412)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'  (seg1 127.0.1.1:6001 pid=832461)
 2: begin;
 BEGIN
 select gp_inject_fault('cdb_copy_end_internal_start', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
@@ -131,6 +168,11 @@ ERROR:  MPP detected 1 segment failures, system is reconnected
 END
 2q: ... <quitting>
 
+-- start_ignore
+-- For a mirrorless cluster this will return a non-zero code, so ignore all the output, we'll verify segments' status anyway.
+!\ gprecoverseg -aF --no-progress; FAILED:  Invalid execution mode: \
+!\ gprecoverseg -ar; FAILED:  Invalid execution mode: \
+-- end_ignore
 
 -- loop while segments come in sync
 select wait_until_all_segments_synchronized();

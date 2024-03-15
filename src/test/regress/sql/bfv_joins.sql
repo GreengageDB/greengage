@@ -583,6 +583,68 @@ drop table l_table;
 drop table r_table1;
 drop table r_table2;
 
+-- error when use motion deliver a lateral param
+create table ttt(tc1 varchar(10)) distributed randomly;
+create table ttt1(tc2 varchar(10)) distributed randomly;
+insert into ttt values('sdfs');
+insert into ttt1 values('sdfs');
+
+explain (costs off)
+select
+  ttt.*,
+  t.t1
+from
+  ttt
+  left join lateral (
+    select
+      string_agg(distinct tc2, ';') as t1
+    from
+      ttt1
+    where
+      ttt.tc1=ttt1.tc2
+) t on true;
+
+-- issue: https://github.com/greenplum-db/gpdb/issues/10013
+drop table if exists t1;
+drop table if exists t2;
+drop type if exists mt;
+
+create type mt as (x int, y int);
+create table t1 (a int, b mt);
+create table t2 (a int, b mt) distributed replicated;
+
+insert into t1 select i, '(1,1)' from generate_series(1, 1)i;
+insert into t2 select i, '(1,1)' from generate_series(1, 1)i;
+
+explain
+select * from t1
+cross join lateral
+(with recursive s as
+ (select * from t2 where (t1.b).x = (t2.b).y
+  union all
+  select a+1, b from s where a+1 < 10)
+ select * from s) x;
+
+select * from t1
+cross join lateral
+(with recursive s as
+ (select * from t2 where (t1.b).x = (t2.b).y
+  union all
+  select a+1, b from s where a+1 < 10)
+ select * from s) x;
+
+drop table t1;
+drop table t2;
+create table t1 (a int, b mt) distributed replicated;
+create table t2 (a int, b mt) distributed replicated;
+insert into t1 select i, '(1,1)' from generate_series(1, 1)i;
+insert into t2 select i, '(1,1)' from generate_series(1, 1)i;
+select * from t1
+cross join lateral
+ (select * from t2 where (t1.b).x = (t2.b).y
+  union
+  select a+1, b from t1 where a+1 < 10) x;
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

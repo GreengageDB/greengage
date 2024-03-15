@@ -498,6 +498,7 @@ extern bool optimizer_prune_unused_columns;
 extern bool optimizer_enable_redistribute_nestloop_loj_inner_child;
 extern bool optimizer_force_comprehensive_join_implementation;
 extern bool optimizer_enable_replicated_table;
+extern bool optimizer_enable_right_outer_join;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;
@@ -562,6 +563,7 @@ extern bool optimizer_replicated_table_insert;
 
 /* GUCs for slice table*/
 extern int	gp_max_slices;
+extern int	gp_max_system_slices;
 
 /**
  * Enable logging of DPE match in optimizer.
