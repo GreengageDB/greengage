@@ -10265,6 +10265,8 @@ XLogReportParameters(void)
 			XLogFlush(recptr);
 		}
 
+		LWLockAcquire(ControlFileLock, LW_EXCLUSIVE);
+
 		ControlFile->MaxConnections = MaxConnections;
 		ControlFile->max_worker_processes = max_worker_processes;
 		ControlFile->max_prepared_xacts = max_prepared_xacts;
@@ -10272,6 +10274,8 @@ XLogReportParameters(void)
 		ControlFile->wal_level = wal_level;
 		ControlFile->wal_log_hints = wal_log_hints;
 		UpdateControlFile();
+
+		LWLockRelease(ControlFileLock);
 	}
 }
 
@@ -10498,8 +10502,10 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 		}
 
 		/* ControlFile->checkPointCopy always tracks the latest ckpt XID */
+		LWLockAcquire(ControlFileLock, LW_EXCLUSIVE);
 		ControlFile->checkPointCopy.nextXidEpoch = checkPoint.nextXidEpoch;
 		ControlFile->checkPointCopy.nextXid = checkPoint.nextXid;
+		LWLockRelease(ControlFileLock);
 
 		/* Update shared-memory copy of checkpoint XID/epoch */
 		{
@@ -10559,8 +10565,10 @@ xlog_redo(XLogRecPtr beginLoc __attribute__((unused)), XLogRecPtr lsn __attribut
 		MultiXactSetSafeTruncate(checkPoint.oldestMulti);
 
 		/* ControlFile->checkPointCopy always tracks the latest ckpt XID */
+		LWLockAcquire(ControlFileLock, LW_EXCLUSIVE);
 		ControlFile->checkPointCopy.nextXidEpoch = checkPoint.nextXidEpoch;
 		ControlFile->checkPointCopy.nextXid = checkPoint.nextXid;
+		LWLockRelease(ControlFileLock);
 
 		/* Update shared-memory copy of checkpoint XID/epoch */
 		{

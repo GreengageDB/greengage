@@ -63,6 +63,8 @@ ExecMaterial(MaterialState *node)
 	TupleTableSlot *slot;
 	Material *ma;
 
+	CHECK_FOR_INTERRUPTS();
+
 	/*
 	 * get state info from node
 	 */

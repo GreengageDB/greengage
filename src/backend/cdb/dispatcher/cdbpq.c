@@ -2,6 +2,7 @@
 #include "libpq-fe.h"
 #include "libpq-int.h"
 #include "cdb/cdbpq.h"
+#include "utils/faultinjector.h"
 
 int
 PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonblock)
@@ -40,6 +41,8 @@ PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonbl
 
 	/* remember we are using simple query protocol */
 	conn->queryclass = PGQUERY_SIMPLE;
+
+	SIMPLE_FAULT_INJECTOR("before_flush_shared_query");
 
 	/*
 	 * Give the data a push.  In nonblock mode, don't complain if we're unable

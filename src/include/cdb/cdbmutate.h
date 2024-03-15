@@ -77,5 +77,5 @@ extern void sri_optimize_for_result(PlannerInfo *root, Plan *plan, RangeTblEntry
 extern SplitUpdate *make_splitupdate(PlannerInfo *root, ModifyTable *mt, Plan *subplan,
 									 RangeTblEntry *rte);
 extern bool contains_outer_params(Node *node, void *context);
-
+extern void checkMotionWithParam(Node *node, Bitmapset *bmsNestParams, PlannerInfo *root);
 #endif   /* CDBMUTATE_H */

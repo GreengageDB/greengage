@@ -1417,16 +1417,32 @@ groupIncMemUsage(ResGroupData *group, ResGroupSlotData *slot, int32 chunks)
 		/* Calculate the global over used chunks */
 		int32 deltaGlobalSharedMemUsage = Max(0, deltaSharedMemUsage - oldSharedFree);
 
-		/* freeChunks -= deltaGlobalSharedMemUsage and get the new value */
-		int32 newFreeChunks = pg_atomic_sub_fetch_u32(&pResGroupControl->freeChunks,
+		/*
+		 * reserve memory from global only when have no group shared free space,
+		 * otherwise will return an incorrect overused chunk if others have already
+		 * overuse the global freechunks
+		 */
+		if (deltaGlobalSharedMemUsage > 0)
+		{
+			/* freeChunks -= deltaGlobalSharedMemUsage and get the new value */
+			int32 newFreeChunks = pg_atomic_sub_fetch_u32(&pResGroupControl->freeChunks,
 													  deltaGlobalSharedMemUsage);
-		/* calculate the total over used chunks of global share */
-		globalOveruse = Max(0, 0 - newFreeChunks);
+			/* calculate the total over used chunks of global share */
+			globalOveruse = Max(0, 0 - newFreeChunks);
+		}
 	}
 
 	/* Add the chunks to memUsage in group */
 	pg_atomic_add_fetch_u32((pg_atomic_uint32 *) &group->memUsage,
 							chunks);
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("group_set_overused_freechunk") == FaultInjectorTypeSkip)
+	{
+		pg_atomic_write_u32(&pResGroupControl->freeChunks, -5);
+		SIMPLE_FAULT_INJECTOR("group_overused_freechunks");
+	}
+#endif
 
 	return globalOveruse;
 }
@@ -1502,11 +1518,15 @@ groupIncSlotMemUsage(ResGroupData *group, ResGroupSlotData *slot)
 		/* Calculate the global over used chunks */
 		int32 deltaGlobalSharedMemUsage = Max(0, slotSharedMemUsage - oldSharedFree);
 
-		/* freeChunks -= deltaGlobalSharedMemUsage and get the new value */
-		int32 newFreeChunks = pg_atomic_sub_fetch_u32(&pResGroupControl->freeChunks,
+		/* reserve memory from global only when have no group shared free space */
+		if (deltaGlobalSharedMemUsage > 0)
+		{
+			/* freeChunks -= deltaGlobalSharedMemUsage and get the new value */
+			int32 newFreeChunks = pg_atomic_sub_fetch_u32(&pResGroupControl->freeChunks,
 													  deltaGlobalSharedMemUsage);
-		/* calculate the total over used chunks of global share */
-		globalOveruse = Max(0, 0 - newFreeChunks);
+			/* calculate the total over used chunks of global share */
+			globalOveruse = Max(0, 0 - newFreeChunks);
+		}
 	}
 
 	/* Add the chunks to memUsage in group */

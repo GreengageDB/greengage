@@ -77,3 +77,30 @@ $$;
 -- to verify that it can be correctly loaded even for bypassed commands
 0: ALTER RESOURCE GROUP admin_group SET memory_spill_ratio 10;
 0: ALTER RESOURCE GROUP default_group SET memory_spill_ratio 10;
+
+-- session 1 set global freechunks to -5 and suspend
+1: create extension gp_inject_fault;
+1: create table overuse_table(a int);
+1: select gp_inject_fault('group_overused_freechunks','suspend','', '', '', 1, -1, 0, dbid, current_setting('gp_session_id')::int) from gp_segment_configuration where role = 'p' and content = -1;
+1: select gp_inject_fault('group_set_overused_freechunk','skip', dbid, current_setting('gp_session_id')::int) from gp_segment_configuration where role = 'p' and content = -1;
+1&: select * from overuse_table;
+
+-- session 2: alloc 1 chunk when checkDispatchResult
+2: select gp_inject_fault_infinite('alloc_chunk_during_dispatch', 'skip', dbid) from gp_segment_configuration
+ where role = 'p' and content = -1;
+-- execute 'set' statement to bypass query so it will use shared mem
+2: SET SESSION AUTHORIZATION DEFAULT;
+
+-- reset all injected fault
+2: select gp_inject_fault('alloc_chunk_during_dispatch', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+
+2: select gp_inject_fault('group_set_overused_freechunk', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+2: select gp_inject_fault('group_overused_freechunks', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
+
+1<:
+
+2: drop table overuse_table;
+
+-- start_ignore
+! gpstop -rai;
+-- end_ignore

@@ -209,6 +209,14 @@ Feature: gpstop behave tests
         And the user runs gpstop -a and selects f
         And gpstop should return a return code of 0
 
+    @concourse_cluster
+    @demo_cluster
+    Scenario: gpstop removes the lock directory when it is empty
+        Given the database is running
+        Then a sample gpstop.lock directory is created using the background pid in master_data_directory
+        And the user runs "gpstop -a"
+        And gpstop should return a return code of 0
+
 	@demo_cluster
     Scenario: gpstop gpstop should not print "Failed to kill processes for segment" when locale is different from English
         Given the database is running

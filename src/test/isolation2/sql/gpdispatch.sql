@@ -29,6 +29,20 @@ create extension if not exists gp_inject_fault;
 
 select gp_inject_fault('make_dispatch_result_error', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = -1;
 
+-- Test for dispatch is interrupted at the send process of shared query
+-- https://github.com/greenplum-db/gpdb/pull/16920
+-- If no PR-16920, you will get a warning like (memory context is broken):
+-- WARNING:  problem in alloc set Dispatch Context: detected write past chunk end in block XXX, chunk YYY
+1: create table tpr16920(i int);
+1: insert into tpr16920 select generate_series(1,1000);
+1: select gp_inject_fault('before_flush_shared_query', 'fatal', 1);
+1: select count(*) from tpr16920;
+2: select gp_inject_fault('before_flush_shared_query', 'reset', 1);
+2: select count(*) from tpr16920;
+2: drop table tpr16920;
+1q:
+2q:
+
 --
 -- Test for issue https://github.com/greenplum-db/gpdb/issues/12703
 --

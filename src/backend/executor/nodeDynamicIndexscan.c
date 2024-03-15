@@ -207,6 +207,13 @@ endCurrentIndexScan(DynamicIndexScanState *node)
 {
 	if (node->indexScanState)
 	{
+		/* Free ExprContext allocated in beginCurrentIndexScan */
+		if (node->indexScanState->ss.ps.ps_ExprContext)
+		{
+			FreeExprContext(node->indexScanState->ss.ps.ps_ExprContext, true);
+			node->indexScanState->ss.ps.ps_ExprContext = NULL;
+		}
+
 		ExecEndIndexScan(node->indexScanState);
 		node->indexScanState = NULL;
 	}

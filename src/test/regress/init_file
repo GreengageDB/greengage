@@ -140,6 +140,9 @@ s/ERROR:  could not find hash function for hash operator.*/ERROR:  could not fin
 m/ERROR:  could not devise a plan.*/
 s/ERROR:  could not devise a plan.*/ERROR:  could not devise a plan/
 
+m/\(cdbmutate\.c\:\d+\)/
+s/\(cdbmutate\.c:\d+\)/\(cdbmutate\.c:XXX\)/
+
 # ignore establish time and segindex num
 m/ The shortest establish conn time: \d+\.\d+ ms, segindex: \d+,/
 s/ The shortest establish conn time: \d+\.\d+ ms, segindex: \d+,/ The shortest establish conn time: xx\.xx ms, segindex: xx,/

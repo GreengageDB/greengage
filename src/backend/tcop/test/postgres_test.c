@@ -142,15 +142,6 @@ test__ProcessInterrupts__DoingCommandRead(void **state)
 	QueryCancelPending = true;
 	DoingCommandRead = true;
 
-	/* Mock up elog_start and elog_finish */
-	expect_any(elog_start, filename);
-	expect_any(elog_start, lineno);
-	expect_any(elog_start, funcname);
-	will_be_called(elog_start);
-	expect_value(elog_finish, elevel, LOG);
-	expect_any(elog_finish, fmt);
-	will_be_called(elog_finish);
-
 	ProcessInterrupts(__FILE__, __LINE__);
 
 	assert_false(QueryCancelPending);
@@ -161,15 +152,6 @@ test__ProcessInterrupts__DoingCommandRead(void **state)
 	 */
 	QueryCancelPending = true;
 	DoingCommandRead = false;
-
-	/* Mock up elog_start and elog_finish */
-	expect_any(elog_start, filename);
-	expect_any(elog_start, lineno);
-	expect_any(elog_start, funcname);
-	will_be_called(elog_start);
-	expect_value(elog_finish, elevel, LOG);
-	expect_any(elog_finish, fmt);
-	will_be_called(elog_finish);
 
 	will_be_called(DisableNotifyInterrupt);
 	will_be_called(DisableCatchupInterrupt);
