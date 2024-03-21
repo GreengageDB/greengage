@@ -11970,19 +11970,18 @@ DETAIL:  Unknown error: Partially Distributed Data
 explain update gpexp_rand set b=(select b from gpexp_hash where gpexp_rand.a = gpexp_hash.a);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Unknown error: Partially Distributed Data
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Update on gpexp_rand  (cost=0.00..133.75 rows=25 width=14)
-   ->  Explicit Redistribute Motion 2:2  (slice2; segments: 2)  (cost=0.00..133.75 rows=25 width=14)
-         ->  Seq Scan on gpexp_rand  (cost=0.00..133.75 rows=25 width=14)
-               SubPlan 1  (slice2; segments: 2)
-                 ->  Result  (cost=0.00..2.63 rows=1 width=4)
-                       Filter: (gpexp_rand.a = gpexp_hash.a)
-                       ->  Materialize  (cost=0.00..2.63 rows=1 width=4)
-                             ->  Broadcast Motion 2:2  (slice1; segments: 2)  (cost=0.00..2.62 rows=1 width=4)
-                                   ->  Seq Scan on gpexp_hash  (cost=0.00..2.62 rows=1 width=4)
+   ->  Seq Scan on gpexp_rand  (cost=0.00..133.75 rows=25 width=14)
+         SubPlan 1  (slice0; segments: 2)
+           ->  Result  (cost=0.00..2.63 rows=1 width=4)
+                 Filter: (gpexp_rand.a = gpexp_hash.a)
+                 ->  Materialize  (cost=0.00..2.63 rows=1 width=4)
+                       ->  Broadcast Motion 2:2  (slice1; segments: 2)  (cost=0.00..2.62 rows=1 width=4)
+                             ->  Seq Scan on gpexp_hash  (cost=0.00..2.62 rows=1 width=4)
  Optimizer: Postgres query optimizer
-(10 rows)
+(9 rows)
 
 update gpexp_rand set b=(select b from gpexp_hash where gpexp_rand.a = gpexp_hash.a);
 INFO:  GPORCA failed to produce a plan, falling back to planner

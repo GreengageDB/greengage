@@ -521,17 +521,16 @@ alter table bar set with(REORGANIZE=false) distributed randomly;
 analyze foo;
 analyze bar;
 explain delete from foo using bar;
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
  Delete on foo  (cost=10000000000.00..10000000009.98 rows=34 width=16)
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=10000000000.00..10000000009.98 rows=34 width=16)
-         ->  Nested Loop  (cost=10000000000.00..10000000009.98 rows=34 width=16)
-               ->  Seq Scan on foo  (cost=0.00..3.10 rows=4 width=10)
-               ->  Materialize  (cost=0.00..3.65 rows=10 width=6)
-                     ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..3.50 rows=10 width=6)
-                           ->  Seq Scan on bar  (cost=0.00..3.10 rows=4 width=6)
+   ->  Nested Loop  (cost=10000000000.00..10000000009.98 rows=34 width=16)
+         ->  Seq Scan on foo  (cost=0.00..3.10 rows=4 width=10)
+         ->  Materialize  (cost=0.00..3.65 rows=10 width=6)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..3.50 rows=10 width=6)
+                     ->  Seq Scan on bar  (cost=0.00..3.10 rows=4 width=6)
  Optimizer: Postgres query optimizer
-(8 rows)
+(7 rows)
 
 delete from foo using bar;
 drop table foo;
