@@ -270,7 +270,8 @@ INSERT 1
 --------------------------
  Success:                 
 (1 row)
-1: select gp_inject_fault('qe_exec_finished', 'panic', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+-- Add panic only for an inserting session.
+1: select gp_inject_fault('qe_exec_finished', 'panic', dbid, sess_id) from gp_segment_configuration join pg_stat_activity on query = 'insert into tab_fi values(2, 2);' where role = 'p' and content = 0;
  gp_inject_fault 
 -----------------
  Success:        
@@ -365,7 +366,8 @@ rmgr: Heap2       len (rec/tot):     36/    68, tx: ##, lsn: #/########, prev #/
 --------------------------
  Success:                 
 (1 row)
-1: select gp_inject_fault('qe_exec_finished', 'panic', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+-- Add panic only for an inserting session.
+1: select gp_inject_fault('qe_exec_finished', 'panic', dbid, sess_id) from gp_segment_configuration join pg_stat_activity on query = 'insert into tab_fi values(2, 2);' where role = 'p' and content = 0;
  gp_inject_fault 
 -----------------
  Success:        

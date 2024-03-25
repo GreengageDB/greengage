@@ -147,7 +147,8 @@ $$ LANGUAGE plpgsql;
 -- going to be made to disk (we just flushed WALs), so we won't replay it during restart later.
 -- skip FTS probe to prevent unexpected mirror promotion
 1: select gp_inject_fault_infinite('fts_probe', 'skip', dbid) from gp_segment_configuration where role='p' and content=-1;
-1: select gp_inject_fault('qe_exec_finished', 'panic', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+-- Add panic only for an inserting session.
+1: select gp_inject_fault('qe_exec_finished', 'panic', dbid, sess_id) from gp_segment_configuration join pg_stat_activity on query = 'insert into tab_fi values(2, 2);' where role = 'p' and content = 0;
 1: select gp_inject_fault('insert_bmlov_before_freeze', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
 1: select gp_inject_fault('fts_probe', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
 2<:
@@ -183,7 +184,8 @@ $$ LANGUAGE plpgsql;
 -- inject a panic and resume in same way as Case 1. But this time we will be able to replay the frozen insert.
 -- skip FTS probe to prevent unexpected mirror promotion
 1: select gp_inject_fault_infinite('fts_probe', 'skip', dbid) from gp_segment_configuration where role='p' and content=-1;
-1: select gp_inject_fault('qe_exec_finished', 'panic', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+-- Add panic only for an inserting session.
+1: select gp_inject_fault('qe_exec_finished', 'panic', dbid, sess_id) from gp_segment_configuration join pg_stat_activity on query = 'insert into tab_fi values(2, 2);' where role = 'p' and content = 0;
 1: select gp_inject_fault('insert_bmlov_after_freeze', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
 1: select gp_inject_fault('fts_probe', 'reset', dbid) from gp_segment_configuration where role='p' and content=-1;
 2<:
