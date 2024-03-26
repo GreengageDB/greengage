@@ -30,7 +30,11 @@
 #include "naucrates/exception.h"
 extern "C" {
 #include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits_fn.h"
+#include "optimizer/tlist.h"
+#include "parser/parse_clause.h"
+#include "parser/parse_oper.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 }
@@ -2826,6 +2830,96 @@ gpdb::GPDBLockRelationOid(Oid reloid, LOCKMODE lockmode)
 		LockRelationOid(reloid, lockmode);
 	}
 	GP_WRAP_END;
+}
+
+Node *
+gpdb::GetSortGroupClauseExpr(SortGroupClause *sgclause, List *targetlist)
+{
+	GP_WRAP_START;
+	{
+		return get_sortgroupclause_expr(sgclause, targetlist);
+	}
+	GP_WRAP_END;
+	return NULL;
+}
+
+List *
+gpdb::LAppendUniqueInt(List *list, int datum)
+{
+	GP_WRAP_START;
+	{
+		return list_append_unique_int(list, datum);
+	}
+	GP_WRAP_END;
+	return NIL;
+}
+
+List *
+gpdb::LAppendUnique(List *list, void *datum)
+{
+	GP_WRAP_START;
+	{
+		return list_append_unique(list, datum);
+	}
+	GP_WRAP_END;
+	return NIL;
+}
+
+bool
+gpdb::ListMemberInt(List *list, int datum)
+{
+	GP_WRAP_START;
+	{
+		return list_member_int(list, datum);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
+void
+gpdb::GetSortGroupOperators(Oid argtype, bool need_lt, bool need_eq,
+							bool need_gt, Oid *lt_opr, Oid *eq_opr, Oid *gt_opr,
+							bool *hashable)
+{
+	GP_WRAP_START;
+	{
+		get_sort_group_operators(argtype, need_lt, need_eq, need_gt, lt_opr,
+								 eq_opr, gt_opr, hashable);
+	}
+	GP_WRAP_END;
+}
+
+Index
+gpdb::AssignSortGroupRef(TargetEntry *tle, List *tlist)
+{
+	GP_WRAP_START;
+	{
+		return assignSortGroupRef(tle, tlist);
+	}
+	GP_WRAP_END;
+	return 0;
+}
+
+void
+gpdb::GetConstraintRelationOids(Oid constraint_oid, Oid *conrelid,
+								Oid *confrelid)
+{
+	GP_WRAP_START;
+	{
+		get_constraint_relation_oids(constraint_oid, conrelid, confrelid);
+	}
+	GP_WRAP_END;
+}
+
+List *
+gpdb::GetConstraintRelationColumns(Oid constraint_oid)
+{
+	GP_WRAP_START;
+	{
+		return get_constraint_relation_columns(constraint_oid);
+	}
+	GP_WRAP_END;
+	return NIL;
 }
 
 // EOF
