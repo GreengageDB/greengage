@@ -264,6 +264,7 @@ extern void ConstraintSetParentConstraint(Oid childConstrId,
 extern bool ConstraintGetPrimaryKeyOf(Oid relid, AttrNumber attno, 
 					Oid *pkrelid, AttrNumber *pkattno);
 extern void get_constraint_relation_oids(Oid constraint_oid, Oid *conrelid, Oid *confrelid);
+extern List *get_constraint_relation_columns(Oid constraint_oid);
 extern Oid	get_relation_constraint_oid(Oid relid, const char *conname, bool missing_ok);
 extern Oid	get_domain_constraint_oid(Oid typid, const char *conname, bool missing_ok);
 extern Oid	get_relation_idx_constraint_oid(Oid relationId, Oid indexId);
