@@ -721,6 +721,33 @@ void GPDBMemoryContextDelete(MemoryContext context);
 
 bool IsTypeRange(Oid typid);
 
+// find the targetlist entry matching the given SortGroupClause
+Node *GetSortGroupClauseExpr(SortGroupClause *sgclause, List *targetlist);
+
+// append an integer to a list, if it was not in the list before
+List *LAppendUniqueInt(List *list, int datum);
+
+// append a datum to a list, if it was not in the list before
+List *LAppendUnique(List *list, void *datum);
+
+// return true if the integer 'datum' is a member of the list
+bool ListMemberInt(List *list, int datum);
+
+// get default sorting/grouping operators for type
+void GetSortGroupOperators(Oid argtype, bool need_lt, bool need_eq,
+						   bool need_gt, Oid *lt_opr, Oid *eq_opr, Oid *gt_opr,
+						   bool *hashable);
+
+// assign the targetentry an unused ressortgroupref, if it doesn't already have one.
+Index AssignSortGroupRef(TargetEntry *tle, List *tlist);
+
+// find the IDs of the relations to which a constraint refers
+void GetConstraintRelationOids(Oid constraint_oid, Oid *conrelid,
+							   Oid *confrelid);
+
+// find the columns of the relations to which a constraint refers
+List *GetConstraintRelationColumns(Oid constraint_oid);
+
 }  //namespace gpdb
 
 #define ForEach(cell, l) \
