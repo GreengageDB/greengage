@@ -392,6 +392,12 @@ if [ -n "${STATEMENT_MEM}" ]; then
 	EOF
 fi
 
+if [ -n "${OPTIMIZER_ENABLE_TABLE_ALIAS}" ]; then
+	cat >> $CLUSTER_CONFIG_POSTGRES_ADDONS<<-EOF
+		optimizer_enable_table_alias = ${OPTIMIZER_ENABLE_TABLE_ALIAS}
+	EOF
+fi
+
 if [ "${ONLY_PREPARE_CLUSTER_ENV}" == "true" ]; then
     echo "ONLY_PREPARE_CLUSTER_ENV set, generated clusterConf file: $CLUSTER_CONFIG, exiting"
     exit 0

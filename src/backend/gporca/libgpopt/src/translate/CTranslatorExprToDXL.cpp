@@ -7566,6 +7566,13 @@ CTranslatorExprToDXL::MakeDXLTableDescr(const CTableDescriptor *ptabdesc,
 	CDXLTableDescr *table_descr = GPOS_NEW(m_mp)
 		CDXLTableDescr(m_mp, mdid, pmdnameTbl, ptabdesc->GetExecuteAsUserId());
 
+	if (NULL != ptabdesc->Alias())
+	{
+		CMDName *pmdaliasTbl =
+			GPOS_NEW(m_mp) CMDName(m_mp, ptabdesc->Alias()->Pstr());
+		table_descr->SetMdAlias(pmdaliasTbl);
+	}
+
 	const ULONG ulColumns = ptabdesc->ColumnCount();
 	// translate col descriptors
 	for (ULONG ul = 0; ul < ulColumns; ul++)

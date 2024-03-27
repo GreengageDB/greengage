@@ -455,6 +455,7 @@
 		"optimizer_skew_factor",
 		"optimizer_use_external_constant_expression_evaluation_for_ints",
 		"optimizer_use_gpdb_allocators",
+		"optimizer_enable_table_alias",
 		"password_encryption",
 		"password_hash_algorithm",
 		"plan_cache_mode",

@@ -41,6 +41,7 @@ CTableDescriptor::CTableDescriptor(
 	: m_mp(mp),
 	  m_mdid(mdid),
 	  m_name(mp, name),
+	  m_alias(NULL),
 	  m_pdrgpcoldesc(NULL),
 	  m_rel_distr_policy(rel_distr_policy),
 	  m_erelstoragetype(erelstoragetype),
@@ -77,6 +78,12 @@ CTableDescriptor::CTableDescriptor(
 //---------------------------------------------------------------------------
 CTableDescriptor::~CTableDescriptor()
 {
+	if (NULL != m_alias)
+	{
+		GPOS_DELETE(m_alias);
+		m_alias = NULL;
+	}
+
 	m_mdid->Release();
 
 	m_pdrgpcoldesc->Release();

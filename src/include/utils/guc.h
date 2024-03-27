@@ -557,6 +557,7 @@ extern bool optimizer_analyze_midlevel_partition;
 extern bool optimizer_analyze_enable_merge_of_leaf_stats;
 
 extern bool optimizer_use_gpdb_allocators;
+extern bool optimizer_enable_table_alias;
 
 /* optimizer GUCs for replicated table */
 extern bool optimizer_replicated_table_insert;

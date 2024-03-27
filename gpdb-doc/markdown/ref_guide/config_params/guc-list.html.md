@@ -2366,6 +2366,18 @@ For information about GPORCA, see [About GPORCA](../../admin_guide/query/topics/
 |-----------|-------|-------------------|
 |Boolean|off|master, session, reload|
 
+## <a id="optimizer_enable_table_alias"></a>optimizer\_enable\_table\_alias 
+
+When GPORCA is enabled \(the default\) and this parameter is `true` \(the default\), 
+GPORCA uses table alias to prepare a query plan. This is consistent with Postgres optimizer.
+When set to `false`, GPORCA doesn't use table alias.
+
+For information about GPORCA, see [About GPORCA](../../admin_guide/query/topics/query-piv-optimizer.html) in the *Greenplum Database Administrator Guide*.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|Boolean|true|master, session, reload|
+
 ## <a id="optimizer_force_agg_skew_avoidance"></a>optimizer\_force\_agg\_skew\_avoidance 
 
 When GPORCA is enabled \(the default\), this parameter affects the query plan alternatives that GPORCA considers when 3 stage aggregate plans are generated. When the value is `true`, the default, GPORCA considers only 3 stage aggregate plans where the intermediate aggregation uses the `GROUP BY` and `DISTINCT` columns for distribution to reduce the effects of processing skew.

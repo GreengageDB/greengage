@@ -54,6 +54,9 @@ private:
 	// name of table
 	CName m_name;
 
+	// table alias
+	CName *m_alias;
+
 	// array of columns
 	CColumnDescriptorArray *m_pdrgpcoldesc;
 
@@ -136,6 +139,20 @@ public:
 	Name() const
 	{
 		return m_name;
+	}
+
+	// alias accessor
+	const CName *
+	Alias() const
+	{
+		return m_alias;
+	}
+
+	void
+	SetAlias(const CWStringConst *alias_str)
+	{
+		GPOS_ASSERT(NULL == m_alias);
+		m_alias = GPOS_NEW(m_mp) CName(m_mp, alias_str);
 	}
 
 	// execute as user accessor

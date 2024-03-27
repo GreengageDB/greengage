@@ -307,6 +307,7 @@ int			optimizer_cost_model;
 bool		optimizer_metadata_caching;
 int			optimizer_mdcache_size;
 bool		optimizer_use_gpdb_allocators;
+bool		optimizer_enable_table_alias;
 
 /* Optimizer debugging GUCs */
 bool		optimizer_print_query;
@@ -2982,6 +2983,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_use_gpdb_allocators,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_enable_table_alias", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable using table aliases to make plan explain more descriptive"),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_table_alias,
 		true,
 		NULL, NULL, NULL
 	},
