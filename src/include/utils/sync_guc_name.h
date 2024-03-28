@@ -158,6 +158,7 @@
 		"tcp_user_timeout",
 		"temp_buffers",
 		"temp_tablespaces",
+		"temp_spill_files_tablespaces",
 		"test_copy_qd_qe_split",
 		"TimeZone",
 		"timezone_abbreviations",

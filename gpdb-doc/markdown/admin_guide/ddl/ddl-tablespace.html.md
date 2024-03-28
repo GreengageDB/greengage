@@ -54,6 +54,8 @@ CREATE TABLE foo(i int);
 
 There is also the `temp_tablespaces` configuration parameter, which determines the placement of temporary tables and indexes, as well as temporary files that are used for purposes such as sorting large data sets. This can be a comma-separate list of tablespace names, rather than only one, so that the load associated with temporary objects can be spread over multiple tablespaces. A random member of the list is picked each time a temporary object is to be created.
 
+If you need to separate temporary files from temporary tables, `temp_spill_files_tablespaces` configuration parameter allows to change their placement. If this parameter is empty, temporary files are created according to `temp_tablespaces`.
+
 The tablespace associated with a database stores that database's system catalogs, temporary files created by server processes using that database, and is the default tablespace selected for tables and indexes created within the database, if no `TABLESPACE` is specified when the objects are created. If you do not specify a tablespace when you create a database, the database uses the same tablespace used by its template database.
 
 You can use a tablespace from any database in the Greenplum Database system if you have appropriate privileges.

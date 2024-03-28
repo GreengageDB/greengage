@@ -111,6 +111,7 @@
 /* GUC variables */
 char	   *default_tablespace = NULL;
 char	   *temp_tablespaces = NULL;
+char	   *temp_spill_files_tablespaces = NULL;
 bool		allow_in_place_tablespaces = false;
 
 
@@ -1790,25 +1791,38 @@ assign_temp_tablespaces(const char *newval, void *extra)
 		SetTempTablespaces(NULL, 0);
 }
 
+/* assign_hook: do extra actions as needed */
+void
+assign_temp_spill_files_tablespaces(const char *newval, void *extra)
+{
+	temp_tablespaces_extra *myextra = (temp_tablespaces_extra *) extra;
+
+	/*
+	 * If check_temp_tablespaces was executed inside a transaction, then pass
+	 * the list it made to fd.c.  Otherwise, clear fd.c's list; we must be
+	 * still outside a transaction, or else restoring during transaction exit,
+	 * and in either case we can just let the next PrepareTempTablespaces call
+	 * make things sane.
+	 */
+	if (myextra)
+		SetTempFileTablespaces(myextra->tblSpcs, myextra->numSpcs);
+	else
+		SetTempFileTablespaces(NULL, 0);
+}
+
 /*
- * PrepareTempTablespaces -- prepare to use temp tablespaces
- *
  * If we have not already done so in the current transaction, parse the
  * temp_tablespaces GUC variable and tell fd.c which tablespace(s) to use
- * for temp files.
+ * for temporary files or tables.
  */
-void
-PrepareTempTablespaces(void)
+static void
+PrepareTempTablespacesImpl(char *gucstr, void (*setTablespacesFunc)(Oid *, int))
 {
 	char	   *rawname;
 	List	   *namelist;
 	Oid		   *tblSpcs;
 	int			numSpcs;
 	ListCell   *l;
-
-	/* No work if already done in current transaction */
-	if (TempTablespacesAreSet())
-		return;
 
 	/*
 	 * Can't do catalog access unless within a transaction.  This is just a
@@ -1821,13 +1835,13 @@ PrepareTempTablespaces(void)
 		return;
 
 	/* Need a modifiable copy of string */
-	rawname = pstrdup(temp_tablespaces);
+	rawname = pstrdup(gucstr);
 
 	/* Parse string into list of identifiers */
 	if (!SplitIdentifierString(rawname, ',', &namelist))
 	{
 		/* syntax error in name list */
-		SetTempTablespaces(NULL, 0);
+		setTablespacesFunc(NULL, 0);
 		pfree(rawname);
 		list_free(namelist);
 		return;
@@ -1879,12 +1893,26 @@ PrepareTempTablespaces(void)
 		tblSpcs[numSpcs++] = curoid;
 	}
 
-	SetTempTablespaces(tblSpcs, numSpcs);
+	setTablespacesFunc(tblSpcs, numSpcs);
 
 	pfree(rawname);
 	list_free(namelist);
 }
 
+/*
+ * PrepareTempTablespaces -- prepare to use tablespaces set in temp_tablespaces
+ * and temp_spill_files_tablespaces.  No work if already done in current
+ * transaction.
+ */
+void
+PrepareTempTablespaces(void)
+{
+	if (!TempTablespacesAreSet())
+		PrepareTempTablespacesImpl(temp_tablespaces, SetTempTablespaces);
+
+	if (!TempFileTablespacesAreSet())
+		PrepareTempTablespacesImpl(temp_spill_files_tablespaces, SetTempFileTablespaces);
+}
 
 /*
  * get_tablespace_oid - given a tablespace name, look up the OID

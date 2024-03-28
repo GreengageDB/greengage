@@ -53,6 +53,9 @@ pg_regress.o: override CPPFLAGS += -I$(top_builddir)/src/port $(EXTRADEFS)
 regress_gp.o: override CPPFLAGS += -I$(libpq_srcdir)
 regress_gp.o: override LDFLAGS += -L$(top_builddir)/src/interfaces/libpq
 
+file_monitor:
+	$(CC) $(CPPFLAGS) -I$(GPHOME)/include -o /tmp/file_monitor $(top_builddir)/src/test/regress/file_monitor.c -luv -L$(GPHOME)/lib
+
 twophase_pqexecparams: twophase_pqexecparams.c
 	$(CC) $(CPPFLAGS) -I$(top_builddir)/src/interfaces/libpq -L$(GPHOME)/lib -L$(top_builddir)/src/interfaces/libpq  -o $@ $< -lpq
 
@@ -170,7 +173,12 @@ tablespace-setup:
 	./testtablespace_mytempsp2 \
 	./testtablespace_mytempsp3 \
 	./testtablespace_mytempsp4 \
-	./testtablespace_database_tablespace
+	./testtablespace_database_tablespace \
+	./testtablespace_temp_tables \
+	./testtablespace_temp_files0 \
+	./testtablespace_temp_files1 \
+	./testtablespace_temp_files2 \
+	./testtablespace_temp_files3
 
 
 .PHONY: hooktest
@@ -200,7 +208,7 @@ installcheck: installcheck-good
 installcheck-small: all tablespace-setup
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(EXTRA_TESTS)
 
-installcheck-good: all tablespace-setup twophase_pqexecparams hooktest query_info_hook_test
+installcheck-good: all tablespace-setup twophase_pqexecparams hooktest query_info_hook_test file_monitor
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule $(EXTRA_TESTS)
 
 installcheck-parallel: all tablespace-setup

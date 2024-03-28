@@ -3343,7 +3343,17 @@ When setting `temp_tablespaces` interactively, avoid specifying a nonexistent ta
 
 The default value is an empty string, which results in all temporary objects being created in the default tablespace of the current database.
 
-See also [default\_tablespace](#default_tablespace).
+See also [temp\_spill\_files\_tablespaces](#temp_spill_files_tablespaces), [default\_tablespace](#default_tablespace).
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|one or more tablespace names|unset|master, session, reload|
+
+## <a id="temp_spill_files_tablespaces"></a>temp\_spill\_files\_tablespaces
+
+Specifies tablespaces in which to create temporary files for purposes such as large data set sorting. This setting takes precedence over `temp_tablespaces` for temporary files.
+
+The value is a comma-separated list of tablespace names. When the list contains more than one tablespace name, Greenplum chooses a random list member each time it creates a temporary file. An exception applies within a transaction, where successively created temporary files are placed in successive tablespaces from the list. If the selected element of the list is an empty string, Greenplum automatically falls back to tablespaces specified in `temp_tablespaces`. If `temp_tablespaces` is empty, Greenplum uses the default tablespace of the current database instead.</p>
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|

@@ -37,6 +37,57 @@ create tablespace mytempsp2 location '@testtablespace@_mytempsp2';
 create tablespace mytempsp3 location '@testtablespace@_mytempsp3';
 create tablespace mytempsp4 location '@testtablespace@_mytempsp4';
 
+--start_ignore
+CREATE EXTENSION IF NOT EXISTS plpython3u;
+--end_ignore
+CREATE OR REPLACE FUNCTION gp_tablespace_watch_start(dbid int, name text, location text)
+    RETURNS SETOF void
+    EXECUTE ON ALL SEGMENTS
+AS $$
+import subprocess
+output = '/tmp/gp_temp_tablespaces_dbid%d_%s' % (dbid, name)
+cmd = "/tmp/file_monitor %s | tee -a /tmp/gp_temp_tablespaces_dbid%d.log > %s &" % (location, dbid, output)
+cmd = ["bash", "-c", cmd]
+process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+rc = process.wait()
+if rc != 0:
+    output, error = process.communicate()
+    raise Exception("error=%s" % str(error))
+return []
+$$ LANGUAGE plpython3u;
+
+CREATE OR REPLACE FUNCTION gp_tablespace_watch_stop()
+    RETURNS SETOF void
+    EXECUTE ON ALL SEGMENTS
+AS $$
+import subprocess
+cmd = "pkill file_monitor"
+cmd = ["bash", "-c", cmd]
+process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+process.wait()
+return []
+$$ LANGUAGE plpython3u;
+
+CREATE OR REPLACE FUNCTION gp_tablespace_watch_match(dbid int, name text, patstr text)
+    RETURNS int
+AS $$
+import subprocess
+script = '''grep "%s" '/tmp/gp_temp_tablespaces_dbid%d_%s' | wc -l''' % (patstr, dbid, name)
+cmd = ["bash", "-c", script]
+process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+rc = process.wait()
+output, error = process.communicate()
+if rc != 0:
+    raise Exception("error=%s" % str(error))
+return int(str(output, encoding='utf-8').strip())
+$$ LANGUAGE plpython3u;
+
+
+CREATE OR REPLACE FUNCTION gp_temptablespace_path(tblspcOid Oid)
+    RETURNS text
+AS '@abs_builddir@/regress.so', 'gp_tablespace_tmppath'
+    LANGUAGE C;
+
 CREATE TABLE tts_foo (i int, j int) distributed by(i);
 insert into tts_foo select i, i from generate_series(1,80000)i;
 ANALYZE tts_foo;
@@ -138,3 +189,249 @@ drop tablespace mytempsp1;
 drop tablespace mytempsp2;
 drop tablespace mytempsp3;
 drop tablespace mytempsp4;
+
+--
+-- temp_spill_files_tablespaces:
+--
+
+-- start_ignore
+DROP TABLE IF EXISTS tts_foo;
+DROP TABLE IF EXISTS tts_bar;
+DROP TABLE IF EXISTS tts_jazz;
+DROP TABLESPACE IF EXISTS temp_tables;
+DROP TABLESPACE IF EXISTS temp_files0;
+DROP TABLESPACE IF EXISTS temp_files1;
+DROP TABLESPACE IF EXISTS temp_files2;
+DROP TABLESPACE IF EXISTS temp_files3;
+-- end_ignore
+
+CREATE TABLE tts_foo (a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE tts_bar (c int, d int) DISTRIBUTED BY (d);
+CREATE TABLE tts_jazz (e int, f int) DISTRIBUTED BY (e);
+
+INSERT INTO tts_foo SELECT i, i FROM generate_series (1, 1000000) i;
+INSERT INTO tts_bar SELECT i, i FROM generate_series (6000, 120000) i;
+INSERT INTO tts_jazz SELECT i, i FROM generate_series (4000, 150000) i;
+
+ANALYZE tts_foo;
+ANALYZE tts_bar;
+ANALYZE tts_jazz;
+
+CREATE TABLESPACE temp_tables LOCATION '@testtablespace@_temp_tables';
+CREATE TABLESPACE temp_files0 LOCATION '@testtablespace@_temp_files0';
+CREATE TABLESPACE temp_files1 LOCATION '@testtablespace@_temp_files1';
+CREATE TABLESPACE temp_files2 LOCATION '@testtablespace@_temp_files2';
+CREATE TABLESPACE temp_files3 LOCATION '@testtablespace@_temp_files3';
+
+RESET temp_tablespaces;
+RESET temp_spill_files_tablespaces;
+
+-- Creates a temporary table and remembers the tablespace it was created in.
+-- Runs a query that creates some temporary files, calculates the tablespace for
+-- temporary files that will be used for current session, and checks if any
+-- files were created in that tablespace.
+--
+-- 'n_temp_spill_files_tablespaces' is the count of tablespaces specified in
+-- 'temp_spill_files_tablespaces', either global or session-wide.
+CREATE OR REPLACE FUNCTION gp_tablespace_file_report(
+    n_temp_spill_files_tablespaces int
+) RETURNS TABLE (
+        temp_table_in text,
+        temp_files_in text
+    ) AS $$
+DECLARE
+    owo int;
+    session_file_ts_name text;
+    temp_table_ts_name text;
+BEGIN
+    SET optimizer = off;
+    SET statement_mem = '1MB';
+
+    CREATE TEMPORARY TABLE tts_baz (a int) DISTRIBUTED BY (a);
+
+    -- See the tablespace where temporary table was created. If there is no
+    -- tablespace for this table, it's in default tablespace.
+    SELECT ts.spcname
+        FROM pg_tablespace ts
+        JOIN pg_class c ON ts.oid = c.reltablespace AND c.relname = 'tts_baz'
+        LIMIT 1
+        INTO temp_table_ts_name;
+
+    DROP TABLE tts_baz;
+
+    -- Find out the tablespace that will be used for files.
+    -- N = gp_session_id % number of tablespaces in GUC.
+    SELECT 'temp_files' || (current_setting('gp_session_id')::int % n_temp_spill_files_tablespaces)
+        INTO session_file_ts_name;
+
+    -- Create the temporary directory.
+    WITH out11 AS (
+        SELECT * FROM (
+            WITH cte(a,b) AS (SELECT a-1, b+1 FROM tts_foo)
+            SELECT * FROM (SELECT * FROM cte UNION ALL SELECT * FROM cte) AS X JOIN tts_bar ON b = c
+            UNION ALL SELECT *, 1, 2 FROM cte
+        ) AS XY
+        JOIN tts_jazz on c = e AND b = f
+    )
+    SELECT count(*) FROM out11 INTO owo;
+
+    -- Start monitoring temporary tablespace usage.
+    PERFORM gp_tablespace_watch_start(gp_execution_dbid(), 'default', gp_temptablespace_path((SELECT dattablespace FROM pg_database WHERE datname = current_database() LIMIT 1)));
+    PERFORM gp_tablespace_watch_start(gp_execution_dbid(), 'temp_tables', gp_temptablespace_path((SELECT oid FROM pg_tablespace WHERE spcname = 'temp_tables' LIMIT 1)));
+    PERFORM gp_tablespace_watch_start(gp_execution_dbid(), session_file_ts_name, gp_temptablespace_path((SELECT oid FROM pg_tablespace WHERE spcname = session_file_ts_name LIMIT 1)));
+
+    -- Run the query again to create temporary hashjoin files in the tablespaces.
+    WITH out11 AS (
+        SELECT * FROM (
+            WITH cte(a,b) AS (SELECT a-1, b+1 FROM tts_foo)
+            SELECT * FROM (SELECT * FROM cte UNION ALL SELECT * FROM cte) AS X JOIN tts_bar ON b = c
+            UNION ALL SELECT *, 1, 2 FROM cte
+        ) AS XY
+        JOIN tts_jazz on c = e AND b = f
+    )
+    SELECT count(*) FROM out11 INTO owo;
+
+    PERFORM gp_tablespace_watch_stop();
+
+    -- Check the existence of temporary hashjoin files.
+    RETURN QUERY SELECT
+        coalesce(temp_table_ts_name, 'default'),
+        CASE
+            WHEN gp_tablespace_watch_match(dbid, 'default', 'HashJoin') > 0 THEN 'default'
+            WHEN gp_tablespace_watch_match(dbid, 'temp_tables', 'HashJoin') > 0 THEN 'temp_tables'
+            WHEN gp_tablespace_watch_match(dbid, session_file_ts_name, 'HashJoin') > 0 THEN 'temp_filesN'
+        END
+        FROM gp_segment_configuration
+        WHERE role = 'p' AND content >= 0;
+END;
+$$ LANGUAGE plpgsql;
+
+--
+-- Global GUC value tests:
+-- FIXME: We shouldn't be forced to use \c to update GUCs on segments.
+--
+
+-- Both files and the table should be in the default tablespace.
+-- start_ignore
+\! gpconfig -r temp_tablespaces
+\! gpconfig -r temp_spill_files_tablespaces
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Both files and the table should be in temp_tables.
+-- start_ignore
+\! gpconfig -c temp_tablespaces -v 'temp_tables'
+\! gpconfig -r temp_spill_files_tablespaces
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in temp_files0, table should be in the default tablespace.
+-- start_ignore
+\! gpconfig -r temp_tablespaces
+\! gpconfig -c temp_spill_files_tablespaces -v 'temp_files0'
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in temp_files0, table should be in temp_tables.
+-- start_ignore
+\! gpconfig -c temp_tablespaces -v 'temp_tables'
+\! gpconfig -c temp_spill_files_tablespaces -v 'temp_files0'
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in temp_filesN, where N = gp_session_id % 4, table should be
+-- in the default tablespace.
+-- start_ignore
+\! gpconfig -r 'temp_tablespaces'
+\! gpconfig -c temp_spill_files_tablespaces -v 'temp_files0','temp_files1','temp_files2','temp_files3'
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(4);
+
+-- Files should be in the default tablespace, table should be in temp_tables.
+-- start_ignore
+\! gpconfig -c temp_tablespaces -v 'temp_tables'
+\! gpconfig -c temp_spill_files_tablespaces -v '""'
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in the default tablespace, table should be in temp_tables.
+-- start_ignore
+\! gpconfig -c temp_tablespaces -v 'temp_tables'
+\! gpconfig -c temp_spill_files_tablespaces -v 'pg_default'
+\! gpstop -u
+\c
+-- end_ignore
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Reset the global config before testing session-only values.
+-- start_ignore
+\! gpconfig -r temp_tablespaces
+\! gpconfig -r temp_spill_files_tablespaces
+\! gpstop -u
+\c
+-- end_ignore
+
+--
+-- Session-only GUC value tests:
+--
+
+-- Both files and the table should be in the default tablespace.
+RESET temp_tablespaces;
+RESET temp_spill_files_tablespaces;
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Both files and the table should be in temp_tables.
+SET temp_tablespaces = 'temp_tables';
+RESET temp_spill_files_tablespaces;
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in temp_files0, table should be in the default tablespace.
+RESET temp_tablespaces;
+SET temp_spill_files_tablespaces = 'temp_files0';
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in temp_files0, table should be in temp_tables.
+SET temp_tablespaces = 'temp_tables';
+SET temp_spill_files_tablespaces = 'temp_files0';
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in temp_filesN, where N = gp_session_id % 4, table should be
+-- in the default tablespace.
+RESET temp_tablespaces;
+SET temp_spill_files_tablespaces = 'temp_files0','temp_files1','temp_files2','temp_files3';
+SELECT * FROM gp_tablespace_file_report(4);
+
+-- Files should be in the default tablespace, table should be in temp_tables.
+SET temp_tablespaces = 'temp_tables';
+SET temp_spill_files_tablespaces = '';
+SELECT * FROM gp_tablespace_file_report(1);
+
+-- Files should be in the default tablespace, table should be in temp_tables.
+SET temp_tablespaces = 'temp_tables';
+SET temp_spill_files_tablespaces = 'pg_default';
+SELECT * FROM gp_tablespace_file_report(1);
+
+RESET temp_tablespaces;
+RESET temp_spill_files_tablespaces;
+
+DROP TABLE tts_foo;
+DROP TABLE tts_bar;
+DROP TABLE tts_jazz;
+
+DROP TABLESPACE temp_tables;
+DROP TABLESPACE temp_files0;
+DROP TABLESPACE temp_files1;
+DROP TABLESPACE temp_files2;
+DROP TABLESPACE temp_files3;

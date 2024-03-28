@@ -30,6 +30,7 @@
 #include "access/xloginsert.h"
 #include "catalog/catalog.h"
 #include "catalog/pg_language.h"
+#include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
 #include "cdb/memquota.h"
 #include "cdb/cdbdisp_query.h"
@@ -2065,6 +2066,32 @@ broken_int4out(PG_FUNCTION_ARGS)
 				 errdetail("The trigger value was 1234")));
 
 	return DirectFunctionCall1(int4out, Int32GetDatum(arg));
+}
+
+PG_FUNCTION_INFO_V1(gp_tablespace_tmppath);
+Datum
+gp_tablespace_tmppath(PG_FUNCTION_ARGS)
+{
+	char tempdirpath[4096];
+	Oid tblspcOid = PG_GETARG_OID(0);
+	if (!OidIsValid(tblspcOid))
+	{
+		tblspcOid = GetNextTempTableSpace();
+		if (!OidIsValid(tblspcOid))
+			tblspcOid = MyDatabaseTableSpace ? MyDatabaseTableSpace : DEFAULTTABLESPACE_OID;
+	}
+	if (tblspcOid == DEFAULTTABLESPACE_OID ||
+		tblspcOid == GLOBALTABLESPACE_OID)
+	{
+		snprintf(tempdirpath, sizeof(tempdirpath), "base/%s",
+				PG_TEMP_FILES_DIR);
+	}
+	else
+	{
+		snprintf(tempdirpath, sizeof(tempdirpath), "pg_tblspc/%u/%s/%s",
+				tblspcOid, GP_TABLESPACE_VERSION_DIRECTORY, PG_TEMP_FILES_DIR);
+	}
+	PG_RETURN_TEXT_P(CStringGetTextDatum(tempdirpath));
 }
 
 #if defined(TCP_KEEPIDLE)

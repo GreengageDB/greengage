@@ -272,15 +272,23 @@ static AllocateDesc *allocatedDescs = NULL;
  */
 static long tempFileCounter = 0;
 
+typedef struct
+{
+	Oid		   *tempTableSpaces;
+	int			numTempTableSpaces;
+	int			nextTempTableSpace;
+} BackendTempTableSpaces;
+
 /*
- * Array of OIDs of temp tablespaces.  (Some entries may be InvalidOid,
+ * Structures containing tablespace info from temp_tablespaces and
+ * temp_spill_files_tablespaces. (Some entries may be InvalidOid,
  * indicating that the current database's default tablespace should be used.)
+ *
  * When numTempTableSpaces is -1, this has not been set in the current
  * transaction.
  */
-static Oid *tempTableSpaces = NULL;
-static int	numTempTableSpaces = -1;
-static int	nextTempTableSpace = 0;
+static BackendTempTableSpaces tempTableSpaces = { NULL, -1, 0 };
+static BackendTempTableSpaces tempSpillFilesTableSpaces = { NULL, -1, 0 };
 
 
 /*--------------------
@@ -1529,10 +1537,15 @@ OpenTemporaryFile(bool interXact, const char *filePrefix)
 	 * force it into the database's default tablespace, so that it will not
 	 * pose a threat to possible tablespace drop attempts.
 	 */
-	if (numTempTableSpaces > 0 && !interXact)
+	if (!interXact)
 	{
-		Oid			tblspcOid = GetNextTempTableSpace();
+		Oid			tblspcOid = GetNextTempFileTableSpace();
 
+		/*
+		 * If we got an InvalidOid, this may mean we couldn't retrieve
+		 * tablespaces from GUCS. The caller must ensure that
+		 * PrepareTempTablespaces() was called before opening temporary files.
+		 */
 		if (OidIsValid(tblspcOid))
 			file = OpenTemporaryFileInTablespace(tblspcOid,
 												 false, /* rejectError */
@@ -2804,25 +2817,14 @@ closeAllVfds(void)
 	}
 }
 
-
-/*
- * SetTempTablespaces
- *
- * Define a list (actually an array) of OIDs of tablespaces to use for
- * temporary files.  This list will be used until end of transaction,
- * unless this function is called again before then.  It is caller's
- * responsibility that the passed-in array has adequate lifespan (typically
- * it'd be allocated in TopTransactionContext).
- *
- * Some entries of the array may be InvalidOid, indicating that the current
- * database's default tablespace should be used.
- */
-void
-SetTempTablespaces(Oid *tableSpaces, int numSpaces)
+static void
+set_tablespaces(Oid *tableSpaces, int numSpaces, BackendTempTableSpaces *tableSpaceVar)
 {
-	Assert(numSpaces >= 0);
-	tempTableSpaces = tableSpaces;
-	numTempTableSpaces = numSpaces;
+	AssertImply(tableSpaces == NULL, numSpaces == 0);
+	AssertImply(tableSpaces != NULL, numSpaces >= 0);
+
+	tableSpaceVar->tempTableSpaces = tableSpaces;
+	tableSpaceVar->numTempTableSpaces = numSpaces;
 
 	/*
 	 * Select a random starting point in the list.  This is to minimize
@@ -2833,9 +2835,45 @@ SetTempTablespaces(Oid *tableSpaces, int numSpaces)
 	 * available tablespaces.
 	 */
 	if (numSpaces > 1)
-		nextTempTableSpace = random() % numSpaces;
+		tableSpaceVar->nextTempTableSpace = random() % numSpaces;
 	else
-		nextTempTableSpace = 0;
+		tableSpaceVar->nextTempTableSpace = 0;
+}
+
+/*
+ * SetTempTablespaces
+ *
+ * Define a list (actually an array) of OIDs of tablespaces to use for temporary
+ * tables (and possibly files).  This list will be used until end of transaction,
+ * unless this function is called again before then.  It is caller's
+ * responsibility that the passed-in array has adequate lifespan (typically
+ * it'd be allocated in TopTransactionContext).
+ *
+ * Some entries of the array may be InvalidOid, indicating that the current
+ * database's default tablespace should be used.
+ */
+void
+SetTempTablespaces(Oid *tableSpaces, int numSpaces)
+{
+	set_tablespaces(tableSpaces, numSpaces, &tempTableSpaces);
+}
+
+/*
+ * SetTempFileTablespaces
+ *
+ * Define a list (actually an array) of OIDs of tablespaces to use for temporary
+ * files.  This list will be used until end of transaction,
+ * unless this function is called again before then.  It is caller's
+ * responsibility that the passed-in array has adequate lifespan (typically
+ * it'd be allocated in TopTransactionContext).
+ *
+ * Some entries of the array may be InvalidOid, indicating that the current
+ * database's default tablespace should be used.
+ */
+void
+SetTempFileTablespaces(Oid *tableSpaces, int numSpaces)
+{
+	set_tablespaces(tableSpaces, numSpaces, &tempSpillFilesTableSpaces);
 }
 
 /*
@@ -2848,7 +2886,33 @@ SetTempTablespaces(Oid *tableSpaces, int numSpaces)
 bool
 TempTablespacesAreSet(void)
 {
-	return (numTempTableSpaces >= 0);
+	return (tempTableSpaces.numTempTableSpaces >= 0);
+}
+
+/*
+ * TempFileTablespacesAreSet
+ *
+ * Returns TRUE if SetFileTempTablespaces has been called in current
+ * transaction.  (This is just so that tablespaces.c doesn't need its own
+ * per-transaction state.)
+ */
+bool
+TempFileTablespacesAreSet(void)
+{
+	return (tempSpillFilesTableSpaces.numTempTableSpaces >= 0);
+}
+
+static Oid
+get_session_temp_tablespace(BackendTempTableSpaces *tableSpaceVar)
+{
+	if (tableSpaceVar->numTempTableSpaces > 0)
+	{
+		/* Advance nextTempTableSpace counter with wraparound */
+		if (++tableSpaceVar->nextTempTableSpace >= tableSpaceVar->numTempTableSpaces)
+			tableSpaceVar->nextTempTableSpace = 0;
+		return tableSpaceVar->tempTableSpaces[tableSpaceVar->nextTempTableSpace];
+	}
+	return InvalidOid;
 }
 
 /*
@@ -2876,11 +2940,33 @@ GetTempTablespaces(Oid *tableSpaces, int numSpaces)
 	 * shared fileset in this case will be writen in the default table space
 	 * rather than the temp tablespaces.
 	 */
-	Assert(TempTablespacesAreSet() || IsAbortInProgress());
-	for (i = 0; i < numTempTableSpaces && i < numSpaces; ++i)
-		tableSpaces[i] = tempTableSpaces[i];
+	if (tempSpillFilesTableSpaces.numTempTableSpaces > 0) {
+		Assert(TempFileTablespacesAreSet() || IsAbortInProgress());
+		for (i = 0; i < tempSpillFilesTableSpaces.numTempTableSpaces && i < numSpaces; ++i)
+			tableSpaces[i] = tempSpillFilesTableSpaces.tempTableSpaces[i];
+	}
+	else {
+		Assert(TempTablespacesAreSet() || IsAbortInProgress());
+		for (i = 0; i < tempTableSpaces.numTempTableSpaces && i < numSpaces; ++i)
+			tableSpaces[i] = tempTableSpaces.tempTableSpaces[i];
+	}
 
 	return i;
+}
+
+/*
+ * GetSessionTempFileTableSpace
+ *
+ * Select temp tablespace for current session to use. It's like
+ * GetNextTempTableSpace in upstream, but it gets the same temp
+ * tablespace in all QD/QE processes in the same session.
+ * A result of InvalidOid means to use the current database's
+ * default tablespace.
+ */
+static inline Oid
+GetSessionTempFileTableSpace(void)
+{
+	return get_session_temp_tablespace(&tempSpillFilesTableSpaces);
 }
 
 /*
@@ -2892,16 +2978,34 @@ GetTempTablespaces(Oid *tableSpaces, int numSpaces)
 Oid
 GetNextTempTableSpace(void)
 {
-	if (numTempTableSpaces > 0)
-	{
-		/* Advance nextTempTableSpace counter with wraparound */
-		if (++nextTempTableSpace >= numTempTableSpaces)
-			nextTempTableSpace = 0;
-		return tempTableSpaces[nextTempTableSpace];
-	}
-	return InvalidOid;
+	return get_session_temp_tablespace(&tempTableSpaces);
 }
 
+
+/*
+ * GetNextTempFileTableSpace
+ *
+ * Select the next temp tablespace to use for temporary files.  A result of
+ * InvalidOid means to use the current database's default tablespace.
+ */
+Oid
+GetNextTempFileTableSpace(void)
+{
+	Oid		tablespace = GetSessionTempFileTableSpace();
+
+	/*
+	 * We may retrieve an invalid Oid, and if count is > 0, we got an empty
+	 * string. In that case, we shouln't fall back to temp_tablespaces, but use
+	 * the default tablespace.
+	 */
+	if (OidIsValid(tablespace) || tempSpillFilesTableSpaces.numTempTableSpaces > 0)
+		return tablespace;
+
+	/*
+	 * Fall back to temp_tablespaces if temp_spill_files_tablespaces is not set.
+	 */
+	return GetNextTempTableSpace();
+}
 
 /*
  * AtEOSubXact_Files
@@ -2938,7 +3042,8 @@ AtEOSubXact_Files(bool isCommit, SubTransactionId mySubid,
  * per-transaction temporary file VFDs are closed, which also causes the
  * underlying files to be deleted (although they should've been closed already
  * by the ResourceOwner cleanup). Furthermore, all "allocated" stdio files are
- * closed. We also forget any transaction-local temp tablespace list.
+ * closed. We also forget any transaction-local temp_tablespace and
+ * temp_spill_files_tablespaces lists.
  *
  * The isCommit flag is used only to decide whether to emit warnings about
  * unclosed files.
@@ -2947,8 +3052,12 @@ void
 AtEOXact_Files(bool isCommit)
 {
 	CleanupTempFiles(isCommit, false);
-	tempTableSpaces = NULL;
-	numTempTableSpaces = -1;
+	
+	tempTableSpaces.tempTableSpaces = NULL;
+	tempTableSpaces.numTempTableSpaces = -1;
+
+	tempSpillFilesTableSpaces.tempTableSpaces = NULL;
+	tempSpillFilesTableSpaces.numTempTableSpaces = -1;
 }
 
 /*
