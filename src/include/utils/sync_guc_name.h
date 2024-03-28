@@ -123,6 +123,7 @@
 		"vmem_process_interrupt",
 		"work_mem",
 		"temp_tablespaces",
+		"temp_spill_files_tablespaces",
 		"gp_add_column_inherits_table_setting",
 		"gp_resgroup_debug_wait_queue",
 		"gp_log_resqueue_priority_sleep_time",
