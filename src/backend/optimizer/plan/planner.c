@@ -2470,8 +2470,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												0, /* rollup_gs_times */
 												result_plan);
 
-				if (canonical_grpsets != NULL &&
-					canonical_grpsets->grpset_counts != NULL &&
+				if (canonical_grpsets->grpset_counts != NULL &&
 					canonical_grpsets->grpset_counts[0] > 1)
 				{
 					result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);
