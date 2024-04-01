@@ -3071,13 +3071,17 @@ CheckRADIUSAuth(Port *port)
 
 	passwd = recv_password_packet(port);
 	if (passwd == NULL)
+	{
+		pg_freeaddrinfo_all(hint.ai_family, serveraddrs);
 		return STATUS_EOF;		/* client wouldn't send password */
+	}
 
 	if (strlen(passwd) > RADIUS_VECTOR_LENGTH)
 	{
 		ereport(LOG,
 				(errmsg("RADIUS authentication does not support passwords longer than 16 characters")));
 		pfree(passwd);
+		pg_freeaddrinfo_all(hint.ai_family, serveraddrs);
 		return STATUS_ERROR;
 	}
 
@@ -3090,6 +3094,7 @@ CheckRADIUSAuth(Port *port)
 		ereport(LOG,
 				(errmsg("could not generate random encryption vector")));
 		pfree(passwd);
+		pg_freeaddrinfo_all(hint.ai_family, serveraddrs);
 		return STATUS_ERROR;
 	}
 #else
@@ -3115,6 +3120,7 @@ CheckRADIUSAuth(Port *port)
 				(errmsg("could not perform MD5 encryption of password")));
 		pfree(passwd);
 		pfree(cryptvector);
+		pg_freeaddrinfo_all(hint.ai_family, serveraddrs);
 		return STATUS_ERROR;
 	}
 	pfree(cryptvector);
