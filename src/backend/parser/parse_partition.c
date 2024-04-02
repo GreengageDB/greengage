@@ -654,7 +654,7 @@ transformPartitionBy(CreateStmtContext *cxt,
 		/* XXX: temporarily add rule creation code for debugging */
 
 		/* now that we have the child table name, make the rule */
-		if (!(pElem && pElem->isDefault))
+		if (pElem && !pElem->isDefault)
 		{
 			ListCell   *lc_rule = NULL;
 			int			everycount = every ?
@@ -1248,15 +1248,10 @@ make_partition_rules(CreateStmtContext *cxt, CreateStmt *stmt,
 		StringInfoData ANDBuf;
 		StringInfoData ORBuf;
 		int			range_idx;
-		PartitionBoundSpec *pBSpec = NULL;
+		PartitionBoundSpec *pBSpec = (PartitionBoundSpec *) pElem->boundSpec;
 
 		ListCell   *lc_every_val = NULL;
 		List	   *allNewCols = NIL;
-
-		if (pElem)
-		{
-			pBSpec = (PartitionBoundSpec *) pElem->boundSpec;
-		}
 
 		initStringInfo(&ANDBuf);
 		initStringInfo(&ORBuf);
