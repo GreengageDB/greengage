@@ -1286,7 +1286,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 							 int serializedDtxContextInfoLen)
 {
 	int			i,
-				resultCount,
+				resultCount = 0,
 				numOfFailed = 0;
 
 	char	   *dtxProtocolCommandStr = 0;
@@ -1336,8 +1336,8 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 
 	if (results == NULL)
 	{
-		numOfFailed++;			/* If we got no results, we need to treat it
-								 * as an error! */
+		/* If we got no results, we need to treat it as an error! */
+		return false;
 	}
 
 	for (i = 0; i < resultCount; i++)
@@ -1420,8 +1420,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 	if (waitGxids)
 		pfree(waitGxids);
 
-	if (results)
-		pfree(results);
+	pfree(results);
 
 	return (numOfFailed == 0);
 }
