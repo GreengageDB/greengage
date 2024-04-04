@@ -164,6 +164,9 @@ bool am_mirror = false;
 /* GPDB specific flag to handle deadlocks during parallel segment start. */
 volatile bool *pm_launch_walreceiver = NULL;
 
+/* This is set by a test to simulate long RESET state. */
+static int	delay_bg_writer_termination_sec = 0;
+
 /*
  * Possible types of a backend. Beyond being the possible bkend_type values in
  * struct bkend, these are OR-able request flag bits for SignalSomeChildren()
@@ -498,6 +501,7 @@ static void sigusr1_handler(SIGNAL_ARGS);
 static void process_startup_packet_die(SIGNAL_ARGS);
 static void process_startup_packet_quickdie(SIGNAL_ARGS);
 static void dummy_handler(SIGNAL_ARGS);
+static void TerminateBgWriterHandler(void);
 static void StartupPacketTimeoutHandler(void);
 static void CleanupBackend(int pid, int exitstatus);
 static bool CleanupBackgroundWorker(int pid, int exitstatus);
@@ -802,6 +806,12 @@ PostmasterMain(int argc, char *argv[])
 	 * Options setup
 	 */
 	InitializeGUCOptions();
+
+	/*
+	 * Note: MyLatch is still not initialized for postmaster, 
+	 * so it will not be set during timeout signal handler
+	 */
+	InitializeTimeouts();
 
 	opterr = 1;
 
@@ -1916,6 +1926,7 @@ ServerLoop(void)
 	int			nSockets;
 	time_t		last_lockfile_recheck_time,
 				last_touch_time;
+	bool		postmaster_no_sigkill = false;
 
 	last_lockfile_recheck_time = last_touch_time = time(NULL);
 
@@ -2026,6 +2037,44 @@ ServerLoop(void)
 			}
 		}
 
+#ifdef FAULT_INJECTOR
+		if (pmState == PM_RUN)
+		{
+			/*
+			 * Code below is for test purposes only. If a fault is set, it
+			 * will delay the termination of the background writer process for
+			 * the amount of seconds desired by the test.
+			 *
+			 * Important note: it is NOT allowed to access the fault injector
+			 * from Postmaster process or from any SIGQUIT handler of child
+			 * processes when the system is resetting after the crash of some
+			 * backend. Reason: during reset Postmaster kills child processes,
+			 * and it might kill some process when the process has acquired
+			 * the spin lock of the fault injector, but hasn't released it
+			 * yet. So, subsequent call of the fault injector api from
+			 * Postmaster or any SIGQUIT handler will lead to deadlock. Only
+			 * 'doomed' processes can still call the fault injector api, as
+			 * they will soon be terminated anyway. Thus, the fault injector
+			 * is accessed only when the Postmaster state is PM_RUN.
+			 */
+			if (SIMPLE_FAULT_INJECTOR("postmaster_delay_termination_bg_writer") ==
+				FaultInjectorTypeSkip)
+			{
+				/*
+				 * Let the background writer sleep a little bit larger than
+				 * the FTS retry window (which is gp_fts_probe_retries * 1 sec).
+				 */
+				delay_bg_writer_termination_sec = gp_fts_probe_retries + 2;
+				postmaster_no_sigkill = true;
+			}
+			else
+			{
+				delay_bg_writer_termination_sec = 0;
+				postmaster_no_sigkill = false;
+			}
+		}
+#endif
+
 		/* If we have lost the log collector, try to start a new one */
 		if (SysLoggerPID == 0 && Logging_collector)
 			SysLoggerPID = SysLogger_Start();
@@ -2123,8 +2172,7 @@ ServerLoop(void)
 			AbortStartTime != 0 &&
 			(now - AbortStartTime) >= SIGKILL_CHILDREN_AFTER_SECS)
 		{
-#ifdef FAULT_INJECTOR
-			if (SIMPLE_FAULT_INJECTOR("postmaster_server_loop_no_sigkill") == FaultInjectorTypeSkip)
+			if (postmaster_no_sigkill)
 			{
 				/* 
 				 * This prevents sending SIGKILL to child processes for testing purpose.
@@ -2135,7 +2183,7 @@ ServerLoop(void)
 				pg_usleep(100000L); 
 				continue;
 			}
-#endif
+
 			/* We were gentle with them before. Not anymore */
 			TerminateChildren(SIGKILL);
 			/* reset flag so we don't SIGKILL again */
@@ -4029,11 +4077,37 @@ HandleChildCrash(int pid, int exitstatus, const char *procname)
 		BgWriterPID = 0;
 	else if (BgWriterPID != 0 && take_action)
 	{
-		ereport(DEBUG2,
-				(errmsg_internal("sending %s to process %d",
-								 (SendStop ? "SIGSTOP" : "SIGQUIT"),
-								 (int) BgWriterPID)));
-		signal_child(BgWriterPID, (SendStop ? SIGSTOP : SIGQUIT));
+		if (delay_bg_writer_termination_sec == 0)
+		{
+			ereport(DEBUG2,
+					(errmsg_internal("sending %s to process %d",
+									 (SendStop ? "SIGSTOP" : "SIGQUIT"),
+									 (int) BgWriterPID)));
+			signal_child(BgWriterPID, (SendStop ? SIGSTOP : SIGQUIT));
+		}
+		else
+		{
+			/*
+			 * Code below is only for test purposes and should not be invoked
+			 * under normal conditions. It will delay the termination of the
+			 * background writer process.
+			 *
+			 * In order to delay the termination of the background writer
+			 * process - send SIGSTOP to the bg writer process and start a
+			 * timer that will wake up and then immediately terminate it.
+			 */
+			static TimeoutId id = 0;
+
+			ereport(DEBUG2,
+					(errmsg_internal("sending SIGSTOP to process %d and starting timer",
+									 (int) BgWriterPID)));
+			signal_child(BgWriterPID, SIGSTOP);
+
+			if (id == 0)
+				id = RegisterTimeout(USER_TIMEOUT, TerminateBgWriterHandler);
+
+			enable_timeout_after(id, delay_bg_writer_termination_sec * 1000);
+		}
 	}
 
 	/* Take care of the checkpointer too */
@@ -5879,6 +5953,21 @@ process_startup_packet_quickdie(SIGNAL_ARGS)
 static void
 dummy_handler(SIGNAL_ARGS)
 {
+}
+
+/*
+ * Terminate stopped background writer process (should be invoked only
+ * during test).
+ */
+static void
+TerminateBgWriterHandler()
+{
+	ereport(DEBUG2,
+			(errmsg_internal("sending SIGCONT and SIGQUIT to process %d",
+							 (int) BgWriterPID)));
+
+	signal_child(BgWriterPID, SIGCONT);
+	signal_child(BgWriterPID, SIGQUIT);
 }
 
 /*

@@ -13,7 +13,7 @@
 -- to restart, and potentially makes FTS think it's in "recovery not
 -- in progress" stage and promote the mirror, we would need the FTS
 -- to make that decision a bit less frequently.
-!\retcode gpconfig -c gp_fts_probe_retries -v 15 --coordinatoronly;
+!\retcode gpconfig -c gp_fts_probe_retries -v 15;
 (exited with code 0)
 !\retcode gpstop -u;
 (exited with code 0)
@@ -22,14 +22,8 @@
 -- This number is selected to be larger than the 15-second retry window
 -- which makes a meaningful test, meanwhile reduce the chance that FTS sees
 -- a "recovery not in progress" primary as much as possible.
-select gp_inject_fault('fault_in_background_writer_quickdie', 'sleep', '', '', '', 1, 1, 17, dbid) from gp_segment_configuration where role = 'p' and content = 0;
- gp_inject_fault 
------------------
- Success:        
-(1 row)
-
--- Do not let the postmaster send SIGKILL to the bgwriter
-select gp_inject_fault_infinite('postmaster_server_loop_no_sigkill', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+-- It also will not let the postmaster send SIGKILL to the bgwriter.
+select gp_inject_fault_infinite('postmaster_delay_termination_bg_writer', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
  gp_inject_fault_infinite 
 --------------------------
  Success:                 
@@ -74,12 +68,7 @@ select dbid, role, preferred_role, status from gp_segment_configuration where co
  5    | m    | m              | u      
 (2 rows)
 
-select gp_inject_fault('postmaster_server_loop_no_sigkill', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
- gp_inject_fault 
------------------
- Success:        
-(1 row)
-select gp_inject_fault('fault_in_background_writer_quickdie', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('postmaster_delay_termination_bg_writer', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
  gp_inject_fault 
 -----------------
  Success:        

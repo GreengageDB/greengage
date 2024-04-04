@@ -275,9 +275,11 @@ handle_sig_alarm(SIGNAL_ARGS)
 
 	/*
 	 * SIGALRM is always cause for waking anything waiting on the process
-	 * latch.
+	 * latch.  Cope with MyLatch not being there, as the startup process also
+	 * uses this signal handler.
 	 */
-	SetLatch(MyLatch);
+	if (MyLatch)
+		SetLatch(MyLatch);
 
 	/*
 	 * Fire any pending timeouts, but only if we're enabled to do so.
