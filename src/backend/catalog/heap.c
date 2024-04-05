@@ -97,6 +97,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
+#include "catalog/aocatalog.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_stat_last_operation.h"
@@ -1778,9 +1779,12 @@ heap_create_with_catalog(const char *relname,
 	 *
 	 * Also, skip this in bootstrap mode, since we don't make dependencies
 	 * while bootstrapping.
+	 *
+	 * GPDB: The section about TOAST is still relevant for AO aux tables.
 	 */
 	if (relkind != RELKIND_COMPOSITE_TYPE &&
 		relkind != RELKIND_TOASTVALUE &&
+		!IsAppendonlyMetadataRelkind(relkind) &&
 		!IsBootstrapProcessingMode())
 	{
 		ObjectAddress myself,

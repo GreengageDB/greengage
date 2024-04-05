@@ -469,3 +469,32 @@ drop schema issue6716 cascade;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to function issue6716.test_func1(integer,integer)
 drop cascades to extension test_ext_cau
+--
+-- Test that extension not depends on AO aux tables
+--
+-- Change default access method. This cause extension tables to be created with
+-- column engine.
+set default_table_access_method = ao_column;
+create extension test_ext8;
+-- Reset access method to default. All necessary tables are already created.
+reset default_table_access_method;
+-- Detach tables from extension.
+alter extension test_ext8 drop table ext8_table1;
+alter extension test_ext8 drop table ext8_temp_table1;
+-- The following select should give 0 rows, as there no extension related
+-- tables left.
+select count(*) cnt
+from pg_depend
+where refobjid = (select oid from pg_extension where extname='test_ext8')
+and (pg_identify_object(classid, objid, objsubid)).identity like '%pg_ao%';
+ cnt 
+-----
+   0
+(1 row)
+
+-- Drop should be finished successfully, as extension not depends on AO aux
+-- tables
+drop table ext8_table1;
+drop table ext8_temp_table1;
+-- Cleanup
+drop extension test_ext8;
