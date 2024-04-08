@@ -18,22 +18,11 @@ RUN dnf makecache && \
     dnf -y install libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     dnf -y install perl-IPC-Run perl-Test-Base libxslt-devel openldap-devel && \
     dnf -y install python39-psycopg2 python39-psutil python39-pyyaml python39-lxml && \
+    dnf -y install llvm-devel clang && \
     dnf clean all && \
     #we install pytest from pypi since the version from the repository does not contain an executable file
     #the rest of the packages are not available in the repository.
     pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave
-
-RUN dnf -y install \
-                --repofrompath=devel_external,https://dl.rockylinux.org/vault/rocky/8.8/devel/x86_64/os \
-                llvm-libs-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                llvm-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                llvm-test-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                llvm-static-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                llvm-devel-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                clang-resource-filesystem-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                clang-libs-15.0.7-1.module+el8.8.0+1144+0a4e73bd \
-                clang-15.0.7-1.module+el8.8.0+1144+0a4e73bd && \
-    dnf clean all
 
 # setup ssh configuration
 RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa && \
