@@ -1,6 +1,11 @@
 #!/bin/bash
+set -eox pipefail
 
 project="resgroup"
+
+function cleanup {
+  docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env down
+}
 
 mkdir ssh_keys -p
 if [ ! -e "ssh_keys/id_rsa" ]
@@ -8,13 +13,15 @@ then
   ssh-keygen -P "" -f ssh_keys/id_rsa
 fi
 
+trap cleanup EXIT
+
 #install gpdb and setup gpadmin user
 bash arenadata/scripts/init_containers.sh $project cdw sdw1
 
 for service in 'cdw' 'sdw1'
 do
   #grant access rights to group controllers
-  docker-compose -p $project -f arenadata/docker-compose.yaml exec $service bash -c "
+  docker-compose -p $project -f arenadata/docker-compose.yaml exec -T $service bash -c "
     chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset} &&
     mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb &&
     chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb &&
@@ -22,7 +29,7 @@ do
 done
 
 #create cluster
-docker-compose -p $project -f arenadata/docker-compose.yaml exec cdw \
+docker-compose -p $project -f arenadata/docker-compose.yaml exec -T cdw \
  bash -c "source gpdb_src/concourse/scripts/common.bash && HOSTS_LIST='sdw1' make_cluster"
 
 #run tests
@@ -61,6 +68,3 @@ EOF1
             exit \$errcode
         )
 EOF
-
-#clear
-docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env down
