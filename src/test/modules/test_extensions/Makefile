@@ -4,11 +4,11 @@ MODULE = test_extensions
 PGFILEDESC = "test_extensions - regression testing for EXTENSION support"
 
 EXTENSION = test_ext_cor test_ext_cine test_ext_cau \
-            test_ext_extschema
+            test_ext_extschema test_ext_ao
 DATA = test_ext_cor--1.0.sql test_ext_cine--1.0.sql test_ext_cine--1.0--1.1.sql \
        test_ext_cau--1.0--1.1.sql test_ext_cau--1.0.sql \
        test_ext_cau--1.1.sql test_ext_cau--unpackaged--1.0.sql \
-       test_ext_extschema--1.0.sql
+       test_ext_extschema--1.0.sql test_ext_ao--1.0.sql
 
 REGRESS = test_extensions
 
