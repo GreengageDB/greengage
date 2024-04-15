@@ -262,7 +262,7 @@ But one thing was missing, there was no password reuse policy enforcement. That 
 
 The credcheck extension adds the "Password Reuse Policy" in release 1.0. To used this feature, the credcheck extension MUST be added to `shared_preload_libraries` configuration option.
 
-All users passwords are historicized in shared memory together with the timestamps of when these passwords were set. The passwords history is saved into a file named `$PGDATA/global/pg_password_history` to be reloaded in shared memory at startup. This file must be part of your backups if you don't want to loose the password history, hopefully pg_basebackup will take care of it. Passwords are stored and compared as sha256 hashes, never in plain text.
+All users passwords are historicized in shared memory together with the timestamps of when these passwords were set. The passwords history is saved into a file named `$PGDATA/pg_password_history` to be reloaded in shared memory at startup. This file must be part of your backups if you don't want to loose the password history, hopefully pg_basebackup will take care of it. Passwords are stored and compared as sha256 hashes, never in plain text.
 
 The password history size is set to 65535 records by default and can be adjusted using the `credcheck.history_max_size` configuration directive. Change of this GUC require a PostgreSQL restart. One record in the history takes 144 bytes, so the default is to allocate around 10 MB of additional shared memory for the password history.
 

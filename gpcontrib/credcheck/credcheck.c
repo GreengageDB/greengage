@@ -57,7 +57,8 @@
 /* Default passord encryption */
 #define Password_encryption = PASSWORD_TYPE_SCRAM_SHA_256;
 /* Name of external file to store password history in the PGDATA */
-#define PGPH_DUMP_FILE  "global/pg_password_history"
+#define PGPH_DUMP_FILE_OLD  "global/pg_password_history"
+#define PGPH_DUMP_FILE  "pg_password_history"
 
 /* Number of output arguments (columns) in the pg_password_history pseudo table */
 #define PG_PASSWORD_HISTORY_COLS	3
@@ -1737,6 +1738,17 @@ pgph_shmem_startup(void)
 	 * Note: we don't bother with locks here, because there should be no other
 	 * processes running when this code is reached.
 	 */
+
+        /*
+	 * Assume backward compatibility with old location of the file,
+         * move file to PGDATA
+         */
+	file = AllocateFile(PGPH_DUMP_FILE_OLD, PG_BINARY_R);
+	if (file != NULL)
+	{
+		FreeFile(file);
+		(void) durable_rename(PGPH_DUMP_FILE_OLD, PGPH_DUMP_FILE, LOG);
+	}
 
 	/*
 	 * Attempt to load old history from the dump file.
