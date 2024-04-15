@@ -113,6 +113,12 @@ int	max_tm_gxacts = 100;
 
 #define GP_OPT_EXPLICT_BEGIN      						0x0020
 
+/*
+ * Some context to distinguish between user-invoked SET commands and explicit
+ * QD to QE config synchronization.
+ */
+#define GP_OPT_SYNCHRONIZATION_SET						0x0040
+
 /*=========================================================================
  * FUNCTIONS PROTOTYPES
  */
@@ -1217,6 +1223,17 @@ mppTxnOptions(bool needDtx)
 }
 
 int
+mppTxnOptionsForSync(bool needDtx, bool isSync)
+{
+	int flags = mppTxnOptions(needDtx);
+
+	if (isSync)
+		flags |= GP_OPT_SYNCHRONIZATION_SET;
+
+	return flags;
+}
+
+int
 mppTxOptions_IsoLevel(int txnOptions)
 {
 	if ((txnOptions & GP_OPT_ISOLATION_LEVEL_MASK) == GP_OPT_SERIALIZABLE)
@@ -1250,6 +1267,12 @@ bool
 isMppTxOptions_ExplicitBegin(int txnOptions)
 {
 	return ((txnOptions & GP_OPT_EXPLICT_BEGIN) != 0);
+}
+
+bool
+isMppTxOptions_SynchronizationSet(int txnOptions)
+{
+	return ((txnOptions & GP_OPT_SYNCHRONIZATION_SET) != 0);
 }
 
 /*=========================================================================

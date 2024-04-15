@@ -7288,14 +7288,34 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 			}
 
 			SIMPLE_FAULT_INJECTOR("set_variable_fault");
-			(void) set_config_option(stmt->name,
-									 ExtractSetVariableArgs(stmt),
-									 (superuser() ? PGC_SUSET : PGC_USERSET),
-									 PGC_S_SESSION,
-									 action,
-									 true,
-									 0);
-			DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
+
+			/*
+			 * If this is a synchronization SET, previous values from the
+			 * startup packet should be overwritten. We can only get here if we
+			 * are a QE.
+			 */
+			if (isMppTxOptions_SynchronizationSet(QEDtxContextInfo.distributedTxnOptions))
+			{
+				(void) set_config_option(stmt->name,
+										 ExtractSetVariableArgs(stmt),
+										 PGC_SIGHUP,
+										 PGC_S_CLIENT,
+										 GUC_ACTION_SET,
+										 true,
+										 0);
+			}
+			else
+			{
+				(void) set_config_option(stmt->name,
+										 ExtractSetVariableArgs(stmt),
+										 (superuser() ? PGC_SUSET : PGC_USERSET),
+										 PGC_S_SESSION,
+										 action,
+										 true,
+										 0);
+
+				DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
+			}
 			break;
 		case VAR_SET_MULTI:
 

@@ -700,6 +700,7 @@ extern const char *GetConfigOption(const char *name, bool missing_ok,
 extern const char *GetConfigOptionResetString(const char *name);
 extern int	GetConfigOptionFlags(const char *name, bool missing_ok);
 extern void ProcessConfigFile(GucContext context);
+extern List *ProcessConfigFileForSync(GucContext context);
 extern void InitializeGUCOptions(void);
 extern bool SelectConfigFiles(const char *userDoption, const char *progname);
 extern void ResetAllOptions(void);
@@ -810,6 +811,7 @@ extern bool gpvars_check_gp_enable_gpperfmon(bool *newval, void **extra, GucSour
 extern bool gpvars_check_gp_gpperfmon_send_interval(int *newval, void **extra, GucSource source);
 extern int guc_name_compare(const char *namea, const char *nameb);
 extern void DispatchSyncPGVariable(struct config_generic * gconfig);
+extern void DispatchSyncPGVariableExplicit(struct config_generic * gconfig);
 
 
 extern StdRdOptions *defaultStdRdOptions(char relkind);
