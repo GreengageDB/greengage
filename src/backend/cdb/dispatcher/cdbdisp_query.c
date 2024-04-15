@@ -284,16 +284,8 @@ cdbdisp_markNamedPortalGangsDestroyed(void)
 	}
 }
 
-/*
- * Special for sending SET commands that change GUC variables, so they go to all
- * gangs, both reader and writer
- *
- * Can not dispatch SET commands to busy reader gangs (allocated by cursors) directly because another
- * command is already in progress.
- * Cursors only allocate reader gangs, so primary writer and idle reader gangs can be dispatched to.
- */
-void
-CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
+static void
+cdbdisp_dispatchSetCommandInternal(const char *strCommand, bool cancelOnError, bool isSync)
 {
 	CdbDispatcherState *ds;
 	DispatchCommandQueryParms *pQueryParms;
@@ -302,12 +294,21 @@ CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
 	int		queryTextLength;
 	ListCell   *le;
 	ErrorData *qeError = NULL;
+	int flags = DF_NONE;
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),
 		 "CdbDispatchSetCommand for command = '%s'",
 		 strCommand);
 
-	pQueryParms = cdbdisp_buildCommandQueryParms(strCommand, DF_NONE);
+	/*
+	 * Dispatch a command with DF_SYNC_SET flag if we are performing a config
+	 * reload. This will allow us to distinguish between user-invoked SET and QD
+	 * to QE synchronization.
+	 */
+	if (isSync)
+		flags |= DF_SYNC_SET;
+
+	pQueryParms = cdbdisp_buildCommandQueryParms(strCommand, flags);
 
 	ds = cdbdisp_makeDispatcherState(false);
 
@@ -363,6 +364,30 @@ CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
 	}
 
 	cdbdisp_destroyDispatcherState(ds);
+}
+
+/*
+ * Special for sending SET commands that change GUC variables, so they go to all
+ * gangs, both reader and writer
+ *
+ * Can not dispatch SET commands to busy reader gangs (allocated by cursors) directly because another
+ * command is already in progress.
+ * Cursors only allocate reader gangs, so primary writer and idle reader gangs can be dispatched to.
+ */
+void
+CdbDispatchSetCommand(const char *strCommand, bool cancelOnError)
+{
+	return cdbdisp_dispatchSetCommandInternal(strCommand, cancelOnError, false);
+}
+
+/*
+ * Just like CdbDispatchSetCommand(), but bypasses priveleges on segments and
+ * uses a context of PGC_S_CLIENT instead of PGC_S_SESSION.
+ */
+void
+CdbDispatchSetCommandForSync(const char *strCommand)
+{
+	return cdbdisp_dispatchSetCommandInternal(strCommand, false, true);
 }
 
 /*
@@ -530,6 +555,7 @@ cdbdisp_buildCommandQueryParms(const char *strCommand, int flags)
 {
 	bool needTwoPhase = flags & DF_NEED_TWO_PHASE;
 	bool withSnapshot = flags & DF_WITH_SNAPSHOT;
+	bool syncSet = flags & DF_SYNC_SET;
 	DispatchCommandQueryParms *pQueryParms;
 
 	pQueryParms = palloc0(sizeof(*pQueryParms));
@@ -543,7 +569,7 @@ cdbdisp_buildCommandQueryParms(const char *strCommand, int flags)
 	pQueryParms->serializedDtxContextInfo =
 		qdSerializeDtxContextInfo(&pQueryParms->serializedDtxContextInfolen,
 								  withSnapshot, false,
-								  mppTxnOptions(needTwoPhase),
+								  mppTxnOptionsForSync(needTwoPhase, syncSet),
 								  "cdbdisp_dispatchCommandInternal");
 
 	return pQueryParms;

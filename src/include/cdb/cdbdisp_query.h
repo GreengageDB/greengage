@@ -33,6 +33,10 @@
  * indicate whether the command should be dispatched to qExecs along with a snapshot.
  */
 #define DF_WITH_SNAPSHOT  0x4
+/*
+ * indicate whether a SET command was an explicit QD to QE config synchronization.
+ */
+#define DF_SYNC_SET 0x8
 
 struct QueryDesc;
 struct SerializedParams;
@@ -67,6 +71,13 @@ extern void CdbDispatchPlan(struct QueryDesc *queryDesc,
  * gangs, both reader and writer
  */
 extern void CdbDispatchSetCommand(const char *strCommand, bool cancelOnError);
+
+/*
+ * The same as CdbDispatchSetCommand(), but bypasses priveleges and always uses
+ * PGC_S_CLIENT context.
+ */
+void
+CdbDispatchSetCommandForSync(const char *strCommand);
 
 /*
  * CdbDispatchCommand

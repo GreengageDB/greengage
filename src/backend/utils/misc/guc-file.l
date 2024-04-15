@@ -126,16 +126,8 @@ STRING			\'([^'\\\n]|\\.|\'\')*\'
 
 /* LCOV_EXCL_STOP */
 
-/*
- * Exported function to read and process the configuration file. The
- * parameter indicates in what context the file is being read --- either
- * postmaster startup (including standalone-backend startup) or SIGHUP.
- * All options mentioned in the configuration file are set to new values.
- * If a hard error occurs, no values will be changed.  (There can also be
- * errors that prevent just one value from being changed.)
- */
-void
-ProcessConfigFile(GucContext context)
+static void
+ProcessConfigFileInContext(GucContext context, List ** changed_gucs_out)
 {
 	int			elevel;
 	MemoryContext config_cxt;
@@ -168,7 +160,7 @@ ProcessConfigFile(GucContext context)
 	/*
 	 * Read and apply the config file.  We don't need to examine the result.
 	 */
-	(void) ProcessConfigFileInternal(context, true, elevel);
+	(void) ProcessConfigFileInternal(context, true, elevel, caller_cxt, changed_gucs_out);
 
 	/* Clean up */
 	MemoryContextSwitchTo(caller_cxt);
@@ -183,7 +175,7 @@ ProcessConfigFile(GucContext context)
  * by show_all_file_settings().
  */
 static ConfigVariable *
-ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
+ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel, MemoryContext caller_cxt, List ** changed_gucs_out)
 {
 	bool		error = false;
 	bool		applying = false;
@@ -192,6 +184,7 @@ ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
 			   *head,
 			   *tail;
 	int			i;
+	List	   *changed_gucs = NIL;
 
 	/* Parse the main config file into a list of option names and values */
 	ConfFileWithError = ConfigFileName;
@@ -404,6 +397,12 @@ ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
 				ereport(elevel,
 						(errmsg("parameter \"%s\" removed from configuration file, reset to default",
 								gconf->name)));
+			if (changed_gucs_out)
+			{
+				MemoryContext old_cxt = MemoryContextSwitchTo(caller_cxt);
+				changed_gucs = lappend(changed_gucs, gconf);
+				MemoryContextSwitchTo(old_cxt);
+			}
 		}
 	}
 
@@ -472,6 +471,17 @@ ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
 									item->name, item->value)));
 			}
 			item->applied = true;
+
+			if (changed_gucs_out)
+			{
+				struct config_generic *gconf = find_option(item->name, false, elevel);
+				if (gconf != NULL)
+				{
+					MemoryContext old_cxt = MemoryContextSwitchTo(caller_cxt);
+					changed_gucs = lappend(changed_gucs, gconf);
+					MemoryContextSwitchTo(old_cxt);
+				}
+			}
 		}
 		else if (scres == 0)
 		{
@@ -524,8 +534,39 @@ bail_out:
 							ConfFileWithError)));
 	}
 
+	if (changed_gucs_out)
+		*changed_gucs_out = changed_gucs;
+	else
+		Assert(changed_gucs == NIL);
+
 	/* Successful or otherwise, return the collected data list */
 	return head;
+}
+
+/*
+ * Exported function to read and process the configuration file. The
+ * parameter indicates in what context the file is being read --- either
+ * postmaster startup (including standalone-backend startup) or SIGHUP.
+ * All options mentioned in the configuration file are set to new values.
+ * If a hard error occurs, no values will be changed.  (There can also be
+ * errors that prevent just one value from being changed.)
+ */
+void
+ProcessConfigFile(GucContext context)
+{
+	ProcessConfigFileInContext(context, NULL);
+}
+
+/*
+ * This works the same way as the ProcessConfigFile(), except that it returns a
+ * list of options (config_generic *) that were changed.
+ */
+List *
+ProcessConfigFileForSync(GucContext context)
+{
+	List * changed_gucs;
+	ProcessConfigFileInContext(context, &changed_gucs);
+	return changed_gucs;
 }
 
 /*

@@ -236,7 +236,9 @@ static double defunct_double = 0;
 
 /* Private functions in guc-file.l that need to be called from guc.c */
 static ConfigVariable *ProcessConfigFileInternal(GucContext context,
-												 bool applySettings, int elevel);
+												 bool applySettings, int elevel,
+												 MemoryContext caller_cxt,
+												 List ** changed_gucs);
 
 
 /*
@@ -8463,12 +8465,36 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 			}
 
 			SIMPLE_FAULT_INJECTOR("set_variable_fault");
-			(void) set_config_option(stmt->name,
-									 ExtractSetVariableArgs(stmt),
-									 (superuser() ? PGC_SUSET : PGC_USERSET),
-									 PGC_S_SESSION,
-									 action, true, 0, false);
-			DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
+
+			/*
+			 * If this is a synchronization SET, previous values from the
+			 * startup packet should be overwritten. We can only get here if we
+			 * are a QE.
+			 */
+			if (isMppTxOptions_SynchronizationSet(QEDtxContextInfo.distributedTxnOptions))
+			{
+				(void) set_config_option(stmt->name,
+										 ExtractSetVariableArgs(stmt),
+										 PGC_SIGHUP,
+										 PGC_S_CLIENT,
+										 GUC_ACTION_SET,
+										 true,
+										 0,
+										 false);
+			}
+			else
+			{
+				(void) set_config_option(stmt->name,
+										 ExtractSetVariableArgs(stmt),
+										 (superuser() ? PGC_SUSET : PGC_USERSET),
+										 PGC_S_SESSION,
+										 action,
+										 true,
+										 0,
+										 false);
+
+				DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
+			}
 			break;
 		case VAR_SET_MULTI:
 
@@ -9951,7 +9977,7 @@ show_all_file_settings(PG_FUNCTION_ARGS)
 						"allowed in this context")));
 
 	/* Scan the config files using current context as workspace */
-	conf = ProcessConfigFileInternal(PGC_SIGHUP, false, DEBUG3);
+	conf = ProcessConfigFileInternal(PGC_SIGHUP, false, DEBUG3, NULL, NULL);
 
 	/* Switch into long-lived context to construct returned data structures */
 	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;

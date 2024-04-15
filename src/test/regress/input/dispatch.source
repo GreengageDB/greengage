@@ -590,3 +590,86 @@ reset optimizer;
 drop function cleanupAllGangs();
 drop table t_create_gang_time;
 
+--
+-- Backend process GUCs marked as GUC_GPDB_NEED_SYNC are overwritten by
+-- coordinator upon receiving a new connection.
+--
+-- GUCs that were changed in the configuration file of the QD should be re-sent
+-- to segments on gpstop -u, if GUC_GPDB_NEED_SYNC is present in the flags.
+--
+
+-- start_ignore
+DROP ROLE IF EXISTS dispatch_test_user2;
+-- end_ignore
+
+-- Use a separate user without any priveleges to catch possible context issues.
+CREATE ROLE dispatch_test_user2 NOSUPERUSER;
+SET SESSION AUTHORIZATION dispatch_test_user2;
+
+CREATE OR REPLACE FUNCTION show_on_segments(show_name text)
+RETURNS table (guc_name text, guc_setting text)
+EXECUTE ON ALL SEGMENTS AS $$
+BEGIN
+	RETURN QUERY SELECT name, setting FROM pg_settings WHERE show_name = name;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Explicitly set GUCs through gpconfig, then run gpstop -u.
+--
+-- log_min_messages has GUC_GPDB_NEED_SYNC in flags, so it should be
+-- synchronized across the segments, and a context of PGC_SUSET, that it should
+-- not be possible to change it without superuser priveleges.
+--
+-- constraint_exclusion is not synchronized, so it should remain unchanged on
+-- segments.
+
+--start_ignore
+-- Set default values and reconnect.
+\!gpconfig -c log_min_messages -v 'warning'
+\!gpconfig -c constraint_exclusion -v 'on'
+\!gpstop -u
+--end_ignore
+
+-- PGC_SUSET, we don't have enough priveleges.
+RESET log_min_messages;
+-- Successfully reset.
+RESET constraint_exclusion;
+
+SHOW log_min_messages;
+SELECT * from show_on_segments('log_min_messages');
+
+SHOW constraint_exclusion;
+SELECT * from show_on_segments('constraint_exclusion');
+
+--start_ignore
+\!gpconfig -c log_min_messages -v 'warning' -m 'notice'
+\!gpconfig -c constraint_exclusion -v 'off' -m 'partition'
+\!gpstop -u
+--end_ignore
+
+-- Should be 'notice', synchronized with segments.
+SHOW log_min_messages;
+SELECT * from show_on_segments('log_min_messages');
+
+-- Should be 'partition' on QD, 'off' on QEs.
+SHOW constraint_exclusion;
+SELECT * from show_on_segments('constraint_exclusion');
+
+--start_ignore
+\!gpconfig -r log_min_messages
+\!gpconfig -r constraint_exclusion
+\!gpstop -u
+--end_ignore
+
+-- After reset, QD and QE should hold the default value, 'warning'.
+SHOW log_min_messages;
+SELECT * from show_on_segments('log_min_messages');
+
+-- After reset, QD and QE should hold the default value, 'on'.
+SHOW constraint_exclusion;
+SELECT * from show_on_segments('constraint_exclusion');
+
+RESET SESSION AUTHORIZATION;
+
+DROP FUNCTION show_on_segments(show_name text);
+DROP ROLE dispatch_test_user2;

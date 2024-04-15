@@ -47,6 +47,7 @@
 #include "utils/builtins.h"
 #include "utils/gdd.h"
 #include "utils/gp_alloc.h"
+#include "utils/guc.h"
 #include "utils/guc_tables.h"
 #include "utils/inval.h"
 #include "utils/resscheduler.h"
@@ -5364,8 +5365,8 @@ check_gp_workfile_compression(bool *newval, void **extra, GucSource source)
 	return true;
 }
 
-void
-DispatchSyncPGVariable(struct config_generic * gconfig)
+static void
+dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_explicit)
 {
 	StringInfoData buffer;
 
@@ -5465,5 +5466,28 @@ DispatchSyncPGVariable(struct config_generic * gconfig)
 		}
 	}
 
-	CdbDispatchSetCommand(buffer.data, false);
+	if (is_explicit)
+		CdbDispatchSetCommandForSync(buffer.data);
+	else
+		CdbDispatchSetCommand(buffer.data, false);
+}
+
+/*
+ * Dispatches a regular SET command to all reader and writer gangs.
+ */
+void
+DispatchSyncPGVariable(struct config_generic * gconfig)
+{
+	return dispatch_sync_pg_variable_internal(gconfig, false);
+}
+
+/*
+ * This function behaves like DispatchSyncPGVariable(), but also sets the GUC
+ * source to PGC_CLIENT, just like we do in ProcessStartupPacket(), and
+ * bypasses GUC contexts up to PGC_SIGHUP.
+ */
+void
+DispatchSyncPGVariableExplicit(struct config_generic * gconfig)
+{
+	return dispatch_sync_pg_variable_internal(gconfig, true);
 }
