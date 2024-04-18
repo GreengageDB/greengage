@@ -2594,6 +2594,14 @@ InitializeLDAPConnection(Port *port, LDAP **ldap)
 		return STATUS_ERROR;
 	}
 
+	if ((r = ldap_set_option(*ldap, LDAP_OPT_RESTART, LDAP_OPT_ON)) != LDAP_SUCCESS)
+	{
+		ldap_unbind(*ldap);
+		ereport(LOG,
+				(errmsg("could not set LDAP restart: %s", ldap_err2string(r))));
+		return STATUS_ERROR;
+	}
+
 	if (port->hba->ldaptls)
 	{
 #ifndef WIN32

@@ -31,3 +31,5 @@ if test "$SUN_STUDIO_CC" = "yes" ; then
     ;;
   esac
 fi
+
+EXTRA_LDAP_LIBS="-llber"
