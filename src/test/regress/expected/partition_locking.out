@@ -599,3 +599,173 @@ select * from locktest_segments where coalesce not like 'gp_%' and coalesce not 
 (40 rows)
 
 commit;
+-- Test locking behaviour for SELECT from root partition. The locks are
+-- acquired when gp_keep_partition_children_locks is on from both planner and
+-- ORCA. In case of ORCA the locks are taken only on statically selected leafs
+-- or on all leafs otherwise similar to planner.
+create table t_part_multi_heap (a int, b int, c int)
+distributed randomly
+partition by range(b)
+  subpartition by list(c) subpartition template
+  (
+    values(0),
+    values(1),
+    values(2)
+  )
+(start(0) end(2) every(1));
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_1" for table "t_part_multi_heap"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_1_2_prt_1" for table "t_part_multi_heap_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_1_2_prt_2" for table "t_part_multi_heap_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_1_2_prt_3" for table "t_part_multi_heap_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_2" for table "t_part_multi_heap"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_2_2_prt_1" for table "t_part_multi_heap_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_2_2_prt_2" for table "t_part_multi_heap_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "t_part_multi_heap_1_prt_2_2_prt_3" for table "t_part_multi_heap_1_prt_2"
+-- ORCA takes locks on selected leafs and planner takes on every leaf partition
+begin;
+select * from t_part_multi_heap where c=2;
+ a | b | c 
+---+---+---
+(0 rows)
+
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+             coalesce              |      mode       | locktype |  node  
+-----------------------------------+-----------------+----------+--------
+ t_part_multi_heap                 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_3 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_3 | AccessShareLock | relation | master
+(7 rows)
+
+commit;
+-- ORCA and planner take locks on all leafs.
+begin;
+select * from t_part_multi_heap;
+ a | b | c 
+---+---+---
+(0 rows)
+
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+             coalesce              |      mode       | locktype |  node  
+-----------------------------------+-----------------+----------+--------
+ t_part_multi_heap                 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_3 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_3 | AccessShareLock | relation | master
+(7 rows)
+
+commit;
+-- The same behaviour. Testing that ORCA could identify the range table inside
+-- the cte.
+begin;
+with cte as (select * from t_part_multi_heap) select * from cte;
+ a | b | c 
+---+---+---
+(0 rows)
+
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+             coalesce              |      mode       | locktype |  node  
+-----------------------------------+-----------------+----------+--------
+ t_part_multi_heap                 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_3 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_3 | AccessShareLock | relation | master
+(7 rows)
+
+commit;
+-- The same behaviour. Testing that ORCA could identify the range table inside
+-- the SubLink.
+create table bar (p int) distributed by (p);
+begin;
+select bar.p from bar where bar.p in (select a from t_part_multi_heap);
+ p 
+---
+(0 rows)
+
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+             coalesce              |      mode       | locktype |  node  
+-----------------------------------+-----------------+----------+--------
+ bar                               | AccessShareLock | relation | master
+ t_part_multi_heap                 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_3 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_1 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_2 | AccessShareLock | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_3 | AccessShareLock | relation | master
+(8 rows)
+
+commit;
+drop table bar;
+-- Test ORCA taking the locks in case of Partition Selector for join.
+create table t_list_multi (a int, b int, c timestamp) distributed by (a)
+partition by list(b)
+  subpartition by list(c) 
+  (partition part1 values (1)
+    (subpartition s_part1 values ('2020-06-01', '2020-07-01', '2020-08-01'),
+     subpartition s_part2 values ('2020-09-01', '2020-10-01', '2020-11-01')));
+NOTICE:  CREATE TABLE will create partition "t_list_multi_1_prt_part1" for table "t_list_multi"
+NOTICE:  CREATE TABLE will create partition "t_list_multi_1_prt_part1_2_prt_s_part1" for table "t_list_multi_1_prt_part1"
+NOTICE:  CREATE TABLE will create partition "t_list_multi_1_prt_part1_2_prt_s_part2" for table "t_list_multi_1_prt_part1"
+create table t_inner_to_join (b int, c date) distributed by (c);
+begin;
+select count(*) from (
+    select distinct c
+    from t_inner_to_join
+    where c = '2020-07-01'
+) tf, t_list_multi
+where t_list_multi.c = tf.c;
+ count 
+-------
+     0
+(1 row)
+
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+                coalesce                |      mode       | locktype |  node  
+----------------------------------------+-----------------+----------+--------
+ t_inner_to_join                        | AccessShareLock | relation | master
+ t_list_multi                           | AccessShareLock | relation | master
+ t_list_multi_1_prt_part1_2_prt_s_part1 | AccessShareLock | relation | master
+ t_list_multi_1_prt_part1_2_prt_s_part2 | AccessShareLock | relation | master
+(4 rows)
+
+commit;
+drop table t_inner_to_join;
+drop table t_list_multi;
+-- Test SELECT FOR UPDATE for acquiring RowShareLock lock on QD
+begin;
+select * from t_part_multi_heap where c=2 for update;
+ a | b | c 
+---+---+---
+(0 rows)
+
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+             coalesce              |      mode       | locktype |  node  
+-----------------------------------+-----------------+----------+--------
+ t_part_multi_heap                 | AccessShareLock | relation | master
+ t_part_multi_heap                 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_1 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_1 | RowShareLock    | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_2 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_2 | RowShareLock    | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_3 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_1_2_prt_3 | RowShareLock    | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_1 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_1 | RowShareLock    | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_2 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_2 | RowShareLock    | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_3 | ExclusiveLock   | relation | master
+ t_part_multi_heap_1_prt_2_2_prt_3 | RowShareLock    | relation | master
+(14 rows)
+
+commit;
+drop table t_part_multi_heap;

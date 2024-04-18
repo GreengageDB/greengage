@@ -162,7 +162,7 @@ bool		gp_log_suboverflow_statement = false;
 bool        gp_use_synchronize_seqscans_catalog_vacuum_full = false;
 
 bool		log_dispatch_stats = false;
-bool		gp_keep_partition_children_locks = false;
+bool		gp_keep_partition_children_locks = true;
 
 int			explain_memory_verbosity = 0;
 char	   *memory_profiler_run_id = "none";
@@ -3361,10 +3361,11 @@ struct config_bool ConfigureNamesBool_gp[] =
 	{
 		{"gp_keep_partition_children_locks", PGC_USERSET, QUERY_TUNING_METHOD,
 		 gettext_noop("Keep locks on partition children during planning"),
-		 NULL
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
 		},
 		&gp_keep_partition_children_locks,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 

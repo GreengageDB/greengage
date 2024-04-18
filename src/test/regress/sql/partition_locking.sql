@@ -157,3 +157,78 @@ drop table partlockt;
 select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
 commit;
+
+-- Test locking behaviour for SELECT from root partition. The locks are
+-- acquired when gp_keep_partition_children_locks is on from both planner and
+-- ORCA. In case of ORCA the locks are taken only on statically selected leafs
+-- or on all leafs otherwise similar to planner.
+create table t_part_multi_heap (a int, b int, c int)
+distributed randomly
+partition by range(b)
+  subpartition by list(c) subpartition template
+  (
+    values(0),
+    values(1),
+    values(2)
+  )
+(start(0) end(2) every(1));
+
+-- ORCA takes locks on selected leafs and planner takes on every leaf partition
+begin;
+select * from t_part_multi_heap where c=2;
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+commit;
+
+-- ORCA and planner take locks on all leafs.
+begin;
+select * from t_part_multi_heap;
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+commit;
+
+-- The same behaviour. Testing that ORCA could identify the range table inside
+-- the cte.
+begin;
+with cte as (select * from t_part_multi_heap) select * from cte;
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+commit;
+
+-- The same behaviour. Testing that ORCA could identify the range table inside
+-- the SubLink.
+create table bar (p int) distributed by (p);
+
+begin;
+select bar.p from bar where bar.p in (select a from t_part_multi_heap);
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+commit;
+
+drop table bar;
+
+-- Test ORCA taking the locks in case of Partition Selector for join.
+create table t_list_multi (a int, b int, c timestamp) distributed by (a)
+partition by list(b)
+  subpartition by list(c) 
+  (partition part1 values (1)
+    (subpartition s_part1 values ('2020-06-01', '2020-07-01', '2020-08-01'),
+     subpartition s_part2 values ('2020-09-01', '2020-10-01', '2020-11-01')));
+create table t_inner_to_join (b int, c date) distributed by (c);
+
+begin;
+select count(*) from (
+    select distinct c
+    from t_inner_to_join
+    where c = '2020-07-01'
+) tf, t_list_multi
+where t_list_multi.c = tf.c;
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+commit;
+
+drop table t_inner_to_join;
+drop table t_list_multi;
+
+-- Test SELECT FOR UPDATE for acquiring RowShareLock lock on QD
+begin;
+select * from t_part_multi_heap where c=2 for update;
+select * from locktest_master where coalesce not like 'gp_%' and coalesce not like 'pg_%';
+commit;
+
+drop table t_part_multi_heap;
