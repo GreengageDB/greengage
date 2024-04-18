@@ -2790,7 +2790,7 @@ gpdb::GetParseRowmark(Query *query, Index rtindex)
 {
 	GP_WRAP_START;
 	{
-		get_parse_rowmark(query, rtindex);
+		return get_parse_rowmark(query, rtindex);
 	}
 	GP_WRAP_END;
 	return nullptr;
