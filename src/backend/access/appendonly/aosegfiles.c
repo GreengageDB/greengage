@@ -49,6 +49,16 @@
 #include "utils/numeric.h"
 #include "utils/visibility_summary.h"
 
+#define VALIDATE_GP_ROLE() \
+	do \
+	{ \
+		if (Gp_role != GP_ROLE_DISPATCH) \
+			ereport(ERROR, \
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), \
+				 	 errmsg("function '%s' must be executed on the dispatcher", \
+							PG_FUNCNAME_MACRO))); \
+	} while (0)
+
 static float8 aorow_compression_ratio_internal(Relation parentrel);
 static void UpdateFileSegInfo_internal(Relation parentrel,
 						   int segno,
@@ -1506,7 +1516,7 @@ gp_update_ao_master_stats(PG_FUNCTION_ARGS)
 	int64		result;
 	Snapshot	appendOnlyMetaDataSnapshot;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
+	VALIDATE_GP_ROLE();
 
 	/* open the parent (main) relation */
 	parentrel = heap_open(relid, RowExclusiveLock);
@@ -1559,7 +1569,7 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 	Relation	aosegrel;
 	int			ret;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
+	VALIDATE_GP_ROLE();
 
 	/*
 	 * stuff done only on the first call of the function. In here we execute
@@ -1738,7 +1748,7 @@ get_ao_compression_ratio(PG_FUNCTION_ARGS)
 	Relation	parentrel;
 	float8		result;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
+	VALIDATE_GP_ROLE();
 
 	/* open the parent (main) relation */
 	parentrel = heap_open(relid, AccessShareLock);
@@ -1771,8 +1781,6 @@ aorow_compression_ratio_internal(Relation parentrel)
 										 * available" */
 	Oid			segrelid = InvalidOid;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
-
 	GetAppendOnlyEntryAuxOids(RelationGetRelid(parentrel), NULL,
 							  &segrelid,
 							  NULL, NULL, NULL, NULL);
@@ -1783,16 +1791,10 @@ aorow_compression_ratio_internal(Relation parentrel)
 	 */
 	aosegrel = heap_open(segrelid, AccessShareLock);
 	initStringInfo(&sqlstmt);
-	if (Gp_role == GP_ROLE_DISPATCH)
-		appendStringInfo(&sqlstmt, "select sum(eof), sum(eofuncompressed) "
-						 "from gp_dist_random('%s.%s')",
-						 get_namespace_name(RelationGetNamespace(aosegrel)),
-						 RelationGetRelationName(aosegrel));
-	else
-		appendStringInfo(&sqlstmt, "select eof, eofuncompressed "
-						 "from %s.%s",
-						 get_namespace_name(RelationGetNamespace(aosegrel)),
-						 RelationGetRelationName(aosegrel));
+	appendStringInfo(&sqlstmt, "select sum(eof), sum(eofuncompressed) "
+					 "from gp_dist_random('%s.%s')",
+					 get_namespace_name(RelationGetNamespace(aosegrel)),
+					 RelationGetRelationName(aosegrel));
 
 	heap_close(aosegrel, AccessShareLock);
 
