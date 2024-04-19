@@ -880,3 +880,38 @@ insert into fix_ao_truncate_last_sequence select 1, 1 from generate_series(1, 5)
 select count(*) from fix_ao_truncate_last_sequence;
 abort;
 
+-- Test AO functions with execution location on dispatcher.
+-- start_ignore
+drop table if exists t1;
+drop table if exists t2;
+drop table if exists tables_list;
+-- end_ignore
+
+create table t1 (a int) with (appendoptimized=true, orientation=row);
+create table t2 (a int) with (appendoptimized=true, orientation=column);
+create table tables_list (tname text);
+insert into tables_list values ('t1'), ('t2');
+
+-- Queries below should fail with a proper error message.
+
+-- It's possible that expected error cancels query on the some segment too early for it, after it started transaction
+-- but before it executed function and issued an error. In this case a warning is issued which we can ignore.
+-- start_matchignore
+-- m/WARNING:  ignoring query cancel request for synchronous replication to ensure cluster consistency.*\n/
+-- m/DETAIL:  The transaction has already changed locally, it has to be replicated to standby.*\n/
+-- end_matchignore
+
+select get_ao_compression_ratio(tname) from tables_list;
+select get_ao_distribution(tname) from tables_list;
+
+-- Query below is an example how to get the result
+-- intended by the failing query above.
+explain (costs off) select get_ao_compression_ratio(tname) from
+	unnest(array(select tname from tables_list)) as tname;
+
+select get_ao_compression_ratio(tname) from
+	unnest(array(select tname from tables_list)) as tname;
+
+drop table t1;
+drop table t2;
+drop table tables_list;
