@@ -2321,9 +2321,6 @@ CopyRelationAcls(Oid srcId, Oid destId)
 		bool		nulls[Natts_pg_attribute];
 		bool		replaces[Natts_pg_attribute];
 
-		if (attSrcForm->attisdropped)
-			continue;
-
 		aclDatum = SysCacheGetAttr(ATTNUM, attSrcTuple, Anum_pg_attribute_attacl,
 								   &isNull);
 		if (isNull)
