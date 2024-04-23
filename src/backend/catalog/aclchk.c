@@ -6574,8 +6574,6 @@ CopyRelationAcls(Oid srcId, Oid destId)
 	int			nnewmembers;
 	Oid		   *newmembers;
 	Oid			ownerId;
-	CatCList   *attlist;
-	int			i;
 
 	pg_class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	pg_attribute_rel = heap_open(AttributeRelationId, RowExclusiveLock);
@@ -6646,24 +6644,51 @@ CopyRelationAcls(Oid srcId, Oid destId)
 	/*
 	 * Now copy column-level privileges.
 	 */
-	attlist = SearchSysCacheList1(ATTNUM, srcId);
-	for (i = 0; i < attlist->n_members; i++)
+	CatCList *srcAttList = SearchSysCacheList1(ATTNUM, srcId);
+	CatCList *destAttList = SearchSysCacheList1(ATTNUM, destId);
+	int dest_i = 0;
+	int src_i = 0;
+	while (src_i < srcAttList->n_members)
 	{
-		HeapTuple	attSrcTuple = &attlist->members[i]->tuple;
+		HeapTuple	attSrcTuple = &srcAttList->members[src_i]->tuple;
 		Form_pg_attribute attSrcForm = (Form_pg_attribute) GETSTRUCT(attSrcTuple);
-		AttrNumber	attnum = attSrcForm->attnum;
-		HeapTuple	attDestTuple;
 		Datum		values[Natts_pg_attribute];
 		bool		nulls[Natts_pg_attribute];
 		bool		replaces[Natts_pg_attribute];
+
+		if (attSrcForm->attisdropped)
+		{
+			// advance only src index for a dropped column
+			src_i++;
+			continue;
+		}
+
+		Assert(dest_i < destAttList->n_members);
+		HeapTuple attDestTuple = &destAttList->members[dest_i]->tuple;
+		Form_pg_attribute attDestForm = (Form_pg_attribute) GETSTRUCT(attDestTuple);
+
+		// check if we need to align indexes for system columns,
+		// because src and dest may have different number of system columns
+		if (attSrcForm->attnum < 0 && attSrcForm->attnum < attDestForm->attnum)
+		{
+			src_i++;
+			continue;
+		}
+		if (attDestForm->attnum < 0 && attDestForm->attnum < attSrcForm->attnum)
+		{
+			dest_i++;
+			continue;
+		}
+
+		// advance both indexes
+		dest_i++;
+		src_i++;
 
 		aclDatum = SysCacheGetAttr(ATTNUM, attSrcTuple, Anum_pg_attribute_attacl,
 								   &isNull);
 		if (isNull)
 			continue;
 		acl = DatumGetAclPCopy(aclDatum);
-
-		attDestTuple = SearchSysCache2(ATTNUM, destId, attnum);
 
 		(void) SysCacheGetAttr(ATTNUM, attDestTuple, Anum_pg_attribute_attacl,
 								   &isNull);
@@ -6694,14 +6719,13 @@ CopyRelationAcls(Oid srcId, Oid destId)
 		ownerId = pg_class_tuple->relowner;
 		nnewmembers = aclmembers(acl, &newmembers);
 
-		updateAclDependencies(RelationRelationId, destId, attnum,
+		updateAclDependencies(RelationRelationId, destId, attDestForm->attnum,
 							  ownerId,
 							  0, NULL,
 							  nnewmembers, newmembers);
-
-		ReleaseSysCache(attDestTuple);
 	}
-	ReleaseSysCacheList(attlist);
+	ReleaseSysCacheList(srcAttList);
+	ReleaseSysCacheList(destAttList);
 
 	ReleaseSysCache(srcTuple);
 	ReleaseSysCache(destTuple);
