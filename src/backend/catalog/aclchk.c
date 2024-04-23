@@ -2240,8 +2240,6 @@ CopyRelationAcls(Oid srcId, Oid destId)
 	int			nnewmembers;
 	Oid		   *newmembers;
 	Oid			ownerId;
-	CatCList   *attlist;
-	int			i;
 
 	pg_class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 	pg_attribute_rel = heap_open(AttributeRelationId, RowExclusiveLock);
@@ -2310,24 +2308,28 @@ CopyRelationAcls(Oid srcId, Oid destId)
 	/*
 	 * Now copy column-level privileges.
 	 */
-	attlist = SearchSysCacheList1(ATTNUM, srcId);
-	for (i = 0; i < attlist->n_members; i++)
+	CatCList *srcAttList = SearchSysCacheList1(ATTNUM, srcId);
+	CatCList *destAttList = SearchSysCacheList1(ATTNUM, destId);
+	int dest_i = 0;
+	for (int src_i = 0; src_i < srcAttList->n_members; src_i++)
 	{
-		HeapTuple	attSrcTuple = &attlist->members[i]->tuple;
+		HeapTuple	attSrcTuple = &srcAttList->members[src_i]->tuple;
 		Form_pg_attribute attSrcForm = (Form_pg_attribute) GETSTRUCT(attSrcTuple);
-		AttrNumber	attnum = attSrcForm->attnum;
-		HeapTuple	attDestTuple;
 		Datum		values[Natts_pg_attribute];
 		bool		nulls[Natts_pg_attribute];
 		bool		replaces[Natts_pg_attribute];
+
+		if (attSrcForm->attisdropped)
+			continue;
+
+		Assert(dest_i < destAttList->n_members);
+		HeapTuple attDestTuple = &destAttList->members[dest_i++]->tuple;
 
 		aclDatum = SysCacheGetAttr(ATTNUM, attSrcTuple, Anum_pg_attribute_attacl,
 								   &isNull);
 		if (isNull)
 			continue;
 		acl = DatumGetAclPCopy(aclDatum);
-
-		attDestTuple = SearchSysCache2(ATTNUM, destId, attnum);
 
 		(void) SysCacheGetAttr(ATTNUM, attDestTuple, Anum_pg_attribute_attacl,
 								   &isNull);
@@ -2357,15 +2359,15 @@ CopyRelationAcls(Oid srcId, Oid destId)
 		/* Update the shared dependency ACL info */
 		ownerId = pg_class_tuple->relowner;
 		nnewmembers = aclmembers(acl, &newmembers);
+		Form_pg_attribute attDestForm = (Form_pg_attribute) GETSTRUCT(attDestTuple);
 
-		updateAclDependencies(RelationRelationId, destId, attnum,
+		updateAclDependencies(RelationRelationId, destId, attDestForm->attnum,
 							  ownerId,
 							  0, NULL,
 							  nnewmembers, newmembers);
-
-		ReleaseSysCache(attDestTuple);
 	}
-	ReleaseSysCacheList(attlist);
+	ReleaseSysCacheList(srcAttList);
+	ReleaseSysCacheList(destAttList);
 
 	ReleaseSysCache(srcTuple);
 	ReleaseSysCache(destTuple);

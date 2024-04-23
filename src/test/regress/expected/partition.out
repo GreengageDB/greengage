@@ -9337,3 +9337,28 @@ DISTRIBUTED BY (a) PARTITION BY LIST(b, c)
 (
   PARTITION part1 VALUES(('(1,1)', 1))
 );
+-- test copying ACLs on columns when adding a new partition if the table has
+-- dropped columns.
+-- start_ignore
+-- end_ignore
+CREATE ROLE user_prt_acl;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+CREATE TABLE t_part_acl (b INT, c INT, d INT, e INT) DISTRIBUTED BY (b) PARTITION BY RANGE (c)
+    (PARTITION "10" START ( 1) INCLUSIVE END (10) EXCLUSIVE,
+     PARTITION "20" START (11) INCLUSIVE END (20) EXCLUSIVE);
+NOTICE:  CREATE TABLE will create partition "t_part_acl_1_prt_10" for table "t_part_acl"
+NOTICE:  CREATE TABLE will create partition "t_part_acl_1_prt_20" for table "t_part_acl"
+GRANT SELECT(d) ON t_part_acl TO user_prt_acl;
+GRANT UPDATE(e) ON t_part_acl TO user_prt_acl;
+ALTER TABLE t_part_acl DROP COLUMN d;
+ALTER TABLE t_part_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLUSIVE;
+NOTICE:  CREATE TABLE will create partition "t_part_acl_1_prt_30" for table "t_part_acl"
+-- checking that we have copied the correct ACL.
+SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_acl_1_prt_30'::regclass AND attacl IS NOT NULL;
+ attname |          attacl          
+---------+--------------------------
+ e       | {user_prt_acl=w/gpadmin}
+(1 row)
+
+DROP TABLE t_part_acl;
+DROP ROLE user_prt_acl;
