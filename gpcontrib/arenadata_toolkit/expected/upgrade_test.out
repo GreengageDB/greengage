@@ -169,7 +169,12 @@ ORDER BY 1;
  1.3: create the latest check
  1.3: db_files_history_backup check
  1.3: only alter check
-(24 rows)
+ 1.4: alter and create_tables check
+ 1.4: alter, create_tables and collect_table_stats check
+ 1.4: column tablespace_location check
+ 1.4: create the latest check
+ 1.4: only alter check
+(29 rows)
 
 -- Cleanup
 DROP FUNCTION do_upgrade_test_for_arenadata_toolkit(TEXT);
