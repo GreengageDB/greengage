@@ -1,3 +1,14 @@
+2024-04-25 - Version 2.7.0
+
+This release is maintenance a release to fix a problem with pgBackRest backup.
+
+  - Change location of the pg_password_history file that used to be stored in
+    the PGDATA/global/ subdirectory and now saved directly in the PGDATA. The
+    old location was generating a checksum warning by pgBackRest.  Thanks to
+    glushakov for the report.
+
+Backward compatibility is preserved, the file will be relocated automatically.
+
 2024-01-30 - Version 2.6.0
 
 This release is the a quick maintenance release to fix path of pg_config
