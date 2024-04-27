@@ -244,4 +244,11 @@ int transform_content_paths(struct transform* tr);
 char* transform_safe(struct transform* tr);
 regex_t* transform_saferegex(struct transform* tr);
 
+
+/*
+ * validate transformation name from options
+ */
+
+const char* validate_transform_opt(struct transform* trlist, const char* name);
+
 #endif
