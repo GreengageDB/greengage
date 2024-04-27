@@ -10,6 +10,7 @@ SYNOPSIS
 gpfdist [-d <directory>] [-p <http_port>] [-l <log_file>] [-t <timeout>] 
 [-S] [-w <time>] [-v | -V] [-m <max_length>] [--ssl <certificate_path>]
 [-k <seconds>] [--compress] [--multi_thread <number_of_threads>]
+[-I <input_transformation_name>] [-O <output_transformation_name>]
 
 gpfdist [-? | --help] | --version
 
@@ -168,6 +169,18 @@ OPTIONS
  Note: The flag '--multi_thread' signifies enabling compression. It is permitted 
  to use this flag in conjunction with '--compress'. However, when used 
  together, the effect is equivalent to using '--multi_thread' by itself.
+
+
+-I <input_transformation_name> 
+
+ Sets the default input transformation, which will be applied to all files 
+ to read. Not used if transformation is set at table level. 
+ No transformation is applied by default. 
+
+
+-O <output_transformation_name> 
+
+ Same as -I, but for output transformation. 
 
 
 -v (verbose) 
