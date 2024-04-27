@@ -11,6 +11,7 @@ gpfdist [-d <directory>] [-p <http_port>] [-l <log_file>] [-t <timeout>]
 [-S] [-w <time>] [-v | -V] [-m <max_length>] [--ssl <certificate_path>]
 [--compress] [--multi_thread <number_of_threads>] [-k <seconds>]
 [--ssl_verify_peer <on/off>]
+[-I <input_transformation_name>] [-O <output_transformation_name>]
 
 gpfdist [-? | --help] | --version
 
@@ -181,6 +182,19 @@ OPTIONS
   certification directory. If the flag is 'off', gpfdist will not check the 
   identity of clients, and it doesn't matter whether the CA certification file 
   exists on the gpfdist side. 
+
+
+-I <input_transformation_name> 
+
+ Sets the default input transformation, which will be applied to all files 
+ to read. Not used if transformation is set at table level. 
+ No transformation is applied by default. 
+
+
+-O <output_transformation_name> 
+
+ Same as -I, but for output transformation. 
+
 
 -v (verbose) 
 

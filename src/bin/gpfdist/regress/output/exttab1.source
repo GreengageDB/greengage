@@ -823,6 +823,96 @@ select * from exttab1_gpfdist_stop;
 
 -- end_ignore
 -- End Test external table sreh output in gp_read_error_log() print rawbytes with \0 in it.
+--
+-- Test default transformation
+--
+-- The server runs with default transformation of catfile_double which doubles
+-- file content. First server is for input flag, second is for output.
+CREATE EXTERNAL WEB TABLE gpfdist_transform_start1 (x text)
+execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data/ -c @abs_srcdir@/data/catfile.yml -I catfile_double </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:7070 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
+on SEGMENT 0
+FORMAT 'text' (delimiter '|');
+CREATE EXTERNAL WEB TABLE gpfdist_transform_start2 (x text)
+execute E'((@bindir@/gpfdist -p 7080 -d @abs_srcdir@/data/ -c @abs_srcdir@/data/catfile.yml -O catfile_double </dev/null >/dev/null 2>&1 &); for i in `seq 1 30`; do curl 127.0.0.1:7080 >/dev/null 2>&1 && break; sleep 1; done; echo "starting...") '
+on SEGMENT 0
+FORMAT 'text' (delimiter '|');
+-- These tables will use default transformation as there is no given in url
+CREATE EXTERNAL TABLE ext_transform_implicit (a text)
+location('gpfdist://@hostname@:7070/transform_data.tbl') format 'text';
+CREATE WRITABLE EXTERNAL TABLE ext_w_transform_implicit (a text)
+location('gpfdist://@hostname@:7080/transform_data.tbl') format 'text';
+-- These tables will use catfile transformation, which overrides default one
+CREATE EXTERNAL TABLE ext_transform_explicit (a text)
+location('gpfdist://@hostname@:7070/transform_data.tbl#transform=catfile') format 'text';
+CREATE WRITABLE EXTERNAL TABLE ext_w_transform_explicit (a text)
+location('gpfdist://@hostname@:7080/transform_data.tbl#transform=catfile') format 'text';
+-- These tables will not use any transformation as there is no flag given
+CREATE EXTERNAL TABLE ext_transform_free (a text)
+location('gpfdist://@hostname@:7080/transform_data.tbl') format 'text';
+CREATE WRITABLE EXTERNAL TABLE ext_w_transform_free (a text)
+location('gpfdist://@hostname@:7070/transform_data.tbl') format 'text';
+-- start_ignore
+-- end_ignore
+-- gpfdist still works if only one default transformation is given (input or output)
+insert into ext_w_transform_free values(1);
+select count(*) from ext_transform_free;
+ count 
+-------
+     1
+(1 row)
+
+-- writing data to gpfdist with default transformation doubles values
+insert into ext_w_transform_implicit values(2);
+select count(*) from ext_transform_free;
+ count 
+-------
+     3
+(1 row)
+
+-- writing data with #transform overrides default transformation
+insert into ext_w_transform_explicit values(3);
+select count(*) from ext_transform_free;
+ count 
+-------
+     4
+(1 row)
+
+-- reading from gpfdist with default transformation doubles values
+select count(*) from ext_transform_implicit;
+ count 
+-------
+     8
+(1 row)
+
+-- reading data with #transform overrides default transformation
+select count(*) from ext_transform_explicit;
+ count 
+-------
+     4
+(1 row)
+
+-- integrity check
+select a from ext_transform_free order by a;
+ a 
+---
+ 1
+ 2
+ 2
+ 3
+(4 rows)
+
+-- start_ignore
+-- end_ignore
+-- cleanup
+DROP EXTERNAL TABLE ext_transform_implicit;
+DROP EXTERNAL TABLE ext_w_transform_implicit;
+DROP EXTERNAL TABLE ext_transform_explicit;
+DROP EXTERNAL TABLE ext_w_transform_explicit;
+DROP EXTERNAL TABLE ext_transform_free;
+DROP EXTERNAL TABLE ext_w_transform_free;
+DROP EXTERNAL WEB TABLE gpfdist_transform_start1;
+DROP EXTERNAL WEB TABLE gpfdist_transform_start2;
+\! rm @abs_srcdir@/data/transform_data.tbl
 drop external table ext_whois;
 drop external table exttab1_gpfdist_start;
 drop external table gpfdist_csv_start;
