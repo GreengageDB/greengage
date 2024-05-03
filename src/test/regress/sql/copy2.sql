@@ -469,3 +469,12 @@ COPY copy_eoc_marker FROM stdin LOG ERRORS SEGMENT REJECT LIMIT 5;
 \.
 SELECT * FROM copy_eoc_marker;
 DROP TABLE copy_eoc_marker;
+
+-- Ensure we close COPY TO/FROM PROGRAM descriptors in case of error
+CREATE TABLE test_copy_error (a SMALLINT) DISTRIBUTED BY (a);
+COPY test_copy_error FROM PROGRAM 'seq 30000 90000 | cat -';
+\! pgrep cat;
+INSERT INTO test_copy_error SELECT CASE WHEN i = 10 THEN 0 ELSE i END FROM generate_series(1, 100) i;
+COPY (SELECT 1 / a FROM test_copy_error) TO PROGRAM 'cat -';
+\! pgrep cat;
+DROP TABLE test_copy_error;
