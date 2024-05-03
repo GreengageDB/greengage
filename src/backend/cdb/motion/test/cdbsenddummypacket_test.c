@@ -7,6 +7,7 @@
 #include "../../motion/ic_udpifc.c"
 
 bool break_loop = false;
+static bool is_ipv6_supported = true;
 
 /*
  * PROTOTYPES
@@ -151,6 +152,57 @@ create_sender_socket(sa_family_t af)
 /*
  * START UNIT TEST
  */
+
+/*
+ * On Linux, bind() to an IPv6 wildcard will result in binding to both IPv6 and
+ * IPv4 and wont fail even if IPv6 is not available. We should not cache an
+ * AF_INET6 address when IPv6 is not available, since it will be impossible to
+ * connect to it. Address family should be correctly decided by AI_ADDRCONFIG
+ * flag for getaddrinfo() from setupUDPListeningSocket().
+ */
+static void
+test_send_dummy_packet_default_wildcard(void **state)
+{
+	break_loop = false;
+	int listenerSocketFd;
+	uint16 listenerPort;
+	int txFamily;
+
+	char *saveICAddress = interconnect_address;
+	int saveICType = Gp_interconnect_address_type;
+
+	interconnect_address = NULL;
+	Gp_interconnect_address_type = INTERCONNECT_ADDRESS_TYPE_WILDCARD;
+
+	setupUDPListeningSocket(&listenerSocketFd, &listenerPort, &txFamily, &udp_dummy_packet_sockaddr);
+	setupUDPListeningSocket(&ICSenderSocket, &ICSenderPort, &ICSenderFamily, NULL);
+
+	Gp_listener_port = (listenerPort << 16);
+	UDP_listenerFd = listenerSocketFd;
+
+	SendDummyPacket();
+
+	if (is_ipv6_supported)
+	{
+		const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *) &udp_dummy_packet_sockaddr;
+		assert_true(txFamily == AF_INET6);
+		assert_true(in6->sin6_family == AF_INET6);
+		assert_true(listenerPort == ntohs(in6->sin6_port));
+	}
+	else
+	{
+		const struct sockaddr_in *in4 = (const struct sockaddr_in *) &udp_dummy_packet_sockaddr;
+		assert_true(txFamily == AF_INET);
+		assert_true(in4->sin_family == AF_INET);
+		assert_true(listenerPort == ntohs(in4->sin_port));
+		assert_true(strcmp("0.0.0.0", inet_ntoa(in4->sin_addr)) == 0);
+	}
+
+	Gp_interconnect_address_type = saveICType;
+	interconnect_address = saveICAddress;
+
+	wait_for_receiver(false);
+}
 
 static void
 test_send_dummy_packet_ipv4_to_ipv4(void **state)
@@ -299,11 +351,7 @@ main(int argc, char* argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
-	int is_ipv6_supported = true;
-	int sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
-	if (sockfd < 0 && errno == EAFNOSUPPORT)
-		is_ipv6_supported = false;
-
+	is_ipv6_supported = isIPv6Available();
 	log_min_messages = DEBUG1;
 
 	start_receiver();
@@ -311,6 +359,7 @@ main(int argc, char* argv[])
 	if (is_ipv6_supported)
 	{
 		const UnitTest tests[] = {
+			unit_test(test_send_dummy_packet_default_wildcard),
 			unit_test(test_send_dummy_packet_ipv4_to_ipv4),
 			unit_test(test_send_dummy_packet_ipv4_to_ipv6_should_fail),
 			unit_test(test_send_dummy_packet_ipv6_to_ipv6),
@@ -323,6 +372,7 @@ main(int argc, char* argv[])
 	{
 		printf("WARNING: IPv6 is not supported, skipping unittest\n");
 		const UnitTest tests[] = {
+			unit_test(test_send_dummy_packet_default_wildcard),
 			unit_test(test_send_dummy_packet_ipv4_to_ipv4),
 		};
 		return run_tests(tests);
