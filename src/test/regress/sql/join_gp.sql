@@ -867,3 +867,19 @@ select * from t2 join lateral
 
 drop table t1;
 drop table t2;
+
+
+-- Check that USING with different types is properly planned by ORCA
+-- start_ignore
+drop table if exists tbl2;
+drop table if exists tbl1;
+-- end_ignore
+
+create table tbl1 (b varchar(15)) distributed by(b);
+create table tbl2 (b varchar(255)) distributed by(b);
+
+explain (costs off)
+select * from tbl1 join tbl2 using (b);
+
+drop table tbl1;
+drop table tbl2;
