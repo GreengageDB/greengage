@@ -123,3 +123,6 @@ UPDATE partition_key_dropped SET a=21 where a=2;
 
 EXPLAIN INSERT INTO partition_key_dropped VALUES(3);
 INSERT INTO partition_key_dropped VALUES(3);
+
+-- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
+SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
