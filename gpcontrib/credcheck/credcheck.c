@@ -2117,8 +2117,6 @@ pg_password_history_internal(FunctionCallInfo fcinfo)
 
 	/* clean up and return the tuplestore */
 	LWLockRelease(pgph->lock);
-
-	tuplestore_donestoring(tupstore);
 }
 
 PG_FUNCTION_INFO_V1(pg_password_history_timestamp);
@@ -2477,8 +2475,6 @@ pg_banned_role_internal(FunctionCallInfo fcinfo)
 
 	/* clean up and return the tuplestore */
 	LWLockRelease(pgaf->lock);
-
-	tuplestore_donestoring(tupstore);
 }
 
 
