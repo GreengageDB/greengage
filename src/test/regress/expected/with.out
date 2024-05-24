@@ -2455,3 +2455,38 @@ select * from with_test;
 (1 row)
 
 drop table with_test;
+-- Make sure we create a correct tuple descriptor for SubqueryScan above
+-- ShareInputScan with ModifyTable below.
+CREATE TABLE with_test (i int) DISTRIBUTED BY (i);
+EXPLAIN (VERBOSE, COSTS OFF) WITH cte AS (
+	INSERT INTO with_test SELECT 1 RETURNING *
+)
+SELECT * FROM cte UNION ALL SELECT * FROM cte;
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   Output: share0_ref1.i
+   ->  Append
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.i
+               ->  Insert on public.with_test
+                     Output: with_test.i
+                     ->  Result
+                           Output: 1
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref2.i
+ Optimizer: Postgres-based planner
+ Settings: gp_cte_sharing = 'on'
+(13 rows)
+
+WITH cte AS (
+	INSERT INTO with_test SELECT 1 RETURNING *
+)
+SELECT * FROM cte UNION ALL SELECT * FROM cte;
+ i 
+---
+ 1
+ 1
+(2 rows)
+
+DROP TABLE with_test;
