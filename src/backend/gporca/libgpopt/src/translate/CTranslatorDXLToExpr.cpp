@@ -574,8 +574,13 @@ CTranslatorDXLToExpr::PexprLogicalGet(const CDXLNode *dxlnode)
 
 	CTableDescriptor *ptabdesc = Ptabdesc(table_descr);
 
-	CWStringConst strAlias(m_mp,
-						   table_descr->MdName()->GetMDName()->GetBuffer());
+	const gpmd::CMDName *ptabalias = table_descr->MdName();
+	if (NULL != table_descr->MdAlias())
+	{
+		ptabalias = table_descr->MdAlias();
+	}
+
+	CWStringConst strAlias(m_mp, ptabalias->GetMDName()->GetBuffer());
 
 	// create a logical get or dynamic get operator
 	CName *pname = GPOS_NEW(m_mp) CName(m_mp, CName(&strAlias));
@@ -2114,6 +2119,11 @@ CTranslatorDXLToExpr::Ptabdesc(CDXLTableDescr *table_descr)
 	CTableDescriptor *ptabdesc = GPOS_NEW(m_mp) CTableDescriptor(
 		m_mp, mdid, CName(m_mp, &strName), pmdrel->ConvertHashToRandom(),
 		rel_distr_policy, rel_storage_type, table_descr->GetExecuteAsUserId());
+
+	if (NULL != table_descr->MdAlias())
+	{
+		ptabdesc->SetAlias(table_descr->MdAlias()->GetMDName());
+	}
 
 	const ULONG ulColumns = table_descr->Arity();
 	for (ULONG ul = 0; ul < ulColumns; ul++)

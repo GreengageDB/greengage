@@ -20,7 +20,6 @@ RUN yum makecache && yum update -y ca-certificates && \
 
 # install all software we need
 RUN yum makecache && \
-    yum -y install python2-pip && \
     yum -y install python-devel python-psutil python-setuptools && \
     yum -y install apr-devel apr-util-devel bzip2-devel expat-devel libcurl-devel && \
     yum -y install libevent-devel libuuid-devel libxml2-devel libyaml-devel libzstd-devel && \
@@ -28,8 +27,10 @@ RUN yum makecache && \
     yum -y install libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     yum -y install perl-IPC-Run perl-Test-Base libxslt-devel && \
     yum -y install libzstd-static && \
-    # The last python 2.7 pip
-    pip install --ignore-installed "pip<21.0" && \
+    # Installing the latest version of pip available for python 2.7 (20.3.4).
+    # The installation goes through a bootstrap script since pip from the
+    # repository can no longer update itself.
+    curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python && \
     pip install psi pytest==3.10.1 && \
     pip install allure-behave==2.4.0 && \
     yum clean all

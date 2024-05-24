@@ -57,7 +57,7 @@
 #include "cdb/cdbsetop.h"
 #include "cdb/cdbvars.h"
 #include "commands/tablecmds.h"
-
+#include "utils/guc.h"
 
 typedef struct
 {
@@ -1558,9 +1558,21 @@ expand_inherited_rtentry(PlannerInfo *root, RangeTblEntry *rte, Index rti)
 			root->rowMarks = lappend(root->rowMarks, newrc);
 		}
 
-		/* Close child relations, but keep locks */
+		/*
+		 * Close child relations, keep the locks depending on
+		 * gp_keep_partition_children_locks value.
+		 */
 		if (childOID != parentOID)
-			heap_close(newrelation, NoLock);
+		{
+			LOCKMODE	releaseLockMode;
+
+			if (gp_keep_partition_children_locks)
+				releaseLockMode = NoLock;
+			else
+				releaseLockMode = rel_is_part_child(childOID) ? lockmode : NoLock;
+
+			heap_close(newrelation, releaseLockMode);
+		}
 	}
 
 	heap_close(oldrelation, NoLock);

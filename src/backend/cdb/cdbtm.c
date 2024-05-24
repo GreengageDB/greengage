@@ -113,6 +113,12 @@ int	max_tm_gxacts = 100;
 
 #define GP_OPT_EXPLICT_BEGIN      						0x0020
 
+/*
+ * Some context to distinguish between user-invoked SET commands and explicit
+ * QD to QE config synchronization.
+ */
+#define GP_OPT_SYNCHRONIZATION_SET						0x0040
+
 /*=========================================================================
  * FUNCTIONS PROTOTYPES
  */
@@ -1217,6 +1223,17 @@ mppTxnOptions(bool needDtx)
 }
 
 int
+mppTxnOptionsForSync(bool needDtx, bool isSync)
+{
+	int flags = mppTxnOptions(needDtx);
+
+	if (isSync)
+		flags |= GP_OPT_SYNCHRONIZATION_SET;
+
+	return flags;
+}
+
+int
 mppTxOptions_IsoLevel(int txnOptions)
 {
 	if ((txnOptions & GP_OPT_ISOLATION_LEVEL_MASK) == GP_OPT_SERIALIZABLE)
@@ -1250,6 +1267,12 @@ bool
 isMppTxOptions_ExplicitBegin(int txnOptions)
 {
 	return ((txnOptions & GP_OPT_EXPLICT_BEGIN) != 0);
+}
+
+bool
+isMppTxOptions_SynchronizationSet(int txnOptions)
+{
+	return ((txnOptions & GP_OPT_SYNCHRONIZATION_SET) != 0);
 }
 
 /*=========================================================================
@@ -1286,7 +1309,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 							 int serializedDtxContextInfoLen)
 {
 	int			i,
-				resultCount,
+				resultCount = 0,
 				numOfFailed = 0;
 
 	char	   *dtxProtocolCommandStr = 0;
@@ -1336,8 +1359,8 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 
 	if (results == NULL)
 	{
-		numOfFailed++;			/* If we got no results, we need to treat it
-								 * as an error! */
+		/* If we got no results, we need to treat it as an error! */
+		return false;
 	}
 
 	for (i = 0; i < resultCount; i++)
@@ -1420,8 +1443,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 	if (waitGxids)
 		pfree(waitGxids);
 
-	if (results)
-		pfree(results);
+	pfree(results);
 
 	return (numOfFailed == 0);
 }

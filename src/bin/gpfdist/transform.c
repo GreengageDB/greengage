@@ -781,4 +781,31 @@ transform_saferegex(struct transform* tr)
 	return &(tr->saferegex);
 }
 
+/*
+ * validate transformation name from options
+ */
+
+const char*
+validate_transform_opt(struct transform* trlist, const char* name)
+{
+	size_t name_len;
+
+	if (!trlist)
+		return "Error: default transformation is set,"
+			" but TRANSFORMATIONS are not specified";
+
+	name_len = strlen(name);
+
+	/*
+	 * Transformation names are parsed from config file and stored as map
+	 * keys. Validate the same key len here. Correspondence of default
+	 * transformation to all transformations is checked at runtime.
+	 */
+	if (name_len < 1 || name_len > MAX_KEYLEN)
+		return "Error: default transformation name length must be"
+			" between 1 and 256 characters (space, tabs, and newline characters are trimmed)";
+
+	return NULL;
+}
+
 #endif

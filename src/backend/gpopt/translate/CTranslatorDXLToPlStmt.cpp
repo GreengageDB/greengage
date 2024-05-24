@@ -51,6 +51,8 @@ extern "C" {
 #include "naucrates/md/IMDTypeInt4.h"
 #include "naucrates/traceflags/traceflags.h"
 
+#include "nodes/nodeFuncs.h"
+
 using namespace gpdxl;
 using namespace gpos;
 using namespace gpopt;
@@ -3306,6 +3308,21 @@ CTranslatorDXLToPlStmt::TranslateDXLPartSelector(
 		m_dxl_to_plstmt_context->AddPartitionedTable(partition_selector->relid);
 	}
 
+	// If gp_keep_partition_children_locks is on, we take locks 1) on leaf
+	// partitions only in case of static selection; 2) on all partitions
+	// (excluding intermediate) in other cases. This is the preferred behavior
+	// for strict correctness of concurrent SELECT.
+	if (GPOS_FTRACE(EopttraceKeepPartitionChildrenLocks))
+	{
+		LOCKMODE parentMode = EvalLockModeForChildRelations(
+			(Query *) m_dxl_to_plstmt_context->GetQuery(),
+			partition_selector->relid);
+
+		AcquireLocksOnChildRelations(partition_selector->relid,
+									 partition_selector->staticPartOids,
+									 parentMode);
+	}
+
 	// increment the number of partition selectors for the given scan id
 	m_dxl_to_plstmt_context->IncrementPartitionSelectors(
 		partition_selector->scanId);
@@ -4691,8 +4708,14 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	alias->colnames = NIL;
 
 	// get table alias
+	const CMDName *md_alias = table_descr->MdAlias();
+	if (!optimizer_enable_table_alias || NULL == md_alias)
+	{
+		md_alias = table_descr->MdName();
+	}
+
 	alias->aliasname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-		table_descr->MdName()->GetMDName()->GetBuffer());
+		md_alias->GetMDName()->GetBuffer());
 
 	// get column names
 	const ULONG arity = table_descr->Arity();
@@ -4742,6 +4765,16 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	}
 
 	rte->eref = alias;
+
+	/*
+		Store the alias information only when table alias is used to allow 
+		EXPLAIN find it
+	*/
+	if (optimizer_enable_table_alias && NULL != table_descr->MdAlias())
+	{
+		rte->alias = (Alias *) copyObject(alias);
+	}
+
 
 	return rte;
 }
@@ -6084,5 +6117,187 @@ CTranslatorDXLToPlStmt::TranslateNestLoopParamList(
 			gpdb::LAppend(nest_params_list, (void *) nest_params);
 	}
 	return nest_params_list;
+}
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::AcquireLocksOnChildRelations
+//
+//	@doc:
+//		Acquires locks of lockmode type either on all leaf partitions or on
+//		relations from partOids list when possible.
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::AcquireLocksOnChildRelations(OID oidParentRel,
+													 List *staticPartOids,
+													 LOCKMODE lockmode)
+{
+	ListCell *lc;
+
+	if (NoLock >= lockmode)
+		return;
+
+	// If static partition selection didn't take place, just acquire locks on
+	// all leaf partitions.
+	if (NIL == staticPartOids)
+	{
+		// FindAllInheritors returns a list of relation OIDs including the
+		// given rel plus all relations that inherit from it, directly or
+		// indirectly. The specified lock type is acquired on all child
+		// relations (but not on the given rel).
+		List *inhOids = gpdb::FindAllInheritors(oidParentRel, NoLock, NULL);
+
+		ForEach(lc, inhOids)
+		{
+			Oid childOid = lfirst_oid(lc);
+
+			if (childOid != oidParentRel && gpdb::IsLeafPartition(childOid))
+			{
+				gpdb::GPDBLockRelationOid(childOid, lockmode);
+			}
+		}
+		gpdb::ListFree(inhOids);
+		return;
+	}
+
+	ForEach(lc, staticPartOids)
+	{
+		OID partOid = lfirst_oid(lc);
+		gpdb::GPDBLockRelationOid(partOid, lockmode);
+	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::EvalLockModeForChildRelations
+//
+//	@doc:
+//		Defines the lock type, which will be imposed on child partitions,
+//		based on parent's lock type.
+//
+//---------------------------------------------------------------------------
+LOCKMODE
+CTranslatorDXLToPlStmt::EvalLockModeForChildRelations(Query *parsetree,
+													  OID oidParentRel)
+{
+	ListCell *lc;
+	int rt_index;
+
+	// First, process RTEs of the current query level.
+	ForEachWithCount(lc, parsetree->rtable, rt_index)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		switch (rte->rtekind)
+		{
+			case RTE_RELATION:
+				// The locks chosen in this method is based on function
+				// expand_inherited_rtentry.
+				// If the parent relation is the query's result relation, i.e. we have
+				// UPDATE/DELETE/INSERT operation, then all relevant locks was acquired in
+				// parse/analyze stage (inside `setTargetTable()` function) and nothing
+				// needs to be done. Otherwise, if it's accessed FOR UPDATE/SHARE, we need
+				// RowShareLock; otherwise AccessShareLock. We can't just grab AccessShareLock
+				// because then the executor would be trying to upgrade the lock, leading to
+				// possible deadlocks.
+				if (rte->relid == oidParentRel)
+				{
+					if (rt_index + 1 == parsetree->resultRelation)
+					{
+						return NoLock;
+					}
+					else if (gpdb::GetParseRowmark(parsetree, rt_index + 1) !=
+							 NULL)
+					{
+						return RowShareLock;
+					}
+					else
+					{
+						return AccessShareLock;
+					}
+				}
+				break;
+
+			case RTE_SUBQUERY:
+				// Recurse into subquery-in-FROM
+				{
+					LOCKMODE lockmode = EvalLockModeForChildRelations(
+						rte->subquery, oidParentRel);
+
+					if (NoLock <= lockmode)
+						return lockmode;
+				}
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	// Recurse into CTE list
+	ForEach(lc, parsetree->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+		LOCKMODE lockmode = EvalLockModeForChildRelations(
+			(Query *) cte->ctequery, oidParentRel);
+
+		if (NoLock <= lockmode)
+		{
+			return lockmode;
+		}
+	}
+
+	// Recurse into sublink subqueries, too.  But we already did the ones in
+	// the rtable and cteList.
+	if (parsetree->hasSubLinks)
+	{
+		SCtxGetParentLockMode ctx;
+		ctx.relid = oidParentRel;
+		ctx.lockmode = -1;
+
+		gpdb::WalkQueryTree(parsetree,
+							(BOOL(*)()) EvalLockModeForChildRelationsWalker,
+							(void *) &ctx, QTW_IGNORE_RC_SUBQUERIES);
+
+		return ctx.lockmode;
+	}
+
+	return -1;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::EvalLockModeForChildRelationsWalker
+//
+//	@doc:
+//		Auxiliary walker function of EvalLockModeForChildRelations for
+//		SubLink processing
+//
+//---------------------------------------------------------------------------
+BOOL
+CTranslatorDXLToPlStmt::EvalLockModeForChildRelationsWalker(
+	Node *node, SCtxGetParentLockMode *context)
+{
+	if (NULL == node)
+	{
+		return false;
+	}
+
+	if (IsA(node, SubLink))
+	{
+		SubLink *sub = (SubLink *) node;
+
+		context->lockmode = EvalLockModeForChildRelations(
+			(Query *) sub->subselect, context->relid);
+		if (NoLock <= context->lockmode)
+		{
+			return true;
+		}
+	}
+
+	// No need to recurse into Query nodes, because EvalLockModeOnChildRelations already
+	// processed subselects of subselects.
+	return gpdb::WalkExpressionTree(
+		node, (BOOL(*)()) EvalLockModeForChildRelationsWalker,
+		(void *) context);
 }
 // EOF

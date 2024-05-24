@@ -5352,6 +5352,8 @@ atpxPart_validate_spec(PartitionBy *pBy,
 	int			result;
 	PartitionNode *pNode_tmpl = NULL;
 
+	Assert(pNode != NULL && pNode->part != NULL);
+
 	spec->partElem = list_make1(pelem);
 
 	pelem->partName = partName;
@@ -5403,13 +5405,17 @@ atpxPart_validate_spec(PartitionBy *pBy,
 		List	   *pbyopclass = NIL;
 		Oid			accessMethodId = BTREE_AM_OID;
 
-		while (pNode2)
+		while (true)
 		{
 			pbykeys = NIL;
 			pbyopclass = NIL;
 
+			Assert(pNode2->part != NULL);
+
 			for (ii = 0; ii < pNode2->part->parnatts; ii++)
 			{
+				Assert(pNode2->part->paratts != NULL);
+
 				AttrNumber	attno =
 				pNode2->part->paratts[ii];
 				Form_pg_attribute attribute =
@@ -5442,7 +5448,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 
 			parent_pBy2 = pBy2;
 
-			if (pNode2 && (pNode2->rules || pNode2->default_part))
+			if (pNode2->rules || pNode2->default_part)
 			{
 				PartitionRule *prule;
 				PartitionElem *el = NULL;	/* for the subpartn template */
@@ -5456,6 +5462,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 				{
 					pNode2 = prule->children;
 
+					Assert(pNode2->part != NULL);
 					Assert(('l' == pNode2->part->parkind) ||
 						   ('r' == pNode2->part->parkind));
 
@@ -5626,7 +5633,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 					}			/* end if pNode_tmpl */
 
 					/* fixup the pnode_tmpl to get the right parlevel */
-					if (pNode2 && (pNode2->rules || pNode2->default_part))
+					if (pNode2->rules || pNode2->default_part)
 					{
 						pNode_tmpl = get_parts(pNode2->part->parrelid,
 											   pNode2->part->parlevel + 1,
@@ -5639,10 +5646,10 @@ atpxPart_validate_spec(PartitionBy *pBy,
 
 				}
 				else
-					pNode2 = NULL;
+					break;
 			}
 			else
-				pNode2 = NULL;
+				break;
 
 		}						/* end while */
 	}

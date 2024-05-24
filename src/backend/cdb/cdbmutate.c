@@ -75,8 +75,18 @@ typedef struct ApplyMotionState
 								 * plan_tree_walker/mutator */
 	int			nextMotionID;
 	int			sliceDepth;
-	bool		containMotionNodes;
 	HTAB	   *planid_subplans; /* hash table for InitPlanItem */
+
+	/* Context for ModifyTable to elide Explicit Redistribute Motion */
+	bool		mtIsChecking;		/* True if we encountered ModifyTable
+									 * node with UPDATE/DELETE and we plan
+									 * to insert Explicit Motions. */
+	List	   *mtResultRelations;	/* Indexes into rtable for relations to
+									 * be modified. Only valid if mtIsChecking
+									 * is true. */
+	int			nMotionsAbove;		/* Number of motions above the current
+									 * node. Only valid if mtIsChecking is
+									 * true. */
 } ApplyMotionState;
 
 typedef struct InitPlanItem
@@ -404,7 +414,10 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 													 * plan */
 	state.nextMotionID = 1;		/* Start at 1 so zero will mean "unassigned". */
 	state.sliceDepth = 0;
-	state.containMotionNodes = false;
+	state.mtIsChecking = false;
+	state.mtResultRelations = NIL;
+	state.nMotionsAbove = 0;
+
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(int);
 	ctl.entrysize = sizeof(InitPlanItem);
@@ -755,14 +768,15 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 	if (!is_plan_node(node))
 	{
 		/*
-		 * The containMotionNodes flag keeps track of whether there are any
-		 * Motion nodes, ignoring any in InitPlans. So if we recurse into an
-		 * InitPlan, save and restore the flag.
+		 * If we expect to elide the Explicit Redistribute Motion, we can
+		 * disable mtIsChecking while we're in an InitPlan, since there will not
+		 * be any scan nodes that perform a scan on the same range table entry
+		 * as ModifyTable under InitPlans.
 		 */
 		if (IsA(node, SubPlan) &&((SubPlan *) node)->is_initplan)
 		{
 			bool		found;
-			bool		saveContainMotionNodes = context->containMotionNodes;
+			bool		saveMtIsChecking = context->mtIsChecking;
 			int			saveSliceDepth = context->sliceDepth;
 			SubPlan		*subplan = (SubPlan *) node;
 			/*
@@ -777,15 +791,92 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 
 			/* reset sliceDepth for each init plan */
 			context->sliceDepth = 0;
+			context->mtIsChecking = false;
 			node = plan_tree_mutator(node, apply_motion_mutator, context);
 
-			context->containMotionNodes = saveContainMotionNodes;
+			context->mtIsChecking = saveMtIsChecking;
 			context->sliceDepth = saveSliceDepth;
 
 			return node;
 		}
 		else
 			return plan_tree_mutator(node, apply_motion_mutator, context);
+	}
+
+	/*
+	 * For UPDATE/DELETE, we check if there's any motions before scan in the
+	 * same subtree for the table we're going to modify. If we encounter the
+	 * scan before any motions, then we can elide unnecessary Explicit
+	 * Redistribute Motion.
+	 */
+	if (IsA(node, ModifyTable))
+	{
+		ModifyTable *mt = (ModifyTable *) node;
+
+		if (mt->operation == CMD_UPDATE || mt->operation == CMD_DELETE)
+		{
+			/*
+			 * Sanity check, since we don't allow multiple ModifyTable nodes.
+			 */
+			Assert(!context->mtIsChecking);
+			Assert(context->mtResultRelations == NIL);
+			Assert(context->nMotionsAbove == 0);
+
+			/*
+			 * When UPDATE/DELETE occurs on a partitioned table, or a table that
+			 * is a part of inheritance tree, ModifyTable node will have more
+			 * than one relation in resultRelations.
+			 *
+			 * Remember resulting relations' indexes to compare them later.
+			 */
+			context->mtIsChecking = true;
+			context->mtResultRelations = mt->resultRelations;
+		}
+	}
+	else if (context->mtIsChecking)
+	{
+		/* 
+		 * Remember if we are descending into a motion node.
+		 */
+		if (IsA(node, Motion))
+			context->nMotionsAbove++;
+		else
+		{
+			/*
+			 * If this is a scan and it's scanrelid matches ModifyTable's relid,
+			 * we need to check if there were any motions above.
+			 *
+			 * These are scan nodes that can be used to perform distributed
+			 * UPDATE/DELETE on the relation they scan, possibly with motions
+			 * above them. This list needs to be updated for other nodes if they
+			 * are changed to support DML execution on segments.
+			 */
+			switch (nodeTag(node))
+			{
+				case T_SeqScan:
+				case T_DynamicSeqScan:
+				case T_IndexScan:
+				case T_DynamicIndexScan:
+				case T_IndexOnlyScan:
+				case T_BitmapIndexScan:
+				case T_DynamicBitmapIndexScan:
+				case T_BitmapHeapScan:
+				case T_DynamicBitmapHeapScan:
+				case T_TidScan:
+					if (list_member_int(context->mtResultRelations,
+										((Scan *) node)->scanrelid))
+					{
+						/*
+						 * Freeze the motion counter. Also, we don't
+						 * need to check other nodes in this subtree
+						 * anymore.
+						 */
+						context->mtIsChecking = false;
+					}
+				default:
+					break;
+			}
+		}
 	}
 
 	plan = (Plan *) node;
@@ -936,17 +1027,11 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 			break;
 
 		case MOVEMENT_EXPLICIT:
-
 			/*
-			 * add an ExplicitRedistribute motion node only if child plan
-			 * nodes have a motion node
+			 * Were there any motions above the scan?
 			 */
-			if (context->containMotionNodes)
+			if (context->nMotionsAbove > 0)
 			{
-				/*
-				 * motion node in child nodes: add a ExplicitRedistribute
-				 * motion
-				 */
 				newnode = (Node *) make_explicit_motion(plan,
 														flow->segidColIdx,
 														true	/* useExecutorVarFormat */
@@ -955,13 +1040,20 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 			else
 			{
 				/*
-				 * no motion nodes in child plan nodes - no need for
-				 * ExplicitRedistribute: restore flow
+				 * Restore flow if Explicit Redistribute Motion is not needed
 				 */
 				flow->req_move = MOVEMENT_NONE;
 				flow->flow_before_req_move = NULL;
 			}
 
+			/*
+			 * If we're here, it means we are directly under the ModifyTable
+			 * node. We are about to go to out of the recursion and go into
+			 * other subtree. So reset the state and continue checking in case
+			 * of another Explicit Redistribute Motion is needed.
+			 */
+			context->mtIsChecking = true;
+			context->nMotionsAbove = 0;
 			break;
 
 		case MOVEMENT_NONE:
@@ -1009,16 +1101,14 @@ done:
 	plan->nMotionNodes = context->nextMotionID - saveNextMotionID;
 	plan->nInitPlans = hash_get_num_entries(context->planid_subplans) - saveNumInitPlans;
 
-	/*
-	 * Remember if this was a Motion node. This is used at the top of the
-	 * tree, with MOVEMENT_EXPLICIT, to avoid adding an explicit motion, if
-	 * there were no Motion in the subtree. Note that this does not take
-	 * InitPlans containing Motion nodes into account. InitPlans are executed
-	 * as a separate step before the main plan, and hence any Motion nodes in
-	 * them don't need to affect the way the main plan is executed.
-	 */
-	if (IsA(newnode, Motion))
-		context->containMotionNodes = true;
+	if (context->mtIsChecking)
+	{
+		/* We're going out of this motion node. */
+		if (IsA(node, Motion))
+			context->nMotionsAbove--;
+		else if (IsA(node, ModifyTable))
+			context->mtIsChecking = false;
+	}
 
 	return newnode;
 }								/* apply_motion_mutator */

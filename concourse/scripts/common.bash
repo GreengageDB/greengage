@@ -87,6 +87,11 @@ function make_cluster() {
 	source /usr/local/greenplum-db-devel/greenplum_path.sh
 	export BLDWRAP_POSTGRES_CONF_ADDONS=${BLDWRAP_POSTGRES_CONF_ADDONS}
 	export STATEMENT_MEM=250MB
+
+	if [[ "$MAKE_TEST_COMMAND" =~ "optimizer=on" ]]; then
+		export OPTIMIZER_ENABLE_TABLE_ALIAS=off
+	fi
+
 	pushd gpdb_src/gpAux/gpdemo
 	su gpadmin -c "source /usr/local/greenplum-db-devel/greenplum_path.sh; make create-demo-cluster WITH_MIRRORS=${WITH_MIRRORS:-true}"
 

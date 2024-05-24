@@ -95,6 +95,8 @@ SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY o
  adb_collect_table_stats                                    | proc    | -          | {owner=X/owner}
  adb_create_tables                                          | proc    | -          | {owner=X/owner}
  adb_get_relfilenodes                                       | proc    | -          | {=X/owner,owner=X/owner}
+ adb_hba_file_rules                                         | proc    | -          | {owner=X/owner}
+ adb_hba_file_rules_view                                    | table   | v          | {owner=arwdDxt/owner}
  adb_relation_storage_size                                  | proc    | -          | {=X/owner,owner=X/owner}
  adb_relation_storage_size_on_segments                      | proc    | -          | {=X/owner,owner=X/owner}
  adb_skew_coefficients                                      | table   | v          | {owner=arwdDxt/owner,=r/owner}
@@ -111,7 +113,7 @@ SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY o
  db_files_history_backup_YYYYMMDDtHHMMSS_1_prt_default_part | table   | a          | 
  db_files_history_backup_YYYYMMDDtHHMMSS_1_prt_pYYYYMM      | table   | a          | 
  operation_exclude                                          | table   | a          | 
-(22 rows)
+(24 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
@@ -126,13 +128,15 @@ WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
  adb_collect_table_stats               | proc    | arenadata_toolkit | e
  adb_create_tables                     | proc    | arenadata_toolkit | e
  adb_get_relfilenodes                  | proc    | arenadata_toolkit | e
+ adb_hba_file_rules                    | proc    | arenadata_toolkit | e
+ adb_hba_file_rules_view               | table   | arenadata_toolkit | e
  adb_relation_storage_size             | proc    | arenadata_toolkit | e
  adb_relation_storage_size_on_segments | proc    | arenadata_toolkit | e
  adb_skew_coefficients                 | table   | arenadata_toolkit | e
  adb_vacuum_strategy                   | proc    | arenadata_toolkit | e
  adb_vacuum_strategy_newest_first      | proc    | arenadata_toolkit | e
  adb_vacuum_strategy_newest_last       | proc    | arenadata_toolkit | e
-(12 rows)
+(14 rows)
 
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit cascade;
@@ -157,6 +161,8 @@ SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY o
  adb_collect_table_stats               | proc    | -          | {owner=X/owner}
  adb_create_tables                     | proc    | -          | {owner=X/owner}
  adb_get_relfilenodes                  | proc    | -          | {=X/owner,owner=X/owner}
+ adb_hba_file_rules                    | proc    | -          | {owner=X/owner}
+ adb_hba_file_rules_view               | table   | v          | {owner=arwdDxt/owner}
  adb_relation_storage_size             | proc    | -          | {=X/owner,owner=X/owner}
  adb_relation_storage_size_on_segments | proc    | -          | {=X/owner,owner=X/owner}
  adb_skew_coefficients                 | table   | v          | {owner=arwdDxt/owner,=r/owner}
@@ -170,7 +176,7 @@ SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY o
  db_files_history_1_prt_default_part   | table   | a          | {owner=arwdDxt/owner}
  db_files_history_1_prt_pYYYYMM        | table   | a          | {owner=arwdDxt/owner}
  operation_exclude                     | table   | a          | {owner=arwdDxt/owner}
-(19 rows)
+(21 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
@@ -185,13 +191,15 @@ WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
  adb_collect_table_stats               | proc    | arenadata_toolkit | e
  adb_create_tables                     | proc    | arenadata_toolkit | e
  adb_get_relfilenodes                  | proc    | arenadata_toolkit | e
+ adb_hba_file_rules                    | proc    | arenadata_toolkit | e
+ adb_hba_file_rules_view               | table   | arenadata_toolkit | e
  adb_relation_storage_size             | proc    | arenadata_toolkit | e
  adb_relation_storage_size_on_segments | proc    | arenadata_toolkit | e
  adb_skew_coefficients                 | table   | arenadata_toolkit | e
  adb_vacuum_strategy                   | proc    | arenadata_toolkit | e
  adb_vacuum_strategy_newest_first      | proc    | arenadata_toolkit | e
  adb_vacuum_strategy_newest_last       | proc    | arenadata_toolkit | e
-(12 rows)
+(14 rows)
 
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit cascade;

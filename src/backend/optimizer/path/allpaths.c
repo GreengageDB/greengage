@@ -124,7 +124,7 @@ static void subquery_push_qual(Query *subquery,
 static void recurse_push_qual(Node *setOp, Query *topquery,
 				  RangeTblEntry *rte, Index rti, Node *qual);
 static void bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel,  List *outer_quals);
-static bool is_query_contain_limit_groupby(Query *parse);
+static bool check_query_for_possible_motion(Query *parse);
 static void handle_gen_seggen_volatile_path(PlannerInfo *root, RelOptInfo *rel);
 
 /*
@@ -1695,12 +1695,13 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		config->honor_order_by = false;		/* partial order is enough */
 		/*
 		 * CDB: if this subquery is the inner plan of a lateral
-		 * join and if it contains a limit, we can only gather
-		 * it to singleQE and materialize the data because we
+		 * join and if it contains a limit or group by or some other clause
+		 * from a bunch of conditions that can cause motion in the plan,
+		 * we can only gather it to singleQE and materialize the data because we
 		 * cannot pass params across motion.
 		 */
 		if ((!bms_is_empty(required_outer)) &&
-			is_query_contain_limit_groupby(subquery))
+			check_query_for_possible_motion(subquery))
 			config->force_singleQE = true;
 
 		rel->subplan = subquery_planner(root->glob, subquery,
@@ -3004,24 +3005,43 @@ recurse_push_qual(Node *setOp, Query *topquery,
 }
 
 static bool
-is_query_contain_limit_groupby(Query *parse)
+check_query_for_possible_motion(Query *parse)
 {
+	ListCell   *lc;
+
+	// LIMIT, DISTINCT, GROUP BY, aggregate functions or recursive CTEs
+	// can cause motions in a plan, so return true if they are presented
 	if (parse->limitCount || parse->limitOffset ||
-		parse->groupClause || parse->distinctClause)
+		parse->groupClause || parse->distinctClause ||
+		parse->hasAggs || parse->hasRecursive)
 		return true;
 
+	// INTERSECT, EXCEPT or UNION without ALL set operations also can
+	// cause motions in a plan, so return true for them as well
 	if (parse->setOperations)
 	{
-		SetOperationStmt *sop_stmt = (SetOperationStmt *) (parse->setOperations);
-		RangeTblRef   *larg = (RangeTblRef *) sop_stmt->larg;
-		RangeTblRef   *rarg = (RangeTblRef *) sop_stmt->rarg;
-		RangeTblEntry *lrte = list_nth(parse->rtable, larg->rtindex-1);
-		RangeTblEntry *rrte = list_nth(parse->rtable, rarg->rtindex-1);
+		SetOperationStmt *stmt = (SetOperationStmt *) parse->setOperations;
 
-		if ((lrte->rtekind == RTE_SUBQUERY &&
-			 is_query_contain_limit_groupby(lrte->subquery)) ||
-			(rrte->rtekind == RTE_SUBQUERY &&
-			 is_query_contain_limit_groupby(rrte->subquery)))
+		if (!stmt->all ||
+			stmt->op == SETOP_INTERSECT ||
+			stmt->op == SETOP_EXCEPT)
+			return true;
+	}
+
+	foreach(lc, parse->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+		if (check_query_for_possible_motion((Query *) cte->ctequery))
+			return true;
+	}
+
+	foreach(lc, parse->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		if (rte->rtekind == RTE_SUBQUERY &&
+			check_query_for_possible_motion(rte->subquery))
 			return true;
 	}
 

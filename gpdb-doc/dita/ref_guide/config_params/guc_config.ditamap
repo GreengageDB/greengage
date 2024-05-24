@@ -245,6 +245,7 @@
             <topicref href="guc-list.xml#optimizer_enable_master_only_queries"/>
             <topicref href="guc-list.xml#optimizer_enable_multiple_distinct_aggs"/>
             <topicref href="guc-list.xml#optimizer_enable_orderedagg"/>
+            <topicref href="guc-list.xml#optimizer_enable_table_alias"/>
             <topicref href="guc-list.xml#optimizer_force_agg_skew_avoidance"/>
             <topicref href="guc-list.xml#optimizer_force_comprehensive_join_implementation"/>
             <topicref href="guc-list.xml#optimizer_force_multistage_agg"/>
@@ -300,6 +301,7 @@
             <topicref href="guc-list.xml#tcp_keepalives_interval"/>
             <topicref href="guc-list.xml#temp_buffers"/>
             <topicref href="guc-list.xml#topic_k52_fqm_f3b"/>
+            <topicref href="guc-list.xml#temp_spill_files_tablespaces"/>
             <topicref href="guc-list.xml#TimeZone"/>
             <topicref href="guc-list.xml#timezone_abbreviations"/>
             <topicref href="guc-list.xml#track_activities"/>

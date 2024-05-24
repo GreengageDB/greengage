@@ -15,6 +15,7 @@
 #include "storage/fd.h"
 #include "nodes/execnodes.h"
 #include "cdb/cdbvars.h"
+#include "libpq/hba.h"
 #include "utils/builtins.h"
 #include "utils/relfilenodemap.h"
 #include "utils/timestamp.h"
@@ -364,3 +365,8 @@ Datum adb_get_relfilenodes(PG_FUNCTION_ARGS)
 	SRF_RETURN_DONE(funcctx);
 }
 
+PG_FUNCTION_INFO_V1(adb_hba_file_rules);
+Datum adb_hba_file_rules(PG_FUNCTION_ARGS)
+{
+	return pg_hba_file_rules(fcinfo);
+}

@@ -569,6 +569,7 @@ build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
 					List *input_tlist)
 {
 	Relids		relids = joinrel->relids;
+	int64		tuple_width = joinrel->width;
 	ListCell   *vars;
 
 	foreach(vars, input_tlist)
@@ -601,7 +602,7 @@ build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
 		    if (bms_nonempty_difference(rci->where_needed, relids))
 		    {
 			    joinrel->reltargetlist = lappend(joinrel->reltargetlist, var);
-			    joinrel->width += rci->attr_width;
+			    tuple_width += rci->attr_width;
 		    }
             continue;
         }
@@ -619,9 +620,11 @@ build_joinrel_tlist(PlannerInfo *root, RelOptInfo *joinrel,
 		{
 			/* Yup, add it to the output */
 			joinrel->reltargetlist = lappend(joinrel->reltargetlist, var);
-			joinrel->width += baserel->attr_widths[ndx];
+			tuple_width += baserel->attr_widths[ndx];
 		}
 	}
+
+	joinrel->width = clamp_width_est(tuple_width);
 }
 
 /*

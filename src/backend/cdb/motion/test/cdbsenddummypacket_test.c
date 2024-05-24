@@ -1,5 +1,3 @@
-#include <netinet/in.h>
-#include <ifaddrs.h>
 #include <unistd.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -149,38 +147,6 @@ create_sender_socket(sa_family_t af)
 	}
 
 	return sockfd;
-}
-
-static bool
-check_for_ipv6(void)
-{
-	struct ifaddrs *ifaddr_first;
-
-	if (getifaddrs(&ifaddr_first) == -1)
-	{
-		printf("send dummy packet failed, getifaddrs failed: %m");
-		fail();
-	}
-
-	for (struct ifaddrs *ifaddr = ifaddr_first; ifaddr != NULL; ifaddr = ifaddr->ifa_next)
-	{
-		/*
-		 * getaddrinfo() with AI_ADDRCONFIG skips loopback addresses, so we
-		 * skip them too.
-		 */
-		if (ifaddr->ifa_addr != NULL &&
-			ifaddr->ifa_addr->sa_family == AF_INET6 &&
-			!IN6_IS_ADDR_LOOPBACK(&((struct sockaddr_in6 *) ifaddr->ifa_addr)->sin6_addr))
-		{
-			freeifaddrs(ifaddr_first);
-			return true;
-		}
-	}
-
-	if (ifaddr_first)
-		freeifaddrs(ifaddr_first);
-
-	return false;
 }
 
 /*
@@ -385,7 +351,7 @@ main(int argc, char* argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
-	is_ipv6_supported = check_for_ipv6();
+	is_ipv6_supported = isIPv6Available();
 	log_min_messages = DEBUG1;
 
 	start_receiver();

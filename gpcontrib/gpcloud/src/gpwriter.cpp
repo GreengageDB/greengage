@@ -81,7 +81,7 @@ GPWriter* writer_init(const char* url_with_options, const char* format) {
         PrepareS3MemContext(params);
 
         string extName = params.isAutoCompress() ? string(format) + ".gz" : format;
-        writer = new GPWriter(params, extName);
+        writer = new(std::nothrow) GPWriter(params, extName);
         if (writer == NULL) {
             return NULL;
         }

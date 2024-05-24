@@ -4445,13 +4445,24 @@ DISTRIBUTED BY (a) PARTITION BY LIST(b, c)
   PARTITION part1 VALUES(('(1,1)', 1))
 );
 
--- Make sure that we do not copy ACLs from dropped columns (which led to segfault)
+-- test copying ACLs on columns when adding a new partition if the table has
+-- dropped columns.
+-- start_ignore
+DROP TABLE IF EXISTS t_part_acl;
+DROP ROLE IF EXISTS user_prt_acl;
+-- end_ignore
+
 CREATE ROLE user_prt_acl;
-CREATE TABLE public.t_part_acl (b INT, c INT, d TEXT) DISTRIBUTED BY (b) PARTITION BY RANGE (c)
-  (PARTITION "10" START (1) INCLUSIVE END (10) EXCLUSIVE,
-   PARTITION "20" START (11) INCLUSIVE END (20) EXCLUSIVE);
-GRANT SELECT(d) ON public.t_part_acl TO user_prt_acl;
-ALTER TABLE public.t_part_acl DROP COLUMN d;
-ALTER TABLE public.t_part_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLUSIVE;
-DROP TABLE public.t_part_acl;
+CREATE TABLE t_part_acl (b INT, c INT, d INT, e INT) DISTRIBUTED BY (b) PARTITION BY RANGE (c)
+    (PARTITION "10" START ( 1) INCLUSIVE END (10) EXCLUSIVE,
+     PARTITION "20" START (11) INCLUSIVE END (20) EXCLUSIVE);
+GRANT SELECT(d) ON t_part_acl TO user_prt_acl;
+GRANT UPDATE(e) ON t_part_acl TO user_prt_acl;
+ALTER TABLE t_part_acl DROP COLUMN d;
+ALTER TABLE t_part_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLUSIVE;
+
+-- checking that we have copied the correct ACL.
+SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_acl_1_prt_30'::regclass AND attacl IS NOT NULL;
+
+DROP TABLE t_part_acl;
 DROP ROLE user_prt_acl;

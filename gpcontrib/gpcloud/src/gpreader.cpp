@@ -32,7 +32,7 @@ unsigned long gpcloud_id_function(void) {
 }
 
 int thread_setup(void) {
-    mutex_buf = new pthread_mutex_t[CRYPTO_num_locks()];
+    mutex_buf = new(std::nothrow) pthread_mutex_t[CRYPTO_num_locks()];
     if (mutex_buf == NULL) {
         return 0;
     }
@@ -101,7 +101,7 @@ GPReader* reader_init(const char* url_with_options) {
         // Prepare memory to be used for thread chunk buffer.
         PrepareS3MemContext(params);
 
-        reader = new GPReader(params);
+        reader = new(std::nothrow) GPReader(params);
         if (reader == NULL) {
             return NULL;
         }

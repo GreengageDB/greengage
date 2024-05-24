@@ -636,16 +636,16 @@ XLogArchiveCheckDone(const char *xlog)
 {
 	char		archiveStatusPath[MAXPGPATH];
 	struct stat stat_buf;
-
-	/* Always deletable if archiving is off */
-	if (!XLogArchivingActive())
-		return true;
+	bool		inRecovery = RecoveryInProgress();
 
 	/*
-	 * GPDB: Always delete if this is a mirror segment and archive_mode is
-	 * "on". Continuous WAL archiving on mirrors is not supportable yet.
+	 * The file is always deletable if archive_mode is "off".  On standbys
+	 * archiving is disabled if archive_mode is "on", and enabled with
+	 * "always".  On a primary, archiving is enabled if archive_mode is "on"
+	 * or "always".
 	 */
-	if (XLogArchivingActive() && RecoveryInProgress())
+	if (!((XLogArchivingActive() && !inRecovery) ||
+		  (XLogArchivingAlways() && inRecovery)))
 		return true;
 
 	/* First check for .done --- this means archiver is done with it */

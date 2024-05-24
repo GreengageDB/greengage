@@ -4463,7 +4463,7 @@ void
 set_rel_width(PlannerInfo *root, RelOptInfo *rel)
 {
 	Oid			reloid = planner_rt_fetch(rel->relid, root)->relid;
-	int32		tuple_width = 0;
+	int64		tuple_width = 0;
 	bool		have_wholerow_var = false;
 	ListCell   *lc;
 
@@ -4570,7 +4570,7 @@ set_rel_width(PlannerInfo *root, RelOptInfo *rel)
 	 */
 	if (have_wholerow_var)
 	{
-		int32		wholerow_width = sizeof(HeapTupleHeaderData);
+		int64		wholerow_width = MAXALIGN(sizeof(HeapTupleHeaderData));
 
 		if (reloid != InvalidOid)
 		{
@@ -4587,7 +4587,7 @@ set_rel_width(PlannerInfo *root, RelOptInfo *rel)
 				wholerow_width += rel->attr_widths[i - rel->min_attr];
 		}
 
-		rel->attr_widths[0 - rel->min_attr] = wholerow_width;
+		rel->attr_widths[0 - rel->min_attr] = clamp_width_est(wholerow_width);
 
 		/*
 		 * Include the whole-row Var as part of the output tuple.  Yes, that
@@ -4596,8 +4596,7 @@ set_rel_width(PlannerInfo *root, RelOptInfo *rel)
 		tuple_width += wholerow_width;
 	}
 
-	Assert(tuple_width >= 0);
-	rel->width = tuple_width;
+	rel->width = clamp_width_est(tuple_width);
 }
 
 /*

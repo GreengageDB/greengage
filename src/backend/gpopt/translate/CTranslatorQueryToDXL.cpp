@@ -3966,7 +3966,8 @@ CTranslatorQueryToDXL::TranslateJoinExprInFromToDXL(JoinExpr *join_expr)
 		if (!join_alias_node)
 			continue;
 		GPOS_ASSERT(IsA(join_alias_node, Var) ||
-					IsA(join_alias_node, CoalesceExpr));
+					IsA(join_alias_node, CoalesceExpr) ||
+					IsA(join_alias_node, RelabelType));
 		Value *value = (Value *) lfirst(lc_col_name);
 		CHAR *col_name_char_array = strVal(value);
 

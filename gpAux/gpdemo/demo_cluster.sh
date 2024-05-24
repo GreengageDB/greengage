@@ -132,6 +132,9 @@ cleanDemo(){
     ##
 
     if [ "${GPDEMO_DESTRUCTIVE_CLEAN}" != "false" ]; then
+        echo "Deleting ${DATADIRS} on hosts"
+        gpssh -f hostfile rm -rf ${DATADIRS}
+
         if [ -f hostfile ];  then
             echo "Deleting hostfile"
             rm -f hostfile
@@ -247,9 +250,35 @@ if [ ! -x $GPPATH/gpinitsystem ]; then
     exit 1
 fi
 
+#*****************************************************************************************
+# Host configuration
+#*****************************************************************************************
+
+LOCALHOST=`hostname`
+
+if [ -n "$HOSTS_LIST" ]; then
+  rm -f hostfile
+  for host in $HOSTS_LIST; do
+    if ! ssh $host /bin/true; then
+      echo "can't access to the host $host, exiting"
+      exit 1
+    fi
+
+    echo $host >> hostfile
+  done
+  HOSTS_OPTS="-h hostfile"
+  TRUSTED_SHELL="ssh"
+else
+  echo $LOCALHOST > hostfile
+  HOSTS_OPTS=""
+  TRUSTED_SHELL="`pwd`/lalshell"
+fi
+
 if [ -d $DATADIRS ]; then
   rm -rf $DATADIRS
 fi
+gpssh -f hostfile rm -rf $DATADIRS
+
 mkdir $DATADIRS
 mkdir $QDDIR
 mkdir $DATADIRS/gpAdminLogs
@@ -257,22 +286,15 @@ mkdir $DATADIRS/gpAdminLogs
 for (( i=1; i<=$NUM_PRIMARY_MIRROR_PAIRS; i++ ))
 do
   PRIMARY_DIR=$DATADIRS/dbfast$i
-  mkdir -p $PRIMARY_DIR
+  gpssh -f hostfile mkdir -p $PRIMARY_DIR
   PRIMARY_DIRS_LIST="$PRIMARY_DIRS_LIST $PRIMARY_DIR"
 
   MIRROR_DIR=$DATADIRS/dbfast_mirror$i
-  mkdir -p $MIRROR_DIR
+  gpssh -f hostfile mkdir -p $MIRROR_DIR
   MIRROR_DIRS_LIST="$MIRROR_DIRS_LIST $MIRROR_DIR"
 done
 PRIMARY_DIRS_LIST=${PRIMARY_DIRS_LIST#* }
 MIRROR_DIRS_LIST=${MIRROR_DIRS_LIST#* }
-
-#*****************************************************************************************
-# Host configuration
-#*****************************************************************************************
-
-LOCALHOST=`hostname`
-echo $LOCALHOST > hostfile
 
 #*****************************************************************************************
 # Name of the system configuration file.
@@ -315,7 +337,7 @@ cat >> $CLUSTER_CONFIG <<-EOF
 	MASTER_PORT=${MASTER_DEMO_PORT}
 	
 	# Shell to use to execute commands on all hosts
-	TRUSTED_SHELL="`pwd`/lalshell"
+	TRUSTED_SHELL="$TRUSTED_SHELL"
 	
 	CHECK_POINT_SEGMENTS=8
 	
@@ -370,6 +392,12 @@ if [ -n "${STATEMENT_MEM}" ]; then
 	EOF
 fi
 
+if [ -n "${OPTIMIZER_ENABLE_TABLE_ALIAS}" ]; then
+	cat >> $CLUSTER_CONFIG_POSTGRES_ADDONS<<-EOF
+		optimizer_enable_table_alias = ${OPTIMIZER_ENABLE_TABLE_ALIAS}
+	EOF
+fi
+
 if [ "${ONLY_PREPARE_CLUSTER_ENV}" == "true" ]; then
     echo "ONLY_PREPARE_CLUSTER_ENV set, generated clusterConf file: $CLUSTER_CONFIG, exiting"
     exit 0
@@ -406,10 +434,10 @@ echo ""
 
 echo "=========================================================================================="
 echo "executing:"
-echo "  $GPPATH/gpinitsystem -a -c $CLUSTER_CONFIG -l $DATADIRS/gpAdminLogs -p ${CLUSTER_CONFIG_POSTGRES_ADDONS} ${STANDBY_INIT_OPTS} \"$@\""
+echo "  $GPPATH/gpinitsystem -a -c $CLUSTER_CONFIG $HOSTS_OPTS -l $DATADIRS/gpAdminLogs -p ${CLUSTER_CONFIG_POSTGRES_ADDONS} ${STANDBY_INIT_OPTS} \"$@\""
 echo "=========================================================================================="
 echo ""
-$GPPATH/gpinitsystem -a -c $CLUSTER_CONFIG -l $DATADIRS/gpAdminLogs -p ${CLUSTER_CONFIG_POSTGRES_ADDONS} ${STANDBY_INIT_OPTS} "$@"
+$GPPATH/gpinitsystem -a -c $CLUSTER_CONFIG $HOSTS_OPTS -l $DATADIRS/gpAdminLogs -p ${CLUSTER_CONFIG_POSTGRES_ADDONS} ${STANDBY_INIT_OPTS} "$@"
 RETURN=$?
 
 echo "========================================"
@@ -429,8 +457,8 @@ if [ "$enable_gpfdist" = "yes" ] && [ "$with_openssl" = "yes" ]; then
 
 	for (( i=1; i<=$NUM_PRIMARY_MIRROR_PAIRS; i++ ))
 	do
-		cp -r certificate/gpfdists $DATADIRS/dbfast$i/${SEG_PREFIX}$((i-1))/
-		cp -r certificate/gpfdists $DATADIRS/dbfast_mirror$i/${SEG_PREFIX}$((i-1))/
+		gpscp -f hostfile -r certificate/gpfdists =:$DATADIRS/dbfast$i/${SEG_PREFIX}$((i-1))/
+		gpscp -f hostfile -r certificate/gpfdists =:$DATADIRS/dbfast_mirror$i/${SEG_PREFIX}$((i-1))/
 	done
 	echo ""
 fi

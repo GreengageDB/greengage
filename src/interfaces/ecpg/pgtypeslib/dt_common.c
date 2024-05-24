@@ -1603,7 +1603,8 @@ DecodeTimezone(char *str, int *tzp)
 	if (*str == '-')
 		tz = -tz;
 
-	*tzp = -tz;
+	if (tzp != NULL)
+		*tzp = -tz;
 	return *cp != '\0';
 }	/* DecodeTimezone() */
 
@@ -1639,7 +1640,8 @@ DecodePosixTimezone(char *str, int *tzp)
 	{
 		case DTZ:
 		case TZ:
-			*tzp = -(val + tz);
+			if (tzp != NULL)
+				*tzp = -(val + tz);
 			break;
 
 		default:
@@ -1864,8 +1866,6 @@ DecodeDateTime(char **field, int *ftype, int nf,
 	int			haveTextMonth = FALSE;
 	int			is2digits = FALSE;
 	int			bc = FALSE;
-	int			t = 0;
-	int		   *tzp = &t;
 
 	/***
 	 * We'll insist on at least all of the date fields, but initialize the
@@ -1878,8 +1878,6 @@ DecodeDateTime(char **field, int *ftype, int nf,
 	*fsec = 0;
 	/* don't know daylight savings time status apriori */
 	tm->tm_isdst = -1;
-	if (tzp != NULL)
-		*tzp = 0;
 
 	for (i = 0; i < nf; i++)
 	{
@@ -1896,16 +1894,13 @@ DecodeDateTime(char **field, int *ftype, int nf,
 					char	   *cp;
 					int			val;
 
-					if (tzp == NULL)
-						return -1;
-
 					val = strtol(field[i], &cp, 10);
 					if (*cp != '-')
 						return -1;
 
 					j2date(val, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
 					/* Get the time zone from the end of the string */
-					if (DecodeTimezone(cp, tzp) != 0)
+					if (DecodeTimezone(cp, NULL) != 0)
 						return -1;
 
 					tmask = DTK_DATE_M | DTK_TIME_M | DTK_M(TZ);
@@ -1921,10 +1916,6 @@ DecodeDateTime(char **field, int *ftype, int nf,
 				else if (((fmask & DTK_DATE_M) == DTK_DATE_M)
 						 || (ptype != 0))
 				{
-					/* No time zone accepted? Then quit... */
-					if (tzp == NULL)
-						return -1;
-
 					if (isdigit((unsigned char) *field[i]) || ptype != 0)
 					{
 						char	   *cp;
@@ -1949,7 +1940,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 							return -1;
 
 						/* Get the time zone from the end of the string */
-						if (DecodeTimezone(cp, tzp) != 0)
+						if (DecodeTimezone(cp, NULL) != 0)
 							return -1;
 						*cp = '\0';
 
@@ -1969,7 +1960,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 					}
 					else
 					{
-						if (DecodePosixTimezone(field[i], tzp) != 0)
+						if (DecodePosixTimezone(field[i], NULL) != 0)
 							return -1;
 
 						ftype[i] = DTK_TZ;
@@ -1996,12 +1987,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 
 			case DTK_TZ:
 				{
-					int			tz;
-
-					if (tzp == NULL)
-						return -1;
-
-					if (DecodeTimezone(field[i], &tz) != 0)
+					if (DecodeTimezone(field[i], NULL) != 0)
 						return -1;
 
 					/*
@@ -2011,15 +1997,9 @@ DecodeDateTime(char **field, int *ftype, int nf,
 					if (i > 0 && (fmask & DTK_M(TZ)) != 0 &&
 						ftype[i - 1] == DTK_TZ &&
 						isalpha((unsigned char) *field[i - 1]))
-					{
-						*tzp -= tz;
 						tmask = 0;
-					}
 					else
-					{
-						*tzp = tz;
 						tmask = DTK_M(TZ);
-					}
 				}
 				break;
 
@@ -2115,7 +2095,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 
 						case DTK_TZ:
 							tmask = DTK_M(TZ);
-							if (DecodeTimezone(field[i], tzp) != 0)
+							if (DecodeTimezone(field[i], NULL) != 0)
 								return -1;
 							break;
 
@@ -2255,8 +2235,6 @@ DecodeDateTime(char **field, int *ftype, int nf,
 								tm->tm_hour = 0;
 								tm->tm_min = 0;
 								tm->tm_sec = 0;
-								if (tzp != NULL)
-									*tzp = 0;
 								break;
 
 							default:
@@ -2289,9 +2267,6 @@ DecodeDateTime(char **field, int *ftype, int nf,
 						 */
 						tmask |= DTK_M(DTZ);
 						tm->tm_isdst = 1;
-						if (tzp == NULL)
-							return -1;
-						*tzp -= val;
 						break;
 
 					case DTZ:
@@ -2302,17 +2277,11 @@ DecodeDateTime(char **field, int *ftype, int nf,
 						 */
 						tmask |= DTK_M(TZ);
 						tm->tm_isdst = 1;
-						if (tzp == NULL)
-							return -1;
-						*tzp = -val;
 						ftype[i] = DTK_TZ;
 						break;
 
 					case TZ:
 						tm->tm_isdst = 0;
-						if (tzp == NULL)
-							return -1;
-						*tzp = -val;
 						ftype[i] = DTK_TZ;
 						break;
 
@@ -2418,7 +2387,7 @@ DecodeDateTime(char **field, int *ftype, int nf,
 		 * result afterwards anyway so we only check for this error: daylight
 		 * savings time modifier but no standard timezone?
 		 */
-		if ((fmask & DTK_DATE_M) == DTK_DATE_M && tzp != NULL && !(fmask & DTK_M(TZ)) && (fmask & DTK_M(DTZMOD)))
+		if ((fmask & DTK_DATE_M) == DTK_DATE_M && !(fmask & DTK_M(TZ)) && (fmask & DTK_M(DTZMOD)))
 			return -1;
 	}
 

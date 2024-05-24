@@ -79,6 +79,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 
@@ -3560,4 +3561,41 @@ getRelationIdentity(StringInfo buffer, Oid relid)
 												 NameStr(relForm->relname)));
 
 	ReleaseSysCache(relTup);
+}
+
+/*
+ * Auxiliary function to return a TEXT array out of a list of C-strings.
+ */
+ArrayType *
+strlist_to_textarray(List *list)
+{
+	ArrayType *arr;
+	Datum	*datums;
+	int		j = 0;
+	ListCell *cell;
+	MemoryContext memcxt;
+	MemoryContext oldcxt;
+
+	memcxt = AllocSetContextCreate(CurrentMemoryContext,
+								   "strlist to array",
+								   ALLOCSET_DEFAULT_MINSIZE,
+								   ALLOCSET_DEFAULT_INITSIZE,
+								   ALLOCSET_DEFAULT_MAXSIZE);
+	oldcxt = MemoryContextSwitchTo(memcxt);
+
+	datums = palloc(sizeof(text *) * list_length(list));
+	foreach(cell, list)
+	{
+		char   *name = lfirst(cell);
+
+		datums[j++] = CStringGetTextDatum(name);
+	}
+
+	MemoryContextSwitchTo(oldcxt);
+
+	arr = construct_array(datums, list_length(list),
+						  TEXTOID, -1, false, 'i');
+	MemoryContextDelete(memcxt);
+
+	return arr;
 }

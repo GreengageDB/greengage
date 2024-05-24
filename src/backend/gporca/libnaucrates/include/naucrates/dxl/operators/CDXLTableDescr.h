@@ -44,6 +44,9 @@ private:
 	// table name
 	CMDName *m_mdname;
 
+	// Optional table alias
+	CMDName *m_mdalias;
+
 	// list of column descriptors
 	CDXLColDescrArray *m_dxl_column_descr_array;
 
@@ -69,6 +72,11 @@ public:
 
 	// table name
 	const CMDName *MdName() const;
+
+	// table alias accessors
+	const CMDName *MdAlias() const;
+	void SetMdAlias(CMDName *alias);
+
 
 	// table mdid
 	IMDId *MDId() const;

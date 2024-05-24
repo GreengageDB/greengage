@@ -4134,7 +4134,6 @@ reset enable_seqscan;
 drop table l_table;
 drop table r_table1;
 drop table r_table2;
--- error when use motion deliver a lateral param
 create table ttt(tc1 varchar(10)) distributed randomly;
 create table ttt1(tc2 varchar(10)) distributed randomly;
 insert into ttt values('sdfs');
@@ -4153,8 +4152,23 @@ from
     where
       ttt.tc1=ttt1.tc2
 ) t on true;
-ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:3701)
--- issue: https://github.com/greenplum-db/gpdb/issues/10013
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Nested Loop Left Join
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on ttt
+   ->  Materialize
+         ->  Aggregate
+               ->  Result
+                     Filter: ((ttt.tc1)::text = (ttt1.tc2)::text)
+                     ->  Materialize
+                           ->  Gather Motion 3:1  (slice2; segments: 3)
+                                 ->  Seq Scan on ttt1
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+drop table ttt;
+drop table ttt1;
 drop table if exists t1;
 drop table if exists t2;
 drop type if exists mt;
@@ -4174,7 +4188,23 @@ cross join lateral
   union all
   select a+1, b from s where a+1 < 10)
  select * from s) x;
-ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:3703)
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=10000000001.01..10000000006.52 rows=35 width=69)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=33)
+         ->  Seq Scan on t1  (cost=0.00..1.01 rows=1 width=33)
+   ->  Materialize  (cost=1.01..5.14 rows=12 width=36)
+         ->  Recursive Union  (cost=1.01..4.29 rows=35 width=36)
+               ->  Result  (cost=1.01..1.01 rows=1 width=33)
+                     Filter: ((t1.b).x = (t2.b).y)
+                     ->  Materialize  (cost=1.01..1.01 rows=1 width=33)
+                           ->  Gather Motion 1:1  (slice2; segments: 1)  (cost=1.01..1.01 rows=1 width=33)
+                                 ->  Seq Scan on t2  (cost=0.00..1.01 rows=1 width=33)
+               ->  WorkTable Scan on s  (cost=0.00..0.26 rows=4 width=36)
+                     Filter: ((a + 1) < 10)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
 select * from t1
 cross join lateral
 (with recursive s as
@@ -4182,19 +4212,163 @@ cross join lateral
   union all
   select a+1, b from s where a+1 < 10)
  select * from s) x;
-ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:3701)
+ a |   b   | a |   b   
+---+-------+---+-------
+ 1 | (1,1) | 1 | (1,1)
+ 1 | (1,1) | 2 | (1,1)
+ 1 | (1,1) | 3 | (1,1)
+ 1 | (1,1) | 4 | (1,1)
+ 1 | (1,1) | 5 | (1,1)
+ 1 | (1,1) | 6 | (1,1)
+ 1 | (1,1) | 7 | (1,1)
+ 1 | (1,1) | 8 | (1,1)
+ 1 | (1,1) | 9 | (1,1)
+(9 rows)
+
+select * from t1
+cross join lateral
+(with s as
+ (select * from t2 where (t1.b).x = (t2.b).y
+  union
+  select a, b from t2 where a < 10)
+ select * from s) x;
+ a |   b   | a |   b   
+---+-------+---+-------
+ 1 | (1,1) | 1 | (1,1)
+(1 row)
+
 drop table t1;
 drop table t2;
 create table t1 (a int, b mt) distributed replicated;
 create table t2 (a int, b mt) distributed replicated;
 insert into t1 select i, '(1,1)' from generate_series(1, 1)i;
 insert into t2 select i, '(1,1)' from generate_series(1, 1)i;
+-- Test lateral join with a sub-query having all variants of set operations
 select * from t1
 cross join lateral
  (select * from t2 where (t1.b).x = (t2.b).y
   union
   select a+1, b from t1 where a+1 < 10) x;
-ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:3701)
+ a |   b   | a |   b   
+---+-------+---+-------
+ 1 | (1,1) | 1 | (1,1)
+ 1 | (1,1) | 2 | (1,1)
+(2 rows)
+
+select * from t1
+cross join lateral
+ (select * from t2 where (t1.b).x = (t2.b).y
+  union all
+  select a+1, b from t1 where a+1 < 10) x;
+ a |   b   | a |   b   
+---+-------+---+-------
+ 1 | (1,1) | 1 | (1,1)
+ 1 | (1,1) | 2 | (1,1)
+(2 rows)
+
+select * from t1
+cross join lateral
+ (select * from t2 where (t1.b).x = (t2.b).y
+  intersect 
+  select a+1, b from t1 where a+1 < 10) x;
+ a | b | a | b 
+---+---+---+---
+(0 rows)
+
+select * from t1
+cross join lateral
+ (select * from t2 where (t1.b).x = (t2.b).y
+  intersect all
+  select a+1, b from t1 where a+1 < 10) x;
+ a | b | a | b 
+---+---+---+---
+(0 rows)
+
+select * from t1
+cross join lateral
+ (select * from t2 where (t1.b).x = (t2.b).y
+  except 
+  select a+1, b from t1 where a+1 < 10) x;
+ a |   b   | a |   b   
+---+-------+---+-------
+ 1 | (1,1) | 1 | (1,1)
+(1 row)
+
+select * from t1
+cross join lateral
+ (select * from t2 where (t1.b).x = (t2.b).y
+  except all
+  select a+1, b from t1 where a+1 < 10) x;
+ a |   b   | a |   b   
+---+-------+---+-------
+ 1 | (1,1) | 1 | (1,1)
+(1 row)
+
+drop table t1;
+drop table t2;
+create table t1 (a int, b text, c int) distributed by (a);
+insert into t1 values (1, '', 1);
+-- Test lateral join with a sub-query having an aggregate function
+explain (costs off) select from (values ('')) tmp(b) join lateral
+(
+  select avg(c) from t1 where t1.b = tmp.b
+) s on true;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Nested Loop
+   ->  Values Scan on "*VALUES*"
+   ->  Materialize
+         ->  Aggregate
+               ->  Result
+                     Filter: (t1.b = "*VALUES*".column1)
+                     ->  Materialize
+                           ->  Gather Motion 3:1  (slice1; segments: 3)
+                                 ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select from (values ('')) tmp(b) join lateral
+(
+  select avg(c) from t1 where t1.b = tmp.b
+) s on true;
+--
+(1 row)
+
+-- Test lateral join with a nested sub-query having an aggregate function
+explain (costs off) select from (values ('')) tmp(b) join lateral
+(
+  select avg_c from
+  (
+	select avg(c) as avg_c from t1 where t1.b = tmp.b
+  ) s2 order by avg_c
+) s1 on true;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Nested Loop
+   ->  Values Scan on "*VALUES*"
+   ->  Materialize
+         ->  Sort
+               Sort Key: (avg(t1.c))
+               ->  Aggregate
+                     ->  Result
+                           Filter: (t1.b = "*VALUES*".column1)
+                           ->  Materialize
+                                 ->  Gather Motion 3:1  (slice1; segments: 3)
+                                       ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select from (values ('')) tmp(b) join lateral
+(
+  select avg_c from
+  (
+	select avg(c) as avg_c from t1 where t1.b = tmp.b
+  ) s2 order by avg_c
+) s1 on true;
+--
+(1 row)
+
+drop table t1;
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

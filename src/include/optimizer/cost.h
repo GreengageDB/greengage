@@ -18,6 +18,7 @@
 
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
+#include "utils/memutils.h"
 
 
 /* defaults for costsize.c's Cost parameters */
@@ -52,6 +53,35 @@ clamp_row_est(double nrows)
      * CDB: Don't round to integer.
 	 */
     return (nrows < 1.0) ? 1.0 : nrows;
+}
+
+/*
+ * clamp_width_est
+ *		Force a tuple-width estimate to a sane value.
+ *
+ * The planner represents datatype width and tuple width estimates as int32.
+ * When summing column width estimates to create a tuple width estimate,
+ * it's possible to reach integer overflow in edge cases.  To ensure sane
+ * behavior, we form such sums in int64 arithmetic and then apply this routine
+ * to clamp to int32 range.
+ */
+static inline int32
+clamp_width_est(int64 tuple_width)
+{
+	/*
+	 * Anything more than MaxAllocSize is clearly bogus, since we could not
+	 * create a tuple that large.
+	 */
+	if (tuple_width > MaxAllocSize)
+		return (int32) MaxAllocSize;
+
+	/*
+	 * Unlike clamp_row_est, we just Assert that the value isn't negative,
+	 * rather than masking such errors.
+	 */
+	Assert(tuple_width >= 0);
+
+	return (int32) tuple_width;
 }
 
 

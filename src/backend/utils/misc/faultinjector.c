@@ -918,7 +918,7 @@ HandleFaultMessage(const char* msg)
 	char *result;
 	int len;
 
-	if (sscanf(msg, "faultname=%s type=%s ddl=%s db=%s table=%s "
+	if (sscanf(msg, "faultname=%63s type=%63s ddl=%63s db=%63s table=%63s "
 			   "start=%d end=%d extra=%d sid=%d",
 			   name, type, ddl, db, table, &start, &end, &extra, &sid) != 9)
 		elog(ERROR, "invalid fault message: %s", msg);

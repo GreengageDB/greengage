@@ -107,3 +107,9 @@ For example, cross_subnet tests or tests with tag `concourse_cluster` currently 
 Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
 
 Docker containers have installed `sigar` libraries. It is required only for `gpperfmon` tests.
+
+## Resource group test
+
+```bash
+bash arenadata/scripts/run_resgroup_test.bash
+```
