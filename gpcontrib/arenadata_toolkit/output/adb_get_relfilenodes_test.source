@@ -1,6 +1,6 @@
 SET client_min_messages=WARNING;
-\! mkdir -p /tmp/arenadata_toolkit_test
-CREATE TABLESPACE arenadata_test location '/tmp/arenadata_toolkit_test/';
+\! rm -rf @testtablespace@ && mkdir @testtablespace@;
+CREATE TABLESPACE arenadata_test location '@testtablespace@';
 CREATE EXTENSION arenadata_toolkit;
 SELECT arenadata_toolkit.adb_create_tables();
  adb_create_tables 
@@ -121,7 +121,7 @@ EXPLAIN SELECT * from arenadata_toolkit.adb_get_relfilenodes(1);
 
 -- Cleanup
 DROP TABLESPACE arenadata_test;
-\! rm -rf /tmp/arenadata_toolkit_test
+\! rm -rf @testtablespace@
 DROP EXTENSION arenadata_toolkit;
-DROP SCHEMA arenadata_toolkit cascade;
+DROP SCHEMA arenadata_toolkit CASCADE;
 RESET client_min_messages;

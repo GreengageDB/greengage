@@ -1,3 +1,9 @@
+-- start_ignore
+-- Prepare DB for the test
+DROP EXTENSION IF EXISTS arenadata_toolkit;
+DROP SCHEMA IF EXISTS arenadata_toolkit CASCADE;
+--end_ignore
+
 CREATE EXTENSION arenadata_toolkit;
 SET search_path = arenadata_toolkit;
 
