@@ -819,7 +819,8 @@ pclose_with_stderr(int pid, int *pipes, StringInfo sinfo)
 	/* close the data pipe. we can now read from error pipe without being blocked */
 	close(pipes[EXEC_DATA_P]);
 
-	read_err_msg(pipes[EXEC_ERR_P], sinfo);
+	if (sinfo->data)
+		read_err_msg(pipes[EXEC_ERR_P], sinfo);
 
 	close(pipes[EXEC_ERR_P]);
 
