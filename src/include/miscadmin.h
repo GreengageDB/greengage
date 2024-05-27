@@ -101,6 +101,7 @@ extern PGDLLIMPORT volatile sig_atomic_t ClientConnectionLost;
 extern PGDLLIMPORT volatile sig_atomic_t CheckClientConnectionPending;
 
 /* these are marked volatile because they are examined by signal handlers: */
+extern PGDLLIMPORT volatile sig_atomic_t TermSignalReceived;
 extern PGDLLIMPORT volatile int32 InterruptHoldoffCount;
 extern PGDLLIMPORT volatile int32 QueryCancelHoldoffCount;
 extern PGDLLIMPORT volatile int32 CritSectionCount;

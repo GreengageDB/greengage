@@ -586,3 +586,17 @@ end if; /* in func */
 end loop; /* in func */
 end; /* in func */
 $$ language plpgsql;
+
+--
+-- exec_cmd_on_segments:
+--   Execute shell command on all segments
+--
+create or replace function exec_cmd_on_segments(cmd text)
+returns table(result text) as $$
+    import subprocess
+    returncode = subprocess.call(cmd, shell=True)
+    if returncode == 0:
+        return ['OK']
+    else:
+        return ['Fail']
+$$ language plpython3u execute on all segments;

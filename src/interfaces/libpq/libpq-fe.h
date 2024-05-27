@@ -316,6 +316,8 @@ extern void PQfreeCancel(PGcancel *cancel);
 /* issue a cancel request */
 extern int	PQcancel(PGcancel *cancel, char *errbuf, int errbufsize);
 
+extern void PQbypassConnCloseAtCancel(pqbool bypass); /* GPDB only */
+
 /* issue a finsh request */
 extern int	PQrequestFinish(PGcancel *cancel, char *errbuf, int errbufsize);
 

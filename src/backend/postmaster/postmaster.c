@@ -5870,6 +5870,29 @@ sigusr1_handler(SIGNAL_ARGS)
 		signal_child(DtxRecoveryPID(), SIGINT);
 	}
 
+	if (CheckPostmasterSignal(PMSIGNAL_FTS_PROMOTED_MIRROR))
+	{
+		/*
+		 * Notify all child coordinator backends that FTS has promoted a mirror.
+		 */
+		if (pmState == PM_RUN &&
+			IS_QUERY_DISPATCHER())
+		{
+			dlist_iter	iter;
+			dlist_foreach(iter, &BackendList)
+			{
+				Backend *bp = dlist_container(Backend, elem, iter.cur);
+
+				if (bp->dead_end || !(BACKEND_TYPE_NORMAL & bp->bkend_type))
+					continue;
+
+				SendProcSignal(bp->pid,
+							   PROCSIG_FTS_PROMOTED_MIRROR,
+							   InvalidBackendId);
+			}
+		}
+	}
+
 	/*
 	 * Try to advance postmaster's state machine, if a child requests it.
 	 *

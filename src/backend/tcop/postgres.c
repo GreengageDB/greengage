@@ -3553,6 +3553,7 @@ die(SIGNAL_ARGS)
 	{
 		InterruptPending = true;
 		ProcDiePending = true;
+		TermSignalReceived = true;
 	}
 
 	/* If we're still here, waken anything waiting on the process latch */

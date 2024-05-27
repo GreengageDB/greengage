@@ -20,6 +20,7 @@
 #include "access/parallel.h"
 #include "cdb/cdbvars.h"
 #include "commands/async.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
 #include "replication/walsender.h"
 #include "storage/ipc.h"
@@ -274,6 +275,23 @@ QueryFinishHandler(void)
 }
 
 /*
+ * Coordinator postmaster signals that FTS has detected a failed segment and
+ * promoted the mirror.
+ */
+static void
+FtsPromotedMirrorHandler(void)
+{
+	/*
+	 * In case the promotion is done during cancel or termination of a query,
+	 * there is a very high chance that libpq will be stuck forever trying to
+	 * wait cancel confirmation from the segment, which is not responding. Code
+	 * below handles this case.
+	 */
+	if (QueryCancelCleanup || TermSignalReceived)
+		PQbypassConnCloseAtCancel(true);
+}
+
+/*
  * procsignal_sigusr1_handler - handle SIGUSR1 signal.
  */
 void
@@ -319,6 +337,9 @@ procsignal_sigusr1_handler(SIGNAL_ARGS)
 
 	if (CheckProcSignal(PROCSIG_RESOURCE_GROUP_MOVE_QUERY))
 		HandleMoveResourceGroup();
+
+	if (CheckProcSignal(PROCSIG_FTS_PROMOTED_MIRROR))
+		FtsPromotedMirrorHandler();
 
 	SetLatch(MyLatch);
 

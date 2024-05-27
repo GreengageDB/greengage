@@ -46,6 +46,8 @@ typedef enum
 	PROCSIG_QUERY_FINISH,		/* query finish */
 	PROCSIG_RESOURCE_GROUP_MOVE_QUERY,	/* move query to a new resource group */
 
+	PROCSIG_FTS_PROMOTED_MIRROR, /* FTS has detected failed primary and promoted mirror*/
+
 	NUM_PROCSIGNALS				/* Must be last! */
 } ProcSignalReason;
 

@@ -40,6 +40,8 @@ volatile sig_atomic_t QueryCancelCleanup = false;
 volatile sig_atomic_t QueryCancelPending = false;
 volatile sig_atomic_t QueryFinishPending = false;
 
+volatile sig_atomic_t TermSignalReceived = false;
+
 /*
  * GPDB: Make these signed integers (instead of uint32) to detect garbage
  * negative values.
