@@ -213,3 +213,17 @@ create or replace function pg_controldata_redo_lsn(datadir text)
     cmd = 'pg_controldata %s | grep \"Latest checkpoint\'s REDO location\"' % datadir
     return subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).split(':')[1].strip()
 $$ language plpythonu;
+
+--
+-- exec_cmd_on_segments:
+--   Execute shell command on all segments
+--
+create or replace function exec_cmd_on_segments(cmd text)
+returns text as $$
+    import subprocess
+    returncode = subprocess.call(cmd, shell=True)
+    if returncode == 0:
+        return 'OK'
+    else:
+        return 'Fail'
+$$ language plpythonu execute on all segments;

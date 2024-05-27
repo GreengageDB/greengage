@@ -662,6 +662,9 @@ cdbcomponent_cleanupIdleQEs(bool includeWriter)
 		}
 	}
 
+	/* reset flag in libpq, that is used to avoid stuck in a loop in PQcancel*/
+	PQbypassConnCloseAtCancel(false);
+
 	return;
 }
 
