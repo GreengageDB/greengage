@@ -493,10 +493,7 @@ KeepFileRestoredFromArchive(char *path, char *xlogfname)
 	 * Create .done file forcibly to prevent the restored segment from being
 	 * archived again later.
 	 */
-	if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
-		XLogArchiveForceDone(xlogfname);
-	else
-		XLogArchiveNotify(xlogfname);
+	XLogArchiveForceDone(xlogfname);
 
 	/*
 	 * If the existing file was replaced, since walsenders might have it open,
