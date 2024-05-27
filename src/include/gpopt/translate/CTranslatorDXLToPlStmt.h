@@ -160,21 +160,9 @@ private:
 	static BOOL SetIndexVarAttnoWalker(
 		Node *node, SContextIndexVarAttno *ctxt_index_var_attno_walker);
 
-	// context for identifying lock mode of root partition
-	struct SCtxGetParentLockMode
-	{
-		OID relid;
-		LOCKMODE lockmode;
-	};
+	static BOOL AcquireLocksOnChildAORelations(Query *parsetree, OID oidRel);
 
-	static void AcquireLocksOnChildRelations(OID parentOid,
-											 List *staticPartOids,
-											 LOCKMODE lockmode);
-
-	static LOCKMODE EvalLockModeForChildRelations(Query *parsetree, OID relid);
-
-	static BOOL EvalLockModeForChildRelationsWalker(Node *node,
-													SCtxGetParentLockMode *ctx);
+	static BOOL AcquireLocksOnChildAORelationsWalker(Node *node, OID *oidRel);
 
 public:
 	// ctor
