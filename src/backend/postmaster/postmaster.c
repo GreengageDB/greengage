@@ -521,17 +521,6 @@ static void setProcAffinity(int id);
 
 bool isAuxiliaryBgWorker(BackgroundWorker *worker);
 
-/*
- * Archiver is allowed to start up at the current postmaster state?
- *
- * If WAL archiving is enabled always, we are allowed to start archiver
- * even during recovery.
- */
-#define PgArchStartupAllowed()	\
-	((XLogArchivingActive() && pmState == PM_RUN) ||	\
-	 (XLogArchivingAlways() &&	\
-	  (pmState == PM_RECOVERY || pmState == PM_HOT_STANDBY)))
-
 #ifdef EXEC_BACKEND
 
 #ifdef WIN32
@@ -2060,9 +2049,21 @@ ServerLoop(void)
 			(pmState == PM_RUN || pmState == PM_HOT_STANDBY))
 			PgStatPID = pgstat_start();
 
-		/* If we have lost the archiver, try to start a new one. */
-		if (PgArchPID == 0 && PgArchStartupAllowed())
+		/*
+		 * If we have lost the archiver, try to start a new one.
+		 *
+		 * If WAL archiving is enabled always, we try to start a new archiver
+		 * even during recovery.
+		 */
+		if (PgArchPID == 0 && wal_level >= WAL_LEVEL_ARCHIVE)
+		{
+			if ((pmState == PM_RUN && XLogArchiveMode > ARCHIVE_MODE_OFF) ||
+				((pmState == PM_RECOVERY || pmState == PM_HOT_STANDBY) &&
+				 XLogArchiveMode == ARCHIVE_MODE_ALWAYS))
+			{
 				PgArchPID = pgarch_start();
+			}
+		}
 
 		/* If we need to signal the autovacuum launcher, do so now */
 		if (avlauncher_needs_signal)
@@ -3366,7 +3367,7 @@ reaper(SIGNAL_ARGS)
 			 */
 			if (!IsBinaryUpgrade && AutoVacuumingActive() && AutoVacPID == 0)
 				AutoVacPID = StartAutoVacLauncher();
-			if (PgArchStartupAllowed() && PgArchPID == 0)
+			if (XLogArchivingActive() && PgArchPID == 0)
 				PgArchPID = pgarch_start();
 			if (PgStatPID == 0)
 				PgStatPID = pgstat_start();
@@ -3523,7 +3524,7 @@ reaper(SIGNAL_ARGS)
 			if (!EXIT_STATUS_0(exitstatus))
 				LogChildExit(LOG, _("archiver process"),
 							 pid, exitstatus);
-			if (PgArchStartupAllowed())
+			if (XLogArchivingActive() && pmState == PM_RUN)
 				PgArchPID = pgarch_start();
 			continue;
 		}
@@ -5608,8 +5609,11 @@ sigusr1_handler(SIGNAL_ARGS)
 		 * files.
 		 */
 		Assert(PgArchPID == 0);
-		if (XLogArchivingAlways())
+		if (wal_level >= WAL_LEVEL_ARCHIVE &&
+			XLogArchiveMode == ARCHIVE_MODE_ALWAYS)
+		{
 			PgArchPID = pgarch_start();
+		}
 
 		pmState = PM_RECOVERY;
 	}
