@@ -228,9 +228,6 @@ enum EOptTraceFlag
 	// Discard HashJoin with RedistributeMotion nodes
 	EopttraceDiscardRedistributeHashJoin = 103044,
 
-	// Keep locks on partition children during planning
-	EopttraceKeepPartitionChildrenLocks = 103045,
-
 	///////////////////////////////////////////////////////
 	///////////////////// statistics flags ////////////////
 	//////////////////////////////////////////////////////

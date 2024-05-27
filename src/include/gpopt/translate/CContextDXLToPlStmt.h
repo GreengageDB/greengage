@@ -128,16 +128,14 @@ private:
 	// CTAS distribution policy
 	GpPolicy *m_distribution_policy;
 
-	const Query *m_orig_query;
-
 public:
 	// ctor/dtor
 	CContextDXLToPlStmt(CMemoryPool *mp, CIdGenerator *plan_id_counter,
 						CIdGenerator *motion_id_counter,
 						CIdGenerator *param_id_counter,
 						DistributionHashOpsKind distribution_hashops,
-						List **rtable_entries_list, List **subplan_entries_list,
-						const Query *orig_query);
+						List **rtable_entries_list,
+						List **subplan_entries_list);
 
 	// dtor
 	~CContextDXLToPlStmt();
@@ -217,12 +215,6 @@ public:
 	// based on decision made by DetermineDistributionHashOpclasses()
 	Oid GetDistributionHashOpclassForType(Oid typid);
 	Oid GetDistributionHashFuncForType(Oid typid);
-
-	const Query *
-	GetQuery() const
-	{
-		return m_orig_query;
-	}
 };
 
 }  // namespace gpdxl
