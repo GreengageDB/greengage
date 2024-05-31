@@ -374,6 +374,8 @@ NOTICE:  table "rep2" does not exist, skipping
 create table rep1 (id bigserial not null, isc varchar(15) not null,iscd varchar(15) null) distributed replicated;
 create table rep2 (id numeric null, rc varchar(255) null,ri numeric null) distributed replicated;
 insert into rep1 (isc,iscd) values ('cmn_bin_yes', 'cmn_bin_yes');
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Volatile functions with replicated relations
 insert into rep2 (id,rc,ri) values (113551,'cmn_bin_yes',101991), (113552,'cmn_bin_no',101991), (113553,'cmn_bin_err',101991), (113554,'cmn_bin_null',101991);
 explain (analyze off, costs off, verbose off)
 with
