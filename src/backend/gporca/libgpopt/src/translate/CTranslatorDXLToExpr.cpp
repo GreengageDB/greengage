@@ -574,8 +574,13 @@ CTranslatorDXLToExpr::PexprLogicalGet(const CDXLNode *dxlnode)
 
 	CTableDescriptor *ptabdesc = Ptabdesc(table_descr);
 
-	CWStringConst strAlias(m_mp,
-						   table_descr->MdName()->GetMDName()->GetBuffer());
+	const gpmd::CMDName *ptabalias = table_descr->MdName();
+	if (NULL != table_descr->MdAlias())
+	{
+		ptabalias = table_descr->MdAlias();
+	}
+
+	CWStringConst strAlias(m_mp, ptabalias->GetMDName()->GetBuffer());
 
 	// create a logical get or dynamic get operator
 	CName *pname = GPOS_NEW(m_mp) CName(m_mp, CName(&strAlias));
@@ -1427,9 +1432,16 @@ CTranslatorDXLToExpr::PexprLogicalDelete(const CDXLNode *dxlnode)
 
 	ULONG ctid_colid = pdxlopDelete->GetCtIdColId();
 	ULONG segid_colid = pdxlopDelete->GetSegmentIdColId();
+	ULONG tableoid_colid = pdxlopDelete->GeTableOidColId();
 
 	CColRef *pcrCtid = LookupColRef(m_phmulcr, ctid_colid);
 	CColRef *pcrSegmentId = LookupColRef(m_phmulcr, segid_colid);
+	CColRef *pcrTableOid = NULL;
+
+	if (0 != tableoid_colid)
+	{
+		pcrTableOid = LookupColRef(m_phmulcr, tableoid_colid);
+	}
 
 	ULongPtrArray *pdrgpulCols = pdxlopDelete->GetDeletionColIdArray();
 	CColRefArray *colref_array =
@@ -1437,8 +1449,8 @@ CTranslatorDXLToExpr::PexprLogicalDelete(const CDXLNode *dxlnode)
 
 	return GPOS_NEW(m_mp) CExpression(
 		m_mp,
-		GPOS_NEW(m_mp)
-			CLogicalDelete(m_mp, ptabdesc, colref_array, pcrCtid, pcrSegmentId),
+		GPOS_NEW(m_mp) CLogicalDelete(m_mp, ptabdesc, colref_array, pcrCtid,
+									  pcrSegmentId, pcrTableOid),
 		pexprChild);
 }
 
@@ -1471,9 +1483,16 @@ CTranslatorDXLToExpr::PexprLogicalUpdate(const CDXLNode *dxlnode)
 
 	ULONG ctid_colid = pdxlopUpdate->GetCtIdColId();
 	ULONG segid_colid = pdxlopUpdate->GetSegmentIdColId();
+	ULONG tableoid_colid = pdxlopUpdate->GetTableOidColId();
 
 	CColRef *pcrCtid = LookupColRef(m_phmulcr, ctid_colid);
 	CColRef *pcrSegmentId = LookupColRef(m_phmulcr, segid_colid);
+	CColRef *pcrTableOid = NULL;
+
+	if (0 != tableoid_colid)
+	{
+		pcrTableOid = LookupColRef(m_phmulcr, tableoid_colid);
+	}
 
 	ULongPtrArray *pdrgpulInsertCols = pdxlopUpdate->GetInsertionColIdArray();
 	CColRefArray *pdrgpcrInsert =
@@ -1490,12 +1509,12 @@ CTranslatorDXLToExpr::PexprLogicalUpdate(const CDXLNode *dxlnode)
 		pcrTupleOid = LookupColRef(m_phmulcr, tuple_oid);
 	}
 
-	return GPOS_NEW(m_mp)
-		CExpression(m_mp,
-					GPOS_NEW(m_mp) CLogicalUpdate(m_mp, ptabdesc, pdrgpcrDelete,
-												  pdrgpcrInsert, pcrCtid,
-												  pcrSegmentId, pcrTupleOid),
-					pexprChild);
+	return GPOS_NEW(m_mp) CExpression(
+		m_mp,
+		GPOS_NEW(m_mp)
+			CLogicalUpdate(m_mp, ptabdesc, pdrgpcrDelete, pdrgpcrInsert,
+						   pcrCtid, pcrSegmentId, pcrTupleOid, pcrTableOid),
+		pexprChild);
 }
 
 //---------------------------------------------------------------------------
@@ -2100,6 +2119,11 @@ CTranslatorDXLToExpr::Ptabdesc(CDXLTableDescr *table_descr)
 	CTableDescriptor *ptabdesc = GPOS_NEW(m_mp) CTableDescriptor(
 		m_mp, mdid, CName(m_mp, &strName), pmdrel->ConvertHashToRandom(),
 		rel_distr_policy, rel_storage_type, table_descr->GetExecuteAsUserId());
+
+	if (NULL != table_descr->MdAlias())
+	{
+		ptabdesc->SetAlias(table_descr->MdAlias()->GetMDName());
+	}
 
 	const ULONG ulColumns = table_descr->Arity();
 	for (ULONG ul = 0; ul < ulColumns; ul++)

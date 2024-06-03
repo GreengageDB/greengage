@@ -68,6 +68,10 @@ CParseHandlerLogicalDelete::StartElement(const XMLCh *const,  // element_uri,
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
 		EdxltokenGpSegmentIdColId, EdxltokenLogicalDelete);
 
+	m_table_oid_colid = CDXLOperatorFactory::ExtractConvertAttrValueToUlong(
+		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenOidColId,
+		EdxltokenLogicalDelete, true, 0);
+
 	const XMLCh *deletion_colids = CDXLOperatorFactory::ExtractAttrValue(
 		attrs, EdxltokenDeleteCols, EdxltokenLogicalDelete);
 	m_deletion_colid_array = CDXLOperatorFactory::ExtractIntsToUlongArray(
@@ -124,6 +128,9 @@ CParseHandlerLogicalDelete::EndElement(const XMLCh *const,	// element_uri,
 	CParseHandlerLogicalOp *logical_op_parse_handler =
 		dynamic_cast<CParseHandlerLogicalOp *>((*this)[1]);
 
+	GPOS_ASSERT(NULL != table_descr_parse_handler);
+	GPOS_ASSERT(NULL != logical_op_parse_handler);
+
 	GPOS_ASSERT(NULL != table_descr_parse_handler->GetDXLTableDescr());
 	GPOS_ASSERT(NULL != logical_op_parse_handler->CreateDXLNode());
 
@@ -133,7 +140,7 @@ CParseHandlerLogicalDelete::EndElement(const XMLCh *const,	// element_uri,
 	m_dxl_node = GPOS_NEW(m_mp)
 		CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLLogicalDelete(
 						   m_mp, table_descr, m_ctid_colid, m_segid_colid,
-						   m_deletion_colid_array));
+						   m_deletion_colid_array, m_table_oid_colid));
 
 	AddChildFromParseHandler(logical_op_parse_handler);
 

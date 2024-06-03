@@ -41,8 +41,10 @@
 #include "utils/syscache.h"
 
 #include "cdb/cdbmutate.h"
+#include "cdb/cdbsetop.h"
 #include "cdb/cdbsubselect.h"
 #include "cdb/cdbvars.h"
+
 
 typedef struct convert_testexpr_context
 {
@@ -667,15 +669,6 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 							&subroot,
 							config);
 
-	if ((plan->flow->locustype == CdbLocusType_SegmentGeneral ||
-		 plan->flow->locustype == CdbLocusType_General) &&
-		(contain_volatile_functions((Node *) plan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		plan->flow->locustype = CdbLocusType_SingleQE;
-		plan->flow->flotype = FLOW_SINGLETON;
-	}
-
 	/* Isolate the params needed by this specific subplan */
 	plan_params = root->plan_params;
 	root->plan_params = NIL;
@@ -979,13 +972,12 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		root->init_plans = lappend(root->init_plans, splan);
 
 	/*
-	 * A parameterless subplan (not initplan) should be prepared to handle
-	 * REWIND efficiently.  If it has direct parameters then there's no point
-	 * since it'll be reset on each scan anyway; and if it's an initplan then
-	 * there's no point since it won't get re-run without parameter changes
-	 * anyway.  The input of a hashed subplan doesn't need REWIND either.
+	 * Executor passes EXEC_REWIND flag to the plan nodes in order to indicate
+	 * that underlying node or subplan are likely to be rescanned. Moreover,
+	 * for any SubPlan, except InitPlans, rescan is expected and EXEC_REWIND
+	 * should be set for them. EXEC_REWIND also allows to delay the eager free.
 	 */
-	if (splan->parParam == NIL && !splan->is_initplan && !splan->useHashTable)
+	if (!splan->is_initplan)
 		root->glob->rewindPlanIDs = bms_add_member(root->glob->rewindPlanIDs,
 												   splan->plan_id);
 

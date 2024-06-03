@@ -130,6 +130,8 @@ CdbDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 
 		*numresults = 0;
 		cdbdisp_destroyDispatcherState(ds);
+
+		*numresults = 0;
 		return NULL;
 	}
 

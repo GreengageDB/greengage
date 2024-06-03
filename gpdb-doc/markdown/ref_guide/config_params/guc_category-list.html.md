@@ -125,6 +125,7 @@ These parameters control the usage of GPORCA by Greenplum Database. For informat
 - [optimizer_enable_multiple_distinct_aggs](guc-list.html#optimizer_enable_multiple_distinct_aggs)
 - [optimizer_enable_orderedagg](guc-list.html#optimizer_enable_orderedagg)
 - [optimizer_enable_replicated_table](guc-list.html#optimizer_enable_replicated_table)
+- [optimizer_enable_table_alias](guc-list.html#optimizer_enable_table_alias)
 - [optimizer_force_agg_skew_avoidance](guc-list.html#optimizer_force_agg_skew_avoidance)
 - [optimizer_force_comprehensive_join_implementation](guc-list.html#optimizer_force_comprehensive_join_implementation)
 - [optimizer_force_multistage_agg](guc-list.html#optimizer_force_multistage_agg)
@@ -303,6 +304,7 @@ These parameters enable and configure query metrics collection. When enabled, Gr
 
 - [gp_enable_query_metrics](guc-list.html#gp_enable_query_metrics)
 - [gp_instrument_shmem_size](guc-list.html#gp_instrument_shmem_size)
+- [gp_max_scan_on_shmem](guc-list.html#gp_max_scan_on_shmem)
 
 ## <a id="topic37"></a>Runtime Statistics Collection Parameters 
 
@@ -340,6 +342,7 @@ These configuration parameters set defaults that are used for client connections
 - [search_path](guc-list.html#search_path)
 - [statement_timeout](guc-list.html#statement_timeout)
 - [temp_tablespaces](guc-list.html#temp_tablespaces)
+- [temp_spill_files_tablespaces](guc-list.html#temp_spill_files_tablespaces)
 - [vacuum_freeze_min_age](guc-list.html#vacuum_freeze_min_age)
 
 ### <a id="topic41"></a>Locale and Formatting Parameters 

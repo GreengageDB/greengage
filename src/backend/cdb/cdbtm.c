@@ -63,6 +63,7 @@ typedef struct TmControlBlock
 	DistributedTransactionId	seqno;
 	bool						DtmStarted;
 	pid_t						DtxRecoveryPid;
+	bool						CleanupBackends;
 	uint32						NextSnapshotId;
 	int							num_committed_xacts;
 	slock_t						gxidGenLock;
@@ -111,6 +112,12 @@ int	max_tm_gxacts = 100;
 #define GP_OPT_READ_ONLY         						0x0010
 
 #define GP_OPT_EXPLICT_BEGIN      						0x0020
+
+/*
+ * Some context to distinguish between user-invoked SET commands and explicit
+ * QD to QE config synchronization.
+ */
+#define GP_OPT_SYNCHRONIZATION_SET						0x0040
 
 /*=========================================================================
  * FUNCTIONS PROTOTYPES
@@ -1155,6 +1162,7 @@ tmShmemInit(void)
 	}
 	shmDtmStarted = &shared->DtmStarted;
 	shmDtxRecoveryPid = &shared->DtxRecoveryPid;
+	shmCleanupBackends = &shared->CleanupBackends;
 	shmNextSnapshotId = &shared->NextSnapshotId;
 	shmNumCommittedGxacts = &shared->num_committed_xacts;
 	shmGxidGenLock = &shared->gxidGenLock;
@@ -1166,6 +1174,7 @@ tmShmemInit(void)
 		*shmNextSnapshotId = 0;
 		*shmDtmStarted = false;
 		*shmDtxRecoveryPid = 0;
+		*shmCleanupBackends = false;
 		*shmNumCommittedGxacts = 0;
 	}
 }
@@ -1214,6 +1223,17 @@ mppTxnOptions(bool needDtx)
 }
 
 int
+mppTxnOptionsForSync(bool needDtx, bool isSync)
+{
+	int flags = mppTxnOptions(needDtx);
+
+	if (isSync)
+		flags |= GP_OPT_SYNCHRONIZATION_SET;
+
+	return flags;
+}
+
+int
 mppTxOptions_IsoLevel(int txnOptions)
 {
 	if ((txnOptions & GP_OPT_ISOLATION_LEVEL_MASK) == GP_OPT_SERIALIZABLE)
@@ -1247,6 +1267,12 @@ bool
 isMppTxOptions_ExplicitBegin(int txnOptions)
 {
 	return ((txnOptions & GP_OPT_EXPLICT_BEGIN) != 0);
+}
+
+bool
+isMppTxOptions_SynchronizationSet(int txnOptions)
+{
+	return ((txnOptions & GP_OPT_SYNCHRONIZATION_SET) != 0);
 }
 
 /*=========================================================================
@@ -1283,7 +1309,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 							 int serializedDtxContextInfoLen)
 {
 	int			i,
-				resultCount,
+				resultCount = 0,
 				numOfFailed = 0;
 
 	char	   *dtxProtocolCommandStr = 0;
@@ -1338,8 +1364,8 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 
 	if (results == NULL)
 	{
-		numOfFailed++;			/* If we got no results, we need to treat it
-								 * as an error! */
+		/* If we got no results, we need to treat it as an error! */
+		return false;
 	}
 
 	for (i = 0; i < resultCount; i++)
@@ -1422,8 +1448,7 @@ doDispatchDtxProtocolCommand(DtxProtocolCommand dtxProtocolCommand,
 	if (waitGxids)
 		pfree(waitGxids);
 
-	if (results)
-		pfree(results);
+	pfree(results);
 
 	return (numOfFailed == 0);
 }

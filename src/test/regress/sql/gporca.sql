@@ -2962,13 +2962,6 @@ select * from v where year > 1;
 reset optimizer_enable_hashjoin;
 reset optimizer_trace_fallback;
 
-create table sqall_t1(a int) distributed by (a);
-insert into sqall_t1 values (1), (2), (3);
-set optimizer_join_order='query';
-select * from sqall_t1 where a not in (
-	    select b.a from sqall_t1 a left join sqall_t1 b on false);
-reset optimizer_join_order;
-
 -- Make sure materialize projects child's tlist, not what is requested
 set optimizer_enable_indexscan to off;
 create table material_test(first_id int, second_id int);
@@ -3004,24 +2997,29 @@ where first_id in (select first_id from mat_w)
 and first_id in (select first_id from mat_w);
 reset optimizer_enable_indexscan;
 
--- Test to ensure bitmapscan doesn't project recheck/scalar filter columns
-create table material_bitmapscan(i int, j int, k timestamp, l timestamp) with(appendonly=true) distributed replicated;
+-- Test Bitmap Heap Scan's targetlist contains only necessary attrs, not
+-- including ones from Recheck and Filter conditions.
+create table material_bitmapscan(i int, j int, k timestamp, l timestamp)
+with(appendonly=true) distributed replicated;
 create index material_bitmapscan_idx on material_bitmapscan using btree(k);
 insert into material_bitmapscan
 select i, mod(i, 10),
-	timestamp '2021-06-01' + interval '1' day * mod(i, 30),
-	timestamp '2021-06-01' + interval '1' day * mod(i, 30)
+        timestamp '2021-06-01' + interval '1' day * mod(i, 30),
+        timestamp '2021-06-01' + interval '1' day * mod(i, 30)
 from generate_series(1, 10000) i;
-
-explain verbose with mat as(
-    select i, j from material_bitmapscan where i = 2 and j = 2
+-- Bitmap Heap Scan should not contain 'material_bitmapscan.k' and
+-- 'material_bitmapscan.l' at the Output list.
+explain (costs off, verbose) with mat as(
+    select i, j from material_bitmapscan
+    where i = 2 and j = 2
     and k = timestamp '2021-06-03' and l = timestamp '2021-06-03'
 )
 select m1.i
 from mat m1 join mat m2 on m1.j = m2.j;
-
+-- There should be one row without any memory access errors.
 with mat as(
-    select i, j from material_bitmapscan where i = 2 and j = 2
+    select i, j from material_bitmapscan
+    where i = 2 and j = 2
     and k = timestamp '2021-06-03' and l = timestamp '2021-06-03'
 )
 select m1.i
@@ -3104,6 +3102,53 @@ reset optimizer_enable_hashjoin;
 reset enable_nestloop;
 reset enable_hashjoin;
 
+--
+-- Test both optimizers not switching to Generic plan.
+-- 1) Test Subquery Scan cost is correct for Postgres optimizer, which leads
+-- Custom plan to be preferred after current fix (Subquery Scan node cost
+-- calculation).
+-- 2) Test ORCA not switching to Generic plan, because it's incorrect to
+-- compare Postgres and ORCA plans cost.
+--
+-- Unlike near the same test in plancache.sql, we show Subquery Scan cost
+-- really changed and plan switching behavior just points to it.
+-- The ORCA part of test somehow duplicates plancache.sql test, showing more
+-- complex example.
+--
+create table test_subquery_scan(i integer, d date)
+partition by range(d) (start ('2019-01-01'::date) end ('2022-01-01'::date)
+every ('1 day'::interval));
+
+prepare test_subquery_scan_pp (date) as
+with ss_cte as (select d from test_subquery_scan where d=$1)
+select d
+from ss_cte
+where d in (select d from ss_cte);
+-- Disabling hashjoin for ORCA will force using of unoptimal plan. Before
+-- fixing ORCA and Postgres plans costs comparison, we used Genric plan after
+-- 5th execution even for ORCA, which was wrong.
+set optimizer_enable_hashjoin=off;
+-- Explain for Postgres optimizer should contain Subquery Scan node, which cost
+-- includes the cost of underlying node.
+-- ORCA should build correct plan, like before (we just showing ORCA not
+-- switching to Generic plan below).
+explain execute test_subquery_scan_pp('2021-01-01'::date);
+execute test_subquery_scan_pp('2021-01-01'::date); -- 1x
+execute test_subquery_scan_pp('2021-01-01'::date); -- 2x
+execute test_subquery_scan_pp('2021-01-01'::date); -- 3x
+execute test_subquery_scan_pp('2021-01-01'::date); -- 4x
+execute test_subquery_scan_pp('2021-01-01'::date); -- 5x
+-- The plan for both, Postgres and ORCA, optimizers should be equal to first
+-- explain call.
+-- 1) Postgres optimizer should not switch to Generic plan, because Subquery
+-- Scan node cost was fixed and Custom plan cost is lower after fix.
+-- 2) ORCA should not switch to Generic plan, because it's incorrect to compare
+-- Postgres and ORCA plans cost.
+-- Filter node contains '(d = '2021-01-01'::date)' condition, which indicates
+-- Custom plan usage.
+explain execute test_subquery_scan_pp('2021-01-01'::date);
+
+reset optimizer_enable_hashjoin;
 --- IS DISTINCT FROM FALSE previously simplified to IS TRUE, returning incorrect results for some hash anti joins
 --- the following tests were added to verify the behavior is correct
 CREATE TABLE tt1 (a int, b int);

@@ -175,6 +175,13 @@ CParseHandlerNLJoin::EndElement(const XMLCh *const,	 // element_uri,
 	CParseHandlerPhysicalOp *right_child_parse_handler =
 		dynamic_cast<CParseHandlerPhysicalOp *>((*this)[5]);
 
+	GPOS_ASSERT(NULL != prop_parse_handler);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
+	GPOS_ASSERT(NULL != filter_parse_handler);
+	GPOS_ASSERT(NULL != join_filter_parse_handler);
+	GPOS_ASSERT(NULL != left_child_parse_handler);
+	GPOS_ASSERT(NULL != right_child_parse_handler);
+
 	if (m_dxl_op->NestParamsExists())
 	{
 		CParseHandlerNLJIndexParamList *nest_params_parse_handler =

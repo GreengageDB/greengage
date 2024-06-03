@@ -316,6 +316,56 @@ explain (costs off) select * from t_hashdist cross join (select a, count(1) as s
 -- limit
 explain (costs off) select * from t_hashdist cross join (select * from generate_series(1, 10) limit 1) x;
 
+set gp_cte_sharing = on;
+
+-- ensure that the volatile function is executed on one segment if it is in the CTE target list
+explain (costs off, verbose) with cte as (
+    select a * random() as a from generate_series(1, 5) a
+)
+select * from cte join (select * from t_hashdist join cte using(a)) b using(a);
+
+set gp_cte_sharing = off;
+
+explain (costs off, verbose) with cte as (
+    select a, a * random() from generate_series(1, 5) a
+)
+select * from cte join t_hashdist using(a);
+
+reset gp_cte_sharing;
+
+-- ensure that the volatile function is executed on one segment if it is in the union target list
+explain (costs off, verbose) select * from (
+    select random() as a from generate_series(1, 5)
+    union
+    select random() as a from generate_series(1, 5)
+)
+a join t_hashdist on a.a = t_hashdist.a;
+
+-- ensure that the volatile function is executed on one segment if it is in target list of subplan of multiset function
+explain (costs off, verbose) select * from (
+    SELECT count(*) as a FROM anytable_out( TABLE( SELECT random()::int from generate_series(1, 5) a ) )
+) a join t_hashdist using(a);
+
+-- if there is a volatile function in the target list of a plan with the locus type
+-- General or Segment General, then such a plan should be executed on single
+-- segment, since it is assumed that nodes with such locus types will give the same
+-- result on all segments, which is impossible for a volatile function.
+-- start_ignore
+drop table if exists d;
+-- end_ignore
+create table d (b int, a int default 1) distributed by (b);
+
+insert into d select * from generate_series(0, 20) j;
+-- change distribution without reorganize
+alter table d set distributed randomly;
+
+with cte as (
+    select a as a, a * random() as rand from generate_series(0, 3)a
+)
+select count(distinct(rand)) from cte join d on cte.a = d.a;
+
+drop table d;
+
 -- CTAS on general locus into replicated table
 create temp SEQUENCE test_seq;
 explain (costs off) create table t_rep as select nextval('test_seq') from (select generate_series(1,10)) t1 distributed replicated;

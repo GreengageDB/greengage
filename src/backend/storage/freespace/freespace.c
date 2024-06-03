@@ -328,8 +328,7 @@ FreeSpaceMapTruncateRel(Relation rel, BlockNumber nblocks)
 	 * at the next command boundary.  But this ensures it isn't outright wrong
 	 * until then.
 	 */
-	if (rel->rd_smgr)
-		rel->rd_smgr->smgr_fsm_nblocks = new_nfsmblocks;
+	rel->rd_smgr->smgr_fsm_nblocks = new_nfsmblocks;
 }
 
 /*

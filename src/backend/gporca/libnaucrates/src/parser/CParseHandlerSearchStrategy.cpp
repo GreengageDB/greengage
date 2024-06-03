@@ -129,6 +129,7 @@ CParseHandlerSearchStrategy::EndElement(const XMLCh *const,	 // element_uri,
 	{
 		CParseHandlerSearchStage *search_stage_parse_handler =
 			dynamic_cast<CParseHandlerSearchStage *>((*this)[idx]);
+		GPOS_ASSERT(NULL != search_stage_parse_handler);
 		CXformSet *xform_set = search_stage_parse_handler->GetXformSet();
 		xform_set->AddRef();
 		CSearchStage *search_stage = GPOS_NEW(m_mp)

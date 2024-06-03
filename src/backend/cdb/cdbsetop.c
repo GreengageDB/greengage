@@ -323,8 +323,7 @@ make_motion_gather(PlannerInfo *root, Plan *subplan, List *sortPathKeys, CdbLocu
 	Motion	   *motion;
 
 	Assert(subplan->flow != NULL);
-	Assert(subplan->flow->flotype == FLOW_PARTITIONED ||
-		   subplan->flow->flotype == FLOW_SINGLETON);
+	Assert(subplan->flow->flotype != FLOW_UNDEFINED);
 
 	if (sortPathKeys)
 	{

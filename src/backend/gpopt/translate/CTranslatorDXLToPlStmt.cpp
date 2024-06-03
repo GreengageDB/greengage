@@ -282,7 +282,7 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	//	pplstmt->intoClause = m_pctxdxltoplstmt->Pintocl();
 	planned_stmt->intoPolicy = m_dxl_to_plstmt_context->GetDistributionPolicy();
 
-	SetInitPlanVariables(planned_stmt);
+	SetSubPlanVariables(planned_stmt);
 
 	if (CMD_SELECT == m_cmd_type && NULL != dxlnode->GetDXLDirectDispatchInfo())
 	{
@@ -309,6 +309,8 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 			}
 		}
 	}
+
+	planned_stmt->transientPlan = gpdb::MDCacheInTransientState();
 
 	return planned_stmt;
 }
@@ -347,14 +349,16 @@ CTranslatorDXLToPlStmt::TranslateDXLOperatorToPlan(
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorDXLToPlStmt::SetInitPlanVariables
+//		CTranslatorDXLToPlStmt::SetSubPlanVariables
 //
 //	@doc:
 //		Iterates over the plan to set the qDispSliceId that is found in the plan
 //		as well as its subplans. Set the number of parameters used in the plan.
+//		Simultaneously fills rewindPlanIDs bitmapset in PlannedStmt with plan_id
+//		of all SubPlans, except InitPlans.
 //---------------------------------------------------------------------------
 void
-CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
+CTranslatorDXLToPlStmt::SetSubPlanVariables(PlannedStmt *planned_stmt)
 {
 	planned_stmt->nInitPlans = 0;			 // Orca does not produce initplans
 	planned_stmt->planTree->nInitPlans = 0;	 // Orca does not produce initplans
@@ -365,6 +369,9 @@ CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
 	List *subplan_list =
 		gpdb::ExtractNodesPlan(planned_stmt->planTree, T_SubPlan, true);
 
+	// set of plan_ids of any SubPlan except InitPLan
+	Bitmapset *planIds = NULL;
+
 	ListCell *lc = NULL;
 
 	ForEach(lc, subplan_list)
@@ -374,6 +381,8 @@ CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
 		{
 			SetInitPlanSliceInformation(subplan);
 		}
+		else
+			planIds = gpdb::BmsAddMember(planIds, subplan->plan_id);
 	}
 
 	// InitPlans can also be defined in subplans. We therefore have to iterate
@@ -394,8 +403,12 @@ CTranslatorDXLToPlStmt::SetInitPlanVariables(PlannedStmt *planned_stmt)
 			{
 				SetInitPlanSliceInformation(subplan);
 			}
+			else
+				planIds = gpdb::BmsAddMember(planIds, subplan->plan_id);
 		}
 	}
+
+	planned_stmt->rewindPlanIDs = planIds;
 }
 
 //---------------------------------------------------------------------------
@@ -3643,6 +3656,14 @@ CTranslatorDXLToPlStmt::TranslateDXLCTEProducerToSharedScan(
 		child_plan = materialize_plan;
 	}
 
+	// Targetlist mismatch leads to different tuple bindings, see #12796.
+	// We assume targetlist's equivalence. In case of inequality one list
+	// is a subset of another, so it safe to compare only length.
+	if (list_length(child_plan->targetlist) != list_length(plan->targetlist))
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+			GPOS_WSZ_LIT("Shared Scan and child plan targetlist mismatch."));
+
 	InitializeSpoolingInfo(child_plan, cte_id);
 
 	plan->lefttree = child_plan;
@@ -3672,8 +3693,6 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 		m_dxl_to_plstmt_context->GetCTEConsumerList(share_id);
 	GPOS_ASSERT(NULL != shared_scan_cte_consumer_list);
 
-	Flow *flow = GetFlowCTEConsumer(shared_scan_cte_consumer_list);
-
 	const ULONG num_of_shared_scan =
 		gpdb::ListLength(shared_scan_cte_consumer_list);
 
@@ -3687,8 +3706,6 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 		share_type = SHARE_MATERIAL;
 		// the share_type is later reset to SHARE_MATERIAL_XSLICE (if needed) by the apply_shareinput_xslice
 		materialize->share_type = share_type;
-		GPOS_ASSERT(NULL == (materialize->plan).flow);
-		(materialize->plan).flow = flow;
 	}
 	else
 	{
@@ -3699,13 +3716,15 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 		share_type = SHARE_SORT;
 		// the share_type is later reset to SHARE_SORT_XSLICE (if needed) the apply_shareinput_xslice
 		sort->share_type = share_type;
-		GPOS_ASSERT(NULL == (sort->plan).flow);
-		(sort->plan).flow = flow;
 	}
 
 	GPOS_ASSERT(SHARE_NOTSHARED != share_type);
 
+	Flow *flow = NULL;
+
 	// set the share type of the consumer nodes based on the producer
+	// If multiple CTE consumers have a flow then ensure that they are of the
+	// same type
 	ListCell *lc_sh_scan_cte_consumer = NULL;
 	ForEach(lc_sh_scan_cte_consumer, shared_scan_cte_consumer_list)
 	{
@@ -3713,39 +3732,12 @@ CTranslatorDXLToPlStmt::InitializeSpoolingInfo(Plan *plan, ULONG share_id)
 			(ShareInputScan *) lfirst(lc_sh_scan_cte_consumer);
 		share_input_scan_consumer->share_type = share_type;
 		share_input_scan_consumer->driver_slice = -1;  // default
-		if (NULL == (share_input_scan_consumer->scan.plan).flow)
-		{
-			(share_input_scan_consumer->scan.plan).flow =
-				(Flow *) gpdb::CopyObject(flow);
-		}
-	}
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CTranslatorDXLToPlStmt::GetFlowCTEConsumer
-//
-//	@doc:
-//		Retrieve the flow of the shared input scan of the cte consumers. If
-//		multiple CTE consumers have a flow then ensure that they are of the
-//		same type
-//---------------------------------------------------------------------------
-Flow *
-CTranslatorDXLToPlStmt::GetFlowCTEConsumer(List *shared_scan_cte_consumer_list)
-{
-	Flow *flow = NULL;
-
-	ListCell *lc_sh_scan_cte_consumer = NULL;
-	ForEach(lc_sh_scan_cte_consumer, shared_scan_cte_consumer_list)
-	{
-		ShareInputScan *share_input_scan_consumer =
-			(ShareInputScan *) lfirst(lc_sh_scan_cte_consumer);
 		Flow *flow_cte = (share_input_scan_consumer->scan.plan).flow;
 		if (NULL != flow_cte)
 		{
 			if (NULL == flow)
 			{
-				flow = (Flow *) gpdb::CopyObject(flow_cte);
+				flow = flow_cte;
 			}
 			else
 			{
@@ -3753,14 +3745,6 @@ CTranslatorDXLToPlStmt::GetFlowCTEConsumer(List *shared_scan_cte_consumer_list)
 			}
 		}
 	}
-
-	if (NULL == flow)
-	{
-		flow = MakeNode(Flow);
-		flow->flotype = FLOW_UNDEFINED;	 // default flow
-	}
-
-	return flow;
 }
 
 //---------------------------------------------------------------------------
@@ -4353,7 +4337,11 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 							 NULL,	// translate context for the base table
 							 child_contexts, output_context);
 
-	if (md_rel->HasDroppedColumns())
+	// Create target list with nulls if rel has dropped cols. DELETE may have
+	// empty target list if there no after trigger present. Skip creating in
+	// such case.
+	if (md_rel->HasDroppedColumns() &&
+		(m_cmd_type != CMD_DELETE || dml_target_list != NIL))
 	{
 		// pad DML target list with NULLs for dropped columns for all DML operator types
 		List *target_list_with_dropped_cols =
@@ -4370,6 +4358,21 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	dml->ctidColIdx = AddTargetEntryForColId(&dml_target_list, &child_context,
 											 phy_dml_dxlop->GetCtIdColId(),
 											 true /*is_resjunk*/);
+
+	if (phy_dml_dxlop->GetTableOidColId() != 0)
+	{
+		dml->tableoidColIdx = AddTargetEntryForColId(
+			&dml_target_list, &child_context, phy_dml_dxlop->GetTableOidColId(),
+			true /*is_resjunk*/);
+	}
+	else if (md_rel->IsPartitioned() &&
+			 (CMD_UPDATE == m_cmd_type || CMD_DELETE == m_cmd_type))
+	{
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+			GPOS_WSZ_LIT("TableOid coulumn missed for partitioned table"));
+	}
+
 	if (phy_dml_dxlop->IsOidsPreserved())
 	{
 		dml->tupleoidColIdx = AddTargetEntryForColId(
@@ -4848,8 +4851,14 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	alias->colnames = NIL;
 
 	// get table alias
+	const CMDName *md_alias = table_descr->MdAlias();
+	if (!optimizer_enable_table_alias || NULL == md_alias)
+	{
+		md_alias = table_descr->MdName();
+	}
+
 	alias->aliasname = CTranslatorUtils::CreateMultiByteCharStringFromWCString(
-		table_descr->MdName()->GetMDName()->GetBuffer());
+		md_alias->GetMDName()->GetBuffer());
 
 	// get column names
 	const ULONG arity = table_descr->Arity();
@@ -4899,6 +4908,16 @@ CTranslatorDXLToPlStmt::TranslateDXLTblDescrToRangeTblEntry(
 	}
 
 	rte->eref = alias;
+
+	/*
+		Store the alias information only when table alias is used to allow 
+		EXPLAIN find it
+	*/
+	if (optimizer_enable_table_alias && NULL != table_descr->MdAlias())
+	{
+		rte->alias = (Alias *) copyObject(alias);
+	}
+
 
 	return rte;
 }

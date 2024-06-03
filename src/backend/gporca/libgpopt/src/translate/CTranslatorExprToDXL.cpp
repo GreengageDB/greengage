@@ -947,7 +947,6 @@ CTranslatorExprToDXL::PdxlnBitmapTableScan(
 	);
 }
 
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorExprToDXL::PdxlnBitmapTableScan
@@ -4491,9 +4490,10 @@ CTranslatorExprToDXL::PdxlnMotion(CExpression *pexprMotion,
 		{
 			CPhysicalMotionRoutedDistribute *popMotion =
 				CPhysicalMotionRoutedDistribute::PopConvert(pexprMotion->Pop());
-			CColRef *pcrSegmentId =
-				dynamic_cast<const CDistributionSpecRouted *>(popMotion->Pds())
-					->Pcr();
+			const CDistributionSpecRouted *spec =
+				dynamic_cast<const CDistributionSpecRouted *>(popMotion->Pds());
+			GPOS_ASSERT(NULL != spec);
+			CColRef *pcrSegmentId = spec->Pcr();
 
 			motion = GPOS_NEW(m_mp)
 				CDXLPhysicalRoutedDistributeMotion(m_mp, pcrSegmentId->Id());
@@ -5738,6 +5738,7 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	GPOS_ASSERT(1 == pexpr->Arity());
 
 	ULONG action_colid = 0;
+	ULONG tableoid_colid = 0;
 	ULONG ctid_colid = 0;
 	ULONG segid_colid = 0;
 
@@ -5758,6 +5759,12 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 	CColRef *pcrAction = popDML->PcrAction();
 	GPOS_ASSERT(NULL != pcrAction);
 	action_colid = pcrAction->Id();
+
+	CColRef *pcrTableOid = popDML->PcrTableOid();
+	if (NULL != pcrTableOid)
+	{
+		tableoid_colid = pcrTableOid->Id();
+	}
 
 	CColRef *pcrCtid = popDML->PcrCtid();
 	CColRef *pcrSegmentId = popDML->PcrSegmentId();
@@ -5787,9 +5794,10 @@ CTranslatorExprToDXL::PdxlnDML(CExpression *pexpr,
 
 	CDXLDirectDispatchInfo *dxl_direct_dispatch_info =
 		GetDXLDirectDispatchInfo(pexpr);
-	CDXLPhysicalDML *pdxlopDML = GPOS_NEW(m_mp) CDXLPhysicalDML(
-		m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid, ctid_colid,
-		segid_colid, preserve_oids, tuple_oid, dxl_direct_dispatch_info);
+	CDXLPhysicalDML *pdxlopDML = GPOS_NEW(m_mp)
+		CDXLPhysicalDML(m_mp, dxl_dml_type, table_descr, pdrgpul, action_colid,
+						ctid_colid, segid_colid, preserve_oids, tuple_oid,
+						tableoid_colid, dxl_direct_dispatch_info);
 
 	// project list
 	CColRefSet *pcrsOutput = pexpr->Prpp()->PcrsRequired();
@@ -7558,6 +7566,13 @@ CTranslatorExprToDXL::MakeDXLTableDescr(const CTableDescriptor *ptabdesc,
 	CDXLTableDescr *table_descr = GPOS_NEW(m_mp)
 		CDXLTableDescr(m_mp, mdid, pmdnameTbl, ptabdesc->GetExecuteAsUserId());
 
+	if (NULL != ptabdesc->Alias())
+	{
+		CMDName *pmdaliasTbl =
+			GPOS_NEW(m_mp) CMDName(m_mp, ptabdesc->Alias()->Pstr());
+		table_descr->SetMdAlias(pmdaliasTbl);
+	}
+
 	const ULONG ulColumns = ptabdesc->ColumnCount();
 	// translate col descriptors
 	for (ULONG ul = 0; ul < ulColumns; ul++)
@@ -8230,6 +8245,20 @@ CTranslatorExprToDXL::GetInputSegIdsArray(CExpression *pexprMotion)
 		// motion (which cannot be a result hash filter node) will read the
 		// input from one segment in order to ensure that data is consistent
 		// after bring read from operator delivering tainted replication.
+
+		// FIXME: If there is any 'unpaired' CTE Consumer beneath, fallback to Postgres
+		// optimizer, as reading from one segment in this case violates results of the
+		// previously made CTEProducerConsumerLocality check.
+		// Related to: https://github.com/greenplum-db/gpdb/issues/13039
+
+		if (CUtils::hasUnpairedCTEConsumer(m_mp, pexprMotion))
+		{
+			GPOS_RAISE(
+				gpdxl::ExmaDXL, gpdxl::ExmiExpr2DXLUnsupportedFeature,
+				GPOS_WSZ_LIT(
+					"CTE Consumer without the appropriate CTE Producer under a duplicate-hazard motion or a tainted replicated node"));
+		}
+
 		IntPtrArray *pdrgpi = GPOS_NEW(m_mp) IntPtrArray(m_mp);
 		INT iSegmentId = *((*m_pdrgpiSegments)[0]);
 		pdrgpi->Append(GPOS_NEW(m_mp) INT(iSegmentId));

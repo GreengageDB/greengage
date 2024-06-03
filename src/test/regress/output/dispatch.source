@@ -1029,7 +1029,7 @@ INFO:  (Gang) is reused
                                                         QUERY PLAN                                                        
 --------------------------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..1176.25 rows=87 width=8) (actual time=0.329..0.329 rows=0 loops=1)
-   ->  Seq Scan on t_create_gang_time  (cost=0.00..1176.25 rows=29 width=8) (never executed)
+   ->  Seq Scan on t_create_gang_time  (cost=0.00..1176.25 rows=29 width=8) (actual time=0.000..0.001 rows=0 loops=1)
          Filter: (tc1 = 1)
  Planning time: 0.289 ms
    (slice0)    Executor memory: 59K bytes.
@@ -1054,11 +1054,11 @@ INFO:  (Gang) is reused
                                                                    QUERY PLAN                                                                    
 -------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)  (cost=10000000000.00..10000243071.10 rows=7413211 width=16) (actual time=0.328..0.328 rows=0 loops=1)
-   ->  Nested Loop  (cost=10000000000.00..10000243071.10 rows=2471071 width=16) (never executed)
-         ->  Seq Scan on t_create_gang_time t2  (cost=0.00..961.00 rows=28700 width=8) (never executed)
+   ->  Nested Loop  (cost=10000000000.00..10000243071.10 rows=2471071 width=16) (actual time=0.000..0.002 rows=0 loops=1)
+         ->  Seq Scan on t_create_gang_time t2  (cost=0.00..961.00 rows=28700 width=8) (actual time=0.000..0.001 rows=0 loops=1)
          ->  Materialize  (cost=0.00..1180.99 rows=87 width=8) (never executed)
                ->  Broadcast Motion 1:3  (slice1; segments: 1)  (cost=0.00..1179.69 rows=259 width=8) (never executed)
-                     ->  Seq Scan on t_create_gang_time t1  (cost=0.00..1176.25 rows=29 width=8) (never executed)
+                     ->  Seq Scan on t_create_gang_time t1  (cost=0.00..1176.25 rows=29 width=8) (actual time=0.000..0.001 rows=0 loops=1)
                            Filter: (tc1 = 2)
  Planning time: 0.485 ms
    (slice0)    Executor memory: 63K bytes.
@@ -1073,3 +1073,134 @@ reset gp_print_create_gang_time;
 reset optimizer;
 drop function cleanupAllGangs();
 drop table t_create_gang_time;
+--
+-- Backend process GUCs marked as GUC_GPDB_NEED_SYNC are overwritten by
+-- coordinator upon receiving a new connection.
+--
+-- GUCs that were changed in the configuration file of the QD should be re-sent
+-- to segments on gpstop -u, if GUC_GPDB_NEED_SYNC is present in the flags.
+--
+-- Use a separate user without any priveleges to catch possible context issues.
+CREATE ROLE dispatch_test_user2 NOSUPERUSER;
+SET SESSION AUTHORIZATION dispatch_test_user2;
+CREATE OR REPLACE FUNCTION show_on_segments(show_name text)
+RETURNS table (guc_name text, guc_setting text)
+EXECUTE ON ALL SEGMENTS AS $$
+BEGIN
+	RETURN QUERY SELECT name, setting FROM pg_settings WHERE show_name = name;
+END;
+$$ LANGUAGE plpgsql;
+-- Explicitly set GUCs through gpconfig, then run gpstop -u.
+--
+-- log_min_messages has GUC_GPDB_NEED_SYNC in flags, so it should be
+-- synchronized across the segments, and a context of PGC_SUSET, that it should
+-- not be possible to change it without superuser priveleges.
+--
+-- backslash_quote is not synchronized, so it should remain unchanged on
+-- segments.
+-- PGC_SUSET, we don't have enough priveleges.
+RESET log_min_messages;
+ERROR:  permission denied to set parameter "log_min_messages"
+-- Successfully reset.
+RESET backslash_quote;
+SHOW log_min_messages;
+ log_min_messages 
+------------------
+ warning
+(1 row)
+
+SELECT * from show_on_segments('log_min_messages');
+     guc_name     | guc_setting 
+------------------+-------------
+ log_min_messages | warning
+ log_min_messages | warning
+ log_min_messages | warning
+(3 rows)
+
+SHOW backslash_quote;
+ backslash_quote 
+-----------------
+ safe_encoding
+(1 row)
+
+SELECT * from show_on_segments('backslash_quote');
+    guc_name     |  guc_setting  
+-----------------+---------------
+ backslash_quote | safe_encoding
+ backslash_quote | safe_encoding
+ backslash_quote | safe_encoding
+(3 rows)
+
+--start_ignore
+\!gpconfig -c log_min_messages -v 'warning' -m 'notice'
+\!gpconfig -c backslash_quote -v 'off' -m 'on'
+\!gpstop -u
+--end_ignore
+-- Should be 'notice', synchronized with segments.
+SHOW log_min_messages;
+ log_min_messages 
+------------------
+ notice
+(1 row)
+
+SELECT * from show_on_segments('log_min_messages');
+     guc_name     | guc_setting 
+------------------+-------------
+ log_min_messages | notice
+ log_min_messages | notice
+ log_min_messages | notice
+(3 rows)
+
+-- Should be 'on' on QD, 'off' on QEs.
+SHOW backslash_quote;
+ backslash_quote 
+-----------------
+ on
+(1 row)
+
+SELECT * from show_on_segments('backslash_quote');
+    guc_name     | guc_setting 
+-----------------+-------------
+ backslash_quote | off
+ backslash_quote | off
+ backslash_quote | off
+(3 rows)
+
+--start_ignore
+\!gpconfig -r log_min_messages
+\!gpconfig -r backslash_quote
+\!gpstop -u
+--end_ignore
+-- After reset, QD and QE should hold the default value, 'warning'.
+SHOW log_min_messages;
+ log_min_messages 
+------------------
+ warning
+(1 row)
+
+SELECT * from show_on_segments('log_min_messages');
+     guc_name     | guc_setting 
+------------------+-------------
+ log_min_messages | warning
+ log_min_messages | warning
+ log_min_messages | warning
+(3 rows)
+
+-- After reset, QD and QE should hold the default value, 'safe_encoding'.
+SHOW backslash_quote;
+ backslash_quote 
+-----------------
+ safe_encoding
+(1 row)
+
+SELECT * from show_on_segments('backslash_quote');
+    guc_name     |  guc_setting  
+-----------------+---------------
+ backslash_quote | safe_encoding
+ backslash_quote | safe_encoding
+ backslash_quote | safe_encoding
+(3 rows)
+
+RESET SESSION AUTHORIZATION;
+DROP FUNCTION show_on_segments(show_name text);
+DROP ROLE dispatch_test_user2;

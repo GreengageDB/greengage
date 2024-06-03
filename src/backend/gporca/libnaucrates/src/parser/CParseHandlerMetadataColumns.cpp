@@ -127,6 +127,7 @@ CParseHandlerMetadataColumns::EndElement(const XMLCh *const,  // element_uri,
 			CParseHandlerMetadataColumn *md_col_parse_handler =
 				dynamic_cast<CParseHandlerMetadataColumn *>((*this)[ul]);
 
+			GPOS_ASSERT(NULL != md_col_parse_handler);
 			GPOS_ASSERT(NULL != md_col_parse_handler->GetMdCol());
 
 			CMDColumn *md_col = md_col_parse_handler->GetMdCol();

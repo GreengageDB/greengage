@@ -204,6 +204,13 @@ CParseHandlerIndexScan::EndElementHelper(const XMLCh *const element_local_name,
 	CParseHandlerTableDescr *table_descr_parse_handler =
 		dynamic_cast<CParseHandlerTableDescr *>((*this)[5]);
 
+	GPOS_ASSERT(NULL != prop_parse_handler);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
+	GPOS_ASSERT(NULL != filter_parse_handler);
+	GPOS_ASSERT(NULL != index_condition_list_parse_handler);
+	GPOS_ASSERT(NULL != index_descr_parse_handler);
+	GPOS_ASSERT(NULL != table_descr_parse_handler);
+
 	CDXLTableDescr *dxl_table_descr =
 		table_descr_parse_handler->GetDXLTableDescr();
 	dxl_table_descr->AddRef();

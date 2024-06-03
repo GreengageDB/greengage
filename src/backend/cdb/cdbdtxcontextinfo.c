@@ -120,12 +120,13 @@ DtxContextInfo_CreateOnMaster(DtxContextInfo *dtxContextInfo, bool inCursor,
 			 dtxContextInfo->curcid);
 
 		elog(LOG,
-			 "DtxContextInfo_CreateOnMaster txnOptions = 0x%x, needDtx = %s, explicitBegin = %s, isoLevel = %s, readOnly = %s.",
+			 "DtxContextInfo_CreateOnMaster txnOptions = 0x%x, needDtx = %s, explicitBegin = %s, isoLevel = %s, readOnly = %s, synchronizationSet = %s.",
 			 txnOptions,
 			 (isMppTxOptions_NeedDtx(txnOptions) ? "true" : "false"),
 			 (isMppTxOptions_ExplicitBegin(txnOptions) ? "true" : "false"),
 			 IsoLevelAsUpperString(mppTxOptions_IsoLevel(txnOptions)),
-			 (isMppTxOptions_ReadOnly(txnOptions) ? "true" : "false"));
+			 (isMppTxOptions_ReadOnly(txnOptions) ? "true" : "false"),
+			 (isMppTxOptions_SynchronizationSet(txnOptions) ? "true" : "false"));
 	}
 }
 

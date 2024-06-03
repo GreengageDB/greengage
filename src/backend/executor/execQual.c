@@ -2254,6 +2254,8 @@ ExecMakeTableFunctionResult(ExprState *funcexpr,
 	bool		direct_function_call;
 	bool		first_time = true;
 
+	Assert(funcexpr);
+
 	callerContext = CurrentMemoryContext;
 
 	funcrettype = exprType((Node *) funcexpr->expr);
@@ -2288,8 +2290,7 @@ ExecMakeTableFunctionResult(ExprState *funcexpr,
 	 * don't get a chance to pass a special ReturnSetInfo to any functions
 	 * buried in the expression.
 	 */
-	if (funcexpr && IsA(funcexpr, FuncExprState) &&
-		IsA(funcexpr->expr, FuncExpr))
+	if (IsA(funcexpr, FuncExprState) && IsA(funcexpr->expr, FuncExpr))
 	{
 		FuncExprState *fcache = (FuncExprState *) funcexpr;
 		ExprDoneCond argDone;

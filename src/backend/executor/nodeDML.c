@@ -85,6 +85,39 @@ ExecDML(DMLState *node)
 	/* remove 'junk' columns from tuple */
 	node->cleanedUpSlot = ExecFilterJunk(node->junkfilter, projectedSlot);
 
+	/*
+	 * If we are modifying a leaf partition we have to ensure that partition
+	 * selection operation will consider leaf partition's attributes as
+	 * coherent with root partition's attribute numbers, because partition
+	 * selection is performed using root's attribute numbers (all partition
+	 * rules are based on the parent relation's tuple descriptor). In case
+	 * when child partition has different attribute numbers from root's due to
+	 * dropped columns, the partition selection may go wrong without extra
+	 * validation.
+	 */
+	if (node->ps.state->es_result_partitions)
+	{
+		ResultRelInfo *relInfo = node->ps.state->es_result_relations;
+
+		/*
+		 * The DML is done on a leaf partition. In order to reuse the map,
+		 * it will be allocated at es_result_relations.
+		 */
+		if (RelationGetRelid(relInfo->ri_RelationDesc) !=
+			node->ps.state->es_result_partitions->part->parrelid &&
+			action != DML_DELETE)
+			makePartitionCheckMap(node->ps.state, relInfo);
+
+		/*
+		 * DML node always performs partition selection, and if we want to
+		 * reuse the map built in makePartitionCheckMap, we are allowed to
+		 * reassign es_result_relation_info, because ExecInsert, ExecDelete
+		 * changes it with target partition anyway. Moreover, without
+		 * inheritance plan (ORCA never builds such plans) the
+		 * es_result_relations will contain the only relation.
+		 */
+		node->ps.state->es_result_relation_info = relInfo;
+	}
 	/* GPDB_91_MERGE_FIXME:
 	 * This kind of node is used by ORCA only. If in the future ORCA still uses
 	 * DML node, canSetTag should be saved in DML plan node and init-ed by
@@ -127,8 +160,25 @@ ExecDML(DMLState *node)
 	{
 		int32 segid = GpIdentity.segindex;
 		Datum ctid = slot_getattr(slot, plannode->ctidColIdx, &isnull);
+		Oid tableoid = InvalidOid;
 
 		Assert(!isnull);
+
+		if (AttributeNumberIsValid(plannode->tableoidColIdx))
+		{
+			Datum dtableoid = slot_getattr(slot, plannode->tableoidColIdx, &isnull);
+			tableoid = isnull ? InvalidOid : DatumGetObjectId(dtableoid);
+		}
+
+		/*
+		 * If tableoid is valid, it means that we are executing UPDATE/DELETE
+		 * on partitioned table (root partition). In order to avoid partition
+		 * pruning in ExecDelete one can use tableoid to build target
+		 * ResultRelInfo for the leaf partition.
+		 */
+		if (OidIsValid(tableoid) && node->ps.state->es_result_partitions)
+			node->ps.state->es_result_relation_info =
+				targetid_get_partition(tableoid, node->ps.state, true);
 
 		ItemPointer  tupleid = (ItemPointer) DatumGetPointer(ctid);
 		ItemPointerData tuple_ctid = *tupleid;
@@ -231,17 +281,28 @@ ExecInitDML(DML *node, EState *estate, int eflags)
 			dmlstate->cleanedUpSlot);
 
 	/*
-	 * We don't maintain typmod in the targetlist, so we should fixup the
-	 * junkfilter to use the same tuple descriptor as the result relation.
-	 * Otherwise the mismatch of tuple descriptor will cause a break in
-	 * ExecInsert()->reconstructMatchingTupleSlot().
+	 * The comment below is related to ExecInsert(). The code works correctly,
+	 * because insert operations always translate full set of attrs to
+	 * targetlist. So, tupledesc below has the same number of attrs after
+	 * replacing. ExecDelete() doesn't reconstruct a slot, and more, can work
+	 * with subset of table attrs. In order to avoid unnecessary job and
+	 * execution error, the code below is not executed for DELETE.
 	 */
-	TupleDesc cleanTupType = CreateTupleDescCopy(dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att);
+	if (estate->es_plannedstmt->commandType != CMD_DELETE)
+	{
+		/*
+		 * We don't maintain typmod in the targetlist, so we should fixup the
+		 * junkfilter to use the same tuple descriptor as the result relation.
+		 * Otherwise the mismatch of tuple descriptor will cause a break in
+		 * ExecInsert()->reconstructMatchingTupleSlot().
+		 */
+		TupleDesc	cleanTupType = CreateTupleDescCopy(dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att);
 
-	ExecSetSlotDescriptor(dmlstate->junkfilter->jf_resultSlot, cleanTupType);
+		ExecSetSlotDescriptor(dmlstate->junkfilter->jf_resultSlot, cleanTupType);
 
-	ReleaseTupleDesc(dmlstate->junkfilter->jf_cleanTupType);
-	dmlstate->junkfilter->jf_cleanTupType = cleanTupType;
+		ReleaseTupleDesc(dmlstate->junkfilter->jf_cleanTupType);
+		dmlstate->junkfilter->jf_cleanTupType = cleanTupType;
+	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
 	{

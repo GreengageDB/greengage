@@ -2187,6 +2187,7 @@ _readFlow(void)
 
 	READ_NODE_FIELD(hashExprs);
 	READ_NODE_FIELD(hashOpfamilies);
+	READ_INT16_FIELD(segidColIdx);
 	READ_NODE_FIELD(flow_before_req_move);
 
 	READ_DONE();
@@ -2237,6 +2238,7 @@ _readDML(void)
 	READ_INT_FIELD(actionColIdx);
 	READ_INT_FIELD(ctidColIdx);
 	READ_INT_FIELD(tupleoidColIdx);
+	READ_INT_FIELD(tableoidColIdx);
 
 	readPlanInfo((Plan *)local_node);
 

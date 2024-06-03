@@ -1,5 +1,9 @@
 create schema gpexplain;
 set search_path = gpexplain;
+-- Ignore LOG entries with timestamp.
+-- start_matchignore
+-- m/^LOG:  \d{4}-\d{2}-\d{2}.*/
+-- end_matchignore
 -- Helper function, to return the EXPLAIN output of a query as a normal
 -- result set, so that you can manipulate it further.
 create or replace function get_explain_output(explain_query text) returns setof text as
@@ -522,3 +526,47 @@ select gp_inject_fault('explain_analyze_sort_error', 'reset', dbid)
 
 drop table sort_error_test1;
 drop table sort_error_test2;
+-- explain should not hide error from segment
+-- error must be handled by executor earlier
+CREATE TABLE t1 (a int);
+EXPLAIN ANALYZE INSERT INTO t1 SELECT 1/gp_segment_id
+FROM gp_dist_random('gp_id');
+ERROR:  division by zero  (seg0 slice1 172.17.0.2:6002 pid=13088)
+DROP TABLE t1;
+-- Check optional table alias support.
+-- Check that with optimizer_enable_table_alias=off plan doesn't have aliases.
+-- When optimizer_enable_table_alias is off, table aliases are not supported.
+set optimizer_enable_table_alias=off;
+create table foo_alias (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into foo_alias select generate_series(1,10);
+explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Delete on foo_alias bbb  (cost=3.23..6.46 rows=4 width=16)
+   ->  Hash Join  (cost=3.23..6.46 rows=4 width=16)
+         Hash Cond: (bbb.a = aaa.a)
+         ->  Seq Scan on foo_alias bbb  (cost=0.00..3.10 rows=4 width=14)
+         ->  Hash  (cost=3.10..3.10 rows=4 width=10)
+               ->  Seq Scan on foo_alias aaa  (cost=0.00..3.10 rows=4 width=10)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+-- When optimizer_enable_table_alias is on, table alias is supported and it 
+-- can be easily seen with self joins
+set optimizer_enable_table_alias=on;
+explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Delete on foo_alias bbb  (cost=3.23..6.46 rows=4 width=16)
+   ->  Hash Join  (cost=3.23..6.46 rows=4 width=16)
+         Hash Cond: (bbb.a = aaa.a)
+         ->  Seq Scan on foo_alias bbb  (cost=0.00..3.10 rows=4 width=14)
+         ->  Hash  (cost=3.10..3.10 rows=4 width=10)
+               ->  Seq Scan on foo_alias aaa  (cost=0.00..3.10 rows=4 width=10)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+drop table foo_alias;
+reset optimizer_enable_table_alias;

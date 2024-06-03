@@ -1337,6 +1337,7 @@ _copyDML(const DML *from)
 	COPY_SCALAR_FIELD(actionColIdx);
 	COPY_SCALAR_FIELD(ctidColIdx);
 	COPY_SCALAR_FIELD(tupleoidColIdx);
+	COPY_SCALAR_FIELD(tableoidColIdx);
 
 	return newnode;
 }
@@ -2321,6 +2322,7 @@ _copyFlow(const Flow *from)
 	COPY_SCALAR_FIELD(numsegments);
 	COPY_NODE_FIELD(hashExprs);
 	COPY_NODE_FIELD(hashOpfamilies);
+	COPY_SCALAR_FIELD(segidColIdx);
 	COPY_NODE_FIELD(flow_before_req_move);
 
 	return newnode;

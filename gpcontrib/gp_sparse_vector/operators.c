@@ -1149,9 +1149,9 @@ svec_pivot(PG_FUNCTION_ARGS)
 { \
 	for (int III=0;III<nlists;III++) /* This should be unrolled as nlists will be small */ \
 	{ \
-	  	memcpy((tmp)[III]                  ,(lists)[III]+I*(widths)[III],(widths)[III]); \
-		memcpy((lists)[III]+I*(widths)[III],(lists)[III]+J*(widths)[III],(widths)[III]); \
-		memcpy((lists)[III]+J*(widths)[III],(tmp)[III]                  ,(widths)[III]); \
+	  	memmove((tmp)[III]                  ,(lists)[III]+I*(widths)[III],(widths)[III]); \
+		memmove((lists)[III]+I*(widths)[III],(lists)[III]+J*(widths)[III],(widths)[III]); \
+		memmove((lists)[III]+J*(widths)[III],(tmp)[III]                  ,(widths)[III]); \
 	} \
 }
 /*

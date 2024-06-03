@@ -239,8 +239,13 @@ bool S3InterfaceService::parseBucketXML(ListBucketResult *result, xmlParserCtxtP
                 }
                 if (!xmlStrcmp(contNode->name, (const xmlChar *)"Size")) {
                     key_size = (char *)xmlNodeGetContent(contNode);
-                    // Size of S3 file is a natural number, don't worry
-                    size = (uint64_t)atoll((const char *)key_size);
+
+					if (key_size) {
+						// Size of S3 file is a natural number, don't worry
+                        size = (uint64_t)atoll((const char *)key_size);
+					} else {
+                        size = 0;
+					}
                 }
                 contNode = contNode->next;
             }

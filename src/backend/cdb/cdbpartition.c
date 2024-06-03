@@ -1722,8 +1722,7 @@ add_partition(Partition *part)
 	tup = heap_form_tuple(RelationGetDescr(partrel), values, isnull);
 
 	/* Insert tuple into the relation */
-	part->partid = simple_heap_insert(partrel, tup);
-	CatalogUpdateIndexes(partrel, tup);
+	part->partid = CatalogTupleInsert(partrel, tup);
 
 	heap_close(partrel, NoLock);
 }
@@ -1792,8 +1791,7 @@ add_partition_rule(PartitionRule *rule)
 	tup = heap_form_tuple(RelationGetDescr(rulerel), values, isnull);
 
 	/* Insert tuple into the relation */
-	rule->parruleid = simple_heap_insert(rulerel, tup);
-	CatalogUpdateIndexes(rulerel, tup);
+	rule->parruleid = CatalogTupleInsert(rulerel, tup);
 
 	heap_close(rulerel, NoLock);
 }
@@ -1899,7 +1897,7 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
 		return 2;
 	}
 
-	simple_heap_delete(part_rel, &tid);
+	CatalogTupleDelete(part_rel, &tid);
 
 	systable_endscan(sscan);
 
@@ -1918,7 +1916,7 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
 
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
-		simple_heap_delete(part_rule_rel, &tuple->t_self);
+		CatalogTupleDelete(part_rule_rel, &tuple->t_self);
 	}
 
 	systable_endscan(sscan);
@@ -2330,8 +2328,7 @@ parruleord_open_gap(Oid partid, int16 level, Oid parent, int16 ruleord,
 
 		closegap ? rule_desc->parruleord-- : rule_desc->parruleord++;
 
-		simple_heap_update(rel, &tuple->t_self, tuple);
-		CatalogUpdateIndexes(rel, tuple);
+		CatalogTupleUpdate(rel, &tuple->t_self, tuple);
 
 		heap_freetuple(tuple);
 	}
@@ -2774,7 +2771,7 @@ partition_policies_equal(GpPolicy *p, PartitionNode *pn)
 				if (p->attrs == 0)
 					/* random policy, skip */
 					;
-				if (memcmp(p->attrs, rel->rd_cdbpolicy->attrs,
+				else if (memcmp(p->attrs, rel->rd_cdbpolicy->attrs,
 						   (sizeof(AttrNumber) * p->nattrs)))
 				{
 					heap_close(rel, NoLock);
@@ -5231,7 +5228,9 @@ get_part_rule(Relation rel,
 
 		lc = list_head(l1);
 		prule2 = (PgPartRule *) lfirst(lc);
-		if (prule2 && prule2->topRule && prule2->topRule->children)
+
+		Assert(prule2);
+		if (prule2->topRule && prule2->topRule->children)
 			pNode = prule2->topRule->children;
 
 		lc = lnext(lc);
@@ -5264,12 +5263,14 @@ get_part_rule(Relation rel,
 									pid2,
 									bExistError, bMustExist,
 									pSearch, pNode, sid1.data, &pNode2);
+			if (!prule2)
+				return NULL;
 
 			pNode = pNode2;
 
 			if (!pNode)
 			{
-				if (prule2 && prule2->topRule && prule2->topRule->children)
+				if (prule2->topRule && prule2->topRule->children)
 					pNode = prule2->topRule->children;
 			}
 
@@ -5351,6 +5352,8 @@ atpxPart_validate_spec(PartitionBy *pBy,
 	int			result;
 	PartitionNode *pNode_tmpl = NULL;
 
+	Assert(pNode != NULL && pNode->part != NULL);
+
 	spec->partElem = list_make1(pelem);
 
 	pelem->partName = partName;
@@ -5380,7 +5383,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 								 * to re-order the ALTER statements */
 
 	/* fixup the pnode_tmpl to get the right parlevel */
-	if (pNode && (pNode->rules || pNode->default_part))
+	if (pNode->rules || pNode->default_part)
 	{
 		pNode_tmpl = get_parts(pNode->part->parrelid,
 							   pNode->part->parlevel + 1,
@@ -5402,13 +5405,17 @@ atpxPart_validate_spec(PartitionBy *pBy,
 		List	   *pbyopclass = NIL;
 		Oid			accessMethodId = BTREE_AM_OID;
 
-		while (pNode2)
+		while (true)
 		{
 			pbykeys = NIL;
 			pbyopclass = NIL;
 
+			Assert(pNode2->part != NULL);
+
 			for (ii = 0; ii < pNode2->part->parnatts; ii++)
 			{
+				Assert(pNode2->part->paratts != NULL);
+
 				AttrNumber	attno =
 				pNode2->part->paratts[ii];
 				Form_pg_attribute attribute =
@@ -5441,7 +5448,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 
 			parent_pBy2 = pBy2;
 
-			if (pNode2 && (pNode2->rules || pNode2->default_part))
+			if (pNode2->rules || pNode2->default_part)
 			{
 				PartitionRule *prule;
 				PartitionElem *el = NULL;	/* for the subpartn template */
@@ -5455,6 +5462,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 				{
 					pNode2 = prule->children;
 
+					Assert(pNode2->part != NULL);
 					Assert(('l' == pNode2->part->parkind) ||
 						   ('r' == pNode2->part->parkind));
 
@@ -5625,7 +5633,7 @@ atpxPart_validate_spec(PartitionBy *pBy,
 					}			/* end if pNode_tmpl */
 
 					/* fixup the pnode_tmpl to get the right parlevel */
-					if (pNode2 && (pNode2->rules || pNode2->default_part))
+					if (pNode2->rules || pNode2->default_part)
 					{
 						pNode_tmpl = get_parts(pNode2->part->parrelid,
 											   pNode2->part->parlevel + 1,
@@ -5638,10 +5646,10 @@ atpxPart_validate_spec(PartitionBy *pBy,
 
 				}
 				else
-					pNode2 = NULL;
+					break;
 			}
 			else
-				pNode2 = NULL;
+				break;
 
 		}						/* end while */
 	}
@@ -5696,10 +5704,12 @@ atpxPartAddList(Relation rel,
 			heap_open(par_prule->topRule->parchildrelid, AccessShareLock);
 
 	Assert((PARTTYP_LIST == part_type) || (PARTTYP_RANGE == part_type));
+	Assert(pelem);
+	Assert(pNode);
 
 	/* XXX XXX: handle case of missing boundary spec for range with EVERY */
 
-	if (pelem && pelem->boundSpec)
+	if (pelem->boundSpec)
 	{
 		if (PARTTYP_RANGE == part_type)
 		{
@@ -6171,7 +6181,7 @@ atpxPartAddList(Relation rel,
 				}				/* end if prule */
 
 				/* check for basic case of START > last partition */
-				if (pNode && pNode->rules && list_length(pNode->rules))
+				if (pNode->rules && list_length(pNode->rules))
 				{
 					bool		bstat;
 					PartitionRule *a_rule = /* get last rule */
@@ -6403,7 +6413,7 @@ atpxPartAddList(Relation rel,
 				}				/* end if prule */
 
 				/* check for case of END < first partition */
-				if (pNode && pNode->rules && list_length(pNode->rules))
+				if (pNode->rules && list_length(pNode->rules))
 				{
 					bool		bstat;
 					PartitionRule *a_rule = /* get first rule */
@@ -6739,7 +6749,7 @@ atpxPartAddList(Relation rel,
 
 			free_parsestate(pstate);
 		}						/* end if parttype_range */
-	}							/* end if pelem && pelem->boundspec */
+	}							/* end if pelem->boundspec */
 
 	/*
 	 * Create a phony CREATE TABLE statement for the parent table. The
@@ -6819,7 +6829,7 @@ atpxPartAddList(Relation rel,
 	(void) atpxPart_validate_spec(pBy, rel, ct, pelem, pNode, partName,
 								  isDefault, part_type, "");
 
-	if (pelem && pelem->boundSpec)
+	if (pelem->boundSpec)
 	{
 		if (PARTTYP_LIST == part_type)
 		{
@@ -6863,7 +6873,7 @@ atpxPartAddList(Relation rel,
 			}
 
 			/* give a new maxpartno for the list partition */
-			if (pNode && pNode->rules && list_length(pNode->rules))
+			if (pNode->rules && list_length(pNode->rules))
 			{
 				ListCell   *lc;
 				PartitionRule *rule = NULL;
@@ -6888,7 +6898,7 @@ atpxPartAddList(Relation rel,
 			errmsg("too many partitions, parruleord overflow")));
 	}
 
-	if (newPos == FIRST && pNode && list_length(pNode->rules) > 0)
+	if (newPos == FIRST && list_length(pNode->rules) > 0)
 	{
 		/*
 		 * Adding new partition at the beginning.  Find a hole in existing
@@ -6922,7 +6932,7 @@ atpxPartAddList(Relation rel,
 								false /* closegap */ );
 		}
 	}
-	else if (newPos == LAST && pNode && list_length(pNode->rules) > 0)
+	else if (newPos == LAST && list_length(pNode->rules) > 0)
 	{
 		/*
 		 * Adding the new partition at the end.	 Find the hole closest to the
@@ -7044,8 +7054,8 @@ atpxPartAddList(Relation rel,
 
 				skipTableRelid = RangeVarGetRelid(t->relation, NoLock, true);
 			}
-		}
 
+		/* FIXME: indent this */
 		for_each_cell(lc, lnext(lc))
 		{
 			Node	   *q = lfirst(lc);
@@ -7073,7 +7083,7 @@ atpxPartAddList(Relation rel,
 			 * XXX XXX: fix the first Alter Table Statement to have the
 			 * correct maxpartno.  Whoohoo!!
 			 */
-			if (bFixFirstATS && q && IsA(q, AlterTableStmt))
+			if (bFixFirstATS && IsA(q, AlterTableStmt))
 			{
 				PartitionSpec *spec = NULL;
 				AlterTableStmt *ats;
@@ -7195,7 +7205,7 @@ atpxPartAddList(Relation rel,
 
 			ii++;
 		}						/* end for each cell */
-
+		}
 	}
 
 	if (par_prule && par_prule->topRule)
@@ -7330,8 +7340,7 @@ exchange_part_rule(Oid oldrelid, Oid newrelid)
 
 		((Form_pg_partition_rule) GETSTRUCT(tuple))->parchildrelid = newrelid;
 
-		simple_heap_update(catalogRelation, &tuple->t_self, tuple);
-		CatalogUpdateIndexes(catalogRelation, tuple);
+		CatalogTupleUpdate(catalogRelation, &tuple->t_self, tuple);
 
 		heap_freetuple(tuple);
 	}
@@ -7381,8 +7390,7 @@ exchange_permissions(Oid oldrelid, Oid newrelid)
 	replace_tuple = heap_modify_tuple(oldtuple,
 									  RelationGetDescr(rel),
 									  values, nulls, replaces);
-	simple_heap_update(rel, &oldtuple->t_self, replace_tuple);
-	CatalogUpdateIndexes(rel, replace_tuple);
+	CatalogTupleUpdate(rel, &oldtuple->t_self, replace_tuple);
 
 	/* XXX: Update the shared dependency ACL info */
 
@@ -7400,8 +7408,7 @@ exchange_permissions(Oid oldrelid, Oid newrelid)
 	replace_tuple = heap_modify_tuple(newtuple,
 									  RelationGetDescr(rel),
 									  values, nulls, replaces);
-	simple_heap_update(rel, &newtuple->t_self, replace_tuple);
-	CatalogUpdateIndexes(rel, replace_tuple);
+	CatalogTupleUpdate(rel, &newtuple->t_self, replace_tuple);
 
 	/* update shared dependency */
 
@@ -8685,8 +8692,7 @@ add_partition_encoding(Oid relid, Oid paroid, AttrNumber attnum, List *encoding)
 	tuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
 
 	/* Insert tuple into the relation */
-	simple_heap_insert(rel, tuple);
-	CatalogUpdateIndexes(rel, tuple);
+	CatalogTupleInsert(rel, tuple);
 
 	heap_freetuple(tuple);
 
@@ -8720,7 +8726,7 @@ remove_partition_encoding_entry(Oid paroid, AttrNumber attnum)
 			if (ppe->parencattnum != attnum)
 				continue;
 		}
-		simple_heap_delete(rel, &tup->t_self);
+		CatalogTupleDelete(rel, &tup->t_self);
 	}
 
 	systable_endscan(sscan);

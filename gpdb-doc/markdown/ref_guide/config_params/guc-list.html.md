@@ -1080,6 +1080,14 @@ The amount of shared memory, in kilobytes, allocated for query metrics. The defa
 |-----------|-------|-------------------|
 |integer `0 - 131072`|5120|master, system, restart|
 
+## <a id="gp_max_scan_on_shmem"></a>gp\_max\_scan\_on\_shmem
+
+Specifies the limit of maximum scan node's instrumentations per query in shmem. If table has many partitions, Postgres planner will generate a plan with many SCAN nodes under a APPEND node. If the number of partitions are too many, this plan will occupy too many slots. Here is a limitation on number of shmem slots used by scan nodes for each backend. Instruments exceeding the limitation are allocated in local memory.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|integer `0 - 3072`|300|master, system, restart|
+
 ## <a id="gp_interconnect_address_type"></a>gp_interconnect_address_type
 
 Specifies the type of address binding strategy Greenplum Database uses for communication between segment host sockets. There are two types: `unicast` and `wildcard`. The default is `wildcard`.
@@ -2376,6 +2384,18 @@ For information about GPORCA, see [About GPORCA](../../admin_guide/query/topics/
 |-----------|-------|-------------------|
 |Boolean|off|master, session, reload|
 
+## <a id="optimizer_enable_table_alias"></a>optimizer\_enable\_table\_alias 
+
+When GPORCA is enabled \(the default\) and this parameter is `true` \(the default\), 
+GPORCA uses table alias to prepare a query plan. This is consistent with Postgres optimizer.
+When set to `false`, GPORCA doesn't use table alias.
+
+For information about GPORCA, see [About GPORCA](../../admin_guide/query/topics/query-piv-optimizer.html) in the *Greenplum Database Administrator Guide*.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|Boolean|true|master, session, reload|
+
 ## <a id="optimizer_force_agg_skew_avoidance"></a>optimizer\_force\_agg\_skew\_avoidance 
 
 When GPORCA is enabled \(the default\), this parameter affects the query plan alternatives that GPORCA considers when 3 stage aggregate plans are generated. When the value is `true`, the default, GPORCA considers only 3 stage aggregate plans where the intermediate aggregation uses the `GROUP BY` and `DISTINCT` columns for distribution to reduce the effects of processing skew.
@@ -3039,7 +3059,17 @@ When setting `temp_tablespaces` interactively, avoid specifying a nonexistent ta
 
 The default value is an empty string, which results in all temporary objects being created in the default tablespace of the current database.
 
-See also [default\_tablespace](#default_tablespace).
+See also [temp\_spill\_files\_tablespaces](#temp_spill_files_tablespaces), [default\_tablespace](#default_tablespace).
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|one or more tablespace names|unset|master, session, reload|
+
+## <a id="temp_spill_files_tablespaces"></a>temp\_spill\_files\_tablespaces
+
+Specifies tablespaces in which to create temporary files for purposes such as large data set sorting. This setting takes precedence over `temp_tablespaces` for temporary files.
+
+The value is a comma-separated list of tablespace names. When the list contains more than one tablespace name, Greenplum chooses a random list member each time it creates a temporary file. An exception applies within a transaction, where successively created temporary files are placed in successive tablespaces from the list. If the selected element of the list is an empty string, Greenplum automatically falls back to tablespaces specified in `temp_tablespaces`. If `temp_tablespaces` is empty, Greenplum uses the default tablespace of the current database instead.</p>
 
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|

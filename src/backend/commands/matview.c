@@ -32,6 +32,7 @@
 #include "commands/matview.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/queue.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -43,6 +44,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/resscheduler.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
@@ -109,9 +111,7 @@ SetMatViewPopulatedState(Relation relation, bool newstate)
 
 	((Form_pg_class) GETSTRUCT(tuple))->relispopulated = newstate;
 
-	simple_heap_update(pgrel, &tuple->t_self, tuple);
-
-	CatalogUpdateIndexes(pgrel, tuple);
+	CatalogTupleUpdate(pgrel, &tuple->t_self, tuple);
 
 	heap_freetuple(tuple);
 	heap_close(pgrel, RowExclusiveLock);
@@ -443,6 +443,17 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	queryDesc = CreateQueryDesc(plan, queryString,
 								GetActiveSnapshot(), InvalidSnapshot,
 								dest, NULL, 0);
+
+	if (gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH)
+	{
+		Assert(queryString);
+		gpmon_qlog_query_submit(queryDesc->gpmon_pkt);
+		gpmon_qlog_query_text(queryDesc->gpmon_pkt,
+				queryString,
+				application_name,
+				GetResqueueName(GetResQueueId()),
+				GetResqueuePriority(GetResQueueId()));
+	}
 
 	RestoreOidAssignments(saved_dispatch_oids);
 

@@ -44,6 +44,7 @@
 #include "storage/proc.h"
 #include "tcop/idle_resource_cleaner.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/guc_tables.h"
 #include "utils/inval.h"
 #include "utils/resscheduler.h"
@@ -309,6 +310,7 @@ int			optimizer_cost_model;
 bool		optimizer_metadata_caching;
 int			optimizer_mdcache_size;
 bool		optimizer_use_gpdb_allocators;
+bool		optimizer_enable_table_alias;
 
 /* Optimizer debugging GUCs */
 bool		optimizer_print_query;
@@ -446,6 +448,7 @@ static char *gp_server_version_string;
 /* Query Metrics */
 bool		gp_enable_query_metrics = false;
 int			gp_instrument_shmem_size = 5120;
+int			gp_max_scan_on_shmem = 300;
 
 /* Security */
 bool		gp_reject_internal_tcp_conn = true;
@@ -3026,6 +3029,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"optimizer_enable_table_alias", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Enable using table aliases to make plan explain more descriptive"),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_table_alias,
+		true,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"vmem_process_interrupt", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Checks for interrupts before reserving VMEM"),
 			NULL,
@@ -4273,6 +4287,16 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_instrument_shmem_size,
 		5120, 0, 131072,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_max_scan_on_shmem", PGC_POSTMASTER, UNGROUPED,
+			gettext_noop("Sets the limit of shmem slots used by scan nodes for each backend."),
+			NULL,
+		},
+		&gp_max_scan_on_shmem,
+		300, 0, 3072,
 		NULL, NULL, NULL
 	},
 
@@ -5776,8 +5800,8 @@ check_gp_workfile_compression(bool *newval, void **extra, GucSource source)
 	return true;
 }
 
-void
-DispatchSyncPGVariable(struct config_generic * gconfig)
+static void
+dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_explicit)
 {
 	StringInfoData buffer;
 
@@ -5879,5 +5903,28 @@ DispatchSyncPGVariable(struct config_generic * gconfig)
 
 	}
 
-	CdbDispatchSetCommand(buffer.data, false);
+	if (is_explicit)
+		CdbDispatchSetCommandForSync(buffer.data);
+	else
+		CdbDispatchSetCommand(buffer.data, false);
+}
+
+/*
+ * Dispatches a regular SET command to all reader and writer gangs.
+ */
+void
+DispatchSyncPGVariable(struct config_generic * gconfig)
+{
+	return dispatch_sync_pg_variable_internal(gconfig, false);
+}
+
+/*
+ * This function behaves like DispatchSyncPGVariable(), but also sets the GUC
+ * source to PGC_CLIENT, just like we do in ProcessStartupPacket(), and
+ * bypasses GUC contexts up to PGC_SIGHUP.
+ */
+void
+DispatchSyncPGVariableExplicit(struct config_generic * gconfig)
+{
+	return dispatch_sync_pg_variable_internal(gconfig, true);
 }

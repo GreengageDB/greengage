@@ -1080,11 +1080,6 @@ typedef struct Agg
 	 * The GROUPING value of input tuples for Agg(a,b,c) is 0, and the values
 	 * for Agg(a,b), Agg(a), Agg() are 0, 1, 3, respectively.
 	 *
-	 * We also use the value "-1" to indicate an Agg node is the final
-	 * one that brings back all rollup results from different segments. This final
-	 * Agg node is very similar to the non-rollup Agg node, except that we need
-	 * a way to know this to properly set GROUPING value during execution.
-	 *
 	 * For a non-rollup Agg node, this value is 0.
 	 */
 	uint64 inputGrouping;
@@ -1333,7 +1328,7 @@ typedef struct DML
 	AttrNumber	actionColIdx;	/* index of action column into the target list */
 	AttrNumber	ctidColIdx;		/* index of ctid column into the target list */
 	AttrNumber	tupleoidColIdx;	/* index of tuple oid column into the target list */
-
+	AttrNumber	tableoidColIdx; /* index of table oid column into the target list */
 } DML;
 
 /*

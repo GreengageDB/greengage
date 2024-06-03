@@ -34,7 +34,8 @@ CDXLLogicalUpdate::CDXLLogicalUpdate(CMemoryPool *mp,
 									 ULONG ctid_colid, ULONG segid_colid,
 									 ULongPtrArray *delete_colid_array,
 									 ULongPtrArray *insert_colid_array,
-									 BOOL preserve_oids, ULONG tuple_oid)
+									 BOOL preserve_oids, ULONG tuple_oid,
+									 ULONG table_oid)
 	: CDXLLogical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_ctid_colid(ctid_colid),
@@ -42,7 +43,8 @@ CDXLLogicalUpdate::CDXLLogicalUpdate(CMemoryPool *mp,
 	  m_deletion_colid_array(delete_colid_array),
 	  m_insert_colid_array(insert_colid_array),
 	  m_preserve_oids(preserve_oids),
-	  m_tuple_oid(tuple_oid)
+	  m_tuple_oid(tuple_oid),
+	  m_table_oid(table_oid)
 {
 	GPOS_ASSERT(NULL != table_descr);
 	GPOS_ASSERT(NULL != delete_colid_array);
@@ -132,6 +134,12 @@ CDXLLogicalUpdate::SerializeToDXL(CXMLSerializer *xml_serializer,
 	{
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenTupleOidColId), m_tuple_oid);
+	}
+
+	if (0 != m_table_oid)
+	{
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenOidColId), m_table_oid);
 	}
 
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);

@@ -72,8 +72,6 @@ RestoreArchivedFile(char *path, const char *xlogfname,
 	XLogRecPtr	restartRedoPtr;
 	TimeLineID	restartTli;
 
-	char        contentid[12];  /* sign, 10 digits and '\0' */
-
 	/* In standby mode, restore_command might not be supplied */
 	if (recoveryRestoreCommand == NULL)
 		goto not_available;
@@ -183,14 +181,18 @@ RestoreArchivedFile(char *path, const char *xlogfname,
 					StrNCpy(dp, lastRestartPointFname, endp - dp);
 					dp += strlen(dp);
 					break;
-				case 'c':
-					/* GPDB: %c: contentId of segment */
-					Assert(GpIdentity.segindex != UNINITIALIZED_GP_IDENTITY_VALUE);
+				case 'c': /* GPDB: %c: contentId of segment */
+				case 'd': /* GPDB: %d: dbid of segment */
+				{
+					char	buf[12];  /* sign, 10 digits and '\0' */
+					int32	val = (sp[1] == 'c') ? GpIdentity.segindex : GpIdentity.dbid;
+					Assert(val != UNINITIALIZED_GP_IDENTITY_VALUE);
 					sp++;
-					pg_ltoa(GpIdentity.segindex, contentid);
-					StrNCpy(dp, contentid, endp - dp);
+					pg_ltoa(val, buf);
+					strlcpy(dp, buf, endp - dp);
 					dp += strlen(dp);
 					break;
+				}
 				case '%':
 					/* convert %% to a single % */
 					sp++;
@@ -634,13 +636,6 @@ XLogArchiveCheckDone(const char *xlog)
 
 	/* Always deletable if archiving is off */
 	if (!XLogArchivingActive())
-		return true;
-
-	/*
-	 * GPDB: Always delete if this is a mirror segment and archive_mode is
-	 * "on". Continuous WAL archiving on mirrors is not supportable yet.
-	 */
-	if (XLogArchivingActive() && RecoveryInProgress())
 		return true;
 
 	/* First check for .done --- this means archiver is done with it */

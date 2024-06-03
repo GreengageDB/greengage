@@ -54,6 +54,10 @@ private:
 	// action column id
 	ULONG m_action_colid;
 
+	// table oid column (has value 0 for Update/Delete operations on non partitioned
+	// tables and for all Insert operations)
+	ULONG m_table_oid_colid;
+
 	// ctid column id
 	ULONG m_ctid_colid;
 
@@ -78,7 +82,7 @@ public:
 					CDXLTableDescr *table_descr,
 					ULongPtrArray *src_colids_array, ULONG action_colid,
 					ULONG ctid_colid, ULONG segid_colid, BOOL preserve_oids,
-					ULONG tuple_oid,
+					ULONG tuple_oid, ULONG table_oid,
 					CDXLDirectDispatchInfo *dxl_direct_dispatch_info);
 
 	// dtor
@@ -116,6 +120,13 @@ public:
 	ActionColId() const
 	{
 		return m_action_colid;
+	}
+
+	// oid column id
+	ULONG
+	GetTableOidColId() const
+	{
+		return m_table_oid_colid;
 	}
 
 	// ctid column id

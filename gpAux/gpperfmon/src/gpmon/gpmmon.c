@@ -1155,7 +1155,7 @@ static int read_conf_file(char *conffile)
 			char *pName = NULL, *pVal = NULL, *pTemp = NULL;
 			/* is it a comment? */
 			pTemp = p;
-			while (pTemp && *pTemp)
+			while (*pTemp)
 			{
 				if (*pTemp == '#')
 				{

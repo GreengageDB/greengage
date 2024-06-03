@@ -819,6 +819,8 @@ typedef struct PgBackendStatus
 	/* the start time of queueing on resource group */
 	TimestampTz	st_resgroup_queue_start_timestamp;
 	TimestampTz st_state_start_timestamp;
+	/* the start time of lock awaiting */
+	TimestampTz st_waiting_start_timestamp;
 
 	/* Database OID, owning user's OID, connection client address */
 	Oid			st_databaseid;

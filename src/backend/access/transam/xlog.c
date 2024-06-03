@@ -935,13 +935,6 @@ XLogInsert(RmgrId rmid, uint8 info, XLogRecData *rdata)
 	return XLogInsert_Internal(rmid, info, rdata, GetCurrentTransactionIdIfAny());
 }
 
-XLogRecPtr
-XLogInsert_OverrideXid(RmgrId rmid, uint8 info, XLogRecData *rdata, TransactionId overrideXid)
-{
-	return XLogInsert_Internal(rmid, info, rdata, overrideXid);
-}
-
-
 static XLogRecPtr
 XLogInsert_Internal(RmgrId rmid, uint8 info, XLogRecData *rdata, TransactionId headerXid)
 {
@@ -8195,6 +8188,8 @@ StartupXLOG(void)
 	 */
 	if (fast_promoted)
 		RequestCheckpoint(CHECKPOINT_FORCE);
+
+	*shmCleanupBackends = true;
 }
 
 /*

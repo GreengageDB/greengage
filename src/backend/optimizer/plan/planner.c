@@ -371,13 +371,6 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	 *
 	 * apply_shareinput will fix shared_id, and change the DAG to a tree.
 	 */
-	forboth(lp, glob->subplans, lr, glob->subroots)
-	{
-		Plan	   *subplan = (Plan *) lfirst(lp);
-		PlannerInfo	   *subroot = (PlannerInfo *) lfirst(lr);
-
-		lfirst(lp) = apply_shareinput_dag_to_tree(subroot, subplan);
-	}
 	top_plan = apply_shareinput_dag_to_tree(root, top_plan);
 
 	/* final cleanup of the plan */
@@ -435,12 +428,6 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bms_free(subplan_context.bms_subplans);
 
 	/* fix ShareInputScans for EXPLAIN */
-	foreach(lp, glob->subplans)
-	{
-		Plan	   *subplan = (Plan *) lfirst(lp);
-
-		lfirst(lp) = replace_shareinput_targetlists(root, subplan);
-	}
 	top_plan = replace_shareinput_targetlists(root, top_plan);
 
 	/* build the PlannedStmt result */
@@ -921,6 +908,15 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 											 list_make1_int(root->is_split_update),
 											 rowMarks,
 											 SS_assign_special_param(root));
+
+			/*
+			 * Currently, we prohibit applying volatile functions
+			 * to the result of modifying CTE with locus Replicated.
+			 */
+			if (parent_root && parent_root->parse->hasModifyingCTE &&
+				plan->flow->locustype == CdbLocusType_Replicated &&
+				contain_volatile_functions((Node *) parse->returningList))
+				elog(ERROR, "could not devise a plan");
 		}
 	}
 
@@ -934,6 +930,34 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	{
 		Assert(root->parse == parse); /* GPDB isn't always careful about this. */
 		SS_finalize_plan(root, plan, true);
+	}
+
+	/*
+	 * If plan contains volatile functions in the target list, then we need
+	 * bring it to SingleQE
+	 */
+	if (plan->flow->locustype == CdbLocusType_General &&
+		(contain_volatile_functions((Node *) plan->targetlist) ||
+		 contain_volatile_functions(parse->havingQual)))
+	{
+		plan->flow->locustype = CdbLocusType_SingleQE;
+		plan->flow->flotype = FLOW_SINGLETON;
+	}
+	else if (plan->flow->locustype == CdbLocusType_SegmentGeneral &&
+		(contain_volatile_functions((Node *) plan->targetlist) ||
+		 contain_volatile_functions(parse->havingQual)))
+	{
+		plan = (Plan *) make_motion_gather(root, plan, NIL, CdbLocusType_SingleQE);
+	}
+	else if (plan->flow->locustype == CdbLocusType_Replicated &&
+			 (contain_volatile_functions((Node *) plan->targetlist) ||
+			  contain_volatile_functions(parse->havingQual)))
+	{
+		/*
+		 * Replicated locus is not supported yet in context of volatile
+		 * functions handling.
+		 */
+		elog(ERROR, "could not devise a plan");
 	}
 
 	/* Return internal info if caller wants it */
@@ -1911,6 +1935,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 
 		/* Obtain canonical grouping sets */
 		canonical_grpsets = make_canonical_groupingsets(parse->groupClause);
+		Assert(canonical_grpsets);
 		numGroupCols = canonical_grpsets->num_distcols;
 
 		/*
@@ -2379,8 +2404,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												0, /* rollup_gs_times */
 												result_plan);
 
-				if (canonical_grpsets != NULL &&
-					canonical_grpsets->grpset_counts != NULL &&
+				if (canonical_grpsets->grpset_counts != NULL &&
 					canonical_grpsets->grpset_counts[0] > 1)
 				{
 					result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);
@@ -2446,8 +2470,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 												0, /* rollup_gs_times */
 												result_plan);
 
-				if (canonical_grpsets != NULL &&
-					canonical_grpsets->grpset_counts != NULL &&
+				if (canonical_grpsets->grpset_counts != NULL &&
 					canonical_grpsets->grpset_counts[0] > 1)
 				{
 					result_plan->flow = pull_up_Flow(result_plan, result_plan->lefttree);

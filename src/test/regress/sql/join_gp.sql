@@ -844,3 +844,42 @@ drop table if exists repli_t1_pk;
 drop table if exists repli_t2_pk;
 drop table if exists repli_t3_pk;
 drop table if exists repli_t4_pk;
+
+-- Test lateral join when subquery contains limit and where clause
+-- Greenplum cannot pass params across motion so one need to prevent
+-- the bottom scan node from appending to its targetlist outer relation
+-- refs. Otherwise it may lead to segfault at the exectution stage.
+
+--start_ignore
+drop table if exists t1;
+drop table if exists t2;
+--end_ignore
+create table t1 (c text) distributed by (c);
+create table t2 (c text) distributed by (c);
+insert into t1 values ('1'), ('2'), ('3');
+insert into t2 values ('3'), ('4');
+
+explain (verbose, costs off) select * from t2 join lateral
+(select * from t1 where t2.c = t1.c limit 1) s on true;
+
+select * from t2 join lateral
+(select * from t1 where t2.c = t1.c limit 1) s on true;
+
+drop table t1;
+drop table t2;
+
+
+-- Check that USING with different types is properly planned by ORCA
+-- start_ignore
+drop table if exists tbl2;
+drop table if exists tbl1;
+-- end_ignore
+
+create table tbl1 (b varchar(15)) distributed by(b);
+create table tbl2 (b varchar(255)) distributed by(b);
+
+explain (costs off)
+select * from tbl1 join tbl2 using (b);
+
+drop table tbl1;
+drop table tbl2;

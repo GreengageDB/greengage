@@ -2924,6 +2924,7 @@ WalSndSignals(void)
 	pqsignal(SIGCONT, SIG_DFL);
 	pqsignal(SIGWINCH, SIG_DFL);
 
+	InitStandardHandlerForSigillSigsegvSigbus_OnMainThread();
 #ifdef SIGILL
 	pqsignal(SIGILL, WalSndCrashHandler);
 #endif

@@ -571,7 +571,8 @@ lookup_agg_hash_entry(AggState *aggstate,
 			++hashtable->num_ht_groups;
 			++hashtable->num_entries;
 
-			*p_isnew = true; /* created a new entry */
+			if (p_isnew != NULL)
+				*p_isnew = true; /* created a new entry */
 		}
 		/*
 		  else no matching entry, and no room to create one. 
@@ -1878,13 +1879,10 @@ agg_hash_reload(AggState *aggstate)
 		(unsigned) LOG2(spill_file->parent_spill_set->num_spill_files);
 
 
-	if (spill_file->file_info->wfile != NULL)
-	{
-		Assert(spill_file->file_info->suspended);
-		BufFileResume(spill_file->file_info->wfile);
-		spill_file->file_info->suspended = false;
-		hashtable->mem_for_metadata  += FREEABLE_BATCHFILE_METADATA;
-	}
+	Assert(spill_file->file_info->wfile && spill_file->file_info->suspended);
+	BufFileResume(spill_file->file_info->wfile);
+	spill_file->file_info->suspended = false;
+	hashtable->mem_for_metadata  += FREEABLE_BATCHFILE_METADATA;
 
 	while(true)
 	{

@@ -3142,10 +3142,8 @@ cdbpathlocus_from_flow(Flow *flow)
 {
 	CdbPathLocus locus;
 
+	Assert(flow);
 	CdbPathLocus_MakeNull(&locus, flow->numsegments);
-
-	if (!flow)
-		return locus;
 
 	switch (flow->flotype)
 	{

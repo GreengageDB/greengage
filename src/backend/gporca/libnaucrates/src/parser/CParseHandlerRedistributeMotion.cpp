@@ -168,6 +168,13 @@ CParseHandlerRedistributeMotion::EndElement(
 	CParseHandlerPhysicalOp *child_parse_handler =
 		dynamic_cast<CParseHandlerPhysicalOp *>((*this)[5]);
 
+	GPOS_ASSERT(NULL != prop_parse_handler);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
+	GPOS_ASSERT(NULL != filter_parse_handler);
+	GPOS_ASSERT(NULL != sort_col_list_parse_handler);
+	GPOS_ASSERT(NULL != hash_expr_list_parse_handler);
+	GPOS_ASSERT(NULL != child_parse_handler);
+
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, m_dxl_op);
 	// set statictics and physical properties
 	CParseHandlerUtils::SetProperties(m_dxl_node, prop_parse_handler);

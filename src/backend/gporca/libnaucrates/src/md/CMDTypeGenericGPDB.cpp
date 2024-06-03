@@ -311,6 +311,8 @@ CMDTypeGenericGPDB::GetDatumVal(CMemoryPool *mp, IDatum *datum) const
 {
 	m_mdid->AddRef();
 	CDatumGenericGPDB *datum_generic = dynamic_cast<CDatumGenericGPDB *>(datum);
+	GPOS_ASSERT(datum_generic);
+
 	ULONG length = 0;
 	BYTE *pba = NULL;
 	if (!datum_generic->IsNull())

@@ -298,6 +298,7 @@ Expr *
 cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 								 Oid hashOpFamily)
 {
+	Expr	   *fin_expr = NULL;
 	ListCell   *lc;
 
 	foreach(lc, eclass->ec_members)
@@ -325,9 +326,13 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 				continue;
 		}
 
-		/* A constant is OK regardless of the target list */
+		/* The return of const or param will be delayed
+		 * in favor of possible matches with target list entries*/
 		if (em->em_is_const)
-			return key;
+		{
+			fin_expr = key;
+			continue;
+		}
 
 		/*-------
 		 * Try to find this EC member in the target list.
@@ -344,7 +349,7 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 		 * tlist_member_match_var() does exactly what we need.
 		 *-------
 		 */
-		while (IsA(key, RelabelType))
+		while (key && IsA(key, RelabelType))
 			key = (Expr *) ((RelabelType *) key)->arg;
 
 		foreach(lc_tle, targetlist)
@@ -362,9 +367,9 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 			while (tlexpr && IsA(tlexpr, RelabelType))
 				tlexpr = (Node *) ((RelabelType *) tlexpr)->arg;
 
-			if (IsA(key, Var))
+			if (key && IsA(key, Var))
 			{
-				if (IsA(tlexpr, Var))
+				if (tlexpr && IsA(tlexpr, Var))
 				{
 					Var		   *keyvar = (Var *) key;
 					Var		   *tlvar = (Var *) tlexpr;
@@ -377,24 +382,20 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 			}
 			else
 			{
-				/* ignore RelabelType nodes on both sides */
-				while (key && IsA(key, RelabelType))
-					key = (Expr *) ((RelabelType *) key)->arg;
-
 				if (equal(tlexpr, key))
 					return key;
 			}
 		}
 
 		/* Return this item if all referenced Vars are in targetlist. */
-		if (!IsA(key, Var) &&
+		if (key && !IsA(key, Var) &&
 			!cdbpullup_missingVarWalker((Node *) key, targetlist))
 		{
 			return key;
 		}
 	}
 
-	return NULL;
+	return fin_expr;
 }
 
 /*

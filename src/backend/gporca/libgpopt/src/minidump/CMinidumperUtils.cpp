@@ -213,7 +213,7 @@ CMinidumperUtils::Finalize(CMiniDumperDXL *pmdmp, BOOL fSerializeErrCtx)
 	CAutoTraceFlag atf3(EtraceSimulateNetError, false);
 	CAutoTraceFlag atf4(EtraceSimulateIOError, false);
 
-	if (fSerializeErrCtx)
+	if (NULL != CTask::Self() && fSerializeErrCtx)
 	{
 		CErrorContext *perrctxt = CTask::Self()->ConvertErrCtxt();
 		perrctxt->Serialize();

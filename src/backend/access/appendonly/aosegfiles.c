@@ -39,6 +39,7 @@
 #include "storage/lmgr.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/int8.h"
 #include "utils/lsyscache.h"
@@ -47,6 +48,16 @@
 #include "utils/fmgroids.h"
 #include "utils/numeric.h"
 #include "utils/visibility_summary.h"
+
+#define VALIDATE_GP_ROLE() \
+	do \
+	{ \
+		if (Gp_role != GP_ROLE_DISPATCH) \
+			ereport(ERROR, \
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), \
+				 	 errmsg("function '%s' must be executed on the dispatcher", \
+							PG_FUNCNAME_MACRO))); \
+	} while (0)
 
 static float8 aorow_compression_ratio_internal(Relation parentrel);
 static void UpdateFileSegInfo_internal(Relation parentrel,
@@ -141,7 +152,9 @@ InsertInitialSegnoEntry(Relation parentrel, int segno)
 	if (!HeapTupleIsValid(pg_aoseg_tuple))
 		elog(ERROR, "failed to build AO file segment tuple");
 
-	frozen_heap_insert(pg_aoseg_rel, pg_aoseg_tuple);
+	simple_heap_insert(pg_aoseg_rel, pg_aoseg_tuple);
+	SIMPLE_FAULT_INJECTOR("insert_aoseg_before_freeze");
+	heap_freeze_tuple_wal_logged(pg_aoseg_rel, pg_aoseg_tuple);
 
 	heap_freetuple(pg_aoseg_tuple);
 
@@ -1503,7 +1516,7 @@ gp_update_ao_master_stats(PG_FUNCTION_ARGS)
 	int64		result;
 	Snapshot	appendOnlyMetaDataSnapshot;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
+	VALIDATE_GP_ROLE();
 
 	/* open the parent (main) relation */
 	parentrel = heap_open(relid, RowExclusiveLock);
@@ -1556,7 +1569,7 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 	Relation	aosegrel;
 	int			ret;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
+	VALIDATE_GP_ROLE();
 
 	/*
 	 * stuff done only on the first call of the function. In here we execute
@@ -1677,7 +1690,7 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 	funcctx = SRF_PERCALL_SETUP();
 
 	query_block = (QueryInfo *) funcctx->user_fctx;
-	if (query_block->index < query_block->rows)
+	if (query_block != NULL && query_block->index < query_block->rows)
 	{
 		/*
 		 * Get heaptuple from SPI, then deform it, and reform it using our
@@ -1710,7 +1723,8 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 	/*
 	 * do when there is no more left
 	 */
-	pfree(query_block);
+	if (query_block != NULL)
+		pfree(query_block);
 
 	SPI_finish();
 
@@ -1734,7 +1748,7 @@ get_ao_compression_ratio(PG_FUNCTION_ARGS)
 	Relation	parentrel;
 	float8		result;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
+	VALIDATE_GP_ROLE();
 
 	/* open the parent (main) relation */
 	parentrel = heap_open(relid, AccessShareLock);
@@ -1767,8 +1781,6 @@ aorow_compression_ratio_internal(Relation parentrel)
 										 * available" */
 	Oid			segrelid = InvalidOid;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH);
-
 	GetAppendOnlyEntryAuxOids(RelationGetRelid(parentrel), NULL,
 							  &segrelid,
 							  NULL, NULL, NULL, NULL);
@@ -1779,16 +1791,10 @@ aorow_compression_ratio_internal(Relation parentrel)
 	 */
 	aosegrel = heap_open(segrelid, AccessShareLock);
 	initStringInfo(&sqlstmt);
-	if (Gp_role == GP_ROLE_DISPATCH)
-		appendStringInfo(&sqlstmt, "select sum(eof), sum(eofuncompressed) "
-						 "from gp_dist_random('%s.%s')",
-						 get_namespace_name(RelationGetNamespace(aosegrel)),
-						 RelationGetRelationName(aosegrel));
-	else
-		appendStringInfo(&sqlstmt, "select eof, eofuncompressed "
-						 "from %s.%s",
-						 get_namespace_name(RelationGetNamespace(aosegrel)),
-						 RelationGetRelationName(aosegrel));
+	appendStringInfo(&sqlstmt, "select sum(eof), sum(eofuncompressed) "
+					 "from gp_dist_random('%s.%s')",
+					 get_namespace_name(RelationGetNamespace(aosegrel)),
+					 RelationGetRelationName(aosegrel));
 
 	heap_close(aosegrel, AccessShareLock);
 

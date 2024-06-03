@@ -1845,6 +1845,9 @@ pgquery_listfields(pgqueryobject * self, PyObject * args)
 	n = PQnfields(self->last_result);
 	fieldstuple = PyTuple_New(n);
 
+	if (fieldstuple == NULL)
+		return NULL;
+
 	for (i = 0; i < n; i++)
 	{
 		name = PQfname(self->last_result, i);
@@ -2620,6 +2623,15 @@ pg_inserttable(pgobject * self, PyObject * args)
 			else if (PyInt_Check(item) || PyLong_Check(item))
 			{
 				PyObject* s = PyObject_Str(item);
+
+				if (s == NULL)
+				{
+					free(buffer);
+					PyErr_SetString(PyExc_MemoryError,
+						"fail to compute a string representation.");
+					return NULL;
+				}
+
 				const char* t = PyString_AsString(s);
 				while (*t && bufsiz)
 				{

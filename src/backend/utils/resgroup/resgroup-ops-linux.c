@@ -432,7 +432,8 @@ fallback:
 		compSetDir(comp, FALLBACK_COMP_DIR);
 	}
 
-	fclose(f);
+	if (f != NULL)
+		fclose(f);
 }
 
 /*

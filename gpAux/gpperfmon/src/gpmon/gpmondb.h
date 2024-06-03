@@ -88,7 +88,7 @@ APR_DECLARE (apr_status_t) gpdb_harvest_one(const char* table);
 
 APR_DECLARE (apr_status_t) remove_segid_constraint(void);
 
-APR_DECLARE (apr_hash_t *) get_active_queries(apr_pool_t* pool);
+APR_DECLARE (apr_hash_t *) get_active_sessions(apr_pool_t* pool);
 
 APR_DECLARE (void) create_log_alert_table(void);
 

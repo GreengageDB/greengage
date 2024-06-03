@@ -321,6 +321,7 @@ ExecSliceDependencyShareInputScan(ShareInputScanState *node)
 	EState *estate = node->ss.ps.state;
 	if(sisc->driver_slice >= 0 && sisc->driver_slice == currentSliceId)
 	{
+		estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
 		shareinput_reader_waitready(node->share_lk_ctxt, sisc->share_id, estate->es_plannedstmt->planGen);
 	}
 }
@@ -335,10 +336,6 @@ void ExecEndShareInputScan(ShareInputScanState *node)
 	/* clean up tuple table */
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
 	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
-
-	ShareInputScan * sisc = (ShareInputScan *) node->ss.ps.plan;
-	if(node->share_lk_ctxt)
-		shareinput_reader_notifydone(node->share_lk_ctxt, sisc->share_id);
 
 	ExecEagerFreeShareInputScan(node);
 

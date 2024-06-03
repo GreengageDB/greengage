@@ -198,8 +198,8 @@ private:
 	// Set the qDispSliceId in the subplans defining an initplan
 	void SetInitPlanSliceInformation(SubPlan *);
 
-	// Set InitPlanVariable in PlannedStmt
-	void SetInitPlanVariables(PlannedStmt *);
+	// Set InitPlanVariable and fill rewindPlanIDs in PlannedStmt
+	void SetSubPlanVariables(PlannedStmt *);
 
 	// translate DXL table scan node into a SeqScan node
 	Plan *TranslateDXLTblScan(
@@ -407,9 +407,6 @@ private:
 
 	// Initialize spooling information
 	void InitializeSpoolingInfo(Plan *plan, ULONG share_id);
-
-	// retrieve the flow of the shared input scan of the cte consumers
-	Flow *GetFlowCTEConsumer(List *shared_scan_cte_consumer_list);
 
 	// translate a CTE producer into a GPDB share input scan
 	Plan *TranslateDXLCTEProducerToSharedScan(

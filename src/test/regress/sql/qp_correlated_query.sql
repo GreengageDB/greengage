@@ -834,6 +834,40 @@ DROP TABLE skip_correlated_t4;
 reset optimizer_join_order;
 reset optimizer_trace_fallback;
 
+--------------------------------------------------------------------------------
+-- Ensure ORCA generates the correct plan with the exists clause
+-- for the partitioned table.
+--------------------------------------------------------------------------------
+CREATE TABLE offers (
+    id int,
+    product int,
+    date date
+) DISTRIBUTED BY (id);
+INSERT INTO offers SELECT i, i, '2023-01-01'::date + (i||' min')::interval FROM generate_series(1, 1000) i;
+CREATE TABLE contacts (
+    contact int,
+    id int,
+    date date
+) DISTRIBUTED BY (id) PARTITION BY RANGE(date) (START (date '2023-01-01') INCLUSIVE END (date '2023-02-01') EXCLUSIVE EVERY (INTERVAL '1 month'));
+INSERT INTO contacts SELECT i, i, '2023-01-01'::date + (i||' min')::interval FROM generate_series(1, 1000) i;
+SET optimizer_enforce_subplans = on;
+EXPLAIN (COSTS off, VERBOSE on)
+SELECT id FROM offers WHERE EXISTS (
+    SELECT id FROM contacts WHERE id = 1
+);
+CREATE INDEX ON contacts USING bitmap(id);
+EXPLAIN (COSTS off, VERBOSE on)
+SELECT id FROM offers WHERE EXISTS (
+    SELECT id FROM contacts WHERE id = 1
+);
+CREATE INDEX ON contacts USING btree(id);
+EXPLAIN (COSTS off, VERBOSE on)
+SELECT id FROM offers WHERE EXISTS (
+    SELECT id FROM contacts WHERE id = 1
+);
+RESET optimizer_enforce_subplans;
+DROP TABLE offers;
+DROP TABLE contacts;
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------

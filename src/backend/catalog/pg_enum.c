@@ -131,8 +131,7 @@ EnumValuesCreate(Oid enumTypeOid, List *vals)
 		tup = heap_form_tuple(RelationGetDescr(pg_enum), values, nulls);
 		HeapTupleSetOid(tup, oids[elemno]);
 
-		simple_heap_insert(pg_enum, tup);
-		CatalogUpdateIndexes(pg_enum, tup);
+		CatalogTupleInsert(pg_enum, tup);
 		heap_freetuple(tup);
 
 		elemno++;
@@ -168,7 +167,7 @@ EnumValuesDelete(Oid enumTypeOid)
 
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
-		simple_heap_delete(pg_enum, &tup->t_self);
+		CatalogTupleDelete(pg_enum, &tup->t_self);
 	}
 
 	systable_endscan(scan);
@@ -450,8 +449,7 @@ restart:
 	values[Anum_pg_enum_enumlabel - 1] = NameGetDatum(&enumlabel);
 	enum_tup = heap_form_tuple(RelationGetDescr(pg_enum), values, nulls);
 	HeapTupleSetOid(enum_tup, newOid);
-	simple_heap_insert(pg_enum, enum_tup);
-	CatalogUpdateIndexes(pg_enum, enum_tup);
+	CatalogTupleInsert(pg_enum, enum_tup);
 	heap_freetuple(enum_tup);
 
 	heap_close(pg_enum, RowExclusiveLock);
@@ -504,9 +502,7 @@ RenumberEnumType(Relation pg_enum, HeapTuple *existing, int nelems)
 		{
 			en->enumsortorder = newsortorder;
 
-			simple_heap_update(pg_enum, &newtup->t_self, newtup);
-
-			CatalogUpdateIndexes(pg_enum, newtup);
+			CatalogTupleUpdate(pg_enum, &newtup->t_self, newtup);
 		}
 
 		heap_freetuple(newtup);

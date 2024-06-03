@@ -173,9 +173,7 @@ InsertExtTableEntry(Oid 	tbloid,
 	pg_exttable_tuple = heap_form_tuple(RelationGetDescr(pg_exttable_rel), values, nulls);
 
 	/* insert a new tuple */
-	simple_heap_insert(pg_exttable_rel, pg_exttable_tuple);
-
-	CatalogUpdateIndexes(pg_exttable_rel, pg_exttable_tuple);
+	CatalogTupleInsert(pg_exttable_rel, pg_exttable_tuple);
 
 	/*
      * Close the pg_exttable relcache entry without unlocking.
@@ -502,7 +500,7 @@ RemoveExtTableEntry(Oid relid)
 	 */
 	do
 	{
-		simple_heap_delete(pg_exttable_rel, &tuple->t_self);
+		CatalogTupleDelete(pg_exttable_rel, &tuple->t_self);
 	}
 	while (HeapTupleIsValid(tuple = systable_getnext(scan)));
 

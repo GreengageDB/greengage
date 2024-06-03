@@ -115,8 +115,7 @@ InsertInitialAOCSFileSegInfo(Relation prel, int32 segno, int32 nvp)
 
 	segtup = heap_form_tuple(RelationGetDescr(segrel), values, nulls);
 
-	simple_heap_insert(segrel, segtup);
-	CatalogUpdateIndexes(segrel, segtup);
+	CatalogTupleInsert(segrel, segtup);
 
 	heap_freetuple(segtup);
 	heap_close(segrel, RowExclusiveLock);
@@ -1725,16 +1724,10 @@ aocol_compression_ratio_internal(Relation parentrel)
 	 * namespace, too.
 	 */
 	initStringInfo(&sqlstmt);
-	if (Gp_role == GP_ROLE_DISPATCH)
-		appendStringInfo(&sqlstmt, "select vpinfo "
-						 "from gp_dist_random('%s.%s')",
-						 get_namespace_name(RelationGetNamespace(aosegrel)),
-						 RelationGetRelationName(aosegrel));
-	else
-		appendStringInfo(&sqlstmt, "select vpinfo "
-						 "from %s.%s",
-						 get_namespace_name(RelationGetNamespace(aosegrel)),
-						 RelationGetRelationName(aosegrel));
+	appendStringInfo(&sqlstmt, "select vpinfo "
+					 "from gp_dist_random('%s.%s')",
+					 get_namespace_name(RelationGetNamespace(aosegrel)),
+					 RelationGetRelationName(aosegrel));
 
 	heap_close(aosegrel, AccessShareLock);
 

@@ -61,6 +61,7 @@ const CHAR *rgszDMLFileNames[] = {
 	"../data/dxl/minidump/DML-Replicated-Input.mdp",
 	"../data/dxl/minidump/InsertWithTriggers.mdp",
 	"../data/dxl/minidump/DeleteWithTriggers.mdp",
+	"../data/dxl/minidump/DeleteWithAfterTriggerDroppedCol.mdp",
 	"../data/dxl/minidump/UpdateWithTriggers.mdp",
 	"../data/dxl/minidump/InsertNotNullCols.mdp",
 	"../data/dxl/minidump/InsertCheckConstraint.mdp",
@@ -96,7 +97,9 @@ const CHAR *rgszDMLFileNames[] = {
 	"../data/dxl/minidump/DML-Volatile-Function.mdp",
 	"../data/dxl/minidump/UpdateWindowGatherMerge.mdp",
 	"../data/dxl/minidump/UpdateDistKeyWithNestedJoin.mdp",
-};
+	"../data/dxl/minidump/PartitionedInsert.mdp",
+	"../data/dxl/minidump/PartitionedDelete.mdp",
+	"../data/dxl/minidump/PartitionedUpdate.mdp"};
 
 //---------------------------------------------------------------------------
 //	@function:

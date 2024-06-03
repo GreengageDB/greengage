@@ -562,6 +562,7 @@ extern bool optimizer_analyze_midlevel_partition;
 extern bool optimizer_analyze_enable_merge_of_leaf_stats;
 
 extern bool optimizer_use_gpdb_allocators;
+extern bool optimizer_enable_table_alias;
 
 /* optimizer GUCs for replicated table */
 extern bool optimizer_replicated_table_insert;
@@ -703,6 +704,7 @@ extern const char *GetConfigOption(const char *name, bool missing_ok,
 extern const char *GetConfigOptionResetString(const char *name);
 extern int	GetConfigOptionFlags(const char *name, bool missing_ok);
 extern void ProcessConfigFile(GucContext context);
+extern List *ProcessConfigFileForSync(GucContext context);
 extern void InitializeGUCOptions(void);
 extern bool SelectConfigFiles(const char *userDoption, const char *progname);
 extern void ResetAllOptions(void);
@@ -785,6 +787,7 @@ extern void GUC_check_errcode(int sqlerrcode);
 extern bool check_default_tablespace(char **newval, void **extra, GucSource source);
 extern bool check_temp_tablespaces(char **newval, void **extra, GucSource source);
 extern void assign_temp_tablespaces(const char *newval, void *extra);
+extern void assign_temp_spill_files_tablespaces(const char *newval, void *extra);
 
 /* in catalog/namespace.c */
 extern bool check_search_path(char **newval, void **extra, GucSource source);
@@ -812,6 +815,7 @@ extern bool gpvars_check_gp_enable_gpperfmon(bool *newval, void **extra, GucSour
 extern bool gpvars_check_gp_gpperfmon_send_interval(int *newval, void **extra, GucSource source);
 extern int guc_name_compare(const char *namea, const char *nameb);
 extern void DispatchSyncPGVariable(struct config_generic * gconfig);
+extern void DispatchSyncPGVariableExplicit(struct config_generic * gconfig);
 
 
 extern StdRdOptions *defaultStdRdOptions(char relkind);

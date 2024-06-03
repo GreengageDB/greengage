@@ -131,6 +131,7 @@ CParseHandlerCostParams::EndElement(const XMLCh *const,	 // element_uri,
 	{
 		CParseHandlerCostParam *parse_handler_cost_params =
 			dynamic_cast<CParseHandlerCostParam *>((*this)[ul]);
+		GPOS_ASSERT(NULL != parse_handler_cost_params);
 		m_cost_model_params->SetParam(
 			parse_handler_cost_params->GetName(),
 			parse_handler_cost_params->Get(),

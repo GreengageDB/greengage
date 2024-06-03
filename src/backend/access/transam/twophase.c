@@ -1706,8 +1706,6 @@ PrescanPreparedTransactions(TransactionId **xids_p, int *nxids_p)
 		TransactionId xid;
 
 		tfRecord = XLogReadRecord(xlogreader, tfXLogRecPtr, &errormsg);
-		hdr = (TwoPhaseFileHeader *) XLogRecGetData(tfRecord);
-		xid = hdr->xid;
 
 		if (tfRecord == NULL)
 		{
@@ -1728,6 +1726,9 @@ PrescanPreparedTransactions(TransactionId **xids_p, int *nxids_p)
 						(errcode(ERRCODE_DATA_CORRUPTED),
 						 errmsg("xlog record is invalid")));
 		}
+
+		hdr = (TwoPhaseFileHeader *) XLogRecGetData(tfRecord);
+		xid = hdr->xid;
 
 		if (TransactionIdDidCommit(xid) == false && TransactionIdDidAbort(xid) == false)
 		{

@@ -117,6 +117,180 @@ DROP TABLE keo3;
 DROP TABLE keo4;
 DROP TABLE keo5;
 
+-- Explicit Redistribute Motion should be added only if there is a motion
+-- between the scan and the ModifyTable on the relation we are going to modify.
+-- (test case not applicable to ORCA)
+-- start_ignore
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t_strewn;
+DROP TABLE IF EXISTS t_strewn2;
+-- end_ignore
+
+CREATE TABLE t1 (i int, j int) DISTRIBUTED BY (i);
+CREATE TABLE t2 (i int) DISTRIBUTED BY (i);
+CREATE TABLE t_strewn (i int) DISTRIBUTED RANDOMLY;
+CREATE TABLE t_strewn2 (i int) DISTRIBUTED RANDOMLY;
+
+INSERT INTO t1 SELECT
+  generate_series(1, 4) * 3, generate_series(1, 4);
+INSERT INTO t2 SELECT generate_series(1, 4) * 3;
+INSERT INTO t_strewn SELECT generate_series(1, 16);
+INSERT INTO t_strewn2 SELECT generate_series(2, 17);
+
+EXPLAIN (costs off)
+UPDATE t1 SET j = t_strewn.i FROM t_strewn WHERE t_strewn.i = t1.i;
+
+UPDATE t1 SET j = t_strewn.i FROM t_strewn WHERE t_strewn.i = t1.i
+RETURNING *;
+
+EXPLAIN (costs off)
+WITH CTE AS (DELETE FROM t1 RETURNING *)
+SELECT count(*) AS a FROM t_strewn JOIN cte USING (i);
+
+WITH CTE AS (DELETE FROM t1 RETURNING *)
+SELECT count(*) AS a FROM t_strewn JOIN cte USING (i);
+
+EXPLAIN (costs off)
+DELETE FROM t_strewn WHERE t_strewn.i = (SELECT t2.i FROM t2 WHERE t_strewn.i = t2.i);
+
+DELETE FROM t_strewn WHERE t_strewn.i = (SELECT t2.i FROM t2 WHERE t_strewn.i = t2.i)
+RETURNING *;
+
+EXPLAIN (costs off)
+UPDATE t_strewn SET i = t_strewn2.i
+FROM t_strewn2 WHERE t_strewn.i = t_strewn2.i;
+
+UPDATE t_strewn SET i = t_strewn2.i
+FROM t_strewn2 WHERE t_strewn.i = t_strewn2.i
+RETURNING *;
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t_strewn;
+DROP TABLE t_strewn2;
+
+-- Explicit Redistribute Motion should not be mistakenly elided for inherited
+-- tables. (test case not applicable to ORCA)
+-- start_ignore
+DROP TABLE IF EXISTS i;
+DROP TABLE IF EXISTS foochild;
+DROP TABLE IF EXISTS foo;
+-- end_ignore
+
+CREATE TABLE i (i int, j int) DISTRIBUTED BY (i);
+INSERT INTO i SELECT
+  generate_series(1, 16), generate_series(1, 16) * 3;
+
+CREATE TABLE foo (f1 serial, f2 text, f3 int) DISTRIBUTED RANDOMLY;
+INSERT INTO foo (f2, f3)
+  VALUES ('first', 1), ('second', 2), ('third', 3);
+
+CREATE TABLE foochild (fc int) INHERITS (foo);
+INSERT INTO foochild
+  VALUES(123, 'child', 999, -123);
+
+EXPLAIN (costs off)
+DELETE FROM foo
+  USING i
+  WHERE foo.f1 = i.j;
+
+DROP TABLE i;
+DROP TABLE foochild;
+DROP TABLE foo;
+
+-- Explicit Redistribute Motion should not be mistakenly elided for partitioned
+-- tables. (test case not applicable to ORCA)
+CREATE TABLE t1 (a int, b int) DISTRIBUTED BY (a)
+PARTITION BY
+  range(b) (start(1) end(16) every(5));
+
+CREATE TABLE t2 (a int, b int) DISTRIBUTED BY (b)
+PARTITION BY
+  range(a) (start(1) end(16) every(10), default partition def);
+
+INSERT INTO t1 SELECT
+  generate_series(1, 4) * 3, generate_series(1, 4);
+INSERT INTO t2 SELECT
+  generate_series(1, 4), generate_series(1, 4) * 3;
+INSERT INTO t2 VALUES
+  (generate_series(7, 11), NULL);
+
+EXPLAIN (costs off)
+DELETE FROM t2 USING t1 WHERE t1.a = t2.a;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+-- Explicit Redistribute Motion should not be elided if we encounter a scan on
+-- the same table that we are going to modify, but with different range table
+-- index. (test case not applicable to ORCA)
+CREATE TABLE t1 (a int, b int);
+CREATE TABLE t2 (a int, b int);
+
+INSERT INTO t1 SELECT a, a FROM generate_series(1, 4) a;
+INSERT INTO t2 SELECT a, a FROM generate_series(1, 16) a;
+
+EXPLAIN (costs off) UPDATE t2 trg
+SET b = src.b1
+FROM (SELECT t1.a AS a1, t1.b AS b1, t2.a AS a2, t2.b AS b2 FROM t1 JOIN t2 USING (b)) src
+WHERE trg.a = src.a1
+  AND trg.a = 2;
+
+-- Use Nested Loop to change left tree with the right tree, to swap the extra
+-- scan we don't indend to detect with the real one. 
+SET enable_hashjoin = off;
+SET enable_nestloop = on;
+
+EXPLAIN (costs off) UPDATE t2 trg
+SET b = src.b1
+FROM (SELECT t1.a AS a1, t1.b AS b1, t2.a AS a2, t2.b AS b2 FROM t1 JOIN t2 USING (b)) src
+WHERE trg.a = src.a1
+  AND trg.a = 2;
+
+RESET enable_hashjoin;
+RESET enable_nestloop;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+-- Explicit Redistribute Motion should be elided for every partition that does
+-- not have any motions above the scan on the table/partition we are going to
+-- update. (test case not applicable to ORCA)
+CREATE TABLE t1 (a int, b int, c int) DISTRIBUTED BY (b)
+    PARTITION BY RANGE(b) (start (1) end(5) every(1));
+
+CREATE TABLE t2 (a int, b int, c int) DISTRIBUTED BY (a);
+
+INSERT INTO t1 SELECT i * 2, i, i * 3 FROM generate_series(1, 4) i;
+INSERT INTO t2 SELECT i, i * 2, i * 3 FROM generate_series(1, 4) i;
+
+-- These partitions will need to have Explicit Redistribute above them.
+TRUNCATE t1_1_prt_1;
+TRUNCATE t1_1_prt_3;
+
+ANALYZE t1_1_prt_1;
+ANALYZE t1_1_prt_3;
+
+EXPLAIN (costs off)
+  UPDATE t1 SET c = t2.b FROM t2;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+-- Explicit Redistribute Motion should not be elided if there's a Gather Motion
+-- beneath the ModifyTable. (test case not applicable to ORCA)
+CREATE TABLE t1 (a int) DISTRIBUTED BY (a);
+
+INSERT INTO t1 SELECT i FROM generate_series(1, 4) i;
+
+-- "USING pg_class" forces a Gather Motion.
+EXPLAIN (costs off)
+DELETE FROM t1
+USING pg_class;
+
+DROP TABLE t1;
+
 --
 -- text types. We should support the following updates.
 --

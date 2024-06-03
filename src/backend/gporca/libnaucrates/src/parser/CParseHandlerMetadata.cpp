@@ -206,6 +206,7 @@ CParseHandlerMetadata::EndElement(const XMLCh *const,  // element_uri,
 		CParseHandlerMetadataObject *metadata_obj_parse_handler =
 			dynamic_cast<CParseHandlerMetadataObject *>((*this)[idx]);
 
+		GPOS_ASSERT(NULL != metadata_obj_parse_handler);
 		GPOS_ASSERT(NULL != metadata_obj_parse_handler->GetImdObj());
 
 		IMDCacheObject *imdobj = metadata_obj_parse_handler->GetImdObj();

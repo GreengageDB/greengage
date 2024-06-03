@@ -131,6 +131,15 @@ FETCH FORWARD 1 FROM _psql_cursor;
 CLOSE _psql_cursor;
 COMMIT;
 
+-- ensure correct truncate error log according to database encoding
+CREATE EXTERNAL WEB TABLE table_test (text text) EXECUTE $$ (echo -n ‘ && seq 1 500 | cut -b1 | tr -d '\n' && echo -n ’) >/dev/stderr && false $$ ON ALL FORMAT 'CSV';
+SELECT true FROM table_test;
+DROP EXTERNAL TABLE IF EXISTS table_test;
+CREATE EXTERNAL WEB TABLE table_test (text text) EXECUTE $$ (echo -n ‘ && seq 1 2006 | cut -b1 | tr -d '\n' && echo -n ’) >/dev/stderr && true $$ ON ALL FORMAT 'CSV';
+SELECT true FROM table_test;
+SELECT logseverity FROM gp_toolkit.gp_log_system WHERE logmessage LIKE 'read err msg from pipe%' AND logdatabase = current_database() LIMIT 1;
+DROP EXTERNAL TABLE IF EXISTS table_test;
+
 -- echo will behave differently on different platforms, force to use bash with -E option
 CREATE EXTERNAL WEB TABLE table_qry (val TEXT)
   EXECUTE E'/usr/bin/env bash -c ''echo -E "$GP_QUERY_STRING"''' ON SEGMENT 0
@@ -283,6 +292,16 @@ SELECT encoding from pg_exttable where urilocation='{gpfdist://9727:8080/d.dat}'
 SELECT encoding from gp_dist_random('pg_exttable') where urilocation='{gpfdist://9727:8080/d.dat}';
 DROP EXTERNAL TABLE issue_9727;
 RESET client_encoding;
+
+-- Test "DROP OWNED BY" when everything of the protocol is granted to some user.
+-- GitHub Issue #12748: https://github.com/greenplum-db/gpdb/issues/12748
+CREATE TRUSTED PROTOCOL dummy_protocol_issue_12748 (readfunc = 'read_from_file', writefunc = 'write_to_file');
+CREATE ROLE test_role_issue_12748;
+GRANT ALL ON PROTOCOL dummy_protocol_issue_12748 TO test_role_issue_12748;
+DROP OWNED BY test_role_issue_12748;
+-- Clean up.
+DROP ROLE test_role_issue_12748;
+DROP PROTOCOL dummy_protocol_issue_12748;
 
 --
 -- WET tests

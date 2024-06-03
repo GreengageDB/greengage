@@ -828,7 +828,7 @@ AppendOnlyBlockDirectory_DeleteSegmentFile(Relation aoRel,
 
 	while ((tuple = index_getnext(indexScan, ForwardScanDirection)) != NULL)
 	{
-		simple_heap_delete(blkdirRel,
+		CatalogTupleDelete(blkdirRel,
 						   &tuple->t_self);
 	}
 	index_endscan(indexScan);
@@ -1194,7 +1194,7 @@ write_minipage(AppendOnlyBlockDirectory *blockDirectory,
 						  columnGroupNo, minipageInfo->numMinipageEntries,
 						  minipageInfo->minipage->entry[0].firstRowNum)));
 
-		simple_heap_update(blkdirRel, &minipageInfo->tupleTid, tuple);
+		CatalogTupleUpdate(blkdirRel, &minipageInfo->tupleTid, tuple);
 	}
 	else
 	{
@@ -1206,10 +1206,8 @@ write_minipage(AppendOnlyBlockDirectory *blockDirectory,
 						  columnGroupNo, minipageInfo->numMinipageEntries,
 						  minipageInfo->minipage->entry[0].firstRowNum)));
 
-		simple_heap_insert(blkdirRel, tuple);
+		CatalogTupleInsert(blkdirRel, tuple);
 	}
-
-	CatalogUpdateIndexes(blkdirRel, tuple);
 
 	heap_freetuple(tuple);
 

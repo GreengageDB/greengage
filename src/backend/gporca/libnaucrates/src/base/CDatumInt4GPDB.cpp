@@ -205,6 +205,12 @@ CDatumInt4GPDB::Matches(const IDatum *datum) const
 	const CDatumInt4GPDB *datum_cast =
 		dynamic_cast<const CDatumInt4GPDB *>(datum);
 
+	// type mismatch
+	if (NULL == datum_cast)
+	{
+		return false;
+	}
+
 	if (!datum_cast->IsNull() && !IsNull())
 	{
 		return (datum_cast->Value() == Value());

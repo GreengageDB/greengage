@@ -290,6 +290,9 @@ ECPGdump_a_type(FILE *o, const char *name, struct ECPGtype * type, const int bra
 					break;
 				case ECPGt_struct:
 				case ECPGt_union:
+					if (ind_name == NULL)
+						mmfatal(INDICATOR_NOT_ARRAY, "indicator for struct/union must have name");
+
 					ECPGdump_a_struct(o, name,
 									  ind_name,
 									  type->size,
@@ -306,7 +309,7 @@ ECPGdump_a_type(FILE *o, const char *name, struct ECPGtype * type, const int bra
 									  type->u.element->size, type->size, struct_sizeof ? struct_sizeof : NULL,
 									  prefix, type->u.element->counter);
 
-					if (ind_type != NULL)
+					if (ind_type != NULL && ind_name != NULL)
 					{
 						if (ind_type->type == ECPGt_NO_INDICATOR)
 						{
@@ -330,6 +333,9 @@ ECPGdump_a_type(FILE *o, const char *name, struct ECPGtype * type, const int bra
 				if (indicator_set && ind_type->type != ECPGt_struct)
 					mmfatal(INDICATOR_NOT_STRUCT, "indicator for struct has to be a struct");
 
+				if (ind_name == NULL)
+					mmfatal(INDICATOR_NOT_STRUCT, "indicator for struct must have name");
+
 				ECPGdump_a_struct(o, name, ind_name, str_one, type, ind_type, prefix, ind_prefix);
 				free(str_one);
 			}
@@ -351,7 +357,7 @@ ECPGdump_a_type(FILE *o, const char *name, struct ECPGtype * type, const int bra
 					mmfatal(INDICATOR_NOT_SIMPLE, "indicator for simple data type has to be simple");
 
 				ECPGdump_a_simple(o, name, type->type, str_varchar_one, (arr_str_siz && strcmp(arr_str_siz, "0") != 0) ? arr_str_siz : str_arr_one, struct_sizeof, prefix, 0);
-				if (ind_type != NULL)
+				if (ind_type != NULL && ind_name != NULL)
 					ECPGdump_a_simple(o, ind_name, ind_type->type, ind_type->size, (arr_str_siz && strcmp(arr_str_siz, "0") != 0) ? arr_str_siz : str_neg_one, ind_struct_sizeof, ind_prefix, 0);
 
 				free(str_varchar_one);
@@ -372,7 +378,7 @@ ECPGdump_a_type(FILE *o, const char *name, struct ECPGtype * type, const int bra
 					mmfatal(INDICATOR_NOT_SIMPLE, "indicator for simple data type has to be simple");
 
 				ECPGdump_a_simple(o, name, type->type, NULL, str_neg_one, NULL, prefix, 0);
-				if (ind_type != NULL)
+				if (ind_type != NULL && ind_name != NULL)
 					ECPGdump_a_simple(o, ind_name, ind_type->type, ind_type->size, ind_type_neg_one, NULL, ind_prefix, 0);
 
 				free(str_neg_one);
@@ -392,7 +398,7 @@ ECPGdump_a_type(FILE *o, const char *name, struct ECPGtype * type, const int bra
 					mmfatal(INDICATOR_NOT_SIMPLE, "indicator for simple data type has to be simple");
 
 				ECPGdump_a_simple(o, name, type->type, type->size, (arr_str_siz && strcmp(arr_str_siz, "0") != 0) ? arr_str_siz : str_neg_one, struct_sizeof, prefix, type->counter);
-				if (ind_type != NULL)
+				if (ind_type != NULL && ind_name != NULL)
 					ECPGdump_a_simple(o, ind_name, ind_type->type, ind_type->size, (arr_str_siz && strcmp(arr_str_siz, "0") != 0) ? arr_str_siz : ind_type_neg_one, ind_struct_sizeof, ind_prefix, 0);
 
 				free(str_neg_one);

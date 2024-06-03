@@ -7,6 +7,11 @@ CREATE
 include: helpers/server_helpers.sql;
 CREATE
 
+CREATE OR REPLACE LANGUAGE plpythonu;
+CREATE
+CREATE OR REPLACE FUNCTION connectSeg(n int, port int, hostname text) RETURNS bool AS $$ import os import subprocess import time for i in range(n): try: cmd = 'PGOPTIONS="-c gp_session_role=utility" psql -h %s -p %d -d postgres -Xc "select 1"' % (hostname, port) proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) proc.communicate() if proc.returncode == 0: return True except Exception as e: time.sleep(1) raise Exception("wait connection timeout") $$ LANGUAGE plpythonu;
+CREATE
+
 SHOW gp_keep_all_xlog;
  gp_keep_all_xlog 
 ------------------
@@ -199,6 +204,12 @@ INSERT 3
  gp_request_fts_probe_scan 
 ---------------------------
  t                         
+(1 row)
+-- Wait for the segment promotion finished and accept the connection
+3: select connectSeg(600,port,hostname) from gp_segment_configuration where content = 1 and role = 'p';
+ connectseg 
+------------
+ t          
 (1 row)
 -- Wait for the end of recovery CHECKPOINT completed after the mirror was promoted
 3: SELECT gp_inject_fault('checkpoint_after_redo_calculated', 'skip', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 1;
@@ -474,6 +485,12 @@ INSERT 3
  t                         
 (1 row)
 
+-- Wait for the segment promotion finished and accept the connection
+3: select connectSeg(600,port,hostname) from gp_segment_configuration where content = 1 and role = 'p';
+ connectseg 
+------------
+ t          
+(1 row)
 -- Reset faults and confirm FTS configuration
 3: SELECT gp_inject_fault('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 1;
  gp_inject_fault 
@@ -638,6 +655,8 @@ DROP
 1Uq: ... <quitting>
 
 5: DROP TABLE tst_missing_tbl;
+DROP
+5: DROP FUNCTION connectSeg(n int, port int, hostname text);
 DROP
 !\retcode gpconfig -r wal_keep_segments;
 -- start_ignore

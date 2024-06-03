@@ -127,6 +127,9 @@ CParseHandlerPhysicalCTEConsumer::EndElement(
 	CParseHandlerProjList *proj_list_parse_handler =
 		dynamic_cast<CParseHandlerProjList *>((*this)[1]);
 
+	GPOS_ASSERT(NULL != prop_parse_handler);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
+
 	// set physical properties
 	CParseHandlerUtils::SetProperties(m_dxl_node, prop_parse_handler);
 

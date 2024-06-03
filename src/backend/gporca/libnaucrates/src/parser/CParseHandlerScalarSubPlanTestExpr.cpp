@@ -112,6 +112,7 @@ CParseHandlerScalarSubPlanTestExpr::EndElement(
 	{
 		CParseHandlerScalarOp *child_parse_handler =
 			dynamic_cast<CParseHandlerScalarOp *>((*this)[0]);
+		GPOS_ASSERT(NULL != child_parse_handler);
 		if (NULL != child_parse_handler->CreateDXLNode())
 		{
 			m_dxl_test_expr = child_parse_handler->CreateDXLNode();

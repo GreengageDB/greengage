@@ -192,22 +192,21 @@ where e.x in
     select b from t2_12512
     )
 ;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Update on t_12512
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
-         ->  HashAggregate
-               Group Key: t_12512.ctid, x.ctid
-               ->  Hash Join
-                     Hash Cond: (x.x = t2_12512.b)
-                     ->  Nested Loop
-                           ->  Seq Scan on t_12512
-                           ->  Function Scan on x
-                     ->  Hash
-                           ->  Broadcast Motion 3:3  (slice1; segments: 3)
-                                 ->  Seq Scan on t2_12512
+   ->  HashAggregate
+         Group Key: t_12512.ctid, x.ctid
+         ->  Hash Join
+               Hash Cond: (x.x = t2_12512.b)
+               ->  Nested Loop
+                     ->  Seq Scan on t_12512
+                     ->  Function Scan on x
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                           ->  Seq Scan on t2_12512
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 update t_12512 set b = 1
     from
@@ -231,23 +230,22 @@ where e.x in
     select b from t2_12512
     )
 ;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Update on t_12512
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
-         ->  HashAggregate
-               Group Key: t_12512.ctid, "*VALUES*".ctid
-               ->  Hash Join
-                     Hash Cond: ("*VALUES*".column1 = t2_12512.b)
-                     ->  Nested Loop
-                           ->  Seq Scan on t_12512
-                           ->  Materialize
-                                 ->  Values Scan on "*VALUES*"
-                     ->  Hash
-                           ->  Broadcast Motion 3:3  (slice1; segments: 3)
-                                 ->  Seq Scan on t2_12512
+   ->  HashAggregate
+         Group Key: t_12512.ctid, "*VALUES*".ctid
+         ->  Hash Join
+               Hash Cond: ("*VALUES*".column1 = t2_12512.b)
+               ->  Nested Loop
+                     ->  Seq Scan on t_12512
+                     ->  Materialize
+                           ->  Values Scan on "*VALUES*"
+               ->  Hash
+                     ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                           ->  Seq Scan on t2_12512
  Optimizer: Postgres query optimizer
-(14 rows)
+(13 rows)
 
 update t_12512 set b = 1
     from

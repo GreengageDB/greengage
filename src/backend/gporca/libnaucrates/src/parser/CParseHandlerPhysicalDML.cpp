@@ -39,6 +39,7 @@ CParseHandlerPhysicalDML::CParseHandlerPhysicalDML(
 	: CParseHandlerPhysicalOp(mp, parse_handler_mgr, parse_handler_root),
 	  m_dxl_dml_type(Edxldmlinsert),
 	  m_src_colids_array(NULL),
+	  m_table_oid_colid(0),
 	  m_action_colid(0),
 	  m_ctid_colid(0),
 	  m_segid_colid(0),
@@ -102,6 +103,11 @@ CParseHandlerPhysicalDML::StartElement(const XMLCh *const,	// element_uri,
 	m_action_colid = CDXLOperatorFactory::ExtractConvertAttrValueToUlong(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenActionColId,
 		token_type);
+
+	m_table_oid_colid = CDXLOperatorFactory::ExtractConvertAttrValueToUlong(
+		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenOidColId,
+		token_type, true, 0);
+
 	m_ctid_colid = CDXLOperatorFactory::ExtractConvertAttrValueToUlong(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenCtidColId,
 		token_type);
@@ -197,26 +203,30 @@ CParseHandlerPhysicalDML::EndElement(const XMLCh *const,  // element_uri,
 
 	CParseHandlerProperties *prop_parse_handler =
 		dynamic_cast<CParseHandlerProperties *>((*this)[0]);
+	GPOS_ASSERT(NULL != prop_parse_handler);
 	GPOS_ASSERT(NULL != prop_parse_handler->GetProperties());
 
 	CParseHandlerDirectDispatchInfo *direct_dispatch_parse_handler =
 		dynamic_cast<CParseHandlerDirectDispatchInfo *>((*this)[1]);
-	GPOS_ASSERT(
-		NULL != direct_dispatch_parse_handler->GetDXLDirectDispatchInfo() &&
-		NULL != direct_dispatch_parse_handler->GetDXLDirectDispatchInfo());
+	GPOS_ASSERT(NULL != direct_dispatch_parse_handler);
+	GPOS_ASSERT(NULL !=
+				direct_dispatch_parse_handler->GetDXLDirectDispatchInfo());
 
 	CParseHandlerProjList *proj_list_parse_handler =
 		dynamic_cast<CParseHandlerProjList *>((*this)[2]);
+	GPOS_ASSERT(NULL != proj_list_parse_handler);
 	GPOS_ASSERT(NULL != proj_list_parse_handler->CreateDXLNode());
 
 	CParseHandlerTableDescr *table_descr_parse_handler =
 		dynamic_cast<CParseHandlerTableDescr *>((*this)[3]);
+	GPOS_ASSERT(NULL != table_descr_parse_handler);
 	GPOS_ASSERT(NULL != table_descr_parse_handler->GetDXLTableDescr());
 	CDXLTableDescr *table_descr = table_descr_parse_handler->GetDXLTableDescr();
 	table_descr->AddRef();
 
 	CParseHandlerPhysicalOp *child_parse_handler =
 		dynamic_cast<CParseHandlerPhysicalOp *>((*this)[4]);
+	GPOS_ASSERT(NULL != child_parse_handler);
 	GPOS_ASSERT(NULL != child_parse_handler->CreateDXLNode());
 
 	CDXLDirectDispatchInfo *dxl_direct_dispatch_info =
@@ -225,7 +235,7 @@ CParseHandlerPhysicalDML::EndElement(const XMLCh *const,  // element_uri,
 	CDXLPhysicalDML *dxl_op = GPOS_NEW(m_mp) CDXLPhysicalDML(
 		m_mp, m_dxl_dml_type, table_descr, m_src_colids_array, m_action_colid,
 		m_ctid_colid, m_segid_colid, m_preserve_oids, m_tuple_oid_colid,
-		dxl_direct_dispatch_info);
+		m_table_oid_colid, dxl_direct_dispatch_info);
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, dxl_op);
 
 	// set statistics and physical properties

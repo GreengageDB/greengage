@@ -189,6 +189,10 @@ CParseHandlerScalarSubPlan::EndElement(const XMLCh *const,	// element_uri,
 	CParseHandlerPhysicalOp *child_parse_handler =
 		dynamic_cast<CParseHandlerPhysicalOp *>((*this)[2]);
 
+	GPOS_ASSERT(NULL != parse_handler_subplan_test_expr);
+	GPOS_ASSERT(NULL != parse_handler_subplan_param_list);
+	GPOS_ASSERT(NULL != child_parse_handler);
+
 	CDXLColRefArray *dxl_colref_array =
 		parse_handler_subplan_param_list->GetDXLColRefArray();
 	dxl_colref_array->AddRef();

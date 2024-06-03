@@ -3098,7 +3098,7 @@ construct_md_array(Datum *elems,
 	memcpy(ARR_DIMS(result), dims, ndims * sizeof(int));
 	memcpy(ARR_LBOUND(result), lbs, ndims * sizeof(int));
 
-	if (elems==NULL && fixedwidthtype) 
+	if (elems==NULL)
 	{
 		/* do nothing */
 	} 

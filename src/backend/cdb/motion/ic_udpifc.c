@@ -57,6 +57,7 @@
 #include <arpa/inet.h>
 #include "pgtime.h"
 #include <netinet/in.h>
+#include <ifaddrs.h>
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -654,6 +655,7 @@ static void setMainThreadWaiting(ThreadWaitingState *state, int motNodeId, int r
 static void checkRxThreadError(void);
 static void setRxThreadError(int eno);
 static void resetRxThreadError(void);
+static bool isIPv6Available(void);
 static void SendDummyPacket(void);
 
 static void ConvertToIPv4MappedAddr(struct sockaddr_storage *sockaddr, socklen_t *o_len);
@@ -890,6 +892,12 @@ dumpTransProtoStats()
 
 	snprintf(tmpbuf, 32, "%d." UINT64_FORMAT "txt", MyProcPid, getCurrentTime());
 	FILE	   *ofile = fopen(tmpbuf, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", tmpbuf);
+		return;
+	}
 
 	pthread_mutex_lock(&trans_proto_stats.lock);
 	while (trans_proto_stats.head)
@@ -1162,6 +1170,103 @@ resetRxThreadError()
 
 
 /*
+ * isIPv6Available
+ * 		Check whether we really want to use AF_INET6.
+ *
+ *		To ensure the IPv6 is available for our use, we must check two
+ *		conditions:
+ *		1. There is at least one non-link-local IPv6 address on some interface;
+ *		2. The loopback IPv6 address exists.  This is done because addresses
+ *		   from the first point could re-appear if the interface was reset, even
+ *		   if IPv6 is still disabled in the host system.  The loopback device is
+ *		   not affected by such behavior, so a missing IPv6 address on the
+ *		   loopback device is a clear sign that IPv6 has been disabled.
+ */
+static bool
+isIPv6Available(void)
+{
+	bool		hasIpv6Addr = false;
+	bool		hasIpv6Loopback = false;
+
+	char	   *errorCause = NULL;
+
+	struct ifaddrs	*ifaddrFirst = NULL;
+
+	if (getifaddrs(&ifaddrFirst) != 0)
+		errorCause = "getifaddrs()";
+	else
+	{
+		for (struct ifaddrs *ifaddr = ifaddrFirst; ifaddr != NULL;
+			 ifaddr = ifaddr->ifa_next)
+		{
+			/* Ignore non-IPv6 addresses. */
+			if (ifaddr->ifa_addr == NULL ||
+				ifaddr->ifa_addr->sa_family != AF_INET6)
+			{
+				continue;
+			}
+
+			const struct sockaddr_in6 *addr =
+				(struct sockaddr_in6 *) ifaddr->ifa_addr;
+			const struct in6_addr *sinAddr = &addr->sin6_addr;
+
+			/* Discard wildcard and link-local addresses. */
+			if (IN6_IS_ADDR_UNSPECIFIED(sinAddr) ||
+				IN6_IS_ADDR_LINKLOCAL(sinAddr))
+			{
+				continue;
+			}
+
+			/* Make sure the address can be used in bind(). */
+			int			bindFd = socket(AF_INET6, SOCK_DGRAM, 0);
+
+			if (bindFd < 0)
+			{
+				if (errno != EAFNOSUPPORT)
+					errorCause = "socket()";
+
+				break;
+			}
+
+			int			checkResult = bind(bindFd, (struct sockaddr *) addr,
+										   sizeof(struct sockaddr_in6));
+
+			closesocket(bindFd);
+
+			if (checkResult == 0)
+			{
+				if (IN6_IS_ADDR_LOOPBACK(sinAddr))
+					hasIpv6Loopback = true;
+				else
+					hasIpv6Addr = true;
+
+				if (hasIpv6Loopback && hasIpv6Addr)
+					break;
+			}
+		}
+	}
+
+	int			errorErrnoSave = errno;
+
+	if (ifaddrFirst != NULL)
+		freeifaddrs(ifaddrFirst);
+
+	if (errorCause != NULL)
+	{
+		errno = errorErrnoSave;
+
+		ereport(ERROR,
+				(errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+				 errmsg("interconnect error: Could not check "
+						"for IPv6 availability"),
+				 errdetail("%s: %m", errorCause)));
+	}
+
+	return (hasIpv6Loopback && hasIpv6Addr);
+}
+
+
+/*
  * setupUDPListeningSocket
  * 		Setup udp listening socket.
  */
@@ -1173,16 +1278,6 @@ setupUDPListeningSocket(int *listenerSocketFd, uint16 *listenerPort, int *txFami
 	const char *fun;
 
 
-	/*
-	 * At the moment, we don't know which of IPv6 or IPv4 is wanted, or even
-	 * supported, so just ask getaddrinfo...
-	 *
-	 * Perhaps just avoid this and try socket with AF_INET6 and AF_INT?
-	 *
-	 * Most implementation of getaddrinfo are smart enough to only return a
-	 * particular address family if that family is both enabled, and at least
-	 * one network adapter has an IP address of that family.
-	 */
 	struct addrinfo hints;
 	struct addrinfo *addrs,
 			   *rp;
@@ -1193,9 +1288,14 @@ setupUDPListeningSocket(int *listenerSocketFd, uint16 *listenerPort, int *txFami
 
 	snprintf(service, 32, "%d", 0);
 	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_UNSPEC;	/* Allow IPv4 or IPv6 */
 	hints.ai_socktype = SOCK_DGRAM; /* Datagram socket */
 	hints.ai_protocol = 0;		/* Any protocol */
+	/*
+	 * Unfortunately, if we are using a wildcard, we can't really distinguish
+	 * whether bind() has really acquired IPv6. Make sure we have at least one
+	 * valid IPv6 address available.
+	 */
+	hints.ai_family = isIPv6Available() ? AF_UNSPEC : AF_INET;
 
 #ifdef USE_ASSERT_CHECKING
 	if (gp_udpic_network_disable_ipv6)
@@ -6771,6 +6871,12 @@ dumpICBufferList(ICBufferList *list, const char *fname)
 {
 	FILE	   *ofile = fopen(fname, "w+");
 
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	dumpICBufferList_Internal(list, ofile);
 	fclose(ofile);
 }
@@ -6784,6 +6890,12 @@ dumpUnackQueueRing(const char *fname)
 {
 	FILE	   *ofile = fopen(fname, "w+");
 	int			i;
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
 
 	fprintf(ofile, "UnackQueueRing: currentTime " UINT64_FORMAT ", idx %d numOutstanding %d numSharedOutstanding %d\n",
 			unack_queue_ring.currentTime, unack_queue_ring.idx,
@@ -6812,6 +6924,12 @@ dumpConnections(ChunkTransportStateEntry *pEntry, const char *fname)
 	MotionConn *conn;
 
 	FILE	   *ofile = fopen(fname, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
 
 	fprintf(ofile, "Entry connections: conn num %d \n", pEntry->numConns);
 	fprintf(ofile, "==================================\n");

@@ -1310,12 +1310,10 @@ CXformUtils::PexprLogicalPartitionSelector(CMemoryPool *mp,
 //
 //---------------------------------------------------------------------------
 CExpression *
-CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
-										CExpression *pexprChild,
-										CLogicalDML::EDMLOperator edmlop,
-										CTableDescriptor *ptabdesc,
-										CColRefArray *colref_array,
-										CColRef *pcrCtid, CColRef *pcrSegmentId)
+CXformUtils::PexprLogicalDMLOverProject(
+	CMemoryPool *mp, CExpression *pexprChild, CLogicalDML::EDMLOperator edmlop,
+	CTableDescriptor *ptabdesc, CColRefArray *colref_array, CColRef *pcrCtid,
+	CColRef *pcrSegmentId, CColRef *pcrTableOid)
 {
 	GPOS_ASSERT(CLogicalDML::EdmlInsert == edmlop ||
 				CLogicalDML::EdmlDelete == edmlop);
@@ -1355,10 +1353,10 @@ CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
 
 	CExpression *pexprDML = GPOS_NEW(mp) CExpression(
 		mp,
-		GPOS_NEW(mp)
-			CLogicalDML(mp, edmlop, ptabdesc, colref_array,
-						GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/, pcrAction,
-						pcrCtid, pcrSegmentId, NULL /*pcrTupleOid*/),
+		GPOS_NEW(mp) CLogicalDML(mp, edmlop, ptabdesc, colref_array,
+								 GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/,
+								 pcrAction, pcrCtid, pcrSegmentId,
+								 NULL /*pcrTupleOid*/, pcrTableOid),
 		pexprProject);
 
 	CExpression *pexprOutput = pexprDML;
@@ -2697,6 +2695,10 @@ CXformUtils::FProcessGPDBAntiSemiHashJoin(
 		{
 			CExpression *pexprEquality = NULL;
 			CExpression *pexprFalse = NULL;
+
+			// LASJ with Not-In in GPDB returns nothing, if a NULL was
+			// produced by the inner-outer tuple match. So, we should
+			// check NOT NULL for the inner and outer sides only for LASJ.
 			if (FExtractEquality(
 					pexprPred, &pexprEquality,
 					&pexprFalse) &&	 // extracted equality expression
@@ -2708,12 +2710,17 @@ CXformUtils::FProcessGPDBAntiSemiHashJoin(
 				CPhysicalJoin::FHashJoinCompatible(
 					pexprEquality, pexprOuter,
 					pexprInner) &&	// equality is hash-join compatible
-				!CUtils::FUsesNullableCol(
-					mp, pexprEquality,
-					pexprInner) &&	// equality uses an inner NOT NULL column
-				!CUtils::FUsesNullableCol(
-					mp, pexprEquality,
-					pexprOuter))  // equality uses an outer NOT NULL column
+				((COperator::EopLogicalLeftAntiSemiJoin ==
+					  pexpr->Pop()->Eopid() &&
+				  !CUtils::FUsesNullableCol(
+					  mp, pexprEquality,
+					  pexprInner) &&  // equality uses an inner NOT NULL column
+				  !CUtils::FUsesNullableCol(
+					  mp, pexprEquality,
+					  pexprOuter)  // equality uses an outer NOT NULL column
+				  ) ||
+				 (COperator::EopLogicalLeftAntiSemiJoinNotIn ==
+				  pexpr->Pop()->Eopid())))
 			{
 				pexprEquality->AddRef();
 				pdrgpexprNew->Append(pexprEquality);
@@ -3459,6 +3466,7 @@ CXformUtils::CreateBitmapIndexProbesWithOrWithoutPredBreakdown(
 	CExpressionArray *pdrgpexprRecheckTemp =
 		GPOS_NEW(pmp) CExpressionArray(pmp);
 
+	GPOS_ASSERT(pexprPred);
 	pexprPred->AddRef();
 
 	while (NULL != pexprPred)

@@ -136,6 +136,7 @@ extern int	CommitDelay;
 extern int	CommitSiblings;
 extern char *default_tablespace;
 extern char *temp_tablespaces;
+extern char *temp_spill_files_tablespaces;
 extern bool ignore_checksum_failure;
 extern bool synchronize_seqscans;
 extern char *SSLCipherSuites;
@@ -1227,7 +1228,7 @@ static struct config_bool ConfigureNamesBool[] =
 #endif
 
 	{
-		{"log_lock_waits", PGC_SUSET, DEFUNCT_OPTIONS,
+		{"log_lock_waits", PGC_SUSET, LOGGING_WHAT,
 			gettext_noop("Logs long lock waits."),
 			NULL
 		},
@@ -2881,6 +2882,18 @@ static struct config_string ConfigureNamesString[] =
 		&temp_tablespaces,
 		"",
 		check_temp_tablespaces, assign_temp_tablespaces, NULL
+	},
+
+	{
+		{"temp_spill_files_tablespaces", PGC_USERSET, CLIENT_CONN_STATEMENT,
+			gettext_noop("Sets the tablespace(s) to use for temporary files."),
+			gettext_noop("This setting takes precedence over temp_tablespaces "
+						 "for temporary files."),
+			GUC_LIST_INPUT | GUC_LIST_QUOTE
+		},
+		&temp_spill_files_tablespaces,
+		"",
+		check_temp_tablespaces, assign_temp_spill_files_tablespaces, NULL
 	},
 
 	{
@@ -7274,14 +7287,34 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 			}
 
 			SIMPLE_FAULT_INJECTOR("set_variable_fault");
-			(void) set_config_option(stmt->name,
-									 ExtractSetVariableArgs(stmt),
-									 (superuser() ? PGC_SUSET : PGC_USERSET),
-									 PGC_S_SESSION,
-									 action,
-									 true,
-									 0);
-			DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
+
+			/*
+			 * If this is a synchronization SET, previous values from the
+			 * startup packet should be overwritten. We can only get here if we
+			 * are a QE.
+			 */
+			if (isMppTxOptions_SynchronizationSet(QEDtxContextInfo.distributedTxnOptions))
+			{
+				(void) set_config_option(stmt->name,
+										 ExtractSetVariableArgs(stmt),
+										 PGC_SIGHUP,
+										 PGC_S_CLIENT,
+										 GUC_ACTION_SET,
+										 true,
+										 0);
+			}
+			else
+			{
+				(void) set_config_option(stmt->name,
+										 ExtractSetVariableArgs(stmt),
+										 (superuser() ? PGC_SUSET : PGC_USERSET),
+										 PGC_S_SESSION,
+										 action,
+										 true,
+										 0);
+
+				DispatchSetPGVariable(stmt->name, stmt->args, stmt->is_local);
+			}
 			break;
 		case VAR_SET_MULTI:
 

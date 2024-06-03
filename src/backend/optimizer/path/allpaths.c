@@ -124,7 +124,7 @@ static void subquery_push_qual(Query *subquery,
 static void recurse_push_qual(Node *setOp, Query *topquery,
 				  RangeTblEntry *rte, Index rti, Node *qual);
 static void bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel,  List *outer_quals);
-static bool is_query_contain_limit_groupby(Query *parse);
+static bool check_query_for_possible_motion(Query *parse);
 static void handle_gen_seggen_volatile_path(PlannerInfo *root, RelOptInfo *rel);
 
 /*
@@ -1695,12 +1695,13 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		config->honor_order_by = false;		/* partial order is enough */
 		/*
 		 * CDB: if this subquery is the inner plan of a lateral
-		 * join and if it contains a limit, we can only gather
-		 * it to singleQE and materialize the data because we
+		 * join and if it contains a limit or group by or some other clause
+		 * from a bunch of conditions that can cause motion in the plan,
+		 * we can only gather it to singleQE and materialize the data because we
 		 * cannot pass params across motion.
 		 */
 		if ((!bms_is_empty(required_outer)) &&
-			is_query_contain_limit_groupby(subquery))
+			check_query_for_possible_motion(subquery))
 			config->force_singleQE = true;
 
 		rel->subplan = subquery_planner(root->glob, subquery,
@@ -1715,21 +1716,6 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		rel->subplan = rte->subquery_plan;
 		subroot = root;
 		/* XXX rel->onerow = ??? */
-	}
-
-	if (rel->subplan->flow->locustype == CdbLocusType_General &&
-		(contain_volatile_functions((Node *) rel->subplan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		rel->subplan->flow->locustype = CdbLocusType_SingleQE;
-		rel->subplan->flow->flotype = FLOW_SINGLETON;
-	}
-
-	if (rel->subplan->flow->locustype == CdbLocusType_SegmentGeneral &&
-		(contain_volatile_functions((Node *) rel->subplan->targetlist) ||
-		 contain_volatile_functions(subquery->havingQual)))
-	{
-		rel->subplan = (Plan *) make_motion_gather(subroot, rel->subplan, NIL, CdbLocusType_SingleQE);
 	}
 
 	rel->subroot = subroot;
@@ -2033,6 +2019,15 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	if (!root->config->gp_cte_sharing || cte->cterefcount == 1)
 	{
+		/*
+		 * If plan sharing is disabled, we avoid performing DML inside CTE for
+		 * each reference. It'll cause duplicated DML operations or mutation
+		 * errors during cdbparallelize().
+		 */
+		if (cte->cterefcount > 1 &&
+			((Query *) cte->ctequery)->commandType != CMD_SELECT)
+			elog(ERROR, "Too much references to non-SELECT CTE");
+
 		PlannerConfig *config = CopyPlannerConfig(root->config);
 
 		/*
@@ -2049,7 +2044,12 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 		config->honor_order_by = false;
 
-		if (!cte->cterecursive)
+		/*
+		 * Additionally to recursive CTE queries, don't try to push down quals
+		 * to non-SELECT queries. There can be DML operation with RETURNING
+		 * clause, and it's incorrect to push down upper quals to it.
+		*/
+		if (!cte->cterecursive && subquery->commandType == CMD_SELECT)
 		{
 			/*
 			 * Adjust the subquery so that 'root', i.e. this subquery, is the
@@ -2090,7 +2090,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		 * subplan will not be used by InitPlans, so that they can be shared
 		 * if this CTE is referenced multiple times (excluding in InitPlans).
 		 */
-		if (cteplaninfo->shared_plan == NULL)
+		if (cteplaninfo->subplan == NULL)
 		{
 			PlannerConfig *config = CopyPlannerConfig(root->config);
 
@@ -2111,15 +2111,44 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 			subplan = subquery_planner(cteroot->glob, subquery, cteroot, cte->cterecursive,
 									   tuple_fraction, &subroot, config);
 
-			cteplaninfo->shared_plan = prepare_plan_for_sharing(cteroot, subplan);
+			/*
+			 * Sharing General and SegmentGeneral subplan may lead to deadlock
+			 * when executed with 1-gang and joined with N-gang.
+			 */
+			if (CdbPathLocus_IsGeneral(*subplan->flow) ||
+				CdbPathLocus_IsSegmentGeneral(*subplan->flow))
+			{
+				cteplaninfo->subplan = subplan;
+			}
+			else
+			{
+				cteplaninfo->subplan = prepare_plan_for_sharing(cteroot, subplan);
+			}
+
 			cteplaninfo->subroot = subroot;
 		}
 
 		/*
 		 * Create another ShareInputScan to reference the already-created
-		 * subplan.
+		 * subplan if not avoiding sharing for General and SegmentGeneral
+		 * subplans.
 		 */
-		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
+		if (CdbPathLocus_IsGeneral(*cteplaninfo->subplan->flow) ||
+			CdbPathLocus_IsSegmentGeneral(*cteplaninfo->subplan->flow))
+		{
+			/*
+			 * If we are not sharing and subplan was created just now, use it.
+			 * Otherwise, make a copy of it to avoid construction of DAG
+			 * instead of a tree.
+			 */
+			if (subplan == NULL)
+				subplan = (Plan *) copyObject(cteplaninfo->subplan);
+		}
+		else
+		{
+			subplan = share_prepared_plan(cteroot, cteplaninfo->subplan);
+		}
+
 		subroot = cteplaninfo->subroot;
 	}
 
@@ -2976,24 +3005,43 @@ recurse_push_qual(Node *setOp, Query *topquery,
 }
 
 static bool
-is_query_contain_limit_groupby(Query *parse)
+check_query_for_possible_motion(Query *parse)
 {
+	ListCell   *lc;
+
+	// LIMIT, DISTINCT, GROUP BY, aggregate functions or recursive CTEs
+	// can cause motions in a plan, so return true if they are presented
 	if (parse->limitCount || parse->limitOffset ||
-		parse->groupClause || parse->distinctClause)
+		parse->groupClause || parse->distinctClause ||
+		parse->hasAggs || parse->hasRecursive)
 		return true;
 
+	// INTERSECT, EXCEPT or UNION without ALL set operations also can
+	// cause motions in a plan, so return true for them as well
 	if (parse->setOperations)
 	{
-		SetOperationStmt *sop_stmt = (SetOperationStmt *) (parse->setOperations);
-		RangeTblRef   *larg = (RangeTblRef *) sop_stmt->larg;
-		RangeTblRef   *rarg = (RangeTblRef *) sop_stmt->rarg;
-		RangeTblEntry *lrte = list_nth(parse->rtable, larg->rtindex-1);
-		RangeTblEntry *rrte = list_nth(parse->rtable, rarg->rtindex-1);
+		SetOperationStmt *stmt = (SetOperationStmt *) parse->setOperations;
 
-		if ((lrte->rtekind == RTE_SUBQUERY &&
-			 is_query_contain_limit_groupby(lrte->subquery)) ||
-			(rrte->rtekind == RTE_SUBQUERY &&
-			 is_query_contain_limit_groupby(rrte->subquery)))
+		if (!stmt->all ||
+			stmt->op == SETOP_INTERSECT ||
+			stmt->op == SETOP_EXCEPT)
+			return true;
+	}
+
+	foreach(lc, parse->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(lc);
+
+		if (check_query_for_possible_motion((Query *) cte->ctequery))
+			return true;
+	}
+
+	foreach(lc, parse->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+		if (rte->rtekind == RTE_SUBQUERY &&
+			check_query_for_possible_motion(rte->subquery))
 			return true;
 	}
 

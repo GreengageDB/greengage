@@ -233,6 +233,9 @@ typedef struct AllocChunkData
 	void *prev_chunk;
 	void *next_chunk;
 #endif
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	MemoryContextChunkInfo info;
+#endif
 }	AllocChunkData;
 
 /*
@@ -393,6 +396,13 @@ static void dump_mc_for(FILE *file, MemoryContext mc)
 void dump_mc(const char *fname, MemoryContext mc)
 {
 	FILE *ofile = fopen(fname, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	dump_mc_for(ofile, mc);
 	fclose(ofile);
 }
@@ -407,6 +417,13 @@ void dump_mc(const char *fname, MemoryContext mc)
 void dump_memory_allocation(const char* fname)
 {
 	FILE *ofile = fopen(fname, "w+");
+
+	if (ofile == NULL)
+	{
+		elog(WARNING, "could not open dump file %s", fname);
+		return;
+	}
+
 	dump_memory_allocation_ctxt(ofile, TopMemoryContext);
 	fclose(ofile);
 }
@@ -1888,6 +1905,10 @@ AllocSetIsEmpty(MemoryContext context)
 	return false;
 }
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "../backend/utils/mmgr/aset_memory_debug.c"
+#endif
+
 /*
  * AllocSet_GetStats
  *		Returns stats about memory consumption of an AllocSet.
@@ -1949,6 +1970,10 @@ AllocSet_GetStats(MemoryContext context, uint64 *nBlocks, uint64 *nChunks,
 			*currentAvailable += chunk->size;
 		}
 	}
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	AllocSetGetAllocatedChunkStats(set);
+#endif
 }
 
 #ifdef MEMORY_CONTEXT_CHECKING

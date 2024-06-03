@@ -1374,7 +1374,9 @@ CExpressionHandle::PexprScalarRepChild(ULONG child_index) const
 		return pexprScalar;
 	}
 
-	if (NULL != m_pexpr && NULL != (*m_pexpr)[child_index]->Pgexpr())
+	GPOS_ASSERT(m_pexpr);
+
+	if (NULL != (*m_pexpr)[child_index]->Pgexpr())
 	{
 		// if the expression does not come from a group, but its child does then
 		// get the scalar child from that group

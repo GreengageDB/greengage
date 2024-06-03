@@ -264,6 +264,7 @@ extern DtxContext DistributedTransactionContext;
 /* state variables for how much of the log file has been flushed */
 extern volatile bool *shmDtmStarted;
 extern volatile pid_t *shmDtxRecoveryPid;
+extern volatile bool *shmCleanupBackends;
 extern volatile DistributedTransactionTimeStamp *shmDistribTimeStamp;
 extern volatile DistributedTransactionId *shmGIDSeq;
 extern uint32 *shmNextSnapshotId;
@@ -315,10 +316,12 @@ extern int	tmShmemSize(void);
 extern void verify_shared_snapshot_ready(int cid);
 
 int			mppTxnOptions(bool needDtx);
+int			mppTxnOptionsForSync(bool needDtx, bool isSync);
 int			mppTxOptions_IsoLevel(int txnOptions);
 bool		isMppTxOptions_ReadOnly(int txnOptions);
 bool		isMppTxOptions_NeedDtx(int txnOptions);
 bool		isMppTxOptions_ExplicitBegin(int txnOptions);
+bool		isMppTxOptions_SynchronizationSet(int txnOptions);
 
 extern void getAllDistributedXactStatus(TMGALLXACTSTATUS **allDistributedXactStatus);
 extern bool getNextDistributedXactStatus(TMGALLXACTSTATUS *allDistributedXactStatus, TMGXACTSTATUS **distributedXactStatus);

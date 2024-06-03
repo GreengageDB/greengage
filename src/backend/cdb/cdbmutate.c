@@ -75,8 +75,18 @@ typedef struct ApplyMotionState
 								 * plan_tree_walker/mutator */
 	int			nextMotionID;
 	int			sliceDepth;
-	bool		containMotionNodes;
 	HTAB	   *planid_subplans; /* hash table for InitPlanItem */
+
+	/* Context for ModifyTable to elide Explicit Redistribute Motion */
+	bool		mtIsChecking;		/* True if we encountered ModifyTable
+									 * node with UPDATE/DELETE and we plan
+									 * to insert Explicit Motions. */
+	List	   *mtResultRelations;	/* Indexes into rtable for relations to
+									 * be modified. Only valid if mtIsChecking
+									 * is true. */
+	int			nMotionsAbove;		/* Number of motions above the current
+									 * node. Only valid if mtIsChecking is
+									 * true. */
 } ApplyMotionState;
 
 typedef struct InitPlanItem
@@ -404,7 +414,10 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 													 * plan */
 	state.nextMotionID = 1;		/* Start at 1 so zero will mean "unassigned". */
 	state.sliceDepth = 0;
-	state.containMotionNodes = false;
+	state.mtIsChecking = false;
+	state.mtResultRelations = NIL;
+	state.nMotionsAbove = 0;
+
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(int);
 	ctl.entrysize = sizeof(InitPlanItem);
@@ -438,6 +451,10 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 			/* If the query comes from 'CREATE TABLE AS' or 'SELECT INTO' */
 			if (query->parentStmtType != PARENTSTMTTYPE_NONE)
 			{
+				if (query->hasModifyingCTE)
+					ereport(ERROR,
+							(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+					errmsg("cannot create plan with several writing gangs")));
 				if (query->intoPolicy != NULL)
 				{
 					targetPolicy = query->intoPolicy;
@@ -617,7 +634,8 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 			{
 				if ((plan->flow->flotype == FLOW_PARTITIONED ||
 					(plan->flow->flotype == FLOW_SINGLETON &&
-					 plan->flow->locustype == CdbLocusType_SegmentGeneral)) &&
+					 plan->flow->locustype == CdbLocusType_SegmentGeneral) ||
+					 plan->flow->flotype == FLOW_REPLICATED) &&
 					 !root->glob->is_parallel_cursor)
 					bringResultToDispatcher = true;
 
@@ -750,14 +768,15 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 	if (!is_plan_node(node))
 	{
 		/*
-		 * The containMotionNodes flag keeps track of whether there are any
-		 * Motion nodes, ignoring any in InitPlans. So if we recurse into an
-		 * InitPlan, save and restore the flag.
+		 * If we expect to elide the Explicit Redistribute Motion, we can
+		 * disable mtIsChecking while we're in an InitPlan, since there will not
+		 * be any scan nodes that perform a scan on the same range table entry
+		 * as ModifyTable under InitPlans.
 		 */
 		if (IsA(node, SubPlan) &&((SubPlan *) node)->is_initplan)
 		{
 			bool		found;
-			bool		saveContainMotionNodes = context->containMotionNodes;
+			bool		saveMtIsChecking = context->mtIsChecking;
 			int			saveSliceDepth = context->sliceDepth;
 			SubPlan		*subplan = (SubPlan *) node;
 			/*
@@ -772,15 +791,92 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 
 			/* reset sliceDepth for each init plan */
 			context->sliceDepth = 0;
+			context->mtIsChecking = false;
 			node = plan_tree_mutator(node, apply_motion_mutator, context);
 
-			context->containMotionNodes = saveContainMotionNodes;
+			context->mtIsChecking = saveMtIsChecking;
 			context->sliceDepth = saveSliceDepth;
 
 			return node;
 		}
 		else
 			return plan_tree_mutator(node, apply_motion_mutator, context);
+	}
+
+	/*
+	 * For UPDATE/DELETE, we check if there's any motions before scan in the
+	 * same subtree for the table we're going to modify. If we encounter the
+	 * scan before any motions, then we can elide unnecessary Explicit
+	 * Redistribute Motion.
+	 */
+	if (IsA(node, ModifyTable))
+	{
+		ModifyTable *mt = (ModifyTable *) node;
+
+		if (mt->operation == CMD_UPDATE || mt->operation == CMD_DELETE)
+		{
+			/*
+			 * Sanity check, since we don't allow multiple ModifyTable nodes.
+			 */
+			Assert(!context->mtIsChecking);
+			Assert(context->mtResultRelations == NIL);
+			Assert(context->nMotionsAbove == 0);
+
+			/*
+			 * When UPDATE/DELETE occurs on a partitioned table, or a table that
+			 * is a part of inheritance tree, ModifyTable node will have more
+			 * than one relation in resultRelations.
+			 *
+			 * Remember resulting relations' indexes to compare them later.
+			 */
+			context->mtIsChecking = true;
+			context->mtResultRelations = mt->resultRelations;
+		}
+	}
+	else if (context->mtIsChecking)
+	{
+		/* 
+		 * Remember if we are descending into a motion node.
+		 */
+		if (IsA(node, Motion))
+			context->nMotionsAbove++;
+		else
+		{
+			/*
+			 * If this is a scan and it's scanrelid matches ModifyTable's relid,
+			 * we need to check if there were any motions above.
+			 *
+			 * These are scan nodes that can be used to perform distributed
+			 * UPDATE/DELETE on the relation they scan, possibly with motions
+			 * above them. This list needs to be updated for other nodes if they
+			 * are changed to support DML execution on segments.
+			 */
+			switch (nodeTag(node))
+			{
+				case T_SeqScan:
+				case T_DynamicSeqScan:
+				case T_IndexScan:
+				case T_DynamicIndexScan:
+				case T_IndexOnlyScan:
+				case T_BitmapIndexScan:
+				case T_DynamicBitmapIndexScan:
+				case T_BitmapHeapScan:
+				case T_DynamicBitmapHeapScan:
+				case T_TidScan:
+					if (list_member_int(context->mtResultRelations,
+										((Scan *) node)->scanrelid))
+					{
+						/*
+						 * Freeze the motion counter. Also, we don't
+						 * need to check other nodes in this subtree
+						 * anymore.
+						 */
+						context->mtIsChecking = false;
+					}
+				default:
+					break;
+			}
+		}
 	}
 
 	plan = (Plan *) node;
@@ -845,7 +941,13 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 	if (IsA(newnode, Motion) &&flow->req_move != MOVEMENT_NONE)
 	{
 		plan = ((Motion *) newnode)->plan.lefttree;
-		flow = plan->flow;
+
+		/* We'll recreate this motion later below. But we should save motion
+		 * request to create appropriate motion above the child node.
+		 * Original flow for the child node will be restored
+		 * after motion creation. */
+		flow->flow_before_req_move = plan->flow;
+		plan->flow = flow;
 		newnode = (Node *) plan;
 	}
 
@@ -925,17 +1027,11 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 			break;
 
 		case MOVEMENT_EXPLICIT:
-
 			/*
-			 * add an ExplicitRedistribute motion node only if child plan
-			 * nodes have a motion node
+			 * Were there any motions above the scan?
 			 */
-			if (context->containMotionNodes)
+			if (context->nMotionsAbove > 0)
 			{
-				/*
-				 * motion node in child nodes: add a ExplicitRedistribute
-				 * motion
-				 */
 				newnode = (Node *) make_explicit_motion(plan,
 														flow->segidColIdx,
 														true	/* useExecutorVarFormat */
@@ -944,13 +1040,20 @@ apply_motion_mutator(Node *node, ApplyMotionState *context)
 			else
 			{
 				/*
-				 * no motion nodes in child plan nodes - no need for
-				 * ExplicitRedistribute: restore flow
+				 * Restore flow if Explicit Redistribute Motion is not needed
 				 */
 				flow->req_move = MOVEMENT_NONE;
 				flow->flow_before_req_move = NULL;
 			}
 
+			/*
+			 * If we're here, it means we are directly under the ModifyTable
+			 * node. We are about to go to out of the recursion and go into
+			 * other subtree. So reset the state and continue checking in case
+			 * of another Explicit Redistribute Motion is needed.
+			 */
+			context->mtIsChecking = true;
+			context->nMotionsAbove = 0;
 			break;
 
 		case MOVEMENT_NONE:
@@ -998,16 +1101,14 @@ done:
 	plan->nMotionNodes = context->nextMotionID - saveNextMotionID;
 	plan->nInitPlans = hash_get_num_entries(context->planid_subplans) - saveNumInitPlans;
 
-	/*
-	 * Remember if this was a Motion node. This is used at the top of the
-	 * tree, with MOVEMENT_EXPLICIT, to avoid adding an explicit motion, if
-	 * there were no Motion in the subtree. Note that this does not take
-	 * InitPlans containing Motion nodes into account. InitPlans are executed
-	 * as a separate step before the main plan, and hence any Motion nodes in
-	 * them don't need to affect the way the main plan is executed.
-	 */
-	if (IsA(newnode, Motion))
-		context->containMotionNodes = true;
+	if (context->mtIsChecking)
+	{
+		/* We're going out of this motion node. */
+		if (IsA(node, Motion))
+			context->nMotionsAbove--;
+		else if (IsA(node, ModifyTable))
+			context->mtIsChecking = false;
+	}
 
 	return newnode;
 }								/* apply_motion_mutator */
@@ -1758,135 +1859,126 @@ cdbmutate_warn_ctid_without_segid(struct PlannerInfo *root, struct RelOptInfo *r
  */
 
 /* Walk the tree for shareinput.
- * Shareinput fix shared_as_id and underlying_share_id of nodes in place.  We do not want to use
- * the ordinary tree walker as it is unnecessary to make copies etc.
+ * Shareinput fix shared_as_id and underlying_share_id of nodes in place.
  */
 typedef bool (*SHAREINPUT_MUTATOR) (Node *node, PlannerInfo *root, bool fPop);
-static void
-shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
+typedef struct ShareInputContext
 {
-	Plan	   *plan = NULL;
+	plan_tree_base_prefix base;
+	SHAREINPUT_MUTATOR mutator;
+}	ShareInputContext;
+static bool
+shareinput_walker(Node *node, ShareInputContext *ctx)
+{
 	bool		recursive_down;
+	PlannerInfo *root = (PlannerInfo *) ctx->base.node;
+	PlannerGlobal *glob = root->glob;
+	SHAREINPUT_MUTATOR mutator = ctx->mutator;
 
 	if (node == NULL)
-		return;
+		return false;
 
-	if (IsA(node, List))
-	{
-		List	   *l = (List *) node;
-		ListCell   *lc;
-
-		foreach(lc, l)
-		{
-			Node	   *n = lfirst(lc);
-
-			shareinput_walker(f, n, root);
-		}
-		return;
-	}
-
-	if (!is_plan_node(node))
-		return;
-
-	plan = (Plan *) node;
-	recursive_down = (*f) (node, root, false);
+	/*
+	 * Always dig into non-plan nodes trying to find plan node. If plan node
+	 * found, call a mutator to decide should we dig more.
+	 */
+	if (is_plan_node(node))
+		recursive_down = (*mutator) (node, root, false);
+	else
+		recursive_down = true;
 
 	if (recursive_down)
 	{
-		if (IsA(node, Append))
-		{
-			ListCell   *cell;
-			Append	   *app = (Append *) node;
+		/*
+		 * The code below can modify various params depends on it's logic.
+		 * Save old values all at once to make it uniform and to avoid
+		 * copypaste. 'root' is already saved above.
+		 */
+		List	   *save_rtable = glob->share.curr_rtable;
+		Plan	   *save_lefttree = NULL;
+		Plan	   *save_righttree = NULL;
 
-			foreach(cell, app->appendplans)
-				shareinput_walker(f, (Node *) lfirst(cell), root);
+		if (is_plan_node(node))
+		{
+			save_lefttree = ((Plan *) node)->lefttree;
+			save_righttree = ((Plan *) node)->righttree;
 		}
-		else if (IsA(node, ModifyTable))
-		{
-			ListCell   *cell;
-			ModifyTable *mt = (ModifyTable *) node;
 
-			foreach(cell, mt->plans)
-				shareinput_walker(f, (Node *) lfirst(cell), root);
+		/*
+		 * The general comment to all SubPlan nodes. Before, we walked through
+		 * subplans separately from main plan. 'motStack' we use in mutators
+		 * not contains possible motion(slice) id from main plan in this case.
+		 * This caused underlying subplan's nodes not marked as cross-slice -
+		 * we didn't respect upper slices from main plan. To avoid this, we
+		 * now iterate over all nodes (even non-plan nodes), iterate through
+		 * subplans as parts of main tree and right on their places.
+		 */
+		if (IsA(node, SubPlan))
+		{
+			SubPlan    *subplan = (SubPlan *) node;
+
+			/*
+			 * The code around rtables (for SubqueryScan and
+			 * TableFunctionScan) works only with appropriate subroot. Find
+			 * one and copy to context.
+			 */
+			ctx->base.node = (Node *) planner_subplan_get_root(root, subplan);
 		}
 		else if (IsA(node, SubqueryScan))
 		{
-			SubqueryScan  *subqscan = (SubqueryScan *) node;
-			PlannerGlobal *glob = root->glob;
-			PlannerInfo   *subroot;
-			List	      *save_rtable;
-			RelOptInfo    *rel;
+			SubqueryScan *subqscan = (SubqueryScan *) node;
+			RelOptInfo *rel;
 
 			/*
 			 * If glob->finalrtable is not NULL, rtables have been flatten,
 			 * thus we should use glob->finalrtable instead.
 			 */
-			save_rtable = glob->share.curr_rtable;
-			if (root->glob->finalrtable == NULL)
+			if (glob->finalrtable == NULL)
 			{
 				rel = find_base_rel(root, subqscan->scan.scanrelid);
+
 				/*
-				 * The Assert() on RelOptInfo's subplan being
-				 * same as the subqueryscan's subplan, is valid
-				 * in Upstream but for not for GPDB, since we
-				 * create a new copy of the subplan if two
+				 * The Assert() on RelOptInfo's subplan being same as the
+				 * subqueryscan's subplan, is valid in Upstream but for not
+				 * for GPDB, since we create a new copy of the subplan if two
 				 * SubPlans refer to the same initplan.
 				 */
-				subroot = rel->subroot;
-				glob->share.curr_rtable = subroot->parse->rtable;
+				ctx->base.node = (Node *) rel->subroot;
+				glob->share.curr_rtable = rel->subroot->parse->rtable;
 			}
 			else
-			{
-				subroot = root;
 				glob->share.curr_rtable = glob->finalrtable;
-			}
-			shareinput_walker(f, (Node *) subqscan->subplan, subroot);
-			glob->share.curr_rtable = save_rtable;
 		}
 		else if (IsA(node, TableFunctionScan))
 		{
-			TableFunctionScan  *tfscan = (TableFunctionScan *) node;
-			PlannerGlobal *glob = root->glob;
-			PlannerInfo   *subroot;
-			List	      *save_rtable;
-			RelOptInfo    *rel;
+			TableFunctionScan *tfscan = (TableFunctionScan *) node;
+			RelOptInfo *rel;
 
 			/*
 			 * If glob->finalrtable is not NULL, rtables have been flatten,
 			 * thus we should use glob->finalrtable instead.
 			 */
-			save_rtable = glob->share.curr_rtable;
-			if (root->glob->finalrtable == NULL)
+			if (glob->finalrtable == NULL)
 			{
 				rel = find_base_rel(root, tfscan->scan.scanrelid);
 				Assert(rel->subplan == tfscan->scan.plan.lefttree);
-				subroot = rel->subroot;
-				glob->share.curr_rtable = subroot->parse->rtable;
+				ctx->base.node = (Node *) rel->subroot;
+				glob->share.curr_rtable = rel->subroot->parse->rtable;
 			}
 			else
-			{
-				subroot = root;
 				glob->share.curr_rtable = glob->finalrtable;
-			}
-			shareinput_walker(f, (Node *)  tfscan->scan.plan.lefttree, subroot);
-			glob->share.curr_rtable = save_rtable;
 		}
-		else if (IsA(node, BitmapAnd))
-		{
-			ListCell   *cell;
-			BitmapAnd  *ba = (BitmapAnd *) node;
 
-			foreach(cell, ba->bitmapplans)
-				shareinput_walker(f, (Node *) lfirst(cell), root);
-		}
-		else if (IsA(node, BitmapOr))
-		{
-			ListCell   *cell;
-			BitmapOr   *bo = (BitmapOr *) node;
-
-			foreach(cell, bo->bitmapplans)
-				shareinput_walker(f, (Node *) lfirst(cell), root);
-		}
+		/*
+		 * Shared scan can be producer or consumer. As descibed in the
+		 * function comment, we should respect execution order, otherwise,
+		 * deadlock between producer and consumer may rise. plan_tree_walker()
+		 * use the standard order of processing - lefttree, then rigttree.
+		 * Ignoring of execution order here may move producer to another part
+		 * of join and consumer (which should be producer normally) to wait
+		 * infinitely for nothing. Let's fool standard plan_tree_walker() by
+		 * temporary switching join parts.
+		 */
 		else if (IsA(node, NestLoop))
 		{
 			/*
@@ -1897,20 +1989,16 @@ shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
 
 			if (nl->join.prefetch_inner)
 			{
-				shareinput_walker(f, (Node *) plan->righttree, root);
-				shareinput_walker(f, (Node *) plan->lefttree, root);
-			}
-			else
-			{
-				shareinput_walker(f, (Node *) plan->lefttree, root);
-				shareinput_walker(f, (Node *) plan->righttree, root);
+				nl->join.plan.lefttree = save_righttree;
+				nl->join.plan.righttree = save_lefttree;
 			}
 		}
 		else if (IsA(node, HashJoin))
 		{
-			/* Hash join the hash table is at inner */
-			shareinput_walker(f, (Node *) plan->righttree, root);
-			shareinput_walker(f, (Node *) plan->lefttree, root);
+			HashJoin   *hj = (HashJoin *) node;
+
+			hj->join.plan.lefttree = save_righttree;
+			hj->join.plan.righttree = save_lefttree;
 		}
 		else if (IsA(node, MergeJoin))
 		{
@@ -1918,34 +2006,27 @@ shareinput_walker(SHAREINPUT_MUTATOR f, Node *node, PlannerInfo *root)
 
 			if (mj->unique_outer)
 			{
-				shareinput_walker(f, (Node *) plan->lefttree, root);
-				shareinput_walker(f, (Node *) plan->righttree, root);
-			}
-			else
-			{
-				shareinput_walker(f, (Node *) plan->righttree, root);
-				shareinput_walker(f, (Node *) plan->lefttree, root);
+				mj->join.plan.lefttree = save_righttree;
+				mj->join.plan.righttree = save_lefttree;
 			}
 		}
-		else if (IsA(node, Sequence))
-		{
-			ListCell   *cell = NULL;
-			Sequence   *sequence = (Sequence *) node;
 
-			foreach(cell, sequence->subplans)
-			{
-				shareinput_walker(f, (Node *) lfirst(cell), root);
-			}
-		}
-		else
+		plan_tree_walker(node, shareinput_walker, ctx);
+
+		/* Restore all values which could be changed above */
+		ctx->base.node = (Node *) root;
+		glob->share.curr_rtable = save_rtable;
+		if (is_plan_node(node))
 		{
-			shareinput_walker(f, (Node *) plan->lefttree, root);
-			shareinput_walker(f, (Node *) plan->righttree, root);
-			shareinput_walker(f, (Node *) plan->initPlan, root);
+			((Plan *) node)->lefttree = save_lefttree;
+			((Plan *) node)->righttree = save_righttree;
 		}
 	}
 
-	(*f) (node, root, true);
+	if (is_plan_node(node))
+		(*mutator) (node, root, true);
+
+	return false;
 }
 
 typedef struct
@@ -2096,7 +2177,24 @@ shareinput_mutator_dag_to_tree(Node *node, PlannerInfo *root, bool fPop)
 	Plan	   *plan = (Plan *) node;
 
 	if (fPop)
+	{
+		/*
+		 * If there is a shared scan under HashJoin, producer is in the inner
+		 * subplan and consumer is in the outer, then we need to enable
+		 * prefetch_inner to avoid deadlock. The deadlock can occur when
+		 * prefetch_inner is disabled and the executor can start performing the
+		 * join from the outer part. In the case of bottleneck, we can turn off
+		 * prefetch_inner for optimization reasons in the create_join_plan
+		 * function. So we need to turn it back on. To simplify the logic, we
+		 * enable prefetch_inner for all hash joins located on bottleneck if
+		 * there is a shared scan in the plan.
+		 */
+		if (IsA(plan, HashJoin) && ctxt->producer_count > 0 &&
+			CdbPathLocus_IsBottleneck(*(plan->flow)))
+			((Join*) plan)->prefetch_inner = true;
+
 		return true;
+	}
 
 	if (IsA(plan, ShareInputScan))
 	{
@@ -2163,9 +2261,13 @@ Plan *
 apply_shareinput_dag_to_tree(PlannerInfo *root, Plan *plan)
 {
 	PlannerGlobal *glob = root->glob;
+	ShareInputContext ctx;
+
+	ctx.base.node = (Node *) root;
+	ctx.mutator = shareinput_mutator_dag_to_tree;
 
 	glob->share.curr_rtable = root->parse->rtable;
-	shareinput_walker(shareinput_mutator_dag_to_tree, (Node *) plan, root);
+	shareinput_walker((Node *) plan, &ctx);
 	return plan;
 }
 
@@ -2206,16 +2308,20 @@ void
 collect_shareinput_producers(PlannerInfo *root, Plan *plan)
 {
 	PlannerGlobal *glob = root->glob;
+	ShareInputContext ctx;
+
+	ctx.base.node = (Node *) root;
+	ctx.mutator = collect_shareinput_producers_walker;
 
 	glob->share.curr_rtable = glob->finalrtable;
-	shareinput_walker(collect_shareinput_producers_walker, (Node *) plan, root);
+	shareinput_walker((Node *) plan, &ctx);
 }
 
 /* Some helper: implements a stack using List. */
 static void
-shareinput_pushmot(ApplyShareInputContext *ctxt, int motid)
+shareinput_pushmot(ApplyShareInputContext *ctxt, Motion *motion)
 {
-	ctxt->motStack = lcons_int(motid, ctxt->motStack);
+	ctxt->motStack = lcons(motion, ctxt->motStack);
 }
 static void
 shareinput_popmot(ApplyShareInputContext *ctxt)
@@ -2225,9 +2331,17 @@ shareinput_popmot(ApplyShareInputContext *ctxt)
 static int
 shareinput_peekmot(ApplyShareInputContext *ctxt)
 {
-	return linitial_int(ctxt->motStack);
-}
+	Motion	   *motion = linitial(ctxt->motStack);
 
+	return motion->motionID;
+}
+static Flow *
+shareinput_peekflow(ApplyShareInputContext *ctxt)
+{
+	Motion	   *motion = linitial(ctxt->motStack);
+
+	return motion->plan.lefttree->flow;
+}
 
 /*
  * Replace the target list of ShareInputScan nodes, with references
@@ -2248,7 +2362,12 @@ shareinput_peekmot(ApplyShareInputContext *ctxt)
 Plan *
 replace_shareinput_targetlists(PlannerInfo *root, Plan *plan)
 {
-	shareinput_walker(replace_shareinput_targetlists_walker, (Node *) plan, root);
+	ShareInputContext ctx;
+
+	ctx.base.node = (Node *) root;
+	ctx.mutator = replace_shareinput_targetlists_walker;
+
+	shareinput_walker((Node *) plan, &ctx);
 	return plan;
 }
 
@@ -2392,7 +2511,7 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		return true;
 	}
 
@@ -2401,11 +2520,12 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 		ShareInputScan *sisc = (ShareInputScan *) plan;
 		int			motId = shareinput_peekmot(ctxt);
 		Plan	   *shared = plan->lefttree;
+		Flow	   *flow = shareinput_peekflow(ctxt);
 
-		Assert(sisc->scan.plan.flow);
-		if (sisc->scan.plan.flow->flotype == FLOW_SINGLETON)
+		Assert(flow);
+		if (flow->flotype == FLOW_SINGLETON)
 		{
-			if (sisc->scan.plan.flow->segindex < 0)
+			if (flow->segindex < 0)
 				ctxt->qdShares = list_append_unique_int(ctxt->qdShares, sisc->share_id);
 		}
 
@@ -2450,7 +2570,7 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		return true;
 	}
 
@@ -2510,7 +2630,7 @@ shareinput_mutator_xslice_3(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		return true;
 	}
 
@@ -2546,8 +2666,8 @@ shareinput_mutator_xslice_3(Node *node, PlannerInfo *root, bool fPop)
 
 		if (list_member_int(ctxt->qdShares, sisc->share_id))
 		{
-			Assert(sisc->scan.plan.flow);
-			Assert(sisc->scan.plan.flow->flotype == FLOW_SINGLETON);
+			Assert(shareinput_peekflow(ctxt));
+			Assert(shareinput_peekflow(ctxt)->flotype == FLOW_SINGLETON);
 			ctxt->qdSlices = list_append_unique_int(ctxt->qdSlices, motId);
 		}
 	}
@@ -2577,7 +2697,7 @@ shareinput_mutator_xslice_4(Node *node, PlannerInfo *root, bool fPop)
 	{
 		Motion	   *motion = (Motion *) plan;
 
-		shareinput_pushmot(ctxt, motion->motionID);
+		shareinput_pushmot(ctxt, motion);
 		/* Do not return.  Motion need to be adjusted as well */
 	}
 
@@ -2597,12 +2717,119 @@ shareinput_mutator_xslice_4(Node *node, PlannerInfo *root, bool fPop)
 	return true;
 }
 
+static bool
+root_slice_is_executed_on_coordinator(Plan *plan, PlannerInfo *root)
+{
+	/*
+	 * By default, the root slice is executed on the coordinator.
+	 */
+	bool		result = true;
+	Query	   *query = root->parse;
+
+	if (query->parentStmtType != PARENTSTMTTYPE_NONE)
+	{
+		/*
+		 * For CTAS, SELECT INTO, COPY INTO, REFRESH MATERIALIZED VIEW, the
+		 * root slice is not executed on the coordinator.
+		 */
+		result = false;
+	}
+
+	if (IsA(plan, ModifyTable))
+	{
+		ModifyTable *mt = (ModifyTable *) plan;
+
+		if (list_length(mt->resultRelations) > 0)
+		{
+			ListCell   *lc = list_head(mt->resultRelations);
+			Oid			reloid = getrelid(lfirst_int(lc), query->rtable);
+
+			if (GpPolicyFetch(reloid)->ptype != POLICYTYPE_ENTRY)
+			{
+				/*
+				 * For the modification node by Postgres planner, if the table
+				 * distribution policy is not master-only, then the root slice
+				 * is not executed on the coordinator.
+				 */
+				result = false;
+			}
+		}
+	}
+
+	if (IsA(plan, DML))
+	{
+		DML		   *dml = (DML *) plan;
+		Oid			reloid = getrelid(dml->scanrelid, query->rtable);
+
+		if (GpPolicyFetch(reloid)->ptype != POLICYTYPE_ENTRY)
+		{
+			/*
+			 * For the modification node by ORCA planner, if the table
+			 * distribution policy is not master-only, then the root slice is
+			 * not executed on the coordinator.
+			 */
+			result = false;
+		}
+	}
+
+	if (plan->flow)
+	{
+		Flow	   *flow = plan->flow;
+
+		if (flow->flotype != FLOW_SINGLETON || flow->segindex >= 0)
+		{
+			/*
+			 * For non-singleton or singleton on segment, the root slice is
+			 * not executed on the coordinator.
+			 */
+			result = false;
+		}
+
+		if (root->glob->is_parallel_cursor)
+		{
+			if (flow->flotype == FLOW_SINGLETON &&
+				(flow->locustype == CdbLocusType_Entry ||
+				 flow->locustype == CdbLocusType_General ||
+				 flow->locustype == CdbLocusType_SingleQE))
+			{
+				/*
+				 * For these scenarios, parallel retrieve cursor needs to run
+				 * on coordinator, since endpoint QE needs to interact with
+				 * the retrieve connections.
+				 */
+				result = true;
+			}
+			else
+			{
+				result = false;
+			}
+		}
+	}
+
+	return result;
+}
+
 Plan *
 apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 {
 	PlannerGlobal *glob = root->glob;
 	ApplyShareInputContext *ctxt = &glob->share;
-	ListCell   *lp, *lr;
+	ShareInputContext walker_ctxt;
+	Motion	   *fakeMotion = makeNode(Motion);
+
+	fakeMotion->plan.lefttree = makeNode(Plan);
+	fakeMotion->plan.lefttree->flow = makeNode(Flow);
+
+	if (root_slice_is_executed_on_coordinator(plan, root))
+	{
+		fakeMotion->plan.lefttree->flow->flotype = FLOW_SINGLETON;
+		fakeMotion->plan.lefttree->flow->segindex = -1;
+	}
+	else
+	{
+		fakeMotion->plan.lefttree->flow->flotype = FLOW_UNDEFINED;
+		fakeMotion->plan.lefttree->flow->segindex = 0;
+	}
 
 	ctxt->motStack = NULL;
 	ctxt->qdShares = NULL;
@@ -2611,7 +2838,9 @@ apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 
 	ctxt->sliceMarks = palloc0(ctxt->producer_count * sizeof(int));
 
-	shareinput_pushmot(ctxt, 0);
+	shareinput_pushmot(ctxt, fakeMotion);
+
+	walker_ctxt.base.node = (Node *) root;
 
 	/*
 	 * Walk the tree.  See comment for each pass for what each pass will do.
@@ -2625,42 +2854,18 @@ apply_shareinput_xslice(Plan *plan, PlannerInfo *root)
 	 * walk through all plans and collect all producer subplans into the
 	 * context, before processing the consumers.
 	 */
-	forboth(lp, glob->subplans, lr, glob->subroots)
-	{
-		Plan	   *subplan = (Plan *) lfirst(lp);
-		PlannerInfo *subroot =  (PlannerInfo *) lfirst(lr);
-
-		shareinput_walker(shareinput_mutator_xslice_1, (Node *) subplan, subroot);
-	}
-	shareinput_walker(shareinput_mutator_xslice_1, (Node *) plan, root);
+	walker_ctxt.mutator = shareinput_mutator_xslice_1;
+	shareinput_walker((Node *) plan, &walker_ctxt);
 
 	/* Now walk the tree again, and process all the consumers. */
-	forboth(lp, glob->subplans, lr, glob->subroots)
-	{
-		Plan	   *subplan = (Plan *) lfirst(lp);
-		PlannerInfo *subroot =  (PlannerInfo *) lfirst(lr);
+	walker_ctxt.mutator = shareinput_mutator_xslice_2;
+	shareinput_walker((Node *) plan, &walker_ctxt);
 
-		shareinput_walker(shareinput_mutator_xslice_2, (Node *) subplan, subroot);
-	}
-	shareinput_walker(shareinput_mutator_xslice_2, (Node *) plan, root);
+	walker_ctxt.mutator = shareinput_mutator_xslice_3;
+	shareinput_walker((Node *) plan, &walker_ctxt);
 
-	forboth(lp, glob->subplans, lr, glob->subroots)
-	{
-		Plan	   *subplan = (Plan *) lfirst(lp);
-		PlannerInfo *subroot =  (PlannerInfo *) lfirst(lr);
-
-		shareinput_walker(shareinput_mutator_xslice_3, (Node *) subplan, subroot);
-	}
-	shareinput_walker(shareinput_mutator_xslice_3, (Node *) plan, root);
-
-	forboth(lp, glob->subplans, lr, glob->subroots)
-	{
-		Plan	   *subplan = (Plan *) lfirst(lp);
-		PlannerInfo *subroot =  (PlannerInfo *) lfirst(lr);
-
-		shareinput_walker(shareinput_mutator_xslice_4, (Node *) subplan, subroot);
-	}
-	shareinput_walker(shareinput_mutator_xslice_4, (Node *) plan, root);
+	walker_ctxt.mutator = shareinput_mutator_xslice_4;
+	shareinput_walker((Node *) plan, &walker_ctxt);
 
 	return plan;
 }
@@ -2987,6 +3192,10 @@ fixup_subplan_walker(Node *node, SubPlanWalkerContext *context)
 			PlannerInfo *root = (PlannerInfo *) context->base.node;
 			Plan	    *dupsubplan = (Plan *) copyObject(planner_subplan_get_plan(root, subplan));
 			int			 newplan_id = list_length(root->glob->subplans) + 1;
+			PlannerInfo *dupsubroot = makeNode(PlannerInfo);
+
+			memcpy(dupsubroot, planner_subplan_get_root(root, subplan), sizeof(PlannerInfo));
+			root->glob->subroots = lappend(root->glob->subroots, dupsubroot);
 
 			subplan->plan_id = newplan_id;
 			root->glob->subplans = lappend(root->glob->subplans, dupsubplan);

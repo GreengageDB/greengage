@@ -203,6 +203,12 @@ CDatumBoolGPDB::Matches(const IDatum *other) const
 	const CDatumBoolGPDB *other_cast =
 		dynamic_cast<const CDatumBoolGPDB *>(other);
 
+	// type mismatch
+	if (NULL == other_cast)
+	{
+		return false;
+	}
+
 	if (!other_cast->IsNull() && !IsNull())
 	{
 		return (other_cast->GetValue() == GetValue());

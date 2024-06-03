@@ -189,6 +189,7 @@ CParseHandlerColStats::EndElement(const XMLCh *const,  // element_uri,
 		CParseHandlerColStatsBucket *parse_handler_col_stats_bucket =
 			dynamic_cast<CParseHandlerColStatsBucket *>((*this)[ul]);
 
+		GPOS_ASSERT(NULL != parse_handler_col_stats_bucket);
 		CDXLBucket *dxl_bucket =
 			parse_handler_col_stats_bucket->GetDXLBucketAt();
 		dxl_bucket->AddRef();

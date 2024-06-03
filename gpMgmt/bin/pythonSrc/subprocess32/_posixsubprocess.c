@@ -791,6 +791,9 @@ subprocess_cloexec_pipe(PyObject *self, PyObject *noargs)
         if (write_fd < 0)  /* We don't support F_DUPFD_CLOEXEC / other error */
 #endif
         {
+#ifdef F_DUPFD_CLOEXEC
+            write_fd = fds[1];
+#endif
             /* Use dup a few times until we get a desirable fd. */
             for (; fds_to_close_idx < 3; ++fds_to_close_idx) {
                 fds_to_close[fds_to_close_idx] = write_fd;

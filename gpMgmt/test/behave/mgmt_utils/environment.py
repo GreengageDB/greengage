@@ -2,6 +2,7 @@ import os
 import shutil
 
 import behave
+from behave import use_fixture
 
 from test.behave_utils.utils import drop_database_if_exists, start_database_if_not_started,\
                                             create_database, \
@@ -20,7 +21,8 @@ def before_all(context):
 def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
-                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet']
+                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet',
+                    'gplogfilter']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -100,6 +102,11 @@ def before_scenario(context, scenario):
         scenario.skip("skipping scenario tagged with @skip")
         return
 
+    if "concourse_cluster" in scenario.effective_tags and not hasattr(context, "concourse_cluster_created"):
+        from test.behave_utils.arenadata.fixtures import init_cluster
+        context.concourse_cluster_created = True
+        return use_fixture(init_cluster, context)
+
     if 'gpmovemirrors' in context.feature.tags:
         context.mirror_context = MirrorMgmtContext()
 
@@ -119,7 +126,8 @@ def before_scenario(context, scenario):
         context.gpssh_exkeys_context = GpsshExkeysMgmtContext(context)
 
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
-                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet']
+                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet',
+                    'gplogfilter']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -151,7 +159,8 @@ def after_scenario(context, scenario):
 
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpinitstandby',
-                    'gpconfig', 'gpstop', 'gpinitsystem', 'cross_subnet']
+                    'gpconfig', 'gpstop', 'gpinitsystem', 'cross_subnet',
+                    'gplogfilter']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 

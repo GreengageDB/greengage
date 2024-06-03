@@ -525,8 +525,7 @@ visibilitymap_truncate(Relation rel, BlockNumber nheapblocks)
 	 * invalidate their copy of smgr_vm_nblocks, and this one too at the next
 	 * command boundary.  But this ensures it isn't outright wrong until then.
 	 */
-	if (rel->rd_smgr)
-		rel->rd_smgr->smgr_vm_nblocks = newnblocks;
+	rel->rd_smgr->smgr_vm_nblocks = newnblocks;
 }
 
 /*

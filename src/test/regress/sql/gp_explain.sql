@@ -1,6 +1,12 @@
 create schema gpexplain;
 set search_path = gpexplain;
 
+-- Ignore LOG entries with timestamp.
+-- start_matchignore
+-- m/^LOG:  \d{4}-\d{2}-\d{2}.*/
+-- end_matchignore
+
+
 -- Helper function, to return the EXPLAIN output of a query as a normal
 -- result set, so that you can manipulate it further.
 create or replace function get_explain_output(explain_query text) returns setof text as
@@ -322,3 +328,34 @@ select gp_inject_fault('explain_analyze_sort_error', 'reset', dbid)
     from gp_segment_configuration where role = 'p' and content > -1;
 drop table sort_error_test1;
 drop table sort_error_test2;
+
+-- explain should not hide error from segment
+-- error must be handled by executor earlier
+CREATE TABLE t1 (a int);
+EXPLAIN ANALYZE INSERT INTO t1 SELECT 1/gp_segment_id
+FROM gp_dist_random('gp_id');
+DROP TABLE t1;
+
+
+-- Check optional table alias support.
+
+-- start_ignore
+drop table if exists foo_alias;
+-- end_ignore
+
+-- Check that with optimizer_enable_table_alias=off plan doesn't have aliases.
+-- When optimizer_enable_table_alias is off, table aliases are not supported.
+set optimizer_enable_table_alias=off;
+
+create table foo_alias (a int, b int);
+insert into foo_alias select generate_series(1,10);
+
+explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
+
+-- When optimizer_enable_table_alias is on, table alias is supported and it 
+-- can be easily seen with self joins
+set optimizer_enable_table_alias=on;
+explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
+
+drop table foo_alias;
+reset optimizer_enable_table_alias;

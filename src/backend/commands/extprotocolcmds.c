@@ -139,7 +139,7 @@ RemoveExtProtocolById(Oid protOid)
 
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
-		simple_heap_delete(rel, &tup->t_self);
+		CatalogTupleDelete(rel, &tup->t_self);
 		found = true;
 	}
 	systable_endscan(scan);

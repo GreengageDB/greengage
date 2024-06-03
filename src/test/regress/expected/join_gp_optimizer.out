@@ -2003,3 +2003,71 @@ drop table if exists repli_t1_pk;
 drop table if exists repli_t2_pk;
 drop table if exists repli_t3_pk;
 drop table if exists repli_t4_pk;
+-- Test lateral join when subquery contains limit and where clause
+-- Greenplum cannot pass params across motion so one need to prevent
+-- the bottom scan node from appending to its targetlist outer relation
+-- refs. Otherwise it may lead to segfault at the exectution stage.
+--start_ignore
+drop table if exists t1;
+NOTICE:  table "t1" does not exist, skipping
+drop table if exists t2;
+NOTICE:  table "t2" does not exist, skipping
+--end_ignore
+create table t1 (c text) distributed by (c);
+create table t2 (c text) distributed by (c);
+insert into t1 values ('1'), ('2'), ('3');
+insert into t2 values ('3'), ('4');
+explain (verbose, costs off) select * from t2 join lateral
+(select * from t1 where t2.c = t1.c limit 1) s on true;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Nested Loop
+   Output: t2.c, t1.c
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: t2.c
+         ->  Seq Scan on public.t2
+               Output: t2.c
+   ->  Materialize
+         Output: t1.c
+         ->  Limit
+               Output: t1.c
+               ->  Result
+                     Output: t1.c
+                     Filter: (t2.c = t1.c)
+                     ->  Materialize
+                           Output: t1.c
+                           ->  Gather Motion 3:1  (slice2; segments: 3)
+                                 Output: t1.c
+                                 ->  Seq Scan on public.t1
+                                       Output: t1.c
+ Optimizer: Postgres query optimizer
+(20 rows)
+
+select * from t2 join lateral
+(select * from t1 where t2.c = t1.c limit 1) s on true;
+ c | c 
+---+---
+ 3 | 3
+(1 row)
+
+drop table t1;
+drop table t2;
+-- Check that USING with different types is properly planned by ORCA
+create table tbl1 (b varchar(15)) distributed by(b);
+create table tbl2 (b varchar(255)) distributed by(b);
+explain (costs off)
+select * from tbl1 join tbl2 using (b);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         ->  Hash Join
+               Hash Cond: ((tbl1.b)::text = (tbl2.b)::text)
+               ->  Seq Scan on tbl1
+               ->  Hash
+                     ->  Seq Scan on tbl2
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+drop table tbl1;
+drop table tbl2;
