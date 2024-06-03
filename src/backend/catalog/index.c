@@ -1246,8 +1246,18 @@ index_create(Relation heapRelation,
 	/*
 	 * Close the index; but we keep the lock that we acquired above until end
 	 * of transaction.  Closing the heap is caller's responsibility.
+	 *
+	 * GPDB: if we're dealing with a child of a partitioned table, also release
+	 * the lock. We should be holding a lock on the master, which is sufficient.
 	 */
-	index_close(indexRelation, NoLock);
+	if (rel_needs_long_lock(RelationGetRelid(heapRelation)))
+	{
+		index_close(indexRelation, NoLock);
+	}
+	else
+	{
+		index_close(indexRelation, AccessExclusiveLock);
+	}
 
 	return indexRelationId;
 }
@@ -1507,6 +1517,7 @@ index_drop(Oid indexId, bool concurrent)
 	Relation	indexRelation;
 	HeapTuple	tuple;
 	bool		hasexprs;
+	bool		need_long_lock;
 	LockRelId	heaprelid,
 				indexrelid;
 	LOCKTAG		heaplocktag;
@@ -1725,7 +1736,11 @@ index_drop(Oid indexId, bool concurrent)
 	 * try to rebuild it while we're deleting catalog entries. We keep the
 	 * lock though.
 	 */
-	index_close(userIndexRelation, NoLock);
+	need_long_lock = rel_needs_long_lock(RelationGetRelid(userIndexRelation));
+	if (need_long_lock)
+		index_close(userIndexRelation, NoLock);
+	else
+		index_close(userIndexRelation, AccessExclusiveLock);
 
 	RelationForgetRelation(indexId);
 
@@ -1784,7 +1799,7 @@ index_drop(Oid indexId, bool concurrent)
 	/*
 	 * Close owning rel, but keep lock
 	 */
-	heap_close(userHeapRelation, NoLock);
+	heap_close(userHeapRelation, need_long_lock ? NoLock : AccessExclusiveLock);
 
 
 	/*
