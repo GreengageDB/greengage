@@ -86,6 +86,7 @@ Packages required for Deep Learning features of MADlib are now included. Note th
 |pytest|Testing framework|
 |python-dateutil|Extensions to the standard Python datetime module|
 |pytz|World timezone definitions, modern and historical|
+|PyXB-X \(Python3 only\)|To generate Python code for classes that correspond to data structures defined by XMLSchema|
 |PyYAML|YAML parser and emitter|
 | regex | Alternative regular expression module, to replace re |
 |requests|HTTP library|

@@ -73,7 +73,7 @@
 
 #define GPSEGCONFIGDUMPFILE "gpsegconfig_dump"
 #define GPSEGCONFIGDUMPFILETMP "gpsegconfig_dump_tmp"
-#define GPSEGCONFIGNUMATTR 9
+#define GPSEGCONFIGNUMATTR 10
 
 #if INET6_ADDRSTRLEN > MAXHOSTNAMELEN
 #define GP_MAX_ADDR_LEN (INET6_ADDRSTRLEN+1)
@@ -141,7 +141,8 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 
 	char	hostname[MAXHOSTNAMELEN];
 	char	address[MAXHOSTNAMELEN];
-	char	buf[MAXHOSTNAMELEN * 2 + 32];
+	char    datadir[MAXPGPATH];
+	char	buf[MAXHOSTNAMELEN * 2 + MAXPGPATH + 32];
 
 	Assert(!IsTransactionState());
 
@@ -159,9 +160,9 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 	{ 
 		config = &configs[idx];
 
-		if (sscanf(buf, "%d %d %c %c %c %c %d %s %s", (int *)&config->dbid, (int *)&config->segindex,
+		if (sscanf(buf, "%d %d %c %c %c %c %d %s %s %s", (int *)&config->dbid, (int *)&config->segindex,
 				   &config->role, &config->preferred_role, &config->mode, &config->status,
-				   &config->port, hostname, address) != GPSEGCONFIGNUMATTR)
+				   &config->port, hostname, address, datadir) != GPSEGCONFIGNUMATTR)
 		{
 			FreeFile(fd);
 			elog(ERROR, "invalid data in gp_segment_configuration dump file: %s:%m", GPSEGCONFIGDUMPFILE);
@@ -169,6 +170,7 @@ readGpSegConfigFromFTSFiles(int *total_dbs)
 
 		config->hostname = pstrdup(hostname);
 		config->address = pstrdup(address);
+		config->datadir = pstrdup(datadir);
 
 		idx++;
 		/*
@@ -219,9 +221,9 @@ writeGpSegConfigToFTSFiles(void)
 	{
 		config = &configs[idx];
 
-		if (fprintf(fd, "%d %d %c %c %c %c %d %s %s\n", config->dbid, config->segindex,
+		if (fprintf(fd, "%d %d %c %c %c %c %d %s %s %s\n", config->dbid, config->segindex,
 					config->role, config->preferred_role, config->mode, config->status,
-					config->port, config->hostname, config->address) < 0)
+					config->port, config->hostname, config->address, config->datadir) < 0)
 		{
 			FreeFile(fd);
 			elog(ERROR, "could not dump gp_segment_configuration to file: %s: %m", GPSEGCONFIGDUMPFILE);
@@ -304,7 +306,10 @@ readGpSegConfigFromCatalog(int *total_dbs)
 		Assert(!isNull);
 		config->port = DatumGetInt32(attr);
 
-		/* datadir is not dumped*/
+		/* datadir */
+		attr = heap_getattr(gp_seg_config_tuple, Anum_gp_segment_configuration_datadir, RelationGetDescr(gp_seg_config_rel), &isNull);
+		Assert(!isNull);
+		config->datadir = TextDatumGetCString(attr);
 
 		idx++;
 
@@ -1019,7 +1024,7 @@ cdbcomponent_getComponentInfo(int contentId)
 	/* entry db */
 	if (contentId == -1)
 	{
-		cdbInfo = &cdbs->entry_db_info[0];	
+		cdbInfo = &cdbs->entry_db_info[0];
 		return cdbInfo;
 	}
 

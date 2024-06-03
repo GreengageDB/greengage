@@ -774,6 +774,17 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, char relstorage, boo
 	else
 		policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
 
+	/* Greenplum specific code */
+	if (list_length(schema) == 0)
+	{
+		elogif(Gp_role == GP_ROLE_DISPATCH, WARNING,
+			   "creating a table with no columns.");
+
+		/* Guard code: see Github Issue 17271. */
+		if (GpPolicyIsHashPartitioned(policy))
+			policy = createRandomPartitionedPolicy(policy->numsegments);
+	}
+
 	/*
 	 * Find columns with default values and prepare for insertion of the
 	 * defaults.  Pre-cooked (that is, inherited) defaults go into a list of
@@ -1426,25 +1437,26 @@ CheckExclusiveAccess(Relation rel)
 }
 #endif
 
+/*
+ * Simple wrapper over RelationSetNewRelfilenode and called during TRUNCATE to
+ * assign a new relfilenode to auxiliary relations (toast and AO aux tables).
+ */
 static void
-relid_set_new_relfilenode(Oid relid, TransactionId recentXmin)
+relid_set_new_relfilenode(Oid relid, MultiXactId minmulti)
 {
 	if (OidIsValid(relid))
 	{
-		MultiXactId minmulti;
 		Relation rel;
-
 		rel = relation_open(relid, AccessExclusiveLock);
-
-		minmulti = GetOldestMultiXactId();
-
-		RelationSetNewRelfilenode(rel, recentXmin, minmulti);
+		RelationSetNewRelfilenode(rel, RecentXmin, minmulti);
+		if (rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED)
+			heap_create_init_fork(rel);
 		heap_close(rel, NoLock);
 	}
 }
 
 static void
-ao_aux_tables_safe_truncate(Relation rel)
+ao_aux_tables_safe_truncate(Relation rel, MultiXactId minmulti)
 {
 	if (!RelationIsAppendOptimized(rel))
 		return;
@@ -1459,9 +1471,9 @@ ao_aux_tables_safe_truncate(Relation rel)
 							  &aoblkdir_relid, NULL, &aovisimap_relid,
 							  NULL);
 
-	relid_set_new_relfilenode(aoseg_relid, RecentXmin);
-	relid_set_new_relfilenode(aoblkdir_relid, RecentXmin);
-	relid_set_new_relfilenode(aovisimap_relid, RecentXmin);
+	relid_set_new_relfilenode(aoseg_relid, minmulti);
+	relid_set_new_relfilenode(aoblkdir_relid, minmulti);
+	relid_set_new_relfilenode(aovisimap_relid, minmulti);
 
 	/*
 	 * Reset existing gp_fastsequence entries for the segrel to an initial entry.
@@ -1867,19 +1879,12 @@ ExecuteTruncate(TruncateStmt *stmt)
 			/*
 			 * The same for the toast table, if any.
 			 */
-			if (OidIsValid(toast_relid))
-			{
-				Relation toast_rel = relation_open(toast_relid, AccessExclusiveLock);
-				RelationSetNewRelfilenode(toast_rel, RecentXmin, minmulti);
-				if (toast_rel->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED)
-					heap_create_init_fork(toast_rel);
-				heap_close(toast_rel, NoLock);
-			}
+			relid_set_new_relfilenode(toast_relid, minmulti);
 
 			/*
 			 * The same for the ao auxiliary tables, if any.
 			 */
-			ao_aux_tables_safe_truncate(rel);
+			ao_aux_tables_safe_truncate(rel, minmulti);
 
 			/*
 			 * Reconstruct the indexes to match, and we're done.

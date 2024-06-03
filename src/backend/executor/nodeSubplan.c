@@ -972,7 +972,7 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 	SubLinkType subLinkType = subplan->subLinkType;
 	EState	   *estate = planstate->state;
 	ScanDirection dir = estate->es_direction;
-	MemoryContext oldcontext = NULL;;
+	volatile MemoryContext oldcontext = NULL;
 	TupleTableSlot *slot;
 	ListCell   *l;
 	bool		found = false;

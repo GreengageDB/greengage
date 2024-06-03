@@ -7,7 +7,7 @@ This tool collects Greenplum and system log files, along with the relevant confi
 ```
 gpmt gp_log_collector [-failed-segs | -c <ID1,ID2,...>| -hostfile <file> | -h <host1, host2,...>]
 [ -start <YYYY-MM-DD> ] [ -end <YYYY-MM-DD> ]
-[ -dir <path> ] [ -segdir <path> ] [ -a ] [-skip-master] [-with-gpbackup] [-with-gptext] [-with-gptext-only] [-with-gpcc] [-with-gpss] [-gpss_logdir <gpss_log_directory>] [-with-pxf] [-with-pxf-only] [-with-gpupgrade]
+[ -dir <path> ] [ -segdir <path> ] [ -a ] [-skip-master] [-with-gpbackup] [-with-gptext] [-with-gptext-only] [-with-gpcc] [-with-gpss] [-gpss_logdir <gpss_log_directory>] [-with-pxf] [-with-pxf-only] [-with-gpupgrade] [-with-gpdr-primary] [-with-gpdr-recovery]
 ```
 
 ## <a id="opts"></a>Options 
@@ -93,8 +93,14 @@ Also, the `pg_log` file is collected from the master and segment hosts.
 -with-gpupgrade
 :   Collect all `gpupgrade` logs along with Greenplum logs.
 
+-with-gpdr-primary
+:   Collect all logs relevant for a Greenplum Disaster Recovery primary cluster, along with Greenplum logs.
 
-> **Note** Hostnames provided through `-hostfile` or `-h` must match the hostname column in `gp_segment_configuration`.
+-with-gpdr-recovery
+:   Collect all logs relevant for a Greenplum Disaster Recovery recovery cluster, along with Greenplum logs.
+
+> **Note**:
+> Hostnames provided through `-hostfile` or `-h` must match the hostname column in `gp_segment_configuration`.
 
 The tool also collects the following information:
 
@@ -107,8 +113,10 @@ The tool also collects the following information:
 | GPText files | <ul><li>Installation configuration file: `$GPTXTHOME/lib/python/gptextlib/consts.py` </li><li>`gptext-state -D`</li><li>`<gptext data dir>/solr*/solr.in`</li><li>`<gptext data dir>/solr*/log4j.properties`</li><li>`<gptext data dir>/zoo*/logs/*`</li><li>`commands/bash/-c_echo $PATH`</li><li>`commands/bash/-c_ps -ef | grep solr`</li><li>`commands/bash/-c_ps -ef | grep zookeeper`</li></ul> |
 | PXF files | <ul><li>`pxf cluster status`</li><li>`pxf status`</li><li>PXF version</li><li>`Logs/`</li><li>`CONF/`</li><li>`Run/`</li></ul> |
 | gpupgrade files | <ul><li>`~/gpAdminLogs` on all hosts</li><li>`$HOME/gpupgrade` on master host</li><li>`$HOME/.gpupgrade` on all hosts</li><li>Source cluster's `pg_log` files located in `$MASTER_DATA_DIRECTORY/pg_log` on master host</li><li>Target cluster's `pg_log` files located in `$(gpupgrade config show --target-datadir)/pg_log` on master host</li><li>Target cluster's master data directory</li></ul> |
+| Greenplum Disaster Recovery files | <ul><li>GPDB pg_logs</li><li>`gpdr_YYYYMMDD.log` files in gpAdminLogs</li><li>GPDR config files in `$GPDR_HOME/configs/`</li><li>GPDR pgbackrest log files in `$GPDR_HOME/logs/`</li><li>GPDR state files in `$GPDR_HOME/state/`</li></ul> |
 
-> **Note** Some commands might not be able to be run if user does not have the correct permissions.
+> **Note**:
+> Some commands might not be able to be run if user does not have the correct permissions.
 
 ## <a id="exs"></a>Examples 
 

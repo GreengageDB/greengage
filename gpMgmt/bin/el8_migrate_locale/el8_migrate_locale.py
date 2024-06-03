@@ -23,7 +23,6 @@ class connection(object):
         self.port = port
         self.dbname = dbname
         self.user = user
-    
     def _get_pg_port(self, port):
         if port is not None:
             return port
@@ -51,20 +50,20 @@ class connection(object):
     def get_default_db_conn(self):
         db = DB(dbname=self.dbname,
                 host=self.host,
-                port=self._get_pg_port(self.port), 
+                port=self._get_pg_port(self.port),
                 user=self.user)
         return db
-    
+
     def get_db_conn(self, dbname):
         db = DB(dbname=dbname,
                 host=self.host,
                 port=self._get_pg_port(self.port),
                 user=self.user)
         return db
-    
+
     def get_db_list(self):
         db = self.get_default_db_conn()
-        sql = "select datname from pg_database where datname not in ('template0');"      
+        sql = "select datname from pg_database where datname not in ('template0');"
         dbs = [datname for datname, in db.query(sql).getresult()]
         db.close
         return dbs
@@ -72,7 +71,7 @@ class connection(object):
 class CheckIndexes(connection):
     def get_affected_user_indexes(self, dbname):
         db = self.get_db_conn(dbname)
-        # The built-in collatable data types are text,varchar,and char, and the indcollation contains the OID of the collation 
+        # The built-in collatable data types are text,varchar,and char, and the indcollation contains the OID of the collation
         # to use for the index, or zero if the column is not of a collatable data type.
         sql = """
         SELECT distinct(indexrelid), indexrelid::regclass::text as indexname, indrelid::regclass::text as tablename, collname, pg_get_indexdef(indexrelid)
@@ -133,7 +132,7 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
         f.close()
 
 class CheckTables(connection):
-    def __init__(self, host, port, dbname, user, order_size_ascend, nthread, pre_upgrade):
+    def __init__(self, host, port, dbname, user, order_size_ascend, nthread, pre_upgrade, loglevel):
         self.host = host
         self.port = port
         self.dbname = dbname
@@ -148,6 +147,7 @@ class CheckTables(connection):
         self.lock = Lock()
         self.qlist = Queue()
         self.pre_upgrade = pre_upgrade
+        self.loglevel = loglevel
         signal.signal(signal.SIGTERM, self.sig_handler)
         signal.signal(signal.SIGINT, self.sig_handler)
 
@@ -191,26 +191,54 @@ class CheckTables(connection):
         FROM 
         might_affected_tables group by (prelid, coll, attname, parisdefault)
         )
-        select prelid, prelid::regclass::text as partitionname, coll, attname, bool_or(parisdefault) as parhasdefault from par_has_default group by (prelid, coll, attname) ;
+        select prelid as parrelid, prelid::regclass::text as tablename, coll as collation, attname, bool_or(parisdefault) as hasDefaultPartition from par_has_default group by (prelid, coll, attname) ;
         """
-        tabs = db.query(sql).getresult()
+
+        #print more info, like the number of range-partition tables and partition key collation.
+        sqlForDebug = """
+        select
+            p.parrelid,
+            p.parrelid::regclass::text as tablename,
+            t.attcollation,
+            t.attrelid,
+            t.attname,
+            t.attnum
+            from
+            pg_partition p
+            join pg_attribute t on p.parrelid = t.attrelid
+            and t.attnum = ANY(p.paratts :: smallint[])
+            and p.parkind = 'r' -- filter out the range-partition tables
+            order by t.attcollation;
+        """
+        if self.loglevel == logging.DEBUG:
+            tabsForDebug = db.query(sqlForDebug)
+            result = tabsForDebug.getresult()
+            logger.debug("There are {} range partitioning tables in database {}.".format(len(result), dbname))
+            if len(result):
+                print tabsForDebug
+
+        # Filtered partition range table that partition key in collate types.
+        filterTabs = db.query(sql)
+        filterResult = filterTabs.getresult()
+        if len(filterResult):
+            logger.warning("There are {} range partitioning tables with partition key in collate types(like varchar, char, text) in database {}, these tables might be affected due to Glibc upgrade and should be checked when doing OS upgrade from EL7 to EL8.".format(len(filterResult), dbname))
+            if self.loglevel == logging.DEBUG:
+                print filterTabs
+
         db.close()
-        return tabs
+        return filterResult
 
     # get the tables which distribution column is using custom operator class, it may be affected by the OS upgrade, so give a warning.
     def get_custom_opclass_as_distribute_keys_tables(self, dbname):
         db = self.get_db_conn(dbname)
         sql = """
-        select table_oid::regclass::text as tablename, max(distclass) from (select localoid , unnest(distclass::int[]) distclass from gp_distribution_policy) x(table_oid, distclass) group by table_oid having max(distclass) > 16384;
+        select table_oid::regclass::text as tablename, max(distclass) as distclass from (select localoid , unnest(distclass::int[]) distclass from gp_distribution_policy) x(table_oid, distclass) group by table_oid having max(distclass) > 16384;
         """
-        tables = db.query(sql).getresult()
-        if tables:
-            logger.warning("There are {} tables in database {} that the distribution key is using custom operator class, should be checked when doing OS upgrade from EL7->EL8.".format(len(tables), dbname))
-            print "---------------------------------------------"
-            print "tablename | distclass"
-            for t in tables:
-                print t
-            print "---------------------------------------------"
+        tables = db.query(sql)
+        result = tables.getresult()
+        if result:
+            logger.warning("There are {} tables in database {} that the distribution key is using custom operator class, should be checked when doing OS upgrade from EL7 to EL8.".format(len(result), dbname))
+            print tables
         db.close()
 
     # Escape double-quotes in a string, so that the resulting string is suitable for
@@ -271,7 +299,6 @@ class CheckTables(connection):
             tables = self.get_affected_partitioned_tables(dbname)
 
             if tables:
-                logger.info("There are {} partitioned tables in database {} that should be checked when doing OS upgrade from EL7->EL8.".format(len(tables), dbname))
                 # if check before os upgrade, it will print the SQL results and doesn't do the GUC check.
                 if self.pre_upgrade:
                     for parrelid, tablename, coll, attname, has_default_partition in tables:
@@ -340,13 +367,13 @@ class CheckTables(connection):
         threads = []
         for i in range(self.nthread):
             t = Thread(target=CheckTables.check_partitiontables_by_guc,
-                        args=[self, i, dbname])
+                       args=[self, i, dbname])
             threads.append(t)
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-    
+
     def sig_handler(self, sig, arg):
         sys.stderr.write("terminated by signal %s\n" % sig)
         sys.exit(127)
@@ -360,64 +387,66 @@ class CheckTables(connection):
         db = self.get_db_conn(dbname)
         has_error = False
 
-        while not self.qlist.empty():
-            result = self.qlist.get()
-            parrelid = result[0]
-            tablename = result[1]
-            coll = result[2]
-            attname = result[3]
-            has_default_partition = result[4]
+        try:
+            db.query("show gp_detect_data_correctness;")
+        except Exception as e:
+            logger.warning("Failed to get GUC gp_detect_data_correctness")
+        else:
+            while not self.qlist.empty():
+                result = self.qlist.get()
+                parrelid = result[0]
+                tablename = result[1]
+                coll = result[2]
+                attname = result[3]
+                has_default_partition = result[4]
 
-            try:
                 db.query("set gp_detect_data_correctness = 1;")
-            except Exception as e:
-                logger.warning("missing GUC gp_detect_data_correctness")
+                # get the leaf partition names
+                get_partitionname_sql = """
+                with recursive cte(root_oid, table_oid, nlevel) as (
+                    select parrelid, parrelid, 0 from pg_partition where not paristemplate and parlevel = 0
+                    union all
+                    select root_oid,  pi.inhrelid, nlevel+1
+                    from cte, pg_inherits pi
+                    where cte.table_oid = pi.inhparent
+                )
+                select root_oid::regclass::text as tablename, table_oid::regclass::text as partitioname
+                from cte where nlevel = (select max(nlevel) from cte) and root_oid = {};
+                """
+                partitiontablenames = db.query(get_partitionname_sql.format(parrelid)).getresult()
+                for tablename, partitioname in partitiontablenames:
+                    sql = "insert into {tab} select * from {tab}".format(tab=partitioname)
+                    try:
+                        logger.info("start checking table {tab} ...".format(tab=partitioname))
+                        db.query(sql)
+                        logger.info("check table {tab} OK.".format(tab=partitioname))
+                    except Exception as e:
+                        logger.info("check table {tab} error out: {err_msg}".format(tab=partitioname, err_msg=str(e)))
+                        has_error = True
+
+                # if check failed, dump the table to the specified out file.
+                if has_error:
+                    # get the partition table size info to estimate the time
+                    msg, size = self.get_table_size_info(dbname, parrelid)
+                    self.filtertabslock.acquire()
+                    self.filtertabs.append((parrelid, tablename, coll, attname, msg, size))
+                    self.filtertabslock.release()
+                    has_error = False
+                    if has_default_partition == 'f':
+                        logger.warning("no default partition for {}".format(tablename))
+
+                db.query("set gp_detect_data_correctness = 0;")
+
+                end = time.time()
+                total_time = end - start
+                logger.info("Current progress: have {} remaining, {} seconds passed.".format(self.qlist.qsize(), round(total_time, 2)))
+
+        finally:
+            if db:
                 db.close()
+            logger.info("worker[{}]: finish.".format(idx))
 
-            # get the leaf partition names
-            get_partitionname_sql = """
-            with recursive cte(root_oid, table_oid, nlevel) as (
-                select parrelid, parrelid, 0 from pg_partition where not paristemplate and parlevel = 0
-                union all
-                select root_oid,  pi.inhrelid, nlevel+1
-                from cte, pg_inherits pi
-                where cte.table_oid = pi.inhparent
-            )
-            select root_oid::regclass::text as tablename, table_oid::regclass::text as partitioname
-            from cte where nlevel = (select max(nlevel) from cte) and root_oid = {};
-            """
-            partitiontablenames = db.query(get_partitionname_sql.format(parrelid)).getresult()
-            for tablename, partitioname in partitiontablenames:
-                sql = "insert into {tab} select * from {tab}".format(tab=partitioname)
-                try:
-                    logger.info("start checking table {tab} ...".format(tab=partitioname))
-                    db.query(sql)
-                    logger.info("check table {tab} OK.".format(tab=partitioname))
-                except Exception as e:
-                    logger.info("check table {tab} error out: {err_msg}".format(tab=partitioname, err_msg=str(e)))
-                    has_error = True
-
-            # if check failed, dump the table to the specified out file.
-            if has_error:
-                # get the partition table size info to estimate the time
-                msg, size = self.get_table_size_info(dbname, parrelid)
-                self.filtertabslock.acquire()
-                self.filtertabs.append((parrelid, tablename, coll, attname, msg, size))
-                self.filtertabslock.release()
-                has_error = False
-                if has_default_partition == 'f':
-                    logger.warning("no default partition for {}".format(tablename))
-
-            db.query("set gp_detect_data_correctness = 0;")
-            
-            end = time.time()
-            total_time = end - start
-            logger.info("Current progress: have {} remaining, {} seconds passed.".format(self.qlist.qsize(), round(total_time, 2)))
-
-        db.close()
-        logger.info("worker[{}]: finish.".format(idx))
-
-class migrate(connection): 
+class migrate(connection):
     def __init__(self, dbname, port, host, user, script_file):
         self.dbname = dbname
         self.port = self._get_pg_port(port)
@@ -476,6 +505,7 @@ def parseargs():
     parser.add_argument('--port', type=int, help='Greenplum Database port')
     parser.add_argument('--dbname', type=str,  default='postgres', help='Greenplum Database database name')
     parser.add_argument('--user', type=str, help='Greenplum Database user name')
+    parser.add_argument('--verbose', help="Print more info", action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO)
 
     subparsers = parser.add_subparsers(help='sub-command help', dest='cmd')
     parser_precheck_index = subparsers.add_parser('precheck-index', help='list affected index')
@@ -500,14 +530,14 @@ def parseargs():
 if __name__ == "__main__":
     args = parseargs()
     # initialize logger
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(level=args.loglevel, stream=sys.stdout, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger()
 
     if args.cmd == 'precheck-index':
         ci = CheckIndexes(args.host, args.port, args.dbname, args.user)
         ci.dump_index_info(args.out)
     elif args.cmd == 'precheck-table':
-        ct = CheckTables(args.host, args.port, args.dbname, args.user, args.order_size_ascend, args.nthread, args.pre_upgrade)
+        ct = CheckTables(args.host, args.port, args.dbname, args.user, args.order_size_ascend, args.nthread, args.pre_upgrade, args.loglevel)
         ct.dump_tables(args.out)
     elif args.cmd == 'migrate':
         cr = migrate(args.dbname, args.port, args.host, args.user, args.input)

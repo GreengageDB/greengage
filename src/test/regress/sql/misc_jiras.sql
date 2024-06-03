@@ -1,3 +1,10 @@
+-- we ingore this in global init-file, replace words here
+-- so that we can let only this case tested in this sql.
+-- start_matchsubs
+-- m/WARNING:  creating a table with no columns./
+-- s/WARNING:  creating a table with no columns./WARNING:  create a table with no columns (misc_jiras)./
+-- end_matchsubs
+
 drop schema if exists misc_jiras;
 create schema misc_jiras;
 
@@ -67,3 +74,30 @@ select *, case when t in (select t from cte t) then 'a' else 'b' end
 from t_record_type_param_dispatch t;
 
 drop table t_record_type_param_dispatch;
+
+-- Github Issue 17271
+-- test create zero-column table will throw warning only on QD
+-- test policy on each segment (including coordinator)
+create table t_17271();
+-- coordinator policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_distribution_policy where localoid = 't_17271'::regclass::oid;
+-- segment policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_dist_random('gp_distribution_policy') where localoid = 't_17271'::regclass::oid;
+
+drop table t_17271;
+
+-- test for no column table CTAS
+-- these tables should distributed randomly
+create table t1_17271(a int, b varchar(20)) distributed by (a);
+create table t2_17271 as
+select distinct on (b) from t1_17271;
+select * from t2_17271;
+
+-- coordinator policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_distribution_policy where localoid = 't2_17271'::regclass::oid;
+-- segment policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_dist_random('gp_distribution_policy') where localoid = 't2_17271'::regclass::oid;

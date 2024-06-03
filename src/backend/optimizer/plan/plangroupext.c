@@ -1267,7 +1267,6 @@ generate_dqa_plan(PlannerInfo *root,
 		root->group_pathkeys =
 			make_pathkeys_for_groupclause(root, root->parse->groupClause,
 										  context->sub_tlist);
-		root->group_pathkeys = root->group_pathkeys;
 	}
 
 	root->parse->havingQual = (Node *)new_qual;

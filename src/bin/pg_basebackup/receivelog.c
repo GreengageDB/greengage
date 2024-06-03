@@ -1141,6 +1141,10 @@ HandleCopyStream(PGconn *conn, XLogRecPtr startpos, uint32 timeline,
 			}
 			/* No more data left to write, receive next copy packet */
 		}
+		else if (copybuf[0] == 'a')
+		{
+			/* GPDB: Skip archive report message. */
+		}
 		else
 		{
 			fprintf(stderr, _("%s: unrecognized streaming header: \"%c\"\n"),

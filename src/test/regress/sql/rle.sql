@@ -4808,3 +4808,33 @@ insert into sml_rle_hdr values (-1,-1.1);
 set client_min_messages=warning;
 update sml_rle_hdr set b = b + 10 where a = -1;
 commit;
+
+-- Some smoke tests against rle's levels using zstd
+create table co_rle_zstd1(i int encoding(compresstype=rle_type, compresslevel=5)) with (appendonly=true, orientation=column);
+create table co_rle_zstd3(i int encoding(compresstype=rle_type, compresslevel=6)) with (appendonly=true, orientation=column);
+\d+ co_rle_zstd1
+\d+ co_rle_zstd3
+insert into co_rle_zstd1 select generate_series(1, 100000);
+insert into co_rle_zstd3 select generate_series(1, 100000);
+select count(distinct i) from co_rle_zstd1;
+select count(distinct i) from co_rle_zstd3;
+
+create table co_rle_zstd_table_level(i int, j int) with (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5);
+\d+ co_rle_zstd_table_level
+insert into co_rle_zstd_table_level select i, i*2 from generate_series(1, 100000)i;
+select count(distinct i) from co_rle_zstd_table_level;
+select count(distinct j) from co_rle_zstd_table_level;
+create table co_rle_zstd_mixed(i int, j int encoding(compresstype=rle_type, compresslevel=6))
+    with (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
+\d+ co_rle_zstd_mixed
+create table co_rle_zstd_table_level_ctas with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5) as select 1 as i distributed by (i);
+\d+ co_rle_zstd_table_level_ctas
+select * from co_rle_zstd_table_level_ctas;
+
+-- Now test with gp_default_storage_options
+set gp_default_storage_options to 'appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5';
+create table co_rle_zstd_def_storage_options(i int);
+insert into co_rle_zstd_def_storage_options select generate_series(1, 100000);
+\d+ co_rle_zstd_def_storage_options
+select count(distinct i) from co_rle_zstd_def_storage_options;
+set gp_default_storage_options to 'compresstype=rle_type, compresslevel=7'; -- should fail

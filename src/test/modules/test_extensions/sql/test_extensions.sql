@@ -1,6 +1,7 @@
 -- CVE-2022-2625
 -- https://github.com/postgres/postgres/commit/5919bb5a5989cda232ac3d1f8b9d90f337be2077
 --
+CREATE SCHEMA has$dollar;
 -- It's generally bad style to use CREATE OR REPLACE unnecessarily.
 -- Test what happens if an extension does it anyway.
 -- Replacing a shell type or operator is sort of like CREATE OR REPLACE;
@@ -185,6 +186,13 @@ show search_path;
 
 reset search_path;
 drop schema issue6716 cascade;
+
+--
+-- Test @extschema@ syntax.
+--
+CREATE SCHEMA "has space";
+CREATE EXTENSION test_ext_extschema SCHEMA has$dollar;
+CREATE EXTENSION test_ext_extschema SCHEMA "has space";
 
 --
 -- Test that extension not depends on AO aux tables

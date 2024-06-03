@@ -353,7 +353,6 @@ void
 mdcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo)
 {
 	char	   *path;
-	char		buf[MAXPGPATH];
 	File		fd;
 
 	path = aorelpath(rnode, segmentFileNum);
@@ -382,8 +381,7 @@ mdcreate_ao(RelFileNodeBackend rnode, int32 segmentFileNum, bool isRedo)
 		}
 	}
 
-	if (path != buf)
-		pfree(path);
+	pfree(path);
 }
 
 /*

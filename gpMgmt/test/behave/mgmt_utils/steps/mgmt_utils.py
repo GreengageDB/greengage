@@ -34,6 +34,7 @@ from gppylib.commands.pg import PgBaseBackup
 from gppylib.commands.unix import findCmdInPath, Scp
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
 from gppylib.operations.buildMirrorSegments import get_recovery_progress_pattern
+from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
 from gppylib.operations.unix import ListRemoteFilesByPattern, CheckRemoteFile
 from test.behave_utils.gpfdist_utils.gpfdist_mgmt import Gpfdist
 from test.behave_utils.utils import *
@@ -42,6 +43,7 @@ from test.behave_utils.cluster_expand import Gpexpand
 from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
+from gppylib.parseutils import canonicalize_address
 
 default_locale = None
 master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
@@ -835,11 +837,8 @@ def impl(context, command, out_msg, num):
     msg_list = context.stdout_message.split('\n')
     msg_list = [x.strip() for x in msg_list]
 
-    count = 0
-    for line in msg_list:
-        if out_msg in line:
-            count += 1
-    if count != int(num):
+    match_count = len(re.findall(out_msg, context.stdout_message))
+    if match_count != int(num):
         raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, count, msg_list))
 
 @given('the user records the current timestamp in log_timestamp table')
@@ -2833,6 +2832,12 @@ def impl(context, expected_file, content_ids):
         ls_outs = listdir_cmd.get_results().stdout.split('\n')
         files_found = [ls_line.split(' ')[-1] for ls_line in ls_outs if ls_line]
 
+        if 'existing_progress_files' not in context:
+            context.existing_progress_files = {}
+        if segHost not in context.existing_progress_files:
+            context.existing_progress_files[segHost] = []
+        context.existing_progress_files[segHost].extend(files_found)
+
         if not files_found:
             raise Exception("expected {} files in {} on host {}, but not found".format(expected_file, log_dir, segHost))
 
@@ -2845,11 +2850,34 @@ def impl(context, expected_file, content_ids):
                 raise Exception("Found unexpected file {} in {}".format(file, log_dir))
 
 
-@then('gpAdminLogs directory {has} "{expected_file}" files on all segment hosts')
-def impl(context, has, expected_file):
+@then('all previous progress files are removed from gpAdminLogs directory on respective hosts only for content {content_ids}')
+def impl(context, content_ids):
+    content_list = [int(c) for c in content_ids.split(',')]
+    all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list, all_segments)
+    for seg in segments:
+        segHost = seg.getSegmentHostName()
+        segDbid = seg.getSegmentDbId()
+        file_substring = "dbid{}.out".format(segDbid)
+        for file in context.existing_progress_files[segHost]:
+            if file_substring in file:
+                log_dir = "%s/gpAdminLogs" % os.path.expanduser("~")
+                checkfile_cmd = Command(name="check if file exists",
+                                        cmdStr="test -f {}".format(file),
+                                        remoteHost=segHost, ctxt=REMOTE)
+                checkfile_cmd.run()
+                if checkfile_cmd.get_return_code() == 0:
+                    raise Exception(
+                        "Did not expect {} file in {} on host {}, but found".format(file, log_dir, segHost))
+
+@then('gpAdminLogs directory {has} "{expected_file}" files on {hosts}')
+def impl(context, has, expected_file, hosts):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
     all_segment_hosts = [seg.getSegmentHostName() for seg in all_segments if seg.getSegmentContentId() >= 0]
 
+    if hosts != 'all segment hosts':
+        all_segment_hosts = [host for host in hosts.split(',')]
     for seg_host in all_segment_hosts:
         log_dir = "%s/gpAdminLogs" % os.path.expanduser("~")
         listdir_cmd = Command(name="list logfiles on host",
@@ -2895,6 +2923,18 @@ def impl(context, command, target):
 
     pat = re.compile(target)
     if not pat.search(contents):
+        raise Exception("cannot find %s in %s" % (target, filename))
+
+@then('{command} should print "{target}" to logfile with latest timestamp')
+def impl(context, command, target):
+    log_dir = _get_gpAdminLogs_directory()
+    filenames = glob.glob('%s/%s_*.log' % (log_dir, command))
+    filename = max(filenames, key=os.path.getctime)
+    contents = ''
+    with open(filename) as fr:
+        for line in fr:
+            contents += line
+    if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
 @given('verify that a role "{role_name}" exists in database "{dbname}"')
@@ -4356,7 +4396,41 @@ def impl(context, dbname):
         context.db_name = datname
         context.db_oid = oid
 
+@then('the created config file {output_config_file} contains the commented row for unreachable failed segment')
+def impl(context, output_config_file):
+    gparray = GpArray.initFromCatalog(dbconn.DbURL())
+    cluster_hosts = gparray.get_hostlist()
+    all_segments = gparray.getDbList()
+    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
 
+    expected_seg_rows = []
+    expected_seg_rows.append(
+        "# If any entry is commented, please know that it belongs to failed segment which is unreachable.")
+    expected_seg_rows.append("# If you need to recover them, please modify the segment entry and add failover details")
+    expected_seg_rows.append(
+        "# (failed_addresss|failed_port|failed_dataDirectory<space>failover_addresss|failover_port|failover_dataDirectory) "
+        "to recover it to another host.")
+    expected_seg_rows.append("")
+    actual_seg_rows = []
+    unreachable_hosts = get_unreachable_segment_hosts(cluster_hosts, 1)
+    for seg in failed_segments:
+        addr = canonicalize_address(seg.getSegmentAddress())
+        if seg.getSegmentHostName() in unreachable_hosts:
+            expected_seg_rows.append('#{}|{}|{}'.format(addr, seg.getSegmentPort(), seg.getSegmentDataDirectory()))
+        else:
+            expected_seg_rows.append('{}|{}|{}'.format(addr, seg.getSegmentPort(), seg.getSegmentDataDirectory()))
+
+    if os.path.exists(output_config_file):
+        with open(output_config_file, 'r') as fp:
+            config_lines = fp.readlines()
+
+        for line in config_lines:
+            actual_seg_rows.append(line.strip())
+    else:
+        raise Exception("{} file does not exist".format(output_config_file))
+
+    if set(expected_seg_rows) != set(actual_seg_rows):
+        raise Exception("created config file {} does not contain all of the expected rows".format(output_config_file))
 
 
 @then('the user waits until recovery_progress.file is created in {logdir} and verifies that all dbids progress with {stage} are present')
@@ -4395,6 +4469,65 @@ def verify_elements_in_file(filename, elements):
                 return False
 
         return True
+
+def set_ic_proxy_and_address(context, new_addr, proxy_mode):
+    """
+        set the proper proxy addresses and enable proxy mode (when proxy_mode == True)
+    """
+    with closing(dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)) as conn:
+        # get segment_configuration
+        sql = "SELECT dbid, content, address, port FROM gp_segment_configuration order by dbid"
+        cursor = dbconn.execSQL(conn, sql)
+        rows = cursor.fetchall()
+        cursor.close()
+        if len(rows) <= 0:
+            raise Exception("Found no entries in gp_segment_configuration table")
+
+        # generate the proper proxy addresses by segment_configuration
+        cmd = "gpconfig -c gp_interconnect_proxy_addresses -v \"'"
+        for row in rows:
+            delta = 4000
+            dbid = row[0]
+            contentid = row[1]
+            host = row[2].strip()
+            port = int(row[3]) - delta
+            # an icproxy_addresses_string example: 1:-1:gpdb:1432,2:0:gpdb:2000,3:1:gpdb:2001
+            if dbid != 1:
+                cmd += ","
+            cmd += "%d:%d:%s:%d" % (dbid, contentid, host, port)
+        # append new address
+        if new_addr:
+            cmd += ","
+            cmd += new_addr
+        cmd += "'\" --skipvalidation"
+        run_command(context, cmd)
+        if context.ret_code != 0:
+            raise Exception("cannot run %s: %s, stdout: %s" % (cmd, context.error_message, context.stdout_message))
+
+        # set interconnect_type to proxy
+        if proxy_mode:
+            cmd = "gpconfig -c gp_interconnect_type -v proxy"
+            run_command(context, cmd)
+            if context.ret_code != 0:
+                raise Exception("cannot run %s: %s, stdout: %s" % (cmd, context.error_message, context.stdout_message))
+
+        # let all config take effects
+        cmd = "gpstop -u"
+        run_command(context, cmd)
+        if context.ret_code != 0:
+            raise Exception("cannot run %s: %s, stdout: %s" % (cmd, context.error_message, context.stdout_message))
+
+@given(u'the cluster is running in IC proxy mode')
+def step_impl(context):
+    set_ic_proxy_and_address(context, "", True)
+
+@given(u'the cluster is not running in IC proxy mode, but proxy_addresses has been set')
+def step_impl(context):
+    set_ic_proxy_and_address(context, "", False)
+
+@given(u'the cluster is running in IC proxy mode with new proxy address {address}')
+def step_impl(context, address):
+    set_ic_proxy_and_address(context, address, True)
 
 @given('"LC_ALL" is different from English')
 def step_impl(context):

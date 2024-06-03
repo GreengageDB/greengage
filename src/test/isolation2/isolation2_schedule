@@ -71,6 +71,11 @@ test: vacuum_drop_phase_ao
 # sessions with multiple portals.
 test: resource_queue_cancel resource_queue_multi_portal
 
+test: resource_queue_role resource_queue_alter
+
+test: resource_queue_self_deadlock
+test: resource_queue_terminate
+
 # below test(s) inject faults so each of them need to be in a separate group
 test: pg_terminate_backend
 
@@ -100,8 +105,9 @@ test: bitmap_index_concurrent
 test: bitmap_union
 test: bitmap_index_inspect
 
-# below test utilizes fault injectors so it needs to be in a group by itself
+# below tests utilize fault injectors so it needs to be in a group by itself
 test: external_table
+test: pqsignal
 
 # This test validates that for AO we delay fsync to checkpointer on mirror.
 test: fsync_ao
@@ -162,6 +168,7 @@ test: uao/vacuum_index_stats_row
 test: uao/insert_should_not_use_awaiting_drop_row
 test: uao/bitmapindex_rescan_row
 test: uao/create_index_allows_readonly_row
+test: uao/concurrent_inserts_hash_crash_row
 # Refer to the case comment for why it is commented out.
 # test: uao/bad_buffer_on_temp_ao_row
 
@@ -222,6 +229,7 @@ test: uao/vacuum_index_stats_column
 test: uao/insert_should_not_use_awaiting_drop_column
 test: uao/bitmapindex_rescan_column
 test: uao/create_index_allows_readonly_column
+test: uao/concurrent_inserts_hash_crash_column
 # Refer to the case comment for why it is commented out.
 # test: uao/bad_buffer_on_temp_ao_column
 

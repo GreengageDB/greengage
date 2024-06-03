@@ -176,6 +176,7 @@ The following parameters control the types of plan operations the Postgres Plann
 - [gp_enable_relsize_collection](guc-list.html#gp_enable_relsize_collection)
 - [gp_enable_sort_distinct](guc-list.html#gp_enable_sort_distinct)
 - [gp_enable_sort_limit](guc-list.html#gp_enable_sort_limit)
+- [gp_keep_partition_children_locks](#gp_keep_partition_children_locks)
 
 ### <a id="topic23"></a>Postgres Planner Costing Parameters 
 
@@ -533,6 +534,7 @@ These parameters control the configuration of the replication between Greenplum 
 - [wait_for_replication_threshold](guc-list.html#wait_for_replication_threshold)
 - [wal_keep_segments](guc-list.html#wal_keep_segments)
 - [wal_receiver_status_interval](guc-list.html#wal_receiver_status_interval)
+- [wal_sender_archiving_status_interval](guc-list.html#wal_sender_archiving_status_interval)
 
 ## <a id="topic56"></a>Greenplum PL/Java Parameters 
 

@@ -80,6 +80,14 @@ m/^NOTICE:  resource group required -- using .* resource group ".*"$/
 # be raised, and it is expected.  This could happen normally on the
 # random_numsegments pipeline job, so ignore this WARNING.
 m/^WARNING:  table ".*" contains rows in segment .*, which is outside the # of segments for the table's policy \(\d+ segments\)$/
+
+# Ignore "terminating connection due to administrator command" as the output is
+# not always echoed to the client.
+m/FATAL:  terminating connection due to administrator command/
+
+# Ignore creating zero-column table warning
+m/^WARNING:  creating a table with no columns./
+
 -- end_matchignore
 
 -- start_matchsubs
@@ -149,4 +157,7 @@ s/ The shortest establish conn time: \d+\.\d+ ms, segindex: \d+,/ The shortest e
 m/ The longest  establish conn time: \d+\.\d+ ms, segindex: \d+/
 s/ The longest  establish conn time: \d+\.\d+ ms, segindex: \d+/ The longest  establish conn time: xx\.xx ms, segindex: xx/
 
+# ignore resource queue ids
+m/resource queue id: \d+/
+s/resource queue id: \d+/resource queue id: XXXX/
 -- end_matchsubs

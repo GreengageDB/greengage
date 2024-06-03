@@ -4,7 +4,7 @@ import mock
 import sys, os, pwd
 import unittest
 from StringIO import StringIO
-from mock import patch
+from mock import patch, call
 
 try:
     gphome = os.environ.get('GPHOME')
@@ -84,14 +84,45 @@ class SshUtilsTestCase(unittest.TestCase):
         with mock.patch.object(pxssh.pxssh, 'login', side_effect=pxssh.EOF('foo')) as mock_login:
             session2 = Session()
             session2.login(['localhost'], 'gpadmin', 0.05, 1.0)
-            self.assertEqual(mock_stdout.getvalue(), '[ERROR] unable to login to localhost\nCould not acquire connection.\n')
+            self.assertEqual(mock_stdout.getvalue(), '[ERROR] unable to login to localhost\nCould not acquire connection.\nfoo\n')
             mock_stdout.truncate(0)
 
         with mock.patch.object(pxssh.pxssh, 'login', side_effect=Exception('foo')) as mock_login:
             session2 = Session()
             session2.login(['localhost'], 'gpadmin', 0.05, 1.0)
             self.assertEqual(mock_stdout.getvalue(), '[ERROR] unable to login to localhost\nhint: use gpssh-exkeys to setup public-key authentication between hosts\n')
+
+    @patch('os.getenv', return_value="term")
+    @patch('os.putenv')
+    @patch('sys.stdout', new_callable=StringIO)
+    def test05_login_retry_when_term_variable_is_set(self, mock_stdout, mock_putenv, mock_getenv):
+        '''
+        Test pxssh.login() retry when there is an exception and TERM env variable is set
+        '''
+
+        with mock.patch.object(pxssh.pxssh, 'login', side_effect=pxssh.EOF('foo')) as mock_login:
+            session = Session()
+            session.login(['localhost'], 'gpadmin', 0.05, 1.0)
+            self.assertIn('[ERROR] unable to login to localhost\nCould not acquire connection.\n', mock_stdout.getvalue())
             mock_stdout.truncate(0)
+            assert mock_putenv.call_count == 3
+            mock_putenv.assert_has_calls([call('TERM', ''), call('TERM', 'term'), call('TERM', 'term')])
+
+    @patch('os.getenv', return_value=None)
+    @patch('os.putenv')
+    @patch('sys.stdout', new_callable=StringIO)
+    def test06_login_does_not_retry_when_term_variable_is_not_set(self, mock_stdout, mock_putenv, mock_getenv):
+        '''
+        Test pxssh.login() does not retry when there is an exception and TERM env variable is not set
+        '''
+
+        with mock.patch.object(pxssh.pxssh, 'login', side_effect=pxssh.EOF('foo')) as mock_login:
+            session = Session()
+            session.login(['localhost'], 'gpadmin', 0.05, 1.0)
+            self.assertIn('[ERROR] unable to login to localhost\nCould not acquire connection.\n', mock_stdout.getvalue())
+            self.assertNotIn('Retrying by restoring the TERM env variable.\n', mock_stdout.getvalue())
+            mock_stdout.truncate(0)
+            mock_putenv.assert_called_once_with('TERM', '')
 
 if __name__ == "__main__":
     unittest.main()

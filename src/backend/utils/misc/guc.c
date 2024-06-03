@@ -959,7 +959,7 @@ static struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&log_checkpoints,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 	{

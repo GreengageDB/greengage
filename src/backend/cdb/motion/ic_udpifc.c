@@ -4719,6 +4719,21 @@ xmit_retry:
 			return;
 		}
 
+		/*
+		 * If the OS can detect an MTU issue on the host network interfaces, we 
+		 * would get EMSGSIZE here. So, bail with a HINT about checking MTU.
+		 */
+		if (errno == EMSGSIZE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
+							errmsg("Interconnect error writing an outgoing packet: %m"),
+							errdetail("error during sendto() call (error:%d).\n"
+								  "For Remote Connection: contentId=%d at %s",
+								  errno, conn->remoteContentId,
+								  conn->remoteHostAndPort),
+							errhint("check if interface MTU is equal across the cluster and lower than gp_max_packet_size")));
+		}
+
 		ereport(ERROR, (errcode(ERRCODE_GP_INTERCONNECTION_ERROR),
 						errmsg("Interconnect error writing an outgoing packet: %m"),
 						errdetail("error during sendto() call (error:%d).\n"

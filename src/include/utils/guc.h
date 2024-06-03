@@ -356,6 +356,8 @@ extern bool gp_perfmon_print_packet_info;
 extern bool gp_enable_relsize_collection;
 extern bool gp_keep_partition_children_locks;
 
+extern int wal_sender_archiving_status_interval;
+
 /* Debug DTM Action */
 typedef enum
 {
@@ -486,6 +488,8 @@ extern bool optimizer_enable_direct_dispatch;
 extern bool optimizer_enable_master_only_queries;
 extern bool optimizer_enable_hashjoin;
 extern bool optimizer_enable_dynamictablescan;
+extern bool optimizer_enable_dynamicindexscan;
+extern bool optimizer_enable_dynamicbitmapscan;
 extern bool optimizer_enable_indexscan;
 extern bool optimizer_enable_indexonlyscan;
 extern bool optimizer_enable_tablescan;
