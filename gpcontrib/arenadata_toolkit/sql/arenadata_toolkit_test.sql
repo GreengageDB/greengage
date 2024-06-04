@@ -1,3 +1,11 @@
+-- start_ignore
+-- Prepare DB for the test
+DROP EXTENSION IF EXISTS arenadata_toolkit;
+DROP SCHEMA IF EXISTS arenadata_toolkit CASCADE;
+DROP FUNCTION IF EXISTS mock_manual_installation();
+DROP VIEW IF EXISTS toolkit_objects_info;
+-- end_ignore
+
 ----------------------------------------------------------------------------------------------------------
 -- test helpers
 ----------------------------------------------------------------------------------------------------------
@@ -77,7 +85,7 @@ SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
 WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
 
 DROP EXTENSION arenadata_toolkit;
-DROP SCHEMA arenadata_toolkit cascade;
+DROP SCHEMA arenadata_toolkit CASCADE;
 
 ----------------------------------------------------------------------------------------------------------
 -- test case 2: arenadata_toolkit wasn't installed
@@ -97,7 +105,7 @@ SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
 WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
 
 DROP EXTENSION arenadata_toolkit;
-DROP SCHEMA arenadata_toolkit cascade;
+DROP SCHEMA arenadata_toolkit CASCADE;
 
 DROP FUNCTION mock_manual_installation();
 DROP VIEW toolkit_objects_info;

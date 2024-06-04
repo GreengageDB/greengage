@@ -29,6 +29,7 @@
 #include "postmaster/fts.h"
 #include "postmaster/ftsprobe.h"
 #include "postmaster/postmaster.h"
+#include "storage/pmsignal.h"
 #include "utils/snapmgr.h"
 
 
@@ -1175,6 +1176,7 @@ processResponse(fts_context *context)
 					   "triggered successfully",
 					   primary->config->segindex, primary->config->dbid);
 				ftsInfo->state = FTS_RESPONSE_PROCESSED;
+				SendPostmasterSignal(PMSIGNAL_FTS_PROMOTED_MIRROR);
 				break;
 			case FTS_SYNCREP_OFF_SUCCESS:
 				elogif(gp_log_fts >= GPVARS_VERBOSITY_VERBOSE, LOG,

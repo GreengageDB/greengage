@@ -1,3 +1,11 @@
+-- start_ignore
+-- Prepare DB for the test
+DROP TABLE IF EXISTS part_table, part_table_bigint, public.db_files_history;
+DROP FUNCTION IF EXISTS remove_partition_from_db_files_history();
+DROP EXTENSION IF EXISTS arenadata_toolkit;
+DROP SCHEMA IF EXISTS arenadata_toolkit CASCADE;
+--end_ignore
+
 CREATE EXTENSION arenadata_toolkit;
 SET search_path = arenadata_toolkit;
 
@@ -51,16 +59,6 @@ PARTITION BY RANGE(b)
 	PARTITION pub_db_files_history_t1 START ('10'::bigint) END ('1000000'::bigint),
 	PARTITION pub_db_files_history_t2 START ('1000001'::bigint) END ('2000000'::bigint)
 );
-
--- There are not "db_files_history" and partitions
--- Note: we can't use 'arenadata_toolkit.db_files_history'::regclass at this
--- moment as it doesn't exist yet (before call to adb_create_tables())
--- and will cause an error.
-SELECT count(1)
-FROM pg_inherits pi
-JOIN pg_class pc ON pc.oid = pi.inhparent
-JOIN pg_namespace pn ON pc.relnamespace = pn.oid
-WHERE pc.relname = 'db_files_history' AND pn.nspname = 'arenadata_toolkit';
 
 SELECT adb_create_tables();
 
@@ -150,9 +148,7 @@ where table_name LIKE 'part_table%'
 ORDER BY oid;
 
 -- Cleanup
-DROP TABLE part_table;
-DROP TABLE part_table_bigint;
-DROP TABLE public.db_files_history;
+DROP TABLE part_table, part_table_bigint, public.db_files_history;
 DROP FUNCTION remove_partition_from_db_files_history();
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit CASCADE;

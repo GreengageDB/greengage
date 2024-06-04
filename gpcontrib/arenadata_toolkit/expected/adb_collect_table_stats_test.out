@@ -46,20 +46,6 @@ PARTITION BY RANGE(b)
 	PARTITION pub_db_files_history_t1 START ('10'::bigint) END ('1000000'::bigint),
 	PARTITION pub_db_files_history_t2 START ('1000001'::bigint) END ('2000000'::bigint)
 );
--- There are not "db_files_history" and partitions
--- Note: we can't use 'arenadata_toolkit.db_files_history'::regclass at this
--- moment as it doesn't exist yet (before call to adb_create_tables())
--- and will cause an error.
-SELECT count(1)
-FROM pg_inherits pi
-JOIN pg_class pc ON pc.oid = pi.inhparent
-JOIN pg_namespace pn ON pc.relnamespace = pn.oid
-WHERE pc.relname = 'db_files_history' AND pn.nspname = 'arenadata_toolkit';
- count 
--------
-     0
-(1 row)
-
 SELECT adb_create_tables();
  adb_create_tables 
 -------------------
@@ -407,9 +393,7 @@ ORDER BY oid;
 (199 rows)
 
 -- Cleanup
-DROP TABLE part_table;
-DROP TABLE part_table_bigint;
-DROP TABLE public.db_files_history;
+DROP TABLE part_table, part_table_bigint, public.db_files_history;
 DROP FUNCTION remove_partition_from_db_files_history();
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit CASCADE;

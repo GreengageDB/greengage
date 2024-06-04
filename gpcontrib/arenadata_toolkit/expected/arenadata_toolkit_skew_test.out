@@ -373,7 +373,7 @@ SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round
 (63 rows)
 
 -- add a lot of data for one part to generate big skew coefficient
--- distributing by first columnt is helps to us to put all data to one segment
+-- distributing by first column is helps to us to put all data to one segment
 INSERT INTO part_table SELECT 1,1,1,1,1,'sub_prt1' FROM generate_series(1,10000) AS i;
 SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round
 	FROM adb_skew_coefficients

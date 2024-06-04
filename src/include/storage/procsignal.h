@@ -43,6 +43,9 @@ typedef enum
 	PROCSIG_RECOVERY_CONFLICT_BUFFERPIN,
 	PROCSIG_RECOVERY_CONFLICT_STARTUP_DEADLOCK,
 	PROCSIG_RESOURCE_GROUP_MOVE_QUERY,	/* move query to a new resource group */
+
+	PROCSIG_FTS_PROMOTED_MIRROR, /* FTS has detected failed primary and promoted mirror*/
+
 	NUM_PROCSIGNALS				/* Must be last! */
 } ProcSignalReason;
 
