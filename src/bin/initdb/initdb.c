@@ -199,8 +199,8 @@ static char *authwarning = NULL;
  * but here it is more convenient to pass it as an environment variable
  * (no quoting to worry about).
  */
-static const char *boot_options = "-F";
-static const char *backend_options = "--single -F -O -c gp_session_role=utility -c search_path=pg_catalog -c exit_on_error=true";
+static const char *boot_options = "-F -c log_checkpoints=false";
+static const char *backend_options = "--single -F -O -c gp_session_role=utility -c search_path=pg_catalog -c exit_on_error=true -c log_checkpoints=false";
 
 #ifdef WIN32
 char	   *restrict_env;

@@ -23,6 +23,8 @@
 #include "cdb/cdbvars.h"
 #include "libpq/pqsignal.h"
 #include "utils/resowner.h"
+#include "utils/faultinjector.h"
+#include "postmaster/fork_process.h"
 
 #define EXEC_DATA_P 0 /* index to data pipe */
 #define EXEC_ERR_P 1 /* index to error pipe  */
@@ -664,7 +666,7 @@ popen_with_stderr(int *pipes, const char *exe, bool forwrite)
 	}
 #ifndef WIN32
 
-	pid = fork();
+	pid = fork_process();
 
 	if (pid > 0) /* parent */
 	{
@@ -690,6 +692,8 @@ popen_with_stderr(int *pipes, const char *exe, bool forwrite)
 	else if (pid == 0) /* child */
 	{
 
+		SIMPLE_FAULT_INJECTOR("popen_with_stderr_in_child");
+
 		/*
 		 * set up the data pipe
 		 */
@@ -698,11 +702,10 @@ popen_with_stderr(int *pipes, const char *exe, bool forwrite)
 			close(data[WRITE]);
 			close(fileno(stdin));
 
-			/* assign pipes to parent to stdin */
 			if (dup2(data[READ], fileno(stdin)) < 0)
 			{
-				perror("dup2 error");
-				exit(EXIT_FAILURE);
+				perror("could not redirect stdin to PROGRAM");
+				_exit(EXIT_FAILURE);
 			}
 
 			/* no longer needed after the duplication */
@@ -716,8 +719,8 @@ popen_with_stderr(int *pipes, const char *exe, bool forwrite)
 			/* assign pipes to parent to stdout */
 			if (dup2(data[WRITE], fileno(stdout)) < 0)
 			{
-				perror("dup2 error");
-				exit(EXIT_FAILURE);
+				perror("could not redirect stdout to PROGRAM");
+				_exit(EXIT_FAILURE);
 			}
 
 			/* no longer needed after the duplication */
@@ -737,8 +740,7 @@ popen_with_stderr(int *pipes, const char *exe, bool forwrite)
 			else
 				close(data[READ]);
 
-			perror("dup2 error");
-			exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		}
 
 		close(err[WRITE]);
@@ -747,7 +749,7 @@ popen_with_stderr(int *pipes, const char *exe, bool forwrite)
 		execl("/bin/sh", "sh", "-c", exe, NULL);
 
 		/* if we're here an error occurred */
-		exit(EXIT_FAILURE);
+		_exit(EXIT_FAILURE);
 	}
 	else
 	{
@@ -819,7 +821,8 @@ pclose_with_stderr(int pid, int *pipes, StringInfo sinfo)
 	/* close the data pipe. we can now read from error pipe without being blocked */
 	close(pipes[EXEC_DATA_P]);
 
-	read_err_msg(pipes[EXEC_ERR_P], sinfo);
+	if (sinfo->data)
+		read_err_msg(pipes[EXEC_ERR_P], sinfo);
 
 	close(pipes[EXEC_ERR_P]);
 

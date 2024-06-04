@@ -46,6 +46,8 @@ our @EXPORT = qw(
   command_warns_like
   command_fails_like
   issues_sql_like
+  run_cmd_until
+  wait_until_file_exists
 
   $tmp_check
   $log_path
@@ -467,6 +469,48 @@ sub command_fails_like
 
 	ok(!$result, "expected failure: got @$cmd exit code 0");
 	like($stderr, $expected_stderr, "$test_name: not match expected stderr");
+}
+
+sub run_cmd_until
+{
+    my ($cmd, $desc) = @_;
+
+    my $max_attempts = 90;
+    my $attempts     = 0;
+    my ($stdout, $stderr);
+
+    while ($attempts < $max_attempts)
+    {
+        my $result = run $cmd, '>', \$stdout, '2>', \$stderr;
+        if ($result == 1)
+        {
+            return 1;
+        }
+
+        # Wait a second before retrying.
+        sleep 1;
+        $attempts++;
+    }
+
+    # Need to format the cmd before printing since it's passed in as an array
+    my $cmd_formatted =  join(" ", @{$cmd});
+    # The command didn't succeed in 90 seconds
+    diag qq(run_cmd_until timed out executing this command:
+    $cmd_formatted
+    command output:
+    $stdout
+    command stderr:
+    $stderr
+    );
+
+    return 0;
+}
+
+sub wait_until_file_exists
+{
+    my ($filepath, $filedesc) = @_;
+    run_cmd_until(['test', '-e', $filepath], $filedesc)
+      or die "Timed out while waiting for $filedesc $filepath";
 }
 
 1;

@@ -238,6 +238,8 @@ max_prepared_transactions = 250		# can be 0 or more
 				# comma-separated list of application_name
 				# from standby(s); '*' = all
 #vacuum_defer_cleanup_age = 0	# number of xacts by which cleanup is delayed
+#wal_sender_archiving_status_interval = 0 # send archival status to standby this often
+											# in milliseconds; 0 disables
 
 # - Standby Servers -
 
@@ -385,7 +387,7 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 #debug_print_slice_table = off
 #debug_print_plan = off
 #debug_pretty_print = on
-#log_checkpoints = off
+#log_checkpoints = on
 #log_connections = off
 #log_disconnections = off
 #log_duration = off

@@ -9808,6 +9808,7 @@ with x as (select * from foo_missing_stats) select count(*) from x x1, x x2 wher
 set allow_system_table_mods=true;
 delete from pg_statistic where starelid='foo_missing_stats'::regclass;
 delete from pg_statistic where starelid='bar_missing_stats'::regclass;
+set allow_system_table_mods=false;
 select count(*) from foo_missing_stats where a = 10;
  count 
 -------
@@ -9827,6 +9828,57 @@ with x as (select * from foo_missing_stats) select count(*) from x x1, x x2 wher
 (1 row)
 
 set optimizer_print_missing_stats = off;
+DROP TABLE IF EXISTS orca.table_with_small_statistic_precision_diff;
+NOTICE:  table "table_with_small_statistic_precision_diff" does not exist, skipping
+CREATE TABLE orca.table_with_small_statistic_precision_diff (
+    col1 double precision
+);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SET allow_system_table_mods=true;
+DELETE FROM pg_statistic WHERE starelid='table_with_small_statistic_precision_diff'::regclass;
+INSERT INTO pg_statistic VALUES (
+'table_with_small_statistic_precision_diff'::regclass,
+1::smallint,
+True::boolean,
+0::real,
+8::integer,
+0::real,
+1::smallint,
+2::smallint,
+0::smallint,
+0::smallint,
+0::smallint,
+670::oid,
+672::oid,
+0::oid,
+0::oid,
+0::oid,
+E'{0.002}'::real[],
+NULL::real[],
+NULL::real[],
+NULL::real[],
+NULL::real[],
+E'{-0.25475}'::float8[],
+E'{-0.3,-0.2547399}'::float8[],
+NULL::float8[],
+NULL::float8[],
+NULL::float8[]);
+SET allow_system_table_mods=false;
+SELECT *
+FROM (
+    SELECT
+        *
+    FROM orca.table_with_small_statistic_precision_diff
+    UNION ALL
+    SELECT
+        *
+    FROM orca.table_with_small_statistic_precision_diff
+) x;
+ col1 
+------
+(0 rows)
+
 -- Push components of disjunctive predicates
 create table cust(cid integer, firstname text, lastname text) distributed by (cid);
 create table datedim(date_sk integer, year integer, moy integer) distributed by (date_sk);
@@ -9931,7 +9983,7 @@ alter table orca.bm_dyn_test drop column to_be_dropped;
 alter table orca.bm_dyn_test add partition part5 values(5);
 NOTICE:  CREATE TABLE will create partition "bm_dyn_test_1_prt_part5" for table "bm_dyn_test"
 insert into orca.bm_dyn_test values(2, 5, '2');
-set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 -- gather on 1 segment because of direct dispatch
 explain select * from orca.bm_dyn_test where i=2 and t='2';
                                      QUERY PLAN                                     
@@ -12247,7 +12299,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
                      ->  Result  (cost=0.00..0.01 rows=1 width=0)
                            Output: '2020-01-01', '99'
  Optimizer: Postgres query optimizer
- Settings: optimizer=off, optimizer_join_order=query
+ Settings: optimizer=off, optimizer_enable_dynamicbitmapscan=on, optimizer_join_order=query
 (16 rows)
 
 CREATE TABLE TP AS
@@ -14742,6 +14794,59 @@ EXPLAIN (VERBOSE, COSTS OFF)
 (14 rows)
 
 DROP TABLE t_outer_srf, t_inner_srf;
+-------------------------------------------------------
+-- Test case to check over writing of worker in ORCA.
+-- In the query, during optimzation of the main query, another instance of ORCA led optimization is triggered to
+-- optimize the 'select' statement inside any_func.
+------------------------------------------------------
+CREATE OR REPLACE FUNCTION any_func(p_dt date)
+RETURNS date
+LANGUAGE sql
+IMMUTABLE AS
+$$
+    select (date_trunc('month', p_dt) + interval '1 month')::date;
+$$
+EXECUTE ON ANY;
+create TABLE test_partitioned_2024 ( nagreementid int4 NULL, dtrepdate date NULL) DISTRIBUTED BY (nagreementid)
+PARTITION BY RANGE(dtrepdate) ( START ('2024-01-01'::date) END ('2024-12-31'::date) EVERY ('1 mon'::interval));
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_1" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_2" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_3" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_4" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_5" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_6" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_7" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_8" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_9" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_10" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_11" for table "test_partitioned_2024"
+NOTICE:  CREATE TABLE will create partition "test_partitioned_2024_1_prt_12" for table "test_partitioned_2024"
+CREATE OR REPLACE FUNCTION ret_date()
+RETURNS DATE AS
+$$
+DECLARE
+    fix_date DATE := '2024-02-10';
+BEGIN
+    RETURN fix_date;
+END;
+$$
+LANGUAGE plpgsql
+STABLE;
+explain select (select min(dtRepDate) from test_partitioned_2024 where dtRepDate = any_func(ret_date()));
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Result  (cost=0.01..0.02 rows=1 width=0)
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Result  (cost=0.00..0.01 rows=1 width=0)
+           InitPlan 1 (returns $0)  (slice2)
+             ->  Limit  (cost=0.00..13.67 rows=1 width=4)
+                   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1176.25 rows=87 width=4)
+                         ->  Append  (cost=0.00..1176.25 rows=29 width=4)
+                               ->  Seq Scan on test_partitioned_2024_1_prt_3  (cost=0.00..1176.25 rows=29 width=4)
+                                     Filter: ((dtrepdate IS NOT NULL) AND (dtrepdate = '03-01-2024'::date))
+ Optimizer: Postgres query optimizer
+(10 rows)
+
 -- Testcases to validate the behavior of the GUC gp_max_system_slices
 -- start_ignore
 drop table if exists foo;
@@ -14789,6 +14894,43 @@ ERROR:  permission denied to set parameter "gp_max_system_slices"
 reset session authorization;
 drop user ruser;
 drop table foo, bar;
+-- Ensure subplans only generate necessary number of slices
+set gp_max_slices=3;
+create table subplan_test_1(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table subplan_test_2(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into subplan_test_1 values (1,1);
+insert into subplan_test_2 select i,i from generate_series(1,5)i;
+analyze subplan_test_1;
+analyze subplan_test_2;
+explain (costs off) select (select b from subplan_test_1 where subplan_test_1.b=subplan_test_2.b) from subplan_test_2;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   ->  Seq Scan on subplan_test_2
+         SubPlan 1  (slice2; segments: 3)
+           ->  Result
+                 Filter: (subplan_test_1.b = subplan_test_2.b)
+                 ->  Materialize
+                       ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                             ->  Seq Scan on subplan_test_1
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select (select b from subplan_test_1 where subplan_test_1.b=subplan_test_2.b) from subplan_test_2;
+ b 
+---
+  
+  
+  
+ 1
+  
+(5 rows)
+
+reset gp_max_slices;
 -- check that ORCA plan, of the next query (the valid plan is generated after https://github.com/greenplum-db/gpdb/pull/14896 (1)),
 -- doesn't fallback to postgres like it was (due to https://github.com/arenadata/gpdb/pull/302 (2) which is applied above (1)).
 -- Previously there was a false-positive decision that plan contains an unpaired CTE consumer under the hazzard CPhysicalMotionRandom
@@ -14993,6 +15135,8 @@ DROP TABLE d, r;
 --                                                          Hash Key: share1_ref2.b
 --                                                          ->  Shared Scan (share slice:id 2:1)
 --  Optimizer: Pivotal Optimizer (GPORCA)
+--
+-- ORCA produces valid plan since 24a54a7
 CREATE TABLE d (a int, b int, c int) DISTRIBUTED BY (a);
 CREATE TABLE r (a int, b int, c char(255)) DISTRIBUTED REPLICATED;
 INSERT INTO d SELECT 1, generate_series(1,10), 1;

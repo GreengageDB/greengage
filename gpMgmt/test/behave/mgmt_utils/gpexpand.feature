@@ -256,6 +256,73 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand to redistribute
         Then the tablespace is valid after gpexpand
 
+    @gpexpand_icproxy
+    Scenario: Cluster expansion failed (no new proxy address) with IC proxy mode enabled
+        Given the database is not running
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And the user runs command "rm -rf /data/gpdata/gpexpand/*"
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with no mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And there are no gpexpand_inputfiles
+        And the cluster is running in IC proxy mode
+        And the cluster is setup for an expansion on hosts "cdw"
+        And the user runs gpexpand interview to add 1 new segment and 0 new host "ignore.host"
+        And the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
+        Then gpexpand should return a return code of 3
+        And gpexpand should print "Checking ICProxy addresses failed" to stdout
+
+    @gpexpand_icproxy
+    Scenario: Cluster expansion failed (bind an wrong proxy address) with IC proxy mode enabled
+        Given the database is not running
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And the user runs command "rm -rf /data/gpdata/gpexpand/*"
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with no mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And there are no gpexpand_inputfiles
+        And the cluster is running in IC proxy mode with new proxy address 4:2:cdw:16502
+        And the cluster is setup for an expansion on hosts "cdw"
+        And the user runs gpexpand interview to add 1 new segment and 0 new host "ignore.host"
+        And the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
+        Then gpexpand should return a return code of 3
+        And gpexpand should print "The ic_proxy process failed to bind or listen" to stdout
+
+    @gpexpand_icproxy
+    Scenario: Cluster expansion successful with IC proxy mode enabled
+        Given the database is not running
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And the user runs command "rm -rf /data/gpdata/gpexpand/*"
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with no mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And there are no gpexpand_inputfiles
+        And the cluster is running in IC proxy mode with new proxy address 4:2:sdw1:16502
+        And the cluster is setup for an expansion on hosts "cdw"
+        And the user runs gpexpand interview to add 1 new segment and 0 new host "ignore.host"
+        And the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
+        Then gpexpand should return a return code of 0
+
+    @gpexpand_icproxy
+    Scenario: Cluster expansion successful with IC proxy mode disabled (but proxy_addresses has been set)
+        Given the database is not running
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And the user runs command "rm -rf /data/gpdata/gpexpand/*"
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And a cluster is created with no mirrors on "cdw" and "sdw1"
+        And database "gptest" exists
+        And there are no gpexpand_inputfiles
+        And the cluster is not running in IC proxy mode, but proxy_addresses has been set
+        And the cluster is setup for an expansion on hosts "cdw"
+        And the user runs gpexpand interview to add 1 new segment and 0 new host "ignore.host"
+        And the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
+        Then gpexpand should return a return code of 0
+        And gpexpand should print "Recommended that run gpconfig to set gp_interconnect_proxy_addresses" to stdout
+
     @gpexpand_verify_redistribution
     Scenario: Verify data is correctly redistributed after expansion
         Given the database is not running
@@ -660,6 +727,31 @@ Feature: expand the cluster by adding more segments
         And verify that the path "gpperfmon/logs" in each segment data directory does not exist
         And verify that the path "promote" in each segment data directory does not exist
         And verify that the path "db_analyze" in each segment data directory does not exist
+
+    @gpexpand_no_mirrors
+    @gpexpand_segment
+    @gpexpand_verify_dtx
+    Scenario: Gpexpand should succeed when xlog has DTX info
+        Given the database is not running
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And the user runs command "rm -rf /data/gpdata/gpexpand/*"
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And the cluster is generated with "3" primaries only
+        And database "gptest" exists
+        And the user runs psql with "-c 'create extension IF NOT EXISTS gp_inject_fault;create table ttt(tc1 int);'" against database "gptest"
+        And the user runs psql with "-c "SELECT gp_inject_fault('before_notify_commited_dtx_transaction', 'suspend', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';"" against database "gptest"
+        And the user runs the command "psql gptest -c 'insert into ttt select generate_series(1,100);'" in the background without sleep
+        And waiting "1" seconds
+        And there are no gpexpand_inputfiles
+        And the cluster is setup for an expansion on hosts "localhost"
+        When the user runs gpexpand interview to add 1 new segment and 0 new host "ignored.host"
+        Then the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--silent"
+        And the user runs psql with "-c "SELECT gp_inject_fault('before_notify_commited_dtx_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';"" against database "gptest"
+        And waiting "1" seconds
+        And the user runs psql with "-c 'drop table ttt;'" against database "gptest"
+        Then verify that the cluster has 1 new segments
 
     @gpexpand_no_mirrors
     @gpexpand_segment

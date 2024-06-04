@@ -938,6 +938,16 @@ Specifies the executing interval \(in seconds\) of the global deadlock detector 
 |-----------|-------|-------------------|
 |5 - `INT_MAX` secs|120 secs|master, system, reload|
 
+## <a id="gp_keep_partition_children_locks"></a>gp_keep_partition_children_locks
+
+If turned on, maintains the relation locks on all append-optimized leaf partitions involved in a query until the end of a transaction. Turning this parameter on can help avoid relatively rare visibility issues in queries, such as `read beyond eof` when running concurrently with lazy `VACUUM`(s) directly on the leaves.
+
+> **Note** Turning `gp_keep_partition_children_locks` on implies that an additional lock will be held for each append-optimized child in each partition hierarchy involved in a query, until the end of transaction. You may require to increase the value of `max_locks_per_transaction`.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|Boolean|false|master, session, reload|
+
 ## <a id="gp_log_endpoints"></a>gp\_log\_endpoints
 
 Controls the amount of parallel retrieve cursor endpoint detail that Greenplum Database writes to the server log file.
@@ -1875,6 +1885,14 @@ This outputs a line to the server log detailing each successful connection. Some
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
 |Boolean|off|local, system, reload|
+
+## <a id="log_checkpoints"></a>log\_checkpoints
+
+Causes checkpoints and restartpoints to be logged in the server log. Some statistics are included in the log messages, including the number of buffers written and the time spent writing them.
+
+|Value Range| Default | Set Classifications    |
+|-----------|---------|------------------------|
+|Boolean| on| local, system, reload  |
 
 ## <a id="log_disconnections"></a>log\_disconnections 
 
@@ -3288,6 +3306,16 @@ The value of [wal\_sender\_timeout](#replication_timeout) controls the time that
 |Value Range|Default|Set Classifications|
 |-----------|-------|-------------------|
 |integer 0- INT\_MAX/1000|10 sec|master, system, reload, superuser|
+
+## <a id="wal_sender_archiving_status_interval"></a>wal\_sender\_archiving\_status\_interval
+
+When Greenplum Database segment mirroring and archiving is enabled, specifies the interval in milliseconds at which the `walsender` process on the primary segment sends archival status messages to the `walreceiver` process of its corresponding mirror segment.
+
+A value of 0 deactivates this feature.
+
+|Value Range|Default|Set Classifications|
+|-----------|-------|-------------------|
+|0 - `INT_MAX`|10000 ms \(10 seconds\)|local, system, reload|
 
 ## <a id="work_mem"></a>work_mem
 

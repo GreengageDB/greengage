@@ -1183,6 +1183,16 @@ check_views_with_unsupported_lag_lead_function(void)
 		bool		db_used = false;
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
 		res = executeQueryOrDie(conn,
 								"SELECT ev_class::regclass::text viewname  "
 								"FROM pg_rewrite pgr "
@@ -1191,6 +1201,7 @@ check_views_with_unsupported_lag_lead_function(void)
 								"	FROM (SELECT DISTINCT oid FROM pg_catalog.pg_proc WHERE (proname, pronamespace) in "
 								"			(('lag', 11), ('lead', 11))AND proargtypes[1]=20)s1);");
 
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
 		ntups = PQntuples(res);
 
 		i_viewname = PQfnumber(res, "viewname");
@@ -1253,6 +1264,15 @@ check_views_with_fabricated_anyarray_casts()
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
 
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
+
 		/* Install check support function */
 		PQclear(executeQueryOrDie(conn,
 									 "CREATE OR REPLACE FUNCTION "
@@ -1268,6 +1288,7 @@ check_views_with_fabricated_anyarray_casts()
 
 		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_has_anyarray_casts(OID);"));
 		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
 
 		ntups = PQntuples(res);
 		i_viewname = PQfnumber(res, "badviewname");
@@ -1330,6 +1351,14 @@ check_views_with_fabricated_unknown_casts()
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
 		/* Install check support function */
 		PQclear(executeQueryOrDie(conn,
@@ -1346,6 +1375,7 @@ check_views_with_fabricated_unknown_casts()
 
 		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_has_unknown_casts(OID);"));
 		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
 
 		ntups = PQntuples(res);
 		i_viewname = PQfnumber(res, "badviewname");
@@ -1415,6 +1445,14 @@ check_views_referencing_deprecated_tables()
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
 		/* Install check support function */
 		PQclear(executeQueryOrDie(conn,
@@ -1432,6 +1470,7 @@ check_views_referencing_deprecated_tables()
 
 		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_references_deprecated_tables(OID);"));
 		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
 
 		ntups = PQntuples(res);
 		i_viewname = PQfnumber(res, "badviewname");
@@ -1502,6 +1541,14 @@ check_views_referencing_deprecated_columns()
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
+		/*
+		 * Disabling track_counts results in a large performance improvement of
+		 * several orders of magnitude when walking the views. This is because
+		 * calling try_relation_open to get a handle of the view calls
+		 * pgstat_initstats which has been profiled to be very expensive. For
+		 * our purposes, this is not needed and disabled for performance.
+		 */
+		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
 		/* Install check support function */
 		PQclear(executeQueryOrDie(conn,
@@ -1519,6 +1566,7 @@ check_views_referencing_deprecated_columns()
 
 		PQclear(executeQueryOrDie(conn, "DROP FUNCTION view_references_deprecated_columns(OID);"));
 		PQclear(executeQueryOrDie(conn, "SET search_path to 'pg_catalog';"));
+		PQclear(executeQueryOrDie(conn, "RESET track_counts;"));
 
 		ntups = PQntuples(res);
 		i_viewname = PQfnumber(res, "badviewname");

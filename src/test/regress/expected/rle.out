@@ -11286,3 +11286,111 @@ insert into sml_rle_hdr values (-1,-1.1);
 set client_min_messages=warning;
 update sml_rle_hdr set b = b + 10 where a = -1;
 commit;
+-- Some smoke tests against rle's levels using zstd
+create table co_rle_zstd1(i int encoding(compresstype=rle_type, compresslevel=5)) with (appendonly=true, orientation=column);
+create table co_rle_zstd3(i int encoding(compresstype=rle_type, compresslevel=6)) with (appendonly=true, orientation=column);
+\d+ co_rle_zstd1
+                                    Append-Only Columnar Table "public.co_rle_zstd1"
+ Column |  Type   | Modifiers | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           | plain   |              | rle_type         | 5                 | 32768      | 
+Checksum: t
+Distributed by: (i)
+Options: appendonly=true, orientation=column
+
+\d+ co_rle_zstd3
+                                    Append-Only Columnar Table "public.co_rle_zstd3"
+ Column |  Type   | Modifiers | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           | plain   |              | rle_type         | 6                 | 32768      | 
+Checksum: t
+Distributed by: (i)
+Options: appendonly=true, orientation=column
+
+insert into co_rle_zstd1 select generate_series(1, 100000);
+insert into co_rle_zstd3 select generate_series(1, 100000);
+select count(distinct i) from co_rle_zstd1;
+ count  
+--------
+ 100000
+(1 row)
+
+select count(distinct i) from co_rle_zstd3;
+ count  
+--------
+ 100000
+(1 row)
+
+create table co_rle_zstd_table_level(i int, j int) with (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5);
+\d+ co_rle_zstd_table_level
+                               Append-Only Columnar Table "public.co_rle_zstd_table_level"
+ Column |  Type   | Modifiers | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           | plain   |              | rle_type         | 5                 | 32768      | 
+ j      | integer |           | plain   |              | rle_type         | 5                 | 32768      | 
+Checksum: t
+Distributed by: (i)
+Options: appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5
+
+insert into co_rle_zstd_table_level select i, i*2 from generate_series(1, 100000)i;
+select count(distinct i) from co_rle_zstd_table_level;
+ count  
+--------
+ 100000
+(1 row)
+
+select count(distinct j) from co_rle_zstd_table_level;
+ count  
+--------
+ 100000
+(1 row)
+
+create table co_rle_zstd_mixed(i int, j int encoding(compresstype=rle_type, compresslevel=6))
+    with (appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
+\d+ co_rle_zstd_mixed
+                                  Append-Only Columnar Table "public.co_rle_zstd_mixed"
+ Column |  Type   | Modifiers | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           | plain   |              | rle_type         | 1                 | 32768      | 
+ j      | integer |           | plain   |              | rle_type         | 6                 | 32768      | 
+Checksum: t
+Distributed by: (i)
+Options: appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1
+
+create table co_rle_zstd_table_level_ctas with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5) as select 1 as i distributed by (i);
+\d+ co_rle_zstd_table_level_ctas
+                            Append-Only Columnar Table "public.co_rle_zstd_table_level_ctas"
+ Column |  Type   | Modifiers | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           | plain   |              | rle_type         | 5                 | 32768      | 
+Checksum: t
+Distributed by: (i)
+Options: appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5
+
+select * from co_rle_zstd_table_level_ctas;
+ i 
+---
+ 1
+(1 row)
+
+-- Now test with gp_default_storage_options
+set gp_default_storage_options to 'appendonly=true, orientation=column, compresstype=rle_type, compresslevel=5';
+create table co_rle_zstd_def_storage_options(i int);
+insert into co_rle_zstd_def_storage_options select generate_series(1, 100000);
+\d+ co_rle_zstd_def_storage_options
+                           Append-Only Columnar Table "public.co_rle_zstd_def_storage_options"
+ Column |  Type   | Modifiers | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+---------+-----------+---------+--------------+------------------+-------------------+------------+-------------
+ i      | integer |           | plain   |              | rle_type         | 5                 | 32768      | 
+Checksum: t
+Distributed by: (i)
+Options: appendonly=true, compresstype=rle_type, compresslevel=5, orientation=column
+
+select count(distinct i) from co_rle_zstd_def_storage_options;
+ count  
+--------
+ 100000
+(1 row)
+
+set gp_default_storage_options to 'compresstype=rle_type, compresslevel=7'; -- should fail
+ERROR:  compresslevel=7 is out of range for rle_type (should be in the range 1 to 6)

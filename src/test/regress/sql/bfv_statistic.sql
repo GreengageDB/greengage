@@ -341,4 +341,46 @@ FROM duplicate_memo_group_test_t1
 FROM duplicate_memo_group_test_t3 a2;
 
 RESET optimizer_join_order;
+
+-- ensure precise frequencies are properly passed into Orca
+create table tiny_freq (a int) distributed by (a);
+set allow_system_table_mods=true;
+UPDATE pg_class
+SET
+        relpages = 13::int,
+        reltuples = 10000000000.0::real,
+        relallvisible = 0::int
+WHERE relname = 'tiny_freq' AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'bfv_statistic');
+INSERT INTO pg_statistic VALUES (
+        'bfv_statistic.tiny_freq'::regclass,
+        1::smallint,
+        False::boolean,
+        0.0::real,
+        4::integer,
+        2.0::real,
+        1::smallint,
+        3::smallint,
+        0::smallint,
+        0::smallint,
+        0::smallint,
+        96::oid,
+        97::oid,
+        0::oid,
+        0::oid,
+        0::oid,
+        E'{0.99999998,0.000000019996}'::real[],
+        E'{1}'::real[],
+        NULL::real[],
+        NULL::real[],
+        NULL::real[],
+        E'{3,12}'::int4[],
+        NULL::int4[],
+        NULL::int4[],
+        NULL::int4[],
+        NULL::int4[]);
+reset allow_system_table_mods;
+
+-- This should estimate a cardinalty of ~200, NOT 1 row
+explain select * from tiny_freq where a=12;
+
 RESET optimizer_trace_fallback;

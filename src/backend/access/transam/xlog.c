@@ -99,7 +99,7 @@ char	   *XLogArchiveCommand = NULL;
 bool		EnableHotStandby = false;
 bool		fullPageWrites = true;
 bool		wal_log_hints = false;
-bool		log_checkpoints = false;
+bool		log_checkpoints = true;
 int			sync_method = DEFAULT_SYNC_METHOD;
 int			wal_level = WAL_LEVEL_MINIMAL;
 int			CommitDelay = 0;	/* precommit delay in microseconds */
@@ -3786,10 +3786,39 @@ XLogFileReadAnyTLI(XLogSegNo segno, int emode, int source)
 
 	foreach(cell, tles)
 	{
-		TimeLineID	tli = ((TimeLineHistoryEntry *) lfirst(cell))->tli;
+		TimeLineHistoryEntry *hent = (TimeLineHistoryEntry *) lfirst(cell);
+		TimeLineID	tli = hent->tli;
 
 		if (tli < curFileTLI)
 			break;				/* don't bother looking at too-old TLIs */
+
+		/*
+		 * Skip scanning the timeline ID that the logfile segment to read
+		 * doesn't belong to
+		 */
+		if (hent->begin != InvalidXLogRecPtr)
+		{
+			XLogSegNo	beginseg = 0;
+
+            /*
+             * Here XLByteToSeg takes 2 argument with fixed 
+             * wal segment size i.e., XLogSegSize
+             */
+			XLByteToSeg(hent->begin, beginseg);
+
+			/*
+			 * The logfile segment that doesn't belong to the timeline is
+			 * older or newer than the segment that the timeline started or
+			 * ended at, respectively. It's sufficient to check only the
+			 * starting segment of the timeline here. Since the timelines are
+			 * scanned in descending order in this loop, any segments newer
+			 * than the ending segment should belong to newer timeline and
+			 * have already been read before. So it's not necessary to check
+			 * the ending segment of the timeline here.
+			 */
+			if (segno < beginseg)
+				continue;
+		}
 
 		if (source == XLOG_FROM_ANY || source == XLOG_FROM_ARCHIVE)
 		{
@@ -8602,8 +8631,14 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		/*
 		 * Find Xacts that are distributed committed from the checkpoint record and
 		 * store them such that they can utilized later during DTM recovery.
+		 *
+		 * The coordinator may execute write DTX during gpexpand, so the newly
+		 * added segment may contain DTX info in checkpoint XLOG. However, this step
+		 * is useless and should be avoided for segments, or fatal may be thrown since
+		 * max_tm_gxacts is 0 in segments.
 		 */
-		XLogProcessCheckpointRecord(record);
+		if(IS_QUERY_DISPATCHER())
+			XLogProcessCheckpointRecord(record);
 	}
 
 	return record;

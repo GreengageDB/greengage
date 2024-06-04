@@ -1,0 +1,1912 @@
+--
+-- Test TRUNCATE should not remove shared AO hash entry in use by other transactions.
+--
+
+create extension if not exists gp_inject_fault;
+CREATE
+
+drop database if exists testdb0;
+DROP
+create database testdb0;
+CREATE
+1:@db_name testdb0: create table ao_insert_hash_crash_@orientation@ (a int, b int) with (appendonly=true, orientation=@orientation@);
+CREATE
+1:@db_name testdb0: insert into ao_insert_hash_crash_@orientation@ select 2, i from generate_series(1,10)i;
+INSERT 10
+1q: ... <quitting>
+drop database if exists testdb1;
+DROP
+create database testdb1 with template testdb0;
+CREATE
+
+SELECT gp_inject_fault('appendonly_insert', 'suspend', '', '', 'ao_insert_hash_crash_@orientation@', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1:@db_name testdb0: begin;
+BEGIN
+1&:@db_name testdb0: insert into ao_insert_hash_crash_@orientation@ select * from ao_insert_hash_crash_@orientation@;  <waiting ...>
+
+SELECT gp_wait_until_triggered_fault('appendonly_insert', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+2:@db_name testdb1: truncate ao_insert_hash_crash_@orientation@;
+TRUNCATE
+
+SELECT gp_inject_fault('appendonly_insert', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+INSERT 10
+-- Without the fix, issue would be reproduced as "ERROR:  expected an AO hash entry for relid xxxxx but found none".
+1:@db_name testdb0: end;
+END
+
+1q: ... <quitting>
+2q: ... <quitting>
+
+--
+-- Test concurrent inserts on an append-optimized table with the same Oid across two databases.
+-- This is intended to verify both databases support max number (127) of concurrent inserts when
+-- the target table has the same Oid due to create database with template clause.
+--
+
+-- start_matchsubs
+-- m/could not find segment file to use for inserting into relation ao_insert_hash_crash.*/
+-- s/could not find segment file to use for inserting into relation ao_insert_hash_crash.*/could not find segment file to use for inserting into relation ao_insert_hash_crash ###/
+-- end_matchsubs
+
+-- start_ignore
+! gpconfig -c max_connections -v 300 --skipvalidation;
+20240126:14:59:06:030395 gpconfig:dev:gpadmin-[INFO]:-completed successfully with parameters '-c max_connections -v 300 --skipvalidation'
+
+! gpstop -rai;
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Starting gpstop with args: -rai
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Gathering information and validating the environment...
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Obtaining Greenplum Master catalog information
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Obtaining Segment details from master...
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 6.26.1+dev.13.gdae0ccc40b build dev'
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
+20240126:14:59:06:030520 gpstop:dev:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20240126:14:59:07:030520 gpstop:dev:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process
+20240126:14:59:07:030520 gpstop:dev:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20240126:14:59:08:030520 gpstop:dev:gpadmin-[INFO]:-No standby master host configured
+20240126:14:59:08:030520 gpstop:dev:gpadmin-[INFO]:-Targeting dbid [2, 3, 4] for shutdown
+20240126:14:59:08:030520 gpstop:dev:gpadmin-[INFO]:-Commencing parallel segment instance shutdown, please wait...
+20240126:14:59:08:030520 gpstop:dev:gpadmin-[INFO]:-0.00% of jobs completed
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-100.00% of jobs completed
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-----------------------------------------------------
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-   Segments stopped successfully      = 3
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-----------------------------------------------------
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-Successfully shutdown 3 of 3 segment instances 
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-Cleaning up leftover gpmmon process
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-No leftover gpmmon process found
+20240126:14:59:09:030520 gpstop:dev:gpadmin-[INFO]:-Cleaning up leftover gpsmon processes
+20240126:14:59:10:030520 gpstop:dev:gpadmin-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20240126:14:59:10:030520 gpstop:dev:gpadmin-[INFO]:-Cleaning up leftover shared memory
+20240126:14:59:10:030520 gpstop:dev:gpadmin-[INFO]:-Restarting System...
+-- end_ignore
+
+0: show max_connections;
+ max_connections 
+-----------------
+ 300             
+(1 row)
+
+0: drop database if exists testdb0;
+DROP
+0: create database testdb0;
+CREATE
+1:@db_name testdb0: create table ao_insert_hash_crash_@orientation@ (a int, b int) with (appendonly=true, orientation=@orientation@);
+CREATE
+1:@db_name testdb0: insert into ao_insert_hash_crash_@orientation@ select 2, i from generate_series(1,10)i;
+INSERT 10
+1q: ... <quitting>
+0: drop database if exists testdb1;
+DROP
+0: create database testdb1 with template testdb0;
+CREATE
+
+1:@db_name testdb0: BEGIN;
+BEGIN
+2:@db_name testdb0: BEGIN;
+BEGIN
+3:@db_name testdb0: BEGIN;
+BEGIN
+4:@db_name testdb0: BEGIN;
+BEGIN
+5:@db_name testdb0: BEGIN;
+BEGIN
+6:@db_name testdb0: BEGIN;
+BEGIN
+7:@db_name testdb0: BEGIN;
+BEGIN
+8:@db_name testdb0: BEGIN;
+BEGIN
+9:@db_name testdb0: BEGIN;
+BEGIN
+10:@db_name testdb0: BEGIN;
+BEGIN
+11:@db_name testdb0: BEGIN;
+BEGIN
+12:@db_name testdb0: BEGIN;
+BEGIN
+13:@db_name testdb0: BEGIN;
+BEGIN
+14:@db_name testdb0: BEGIN;
+BEGIN
+15:@db_name testdb0: BEGIN;
+BEGIN
+16:@db_name testdb0: BEGIN;
+BEGIN
+17:@db_name testdb0: BEGIN;
+BEGIN
+18:@db_name testdb0: BEGIN;
+BEGIN
+19:@db_name testdb0: BEGIN;
+BEGIN
+20:@db_name testdb0: BEGIN;
+BEGIN
+21:@db_name testdb0: BEGIN;
+BEGIN
+22:@db_name testdb0: BEGIN;
+BEGIN
+23:@db_name testdb0: BEGIN;
+BEGIN
+24:@db_name testdb0: BEGIN;
+BEGIN
+25:@db_name testdb0: BEGIN;
+BEGIN
+26:@db_name testdb0: BEGIN;
+BEGIN
+27:@db_name testdb0: BEGIN;
+BEGIN
+28:@db_name testdb0: BEGIN;
+BEGIN
+29:@db_name testdb0: BEGIN;
+BEGIN
+30:@db_name testdb0: BEGIN;
+BEGIN
+31:@db_name testdb0: BEGIN;
+BEGIN
+32:@db_name testdb0: BEGIN;
+BEGIN
+33:@db_name testdb0: BEGIN;
+BEGIN
+34:@db_name testdb0: BEGIN;
+BEGIN
+35:@db_name testdb0: BEGIN;
+BEGIN
+36:@db_name testdb0: BEGIN;
+BEGIN
+37:@db_name testdb0: BEGIN;
+BEGIN
+38:@db_name testdb0: BEGIN;
+BEGIN
+39:@db_name testdb0: BEGIN;
+BEGIN
+40:@db_name testdb0: BEGIN;
+BEGIN
+41:@db_name testdb0: BEGIN;
+BEGIN
+42:@db_name testdb0: BEGIN;
+BEGIN
+43:@db_name testdb0: BEGIN;
+BEGIN
+44:@db_name testdb0: BEGIN;
+BEGIN
+45:@db_name testdb0: BEGIN;
+BEGIN
+46:@db_name testdb0: BEGIN;
+BEGIN
+47:@db_name testdb0: BEGIN;
+BEGIN
+48:@db_name testdb0: BEGIN;
+BEGIN
+49:@db_name testdb0: BEGIN;
+BEGIN
+50:@db_name testdb0: BEGIN;
+BEGIN
+51:@db_name testdb0: BEGIN;
+BEGIN
+52:@db_name testdb0: BEGIN;
+BEGIN
+53:@db_name testdb0: BEGIN;
+BEGIN
+54:@db_name testdb0: BEGIN;
+BEGIN
+55:@db_name testdb0: BEGIN;
+BEGIN
+56:@db_name testdb0: BEGIN;
+BEGIN
+57:@db_name testdb0: BEGIN;
+BEGIN
+58:@db_name testdb0: BEGIN;
+BEGIN
+59:@db_name testdb0: BEGIN;
+BEGIN
+60:@db_name testdb0: BEGIN;
+BEGIN
+61:@db_name testdb0: BEGIN;
+BEGIN
+62:@db_name testdb0: BEGIN;
+BEGIN
+63:@db_name testdb0: BEGIN;
+BEGIN
+64:@db_name testdb0: BEGIN;
+BEGIN
+65:@db_name testdb0: BEGIN;
+BEGIN
+66:@db_name testdb0: BEGIN;
+BEGIN
+67:@db_name testdb0: BEGIN;
+BEGIN
+68:@db_name testdb0: BEGIN;
+BEGIN
+69:@db_name testdb0: BEGIN;
+BEGIN
+70:@db_name testdb0: BEGIN;
+BEGIN
+71:@db_name testdb0: BEGIN;
+BEGIN
+72:@db_name testdb0: BEGIN;
+BEGIN
+73:@db_name testdb0: BEGIN;
+BEGIN
+74:@db_name testdb0: BEGIN;
+BEGIN
+75:@db_name testdb0: BEGIN;
+BEGIN
+76:@db_name testdb0: BEGIN;
+BEGIN
+77:@db_name testdb0: BEGIN;
+BEGIN
+78:@db_name testdb0: BEGIN;
+BEGIN
+79:@db_name testdb0: BEGIN;
+BEGIN
+80:@db_name testdb0: BEGIN;
+BEGIN
+81:@db_name testdb0: BEGIN;
+BEGIN
+82:@db_name testdb0: BEGIN;
+BEGIN
+83:@db_name testdb0: BEGIN;
+BEGIN
+84:@db_name testdb0: BEGIN;
+BEGIN
+85:@db_name testdb0: BEGIN;
+BEGIN
+86:@db_name testdb0: BEGIN;
+BEGIN
+87:@db_name testdb0: BEGIN;
+BEGIN
+88:@db_name testdb0: BEGIN;
+BEGIN
+89:@db_name testdb0: BEGIN;
+BEGIN
+90:@db_name testdb0: BEGIN;
+BEGIN
+91:@db_name testdb0: BEGIN;
+BEGIN
+92:@db_name testdb0: BEGIN;
+BEGIN
+93:@db_name testdb0: BEGIN;
+BEGIN
+94:@db_name testdb0: BEGIN;
+BEGIN
+95:@db_name testdb0: BEGIN;
+BEGIN
+96:@db_name testdb0: BEGIN;
+BEGIN
+97:@db_name testdb0: BEGIN;
+BEGIN
+98:@db_name testdb0: BEGIN;
+BEGIN
+99:@db_name testdb0: BEGIN;
+BEGIN
+100:@db_name testdb0: BEGIN;
+BEGIN
+101:@db_name testdb0: BEGIN;
+BEGIN
+102:@db_name testdb0: BEGIN;
+BEGIN
+103:@db_name testdb0: BEGIN;
+BEGIN
+104:@db_name testdb0: BEGIN;
+BEGIN
+105:@db_name testdb0: BEGIN;
+BEGIN
+106:@db_name testdb0: BEGIN;
+BEGIN
+107:@db_name testdb0: BEGIN;
+BEGIN
+108:@db_name testdb0: BEGIN;
+BEGIN
+109:@db_name testdb0: BEGIN;
+BEGIN
+110:@db_name testdb0: BEGIN;
+BEGIN
+111:@db_name testdb0: BEGIN;
+BEGIN
+112:@db_name testdb0: BEGIN;
+BEGIN
+113:@db_name testdb0: BEGIN;
+BEGIN
+114:@db_name testdb0: BEGIN;
+BEGIN
+115:@db_name testdb0: BEGIN;
+BEGIN
+116:@db_name testdb0: BEGIN;
+BEGIN
+117:@db_name testdb0: BEGIN;
+BEGIN
+118:@db_name testdb0: BEGIN;
+BEGIN
+119:@db_name testdb0: BEGIN;
+BEGIN
+120:@db_name testdb0: BEGIN;
+BEGIN
+121:@db_name testdb0: BEGIN;
+BEGIN
+122:@db_name testdb0: BEGIN;
+BEGIN
+123:@db_name testdb0: BEGIN;
+BEGIN
+124:@db_name testdb0: BEGIN;
+BEGIN
+125:@db_name testdb0: BEGIN;
+BEGIN
+126:@db_name testdb0: BEGIN;
+BEGIN
+127:@db_name testdb0: BEGIN;
+BEGIN
+128:@db_name testdb0: BEGIN;
+BEGIN
+1:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+2:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+3:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+4:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+5:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+6:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+7:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+8:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+9:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+10:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+11:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+12:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+13:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+14:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+15:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+16:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+17:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+18:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+19:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+20:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+21:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+22:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+23:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+24:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+25:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+26:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+27:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+28:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+29:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+30:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+31:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+32:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+33:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+34:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+35:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+36:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+37:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+38:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+39:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+40:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+41:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+42:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+43:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+44:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+45:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+46:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+47:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+48:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+49:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+50:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+51:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+52:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+53:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+54:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+55:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+56:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+57:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+58:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+59:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+60:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+61:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+62:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+63:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+64:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+65:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+66:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+67:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+68:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+69:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+70:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+71:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+72:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+73:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+74:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+75:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+76:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+77:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+78:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+79:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+80:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+81:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+82:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+83:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+84:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+85:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+86:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+87:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+88:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+89:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+90:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+91:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+92:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+93:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+94:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+95:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+96:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+97:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+98:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+99:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+100:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+101:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+102:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+103:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+104:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+105:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+106:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+107:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+108:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+109:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+110:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+111:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+112:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+113:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+114:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+115:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+116:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+117:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+118:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+119:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+120:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+121:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+122:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+123:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+124:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+125:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+126:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+127:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+128:@db_name testdb0: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+ERROR:  could not find segment file to use for inserting into relation ao_insert_hash_crash_@orientation@ (32769) (appendonlywriter.c:1238)
+-- the other database
+129:@db_name testdb1: BEGIN;
+BEGIN
+130:@db_name testdb1: BEGIN;
+BEGIN
+131:@db_name testdb1: BEGIN;
+BEGIN
+132:@db_name testdb1: BEGIN;
+BEGIN
+133:@db_name testdb1: BEGIN;
+BEGIN
+134:@db_name testdb1: BEGIN;
+BEGIN
+135:@db_name testdb1: BEGIN;
+BEGIN
+136:@db_name testdb1: BEGIN;
+BEGIN
+137:@db_name testdb1: BEGIN;
+BEGIN
+138:@db_name testdb1: BEGIN;
+BEGIN
+139:@db_name testdb1: BEGIN;
+BEGIN
+140:@db_name testdb1: BEGIN;
+BEGIN
+141:@db_name testdb1: BEGIN;
+BEGIN
+142:@db_name testdb1: BEGIN;
+BEGIN
+143:@db_name testdb1: BEGIN;
+BEGIN
+144:@db_name testdb1: BEGIN;
+BEGIN
+145:@db_name testdb1: BEGIN;
+BEGIN
+146:@db_name testdb1: BEGIN;
+BEGIN
+147:@db_name testdb1: BEGIN;
+BEGIN
+148:@db_name testdb1: BEGIN;
+BEGIN
+149:@db_name testdb1: BEGIN;
+BEGIN
+150:@db_name testdb1: BEGIN;
+BEGIN
+151:@db_name testdb1: BEGIN;
+BEGIN
+152:@db_name testdb1: BEGIN;
+BEGIN
+153:@db_name testdb1: BEGIN;
+BEGIN
+154:@db_name testdb1: BEGIN;
+BEGIN
+155:@db_name testdb1: BEGIN;
+BEGIN
+156:@db_name testdb1: BEGIN;
+BEGIN
+157:@db_name testdb1: BEGIN;
+BEGIN
+158:@db_name testdb1: BEGIN;
+BEGIN
+159:@db_name testdb1: BEGIN;
+BEGIN
+160:@db_name testdb1: BEGIN;
+BEGIN
+161:@db_name testdb1: BEGIN;
+BEGIN
+162:@db_name testdb1: BEGIN;
+BEGIN
+163:@db_name testdb1: BEGIN;
+BEGIN
+164:@db_name testdb1: BEGIN;
+BEGIN
+165:@db_name testdb1: BEGIN;
+BEGIN
+166:@db_name testdb1: BEGIN;
+BEGIN
+167:@db_name testdb1: BEGIN;
+BEGIN
+168:@db_name testdb1: BEGIN;
+BEGIN
+169:@db_name testdb1: BEGIN;
+BEGIN
+170:@db_name testdb1: BEGIN;
+BEGIN
+171:@db_name testdb1: BEGIN;
+BEGIN
+172:@db_name testdb1: BEGIN;
+BEGIN
+173:@db_name testdb1: BEGIN;
+BEGIN
+174:@db_name testdb1: BEGIN;
+BEGIN
+175:@db_name testdb1: BEGIN;
+BEGIN
+176:@db_name testdb1: BEGIN;
+BEGIN
+177:@db_name testdb1: BEGIN;
+BEGIN
+178:@db_name testdb1: BEGIN;
+BEGIN
+179:@db_name testdb1: BEGIN;
+BEGIN
+180:@db_name testdb1: BEGIN;
+BEGIN
+181:@db_name testdb1: BEGIN;
+BEGIN
+182:@db_name testdb1: BEGIN;
+BEGIN
+183:@db_name testdb1: BEGIN;
+BEGIN
+184:@db_name testdb1: BEGIN;
+BEGIN
+185:@db_name testdb1: BEGIN;
+BEGIN
+186:@db_name testdb1: BEGIN;
+BEGIN
+187:@db_name testdb1: BEGIN;
+BEGIN
+188:@db_name testdb1: BEGIN;
+BEGIN
+189:@db_name testdb1: BEGIN;
+BEGIN
+190:@db_name testdb1: BEGIN;
+BEGIN
+191:@db_name testdb1: BEGIN;
+BEGIN
+192:@db_name testdb1: BEGIN;
+BEGIN
+193:@db_name testdb1: BEGIN;
+BEGIN
+194:@db_name testdb1: BEGIN;
+BEGIN
+195:@db_name testdb1: BEGIN;
+BEGIN
+196:@db_name testdb1: BEGIN;
+BEGIN
+197:@db_name testdb1: BEGIN;
+BEGIN
+198:@db_name testdb1: BEGIN;
+BEGIN
+199:@db_name testdb1: BEGIN;
+BEGIN
+200:@db_name testdb1: BEGIN;
+BEGIN
+201:@db_name testdb1: BEGIN;
+BEGIN
+202:@db_name testdb1: BEGIN;
+BEGIN
+203:@db_name testdb1: BEGIN;
+BEGIN
+204:@db_name testdb1: BEGIN;
+BEGIN
+205:@db_name testdb1: BEGIN;
+BEGIN
+206:@db_name testdb1: BEGIN;
+BEGIN
+207:@db_name testdb1: BEGIN;
+BEGIN
+208:@db_name testdb1: BEGIN;
+BEGIN
+209:@db_name testdb1: BEGIN;
+BEGIN
+210:@db_name testdb1: BEGIN;
+BEGIN
+211:@db_name testdb1: BEGIN;
+BEGIN
+212:@db_name testdb1: BEGIN;
+BEGIN
+213:@db_name testdb1: BEGIN;
+BEGIN
+214:@db_name testdb1: BEGIN;
+BEGIN
+215:@db_name testdb1: BEGIN;
+BEGIN
+216:@db_name testdb1: BEGIN;
+BEGIN
+217:@db_name testdb1: BEGIN;
+BEGIN
+218:@db_name testdb1: BEGIN;
+BEGIN
+219:@db_name testdb1: BEGIN;
+BEGIN
+220:@db_name testdb1: BEGIN;
+BEGIN
+221:@db_name testdb1: BEGIN;
+BEGIN
+222:@db_name testdb1: BEGIN;
+BEGIN
+223:@db_name testdb1: BEGIN;
+BEGIN
+224:@db_name testdb1: BEGIN;
+BEGIN
+225:@db_name testdb1: BEGIN;
+BEGIN
+226:@db_name testdb1: BEGIN;
+BEGIN
+227:@db_name testdb1: BEGIN;
+BEGIN
+228:@db_name testdb1: BEGIN;
+BEGIN
+229:@db_name testdb1: BEGIN;
+BEGIN
+230:@db_name testdb1: BEGIN;
+BEGIN
+231:@db_name testdb1: BEGIN;
+BEGIN
+232:@db_name testdb1: BEGIN;
+BEGIN
+233:@db_name testdb1: BEGIN;
+BEGIN
+234:@db_name testdb1: BEGIN;
+BEGIN
+235:@db_name testdb1: BEGIN;
+BEGIN
+236:@db_name testdb1: BEGIN;
+BEGIN
+237:@db_name testdb1: BEGIN;
+BEGIN
+238:@db_name testdb1: BEGIN;
+BEGIN
+239:@db_name testdb1: BEGIN;
+BEGIN
+240:@db_name testdb1: BEGIN;
+BEGIN
+241:@db_name testdb1: BEGIN;
+BEGIN
+242:@db_name testdb1: BEGIN;
+BEGIN
+243:@db_name testdb1: BEGIN;
+BEGIN
+244:@db_name testdb1: BEGIN;
+BEGIN
+245:@db_name testdb1: BEGIN;
+BEGIN
+246:@db_name testdb1: BEGIN;
+BEGIN
+247:@db_name testdb1: BEGIN;
+BEGIN
+248:@db_name testdb1: BEGIN;
+BEGIN
+249:@db_name testdb1: BEGIN;
+BEGIN
+250:@db_name testdb1: BEGIN;
+BEGIN
+251:@db_name testdb1: BEGIN;
+BEGIN
+252:@db_name testdb1: BEGIN;
+BEGIN
+253:@db_name testdb1: BEGIN;
+BEGIN
+254:@db_name testdb1: BEGIN;
+BEGIN
+255:@db_name testdb1: BEGIN;
+BEGIN
+256:@db_name testdb1: BEGIN;
+BEGIN
+129:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+130:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+131:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+132:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+133:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+134:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+135:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+136:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+137:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+138:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+139:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+140:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+141:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+142:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+143:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+144:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+145:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+146:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+147:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+148:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+149:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+150:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+151:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+152:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+153:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+154:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+155:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+156:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+157:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+158:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+159:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+160:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+161:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+162:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+163:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+164:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+165:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+166:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+167:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+168:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+169:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+170:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+171:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+172:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+173:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+174:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+175:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+176:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+177:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+178:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+179:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+180:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+181:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+182:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+183:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+184:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+185:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+186:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+187:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+188:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+189:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+190:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+191:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+192:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+193:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+194:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+195:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+196:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+197:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+198:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+199:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+200:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+201:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+202:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+203:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+204:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+205:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+206:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+207:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+208:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+209:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+210:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+211:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+212:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+213:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+214:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+215:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+216:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+217:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+218:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+219:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+220:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+221:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+222:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+223:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+224:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+225:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+226:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+227:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+228:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+229:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+230:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+231:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+232:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+233:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+234:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+235:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+236:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+237:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+238:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+239:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+240:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+241:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+242:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+243:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+244:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+245:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+246:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+247:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+248:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+249:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+250:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+251:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+252:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+253:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+254:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+255:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+INSERT 1
+256:@db_name testdb1: INSERT INTO ao_insert_hash_crash_@orientation@ VALUES (1, 1);
+ERROR:  could not find segment file to use for inserting into relation ao_insert_hash_crash_@orientation@ (32769) (appendonlywriter.c:1238)
+
+1:@db_name testdb0: COMMIT;
+COMMIT
+2:@db_name testdb0: COMMIT;
+COMMIT
+3:@db_name testdb0: COMMIT;
+COMMIT
+4:@db_name testdb0: COMMIT;
+COMMIT
+5:@db_name testdb0: COMMIT;
+COMMIT
+6:@db_name testdb0: COMMIT;
+COMMIT
+7:@db_name testdb0: COMMIT;
+COMMIT
+8:@db_name testdb0: COMMIT;
+COMMIT
+9:@db_name testdb0: COMMIT;
+COMMIT
+10:@db_name testdb0: COMMIT;
+COMMIT
+11:@db_name testdb0: COMMIT;
+COMMIT
+12:@db_name testdb0: COMMIT;
+COMMIT
+13:@db_name testdb0: COMMIT;
+COMMIT
+14:@db_name testdb0: COMMIT;
+COMMIT
+15:@db_name testdb0: COMMIT;
+COMMIT
+16:@db_name testdb0: COMMIT;
+COMMIT
+17:@db_name testdb0: COMMIT;
+COMMIT
+18:@db_name testdb0: COMMIT;
+COMMIT
+19:@db_name testdb0: COMMIT;
+COMMIT
+20:@db_name testdb0: COMMIT;
+COMMIT
+21:@db_name testdb0: COMMIT;
+COMMIT
+22:@db_name testdb0: COMMIT;
+COMMIT
+23:@db_name testdb0: COMMIT;
+COMMIT
+24:@db_name testdb0: COMMIT;
+COMMIT
+25:@db_name testdb0: COMMIT;
+COMMIT
+26:@db_name testdb0: COMMIT;
+COMMIT
+27:@db_name testdb0: COMMIT;
+COMMIT
+28:@db_name testdb0: COMMIT;
+COMMIT
+29:@db_name testdb0: COMMIT;
+COMMIT
+30:@db_name testdb0: COMMIT;
+COMMIT
+31:@db_name testdb0: COMMIT;
+COMMIT
+32:@db_name testdb0: COMMIT;
+COMMIT
+33:@db_name testdb0: COMMIT;
+COMMIT
+34:@db_name testdb0: COMMIT;
+COMMIT
+35:@db_name testdb0: COMMIT;
+COMMIT
+36:@db_name testdb0: COMMIT;
+COMMIT
+37:@db_name testdb0: COMMIT;
+COMMIT
+38:@db_name testdb0: COMMIT;
+COMMIT
+39:@db_name testdb0: COMMIT;
+COMMIT
+40:@db_name testdb0: COMMIT;
+COMMIT
+41:@db_name testdb0: COMMIT;
+COMMIT
+42:@db_name testdb0: COMMIT;
+COMMIT
+43:@db_name testdb0: COMMIT;
+COMMIT
+44:@db_name testdb0: COMMIT;
+COMMIT
+45:@db_name testdb0: COMMIT;
+COMMIT
+46:@db_name testdb0: COMMIT;
+COMMIT
+47:@db_name testdb0: COMMIT;
+COMMIT
+48:@db_name testdb0: COMMIT;
+COMMIT
+49:@db_name testdb0: COMMIT;
+COMMIT
+50:@db_name testdb0: COMMIT;
+COMMIT
+51:@db_name testdb0: COMMIT;
+COMMIT
+52:@db_name testdb0: COMMIT;
+COMMIT
+53:@db_name testdb0: COMMIT;
+COMMIT
+54:@db_name testdb0: COMMIT;
+COMMIT
+55:@db_name testdb0: COMMIT;
+COMMIT
+56:@db_name testdb0: COMMIT;
+COMMIT
+57:@db_name testdb0: COMMIT;
+COMMIT
+58:@db_name testdb0: COMMIT;
+COMMIT
+59:@db_name testdb0: COMMIT;
+COMMIT
+60:@db_name testdb0: COMMIT;
+COMMIT
+61:@db_name testdb0: COMMIT;
+COMMIT
+62:@db_name testdb0: COMMIT;
+COMMIT
+63:@db_name testdb0: COMMIT;
+COMMIT
+64:@db_name testdb0: COMMIT;
+COMMIT
+65:@db_name testdb0: COMMIT;
+COMMIT
+66:@db_name testdb0: COMMIT;
+COMMIT
+67:@db_name testdb0: COMMIT;
+COMMIT
+68:@db_name testdb0: COMMIT;
+COMMIT
+69:@db_name testdb0: COMMIT;
+COMMIT
+70:@db_name testdb0: COMMIT;
+COMMIT
+71:@db_name testdb0: COMMIT;
+COMMIT
+72:@db_name testdb0: COMMIT;
+COMMIT
+73:@db_name testdb0: COMMIT;
+COMMIT
+74:@db_name testdb0: COMMIT;
+COMMIT
+75:@db_name testdb0: COMMIT;
+COMMIT
+76:@db_name testdb0: COMMIT;
+COMMIT
+77:@db_name testdb0: COMMIT;
+COMMIT
+78:@db_name testdb0: COMMIT;
+COMMIT
+79:@db_name testdb0: COMMIT;
+COMMIT
+80:@db_name testdb0: COMMIT;
+COMMIT
+81:@db_name testdb0: COMMIT;
+COMMIT
+82:@db_name testdb0: COMMIT;
+COMMIT
+83:@db_name testdb0: COMMIT;
+COMMIT
+84:@db_name testdb0: COMMIT;
+COMMIT
+85:@db_name testdb0: COMMIT;
+COMMIT
+86:@db_name testdb0: COMMIT;
+COMMIT
+87:@db_name testdb0: COMMIT;
+COMMIT
+88:@db_name testdb0: COMMIT;
+COMMIT
+89:@db_name testdb0: COMMIT;
+COMMIT
+90:@db_name testdb0: COMMIT;
+COMMIT
+91:@db_name testdb0: COMMIT;
+COMMIT
+92:@db_name testdb0: COMMIT;
+COMMIT
+93:@db_name testdb0: COMMIT;
+COMMIT
+94:@db_name testdb0: COMMIT;
+COMMIT
+95:@db_name testdb0: COMMIT;
+COMMIT
+96:@db_name testdb0: COMMIT;
+COMMIT
+97:@db_name testdb0: COMMIT;
+COMMIT
+98:@db_name testdb0: COMMIT;
+COMMIT
+99:@db_name testdb0: COMMIT;
+COMMIT
+100:@db_name testdb0: COMMIT;
+COMMIT
+101:@db_name testdb0: COMMIT;
+COMMIT
+102:@db_name testdb0: COMMIT;
+COMMIT
+103:@db_name testdb0: COMMIT;
+COMMIT
+104:@db_name testdb0: COMMIT;
+COMMIT
+105:@db_name testdb0: COMMIT;
+COMMIT
+106:@db_name testdb0: COMMIT;
+COMMIT
+107:@db_name testdb0: COMMIT;
+COMMIT
+108:@db_name testdb0: COMMIT;
+COMMIT
+109:@db_name testdb0: COMMIT;
+COMMIT
+110:@db_name testdb0: COMMIT;
+COMMIT
+111:@db_name testdb0: COMMIT;
+COMMIT
+112:@db_name testdb0: COMMIT;
+COMMIT
+113:@db_name testdb0: COMMIT;
+COMMIT
+114:@db_name testdb0: COMMIT;
+COMMIT
+115:@db_name testdb0: COMMIT;
+COMMIT
+116:@db_name testdb0: COMMIT;
+COMMIT
+117:@db_name testdb0: COMMIT;
+COMMIT
+118:@db_name testdb0: COMMIT;
+COMMIT
+119:@db_name testdb0: COMMIT;
+COMMIT
+120:@db_name testdb0: COMMIT;
+COMMIT
+121:@db_name testdb0: COMMIT;
+COMMIT
+122:@db_name testdb0: COMMIT;
+COMMIT
+123:@db_name testdb0: COMMIT;
+COMMIT
+124:@db_name testdb0: COMMIT;
+COMMIT
+125:@db_name testdb0: COMMIT;
+COMMIT
+126:@db_name testdb0: COMMIT;
+COMMIT
+127:@db_name testdb0: COMMIT;
+COMMIT
+128:@db_name testdb0: COMMIT;
+COMMIT
+129:@db_name testdb1: COMMIT;
+COMMIT
+130:@db_name testdb1: COMMIT;
+COMMIT
+131:@db_name testdb1: COMMIT;
+COMMIT
+132:@db_name testdb1: COMMIT;
+COMMIT
+133:@db_name testdb1: COMMIT;
+COMMIT
+134:@db_name testdb1: COMMIT;
+COMMIT
+135:@db_name testdb1: COMMIT;
+COMMIT
+136:@db_name testdb1: COMMIT;
+COMMIT
+137:@db_name testdb1: COMMIT;
+COMMIT
+138:@db_name testdb1: COMMIT;
+COMMIT
+139:@db_name testdb1: COMMIT;
+COMMIT
+140:@db_name testdb1: COMMIT;
+COMMIT
+141:@db_name testdb1: COMMIT;
+COMMIT
+142:@db_name testdb1: COMMIT;
+COMMIT
+143:@db_name testdb1: COMMIT;
+COMMIT
+144:@db_name testdb1: COMMIT;
+COMMIT
+145:@db_name testdb1: COMMIT;
+COMMIT
+146:@db_name testdb1: COMMIT;
+COMMIT
+147:@db_name testdb1: COMMIT;
+COMMIT
+148:@db_name testdb1: COMMIT;
+COMMIT
+149:@db_name testdb1: COMMIT;
+COMMIT
+150:@db_name testdb1: COMMIT;
+COMMIT
+151:@db_name testdb1: COMMIT;
+COMMIT
+152:@db_name testdb1: COMMIT;
+COMMIT
+153:@db_name testdb1: COMMIT;
+COMMIT
+154:@db_name testdb1: COMMIT;
+COMMIT
+155:@db_name testdb1: COMMIT;
+COMMIT
+156:@db_name testdb1: COMMIT;
+COMMIT
+157:@db_name testdb1: COMMIT;
+COMMIT
+158:@db_name testdb1: COMMIT;
+COMMIT
+159:@db_name testdb1: COMMIT;
+COMMIT
+160:@db_name testdb1: COMMIT;
+COMMIT
+161:@db_name testdb1: COMMIT;
+COMMIT
+162:@db_name testdb1: COMMIT;
+COMMIT
+163:@db_name testdb1: COMMIT;
+COMMIT
+164:@db_name testdb1: COMMIT;
+COMMIT
+165:@db_name testdb1: COMMIT;
+COMMIT
+166:@db_name testdb1: COMMIT;
+COMMIT
+167:@db_name testdb1: COMMIT;
+COMMIT
+168:@db_name testdb1: COMMIT;
+COMMIT
+169:@db_name testdb1: COMMIT;
+COMMIT
+170:@db_name testdb1: COMMIT;
+COMMIT
+171:@db_name testdb1: COMMIT;
+COMMIT
+172:@db_name testdb1: COMMIT;
+COMMIT
+173:@db_name testdb1: COMMIT;
+COMMIT
+174:@db_name testdb1: COMMIT;
+COMMIT
+175:@db_name testdb1: COMMIT;
+COMMIT
+176:@db_name testdb1: COMMIT;
+COMMIT
+177:@db_name testdb1: COMMIT;
+COMMIT
+178:@db_name testdb1: COMMIT;
+COMMIT
+179:@db_name testdb1: COMMIT;
+COMMIT
+180:@db_name testdb1: COMMIT;
+COMMIT
+181:@db_name testdb1: COMMIT;
+COMMIT
+182:@db_name testdb1: COMMIT;
+COMMIT
+183:@db_name testdb1: COMMIT;
+COMMIT
+184:@db_name testdb1: COMMIT;
+COMMIT
+185:@db_name testdb1: COMMIT;
+COMMIT
+186:@db_name testdb1: COMMIT;
+COMMIT
+187:@db_name testdb1: COMMIT;
+COMMIT
+188:@db_name testdb1: COMMIT;
+COMMIT
+189:@db_name testdb1: COMMIT;
+COMMIT
+190:@db_name testdb1: COMMIT;
+COMMIT
+191:@db_name testdb1: COMMIT;
+COMMIT
+192:@db_name testdb1: COMMIT;
+COMMIT
+193:@db_name testdb1: COMMIT;
+COMMIT
+194:@db_name testdb1: COMMIT;
+COMMIT
+195:@db_name testdb1: COMMIT;
+COMMIT
+196:@db_name testdb1: COMMIT;
+COMMIT
+197:@db_name testdb1: COMMIT;
+COMMIT
+198:@db_name testdb1: COMMIT;
+COMMIT
+199:@db_name testdb1: COMMIT;
+COMMIT
+200:@db_name testdb1: COMMIT;
+COMMIT
+201:@db_name testdb1: COMMIT;
+COMMIT
+202:@db_name testdb1: COMMIT;
+COMMIT
+203:@db_name testdb1: COMMIT;
+COMMIT
+204:@db_name testdb1: COMMIT;
+COMMIT
+205:@db_name testdb1: COMMIT;
+COMMIT
+206:@db_name testdb1: COMMIT;
+COMMIT
+207:@db_name testdb1: COMMIT;
+COMMIT
+208:@db_name testdb1: COMMIT;
+COMMIT
+209:@db_name testdb1: COMMIT;
+COMMIT
+210:@db_name testdb1: COMMIT;
+COMMIT
+211:@db_name testdb1: COMMIT;
+COMMIT
+212:@db_name testdb1: COMMIT;
+COMMIT
+213:@db_name testdb1: COMMIT;
+COMMIT
+214:@db_name testdb1: COMMIT;
+COMMIT
+215:@db_name testdb1: COMMIT;
+COMMIT
+216:@db_name testdb1: COMMIT;
+COMMIT
+217:@db_name testdb1: COMMIT;
+COMMIT
+218:@db_name testdb1: COMMIT;
+COMMIT
+219:@db_name testdb1: COMMIT;
+COMMIT
+220:@db_name testdb1: COMMIT;
+COMMIT
+221:@db_name testdb1: COMMIT;
+COMMIT
+222:@db_name testdb1: COMMIT;
+COMMIT
+223:@db_name testdb1: COMMIT;
+COMMIT
+224:@db_name testdb1: COMMIT;
+COMMIT
+225:@db_name testdb1: COMMIT;
+COMMIT
+226:@db_name testdb1: COMMIT;
+COMMIT
+227:@db_name testdb1: COMMIT;
+COMMIT
+228:@db_name testdb1: COMMIT;
+COMMIT
+229:@db_name testdb1: COMMIT;
+COMMIT
+230:@db_name testdb1: COMMIT;
+COMMIT
+231:@db_name testdb1: COMMIT;
+COMMIT
+232:@db_name testdb1: COMMIT;
+COMMIT
+233:@db_name testdb1: COMMIT;
+COMMIT
+234:@db_name testdb1: COMMIT;
+COMMIT
+235:@db_name testdb1: COMMIT;
+COMMIT
+236:@db_name testdb1: COMMIT;
+COMMIT
+237:@db_name testdb1: COMMIT;
+COMMIT
+238:@db_name testdb1: COMMIT;
+COMMIT
+239:@db_name testdb1: COMMIT;
+COMMIT
+240:@db_name testdb1: COMMIT;
+COMMIT
+241:@db_name testdb1: COMMIT;
+COMMIT
+242:@db_name testdb1: COMMIT;
+COMMIT
+243:@db_name testdb1: COMMIT;
+COMMIT
+244:@db_name testdb1: COMMIT;
+COMMIT
+245:@db_name testdb1: COMMIT;
+COMMIT
+246:@db_name testdb1: COMMIT;
+COMMIT
+247:@db_name testdb1: COMMIT;
+COMMIT
+248:@db_name testdb1: COMMIT;
+COMMIT
+249:@db_name testdb1: COMMIT;
+COMMIT
+250:@db_name testdb1: COMMIT;
+COMMIT
+251:@db_name testdb1: COMMIT;
+COMMIT
+252:@db_name testdb1: COMMIT;
+COMMIT
+253:@db_name testdb1: COMMIT;
+COMMIT
+254:@db_name testdb1: COMMIT;
+COMMIT
+255:@db_name testdb1: COMMIT;
+COMMIT
+256:@db_name testdb1: COMMIT;
+COMMIT
+
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+4q: ... <quitting>
+5q: ... <quitting>
+6q: ... <quitting>
+7q: ... <quitting>
+8q: ... <quitting>
+9q: ... <quitting>
+10q: ... <quitting>
+11q: ... <quitting>
+12q: ... <quitting>
+13q: ... <quitting>
+14q: ... <quitting>
+15q: ... <quitting>
+16q: ... <quitting>
+17q: ... <quitting>
+18q: ... <quitting>
+19q: ... <quitting>
+20q: ... <quitting>
+21q: ... <quitting>
+22q: ... <quitting>
+23q: ... <quitting>
+24q: ... <quitting>
+25q: ... <quitting>
+26q: ... <quitting>
+27q: ... <quitting>
+28q: ... <quitting>
+29q: ... <quitting>
+30q: ... <quitting>
+31q: ... <quitting>
+32q: ... <quitting>
+33q: ... <quitting>
+34q: ... <quitting>
+35q: ... <quitting>
+36q: ... <quitting>
+37q: ... <quitting>
+38q: ... <quitting>
+39q: ... <quitting>
+40q: ... <quitting>
+41q: ... <quitting>
+42q: ... <quitting>
+43q: ... <quitting>
+44q: ... <quitting>
+45q: ... <quitting>
+46q: ... <quitting>
+47q: ... <quitting>
+48q: ... <quitting>
+49q: ... <quitting>
+50q: ... <quitting>
+51q: ... <quitting>
+52q: ... <quitting>
+53q: ... <quitting>
+54q: ... <quitting>
+55q: ... <quitting>
+56q: ... <quitting>
+57q: ... <quitting>
+58q: ... <quitting>
+59q: ... <quitting>
+60q: ... <quitting>
+61q: ... <quitting>
+62q: ... <quitting>
+63q: ... <quitting>
+64q: ... <quitting>
+65q: ... <quitting>
+66q: ... <quitting>
+67q: ... <quitting>
+68q: ... <quitting>
+69q: ... <quitting>
+70q: ... <quitting>
+71q: ... <quitting>
+72q: ... <quitting>
+73q: ... <quitting>
+74q: ... <quitting>
+75q: ... <quitting>
+76q: ... <quitting>
+77q: ... <quitting>
+78q: ... <quitting>
+79q: ... <quitting>
+80q: ... <quitting>
+81q: ... <quitting>
+82q: ... <quitting>
+83q: ... <quitting>
+84q: ... <quitting>
+85q: ... <quitting>
+86q: ... <quitting>
+87q: ... <quitting>
+88q: ... <quitting>
+89q: ... <quitting>
+90q: ... <quitting>
+91q: ... <quitting>
+92q: ... <quitting>
+93q: ... <quitting>
+94q: ... <quitting>
+95q: ... <quitting>
+96q: ... <quitting>
+97q: ... <quitting>
+98q: ... <quitting>
+99q: ... <quitting>
+100q: ... <quitting>
+101q: ... <quitting>
+102q: ... <quitting>
+103q: ... <quitting>
+104q: ... <quitting>
+105q: ... <quitting>
+106q: ... <quitting>
+107q: ... <quitting>
+108q: ... <quitting>
+109q: ... <quitting>
+110q: ... <quitting>
+111q: ... <quitting>
+112q: ... <quitting>
+113q: ... <quitting>
+114q: ... <quitting>
+115q: ... <quitting>
+116q: ... <quitting>
+117q: ... <quitting>
+118q: ... <quitting>
+119q: ... <quitting>
+120q: ... <quitting>
+121q: ... <quitting>
+122q: ... <quitting>
+123q: ... <quitting>
+124q: ... <quitting>
+125q: ... <quitting>
+126q: ... <quitting>
+127q: ... <quitting>
+128q: ... <quitting>
+129q: ... <quitting>
+130q: ... <quitting>
+131q: ... <quitting>
+132q: ... <quitting>
+133q: ... <quitting>
+134q: ... <quitting>
+135q: ... <quitting>
+136q: ... <quitting>
+137q: ... <quitting>
+138q: ... <quitting>
+139q: ... <quitting>
+140q: ... <quitting>
+141q: ... <quitting>
+142q: ... <quitting>
+143q: ... <quitting>
+144q: ... <quitting>
+145q: ... <quitting>
+146q: ... <quitting>
+147q: ... <quitting>
+148q: ... <quitting>
+149q: ... <quitting>
+150q: ... <quitting>
+151q: ... <quitting>
+152q: ... <quitting>
+153q: ... <quitting>
+154q: ... <quitting>
+155q: ... <quitting>
+156q: ... <quitting>
+157q: ... <quitting>
+158q: ... <quitting>
+159q: ... <quitting>
+160q: ... <quitting>
+161q: ... <quitting>
+162q: ... <quitting>
+163q: ... <quitting>
+164q: ... <quitting>
+165q: ... <quitting>
+166q: ... <quitting>
+167q: ... <quitting>
+168q: ... <quitting>
+169q: ... <quitting>
+170q: ... <quitting>
+171q: ... <quitting>
+172q: ... <quitting>
+173q: ... <quitting>
+174q: ... <quitting>
+175q: ... <quitting>
+176q: ... <quitting>
+177q: ... <quitting>
+178q: ... <quitting>
+179q: ... <quitting>
+180q: ... <quitting>
+181q: ... <quitting>
+182q: ... <quitting>
+183q: ... <quitting>
+184q: ... <quitting>
+185q: ... <quitting>
+186q: ... <quitting>
+187q: ... <quitting>
+188q: ... <quitting>
+189q: ... <quitting>
+190q: ... <quitting>
+191q: ... <quitting>
+192q: ... <quitting>
+193q: ... <quitting>
+194q: ... <quitting>
+195q: ... <quitting>
+196q: ... <quitting>
+197q: ... <quitting>
+198q: ... <quitting>
+199q: ... <quitting>
+200q: ... <quitting>
+201q: ... <quitting>
+202q: ... <quitting>
+203q: ... <quitting>
+204q: ... <quitting>
+205q: ... <quitting>
+206q: ... <quitting>
+207q: ... <quitting>
+208q: ... <quitting>
+209q: ... <quitting>
+210q: ... <quitting>
+211q: ... <quitting>
+212q: ... <quitting>
+213q: ... <quitting>
+214q: ... <quitting>
+215q: ... <quitting>
+216q: ... <quitting>
+217q: ... <quitting>
+218q: ... <quitting>
+219q: ... <quitting>
+220q: ... <quitting>
+221q: ... <quitting>
+222q: ... <quitting>
+223q: ... <quitting>
+224q: ... <quitting>
+225q: ... <quitting>
+226q: ... <quitting>
+227q: ... <quitting>
+228q: ... <quitting>
+229q: ... <quitting>
+230q: ... <quitting>
+231q: ... <quitting>
+232q: ... <quitting>
+233q: ... <quitting>
+234q: ... <quitting>
+235q: ... <quitting>
+236q: ... <quitting>
+237q: ... <quitting>
+238q: ... <quitting>
+239q: ... <quitting>
+240q: ... <quitting>
+241q: ... <quitting>
+242q: ... <quitting>
+243q: ... <quitting>
+244q: ... <quitting>
+245q: ... <quitting>
+246q: ... <quitting>
+247q: ... <quitting>
+248q: ... <quitting>
+249q: ... <quitting>
+250q: ... <quitting>
+251q: ... <quitting>
+252q: ... <quitting>
+253q: ... <quitting>
+254q: ... <quitting>
+255q: ... <quitting>
+256q: ... <quitting>

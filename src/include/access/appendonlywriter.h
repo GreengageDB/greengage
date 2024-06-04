@@ -177,6 +177,12 @@ typedef struct AOSegfileStatus
 	bool		aborted;
 } AOSegfileStatus;
 
+typedef struct AORelHashKey
+{
+	Oid dbid;
+	Oid relid;
+} AORelHashKey;
+
 /*
  * Describes the status of all file segments of an AO relation in the system.
  * This data structure is kept in a hash table on the master and kept up to
@@ -189,10 +195,9 @@ typedef struct AOSegfileStatus
  */
 typedef struct AORelHashEntryData
 {
-	Oid			relid;
+	AORelHashKey key;
 	int			txns_using_rel;
 	AOSegfileStatus relsegfiles[MAX_AOREL_CONCURRENCY];
-
 } AORelHashEntryData;
 typedef AORelHashEntryData *AORelHashEntry;
 

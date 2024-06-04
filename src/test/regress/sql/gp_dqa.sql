@@ -247,3 +247,63 @@ select count(distinct a), count(distinct b) from dqa_f4 group by c;
 reset optimizer_enable_multiple_distinct_aggs;
 
 drop table dqa_f4;
+
+-- Test corner case of mdqa as groupkey is constant
+create table dqa_f5(a int, b int, c int, d int);
+
+set optimizer_enable_multiple_distinct_aggs=on;
+explain (costs off)
+with tmp_result as (
+    select
+        a, b, count(distinct c), count(distinct d)
+    from dqa_f5
+    where a = 1
+    group by a,b
+    )
+select * from tmp_result where b=1;
+
+explain (costs off)
+with tmp_result as (
+    select
+        a, d, count(distinct b), count(distinct c)
+    from dqa_f5
+    where a = 1
+    group by a,d
+    )
+select * from tmp_result where d=1;
+
+alter table dqa_f5 set distributed randomly;
+explain (costs off)
+with tmp_result as (
+    select
+        a, b, count(distinct c), count(distinct d)
+    from dqa_f5
+    where a = 1
+    group by a,b
+    )
+select * from tmp_result where b=1;
+
+alter table dqa_f5 set distributed by (a,b,c);
+explain (costs off)
+with tmp_result as (
+    select
+        a, b, count(distinct c), count(distinct d)
+    from dqa_f5
+    where a = 1
+    group by a,b
+    )
+select * from tmp_result where b=1;
+
+alter table dqa_f5 set distributed by (a,b);
+explain (costs off)
+with tmp_result as (
+    select
+        a, b, count(distinct c), count(distinct d)
+    from dqa_f5
+    where a = 1
+    group by a,b
+    )
+select * from tmp_result where b=1;
+
+reset optimizer_enable_multiple_distinct_aggs;
+drop table dqa_f5;

@@ -1,3 +1,9 @@
+-- we ingore this in global init-file, replace words here
+-- so that we can let only this case tested in this sql.
+-- start_matchsubs
+-- m/WARNING:  creating a table with no columns./
+-- s/WARNING:  creating a table with no columns./WARNING:  create a table with no columns (misc_jiras)./
+-- end_matchsubs
 drop schema if exists misc_jiras;
 NOTICE:  schema "misc_jiras" does not exist, skipping
 create schema misc_jiras;
@@ -104,3 +110,58 @@ from t_record_type_param_dispatch t;
 (0 rows)
 
 drop table t_record_type_param_dispatch;
+-- Github Issue 17271
+-- test create zero-column table will throw warning only on QD
+-- test policy on each segment (including coordinator)
+create table t_17271();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+WARNING:  creating a table with no columns.
+-- coordinator policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_distribution_policy where localoid = 't_17271'::regclass::oid;
+ localoid | policytype | numsegments | distkey | distclass 
+----------+------------+-------------+---------+-----------
+ t_17271  | p          |           3 |         | 
+(1 row)
+
+-- segment policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_dist_random('gp_distribution_policy') where localoid = 't_17271'::regclass::oid;
+ localoid | policytype | numsegments | distkey | distclass 
+----------+------------+-------------+---------+-----------
+ t_17271  | p          |           3 |         | 
+ t_17271  | p          |           3 |         | 
+ t_17271  | p          |           3 |         | 
+(3 rows)
+
+drop table t_17271;
+-- test for no column table CTAS
+-- these tables should distributed randomly
+create table t1_17271(a int, b varchar(20)) distributed by (a);
+create table t2_17271 as
+select distinct on (b) from t1_17271;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '???' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  creating a table with no columns.
+select * from t2_17271;
+--
+(0 rows)
+
+-- coordinator policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_distribution_policy where localoid = 't2_17271'::regclass::oid;
+ localoid | policytype | numsegments | distkey | distclass 
+----------+------------+-------------+---------+-----------
+ t2_17271 | p          |           3 |         | 
+(1 row)
+
+-- segment policy
+select localoid::regclass::text, policytype,numsegments,distkey,distclass
+from gp_dist_random('gp_distribution_policy') where localoid = 't2_17271'::regclass::oid;
+ localoid | policytype | numsegments | distkey | distclass 
+----------+------------+-------------+---------+-----------
+ t2_17271 | p          |           3 |         | 
+ t2_17271 | p          |           3 |         | 
+ t2_17271 | p          |           3 |         | 
+(3 rows)
+

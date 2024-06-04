@@ -949,6 +949,9 @@ ProcKill(int code, Datum arg)
 	Assert(MyProc != NULL);
 
 	SIMPLE_FAULT_INJECTOR("proc_kill");
+	/* not safe if forked by system(), etc. */
+	if (MyProc->pid != (int) getpid())
+		elog(PANIC, "ProcKill() called in child process");
 
 	/* Make sure we're out of the sync rep lists */
 	SyncRepCleanupAtProcExit();
@@ -1075,6 +1078,10 @@ AuxiliaryProcKill(int code, Datum arg)
 	PGPROC	   *proc;
 
 	Assert(proctype >= 0 && proctype < NUM_AUXILIARY_PROCS);
+
+	/* not safe if forked by system(), etc. */
+	if (MyProc->pid != (int) getpid())
+		elog(PANIC, "AuxiliaryProcKill() called in child process");
 
 	auxproc = &AuxiliaryProcs[proctype];
 
@@ -1958,8 +1965,6 @@ ResProcSleep(LOCKMODE lockmode, LOCALLOCK *locallock, void *incrementSet)
 	uint32		hashcode = locallock->hashcode;
 	LWLockId	partitionLock = LockHashPartitionLock(hashcode);
 
-	bool		selflock = true;		/* initialize result for error. */
-
 	/*
 	 * Don't check my held locks, as we just add at the end of the queue.
 	 */
@@ -1977,16 +1982,6 @@ ResProcSleep(LOCKMODE lockmode, LOCALLOCK *locallock, void *incrementSet)
 	MyProc->waitLockMode = lockmode;
 
 	MyProc->waitStatus = STATUS_WAITING;
-
-	/* Now check the status of the self lock footgun. */
-	selflock = ResCheckSelfDeadLock(lock, proclock, incrementSet);
-	if (selflock)
-	{
-		LWLockRelease(partitionLock);
-		ereport(ERROR,
-				(errcode(ERRCODE_T_R_DEADLOCK_DETECTED),
-				 errmsg("deadlock detected, locking against self")));
-	}
 
 	/* Mark that we are waiting for a lock */
 	lockAwaited = locallock;
@@ -2235,6 +2230,8 @@ ResLockWaitCancel(void)
 		}
 		else
 			disable_timeout(DEADLOCK_TIMEOUT, false);
+
+		SIMPLE_FAULT_INJECTOR("res_lock_wait_cancel_before_partition_lock");
 
 		/* Unlink myself from the wait queue, if on it  */
 		partitionLock = LockHashPartitionLock(lockAwaited->hashcode);

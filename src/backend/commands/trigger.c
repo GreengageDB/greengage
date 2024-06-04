@@ -2517,6 +2517,10 @@ ExecBRUpdateTriggers(EState *estate, EPQState *epqstate,
 	 */
 	if (newSlot != NULL)
 	{
+		/*
+		 * estate->es_junkFilter is used for SELECT,
+		 * Here we should use relinfo->ri_junkFilter instead of estate->es_junkFilter.
+		 */
 		slot = ExecFilterJunk(relinfo->ri_junkFilter, newSlot);
 		slottuple = ExecFetchSlotHeapTuple(slot);
 		newtuple = slottuple;

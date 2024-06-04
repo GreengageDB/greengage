@@ -2739,6 +2739,7 @@ CommitTransaction(void)
 
 	if (notifyCommittedDtxTransactionIsNeeded())
 	{
+		SIMPLE_FAULT_INJECTOR("before_notify_commited_dtx_transaction");
 		/*
 		 * Do 2nd phase of commit to all QE. NOTE: we can't process
 		 * signals (which may attempt to abort our now partially-completed

@@ -31,6 +31,7 @@
 #include "utils/memutils.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
+#include "storage/gp_compress.h"
 
 /*
  * Confusingly, RELOPT_KIND_HEAP is also used for AO/CO tables. To reduce
@@ -1024,13 +1025,13 @@ validate_and_adjust_options(StdRdOptions *result,
 
 		if (result->compresstype[0] &&
 			(pg_strcasecmp(result->compresstype, "rle_type") == 0) &&
-			(result->compresslevel > 4))
+			(result->compresslevel > RLE_MAX_LEVEL))
 		{
 			if (validate)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("compresslevel=%d is out of range for rle_type (should be in the range 1 to 4)",
-								result->compresslevel)));
+						 errmsg("compresslevel=%d is out of range for rle_type (should be in the range 1 to %d)",
+								result->compresslevel, RLE_MAX_LEVEL)));
 
 			result->compresslevel = setDefaultCompressionLevel(result->compresstype);
 		}
@@ -1266,7 +1267,7 @@ validateAppendOnlyRelOptions(bool ao,
 								complevel)));
 		}
 		if (comptype && (pg_strcasecmp(comptype, "rle_type") == 0) &&
-			(complevel < 0 || complevel > 4))
+			(complevel < 0 || complevel > RLE_MAX_LEVEL))
 		{
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),

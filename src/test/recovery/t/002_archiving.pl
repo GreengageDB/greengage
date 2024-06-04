@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use PostgresNode;
 use TestLib;
-use Test::More tests => 22;
+use Test::More tests => 11;
 use File::Copy;
 
 # Initialize master node, doing archives
@@ -119,10 +119,6 @@ $node_standby->poll_query_until('postgres', $query)
   or die "Timed out while waiting for standby to receive the latest wal file";
 
 $node_standby->promote;
-# wait for the partial file to get archived
-my $archiver_query = "select count(*) = 1 from pg_stat_archiver where last_archived_wal >= '$latest_wal_filename_old_timeline.partial';";
-$node_standby->poll_query_until('postgres', $archiver_query)
-  or die "Timed out while waiting for the partial wal file to be archived by the standby";
 
 $node_standby->safe_psql('postgres',
 	"INSERT INTO test_partial_wal SELECT generate_series(1,1000)");
@@ -164,13 +160,16 @@ $node_master->safe_psql('postgres',
 sub post_standby_promotion_tests
 {
 	#assert that 0000100004 exists on master
-	ok(-f "$latest_wal_filepath_old_timeline", 'latest wal file from the old timeline exists on master');
+	wait_until_file_exists($latest_wal_filepath_old_timeline, "latest wal file from the old timeline to exist on master");
+
 	#assert that 0000100004.partial exists on standby
-	ok(-f $node_standby->data_dir . $partial_wal_file_path, 'partial wal file from the old timeline exists on standby');
+	wait_until_file_exists($node_standby->data_dir . $partial_wal_file_path, "partial wal file from the old timeline to exist on standby");
+
 	#assert that 0000100004.partial.done exists on standby
-	ok(-f $node_standby->data_dir . $partial_done_file_path, 'partial done file from the old timeline exists on standby');
+	wait_until_file_exists($node_standby->data_dir . $partial_done_file_path, "partial done file from the old timeline to exist on standby");
+
 	#assert that 0000100004.partial got archived
-	ok(-f "$archived_partial_wal_file", 'latest partial wal file from the old timeline has been archived');
+	wait_until_file_exists($archived_partial_wal_file, "latest partial wal file from the old timeline to be archived");
 
 	#assert that 0000100004.partial doesn't exist on master
 	ok(!-f $node_master->data_dir . $partial_wal_file_path, 'partial wal file from the old timeline should not exist on master');
@@ -187,19 +186,22 @@ sub post_standby_promotion_tests
 sub post_master_stop_tests
 {
 	#assert that 0000100004 still exists on master
-	ok(-f "$latest_wal_filepath_old_timeline", 'latest wal file from the old timeline exists on master');
+	wait_until_file_exists($latest_wal_filepath_old_timeline, "latest wal file from the old timeline to exist on master");
+
 	#assert that 0000100004.done exists on master
-	ok(-f $node_master->data_dir . $latest_done_old_timeline, 'done file from the old timeline should exist on master');
+	wait_until_file_exists($node_master->data_dir . $latest_done_old_timeline, "done file from the old timeline to exist on master");
+
 	#assert that 0000100004 is archived
-	ok(-f "$latest_archived_wal_old_timeline", 'latest wal file from the old timeline should be archived');
+	wait_until_file_exists($latest_archived_wal_old_timeline, "latest wal file from the old timeline to be archived");
 }
 
 sub post_pg_rewind_tests
 {
 	#assert that 0000100004.partial exists on master
-	ok(-f $node_master->data_dir . $partial_wal_file_path, 'latest partial wal file from the old timeline exists on master');
+	wait_until_file_exists($node_master->data_dir . $partial_wal_file_path, "latest partial wal file from the old timeline to exist on master");
+
 	#assert that 0000100004.partial.done exists on master
-	ok(-f $node_master->data_dir . $partial_done_file_path, 'latest partial done file from the old timeline exists on master');
+	wait_until_file_exists($node_master->data_dir . $partial_done_file_path, "latest partial done file from the old timeline to exist on master");
 
 	#assert that 0000100004 does not exist on master
 	ok(!-f "$latest_wal_filepath_old_timeline", 'latest wal file from the old timeline exists should not exist on standby');
@@ -207,7 +209,8 @@ sub post_pg_rewind_tests
 	ok(!-f $node_master->data_dir . $latest_done_old_timeline, 'latest done file from the old timeline should not exist on master');
 
 	#assert that 0000100004 is still archived
-	ok(-f "$latest_archived_wal_old_timeline", 'latest wal file from the old timeline should still be archived');
+	wait_until_file_exists($latest_archived_wal_old_timeline, "latest wal file from the old timeline to be archived");
+
 	#partial wal file is still archived
-	ok(-f "$archived_partial_wal_file", 'latest partial wal file from the old timeline should still be archived');
+	wait_until_file_exists($archived_partial_wal_file, "latest partial wal file from the old timeline to be archived");
 }
