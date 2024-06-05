@@ -36,7 +36,7 @@ jobs:
       - name: Get Greenplum version variables
         id: vars
         run: |
-          remote_repo='https://github.com/greenplum-db/gpdb.git'
+          remote_repo='https://github.com/arenadata/gpdb.git'
           git ls-remote --tags --refs --sort='v:refname' $remote_repo '7.*' | grep -v '-' | tail -n 1  > baseline_version_ref
           baseline_ref=$(cat baseline_version_ref | awk '{print $1}')
           baseline_version=$(cat baseline_version_ref | awk '{print $2}')
@@ -69,7 +69,7 @@ jobs:
           - build-latest
         include:
           - name: build-baseline
-            repo: greenplum-db/gpdb
+            repo: arenadata/gpdb
             ref: ${{ needs.abi-dump-setup.outputs.BASELINE_VERSION }}
           - name: build-latest
             repo: ${{ github.repository }}
