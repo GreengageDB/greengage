@@ -2490,3 +2490,52 @@ SELECT * FROM cte UNION ALL SELECT * FROM cte;
 (2 rows)
 
 DROP TABLE with_test;
+-- Test that planner correctly assigns writer and reader slices in case of
+-- shared modifying CTE.
+CREATE TABLE with_test (i int, j int) DISTRIBUTED RANDOMLY;
+-- start_matchsubs
+-- m/segment \d$/
+-- s/segment \d$/segment N/
+-- end_matchsubs
+EXPLAIN (SLICETABLE, COSTS OFF)
+WITH cte AS (
+	INSERT INTO with_test VALUES (1, 2) RETURNING *
+)
+SELECT i FROM cte a
+JOIN cte b USING (i);
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (a.i = b.i)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: a.i
+               ->  Subquery Scan on a
+                     ->  Shared Scan (share slice:id 2:0)
+         ->  Hash
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Hash Key: b.i
+                     ->  Subquery Scan on b
+                           ->  Shared Scan (share slice:id 3:0)
+                                 ->  Insert on with_test
+                                       ->  Redistribute Motion 1:3  (slice4; segments: 1)
+                                             ->  Result
+ Optimizer: Postgres-based planner
+ Slice 0: Dispatcher; root 0; parent -1; gang size 0
+ Slice 1: Reader; root 0; parent 0; gang size 3
+ Slice 2: Reader; root 0; parent 1; gang size 3
+ Slice 3: Primary Writer; root 0; parent 1; gang size 3
+ Slice 4: Singleton Reader; root 0; parent 3; gang size 1; segment N
+(21 rows)
+
+WITH cte AS (
+	INSERT INTO with_test VALUES (1, 2) RETURNING *
+)
+SELECT i FROM cte a
+JOIN cte b USING (i);
+ i 
+---
+ 1
+(1 row)
+
+DROP TABLE with_test;

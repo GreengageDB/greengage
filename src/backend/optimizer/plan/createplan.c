@@ -4407,13 +4407,30 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 		if (!cteplaninfo->shared_plan)
 		{
 			RelOptInfo *sub_final_rel;
+			GangType	saved_gangType = root->curSlice->gangType;
 
 			sub_final_rel = fetch_upper_rel(best_path->parent->subroot, UPPERREL_FINAL, NULL);
 			subplan = create_plan(best_path->parent->subroot, sub_final_rel->cheapest_total_path, root->curSlice);
 			cteplaninfo->shared_plan = prepare_plan_for_sharing(cteroot, subplan);
+
+			/*
+			 * If gangType has switched, it means that CTE's plan contains
+			 * modifying operation without motion above (otherwise, the
+			 * gangType wouldn't switch). In this case we should mark each
+			 * ShareInputScan as writing slice creator, in order to prevent
+			 * the situation, when consumer gets to the writer gang and producer
+			 * gets to the reader gang (it depends of tree traverse order
+			 * inside the apply_shareinput_dag_to_tree function)
+			 */
+			if (root->curSlice->gangType != saved_gangType &&
+				root->curSlice->gangType == GANGTYPE_PRIMARY_WRITER)
+				cteplaninfo->rootSliceIsWriter = true;
 		}
 		/* Wrap the common Plan tree in a ShareInputScan node */
 		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
+
+		if (cteplaninfo->rootSliceIsWriter)
+			((ShareInputScan *) subplan)->rootSliceIsWriter = true;
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,
