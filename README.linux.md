@@ -57,30 +57,33 @@
     ./README.CentOS.bash
     ```
 
-## For Ubuntu:
+## For Ubuntu (versions 20.04 or 22.04):
 
-- Install Dependencies
-  When you run the README.ubuntu.bash script for dependencies, you will be asked to configure realm for kerberos.
-  You can enter any realm, since this is just for testing, and during testing, it will reconfigure a local server/client.
-  If you want to skip this manual configuration, use:
-  `export DEBIAN_FRONTEND=noninteractive`
-
+- Install dependencies using README.ubuntu.bash script:
   ```bash
   ./README.ubuntu.bash
   ```
 
-- If you want to use gcc-6 and g++-6:
+- Create symbolic link to Python 2 in `/usr/bin`:
 
   ```bash
-  add-apt-repository ppa:ubuntu-toolchain-r/test -y
-  apt-get update
-  apt-get install -y gcc-6 g++-6
+  sudo ln -s python2 /usr/bin/python
   ```
 
-## Common Platform Tasks:
+- Ensure that your system supports American English with an internationally compatible character encoding scheme. To do this, run:
+  ```bash
+  sudo locale-gen "en_US.UTF-8"
+  ```
+  
+- Optionally, installing Kerberos may be required to configure secure access to GPDB. To install Kerberos, run:
+  ```bash
+  sudo apt-get install -y krb5-kdc krb5-admin-server
+  ```
+  Note: You will be asked to configure realm for Kerberos. You can enter any realm, since this is just for testing,
+  and during testing, it will reconfigure a local server/client. If you want to skip this manual configuration, use:
+  `export DEBIAN_FRONTEND=noninteractive`
 
-Make sure that you add `/usr/local/lib` to `/etc/ld.so.conf`,
-then run command `ldconfig`.
+## Common Platform Tasks:
 
 1. Create gpadmin and setup ssh keys
 
@@ -132,19 +135,30 @@ then run command `ldconfig`.
     net.core.rmem_max = 2097152
     net.core.wmem_max = 2097152
     vm.overcommit_memory = 2
-
     EOF'
+    sudo sysctl -p # Apply settings
+    ```      
 
+4. Change user and system limits:
+    ```bash
     sudo bash -c 'cat >> /etc/security/limits.conf <<-EOF
     * soft nofile 65536
     * hard nofile 65536
     * soft nproc 131072
     * hard nproc 131072
-
     EOF'
+    su - $USER # Apply settings
+    ```
 
-    sudo bash -c 'cat >> /etc/ld.so.conf <<-EOF
-    /usr/local/lib
+5. Install the **correct** version of the Xerces-C++ library. 
+To do this, go to [the next step of the main instructions](README.md#xerces).
 
-    EOF'
+6. Update the library cache:
+    ```bash
+    sudo ldconfig
+    ```
+
+7. Make sure that you download yaml and psutil as submodules. To do this, use `git clone --recurse-submodules` when downloading the source code. If you want to update the submodules, run:
+    ```bash
+    git submodule update --init --recursive --force
     ```
