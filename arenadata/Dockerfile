@@ -11,18 +11,18 @@ RUN dnf -y install 'dnf-command(config-manager)' && dnf config-manager --set-ena
 
 # install all software we need
 RUN dnf makecache && \
-    dnf -y install python39-devel && \
+    dnf -y install python3.11-devel && \
     dnf -y install apr-devel bzip2 bzip2-devel expat-devel libcurl-devel && \
     dnf -y install libevent-devel libuuid-devel libxml2-devel libyaml-devel libzstd-devel && \
     dnf -y install openssl-devel pam-devel readline-devel snappy-devel libuv-devel && \
     dnf -y install libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     dnf -y install perl-IPC-Run perl-Test-Base libxslt-devel openldap-devel && \
-    dnf -y install python39-psycopg2 python39-psutil python39-pyyaml python39-lxml && \
+    dnf -y install python3.11-psycopg2 python3.11-pyyaml python3.11-lxml python3.11-pip && \
     dnf -y install llvm-devel clang && \
     dnf clean all && \
     #we install pytest from pypi since the version from the repository does not contain an executable file
     #the rest of the packages are not available in the repository.
-    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave
+    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave psutil
 
 # setup ssh configuration
 RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa && \
