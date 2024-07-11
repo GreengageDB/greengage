@@ -118,16 +118,7 @@ ExecDML(DMLState *node)
 		 */
 		node->ps.state->es_result_relation_info = relInfo;
 	}
-	/* GPDB_91_MERGE_FIXME:
-	 * This kind of node is used by ORCA only. If in the future ORCA still uses
-	 * DML node, canSetTag should be saved in DML plan node and init-ed by
-	 * copying canSetTag value from the parse tree.
-	 *
-	 * For !isUpdate case, ExecInsert() and ExecDelete() should use canSetTag
-	 * value from parse tree, however for isUpdate case, it seems that
-	 * ExecInsert() is run after ExecDelete() so canSetTag should be set
-	 * properly in ExecInsert().
-	 */
+
 	if (DML_INSERT == action)
 	{
 		/* Respect any given tuple Oid when updating a tuple. */
@@ -151,7 +142,7 @@ ExecDML(DMLState *node)
 		ExecInsert(node->cleanedUpSlot,
 				   NULL,
 				   node->ps.state,
-				   true, /* GPDB_91_MERGE_FIXME: canSetTag, where to get this? */
+				   node->canSetTag,
 				   PLANGEN_OPTIMIZER /* Plan origin */,
 				   isUpdate,
 				   InvalidOid);
@@ -197,7 +188,10 @@ ExecDML(DMLState *node)
 				   node->cleanedUpSlot,
 				   NULL /* DestReceiver */,
 				   node->ps.state,
-				   !isUpdate, /* GPDB_91_MERGE_FIXME: where to get canSetTag? */
+				   isUpdate ? false : node->canSetTag, /* if "isUpdate",
+														  ExecInsert() will be run after
+														  ExecDelete() so canSetTag should be set
+														  properly in ExecInsert(). */
 				   PLANGEN_OPTIMIZER /* Plan origin */,
 				   isUpdate);
 	}
@@ -217,6 +211,7 @@ ExecInitDML(DML *node, EState *estate, int eflags)
 	DMLState *dmlstate = makeNode(DMLState);
 	dmlstate->ps.plan = (Plan *)node;
 	dmlstate->ps.state = estate;
+	dmlstate->canSetTag = node->canSetTag;
 	/*
 	 * Initialize es_result_relation_info, just like ModifyTable.
 	 * GPDB_90_MERGE_FIXME: do we need to consolidate the ModifyTable and DML
@@ -324,6 +319,21 @@ ExecInitDML(DML *node, EState *estate, int eflags)
 			operation != CMD_DELETE)
 		{
 			ExecOpenIndices(resultRelInfo);
+		}
+	}
+
+	/*
+	 * If table is replicated, update es_processed only at one segment.
+	 * It allows not to adjust es_processed at QD after all executors send
+	 * the same value of es_processed.
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE)
+	{
+		struct GpPolicy *cdbpolicy = resultRelInfo->ri_RelationDesc->rd_cdbpolicy;
+		if (GpPolicyIsReplicated(cdbpolicy) &&
+			GpIdentity.segindex != (gp_session_id % cdbpolicy->numsegments))
+		{
+			dmlstate->canSetTag = false;
 		}
 	}
 
