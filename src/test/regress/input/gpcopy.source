@@ -1137,6 +1137,60 @@ COPY COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION to '/tmp/COPY_ON_SEGMENT_CHECK_D
 COPY COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION<SEGID>.csv' ON SEGMENT CSV;
 
 -- start_ignore
+DROP TABLE IF EXISTS part_table, tmp_table;
+\! rm -f /tmp/table_data
+-- end_ignore
+
+-- COPY TO root, leaf and mid-level partitions
+-- Create test table
+CREATE TABLE part_table (id INT, a INT, b INT , c TEXT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (a)
+SUBPARTITION BY LIST (c)
+SUBPARTITION TEMPLATE
+( SUBPARTITION part_a VALUES ('a'),
+  SUBPARTITION part_b VALUES ('b'))
+(START (0) INCLUSIVE
+ END (3) EXCLUSIVE
+ EVERY (1));
+-- Generate data file with data for more than one partitions
+CREATE TABLE tmp_table (LIKE part_table);
+INSERT INTO tmp_table SELECT a, 1, a, 'a' FROM generate_series(1, 100)a;
+INSERT INTO tmp_table SELECT a, 1, a, 'b' FROM generate_series(1, 100)a;
+COPY tmp_table TO '/tmp/table_data';
+-- Copy to the mid-level partition should fail
+COPY part_table_1_prt_2 FROM '/tmp/table_data';
+-- Copy to the leaf partition should use check constraint and fail
+COPY part_table_1_prt_2_2_prt_part_a FROM '/tmp/table_data';
+-- Copy to the root partition should be success
+COPY part_table FROM '/tmp/table_data';
+-- Check the result
+SELECT count() FROM part_table;
+-- Cleanup tables
+TRUNCATE TABLE part_table;
+TRUNCATE TABLE tmp_table;
+\! rm -f /tmp/table_data
+-- Generate data for only one partition
+INSERT INTO tmp_table SELECT a, 1, a, 'a' FROM generate_series(1, 100)a;
+COPY tmp_table TO '/tmp/table_data';
+-- Copy to a mid-level partition should fail
+COPY part_table_1_prt_2 FROM '/tmp/table_data';
+-- Copy to a leaf partition should use check constraint and be success
+COPY part_table_1_prt_2_2_prt_part_a FROM '/tmp/table_data';
+ANALYZE part_table;
+-- Check the result
+SELECT count() FROM part_table;
+-- Cleanup table
+TRUNCATE TABLE part_table;
+-- Copy to a root partition should be success
+COPY part_table FROM '/tmp/table_data';
+-- Check the result
+SELECT count() FROM part_table;
+-- Cleanup
+DROP TABLE IF EXISTS part_table, tmp_table;
+\! rm -f /tmp/table_data
+
+-- start_ignore
 DROP TABLE IF EXISTS LINEITEM_1;
 DROP TABLE IF EXISTS LINEITEM_2;
 DROP TABLE IF EXISTS LINEITEM_3;
