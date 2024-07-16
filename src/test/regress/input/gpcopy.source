@@ -1478,7 +1478,7 @@ abort;
 
 -- start_ignore
 create language plpythonu;
--- end_ingore
+-- end_ignore
 
 create function get_file_lines_12700(segid int) returns int
 as
