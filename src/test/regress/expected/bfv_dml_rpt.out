@@ -1,0 +1,67 @@
+-- Check, that SELECT over CTE, which contains DML, works without an error
+DO $$
+DECLARE
+    res INT;
+BEGIN
+    CREATE TEMPORARY TABLE t_test(a INT) DISTRIBUTED REPLICATED;
+
+    WITH cte AS (
+        INSERT INTO t_test(a) VALUES (1), (2), (3) RETURNING a
+    ) SELECT sum(a) FROM cte INTO res;
+    RAISE NOTICE '%', res;
+
+    WITH cte AS (
+        UPDATE t_test SET a = a+1 RETURNING a
+    ) SELECT sum(a) FROM cte INTO res;
+    RAISE NOTICE '%', res;
+
+    WITH cte AS (
+        DELETE FROM t_test WHERE a < 4 RETURNING a
+    ) SELECT sum(a) FROM cte INTO res;
+    RAISE NOTICE '%', res;
+
+    DROP TABLE t_test;
+END;
+$$;
+NOTICE:  6
+NOTICE:  9
+NOTICE:  5
+-- Check, that INSERT produce the error with correct explanation
+DO $$
+DECLARE
+    res INT;
+BEGIN
+    CREATE TEMPORARY TABLE t_test(a INT) DISTRIBUTED REPLICATED;
+    INSERT INTO t_test(a) VALUES (1), (2), (3) RETURNING a INTO res;
+    RAISE NOTICE '%', res;
+    DROP TABLE t_test;
+END;
+$$;
+ERROR:  query returned more than one row
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at SQL statement
+-- Check, that INSERT will be executed without an error
+DO $$
+DECLARE
+    res INT;
+BEGIN
+    CREATE TEMPORARY TABLE t_test(a INT) DISTRIBUTED REPLICATED;
+    INSERT INTO t_test(a) VALUES (1) RETURNING a INTO res;
+    RAISE NOTICE '%', res;
+    DROP TABLE t_test;
+END;
+$$;
+NOTICE:  1
+-- Check correct work at the utility mode
+CREATE TABLE t_test(a int) DISTRIBUTED REPLICATED;
+INSERT INTO t_test(a) VALUES (1), (2), (3);
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'UPDATE t_test SET a = 1 WHERE a = 2;'
+UPDATE 1
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'SELECT * FROM t_test ORDER BY 1;'
+ a 
+---
+ 1
+ 1
+ 3
+(3 rows)
+
+DROP TABLE t_test;

@@ -193,7 +193,7 @@ test: minirepro
 test: gporca_faults
 
 # Tests for replicated table
-test: rpt rpt_joins rpt_tpch rpt_returning
+test: rpt rpt_joins rpt_tpch rpt_returning bfv_dml_rpt
 
 # NOTE: The bfv_temp test assumes that there are no temporary tables in
 # other sessions. Therefore the other tests in this group mustn't create

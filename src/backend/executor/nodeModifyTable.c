@@ -3345,6 +3345,22 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 											   estate->es_auxmodifytables);
 	}
 
+	/*
+	 * If table is replicated, update es_processed only at one segment.
+	 * It allows not to adjust es_processed at QD after all executors send
+	 * the same value of es_processed.
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE)
+	{
+		struct GpPolicy *cdbpolicy = mtstate->resultRelInfo->ri_RelationDesc->rd_cdbpolicy;
+		if (GpPolicyIsReplicated(cdbpolicy) &&
+			GpIdentity.segindex != (gp_session_id % cdbpolicy->numsegments))
+		{
+			mtstate->canSetTag = false;
+		}
+	}
+
+
 	return mtstate;
 }
 

@@ -1570,9 +1570,15 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 		/* collect pgstat from QEs for current transaction level */
 		pgstat_combine_from_qe(pr, primaryWriterSliceIndex);
 
-		/* get num of rows processed from writer QEs. */
-		estate->es_processed +=
-			cdbdisp_sumCmdTuples(pr, primaryWriterSliceIndex);
+		/*
+		 * get num of rows processed from writer QEs.
+		 * Do not modify es_processed if it is not zero. Because
+		 * es_processed save info about tuples, which were really processed,
+		 * and limit was used (not to process tuples more than limit).
+		 */
+		if (0 == estate->es_processed)
+			estate->es_processed =
+				cdbdisp_sumCmdTuples(pr, primaryWriterSliceIndex);
 
 		/* sum up rejected rows if any (single row error handling only) */
 		cdbdisp_sumRejectedRows(pr);

@@ -182,7 +182,6 @@ static char *ExecBuildSlotValueDescription(Oid reloid,
 										   Bitmapset *modifiedCols,
 										   int maxfieldlen);
 static void EvalPlanQualStart(EPQState *epqstate, Plan *planTree);
-static void AdjustReplicatedTableCounts(EState *estate);
 
 /* end of local decls */
 
@@ -2570,9 +2569,6 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 	 */
 	ExecResetTupleTable(estate->es_tupleTable, false);
 
-	/* Adjust INSERT/UPDATE/DELETE count for replicated table ON QD */
-	AdjustReplicatedTableCounts(estate);
-
 	/*
 	 * close indexes of result relation(s) if any.  (Rels themselves get
 	 * closed next.)
@@ -2663,6 +2659,8 @@ ExecutePlan(EState *estate,
 	 */
 	for (;;)
 	{
+		uint64 saved_es_processed = estate->es_processed;
+
 		/* Reset the per-output-tuple exprcontext */
 		ResetPerTupleExprContext(estate);
 
@@ -2722,8 +2720,10 @@ ExecutePlan(EState *estate,
 		 * Count tuples processed, if this is a SELECT.  (For other operation
 		 * types, the ModifyTable plan node must count the appropriate
 		 * events.)
+		 * Do not increment es_processed if it was changed at ExecProcNode.
 		 */
-		if (operation == CMD_SELECT)
+		if ((operation == CMD_SELECT || estate->es_plannedstmt->hasReturning) &&
+			saved_es_processed == estate->es_processed)
 		{
 			(estate->es_processed)++;
 
@@ -4115,47 +4115,6 @@ Node *
 attrMapExpr(TupleConversionMap *map, Node *expr)
 {
 	return apply_attrmap_mutator(expr, map);
-}
-
-/*
- * Adjust INSERT/UPDATE/DELETE count for replicated table ON QD
- */
-static void
-AdjustReplicatedTableCounts(EState *estate)
-{
-	int i;
-	ResultRelInfo *resultRelInfo;
-	bool containReplicatedTable = false;
-	int			numsegments =  1;
-
-	if (Gp_role != GP_ROLE_DISPATCH)
-		return;
-
-	/* check if result_relations contain replicated table*/
-	for (i = 0; i < estate->es_num_result_relations; i++)
-	{
-		resultRelInfo = estate->es_result_relations + i;
-
-		if (!resultRelInfo->ri_RelationDesc->rd_cdbpolicy)
-			continue;
-
-		if (GpPolicyIsReplicated(resultRelInfo->ri_RelationDesc->rd_cdbpolicy))
-		{
-			containReplicatedTable = true;
-			numsegments = resultRelInfo->ri_RelationDesc->rd_cdbpolicy->numsegments;
-		}
-		else if (containReplicatedTable)
-		{
-			/*
-			 * If one is replicated table, error if other tables are not
-			 * replicated table.
- 			 */
-			elog(ERROR, "mix of replicated and non-replicated tables in result_relation is not supported");
-		}
-	}
-
-	if (containReplicatedTable)
-		estate->es_processed = estate->es_processed / numsegments;
 }
 
 /*

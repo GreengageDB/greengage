@@ -2828,39 +2828,15 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, uint64 tcount)
 	{
 		Oid			relationOid = InvalidOid; 	/* relation that is modified */
 		AutoStatsCmdType cmdType = AUTOSTATS_CMDTYPE_SENTINEL; 	/* command type */
-		bool		checkTuples;
 
 		ExecutorStart(queryDesc, 0);
 
 		ExecutorRun(queryDesc, ForwardScanDirection, tcount, true);
 
-		/*
-		 * In GPDB, in a INSERT/UPDATE/DELETE ... RETURNING statement, the
-		 * es_processed counter is only updated in ExecutorEnd, when we
-		 * collect the results from each segment. Therefore, we cannot
-		 * call _SPI_checktuples() just yet.
-		 */
+		_SPI_current->processed = queryDesc->estate->es_processed;
+
 		if ((res == SPI_OK_SELECT || queryDesc->plannedstmt->hasReturning) &&
 			queryDesc->dest->mydest == DestSPI)
-		{
-			checkTuples = true;
-		}
-		else
-			checkTuples = false;
-
-		if (Gp_role == GP_ROLE_DISPATCH)
-			autostats_get_cmdtype(queryDesc, &cmdType, &relationOid);
-
-		ExecutorFinish(queryDesc);
-		ExecutorEnd(queryDesc);
-		/* FreeQueryDesc is done by the caller */
-
-		/*
-		 * Now that ExecutorEnd() has run, set # of rows processed (see comment
-		 * above) and call _SPI_checktuples()
-		 */
-		_SPI_current->processed = queryDesc->es_processed;
-		if (checkTuples)
 		{
 #ifdef FAULT_INJECTOR
 			/*
@@ -2878,6 +2854,13 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, uint64 tcount)
 			}
 #endif /* FAULT_INJECTOR */
 		}
+
+		if (Gp_role == GP_ROLE_DISPATCH)
+			autostats_get_cmdtype(queryDesc, &cmdType, &relationOid);
+
+		ExecutorFinish(queryDesc);
+		ExecutorEnd(queryDesc);
+		/* FreeQueryDesc is done by the caller */
 
 		/* MPP-14001: Running auto_stats */
 		if (Gp_role == GP_ROLE_DISPATCH)
