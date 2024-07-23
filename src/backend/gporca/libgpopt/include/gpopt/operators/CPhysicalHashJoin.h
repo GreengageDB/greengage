@@ -101,7 +101,7 @@ protected:
 	// helper for computing a hashed distribution matching the given distribution
 	CDistributionSpecHashed *PdshashedMatching(
 		CMemoryPool *mp, CDistributionSpecHashed *pdshashed,
-		ULONG ulSourceChild) const;
+		ULONG ulSourceChild, BOOL isPdsReq) const;
 
 	// create (singleton, singleton) optimization request
 	CDistributionSpec *PdsRequiredSingleton(CMemoryPool *mp,

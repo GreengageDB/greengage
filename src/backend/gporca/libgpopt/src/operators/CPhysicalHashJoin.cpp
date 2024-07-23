@@ -292,7 +292,7 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 			// require second child to provide a matching hashed distribution
 			return PdshashedMatching(mp,
 									 CDistributionSpecHashed::PdsConvert(pds),
-									 ulSourceChildIndex);
+									 ulSourceChildIndex, true);
 
 		default:
 			GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pds->Edt() ||
@@ -555,8 +555,10 @@ CDistributionSpecHashed *
 CPhysicalHashJoin::PdshashedMatching(
 	CMemoryPool *mp, CDistributionSpecHashed *pdshashed,
 	ULONG
-		ulSourceChild  // index of child that delivered the given hashed distribution
-) const
+		ulSourceChild,	// index of child that delivered the given hashed distribution
+	// indicates whether function is called within the distribution request (true)
+	// or within property derivation (false) from PdsDeriveFromHashedOuter/PdsDeriveFromReplicatedOuter
+	BOOL isPdsReq) const
 {
 	GPOS_ASSERT(2 > ulSourceChild);
 
@@ -622,26 +624,6 @@ CPhysicalHashJoin::PdshashedMatching(
 			}
 		}
 	}
-	// check if we failed to compute required distribution
-	if (pdrgpexpr->Size() != ulDlvrdSize)
-	{
-		pdrgpexpr->Release();
-		if (nullptr != pdshashed->PdshashedEquiv())
-		{
-			CRefCount::SafeRelease(opfamilies);
-			// try again using the equivalent hashed distribution
-			return PdshashedMatching(mp, pdshashed->PdshashedEquiv(),
-									 ulSourceChild);
-		}
-	}
-	if (pdrgpexpr->Size() != ulDlvrdSize)
-	{
-		// it should never happen, but instead of creating wrong spec, raise an exception
-		GPOS_RAISE(
-			CException::ExmaInvalid, CException::ExmiInvalid,
-			GPOS_WSZ_LIT("Unable to create matching hashed distribution."));
-	}
-
 	// As of now, we cannot set nulls colocation to false for inner joins, because
 	// this logic is used by PdsDeriveFromHashedOuter and PdsDeriveFromReplicatedOuter,
 	// where the property delivered by the inner relation is calculated based on the
@@ -658,6 +640,27 @@ CPhysicalHashJoin::PdshashedMatching(
 		 COperator::EopPhysicalFullHashJoin == Eopid()))
 	{
 		fNullsColocated = false;
+	}
+
+	// check if we failed to compute required distribution
+	// We could fail to find enough key expressions matching the source
+	// distribution, or we need the matching distribution have colocated nulls
+	// but input distribution's nulls are not colocated (only for distribution requests).
+	if (pdrgpexpr->Size() != ulDlvrdSize ||
+		(isPdsReq && fNullsColocated && !pdshashed->FNullsColocated()))
+	{
+		pdrgpexpr->Release();
+		if (nullptr != pdshashed->PdshashedEquiv())
+		{
+			CRefCount::SafeRelease(opfamilies);
+			// try again using the equivalent hashed distribution
+			return PdshashedMatching(mp, pdshashed->PdshashedEquiv(),
+									 ulSourceChild, isPdsReq);
+		}
+		// it should never happen, but instead of creating wrong spec, raise an exception
+		GPOS_RAISE(
+			CException::ExmaInvalid, CException::ExmiInvalid,
+			GPOS_WSZ_LIT("Unable to create matching hashed distribution."));
 	}
 
 	return GPOS_NEW(mp)

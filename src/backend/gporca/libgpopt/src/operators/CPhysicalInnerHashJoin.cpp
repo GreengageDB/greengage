@@ -69,7 +69,7 @@ CPhysicalInnerHashJoin::PdshashedCreateMatching(
 	GPOS_ASSERT(nullptr != pdshashed);
 
 	CDistributionSpecHashed *pdshashedMatching =
-		PdshashedMatching(mp, pdshashed, ulSourceChild);
+		PdshashedMatching(mp, pdshashed, ulSourceChild, false);
 
 	// create a new spec with input and the output spec as equivalents, as you don't want to lose
 	// the already existing equivalent specs of pdshashed
