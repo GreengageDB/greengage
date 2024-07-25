@@ -1,21 +1,20 @@
 use strict;
 use warnings;
-use Cwd;
-use Config;
 use File::Basename qw(basename dirname);
 use File::Compare;
 use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 107 + 25;
+
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 program_help_ok('pg_basebackup');
 program_version_ok('pg_basebackup');
 program_options_handling_ok('pg_basebackup');
 
-my $tempdir = TestLib::tempdir;
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 
 # Set umask so test directories and files are created with default permissions
 umask(0077);
@@ -179,7 +178,7 @@ ok(-f "$tempdir/tarbackup/base.tar", 'backup tar was created');
 rmtree("$tempdir/tarbackup");
 
 ########################## Test that the headers are zeroed out in both the primary and mirror WAL files
-my $node_wal_compare_primary = get_new_node('wal_compare_primary');
+my $node_wal_compare_primary = PostgreSQL::Test::Cluster->new('wal_compare_primary');
 # We need to enable archiving for this test because we depend on the backup history
 # file created by pg_basebackup to retrieve the "STOP WAL LOCATION". This file only
 # gets persisted if archiving is turned on.
@@ -308,7 +307,7 @@ SKIP:
 	# to our physical temp location.  That way we can use shorter names
 	# for the tablespace directories, which hopefully won't run afoul of
 	# the 99 character length limit.
-	my $shorter_tempdir = TestLib::tempdir_short . "/tempdir";
+	my $shorter_tempdir = PostgreSQL::Test::Utils::tempdir_short . "/tempdir";
 	symlink "$tempdir", $shorter_tempdir;
 
 	mkdir "$tempdir/tblspc1";
@@ -739,3 +738,5 @@ ok(-f "$tempdir/backup/internal.auto.conf", 'internal.auto.conf was created');
 ok(-f "$tempdir/backup/postgresql.auto.conf", 'postgresql.auto.conf was created');
 ok(-f "$tempdir/backup/standby.signal",       'standby.signal was created');
 rmtree("$tempdir/backup");
+
+done_testing();

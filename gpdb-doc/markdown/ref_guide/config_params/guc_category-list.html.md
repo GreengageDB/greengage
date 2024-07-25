@@ -32,6 +32,7 @@ These parameters control how clients connect and authenticate to Greenplum Datab
 - [gp_dispatch_keepalives_count](guc-list.html#gp_dispatch_keepalives_count)
 - [gp_dispatch_keepalives_idle](guc-list.html#gp_dispatch_keepalives_idle)
 - [gp_dispatch_keepalives_interval](guc-list.html#gp_dispatch_keepalives_interval)
+- [gp_postmaster_address_family](guc-list.html#gp_postmaster_address_family)
 - [gp_vmem_idle_resource_timeout](guc-list.html#gp_vmem_idle_resource_timeout)
 - [listen_addresses](guc-list.html#listen_addresses)
 - [max_connections](guc-list.html#max_connections)
@@ -230,6 +231,7 @@ These parameters adjust the amount of data sampled by an `ANALYZE` operation. Ad
 Control the query plan execution.
 
 - [gp_max_slices](guc-list.html#gp_max_slices)
+- [gp_max_system_slices](guc-list.html#gp_max_system_slices)
 - [plan_cache_mode](guc-list.html#plan_cache_mode)
 
 ### <a id="topic_jit"></a>JIT Configuration Parameters
@@ -278,6 +280,7 @@ These configuration parameters control Greenplum Database logging.
 - [debug_print_prelim_plan](guc-list.html#debug_print_prelim_plan)
 - [debug_print_rewritten](guc-list.html#debug_print_rewritten)
 - [debug_print_slice_table](guc-list.html#debug_print_slice_table)
+- [debug_shareinput_xslice](guc-list.html#debug_shareinput_xslice)
 - [log_autostats](guc-list.html#log_autostats)
 - [log_connections](guc-list.html#log_connections)
 - [log_directory](guc-list.html#log_directory)

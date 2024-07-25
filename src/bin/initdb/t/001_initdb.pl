@@ -6,11 +6,11 @@ use strict;
 use warnings;
 use Fcntl ':mode';
 use File::stat qw{lstat};
-use PostgresNode;
-use TestLib;
-use Test::More tests => 22;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
-my $tempdir = TestLib::tempdir;
+my $tempdir = PostgreSQL::Test::Utils::tempdir;
 my $xlogdir = "$tempdir/pgxlog";
 my $datadir = "$tempdir/data";
 
@@ -89,3 +89,5 @@ SKIP:
 	ok(check_mode_recursive($datadir_group, 0750, 0640),
 		'check PGDATA permissions');
 }
+
+done_testing();

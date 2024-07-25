@@ -32,7 +32,6 @@ Datum gp_aovisimap(PG_FUNCTION_ARGS);
 Datum
 gp_aovisimap(PG_FUNCTION_ARGS)
 {
-	Oid			aoRelOid = PG_GETARG_OID(0);
 	Datum		values[3];
 	bool		nulls[3];
 	HeapTuple	tuple;
@@ -50,10 +49,18 @@ gp_aovisimap(PG_FUNCTION_ARGS)
 	FuncCallContext *funcctx;
 	Context    *context;
 
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		context = (Context *) funcctx->user_fctx;
+		goto srf_done;
+	}
+
 	if (SRF_IS_FIRSTCALL())
 	{
 		TupleDesc	tupdesc;
 		MemoryContext oldcontext;
+		Oid		aoRelOid = PG_GETARG_OID(0);
 
 		/* create a function context for cross-call persistence */
 		funcctx = SRF_FIRSTCALL_INIT();
@@ -127,6 +134,7 @@ gp_aovisimap(PG_FUNCTION_ARGS)
 		SRF_RETURN_NEXT(funcctx, result);
 	}
 
+srf_done:
 	AppendOnlyVisimapScan_Finish(&context->visiMapScan, AccessShareLock);
 	table_close(context->aorel, AccessShareLock);
 	pfree(context);
@@ -139,7 +147,6 @@ Datum gp_aovisimap_hidden_info(PG_FUNCTION_ARGS);
 Datum
 gp_aovisimap_hidden_info(PG_FUNCTION_ARGS)
 {
-	Oid			aoRelOid = PG_GETARG_OID(0);
 	Datum		values[3];
 	bool		nulls[3];
 	HeapTuple	tuple;
@@ -162,8 +169,17 @@ gp_aovisimap_hidden_info(PG_FUNCTION_ARGS)
 	FuncCallContext *funcctx;
 	Context    *context;
 
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		context = (Context *) funcctx->user_fctx;
+		goto srf_done;
+	}
+
 	if (SRF_IS_FIRSTCALL())
 	{
+		Oid			aoRelOid = PG_GETARG_OID(0);
+
 		TupleDesc	tupdesc;
 		MemoryContext oldcontext;
 		Snapshot	snapshot;
@@ -271,6 +287,7 @@ gp_aovisimap_hidden_info(PG_FUNCTION_ARGS)
 		SRF_RETURN_NEXT(funcctx, result);
 	}
 
+srf_done:
 	AppendOnlyVisimap_Finish(&context->visiMap, AccessShareLock);
 	if (context->appendonlySegfileInfo)
 	{
@@ -318,7 +335,6 @@ gp_aovisimap_encode_bitmap(char *bitmapBuffer, Bitmapset *bms)
 Datum
 gp_aovisimap_entry(PG_FUNCTION_ARGS)
 {
-	Oid			aoRelOid = PG_GETARG_OID(0);
 	Datum		values[4];
 	bool		nulls[4];
 	HeapTuple	tuple;
@@ -339,8 +355,16 @@ gp_aovisimap_entry(PG_FUNCTION_ARGS)
 	FuncCallContext *funcctx;
 	Context    *context;
 
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		context = (Context *) funcctx->user_fctx;
+		goto srf_done;
+	}
+
 	if (SRF_IS_FIRSTCALL())
 	{
+		Oid			aoRelOid = PG_GETARG_OID(0);
 		TupleDesc	tupdesc;
 		MemoryContext oldcontext;
 
@@ -427,6 +451,7 @@ gp_aovisimap_entry(PG_FUNCTION_ARGS)
 		SRF_RETURN_NEXT(funcctx, result);
 	}
 
+srf_done:
 	AppendOnlyVisimapStore_EndScan(&context->visiMap.visimapStore,
 								   context->indexScan);
 	AppendOnlyVisimap_Finish(&context->visiMap, AccessShareLock);

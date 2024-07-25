@@ -1,16 +1,18 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use Test::More tests => 2;
+use PostgreSQL::Test::Cluster;
+use Test::More;
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
-$ENV{PGOPTIONS} = '-c gp_role=utility --client-min-messages=WARNING';
+$ENV{PGOPTIONS} = '-c gp_session_role=utility --client-min-messages=WARNING';
 
 $node->issues_sql_like(
 	[ 'reindexdb', '-a' ],
 	qr/statement: REINDEX.*statement: REINDEX/s,
 	'reindex all databases');
+
+done_testing();

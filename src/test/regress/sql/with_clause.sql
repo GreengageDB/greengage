@@ -461,3 +461,223 @@ UNION ALL
   SELECT 'sleep', 1 where pg_sleep(1) is not null
 UNION ALL
   SELECT 'c', j FROM cte;
+
+-- Test forced materialization (sharing) of CTEs with non-SELECT DML inside.
+--start_ignore
+drop table if exists with_dml;
+--end_ignore
+create table with_dml (i int, j int) distributed by (i);
+
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte;
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte;
+
+explain (costs off)
+with cte as (
+    update with_dml
+    set j = j + 1 where i <= 5
+    returning j
+) select count(*) from cte;
+
+with cte as (
+    update with_dml
+    set j = j + 1 where i <= 5
+    returning j
+) select count(*) from cte;
+
+explain (costs off)
+with cte as (
+    delete from with_dml where i > 0
+    returning i
+) select count(*) from cte;
+
+with cte as (
+    delete from with_dml where i > 0
+    returning i
+) select count(*) from cte;
+
+-- Test join operations with shared modifying CTEs
+--start_ignore
+drop table if exists t_hashed;
+drop table if exists t_strewn;
+drop table if exists t_repl;
+--end_ignore
+create table t_hashed (i int, j int) distributed by (i);
+create table t_strewn (i int, j int) distributed randomly;
+create table t_repl (i int, j int) distributed replicated;
+
+insert into t_hashed values (1,1), (2,2), (3,3);
+insert into t_strewn values (1,1), (2,2), (3,3);
+insert into t_repl values (1,1), (2,2), (3,3);
+
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_repl using (i);
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_repl using (i);
+
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_hashed on cte.i = t_hashed.i;
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_hashed on cte.i = t_hashed.i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_strewn on cte.i = t_strewn.i;
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,5) i
+    returning i
+) select count(*) from cte join t_strewn on cte.i = t_strewn.i;
+
+drop table t_strewn;
+
+-- Test that shared modifying CTE work under SubPlan or InitPlan
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t_hashed
+where t_hashed.i in (select i from cte);
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t_hashed
+where t_hashed.i in (select i from cte);
+
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t_hashed
+where t_hashed.i in (select i from cte where cte.i = t_hashed.j);
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t_hashed
+where t_hashed.i in (select i from cte where cte.i = t_hashed.j);
+
+explain (costs off)
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t_hashed
+where exists (select * from cte);
+
+with cte as (
+    insert into with_dml
+    select i, i * 100 from generate_series(1,6) i
+    returning i, j
+) select * from t_hashed
+where exists (select * from cte);
+
+drop table t_hashed;
+
+-- Test complex recursive case
+explain (costs off)
+with recursive cte as (
+    select 1 as i from t_repl where t_repl.j = 1
+    union all
+    select cte.i + 1 from cte join cte2 using(i) where cte.i<3),
+cte2 as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select * from cte;
+
+with recursive cte as (
+    select 1 as i from t_repl where t_repl.j = 1
+    union all
+    select cte.i + 1 from cte join cte2 using(i) where cte.i<3),
+cte2 as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select * from cte;
+
+drop table t_repl;
+
+-- Control tuple count in with_dml relation
+select count(*) from with_dml;
+
+-- Test multi reference cases
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select count(*) from cte a join cte b on a.i=b.i;
+
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i, j
+) select count(*) from cte a join cte b on a.i=b.i;
+
+explain (costs off)
+with cte as (
+    update with_dml set j = j + 1
+    returning i, j
+) select count(*) from cte a join cte b on a.i=b.i;
+
+with cte as (
+    update with_dml set j = j + 1
+    returning i, j
+) select count(*) from cte a join cte b on a.i=b.i;
+
+explain (costs off)
+with cte as (
+    delete from with_dml where i > 0
+    returning i, j
+) select count(*) from cte a join cte b on a.i=b.i;
+
+with cte as (
+    delete from with_dml where i > 0
+    returning i, j
+) select count(*) from cte a join cte b on a.i=b.i;
+
+explain (costs off)
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i, j
+), cte2 as (select * from cte)
+select count(*) from cte2 a join cte2 b on a.i=b.i;
+
+with cte as (
+    insert into with_dml select i, i * 100 from generate_series(1,5) i
+    returning i, j
+), cte2 as (select * from cte)
+select count(*) from cte2 a join cte2 b on a.i=b.i;
+
+drop table with_dml;

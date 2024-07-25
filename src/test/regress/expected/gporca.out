@@ -9940,7 +9940,7 @@ create index bm_dyn_test_idx on orca.bm_dyn_test using bitmap (i);
 alter table orca.bm_dyn_test drop column to_be_dropped;
 alter table orca.bm_dyn_test add partition part5 values(5);
 insert into orca.bm_dyn_test values(2, 5, '2');
-set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 -- gather on 1 segment because of direct dispatch
 explain select * from orca.bm_dyn_test where i=2 and t='2';
                                      QUERY PLAN                                     
@@ -11927,6 +11927,12 @@ SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 (6 rows)
 
 set optimizer_expand_fulljoin = on;
+select disable_xform('CXformFullOuterJoin2HashJoin');
+              disable_xform               
+------------------------------------------
+ CXformFullOuterJoin2HashJoin is disabled
+(1 row)
+
 EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
                                              QUERY PLAN                                             
 ----------------------------------------------------------------------------------------------------
@@ -13366,6 +13372,7 @@ PARTITION BY RANGE(i)
 default partition def);
 create INDEX y_idx on y (j);
 set optimizer_enable_indexjoin=on;
+set optimizer_enable_dynamicindexscan=on;
 explain (costs off) select count(*) from x, y where (x.i > y.j AND x.j <= y.i);
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
@@ -14840,6 +14847,43 @@ explain select * from DatumSortedSet_core where b in (NULL, NULL);
 (4 rows)
 
 ---------------------------------------------------------------------------------
+-- Test fill argtypes of PopAggFunc
+-- start_ignore
+drop table if exists foo;
+drop table if exists bar;
+-- end_ignore
+set optimizer_enable_eageragg = on;
+create table foo (j1 int, g1 int, s1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into foo select i%10, i %10, i from generate_series(1,100) i;
+create table bar (j2 int, g2 int, s2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into bar select i%1, i %10, i from generate_series(1,10) i;
+analyze foo;
+analyze bar;
+explain (costs off) select max(s1) from foo inner join bar on j1 = j2 group by g1;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Finalize HashAggregate
+         Group Key: foo.g1
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: foo.g1
+               ->  Partial HashAggregate
+                     Group Key: foo.g1
+                     ->  Hash Join
+                           Hash Cond: (foo.j1 = bar.j2)
+                           ->  Seq Scan on foo
+                           ->  Hash
+                                 ->  Seq Scan on bar
+ Optimizer: Postgres-based planner
+(13 rows)
+
+drop table foo;
+drop table bar;
+reset optimizer_enable_eageragg;
 -- Testcases to validate the behavior of the GUC gp_max_system_slices
 -- start_ignore
 drop table if exists foo;
@@ -14884,5 +14928,45 @@ set session authorization ruser;
 set gp_max_system_slices=10;
 ERROR:  permission denied to set parameter "gp_max_system_slices"
 reset session authorization;
+-- Test that set returning function with multiple columns works with explain
+CREATE FUNCTION srf_attnum() RETURNS TABLE(v1 int, v2 int)
+    LANGUAGE plpgsql NO SQL
+    AS $_$
+BEGIN
+    DROP TABLE IF EXISTS tbl_2_cols;
+    CREATE TEMP TABLE tbl_2_cols (col1 int, col2 int) DISTRIBUTED RANDOMLY;
+    RETURN QUERY SELECT * from tbl_2_cols;
+END;
+$_$;
+NOTICE:  specifying "NO SQL" acts as no operation.
+explain select distinct v1 from srf_attnum();
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ HashAggregate  (cost=12.75..22.75 rows=1000 width=4)
+   Group Key: v1
+   ->  Function Scan on srf_attnum  (cost=0.25..10.25 rows=1000 width=4)
+ Optimizer: Postgres-based planner
+(4 rows)
+
+select distinct v1 from srf_attnum();
+NOTICE:  table "tbl_2_cols" does not exist, skipping
+ v1 
+----
+(0 rows)
+
+explain select distinct v2 from srf_attnum();
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ HashAggregate  (cost=12.75..22.75 rows=1000 width=4)
+   Group Key: v2
+   ->  Function Scan on srf_attnum  (cost=0.25..10.25 rows=1000 width=4)
+ Optimizer: Postgres-based planner
+(4 rows)
+
+select distinct v2 from srf_attnum();
+ v2 
+----
+(0 rows)
+
 drop user ruser;
 drop table foo, bar;

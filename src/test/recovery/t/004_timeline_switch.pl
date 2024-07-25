@@ -4,41 +4,41 @@
 use strict;
 use warnings;
 use File::Path qw(rmtree);
-use PostgresNode;
-use TestLib;
-use Test::More tests => 2;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 $ENV{PGDATABASE} = 'postgres';
 
-# Initialize master node
-my $node_master = get_new_node('master');
-$node_master->init(allows_streaming => 1);
-$node_master->start;
+# Initialize primary node
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
+$node_primary->init(allows_streaming => 1);
+$node_primary->start;
 
 # Take backup
 my $backup_name = 'my_backup';
-$node_master->backup($backup_name);
+$node_primary->backup($backup_name);
 
 # Create two standbys linking to it
-my $node_standby_1 = get_new_node('standby_1');
-$node_standby_1->init_from_backup($node_master, $backup_name,
+my $node_standby_1 = PostgreSQL::Test::Cluster->new('standby_1');
+$node_standby_1->init_from_backup($node_primary, $backup_name,
 	has_streaming => 1);
 $node_standby_1->start;
-my $node_standby_2 = get_new_node('standby_2');
-$node_standby_2->init_from_backup($node_master, $backup_name,
+my $node_standby_2 = PostgreSQL::Test::Cluster->new('standby_2');
+$node_standby_2->init_from_backup($node_primary, $backup_name,
 	has_streaming => 1);
 $node_standby_2->start;
 
-# Create some content on master
-$node_master->safe_psql('postgres',
+# Create some content on primary
+$node_primary->safe_psql('postgres',
 	"CREATE TABLE tab_int AS SELECT generate_series(1,1000) AS a");
 
 # Wait until standby has replayed enough data on standby 1
-$node_master->wait_for_catchup($node_standby_1, 'replay',
-	$node_master->lsn('write'));
+$node_primary->wait_for_catchup($node_standby_1, 'replay',
+	$node_primary->lsn('write'));
 
-# Stop and remove master
-$node_master->teardown_node;
+# Stop and remove primary
+$node_primary->teardown_node;
 
 # promote standby 1 using "pg_promote", switching it to a new timeline
 my $psql_out = '';
@@ -66,3 +66,5 @@ $node_standby_1->wait_for_catchup($node_standby_2, 'replay',
 my $result =
   $node_standby_2->safe_psql('postgres', "SELECT count(*) FROM tab_int");
 is($result, qq(2000), 'check content of standby 2');
+
+done_testing();

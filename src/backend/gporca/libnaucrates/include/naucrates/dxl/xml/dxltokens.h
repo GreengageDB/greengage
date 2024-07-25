@@ -60,6 +60,9 @@ enum Edxltoken
 	EdxltokenHint,
 	EdxltokenPlanHint,
 	EdxltokenScanHint,
+	EdxltokenRowHint,
+	EdxltokenJoinHint,
+	EdxltokenLeading,
 	EdxltokenJoinArityForAssociativityCommutativity,
 	EdxltokenArrayExpansionThreshold,
 	EdxltokenJoinOrderDPThreshold,
@@ -167,6 +170,7 @@ enum Edxltoken
 	EdxltokenScalarLimitOffset,
 	EdxltokenScalarOneTimeFilter,
 	EdxltokenScalarOpExpr,
+	EdxltokenScalarParam,
 	EdxltokenScalarProjElem,
 	EdxltokenScalarCast,
 	EdxltokenScalarCoerceToDomain,
@@ -357,6 +361,8 @@ enum Edxltoken
 	EdxltokenColFreqRemain,
 	EdxltokenColStatsMissing,
 
+	EdxltokenParamId,
+
 	EdxltokenCtidColName,
 	EdxltokenOidColName,
 	EdxltokenXminColName,
@@ -365,6 +371,9 @@ enum Edxltoken
 	EdxltokenCmaxColName,
 	EdxltokenTableOidColName,
 	EdxltokenGpSegmentIdColName,
+
+	// For Logical Select
+	EdxltokenSecurityQuals,
 
 	EdxltokenActionColId,
 	EdxltokenCtidColId,
@@ -751,6 +760,11 @@ enum Edxltoken
 	EdxltokenForeignServerOid,
 	EdxltokenPhysicalDynamicIndexOnlyScan,
 	EdxltokenRelAppendOnlyVersion,
+
+	EdxltokenAbsolute,
+	EdxltokenAdd,
+	EdxltokenSubtract,
+	EdxltokenMultiply,
 
 	EdxltokenSentinel
 };

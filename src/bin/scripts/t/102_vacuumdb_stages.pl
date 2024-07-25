@@ -1,10 +1,10 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use Test::More tests => 4;
+use PostgreSQL::Test::Cluster;
+use Test::More;
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
@@ -33,3 +33,5 @@ $node->issues_sql_like(
                    .*statement:\ RESET\ default_statistics_target;
                    .*statement:\ ANALYZE/sx,
 	'analyze more than one database in stages');
+
+done_testing();

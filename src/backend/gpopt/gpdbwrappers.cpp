@@ -412,6 +412,17 @@ gpdb::WalkExpressionTree(Node *node, bool (*walker)(), void *context)
 	return false;
 }
 
+gpos::BOOL
+gpdb::WalkQueryTree(Query *query, bool (*walker)(), void *context, int flags)
+{
+	GP_WRAP_START;
+	{
+		return query_tree_walker(query, walker, context, flags);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
 Oid
 gpdb::ExprType(Node *expr)
 {
@@ -2081,7 +2092,7 @@ gpdb::HasUpdateTriggers(Oid relid)
 {
 	GP_WRAP_START;
 	{
-		return has_update_triggers(relid);
+		return has_update_triggers(relid, true);
 	}
 	GP_WRAP_END;
 	return false;

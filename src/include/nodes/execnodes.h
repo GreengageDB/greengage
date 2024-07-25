@@ -300,7 +300,8 @@ typedef enum
 	SFRM_ValuePerCall = 0x01,	/* one value returned per call */
 	SFRM_Materialize = 0x02,	/* result set instantiated in Tuplestore */
 	SFRM_Materialize_Random = 0x04, /* Tuplestore needs randomAccess */
-	SFRM_Materialize_Preferred = 0x08	/* caller prefers Tuplestore */
+	SFRM_Materialize_Preferred = 0x08,	/* caller prefers Tuplestore */
+	SFRM_Squelch = 0x10,		/* Squelch protocol is used  */
 } SetFunctionReturnMode;
 
 /*
@@ -940,6 +941,13 @@ typedef struct SetExprState
 	 * argument values between calls, when setArgsValid is true.
 	 */
 	FunctionCallInfo fcinfo;
+
+	/*
+	 * SRF can optionally support squelching. To make a squelch call of
+	 * function it should evidently set flag in it's result. The flag is
+	 * translated to this field.
+	 */
+	bool		isSquelchSupported;
 } SetExprState;
 
 /* ----------------

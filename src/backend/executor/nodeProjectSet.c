@@ -321,6 +321,11 @@ void
 ExecEndProjectSet(ProjectSetState *node)
 {
 	/*
+	 * Notify SRF(s) that we will not consume results anymore
+	 */
+	ExecSquelchProjectSetNode(node);
+
+	/*
 	 * Free the exprcontext
 	 */
 	ExecFreeExprContext(&node->ps);
@@ -348,4 +353,28 @@ ExecReScanProjectSet(ProjectSetState *node)
 	 */
 	if (node->ps.lefttree->chgParam == NULL)
 		ExecReScan(node->ps.lefttree);
+}
+
+void
+ExecSquelchProjectSetNode(ProjectSetState *node)
+{
+	ExecSquelchProjectSRF(node);
+
+	ExecSquelchNode(outerPlanState(node));
+	ExecSquelchNode(innerPlanState(node));
+}
+
+void
+ExecSquelchProjectSRF(ProjectSetState *node)
+{
+	ExprContext *econtext = node->ps.ps_ExprContext;
+
+	for (int argno = 0; argno < node->nelems; argno++)
+	{
+		Node	   *elem = node->elems[argno];
+
+		if (IsA(elem, SetExprState))
+			ExecSquelchFunctionResultSet((SetExprState *) elem,
+										 econtext);
+	}
 }

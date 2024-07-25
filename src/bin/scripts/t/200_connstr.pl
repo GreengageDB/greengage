@@ -1,9 +1,9 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 3;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Tests to check connection string handling in utilities
 
@@ -20,7 +20,7 @@ my $dbname2 =
 my $dbname3 = generate_ascii_string(130, 192);
 my $dbname4 = generate_ascii_string(193, 255);
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init(extra => [ '--locale=C', '--encoding=LATIN1' ]);
 $node->start;
 
@@ -37,3 +37,5 @@ $node->command_ok([qw(reindexdb --all --echo)],
 $node->command_ok(
 	[qw(clusterdb --all --echo --verbose)],
 	'clusterdb --all with unusual database names');
+
+done_testing();

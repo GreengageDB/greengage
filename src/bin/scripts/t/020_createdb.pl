@@ -1,15 +1,15 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 22;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 program_help_ok('createdb');
 program_version_ok('createdb');
 program_options_handling_ok('createdb');
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
@@ -48,3 +48,5 @@ $node->command_checks_all(
 		qr/^createdb: error: database creation failed: ERROR:  invalid locale name|^createdb: error: database creation failed: ERROR:  new LC_CTYPE \(foo'; SELECT '1\) is incompatible with the LC_CTYPE of the template database/s
 	],
 	'createdb with incorrect --lc-ctype');
+
+done_testing();

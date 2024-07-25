@@ -282,7 +282,7 @@ static GpDistributionData *InitDistributionData(CopyState cstate, EState *estate
 static void FreeDistributionData(GpDistributionData *distData);
 static void InitCopyFromDispatchSplit(CopyState cstate, GpDistributionData *distData, EState *estate);
 static unsigned int GetTargetSeg(GpDistributionData *distData, TupleTableSlot *slot);
-static ProgramPipes *open_program_pipes(char *command, bool forwrite);
+static ProgramPipes *open_program_pipes(CopyState cstate, bool forwrite);
 static void close_program_pipes(CopyState cstate, bool ifThrow);
 CopyIntoClause*
 MakeCopyIntoClause(CopyStmt *stmt);
@@ -2406,7 +2406,7 @@ BeginCopyToOnSegment(QueryDesc *queryDesc)
 
 	if (cstate->is_program)
 	{
-		cstate->program_pipes = open_program_pipes(cstate->filename, true);
+		cstate->program_pipes = open_program_pipes(cstate, true);
 		cstate->copy_file = fdopen(cstate->program_pipes->pipes[0], PG_BINARY_W);
 
 		if (cstate->copy_file == NULL)
@@ -2625,7 +2625,7 @@ BeginCopyTo(ParseState *pstate,
 		if (is_program)
 		{
 			progress_vals[1] = PROGRESS_COPY_TYPE_PROGRAM;
-			cstate->program_pipes = open_program_pipes(cstate->filename, true);
+			cstate->program_pipes = open_program_pipes(cstate, true);
 			cstate->copy_file = fdopen(cstate->program_pipes->pipes[0], PG_BINARY_W);
 
 			if (cstate->copy_file == NULL)
@@ -3206,7 +3206,14 @@ CopyTo(CopyState cstate)
 							fmgr_info(out_func_oid, &cstate->out_functions[attnum - 1]);
 						}
 					}
-					scandesc = table_beginscan_es(rel, GetActiveSnapshot(), 0, NULL, proj, NULL);
+					/*
+					 * We specifically pass NULL proj if the table has no column, and leave it
+					 * to the underlying CO AM layer to handle it - the behavior should be same
+					 * as SELECT * which is to choose one column to scan.
+					 */
+					scandesc = table_beginscan_es(rel, GetActiveSnapshot(), 0, NULL, 
+													cstate->attnumlist ? proj : NULL, 
+													NULL);
 					slot = table_slot_create(rel, NULL);
 
 					while (table_scan_getnextslot(scandesc, ForwardScanDirection, slot))
@@ -5101,7 +5108,7 @@ BeginCopyFrom(ParseState *pstate,
 		if (cstate->is_program)
 		{
 			progress_vals[1] = PROGRESS_COPY_TYPE_PROGRAM;
-			cstate->program_pipes = open_program_pipes(cstate->filename, false);
+			cstate->program_pipes = open_program_pipes(cstate, false);
 			cstate->copy_file = fdopen(cstate->program_pipes->pipes[0], PG_BINARY_R);
 			if (cstate->copy_file == NULL)
 				ereport(ERROR,
@@ -8014,9 +8021,21 @@ GetTargetSeg(GpDistributionData *distData, TupleTableSlot *slot)
 	return target_seg;
 }
 
-static ProgramPipes*
-open_program_pipes(char *command, bool forwrite)
+static void
+close_program_pipes_on_reset(void *arg)
 {
+	if (!IsAbortInProgress())
+		return;
+
+	CopyState	cstate = arg;
+
+	close_program_pipes(cstate, false);
+}
+
+static ProgramPipes*
+open_program_pipes(CopyState cstate, bool forwrite)
+{
+	char	   *command = cstate->filename;
 	int save_errno;
 	pqsigfunc save_SIGPIPE;
 	/* set up extvar */
@@ -8054,6 +8073,12 @@ open_program_pipes(char *command, bool forwrite)
 				 errmsg("can not start command: %s", command)));
 	}
 
+	MemoryContextCallback *callback = MemoryContextAlloc(cstate->copycontext, sizeof(MemoryContextCallback));
+
+	callback->arg = cstate;
+	callback->func = close_program_pipes_on_reset;
+	MemoryContextRegisterResetCallback(cstate->copycontext, callback);
+
 	return program_pipes;
 }
 
@@ -8063,8 +8088,7 @@ close_program_pipes(CopyState cstate, bool ifThrow)
 	Assert(cstate->is_program);
 
 	int ret = 0;
-	StringInfoData sinfo;
-	initStringInfo(&sinfo);
+	StringInfoData sinfo = {0};
 
 	if (cstate->copy_file)
 	{
@@ -8077,8 +8101,11 @@ close_program_pipes(CopyState cstate, bool ifThrow)
 	{
 		return;
 	}
-	
+
+	if (ifThrow)
+		initStringInfo(&sinfo);
 	ret = pclose_with_stderr(cstate->program_pipes->pid, cstate->program_pipes->pipes, &sinfo);
+	cstate->program_pipes = NULL;
 
 	if (ret == 0 || !ifThrow)
 	{

@@ -1551,7 +1551,7 @@ alter table orca.bm_dyn_test drop column to_be_dropped;
 alter table orca.bm_dyn_test add partition part5 values(5);
 insert into orca.bm_dyn_test values(2, 5, '2');
 
-set optimizer_enable_bitmapscan=on;
+set optimizer_enable_dynamicbitmapscan=on;
 -- start_ignore
 analyze orca.bm_dyn_test;
 -- end_ignore
@@ -2546,6 +2546,7 @@ EXPLAIN SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 SELECT a, b FROM btab_old_hash LEFT OUTER JOIN atab_old_hash ON a |=| b;
 
 set optimizer_expand_fulljoin = on;
+select disable_xform('CXformFullOuterJoin2HashJoin');
 EXPLAIN SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 SELECT a, b FROM atab_old_hash FULL JOIN btab_old_hash ON a |=| b;
 reset optimizer_expand_fulljoin;
@@ -3030,6 +3031,7 @@ default partition def);
 create INDEX y_idx on y (j);
 
 set optimizer_enable_indexjoin=on;
+set optimizer_enable_dynamicindexscan=on;
 explain (costs off) select count(*) from x, y where (x.i > y.j AND x.j <= y.i);
 reset optimizer_enable_indexjoin;
 
@@ -3638,6 +3640,25 @@ create table DatumSortedSet_core (a int, b character varying NOT NULL) distribut
 explain select * from DatumSortedSet_core where b in (NULL, NULL);
 ---------------------------------------------------------------------------------
 
+-- Test fill argtypes of PopAggFunc
+-- start_ignore
+drop table if exists foo;
+drop table if exists bar;
+-- end_ignore
+
+set optimizer_enable_eageragg = on;
+create table foo (j1 int, g1 int, s1 int);
+insert into foo select i%10, i %10, i from generate_series(1,100) i;
+create table bar (j2 int, g2 int, s2 int);
+insert into bar select i%1, i %10, i from generate_series(1,10) i;
+analyze foo;
+analyze bar;
+
+explain (costs off) select max(s1) from foo inner join bar on j1 = j2 group by g1;
+drop table foo;
+drop table bar;
+reset optimizer_enable_eageragg;
+
 -- Testcases to validate the behavior of the GUC gp_max_system_slices
 
 -- start_ignore
@@ -3668,6 +3689,21 @@ create user ruser;
 set session authorization ruser;
 set gp_max_system_slices=10;
 reset session authorization;
+
+-- Test that set returning function with multiple columns works with explain
+CREATE FUNCTION srf_attnum() RETURNS TABLE(v1 int, v2 int)
+    LANGUAGE plpgsql NO SQL
+    AS $_$
+BEGIN
+    DROP TABLE IF EXISTS tbl_2_cols;
+    CREATE TEMP TABLE tbl_2_cols (col1 int, col2 int) DISTRIBUTED RANDOMLY;
+    RETURN QUERY SELECT * from tbl_2_cols;
+END;
+$_$;
+explain select distinct v1 from srf_attnum();
+select distinct v1 from srf_attnum();
+explain select distinct v2 from srf_attnum();
+select distinct v2 from srf_attnum();
 
 drop user ruser;
 drop table foo, bar;

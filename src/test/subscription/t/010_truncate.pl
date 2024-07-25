@@ -1,17 +1,18 @@
 # Test TRUNCATE
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 12;
+
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # setup
 
-my $node_publisher = get_new_node('publisher');
+my $node_publisher = PostgreSQL::Test::Cluster->new('publisher');
 $node_publisher->init(allows_streaming => 'logical');
 $node_publisher->start;
 
-my $node_subscriber = get_new_node('subscriber');
+my $node_subscriber = PostgreSQL::Test::Cluster->new('subscriber');
 $node_subscriber->init(allows_streaming => 'logical');
 $node_subscriber->append_conf('postgresql.conf',
 	qq(max_logical_replication_workers = 6));
@@ -209,3 +210,5 @@ is($result, qq(0||),
 $result = $node_subscriber->safe_psql('postgres',
 	"SELECT deadlocks FROM pg_stat_database WHERE datname='postgres'");
 is($result, qq(0), 'no deadlocks detected');
+
+done_testing();

@@ -169,10 +169,11 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 		old_cluster.controldata.cat_ver < JSONB_FORMAT_CHANGE_CAT_VER)
 		check_for_jsonb_9_4_usage(&old_cluster);
 
-	/* Pre-PG 9.4 had a different 'line' data type internal format */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 903)
-		old_9_3_check_for_line_data_type_usage(&old_cluster);
-
+	/* For now, the issue exists only for Greenplum 6.x/PostgreSQL 9.4 */
+	if (GET_MAJOR_VERSION(old_cluster.major_version) == 904)
+	{
+		check_for_appendonly_materialized_view_with_relfrozenxid(&old_cluster);
+	}
 
 	teardown_GPDB6_data_type_checks(&old_cluster);
 
@@ -231,12 +232,14 @@ report_clusters_compatible(void)
 				pg_fatal("could not determine current directory: %m\n");
 			canonicalize_path(cwd);
 
-			pg_log(PG_REPORT, "\n*Some cluster objects are not compatible*\n\npg_upgrade check output files are located:\n%s\n\n", cwd);
+			pg_log(PG_REPORT, "\n*Some cluster objects are not compatible*\n\npg_upgrade check output files are located in:\n%s\n\n", log_opts.basedir);
 		} else
 			pg_log(PG_REPORT, "\n*Clusters are compatible*\n");
 
 		/* stops new cluster */
 		stop_postmaster(false);
+		cleanup_output_dirs();
+
 		if (get_check_fatal_occurred())
 			exit(1);
 		exit(0);
@@ -614,7 +617,7 @@ check_for_new_tablespace_dir(ClusterInfo *new_cluster)
 				new_cluster->tablespace_suffix);
 
 		if (stat(new_tablespace_dir, &statbuf) == 0 || errno != ENOENT)
-			pg_fatal("new cluster tablespace directory already exists: \"%s\"\n",
+			gp_fatal_log("new cluster tablespace directory already exists: \"%s\"\n",
 					 new_tablespace_dir);
 	}
 
@@ -885,13 +888,14 @@ check_proper_datallowconn(ClusterInfo *cluster)
 	if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("All non-template0 databases must allow connections, i.e. their\n"
-				 "pg_database.datallowconn must be true.  Your installation contains\n"
-				 "non-template0 databases with their pg_database.datallowconn set to\n"
-				 "false.  Consider allowing connection for all non-template0 databases\n"
-				 "or drop the databases which do not allow connections.  A list of\n"
-				 "databases with the problem is in the file:\n"
-				 "    %s\n\n", output_path);
+		pg_fatal(
+				 "| All non-template0 databases must allow connections, i.e. their\n"
+				 "| pg_database.datallowconn must be true.  Your installation contains\n"
+				 "| non-template0 databases with their pg_database.datallowconn set to\n"
+				 "| false.  Consider allowing connection for all non-template0 databases\n"
+				 "| or drop the databases which do not allow connections.  A list of\n"
+				 "| databases with the problem is in the file:\n"
+				 "|    %s\n\n", output_path);
 	}
 	else
 		check_ok();
@@ -1122,8 +1126,9 @@ check_for_composite_data_type_usage(ClusterInfo *cluster)
 
 	prep_status("Checking for system-defined composite types in user tables");
 
-	snprintf(output_path, sizeof(output_path), "tables_using_composite.txt");
-
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "tables_using_composite.txt");
 	/*
 	 * Look for composite types that were made during initdb *or* belong to
 	 * information_schema; that's important in case information_schema was
@@ -1149,12 +1154,13 @@ check_for_composite_data_type_usage(ClusterInfo *cluster)
 	if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("Your installation contains system-defined composite type(s) in user tables.\n"
-				 "These type OIDs are not stable across PostgreSQL versions,\n"
-				 "so this cluster cannot currently be upgraded.  You can\n"
-				 "drop the problem columns and restart the upgrade.\n"
-				 "A list of the problem columns is in the file:\n"
-				 "    %s\n\n", output_path);
+		gp_fatal_log(
+				 "| Your installation contains system-defined composite type(s) in user tables.\n"
+				 "| These type OIDs are not stable across PostgreSQL versions,\n"
+				 "| so this cluster cannot currently be upgraded.  You can\n"
+				 "| drop the problem columns and restart the upgrade.\n"
+				 "| A list of the problem columns is in the file:\n"
+				 "|    %s\n\n", output_path);
 	}
 	else
 		check_ok();
@@ -1179,7 +1185,9 @@ check_for_reg_data_type_usage(ClusterInfo *cluster)
 
 	prep_status("Checking for reg* data types in user tables");
 
-	snprintf(output_path, sizeof(output_path), "tables_using_reg.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "tables_using_reg.txt");
 
 	/*
 	 * Note: older servers will not have all of these reg* types, so we have
@@ -1236,19 +1244,21 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 	prep_status("Checking for removed \"%s\" data type in user tables",
 				datatype);
 
-	snprintf(output_path, sizeof(output_path), "tables_using_%s.txt",
+	snprintf(output_path, sizeof(output_path), "%s/tables_using_%s.txt",
+			 log_opts.basedir,
 			 datatype);
 	snprintf(typename, sizeof(typename), "pg_catalog.%s", datatype);
 
 	if (check_for_data_type_usage(cluster, typename, output_path))
 	{
 		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("Your installation contains the \"%s\" data type in user tables.\n"
-				 "The \"%s\" type has been removed in PostgreSQL version %s,\n"
-				 "so this cluster cannot currently be upgraded.  You can drop the\n"
-				 "problem columns, or change them to another data type, and restart\n"
-				 "the upgrade.  A list of the problem columns is in the file:\n"
-				 "    %s\n\n", datatype, datatype, version, output_path);
+		gp_fatal_log(
+				"| Your installation contains the \"%s\" data type in user tables.\n"
+				"| The \"%s\" type has been removed in PostgreSQL version %s,\n"
+				"| so this cluster cannot currently be upgraded.  You can drop the\n"
+				"| problem columns, or change them to another data type, and restart\n"
+				"| the upgrade.  A list of the problem columns is in the file:\n"
+				"|    %s\n\n", datatype, datatype, version, output_path);
 	}
 	else
 		check_ok();
@@ -1267,7 +1277,9 @@ check_for_jsonb_9_4_usage(ClusterInfo *cluster)
 
 	prep_status("Checking for incompatible \"jsonb\" data type");
 
-	snprintf(output_path, sizeof(output_path), "tables_using_jsonb.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "tables_using_jsonb.txt");
 
 	if (check_for_data_type_usage(cluster, "pg_catalog.jsonb", output_path))
 	{
@@ -1294,27 +1306,52 @@ check_for_pg_role_prefix(ClusterInfo *cluster)
 {
 	PGresult   *res;
 	PGconn	   *conn = connectToServer(cluster, "template1");
+	int			ntups;
+	int			i_roloid;
+	int			i_rolname;
+	FILE	   *script = NULL;
+	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for roles starting with \"pg_\"");
 
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir,
+			 "pg_role_prefix.txt");
+
 	res = executeQueryOrDie(conn,
-							"SELECT * "
+							"SELECT oid AS roloid, rolname "
 							"FROM pg_catalog.pg_roles "
 							"WHERE rolname ~ '^pg_'");
 
-	if (PQntuples(res) != 0)
+	ntups = PQntuples(res);
+	i_roloid = PQfnumber(res, "roloid");
+	i_rolname = PQfnumber(res, "rolname");
+	for (int rowno = 0; rowno < ntups; rowno++)
 	{
-		if (cluster == &old_cluster)
-			gp_fatal_log("The source cluster contains roles starting with \"pg_\"\n");
-		else
-			gp_fatal_log("The target cluster contains roles starting with \"pg_\"\n");
+		if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+			gp_fatal_log("could not open file \"%s\": %s",
+					 output_path, strerror(errno));
+		fprintf(script, "%s (oid=%s)\n",
+				PQgetvalue(res, rowno, i_rolname),
+				PQgetvalue(res, rowno, i_roloid));
 	}
 
 	PQclear(res);
 
 	PQfinish(conn);
 
-	check_ok();
+	if (script)
+	{
+		fclose(script);
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log("| Your installation contains roles starting with \"pg_\".\n"
+				 "| \"pg_\" is a reserved prefix for system roles, the cluster\n"
+				 "| cannot be upgraded until these roles are renamed.\n"
+				 "| A list of roles starting with \"pg_\" is in the file:\n"
+				 "|     %s", output_path);
+	}
+	else
+		check_ok();
 }
 
 
@@ -1458,9 +1495,10 @@ check_for_appendonly_materialized_view_with_relfrozenxid(ClusterInfo *cluster)
 
 	if(found)
 	{
-		pg_fatal("Detected appendonly materialized view with incorrect relfrozenxid.\n"
-					"See %s for details.\n",
-					output_path);
+		gp_fatal_log(
+				"| Detected appendonly materialized view with incorrect relfrozenxid.\n"
+				"| A list of the problem materialized views are in the file:\n"
+				"| %s\n\n", output_path);
 	}
 	else
 	{

@@ -1,15 +1,15 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 54;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 program_help_ok('vacuumdb');
 program_version_ok('vacuumdb');
 program_options_handling_ok('vacuumdb');
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
@@ -158,3 +158,5 @@ $node->issues_sql_like(
 								.*statement:\ VACUUM\ \(SKIP_DATABASE_STATS\)\ .*;
 								.*statement:\ VACUUM\ \(SKIP_DATABASE_STATS\)\ .*;/sx,
 	'vacuumdb -j4 with ten tables issues five vacuum commands');
+
+done_testing();

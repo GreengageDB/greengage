@@ -76,6 +76,9 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenHint, GPOS_WSZ_LIT("Hint")},
 		{EdxltokenPlanHint, GPOS_WSZ_LIT("PlanHint")},
 		{EdxltokenScanHint, GPOS_WSZ_LIT("ScanHint")},
+		{EdxltokenRowHint, GPOS_WSZ_LIT("RowHint")},
+		{EdxltokenJoinHint, GPOS_WSZ_LIT("JoinHint")},
+		{EdxltokenLeading, GPOS_WSZ_LIT("Leading")},
 		{EdxltokenJoinArityForAssociativityCommutativity,
 		 GPOS_WSZ_LIT("JoinArityForAssociativityCommutativity")},
 		{EdxltokenArrayExpansionThreshold,
@@ -212,6 +215,7 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenScalarLimitOffset, GPOS_WSZ_LIT("LimitOffset")},
 		{EdxltokenScalarOneTimeFilter, GPOS_WSZ_LIT("OneTimeFilter")},
 		{EdxltokenScalarOpExpr, GPOS_WSZ_LIT("OpExpr")},
+		{EdxltokenScalarParam, GPOS_WSZ_LIT("ExtParam")},
 		{EdxltokenScalarProjElem, GPOS_WSZ_LIT("ProjElem")},
 		{EdxltokenScalarCast, GPOS_WSZ_LIT("Cast")},
 		{EdxltokenScalarCoerceToDomain, GPOS_WSZ_LIT("CoerceToDomain")},
@@ -407,6 +411,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenColFreqRemain, GPOS_WSZ_LIT("FreqRemain")},
 		{EdxltokenColStatsMissing, GPOS_WSZ_LIT("ColStatsMissing")},
 
+		{EdxltokenParamId, GPOS_WSZ_LIT("ParamId")},
+
 		{EdxltokenCtidColName, GPOS_WSZ_LIT("ctid")},
 		{EdxltokenOidColName, GPOS_WSZ_LIT("oid")},
 		{EdxltokenXminColName, GPOS_WSZ_LIT("xmin")},
@@ -415,6 +421,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenCmaxColName, GPOS_WSZ_LIT("cmax")},
 		{EdxltokenTableOidColName, GPOS_WSZ_LIT("tableoid")},
 		{EdxltokenGpSegmentIdColName, GPOS_WSZ_LIT("gp_segment_id")},
+
+		{EdxltokenSecurityQuals, GPOS_WSZ_LIT("HasSecurityQuals")},
 
 		{EdxltokenActionColId, GPOS_WSZ_LIT("ActionCol")},
 		{EdxltokenCtidColId, GPOS_WSZ_LIT("CtidCol")},
@@ -786,6 +794,11 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenNLJIndexParamList, GPOS_WSZ_LIT("NLJIndexParamList")},
 		{EdxltokenNLJIndexParam, GPOS_WSZ_LIT("NLJIndexParam")},
 		{EdxltokenNLJIndexOuterRefAsParam, GPOS_WSZ_LIT("OuterRefAsParam")},
+
+		{EdxltokenAbsolute, GPOS_WSZ_LIT("Absolute")},
+		{EdxltokenAdd, GPOS_WSZ_LIT("Add")},
+		{EdxltokenSubtract, GPOS_WSZ_LIT("Sub")},
+		{EdxltokenMultiply, GPOS_WSZ_LIT("Multi")},
 	};
 
 	m_pstrmap = GPOS_NEW_ARRAY(m_mp, SStrMapElem, EdxltokenSentinel);

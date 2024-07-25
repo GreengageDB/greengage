@@ -6,9 +6,9 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 1;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 # Find the largest LSN in the set of pages part of the given relation
 # file.  This is used for offline checks of page consistency.  The LSN
@@ -40,7 +40,7 @@ sub find_largest_lsn
 }
 
 # Initialize primary node
-my $primary = get_new_node('primary');
+my $primary = PostgreSQL::Test::Cluster->new('primary');
 $primary->init(allows_streaming => 1);
 
 # Set shared_buffers to a very low value to enforce discard and flush
@@ -60,7 +60,7 @@ $primary->start;
 
 # setup/start a standby
 $primary->backup('bkp');
-my $standby = get_new_node('standby');
+my $standby = PostgreSQL::Test::Cluster->new('standby');
 $standby->init_from_backup($primary, 'bkp', has_streaming => 1);
 $standby->start;
 
@@ -140,3 +140,5 @@ die "No minRecoveryPoint in control file found\n"
 # the pages on disk.
 ok($offline_recovery_lsn ge $offline_max_lsn,
 	"Check offline that table data is consistent with minRecoveryPoint");
+
+done_testing();

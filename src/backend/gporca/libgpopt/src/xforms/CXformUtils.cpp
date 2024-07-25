@@ -2507,7 +2507,7 @@ CXformUtils::PexprBuildBtreeIndexPlan(CMemoryPool *mp, CMDAccessor *md_accessor,
 	//
 	// (2) is valid only for Join2IndexApply xform wherein the index-get
 	// expression must include outer references for it to be an alternative
-	// worth considering. Otherwise it has the same effect as a regular NLJ
+	// worth considering. Otherwise, it has the same effect as a regular NLJ
 	// with an index lookup.
 	//
 	// Both (1) and (2) doesn't apply if index is used for ORDER BY. Because
@@ -3103,7 +3103,7 @@ CXformUtils::PexprBitmapSelectBestIndex(
 		{
 			pop->Release();
 			pexprIndexFinal->Release();
-			(*ppexprResidual) = pexprPred;
+			(*ppexprRecheck)->Release();
 			return nullptr;
 		}
 		return GPOS_NEW(mp) CExpression(mp, pop, pexprIndexFinal);
@@ -3389,6 +3389,7 @@ CXformUtils::FHasAmbiguousType(CExpression *pexpr, CMDAccessor *md_accessor)
 			case COperator::EopScalarProjectList:
 			case COperator::EopScalarProjectElement:
 			case COperator::EopScalarSwitchCase:
+			case COperator::EopScalarArrayRefIndexList:
 				break;	// these operators do not have valid return type
 
 			default:

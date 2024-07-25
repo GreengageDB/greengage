@@ -981,6 +981,7 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 		ShareInputScan *sisc = (ShareInputScan *) plan;
 		int			motId = shareinput_peekmot(ctxt);
 		ApplyShareInputContextPerShare *pershare;
+		PlanSlice  *currentSlice = &ctxt->slices[motId];
 
 		pershare = &ctxt->shared_inputs[sisc->share_id];
 
@@ -994,11 +995,27 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 		sisc->nconsumers = bms_num_members(pershare->participant_slices) - 1;
 
 		/*
+		 * The SISC's plan contains modifying operation, which
+		 * creates a writer gang. Due to specific tree traverse order
+		 * during apply_shareinput_dag_to_tree, the producer could get
+		 * to the reader slice, while the consumer could get to the
+		 * writer slice (gangType is chosen before shareinput fixing).
+		 * Therefore, in order to prevent this, we set up the correct
+		 * gangType back.
+		 */
+		if (sisc->rootSliceIsWriter)
+		{
+			if (plan->lefttree)
+				currentSlice->gangType = GANGTYPE_PRIMARY_WRITER;
+			else if (sisc->this_slice_id != sisc->producer_slice_id)
+				currentSlice->gangType = GANGTYPE_PRIMARY_READER;
+		}
+
+		/*
 		 * If this share needs to run in the QD, mark the slice accordingly.
 		 */
 		if (bms_is_member(sisc->share_id, ctxt->qdShares))
 		{
-			PlanSlice  *currentSlice = &ctxt->slices[motId];
 
 			switch (currentSlice->gangType)
 			{
@@ -2004,4 +2021,49 @@ checkMotionAboveWorkTableScan(Node* node, PlannerInfo *root)
 	context.bellowMotion = false;
 
 	(void) cte_motion_search_walker(node, (void *) &context);
+}
+
+typedef struct MotionWithParamContext
+{
+	plan_tree_base_prefix base; /* Required prefix for plan_tree_walker/mutator */
+	Bitmapset  *nestLoopParams; /* nestloop params */
+} MotionWithParamContext;
+
+/*
+ * check whether pass params by a motion
+ */
+static bool
+checkMotionWithParamWalker(Node *node, MotionWithParamContext* motionWithParamcontext)
+{
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Motion))
+	{
+		Plan * plan = (Plan *) node;
+		Bitmapset  *finalExtParam;
+		if (!bms_is_empty(plan->extParam))
+		{
+			finalExtParam = bms_intersect(plan->extParam, motionWithParamcontext->nestLoopParams);
+			if (!bms_is_empty(finalExtParam))
+			{
+				elog(ERROR, "Passing parameters across motion is not supported.");
+			}
+		}
+	}
+
+	return plan_tree_walker(node, checkMotionWithParamWalker, motionWithParamcontext, true);
+}
+
+/*
+ * We can not deliver a param by a motion node.
+ * If there is a param on motion node, we should throw an error.
+ */
+void
+checkMotionWithParam(Node *node, Bitmapset *bmsNestParams, PlannerInfo *root)
+{
+	MotionWithParamContext motionWithParamcontext;
+	motionWithParamcontext.nestLoopParams = bmsNestParams;
+	planner_init_plan_tree_base(&motionWithParamcontext.base, root);
+	checkMotionWithParamWalker(node, &motionWithParamcontext);
 }

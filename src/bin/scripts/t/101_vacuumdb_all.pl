@@ -1,10 +1,10 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use Test::More tests => 2;
+use PostgreSQL::Test::Cluster;
+use Test::More;
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
@@ -12,3 +12,5 @@ $node->issues_sql_like(
 	[ 'vacuumdb', '-a' ],
 	qr/statement: VACUUM.*statement: VACUUM/s,
 	'vacuum all databases');
+
+done_testing();

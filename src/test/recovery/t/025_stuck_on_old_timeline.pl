@@ -8,15 +8,15 @@
 # standby can follow the new primary (promoted standby).
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 
 use File::Basename;
 use FindBin;
-use Test::More tests => 1;
+use Test::More;
 
 # Initialize primary node
-my $node_primary = get_new_node('primary');
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 
 # Set up an archive command that will copy the history file but not the WAL
 # files. No real archive command should behave this way; the point is to
@@ -29,9 +29,9 @@ $node_primary->init(allows_streaming => 1, has_archiving => 1);
 # that arise from use of backslashes. That means we need to double-quote all
 # the paths in the archive_command
 my $perlbin = $^X;
-$perlbin =~ s!\\!/!g if $TestLib::windows_os;
+$perlbin =~ s!\\!/!g if $PostgreSQL::Test::Utils::windows_os;
 my $archivedir_primary = $node_primary->archive_dir;
-$archivedir_primary =~ s!\\!/!g if $TestLib::windows_os;
+$archivedir_primary =~ s!\\!/!g if $PostgreSQL::Test::Utils::windows_os;
 $node_primary->append_conf('postgresql.conf', qq(
 archive_command = '"$perlbin" "$FindBin::RealBin/cp_history_files" "%p" "$archivedir_primary/%f"'
 wal_keep_size=128MB
@@ -46,7 +46,7 @@ my $backup_name = 'my_backup';
 $node_primary->backup($backup_name);
 
 # Create streaming standby linking to primary
-my $node_standby = get_new_node('standby');
+my $node_standby = PostgreSQL::Test::Cluster->new('standby');
 $node_standby->init_from_backup($node_primary, $backup_name,
 	allows_streaming => 1, has_streaming => 1, has_archiving => 1);
 $node_standby->start;
@@ -56,7 +56,7 @@ $node_standby->backup($backup_name, backup_options => ['-Xnone']);
 
 # Create cascading standby but don't start it yet.
 # Must set up both streaming and archiving.
-my $node_cascade = get_new_node('cascade');
+my $node_cascade = PostgreSQL::Test::Cluster->new('cascade');
 $node_cascade->init_from_backup($node_standby, $backup_name,
 	has_streaming => 1);
 $node_cascade->enable_restoring($node_primary);
@@ -105,3 +105,5 @@ my $result =
   $node_cascade->safe_psql('postgres', "SELECT count(*) FROM tab_int");
 print "cascade: $result\n";
 is($result, 1, 'check streamed content on cascade standby');
+
+done_testing();

@@ -8,6 +8,26 @@
 2:SET ROLE role_multi_portal;
 
 --
+-- Scenario 0:
+-- Multiple explicit cursors active in the same session.
+--
+
+1:BEGIN;
+1:DECLARE c1 CURSOR FOR SELECT 1;
+1:DECLARE c2 CURSOR FOR SELECT 1;
+
+-- Shows 1 lock on the resource queue, with 2 holders (one for each cursor).
+-- Note: In the gp_locks_on_resqueue view, we show that lorusename as the
+-- session_user (and not the current_user 'role_multi_portal', which determines
+-- the queue for the statement).
+0:SELECT lorusename=session_user, lorlocktype, lormode, lorgranted
+  FROM gp_toolkit.gp_locks_on_resqueue WHERE lorrsqname='rq_multi_portal';
+0:SELECT rsqcountlimit, rsqcountvalue,rsqwaiters, rsqholders
+  FROM gp_toolkit.gp_resqueue_status WHERE rsqname='rq_multi_portal';
+
+1:END;
+
+--
 -- Scenario 1:
 -- Multiple explicit cursors active in the same session with a deadlock.
 --
@@ -88,12 +108,12 @@
 
 -- There should now only be one active statement, following the abort of session
 -- 1's transaction. The active statement is contributed by session 2.
+1<:
 0:SELECT rsqcountlimit, rsqcountvalue FROM pg_resqueue_status WHERE rsqname = 'rq_multi_portal';
 0:SELECT query, state from pg_stat_activity
   WHERE query = 'DECLARE c2 CURSOR FOR SELECT 1;';
 
 -- After ending the transactions, there should be 0 active statements.
-1<:
 1:END;
 2:END;
 0:SELECT rsqcountlimit, rsqcountvalue FROM pg_resqueue_status WHERE rsqname = 'rq_multi_portal';

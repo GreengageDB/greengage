@@ -1199,6 +1199,12 @@ typedef struct ShareInputScan
 
 	/* Discard the scan output? True for ORCA CTE producer, false otherwise. */
 	bool        discard_output;
+
+	/*
+	 * Indicates that producer's root slice is writing. I.e. in the shared plan
+	 * there is a modifying operation without a motion above.
+	 */
+	bool		rootSliceIsWriter;
 } ShareInputScan;
 
 /* ----------------

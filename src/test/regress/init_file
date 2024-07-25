@@ -97,8 +97,15 @@ m/^DEBUG:  probing availability of JIT provider/
 m/^DEBUG:  LLVMJIT detected CPU/
 m/^DEBUG:  time to inline:/
 
+# Ignore creating zero-column table warning
+m/^WARNING:  creating a table with no columns./
+
 # Ignore data access indicator notice.
 m/NOTICE:  specifying ".*" acts as no operation./
+
+# Ignore "terminating connection due to administrator command" as the output is
+# not always echoed to the client.
+m/FATAL:  terminating connection due to administrator command/
 
 -- end_matchignore
 
@@ -204,4 +211,8 @@ s/^------------+\s*$/------------\n/
 -- s/Heap Blocks: exact=\d+/Heap Blocks: exact=###/
 -- m/Heap Blocks: lossy=\d+/
 -- s/Heap Blocks: lossy=\d+/Heap Blocks: lossy=###/
+
+# ignore resource queue ids
+m/resource queue id: \d+/
+s/resource queue id: \d+/resource queue id: XXXX/
 -- end_matchsubs

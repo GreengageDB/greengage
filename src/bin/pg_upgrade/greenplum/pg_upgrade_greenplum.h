@@ -36,7 +36,8 @@ typedef enum {
 	GREENPLUM_PROGRESS_OPTION = 11,
 	GREENPLUM_CONTINUE_CHECK_ON_FATAL = 12,
 	GREENPLUM_SKIP_TARGET_CHECK = 13,
-	GREENPLUM_SKIP_CHECKS = 14
+	GREENPLUM_SKIP_CHECKS = 14,
+	GREENPLUM_OUTPUT_DIR = 15
 } greenplumOption;
 
 #define GREENPLUM_OPTIONS \
@@ -44,7 +45,8 @@ typedef enum {
 	{"progress", no_argument, NULL, GREENPLUM_PROGRESS_OPTION}, \
 	{"continue-check-on-fatal", no_argument, NULL, GREENPLUM_CONTINUE_CHECK_ON_FATAL}, \
 	{"skip-target-check", no_argument, NULL, GREENPLUM_SKIP_TARGET_CHECK}, \
-	{"skip-checks", no_argument, NULL, GREENPLUM_SKIP_CHECKS},
+	{"skip-checks", no_argument, NULL, GREENPLUM_SKIP_CHECKS}, \
+	{"output-dir", required_argument, NULL, GREENPLUM_OUTPUT_DIR},
 
 #define GREENPLUM_USAGE "\
       --mode=TYPE               designate node type to upgrade, \"segment\" or \"dispatcher\" (default \"segment\")\n\
@@ -52,6 +54,7 @@ typedef enum {
       --continue-check-on-fatal continue to run through all pg_upgrade checks without upgrade. Stops on major issues\n\
       --skip-target-check       skip all checks on new/target cluster\n\
       --skip-checks             skip all checks\n\
+      --output-dir              directory to output logs. Default=\"COORDINATOR_DATA_DIRECTORY/pg_upgrade.d\"\n\
 "
 
 /* option_gp.c */
@@ -64,22 +67,20 @@ void set_check_fatal_occured(void);
 bool get_check_fatal_occurred(void);
 bool is_skip_target_check(void);
 bool skip_checks(void);
+char *get_output_dir(void);
 
-/* pg_upgrade_greenplum.c */
+/* controldata_gp.c */
 void freeze_master_data(void);
 void reset_system_identifier(void);
-
 
 /* aotable.c */
 
 void		restore_aosegment_tables(void);
 bool        is_appendonly(char relstorage);
 
-
 /* version_gp.c */
 
 void check_hash_partition_usage(void);
-void old_GPDB5_check_for_unsupported_distribution_key_data_types(void);
 void old_GPDB6_check_for_unsupported_sha256_password_hashes(void);
 void new_gpdb_invalidate_bitmap_indexes(void);
 
@@ -94,5 +95,8 @@ void teardown_GPDB6_data_type_checks(ClusterInfo *cluster);
 void report_progress(ClusterInfo *cluster, progress_type op, char *fmt,...)
 pg_attribute_printf(3, 4);
 void close_progress(void);
+
+/* util.c */
+void make_outputdirs_gp(char *pgdata);
 
 #endif /* PG_UPGRADE_GREENPLUM_H */

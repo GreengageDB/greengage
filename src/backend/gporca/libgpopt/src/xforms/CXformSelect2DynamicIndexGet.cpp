@@ -15,7 +15,6 @@
 
 #include "gpopt/base/CConstraint.h"
 #include "gpopt/base/CUtils.h"
-#include "gpopt/metadata/CPartConstraint.h"
 #include "gpopt/operators/CLogicalDynamicGet.h"
 #include "gpopt/operators/CLogicalSelect.h"
 #include "gpopt/xforms/CXformUtils.h"
@@ -87,6 +86,17 @@ CXformSelect2DynamicIndexGet::Transform(CXformContext *pxfctxt,
 		CLogicalDynamicGet::PopConvert((*pexpr)[0]->Pop());
 	// Do not run if contains foreign partitions, instead run CXformExpandDynamicGetWithForeignPartitions
 	if (popGet->ContainsForeignParts())
+	{
+		return;
+	}
+
+	// We need to early exit when the relation contains security quals
+	// because we are adding the security quals when translating from DXL to
+	// Planned Statement as a filter. If we don't early exit then it may happen
+	// that we generate a plan where the index condition contains non-leakproof
+	// expressions. This can lead to data leak as we always want our security
+	// quals to be executed first.
+	if (popGet->HasSecurityQuals())
 	{
 		return;
 	}

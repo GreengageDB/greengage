@@ -325,6 +325,7 @@ extern int rep_lag_avoidance_threshold;
 extern bool gp_maintenance_mode;
 extern bool gp_maintenance_conn;
 extern bool allow_segment_DML;
+extern bool gp_enable_statement_trigger;
 
 extern bool gp_ignore_error_table;
 
@@ -373,6 +374,7 @@ extern bool trace_sort;
 extern bool vmem_process_interrupt;
 extern bool execute_pruned_plan;
 
+extern int gp_max_partition_level;
 extern bool gp_enable_relsize_collection;
 
 /* Debug DTM Action */
@@ -497,7 +499,9 @@ extern bool optimizer_enable_direct_dispatch;
 extern bool optimizer_enable_coordinator_only_queries;
 extern bool optimizer_enable_hashjoin;
 extern bool optimizer_enable_dynamictablescan;
+extern bool optimizer_enable_dynamicindexscan;
 extern bool optimizer_enable_dynamicindexonlyscan;
+extern bool optimizer_enable_dynamicbitmapscan;
 extern bool optimizer_enable_indexscan;
 extern bool optimizer_enable_indexonlyscan;
 extern bool optimizer_enable_tablescan;
@@ -512,6 +516,7 @@ extern bool optimizer_force_comprehensive_join_implementation;
 extern bool optimizer_enable_replicated_table;
 extern bool optimizer_enable_foreign_table;
 extern bool optimizer_enable_right_outer_join;
+extern bool optimizer_enable_query_parameter;
 
 /* Optimizer plan enumeration related GUCs */
 extern bool optimizer_enumerate_plans;

@@ -2954,10 +2954,19 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	}
 
 	/*
+	 * Inlining the non-plain SELECT CTEs (like INSERT/UPDATE/DELETE) leads to
+	 * redundant or duplicated operations whenever the CTE is referenced
+	 * multiple times within the query. Therefore, the best option is to
+	 * materialize such CTEs by utilizing the existing SharedInputScan node.
+	 * This idea is similar to vanilla PostgreSQL approach.
+	 */
+	if (subquery->commandType != CMD_SELECT)
+		is_shared = true;
+	/*
 	 * since shareinputscan with outer refs is not supported by GPDB, if
 	 * contain outer self references, the cte need to be inlined.
 	 */
-	if (is_shared && contain_outer_selfref(cte->ctequery))
+	else if (is_shared && contain_outer_selfref(cte->ctequery))
 		is_shared = false;
 
 	if (!is_shared)

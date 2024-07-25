@@ -1020,20 +1020,6 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	CdbExplain_DepStatAcc vmem_reserved;
 	CdbExplain_DepStatAcc totalPartTableScanned;
 
-	/* Buffer usage counters */
-	CdbExplain_DepStatAcc shared_blks_hit;
-	CdbExplain_DepStatAcc shared_blks_read;
-	CdbExplain_DepStatAcc shared_blks_written;
-	CdbExplain_DepStatAcc shared_blks_dirtied;
-	CdbExplain_DepStatAcc local_blks_hit;
-	CdbExplain_DepStatAcc local_blks_read;
-	CdbExplain_DepStatAcc local_blks_written;
-	CdbExplain_DepStatAcc local_blks_dirtied;
-	CdbExplain_DepStatAcc temp_blks_read;
-	CdbExplain_DepStatAcc temp_blks_written;
-	CdbExplain_DepStatAcc blk_read_time;
-	CdbExplain_DepStatAcc blk_write_time;
-
 	int			imsgptr;
 	int			nInst;
 
@@ -1059,18 +1045,6 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 	cdbexplain_depStatAcc_init0(&workmemwanted);
 	cdbexplain_depStatAcc_init0(&totalWorkfileCreated);
 	cdbexplain_depStatAcc_init0(&totalPartTableScanned);
-	cdbexplain_depStatAcc_init0(&shared_blks_hit);
-	cdbexplain_depStatAcc_init0(&shared_blks_read);
-	cdbexplain_depStatAcc_init0(&shared_blks_written);
-	cdbexplain_depStatAcc_init0(&shared_blks_dirtied);
-	cdbexplain_depStatAcc_init0(&local_blks_hit);
-	cdbexplain_depStatAcc_init0(&local_blks_read);
-	cdbexplain_depStatAcc_init0(&local_blks_written);
-	cdbexplain_depStatAcc_init0(&local_blks_dirtied);
-	cdbexplain_depStatAcc_init0(&temp_blks_read);
-	cdbexplain_depStatAcc_init0(&temp_blks_written);
-	cdbexplain_depStatAcc_init0(&blk_read_time);
-	cdbexplain_depStatAcc_init0(&blk_write_time);
 
 	/* Initialize per-slice accumulators. */
 	cdbexplain_depStatAcc_init0(&peakmemused);
@@ -1110,18 +1084,6 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		cdbexplain_depStatAcc_upd(&workmemwanted, rsi->workmemwanted, rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalWorkfileCreated, (rsi->workfileCreated ? 1 : 0), rsh, rsi, nsi);
 		cdbexplain_depStatAcc_upd(&totalPartTableScanned, rsi->numPartScanned, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&shared_blks_hit, rsi->bufusage.shared_blks_hit, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&shared_blks_read, rsi->bufusage.shared_blks_read, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&shared_blks_written, rsi->bufusage.shared_blks_written, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&shared_blks_dirtied, rsi->bufusage.shared_blks_dirtied, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&local_blks_hit, rsi->bufusage.local_blks_hit, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&local_blks_read, rsi->bufusage.local_blks_read, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&local_blks_written, rsi->bufusage.local_blks_written, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&local_blks_dirtied, rsi->bufusage.local_blks_dirtied, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&temp_blks_read, rsi->bufusage.temp_blks_read, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&temp_blks_written, rsi->bufusage.temp_blks_written, rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&blk_read_time, INSTR_TIME_GET_DOUBLE(rsi->bufusage.blk_read_time), rsh, rsi, nsi);
-		cdbexplain_depStatAcc_upd(&blk_write_time, INSTR_TIME_GET_DOUBLE(rsi->bufusage.blk_write_time), rsh, rsi, nsi);
 
 		/* Update per-slice accumulators. */
 		cdbexplain_depStatAcc_upd(&peakmemused, rsh->worker.peakmemused, rsh, rsi, nsi);
@@ -1202,34 +1164,6 @@ cdbexplain_depositStatsToNode(PlanState *planstate, CdbExplain_RecvStatCtx *ctx)
 		 */
 		if (peakmemused.agg.vmax > 1.05 * cdbexplain_agg_avg(&peakmemused.agg))
 			cdbexplain_depStatAcc_saveText(&peakmemused, ctx->extratextbuf, &saved);
-
-		/*
-		 * For positive buffer counters, save extra message text
-		 */
-		if (shared_blks_hit.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&shared_blks_hit, ctx->extratextbuf, &saved);
-		if (shared_blks_read.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&shared_blks_read, ctx->extratextbuf, &saved);
-		if (shared_blks_written.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&shared_blks_written, ctx->extratextbuf, &saved);
-		if (shared_blks_dirtied.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&shared_blks_dirtied, ctx->extratextbuf, &saved);
-		if (local_blks_hit.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&local_blks_hit, ctx->extratextbuf, &saved);
-		if (local_blks_read.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&local_blks_read, ctx->extratextbuf, &saved);
-		if (local_blks_written.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&local_blks_written, ctx->extratextbuf, &saved);
-		if (local_blks_dirtied.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&local_blks_dirtied, ctx->extratextbuf, &saved);
-		if (temp_blks_read.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&temp_blks_read, ctx->extratextbuf, &saved);
-		if (temp_blks_written.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&temp_blks_written, ctx->extratextbuf, &saved);
-		if (blk_read_time.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&blk_read_time, ctx->extratextbuf, &saved);
-		if (blk_write_time.agg.vsum > 0)
-			cdbexplain_depStatAcc_saveText(&blk_write_time, ctx->extratextbuf, &saved);
 
 		/*
 		 * One worker which produced the greatest number of output rows.

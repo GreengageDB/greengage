@@ -143,6 +143,21 @@ per_MultiFuncCall(PG_FUNCTION_ARGS)
 }
 
 /*
+ * is_SquelchFuncCall
+ * Set squelch flag for this function and test if it's squelching already
+ */
+bool
+is_SquelchFuncCall(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo *rsi = (ReturnSetInfo *) fcinfo->resultinfo;
+
+	rsi->returnMode |= SFRM_Squelch;
+
+	return rsi->allowedModes & SFRM_Squelch;
+}
+
+
+/*
  * end_MultiFuncCall
  * Clean up after init_MultiFuncCall
  */
@@ -169,6 +184,13 @@ shutdown_MultiFuncCall(Datum arg)
 {
 	FmgrInfo   *flinfo = (FmgrInfo *) DatumGetPointer(arg);
 	FuncCallContext *funcctx = (FuncCallContext *) flinfo->fn_extra;
+
+	/*
+	 * SRF call protocol might have SRF never called, that's why
+	 * context might not exist.
+	 */
+	if (funcctx == NULL)
+		return;
 
 	/* unbind from flinfo */
 	flinfo->fn_extra = NULL;

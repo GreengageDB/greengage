@@ -153,9 +153,13 @@ ExecReScan(PlanState *node)
 			UpdateChangedParamSet(node->righttree, node->chgParam);
 	}
 
-	/* Call expression callbacks */
 	if (node->ps_ExprContext)
+	{
+		if (IsA(node, ProjectSetState))
+			ExecSquelchProjectSRF((ProjectSetState *) node);
+		/* Call expression callbacks */
 		ReScanExprContext(node->ps_ExprContext);
+	}
 
 	/* And do node-type-specific processing */
 	switch (nodeTag(node))
@@ -749,6 +753,10 @@ ExecSquelchNode(PlanState *node)
 			ExecSquelchSubqueryScan((SubqueryScanState *) node);
 			break;
 
+		case T_ProjectSetState:
+			ExecSquelchProjectSetNode((ProjectSetState *) node);
+			break;
+
 			/*
 			 * Node types that need no special handling, just recurse to
 			 * children.
@@ -767,7 +775,6 @@ ExecSquelchNode(PlanState *node)
 		case T_PartitionSelectorState:
 		case T_WorkTableScanState:
 		case T_ResultState:
-		case T_ProjectSetState:
 			ExecSquelchNode(outerPlanState(node));
 			ExecSquelchNode(innerPlanState(node));
 			break;

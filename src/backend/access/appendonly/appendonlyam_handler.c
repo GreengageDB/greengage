@@ -30,6 +30,7 @@
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_appendonly.h"
+#include "catalog/pg_attribute_encoding.h"
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
@@ -271,7 +272,7 @@ appendonly_dml_finish(Relation relation)
 
 		/*
 		 * If this fetch is a part of an update, then we have been reusing the
-		 * visimap used by the delete half of the update, which would have
+		 * visimapDelete used by the delete half of the update, which would have
 		 * already been cleaned up above. Clean up otherwise.
 		 */
 		if (!had_delete_desc)
@@ -280,6 +281,7 @@ appendonly_dml_finish(Relation relation)
 			pfree(state->uniqueCheckDesc->visimap);
 		}
 		state->uniqueCheckDesc->visimap = NULL;
+		state->uniqueCheckDesc->visiMapDelete = NULL;
 
 		pfree(state->uniqueCheckDesc);
 		state->uniqueCheckDesc = NULL;
@@ -390,17 +392,27 @@ get_or_create_unique_check_desc(Relation relation, Snapshot snapshot)
 													  snapshot);
 
 		/*
-		 * If this is part of an update, we need to reuse the visimap used by
-		 * the delete half of the update. This is to avoid spurious conflicts
-		 * when the key's previous and new value are identical. Using the
-		 * visimap from the delete half ensures that the visimap can recognize
-		 * any tuples deleted by us prior to this insert, within this command.
+		 * If this is part of an UPDATE, we need to reuse the visimapDelete
+		 * support structure from the delete half of the update. This is to
+		 * avoid spurious conflicts when the key's previous and new value are
+		 * identical. Using it ensures that we can recognize any tuples deleted
+		 * by us prior to this insert, within this command.
+		 *
+		 * Note: It is important that we reuse the visimapDelete structure and
+		 * not the visimap structure. This is because, when a uniqueness check
+		 * is performed as part of an UPDATE, visimap changes aren't persisted
+		 * yet (they are persisted at dml_finish() time, see
+		 * AppendOnlyVisimapDelete_Finish()). So, if we use the visimap
+		 * structure, we would not necessarily see all the changes.
 		 */
 		if (state->deleteDesc)
-			uniqueCheckDesc->visimap = &state->deleteDesc->visibilityMap;
+		{
+			uniqueCheckDesc->visiMapDelete = &state->deleteDesc->visiMapDelete;
+			uniqueCheckDesc->visimap = NULL;
+		}
 		else
 		{
-			/* Initialize the visimap */
+			/* COPY/INSERT: Initialize the visimap */
 			uniqueCheckDesc->visimap = palloc0(sizeof(AppendOnlyVisimap));
 			AppendOnlyVisimap_Init_forUniqueCheck(uniqueCheckDesc->visimap,
 												  relation,
@@ -681,8 +693,9 @@ appendonly_index_unique_check(Relation rel,
 	if (TransactionIdIsValid(snapshot->xmin) || TransactionIdIsValid(snapshot->xmax))
 		return true;
 
-	/* Now, consult the visimap */
-	visible = AppendOnlyVisimap_UniqueCheck(uniqueCheckDesc->visimap,
+	/* Now, perform a visibility check against the visimap infrastructure */
+	visible = AppendOnlyVisimap_UniqueCheck(uniqueCheckDesc->visiMapDelete,
+											uniqueCheckDesc->visimap,
 											aoTupleId,
 											snapshot);
 
@@ -1094,6 +1107,12 @@ appendonly_relation_nontransactional_truncate(Relation rel)
 	heap_truncate_one_relid(aoseg_relid);
 	heap_truncate_one_relid(aoblkdir_relid);
 	heap_truncate_one_relid(aovisimap_relid);
+
+	/*
+	 * Also clean up pg_attribute_encoding entries which were only useful for
+	 * the AO table about the lastrownums information. Since table data is
+	 * truncated we do not need the lastrownums info anymore. */
+	RemoveAttributeEncodingsByRelid(RelationGetRelid(rel));
 }
 
 static void
@@ -1524,9 +1543,9 @@ appendonly_acquire_sample_rows(Relation onerel, int elevel, HeapTuple *rows,
 
 	/* Prepare for sampling row numbers */
 	RowSamplerData rs;
-	RowSampler_Init(&rs, *totalrows, targrows, random());
+	RowSampler_Init(&rs, totaltupcount, targrows, random());
 
-	while (RowSampler_HasMore(&rs))
+	while (RowSampler_HasMore(&rs) && (liverows < *totalrows))
 	{
 		aoscan->targrow = RowSampler_Next(&rs);
 

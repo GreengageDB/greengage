@@ -5,16 +5,12 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 if ($windows_os)
 {
 	plan skip_all => "authentication tests cannot run on Windows";
-}
-else
-{
-	plan tests => 12;
 }
 
 # Delete pg_hba.conf from the given node, add a new entry to it
@@ -41,17 +37,25 @@ sub test_login
 
 	$status_string = 'success' if ($expected_res eq 0);
 
+	my $connstr = "user=$role";
+	my $testname =
+	  "authentication $status_string for role $role with password $password";
+
 	$ENV{"PGPASSWORD"} = $password;
-	my $res = $node->psql('postgres', undef, extra_params => [ '-U', $role ]);
-	is($res, $expected_res,
-		"authentication $status_string for role $role with password $password"
-	);
-	return;
+	if ($expected_res eq 0)
+	{
+		$node->connect_ok($connstr, $testname);
+	}
+	else
+	{
+		# No checks of the error message, only the status code.
+		$node->connect_fails($connstr, $testname);
+	}
 }
 
-# Initialize master node. Force UTF-8 encoding, so that we can use non-ASCII
+# Initialize primary node. Force UTF-8 encoding, so that we can use non-ASCII
 # characters in the passwords below.
-my $node = get_new_node('master');
+my $node = PostgreSQL::Test::Cluster->new('primary');
 $node->init(extra => [ '--locale=C', '--encoding=UTF8' ]);
 $node->start;
 
@@ -104,3 +108,5 @@ test_login($node, 'saslpreptest6_role', "foobar",     2);
 test_login($node, 'saslpreptest7_role', "foo\xd8\xa71bar", 0);
 test_login($node, 'saslpreptest7_role', "foo1\xd8\xa7bar", 2);
 test_login($node, 'saslpreptest7_role', "foobar",          2);
+
+done_testing();

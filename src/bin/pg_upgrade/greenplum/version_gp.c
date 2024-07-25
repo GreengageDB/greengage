@@ -39,7 +39,8 @@ check_hash_partition_usage(void)
 
 	prep_status("Checking for hash partitioned tables");
 
-	snprintf(output_path, sizeof(output_path), "hash_partitioned_tables.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "hash_partitioned_tables.txt");
 
 	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
 	{
@@ -85,7 +86,7 @@ check_hash_partition_usage(void)
 	{
 		fclose(script);
 		pg_log(PG_REPORT, "fatal\n");
-		pg_log(PG_FATAL,
+		gp_fatal_log(
 			   "| Your installation contains hash partitioned tables.\n"
 			   "| Upgrading hash partitioned tables is not supported,\n"
 			   "| so this cluster cannot currently be upgraded.  You\n"
@@ -99,98 +100,7 @@ check_hash_partition_usage(void)
 }
 
 /*
- * old_GPDB5_check_for_unsupported_distribution_key_data_types()
- *
- *	abstime, reltime, tinterval, money and anyarray datatypes don't have hash opclasses
- *	in GPDB 6, so they are not supported as distribution keys anymore.
- */
-void
-old_GPDB5_check_for_unsupported_distribution_key_data_types(void)
-{
-	int			dbnum;
-	FILE	   *script = NULL;
-	bool		found = false;
-	char		output_path[MAXPGPATH];
-
-	prep_status("Checking for abstime, reltime, tinterval user data types");
-
-	snprintf(output_path, sizeof(output_path), "tables_using_abstime_reltime_tinterval.txt");
-
-	for (dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
-	{
-		PGresult   *res;
-		bool		db_used = false;
-		int			ntups;
-		int			rowno;
-		int			i_nspname,
-					i_relname,
-					i_attname;
-		DbInfo	   *active_db = &old_cluster.dbarr.dbs[dbnum];
-		PGconn	   *conn = connectToServer(&old_cluster, active_db->db_name);
-
-		res = executeQueryOrDie(conn,
-								"SELECT nspname, relname, attname "
-								"FROM   pg_catalog.pg_class c, "
-								"       pg_catalog.pg_namespace n, "
-								"       pg_catalog.pg_attribute a, "
-								"       gp_distribution_policy p "
-								"WHERE  c.oid = a.attrelid AND "
-								"       c.oid = p.localoid AND "
-								"       a.atttypid in ('pg_catalog.abstime'::regtype, "
-								"                      'pg_catalog.reltime'::regtype, "
-								"                      'pg_catalog.tinterval'::regtype, "
-								"                      'pg_catalog.money'::regtype, "
-								"                      'pg_catalog.anyarray'::regtype) AND "
-								"       attnum = any (p.attrnums) AND "
-								"       c.relnamespace = n.oid AND "
-		/* exclude possible orphaned temp tables */
-								"  		n.nspname !~ '^pg_temp_'");
-
-		ntups = PQntuples(res);
-		i_nspname = PQfnumber(res, "nspname");
-		i_relname = PQfnumber(res, "relname");
-		i_attname = PQfnumber(res, "attname");
-		for (rowno = 0; rowno < ntups; rowno++)
-		{
-			found = true;
-			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
-				pg_fatal("Could not open file \"%s\": %s\n",
-						 output_path, strerror(errno));
-			if (!db_used)
-			{
-				fprintf(script, "In database: %s\n", active_db->db_name);
-				db_used = true;
-			}
-			fprintf(script, "  %s.%s.%s\n",
-					PQgetvalue(res, rowno, i_nspname),
-					PQgetvalue(res, rowno, i_relname),
-					PQgetvalue(res, rowno, i_attname));
-		}
-
-		PQclear(res);
-
-		PQfinish(conn);
-	}
-
-	if (script)
-		fclose(script);
-
-	if (found)
-	{
-		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("Your installation contains a user table, that uses a 'abstime',\n"
-				 "'reltime', 'tinterval', 'money' or 'anyarray' type as a distribution key column. Using\n"
-				 "these datatypes as distribution keys is no longer supported. You can use\n"
-				 "ALTER TABLE ... SET DISTRIBUTED RANDOMLY to change the distribution keys,\n"
-				 "and restart the upgrade.  A list of the problem columns is in the file:\n"
-				 "    %s\n\n", output_path);
-	}
-	else
-		check_ok();
-}
-
-/*
- * old_GPDB6_check_for_unsupported_distribution_key_data_types()
+ * old_GPDB6_check_for_unsupported_sha256_password_hashes()
  *
  *  Support for password_hash_algorithm='sha-256' was removed in GPDB 7. Check if
  *  any roles have SHA-256 password hashes.
@@ -204,7 +114,8 @@ old_GPDB6_check_for_unsupported_sha256_password_hashes(void)
 
 	prep_status("Checking for SHA-256 hashed passwords");
 
-	snprintf(output_path, sizeof(output_path), "roles_using_sha256_passwords.txt");
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "roles_using_sha256_passwords.txt");
 
 	/* It's enough to check this in one database, pg_authid is a shared catalog. */
 	{
@@ -242,11 +153,12 @@ old_GPDB6_check_for_unsupported_sha256_password_hashes(void)
 	if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
-		pg_fatal("Your installation contains roles with SHA-256 hashed passwords. Using\n"
-				 "SHA-256 for password hashes is no longer supported. You can use\n"
-				 "ALTER ROLE <role name> WITH PASSWORD NULL as superuser to clear passwords,\n"
-				 "and restart the upgrade.  A list of the problem roles is in the file:\n"
-				 "    %s\n\n", output_path);
+		gp_fatal_log(
+				 "| Your installation contains roles with SHA-256 hashed passwords. Using\n"
+				 "| SHA-256 for password hashes is no longer supported. You can use\n"
+				 "| ALTER ROLE <role name> WITH PASSWORD NULL as superuser to clear passwords,\n"
+				 "| and restart the upgrade.  A list of the problem roles is in the file:\n"
+				 "|    %s\n\n", output_path);
 	}
 	else
 		check_ok();
@@ -255,7 +167,7 @@ old_GPDB6_check_for_unsupported_sha256_password_hashes(void)
 /*
  * new_gpdb_invalidate_bitmap_indexes()
  *
- * TODO: We are currently missing the support to migrate over bitmap indexes.
+ * GPDB_UPGRADE_FIXME: We are currently missing the support to migrate over bitmap indexes.
  * Hence, mark all bitmap indexes as invalid.
  */
 void

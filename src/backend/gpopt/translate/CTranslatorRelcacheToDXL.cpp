@@ -607,25 +607,23 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	// collect relation indexes
 	md_index_info_array = RetrieveRelIndexInfo(mp, rel.get());
 
-	is_partitioned =
-		(nullptr != gpdb::GPDBRelationRetrievePartitionDesc(rel.get()));
+	is_partitioned = (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE);
 
 	// get number of leaf partitions
-	if (gpdb::GPDBRelationRetrievePartitionDesc(rel.get()))
+	if (is_partitioned)
 	{
 		RetrievePartKeysAndTypes(mp, rel.get(), oid, &part_keys, &part_types);
 
 		partition_oids = GPOS_NEW(mp) IMdIdArray(mp);
-		for (int i = 0;
-			 i < gpdb::GPDBRelationRetrievePartitionDesc(rel.get())->nparts;
-			 ++i)
+		PartitionDesc part_desc =
+			gpdb::GPDBRelationRetrievePartitionDesc(rel.get());
+		for (int i = 0; i < part_desc->nparts; ++i)
 		{
-			Oid part_oid =
-				gpdb::GPDBRelationRetrievePartitionDesc(rel.get())->oids[i];
+			Oid part_oid = part_desc->oids[i];
 			partition_oids->Append(GPOS_NEW(mp)
 									   CMDIdGPDB(IMDId::EmdidRel, part_oid));
 			gpdb::RelationWrapper rel_part = gpdb::GetRelation(part_oid);
-			if (gpdb::GPDBRelationRetrievePartitionDesc(rel_part.get()))
+			if (rel_part->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 			{
 				// Multi-level partitioned tables are unsupported - fall back
 				GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiMDObjUnsupported,
@@ -1899,6 +1897,14 @@ CTranslatorRelcacheToDXL::RetrieveColStats(CMemoryPool *mp,
 
 	CDXLBucketArray *dxl_stats_bucket_array = GPOS_NEW(mp) CDXLBucketArray(mp);
 
+	if (0 > attno)
+	{
+		mdid_col_stats->AddRef();
+		return GenerateStatsForSystemCols(mp, md_rel, mdid_col_stats,
+										  md_colname, md_col->MdidType(), attno,
+										  dxl_stats_bucket_array, num_rows);
+	}
+
 	// extract out histogram and mcv information from pg_statistic
 	HeapTuple stats_tup = gpdb::GetAttStats(rel_oid, attno);
 
@@ -2089,6 +2095,73 @@ CTranslatorRelcacheToDXL::RetrieveColStats(CMemoryPool *mp,
 	return dxl_col_stats;
 }
 
+//---------------------------------------------------------------------------
+//      @function:
+//              CTranslatorRelcacheToDXL::GenerateStatsForSystemCols
+//
+//      @doc:
+//              Generate statistics for the system level columns
+//
+//---------------------------------------------------------------------------
+CDXLColStats *
+CTranslatorRelcacheToDXL::GenerateStatsForSystemCols(
+	CMemoryPool *mp, const IMDRelation *md_rel, CMDIdColStats *mdid_col_stats,
+	CMDName *md_colname, IMDId *mdid_atttype, AttrNumber attno,
+	CDXLBucketArray *dxl_stats_bucket_array, CDouble num_rows)
+{
+	GPOS_ASSERT(nullptr != mdid_col_stats);
+	GPOS_ASSERT(nullptr != md_colname);
+	GPOS_ASSERT(0 > attno);
+	GPOS_ASSERT(nullptr != dxl_stats_bucket_array);
+
+	IMDType *md_type = RetrieveType(mp, mdid_atttype);
+	GPOS_ASSERT(md_type->IsFixedLength());
+
+
+	BOOL is_col_stats_missing = true;
+	CDouble null_freq(0.0);
+	CDouble width(md_type->Length());
+	CDouble distinct_remaining(0.0);
+	CDouble freq_remaining(0.0);
+
+	if (CStatistics::MinRows <= num_rows)
+	{
+		switch (attno)
+		{
+			case GpSegmentIdAttributeNumber:  // gp_segment_id
+			{
+				is_col_stats_missing = false;
+				freq_remaining = CDouble(1.0);
+				distinct_remaining = CDouble(gpdb::GetGPSegmentCount());
+				break;
+			}
+			case TableOidAttributeNumber:  // tableoid
+			{
+				is_col_stats_missing = false;
+				freq_remaining = CDouble(1.0);
+				distinct_remaining = CDouble(
+					md_rel->IsPartitioned() ? md_rel->PartColumnCount() : 1);
+				break;
+			}
+			case SelfItemPointerAttributeNumber:  // ctid
+			{
+				is_col_stats_missing = false;
+				freq_remaining = CDouble(1.0);
+				distinct_remaining = num_rows;
+				break;
+			}
+			default:
+				break;
+		}
+	}
+
+	// cleanup
+	md_type->Release();
+
+	return GPOS_NEW(mp) CDXLColStats(
+		mp, mdid_col_stats, md_colname, width, null_freq, distinct_remaining,
+		freq_remaining, dxl_stats_bucket_array, is_col_stats_missing);
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -2890,7 +2963,7 @@ CTranslatorRelcacheToDXL::RelHasSystemColumns(char rel_kind)
 {
 	return RELKIND_RELATION == rel_kind || RELKIND_SEQUENCE == rel_kind ||
 		   RELKIND_AOSEGMENTS == rel_kind || RELKIND_TOASTVALUE == rel_kind ||
-		   RELKIND_FOREIGN_TABLE == rel_kind ||
+		   RELKIND_FOREIGN_TABLE == rel_kind || RELKIND_MATVIEW == rel_kind ||
 		   RELKIND_PARTITIONED_TABLE == rel_kind;
 }
 

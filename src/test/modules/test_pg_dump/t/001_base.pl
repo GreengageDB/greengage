@@ -1,13 +1,11 @@
 use strict;
 use warnings;
 
-use Config;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 
-my $tempdir       = TestLib::tempdir;
-my $tempdir_short = TestLib::tempdir_short;
+my $tempdir       = PostgreSQL::Test::Utils::tempdir;
 
 ###############################################################
 # This structure is based off of the src/bin/pg_dump/t test
@@ -26,7 +24,7 @@ my $tempdir_short = TestLib::tempdir_short;
 # the full command and arguments to run.  Note that this is run
 # using $node->command_ok(), so the port does not need to be
 # specified and is pulled from $PGPORT, which is set by the
-# PostgresNode system.
+# PostgreSQL::Test::Cluster system.
 #
 # restore_cmd is the pg_restore command to run, if any.  Note
 # that this should generally be used when the pg_dump goes to
@@ -649,49 +647,11 @@ my %tests = (
 #########################################
 # Create a PG instance to test actually dumping from
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 $node->start;
 
 my $port = $node->port;
-
-my $num_tests = 0;
-
-foreach my $run (sort keys %pgdump_runs)
-{
-	my $test_key = $run;
-
-	# Each run of pg_dump is a test itself
-	$num_tests++;
-
-	# If there is a restore cmd, that's another test
-	if ($pgdump_runs{$run}->{restore_cmd})
-	{
-		$num_tests++;
-	}
-
-	if ($pgdump_runs{$run}->{test_key})
-	{
-		$test_key = $pgdump_runs{$run}->{test_key};
-	}
-
-	# Then count all the tests run against each run
-	foreach my $test (sort keys %tests)
-	{
-		# If there is a like entry, but no unlike entry, then we will test the like case
-		if ($tests{$test}->{like}->{$test_key}
-			&& !defined($tests{$test}->{unlike}->{$test_key}))
-		{
-			$num_tests++;
-		}
-		else
-		{
-			# We will test everything that isn't a 'like'
-			$num_tests++;
-		}
-	}
-}
-plan tests => $num_tests;
 
 #########################################
 # Set up schemas, tables, etc, to be dumped.
@@ -784,3 +744,5 @@ foreach my $run (sort keys %pgdump_runs)
 # Stop the database instance, which will be removed at the end of the tests.
 
 $node->stop('fast');
+
+done_testing();

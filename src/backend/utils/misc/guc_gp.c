@@ -230,10 +230,14 @@ char	   *gp_resource_group_cgroup_parent;
 bool		vmem_process_interrupt = false;
 bool		execute_pruned_plan = false;
 
+/* partitioning GUC */
+int			gp_max_partition_level;
+
 /* Upgrade & maintenance GUCs */
 bool		gp_maintenance_mode;
 bool		gp_maintenance_conn;
 bool		allow_segment_DML;
+bool		gp_enable_statement_trigger;
 
 /* Time based authentication GUC */
 char	   *gp_auth_time_override_str = NULL;
@@ -327,7 +331,9 @@ bool		optimizer_enable_dml_constraints;
 bool		optimizer_enable_coordinator_only_queries;
 bool		optimizer_enable_hashjoin;
 bool		optimizer_enable_dynamictablescan;
+bool		optimizer_enable_dynamicindexscan;
 bool		optimizer_enable_dynamicindexonlyscan;
+bool		optimizer_enable_dynamicbitmapscan;
 bool		optimizer_enable_indexscan;
 bool		optimizer_enable_indexonlyscan;
 bool		optimizer_enable_tablescan;
@@ -340,6 +346,7 @@ bool		optimizer_force_comprehensive_join_implementation;
 bool		optimizer_enable_replicated_table;
 bool		optimizer_enable_foreign_table;
 bool		optimizer_enable_right_outer_join;
+bool		optimizer_enable_query_parameter;
 
 /* Optimizer plan enumeration related GUCs */
 bool		optimizer_enumerate_plans;
@@ -636,6 +643,18 @@ struct config_bool ConfigureNamesBool_gp[] =
 		false,
 		NULL, NULL, NULL
 	},
+
+	{
+		{"gp_enable_statement_trigger", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Enables statement triggers to be created instead of erroring out."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_enable_statement_trigger,
+		false,
+		NULL, NULL, NULL
+	},
+
 	{
 		{"enable_groupagg", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of grouping aggregation plans."),
@@ -2257,6 +2276,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+			{"optimizer_enable_dynamicindexscan", PGC_USERSET, QUERY_TUNING_METHOD,
+					gettext_noop("Enables the optimizer's use of plans with dynamic index scan."),
+					NULL,
+					GUC_NOT_IN_SAMPLE
+			},
+			&optimizer_enable_dynamicindexscan,
+			true,
+			NULL, NULL, NULL
+	},
+
+	{
 		{"optimizer_enable_dynamicindexonlyscan", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the optimizer's use of plans with dynamic index only scan."),
 			NULL,
@@ -2265,6 +2295,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		&optimizer_enable_dynamicindexonlyscan,
 		true,
 		NULL, NULL, NULL
+	},
+
+	{
+			{"optimizer_enable_dynamicbitmapscan", PGC_USERSET, QUERY_TUNING_METHOD,
+					gettext_noop("Enables the optimizer's use of plans with dynamic bitmap scan."),
+					NULL,
+					GUC_NOT_IN_SAMPLE
+			},
+			&optimizer_enable_dynamicbitmapscan,
+			true,
+			NULL, NULL, NULL
 	},
 
 	{
@@ -2676,14 +2717,13 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_reject_internal_tcp_connection", PGC_POSTMASTER,
-			DEVELOPER_OPTIONS,
-			gettext_noop("Permit internal TCP connections to the coordinator."),
+		{"gp_reject_internal_tcp_connection", PGC_POSTMASTER, DEFUNCT_OPTIONS,
+			gettext_noop("Unused. Syntax check only for GPDB compatibility."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_reject_internal_tcp_conn,
-		true,
+		false,
 		NULL, NULL, NULL
 	},
 
@@ -2941,17 +2981,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		false,
 		NULL, NULL, NULL
 	},
-
-	{
-		{"gp_pause_on_restore_point_replay", PGC_SIGHUP, DEVELOPER_OPTIONS,
-		 gettext_noop("Pause recovery when a restore point is replayed."),
-		 NULL,
-		 GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&gp_pause_on_restore_point_replay,
-		false,
-		NULL, NULL, NULL
-	},
 	{
 		{"gp_autostats_allow_nonowner", PGC_SUSET, DEVELOPER_OPTIONS,
 			gettext_noop("Allow automatic stats collection on tables even for users who are not the owner of the relation."),
@@ -3021,6 +3050,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		 GUC_NOT_IN_SAMPLE
 		},
 		&optimizer_enable_right_outer_join,
+		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"optimizer_enable_query_parameter", PGC_USERSET, DEVELOPER_OPTIONS,
+		 gettext_noop("Enable query parameters in Orca."),
+		 NULL,
+		 GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_enable_query_parameter,
 		true,
 		NULL, NULL, NULL
 	},
@@ -3216,6 +3255,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_max_plan_size,
 		0, 0, MAX_KILOBYTES,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_max_partition_level", PGC_SUSET, PRESET_OPTIONS,
+			gettext_noop("Sets the maximum number of levels allowed when creating a partitioned table using Greenplum classic syntax."),
+			gettext_noop("Use 0 for no limit."),
+			GUC_SUPERUSER_ONLY
+		},
+		&gp_max_partition_level,
+		0, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 
@@ -4699,6 +4749,18 @@ struct config_string ConfigureNamesString_gp[] =
 	},
 #endif  /* ENABLE_IC_PROXY */
 
+	{
+		{"gp_pause_on_restore_point_replay", PGC_SUSET, DEVELOPER_OPTIONS,
+			gettext_noop("Specifies the restore point to pause replay on."),
+			gettext_noop("Unlike recovery_target_name, this can be used to continuously set/reset "
+						"how much a standby should replay up to."),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_pause_on_restore_point_replay,
+		"",
+		NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, NULL, NULL, NULL
@@ -4949,7 +5011,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 	},
 
 	{
-		{"gp_postmaster_inet_address_family", PGC_POSTMASTER, CUSTOM_OPTIONS,
+		{"gp_postmaster_address_family", PGC_POSTMASTER, CUSTOM_OPTIONS,
 			gettext_noop("Specifies the address family used by postmaster listener sockets."),
 			gettext_noop("Valid values are auto, ipv4 and ipv6."), 
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE

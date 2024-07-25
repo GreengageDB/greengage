@@ -57,6 +57,14 @@ CleanupRelease(T *elem)
 	(dynamic_cast<CRefCount *>(elem))->Release();
 }
 
+// Compare function used by CDynamicPtrArray::Sort
+inline INT
+CompareUlongPtr(const void *right, const void *left)
+{
+	return *((ULONG *) right) - *((ULONG *) left);
+}
+
+
 // commonly used array types
 
 // arrays of unsigned integers
@@ -69,6 +77,9 @@ using IntPtrArray = CDynamicPtrArray<INT, CleanupDelete>;
 
 // array of strings
 using StringPtrArray = CDynamicPtrArray<CWStringBase, CleanupDelete>;
+
+// array of string arrays
+using StringPtr2dArray = CDynamicPtrArray<StringPtrArray, CleanupRelease>;
 
 // arrays of chars
 using CharPtrArray = CDynamicPtrArray<CHAR, CleanupDelete>;
@@ -102,26 +113,6 @@ private:
 
 	// actual array
 	T **m_elems;
-
-	// comparison function for pointers
-	static INT
-	PtrCmp(const void *p1, const void *p2)
-	{
-		ULONG_PTR ulp1 = *(ULONG_PTR *) p1;
-		ULONG_PTR ulp2 = *(ULONG_PTR *) p2;
-
-		if (ulp1 < ulp2)
-		{
-			return -1;
-		}
-
-		if (ulp1 > ulp2)
-		{
-			return 1;
-		}
-
-		return 0;
-	}
 
 	// resize function
 	void
@@ -241,7 +232,7 @@ public:
 
 	// sort array
 	void
-	Sort(CompareFn compare_func = PtrCmp)
+	Sort(CompareFn compare_func)
 	{
 		clib::Qsort(m_elems, m_size, sizeof(T *), compare_func);
 	}
@@ -254,10 +245,22 @@ public:
 
 		for (ULONG i = 0; i < m_size && is_equal; i++)
 		{
-			is_equal = (m_elems[i] == arr->m_elems[i]);
+			is_equal = (*m_elems[i] == *arr->m_elems[i]);
 		}
 
 		return is_equal;
+	}
+
+	BOOL
+	operator==(const CDynamicPtrArray<T, CleanupFn> &other)
+	{
+		if (this == &other)
+		{
+			// same object reference
+			return true;
+		}
+
+		return Equals(&other);
 	}
 
 	// lookup object
@@ -294,10 +297,9 @@ public:
 		return gpos::ulong_max;
 	}
 
-#ifdef GPOS_DEBUG
 	// check if array is sorted
 	BOOL
-	IsSorted(CompareFn compare_func = PtrCmp) const
+	IsSorted(CompareFn compare_func) const
 	{
 		for (ULONG i = 1; i < m_size; i++)
 		{
@@ -309,7 +311,6 @@ public:
 
 		return true;
 	}
-#endif	// GPOS_DEBUG
 
 	// accessor for n-th element
 	T *

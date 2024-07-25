@@ -19,7 +19,6 @@
 #include "gpopt/base/CWindowFrame.h"
 #include "gpopt/engine/CHint.h"
 #include "gpopt/metadata/CIndexDescriptor.h"
-#include "gpopt/metadata/CPartConstraint.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CExpression.h"
 #include "gpopt/operators/CExpressionHandle.h"
@@ -898,7 +897,8 @@ CCostModelGPDB::CostHashJoin(CMemoryPool *mp, CExpressionHandle &exprhdl,
 				COperator::EopPhysicalLeftAntiSemiHashJoin == op_id ||
 				COperator::EopPhysicalLeftAntiSemiHashJoinNotIn == op_id ||
 				COperator::EopPhysicalLeftOuterHashJoin == op_id ||
-				COperator::EopPhysicalRightOuterHashJoin == op_id);
+				COperator::EopPhysicalRightOuterHashJoin == op_id ||
+				COperator::EopPhysicalFullHashJoin == op_id);
 #endif	// GPOS_DEBUG
 
 	const DOUBLE num_rows_outer = pci->PdRows()[0];
@@ -2474,6 +2474,7 @@ CCostModelGPDB::Cost(
 		case COperator::EopPhysicalLeftAntiSemiHashJoinNotIn:
 		case COperator::EopPhysicalLeftOuterHashJoin:
 		case COperator::EopPhysicalRightOuterHashJoin:
+		case COperator::EopPhysicalFullHashJoin:
 		{
 			return CostHashJoin(m_mp, exprhdl, this, pci);
 		}

@@ -128,7 +128,7 @@ Feature: gpcheckcat tests
         Then gpcheckcat should print "Extra" to stdout
         And gpcheckcat should print "Table miss_attr_db4.public.heap_table.1" to stdout
 
-    Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence
+    Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence for AO tables
         Given database "errorneous_lastrownums" is dropped and recreated
         And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_row; insert into errlastrownum select * from generate_series(1,100);""
         And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
@@ -140,6 +140,26 @@ Feature: gpcheckcat tests
         And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
         Given database "errorneous_lastrownums" is dropped and recreated
         And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_row; insert into errlastrownum select * from generate_series(1,10);""
+        And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
+        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
+        Then gpcheckcat should return a return code of 0
+        Then the user runs sql "set allow_system_table_mods=on; delete from gp_fastsequence where last_sequence > 0;" in "errorneous_lastrownums" on first primary segment
+        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
+        Then gpcheckcat should return a return code of 3
+        And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
+
+    Scenario: gpcheckcat should report inconsistent pg_fastsequence.lastrownums values with gp_fastsequence for AOCO tables
+        Given database "errorneous_lastrownums" is dropped and recreated
+        And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_column; insert into errlastrownum select * from generate_series(1,100);""
+        And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
+        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
+        Then gpcheckcat should return a return code of 0
+        When the user runs sql "set allow_system_table_mods=on; update gp_fastsequence set last_sequence = 0 where last_sequence > 0;" in "errorneous_lastrownums" on first primary segment
+        When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
+        Then gpcheckcat should return a return code of 3
+        And gpcheckcat should print "Failed test\(s\) that are not reported here: ao_lastrownums" to stdout
+        Given database "errorneous_lastrownums" is dropped and recreated
+        And the user runs "psql errorneous_lastrownums -c "create table errlastrownum(a int) using ao_column; insert into errlastrownum select * from generate_series(1,10);""
         And the user runs "psql errorneous_lastrownums -c "alter table errlastrownum add column newcol int;""
         When the user runs "gpcheckcat -R ao_lastrownums errorneous_lastrownums"
         Then gpcheckcat should return a return code of 0
@@ -779,3 +799,97 @@ Feature: gpcheckcat tests
           And the user runs "gpstop -ma"
           And "gpstop -m" should return a return code of 0
           And the user runs "gpstart -a"
+
+    Scenario: Validate if gpecheckcat throws error when there are tables created using mix distribution policy
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        Then psql should return a return code of 0
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db "
+        And gpcheckcat should print "Found tables created using both legacy and non legacy hashops in distribution policy." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: Validate if gpcheckcat succeeds and there are no tables
+        Given database "hashops_db" is dropped and recreated
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "PASSED" to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: Validate if gpcheckcat throws error when GUC gp_use_legacy_hashops is on and there are non legacy tables
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v on --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "GUC gp_use_legacy_hashops is on." to stdout
+        And gpcheckcat should print "all newly created tables will use legacy hash ops by default for hash distributed table," to stdout
+        And gpcheckcat should print "but there are tables using non-legacy hash ops in the cluster." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        And the user runs "dropdb hashops_db"
+
+      Scenario: Validate if gpcheckcat succeeds when GUC gp_use_legacy_hashops is on and there are legacy tables
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        Then psql should return a return code of 0
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v on --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+         And gpcheckcat should print "PASSED" to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: Validate if gpcheckcat throws error when GUC gp_use_legacy_hashops is off and there are legacy tables
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v off --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "GUC gp_use_legacy_hashops is off." to stdout
+        And gpcheckcat should print "all newly created tables will use non legacy hash ops by default for hash distributed table," to stdout
+        And gpcheckcat should print "but there are tables using legacy hash ops in the cluster." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: Validate if gpcheckcat succeeds when GUC gp_use_legacy_hashops is off and there are non legacy tables 
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        And the user runs "gpconfig -c gp_use_legacy_hashops -v off --skipvalidation"
+        Then gpconfig should return a return code of 0
+        And the user runs "gpstop -a"
+        Then gpstop should return a return code of 0
+        And the user runs "gpstart -a"
+        When the user runs "gpcheckcat -R mix_distribution_policy hashops_db"
+        And gpcheckcat should print "PASSED" to stdout
+        And the user runs "dropdb hashops_db"
+
+    Scenario: gpcheckcat -l should report mix_distribution_policy to stdout
+        When the user runs "gpcheckcat -l "
+        And gpcheckcat should print "mix_distribution_policy" to stdout
+
+    Scenario: gpcheckcat report all tables created using legacy opclass on multiple database
+        Given database "hashops_db" is dropped and recreated
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        And the user runs "psql hashops_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        Given database "hashops_db2" is dropped and recreated
+        And the user runs "psql hashops_db2 -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_legacy_hash_ops_tables.sql"
+        And the user runs "psql hashops_db2 -f test/behave/mgmt_utils/steps/data/gpcheckcat/create_non_legacy_hashops_tables.sql"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -A -R mix_distribution_policy"
+        And gpcheckcat should print "Found tables created using both legacy and non legacy hashops in distribution policy." to stdout
+        And gpcheckcat should print "Please run the gpcheckcat.distpolicy.sql file to list the tables." to stdout
+        Then gpcheckcat should print "Completed 1 test(s) on database 'hashops_db'" to logfile with latest timestamp
+        Then gpcheckcat should print "Completed 1 test(s) on database 'hashops_db2'" to logfile with latest timestamp
+        And the user runs "dropdb hashops_db"
+        And the user runs "dropdb hashops_db2"

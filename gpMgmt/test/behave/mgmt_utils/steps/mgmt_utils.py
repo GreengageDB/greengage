@@ -28,6 +28,7 @@ from gppylib.commands.unix import CMD_CACHE
 from gppylib.commands.pg import PgBaseBackup
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
 from gppylib.operations.buildMirrorSegments import get_recovery_progress_pattern
+from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
 from gppylib.operations.unix import ListRemoteFilesByPattern, CheckRemoteFile
 from test.behave_utils.gpfdist_utils.gpfdist_mgmt import Gpfdist
 from test.behave_utils.utils import *
@@ -2714,6 +2715,18 @@ def impl(context, command, target):
     if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
+@then('{command} should print "{target}" to logfile with latest timestamp')
+def impl(context, command, target):
+    log_dir = _get_gpAdminLogs_directory()
+    filenames = glob.glob('%s/%s_*.log' % (log_dir, command))
+    filename = max(filenames, key=os.path.getctime)
+    contents = ''
+    with open(filename) as fr:
+        for line in fr:
+            contents += line
+    if target not in contents:
+        raise Exception("cannot find %s in %s" % (target, filename))
+
 
 @then('{command} should print "{target}" regex to logfile')
 def impl(context, command, target):
@@ -4226,16 +4239,27 @@ def impl(context, table, dbname, count):
             "%s table in %s has %d rows, expected %d rows." % (table, dbname, sum(current_row_count), int(count)))
 
 
-@then('the created config file {output_config_file} contains the row for unreachable failed segment')
+@then('the created config file {output_config_file} contains the commented row for unreachable failed segment')
 def impl(context, output_config_file):
-    all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+    gparray = GpArray.initFromCatalog(dbconn.DbURL())
+    cluster_hosts = gparray.get_hostlist()
+    all_segments = gparray.getDbList()
     failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
 
     expected_seg_rows = []
+    expected_seg_rows.append("# If any entry is commented, please know that it belongs to failed segment which is unreachable.")
+    expected_seg_rows.append("# If you need to recover them, please modify the segment entry and add failover details")
+    expected_seg_rows.append("# (failed_addresss|failed_port|failed_dataDirectory<space>failover_addresss|failover_port|failover_dataDirectory) "
+                     "to recover it to another host.")
+    expected_seg_rows.append("")
     actual_seg_rows = []
+    unreachable_hosts = get_unreachable_segment_hosts(cluster_hosts, 1)
     for seg in failed_segments:
         addr = canonicalize_address(seg.getSegmentAddress())
-        expected_seg_rows.append('{}|{}|{}'.format(addr, seg.getSegmentPort(), seg.getSegmentDataDirectory()))
+        if seg.getSegmentHostName() in unreachable_hosts:
+            expected_seg_rows.append('#{}|{}|{}'.format(addr, seg.getSegmentPort(), seg.getSegmentDataDirectory()))
+        else:
+            expected_seg_rows.append('{}|{}|{}'.format(addr, seg.getSegmentPort(), seg.getSegmentDataDirectory()))
 
     if os.path.exists(output_config_file):
         with open(output_config_file, 'r') as fp:
@@ -4276,6 +4300,15 @@ def impl(context, logdir, stage):
         if attempt == num_retries:
             raise Exception('Timed out after {} retries'.format(num_retries))
 
+@when('add {seconds} seconds sleep after first table expand')
+def impl(context, seconds):
+    create_fault_query = "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"
+    execute_sql(context.dbname, create_fault_query)
+    # We use the after_swap_relation_files fault injector to simulate a long
+    # table expansion time because during the expansion of the table, we swap
+    # the relation files.
+    inject_fault_query = f"SELECT gp_inject_fault('after_swap_relation_files', 'sleep', '', '', '', 1, 1, {seconds}, 2);"
+    execute_sql(context.dbname, inject_fault_query)
 
 def verify_elements_in_file(filename, elements):
     with open(filename, 'r') as file:
@@ -4286,3 +4319,54 @@ def verify_elements_in_file(filename, elements):
                 return False
 
         return True
+
+def set_ic_proxy_and_address(context, new_addr):
+    """
+        set the proper proxy addresses and enable proxy mode
+    """
+    with closing(dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)) as conn:
+        # get segment_configuration
+        sql = "SELECT dbid, content, address, port FROM gp_segment_configuration order by dbid"
+        rows = dbconn.query(conn, sql).fetchall()
+        if len(rows) <= 0:
+            raise Exception("Found no entries in gp_segment_configuration table")
+
+        # generate the proper proxy addresses by segment_configuration
+        cmd = "gpconfig -c gp_interconnect_proxy_addresses -v \"'"
+        for row in rows:
+            delta = 4000
+            dbid = row[0]
+            contentid = row[1]
+            host = row[2].strip()
+            port = int(row[3]) - delta
+            # an icproxy_addresses_string example: 1:-1:gpdb:1432,2:0:gpdb:2000,3:1:gpdb:2001
+            if dbid != 1:
+                cmd += ","
+            cmd += "%d:%d:%s:%d" % (dbid, contentid, host, port)
+        # append new address
+        if new_addr:
+            cmd += ","
+            cmd += new_addr
+        cmd += "'\" --skipvalidation"
+        run_command(context, cmd)
+        if context.ret_code != 0:
+            raise Exception("cannot run %s: %s, stdout: %s" % (cmd, context.error_message, context.stdout_message))
+
+        # set interconnect_type to proxy
+        cmd = "gpconfig -c gp_interconnect_type -v proxy"
+        run_command(context, cmd)
+        if context.ret_code != 0:
+            raise Exception("cannot run %s: %s, stdout: %s" % (cmd, context.error_message, context.stdout_message))
+        # let all config take effects
+        cmd = "gpstop -u"
+        run_command(context, cmd)
+        if context.ret_code != 0:
+            raise Exception("cannot run %s: %s, stdout: %s" % (cmd, context.error_message, context.stdout_message))
+
+@given(u'the cluster is running in IC proxy mode')
+def step_impl(context):
+    set_ic_proxy_and_address(context, "")
+
+@given(u'the cluster is running in IC proxy mode with new proxy address {address}')
+def step_impl(context, address):
+    set_ic_proxy_and_address(context, address)

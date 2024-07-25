@@ -3,22 +3,11 @@
 #
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
-use Config;
-if ($Config{osname} eq 'MSWin32')
-{
 
-	# some Windows Perls at least don't like IPC::Run's start/kill_kill regime.
-	plan skip_all => "Test fails on Windows perl";
-}
-else
-{
-	plan tests => 3;
-}
-
-my $node = get_new_node('master');
+my $node = PostgreSQL::Test::Cluster->new('primary');
 $node->init(allows_streaming => 1);
 $node->start;
 
@@ -66,3 +55,5 @@ is($node->safe_psql('postgres', qq[SELECT txid_status('$xid');]),
 	'aborted', 'xid is aborted after crash');
 
 $tx->kill_kill;
+
+done_testing();

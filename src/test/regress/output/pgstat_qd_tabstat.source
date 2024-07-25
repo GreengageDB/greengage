@@ -42,19 +42,20 @@ select n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n
 create table table_for_initplan (i int, j varchar, k int) distributed by (i);
 copy table_for_initplan (i, j, k) from stdin;
 explain (costs off) with updated AS (update table_for_initplan set k = 33 where i = 3 returning k) select table_for_initplan.*, (select sum(k) from updated) from table_for_initplan;
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    InitPlan 1 (returns $1)  (slice2)
      ->  Finalize Aggregate
            ->  Gather Motion 1:1  (slice3; segments: 1)
                  ->  Partial Aggregate
-                       ->  Update on table_for_initplan table_for_initplan_1
-                             ->  Seq Scan on table_for_initplan table_for_initplan_1
-                                   Filter: (i = 3)
+                       ->  Shared Scan (share slice:id 3:0)
+                             ->  Update on table_for_initplan table_for_initplan_1
+                                   ->  Seq Scan on table_for_initplan table_for_initplan_1
+                                         Filter: (i = 3)
    ->  Seq Scan on table_for_initplan
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 with updated AS (update table_for_initplan set k = 33 where i = 3 returning k) select table_for_initplan.*, (select sum(k) from updated) from table_for_initplan;
  i |   j   | k  | sum 

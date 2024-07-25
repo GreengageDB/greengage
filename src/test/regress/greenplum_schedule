@@ -18,6 +18,8 @@
 # required setup steps
 test: test_setup
 
+test: planhints rowhints joinhints
+
 test: pg_dump_binary_upgrade
 
 test: gp_dispatch_keepalives
@@ -191,7 +193,7 @@ test: minirepro
 test: gporca_faults
 
 # Tests for replicated table
-test: rpt rpt_joins rpt_tpch rpt_returning
+test: rpt rpt_joins rpt_tpch rpt_returning bfv_dml_rpt
 
 # NOTE: The bfv_temp test assumes that there are no temporary tables in
 # other sessions. Therefore the other tests in this group mustn't create
@@ -199,7 +201,7 @@ test: rpt rpt_joins rpt_tpch rpt_returning
 test: bfv_cte
 test: bfv_joins bfv_subquery bfv_planner bfv_legacy bfv_temp bfv_dml
 
-test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_skew qp_select partition_prune_opfamily gp_tsrf qp_join_union_all qp_join_universal
+test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_skew qp_select partition_prune_opfamily gp_tsrf qp_join_union_all qp_join_universal qp_rowsecurity qp_query_params qp_full_join
 
 test: qp_misc_jiras qp_with_clause qp_executor qp_olap_windowerr qp_olap_window qp_derived_table qp_bitmapscan qp_dropped_cols
 test: qp_with_functional_inlining qp_with_functional_noinlining
@@ -352,9 +354,6 @@ test: resource_manager_restore_to_none
 
 # test dispatch and result handling of gp_log_memory_backend_contexts
 test: gp_log_mem_dispatch
-
-# test that distributing or hash partitioning by an enum field or expression is blocked
-test: enum_dist_part_ban
 
 # test compresstype fallback from quicklz when gp_quicklz_fallback=true
 test: quicklz_fallback

@@ -1,17 +1,17 @@
 use strict;
 use warnings;
 
-use PostgresNode;
-use TestLib;
-use Test::More tests => 3;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
-my $tempdir       = TestLib::tempdir;
-my $tempdir_short = TestLib::tempdir_short;
+my $tempdir       = PostgreSQL::Test::Utils::tempdir;
+my $tempdir_short = PostgreSQL::Test::Utils::tempdir_short;
 
 command_exit_is([ 'pg_ctl', 'status', '-D', "$tempdir/nonexistent" ],
 	4, 'pg_ctl status with nonexistent directory');
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 
 command_exit_is([ 'pg_ctl', 'status', '-D', $node->data_dir ],
@@ -23,3 +23,5 @@ command_exit_is([ 'pg_ctl', 'status', '-D', $node->data_dir ],
 	0, 'pg_ctl status with server running');
 
 system_or_bail 'pg_ctl', 'stop', '-D', $node->data_dir;
+
+done_testing();

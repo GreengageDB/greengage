@@ -1,8 +1,8 @@
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 17;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 program_help_ok('pg_controldata');
 program_version_ok('pg_controldata');
@@ -11,7 +11,7 @@ command_fails(['pg_controldata'], 'pg_controldata without arguments fails');
 command_fails([ 'pg_controldata', 'nonexistent' ],
 	'pg_controldata with nonexistent directory fails');
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 $node->init;
 
 command_like([ 'pg_controldata', $node->data_dir ],
@@ -39,3 +39,5 @@ command_checks_all(
 	],
 	[qr/^$/],
 	'pg_controldata with corrupted pg_control');
+
+done_testing();

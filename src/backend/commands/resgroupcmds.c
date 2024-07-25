@@ -57,6 +57,9 @@
 #define RESGROUP_MIN_CPU_WEIGHT	(1)
 #define RESGROUP_MAX_CPU_WEIGHT	(500)
 
+#define RESGROUP_MIN_MEMORY_LIMIT (0)
+#define RESGROUP_DEFAULT_MEMORY_LIMIT (-1)
+
 #define RESGROUP_MIN_MIN_COST		(0)
 static int str2Int(const char *str, const char *prop);
 static ResGroupLimitType getResgroupOptionType(const char* defname);
@@ -481,7 +484,6 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 
 	validateCapabilities(pg_resgroupcapability_rel, groupid, &caps, false);
 	AssertImply(limitType != RESGROUP_LIMIT_TYPE_IO_LIMIT, caps.io_limit == NIL);
-	AssertImply(limitType == RESGROUP_LIMIT_TYPE_IO_LIMIT, caps.io_limit != NIL);
 
 	/* cpuset & cpu_max_percent can not coexist.
 	 * if cpuset is active, then cpu_max_percent must set to CPU_RATE_LIMIT_DISABLED,
@@ -514,6 +516,16 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 			updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
 										  groupid, RESGROUP_LIMIT_TYPE_IO_LIMIT,
 										  0, cgroupOpsRoutine->dumpio(caps.io_limit));
+		else
+		{
+			/*
+			 * When alter io_limit to -1 , the caps.io_limit will be nil.
+			 * So we should update the io_limit in capability relation to -1.
+			 */
+			updateResgroupCapabilityEntry(pg_resgroupcapability_rel,
+										  groupid, RESGROUP_LIMIT_TYPE_IO_LIMIT,
+										  0, DefaultIOLimit);
+		}
 	}
 	else
 	{
@@ -940,6 +952,11 @@ checkResgroupCapLimit(ResGroupLimitType type, int value)
 				break;
 
 			case RESGROUP_LIMIT_TYPE_MEMORY_LIMIT:
+				if (value < RESGROUP_MIN_MEMORY_LIMIT && value != RESGROUP_DEFAULT_MEMORY_LIMIT)
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							 errmsg("memory_limit range is [%d, INT_MAX] or equals to %d",
+								    RESGROUP_MIN_MEMORY_LIMIT, RESGROUP_DEFAULT_MEMORY_LIMIT)));
 				break;
 
 			case RESGROUP_LIMIT_TYPE_MIN_COST:

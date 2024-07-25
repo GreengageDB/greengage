@@ -1,17 +1,17 @@
 # Test replication between databases with different encodings
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 1;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
-my $node_publisher = get_new_node('publisher');
+my $node_publisher = PostgreSQL::Test::Cluster->new('publisher');
 $node_publisher->init(
 	allows_streaming => 'logical',
 	extra            => [ '--locale=C', '--encoding=UTF8' ]);
 $node_publisher->start;
 
-my $node_subscriber = get_new_node('subscriber');
+my $node_subscriber = PostgreSQL::Test::Cluster->new('subscriber');
 $node_subscriber->init(
 	allows_streaming => 'logical',
 	extra            => [ '--locale=C', '--encoding=LATIN1' ]);
@@ -50,3 +50,5 @@ is( $node_subscriber->safe_psql(
 
 $node_subscriber->stop;
 $node_publisher->stop;
+
+done_testing();

@@ -23,11 +23,11 @@
 #include "access/xlog_internal.h"
 #include "miscadmin.h"
 #include "postmaster/startup.h"
+#include "postmaster/pgarch.h"
 #include "replication/walsender.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
-#include "storage/pmsignal.h"
 
 /*
  * GPDB specific imports:
@@ -559,9 +559,23 @@ XLogArchiveNotify(const char *xlog)
 		return;
 	}
 
+	/*
+	 * Timeline history files are given the highest archival priority to
+	 * lower the chance that a promoted standby will choose a timeline that
+	 * is already in use.  However, the archiver ordinarily tries to gather
+	 * multiple files to archive from each scan of the archive_status
+	 * directory, which means that newly created timeline history files
+	 * could be left unarchived for a while.  To ensure that the archiver
+	 * picks up timeline history files as soon as possible, we force the
+	 * archiver to scan the archive_status directory the next time it looks
+	 * for a file to archive.
+	 */
+	if (IsTLHistoryFileName(xlog))
+		PgArchForceDirScan();
+
 	/* Notify archiver that it's got something to do */
 	if (IsUnderPostmaster)
-		SendPostmasterSignal(PMSIGNAL_WAKEN_ARCHIVER);
+		PgArchWakeup();
 }
 
 /*

@@ -141,10 +141,6 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
 			 * In any case the planner has most likely inserted an INT4 null.
 			 * What we insist on is just *some* NULL constant.
 			 */
-			/* GPDB_96_MERGE_FIXME: the subplan can be a Motion, so that the NULLs
-			 * are transferred through the Motion node.
-			 */
-#if 0
 			if (!IsA(tle->expr, Const) ||
 				!((Const *) tle->expr)->constisnull)
 				ereport(ERROR,
@@ -152,7 +148,6 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
 						 errmsg("table row type and query-specified row type do not match"),
 						 errdetail("Query provides a value for a dropped column at ordinal position %d.",
 								   attno)));
-#endif
 		}
 	}
 	if (attno != resultDesc->natts)
@@ -3349,6 +3344,22 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			estate->es_auxmodifytables = lcons(mtstate,
 											   estate->es_auxmodifytables);
 	}
+
+	/*
+	 * If table is replicated, update es_processed only at one segment.
+	 * It allows not to adjust es_processed at QD after all executors send
+	 * the same value of es_processed.
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE)
+	{
+		struct GpPolicy *cdbpolicy = mtstate->resultRelInfo->ri_RelationDesc->rd_cdbpolicy;
+		if (GpPolicyIsReplicated(cdbpolicy) &&
+			GpIdentity.segindex != (gp_session_id % cdbpolicy->numsegments))
+		{
+			mtstate->canSetTag = false;
+		}
+	}
+
 
 	return mtstate;
 }

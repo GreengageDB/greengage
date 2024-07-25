@@ -49,7 +49,7 @@ CHashSetIterTest::EresUnittest_Basic()
 
 	// iteration over empty map
 	UlongHashSetIter siEmpty(ps);
-	GPOS_ASSERT(!siEmpty.Advance());
+	GPOS_UNITTEST_ASSERT(!siEmpty.Advance());
 
 #endif	// GPOS_DEBUG
 
@@ -71,9 +71,9 @@ CHashSetIterTest::EresUnittest_Basic()
 			pdrgpulIterValues->Append(si.Get());
 		}
 
-		pdrgpulIterValues->Sort();
+		pdrgpulIterValues->Sort(CompareUlongPtr);
 
-		GPOS_ASSERT(pdrgpulValues->Equals(pdrgpulIterValues.Value()));
+		GPOS_UNITTEST_ASSERT(pdrgpulValues->Equals(pdrgpulIterValues.Value()));
 	}
 
 	ps->Release();

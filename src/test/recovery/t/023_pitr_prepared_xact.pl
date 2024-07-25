@@ -1,19 +1,20 @@
 # Test for point-in-time-recovery (PITR) with prepared transactions
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 1;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 use File::Compare;
 
 # GPDB: Effectively disable this TAP test. We cannot run PREPARE
 # TRANSACTION in utility-mode. We need at least 1 test so create a
 # dummy one.
+use Test::More tests => 1;
 is(-1, -1, "Disable this TAP test");
 exit;
 
 # Initialize and start primary node with WAL archiving
-my $node_primary = get_new_node('primary');
+my $node_primary = PostgreSQL::Test::Cluster->new('primary');
 $node_primary->init(has_archiving => 1, allows_streaming => 1);
 $node_primary->append_conf(
 	'postgresql.conf', qq{
@@ -27,7 +28,7 @@ $node_primary->backup($backup_name);
 # Initialize node for PITR targeting a very specific restore point, just
 # after a PREPARE TRANSACTION is issued so as we finish with a promoted
 # node where this 2PC transaction needs an explicit COMMIT PREPARED.
-my $node_pitr = get_new_node('node_pitr');
+my $node_pitr = PostgreSQL::Test::Cluster->new('node_pitr');
 $node_pitr->init_from_backup(
 	$node_primary, $backup_name,
 	standby       => 0,
@@ -90,3 +91,5 @@ CHECKPOINT;
 # still be found.
 $node_pitr->stop('immediate');
 $node_pitr->start;
+
+done_testing();

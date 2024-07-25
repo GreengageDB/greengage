@@ -1,11 +1,11 @@
 use strict;
 use warnings;
-use TestLib;
-use PostgresNode;
-use Test::More tests => 1;
+use PostgreSQL::Test::Utils;
+use PostgreSQL::Test::Cluster;
 
 # GPDB: Effectively disable this TAP test. We don't support logical decoding
 # yet. TAP needs at least 1 test so create a dummy one.
+use Test::More tests => 1;
 is(-1, -1, "Disable this TAP test");
 exit;
 
@@ -13,7 +13,7 @@ program_help_ok('pg_recvlogical');
 program_version_ok('pg_recvlogical');
 program_options_handling_ok('pg_recvlogical');
 
-my $node = get_new_node('main');
+my $node = PostgreSQL::Test::Cluster->new('main');
 
 # Initialize node without replication settings
 $node->init(allows_streaming => 1, has_archiving => 1);
@@ -65,3 +65,5 @@ $node->command_ok(
 		'--start', '--endpos', "$nextlsn", '--no-loop', '-f', '-'
 	],
 	'replayed a transaction');
+
+done_testing();

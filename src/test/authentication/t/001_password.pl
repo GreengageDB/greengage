@@ -8,18 +8,13 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
 use Test::More;
 if ($windows_os)
 {
 	plan skip_all => "authentication tests cannot run on Windows";
 }
-else
-{
-	plan tests => 11;
-}
-
 
 # Delete pg_hba.conf from the given node, add a new entry to it
 # and then execute a reload to refresh it.
@@ -45,16 +40,23 @@ sub test_role
 
 	$status_string = 'success' if ($expected_res eq 0);
 
-	local $Test::Builder::Level = $Test::Builder::Level + 1;
+	my $connstr = "user=$role";
+	my $testname =
+	  "authentication $status_string for method $method, role $role";
 
-	my $res = $node->psql('postgres', undef, extra_params => [ '-U', $role, '-w' ]);
-	is($res, $expected_res,
-		"authentication $status_string for method $method, role $role");
-	return;
+	if ($expected_res eq 0)
+	{
+		$node->connect_ok($connstr, $testname);
+	}
+	else
+	{
+		# No checks of the error message, only the status code.
+		$node->connect_fails($connstr, $testname);
+	}
 }
 
-# Initialize master node
-my $node = get_new_node('master');
+# Initialize primary node
+my $node = PostgreSQL::Test::Cluster->new('primary');
 $node->init;
 $node->start;
 
@@ -90,7 +92,7 @@ test_role($node, 'scram_role', 'md5', 0);
 test_role($node, 'md5_role',   'md5', 0);
 
 # Test .pgpass processing; but use a temp file, don't overwrite the real one!
-my $pgpassfile = "${TestLib::tmp_check}/pgpass";
+my $pgpassfile = "${PostgreSQL::Test::Utils::tmp_check}/pgpass";
 
 delete $ENV{"PGPASSWORD"};
 $ENV{"PGPASSFILE"} = $pgpassfile;
@@ -110,4 +112,6 @@ append_to_file($pgpassfile, qq!
 *:*:*:md5_role:p\\ass
 !);
 
-test_role($node, 'md5_role',   'password from pgpass', 0);
+test_role($node, 'md5_role', 'password from pgpass', 0);
+
+done_testing();

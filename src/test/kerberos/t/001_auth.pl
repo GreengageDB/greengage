@@ -13,15 +13,11 @@
 
 use strict;
 use warnings;
-use TestLib;
-use PostgresNode;
+use PostgreSQL::Test::Utils;
+use PostgreSQL::Test::Cluster;
 use Test::More;
 
-if ($ENV{with_gssapi} eq 'yes')
-{
-	plan tests => 19;
-}
-else
+if ($ENV{with_gssapi} ne 'yes')
 {
 	plan skip_all => 'GSSAPI/Kerberos not supported by this build';
 }
@@ -65,15 +61,15 @@ my $host     = 'auth-test-localhost.postgresql.example.com';
 my $hostaddr = '127.0.0.1';
 my $realm    = 'EXAMPLE.COM';
 
-my $krb5_conf   = "${TestLib::tmp_check}/krb5.conf";
-my $kdc_conf    = "${TestLib::tmp_check}/kdc.conf";
-my $krb5_cache  = "${TestLib::tmp_check}/krb5cc";
-my $krb5_log    = "${TestLib::log_path}/krb5libs.log";
-my $kdc_log     = "${TestLib::log_path}/krb5kdc.log";
-my $kdc_port    = get_free_port();
-my $kdc_datadir = "${TestLib::tmp_check}/krb5kdc";
-my $kdc_pidfile = "${TestLib::tmp_check}/krb5kdc.pid";
-my $keytab      = "${TestLib::tmp_check}/krb5.keytab";
+my $krb5_conf   = "${PostgreSQL::Test::Utils::tmp_check}/krb5.conf";
+my $kdc_conf    = "${PostgreSQL::Test::Utils::tmp_check}/kdc.conf";
+my $krb5_cache  = "${PostgreSQL::Test::Utils::tmp_check}/krb5cc";
+my $krb5_log    = "${PostgreSQL::Test::Utils::log_path}/krb5libs.log";
+my $kdc_log     = "${PostgreSQL::Test::Utils::log_path}/krb5kdc.log";
+my $kdc_port    = PostgreSQL::Test::Cluster::get_free_port();
+my $kdc_datadir = "${PostgreSQL::Test::Utils::tmp_check}/krb5kdc";
+my $kdc_pidfile = "${PostgreSQL::Test::Utils::tmp_check}/krb5kdc.pid";
+my $keytab      = "${PostgreSQL::Test::Utils::tmp_check}/krb5.keytab";
 
 note "setting up Kerberos";
 
@@ -159,7 +155,7 @@ END
 
 note "setting up PostgreSQL instance";
 
-my $node = get_new_node('node');
+my $node = PostgreSQL::Test::Cluster->new('node');
 $node->init;
 $node->append_conf('postgresql.conf', "listen_addresses = '$hostaddr'");
 $node->append_conf('postgresql.conf', "krb_server_keyfile = '$keytab'");
@@ -172,30 +168,25 @@ note "running tests";
 # Test connection success or failure, and if success, that query returns true.
 sub test_access
 {
-	my ($node, $role, $query, $expected_res, $gssencmode, $test_name) = @_;
+	my ($node, $role, $query, $expected_res, $gssencmode, $test_name,
+		$expect_log_msg)
+	  = @_;
 
 	# need to connect over TCP/IP for Kerberos
-	my ($res, $stdoutres, $stderrres) = $node->psql(
-		'postgres',
-		undef,
-		extra_params => [
-			'-XAtd',
-			$node->connstr('postgres')
-			  . " host=$host hostaddr=$hostaddr $gssencmode",
-			'-U',
-			$role,
-			'-c',
-			$query
-		]);
+	my $connstr = $node->connstr('postgres')
+	  . " user=$role host=$host hostaddr=$hostaddr $gssencmode";
 
-	# If we get a query result back, it should be true.
-	if ($res == $expected_res and $res eq 0)
+	if ($expected_res eq 0)
 	{
-		is($stdoutres, "t", $test_name);
+		# The result is assumed to match "true", or "t", here.
+		$node->connect_ok(
+			$connstr, $test_name,
+			sql             => $query,
+			expected_stdout => qr/t/);
 	}
 	else
 	{
-		is($res, $expected_res, $test_name);
+		$node->connect_fails($connstr, $test_name);
 	}
 	return;
 }
@@ -208,20 +199,12 @@ sub test_query
 	my ($node, $role, $query, $expected, $gssencmode, $test_name) = @_;
 
 	# need to connect over TCP/IP for Kerberos
-	my ($res, $stdoutres, $stderrres) = $node->psql(
-		'postgres',
-		"$query",
-		extra_params => [
-			'-XAtd',
-			$node->connstr('postgres')
-			  . " host=$host hostaddr=$hostaddr $gssencmode",
-			'-U',
-			$role
-		]);
+	my $connstr = $node->connstr('postgres')
+	  . " user=$role host=$host hostaddr=$hostaddr $gssencmode";
 
-	is($res, 0, $test_name);
-	like($stdoutres, $expected, $test_name);
-	is($stderrres, "", $test_name);
+	my ($stdoutres, $stderrres);
+
+	$node->connect_ok($connstr, $test_name, $query, $expected);
 	return;
 }
 
@@ -370,3 +353,5 @@ test_access(
 	0,
 	'',
 	'succeeds with include_realm=0 and defaults');
+
+done_testing();

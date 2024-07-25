@@ -1,13 +1,12 @@
 use strict;
 use warnings;
 
-use Config;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 74;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
-my $tempdir       = TestLib::tempdir;
-my $tempdir_short = TestLib::tempdir_short;
+my $tempdir       = PostgreSQL::Test::Utils::tempdir;
+my $tempdir_short = PostgreSQL::Test::Utils::tempdir_short;
 
 #########################################
 # Basic checks
@@ -163,3 +162,5 @@ command_fails_like(
 	qr/\Qpg_dumpall: error: option --exclude-database cannot be used together with -g\/--globals-only\E/,
 	'pg_dumpall: option --exclude-database cannot be used together with -g/--globals-only'
 );
+
+done_testing();

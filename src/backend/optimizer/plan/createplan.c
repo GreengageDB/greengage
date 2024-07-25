@@ -277,9 +277,6 @@ static MergeJoin *make_mergejoin(List *tlist,
 								 Plan *lefttree, Plan *righttree,
 								 JoinType jointype, bool inner_unique,
 								 bool skip_mark_restore);
-static Sort *make_sort(Plan *lefttree, int numCols,
-					   AttrNumber *sortColIdx, Oid *sortOperators,
-					   Oid *collations, bool *nullsFirst);
 static Plan *prepare_sort_from_pathkeys(Plan *lefttree, List *pathkeys,
 										Relids relids,
 										const AttrNumber *reqColIdx,
@@ -4410,13 +4407,30 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 		if (!cteplaninfo->shared_plan)
 		{
 			RelOptInfo *sub_final_rel;
+			GangType	saved_gangType = root->curSlice->gangType;
 
 			sub_final_rel = fetch_upper_rel(best_path->parent->subroot, UPPERREL_FINAL, NULL);
 			subplan = create_plan(best_path->parent->subroot, sub_final_rel->cheapest_total_path, root->curSlice);
 			cteplaninfo->shared_plan = prepare_plan_for_sharing(cteroot, subplan);
+
+			/*
+			 * If gangType has switched, it means that CTE's plan contains
+			 * modifying operation without motion above (otherwise, the
+			 * gangType wouldn't switch). In this case we should mark each
+			 * ShareInputScan as writing slice creator, in order to prevent
+			 * the situation, when consumer gets to the writer gang and producer
+			 * gets to the reader gang (it depends of tree traverse order
+			 * inside the apply_shareinput_dag_to_tree function)
+			 */
+			if (root->curSlice->gangType != saved_gangType &&
+				root->curSlice->gangType == GANGTYPE_PRIMARY_WRITER)
+				cteplaninfo->rootSliceIsWriter = true;
 		}
 		/* Wrap the common Plan tree in a ShareInputScan node */
 		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
+
+		if (cteplaninfo->rootSliceIsWriter)
+			((ShareInputScan *) subplan)->rootSliceIsWriter = true;
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,
@@ -6736,7 +6750,7 @@ make_mergejoin(List *tlist,
  * Caller must have built the sortColIdx, sortOperators, collations, and
  * nullsFirst arrays already.
  */
-static Sort *
+Sort *
 make_sort(Plan *lefttree, int numCols,
 		  AttrNumber *sortColIdx, Oid *sortOperators,
 		  Oid *collations, bool *nullsFirst)
@@ -7231,21 +7245,7 @@ make_motion(PlannerInfo *root, Plan *lefttree,
 	plan->total_cost = lefttree->total_cost;
 	plan->plan_rows = lefttree->plan_rows;
 	plan->plan_width = lefttree->plan_width;
-
-	if (IsA(lefttree, ModifyTable))
-	{
-		ModifyTable *mtplan = (ModifyTable *) lefttree;
-
-		/* See setrefs.c. A ModifyTable doesn't have a valid targetlist */
-		if (mtplan->returningLists)
-			plan->targetlist = linitial(mtplan->returningLists);
-		else
-			plan->targetlist = NIL;
-	}
-	else
-	{
-		plan->targetlist = lefttree->targetlist;
-	}
+	plan->targetlist = lefttree->targetlist;
 
 	plan->qual = NIL;
 	plan->lefttree = lefttree;
@@ -7798,8 +7798,6 @@ make_modifytable(PlannerInfo *root,
 	node->plan.lefttree = NULL;
 	node->plan.righttree = NULL;
 	node->plan.qual = NIL;
-	/* setrefs.c will fill in the targetlist, if needed */
-	node->plan.targetlist = NIL;
 
 	node->operation = operation;
 	node->canSetTag = canSetTag;
@@ -7838,6 +7836,15 @@ make_modifytable(PlannerInfo *root,
 	}
 	node->withCheckOptionLists = withCheckOptionLists;
 	node->returningLists = returningLists;
+
+	/*
+	 * GPDB: Set up a temporary targetlist for parent nodes which may copy
+	 * it for their tuple descriptor, e.g. ShareInputScans or Motions. We'll
+	 * recreate the targetlist later. (see setrefs.c)
+	 */
+	node->plan.targetlist =
+		(returningLists == NIL) ? NIL : copyObject(linitial(returningLists));
+
 	node->rowMarks = rowMarks;
 	node->epqParam = epqParam;
 
@@ -8092,13 +8099,9 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 									hashOpfamilies,
 									numHashSegments);
 	}
-	else if (CdbPathLocus_IsOuterQuery(path->path.locus))
-	{
-		motion = make_union_motion(subplan);
-		motion->motionType = MOTIONTYPE_OUTER_QUERY;
-	}
 	/* Send all tuples to a single process? */
-	else if (CdbPathLocus_IsBottleneck(path->path.locus))
+	else if (CdbPathLocus_IsBottleneck(path->path.locus)
+			|| CdbPathLocus_IsOuterQuery(path->path.locus))
 	{
 		if (path->path.pathkeys)
 		{
@@ -8153,6 +8156,13 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 		{
 			motion = make_union_motion(subplan);
 		}
+		/*
+		 * When path.locus is CdbLocusType_OuterQuery, We will miss the pathkeys
+		 * if use make_union_motion. So use make_sorted_union_motion instead of
+		 * make_union_motion if path has pathkeys.
+		 */
+		if (CdbPathLocus_IsOuterQuery(path->path.locus))
+			motion->motionType = MOTIONTYPE_OUTER_QUERY;
 	}
 
 	/* Send all of the tuples to all of the QEs in gang above... */

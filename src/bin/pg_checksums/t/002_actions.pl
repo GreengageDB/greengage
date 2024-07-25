@@ -3,9 +3,9 @@
 
 use strict;
 use warnings;
-use PostgresNode;
-use TestLib;
-use Test::More tests => 63;
+use PostgreSQL::Test::Cluster;
+use PostgreSQL::Test::Utils;
+use Test::More;
 
 
 # Utility routine to create and check a table with corrupted checksums
@@ -82,7 +82,7 @@ sub check_relation_corruption
 }
 
 # Initialize node with checksums disabled.
-my $node = get_new_node('node_checksum');
+my $node = PostgreSQL::Test::Cluster->new('node_checksum');
 $node->init();
 my $pgdata = $node->data_dir;
 
@@ -229,3 +229,5 @@ fail_corrupt($node, "99990_vm");
 fail_corrupt($node, "99990_init.123");
 fail_corrupt($node, "99990_fsm.123");
 fail_corrupt($node, "99990_vm.123");
+
+done_testing();
