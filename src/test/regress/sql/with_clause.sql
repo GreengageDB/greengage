@@ -462,6 +462,27 @@ UNION ALL
 UNION ALL
   SELECT 'c', j FROM cte;
 
+--start_ignore
+DROP TABLE IF EXISTS es1;
+DROP TABLE IF EXISTS es2;
+--end_ignore
+
+CREATE TABLE es1 (i INT) DISTRIBUTED BY(i);
+CREATE TABLE es2 (i INT) DISTRIBUTED BY(i);
+SET gp_cte_sharing = ON;
+WITH cte AS (
+	UPDATE es1 SET i = es1.i FROM es2 WHERE es2.i = es1.i RETURNING *
+)
+SELECT * FROM cte UNION ALL SELECT * FROM cte;
+
+EXPLAIN (VERBOSE ON, COSTS OFF) WITH cte AS (
+	UPDATE es1 SET i = es1.i FROM es2 WHERE es2.i = es1.i RETURNING *
+)
+SELECT * FROM cte UNION ALL SELECT * FROM cte;
+
+DROP TABLE es1;
+DROP TABLE es2;
+
 -- Test forced materialization (sharing) of CTEs with non-SELECT DML inside.
 --start_ignore
 drop table if exists with_dml;

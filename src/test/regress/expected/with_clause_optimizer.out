@@ -2364,6 +2364,53 @@ UNION ALL
  c      | 1
 (7 rows)
 
+--start_ignore
+DROP TABLE IF EXISTS es1;
+NOTICE:  table "es1" does not exist, skipping
+DROP TABLE IF EXISTS es2;
+NOTICE:  table "es2" does not exist, skipping
+--end_ignore
+CREATE TABLE es1 (i INT) DISTRIBUTED BY(i);
+CREATE TABLE es2 (i INT) DISTRIBUTED BY(i);
+SET gp_cte_sharing = ON;
+WITH cte AS (
+	UPDATE es1 SET i = es1.i FROM es2 WHERE es2.i = es1.i RETURNING *
+)
+SELECT * FROM cte UNION ALL SELECT * FROM cte;
+ i | i 
+---+---
+(0 rows)
+
+EXPLAIN (VERBOSE ON, COSTS OFF) WITH cte AS (
+	UPDATE es1 SET i = es1.i FROM es2 WHERE es2.i = es1.i RETURNING *
+)
+SELECT * FROM cte UNION ALL SELECT * FROM cte;
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: share0_ref1.i, share0_ref1.i_1
+   ->  Append
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.i, share0_ref1.i_1
+               ->  Update on public.es1
+                     Output: es1.i, es2.i
+                     ->  Hash Join
+                           Output: es1.i, es1.ctid, es1.gp_segment_id, es2.ctid, es2.i
+                           Hash Cond: (es1.i = es2.i)
+                           ->  Seq Scan on public.es1
+                                 Output: es1.i, es1.ctid, es1.gp_segment_id
+                           ->  Hash
+                                 Output: es2.ctid, es2.i
+                                 ->  Seq Scan on public.es2
+                                       Output: es2.ctid, es2.i
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref2.i, share0_ref2.i_1
+ Optimizer: Postgres-based planner
+ Settings: gp_cte_sharing = 'on'
+(20 rows)
+
+DROP TABLE es1;
+DROP TABLE es2;
 -- Test forced materialization (sharing) of CTEs with non-SELECT DML inside.
 create table with_dml (i int, j int) distributed by (i);
 explain (costs off)

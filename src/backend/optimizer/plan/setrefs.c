@@ -302,6 +302,22 @@ static void set_plan_references_output_asserts(PlannerGlobal *glob, Plan *plan)
 /* End of debug code */
 #endif
 
+static inline bool rowmark_list_has_rowmark(List *rowmarks, PlanRowMark *rc_key)
+{
+	ListCell   *lc;
+
+	foreach(lc, rowmarks)
+	{
+		PlanRowMark *rc = lfirst_node(PlanRowMark, lc);
+		if (rc->rowmarkId == rc_key->rowmarkId)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 /*****************************************************************************
  *
  *		SUBPLAN REFERENCES
@@ -402,17 +418,28 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	foreach(lc, root->rowMarks)
 	{
 		PlanRowMark *rc = lfirst_node(PlanRowMark, lc);
-		PlanRowMark *newrc;
 
-		/* flat copy is enough since all fields are scalars */
-		newrc = (PlanRowMark *) palloc(sizeof(PlanRowMark));
-		memcpy(newrc, rc, sizeof(PlanRowMark));
+		/*
+		 * If the query has several nodes, which are reference
+		 * the same RTE, we don't need to adjust the rowmark more than once.
+		 * For this case we include only distinct rowmarks in the finalrowmarks,
+		 * referencing to repeated more than once.
+		 * As long as rowmarks are readonly and adjusted properly, this is safe.
+		 */
+		if (!rowmark_list_has_rowmark(glob->finalrowmarks, rc))
+		{
+			PlanRowMark *newrc;
 
-		/* adjust indexes ... but *not* the rowmarkId */
-		newrc->rti += rtoffset;
-		newrc->prti += rtoffset;
+			/* flat copy is enough since all fields are scalars */
+			newrc = (PlanRowMark *) palloc(sizeof(PlanRowMark));
+			memcpy(newrc, rc, sizeof(PlanRowMark));
 
-		glob->finalrowmarks = lappend(glob->finalrowmarks, newrc);
+			/* adjust indexes ... but *not* the rowmarkId */
+			newrc->rti += rtoffset;
+			newrc->prti += rtoffset;
+
+			glob->finalrowmarks = lappend(glob->finalrowmarks, newrc);
+		}
 	}
 
 	/* If needed, create workspace for processing AlternativeSubPlans */
