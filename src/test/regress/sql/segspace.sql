@@ -327,3 +327,30 @@ end;
 $func$ language plpgsql;
 
 select workset_cleanup_test();
+
+------------ Ensure that tuplestore is destroyed correctly in a case of error -------------------
+
+--start_ignore
+drop table if exists testdata;
+--end_ignore
+create table testdata as
+(select
+  md5(random()::text) as textdata,
+  random() * i as numdata,
+  timestamp '2000-01-01 00:00:00' + random() *
+    (timestamp '2024-01-01 00:00:00' - timestamp '2000-01-01 00:00:00') as datedata
+from generate_series(1, 400000) i);
+
+-- The default statement_mem value is 125Mb which is enough to force gp to spill.
+-- However, if statement_mem is bigger, then gp doesn't need to spill and this test
+-- can't be reproduced.
+set gp_workfile_limit_per_query = 100;
+
+begin;
+declare testdata_cursor cursor without hold for select * from testdata;
+fetch forward all from testdata_cursor;
+rollback;
+
+reset gp_workfile_limit_per_query;
+
+drop table testdata;
