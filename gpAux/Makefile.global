@@ -41,6 +41,7 @@ export NO_M64=1
 # 32-bit/64-bit compiler/linker flag settings
 rhel6_x86_64_BLD_CFLAGS=-m64 -gdwarf-2 -gstrict-dwarf
 rhel7_x86_64_BLD_CFLAGS=-m64
+ubuntu22.04_x86_64_BLD_CFLAGS=-m64
 BLD_CFLAGS=$($(BLD_ARCH)_BLD_CFLAGS)
 BLD_LDFLAGS=$($(BLD_ARCH)_BLD_LDFLAGS)
 BLD_BITS:=$(strip $(findstring 32,$(BLD_ARCH)) $(findstring 64,$(BLD_ARCH)))
