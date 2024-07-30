@@ -56,13 +56,14 @@ zic: $(ZICOBJS) | submake-libpgport
 
 install: all installdirs
 ifeq (,$(with_system_tzdata))
-	$(ZIC) -d '$(DESTDIR)$(datadir)/timezone' -p '$(POSIXRULES)' $(ZIC_OPTIONS) $(TZDATAFILES)
+	$(ZIC) -d '$(DESTDIR)$(datadir)/timezone' -p '$(POSIXRULES)' -b fat $(ZIC_OPTIONS) $(TZDATAFILES)
 endif
 	$(MAKE) -C tznames $@
 
+# Note: -P code currently depends on '-b fat'. Not worth fixing right now.
 abbrevs.txt: zic $(TZDATAFILES)
 	mkdir junkdir
-	$(ZIC) -P -d junkdir -p '$(POSIXRULES)' $(TZDATAFILES) | LANG=C sort | uniq >abbrevs.txt
+	$(ZIC) -P -b fat -d junkdir -p '$(POSIXRULES)' $(TZDATAFILES) | LANG=C sort | uniq >abbrevs.txt
 	rm -rf junkdir
 
 installdirs:

@@ -32,6 +32,8 @@ done
 docker-compose -p $project -f arenadata/docker-compose.yaml exec -T cdw \
  bash -c "source gpdb_src/concourse/scripts/common.bash && HOSTS_LIST='sdw1' make_cluster"
 
+#disable exit on error to allow log collection regardless of return code
+set +e
 #run tests
 docker-compose -p $project -f arenadata/docker-compose.yaml exec -Tu gpadmin cdw bash -ex <<EOF
         source /usr/local/greenplum-db-devel/greenplum_path.sh
@@ -68,3 +70,28 @@ EOF1
             exit \$errcode
         )
 EOF
+
+exitcode=$?
+docker-compose -p $project -f arenadata/docker-compose.yaml exec -T cdw bash -ex <<EOF
+  cd /home/gpadmin
+  tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
+  tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
+  tar -czf /logs/pg_log.tar.gz gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_log/ gpdb_src/gpAux/gpdemo/datadirs/standby/pg_log
+  #regression.diffs may not exist if tests were successful
+  tar --ignore-failed-read -czf /logs/results.tar.gz gpdb_src/src/test/isolation2/results/resgroup/ gpdb_src/src/test/isolation2/regression.diffs
+EOF
+
+docker-compose -p $project -f arenadata/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
+  cd /home/gpadmin
+  tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
+  tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
+  tar -czf /logs/pg_log.tar.gz \
+    gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/pg_log \
+    gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/pg_log \
+    gpdb_src/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/pg_log \
+    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0/pg_log \
+    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/pg_log \
+    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/pg_log
+EOF
+
+exit $exitcode

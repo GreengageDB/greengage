@@ -1278,6 +1278,7 @@ dumptuples(Tuplestorestate *state)
 		if (i >= state->memtupcount)
 			break;
 		WRITETUP(state, state->memtuples[i]);
+		state->memtupdeleted++;
 	}
 	state->memtupdeleted = 0;
 	state->memtupcount = 0;

@@ -1612,6 +1612,46 @@ drop table if exists t;
 drop table if exists t1;
 drop table if exists t2;
 drop function if exists f(i int);
+-- Check that query containing 2 CTEs and replicated table can be optimized by ORCA
+-- and it's execution does not produce problems like unconsumed producers or starved consumers
+create table tbl2 (a numeric, b varchar(255), c numeric) distributed replicated;
+create table tbl1 (a bigserial, b varchar(15), c varchar(15)) distributed replicated;
+explain (analyze off, costs off, verbose off)
+with
+t1 as (select * from tbl1),
+t2 as (select a, b from tbl2)
+ select * from t1 p
+  join t2 r on p.b = r.b
+  join t2 r1 on p.c = r1.b;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Hash Join
+         Hash Cond: ((tbl1.c)::text = (tbl2_1.b)::text)
+         ->  Hash Join
+               Hash Cond: ((tbl1.b)::text = (tbl2.b)::text)
+               ->  Seq Scan on tbl1
+               ->  Hash
+                     ->  Seq Scan on tbl2
+         ->  Hash
+               ->  Seq Scan on tbl2 tbl2_1
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+insert into tbl1 values(1,2,3);
+insert into tbl2 values(1,2,3);
+insert into tbl2 values(2,3,4);
+with
+t1 as (select * from tbl1),
+t2 as (select a, b from tbl2)
+ select * from t1 p
+  join t2 r on p.b = r.b
+  join t2 r1 on p.c = r1.b;
+ a | b | c | a | b | a | b 
+---+---+---+---+---+---+---
+ 1 | 2 | 3 | 1 | 2 | 2 | 3
+(1 row)
+
 -- start_ignore
 drop schema rpt cascade;
 NOTICE:  drop cascades to 13 other objects

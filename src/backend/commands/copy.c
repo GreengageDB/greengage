@@ -3570,6 +3570,12 @@ CopyFrom(CopyState cstate)
 							RelationGetRelationName(cstate->rel))));
 	}
 
+	if (rel_part_status(cstate->rel->rd_id) == PART_STATUS_INTERIOR)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot copy to intermediate part of a partitioned table"),
+				 errhint("consider using COPY to either the root or a leaf partition instead.")));
+
 	if (Gp_role == GP_ROLE_UTILITY && rel_is_parent(cstate->rel->rd_id))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

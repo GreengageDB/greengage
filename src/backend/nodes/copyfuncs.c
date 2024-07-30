@@ -1338,6 +1338,7 @@ _copyDML(const DML *from)
 	COPY_SCALAR_FIELD(ctidColIdx);
 	COPY_SCALAR_FIELD(tupleoidColIdx);
 	COPY_SCALAR_FIELD(tableoidColIdx);
+	COPY_SCALAR_FIELD(canSetTag);
 
 	return newnode;
 }

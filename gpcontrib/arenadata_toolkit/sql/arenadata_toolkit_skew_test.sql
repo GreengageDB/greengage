@@ -1,3 +1,13 @@
+-- start_ignore
+-- Prepare DB for the test
+DROP TABLE IF EXISTS heap, empty_ao, ao, empty_co, co, part_table;
+DROP EXTERNAL TABLE IF EXISTS external_tbl;
+DROP FUNCTION IF EXISTS compare_table_and_forks_size_calculation(OID);
+DROP FUNCTION IF EXISTS check_size_diff(OID);
+DROP EXTENSION IF EXISTS arenadata_toolkit;
+DROP SCHEMA IF EXISTS arenadata_toolkit CASCADE;
+-- end_ignore
+
 CREATE EXTENSION arenadata_toolkit;
 
 ----------------------------------------------------------------------------------------------------------
@@ -197,7 +207,7 @@ SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round
 	ORDER BY skcrelname;
 
 -- add a lot of data for one part to generate big skew coefficient
--- distributing by first columnt is helps to us to put all data to one segment
+-- distributing by first column is helps to us to put all data to one segment
 INSERT INTO part_table SELECT 1,1,1,1,1,'sub_prt1' FROM generate_series(1,10000) AS i;
 
 SELECT skcnamespace, skcrelname, round(skccoeff, 2) AS skccoeff_round

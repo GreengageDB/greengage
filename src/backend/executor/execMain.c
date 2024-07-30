@@ -190,7 +190,6 @@ static void FillSliceTable(EState *estate, PlannedStmt *stmt);
 
 static PartitionNode *BuildPartitionNodeFromRoot(Oid relid);
 static void InitializeQueryPartsMetadata(PlannedStmt *plannedstmt, EState *estate);
-static void AdjustReplicatedTableCounts(EState *estate);
 static void check_epq_safe_on_qes(Plan *plan);
 
 /* end of local decls */
@@ -3091,9 +3090,6 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 	/* Report how many tuples we may have inserted into AO tables */
 	SendAOTupCounts(estate);
 
-	/* Adjust INSERT/UPDATE/DELETE count for replicated table ON QD */
-	AdjustReplicatedTableCounts(estate);
-
 	/*
 	 * close the result relation(s) if any, but hold locks until xact commit.
 	 */
@@ -3199,6 +3195,8 @@ ExecutePlan(EState *estate,
 	 */
 	for (;;)
 	{
+		uint64 saved_es_processed = estate->es_processed;
+
 		/* Reset the per-output-tuple exprcontext */
 		ResetPerTupleExprContext(estate);
 
@@ -3250,8 +3248,10 @@ ExecutePlan(EState *estate,
 		 * Count tuples processed, if this is a SELECT.  (For other operation
 		 * types, the ModifyTable plan node must count the appropriate
 		 * events.)
+		 * Do not increment es_processed if it was changed at ExecProcNode.
 		 */
-		if (operation == CMD_SELECT)
+		if ((operation == CMD_SELECT || estate->es_plannedstmt->hasReturning) &&
+			saved_es_processed == estate->es_processed)
 		{
 			(estate->es_processed)++;
 
@@ -5448,47 +5448,6 @@ InitializePartsMetadata(Oid rootOid)
 
 	metadata->accessMethods = createPartitionAccessMethods(num_partition_levels(metadata->partsAndRules));
 	return list_make1(metadata);
-}
-
-/*
- * Adjust INSERT/UPDATE/DELETE count for replicated table ON QD
- */
-static void
-AdjustReplicatedTableCounts(EState *estate)
-{
-	int i;
-	ResultRelInfo *resultRelInfo;
-	bool containReplicatedTable = false;
-	int			numsegments = getgpsegmentCount();
-
-	if (Gp_role != GP_ROLE_DISPATCH)
-		return;
-
-	/* check if result_relations contain replicated table*/
-	for (i = 0; i < estate->es_num_result_relations; i++)
-	{
-		resultRelInfo = estate->es_result_relations + i;
-
-		if (!resultRelInfo->ri_RelationDesc->rd_cdbpolicy)
-			continue;
-
-		if (GpPolicyIsReplicated(resultRelInfo->ri_RelationDesc->rd_cdbpolicy))
-		{
-			containReplicatedTable = true;
-			numsegments = resultRelInfo->ri_RelationDesc->rd_cdbpolicy->numsegments;
-		}
-		else if (containReplicatedTable)
-		{
-			/*
-			 * If one is replicated table, assert that other
-			 * tables are also replicated table.
- 			 */
-			Insist(0);
-		}
-	}
-
-	if (containReplicatedTable)
-		estate->es_processed = estate->es_processed / numsegments;
 }
 
 static void

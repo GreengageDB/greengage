@@ -848,15 +848,15 @@ drop table test_reporting_c;
 
 -- Test AO functions with execution location on dispatcher.
 -- start_ignore
-drop table if exists t1;
-drop table if exists t2;
+drop table if exists t1_ao_comp_rate;
+drop table if exists t2_ao_comp_rate;
 drop table if exists tables_list;
 -- end_ignore
 
-create table t1 (a int) with (appendoptimized=true, orientation=row);
-create table t2 (a int) with (appendoptimized=true, orientation=column);
+create table t1_ao_comp_rate (a int) with (appendoptimized=true, orientation=row);
+create table t2_ao_comp_rate (a int) with (appendoptimized=true, orientation=column);
 create table tables_list (tname text);
-insert into tables_list values ('t1'), ('t2');
+insert into tables_list values ('t1_ao_comp_rate'), ('t2_ao_comp_rate');
 
 -- Queries below should fail with a proper error message.
 select get_ao_compression_ratio(tname) from tables_list;
@@ -871,6 +871,6 @@ explain (costs off) select get_ao_compression_ratio(tname) from
 select get_ao_compression_ratio(tname) from
 	unnest(array(select tname from tables_list)) as tname;
 
-drop table t1;
-drop table t2;
+drop table t1_ao_comp_rate;
+drop table t2_ao_comp_rate;
 drop table tables_list;

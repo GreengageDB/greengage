@@ -4109,6 +4109,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 
 	// create DML node
 	DML *dml = MakeNode(DML);
+	dml->canSetTag = true;
 	Plan *plan = &(dml->plan);
 	AclMode acl_mode = ACL_NO_RIGHTS;
 

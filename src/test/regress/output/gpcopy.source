@@ -1376,6 +1376,86 @@ COPY COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION to '/tmp/COPY_ON_SEGMENT_CHECK_D
 COPY COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION FROM '/tmp/COPY_ON_SEGMENT_CHECK_DISTKEY_SUBPARTITION<SEGID>.csv' ON SEGMENT CSV;
 ERROR:  value of distribution key doesn't belong to segment with ID 0, it belongs to segment with ID 1  (seg0 127.0.0.1:40000 pid=13100)
 CONTEXT:  COPY copy_on_segment_check_distkey_subpartition, line 2: "0,0"
+-- COPY TO root, leaf and mid-level partitions
+-- Create test table
+CREATE TABLE part_table (id INT, a INT, b INT , c TEXT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (a)
+SUBPARTITION BY LIST (c)
+SUBPARTITION TEMPLATE
+( SUBPARTITION part_a VALUES ('a'),
+  SUBPARTITION part_b VALUES ('b'))
+(START (0) INCLUSIVE
+ END (3) EXCLUSIVE
+ EVERY (1));
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_1" for table "part_table"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_1_2_prt_part_a" for table "part_table_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_1_2_prt_part_b" for table "part_table_1_prt_1"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_2" for table "part_table"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_2_2_prt_part_a" for table "part_table_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_2_2_prt_part_b" for table "part_table_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_3" for table "part_table"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_3_2_prt_part_a" for table "part_table_1_prt_3"
+NOTICE:  CREATE TABLE will create partition "part_table_1_prt_3_2_prt_part_b" for table "part_table_1_prt_3"
+-- Generate data file with data for more than one partitions
+CREATE TABLE tmp_table (LIKE part_table);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+INSERT INTO tmp_table SELECT a, 1, a, 'a' FROM generate_series(1, 100)a;
+INSERT INTO tmp_table SELECT a, 1, a, 'b' FROM generate_series(1, 100)a;
+COPY tmp_table TO '/tmp/table_data';
+-- Copy to the mid-level partition should fail
+COPY part_table_1_prt_2 FROM '/tmp/table_data';
+ERROR:  cannot copy to intermediate part of a partitioned table
+HINT:  consider using COPY to either the root or a leaf partition instead.
+-- Copy to the leaf partition should use check constraint and fail
+COPY part_table_1_prt_2_2_prt_part_a FROM '/tmp/table_data';
+ERROR:  new row for relation "part_table_1_prt_2_2_prt_part_a" violates check constraint "part_table_1_prt_2_2_prt_part_a_check"
+DETAIL:  Failing row contains (2, 1, 2, b).
+CONTEXT:  COPY part_table_1_prt_2_2_prt_part_a, line 115: "2	1	2	b"
+-- Copy to the root partition should be success
+COPY part_table FROM '/tmp/table_data';
+-- Check the result
+SELECT count() FROM part_table;
+ count 
+-------
+   200
+(1 row)
+
+-- Cleanup tables
+TRUNCATE TABLE part_table;
+TRUNCATE TABLE tmp_table;
+\! rm -f /tmp/table_data
+-- Generate data for only one partition
+INSERT INTO tmp_table SELECT a, 1, a, 'a' FROM generate_series(1, 100)a;
+COPY tmp_table TO '/tmp/table_data';
+-- Copy to a mid-level partition should fail
+COPY part_table_1_prt_2 FROM '/tmp/table_data';
+ERROR:  cannot copy to intermediate part of a partitioned table
+HINT:  consider using COPY to either the root or a leaf partition instead.
+-- Copy to a leaf partition should use check constraint and be success
+COPY part_table_1_prt_2_2_prt_part_a FROM '/tmp/table_data';
+ANALYZE part_table;
+-- Check the result
+SELECT count() FROM part_table;
+ count 
+-------
+   100
+(1 row)
+
+-- Cleanup table
+TRUNCATE TABLE part_table;
+-- Copy to a root partition should be success
+COPY part_table FROM '/tmp/table_data';
+-- Check the result
+SELECT count() FROM part_table;
+ count 
+-------
+   100
+(1 row)
+
+-- Cleanup
+DROP TABLE IF EXISTS part_table, tmp_table;
+\! rm -f /tmp/table_data
 -- start_ignore
 DROP TABLE IF EXISTS LINEITEM_1;
 DROP TABLE IF EXISTS LINEITEM_2;
@@ -1730,7 +1810,7 @@ copy t_12700 from '/tmp/out_12700_<SEGID>' on segment;
 abort;
 -- start_ignore
 create language plpythonu;
--- end_ingore
+-- end_ignore
 create function get_file_lines_12700(segid int) returns int
 as
 $$

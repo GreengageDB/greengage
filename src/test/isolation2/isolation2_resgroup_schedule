@@ -15,6 +15,7 @@ test: resgroup/resgroup_assign_slot_fail
 test: resgroup/resgroup_unassign_entrydb
 test: resgroup/resgroup_seg_down_2pc
 test: resgroup/resgroup_query_mem
+test: resgroup/resgroup_views_seg_down
 
 # functions
 test: resgroup/resgroup_concurrency

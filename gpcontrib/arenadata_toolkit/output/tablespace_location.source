@@ -90,8 +90,7 @@ ORDER BY source_table_name, table_name, content;
 (27 rows)
 
 -- Cleanup
-DROP TABLE table_at_pg_default;
-DROP TABLE table_at_custom_tblspc;
+DROP TABLE table_at_pg_default, table_at_custom_tblspc;
 DROP TABLESPACE test_tblspc;
 DROP EXTENSION arenadata_toolkit;
 -- Change log level to disable notice messages about dropped objects

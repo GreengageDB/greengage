@@ -21,6 +21,7 @@
 
 #include "access/timeline.h"
 #include "access/xlog_internal.h"
+#include "catalog/catalog.h"
 #include "catalog/catversion.h"
 #include "catalog/pg_control.h"
 #include "getopt_long.h"
@@ -911,8 +912,8 @@ get_target_dbid(const char *argv0)
 					 "Check your installation.\n", full_path, progname);
 	}
 
-	snprintf(cmd, MAXCMDLEN, "\"%s\" -D \"%s\" -C gp_dbid",
-			 exec_path, datadir_target);
+	snprintf(cmd, MAXCMDLEN, "\"%s\" -D \"%s\" -C gp_dbid -c config_file=\"%s/%s\"",
+			 exec_path, datadir_target, datadir_target, GP_INTERNAL_AUTO_CONF_FILE_NAME);
 
 	if ((output = popen(cmd, "r")) == NULL ||
 		fgets(cmd_output, sizeof(cmd_output), output) == NULL)
