@@ -675,3 +675,18 @@ execute checkattributeencoding('t_addcol_p1');
 execute checkattributeencoding('t_addcol_p2');
 
 
+--- test SET ACCESS METHOD ao_column for tables with many columns
+create table t_access_method (
+  c1 int,
+  c2 int,
+  c3 int,
+  c4 int,
+  c5 int,
+  c6 int,
+  c7 int,
+  c8 int,
+  c9 int
+) distributed by (c1);
+
+alter table t_access_method set access method ao_column;
+select a.amname from pg_class c join pg_am a on c.relam = a.oid where c.relname = 't_access_method';
