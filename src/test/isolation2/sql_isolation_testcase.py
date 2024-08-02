@@ -251,7 +251,7 @@ class SQLIsolationExecutor(object):
         # The re.S flag makes the "." in the regex match newlines.
         # When matched against a command in process_command(), all
         # lines in the command are matched and sent as SQL query.
-        self.command_pattern = re.compile(r"^(-?\d+|[*])([&\\<\\>URSIMq]*?)\:(.*)", re.S)
+        self.command_pattern = re.compile(r"^(-?\d+|[*])([&\\<\\>URSIMqt]*?)\:(.*)", re.S)
         if dbname:
             self.dbname = dbname
         else:
@@ -581,6 +581,22 @@ class SQLIsolationExecutor(object):
         self.processes[(name, mode)].quit()
         del self.processes[(name, mode)]
 
+    def terminate_process(self, out_file, name, mode=""):
+        """
+        Terminates a process with the given name
+        """
+        if len(name) > 0 and not is_digit(name):
+            raise Exception("Name should be a number")
+        if len(name) > 0 and mode != "utility" and int(name) >= 1024:
+            raise Exception("Session name should be smaller than 1024 unless it is utility mode number")
+
+        if not (name, mode) in self.processes:
+            raise Exception("Sessions not started cannot be terminated")
+
+        self.processes[(name, mode)].terminate()
+        del self.processes[(name, mode)]
+        print >> out_file, "... <terminating>"
+
     def get_all_primary_contentids(self, dbname):
         """
         Retrieves all primary content IDs (including the master). Intended for
@@ -731,6 +747,10 @@ class SQLIsolationExecutor(object):
             if len(sql) > 0:
                 raise Exception("No query should be given on quit")
             self.quit_process(output_file, process_name, con_mode, dbname=dbname)
+        elif flag == "t":
+            if len(sql) > 0:
+                raise Exception("No query should be given on termination")
+            self.terminate_process(output_file, process_name, con_mode)
         elif flag == "U":
             if process_name == '*':
                 process_names = [str(content) for content in self.get_all_primary_contentids(dbname)]
@@ -821,7 +841,7 @@ class SQLIsolationExecutor(object):
                     command_part = line
                 if command_part == "" or command_part == "\n":
                     print >>output_file
-                elif re.match(r".*;\s*$", command_part) or re.match(r"^\d+[q\\<]:\s*$", line) or re.match(r"^\*Rq:$", line) or re.match(r"^-?\d+[SUMR][q\\<]:\s*$", line):
+                elif re.match(r".*;\s*$", command_part) or re.match(r"^\d+[qt\\<]:\s*$", line) or re.match(r"^\*R[qt]:$", line) or re.match(r"^-?\d+[SUMR][qt\\<]:\s*$", line):
                     command += command_part
                     try:
                         self.process_command(command, output_file, shell_executor)
@@ -869,6 +889,7 @@ class SQLIsolationTestCase:
             >: running in background without blocking
             <: join an existing session
             q: quit the given session without blocking
+            t: terminates the given session without blocking
 
             U: connect in utility mode to primary contentid from gp_segment_configuration
             U&: expect blocking behavior in utility mode (does not currently support an asterisk target)
