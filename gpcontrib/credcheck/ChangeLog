@@ -1,3 +1,12 @@
+2024-08-03 - Version 2.8.0
+
+This release adds the compatibility with PostgreSQL 17. Upgrade require a
+PostgreSQL restart to reload the credcheck library.
+
+- Remove call to tuplestore_donestoring() for compatibility with PG v17.
+- Show actual setted parameters in error messages. Thanks to coroneltortuga
+  for the feature request.
+
 2024-04-25 - Version 2.7.0
 
 This release is maintenance a release to fix a problem with pgBackRest backup.
