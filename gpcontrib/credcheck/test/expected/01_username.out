@@ -30,11 +30,11 @@ SET credcheck.username_min_length TO 2;
 DROP USER IF EXISTS a;
 NOTICE:  role "a" does not exist, skipping
 CREATE USER a WITH PASSWORD 'dummy';
-ERROR:  username length should match the configured credcheck.username_min_length
+ERROR:  username length should match the configured credcheck.username_min_length (2)
 DROP USER IF EXISTS a;
 NOTICE:  role "a" does not exist, skipping
 CREATE USER a;
-ERROR:  username length should match the configured credcheck.username_min_length
+ERROR:  username length should match the configured credcheck.username_min_length (2)
 DROP USER IF EXISTS a;
 NOTICE:  role "a" does not exist, skipping
 --
@@ -44,7 +44,7 @@ SET credcheck.username_min_repeat TO 5;
 DROP USER IF EXISTS abbbaaaaaa;
 NOTICE:  role "abbbaaaaaa" does not exist, skipping
 CREATE USER abbbaaaaaa WITH PASSWORD 'dummy';
-ERROR:  username characters are repeated more than the configured credcheck.username_min_repeat times
+ERROR:  username characters are repeated more than the configured credcheck.username_min_repeat times (5)
 DROP USER IF EXISTS abbbaaaaaa;
 NOTICE:  role "abbbaaaaaa" does not exist, skipping
 --
@@ -54,7 +54,7 @@ SET credcheck.username_min_special TO 1;
 DROP USER IF EXISTS a$;
 NOTICE:  role "a$" does not exist, skipping
 CREATE USER aa WITH PASSWORD 'dummy';
-ERROR:  username does not contain the configured credcheck.username_min_special characters
+ERROR:  username does not contain the configured credcheck.username_min_special characters (1)
 CREATE USER a$ WITH PASSWORD 'dummy';
 DROP USER IF EXISTS a$;
 --
@@ -64,7 +64,7 @@ SET credcheck.username_min_upper TO 1;
 DROP USER IF EXISTS "aA$";
 NOTICE:  role "aA$" does not exist, skipping
 CREATE USER "aa$" WITH PASSWORD 'dummy';
-ERROR:  username does not contain the configured credcheck.username_min_upper characters
+ERROR:  username does not contain the configured credcheck.username_min_upper characters (1)
 CREATE USER "aA$" WITH PASSWORD 'dummy';
 DROP USER IF EXISTS "aA$";
 --
@@ -74,7 +74,7 @@ SET credcheck.username_min_lower TO 1;
 DROP USER IF EXISTS "AAA$";
 NOTICE:  role "AAA$" does not exist, skipping
 CREATE USER "AAA$" WITH PASSWORD 'dummy';
-ERROR:  username does not contain the configured credcheck.username_min_lower characters
+ERROR:  username does not contain the configured credcheck.username_min_lower characters (1)
 DROP USER IF EXISTS "aaA$";
 NOTICE:  role "aaA$" does not exist, skipping
 CREATE USER "aaA$" WITH PASSWORD 'dummy';
@@ -86,7 +86,7 @@ SET credcheck.username_contain TO 'a,b,c';
 DROP USER IF EXISTS "pA$user";
 NOTICE:  role "pA$user" does not exist, skipping
 CREATE USER "pA$user" WITH PASSWORD 'dummy';
-ERROR:  username does not contain the configured credcheck.username_contain characters
+ERROR:  username does not contain the configured credcheck.username_contain characters: a,b,c
 DROP USER IF EXISTS "aA$user";
 NOTICE:  role "aA$user" does not exist, skipping
 CREATE USER "aA$user" WITH PASSWORD 'dummy';
@@ -98,7 +98,7 @@ SET credcheck.username_not_contain TO 'x,z';
 DROP USER IF EXISTS "xaA$user";
 NOTICE:  role "xaA$user" does not exist, skipping
 CREATE USER "xaA$user" WITH PASSWORD 'dummy';
-ERROR:  username contains the configured credcheck.username_not_contain unauthorized characters
+ERROR:  username contains the configured credcheck.username_not_contain unauthorized characters: x,z
 DROP USER IF EXISTS "aaA$user";
 NOTICE:  role "aaA$user" does not exist, skipping
 CREATE USER "aaA$user" WITH PASSWORD 'dummy';
@@ -136,18 +136,18 @@ SET credcheck.username_min_digit TO 1;
 DROP USER IF EXISTS aa;
 NOTICE:  role "aa" does not exist, skipping
 CREATE USER aa WITH PASSWORD 'dummy';
-ERROR:  username does not contain the configured credcheck.username_min_digit characters
+ERROR:  username does not contain the configured credcheck.username_min_digit characters (1)
 DROP USER IF EXISTS aa2;
 NOTICE:  role "aa2" does not exist, skipping
 CREATE USER aa2 WITH PASSWORD 'dummy';
-ERROR:  username does not contain the configured credcheck.username_min_special characters
+ERROR:  username does not contain the configured credcheck.username_min_special characters (1)
 DROP USER IF EXISTS aa2;
 NOTICE:  role "aa2" does not exist, skipping
 CREATE USER "a$user1" WITH PASSWORD '';
-ERROR:  password length should match the configured credcheck.password_min_length
+ERROR:  password length should match the configured credcheck.password_min_length (1)
 DROP USER "a$user1";
 ERROR:  role "a$user1" does not exist
 CREATE USER aa;
-ERROR:  username does not contain the configured credcheck.username_min_digit characters
+ERROR:  username does not contain the configured credcheck.username_min_digit characters (1)
 DROP USER aa;
 ERROR:  role "aa" does not exist

@@ -370,8 +370,8 @@ username_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg(gettext_noop("username length should match the configured %s"), 
-				     "credcheck.username_min_length")));
+				errmsg(gettext_noop("username length should match the configured %s (%d)"), 
+				     "credcheck.username_min_length", username_min_length)));
 		goto clean;
 	}
 
@@ -397,8 +397,8 @@ username_check(const char *username, const char *password)
 		{
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-					errmsg(gettext_noop("username does not contain the configured %s characters"),
-	 						"credcheck.username_contain")));
+					errmsg(gettext_noop("username does not contain the configured %s characters: %s"),
+	 						"credcheck.username_contain", tmp_contains)));
 			goto clean;
 		}
 	}
@@ -410,8 +410,8 @@ username_check(const char *username, const char *password)
 		{
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-					errmsg(gettext_noop("username contains the configured %s unauthorized characters"),
-					       "credcheck.username_not_contain")));
+					errmsg(gettext_noop("username contains the configured %s unauthorized characters: %s"),
+					       "credcheck.username_not_contain", tmp_not_contains)));
 			goto clean;
 		}
 	}
@@ -424,8 +424,8 @@ username_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("username does not contain the configured %s characters",
-				     "credcheck.username_min_upper")));
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_upper", username_min_upper)));
 		goto clean;
 	}
 
@@ -434,8 +434,8 @@ username_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("username does not contain the configured %s characters",
-				     "credcheck.username_min_lower")));
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_lower", username_min_lower)));
 		goto clean;
 	}
 
@@ -444,8 +444,8 @@ username_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("username does not contain the configured %s characters",
-				     "credcheck.username_min_digit")));
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_digit", username_min_digit)));
 		goto clean;
 	}
 
@@ -454,8 +454,8 @@ username_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("username does not contain the configured %s characters",
-				     "credcheck.username_min_special")));
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_special", username_min_special)));
 		goto clean;
 	}
 
@@ -467,7 +467,7 @@ username_check(const char *username, const char *password)
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 				   errmsg(gettext_noop("%s characters are repeated more than the "
-						"configured %s times"), "username", "credcheck.username_min_repeat")));
+						"configured %s times (%d)"), "username", "credcheck.username_min_repeat", username_min_repeat)));
 			goto clean;
 		}
 	}
@@ -526,8 +526,7 @@ is_in_whitelist(char *username)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("%s username list is invalid: %s",
-				     "credcheck.password_min_length", username_whitelist)));
+				errmsg("username list is invalid: %s", username_whitelist)));
 		list_free(elemlist);
 		pfree(rawstring);
 		return false;
@@ -589,8 +588,8 @@ static void password_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg(gettext_noop("password length should match the configured %s"),
-				     "credcheck.password_min_length")));
+				errmsg(gettext_noop("password length should match the configured %s (%d)"),
+				     "credcheck.password_min_length", password_min_length)));
 		goto clean;
 	}
 
@@ -613,8 +612,8 @@ static void password_check(const char *username, const char *password)
 		{
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-					errmsg(gettext_noop("password does not contain the configured %s characters"), 
-					       "credcheck.password_contain")));
+					errmsg(gettext_noop("password does not contain the configured %s characters: %s"), 
+					       "credcheck.password_contain", tmp_contains)));
 			goto clean;
 		}
 	}
@@ -626,8 +625,8 @@ static void password_check(const char *username, const char *password)
 		{
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-					errmsg(gettext_noop("password contains the configured %s unauthorized characters"),
-					       "credcheck.password_not_contain")));
+					errmsg(gettext_noop("password contains the configured %s unauthorized characters: %s"),
+					       "credcheck.password_not_contain", tmp_not_contains)));
 			goto clean;
 		}
 	}
@@ -640,8 +639,8 @@ static void password_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("password does not contain the configured %s characters",
-				     "credcheck.password_min_upper")));
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_upper", password_min_upper)));
 		goto clean;
 	}
 
@@ -650,8 +649,8 @@ static void password_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("password does not contain the configured %s characters",
-				     "credcheck.password_min_lower")));
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_lower", password_min_lower)));
 		goto clean;
 	}
 
@@ -660,8 +659,8 @@ static void password_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("password does not contain the configured %s characters",
-				     "credcheck.password_min_digit")));
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_digit", password_min_digit)));
 		goto clean;
 	}
 
@@ -670,8 +669,8 @@ static void password_check(const char *username, const char *password)
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("password does not contain the configured %s characters",
-				     "credcheck.password_min_special")));
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_special", password_min_special)));
 		goto clean;
 	}
 
@@ -683,7 +682,8 @@ static void password_check(const char *username, const char *password)
 			ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 				   errmsg("%s characters are repeated more than the "
-						"configured %s times", "password", "credcheck.password_min_repeat")));
+						"configured %s times (%d)", "password",
+						"credcheck.password_min_repeat", password_min_repeat)));
 			goto clean;
 		}
 	}
