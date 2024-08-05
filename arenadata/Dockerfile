@@ -3,7 +3,6 @@ FROM centos:centos7 as base
 ARG sigar=https://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-1.6.5-1056.git2932df5.el7.x86_64.rpm
 ARG sigar_headers=http://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-headers-1.6.5-1056.git2932df5.el7.x86_64.rpm
 ARG CENTOS_REPOS_URL="https://mirror.axelname.ru/centos"
-ARG CENTOS_REPO_EPEL_URL="https://mirror.yandex.ru/epel"
 
 # Reinstall glibc-common. This is necessary to get langpacks in docker
 # because docker images don't contain them.
@@ -70,7 +69,6 @@ RUN yum -y install centos-release-scl && \
        sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-rh|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/sclo/\$basearch/rh/|g" /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo; \
        sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-sclo|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/sclo/\$basearch/sclo/|g" /etc/yum.repos.d/CentOS-SCLo-scl.repo; \
     fi && \
-    sed -i "s|metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-7\&arch=\$basearch|baseurl=$CENTOS_REPO_EPEL_URL/\$releasever/\$basearch|g" /etc/yum.repos.d/epel.repo && \
     yum -y install --nogpgcheck devtoolset-7-gcc devtoolset-7-gcc-c++ && yum clean all && \
     pip --no-cache-dir install psi && \
     ln -s /usr/bin/cmake3 /usr/bin/cmake && \
