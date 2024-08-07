@@ -1,0 +1,56 @@
+FROM ubuntu:22.04 as base
+
+ARG sigar=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar_1.6.5-3304%2Bgite8961a6_all.deb
+ARG sigar_headers=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar-headers_1.6.5-3304%2Bgite8961a6_all.deb
+ARG libxerces=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/libxerces-c31_3.1.2-3304_amd64.deb
+ARG libxerces_dev=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/libxerces-c31-dev_3.1.2-3304_amd64.deb
+
+COPY README.ubuntu.bash ./
+RUN set -eux; \
+    ./README.ubuntu.bash; \
+    rm README.ubuntu.bash; \
+    wget $sigar $sigar_headers $libxerces $libxerces_dev; \
+    apt install -y ./*.deb; \
+    rm ./*.deb; \
+    ln -s python2 /usr/bin/python; \
+# Install pg_bsd_indent used by pgindent utility
+    wget https://ftp.postgresql.org/pub/dev/pg_bsd_indent-1.3.tar.gz -O - | tar -xzf -; \
+    make install -C pg_bsd_indent; \
+    rm -r pg_bsd_indent; \
+# The en_US.UTF-8 locale is needed to run GPDB
+    locale-gen en_US.UTF-8; \
+# To run sshd directly, but not using `/etc/init.d/ssh start`
+    mkdir /run/sshd; \
+# Alter precedence in favor of IPv4 during resolving
+    echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
+
+WORKDIR /home/gpadmin
+
+FROM base as build
+
+COPY . gpdb_src
+
+RUN mkdir /home/gpadmin/bin_gpdb
+
+ENV TARGET_OS=ubuntu
+ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
+ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" 
+
+# Compile with running mocking tests
+RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+
+FROM base as code
+# Use --exclude, when it will be available in stable syntax.
+COPY . gpdb_src
+RUN rm -rf gpdb_src/.git/
+
+FROM base as test
+COPY --from=code /home/gpadmin/gpdb_src gpdb_src
+COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb
+
+# Install entab used by pgindent utility.
+# This should be done using gpdb sources.
+RUN make -C gpdb_src/src/tools/entab install clean
+
+# Volume for tests output
+VOLUME /home/gpadmin/gpdb_src/src/test
