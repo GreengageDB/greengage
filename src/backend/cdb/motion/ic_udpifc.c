@@ -1788,8 +1788,6 @@ destroyConnHashTable(ConnHashTable *ht)
 static inline void
 sendControlMessage(icpkthdr *pkt, int fd, struct sockaddr *addr, socklen_t peerLen)
 {
-	int			n;
-
 #ifdef USE_ASSERT_CHECKING
 	if (testmode_inject_fault(gp_udpic_dropacks_percent))
 	{
@@ -1805,12 +1803,10 @@ sendControlMessage(icpkthdr *pkt, int fd, struct sockaddr *addr, socklen_t peerL
 		addCRC(pkt);
 
 	/* retry 10 times for sending control message */
-	int counter = 0;
-	while (counter < 10)
+	for (int counter = 0; counter < 10; counter++)
 	{
-		counter++;
-		n = sendto(fd, (const char *) pkt, pkt->len, 0, addr, peerLen);
-		if (n < 0)
+		int const sent_bytes = sendto(fd, (const char *) pkt, pkt->len, 0, addr, peerLen);
+		if (sent_bytes < 0)
 		{
 			if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
 				continue;
@@ -1819,10 +1815,11 @@ sendControlMessage(icpkthdr *pkt, int fd, struct sockaddr *addr, socklen_t peerL
 				return;
 			}
 		}
-		break;
+
+		if (sent_bytes < pkt->len)
+			write_log("sendcontrolmessage: got error %d errno %d seq %d", sent_bytes, errno, pkt->seq);
+		return;
 	}
-	if (n < pkt->len)
-		write_log("sendcontrolmessage: got error %d errno %d seq %d", n, errno, pkt->seq);
 }
 
 /*

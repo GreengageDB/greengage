@@ -71,7 +71,7 @@ AC_CACHE_CHECK([whether $1 is 64 bits], [Ac_cachevar],
 ac_int64 a = 20000001;
 ac_int64 b = 40000005;
 
-int does_int64_work()
+static int does_int64_work()
 {
   ac_int64 c,d;
 

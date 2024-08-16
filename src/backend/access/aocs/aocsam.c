@@ -2168,13 +2168,12 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 {
 	int			segmentFileNum = AOTupleIdGet_segmentFileNum(aoTupleId);
 	int64		rowNum = AOTupleIdGet_rowNum(aoTupleId);
-	int			numCols = aocsFetchDesc->relation->rd_att->natts;
 	int			colno = 0; /* initialize to placate compiler, but it should be overwritten later in any case */
 	bool		found = true;
 	bool		isSnapshotAny = (aocsFetchDesc->snapshot == SnapshotAny);
 	bool 		valmissing;
 
-	Assert(numCols > 0);
+	Assert(aocsFetchDesc->relation->rd_att->natts > 0);
 
 	Assert(segmentFileNum >= 0);
 

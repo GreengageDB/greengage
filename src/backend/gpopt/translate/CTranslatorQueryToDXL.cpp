@@ -4487,10 +4487,8 @@ CTranslatorQueryToDXL::CreateDXLProjectNullsForGroupingSets(
 
 		INT sort_group_ref = INT(target_entry->ressortgroupref);
 
-		GPOS_ASSERT_IMP(
-			nullptr == sort_grouping_col_mapping,
-			nullptr != sort_grouping_col_mapping->Find(&sort_group_ref) &&
-				"Grouping column with no mapping");
+		GPOS_ASSERT(nullptr != sort_grouping_col_mapping &&
+					"Grouping column with no mapping");
 
 		if (0 < sort_group_ref && 0 < colid &&
 			nullptr == sort_grouping_col_mapping->Find(&sort_group_ref))

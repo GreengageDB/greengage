@@ -197,7 +197,7 @@ extern bool tsquery_requires_match(QueryItem *curitem);
  * to_ts* - text transformation to tsvector, tsquery
  */
 extern TSVector make_tsvector(ParsedText *prs);
-extern int32 tsCompareString(char *a, int lena, char *b, int lenb, bool prefix);
+extern int32 tsCompareString(char *a, size_t lena, char *b, size_t lenb, bool prefix);
 
 /*
  * Possible strategy numbers for indexes

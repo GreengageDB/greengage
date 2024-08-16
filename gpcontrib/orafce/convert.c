@@ -806,8 +806,8 @@ pg_unicode_to_server(pg_wchar c, unsigned char *s)
 	FunctionCall5(orafce_Utf8ToServerConvProc,
 				  Int32GetDatum(PG_UTF8),
 				  Int32GetDatum(server_encoding),
-				  CStringGetDatum(c_as_utf8),
-				  CStringGetDatum(s),
+				  PointerGetDatum(c_as_utf8),
+				  PointerGetDatum(s),
 				  Int32GetDatum(c_as_utf8_len));
 }
 

@@ -1168,7 +1168,7 @@ tsvector_concat(PG_FUNCTION_ARGS)
  * if isPrefix = true then it returns zero value iff b has prefix a
  */
 int32
-tsCompareString(char *a, int lena, char *b, int lenb, bool prefix)
+tsCompareString(char *a, size_t lena, char *b, size_t lenb, bool prefix)
 {
 	int			cmp;
 

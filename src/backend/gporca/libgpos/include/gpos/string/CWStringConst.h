@@ -55,6 +55,10 @@ public:
 	// hash function
 	static ULONG HashValue(const CWStringConst *string);
 
+	// There is the same Equals at the CWStringBase, add it here
+	// not to hidden it. [-Woverloaded-virtual]
+	using CWStringBase::Equals;
+
 	// checks whether the string is byte-wise equal to another string
 	BOOL Equals(const CWStringBase *str) const override;
 };

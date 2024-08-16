@@ -5266,7 +5266,7 @@ add_placeholder_variable(const char *name, int elevel)
 struct config_generic *
 find_option(const char *name, bool create_placeholders, int elevel)
 {
-	const char **key = &name;
+	struct config_generic *key = &(struct config_generic){.name = name};
 	struct config_generic **res;
 	int			i;
 
