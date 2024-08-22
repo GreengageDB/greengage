@@ -44,7 +44,12 @@ typedef struct PlannerConfig
 
 	bool		honor_order_by;
 
-	bool		is_under_subplan; /* True for plan rooted at a subquery which is planned as a subplan */
+	/*
+	 * True if it's possible for the plan to depend on external parameters,
+	 * for example if it is a clause in a lateral join or a correlated subquery.
+	 * Doesn't guarantee the subquery is actually correlated
+	 */
+	bool		can_have_dependencies;
 
 	/* These ones are tricky */
 	//GpRoleValue	Gp_role; // TODO: this one is tricky

@@ -1699,10 +1699,14 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 		 * from a bunch of conditions that can cause motion in the plan,
 		 * we can only gather it to singleQE and materialize the data because we
 		 * cannot pass params across motion.
+		 * We also set can_have_dependencies to disable other related optimizations.
 		 */
 		if ((!bms_is_empty(required_outer)) &&
 			check_query_for_possible_motion(subquery))
+		{
 			config->force_singleQE = true;
+			config->can_have_dependencies = true;
+		}
 
 		rel->subplan = subquery_planner(root->glob, subquery,
 									root,

@@ -379,7 +379,7 @@ PlannerConfig *DefaultPlannerConfig(void)
 
 	c1->honor_order_by = true;
 
-	c1->is_under_subplan = false;
+	c1->can_have_dependencies = false;
 
 	c1->force_singleQE = false;
 

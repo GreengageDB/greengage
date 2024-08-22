@@ -302,6 +302,23 @@ explain (costs off)
   select max(unique2), generate_series(1,3) as g from tenk1 order by g desc;
 select max(unique2), generate_series(1,3) as g from tenk1 order by g desc;
 
+-- check MIN/MAX optimization for lateral joins (shouldn't be optimized)
+explain (costs off)
+  select x from (values (1), (2)) as v(v_col)
+    join lateral (select max(unique1) x from tenk1 where unique1 = v_col) as r
+    on true;
+select x from (values (1), (2)) as v(v_col)
+  join lateral (select max(unique1) x from tenk1 where unique1 = v_col) as r
+  on true;
+-- check MIN/MAX is still enabled for normal joins
+explain (costs off)
+  select x from (values (1), (2)) as v(v_col)
+    join (select max(unique1) x from tenk1 where unique1 = 1) as r
+    on true;
+select x from (values (1), (2)) as v(v_col)
+  join (select max(unique1) x from tenk1 where unique1 = 1) as r
+  on true;
+
 -- try it on an inheritance tree
 create table minmaxtest(f1 int);
 create table minmaxtest1() inherits (minmaxtest);
