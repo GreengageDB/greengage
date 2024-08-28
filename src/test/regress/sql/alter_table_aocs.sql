@@ -818,3 +818,20 @@ alter table t_addcol_aoco5 add column b int default 1, add column c int default 
 insert into t_addcol_aoco5 values(1); -- bad
 insert into t_addcol_aoco5 values(11); -- good
 select * from t_addcol_aoco5;
+
+--
+-- test correct sampling for AOCO tables with added columns
+--
+create table t_addcol_aoco6(id int, a int) using ao_column distributed by (id);
+insert into t_addcol_aoco6 values (0, 0);
+alter table t_addcol_aoco6 add column b int default 0;
+insert into t_addcol_aoco6 select 0, x, x from generate_series(1, 10000) as x;
+-- a and b should always be equal, so this should be empty.
+-- If sampling is not correctly implemented, a and b might be taken from
+-- different table rows and will be different.
+-- In case of a mismatch the sample would be printed.
+select *
+    from pg_catalog.gp_acquire_sample_rows('t_addcol_aoco6'::regclass, 1, 'f')
+    as t(a1 float8, a2 float8, a3 float8[], id int, a int, b int)
+    where a <> b;
+drop table t_addcol_aoco6;

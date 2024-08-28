@@ -1087,6 +1087,8 @@ aocs_block_remaining_rows(DatumStreamRead *ds)
 
 /*
  * fetches a single column value corresponding to `endrow` (equals to `targrow`)
+ * The function should also work for physical rows numbers as `startrow` and `endrow`
+ * (assuming they belong to the same block)
  * Return the physical row number.
  * Optionally, caller passes a chkvisimap pointer to indicate if they want visimap
  * checking, the result of which will be written to chkvisimap.
@@ -1178,12 +1180,22 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 		DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
 		int64 startrow = scan->segfirstrow + scan->segrowsprocessed;
 		bool chkvisimap = true;
+		bool isanchor = i == ANCHOR_COL_IN_PROJ;
+
+		/*
+		 * We should only use targrow for the initial anchor column scan.
+		 * phyrow should be used for all other columns, since it uniquely
+		 * identifies the row in all column files, unlike the sequential
+		 * number that can be different for different columns.
+		 */
+		int64 current_target_row = isanchor ? targrow : phyrow;
+		int64 current_start_row = InvalidAORowNum;
 
 		/*
 		 * After scanning the anchor column, we check if the value is 
 		 * missing in this column, if so, we skip the scanning.
 		 */
-		if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+		if (!isanchor)
 		{
 			/* we should've got a valid phyrow when scanning the anchor column */
 			Assert(phyrow > 0);
@@ -1199,7 +1211,7 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 			}
 		}
 
-		if (ds->blockRowCount <= 0)
+		if (scan->segrowsprocessed == 0)
 			; /* haven't read block */
 		else
 		{
@@ -1207,13 +1219,22 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 			rowcount = aocs_block_remaining_rows(ds);
 			Assert(rowcount >= 0);
 
-			if (startrow + rowcount - 1 >= targrow)
+			/*
+			 * For sequential number scan (targrow) the starting number is
+			 * startrow. For physical number scan (phyrow) the starting number
+			 * can be calculated from block header.
+			 */
+			current_start_row = isanchor ? startrow : ds->blockFirstRowNum + ds->blockRowsProcessed;
+
+			if (current_start_row + rowcount - 1 >= current_target_row)
 			{
 				/* read the value, visimap check only needed for the anchor column */
 				phyrow = aocs_gettuple_column(scan,
-											attno, startrow, targrow, 
-											i == ANCHOR_COL_IN_PROJ ? &chkvisimap : NULL,
-											slot);
+											  attno,
+											  current_start_row,
+											  current_target_row,
+											  isanchor ? &chkvisimap : NULL,
+											  slot);
 				if (!chkvisimap)
 					ret = false;
 
@@ -1238,7 +1259,14 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 				/* new block, reset blockRowsProcessed */
 				ds->blockRowsProcessed = 0;
 
-				if (startrow + rowcount - 1 >= targrow)
+				/*
+				 * For sequential number scan (targrow) the starting number is
+				 * startrow. For physical number scan (phyrow) the starting
+				 * number is first row number in block.
+				 */
+				current_start_row = isanchor ? startrow : ds->blockFirstRowNum;
+
+				if (current_start_row + rowcount - 1 >= current_target_row)
 				{
 					int64 blocksRead;
 
@@ -1252,10 +1280,12 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 												blocksRead);
 
 					/* read the value, visimap check only needed for the anchor column */
-					phyrow = aocs_gettuple_column(scan, 
-												attno, startrow, targrow, 
-												i == ANCHOR_COL_IN_PROJ ? &chkvisimap : NULL,
-												slot);
+					phyrow = aocs_gettuple_column(scan,
+												  attno,
+												  current_start_row,
+												  current_target_row,
+												  isanchor ? &chkvisimap : NULL,
+												  slot);
 					if (!chkvisimap)
 						ret = false;
 
@@ -1268,7 +1298,11 @@ aocs_gettuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 				/* continue next block */
 			}
 			else
-				pg_unreachable(); /* unreachable code */
+				ereport(ERROR,
+						(errcode(ERRCODE_INTERNAL_ERROR),
+						 errmsg("Unexpected EOF during analysis of AOCO table '%s' for column '%s'",
+								ds->ao_read.relationName,
+								scan->columnScanInfo.relationTupleDesc->attrs[attno].attname.data)));
 		}
 	}
 
