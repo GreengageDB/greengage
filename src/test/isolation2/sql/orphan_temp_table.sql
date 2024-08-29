@@ -33,3 +33,30 @@
 
 3: select count(*) from pg_class where relname = 'test_temp_table_cleanup';
 3q:
+
+-- case 3: Test if temp namespace will be left if session exits during a long insert operation
+
+4: CREATE TEMP TABLE test_temp_table_cleanup(a int);
+4: BEGIN;
+-- simulate a long insert query
+4: SELECT gp_inject_fault('heap_insert', 'infinite_loop', '', '',
+   'test_temp_table_cleanup', 1, 1, 0, dbid) FROM gp_segment_configuration
+   WHERE content = 0 AND role = 'p';
+4&: INSERT INTO test_temp_table_cleanup SELECT generate_series(1, 100);
+
+-- trigger a panic on the segment
+5: SELECT gp_inject_fault('create_function_fail', 'panic', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 0;
+5: CREATE FUNCTION my_function() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+
+-- the insert query should have failed
+4<:
+4q:
+
+5: CREATE TABLE ensure_segment_is_up(a int);
+5: DROP TABLE ensure_segment_is_up;
+
+5: SELECT gp_inject_fault('create_function_fail', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 0;
+5: SELECT gp_inject_fault('heap_insert', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 0;
+-- there shouldn't be any temporary namespaces left after the session quits
+5: SELECT count(*) FROM pg_namespace where (nspname like '%pg_temp_%' or nspname like '%pg_toast_temp_%') and oid > 16386;
+5q:

@@ -66,3 +66,56 @@ BEGIN
  0     
 (1 row)
 3q: ... <quitting>
+
+-- case 3: Test if temp namespace will be left if session exits during a long insert operation
+
+4: CREATE TEMP TABLE test_temp_table_cleanup(a int);
+CREATE TABLE
+4: BEGIN;
+BEGIN
+-- simulate a long insert query
+4: SELECT gp_inject_fault('heap_insert', 'infinite_loop', '', '', 'test_temp_table_cleanup', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE content = 0 AND role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+4&: INSERT INTO test_temp_table_cleanup SELECT generate_series(1, 100);  <waiting ...>
+
+-- trigger a panic on the segment
+5: SELECT gp_inject_fault('create_function_fail', 'panic', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+5: CREATE FUNCTION my_function() RETURNS void AS $$ BEGIN END; $$ LANGUAGE plpgsql;
+ERROR:  fault triggered, fault name:'create_function_fail' fault type:'panic'  (seg0 127.0.0.1:7002 pid=1390184)
+
+-- the insert query should have failed
+4<:  <... completed>
+ERROR:  Error on receive from seg0 slice1 127.0.0.1:7002 pid=1390163: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+4q: ... <quitting>
+
+5: CREATE TABLE ensure_segment_is_up(a int);
+CREATE TABLE
+5: DROP TABLE ensure_segment_is_up;
+DROP TABLE
+
+5: SELECT gp_inject_fault('create_function_fail', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+5: SELECT gp_inject_fault('heap_insert', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+-- there shouldn't be any temporary namespaces left after the session quits
+5: SELECT count(*) FROM pg_namespace where (nspname like '%pg_temp_%' or nspname like '%pg_toast_temp_%') and oid > 16386;
+ count 
+-------
+ 0     
+(1 row)
+5q: ... <quitting>

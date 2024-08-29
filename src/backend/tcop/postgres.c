@@ -5292,7 +5292,10 @@ PostgresMain(int argc, char *argv[],
 		 * (2b) Check for temp table delete reset session work.
 		 */
 		if (Gp_role == GP_ROLE_DISPATCH)
+		{
+			GpResetSessionIfNeeded();
 			GpDropTempTables();
+		}
 
 		/*
 		 * (3) read a command (loop blocks here)

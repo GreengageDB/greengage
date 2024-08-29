@@ -166,6 +166,7 @@ extern void SetTempNamespaceState(Oid tempNamespaceId,
 extern void SetTempNamespaceStateAfterBoot(Oid tempNamespaceId,
 								  Oid tempToastNamespaceId); /* GPDB only */
 extern void ResetTempTableNamespace(void);
+extern void CancelRemoveTempRelationsCallback(void);
 
 extern OverrideSearchPath *GetOverrideSearchPath(MemoryContext context);
 extern OverrideSearchPath *CopyOverrideSearchPath(OverrideSearchPath *path);
