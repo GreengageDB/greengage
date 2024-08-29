@@ -140,6 +140,7 @@ extern bool isOtherTempNamespace(Oid namespaceId);
 extern int	GetTempNamespaceBackendId(Oid namespaceId);
 extern Oid	GetTempToastNamespace(void);
 extern void ResetTempTableNamespace(void);
+extern void CancelRemoveTempRelationsCallback(void);
 
 extern OverrideSearchPath *GetOverrideSearchPath(MemoryContext context);
 extern OverrideSearchPath *CopyOverrideSearchPath(OverrideSearchPath *path);
