@@ -1904,7 +1904,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_log_stack_trace_lines,
-		true,
+		false,
 		NULL, NULL, NULL
 	},
 
