@@ -60,7 +60,6 @@ using namespace gpmd;
 
 extern bool optimizer_enable_ctas;
 extern bool optimizer_enable_dml;
-extern bool optimizer_enable_dml_triggers;
 extern bool optimizer_enable_dml_constraints;
 extern bool optimizer_enable_replicated_table;
 extern bool optimizer_enable_multiple_distinct_aggs;
@@ -716,8 +715,7 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 		&m_context->m_has_distributed_tables,
 		&m_context->m_has_replicated_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
-	if (!optimizer_enable_dml_triggers &&
-		CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel,
+	if (CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel,
 										 Edxldmlinsert))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
@@ -1168,8 +1166,7 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 		&m_context->m_has_distributed_tables,
 		&m_context->m_has_replicated_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
-	if (!optimizer_enable_dml_triggers &&
-		CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel,
+	if (CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel,
 										 Edxldmldelete))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
@@ -1250,8 +1247,7 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 		&m_context->m_has_distributed_tables,
 		&m_context->m_has_replicated_tables);
 	const IMDRelation *md_rel = m_md_accessor->RetrieveRel(table_descr->MDId());
-	if (!optimizer_enable_dml_triggers &&
-		CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel,
+	if (CTranslatorUtils::RelHasTriggers(m_mp, m_md_accessor, md_rel,
 										 Edxldmlupdate))
 	{
 		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,

@@ -3706,6 +3706,33 @@ WITH e AS (
 
 DROP TABLE d, r;
 
+-- Test that optimizer_enable_dml_triggers GUC is defunct 
+CREATE TABLE d (с1 int, с2 int) DISTRIBUTED BY (с1);
+INSERT INTO d VALUES (1, 1);
+
+CREATE OR REPLACE FUNCTION trig_proc() RETURNS TRIGGER
+AS $$
+BEGIN
+  RAISE NOTICE 'Values: (%, %)', OLD.с1, OLD.с2;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER d_upd AFTER UPDATE ON d
+FOR EACH ROW EXECUTE PROCEDURE trig_proc();
+
+-- The GUC should be disabled by default and cannot be enabled
+SHOW optimizer_enable_dml_triggers;
+SET optimizer_enable_dml_triggers = TRUE;
+SHOW optimizer_enable_dml_triggers;
+
+-- The next query should be processed by the Postgres planner
+-- because trigger planning in Orca has been disabled.
+UPDATE d SET с2 = 2 WHERE с1 = 1;
+
+DROP TABLE d;
+DROP FUNCTION trig_proc();
+
 reset optimizer_trace_fallback;
 
 -- start_ignore
