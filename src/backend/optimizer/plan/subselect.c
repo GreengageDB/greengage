@@ -635,7 +635,11 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
-		config->is_under_subplan = true;
+		/*
+		 * This is a subquery, so it can possibly be correlated and depend
+		 * on other parts of the plan
+		 */
+		config->can_have_dependencies = true;
 
 		/*
 		 * Disable CTE sharing in subplan.

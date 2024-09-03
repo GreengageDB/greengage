@@ -61,7 +61,7 @@
 
 - Install dependencies using README.ubuntu.bash script:
   ```bash
-  ./README.ubuntu.bash
+  sudo ./README.ubuntu.bash
   ```
 
 - Create symbolic link to Python 2 in `/usr/bin`:

@@ -1904,7 +1904,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_log_stack_trace_lines,
-		true,
+		false,
 		NULL, NULL, NULL
 	},
 
@@ -2930,7 +2930,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"optimizer_enable_dml_triggers", PGC_USERSET, DEVELOPER_OPTIONS,
+		{"optimizer_enable_dml_triggers", PGC_USERSET, DEFUNCT_OPTIONS,
 			gettext_noop("Support DML with triggers."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
