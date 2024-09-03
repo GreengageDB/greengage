@@ -596,6 +596,35 @@ JIT:
 Execution Time: N.N ms
 (12 rows)
 -- Check explain analyze json format output with jit enable
+-- JSON Required replaces for costs and time changes
+-- start_matchsubs
+-- m/ "Startup Cost": \d+.\d+/
+-- s/ "Startup Cost": \d+.\d+/ "Startup Cost": ##.###/g
+-- m/ "Total Cost": \d+.\d+/
+-- s/ "Total Cost": \d+.\d+/ "Total Cost": ##.###/g
+-- m/ "Plan Rows": \d+/
+-- s/ "Plan Rows": \d+/ "Plan Rows": #####/g
+-- m/ "Actual Startup Time": \d+.\d+/
+-- s/ "Actual Startup Time": \d+.\d+/ "Actual Startup Time": ##.###/g
+-- m/ "Actual Total Time": \d+.\d+/
+-- s/ "Actual Total Time": \d+.\d+/ "Actual Total Time": ##.###/g
+-- m/ "Time To First Result": "\d+(.\d+)?"/
+-- s/ "Time To First Result": "\d+(.\d+)?"/ "Time To First Result": "##.###"/g
+-- m/ "Time To Total Result": "\d+(.\d+)?"/
+-- s/ "Time To Total Result": "\d+(.\d+)?"/ "Time To Total Result": "##.###"/g
+-- m/ "Planning Time": \d+.\d+/
+-- s/ "Planning Time": \d+.\d+/ "Planning Time": ##.###/g
+-- m/ "Executor Memory": \d+/
+-- s/ "Executor Memory": \d+/ "Executor Memory": #####/g
+-- m/ "Average": \d+/
+-- s/ "Average": \d+/ "Average": #####/g
+-- m/ "Maximum Memory Used": \d+/
+-- s/ "Maximum Memory Used": \d+/ "Maximum Memory Used": #####/g
+-- m/ "Memory used": \d+/
+-- s/ "Memory used": \d+/ "Memory used": #####/g
+-- m/ "Execution Time": \d+.\d+/
+-- s/ "Execution Time": \d+.\d+/ "Execution Time": ##.###/g
+-- end_matchsubs
 select explain_filter_to_json('EXPLAIN (ANALYZE, FORMAT json) SELECT * FROM jit_explain_output LIMIT 10;');
 explain_filter_to_json
 [{"JIT": {"slice": {"slice": 0, "Timing": 0.0, "functions": 0.0}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0}, "Triggers": [], "Optimizer": "GPORCA", "Planning Time": 0.0, "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
@@ -776,6 +805,106 @@ RESET enable_seqscan;
 RESET enable_bitmapscan;
 RESET optimizer_enable_tablescan;
 RESET optimizer_enable_bitmapscan;
+-- Test Allstats formatting
+create table allstat_test(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+set gp_enable_explain_allstat=true;
+explain (analyze, format json) select * from allstat_test;
+QUERY PLAN
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 3,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 3,
+      "Gang Type": "primary reader",
+      "Parallel Aware": false,
+      "Startup Cost": 0.00,
+      "Total Cost": 431.00,
+      "Plan Rows": 1,
+      "Plan Width": 4,
+      "Actual Startup Time": 0.304,
+      "Actual Total Time": 0.304,
+      "Actual Rows": 0,
+      "Actual Loops": 1,
+      "Allstat": [
+        {
+          "Segment index": -1,
+          "Time To First Result": "0.279",
+          "Time To Total Result": "0.304",
+          "Tuples": 0.0
+        }
+      ],
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 3,
+          "Gang Type": "primary reader",
+          "Parallel Aware": false,
+          "Relation Name": "allstat_test",
+          "Alias": "allstat_test",
+          "Startup Cost": 0.00,
+          "Total Cost": 431.00,
+          "Plan Rows": 1,
+          "Plan Width": 4,
+          "Actual Startup Time": 0.000,
+          "Actual Total Time": 0.018,
+          "Actual Rows": 0,
+          "Actual Loops": 1,
+          "Allstat": [
+            {
+              "Segment index": 0,
+              "Time To First Result": "0.493",
+              "Time To Total Result": "0.018",
+              "Tuples": 0.0
+            },
+            {
+              "Segment index": 1,
+              "Time To First Result": "0.493",
+              "Time To Total Result": "0.018",
+              "Tuples": 0.0
+            },
+            {
+              "Segment index": 2,
+              "Time To First Result": "0.545",
+              "Time To Total Result": "0.013",
+              "Tuples": 0.0
+            }
+          ]
+        }
+      ]
+    },
+    "Optimizer": "GPORCA",
+    "Planning Time": 3.070,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 36488
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 36360,
+          "Workers": 3,
+          "Maximum Memory Used": 36360
+        }
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 128000
+    },
+    "Execution Time": 0.778
+  }
+]
+(1 row)
+reset gp_enable_explain_allstat;
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
@@ -786,3 +915,4 @@ DROP TABLE test_src_tbl;
 DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
 DROP TABLE stat_io_timing;
+DROP TABLE allstat_test;

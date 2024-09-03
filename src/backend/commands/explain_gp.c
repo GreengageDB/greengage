@@ -1756,7 +1756,7 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 								   "allstat: seg_firststart_total_ntuples");
 		}
 		else
-			ExplainOpenGroup("Allstat", "Allstat", true, es);
+			ExplainOpenGroup("Allstat", "Allstat", false, es);
 
 		for (i = 0; i < ns->ninst; i++)
 		{
@@ -1790,19 +1790,19 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 				cdbexplain_formatSeconds(totalbuf, sizeof(totalbuf),
 										 nsi->total, false);
 
-				ExplainOpenGroup("Segment", NULL, false, es);
+				ExplainOpenGroup("Segment", NULL, true, es);
 				ExplainPropertyInteger("Segment index", NULL, ns->segindexes[i], es);
 				ExplainPropertyText("Time To First Result", startbuf, es);
 				ExplainPropertyText("Time To Total Result", totalbuf, es);
 				ExplainPropertyFloat("Tuples", NULL, nsi->ntuples, 1, es);
-				ExplainCloseGroup("Segment", NULL, false, es);
+				ExplainCloseGroup("Segment", NULL, true, es);
 			}
 		}
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			appendStringInfoString(es->str, "//end\n");
 		else
-			ExplainCloseGroup("Allstat", "Allstat", true, es);
+			ExplainCloseGroup("Allstat", "Allstat", false, es);
 	}
 }								/* cdbexplain_showExecStats */
 

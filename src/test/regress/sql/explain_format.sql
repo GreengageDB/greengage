@@ -136,6 +136,35 @@ select explain_filter('EXPLAIN SELECT * FROM jit_explain_output LIMIT 10;');
 select explain_filter('EXPLAIN (ANALYZE) SELECT * FROM jit_explain_output LIMIT 10;');
 
 -- Check explain analyze json format output with jit enable
+-- JSON Required replaces for costs and time changes
+-- start_matchsubs
+-- m/ "Startup Cost": \d+.\d+/
+-- s/ "Startup Cost": \d+.\d+/ "Startup Cost": ##.###/g
+-- m/ "Total Cost": \d+.\d+/
+-- s/ "Total Cost": \d+.\d+/ "Total Cost": ##.###/g
+-- m/ "Plan Rows": \d+/
+-- s/ "Plan Rows": \d+/ "Plan Rows": #####/g
+-- m/ "Actual Startup Time": \d+.\d+/
+-- s/ "Actual Startup Time": \d+.\d+/ "Actual Startup Time": ##.###/g
+-- m/ "Actual Total Time": \d+.\d+/
+-- s/ "Actual Total Time": \d+.\d+/ "Actual Total Time": ##.###/g
+-- m/ "Time To First Result": "\d+(.\d+)?"/
+-- s/ "Time To First Result": "\d+(.\d+)?"/ "Time To First Result": "##.###"/g
+-- m/ "Time To Total Result": "\d+(.\d+)?"/
+-- s/ "Time To Total Result": "\d+(.\d+)?"/ "Time To Total Result": "##.###"/g
+-- m/ "Planning Time": \d+.\d+/
+-- s/ "Planning Time": \d+.\d+/ "Planning Time": ##.###/g
+-- m/ "Executor Memory": \d+/
+-- s/ "Executor Memory": \d+/ "Executor Memory": #####/g
+-- m/ "Average": \d+/
+-- s/ "Average": \d+/ "Average": #####/g
+-- m/ "Maximum Memory Used": \d+/
+-- s/ "Maximum Memory Used": \d+/ "Maximum Memory Used": #####/g
+-- m/ "Memory used": \d+/
+-- s/ "Memory used": \d+/ "Memory used": #####/g
+-- m/ "Execution Time": \d+.\d+/
+-- s/ "Execution Time": \d+.\d+/ "Execution Time": ##.###/g
+-- end_matchsubs
 select explain_filter_to_json('EXPLAIN (ANALYZE, FORMAT json) SELECT * FROM jit_explain_output LIMIT 10;');
 
 RESET jit;
@@ -226,6 +255,12 @@ RESET enable_bitmapscan;
 RESET optimizer_enable_tablescan;
 RESET optimizer_enable_bitmapscan;
 
+-- Test Allstats formatting
+create table allstat_test(a int);
+set gp_enable_explain_allstat=true;
+explain (analyze, format json) select * from allstat_test;
+reset gp_enable_explain_allstat;
+
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
@@ -236,3 +271,4 @@ DROP TABLE test_src_tbl;
 DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
 DROP TABLE stat_io_timing;
+DROP TABLE allstat_test;
