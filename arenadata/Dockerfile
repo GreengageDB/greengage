@@ -2,20 +2,14 @@ FROM centos:centos7 as base
 
 ARG sigar=https://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-1.6.5-1056.git2932df5.el7.x86_64.rpm
 ARG sigar_headers=http://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-headers-1.6.5-1056.git2932df5.el7.x86_64.rpm
-ARG CENTOS_REPOS_URL="https://mirror.axelname.ru/centos"
+ARG CENTOS_REPOS_URL="http://mirror.adsw.io"
 
 # Reinstall glibc-common. This is necessary to get langpacks in docker
 # because docker images don't contain them.
 # Change URL for repos, because Centos 7 EOL 30.06.2024
-RUN if [[ "x86_64" == "$(uname -i)" ]]; then \
-        sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=os\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/\$releasever/os/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo; \
-        sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=updates\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/\$releasever/updates/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo; \
-        sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=extras\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/\$releasever/extras/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo; \
-    else \
-        sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=os\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/os/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo; \
-        sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=updates\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/updates/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo; \
-        sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=extras\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/extras/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo; \
-    fi &&\
+RUN sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=os\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/centos/\$releasever/os/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo && \
+    sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=updates\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/centos/\$releasever/updates/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo && \
+    sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=extras\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/centos/\$releasever/extras/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo && \
     sed -i 's/\(override_install_langs*\)/# \1/' /etc/yum.conf && \
     yum -y reinstall glibc-common && \
 	yum clean all
@@ -62,13 +56,8 @@ RUN ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa && \
 
 # newer version of gcc and run environment for gpdb
 RUN yum -y install centos-release-scl && \
-    if [[ "x86_64" == "$(uname -i)" ]]; then \
-       sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-rh|baseurl=$CENTOS_REPOS_URL/\$releasever/sclo/\$basearch/rh/|g" /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo; \
-       sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-sclo|baseurl=$CENTOS_REPOS_URL/\$releasever/sclo/\$basearch/sclo/|g" /etc/yum.repos.d/CentOS-SCLo-scl.repo; \
-    else \
-       sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-rh|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/sclo/\$basearch/rh/|g" /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo; \
-       sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-sclo|baseurl=$CENTOS_REPOS_URL/altarch/\$releasever/sclo/\$basearch/sclo/|g" /etc/yum.repos.d/CentOS-SCLo-scl.repo; \
-    fi && \
+    sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-rh|baseurl=$CENTOS_REPOS_URL/sc-lo/\$releasever/rh/\$basearch/|g" /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo && \
+    sed -i "s|enabled=1|enabled=0|g" /etc/yum.repos.d/CentOS-SCLo-scl.repo && \
     yum -y install --nogpgcheck devtoolset-7-gcc devtoolset-7-gcc-c++ && yum clean all && \
     pip --no-cache-dir install psi && \
     ln -s /usr/bin/cmake3 /usr/bin/cmake && \

@@ -87,9 +87,9 @@ jobs:
           tar -xf uctags-2023.07.05-linux-x86_64.tar.xz
           cp uctags-2023.07.05-linux-x86_64/bin/* /usr/bin/
           which ctags
-          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=os&infra=$infra|baseurl=https://mirror.axelname.ru/centos/$releasever/os/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
-          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=updates&infra=$infra|baseurl=https://mirror.axelname.ru/centos/$releasever/updates/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
-          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=extras&infra=$infra|baseurl=https://mirror.axelname.ru/centos/$releasever/extras/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
+          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=os&infra=$infra|baseurl=http://mirror.adsw.io/centos/$releasever/os/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
+          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=updates&infra=$infra|baseurl=http://mirror.adsw.io/centos/$releasever/updates/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
+          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=extras&infra=$infra|baseurl=http://mirror.adsw.io/centos/$releasever/extras/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
           yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
           yum install -y git
 
@@ -161,9 +161,9 @@ jobs:
 
       - name: Install abi-compliance-checker and report viewer (lynx)
         run: |
-          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=os&infra=$infra|baseurl=https://mirror.axelname.ru/centos/$releasever/os/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
-          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=updates&infra=$infra|baseurl=https://mirror.axelname.ru/centos/$releasever/updates/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
-          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=extras&infra=$infra|baseurl=https://mirror.axelname.ru/centos/$releasever/extras/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
+          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=os&infra=$infra|baseurl=http://mirror.adsw.io/centos/$releasever/os/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
+          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=updates&infra=$infra|baseurl=http://mirror.adsw.io/centos/$releasever/updates/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
+          sed -i 's|mirrorlist=http://mirrorlist.centos.org/?release=$releasever&arch=$basearch&repo=extras&infra=$infra|baseurl=http://mirror.adsw.io/centos/$releasever/extras/$basearch|g' /etc/yum.repos.d/CentOS-Base.repo
           yum install -y epel-release
           yum install -y abi-compliance-checker
           yum install -y lynx
