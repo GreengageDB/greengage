@@ -46,10 +46,14 @@ typedef struct PlannerConfig
 
 	/*
 	 * True if it's possible for the plan to depend on external parameters,
-	 * for example if it is a clause in a lateral join or a correlated subquery.
-	 * Doesn't guarantee the subquery is actually correlated
+	 * for example if it is a correlated subquery or a clause in a lateral join.
+	 * Doesn't guarantee the subquery is actually correlated.
+	 * 
+	 * Despite its name, it is also true for lateral joins.
+	 * This should be named something like can_have_dependencies instead but
+	 * the name cannot be changed due to source compatibility.
 	 */
-	bool		can_have_dependencies;
+	bool		is_under_subplan;
 
 	/* These ones are tricky */
 	//GpRoleValue	Gp_role; // TODO: this one is tricky

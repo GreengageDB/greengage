@@ -639,7 +639,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery, SubLinkType subLinkType,
 		 * This is a subquery, so it can possibly be correlated and depend
 		 * on other parts of the plan
 		 */
-		config->can_have_dependencies = true;
+		config->is_under_subplan = true;
 
 		/*
 		 * Disable CTE sharing in subplan.

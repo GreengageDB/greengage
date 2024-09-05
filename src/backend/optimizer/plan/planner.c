@@ -636,7 +636,7 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	 */
 	if ((parent_root && parent_root->is_correlated_subplan) ||
 		((Gp_role == GP_ROLE_DISPATCH) &&
-		root->config->can_have_dependencies &&
+		root->config->is_under_subplan &&
 		IsSubqueryCorrelated(parse)))
 	{
 		root->is_correlated_subplan = true;
