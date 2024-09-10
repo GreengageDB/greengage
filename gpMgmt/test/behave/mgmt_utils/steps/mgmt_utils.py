@@ -225,6 +225,24 @@ def impl(conetxt, tabname):
         conn.commit()
 
 
+@given('schema "{schemaname}" exists')
+def impl(context, schemaname):
+    dbname = 'gptest'
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        sql = "CREATE SCHEMA IF NOT EXISTS {schemaname}".format(schemaname=schemaname)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+
+@given('the user sets schema of table "{tabname}" to "{schemaname}"')
+def impl(context, tabname, schemaname):
+    dbname = 'gptest'
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        sql = "ALTER TABLE {tabname} SET SCHEMA {schemaname}".format(tabname=tabname, schemaname=schemaname)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+
 @given('the user executes "{sql}" with named connection "{cname}"')
 def impl(context, cname, sql):
     conn = context.named_conns[cname]
