@@ -133,6 +133,13 @@ Feature: Tests for gpinitstandby feature
         Then gpinitstandby should return a return code of 0
         And verify that the file "pg_hba.conf" in the coordinator data directory has "no" line starting with "host.*replication.*(127.0.0.1|::1).*trust"
 
+    Scenario: gpinitstandby should create pg_hba standby entry to segment primary and mirror
+        Given the database is running
+        And the standby is not initialized
+        When the user initializes a standby on the host "sdw3" and port 7001
+        Then gpinitstandby should return a return code of 0
+        And verify that pg_hba.conf file has "standby" entries in each segment (primary and mirror) data directories
+
     @backup_restore_bashrc
     Scenario: gpinitstandby should not throw error when banner exists on the host
         Given the database is running

@@ -1111,6 +1111,15 @@ def impl(context):
     temp_data_dir = tempfile.mkdtemp() + "/standby_datadir"
     run_gpinitstandby(context, hostname, os.environ.get("PGPORT"), temp_data_dir)
 
+@when('the user initializes a standby on the host "{host}" and port {port}')
+def impl(context, host, port):
+    temp_data_dir = tempfile.mkdtemp() + "/standby_datadir"
+    context.standby_hostname = host
+    context.standby_port = port
+    context.standby_data_dir = temp_data_dir
+    options = "-P %s -S %s" % (port, temp_data_dir)
+    run_gpinitstandby(context, host, port, temp_data_dir, options, True)
+
 @when('the user initializes a standby on the same host as coordinator and the same data directory')
 def impl(context):
     hostname = get_coordinator_hostname('postgres')[0][0]
@@ -2030,13 +2039,25 @@ def impl(context, filename, some, output):
         err_str = "xx Expected stdout string '%s' and found: '%s'" % (regexStr, contents)
         raise Exception(err_str)
 
+@given('verify that pg_hba.conf file has "{type}" entries in each segment (primary and mirror) data directories')
+@then('verify that pg_hba.conf file has "{type}" entries in each segment (primary and mirror) data directories')
+def impl(context, type):
+    verify_pg_hba_in_each_segment_data_directories(context, type, False)
+
 @given('verify that pg_hba.conf file has "{type}" entries in each segment data directories')
 @then('verify that pg_hba.conf file has "{type}" entries in each segment data directories')
 def impl(context, type):
+    verify_pg_hba_in_each_segment_data_directories(context, type)
+
+def verify_pg_hba_in_each_segment_data_directories(context, type, check_only_primary=True):
+    if check_only_primary:
+        query = "SELECT hostname, datadir FROM gp_segment_configuration WHERE role='p' AND content > -1;"
+    else:
+        query = "SELECT hostname, datadir FROM gp_segment_configuration WHERE content > -1;"
+
     conn = dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False)
     try:
-        curs = dbconn.query(conn,
-                            "SELECT hostname, datadir FROM gp_segment_configuration WHERE role='p' AND content > -1;")
+        curs = dbconn.query(conn, query)
         result = curs.fetchall()
         segment_info = [(result[s][0], result[s][1]) for s in range(len(result))]
     except Exception as e:
