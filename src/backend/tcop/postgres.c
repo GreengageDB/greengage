@@ -1592,7 +1592,8 @@ send_guc_to_QE(List *guc_list, bool is_restore)
 			/* if some guc can not restore successful
 			 * we can not keep alive gang anymore.
 			 */
-			DisconnectAndDestroyAllGangs(false);
+			DisconnectAndDestroyAllGangs(true);
+			CheckForResetSession();
 			/*
 			 * when qe elog an error, qd will use ReThrowError to
 			 * re throw the error, the errordata_stack_depth will ++,
