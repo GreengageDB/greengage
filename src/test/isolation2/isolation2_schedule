@@ -250,6 +250,8 @@ test: add_column_after_vacuum_skip_drop_column
 test: vacuum_after_vacuum_skip_drop_column
 # test workfile_mgr
 test: workfile_mgr_test
+test: workfile_gp_toolkit
+
 test: pg_basebackup
 test: pg_basebackup_with_tablespaces
 test: pg_basebackup_large_database_oid

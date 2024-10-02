@@ -13,7 +13,7 @@ CREATE FUNCTION
 CREATE OR REPLACE FUNCTION gp_workfile_mgr_create_empty_workset(worksetname text) RETURNS setof void LANGUAGE C VOLATILE EXECUTE ON ALL SEGMENTS AS '@abs_builddir@/isolation2_regress@DLSUFFIX@', 'gp_workfile_mgr_create_workset';
 CREATE FUNCTION
 
-CREATE FUNCTION gp_workfile_mgr_cache_entries() RETURNS TABLE(segid int4, prefix text, size int8, operation text, slice int4, sessionid int4, commandid int4, numfiles int4) AS '$libdir/gp_workfile_mgr', 'gp_workfile_mgr_cache_entries' LANGUAGE C VOLATILE EXECUTE ON ALL SEGMENTS;
+CREATE FUNCTION gp_workfile_mgr_cache_entries() RETURNS TABLE(segid int4, prefix text, size int8, operation text, slice int4, sessionid int4, commandid int4, numfiles int4, pid int4) AS '$libdir/gp_workfile_mgr', 'gp_workfile_mgr_cache_entries' LANGUAGE C VOLATILE EXECUTE ON ALL SEGMENTS;
 CREATE FUNCTION
 
 -- Wait for at the most 1 min for backends to remove transient

@@ -104,6 +104,9 @@ typedef struct workfile_set
 
 	/* Number of compressed work files */
 	uint32		num_files_compressed;
+
+	/* PID of the process creating the workfile set */
+	int			pid;
 } workfile_set;
 
 /* Workfile Set operations */

@@ -569,6 +569,8 @@ workfile_mgr_create_set(const char *operator_name, const char *prefix, bool hold
 
 	LWLockRelease(WorkFileManagerLock);
 
+	SIMPLE_FAULT_INJECTOR("after_workfile_mgr_create_set");
+
 	return work_set;
 }
 
@@ -639,6 +641,7 @@ workfile_mgr_create_set_internal(const char *operator_name, const char *prefix)
 	work_set->pinned = false;
 	work_set->compression_buf_total = 0;
 	work_set->num_files_compressed = 0;
+	work_set->pid = MyProcPid;
 
 	/* Track all workfile_sets created in current process */
 	if (!localCtl.initialized)
@@ -869,7 +872,7 @@ gp_workfile_mgr_cache_entries_internal(PG_FUNCTION_ARGS)
 		 * The number and type of attributes have to match the definition of the
 		 * view gp_workfile_mgr_cache_entries
 		 */
-#define NUM_CACHE_ENTRIES_ELEM 8
+#define NUM_CACHE_ENTRIES_ELEM 9
 		TupleDesc tupdesc = CreateTemplateTupleDesc(NUM_CACHE_ENTRIES_ELEM);
 
 		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "segid", INT4OID, -1, 0);
@@ -880,6 +883,7 @@ gp_workfile_mgr_cache_entries_internal(PG_FUNCTION_ARGS)
 		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "sessionid", INT4OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "commandid", INT4OID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "numfiles", INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "pid", INT4OID, -1, 0);
 
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
@@ -915,6 +919,7 @@ gp_workfile_mgr_cache_entries_internal(PG_FUNCTION_ARGS)
 		values[5] = UInt32GetDatum(work_set->session_id);
 		values[6] = UInt32GetDatum(work_set->command_count);
 		values[7] = UInt32GetDatum(work_set->num_files);
+		values[8] = UInt32GetDatum(work_set->pid);
 
 		cxt->index++;
 
