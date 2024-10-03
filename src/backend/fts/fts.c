@@ -94,6 +94,13 @@ sigIntHandler(SIGNAL_ARGS)
 		SetLatch(MyLatch);
 }
 
+static void
+FtsProbeCrashHandler(SIGNAL_ARGS)
+{
+	StandardHandlerForSigillSigsegvSigbus_OnMainThread("ftsprobe",
+														PASS_SIGNAL_ARGS);
+}
+
 pid_t
 FtsProbePID(void)
 {
@@ -120,6 +127,16 @@ FtsProbeMain(Datum main_arg)
 	 */
 	pqsignal(SIGHUP, sigHupHandler);
 	pqsignal(SIGINT, sigIntHandler);
+
+	#ifdef SIGILL
+		pqsignal(SIGILL, FtsProbeCrashHandler);
+	#endif
+	#ifdef SIGSEGV
+		pqsignal(SIGSEGV, FtsProbeCrashHandler);
+	#endif
+	#ifdef SIGBUS
+		pqsignal(SIGBUS, FtsProbeCrashHandler);
+	#endif
 
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();

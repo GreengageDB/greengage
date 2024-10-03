@@ -131,6 +131,7 @@ static void WalRcvSigHupHandler(SIGNAL_ARGS);
 static void WalRcvSigUsr1Handler(SIGNAL_ARGS);
 static void WalRcvShutdownHandler(SIGNAL_ARGS);
 static void WalRcvQuickDieHandler(SIGNAL_ARGS);
+static void WalRcvCrashHandler(SIGNAL_ARGS);
 
 
 /*
@@ -264,6 +265,16 @@ WalReceiverMain(void)
 
 	/* Reset some signals that are accepted by postmaster but not here */
 	pqsignal(SIGCHLD, SIG_DFL);
+
+	#ifdef SIGILL
+		pqsignal(SIGILL, WalRcvCrashHandler);
+	#endif
+	#ifdef SIGSEGV
+		pqsignal(SIGSEGV, WalRcvCrashHandler);
+	#endif
+	#ifdef SIGBUS
+		pqsignal(SIGBUS, WalRcvCrashHandler);
+	#endif
 
 	/* We allow SIGQUIT (quickdie) at all times */
 	sigdelset(&BlockSig, SIGQUIT);
@@ -835,6 +846,13 @@ WalRcvQuickDieHandler(SIGNAL_ARGS)
 	 * being doubly sure.)
 	 */
 	_exit(2);
+}
+
+static void
+WalRcvCrashHandler(SIGNAL_ARGS)
+{
+	StandardHandlerForSigillSigsegvSigbus_OnMainThread("walreceiver",
+														PASS_SIGNAL_ARGS);
 }
 
 /*
