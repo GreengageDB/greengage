@@ -2513,6 +2513,19 @@ def impl(context, sql, boolean):
         if _str2bool(result) != _str2bool(boolean):
             raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
 
+@then('check that the result from boolean sql "{sql}" is "{boolean}"')
+def impl(context, sql, boolean):
+    cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "%s"' % sql)
+    cmd.run()
+    if cmd.get_return_code() != 0:
+        context.ret_code = cmd.get_return_code()
+        context.error_message = 'psql internal error: %s' % cmd.get_stderr()
+        check_return_code(context, 0)
+    else:
+        result = cmd.get_stdout()
+        if _str2bool(result) != _str2bool(boolean):
+            raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
+
 
 def _str2bool(string):
     return string.lower().strip() in ['t', 'true', '1', 'yes', 'y']

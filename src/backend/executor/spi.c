@@ -2274,19 +2274,6 @@ _SPI_execute_plan(SPIPlanPtr plan, ParamListInfo paramLI,
 
 			dest = CreateDestReceiver(canSetTag ? DestSPI : DestNone);
 
-			bool orig_gp_enable_gpperfmon = gp_enable_gpperfmon;
-			
-PG_TRY();
-{
-			/*
-			* Temporarily disable gpperfmon since we don't send information for internal queries in
-			* most cases, except when the debugging level is set to DEBUG4 or DEBUG5.
-			*/
-			if (log_min_messages > DEBUG4)
-			{
-				gp_enable_gpperfmon = false;
-			}
-
 			if (IsA(stmt, PlannedStmt) &&
 				((PlannedStmt *) stmt)->utilityStmt == NULL)
 			{
@@ -2383,15 +2370,6 @@ PG_TRY();
 													  NULL, 10);
 				}
 			}
-
-			gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
-}
-PG_CATCH();
-{
-			gp_enable_gpperfmon = orig_gp_enable_gpperfmon;
-			PG_RE_THROW();
-}
-PG_END_TRY();
 
 			/*
 			 * The last canSetTag query sets the status values returned to the

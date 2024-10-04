@@ -101,6 +101,26 @@ Feature: gpperfmon
         """
         Then wait until the results from boolean sql "SELECT count(*) > 0 FROM queries_history WHERE query_text = 'SELECT pg_sleep(80)'" is "true"
 
+    @gpperfmon_query_history
+    Scenario Outline: gpperfmon only logs nested statements if log_min_messages is set to debug4 or debug5
+        Given gpperfmon is configured and running in qamode
+        When the user truncates "queries_history" tables in "gpperfmon"
+        When below sql is executed in "gptest" db
+        """
+        CREATE OR REPLACE FUNCTION test_sleep() RETURNS SETOF INT AS $$BEGIN
+            RETURN QUERY SELECT 1 FROM pg_sleep(30);
+        END$$ LANGUAGE plpgsql;
+        """
+        When the user runs psql with "-1c 'SET log_min_messages = "<log_level>"; DECLARE test_cursor CURSOR FOR SELECT * FROM generate_series(1,100); FETCH FORWARD 10 FROM test_cursor; SELECT test_sleep();'" against database "gptest"
+        Then wait until the results from boolean sql "SELECT count(*) > 0 FROM queries_history WHERE query_text LIKE '%test_sleep()%' AND query_text NOT LIKE '%queries_history%'" is "true"
+        And check that the result from boolean sql "SELECT count(*) > 0 FROM queries_history WHERE query_text LIKE '%test_cursor%' AND query_text NOT LIKE '%queries_history%'" is "true"
+        And check that the result from boolean sql "SELECT count(*) > 0 FROM queries_history WHERE query_text LIKE '%pg_sleep(30)%' AND query_text NOT LIKE '%queries_history%'" is "<inner_query_present>"
+
+    Examples:
+        | log_level | inner_query_present |
+        | debug4    | true                |
+        | warning   | false               |
+
     @gpperfmon_system_history
     Scenario: gpperfmon adds to system_history table
         Given gpperfmon is configured and running in qamode

@@ -124,6 +124,7 @@ CreateQueryDesc(PlannedStmt *plannedstmt,
 	{
 		qd->gpmon_pkt = (gpmon_packet_t *) palloc0(sizeof(gpmon_packet_t));
 		gpmon_qlog_packet_init(qd->gpmon_pkt);
+		gpmon_qlog_set_top_level(qd->gpmon_pkt, qd->plannedstmt->metricsQueryType == TOP_LEVEL_QUERY);
 	}
 
 	return qd;
