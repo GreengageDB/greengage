@@ -181,13 +181,13 @@ if __name__ == '__main__':
             cmd = Command("""echo "host     all         gpmon         ::1/128    md5" >> %s""" % pg_hba, showOutput=True)
             commands.append(cmd)
         else:
-            cmd = Command("""echo "local    gpperfmon         gpmon                         peer         map=perfmon" >> %s""" % pg_hba, showOutput=True)
+            cmd = Command("""echo "local    gpperfmon         gpmon                         peer         map=gpperfmon" >> %s""" % pg_hba, showOutput=True)
             commands.append(cmd)
 
-            cmd = Command("""echo "host     gpperfmon         gpmon         127.0.0.1/28    ident        map=perfmon" >> %s""" % pg_hba, showOutput=True)
+            cmd = Command("""echo "host     gpperfmon         gpmon         127.0.0.1/28    ident        map=gpperfmon" >> %s""" % pg_hba, showOutput=True)
             commands.append(cmd)
 
-            cmd = Command("""echo "host     gpperfmon         gpmon         ::1/128         ident        map=perfmon" >> %s""" % pg_hba, showOutput=True)
+            cmd = Command("""echo "host     gpperfmon         gpmon         ::1/128         ident        map=gpperfmon" >> %s""" % pg_hba, showOutput=True)
             commands.append(cmd)
                         
 
@@ -218,7 +218,7 @@ if __name__ == '__main__':
             cmd = Command("""cp -f %s %s""" % (pg_ident_conf, old_pg_ident_conf))
             commands.append(cmd)
 
-            cmd = Command("""echo "perfmon      %s         gpmon" >> %s""" % (options.gpadmin_username, pg_ident_conf), showOutput=True)
+            cmd = Command("""echo "gpperfmon      %s         gpmon" >> %s""" % (options.gpadmin_username, pg_ident_conf), showOutput=True)
             commands.append(cmd)
             ################################################
 

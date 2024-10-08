@@ -34,6 +34,7 @@
 #include "cdb/cdbvars.h"
 #include "cdb/ml_ipc.h"
 #include "executor/execdesc.h"
+#include "storage/proc.h"
 #include "storage/shmem.h"
 
 #include "ic_proxy.h"
@@ -444,7 +445,7 @@ ic_proxy_backend_connect(ICProxyBackendContext *context, ChunkTransportStateEntr
 	/* message key for a HELLO message */
 	ic_proxy_key_init(&backend->key,					/* key itself */
 					  gp_session_id,					/* sessionId */
-					  gp_command_count,					/* commandId */
+					  MyProc->queryCommandId,			/* commandId */
 					  pEntry->sendSlice->sliceIndex,	/* sendSliceIndex */
 					  pEntry->recvSlice->sliceIndex,	/* recvSliceIndex */
 					  GpIdentity.segindex,				/* localContentId */

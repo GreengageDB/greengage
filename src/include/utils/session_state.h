@@ -96,7 +96,7 @@ typedef struct SessionState
 	 */
 	void *resGroupSlot;
 
-	/* gp_command_count of the latest cursor command in this session */
+	/* MyProc->queryCommandId of the latest cursor command in this session */
 	int latestCursorCommandId;
 
 #ifdef USE_ASSERT_CHECKING

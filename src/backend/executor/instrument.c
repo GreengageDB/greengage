@@ -23,6 +23,7 @@
 #include "utils/memutils.h"
 #include "gpmon/gpmon.h"
 #include "miscadmin.h"
+#include "storage/proc.h"
 #include "storage/shmem.h"
 
 BufferUsage pgBufferUsage;
@@ -355,7 +356,7 @@ pickInstrFromShmem(const Plan *plan, int instrument_options)
 		slot->pid = MyProcPid;
 		gpmon_gettmid(&(slot->tmid));
 		slot->ssid = gp_session_id;
-		slot->ccnt = gp_command_count;
+		slot->ccnt = MyProc->queryCommandId;
 		slot->nid = (int16) plan->plan_node_id;
 
 		MemoryContext contextSave = MemoryContextSwitchTo(TopMemoryContext);

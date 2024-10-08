@@ -23,6 +23,7 @@
 #include "executor/tstoreReceiver.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
+#include "storage/proc.h"
 #include "tcop/pquery.h"
 #include "tcop/utility.h"
 #include "utils/memutils.h"
@@ -116,15 +117,31 @@ CreateQueryDesc(PlannedStmt *plannedstmt,
 	qd->ddesc = NULL;
 	qd->gpmon_pkt = NULL;
 	qd->memoryAccountId = MEMORY_OWNER_TYPE_Undefined;
-	
-	if (Gp_role != GP_ROLE_EXECUTE)
-		increment_command_count();
 
-	if(gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH)
+	int prevCommandId = MyProc->queryCommandId;
+
+	PG_TRY();
 	{
-		qd->gpmon_pkt = (gpmon_packet_t *) palloc0(sizeof(gpmon_packet_t));
-		gpmon_qlog_packet_init(qd->gpmon_pkt);
+		if (Gp_role != GP_ROLE_EXECUTE)
+			increment_command_count();
+
+		qd->command_id = MyProc->queryCommandId;
+
+		if(gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH)
+		{
+			qd->gpmon_pkt = (gpmon_packet_t *) palloc0(sizeof(gpmon_packet_t));
+			gpmon_qlog_packet_init(qd->gpmon_pkt);
+			gpmon_qlog_set_top_level(qd->gpmon_pkt, qd->plannedstmt->metricsQueryType == TOP_LEVEL_QUERY);
+		}
 	}
+	PG_CATCH();
+	{
+		MyProc->queryCommandId = prevCommandId;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	MyProc->queryCommandId = prevCommandId;
 
 	return qd;
 }
@@ -337,9 +354,23 @@ ProcessQuery(Portal portal,
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
-		/* MPP-4082. Issue automatic ANALYZE if conditions are satisfied. */
-		bool inFunction = false;
-		auto_stats(cmdType, relationOid, queryDesc->es_processed, inFunction);
+		int prevCommandId = MyProc->queryCommandId;
+		MyProc->queryCommandId = queryDesc->command_id;
+
+		PG_TRY();
+		{
+			/* MPP-4082. Issue automatic ANALYZE if conditions are satisfied. */
+			bool inFunction = false;
+			auto_stats(cmdType, relationOid, queryDesc->es_processed, inFunction);
+		}
+		PG_CATCH();
+		{
+			MyProc->queryCommandId = prevCommandId;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		MyProc->queryCommandId = prevCommandId;
 	}
 
 	FreeQueryDesc(queryDesc);
@@ -1954,6 +1985,6 @@ PortalBackoffEntryInit(Portal portal)
 		gp_session_id > -1)
 	{
 		/* Initialize the SHM backend entry */
-		BackoffBackendEntryInit(gp_session_id, gp_command_count, portal->queueId);
+		BackoffBackendEntryInit(gp_session_id, MyProc != NULL ? MyProc->queryCommandId : 0, portal->queueId);
 	}
 }

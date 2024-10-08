@@ -634,7 +634,7 @@ BackoffBackendTickExpired(void)
 {
 	BackoffBackendLocalEntry *le;
 	BackoffBackendSharedEntry *se;
-	StatementId currentStatementId = {gp_session_id, gp_command_count};
+	StatementId currentStatementId = {gp_session_id, MyProc != NULL ? MyProc->queryCommandId : 0};
 
 	backoffTickCounter = 0;
 

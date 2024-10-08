@@ -121,6 +121,10 @@
 										queryDesc->ddesc->parallelCursorName &&	\
 										strlen(queryDesc->ddesc->parallelCursorName) > 0)
 
+#define UPDATE_COMMAND_ID_AT_START(queryDesc, prevCommandId) UpdateCommandId(queryDesc, prevCommandId, __FUNCTION__, true)
+#define UPDATE_COMMAND_ID(queryDesc, prevCommandId) UpdateCommandId(queryDesc, prevCommandId, __FUNCTION__, false)
+#define RESTORE_COMMAND_ID(queryDesc, prevCommandId) RestoreCommandId(queryDesc, prevCommandId, __FUNCTION__)
+
 /* Hooks for plugins to get control in ExecutorStart/Run/Finish/End */
 ExecutorStart_hook_type ExecutorStart_hook = NULL;
 ExecutorRun_hook_type ExecutorRun_hook = NULL;
@@ -191,6 +195,9 @@ static void FillSliceTable(EState *estate, PlannedStmt *stmt);
 static PartitionNode *BuildPartitionNodeFromRoot(Oid relid);
 static void InitializeQueryPartsMetadata(PlannedStmt *plannedstmt, EState *estate);
 static void check_epq_safe_on_qes(Plan *plan);
+
+static inline void UpdateCommandId(QueryDesc *queryDesc, int *prevCommandId, const char *functionName, bool trackStart);
+static inline void RestoreCommandId(QueryDesc *queryDesc, int prevCommandId, const char *functionName);
 
 /* end of local decls */
 
@@ -266,6 +273,42 @@ CopyDirectDispatchFromPlanToSliceTable(PlannedStmt *stmt, EState *estate)
 	CopyDirectDispatchFromPlanToSliceTableWalker((Node *) stmt->planTree, &context);
 }
 
+static inline void
+UpdateCommandId(QueryDesc *queryDesc, int *prevCommandId, const char *functionName, bool trackStart)
+{
+	if (Gp_role != GP_ROLE_EXECUTE)
+	{
+		*prevCommandId = MyProc->queryCommandId;
+		MyProc->queryCommandId = queryDesc->command_id;
+	}
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip ||
+		(trackStart && SIMPLE_FAULT_INJECTOR("track_query_command_id_at_start") == FaultInjectorTypeSkip))
+		elog(NOTICE,
+			"START %s | Q: %s | QUERY ID: %d",
+			functionName,
+			queryDesc->sourceText,
+			MyProc->queryCommandId);
+#endif
+}
+
+static inline void
+RestoreCommandId(QueryDesc *queryDesc, int prevCommandId, const char *functionName)
+{
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip)
+		elog(NOTICE,
+			"END %s | Q: %s | QUERY ID: %d",
+			functionName,
+			queryDesc->sourceText,
+			MyProc->queryCommandId);
+#endif
+
+	if (Gp_role != GP_ROLE_EXECUTE)
+		MyProc->queryCommandId = prevCommandId;
+}
+
 /* ----------------------------------------------------------------
  *		ExecutorStart
  *
@@ -296,10 +339,24 @@ CopyDirectDispatchFromPlanToSliceTable(PlannedStmt *stmt, EState *estate)
 void
 ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
-	if (ExecutorStart_hook)
-		(*ExecutorStart_hook) (queryDesc, eflags);
-	else
-		standard_ExecutorStart(queryDesc, eflags);
+	int prevCommandId = 0;
+	UPDATE_COMMAND_ID_AT_START(queryDesc, &prevCommandId);
+
+	PG_TRY();
+	{
+		if (ExecutorStart_hook)
+			(*ExecutorStart_hook) (queryDesc, eflags);
+		else
+			standard_ExecutorStart(queryDesc, eflags);
+	}
+	PG_CATCH();
+	{
+		RESTORE_COMMAND_ID(queryDesc, prevCommandId);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	RESTORE_COMMAND_ID(queryDesc, prevCommandId);
 }
 
 void
@@ -983,6 +1040,10 @@ ExecutorRun(QueryDesc *queryDesc,
 	 * at the definition of the static variable executor_run_nesting_level.
 	 */
 	executor_run_nesting_level++;
+
+	int prevCommandId = 0;
+	UPDATE_COMMAND_ID(queryDesc, &prevCommandId);
+
 	PG_TRY();
 	{
 		if (ExecutorRun_hook)
@@ -994,9 +1055,12 @@ ExecutorRun(QueryDesc *queryDesc,
 	PG_CATCH();
 	{
 		executor_run_nesting_level--;
+		RESTORE_COMMAND_ID(queryDesc, prevCommandId);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+	RESTORE_COMMAND_ID(queryDesc, prevCommandId);
 }
 
 void
@@ -1250,10 +1314,24 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 void
 ExecutorFinish(QueryDesc *queryDesc)
 {
-	if (ExecutorFinish_hook)
-		(*ExecutorFinish_hook) (queryDesc);
-	else
-		standard_ExecutorFinish(queryDesc);
+	int prevCommandId = 0;
+	UPDATE_COMMAND_ID(queryDesc, &prevCommandId);
+
+	PG_TRY();
+	{
+		if (ExecutorFinish_hook)
+			(*ExecutorFinish_hook) (queryDesc);
+		else
+			standard_ExecutorFinish(queryDesc);
+	}
+	PG_CATCH();
+	{
+		RESTORE_COMMAND_ID(queryDesc, prevCommandId);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	RESTORE_COMMAND_ID(queryDesc, prevCommandId);
 }
 
 void
@@ -1329,10 +1407,24 @@ standard_ExecutorFinish(QueryDesc *queryDesc)
 void
 ExecutorEnd(QueryDesc *queryDesc)
 {
-	if (ExecutorEnd_hook)
-		(*ExecutorEnd_hook) (queryDesc);
-	else
-		standard_ExecutorEnd(queryDesc);
+	int prevCommandId = 0;
+	UPDATE_COMMAND_ID(queryDesc, &prevCommandId);
+
+	PG_TRY();
+	{
+		if (ExecutorEnd_hook)
+			(*ExecutorEnd_hook) (queryDesc);
+		else
+			standard_ExecutorEnd(queryDesc);
+	}
+	PG_CATCH();
+	{
+		RESTORE_COMMAND_ID(queryDesc, prevCommandId);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	RESTORE_COMMAND_ID(queryDesc, prevCommandId);
 }
 
 void

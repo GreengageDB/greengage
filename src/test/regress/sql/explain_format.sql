@@ -108,6 +108,36 @@ EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;
 -- The plan contains an Agg and a Hash node on top of each other, neither of
 -- which have a plan->flow set. Explain should be able to dig the flow from
 -- the grandchild node then.
+
+-- JSON Required replaces for costs and time changes
+-- start_matchsubs
+-- m/ "Startup Cost": \d+.\d+/
+-- s/ "Startup Cost": \d+.\d+/ "Startup Cost": ##.###/
+-- m/ "Total Cost": \d+.\d+/
+-- s/ "Total Cost": \d+.\d+/ "Total Cost": ##.###/
+-- m/ "Plan Rows": \d+/
+-- s/ "Plan Rows": \d+/ "Plan Rows": #####/
+-- m/ "Actual Startup Time": \d+.\d+/
+-- s/ "Actual Startup Time": \d+.\d+/ "Actual Startup Time": ##.###/
+-- m/ "Actual Total Time": \d+.\d+/
+-- s/ "Actual Total Time": \d+.\d+/ "Actual Total Time": ##.###/
+-- m/ "Time To First Result": "\d+(.\d+)?"/
+-- s/ "Time To First Result": "\d+(.\d+)?"/ "Time To First Result": "##.###"/
+-- m/ "Time To Total Result": "\d+(.\d+)?"/
+-- s/ "Time To Total Result": "\d+(.\d+)?"/ "Time To Total Result": "##.###"/
+-- m/ "Planning Time": \d+.\d+/
+-- s/ "Planning Time": \d+.\d+/ "Planning Time": ##.###/
+-- m/ "Executor Memory": \d+/
+-- s/ "Executor Memory": \d+/ "Executor Memory": #####/
+-- m/ "Average": \d+/
+-- s/ "Average": \d+/ "Average": #####/
+-- m/ "Maximum Memory Used": \d+/
+-- s/ "Maximum Memory Used": \d+/ "Maximum Memory Used": #####/
+-- m/ "Memory used": \d+/
+-- s/ "Memory used": \d+/ "Memory used": #####/
+-- m/ "Execution Time": \d+.\d+/
+-- s/ "Execution Time": \d+.\d+/ "Execution Time": ##.###/
+-- end_matchsubs
 CREATE SCHEMA explaintest;
 SET search_path=explaintest;
 CREATE TABLE SUBSELECT_TBL (
@@ -132,6 +162,12 @@ commit;
 -- Yet another variant, with missing flow in Append. (github issue #9819)
 create table subselect_tbl_child() INHERITS (subselect_tbl);
 explain (verbose, format json) select * from (select * from subselect_tbl) p where f1 in (select f1 from subselect_tbl where f2 >= 19);
+
+-- Test Allstats formatting
+create table allstat_test(a int);
+set gp_enable_explain_allstat=true;
+explain (analyze, format json) select * from allstat_test;
+reset gp_enable_explain_allstat;
 
 -- Cleanup
 RESET search_path;

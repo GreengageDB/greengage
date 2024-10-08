@@ -404,6 +404,50 @@ DROP OWNED BY test_role_issue_12748;
 -- Clean up.
 DROP ROLE test_role_issue_12748;
 DROP PROTOCOL dummy_protocol_issue_12748;
+-- Test pg_dump's DROP EXTERNAL TABLE
+-- GitHub Issue #1025: https://github.com/arenadata/gpdb/issues/1025
+create external table public.issue_1025 (a int) location ('file://@hostname@@abs_srcdir@/data/no/such/place/badt1.tbl' ) format 'csv' (delimiter '|');
+-- Expect: success
+\! pg_dump -s -c -t public.issue_1025 regression
+--
+-- Greenplum Database database dump
+--
+
+SET gp_default_storage_options = '';
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+
+DROP EXTERNAL TABLE public.issue_1025;
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+--
+-- Name: issue_1025; Type: EXTERNAL TABLE; Schema: public; Owner: @curusername@; Tablespace: 
+--
+
+CREATE EXTERNAL TABLE public.issue_1025 (
+    a integer
+) LOCATION (
+    'file://@hostname@@abs_srcdir@/data/no/such/place/badt1.tbl'
+) ON ALL 
+FORMAT 'csv' (delimiter E'|' null E'' escape E'"' quote E'"')
+ENCODING 'UTF8';
+
+
+ALTER EXTERNAL TABLE public.issue_1025 OWNER TO @curusername@;
+
+--
+-- Greenplum Database database dump complete
+--
+
+-- End of pg_dump output
 --
 -- WET tests
 --

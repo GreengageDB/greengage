@@ -81,6 +81,7 @@
 #include "storage/buffile.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
+#include "storage/proc.h"
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
 #include "utils/workfile_mgr.h"
@@ -594,7 +595,7 @@ workfile_mgr_create_set_internal(const char *operator_name, const char *prefix)
 	 * Find our per-query entry (or allocate, on first use)
 	 */
 	key.session_id = gp_session_id;
-	key.command_count = gp_command_count;
+	key.command_count = MyProc->queryCommandId;
 	perquery = (WorkFileUsagePerQuery *) hash_search(workfile_shared->per_query_hash,
 													 &key,
 													 HASH_ENTER_NULL, &found);
@@ -627,7 +628,7 @@ workfile_mgr_create_set_internal(const char *operator_name, const char *prefix)
 	workfile_shared->num_active++;
 
 	work_set->session_id = gp_session_id;
-	work_set->command_count = gp_command_count;
+	work_set->command_count = MyProc->queryCommandId;
 	work_set->slice_id = currentSliceId;
 	work_set->perquery = perquery;
 	work_set->num_files = 0;

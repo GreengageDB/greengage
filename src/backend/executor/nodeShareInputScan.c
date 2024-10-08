@@ -412,11 +412,12 @@ ExecReScanShareInputScan(ShareInputScanState *node)
 #include "sys/types.h"
 #include "sys/stat.h"
 #include "storage/fd.h"
+#include "storage/proc.h"
 #include "cdb/cdbselect.h"
 
 char *shareinput_create_bufname_prefix(int share_id)
 {
-	return psprintf("SIRW_%d_%d_%d", gp_session_id, gp_command_count, share_id);
+	return psprintf("SIRW_%d_%d_%d", gp_session_id, MyProc->queryCommandId, share_id);
 }
 
 /* Here we use the absolute path name as the lock name.  See fd.c
@@ -430,7 +431,7 @@ sisc_lockname(char *p, int size, int share_id, const char* name)
 
 	snprintf(filename, sizeof(filename),
 			 "gpcdb2.sisc_%d_%d_%d_%d_%s",
-			 GpIdentity.segindex, gp_session_id, gp_command_count, share_id, name);
+			 GpIdentity.segindex, gp_session_id, MyProc->queryCommandId, share_id, name);
 
 	/* Ensure that temp tablespaces are set up to build temporary path. */
 	PrepareTempTablespaces();

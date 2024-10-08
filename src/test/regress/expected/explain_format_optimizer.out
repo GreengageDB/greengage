@@ -493,6 +493,35 @@ QUERY PLAN
 -- The plan contains an Agg and a Hash node on top of each other, neither of
 -- which have a plan->flow set. Explain should be able to dig the flow from
 -- the grandchild node then.
+-- JSON Required replaces for costs and time changes
+-- start_matchsubs
+-- m/ "Startup Cost": \d+.\d+/
+-- s/ "Startup Cost": \d+.\d+/ "Startup Cost": ##.###/
+-- m/ "Total Cost": \d+.\d+/
+-- s/ "Total Cost": \d+.\d+/ "Total Cost": ##.###/
+-- m/ "Plan Rows": \d+/
+-- s/ "Plan Rows": \d+/ "Plan Rows": #####/
+-- m/ "Actual Startup Time": \d+.\d+/
+-- s/ "Actual Startup Time": \d+.\d+/ "Actual Startup Time": ##.###/
+-- m/ "Actual Total Time": \d+.\d+/
+-- s/ "Actual Total Time": \d+.\d+/ "Actual Total Time": ##.###/
+-- m/ "Time To First Result": "\d+(.\d+)?"/
+-- s/ "Time To First Result": "\d+(.\d+)?"/ "Time To First Result": "##.###"/
+-- m/ "Time To Total Result": "\d+(.\d+)?"/
+-- s/ "Time To Total Result": "\d+(.\d+)?"/ "Time To Total Result": "##.###"/
+-- m/ "Planning Time": \d+.\d+/
+-- s/ "Planning Time": \d+.\d+/ "Planning Time": ##.###/
+-- m/ "Executor Memory": \d+/
+-- s/ "Executor Memory": \d+/ "Executor Memory": #####/
+-- m/ "Average": \d+/
+-- s/ "Average": \d+/ "Average": #####/
+-- m/ "Maximum Memory Used": \d+/
+-- s/ "Maximum Memory Used": \d+/ "Maximum Memory Used": #####/
+-- m/ "Memory used": \d+/
+-- s/ "Memory used": \d+/ "Memory used": #####/
+-- m/ "Execution Time": \d+.\d+/
+-- s/ "Execution Time": \d+.\d+/ "Execution Time": ##.###/
+-- end_matchsubs
 CREATE SCHEMA explaintest;
 SET search_path=explaintest;
 CREATE TABLE SUBSELECT_TBL (
@@ -884,12 +913,105 @@ QUERY PLAN
   }
 ]
 (1 row)
+-- Test Allstats formatting
+create table allstat_test(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+set gp_enable_explain_allstat=true;
+explain (analyze, format json) select * from allstat_test;
+QUERY PLAN
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 3,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 3,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 431.00,
+      "Plan Rows": 1,
+      "Plan Width": 4,
+      "Actual Startup Time": 0.776,
+      "Actual Total Time": 0.776,
+      "Actual Rows": 0,
+      "Actual Loops": 1,
+      "Plans": [
+        {
+          "Node Type": "Seq Scan",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 3,
+          "Gang Type": "primary reader",
+          "Relation Name": "allstat_test",
+          "Alias": "allstat_test",
+          "Startup Cost": 0.00,
+          "Total Cost": 431.00,
+          "Plan Rows": 1,
+          "Plan Width": 4,
+          "Actual Startup Time": 0.000,
+          "Actual Total Time": 0.001,
+          "Actual Rows": 0,
+          "Actual Loops": 1,
+          "Allstat": [
+            {
+              "Segment index": 0,
+              "Time To First Result": "0.937",
+              "Time To Total Result": "0",
+              "Tuples": 0.0
+            },
+            {
+              "Segment index": 1,
+              "Time To First Result": "0.992",
+              "Time To Total Result": "0.001",
+              "Tuples": 0.0
+            },
+            {
+              "Segment index": 2,
+              "Time To First Result": "1.197",
+              "Time To Total Result": "0",
+              "Tuples": 0.0
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 27.358,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 42160
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 42160,
+          "Workers": 3,
+          "Maximum Memory Used": 42160
+        }
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 128000
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    },
+    "Execution Time": 1.981
+  }
+]
+(1 row)
+reset gp_enable_explain_allstat;
 -- Cleanup
 RESET search_path;
 DROP SCHEMA explaintest cascade;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table explaintest.subselect_tbl
 drop cascades to table explaintest.subselect_tbl_child
+drop cascades to table explaintest.allstat_test
 DROP TABLE boxes;
 DROP TABLE apples;
 DROP TABLE box_locations;

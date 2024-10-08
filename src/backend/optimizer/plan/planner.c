@@ -629,6 +629,11 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 	if (parse->setOperations)
 		flatten_simple_union_all(root);
 
+	/*
+	 * If this subplan is inside another correlated subplan or if it itself is
+	 * correlated, disable some optimizations that assume the subplan doesn't
+	 * have any dependencies on other parts of the plan.
+	 */
 	if ((parent_root && parent_root->is_correlated_subplan) ||
 		((Gp_role == GP_ROLE_DISPATCH) &&
 		root->config->is_under_subplan &&

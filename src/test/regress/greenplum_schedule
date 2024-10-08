@@ -311,4 +311,6 @@ test: syslogger_gp
 # run this at the end of the schedule for more chance to catch abnormalies
 test: gp_check_files
 
+test: gp_query_id
+
 # end of tests

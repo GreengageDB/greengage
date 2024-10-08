@@ -13113,7 +13113,7 @@ dumpExternal(Archive *fout, TableInfo *tbinfo, PQExpBuffer q, PQExpBuffer delq)
 		 * DROP must be fully qualified in case same name appears in
 		 * pg_catalog
 		 */
-		appendPQExpBuffer(delq, "DROP EXTERNAL TABLE %s.",
+		appendPQExpBuffer(delq, "DROP EXTERNAL TABLE %s;\n",
 						  qualrelname);
 
 		/* Now get required information from pg_exttable */

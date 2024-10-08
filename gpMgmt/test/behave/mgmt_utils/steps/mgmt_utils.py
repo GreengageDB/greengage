@@ -225,6 +225,24 @@ def impl(conetxt, tabname):
         conn.commit()
 
 
+@given('schema "{schemaname}" exists')
+def impl(context, schemaname):
+    dbname = 'gptest'
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        sql = "CREATE SCHEMA IF NOT EXISTS {schemaname}".format(schemaname=schemaname)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+
+@given('the user sets schema of table "{tabname}" to "{schemaname}"')
+def impl(context, tabname, schemaname):
+    dbname = 'gptest'
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        sql = "ALTER TABLE {tabname} SET SCHEMA {schemaname}".format(tabname=tabname, schemaname=schemaname)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+
 @given('the user executes "{sql}" with named connection "{cname}"')
 def impl(context, cname, sql):
     conn = context.named_conns[cname]
@@ -2492,6 +2510,19 @@ def impl(context, sql, boolean):
         context.error_message = 'psql internal error: %s' % cmd.get_stderr()
         check_return_code(context, 0)
     else:
+        if _str2bool(result) != _str2bool(boolean):
+            raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
+
+@then('check that the result from boolean sql "{sql}" is "{boolean}"')
+def impl(context, sql, boolean):
+    cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "%s"' % sql)
+    cmd.run()
+    if cmd.get_return_code() != 0:
+        context.ret_code = cmd.get_return_code()
+        context.error_message = 'psql internal error: %s' % cmd.get_stderr()
+        check_return_code(context, 0)
+    else:
+        result = cmd.get_stdout()
         if _str2bool(result) != _str2bool(boolean):
             raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
 

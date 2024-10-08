@@ -15,6 +15,7 @@
 
 #include "cdb/cdbvars.h"
 #include "nodes/execnodes.h"
+#include "storage/proc.h"
 
 void CheckSendPlanStateGpmonPkt(PlanState *ps)
 {
@@ -68,7 +69,7 @@ void InitPlanNodeGpmonPkt(Plan *plan, gpmon_packet_t *gpmon_pkt, EState *estate)
 
 	gpmon_gettmid(&gpmon_pkt->u.qexec.key.tmid);
 	gpmon_pkt->u.qexec.key.ssid = gp_session_id;
-	gpmon_pkt->u.qexec.key.ccnt = gp_command_count;
+	gpmon_pkt->u.qexec.key.ccnt = MyProc->queryCommandId;
 	gpmon_pkt->u.qexec.key.hash_key.segid = GpIdentity.segindex;
 	gpmon_pkt->u.qexec.key.hash_key.pid = MyProcPid;
 	gpmon_pkt->u.qexec.key.hash_key.nid = plan->plan_node_id;

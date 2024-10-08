@@ -20,6 +20,7 @@
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "miscadmin.h"
+#include "storage/proc.h"
 
 /* Extern stuff */
 extern char *get_database_name(Oid dbid);
@@ -204,6 +205,16 @@ void gpmon_send(gpmon_packet_t* p)
 		Assert(gpmonPacket->version == GPMON_PACKET_VERSION); \
 		Assert(gpmonPacket->pkttype == GPMON_PKTTYPE_QLOG)
 
+void gpmon_qlog_set_top_level(gpmon_packet_t *gpmonPacket, bool isTopLevel)
+{
+	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	gpmonPacket->u.qlog.istoplevel = isTopLevel;
+}
+
+#define GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket) \
+	if (!gpmonPacket->u.qlog.istoplevel && log_min_messages > DEBUG4) \
+		return
+
 /**
  * To be used when gpmon packet has not been inited already.
  */
@@ -238,7 +249,7 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 	}
 
 	/* Fix up command count */
-	gpmonPacket->u.qlog.key.ccnt = gp_command_count;
+	gpmonPacket->u.qlog.key.ccnt = MyProc->queryCommandId;
 }
 
 /**
@@ -249,6 +260,7 @@ void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket)
 	struct timeval tv;
 
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket);
 
 	gettimeofday(&tv, 0);
 	
@@ -285,6 +297,7 @@ void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 		const char *resqPriority)
 {
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket);
 
 	queryText = gpmon_null_subst(queryText);
 	appName = gpmon_null_subst(appName);
@@ -331,6 +344,7 @@ void gpmon_qlog_query_start(gpmon_packet_t *gpmonPacket)
 	struct timeval tv;
 
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket);
 
 	gettimeofday(&tv, 0);
 	
@@ -353,6 +367,7 @@ void gpmon_qlog_query_end(gpmon_packet_t *gpmonPacket)
 	struct timeval tv;
 
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket);
 	Assert(gpmonPacket->u.qlog.status == GPMON_QLOG_STATUS_START);
 	gettimeofday(&tv, 0);
 	
@@ -375,6 +390,7 @@ void gpmon_qlog_query_error(gpmon_packet_t *gpmonPacket)
 	struct timeval tv;
 
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket);
 	Assert(gpmonPacket->u.qlog.status == GPMON_QLOG_STATUS_START ||
 		   gpmonPacket->u.qlog.status == GPMON_QLOG_STATUS_SUBMIT ||
 		   gpmonPacket->u.qlog.status == GPMON_QLOG_STATUS_CANCELING);
@@ -400,6 +416,7 @@ void
 gpmon_qlog_query_canceling(gpmon_packet_t *gpmonPacket)
 {
 	GPMON_QLOG_PACKET_ASSERTS(gpmonPacket);
+	GPMON_QLOG_PACKET_SHOULD_SEND(gpmonPacket);
 	Assert(gpmonPacket->u.qlog.status == GPMON_QLOG_STATUS_START ||
 		   gpmonPacket->u.qlog.status == GPMON_QLOG_STATUS_SUBMIT);
 

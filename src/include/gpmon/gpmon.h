@@ -41,6 +41,7 @@ for example SCHEMA.RELATION\0
    ------------------------------------------------------------------ */
 
 extern void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket);
+extern void gpmon_qlog_set_top_level(gpmon_packet_t *gpmonPacket, bool isTopLevel);
 extern void gpmon_qlog_query_submit(gpmon_packet_t *gpmonPacket);
 extern void gpmon_qlog_query_text(const gpmon_packet_t *gpmonPacket,
 		const char *queryText,
@@ -173,6 +174,7 @@ struct gpmon_qlog_t
 	int32 cost;
 	int64 cpu_elapsed; /* CPU elapsed for query */
 	gpmon_proc_metrics_t p_metrics;
+	bool istoplevel;
 };
 
 

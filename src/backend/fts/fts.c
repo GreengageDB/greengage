@@ -55,7 +55,7 @@ bool am_ftshandler = false;
  * STATIC VARIABLES
  */
 static bool skipFtsProbe = false;
-static volatile pid_t *shmFtsProbePID;
+static volatile pid_t *shmFtsProbePID = NULL;
 
 static volatile bool probe_requested = false;
 static volatile sig_atomic_t got_SIGHUP = false;
@@ -103,7 +103,7 @@ FtsProbeShmemInit(void)
 pid_t
 FtsProbePID(void)
 {
-	return *shmFtsProbePID;
+	return shmFtsProbePID ? *shmFtsProbePID : 0;
 }
 
 bool

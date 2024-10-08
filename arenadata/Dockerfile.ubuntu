@@ -25,7 +25,7 @@ RUN set -eux; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Packages for tests
-    DEBIAN_FRONTEND=noninteractive apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip; \
+    DEBIAN_FRONTEND=noninteractive apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip openjdk-11-jdk; \
 # Install allure-behave for behave tests
     pip2 install allure-behave==2.4.0; \
     pip2 cache purge
