@@ -362,19 +362,64 @@ ProcessUtility(Node *parsetree,
 {
 	Assert(queryString != NULL);	/* required as of 8.4 */
 
-	/*
-	 * We provide a function hook variable that lets loadable plugins get
-	 * control when ProcessUtility is called.  Such a plugin would normally
-	 * call standard_ProcessUtility().
-	 */
-	if (ProcessUtility_hook)
-		(*ProcessUtility_hook) (parsetree, queryString,
-								context, params,
-								dest, completionTag);
-	else
-		standard_ProcessUtility(parsetree, queryString,
-								context, params,
-								dest, completionTag);
+	int prevCommandId = MyProc->queryCommandId;
+
+	if (Gp_role != GP_ROLE_EXECUTE)
+		increment_command_count();
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip ||
+		SIMPLE_FAULT_INJECTOR("track_query_command_id_at_start") == FaultInjectorTypeSkip)
+		elog(NOTICE, "START %s | Q: %s | QUERY ID: %d",
+										__FUNCTION__,
+										queryString,
+										MyProc->queryCommandId);
+#endif
+
+	PG_TRY();
+	{
+		/*
+		 * We provide a function hook variable that lets loadable plugins get
+		 * control when ProcessUtility is called.  Such a plugin would normally
+		 * call standard_ProcessUtility().
+		 */
+		if (ProcessUtility_hook)
+			(*ProcessUtility_hook) (parsetree, queryString,
+									context, params,
+									dest, completionTag);
+		else
+			standard_ProcessUtility(parsetree, queryString,
+									context, params,
+									dest, completionTag);
+	}
+	PG_CATCH();
+	{
+#ifdef FAULT_INJECTOR
+		if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip)
+				elog(NOTICE, "END %s | Q: %s | QUERY ID: %d",
+											__FUNCTION__,
+											queryString,
+											MyProc->queryCommandId);
+#endif
+		/* restore queryCommandId, which was updated in increment_command_count() */
+		if (Gp_role != GP_ROLE_EXECUTE)
+			MyProc->queryCommandId = prevCommandId;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip)
+		elog(NOTICE, "END %s | Q: %s | QUERY ID: %d",
+										__FUNCTION__,
+										queryString,
+										MyProc->queryCommandId);
+#endif
+
+	/* restore queryCommandId, which was updated in increment_command_count() */
+	if (Gp_role != GP_ROLE_EXECUTE)
+		MyProc->queryCommandId = prevCommandId;
 }
 
 /*

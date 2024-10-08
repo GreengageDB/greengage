@@ -3227,8 +3227,8 @@ log_line_prefix(StringInfo buf, ErrorData *edata)
 				int j = buf->len;
 				if (gp_session_id > 0)
 					appendStringInfo(buf, "con%d ", gp_session_id);
-				if (gp_command_count > 0)
-					appendStringInfo(buf, "cmd%d ", gp_command_count);
+				if (MyProc != NULL && MyProc->queryCommandId > 0)
+					appendStringInfo(buf, "cmd%d ", MyProc->queryCommandId);
 				if (Gp_role == GP_ROLE_EXECUTE)
 					appendStringInfo(buf, "seg%d ", GpIdentity.segindex);
 				if (currentSliceId > 0)
@@ -3974,7 +3974,7 @@ write_syslogger_in_csv(ErrorData *edata, bool amsyslogger)
 
 	/* GPDB specific options */
 	syslogger_write_int32(true, "con", gp_session_id, amsyslogger, true);
-	syslogger_write_int32(true, "cmd", gp_command_count, amsyslogger, true);
+	syslogger_write_int32(true, "cmd", MyProc != NULL ? MyProc->queryCommandId : 0, amsyslogger, true);
 	syslogger_write_int32(false, "seg", GpIdentity.segindex, amsyslogger, true);
 	syslogger_write_int32(true, "slice", currentSliceId, amsyslogger, true);
 	{
@@ -4113,7 +4113,7 @@ write_message_to_server_log(int elevel,
 	fix_fields.omit_location = omit_location ? 't' : 'f';
 	fix_fields.gp_is_primary = 't';
 	fix_fields.gp_session_id = gp_session_id;
-	fix_fields.gp_command_count = gp_command_count;
+	fix_fields.gp_command_count = MyProc != NULL ? MyProc->queryCommandId : 0;
 	fix_fields.gp_segment_id = GpIdentity.segindex;
 	fix_fields.slice_id = currentSliceId;
 	fix_fields.error_cursor_pos = cursorpos;
@@ -5560,7 +5560,7 @@ StandardHandlerForSigillSigsegvSigbus_OnMainThread(char *processName, SIGNAL_ARG
 	}
 
 	errorData->gp_session_id = gp_session_id;
-	errorData->gp_command_count = gp_command_count;
+	errorData->gp_command_count = MyProc != NULL ? MyProc->queryCommandId : 0;
 	errorData->gp_segment_id = GpIdentity.segindex;
 	errorData->slice_id = currentSliceId;
 	errorData->signal_num = (int32)postgres_signal_arg;

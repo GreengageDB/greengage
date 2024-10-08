@@ -20,6 +20,7 @@
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "miscadmin.h"
+#include "storage/proc.h"
 
 /* Extern stuff */
 extern char *get_database_name(Oid dbid);
@@ -248,7 +249,7 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 	}
 
 	/* Fix up command count */
-	gpmonPacket->u.qlog.key.ccnt = gp_command_count;
+	gpmonPacket->u.qlog.key.ccnt = MyProc->queryCommandId;
 }
 
 /**

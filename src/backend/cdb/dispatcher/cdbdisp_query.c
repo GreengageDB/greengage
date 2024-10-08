@@ -28,6 +28,7 @@
 #include "cdb/tupleremap.h"
 #include "catalog/namespace.h" /* for GetTempNamespaceState() */
 #include "nodes/execnodes.h"
+#include "storage/proc.h"
 #include "tcop/tcopprot.h"
 #include "utils/datum.h"
 #include "utils/guc.h"
@@ -75,6 +76,7 @@ typedef struct DispatchCommandQueryParms
 	 */
 	const char *strCommand;
 	int			strCommandlen;
+	int			queryCommandId;
 	char	   *serializedQuerytree;
 	int			serializedQuerytreelen;
 	char	   *serializedPlantree;
@@ -231,7 +233,7 @@ CdbDispatchPlan(struct QueryDesc *queryDesc,
 	 */
 	if (queryDesc->extended_query)
 	{
-		verify_shared_snapshot_ready(gp_command_count);
+		verify_shared_snapshot_ready(MyProc->queryCommandId);
 	}
 
 	/* In the final stage, add the resource information needed for QE by the resource group */
@@ -526,6 +528,7 @@ cdbdisp_buildCommandQueryParms(const char *strCommand, int flags)
 
 	pQueryParms = palloc0(sizeof(*pQueryParms));
 	pQueryParms->strCommand = strCommand;
+	pQueryParms->queryCommandId = MyProc->queryCommandId;
 	pQueryParms->serializedQuerytree = NULL;
 	pQueryParms->serializedQuerytreelen = 0;
 	pQueryParms->serializedQueryDispatchDesc = NULL;
@@ -599,6 +602,7 @@ cdbdisp_buildUtilityQueryParms(struct Node *stmt,
 
 	pQueryParms = palloc0(sizeof(*pQueryParms));
 	pQueryParms->strCommand = PointerIsValid(debug_query_string) ? debug_query_string : "";
+	pQueryParms->queryCommandId = MyProc->queryCommandId;
 	pQueryParms->serializedQuerytree = serializedQuerytree;
 	pQueryParms->serializedQuerytreelen = serializedQuerytree_len;
 	pQueryParms->serializedQueryDispatchDesc = serializedQueryDispatchDesc;
@@ -681,6 +685,7 @@ cdbdisp_buildPlanQueryParms(struct QueryDesc *queryDesc,
 	sddesc = serializeNode((Node *) queryDesc->ddesc, &sddesc_len, NULL /* uncompressed_size */ );
 
 	pQueryParms->strCommand = queryDesc->sourceText;
+	pQueryParms->queryCommandId = MyProc->queryCommandId;
 	pQueryParms->serializedQuerytree = NULL;
 	pQueryParms->serializedQuerytreelen = 0;
 	pQueryParms->serializedPlantree = splan;
@@ -890,6 +895,7 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 	const char *dtxContextInfo = pQueryParms->serializedDtxContextInfo;
 	int			dtxContextInfo_len = pQueryParms->serializedDtxContextInfolen;
 	int64		currentStatementStartTimestamp = GetCurrentStatementStartTimestamp();
+	int			queryCommandId = pQueryParms->queryCommandId;
 	Oid			sessionUserId = GetSessionUserId();
 	Oid			outerUserId = GetOuterUserId();
 	Oid			currentUserId = GetUserId();
@@ -932,7 +938,7 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 
 	total_query_len = 1 /* 'M' */ +
 		sizeof(len) /* message length */ +
-		sizeof(gp_command_count) +
+		sizeof(queryCommandId) +
 		sizeof(sessionUserId) /* sessionUserIsSuper */ +
 		sizeof(outerUserId) /* outerUserIsSuper */ +
 		sizeof(currentUserId) +
@@ -964,9 +970,9 @@ buildGpQueryString(DispatchCommandQueryParms *pQueryParms,
 
 	pos += 4;					/* placeholder for message length */
 
-	tmp = htonl(gp_command_count);
-	memcpy(pos, &tmp, sizeof(gp_command_count));
-	pos += sizeof(gp_command_count);
+	tmp = htonl(queryCommandId);
+	memcpy(pos, &tmp, sizeof(queryCommandId));
+	pos += sizeof(queryCommandId);
 
 	tmp = htonl(sessionUserId);
 	memcpy(pos, &tmp, sizeof(sessionUserId));

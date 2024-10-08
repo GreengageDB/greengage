@@ -170,8 +170,7 @@ struct PGPROC
 
 	/*
 	 * Current command_id for the running query
-	 * This counter is not dead code although there is no consumer in the gpdb
-	 * code tree, it is required by external monitoring infrastructure.
+	 * This counter can be used by external monitoring infrastructure.
 	 * As a monitoring approach, each query execution is assigned with a unique
 	 * ID. The queryCommandId is part of the ID. Monitoring extension with
 	 * shared memory access can use queryCommandId to map query execution with

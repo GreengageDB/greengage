@@ -245,6 +245,7 @@ typedef struct QueryDesc
 	PlannedStmt *plannedstmt;	/* planner's output, or null if utility */
 	Node	   *utilitystmt;	/* utility statement, or null */
 	const char *sourceText;		/* source text of the query */
+	int		    command_id;		/* id of the query */
 	Snapshot	snapshot;		/* snapshot to use for query */
 	Snapshot	crosscheck_snapshot;	/* crosscheck for RI update/delete */
 	DestReceiver *dest;			/* the destination for tuple output */

@@ -796,6 +796,7 @@ CheckForResetSession(void)
 
 	gp_session_id = newSessionId;
 	gp_command_count = 0;
+	MyProc->queryCommandId = 0;
 	pgstat_report_sessionid(newSessionId);
 
 	/* Update the slotid for our singleton reader. */
