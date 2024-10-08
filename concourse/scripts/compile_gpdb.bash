@@ -59,15 +59,6 @@ function build_gpdb() {
 		make GPROOT=/usr/local PARALLEL_MAKE_OPTS=-j"$(nproc)" -s dist
 	fi
 	popd
-
-	if [ -n "${PYTHON3}" ]; then
-		export PYTHON=${PYTHON3}
-		make -C ${GPDB_SRC_PATH}/src/pl/plpython clean
-		pushd ${GPDB_SRC_PATH}
-		./config.status --recheck
-		make -C src/pl/plpython install
-		popd
-	fi
 }
 
 function git_info() {

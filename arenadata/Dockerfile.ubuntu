@@ -4,13 +4,12 @@ ARG sigar=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/communit
 ARG sigar_headers=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar-headers_1.6.5-3304%2Bgite8961a6_all.deb
 ARG libxerces=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/libxerces-c31_3.1.2-3304_amd64.deb
 ARG libxerces_dev=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/libxerces-c31-dev_3.1.2-3304_amd64.deb
-ARG adb_python3=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/adb6-python_3.9.18-3304_all.deb
 
 COPY README.ubuntu.bash ./
 RUN set -eux; \
     ./README.ubuntu.bash; \
     rm README.ubuntu.bash; \
-    wget $sigar $sigar_headers $libxerces $libxerces_dev $adb_python3; \
+    wget $sigar $sigar_headers $libxerces $libxerces_dev; \
     apt install -y ./*.deb; \
     rm ./*.deb; \
     ln -s python2 /usr/bin/python; \
@@ -41,7 +40,6 @@ RUN mkdir /home/gpadmin/bin_gpdb
 ENV TARGET_OS=ubuntu
 ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
 ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" 
-ENV PYTHON3=/opt/adb6-python3.9/bin/python3
 
 # Compile with running mocking tests
 RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
