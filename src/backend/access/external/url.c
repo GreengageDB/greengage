@@ -22,6 +22,7 @@
 #include "libpq/libpq-be.h"
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"		/* postmaster port */
+#include "storage/proc.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -109,9 +110,9 @@ external_set_env_vars_ext(extvar_t *extvar, char *uri, bool csv, char *escape, c
 	 * "session id"-"command id" to identify the transaction.
 	 */
 	if (!getDistributedTransactionIdentifier(extvar->GP_XID))
-		sprintf(extvar->GP_XID, "%u-%.10u", gp_session_id, gp_command_count);
+		sprintf(extvar->GP_XID, "%u-%.10u", gp_session_id, MyProc->queryCommandId);
 
-	sprintf(extvar->GP_CID, "%x", gp_command_count);
+	sprintf(extvar->GP_CID, "%x", MyProc->queryCommandId);
 	sprintf(extvar->GP_SN, "%x", scancounter);
 	sprintf(extvar->GP_SEGMENT_ID, "%d", GpIdentity.segindex);
 	sprintf(extvar->GP_SEG_PORT, "%d", PostPortNumber);

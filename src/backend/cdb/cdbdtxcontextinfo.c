@@ -21,6 +21,7 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbtm.h"
 #include "access/xact.h"
+#include "storage/proc.h"
 #include "utils/guc.h"
 #include "utils/session_state.h"
 
@@ -62,7 +63,7 @@ DtxContextInfo_CreateOnCoordinator(DtxContextInfo *dtxContextInfo, bool inCursor
 
 	AssertImply(inCursor,
 				dtxContextInfo->distributedXid != InvalidDistributedTransactionId &&
-				gp_command_count == MySessionState->latestCursorCommandId);
+				MyProc->queryCommandId == MySessionState->latestCursorCommandId);
 
 	dtxContextInfo->cursorContext = inCursor;
 	dtxContextInfo->nestingLevel = GetCurrentTransactionNestLevel();

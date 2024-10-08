@@ -361,4 +361,6 @@ test: quicklz_fallback
 # run pg_hba raleted testing
 test: hba_conf
 
+test: gp_query_id
+
 # end of tests

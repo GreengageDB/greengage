@@ -34,6 +34,7 @@
 #include "utils/guc.h"
 
 #include "cdb/cdbvars.h"        /* Gp_role, GpIdentity.segindex, currentSliceId */
+#include "storage/proc.h"
 
 extern char **environ;
 extern int PostPortNumber; /* GPDB: Helps identify child processes */
@@ -380,8 +381,8 @@ set_ps_display(const char *activity, bool force)
 	}
 
 	/* Add count of commands received from client session. */
-	if (gp_command_count > 0 && ep - cp > 0)
-		cp += snprintf(cp, ep - cp, "cmd%d ", gp_command_count);
+	if (MyProc != NULL && MyProc->queryCommandId > 0 && ep - cp > 0)
+		cp += snprintf(cp, ep - cp, "cmd%d ", MyProc->queryCommandId);
 
 	/* Add slice number information */
 	if (currentSliceId > 0 && ep - cp > 0)

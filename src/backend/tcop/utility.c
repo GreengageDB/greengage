@@ -383,6 +383,19 @@ ProcessUtility(PlannedStmt *pstmt,
 	Assert(pstmt->commandType == CMD_UTILITY);
 	Assert(queryString != NULL);	/* required as of 8.4 */
 
+	int prevCommandId = MyProc->queryCommandId;
+
+	if (Gp_role != GP_ROLE_EXECUTE)
+		increment_command_count();
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip ||
+		SIMPLE_FAULT_INJECTOR("track_query_command_id_at_start") == FaultInjectorTypeSkip)
+		elog(NOTICE, "START %s | Q: %s | QUERY ID: %d",
+										__FUNCTION__,
+										queryString,
+										MyProc->queryCommandId);
+#endif
 	/*
 	 * Greenplum specific code:
 	 *   Please refer to the comments at the definition of process_utility_nesting_level.
@@ -407,10 +420,33 @@ ProcessUtility(PlannedStmt *pstmt,
 	}
 	PG_CATCH();
 	{
+#ifdef FAULT_INJECTOR
+		if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip)
+				elog(NOTICE, "END %s | Q: %s | QUERY ID: %d",
+											__FUNCTION__,
+											queryString,
+											MyProc->queryCommandId);
+#endif
+		/* restore queryCommandId, which was updated in increment_command_count() */
+		if (Gp_role != GP_ROLE_EXECUTE)
+			MyProc->queryCommandId = prevCommandId;
+
 		process_utility_nesting_level--;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+
+#ifdef FAULT_INJECTOR
+	if (SIMPLE_FAULT_INJECTOR("track_query_command_id") == FaultInjectorTypeSkip)
+		elog(NOTICE, "END %s | Q: %s | QUERY ID: %d",
+										__FUNCTION__,
+										queryString,
+										MyProc->queryCommandId);
+#endif
+
+	/* restore queryCommandId, which was updated in increment_command_count() */
+	if (Gp_role != GP_ROLE_EXECUTE)
+		MyProc->queryCommandId = prevCommandId;
 }
 
 /*

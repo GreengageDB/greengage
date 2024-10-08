@@ -574,14 +574,14 @@ generate_endpoint_name(char *name, const char *cursorName)
 	len += ENDPOINT_NAME_SESSIONID_LEN;
 
 	/*
-	 * part3: gp_command_count In theory cursor name + gp_session_id is
+	 * part3: MyProc->queryCommandId. In theory cursor name + gp_session_id is
 	 * enough, but we'd keep this part to avoid confusion or potential issues
 	 * for the scenario that in the same session (thus same gp_session_id),
 	 * two endpoints with same cursor names (happens the cursor is
 	 * dropped/rollbacked and then recreated) and retrieve the endpoints would
 	 * be confusing for users that in the same retrieve connection.
 	 */
-	snprintf(name + len, ENDPOINT_NAME_COMMANDID_LEN + 1, "%08x", gp_command_count);
+	snprintf(name + len, ENDPOINT_NAME_COMMANDID_LEN + 1, "%08x", MyProc->queryCommandId);
 	len += ENDPOINT_NAME_COMMANDID_LEN;
 
 	name[len] = '\0';

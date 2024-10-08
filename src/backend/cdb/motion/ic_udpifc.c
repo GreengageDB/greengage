@@ -45,6 +45,7 @@
 #include "postmaster/postmaster.h"
 #include "storage/latch.h"
 #include "storage/pmsignal.h"
+#include "storage/proc.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -3087,7 +3088,7 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 			}
 		}
 
-		addCursorIcEntry(ich_table, sliceTable->ic_instance_id, gp_command_count);
+		addCursorIcEntry(ich_table, sliceTable->ic_instance_id, MyProc->queryCommandId);
 		/* save the latest transaction id */
 		rx_control_info.lastDXatId = distTransId;
 	}

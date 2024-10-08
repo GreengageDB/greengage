@@ -688,7 +688,7 @@ void
 shareinput_create_bufname_prefix(char* p, int size, int share_id)
 {
 	snprintf(p, size, "SIRW_%d_%d_%d",
-			 gp_session_id, gp_command_count, share_id);
+			 gp_session_id, MyProc->queryCommandId, share_id);
 }
 
 /*
@@ -814,7 +814,7 @@ get_shareinput_reference(int share_id)
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 	tag.session_id = gp_session_id;
-	tag.command_count = gp_command_count;
+	tag.command_count = MyProc->queryCommandId;
 	tag.share_id = share_id;
 	xslice_state = hash_search(shareinput_Xslice_hash,
 							   &tag,

@@ -19,6 +19,7 @@ extern "C" {
 #include "cdb/cdbvars.h"
 #include "optimizer/hints.h"
 #include "optimizer/orca.h"
+#include "storage/proc.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 }
@@ -848,7 +849,7 @@ COptTasks::OptimizeTask(void *ptr)
 			plan_dxl = COptimizer::PdxlnOptimize(
 				mp, &mda, query_dxl, query_output_dxlnode_array,
 				cte_dxlnode_array, expr_evaluator, num_segments, gp_session_id,
-				gp_command_count, search_strategy_arr, optimizer_config);
+				MyProc->queryCommandId, search_strategy_arr, optimizer_config);
 
 			if (opt_ctxt->m_should_serialize_plan_dxl)
 			{

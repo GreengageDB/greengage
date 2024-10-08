@@ -23,6 +23,7 @@
 #include "utils/memutils.h"
 #include "utils/timestamp.h"
 #include "miscadmin.h"
+#include "storage/proc.h"
 #include "storage/shmem.h"
 #include "cdb/cdbdtxcontextinfo.h"
 #include "cdb/cdbtm.h"
@@ -456,7 +457,7 @@ pickInstrFromShmem(const Plan *plan, int instrument_options)
 		slot->pid = MyProcPid;
 		gp_gettmid(&(slot->tmid));
 		slot->ssid = gp_session_id;
-		slot->ccnt = gp_command_count;
+		slot->ccnt = MyProc->queryCommandId;
 		slot->nid = (int16) plan->plan_node_id;
 
 		MemoryContext contextSave = MemoryContextSwitchTo(TopMemoryContext);

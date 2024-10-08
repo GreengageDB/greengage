@@ -25,6 +25,7 @@
 #include "executor/tstoreReceiver.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
+#include "storage/proc.h"
 #include "tcop/pquery.h"
 #include "tcop/utility.h"
 #include "utils/memutils.h"
@@ -124,8 +125,14 @@ CreateQueryDesc(PlannedStmt *plannedstmt,
 	/* not yet executed */
 	qd->already_executed = false;
 
+	int prevCommandId = MyProc->queryCommandId;
+
 	if (Gp_role != GP_ROLE_EXECUTE)
 		increment_command_count();
+
+	qd->command_id = MyProc->queryCommandId;
+
+	MyProc->queryCommandId = prevCommandId;
 
 	return qd;
 }
@@ -295,9 +302,23 @@ ProcessQuery(Portal portal,
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
-		/* MPP-4082. Issue automatic ANALYZE if conditions are satisfied. */
-		bool inFunction = false;
-		auto_stats(cmdType, relationOid, queryDesc->es_processed, inFunction);
+		int prevCommandId = MyProc->queryCommandId;
+		MyProc->queryCommandId = queryDesc->command_id;
+
+		PG_TRY();
+		{
+			/* MPP-4082. Issue automatic ANALYZE if conditions are satisfied. */
+			bool inFunction = false;
+			auto_stats(cmdType, relationOid, queryDesc->es_processed, inFunction);
+		}
+		PG_CATCH();
+		{
+			MyProc->queryCommandId = prevCommandId;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		MyProc->queryCommandId = prevCommandId;
 	}
 
 	FreeQueryDesc(queryDesc);
@@ -2016,7 +2037,7 @@ PortalBackoffEntryInit(Portal portal)
 		gp_session_id > -1)
 	{
 		/* Initialize the SHM backend entry */
-		BackoffBackendEntryInit(gp_session_id, gp_command_count, portal->queueId);
+		BackoffBackendEntryInit(gp_session_id, MyProc != NULL ? MyProc->queryCommandId : 0, portal->queueId);
 	}
 }
 
