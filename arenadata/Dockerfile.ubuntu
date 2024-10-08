@@ -22,12 +22,7 @@ RUN set -eux; \
 # To run sshd directly, but not using `/etc/init.d/ssh start`
     mkdir /run/sshd; \
 # Alter precedence in favor of IPv4 during resolving
-    echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
-# Packages for tests
-    DEBIAN_FRONTEND=noninteractive apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip; \
-# Install allure-behave for behave tests
-    pip2 install allure-behave==2.4.0; \
-    pip2 cache purge
+    echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
 
 WORKDIR /home/gpadmin
 

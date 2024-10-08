@@ -16,11 +16,8 @@ services:
     privileged: true
     sysctls:
       kernel.sem: 500 1024000 200 4096
-    init: true
-    ulimits:
-      nofile: 65535
     entrypoint: >
-      sleep infinity
+      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
   sdw1:
     image: "${IMAGE}"
     privileged: true
@@ -31,11 +28,8 @@ services:
       - "$PWD/logs_sdw1:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
-    init: true
-    ulimits:
-      nofile: 65535
     entrypoint: >
-      sleep infinity
+      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
   sdw2:
     image: "${IMAGE}"
     privileged: true
@@ -45,11 +39,8 @@ services:
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
     sysctls:
       kernel.sem: 500 1024000 200 4096
-    init: true
-    ulimits:
-      nofile: 65535
     entrypoint: >
-      sleep infinity
+      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
   sdw3:
     image: "${IMAGE}"
     privileged: true
@@ -59,8 +50,5 @@ services:
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
     sysctls:
       kernel.sem: 500 1024000 200 4096
-    init: true
-    ulimits:
-      nofile: 65535
     entrypoint: >
-      sleep infinity
+      bash -c "set -e && tail -f /home/gpadmin/gpdb_src/README.md"
