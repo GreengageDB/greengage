@@ -194,7 +194,8 @@ format 'text';
 alter table ext drop column a; -- should pass with warning
 alter external table ext add column a int; -- pass
 alter external table ext drop column a; -- pass
-alter external table ext add column extnewcol int not null; -- should fail (constraints not allowed)
+alter external table ext add column extnewcol int not null; -- should output a warning
+alter external table ext drop column extnewcol; -- pass
 alter external table ext add column extnewcol int; -- pass
 alter external table ext alter column extnewcol set default 1; -- should pass
 
@@ -1584,8 +1585,20 @@ CREATE EXTERNAL TABLE SERIAL (a serial, x text)
 LOCATION ('file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl')
 FORMAT 'csv';
 
+\d SERIAL
+
+CREATE TABLE SERIAL_NORMAL (a serial, x text);
+
+CREATE EXTERNAL TABLE SERIAL_LIKE (LIKE SERIAL_NORMAL)
+LOCATION ('file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl')
+FORMAT 'csv';
+
+\d SERIAL_LIKE
+
 -- drop temp external table
-DROP EXTERNAL TABLE IF EXISTS serial;
+DROP EXTERNAL TABLE SERIAL;
+DROP TABLE SERIAL_NORMAL;
+DROP EXTERNAL TABLE SERIAL_LIKE;
 
 -- External table query within plpgSQL function get error
 CREATE EXTERNAL TABLE exttab_error_context_callback(c1 int, c2 int)

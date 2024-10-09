@@ -366,6 +366,32 @@ DefineExternalRelation(CreateExternalStmt *createExtStmt)
 	}
 
 	/*
+	 * Check for NOT NULL column constraints in readable tables. Since
+	 * external tables don't have inheritance it is enough to check just
+	 * tableElts.
+	 */
+	if (!iswritable)
+	{
+		ListCell   *listptr;
+
+		foreach(listptr, createStmt->tableElts)
+		{
+			if (IsA(lfirst(listptr), ColumnDef))
+			{
+				ColumnDef  *colDef = lfirst(listptr);
+
+				if (colDef->is_not_null)
+				{
+					colDef->is_not_null = false;
+					ereport(WARNING,
+							(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+							 errmsg("NOT NULL constraints on readable external tables are ignored")));
+				}
+			}
+		}
+	}
+
+	/*
 	 * First, create the pg_class and other regular relation catalog entries.
 	 * Under the covers this will dispatch a CREATE TABLE statement to all the
 	 * QEs.
