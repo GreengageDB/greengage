@@ -336,23 +336,11 @@ _bitmap_insert_lov(Relation lovHeap, Relation lovIndex, Datum *datum,
 	result = index_insert(lovIndex, indexDatum, indexNulls,
 					 	  &(tuple->t_self), lovHeap, true);
 
-#ifdef FAULT_INJECTOR
-	FaultInjector_InjectFaultIfSet(
-							"insert_bmlov_before_freeze",
-							DDLNotSpecified,
-							"", //databaseName
-							RelationGetRelationName(lovHeap));
-#endif
+	SIMPLE_FAULT_INJECTOR("insert_bmlov_before_freeze");
 	/* freeze the tuple */
 	heap_freeze_tuple_wal_logged(lovHeap, tuple);
 
-#ifdef FAULT_INJECTOR
-	FaultInjector_InjectFaultIfSet(
-							"insert_bmlov_after_freeze",
-							DDLNotSpecified,
-							"", //databaseName
-							RelationGetRelationName(lovHeap));
-#endif
+	SIMPLE_FAULT_INJECTOR("insert_bmlov_after_freeze");
 	pfree(indexDatum);
 	pfree(indexNulls);
 	Assert(result);
