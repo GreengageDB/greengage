@@ -7,6 +7,18 @@
 -- s/Buckets: \d+/Buckets: ###/
 -- m/Batches: \d+/
 -- s/Batches: \d+/Batches: ###/
+-- m/Planning Time: [0-9.]+ ms/
+-- s/Planning Time: [0-9.]+ ms/Planning Time: #.### ms/
+-- m/Execution Time: [0-9.]+ ms/
+-- s/Execution Time: [0-9.]+ ms/Execution Time: #.### ms/
+-- m/Executor memory: \d+\w? bytes/
+-- s/Executor memory: \d+\w? bytes/Executor memory: ### bytes/
+-- m/Memory used:\s+\d+\w?B/
+-- s/Memory used:\s+\d+\w?B/Memory used:  ###B/
+-- m/\d+\w? bytes max \(seg\d+\)/
+-- s/\d+\w? bytes max \(seg\d+\)/### bytes max (seg#)/
+-- m/Work_mem: \d+\w? bytes max/
+-- s/Work_mem: \d+\w? bytes max/Work_mem: ### bytes max/
 -- end_matchsubs
 
 CREATE TEMP TABLE empty_table(a int);
@@ -37,3 +49,30 @@ select gp_inject_fault('explain_analyze_sort_error', 'reset', dbid)
     from gp_segment_configuration where role = 'p' and content > -1;
 drop table sort_error_test1;
 drop table sort_error_test2;
+
+--
+-- Test correct slice stats reporting in case of duplicated subplans
+--
+
+create table slice_test(i int, j int) distributed by (i);
+create table slice_test2(i int, j int) distributed by (i);
+insert into slice_test select i, i from generate_series(0, 100) i;
+insert into slice_test select i, 2*i from generate_series(0, 100) i;
+insert into slice_test2 values (0, 1);
+
+-- explain_processing_off
+-- create duplicate subplan in QE slice
+explain (analyze, timing off, costs off) select a.i from slice_test a
+  where a.j = (select b.i from slice_test2 b where a.i = 0 or b.i = 0)
+    and a.i = a.j;
+
+-- checking this didn't break previous behavior
+-- create multiple initplans in slice 0 (should be printed as two slices)
+explain (analyze, timing off, costs off)
+  select a.i from (select x::int as i, x::int / 5 as j from round(random() / 5) as x) a
+    where a.j = (select round(random() / 5)::int where a.i = 0)
+      and a.i = a.j;
+-- explain_processing_on
+
+drop table slice_test;
+drop table slice_test2;

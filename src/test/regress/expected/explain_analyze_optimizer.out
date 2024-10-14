@@ -7,6 +7,18 @@
 -- s/Buckets: \d+/Buckets: ###/
 -- m/Batches: \d+/
 -- s/Batches: \d+/Batches: ###/
+-- m/Planning Time: [0-9.]+ ms/
+-- s/Planning Time: [0-9.]+ ms/Planning Time: #.### ms/
+-- m/Execution Time: [0-9.]+ ms/
+-- s/Execution Time: [0-9.]+ ms/Execution Time: #.### ms/
+-- m/Executor memory: \d+\w? bytes/
+-- s/Executor memory: \d+\w? bytes/Executor memory: ### bytes/
+-- m/Memory used:\s+\d+\w?B/
+-- s/Memory used:\s+\d+\w?B/Memory used:  ###B/
+-- m/\d+\w? bytes max \(seg\d+\)/
+-- s/\d+\w? bytes max \(seg\d+\)/### bytes max (seg#)/
+-- m/Work_mem: \d+\w? bytes max/
+-- s/Work_mem: \d+\w? bytes max/Work_mem: ### bytes max/
 -- end_matchsubs
 CREATE TEMP TABLE empty_table(a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
@@ -79,3 +91,65 @@ select gp_inject_fault('explain_analyze_sort_error', 'reset', dbid)
 
 drop table sort_error_test1;
 drop table sort_error_test2;
+--
+-- Test correct slice stats reporting in case of duplicated subplans
+--
+create table slice_test(i int, j int) distributed by (i);
+create table slice_test2(i int, j int) distributed by (i);
+insert into slice_test select i, i from generate_series(0, 100) i;
+insert into slice_test select i, 2*i from generate_series(0, 100) i;
+insert into slice_test2 values (0, 1);
+-- explain_processing_off
+-- create duplicate subplan in QE slice
+explain (analyze, timing off, costs off) select a.i from slice_test a
+  where a.j = (select b.i from slice_test2 b where a.i = 0 or b.i = 0)
+    and a.i = a.j;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Result (actual rows=2 loops=1)
+   Filter: (a.j = (SubPlan 1))
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=102 loops=1)
+         ->  Seq Scan on slice_test a (actual rows=39 loops=1)
+               Filter: (i = j)
+               Rows Removed by Filter: 37
+   SubPlan 1
+     ->  Result (actual rows=1 loops=102)
+           Filter: ((a.i = 0) OR (b.i = 0))
+           ->  Materialize (actual rows=1 loops=103)
+                 ->  Gather Motion 3:1  (slice2; segments: 3) (actual rows=1 loops=1)
+                       ->  Seq Scan on slice_test2 b (actual rows=1 loops=1)
+ Optimizer: GPORCA
+ Planning Time: 6.096 ms
+   (slice0)    Executor memory: 49K bytes.  Work_mem: 17K bytes max.
+   (slice1)    Executor memory: 36K bytes avg x 3 workers, 36K bytes max (seg0).
+   (slice2)    Executor memory: 37K bytes avg x 3 workers, 37K bytes max (seg0).
+ Memory used:  128000kB
+ Execution Time: 5.096 ms
+(19 rows)
+
+-- checking this didn't break previous behavior
+-- create multiple initplans in slice 0 (should be printed as two slices)
+explain (analyze, timing off, costs off)
+  select a.i from (select x::int as i, x::int / 5 as j from round(random() / 5) as x) a
+    where a.j = (select round(random() / 5)::int where a.i = 0)
+      and a.i = a.j;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Function Scan on round x (actual rows=1 loops=1)
+   Filter: (((SubPlan 1) = (x)::integer) AND (((x)::integer / 5) = (SubPlan 1)))
+   InitPlan 2 (returns $1)
+     ->  Result (actual rows=1 loops=1)
+   SubPlan 1
+     ->  Result (actual rows=1 loops=2)
+           One-Time Filter: ((x.x)::integer = 0)
+ Optimizer: Postgres-based planner
+ Planning Time: 2.920 ms
+   (slice0)    Executor memory: 19K bytes.
+   (slice1)    Executor memory: 36K bytes.  Work_mem: 17K bytes max.
+ Memory used:  128000kB
+ Execution Time: 0.085 ms
+(14 rows)
+
+-- explain_processing_on
+drop table slice_test;
+drop table slice_test2;

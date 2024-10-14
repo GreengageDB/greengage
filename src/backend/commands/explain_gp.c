@@ -657,9 +657,14 @@ cdbexplain_recvExecStats(struct PlanState *planstate,
 	/* Make sure we visited the right number of PlanState nodes. */
 	Assert(ctx.iStatInst == ctx.nStatInst);
 
-	/* Transfer per-slice stats from message headers to the SliceSummary. */
-	for (imsgptr = 0; imsgptr < ctx.nmsgptr; imsgptr++)
-		cdbexplain_depositSliceStats(ctx.msgptrs[imsgptr], &ctx);
+	/* Transfer per-slice stats from message headers to the SliceSummary.
+	 * Only do this if we haven't deposited stats for this slice before.
+	 * Slice 0 is allowed to be repeated.
+	 * (see comment for cdbexplain_depositSliceStats)
+	 */
+	if (sliceIndex == 0 || !showstatctx->slices[sliceIndex].workers)
+		for (imsgptr = 0; imsgptr < ctx.nmsgptr; imsgptr++)
+			cdbexplain_depositSliceStats(ctx.msgptrs[imsgptr], &ctx);
 
 	/* Transfer worker counts to SliceSummary. */
 	showstatctx->slices[sliceIndex].dispatchSummary = ds;
