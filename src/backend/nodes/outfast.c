@@ -65,6 +65,10 @@
 	{ appendBinaryStringInfo(str, (const char *)&node->fldname, sizeof(int8)); }
 
 /* Write an integer field  */
+#define WRITE_UINT8_FIELD(fldname) \
+	{ appendBinaryStringInfo(str, (const char *)&node->fldname, sizeof(uint8)); }
+
+/* Write an integer field  */
 #define WRITE_INT16_FIELD(fldname) \
 	{ appendBinaryStringInfo(str, (const char *)&node->fldname, sizeof(int16)); }
 
@@ -528,7 +532,7 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_NODE_FIELD(rowMarks);
 	WRITE_NODE_FIELD(setOperations);
 	WRITE_NODE_FIELD(constraintDeps);
-	WRITE_BOOL_FIELD(parentStmtType);
+	WRITE_UINT8_FIELD(parentStmtType);
 
 	/* Don't serialize policy */
 }

@@ -4402,7 +4402,7 @@ _outQuery(StringInfo str, const Query *node)
 	WRITE_NODE_FIELD(withCheckOptions);
 	WRITE_LOCATION_FIELD(stmt_location);
 	WRITE_LOCATION_FIELD(stmt_len);
-	WRITE_BOOL_FIELD(parentStmtType);
+	WRITE_UINT_FIELD(parentStmtType);
 
 	/* Don't serialize policy */
 }

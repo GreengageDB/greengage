@@ -180,6 +180,26 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements
       |     SELECT * FROM road WHERE thepath = $1;                       | 
 (5 rows)
 
+-- create table as execute DML
+CREATE TABLE simple_table (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO simple_table VALUES (1, 1);
+PREPARE prepared_select AS SELECT * FROM simple_table;
+CREATE TEMPORARY TABLE simple_table_from_select AS EXECUTE prepared_select;
+PREPARE prepared_insert AS INSERT INTO simple_table VALUES (1, 1) RETURNING *;
+CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_insert;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: RETURNING clause
+ERROR:  prepared statement is not a SELECT
+PREPARE prepared_update AS UPDATE simple_table SET b = 2 WHERE a = 1 RETURNING *;
+CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_update;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: RETURNING clause
+ERROR:  prepared statement is not a SELECT
+PREPARE prepared_delete AS DELETE FROM simple_table WHERE a = 1 RETURNING *;
+CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_delete;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: RETURNING clause
+ERROR:  prepared statement is not a SELECT
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;
 SELECT name, statement, parameter_types FROM pg_prepared_statements

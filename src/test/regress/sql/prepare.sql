@@ -75,6 +75,22 @@ PREPARE q7(unknown) AS
 SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
+-- create table as execute DML
+CREATE TABLE simple_table (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO simple_table VALUES (1, 1);
+
+PREPARE prepared_select AS SELECT * FROM simple_table;
+CREATE TEMPORARY TABLE simple_table_from_select AS EXECUTE prepared_select;
+
+PREPARE prepared_insert AS INSERT INTO simple_table VALUES (1, 1) RETURNING *;
+CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_insert;
+
+PREPARE prepared_update AS UPDATE simple_table SET b = 2 WHERE a = 1 RETURNING *;
+CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_update;
+
+PREPARE prepared_delete AS DELETE FROM simple_table WHERE a = 1 RETURNING *;
+CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_delete;
+
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;
 SELECT name, statement, parameter_types FROM pg_prepared_statements

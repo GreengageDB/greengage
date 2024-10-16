@@ -70,6 +70,10 @@
 #define READ_INT8_FIELD(fldname) \
 	memcpy(&local_node->fldname, read_str_ptr, sizeof(int8));  read_str_ptr+=sizeof(int8)
 
+/* Read an uint8 field  */
+#define READ_UINT8_FIELD(fldname) \
+	memcpy(&local_node->fldname, read_str_ptr, sizeof(uint8));  read_str_ptr+=sizeof(uint8)
+
 /* Read an int16 field  */
 #define READ_INT16_FIELD(fldname) \
 	memcpy(&local_node->fldname, read_str_ptr, sizeof(int16));  read_str_ptr+=sizeof(int16)
@@ -269,7 +273,7 @@ _readQuery(void)
 	READ_NODE_FIELD(rowMarks);
 	READ_NODE_FIELD(setOperations);
 	READ_NODE_FIELD(constraintDeps);
-	READ_BOOL_FIELD(parentStmtType);
+	READ_UINT8_FIELD(parentStmtType); Assert(local_node->parentStmtType <= PARENTSTMTTYPE_REFRESH_MATVIEW);
 
 	/* policy not serialized */
 
