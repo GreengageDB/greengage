@@ -8207,6 +8207,7 @@ StartupXLOG(void)
 	if (fast_promoted)
 		RequestCheckpoint(CHECKPOINT_FORCE);
 
+	Assert(shmCleanupBackends != NULL);
 	*shmCleanupBackends = true;
 }
 

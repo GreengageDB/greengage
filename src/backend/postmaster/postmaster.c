@@ -1055,6 +1055,21 @@ PostmasterMain(int argc, char *argv[])
 		ereport(ERROR,
 				(errmsg("WAL streaming (max_wal_senders > 0) requires wal_level \"archive\", \"hot_standby\", or \"logical\"")));
 
+	if (Gp_role == GP_ROLE_EXECUTE)
+	{
+		/**
+		 * Postmaster normally started in DISPATCH or UTILITY mode and switched
+		 * to EXECUTE afterwards. Starting it in EXECUTE mode is impossible
+		 * because it skips several initialization stages and becomes unusable.
+		 * It never started in EXECUTE mode when from supporting scripts,
+		 * but it's still possible to try it with pg_ctl manually. To inform
+		 * curious folks who do it, check and bail out.
+		 */
+		ereport(FATAL,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("Postmaster can not be started in EXECUTE mode.")));
+	}
+
     if ( GpIdentity.dbid == -1 && Gp_role == GP_ROLE_UTILITY)
     {
         /**
