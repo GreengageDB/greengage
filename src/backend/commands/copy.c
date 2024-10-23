@@ -2852,16 +2852,12 @@ CopyToDispatch(CopyState cstate)
 {
 	CopyStmt   *stmt = glob_copystmt;
 	TupleDesc	tupDesc;
-	int			num_phys_attrs;
-	int			attr_count;
 	FormData_pg_attribute *attr;
 	CdbCopy    *cdbCopy;
 	uint64		processed = 0;
 
 	tupDesc = cstate->rel->rd_att;
 	attr = tupDesc->attrs;
-	num_phys_attrs = tupDesc->natts;
-	attr_count = list_length(cstate->attnumlist);
 
 	/* We use fe_msgbuf as a per-row buffer regardless of copy_dest */
 	cstate->fe_msgbuf = makeStringInfo();
@@ -5738,8 +5734,7 @@ static bool
 NextCopyFromExecute(CopyState cstate, ExprContext *econtext, Datum *values, bool *nulls)
 {
 	TupleDesc	tupDesc;
-	AttrNumber	num_phys_attrs,
-				attr_count;
+	AttrNumber	num_phys_attrs;
 	FormData_pg_attribute *attr;
 	int			i;
 	copy_from_dispatch_row frame;
@@ -5748,7 +5743,6 @@ NextCopyFromExecute(CopyState cstate, ExprContext *econtext, Datum *values, bool
 
 	tupDesc = RelationGetDescr(cstate->rel);
 	num_phys_attrs = tupDesc->natts;
-	attr_count = list_length(cstate->attnumlist);
 
 	/*
 	 * The code below reads the 'copy_from_dispatch_row' struct, and only

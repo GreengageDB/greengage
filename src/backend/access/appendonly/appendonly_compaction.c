@@ -688,7 +688,6 @@ AppendOptimizedDropDeadSegments(Relation aorel, Bitmapset *segnos, AOVacuumRelSt
 void
 AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 {
-	const char *relname;
 	Relation	pg_aoseg_rel;
 	TupleDesc	pg_aoseg_dsc;
 	SysScanDesc aoscan;
@@ -697,8 +696,6 @@ AppendOptimizedTruncateToEOF(Relation aorel, AOVacuumRelStats *vacrelstats)
 	Oid			segrelid;
 
 	Assert(RelationStorageIsAO(aorel));
-
-	relname = RelationGetRelationName(aorel);
 
 	/*
 	 * The algorithm below for choosing a target segment is not concurrent-safe.
@@ -790,15 +787,12 @@ AppendOnlyCompact(Relation aorel,
 				  List *avoid_segnos,
 				  AOVacuumRelStats *vacrelstats)
 {
-	const char *relname;
 	AppendOnlyInsertDesc insertDesc = NULL;
 	FileSegInfo *fsinfo;
 	Snapshot	appendOnlyMetaDataSnapshot = RegisterSnapshot(GetCatalogSnapshot(InvalidOid));
 
 	Assert(RelationStorageIsAoRows(aorel));
 	Assert(Gp_role == GP_ROLE_EXECUTE || Gp_role == GP_ROLE_UTILITY);
-
-	relname = RelationGetRelationName(aorel);
 
 	/* Fetch under the write lock to get latest committed eof. */
 	fsinfo = GetFileSegInfo(aorel, appendOnlyMetaDataSnapshot, compaction_segno, true);

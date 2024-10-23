@@ -121,7 +121,6 @@ bmbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 	double      reltuples;
 	BMBuildState bmstate;
 	IndexBuildResult *result;
-	TupleDesc	tupDesc;
 
 	if (indexInfo->ii_Concurrent)
 		ereport(ERROR,
@@ -134,8 +133,6 @@ bmbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 				(errcode(ERRCODE_INDEX_CORRUPTED),
 				errmsg("index \"%s\" already contains data",
 				RelationGetRelationName(index))));
-
-	tupDesc = RelationGetDescr(index);
 
 	/* initialize the bitmap index for MAIN_FORKNUM. */
 	_bitmap_init(index, RelationNeedsWAL(index), false);

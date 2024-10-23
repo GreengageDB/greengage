@@ -4820,7 +4820,6 @@ pgstat_combine_one_qe_result(List **oidList, struct pg_result *pgresult,
 {
 	int						arrayLen;
 	PgStatTabRecordFromQE  *records;
-	PgStat_SubXactStatus   *xact_state;
 	PgStat_TableStatus	   *pgstat_info;
 	PgStat_TableXactStatus *trans;
 
@@ -4830,7 +4829,7 @@ pgstat_combine_one_qe_result(List **oidList, struct pg_result *pgresult,
 	* If this is the first rel to be modified at the current nest level,
 	* we first have to push a transaction stack entry.
 	*/
-	xact_state = get_tabstat_stack_level(nest_level);
+	get_tabstat_stack_level(nest_level);
 
 	arrayLen = pgresult->extraslen / sizeof(PgStatTabRecordFromQE);
 	records = (PgStatTabRecordFromQE *) pgresult->extras;

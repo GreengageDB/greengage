@@ -665,7 +665,6 @@ ExecInitMotion(Motion *node, EState *estate, int eflags)
 	ExecSlice  *sendSlice;
 	ExecSlice  *recvSlice;
 	SliceTable *sliceTable = estate->es_sliceTable;
-	PlanState  *outerPlan;
 	int			parentIndex;
 
 	/*
@@ -785,12 +784,6 @@ ExecInitMotion(Motion *node, EState *estate, int eflags)
 	{
 		outerPlanState(motionstate) = ExecInitNode(outerPlan(node), estate, eflags);
 	}
-
-	/*
-	 * initialize tuple type.  no need to initialize projection info because
-	 * this node doesn't do projections.
-	 */
-	outerPlan = outerPlanState(motionstate);
 
 	/*
 	 * Initialize result type and slot

@@ -2290,11 +2290,6 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 	{
 		/* Process an internal node (set operation node) */
 		SetOperationStmt *op = makeNode(SetOperationStmt);
-		const char *context;
-
-		context = (stmt->op == SETOP_UNION ? "UNION" :
-				   (stmt->op == SETOP_INTERSECT ? "INTERSECT" :
-					"EXCEPT"));
 
 		op->op = stmt->op;
 		op->all = stmt->all;

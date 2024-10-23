@@ -171,7 +171,6 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	Oid			relowner;
 	Oid			OIDNewHeap;
 	DestReceiver *dest;
-	uint64		processed = 0;
 	bool		concurrent;
 	LOCKMODE	lockmode;
 	char		relpersistence;
@@ -352,7 +351,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	refreshClause = MakeRefreshClause(concurrent, stmt->skipData, stmt->relation);
 	dataQuery->intoPolicy = matviewRel->rd_cdbpolicy;
 
-	processed = refresh_matview_datafill(dest, dataQuery, queryString, refreshClause);
+	refresh_matview_datafill(dest, dataQuery, queryString, refreshClause);
 
 	/* Make the matview match the newly generated data. */
 	if (concurrent)

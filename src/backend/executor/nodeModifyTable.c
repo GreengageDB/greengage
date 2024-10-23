@@ -1766,7 +1766,6 @@ ExecSplitUpdate_Insert(ModifyTableState *mtstate,
 					   bool canSetTag)
 {
 	ResultRelInfo *resultRelInfo;
-	Relation	resultRelationDesc;
 	bool		partition_constraint_failed;
 	TupleConversionMap *saved_tcs_map = NULL;
 	PartitionTupleRouting *proute = mtstate->mt_partition_tuple_routing;
@@ -1777,7 +1776,6 @@ ExecSplitUpdate_Insert(ModifyTableState *mtstate,
 	 * get information on the (current) result relation
 	 */
 	resultRelInfo = estate->es_result_relation_info;
-	resultRelationDesc = resultRelInfo->ri_RelationDesc;
 
 	/* ensure slot is independent, consider e.g. EPQ */
 	ExecMaterializeSlot(slot);

@@ -1117,7 +1117,6 @@ ExecSetParamPlan(SubPlanState *node, ExprContext *econtext, QueryDesc *queryDesc
 
 	bool		needDtx;
 	bool		shouldDispatch = false;
-	volatile bool explainRecvStats = false;
 
 	if (Gp_role == GP_ROLE_DISPATCH &&
 		planstate != NULL &&
@@ -1415,7 +1414,6 @@ PG_TRY();
 		if (planstate->instrument && planstate->instrument->need_cdb)
 		{
 			/* Jam stats into subplan's Instrumentation nodes. */
-			explainRecvStats = true;
 			cdbexplain_recvExecStats(planstate, ds->primaryResults,
 									 LocallyExecutingSliceIndex(queryDesc->estate),
 									 econtext->ecxt_estate->showstatctx);

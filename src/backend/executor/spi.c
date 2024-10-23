@@ -2738,7 +2738,6 @@ static int
 _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, uint64 tcount)
 {
 	int			operation = queryDesc->operation;
-	int			eflags;
 	int			res;
 
 	_SPI_assign_query_mem(queryDesc);
@@ -2817,12 +2816,6 @@ _SPI_pquery(QueryDesc *queryDesc, bool fire_triggers, uint64 tcount)
 	if (ShowExecutorStats)
 		ResetUsage();
 #endif
-
-	/* Select execution options */
-	if (fire_triggers)
-		eflags = 0;				/* default run-to-completion flags */
-	else
-		eflags = EXEC_FLAG_SKIP_TRIGGERS;
 
 	PG_TRY();
 	{

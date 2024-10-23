@@ -144,7 +144,6 @@ void
 LockSegnoForWrite(Relation rel, int segno)
 {
 	Relation	pg_aoseg_rel;
-	TupleDesc	pg_aoseg_dsc;
 	SysScanDesc aoscan;
 	HeapTuple	tuple;
 	Snapshot	snapshot;
@@ -171,7 +170,6 @@ LockSegnoForWrite(Relation rel, int segno)
 	 * size threshold (90% full).
 	 */
 	pg_aoseg_rel = table_open(segrelid, AccessShareLock);
-	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
 
 	/*
 	 * Obtain the snapshot that is taken at the beginning of the transaction.
@@ -385,7 +383,6 @@ static int
 choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 {
 	Relation	pg_aoseg_rel;
-	TupleDesc	pg_aoseg_dsc;
 	int			i;
 	int32		chosen_segno = -1;
 	candidate_segment candidates[MAX_AOREL_CONCURRENCY];
@@ -443,7 +440,6 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 	 * size threshold (90% full).
 	 */
 	pg_aoseg_rel = heap_open(segrelid, AccessShareLock);
-	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
 
 	/*
 	 * Scan through all the pg_aoseg (or pg_aocs) entries, and make note of

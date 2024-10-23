@@ -2168,7 +2168,6 @@ select_cdb_redistribute_clauses(PlannerInfo *root,
 {
 	List	   *result_list = NIL;
 	bool		isouterjoin = IS_OUTER_JOIN(jointype);
-	bool		have_nonmergeable_joinclause = false;
 	ListCell   *l;
 
 	foreach(l, restrictlist)
@@ -2197,8 +2196,6 @@ select_cdb_redistribute_clauses(PlannerInfo *root,
 			 * reason to support constants is so we can do FULL JOIN ON
 			 * FALSE.)
 			 */
-			if (!restrictinfo->clause || !IsA(restrictinfo->clause, Const))
-				have_nonmergeable_joinclause = true;
 			continue;			/* not mergejoinable */
 		}
 
@@ -2207,7 +2204,6 @@ select_cdb_redistribute_clauses(PlannerInfo *root,
 		 */
 		if (!clause_sides_match_join(restrictinfo, outerrel, innerrel))
 		{
-			have_nonmergeable_joinclause = true;
 			continue;			/* no good for these input relations */
 		}
 
@@ -2236,7 +2232,6 @@ select_cdb_redistribute_clauses(PlannerInfo *root,
 		if (EC_MUST_BE_REDUNDANT(restrictinfo->left_ec) ||
 			EC_MUST_BE_REDUNDANT(restrictinfo->right_ec))
 		{
-			have_nonmergeable_joinclause = true;
 			continue;			/* can't handle redundant eclasses */
 		}
 

@@ -1628,7 +1628,6 @@ GetExtStatisticsName(Oid statOid)
 List *
 GetExtStatisticsKinds(Oid statOid)
 {
-	Form_pg_statistic_ext staForm;
 	HeapTuple	htup;
 	Datum		datum;
 	bool		isnull;
@@ -1641,8 +1640,6 @@ GetExtStatisticsKinds(Oid statOid)
 	htup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statOid));
 	if (!HeapTupleIsValid(htup))
 		elog(ERROR, "cache lookup failed for statistics object %u", statOid);
-
-	staForm = (Form_pg_statistic_ext) GETSTRUCT(htup);
 
 	datum = SysCacheGetAttr(STATEXTOID, htup,
 							Anum_pg_statistic_ext_stxkind, &isnull);

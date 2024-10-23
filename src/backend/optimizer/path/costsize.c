@@ -5000,14 +5000,12 @@ adjust_selectivity_for_nulltest(Selectivity selec,
 
 			if (IsA(clause, NullTest))
 			{
-				int			nulltesttype;
 				Node	   *node;
 				Node	   *basenode;
 
 				/* extract information */
-				nulltesttype = ((NullTest *) clause)->nulltesttype;
 				node = (Node *) ((NullTest *) clause)->arg;
-	
+
 				/* CONSIDER: is this really necessary? */
 				if (IsA(node, RelabelType))
 					basenode = (Node *) ((RelabelType *) node)->arg;
@@ -5017,7 +5015,7 @@ adjust_selectivity_for_nulltest(Selectivity selec,
 				if (IsA(basenode, Var))
 				{
 					double	nullfrac = 1 - selec;
-	
+
 					/* adjust selectivity according to test */
 					switch (((NullTest *) clause)->nulltesttype)
 					{

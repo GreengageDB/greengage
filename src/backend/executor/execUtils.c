@@ -1509,13 +1509,11 @@ getGpExecIdentity(QueryDesc *queryDesc,
 void mppExecutorFinishup(QueryDesc *queryDesc)
 {
 	EState	   *estate;
-	ExecSlice  *currentSlice;
 	int			primaryWriterSliceIndex;
 
 	/* caller must have switched into per-query memory context already */
 	estate = queryDesc->estate;
 
-	currentSlice = getCurrentSlice(estate, LocallyExecutingSliceIndex(estate));
 	primaryWriterSliceIndex = PrimaryWriterSliceIndex(estate);
 
 	/* Teardown the Interconnect */

@@ -2851,7 +2851,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	CommonTableExpr *cte = NULL;
 	double		tuple_fraction = 0.0;
 	CtePlanInfo *cteplaninfo;
-	List	   *pathkeys = NULL;
 	PlannerInfo *subroot = NULL;
 	RelOptInfo *sub_final_rel;
 	Relids		required_outer;
@@ -3070,8 +3069,6 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 		set_dummy_rel_pathlist(root, rel);
 		return;
 	}
-
-	pathkeys = subroot->query_pathkeys;
 
 	/* Mark rel with estimated output rows, width, etc */
 	{

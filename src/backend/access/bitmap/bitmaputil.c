@@ -1035,7 +1035,6 @@ _bitmap_log_bitmapwords(Relation rel,
 	xl_bm_bitmapwords xlBitmapWords;
 	ListCell   *lcp;
 	ListCell   *lcb;
-	bool		init_page;
 	int			num_bm_pages = list_length(xl_bm_bitmapword_pages);
 	int 		current_page = 0;
 
@@ -1064,7 +1063,6 @@ _bitmap_log_bitmapwords(Relation rel,
 	rdata_no = 1;
 
 	/* Write per-page structs */
-	init_page = init_first_page;
 	forboth(lcp, xl_bm_bitmapword_pages, lcb, bitmapBuffers)
 	{
 		xl_bm_bitmapwords_perpage *xlBitmapwordsPage = lfirst(lcp);

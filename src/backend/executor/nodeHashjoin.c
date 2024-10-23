@@ -1814,7 +1814,6 @@ ExecHashJoinReloadHashTable(HashJoinState *hjstate)
 	TupleTableSlot *slot;
 	uint32		hashvalue;
 	int			curbatch = hashtable->curbatch;
-	int			nmoved = 0;
 #if 0
 	int			orignbatch = hashtable->nbatch;
 #endif
@@ -1851,8 +1850,7 @@ ExecHashJoinReloadHashTable(HashJoinState *hjstate)
 			 * NOTE: some tuples may be sent to future batches.  Also, it is
 			 * possible for hashtable->nbatch to be increased here!
 			 */
-			if (!ExecHashTableInsert(hashState, hashtable, slot, hashvalue))
-				nmoved++;
+			ExecHashTableInsert(hashState, hashtable, slot, hashvalue);
 		}
 
 		/*
