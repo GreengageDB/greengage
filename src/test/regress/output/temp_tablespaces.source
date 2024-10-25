@@ -508,8 +508,8 @@ ANALYZE tts_bar;
 ANALYZE tts_jazz;
 CREATE TABLESPACE temp_tables LOCATION '@testtablespace@_temp_tables';
 CREATE TABLESPACE temp_files0 LOCATION '@testtablespace@_temp_files0';
-CREATE TABLESPACE temp_files1 LOCATION '@testtablespace@_temp_files1';
-CREATE TABLESPACE temp_files2 LOCATION '@testtablespace@_temp_files2';
+CREATE TABLESPACE "temp_files1'" LOCATION '@testtablespace@_temp_files1';
+CREATE TABLESPACE "temp_files2""" LOCATION '@testtablespace@_temp_files2';
 CREATE TABLESPACE temp_files3 LOCATION '@testtablespace@_temp_files3';
 RESET temp_tablespaces;
 RESET temp_spill_files_tablespaces;
@@ -530,6 +530,7 @@ DECLARE
     owo int;
     session_file_ts_name text;
     temp_table_ts_name text;
+    session_file_ts_filename text;
 BEGIN
     SET optimizer = off;
     SET statement_mem = '1MB';
@@ -549,7 +550,13 @@ BEGIN
     -- Find out the tablespace that will be used for files.
     -- N = gp_session_id % number of tablespaces in GUC.
     SELECT 'temp_files' || (current_setting('gp_session_id')::int % n_temp_spill_files_tablespaces)
-        INTO session_file_ts_name;
+        INTO session_file_ts_filename;
+    SELECT CASE current_setting('gp_session_id')::int % n_temp_spill_files_tablespaces
+        WHEN 0 THEN 'temp_files0'
+        WHEN 1 THEN 'temp_files1'''
+        WHEN 2 THEN 'temp_files2"'
+        WHEN 3 THEN 'temp_files3'
+    END INTO session_file_ts_name;
 
     -- Create the temporary directory.
     WITH out11 AS (
@@ -565,7 +572,7 @@ BEGIN
     -- Start monitoring temporary tablespace usage.
     PERFORM gp_tablespace_watch_start(gp_execution_dbid(), 'default', gp_temptablespace_path((SELECT dattablespace FROM pg_database WHERE datname = current_database() LIMIT 1)));
     PERFORM gp_tablespace_watch_start(gp_execution_dbid(), 'temp_tables', gp_temptablespace_path((SELECT oid FROM pg_tablespace WHERE spcname = 'temp_tables' LIMIT 1)));
-    PERFORM gp_tablespace_watch_start(gp_execution_dbid(), session_file_ts_name, gp_temptablespace_path((SELECT oid FROM pg_tablespace WHERE spcname = session_file_ts_name LIMIT 1)));
+    PERFORM gp_tablespace_watch_start(gp_execution_dbid(), session_file_ts_filename, gp_temptablespace_path((SELECT oid FROM pg_tablespace WHERE spcname = session_file_ts_name LIMIT 1)));
 
     -- Run the query again to create temporary hashjoin files in the tablespaces.
     WITH out11 AS (
@@ -586,13 +593,12 @@ BEGIN
         CASE
             WHEN gp_tablespace_watch_match(gp_execution_dbid(), 'default', '_HashJoin') > 0 THEN 'default'
             WHEN gp_tablespace_watch_match(gp_execution_dbid(), 'temp_tables', '_HashJoin') > 0 THEN 'temp_tables'
-            WHEN gp_tablespace_watch_match(gp_execution_dbid(), session_file_ts_name, '_HashJoin') > 0 THEN 'temp_filesN'
+            WHEN gp_tablespace_watch_match(gp_execution_dbid(), session_file_ts_filename, '_HashJoin') > 0 THEN 'temp_filesN'
         END;
 END;
 $$ LANGUAGE plpgsql;
 --
 -- Global GUC value tests:
--- FIXME: We shouldn't be forced to use \c to update GUCs on segments.
 --
 -- Both files and the table should be in the default tablespace.
 -- start_ignore
@@ -654,7 +660,7 @@ SELECT * FROM gp_tablespace_file_report(1);
 -- in the default tablespace.
 -- start_ignore
 \! gpconfig -r 'temp_tablespaces'
-\! gpconfig -c temp_spill_files_tablespaces -v 'temp_files0','temp_files1','temp_files2','temp_files3'
+\! gpconfig -c temp_spill_files_tablespaces -v 'temp_files0','temp_files1'\''','temp_files2"','temp_files3'
 \! gpstop -u
 -- end_ignore
 SELECT * FROM gp_tablespace_file_report(4);
@@ -749,7 +755,7 @@ SELECT * FROM gp_tablespace_file_report(1);
 -- Files should be in temp_filesN, where N = gp_session_id % 4, table should be
 -- in the default tablespace.
 RESET temp_tablespaces;
-SET temp_spill_files_tablespaces = 'temp_files0','temp_files1','temp_files2','temp_files3';
+SET temp_spill_files_tablespaces = 'temp_files0','temp_files1''','temp_files2"','temp_files3';
 SELECT * FROM gp_tablespace_file_report(4);
  temp_table_in | temp_files_in 
 ---------------+---------------
@@ -787,6 +793,6 @@ DROP TABLE tts_bar;
 DROP TABLE tts_jazz;
 DROP TABLESPACE temp_tables;
 DROP TABLESPACE temp_files0;
-DROP TABLESPACE temp_files1;
-DROP TABLESPACE temp_files2;
+DROP TABLESPACE "temp_files1'";
+DROP TABLESPACE "temp_files2""";
 DROP TABLESPACE temp_files3;
