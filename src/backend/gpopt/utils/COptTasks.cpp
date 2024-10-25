@@ -987,14 +987,15 @@ COptTasks::PrintMissingStatsWarning(CMemoryPool *mp, CMDAccessor *md_accessor,
 
 	if (0 < rel_stats->Size())
 	{
-		int length = NAMEDATALEN * rel_stats->Size() + 200;
-		char msgbuf[length];
-		snprintf(
-			msgbuf, sizeof(msgbuf),
-			"One or more columns in the following table(s) do not have statistics: %s",
-			CreateMultiByteCharStringFromWCString(wcstr.GetBuffer()));
+		CWStringDynamic msgbuf(mp);
+		msgbuf.AppendFormat(
+			GPOS_WSZ_LIT(
+				"One or more columns in the following table(s) do not have statistics: %ls"),
+			wcstr.GetBuffer());
+
 		GpdbEreport(
-			ERRCODE_SUCCESSFUL_COMPLETION, NOTICE, msgbuf,
+			ERRCODE_SUCCESSFUL_COMPLETION, NOTICE,
+			CreateMultiByteCharStringFromWCString(msgbuf.GetBuffer()),
 			"For non-partitioned tables, run analyze <table_name>(<column_list>)."
 			" For partitioned tables, run analyze rootpartition <table_name>(<column_list>)."
 			" See log for columns missing statistics.");
