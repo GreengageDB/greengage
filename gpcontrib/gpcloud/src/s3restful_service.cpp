@@ -237,7 +237,7 @@ Response S3RESTfulService::post(const string &url, HTTPHeaders &headers,
     UploadData uploadData(s3data);
     curl_easy_setopt(curl, CURLOPT_READDATA, (void *)&uploadData);
     curl_easy_setopt(curl, CURLOPT_READFUNCTION, RESTfulServiceReadFuncCallback);
-    curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)data.size());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)data.size());
 
     this->performCurl(curl, response);
 
