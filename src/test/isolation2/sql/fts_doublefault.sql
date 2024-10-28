@@ -103,7 +103,7 @@ select gp_request_fts_probe_scan();
 -1U: select dbid, description from gp_configuration_history where time > (select time from last_timestamp) order by time;
 
 -- kill the ftsprobe process.
-!\retcode pkill -f ftsprobe;
+!\retcode pkill -f '^postgres:  7000, ftsprobe process';
 
 -- restarts ftsprobe, we should see another entry for content 0 doublefault into gp_configuration_history
 select gp_request_fts_probe_scan();
