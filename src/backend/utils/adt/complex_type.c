@@ -394,7 +394,7 @@ construct_complex(PG_FUNCTION_ARGS)
 /*
  *		construct_complex_trig	- returns arg1*cos(arg2) + arg1*sin(arg2)i
  */
-extern Datum
+Datum
 construct_complex_trig(PG_FUNCTION_ARGS)
 {
 	double		mag = PG_GETARG_FLOAT8(0);

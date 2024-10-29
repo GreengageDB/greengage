@@ -60,7 +60,7 @@ static Datum optionsListToArray(List *options);
 * to leave it intact and do another dispatch.
 * ----------------------------------------------------------------
 */
-extern void
+void
 DefineExternalRelation(CreateExternalStmt *createExtStmt)
 {
 	CreateStmt *createStmt = makeNode(CreateStmt);
