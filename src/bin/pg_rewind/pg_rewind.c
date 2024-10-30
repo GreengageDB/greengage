@@ -889,7 +889,7 @@ syncTargetDirectory(void)
 				case FILE_ACTION_CREATE:
 					fsync_fname(entry->path,
 								entry->source_type == FILE_TYPE_DIRECTORY);
-					/* FALLTHROUGH */
+					fallthru;
 				case FILE_ACTION_REMOVE:
 					/*
 					 * Fsync the parent directory if we either create or delete

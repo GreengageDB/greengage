@@ -6350,7 +6350,7 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 			/* It's unsafe to push having statements with partial aggregates */
 			if (((GroupPathExtraData *) extra)->havingQual)
 				return;
-			/* Fall through */
+			fallthru;
 			/* Partial agg push down path */
 		case UPPERREL_GROUP_AGG:
 			add_foreign_grouping_paths(root, input_rel, output_rel,

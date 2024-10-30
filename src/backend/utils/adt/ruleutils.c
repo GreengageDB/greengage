@@ -7810,7 +7810,7 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
 				}
 				/* else do the same stuff as for T_SubLink et al. */
 			}
-			/* FALLTHROUGH */
+			fallthru;
 
 		case T_SubLink:
 		case T_NullTest:
@@ -10563,7 +10563,6 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				break;
 			case RTE_TABLEFUNCTION:
 				/* Table Function RTE */
-				/* fallthrough */
 			case RTE_FUNCTION:
 				/* Function RTE */
 				rtfunc1 = (RangeTblFunction *) linitial(rte->functions);

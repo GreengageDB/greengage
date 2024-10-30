@@ -383,7 +383,7 @@ retry_masked:
 				REMEMBER_EPIPE(spinfo, true);
 
 #ifdef ECONNRESET
-				/* FALL THRU */
+				fallthru;
 
 			case ECONNRESET:
 #endif

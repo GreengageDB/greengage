@@ -852,7 +852,7 @@ transformColumnDefinition(CreateStmtContext *cxt, ColumnDef *column)
 							 errmsg("primary key constraints are not supported on foreign tables"),
 							 parser_errposition(cxt->pstate,
 												constraint->location)));
-				/* FALL THRU */
+				fallthru;
 
 			case CONSTR_UNIQUE:
 				if (cxt->isforeign)

@@ -3476,7 +3476,6 @@ DatumStreamBlockWrite_PutDense(
 				return -1;
 			case DELTA_COMPRESSION_NOT_APPLIED:
 				break;
-				/* FALL through */
 		}
 	}
 

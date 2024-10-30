@@ -825,7 +825,7 @@ doNotifyingAbort(void)
 				setCurrentDtxState(DTX_STATE_RETRY_ABORT_PREPARED);
 				setDistributedTransactionContext(DTX_CONTEXT_QD_RETRY_PHASE_2);
 			}
-			/* FALL THRU */
+			fallthru;
 
 		case DTX_STATE_RETRY_ABORT_PREPARED:
 			retryAbortPrepared();

@@ -7116,7 +7116,7 @@ set_config_option(const char *name, const char *value,
 				return 0;
 			}
 			/* fall through to process the same as PGC_BACKEND */
-			/* FALLTHROUGH */
+			fallthru;
 		case PGC_BACKEND:
 			if (context == PGC_SIGHUP)
 			{
@@ -8572,7 +8572,7 @@ ExecSetVariableStmt(VariableSetStmt *stmt, bool isTopLevel)
 		case VAR_SET_DEFAULT:
 			if (stmt->is_local)
 				WarnNoTransactionBlock(isTopLevel, "SET LOCAL");
-			/* fall through */
+			fallthru;
 		case VAR_RESET:
 			if (strcmp(stmt->name, "transaction_isolation") == 0 &&
 				Gp_role != GP_ROLE_EXECUTE)

@@ -1714,7 +1714,7 @@ find_nonnullable_rels_walker(Node *node, bool top_level)
 				 * the intersection of the sets of nonnullable rels, just as
 				 * for OR.  Fall through to share code.
 				 */
-				/* FALL THRU */
+				fallthru;
 			case OR_EXPR:
 
 				/*
@@ -1939,7 +1939,7 @@ find_nonnullable_vars_walker(Node *node, bool top_level)
 				 * the intersection of the sets of nonnullable vars, just as
 				 * for OR.  Fall through to share code.
 				 */
-				/* FALL THRU */
+				fallthru;
 			case OR_EXPR:
 
 				/*

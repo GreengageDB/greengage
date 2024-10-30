@@ -1120,7 +1120,7 @@ NUMDesc_prepare(NUMDesc *num, FormatNode *n)
 		case NUM_D:
 			num->flag |= NUM_F_LDECIMAL;
 			num->need_locale = true;
-			/* FALLTHROUGH */
+			fallthru;
 		case NUM_DEC:
 			if (IS_DECIMAL(num))
 				ereport(ERROR,
@@ -2973,7 +2973,6 @@ DCH_to_char(FormatNode *node, bool is_interval, TmToChar *in, char *out, Oid col
 				s += strlen(s);
 				break;
 			case DCH_RM:
-				/* FALLTHROUGH */
 			case DCH_rm:
 
 				/*

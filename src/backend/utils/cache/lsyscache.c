@@ -1714,7 +1714,6 @@ trigger_enabled(Oid triggerid)
 	switch (tgenabled)
 	{
 		case TRIGGER_FIRES_ON_ORIGIN:
-			/* fallthrough */
 			/*
 			 * FIXME: we should probably return false when
 			 * SessionReplicationRole isn't SESSION_REPLICATION_ROLE_ORIGIN,

@@ -1882,8 +1882,6 @@ DecodeTimeOnly(char **field, int *ftype, int nf,
 						case DTK_DAY:
 							if (tzp == NULL)
 								return DTERR_BAD_FORMAT;
-						default:
-							break;
 					}
 
 					errno = 0;
@@ -3141,7 +3139,7 @@ DecodeInterval(char **field, int *ftype, int nf, int range,
 				 * handle signed float numbers and signed year-month values.
 				 */
 
-				/* FALLTHROUGH */
+				fallthru;
 
 			case DTK_DATE:
 			case DTK_NUMBER:
@@ -3572,7 +3570,7 @@ DecodeISO8601Interval(char *str,
 						continue;
 					}
 					/* Else fall through to extended alternative format */
-					/* FALLTHROUGH */
+					fallthru;
 				case '-':		/* ISO 8601 4.4.3.3 Alternative Format,
 								 * Extended */
 					if (havefield)
@@ -3651,7 +3649,7 @@ DecodeISO8601Interval(char *str,
 						return 0;
 					}
 					/* Else fall through to extended alternative format */
-					/* FALLTHROUGH */
+					fallthru;
 				case ':':		/* ISO 8601 4.4.3.3 Alternative Format,
 								 * Extended */
 					if (havefield)
