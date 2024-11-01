@@ -109,3 +109,41 @@ WHERE c.table_name = 't_comments_b';
 
 DROP TABLE t_comments_a;
 DROP TABLE t_comments_b;
+-- Check including storage for partitioned table with storage attributes
+CREATE TABLE ctlt4 (a numeric, b timestamp)
+WITH (appendoptimized=true, orientation=row, compresstype=zstd);
+-- Should be created without errors
+CREATE TABLE ctlt4_like (LIKE ctlt4 INCLUDING STORAGE)
+PARTITION BY RANGE(b) (
+  DEFAULT PARTITION extra
+);
+\d+ ctlt4_like
+                          Append-Only Table "public.ctlt4_like"
+ Column |            Type             | Modifiers | Storage | Stats target | Description 
+--------+-----------------------------+-----------+---------+--------------+-------------
+ a      | numeric                     |           | main    |              | 
+ b      | timestamp without time zone |           | plain   |              | 
+Compression Type: zstd
+Compression Level: 1
+Block Size: 32768
+Checksum: t
+Child tables: ctlt4_like_1_prt_extra
+Distributed by: (a)
+Partition by: (b)
+Options: appendonly=true, checksum=true, compresslevel=1, compresstype=zstd
+
+\d+ ctlt4_like_1_prt_extra
+                    Append-Only Table "public.ctlt4_like_1_prt_extra"
+ Column |            Type             | Modifiers | Storage | Stats target | Description 
+--------+-----------------------------+-----------+---------+--------------+-------------
+ a      | numeric                     |           | main    |              | 
+ b      | timestamp without time zone |           | plain   |              | 
+Compression Type: zstd
+Compression Level: 1
+Block Size: 32768
+Checksum: t
+Inherits: ctlt4_like
+Distributed by: (a)
+Options: appendonly=true, checksum=true, compresslevel=1, compresstype=zstd
+
+DROP TABLE ctlt4, ctlt4_like;

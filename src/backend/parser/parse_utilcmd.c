@@ -1176,8 +1176,12 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 	/*
 	 * If STORAGE is included, we need to copy over the table storage params
 	 * as well as the attribute encodings.
+	 * 
+	 * We shouldn't copy them for child partitions since they have already been
+	 * copied in make_child_node().
 	 */
-	if (stmt && table_like_clause->options & CREATE_TABLE_LIKE_STORAGE)
+	if (stmt && table_like_clause->options & CREATE_TABLE_LIKE_STORAGE &&
+		!stmt->is_part_child)
 	{
 		/*
 		 * As we are modifying the utility statement we must make sure these
