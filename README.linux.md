@@ -59,9 +59,9 @@
 
 ## For Ubuntu (versions 20.04 or 22.04):
 
-- Install dependencies using README.ubuntu.bash script:
+- Install dependencies using README.Ubuntu.bash script:
   ```bash
-  sudo ./README.ubuntu.bash
+  sudo ./README.Ubuntu.bash
   ```
 
 - Create symbolic link to Python 2 in `/usr/bin`:
