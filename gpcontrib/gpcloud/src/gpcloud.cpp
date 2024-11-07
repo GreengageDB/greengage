@@ -205,7 +205,7 @@ static gpcloudResHandle *createGpcloudResHandle(void) {
     return resHandle;
 }
 
-static void destroyGpcloudResHandle(gpcloudResHandle *resHandle) {
+static void destroyGpcloudResHandle(gpcloudResHandle *resHandle, int errorLevel) {
     if (resHandle == NULL) return;
 
     /* unlink from linked list first */
@@ -220,13 +220,13 @@ static void destroyGpcloudResHandle(gpcloudResHandle *resHandle) {
 
     if (resHandle->gpreader != NULL) {
         if (!reader_cleanup(&resHandle->gpreader)) {
-            elog(WARNING, "Failed to cleanup gpcloud extension: %s", s3extErrorMessage.c_str());
+            elog(errorLevel, "Failed to cleanup gpcloud extension: %s", s3extErrorMessage.c_str());
         }
     }
 
     if (resHandle->gpwriter != NULL) {
         if (!writer_cleanup(&resHandle->gpwriter)) {
-            elog(WARNING, "Failed to cleanup gpcloud extension: %s", s3extErrorMessage.c_str());
+            elog(errorLevel, "Failed to cleanup gpcloud extension: %s", s3extErrorMessage.c_str());
         }
     }
 
@@ -253,7 +253,7 @@ static void gpcloudAbortCallback(ResourceReleasePhase phase, bool isCommit, bool
             if (isCommit)
                 elog(WARNING, "gpcloud external table reference leak: %p still referenced", curr);
 
-            destroyGpcloudResHandle(curr);
+            destroyGpcloudResHandle(curr, WARNING);
         }
     }
 }
@@ -272,7 +272,7 @@ Datum s3_import(PG_FUNCTION_ARGS) {
 
     /* last call. destroy reader */
     if (EXTPROTOCOL_IS_LAST_CALL(fcinfo)) {
-        destroyGpcloudResHandle(resHandle);
+        destroyGpcloudResHandle(resHandle, ERROR);
 
         EXTPROTOCOL_SET_USER_CTX(fcinfo, NULL);
         PG_RETURN_INT32(0);
@@ -329,7 +329,7 @@ Datum s3_export(PG_FUNCTION_ARGS) {
 
     /* last call. destroy writer */
     if (EXTPROTOCOL_IS_LAST_CALL(fcinfo)) {
-        destroyGpcloudResHandle(resHandle);
+        destroyGpcloudResHandle(resHandle, ERROR);
 
         EXTPROTOCOL_SET_USER_CTX(fcinfo, NULL);
         PG_RETURN_INT32(0);
