@@ -15,7 +15,7 @@ RUN set -eux; \
 # Packages for tests
     apt install -y rsync iproute2 fakeroot lsof sudo python3.11 python3.11-dev openjdk-17-jdk libipc-run-perl;\
 # Install allure-behave for behave tests
-    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0 psutil; \
+    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0; \
     pip3 cache purge
 
 WORKDIR /home/gpadmin
