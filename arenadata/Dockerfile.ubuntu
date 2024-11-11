@@ -13,7 +13,7 @@ RUN set -eux; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Packages for tests
-    apt install -y rsync iproute2 fakeroot lsof sudo python3.11 python3.11-dev openjdk-17-jdk libipc-run-perl;\
+    apt install -y rsync iproute2 fakeroot lsof sudo python3.11 python3.11-dev openjdk-17-jdk libipc-run-perl; \
 # Install allure-behave for behave tests
     pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0; \
     pip3 cache purge
@@ -36,6 +36,7 @@ ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --
 
 # Compile with running mocking tests
 RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+
 FROM base AS code
 COPY . gpdb_src
 RUN rm -rf gpdb_src/.git/
