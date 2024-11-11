@@ -290,7 +290,7 @@ INHERITS \( parent\_table \[, …\]\)
 LIKE source\_table like\_option `...`\]
 :   The `LIKE` clause specifies a table from which the new table automatically copies all column names, their data types, not-null constraints, and distribution policy. Unlike `INHERITS`, the new table and original table are completely decoupled after creation is complete.
 
-:   > **Note** Storage properties like append-optimized or partition structure are not copied.
+:   > **Note** Partition structure is not copied. Storage properties like append-optimized are only copied if `INCLUDING STORAGE` is specified. However, child partitions inherit all the storage properties of the root partition.
 
 :   Default expressions for the copied column definitions will only be copied if `INCLUDING DEFAULTS` is specified. The default behavior is to exclude default expressions, resulting in the copied columns in the new table having null defaults.
 
@@ -300,7 +300,11 @@ LIKE source\_table like\_option `...`\]
 
 :   Any indexes on the original table will not be created on the new table, unless the `INCLUDING INDEXES` clause is specified.
 
-:   `STORAGE` settings for the copied column definitions will be copied only if `INCLUDING STORAGE` is specified. The default behavior is to exclude `STORAGE` settings, resulting in the copied columns in the new table having type-specific default settings.
+:   `STORAGE` settings for the copied column definitions will be copied only if `INCLUDING STORAGE` is specified. The default behavior is to exclude `STORAGE` settings, resulting in the copied columns in the new table having type-specific default settings. Copied `STORAGE` settings include:
+
+    -   Table-wide append-optimized options such as `appendonly`, `orientation`, `checksum`, `compresslevel`, `compresstype`.
+    -   Column-specific `ENCODING` options.
+    -   Column-specific TOAST mode.
 
 :   Comments for the copied columns, constraints, and indexes will be copied only if `INCLUDING COMMENTS` is specified. The default behavior is to exclude comments, resulting in the copied columns and constraints in the new table having no comments.
 

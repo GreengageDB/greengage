@@ -343,8 +343,9 @@ CREATE [ [GLOBAL | LOCAL] {TEMPORARY | TEMP} | UNLOGGED ] TABLE [IF NOT EXISTS]
             distribution policy. Unlike <codeph>INHERITS</codeph>, the new table and original table
             are completely decoupled after creation is complete.</pd>
           <pd>
-            <note>Storage properties like append-optimized or partition structure are not
-              copied.</note>
+            <note>Partition structure is not copied. Storage properties like append-optimized are
+            only copied if <codeph>INCLUDING STORAGE</codeph> is specified. However, child
+            partitions inherit all the storage properties of the root partition.</note>
           </pd>
           <pd>Default expressions for the copied column definitions will only be copied if
               <codeph>INCLUDING DEFAULTS</codeph> is specified. The default behavior is to exclude
@@ -363,7 +364,14 @@ CREATE [ [GLOBAL | LOCAL] {TEMPORARY | TEMP} | UNLOGGED ] TABLE [IF NOT EXISTS]
           <pd><codeph>STORAGE</codeph> settings for the copied column definitions will be copied
             only if <codeph>INCLUDING STORAGE</codeph> is specified. The default behavior is to
             exclude <codeph>STORAGE</codeph> settings, resulting in the copied columns in the new
-            table having type-specific default settings. </pd>
+            table having type-specific default settings. Copied <codeph>STORAGE</codeph> settings
+            include: <ul>
+              <li>Table-wide append-optimized options such as <codeph>appendonly</codeph>,
+                <codeph>orientation</codeph>, <codeph>checksum</codeph>,
+                <codeph>compresslevel</codeph>, <codeph>compresstype</codeph>.</li>
+              <li>Column-specific <codeph>ENCODING</codeph> options.</li>
+              <li>Column-specific TOAST mode.</li>
+            </ul></pd>
           <pd> Comments for the copied columns, constraints, and indexes will be copied only if
               <codeph>INCLUDING COMMENTS</codeph> is specified. The default behavior is to exclude
             comments, resulting in the copied columns and constraints in the new table having no
