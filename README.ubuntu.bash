@@ -24,6 +24,7 @@ apt-get install -y \
   libssl-dev \
   libtool \
   libuv1-dev \
+  libxerces-c-dev \
   libxml2-dev \
   libxslt-dev \
   libyaml-dev \

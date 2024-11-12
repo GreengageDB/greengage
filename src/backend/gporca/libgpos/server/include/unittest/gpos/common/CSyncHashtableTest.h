@@ -114,13 +114,6 @@ private:
 		{
 		}
 
-		// copy ctor
-		SElem(const SElem &elem)
-		{
-			m_id = elem.m_id;
-			m_ulKey = elem.m_ulKey;
-		}
-
 #ifdef GPOS_DEBUG
 		static BOOL
 		IsValid(const ULONG &ulKey)

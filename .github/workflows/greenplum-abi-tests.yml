@@ -93,7 +93,11 @@ jobs:
           sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl abi-dumper
           sudo ln -fs python2 /usr/bin/python
 
+        # FIXME: The next lines is only needed for the current pass of the ABI
+        # tests and should be removed after merging README.ubuntu.bash changes
+        # into the base branch.
       - name: Build libxerces 3.1.2
+        if: ${{matrix.ref == '6.27.1_arenadata58' }}
         run: |
           wget https://github.com/arenadata/gp-xerces/archive/refs/tags/v3.1.2-p1.tar.gz
           tar -xzf v3.1.2-p1.tar.gz

@@ -38,10 +38,9 @@ protected:
 	// actual element to point to
 	T *m_object;
 
-	// hidden copy ctor
-	CAutoP<T>(const CAutoP &);
-
 public:
+	CAutoP<T>(const CAutoP &) = delete;
+
 	// ctor
 	explicit CAutoP<T>() : m_object(NULL)
 	{
