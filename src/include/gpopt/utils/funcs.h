@@ -10,14 +10,9 @@
 #ifndef GPOPT_funcs_H
 #define GPOPT_funcs_H
 
+#include "gpopt/utils/gpdbdefs.h"
 
 extern "C" {
-
-#include "postgres.h"
-
-#include "fmgr.h"
-#include "utils/builtins.h"
-
 extern Datum DisableXform(PG_FUNCTION_ARGS);
 extern Datum EnableXform(PG_FUNCTION_ARGS);
 extern Datum LibraryVersion();

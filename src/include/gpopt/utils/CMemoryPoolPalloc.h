@@ -17,6 +17,8 @@
 #include "gpos/base.h"
 #include "gpos/memory/CMemoryPool.h"
 
+#include "gpopt/utils/gpdbdefs.h"
+
 namespace gpos
 {
 // Memory pool that maps to a Postgres MemoryContext.

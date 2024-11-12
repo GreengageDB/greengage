@@ -213,7 +213,7 @@ public:
 												ULONG attno);
 
 	// return the column name of the target entry
-	static CHAR *GetTargetEntryColName(TargetEntry *target_entry, Query *query);
+	static CHAR *GetTargetEntryColName(TargetEntry *target_entry);
 
 	// make the input query into a derived table and return a new root query
 	static Query *ConvertToDerivedTable(const Query *original_query,

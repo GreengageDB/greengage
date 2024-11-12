@@ -16,10 +16,6 @@
 #ifndef GPDXL_CTranslatorDxlToPlStmt_H
 #define GPDXL_CTranslatorDxlToPlStmt_H
 
-extern "C" {
-#include "postgres.h"
-}
-
 #include "gpos/base.h"
 
 #include "gpopt/translate/CContextDXLToPlStmt.h"
@@ -27,6 +23,7 @@ extern "C" {
 #include "gpopt/translate/CDXLTranslateContextBaseTable.h"
 #include "gpopt/translate/CMappingColIdVarPlStmt.h"
 #include "gpopt/translate/CTranslatorDXLToScalar.h"
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/CIdGenerator.h"
 #include "naucrates/dxl/operators/CDXLCtasStorageOptions.h"
 #include "naucrates/dxl/operators/CDXLPhysicalIndexScan.h"
@@ -207,11 +204,8 @@ private:
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
 
 	// translate DXL table scan node into a SeqScan node
-	Plan *TranslateDXLTblScan(
-		const CDXLNode *tbl_scan_dxlnode, CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
-	);
+	Plan *TranslateDXLTblScan(const CDXLNode *tbl_scan_dxlnode,
+							  CDXLTranslateContext *output_context);
 
 	// translate DXL index scan node into a IndexScan node
 	Plan *TranslateDXLIndexScan(
@@ -319,17 +313,14 @@ private:
 	);
 
 	// translate DXL TVF into a GPDB Function Scan node
-	Plan *TranslateDXLTvf(
-		const CDXLNode *tvf_dxlnode, CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
-	);
+	Plan *TranslateDXLTvf(const CDXLNode *tvf_dxlnode,
+						  CDXLTranslateContext *output_context);
 
 
 	Plan *TranslateDXLProjectSet(const CDXLNode *result_dxlnode);
 
 	Plan *CreateProjectSetNodeTree(const CDXLNode *result_dxlnode,
-								   Plan *result_node_plan, Plan *child_plan,
+								   Plan *result_node_plan,
 								   Plan *&project_set_child_plan,
 								   BOOL &will_require_result_node);
 
@@ -369,12 +360,8 @@ private:
 	);
 
 	// translate a dynamic table scan operator
-	Plan *TranslateDXLDynTblScan(
-		const CDXLNode *dyn_tbl_scan_dxlnode,
-		CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
-	);
+	Plan *TranslateDXLDynTblScan(const CDXLNode *dyn_tbl_scan_dxlnode,
+								 CDXLTranslateContext *output_context);
 
 	// translate a dynamic index scan operator
 	Plan *TranslateDXLDynIdxScan(
@@ -393,12 +380,8 @@ private:
 	);
 
 	// translate a dynamic foreign scan operator
-	Plan *TranslateDXLDynForeignScan(
-		const CDXLNode *dyn_foreign_scan_dxlnode,
-		CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
-	);
+	Plan *TranslateDXLDynForeignScan(const CDXLNode *dyn_foreign_scan_dxlnode,
+									 CDXLTranslateContext *output_context);
 
 	// translate a DML operator
 	Plan *TranslateDXLDml(
@@ -432,10 +415,7 @@ private:
 	// translate a CTE consumer into a GPDB share input scan
 	Plan *TranslateDXLCTEConsumerToSharedScan(
 		const CDXLNode *cte_consumer_dxlnode,
-		CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *
-			ctxt_translation_prev_siblings	// translation contexts of previous siblings
-	);
+		CDXLTranslateContext *output_context);
 
 	// translate a (dynamic) bitmap table scan operator
 	Plan *TranslateDXLBitmapTblScan(
@@ -454,10 +434,8 @@ private:
 	);
 
 	// translate a DXL Value Scan into GPDB Value Scan
-	Plan *TranslateDXLValueScan(
-		const CDXLNode *value_scan_dxlnode,
-		CDXLTranslateContext *output_context,
-		CDXLTranslationContextArray *ctxt_translation_prev_siblings);
+	Plan *TranslateDXLValueScan(const CDXLNode *value_scan_dxlnode,
+								CDXLTranslateContext *output_context);
 
 	// translate DXL filter list into GPDB filter list
 	List *TranslateDXLFilterList(
@@ -578,9 +556,9 @@ private:
 
 	// translate the index condition list in an Index scan
 	void TranslateIndexConditions(
-		CDXLNode *index_cond_list_dxlnode, const CDXLTableDescr *dxl_tbl_descr,
-		BOOL is_bitmap_index_probe, const IMDIndex *index,
-		const IMDRelation *md_rel, CDXLTranslateContext *output_context,
+		CDXLNode *index_cond_list_dxlnode, BOOL is_bitmap_index_probe,
+		const IMDIndex *index, const IMDRelation *md_rel,
+		CDXLTranslateContext *output_context,
 		CDXLTranslateContextBaseTable *base_table_context,
 		CDXLTranslationContextArray *ctxt_translation_prev_siblings,
 		List **index_cond, List **index_orig_cond);
@@ -612,7 +590,7 @@ private:
 
 	// translate the distribution policy for a DXL physical CTAS operator
 	static GpPolicy *TranslateDXLPhyCtasToDistrPolicy(
-		const CDXLPhysicalCTAS *dxlop, List *target_list);
+		const CDXLPhysicalCTAS *dxlop);
 
 	// translate CTAS storage options
 	static List *TranslateDXLCtasStorageOptions(

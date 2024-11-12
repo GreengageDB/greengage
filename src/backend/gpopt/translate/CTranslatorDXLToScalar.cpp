@@ -12,17 +12,7 @@
 //	@test:
 //---------------------------------------------------------------------------
 
-extern "C" {
-#include "postgres.h"
-
-#include "catalog/pg_collation.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodes.h"
-#include "nodes/parsenodes.h"
-#include "nodes/plannodes.h"
-#include "nodes/primnodes.h"
-#include "utils/datum.h"
-}
+#include "gpopt/translate/CTranslatorDXLToScalar.h"
 
 #include <vector>
 
@@ -34,8 +24,8 @@ extern "C" {
 #include "gpopt/mdcache/CMDAccessorUtils.h"
 #include "gpopt/translate/CMappingColIdVarPlStmt.h"
 #include "gpopt/translate/CTranslatorDXLToPlStmt.h"
-#include "gpopt/translate/CTranslatorDXLToScalar.h"
 #include "gpopt/translate/CTranslatorUtils.h"
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/operators/CDXLDatumBool.h"
 #include "naucrates/dxl/operators/CDXLDatumGeneric.h"
@@ -134,7 +124,7 @@ CTranslatorDXLToScalar::TranslateDXLToScalar(const CDXLNode *dxlnode,
 		}
 		case EdxlopScalarParam:
 		{
-			return TranslateDXLScalarParamToScalar(dxlnode, colid_var);
+			return TranslateDXLScalarParamToScalar(dxlnode);
 		}
 		case EdxlopScalarArrayComp:
 		{
@@ -439,7 +429,7 @@ CTranslatorDXLToScalar::TranslateDXLScalarOpExprToScalar(
 //---------------------------------------------------------------------------
 Expr *
 CTranslatorDXLToScalar::TranslateDXLScalarParamToScalar(
-	const CDXLNode *scalar_param_node, CMappingColIdVar *colid_var)
+	const CDXLNode *scalar_param_node)
 {
 	GPOS_ASSERT(nullptr != scalar_param_node);
 	CDXLScalarParam *scalar_param_dxl =

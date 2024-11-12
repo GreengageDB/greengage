@@ -14,18 +14,7 @@
 //
 //---------------------------------------------------------------------------
 
-extern "C" {
-#include "postgres.h"
-
-#include "access/sysattr.h"
-#include "catalog/heap.h"
-#include "catalog/pg_class.h"
-#include "nodes/makefuncs.h"
-#include "nodes/parsenodes.h"
-#include "nodes/plannodes.h"
-#include "optimizer/walkers.h"
-#include "utils/rel.h"
-}
+#include "gpopt/translate/CTranslatorQueryToDXL.h"
 
 #include "gpos/base.h"
 #include "gpos/common/CAutoTimer.h"
@@ -36,9 +25,9 @@ extern "C" {
 #include "gpopt/translate/CCTEListEntry.h"
 #include "gpopt/translate/CQueryMutators.h"
 #include "gpopt/translate/CTranslatorDXLToPlStmt.h"
-#include "gpopt/translate/CTranslatorQueryToDXL.h"
 #include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 #include "gpopt/translate/CTranslatorUtils.h"
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/operators/CDXLDatumInt4.h"
 #include "naucrates/dxl/operators/CDXLDatumInt8.h"
@@ -77,6 +66,8 @@ extern "C" {
 #include "naucrates/md/IMDTypeInt4.h"
 #include "naucrates/md/IMDTypeInt8.h"
 #include "naucrates/traceflags/traceflags.h"
+
+#pragma GCC diagnostic ignored "-Wcast-function-type"
 
 using namespace gpdxl;
 using namespace gpos;
@@ -690,8 +681,7 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 		GPOS_ASSERT(nullptr == m_query->groupingSets);
 		child_dxlnode = TranslateWindowToDXL(
 			dxlnode, m_query->targetList, m_query->windowClause,
-			m_query->sortClause, sort_group_attno_to_colid_mapping,
-			output_attno_to_colid_mapping);
+			sort_group_attno_to_colid_mapping, output_attno_to_colid_mapping);
 	}
 	else
 	{
@@ -1787,7 +1777,7 @@ CTranslatorQueryToDXL::TranslateWindowSpecToDXL(
 CDXLNode *
 CTranslatorQueryToDXL::TranslateWindowToDXL(
 	CDXLNode *child_dxlnode, List *target_list, List *window_clause,
-	List *sort_clause, IntToUlongMap *sort_col_attno_to_colid_mapping,
+	IntToUlongMap *sort_col_attno_to_colid_mapping,
 	IntToUlongMap *output_attno_to_colid_mapping)
 {
 	if (0 == gpdb::ListLength(window_clause))
@@ -3365,7 +3355,7 @@ CTranslatorQueryToDXL::TranslateFromClauseToDXL(Node *node)
 			}
 			case RTE_VALUES:
 			{
-				return TranslateValueScanRTEToDXL(rte, rt_index, m_query_level);
+				return TranslateValueScanRTEToDXL(rte, rt_index);
 			}
 			case RTE_CTE:
 			{
@@ -3643,8 +3633,7 @@ CTranslatorQueryToDXL::NoteDistributionPolicyOpclasses(const RangeTblEntry *rte)
 //---------------------------------------------------------------------------
 CDXLNode *
 CTranslatorQueryToDXL::TranslateValueScanRTEToDXL(const RangeTblEntry *rte,
-												  ULONG rt_index,
-												  ULONG current_query_level)
+												  ULONG rt_index)
 {
 	List *tuples_list = rte->values_lists;
 	GPOS_ASSERT(nullptr != tuples_list);
@@ -4760,7 +4749,7 @@ CTranslatorQueryToDXL::CreateDXLConstValueTrue()
 CDXLNode *
 CTranslatorQueryToDXL::TranslateGroupingFuncToDXL(
 	const Expr *expr, CBitSet *bitset,
-	UlongToUlongMap *grpcol_index_to_colid_mapping) const
+	UlongToUlongMap *grpcol_index_to_colid_mapping GPOS_UNUSED) const
 {
 	GPOS_ASSERT(IsA(expr, GroupingFunc));
 	GPOS_ASSERT(nullptr != grpcol_index_to_colid_mapping);

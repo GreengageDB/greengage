@@ -89,8 +89,7 @@ private:
 	Expr *TranslateDXLScalarArrayCompToScalar(
 		const CDXLNode *scalar_array_cmp_node, CMappingColIdVar *colid_var);
 
-	Expr *TranslateDXLScalarParamToScalar(const CDXLNode *scalar_param_node,
-										  CMappingColIdVar *colid_var);
+	Expr *TranslateDXLScalarParamToScalar(const CDXLNode *scalar_param_node);
 
 	Expr *TranslateDXLScalarOpExprToScalar(const CDXLNode *scalar_op_expr_node,
 										   CMappingColIdVar *colid_var);

@@ -22,10 +22,7 @@
 #include "gpos/base.h"
 #include "gpos/common/CHashMap.h"
 
-extern "C" {
-#include "postgres.h"  // Index
-}
-
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/gpdb_types.h"
 
 namespace gpdxl

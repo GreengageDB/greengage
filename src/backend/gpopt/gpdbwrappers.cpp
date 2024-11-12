@@ -24,32 +24,27 @@
 
 #include <limits>  // std::numeric_limits
 
+#include "gpos/attributes.h"
 #include "gpos/base.h"
 #include "gpos/error/CAutoExceptionStack.h"
 #include "gpos/error/CException.h"
 
-#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/exception.h"
 
-#include "catalog/pg_collation.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
-#include "access/amapi.h"
-#include "access/external.h"
-#include "access/genam.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_inherits.h"
 #include "foreign/fdwapi.h"
-#include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
-#include "optimizer/plancat.h"
 #include "optimizer/subselect.h"
 #include "parser/parse_agg.h"
-#include "partitioning/partdesc.h"
 #include "storage/lmgr.h"
-#include "utils/fmgroids.h"
-#include "utils/memutils.h"
-#include "utils/partcache.h"
 }
+#pragma GCC diagnostic pop
+
 #define GP_WRAP_START                                            \
 	sigjmp_buf local_sigjmp_buf;                                 \
 	{                                                            \
@@ -2307,14 +2302,16 @@ static int64 mdcache_invalidation_counter = 0;
 static int64 last_mdcache_invalidation_counter = 0;
 
 static void
-mdsyscache_invalidation_counter_callback(Datum arg, int cacheid,
-										 uint32 hashvalue)
+mdsyscache_invalidation_counter_callback(Datum arg GPOS_UNUSED,
+										 int cacheid GPOS_UNUSED,
+										 uint32 hashvalue GPOS_UNUSED)
 {
 	mdcache_invalidation_counter++;
 }
 
 static void
-mdrelcache_invalidation_counter_callback(Datum arg, Oid relid)
+mdrelcache_invalidation_counter_callback(Datum arg GPOS_UNUSED,
+										 Oid relid GPOS_UNUSED)
 {
 	mdcache_invalidation_counter++;
 }
@@ -2516,6 +2513,8 @@ gpdb::GPDBMemoryContextDelete(MemoryContext context)
 	GP_WRAP_END;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 MemoryContext
 gpdb::GPDBAllocSetContextCreate()
 {
@@ -2537,6 +2536,7 @@ gpdb::GPDBAllocSetContextCreate()
 	GP_WRAP_END;
 	return nullptr;
 }
+#pragma GCC diagnostic pop
 
 bool
 gpdb::ExpressionReturnsSet(Node *clause)

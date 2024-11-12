@@ -14,20 +14,9 @@
 //---------------------------------------------------------------------------
 #ifndef GPDB_gpdbwrappers_H
 #define GPDB_gpdbwrappers_H
-
-extern "C" {
-#include "postgres.h"
-
-#include "access/amapi.h"
-#include "access/attnum.h"
-#include "optimizer/plancat.h"
-#include "parser/parse_coerce.h"
-#include "statistics/statistics.h"
-#include "utils/faultinjector.h"
-#include "utils/lsyscache.h"
-}
-
 #include "gpos/types.h"
+
+#include "gpopt/utils/gpdbdefs.h"
 
 // fwd declarations
 using SysScanDesc = struct SysScanDescData *;
@@ -718,32 +707,14 @@ gpos::BOOL WalkQueryTree(Query *query, bool (*walker)(), void *context,
 		 ? gpdb::MemCtxtAllocZeroAligned(CurrentMemoryContext, (sz)) \
 		 : gpdb::MemCtxtAllocZero(CurrentMemoryContext, (sz)))
 
-#ifdef __GNUC__
-
-/* With GCC, we can use a compound statement within an expression */
-#define NewNode(size, tag)                                                \
-	({                                                                    \
-		Node *_result;                                                    \
-		AssertMacro((size) >= sizeof(Node)); /* need the tag, at least */ \
-		_result = (Node *) Palloc0Fast(size);                             \
-		_result->type = (tag);                                            \
-		_result;                                                          \
-	})
-#else
-
-/*
- *	There is no way to dereference the palloc'ed pointer to assign the
- *	tag, and also return the pointer itself, so we need a holder variable.
- *	Fortunately, this macro isn't recursive so we just define
- *	a global variable for this purpose.
- */
-extern PGDLLIMPORT Node *newNodeMacroHolder;
-
-#define NewNode(size, tag)                                             \
-	(AssertMacro((size) >= sizeof(Node)), /* need the tag, at least */ \
-	 newNodeMacroHolder = (Node *) Palloc0Fast(size),                  \
-	 newNodeMacroHolder->type = (tag), newNodeMacroHolder)
-#endif	// __GNUC__
+static inline Node *
+NewNode(Size size, NodeTag tag)
+{
+	AssertMacro(size >= sizeof(Node)); /* need the tag, at least */
+	Node *_result = (Node *) Palloc0Fast(size);
+	_result->type = tag;
+	return _result;
+}
 
 #define MakeNode(_type_) ((_type_ *) NewNode(sizeof(_type_), T_##_type_))
 

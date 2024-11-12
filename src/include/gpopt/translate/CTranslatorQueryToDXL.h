@@ -178,7 +178,7 @@ private:
 	// translate a window operator
 	CDXLNode *TranslateWindowToDXL(
 		CDXLNode *child_dxlnode, List *target_list, List *window_clause,
-		List *sort_clause, IntToUlongMap *sort_col_attno_to_colid_mapping,
+		IntToUlongMap *sort_col_attno_to_colid_mapping,
 		IntToUlongMap *output_attno_to_colid_mapping);
 
 	// translate window spec
@@ -317,9 +317,7 @@ private:
 		CDXLNodeArray *dxl_project_elements) const;
 
 	// translate a value scan range table entry
-	CDXLNode *TranslateValueScanRTEToDXL(const RangeTblEntry *rte, ULONG rti,
-										 ULONG	//current_query_level
-	);
+	CDXLNode *TranslateValueScanRTEToDXL(const RangeTblEntry *rte, ULONG rti);
 
 	// create a dxl node from a array of datums and project elements
 	CDXLNode *TranslateTVFToDXL(const RangeTblEntry *rte, ULONG rti,

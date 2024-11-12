@@ -15,15 +15,6 @@
 
 #include "gpopt/utils/COptTasks.h"
 
-extern "C" {
-#include "cdb/cdbvars.h"
-#include "optimizer/hints.h"
-#include "optimizer/orca.h"
-#include "storage/proc.h"
-#include "utils/fmgroids.h"
-#include "utils/guc.h"
-}
-
 #include "gpos/_api.h"
 #include "gpos/base.h"
 #include "gpos/common/CAutoP.h"

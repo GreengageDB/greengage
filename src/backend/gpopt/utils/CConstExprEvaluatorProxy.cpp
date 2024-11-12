@@ -13,16 +13,11 @@
 //	@test:
 //
 //---------------------------------------------------------------------------
-
-extern "C" {
-#include "postgres.h"
-
-#include "executor/executor.h"
-}
+#include "gpopt/utils/CConstExprEvaluatorProxy.h"
 
 #include "gpopt/gpdbwrappers.h"
 #include "gpopt/translate/CTranslatorScalarToDXL.h"
-#include "gpopt/utils/CConstExprEvaluatorProxy.h"
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/operators/CDXLNode.h"
 #include "naucrates/exception.h"
 

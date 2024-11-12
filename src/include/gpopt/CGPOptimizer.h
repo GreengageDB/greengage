@@ -15,13 +15,7 @@
 #ifndef CGPOptimizer_H
 #define CGPOptimizer_H
 
-extern "C" {
-#include "postgres.h"
-
-#include "nodes/params.h"
-#include "nodes/parsenodes.h"
-#include "nodes/plannodes.h"
-}
+#include "gpopt/utils/gpdbdefs.h"
 
 class CGPOptimizer
 {

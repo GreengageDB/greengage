@@ -12,30 +12,7 @@
 //
 //
 //---------------------------------------------------------------------------
-
-extern "C" {
-#include "postgres.h"
-
-#include "access/heapam.h"
-#include "catalog/heap.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_am.h"
-#include "catalog/pg_proc.h"
-#include "catalog/pg_statistic.h"
-#include "catalog/pg_statistic_ext.h"
-#include "cdb/cdbhash.h"
-#include "partitioning/partdesc.h"
-#include "utils/array.h"
-#include "utils/datum.h"
-#include "utils/elog.h"
-#include "utils/guc.h"
-#include "utils/lsyscache.h"
-#include "utils/partcache.h"
-#include "utils/rel.h"
-#include "utils/relcache.h"
-#include "utils/syscache.h"
-#include "utils/typcache.h"
-}
+#include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 
 #include "gpos/base.h"
 #include "gpos/common/CAutoRef.h"
@@ -45,7 +22,6 @@ extern "C" {
 #include "gpopt/base/CUtils.h"
 #include "gpopt/gpdbwrappers.h"
 #include "gpopt/mdcache/CMDAccessor.h"
-#include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 #include "gpopt/translate/CTranslatorScalarToDXL.h"
 #include "gpopt/translate/CTranslatorUtils.h"
 #include "naucrates/dxl/CDXLUtils.h"
@@ -572,7 +548,7 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	rel_ao_version = get_ao_version(rel);
 
 	// get relation columns
-	mdcol_array = RetrieveRelColumns(mp, md_accessor, rel.get());
+	mdcol_array = RetrieveRelColumns(mp, rel.get());
 	const ULONG max_cols =
 		GPDXL_SYSTEM_COLUMNS + (ULONG) rel->rd_att->natts + 1;
 	ULONG *attno_mapping = ConstructAttnoMapping(mp, mdcol_array, max_cols);
@@ -612,7 +588,7 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	// get number of leaf partitions
 	if (is_partitioned)
 	{
-		RetrievePartKeysAndTypes(mp, rel.get(), oid, &part_keys, &part_types);
+		RetrievePartKeysAndTypes(mp, rel.get(), &part_keys, &part_types);
 
 		partition_oids = GPOS_NEW(mp) IMdIdArray(mp);
 		PartitionDesc part_desc =
@@ -683,9 +659,7 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 //
 //---------------------------------------------------------------------------
 CMDColumnArray *
-CTranslatorRelcacheToDXL::RetrieveRelColumns(CMemoryPool *mp,
-											 CMDAccessor *md_accessor,
-											 Relation rel)
+CTranslatorRelcacheToDXL::RetrieveRelColumns(CMemoryPool *mp, Relation rel)
 {
 	CMDColumnArray *mdcol_array = GPOS_NEW(mp) CMDColumnArray(mp);
 
@@ -749,7 +723,7 @@ CTranslatorRelcacheToDXL::RetrieveRelColumns(CMemoryPool *mp,
 	// add system columns
 	if (RelHasSystemColumns(rel->rd_rel->relkind))
 	{
-		AddSystemColumns(mp, mdcol_array, rel);
+		AddSystemColumns(mp, mdcol_array);
 	}
 
 	return mdcol_array;
@@ -907,8 +881,7 @@ CTranslatorRelcacheToDXL::RetrieveRelDistributionOpFamilies(CMemoryPool *mp,
 //---------------------------------------------------------------------------
 void
 CTranslatorRelcacheToDXL::AddSystemColumns(CMemoryPool *mp,
-										   CMDColumnArray *mdcol_array,
-										   Relation rel)
+										   CMDColumnArray *mdcol_array)
 {
 	for (INT i = SelfItemPointerAttributeNumber;
 		 i > FirstLowInvalidHeapAttributeNumber; i--)
@@ -2636,7 +2609,7 @@ CTranslatorRelcacheToDXL::RetrieveRelStorageType(Relation rel)
 //---------------------------------------------------------------------------
 void
 CTranslatorRelcacheToDXL::RetrievePartKeysAndTypes(CMemoryPool *mp,
-												   Relation rel, OID oid,
+												   Relation rel,
 												   ULongPtrArray **part_keys,
 												   CharPtrArray **part_types)
 {

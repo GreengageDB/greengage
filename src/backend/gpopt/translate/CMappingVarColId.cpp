@@ -12,17 +12,13 @@
 //
 //
 //---------------------------------------------------------------------------
-extern "C" {
-#include "postgres.h"
+#include "gpopt/translate/CMappingVarColId.h"
 
-#include "nodes/primnodes.h"
-#include "nodes/value.h"
-}
 #include "gpos/error/CAutoTrace.h"
 
 #include "gpopt/gpdbwrappers.h"
-#include "gpopt/translate/CMappingVarColId.h"
 #include "gpopt/translate/CTranslatorUtils.h"
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/operators/CDXLScalarIdent.h"
 #include "naucrates/dxl/operators/CDXLScalarProjElem.h"

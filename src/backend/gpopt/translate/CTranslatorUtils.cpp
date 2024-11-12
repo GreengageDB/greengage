@@ -14,19 +14,7 @@
 //
 //---------------------------------------------------------------------------
 
-extern "C" {
-#include "postgres.h"
-
-#include "access/sysattr.h"
-#include "catalog/pg_proc.h"
-#include "catalog/pg_statistic.h"
-#include "catalog/pg_type.h"
-#include "nodes/parsenodes.h"
-#include "nodes/plannodes.h"
-#include "optimizer/walkers.h"
-#include "utils/guc.h"
-#include "utils/rel.h"
-}
+#include "gpopt/translate/CTranslatorUtils.h"
 
 #include "gpos/attributes.h"
 #include "gpos/base.h"
@@ -40,7 +28,6 @@ extern "C" {
 #include "gpopt/translate/CDXLTranslateContext.h"
 #include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 #include "gpopt/translate/CTranslatorScalarToDXL.h"
-#include "gpopt/translate/CTranslatorUtils.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/gpdb_types.h"
 #include "naucrates/dxl/operators/CDXLColDescr.h"

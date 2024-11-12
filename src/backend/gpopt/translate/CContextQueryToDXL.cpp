@@ -12,12 +12,10 @@
 //		and the caller is responsible for freeing it
 //
 //---------------------------------------------------------------------------
-extern "C" {
-#include "postgres.h"
-}
-
 #include "gpopt/translate/CContextQueryToDXL.h"
+
 #include "gpopt/translate/CTranslatorUtils.h"
+#include "gpopt/utils/gpdbdefs.h"
 #include "naucrates/dxl/CIdGenerator.h"
 
 using namespace gpdxl;
