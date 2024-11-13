@@ -296,21 +296,42 @@ test_send_dummy_packet_ipv6_to_ipv6_wildcard(void **state)
 	wait_for_receiver(false);
 }
 
+
+/*
+ * Test if IPv6 is supported.
+ *
+ * Sometimes even if IPv6 socket is successfully created it is not possible
+ * to bind an address to it (if IPv6 is disabled).
+ * 
+ * Note: this is not a general solution and should only be used for this
+ * specific test. It is theoretically possible that loopback IPv6 address
+ * is available but real IPv6 addresses aren't. However, checking for that
+ * would be a lot more complicated
+ */
+static bool is_ipv6_supported(void) {
+	int sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
+	if (sockfd < 0 && errno == EAFNOSUPPORT)
+		return false;
+
+	const struct sockaddr_in6 socket_struct = {.sin6_family = AF_INET6, .sin6_addr = in6addr_loopback};
+	int res = bind(sockfd, (const struct sockaddr *) &socket_struct, sizeof(socket_struct));
+	if (res < 0 && errno == EADDRNOTAVAIL)
+		return false;
+
+	closesocket(sockfd);
+	return true;
+}
+
 int
 main(int argc, char* argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
-	int is_ipv6_supported = true;
-	int sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
-	if (sockfd < 0 && errno == EAFNOSUPPORT)
-		is_ipv6_supported = false;
-
 	log_min_messages = DEBUG1;
 
 	start_receiver();
 
-	if (is_ipv6_supported)
+	if (is_ipv6_supported())
 	{
 		const UnitTest tests[] = {
 			unit_test(test_send_dummy_packet_ipv4_to_ipv4),
