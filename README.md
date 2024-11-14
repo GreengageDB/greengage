@@ -118,6 +118,9 @@ make installcheck-world
   upstream. We try to keep the upstream tests identical to the upstream
   versions, to make merging with newer PostgreSQL releases easier.
 
+* Tests require a UTF-8 compatible locale. Ensure your system is set up
+  correctly before making the test cluster, e.g., `export LANG=en_US.UTF-8`.
+
 ## Alternative Configurations
 
 ### Building GPDB without GPORCA
