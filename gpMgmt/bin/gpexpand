@@ -15,6 +15,7 @@ import sys
 import json
 import shutil
 import signal
+import socket
 import traceback
 from collections import defaultdict
 from time import strftime, sleep
@@ -773,8 +774,19 @@ class SegmentTemplate:
 
     def _distribute_tarfile(self):
         """Distributes template tar file to hosts"""
+        localHostAddr = socket.gethostbyname(getLocalHostname())
+        # NOTE: Currently, GP's scp transfers relative file paths into the home
+        # directory by default.
+        pathsAreSame = os.path.realpath(self.segTarFile) == os.path.join(getHomePath(), self.schema_tar_file)
+
         for host in self.hosts:
-            logger.debug('Copying tar file to %s' % host)
+            # If the source and the destination are the same on the local
+            # machine, scp may corrupt the file. Don't overwrite it.
+            if socket.gethostbyname(host) == localHostAddr and pathsAreSame:
+                logger.debug('Skipping tar file (%s) copy to %s' % (self.schema_tar_file, host))
+                continue
+
+            logger.debug('Copying tar file (%s) to %s' % (self.schema_tar_file, host))
             cpCmd = Scp(name='gpexpand distribute tar file to new hosts',
                         srcFile=self.schema_tar_file,
                         dstFile=self.segTarDir,

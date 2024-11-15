@@ -804,3 +804,22 @@ Feature: expand the cluster by adding more segments
         And table "test_good_2" should be marked as expanded
         And table "test_already_expanded" should be marked as expanded
         And table "test_broken" should not be marked as expanded
+
+    @gpexpand_avoid_tarfile_overwrite
+    Scenario: Avoid overwriting the tar file on coordinator
+        Given the database is not running
+        # need to remove this log because otherwise SCAN_LOG may pick up a previous error/warning in the log
+        And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
+        # gpconfigurenewsegment scp's tar file to home by default
+        And a working directory of the test as '/data/gpdata/gpexpand'
+        And a temporary directory under "/data/gpdata/gpexpand/expandedData" to expand into
+        And the cluster is generated with "1" primaries only
+        And database "gptest" exists
+        And the directory is changed to '/home/gpadmin'
+        And there are no gpexpand_inputfiles
+        And the cluster is setup for an expansion on hosts "localhost"
+        When the user runs gpexpand interview to add 1 new segment and 0 new host "ignored.host"
+        Then the number of segments have been saved
+        When the user runs gpexpand with the latest gpexpand_inputfile with additional parameters "--verbose"
+        Then gpexpand should print "[DEBUG]:-Skipping tar file (gpexpand_schema.tar) copy to cdw" escaped to stdout
+        And verify that the cluster has 1 new segments

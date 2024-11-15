@@ -3038,6 +3038,11 @@ def impl(context, working_directory, mode):
 def impl(context, working_directory):
     _create_working_directory(context, working_directory)
 
+@given("the directory is changed to '{working_directory}'")
+def impl(context, working_directory):
+    context.working_directory = working_directory
+    os.chdir(working_directory)
+
 def _create_working_directory(context, working_directory, mode=''):
     context.working_directory = working_directory
     # Don't fail if directory already exists, which can occur for the first scenario

@@ -81,6 +81,10 @@ def getUserName():
     return pwd.getpwuid(os.getuid()).pw_name
 
 
+def getHomePath():
+    return pwd.getpwuid(os.getuid()).pw_dir
+
+
 def check_pid_on_remotehost(pid, host):
     """ Check For the existence of a unix pid on remote host. """
 
