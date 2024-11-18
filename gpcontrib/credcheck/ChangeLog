@@ -1,0 +1,271 @@
+2024-08-03 - Version 2.8.0
+
+This release adds the compatibility with PostgreSQL 17. Upgrade require a
+PostgreSQL restart to reload the credcheck library.
+
+- Remove call to tuplestore_donestoring() for compatibility with PG v17.
+- Show actual setted parameters in error messages. Thanks to coroneltortuga
+  for the feature request.
+
+2024-04-25 - Version 2.7.0
+
+This release is maintenance a release to fix a problem with pgBackRest backup.
+
+  - Change location of the pg_password_history file that used to be stored in
+    the PGDATA/global/ subdirectory and now saved directly in the PGDATA. The
+    old location was generating a checksum warning by pgBackRest.  Thanks to
+    glushakov for the report.
+
+Backward compatibility is preserved, the file will be relocated automatically.
+
+2024-01-30 - Version 2.6.0
+
+This release is the a quick maintenance release to fix path of pg_config
+in Makefile and an errata in the previous upgrade filename. Thanks to Devrim
+Gunduz for the report.
+
+2024-01-30 - Version 2.5.0
+
+This release is a quick maintenance release to fix compîlation issue with
+PostgreSQL prior 15.0 on custom variable prefix restriction. Thanks to Devrim
+Gunduz for the report.
+
+2024-01-30 - Version 2.4.0
+
+This release is a maintenance release to fix a major issue with the backup of the
+history file with pgBackRest and adds an authentication delay feature.
+
+  - Add authentication delay feature to be able to add a pause on authentication
+    failure. Setting `credcheck.auth_delay_ms` causes the server to pause for a
+    given number of milliseconds before reporting authentication failure. This
+    makes brute-force attacks on database passwords more difficult.
+    This patch is purely a copy/paste from the auth_delay extension to avoid
+    loading other extension. See https://www.postgresql.org/docs/current/auth-delay.html
+    for more information about the origin of this feature.
+  - Force size of file $PGDATA/global/pg_password_history to be a multiple of 8192
+    to fix pgBackRest error caused by the error message: "page misalignment in file
+    /.../global/pg_password_history: file size 2604 is not divisible by page size 8192"
+    Thanks to did16 for the report.
+
+2023-11-03 - Version 2.3.0
+
+This release is a maintenance release to fix a major issue with the
+"whitelist" feature.
+
+  - Fix crash when length of the credcheck.whitelist value was > NAMEDATALEN.
+    Thanks to zobnin for the report.
+
+Extension upgrade requires a PostgreSQL restart to reload the credcheck library.
+
+2023-09-16 - Version 2.2.0
+
+This release adds a new feature, fixes a major bug with null password and fixes
+some issues reported by users since last release.
+
+  - Add new GUC variable credcheck.whitelist that can be used to set a comma
+    separated list of username to exclude from the password policy check.
+    For example:
+        credcheck.whitelist = 'admin,supuser'
+    will disable any credcheck policy for the user named admin and supuser.
+    Thanks to Nikolai for the feature request.
+  - Add -Wno-ignored-attributes to CPPFLAGS to avoid compilation warning on
+    pg_vsnprintf call.
+  - Fix PG crash when password was set to NULL. Thanks to ragaoua for the
+    report.
+  - Suppress "MD5 password cleared because of role rename" messages. This
+    makes the tests pass on PG12 and 13. Thanks to Christoph Berg for the patch.
+  - Use pg_regress' variant comparison files mechanism. Instead of manually
+    selecting the tests to run on PG13 in the Makefile, simply let pg_regress
+    choose the matching output file from .out and _1.out. Thanks to Christoph
+    Berg for the patch.
+  - Add missing file credcheck--2.1.0.sql. Thanks to Jeff Janes for the report.
+
+Extension upgrade requires a PostgreSQL restart to reload the credcheck library.
+
+2023-07-15 - Version 2.1.0
+
+This release adds a two new features and fix issues reported by users
+since last release.
+
+  - Add custom configuration variable credcheck.encrypted_password
+    allowed to allow the use of encrypted password in CREATE or
+    ALTER ROLE statement. Default is to not allow encrypted password
+    and to fire an error. Thanks to ragaoua for the feature request.
+  - Add the possibility to check the easiness of a password by the use of
+    the cracklib tool. This work is simply a integration of a copy/paste
+    from the passwordcheck extension available in the contrib/ directory.
+    Credits to the author Laurenz Albe.
+  - Fix failure count issue when ssl is disabled. Thanks to yinzhishu for
+    the report.
+
+Upgrade require a PostgreSQL restart to reload the credcheck library.
+
+2023-06-10 - Version 2.0.0
+
+This release adds a major feature called Authentication Failure Ban and
+the compatibility with PostgreSQL 16. Upgrade require a PostgreSQL restart
+to reload the credcheck library.
+
+  - Add "Authentication failure ban" new feature
+    
+	PostgreSQL doesn't have any mechanism to limit the number of authentication
+	failure attempt before the user being banned.  With the credcheck extension,
+	after an amount of authentication failure defined by configuration directive
+	`credcheck.max_auth_failure` the user can be banned and never connect anymore
+	even if it gives the right password later. This feature requires that the
+	credcheck extension to be added to to `shared_preload_libraries` configuration
+	option.
+
+	All users authentication failures are registered in shared memory with the
+	timestamps of when the user have been banned. The authentication failures
+	history is saved into memory only, that mean that the history is lost at
+	PostgreSQL restart. I have not seen the interest for the moment to restore
+	the cache at startup.
+
+	The authentication failure cache size is set to 1024 records by default and
+	can be adjusted using the `credcheck.auth_failure_cache_size` configuration
+	directive. Change of this GUC require a PostgreSQL restart.
+
+	Two settings allow to control the behavior of this feature:
+
+	* `credcheck.max_auth_failure`: number of authentication failure allowed
+	for a user before being banned.
+	* `credcheck.reset_superuser` : force superuser to not be banned or reset
+	a banned superuser when set to true.
+
+	The default value for the first setting is `0` which means that authentication
+	failure ban feature is disabled. The default value for the second setting is
+	`false` which means that `postgres` superuser can be banned.
+
+	In case the `postgres` superuser was banned, he can not logged anymore. If
+	there is no other superuser account that can be used to reset the record of
+	the banned superuser, set the `credcheck.reset_superuser`configuration directive
+	to `true` into postgresql.conf file and send the SIGHUP signal to the PostgreSQL
+	process pid so that it will reread the configuration. Next time the superuser will
+	try to connect, its authentication failure cache entry will be removed.
+
+  - Fix Makefile for PG 16. Thanks to Devrim Gunduz for the report.
+  - Add missing SQL file for version 1.2.0
+
+2023-05-13 - Version 1.2.0
+
+This release fixes a major bug reported by users since last release:
+
+    Fix case where password was wrongly saved in the history after a
+    VALID UNTIL min/max error. Add a regression test for this case.
+    Thanks to Tushar Takate for the report.
+
+Upgrade require a PostgreSQL restart to reload the credcheck library.
+
+2023-04-27 - Version 1.1.0
+
+This release fixes some minor issues reported by users since last release
+and adds a new custom setting:
+
+ - credcheck.password_valid_max to force use of VALID UNTIL clause in
+   CREATE/ALTER ROLE statements with a maximum number of days. Thanks to
+   Gabriel Leroux for the feature report.
+ - Explicitely import unistd.h for unlink() calls. Thanks to Gabriel Leroux
+   for the report.
+
+2023-04-06 - Version 1.0.0
+
+This release adds a major feature called Password Reuse Policy and
+the ability to force the use of an expiration date for a password.
+It also prevent PostgreSQL to expose the password in the logs in case
+of error and fixes some issues reported by users since the past 6 months.
+
+  - Add Password Reuse Policy feature. This implementation use a dedicated
+    shared memory storage to share the password history between all database.
+    
+    The module must be loaded by adding credcheck to shared_preload_libraries
+    in postgresql.conf, because it requires additional shared memory.
+    This means that a server restart is needed to add or remove the module.
+    
+    When credcheck is active, it stores password history across all databases
+    of the server. To access and manipulate this history, the module provides a
+    view pg_password_history and the utility functions pg_password_history_reset()
+    and pg_password_history_timestamp(). These are not available globally but can
+    be enabled for a specific database with CREATE EXTENSION credcheck.
+    
+    The password history is stored in share memory and written to disk in
+    file $PGDATA/global/pg_password_history to be loaded at startup. The
+    share memory history size is set to 65535 records by default and can
+    be adjusted using the credcheck.history_max_size configuration
+    directive. Change of this GUC require a PostgreSQL restart. One record
+    in the history takes 144 bytes so the default is to allocate around
+    10 MB of additional shared memory for the password history.
+   
+    Two settings allow to control the behavior of this feature:
+    
+      - credcheck.password_reuse_history: number of distinct passwords set
+        before a password can be reused.
+      - credcheck.password_reuse_interval: amount of time it takes before a
+        password can be reused again.
+    
+    The default value for these settings are 0 which means that all password
+    reuse policies are disabled.
+    
+    The password history consists of passwords a user has been assigned in
+    the past. credcheck can restrict new passwords from being chosen from
+    this history:
+    
+      - If an account is restricted on the basis of number of password changes,
+        a new password cannot be chosen from the password_reuse_history most
+        recent passwords. For example, minimum number of password changes is
+        set to 3, a new password cannot be the same as any of the most recent
+        3 passwords.
+      - If an account is restricted based on time elapsed, a new password can't
+        be chosen from those in the history that are newer than the number of
+        day set to password_reuse_interval. For example, if the password reuse
+        interval is set to 365, new password must not be among those previously
+        chosen within the last year.
+    
+    Thanks to Umair Shahid and Gabi201265 for the feature request.
+
+  - Force PostgreSQL to not expose the password in the log when an error
+    in CREATE/ALTER role occurs. This behavior can be disabled by setting
+    the custom variable credcheck.no_password_logging to off.
+
+  - Add possibility to enforce the use of an expiration date for a password
+    with a life time of a specific number of days. Ex:
+      credcheck.password_valid_until = 60
+    the password life time must be at least of two months.
+    Thanks to Umair Shahid for the feature request.
+
+  - Allow credcheck to check the user name in CREATE USER statement without
+    option PASSWORD. Thanks to freeDev84 for the feature report.
+
+  - Force credcheck settings to be set/changed only by a superuser.
+    This fix will break backward compatibility if you use SET credcheck.* on
+    a non superuser connection.
+
+  - Fix detection of the VALID UNTIL clause in CREATE ROLE. Thanks to did16 for
+    the report.
+
+  - Use errcode ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION (28000) for most error messages.
+
+
+2021-09-20 - Version 0.2.0
+
+This release adds support to PostgreSQL v14 and fix some minor issues
+reported by users since the last 3 months.
+
+  - Remove SQL extension file as it is empty and not required.
+  - Fix compilation error with PostgreSQL v14, thanks to Devrim Gunduz
+    for the report. [ patch from Gilles Darold ]
+  - Add upgrade SQL script for extension. [ patch from Gilles Darold ]
+  - Ignore char repeat checks, if the string size is 1
+    also changing the comment style. [ patch from Dinesh Kumar ]
+  - Adding file header content. [ patch from Dinesh Kumar ]
+  - Typo fix in docs. [ patch from Dinesh Kumar ]
+
+2021-06-25 - Version 0.1.1
+
+This release adds minor fixes to ignore char repeat checks if the string
+size is 1 and also change the comment style in C code.
+
+2021-06-24 - Version 0.1.0
+
+This is the first release of credcheck extension, which is a credential
+checker for the PostgreSQL users.
