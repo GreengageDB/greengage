@@ -2463,7 +2463,7 @@ pg_banned_role_internal(FunctionCallInfo fcinfo)
 		memset(values, 0, sizeof(values));
 		memset(nulls, 0, sizeof(nulls));
 
-		values[i++] = Int8GetDatum(entry->key.roleid);
+		values[i++] = ObjectIdGetDatum(entry->key.roleid);
 		values[i++] = Int8GetDatum(entry->failure_count);
 		if (entry->banned_date)
 			values[i++] = TimestampTzGetDatum(entry->banned_date);
