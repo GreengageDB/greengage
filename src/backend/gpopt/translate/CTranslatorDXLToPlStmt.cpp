@@ -245,6 +245,10 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 
 	topslice = &planned_stmt->slices[0];
 
+	// Always set the REWIND flag for subplans, since ORCA cannot generate
+	// InitPlans.
+	planned_stmt->rewindPlanIDs = m_dxl_to_plstmt_context->GetSubplanPlanIds();
+
 	// Can we do direct dispatch?
 	if (CMD_SELECT == m_cmd_type &&
 		nullptr != dxlnode->GetDXLDirectDispatchInfo())

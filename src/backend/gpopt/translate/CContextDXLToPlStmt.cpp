@@ -50,7 +50,8 @@ CContextDXLToPlStmt::CContextDXLToPlStmt(
 	  m_result_relation_index(0),
 	  m_into_clause(nullptr),
 	  m_distribution_policy(nullptr),
-	  m_part_selector_to_param_map(nullptr)
+	  m_part_selector_to_param_map(nullptr),
+	  m_subplan_planids_bms(nullptr)
 {
 	m_cte_consumer_info = GPOS_NEW(m_mp) HMUlCTEConsumerInfo(m_mp);
 	m_part_selector_to_param_map = GPOS_NEW(m_mp) UlongToUlongMap(m_mp);
@@ -587,6 +588,12 @@ CContextDXLToPlStmt::GetRTEIndexByAssignedQueryId(
 	//	`assigned_query_id_for_target_rel` of table descriptor which points to
 	//	result relation wasn't previously processed - create a new index.
 	return gpdb::ListLength(m_rtable_entries_list) + 1;
+}
+
+void
+CContextDXLToPlStmt::AddSubplanPlanId(int id)
+{
+	m_subplan_planids_bms = gpdb::BmsAddMember(m_subplan_planids_bms, id);
 }
 
 // EOF

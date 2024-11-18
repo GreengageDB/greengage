@@ -3996,3 +3996,14 @@ reset optimizer;
 drop table outer_foo;
 drop table inner_bar;
 drop table t;
+-- Make sure we don't mark InitPlans as rescannable.
+create table foo (i int, j int) distributed by (i);
+create table bar (i int, j int) distributed by (j);
+with cte as (update foo set i = 2 returning foo.i)
+select * from bar where 2 = (select cte.i from cte);
+ i | j 
+---+---
+(0 rows)
+
+drop table foo;
+drop table bar;

@@ -135,6 +135,8 @@ private:
 	// hash map of the queryid (of DML query) and the target relation index
 	HMUlIndex *m_used_rte_indexes;
 
+	Bitmapset *m_subplan_planids_bms;
+
 public:
 	// ctor/dtor
 	CContextDXLToPlStmt(CMemoryPool *mp, CIdGenerator *plan_id_counter,
@@ -248,6 +250,14 @@ public:
 
 	Index GetRTEIndexByAssignedQueryId(ULONG assigned_query_id_for_target_rel,
 									   BOOL *is_rte_exists);
+
+	void AddSubplanPlanId(int id);
+
+	Bitmapset *
+	GetSubplanPlanIds()
+	{
+		return m_subplan_planids_bms;
+	}
 };
 
 }  // namespace gpdxl
