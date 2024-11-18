@@ -201,19 +201,6 @@ static inline void RestoreCommandId(QueryDesc *queryDesc, int prevCommandId, con
 
 /* end of local decls */
 
-/*
- * For a partitioned insert target only:  
- * This type represents an entry in the per-part hash table stored at
- * estate->es_partition_state->result_partition_hash.   The table maps 
- * part OID -> ResultRelInfo and avoids repeated calculation of the
- * result information.
- */
-typedef struct ResultPartHashEntry 
-{
-	Oid			targetid; /* OID of part relation */
-	ResultRelInfo resultRelInfo;
-} ResultPartHashEntry;
-
 
 typedef struct CopyDirectDispatchToSliceContext
 {

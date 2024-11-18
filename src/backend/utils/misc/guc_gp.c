@@ -5811,7 +5811,7 @@ dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_expl
 
 	initStringInfo( &buffer );
 
-	appendStringInfo(&buffer, "SET ");
+	appendStringInfo(&buffer, "SELECT pg_catalog.set_config(%s, ", quote_literal_cstr(gconfig->name));
 
 	switch (gconfig->vartype)
 	{
@@ -5819,21 +5819,21 @@ dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_expl
 		{
 			struct config_bool *bguc = (struct config_bool *) gconfig;
 
-			appendStringInfo(&buffer, "%s TO %s", gconfig->name, *(bguc->variable) ? "true" : "false");
+			appendStringInfoString(&buffer, *(bguc->variable) ? "'true'" : "'false'");
 			break;
 		}
 		case PGC_INT:
 		{
 			struct config_int *iguc = (struct config_int *) gconfig;
 
-			appendStringInfo(&buffer, "%s TO %d", gconfig->name, *iguc->variable);
+			appendStringInfo(&buffer, "'%d'", *iguc->variable);
 			break;
 		}
 		case PGC_REAL:
 		{
 			struct config_real *rguc = (struct config_real *) gconfig;
 
-			appendStringInfo(&buffer, " %s TO %f", gconfig->name, *rguc->variable);
+			appendStringInfo(&buffer, "'%f'", *rguc->variable);
 			break;
 		}
 		case PGC_STRING:
@@ -5841,39 +5841,7 @@ dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_expl
 			struct config_string *sguc = (struct config_string *) gconfig;
 			const char *str = *sguc->variable;
 
-			appendStringInfo(&buffer, "%s TO ", gconfig->name);
-
-			/*
-			 * If it's a list, we need to split the list into elements and
-			 * quote the elements individually.
-			 * else if it's empty or not a list, we should quote the whole src.
-			 *
-			 * This is the copied from pg_get_functiondef()'s handling of
-			 * proconfig options.
-			 */
-			if (sguc->gen.flags & GUC_LIST_QUOTE && str[0] != '\0')
-			{
-				List       *namelist;
-				ListCell   *lc;
-
-				/* Parse string into list of identifiers */
-				if (!SplitGUCList((char *) pstrdup(str), ',', &namelist))
-				{
-					/* this shouldn't fail really */
-					elog(ERROR, "invalid list syntax in proconfig item");
-				}
-				foreach(lc, namelist)
-				{
-					char       *curname = (char *) lfirst(lc);
-
-					appendStringInfoString(&buffer, quote_literal_cstr(curname));
-					if (lnext(lc))
-						appendStringInfoString(&buffer, ", ");
-				}
-			}
-			else
-				appendStringInfoString(&buffer, quote_literal_cstr(str));
-
+			appendStringInfoString(&buffer, quote_literal_cstr(str));
 			break;
 		}
 		case PGC_ENUM:
@@ -5881,28 +5849,16 @@ dispatch_sync_pg_variable_internal(struct config_generic * gconfig, bool is_expl
 			struct config_enum *eguc = (struct config_enum *) gconfig;
 			int			value = *eguc->variable;
 			const char *str = config_enum_lookup_by_value(eguc, value);
-			int			i;
 
-			appendStringInfo(&buffer, "%s TO ", gconfig->name);
-
-			/*
-			 * All whitespace characters must be escaped. See
-			 * pg_split_opts() in the backend. (Not sure if an enum value
-			 * can have whitespace, but let's be prepared.)
-			 */
-			for (i = 0; str[i] != '\0'; i++)
-			{
-				if (isspace((unsigned char) str[i]))
-					appendStringInfoChar(&buffer, '\\');
-
-				appendStringInfoChar(&buffer, str[i]);
-			}
+			appendStringInfoString(&buffer, quote_literal_cstr(str));
 			break;
 		}
 		default:
 			Insist(false);
 
 	}
+
+	appendStringInfo(&buffer, ", false)");
 
 	if (is_explicit)
 		CdbDispatchSetCommandForSync(buffer.data);

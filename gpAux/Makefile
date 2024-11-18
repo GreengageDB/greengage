@@ -137,6 +137,7 @@ ubuntu18.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapredu
 ubuntu20.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 ubuntu22.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 sles12_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+redos7.3_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 BLD_CONFIGFLAGS=$($(BLD_ARCH)_CONFIGFLAGS)
 
 CONFIGFLAGS=$(strip $(BLD_CONFIGFLAGS) --with-pgport=$(DEFPORT) $(BLD_DEPLOYMENT_SETTING))

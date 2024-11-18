@@ -13,4 +13,11 @@
 #define GPOS_ASSERTS_ONLY
 #endif
 
+#ifdef GPOS_DEBUG
+// mark that the function can throw an exception
+#define GPOS_NOEXCEPT noexcept(false)
+#else
+#define GPOS_NOEXCEPT noexcept
+#endif
+
 #endif	// !GPOS_attributes_H

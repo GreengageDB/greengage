@@ -374,3 +374,13 @@ EXPLAIN INSERT INTO partition_key_dropped VALUES(3);
 
 INSERT INTO partition_key_dropped VALUES(3);
 ERROR:  no partition for partitioning key  (seg0 127.0.0.1:6002 pid=12782)
+-- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
+SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: WITH ORDINALITY
+ value | ordinality 
+-------+------------
+ "b"   |          1
+ "a"   |          2
+(2 rows)
+

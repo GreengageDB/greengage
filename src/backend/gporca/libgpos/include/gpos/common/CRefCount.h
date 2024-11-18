@@ -61,7 +61,7 @@ public:
 	}
 
 	// dtor
-	virtual ~CRefCount()
+	virtual ~CRefCount() GPOS_NOEXCEPT
 	{
 		// enforce strict ref-counting unless we're in a pending exception,
 		// e.g., a ctor has thrown

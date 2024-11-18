@@ -72,6 +72,7 @@ CreateGangFunc pCreateGangFunc = cdbgang_createGang_async;
 
 static bool NeedResetSession = false;
 static Oid	OldTempNamespace = InvalidOid;
+static Oid	OldTempToastNamespace = InvalidOid;
 
 /*
  * cdbgang_createGang:
@@ -773,58 +774,93 @@ void DisconnectAndDestroyUnusedQEs(void)
 /*
  * Drop any temporary tables associated with the current session and
  * use a new session id since we have effectively reset the session.
- *
- * Call this procedure outside of a transaction.
  */
 void
 CheckForResetSession(void)
 {
+	GpResetSessionIfNeeded();
+	GpDropTempTables();
+}
+/*
+ * Check if there is a temporary namespace awaiting deletion.
+ */
+bool
+GpHasTempNamespaceForDeletion(void)
+{
+	return OidIsValid(OldTempNamespace);
+}
+
+/*
+ * Resets a session and starts a new one if the reset is needed.
+ * To be called before GpDropTempTables.
+ */
+void
+GpResetSessionIfNeeded(void)
+{
 	int			oldSessionId = 0;
 	int			newSessionId = 0;
-	Oid			dropTempNamespaceOid;
-
-	if (!NeedResetSession)
-		return;
 
 	/* Do the session id change early. */
-
-	/* If we have gangs, we can't change our session ID. */
-	Assert(!cdbcomponent_qesExist());
-
-	oldSessionId = gp_session_id;
-	ProcNewMppSessionId(&newSessionId);
-
-	gp_session_id = newSessionId;
-	gp_command_count = 0;
-	MyProc->queryCommandId = 0;
-	pgstat_report_sessionid(newSessionId);
-
-	/* Update the slotid for our singleton reader. */
-	if (SharedLocalSnapshotSlot != NULL)
+	if (NeedResetSession)
 	{
-		LWLockAcquire(SharedLocalSnapshotSlot->slotLock, LW_EXCLUSIVE);
-		SharedLocalSnapshotSlot->slotid = gp_session_id;
-		LWLockRelease(SharedLocalSnapshotSlot->slotLock);
+		/* If we have gangs, we can't change our session ID. */
+		Assert(!cdbcomponent_qesExist());
+
+		oldSessionId = gp_session_id;
+		ProcNewMppSessionId(&newSessionId);
+
+		gp_session_id = newSessionId;
+		gp_command_count = 0;
+		MyProc->queryCommandId = 0;
+		pgstat_report_sessionid(newSessionId);
+
+		/* Update the slotid for our singleton reader. */
+		if (SharedLocalSnapshotSlot != NULL)
+		{
+			LWLockAcquire(SharedLocalSnapshotSlot->slotLock, LW_EXCLUSIVE);
+			SharedLocalSnapshotSlot->slotid = gp_session_id;
+			LWLockRelease(SharedLocalSnapshotSlot->slotLock);
+		}
+
+		elog(LOG, "The previous session was reset because its gang was disconnected (session id = %d). "
+			 "The new session id = %d", oldSessionId, newSessionId);
 	}
 
-	elog(LOG, "The previous session was reset because its gang was disconnected (session id = %d). "
-		 "The new session id = %d", oldSessionId, newSessionId);
+	NeedResetSession = false;
+}
 
+/*
+ * Drop temporary tables if any are awaiting deletion.
+ * If called from within a transaction, does nothing and
+ * defers the deletion to the call from PostgresMain.
+ */
+void
+GpDropTempTables(void)
+{
+	Oid			dropTempNamespaceOid;
+	Oid			dropTempToastNamespaceOid;
+
+	/*
+	 * When it's in transaction block, need to bump the session id, e.g. retry COMMIT PREPARED,
+	 * but defer drop temp table to the main loop in PostgresMain().
+	 */
 	if (IsTransactionOrTransactionBlock())
-	{
-		NeedResetSession = false;
 		return;
-	}
 
 	dropTempNamespaceOid = OldTempNamespace;
+	dropTempToastNamespaceOid = OldTempToastNamespace;
 	OldTempNamespace = InvalidOid;
-	NeedResetSession = false;
+	OldTempToastNamespace = InvalidOid;
 
 	if (dropTempNamespaceOid != InvalidOid)
 	{
+		MemoryContext oldcontext = CurrentMemoryContext;
+
 		PG_TRY();
 		{
 			DropTempTableNamespaceForResetSession(dropTempNamespaceOid);
+			/* drop pg_temp_N schema entry from pg_namespace */
+			DropTempTableNamespaceEntryForResetSession(dropTempNamespaceOid, dropTempToastNamespaceOid);
 		} PG_CATCH();
 		{
 			/*
@@ -837,18 +873,30 @@ CheckForResetSession(void)
 			}
 
 			EmitErrorReport();
+
+			MemoryContextSwitchTo(oldcontext);
 			FlushErrorState();
+			AbortCurrentTransaction();
 		} PG_END_TRY();
+
+		CancelRemoveTempRelationsCallback();
 	}
 }
 
-void
-resetSessionForPrimaryGangLoss(void)
+static void
+GpScheduleSessionResetInternal(bool primaryGangLoss)
 {
-	if (ProcCanSetMppSessionId())
+	/*
+ 	 * GpScheduleSessionResetInternal could be called twice in a transacion,
+ 	 * we need to use NeedResetSession to double check if we should do the
+ 	 * real work to avoid that OldTempToastNamespace be makred invalid before
+ 	 * cleaning up the temp namespace.
+ 	 */
+	if (ProcCanSetMppSessionId() && !NeedResetSession)
 	{
 		/*
-		 * Not too early.
+		 * Schedule this session for reset.
+		 * Reset will happen on the next GpResetSessionIfNeeded call.
 		 */
 		NeedResetSession = true;
 
@@ -861,14 +909,21 @@ resetSessionForPrimaryGangLoss(void)
 		 */
 		if (TempNamespaceOidIsValid())
 		{
+
+			OldTempToastNamespace = GetTempToastNamespace();
 			/*
 			 * Here we indicate we don't have a temporary table namespace
 			 * anymore so all temporary tables of the previous session will be
 			 * inaccessible.  Later, when we can start a new transaction, we
 			 * will attempt to actually drop the old session tables to release
 			 * the disk space.
+			 * This will happen on the next GpDropTempTables call that isn't
+			 * inside a transaction.
 			 */
 			OldTempNamespace = ResetTempNamespace();
+
+			if (!primaryGangLoss)
+				return;
 
 			elog(WARNING,
 				 "Any temporary tables for this session have been dropped "
@@ -876,8 +931,37 @@ resetSessionForPrimaryGangLoss(void)
 				 gp_session_id);
 		}
 		else
+		{
 			OldTempNamespace = InvalidOid;
+			OldTempToastNamespace = InvalidOid;
+		}
 	}
+}
+
+/*
+ * Schedule this session for reset and register temporary tables for deletion.
+ * This function doesn't actually reset or delete anything by itself,
+ * the session will be reset on the next GpResetSessionIfNeeded call,
+ * and the temporary tables will be dropped by GpDropTempTables.
+ * Outputs a warning about dropping temporary tables.
+ */
+void
+resetSessionForPrimaryGangLoss(void)
+{
+	GpScheduleSessionResetInternal(true);
+}
+
+/*
+ * Schedule this session for reset and register temporary tables for deletion.
+ * This function doesn't actually reset or delete anything by itself,
+ * the session will be reset on the next GpResetSessionIfNeeded call,
+ * and the temporary tables will be dropped by GpDropTempTables.
+ * Does not output a warning about dropping temporary tables.
+ */
+void
+GpScheduleSessionReset(void)
+{
+	GpScheduleSessionResetInternal(false);
 }
 
 /*

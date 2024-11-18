@@ -526,6 +526,9 @@ static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 %type <node>	TableConstraint TableLikeClause
 %type <ival>	TableLikeOptionList TableLikeOption
 %type <list>	ColQualList
+%type <node>	NullColConstraintElem DefaultColConstraintElem
+%type <node>	ExtColConstraintElem
+%type <list>	ExtColQualList
 %type <node>	ColConstraint ColConstraintElem ConstraintAttr
 %type <ival>	key_actions key_delete key_match key_update key_action
 %type <ival>	ConstraintAttributeSpec ConstraintAttributeElem
@@ -4388,7 +4391,8 @@ opt_storage_encoding: ENCODING definition { $$ = $2; }
  * conflict on NOT (since NOT might start a subsequent NOT NULL constraint,
  * or be part of a_expr NOT LIKE or similar constructs).
  */
-ColConstraintElem:
+
+NullColConstraintElem:
 			NOT NULL_P
 				{
 					Constraint *n = makeNode(Constraint);
@@ -4403,6 +4407,23 @@ ColConstraintElem:
 					n->location = @1;
 					$$ = (Node *)n;
 				}
+		;
+
+DefaultColConstraintElem:
+			DEFAULT b_expr
+				{
+					Constraint *n = makeNode(Constraint);
+					n->contype = CONSTR_DEFAULT;
+					n->location = @1;
+					n->raw_expr = $2;
+					n->cooked_expr = NULL;
+					$$ = (Node *)n;
+				}
+		;
+
+ColConstraintElem:
+			NullColConstraintElem 					{ $$ = $1; }
+			| DefaultColConstraintElem				{ $$ = $1; }
 			| UNIQUE opt_definition OptConsTableSpace
 				{
 					Constraint *n = makeNode(Constraint);
@@ -4432,15 +4453,6 @@ ColConstraintElem:
 					n->location = @1;
 					n->is_no_inherit = $5;
 					n->raw_expr = $3;
-					n->cooked_expr = NULL;
-					$$ = (Node *)n;
-				}
-			| DEFAULT b_expr
-				{
-					Constraint *n = makeNode(Constraint);
-					n->contype = CONSTR_DEFAULT;
-					n->location = @1;
-					n->raw_expr = $2;
 					n->cooked_expr = NULL;
 					$$ = (Node *)n;
 				}
@@ -5681,19 +5693,32 @@ ExtTableElement:
 			| TableLikeClause				{ $$ = $1; }
 			;
 
-/* column def for ext table - doesn't have room for constraints */
-ExtcolumnDef:	ColId Typename
+/* column def for ext table - allowed to have NOT NULL and DEFAULT constraints */
+ExtcolumnDef:	ColId Typename ExtColQualList
 		{
 			ColumnDef *n = makeNode(ColumnDef);
 			n->colname = $1;
 			n->typeName = $2;
 			n->is_local = true;
 			n->is_not_null = false;
-			n->constraints = NIL;
+			n->raw_default = NULL;
+			n->cooked_default = NULL;
+			n->constraints = $3;
+			n->location = @1;
 			$$ = (Node *)n;
 		}
 		;
-	
+
+ExtColConstraintElem:
+			NullColConstraintElem 					{ $$ = $1; }
+			| DefaultColConstraintElem				{ $$ = $1; }
+		;
+
+ExtColQualList:
+			ExtColQualList ExtColConstraintElem		{ $$ = lappend($1, $2); }
+			| /*EMPTY*/								{ $$ = NIL; }
+		;
+
 /*
  * Single row error handling SQL
  */

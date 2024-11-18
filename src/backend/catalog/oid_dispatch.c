@@ -508,7 +508,7 @@ CreateKeyFromCatalogTuple(Relation catalogrel, HeapTuple tuple,
  * during plannign stage to touch oid assignments.
  *
  */
-extern List*
+List*
 SaveOidAssignments()
 {
 	List     *src = NIL;
@@ -529,7 +529,7 @@ SaveOidAssignments()
 	return src;
 }
 
-extern void
+void
 RestoreOidAssignments(List *oid_assignments)
 {
 	List          **target;

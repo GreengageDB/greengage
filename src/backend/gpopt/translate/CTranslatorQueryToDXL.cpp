@@ -3131,6 +3131,12 @@ CTranslatorQueryToDXL::TranslateFromClauseToDXL(Node *node)
 					   GPOS_WSZ_LIT("LATERAL"));
 		}
 
+		if (rte->funcordinality)
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("WITH ORDINALITY"));
+		}
+
 		static const SRTETranslator dxlop_translator_func_mapping_array[] = {
 			{RTE_RELATION, &CTranslatorQueryToDXL::TranslateRTEToDXLLogicalGet},
 			{RTE_VALUES, &CTranslatorQueryToDXL::TranslateValueScanRTEToDXL},

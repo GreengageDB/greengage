@@ -63,7 +63,7 @@ public:
 	CAutoMemoryPool(ELeakCheck leak_check_type = ElcExc);
 
 	// dtor
-	~CAutoMemoryPool();
+	~CAutoMemoryPool() noexcept(false);
 
 	// accessor
 	CMemoryPool *

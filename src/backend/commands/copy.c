@@ -161,6 +161,9 @@ static uint64 CopyTo(CopyState cstate);
 static uint64 CopyFrom(CopyState cstate);
 static uint64 CopyDispatchOnSegment(CopyState cstate, const CopyStmt *stmt);
 static uint64 CopyToQueryOnSegment(CopyState cstate);
+static void CopyFromUpdateAOInsertCountInPartitions(HTAB *partition_hash,
+									HTAB *tupcounts_ht, List *ao_segnos);
+static void CopyFromUpdateAOInsertCount(ResultRelInfo *resultRelInfo, int64 tupcount);
 static void CopyFromInsertBatch(CopyState cstate, EState *estate,
 					CommandId mycid, int hi_options,
 					ResultRelInfo *resultRelInfo, TupleTableSlot *myslot,
@@ -4400,23 +4403,33 @@ CopyFrom(CopyState cstate)
 
 			if (relstorage_is_ao(RelinfoGetStorage(resultRelInfo)))
 			{
-				int64 tupcount;
+				int64 tupcount = 0;
 
 				if (cdbCopy->aotupcounts)
 				{
 					HTAB *ht = cdbCopy->aotupcounts;
-					struct {
-						Oid relid;
-						int64 tupcount;
-					} *ao;
 					bool found;
 					Oid relid = RelationGetRelid(resultRelInfo->ri_RelationDesc);
 
-					ao = hash_search(ht, &relid, HASH_FIND, &found);
+					PQaoRelTupCount *ao = hash_search(ht, &relid,
+													  HASH_FIND, &found);
 					if (found)
+					{
 						tupcount = ao->tupcount;
-					else
-						tupcount = 0;
+						if (resultRelInfo->ri_partition_hash)
+						{
+							/*
+							* Since `ri_partition_hash` contains information only
+							* about leaf partitions, the counts will be updated only
+							* for the lowest level partitions. This is fine as
+							* there are no auxiliary segment tables for the 
+							* intermediate level partitions.
+							*/
+							CopyFromUpdateAOInsertCountInPartitions(
+								resultRelInfo->ri_partition_hash,
+								ht, cstate->ao_segnos);
+						}
+					}
 				}
 				else
 				{
@@ -4426,10 +4439,7 @@ CopyFrom(CopyState cstate)
 				/* find out which segnos the result rels in the QE's used */
 				ResultRelInfoSetSegno(resultRelInfo, cstate->ao_segnos);
 
-				if (resultRelInfo->ri_aoInsertDesc)
-					resultRelInfo->ri_aoInsertDesc->insertCount += tupcount;
-				if (resultRelInfo->ri_aocsInsertDesc)
-					resultRelInfo->ri_aocsInsertDesc->insertCount += tupcount;
+				CopyFromUpdateAOInsertCount(resultRelInfo, tupcount);
 			}
 		}
 	}
@@ -4471,6 +4481,49 @@ CopyFrom(CopyState cstate)
 	}
 
 	return processed;
+}
+
+/*
+ * A subroutine to update the insert counts in all partitions for AO relations.
+ */
+static void CopyFromUpdateAOInsertCountInPartitions(HTAB *partition_hash, 
+													HTAB *tupcounts_ht,
+													List *ao_segnos)
+{
+	HASH_SEQ_STATUS hash_seq_status;
+	ResultPartHashEntry *entry;
+
+	hash_seq_init(&hash_seq_status, partition_hash);
+	while ((entry = hash_seq_search(&hash_seq_status)) != NULL)
+	{
+		ResultRelInfo *partInfo = &entry->resultRelInfo;
+
+		if (relstorage_is_ao(RelinfoGetStorage(partInfo)))
+		{
+			bool found;
+			Oid partRelid = RelationGetRelid(partInfo->ri_RelationDesc);
+			PQaoRelTupCount *ao = hash_search(tupcounts_ht, &partRelid,
+											  HASH_FIND, &found);
+			if (found)
+			{
+				ResultRelInfoSetSegno(partInfo, ao_segnos);
+				CopyFromUpdateAOInsertCount(partInfo, ao->tupcount);
+			}
+		}
+	}
+}
+
+/*
+ * Increments the insert count for AO insert descriptors 
+ * by adding the `tupcount` value.
+ */
+static void CopyFromUpdateAOInsertCount(ResultRelInfo *resultRelInfo,
+										int64 tupcount)
+{
+	if (resultRelInfo->ri_aoInsertDesc)
+		resultRelInfo->ri_aoInsertDesc->insertCount += tupcount;
+	if (resultRelInfo->ri_aocsInsertDesc)
+		resultRelInfo->ri_aocsInsertDesc->insertCount += tupcount;
 }
 
 /*

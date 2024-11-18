@@ -232,6 +232,19 @@ typedef struct AttrMap
 	AttrNumber attr_map[1];
 } AttrMap;
 
+/*
+ * For a partitioned insert target only:  
+ * This type represents an entry in the per-part hash table stored at
+ * estate->es_partition_state->result_partition_hash.   The table maps 
+ * part OID -> ResultRelInfo and avoids repeated calculation of the
+ * result information.
+ */
+typedef struct ResultPartHashEntry 
+{
+	Oid			targetid; /* OID of part relation */
+	ResultRelInfo resultRelInfo;
+} ResultPartHashEntry;
+
 extern void ExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void standard_ExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void ExecutorRun(QueryDesc *queryDesc,

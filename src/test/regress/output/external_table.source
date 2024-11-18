@@ -256,9 +256,9 @@ WARNING:  "ext" is an external table. ALTER TABLE for external tables is depreca
 HINT:  Use ALTER EXTERNAL TABLE instead
 alter external table ext add column a int; -- pass
 alter external table ext drop column a; -- pass
-alter external table ext add column extnewcol int not null; -- should fail (constraints not allowed)
-ERROR:  unsupported ALTER command for external table
-DETAIL:  No constraints allowed.
+alter external table ext add column extnewcol int not null; -- should output a warning
+WARNING:  NOT NULL constraints on readable external tables are ignored
+alter external table ext drop column extnewcol; -- pass
 alter external table ext add column extnewcol int; -- pass
 alter external table ext alter column extnewcol set default 1; -- should pass
 alter external table ext alter column x type integer using 123; -- should fail (USING doesn't make sense on external table)
@@ -2937,8 +2937,43 @@ DROP PROTOCOL if exists demoprot2;
 CREATE EXTERNAL TABLE SERIAL (a serial, x text)
 LOCATION ('file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl')
 FORMAT 'csv';
+WARNING:  NOT NULL constraints on readable external tables are ignored
+\d SERIAL
+                External table "public.serial"
+ Column |  Type   |                 Modifiers                 
+--------+---------+-------------------------------------------
+ a      | integer | default nextval('serial_a_seq'::regclass)
+ x      | text    | 
+Type: readable
+Encoding: UTF8
+Format type: csv
+Format options: delimiter ',' null '' escape '"' quote '"'
+External options: {}
+External location: file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl
+Execute on: all segments
+
+CREATE TABLE SERIAL_NORMAL (a serial, x text);
+CREATE EXTERNAL TABLE SERIAL_LIKE (LIKE SERIAL_NORMAL)
+LOCATION ('file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl')
+FORMAT 'csv';
+\d SERIAL_LIKE
+External table "public.serial_like"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ a      | integer | 
+ x      | text    | 
+Type: readable
+Encoding: UTF8
+Format type: csv
+Format options: delimiter ',' null '' escape '"' quote '"'
+External options: {}
+External location: file://@hostname@@abs_srcdir@/data/no/such/place/serial.tbl
+Execute on: all segments
+
 -- drop temp external table
-DROP EXTERNAL TABLE IF EXISTS serial;
+DROP EXTERNAL TABLE SERIAL;
+DROP TABLE SERIAL_NORMAL;
+DROP EXTERNAL TABLE SERIAL_LIKE;
 -- External table query within plpgSQL function get error
 CREATE EXTERNAL TABLE exttab_error_context_callback(c1 int, c2 int)
 LOCATION ('file://@hostname@@abs_srcdir@/data/exttab.data') FORMAT 'TEXT';

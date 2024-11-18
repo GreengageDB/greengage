@@ -649,6 +649,112 @@ select count(*) from bad_location2;
 ERROR:  http response code 404 from gpfdist (gpfdist://@hostname@:7070/exttab1/non_existent_file.txt): HTTP/1.0 404 file not found
 drop external table bad_location2;
 --
+-- Test DEFAULT and NOT NULL
+--
+-- Test NOT NULL for readable (constraint should be ignored)
+CREATE EXTERNAL TABLE readable_not_null (a int, b int NOT NULL, c int NULL)
+LOCATION ('gpfdist://@hostname@:7070/exttab1/data_with_null.data')
+FORMAT 'text' (DELIMITER '|' NULL AS 'null');
+WARNING:  NOT NULL constraints on readable external tables are ignored
+SELECT a FROM readable_not_null WHERE b IS NULL; -- should work
+ a 
+---
+ 1
+(1 row)
+
+SELECT a FROM readable_not_null WHERE c IS NULL; -- should work
+ a 
+---
+ 3
+(1 row)
+
+-- Test NOT NULL with FILL MISSING FIELDS (constraint should be ignored)
+CREATE EXTERNAL TABLE readable_not_null_fill (a int, b int NOT NULL, c int NULL)
+LOCATION ('gpfdist://@hostname@:7070/exttab1/missing_fields1.data')
+FORMAT 'text' (DELIMITER '|' FILL MISSING FIELDS);
+WARNING:  NOT NULL constraints on readable external tables are ignored
+\d readable_not_null_fill
+External table "public.readable_not_null_fill"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ a      | integer | 
+ b      | integer | 
+ c      | integer | 
+Type: readable
+Encoding: UTF8
+Format type: text
+Format options: delimiter '|' null '\N' escape '\' fill missing fields
+External options: {}
+External location: gpfdist://@hostname@:7070/exttab1/missing_fields1.data
+Execute on: all segments
+
+-- Since constraint is ignored, we should be able to find the row despite b is NULL in the query
+SELECT a FROM readable_not_null_fill WHERE b IS NULL; -- should work
+ a 
+---
+ 3
+(1 row)
+
+SELECT a FROM readable_not_null_fill WHERE c IS NULL; -- should work
+ a 
+---
+ 2
+ 3
+ 4
+(3 rows)
+
+-- Test DEFAULT for readable
+-- DEFAULT doesn't affect readable tables, FILL MISSING FIELDS works like usual
+CREATE EXTERNAL TABLE readable_default_fill (a int, b int, c int DEFAULT 2222)
+LOCATION ('gpfdist://@hostname@:7070/exttab1/missing_fields1.data')
+FORMAT 'text' (DELIMITER '|' FILL MISSING FIELDS);
+SELECT a FROM readable_default_fill WHERE c = 2222; -- should be empty
+ a 
+---
+(0 rows)
+
+SELECT a FROM readable_default_fill WHERE c IS NULL; -- should work
+ a 
+---
+ 2
+ 3
+ 4
+(3 rows)
+
+-- Test NOT NULL and DEFAULT for readable
+-- If data actually has NULL values, DEFAULT won't help you
+CREATE EXTERNAL TABLE readable_not_null_default (a int, b int DEFAULT 1111, c int NOT NULL DEFAULT 2222)
+LOCATION ('gpfdist://@hostname@:7070/exttab1/data_with_null.data')
+FORMAT 'text' (DELIMITER '|' NULL AS 'null');
+WARNING:  NOT NULL constraints on readable external tables are ignored
+SELECT a FROM readable_not_null_default WHERE b = 1111; -- should be empty
+ a 
+---
+(0 rows)
+
+SELECT a FROM readable_not_null_default WHERE b IS NULL; -- should work
+ a 
+---
+ 1
+(1 row)
+
+SELECT a FROM readable_not_null_default WHERE c = 2222; -- should be empty
+ a 
+---
+(0 rows)
+
+SELECT a FROM readable_not_null_default WHERE c IS NULL; -- should work
+ a 
+---
+ 3
+(1 row)
+
+-- Cleanup
+DROP EXTERNAL TABLE readable_not_null;
+DROP EXTERNAL TABLE readable_not_null_fill;
+DROP EXTERNAL TABLE readable_default_fill;
+DROP EXTERNAL TABLE readable_not_null_default;
+--
 -- WET tests
 --
 --
@@ -957,9 +1063,97 @@ select a from ext_transform_free order by a;
  3
 (4 rows)
 
+--
+-- WET tests for DEFAULT and NOT NULL
+--
+-- delete output files from any previous runs
+\! rm -f @abs_srcdir@/data/wet_writable_not_null.data
+\! rm -f @abs_srcdir@/data/wet_writable_default.data
+-- Test NOT NULL for writable
+CREATE WRITABLE EXTERNAL TABLE writable_not_null (a int, b int NOT NULL, c int NULL)
+LOCATION ('gpfdist://@hostname@:7070/wet_writable_not_null.data')
+FORMAT 'text' (DELIMITER '|' NULL AS 'null');
+INSERT INTO writable_not_null(a, b, c) VALUES (1, 10, 100); -- should pass
+INSERT INTO writable_not_null(a, b, c) VALUES (2, NULL, 200); -- should fail
+ERROR:  null value in column "b" violates not-null constraint
+INSERT INTO writable_not_null(a, b, c) VALUES (3, 30, NULL); -- should pass
+INSERT INTO writable_not_null(a, c) VALUES (4, 400); -- should fail
+ERROR:  null value in column "b" violates not-null constraint
+INSERT INTO writable_not_null(a, b) VALUES (5, 50); -- should pass
+CREATE READABLE EXTERNAL TABLE readable_not_null (LIKE writable_not_null)
+LOCATION ('gpfdist://@hostname@:7070/wet_writable_not_null.data')
+FORMAT 'text' (DELIMITER '|' NULL AS 'null');
+SELECT a, b, c FROM readable_not_null;
+ a | b  |  c  
+---+----+-----
+ 1 | 10 | 100
+ 3 | 30 |    
+ 5 | 50 |    
+(3 rows)
+
+-- ALTER EXTERNAL TABLE can disable NOT NULL
+ALTER EXTERNAL TABLE writable_not_null ALTER COLUMN b DROP NOT NULL;
+INSERT INTO writable_not_null(a, b, c) VALUES (6, NULL, 600); -- should pass
+-- and put it back
+ALTER EXTERNAL TABLE writable_not_null ALTER COLUMN b SET NOT NULL;
+INSERT INTO writable_not_null(a, b, c) VALUES (7, NULL, 700); -- should fail
+ERROR:  null value in column "b" violates not-null constraint
+SELECT a, b, c FROM readable_not_null;
+ a | b  |  c  
+---+----+-----
+ 1 | 10 | 100
+ 3 | 30 |    
+ 5 | 50 |    
+ 6 |    | 600
+(4 rows)
+
+-- Test DEFAULT for writable, replaces missing fields, but not direct NULLs
+-- Should work with NOT NULL columns too
+CREATE WRITABLE EXTERNAL TABLE writable_default (a int, b int NOT NULL DEFAULT 1234, c int DEFAULT 5678)
+LOCATION ('gpfdist://@hostname@:7070/wet_writable_default.data')
+FORMAT 'text' (DELIMITER '|');
+INSERT INTO writable_default(a, b, c) VALUES (1, 10, 100); -- should pass
+INSERT INTO writable_default(a, b, c) VALUES (2, NULL, 200); -- should fail
+ERROR:  null value in column "b" violates not-null constraint
+INSERT INTO writable_default(a, b, c) VALUES (3, 30, NULL); -- should add NULL
+INSERT INTO writable_default(a, c) VALUES (4, 400); -- should replace with 1234
+INSERT INTO writable_default(a, b) VALUES (5, 50); -- should replace with 5678
+CREATE READABLE EXTERNAL TABLE readable_default (LIKE writable_default)
+LOCATION ('gpfdist://@hostname@:7070/wet_writable_default.data')
+FORMAT 'text' (DELIMITER '|');
+SELECT a, b, c FROM readable_default;
+ a |  b   |  c   
+---+------+------
+ 1 |   10 |  100
+ 3 |   30 |     
+ 4 | 1234 |  400
+ 5 |   50 | 5678
+(4 rows)
+
+-- ALTER EXTERNAL TABLE can change DEFAULT
+ALTER EXTERNAL TABLE writable_default ALTER COLUMN b SET DEFAULT 9999;
+INSERT INTO writable_default(a, c) VALUES (6, 600); -- should replace with 9999
+-- or disable it
+ALTER EXTERNAL TABLE writable_default ALTER COLUMN b DROP DEFAULT;
+INSERT INTO writable_default(a, c) VALUES (7, 700); -- should fail
+ERROR:  null value in column "b" violates not-null constraint
+SELECT a, b, c FROM readable_default;
+ a |  b   |  c   
+---+------+------
+ 1 |   10 |  100
+ 3 |   30 |     
+ 4 | 1234 |  400
+ 5 |   50 | 5678
+ 6 | 9999 |  600
+(5 rows)
+
 -- start_ignore
 -- end_ignore
 -- cleanup
+DROP EXTERNAL TABLE writable_not_null;
+DROP EXTERNAL TABLE readable_not_null;
+DROP EXTERNAL TABLE writable_default;
+DROP EXTERNAL TABLE readable_default;
 DROP EXTERNAL TABLE ext_transform_implicit;
 DROP EXTERNAL TABLE ext_w_transform_implicit;
 DROP EXTERNAL TABLE ext_transform_explicit;

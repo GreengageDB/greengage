@@ -60,7 +60,7 @@ static Datum optionsListToArray(List *options);
 * to leave it intact and do another dispatch.
 * ----------------------------------------------------------------
 */
-extern void
+void
 DefineExternalRelation(CreateExternalStmt *createExtStmt)
 {
 	CreateStmt *createStmt = makeNode(CreateStmt);
@@ -361,6 +361,32 @@ DefineExternalRelation(CreateExternalStmt *createExtStmt)
 									list_length(exttypeDesc->location_list),
 									getgpsegmentCount()),
 							 errhint("The table cannot be queried until cluster is expanded so that there are at least as many segments as locations.")));
+			}
+		}
+	}
+
+	/*
+	 * Check for NOT NULL column constraints in readable tables. Since
+	 * external tables don't have inheritance it is enough to check just
+	 * tableElts.
+	 */
+	if (!iswritable)
+	{
+		ListCell   *listptr;
+
+		foreach(listptr, createStmt->tableElts)
+		{
+			if (IsA(lfirst(listptr), ColumnDef))
+			{
+				ColumnDef  *colDef = lfirst(listptr);
+
+				if (colDef->is_not_null)
+				{
+					colDef->is_not_null = false;
+					ereport(WARNING,
+							(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+							 errmsg("NOT NULL constraints on readable external tables are ignored")));
+				}
 			}
 		}
 	}

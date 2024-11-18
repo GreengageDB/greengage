@@ -3648,8 +3648,6 @@ ATVerifyObject(AlterTableStmt *stmt, Relation rel)
 			{
 				/* EXTERNAL tables don't support the following AT */
 				case AT_ColumnDefaultRecurse:
-				case AT_DropNotNull:
-				case AT_SetNotNull:
 				case AT_SetStatistics:
 				case AT_SetStorage:
 				case AT_AddIndex:
@@ -3689,9 +3687,7 @@ ATVerifyObject(AlterTableStmt *stmt, Relation rel)
 					break;
 
 				case AT_AddColumn: /* check no constraint is added too */
-					if (((ColumnDef *) cmd->def)->constraints != NIL ||
-						((ColumnDef *) cmd->def)->is_not_null ||
-						((ColumnDef *) cmd->def)->raw_default)
+					if (((ColumnDef *) cmd->def)->constraints != NIL)
 						ereport(ERROR,
 								(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
 								 errmsg("unsupported ALTER command for external table"),
@@ -7605,6 +7601,20 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		elog(ERROR, "cache lookup failed for relation %u", myrelid);
 	relkind = ((Form_pg_class) GETSTRUCT(reltup))->relkind;
 
+	/* Check for NOT NULL constraints in external readable tables */
+	if (colDef->is_not_null && RelationIsExternal(rel))
+	{
+		ExtTableEntry *ext_table_entry = GetExtTableEntry(myrelid);
+
+		if (!ext_table_entry->iswritable)
+		{
+			colDef->is_not_null = false;
+			ereport(WARNING,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("NOT NULL constraints on readable external tables are ignored")));
+		}
+	}
+
 	/* new name should not already exist */
 	check_for_column_name_collision(rel, colDef->colname);
 
@@ -8174,6 +8184,19 @@ ATExecSetNotNull(AlteredTableInfo *tab, Relation rel,
 	HeapTuple	tuple;
 	AttrNumber	attnum;
 	Relation	attr_rel;
+
+	if (RelationIsExternal(rel))
+	{
+		ExtTableEntry *ext_table_entry = GetExtTableEntry(RelationGetRelid(rel));
+
+		if (!ext_table_entry->iswritable)
+		{
+			ereport(WARNING,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("NOT NULL constraints on readable external tables are ignored")));
+			return;
+		}
+	}
 
 	/*
 	 * lookup the attribute

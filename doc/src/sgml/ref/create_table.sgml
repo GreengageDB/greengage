@@ -443,7 +443,10 @@ Where column_reference_storage_directive is:
       default behavior is to exclude <literal>STORAGE</> settings, resulting
       in the copied columns in the new table having type-specific default
       settings.  For more on <literal>STORAGE</> settings, see
-      <xref linkend="storage-toast">.
+      <xref linkend="storage-toast">. Copied options also include
+      <literal>ENCODING</> settings and table-wide append-optimized options
+      (such as <literal>appendonly</>, <literal>orientation</>,
+      <literal>checksum</>, <literal>compresslevel</>, <literal>compresstype</>.)
      </para>
      <para>
       Comments for the copied columns, constraints, and indexes

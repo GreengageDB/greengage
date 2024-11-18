@@ -150,7 +150,7 @@ table\_name
 :   The name of the new external table.
 
 column\_name
-:   The name of a column to create in the external table definition. Unlike regular tables, external tables do not have column constraints or default values, so do not specify those.
+:   The name of a column to create in the external table definition. Unlike regular tables, external tables can only have NOT NULL constraints or DEFAULT values, no other column constraints are implemented. On readable tables NOT NULL constraints are ignored.
 
 LIKE other\_table
 :   The `LIKE` clause specifies a table from which the new external table automatically copies all column names, data types and Greenplum distribution policy. If the original table specifies any column constraints or default column values, those will not be copied over to the new external table definition.

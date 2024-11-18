@@ -218,8 +218,9 @@ CREATE WRITABLE EXTERNAL WEB [TEMPORARY | TEMP] TABLE table_name
     <listitem>
      <para>
       The name of a column to create in the external table. 
-	  Unlike regular tables, external tables do not have column 
-	  constraints or default values, so do not specify those.
+	  Unlike regular tables, external tables can only have NOT NULL
+	  constraints or DEFAULT values, no other column constraints are
+	  implemented. On readable tables NOT NULL constraints are ignored. 	  
      </para>
     </listitem>
    </varlistentry>

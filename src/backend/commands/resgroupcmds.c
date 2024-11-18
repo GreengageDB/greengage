@@ -1601,7 +1601,7 @@ checkCpusetSyntax(const char *cpuset)
 /*
  * Check Cpuset by coordinator and segment
  */
-extern void
+void
 checkCpuSetByRole(const char *cpuset)
 {
 	char *first = NULL;
@@ -1652,7 +1652,7 @@ checkCpuSetByRole(const char *cpuset)
  * cpuset = "1"
  * assign '1' to both coordinator and segment
  */
-extern char *
+char *
 getCpuSetByRole(const char *cpuset)
 {
 	char *splitcpuset = NULL;
