@@ -19,7 +19,7 @@ SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credte
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
 -- success, but the old password must be kept in the history (interval not reached)
-ALTER USER credtest PASSWORD 'AJ8YuRe=6O0';
+ALTER USER credtest PASSWORD 'AJ8YuRe=6O1';
 SELECT rolename, password_hash FROM pg_password_history WHERE rolename = 'credtest' ORDER BY password_date ;
 -- fail, the password is still present in the history
 ALTER USER credtest PASSWORD 'J8YuRe=6O';
