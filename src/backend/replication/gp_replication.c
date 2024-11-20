@@ -250,8 +250,17 @@ FTSReplicationStatusUpdateForWalState(const char *app_name, WalSndState state)
 	LWLockAcquire(FTSReplicationStatusLock, LW_SHARED);
 
 	replication_status = RetrieveFTSReplicationStatus(app_name, false /*skip_warn*/);
-	/* replication_status must exist */
-	Assert(replication_status);
+
+	/*
+	 * FTS and WAL working independently, it's still possible a condition when
+	 * FTS command to stop replication comes after replica starts. In this
+	 * case replication status slot can be already empty.
+	 */
+	if (replication_status == NULL)
+	{
+		LWLockRelease(FTSReplicationStatusLock);
+		return;
+	}
 
 	bool is_up;
 	SpinLockAcquire(&MyWalSnd->mutex);
