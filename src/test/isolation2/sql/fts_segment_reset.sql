@@ -23,11 +23,22 @@
 select gp_inject_fault_infinite('postmaster_delay_termination_bg_writer', 'skip', dbid)
 from gp_segment_configuration where role = 'p' and content = 0;
 
+-- prepare wait on QD for segment is in reset mode
+select gp_inject_fault('fts_segment_in_reset_mode', 'suspend', dbid) 
+from gp_segment_configuration WHERE content = -1 AND role = 'p';
+
 -- Now bring down primary of seg0. There're a lot of ways to do that, in order
 -- to better emulate a real-world scnarios we're injecting a PANIC to do that.
 1:select gp_inject_fault('start_prepare', 'panic', dbid) 
 from gp_segment_configuration where role = 'p' AND content = 0;
 1&:create table fts_reset_t(a int);
+
+-- Now wait for segment in reset mode
+select gp_wait_until_triggered_fault('fts_segment_in_reset_mode', 1, dbid) 
+from gp_segment_configuration WHERE content = -1 AND role = 'p';
+
+select gp_inject_fault('fts_segment_in_reset_mode', 'reset', dbid)
+from gp_segment_configuration WHERE content = -1 AND role = 'p';
 
 -- This should fail due to the seg0 in reset mode
 2&:create table fts_reset_t2(a int);
@@ -48,7 +59,7 @@ select dbid, role, preferred_role, status from gp_segment_configuration where co
 select gp_inject_fault('postmaster_delay_termination_bg_writer', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
 
 -- The only table that should have been created successfully
-drop table fts_reset_t3;
+3:drop table fts_reset_t3;
 
 -- In case anything goes wrong, we don't want to affect other tests. So rebalance the cluster anyway.
 !\retcode gprecoverseg -aF

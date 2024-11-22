@@ -283,6 +283,8 @@ checkIfFailedDueToNormalRestart(fts_segment_info *ftsInfo)
 				   ftsInfo->primary_cdbinfo->config->segindex,
 				   ftsInfo->primary_cdbinfo->config->dbid,
 				   ftsInfo->mirror_cdbinfo->config->dbid);
+
+		SIMPLE_FAULT_INJECTOR("fts_segment_in_reset_mode");
 	}
 }
 
