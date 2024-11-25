@@ -1261,6 +1261,354 @@ select j, (select 5) AS "Uncorrelated Field" from t;
 (1 row)
 
 -- start_ignore
+drop table if exists t1;
+NOTICE:  table "t1" does not exist, skipping
+drop table if exists t2;
+NOTICE:  table "t2" does not exist, skipping
+-- end_ignore
+create table t1 (a int) distributed by (a);
+create table t2 (a int, b float) distributed replicated;
+set gp_cte_sharing = on;
+-- ensure that the volatile function is executed on one segment
+-- if it is in the CTE target list or having qual
+explain (costs off, verbose) with cte as (
+    select a * random() as a from t2
+)
+select * from cte join (select * from t1 join cte using(a)) b using(a);
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: share0_ref1.a
+   ->  Hash Join
+         Output: share0_ref1.a
+         Hash Cond: (share0_ref2.a = share0_ref1.a)
+         ->  Hash Join
+               Output: share0_ref2.a
+               Hash Cond: ((t1.a)::double precision = share0_ref2.a)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: t1.a
+                     Hash Key: (t1.a)::double precision
+                     ->  Seq Scan on rpt.t1
+                           Output: t1.a
+               ->  Hash
+                     Output: share0_ref2.a
+                     ->  Redistribute Motion 1:3  (slice3; segments: 1)
+                           Output: share0_ref2.a
+                           Hash Key: share0_ref2.a
+                           ->  Result
+                                 Output: share0_ref2.a
+                                 ->  Shared Scan (share slice:id 3:0)
+                                       Output: share0_ref2.a
+         ->  Hash
+               Output: share0_ref1.a
+               ->  Redistribute Motion 1:3  (slice4; segments: 1)
+                     Output: share0_ref1.a
+                     Hash Key: share0_ref1.a
+                     ->  Result
+                           Output: share0_ref1.a
+                           ->  Shared Scan (share slice:id 4:0)
+                                 Output: share0_ref1.a
+                                 ->  Seq Scan on rpt.t2
+                                       Output: ((t2.a)::double precision * random())
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', gp_cte_sharing = 'on', optimizer = 'off'
+(35 rows)
+
+explain (costs off, verbose) with cte as (
+    select a, count(*) from t2 group by a having count(*) > random()
+)
+select * from cte join (select * from t1 join cte using(a)) b using(a);
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: share0_ref1.a, share0_ref1.count, cte.count
+   ->  Hash Join
+         Output: share0_ref1.a, share0_ref1.count, cte.count
+         Hash Cond: (t1.a = share0_ref1.a)
+         ->  Hash Join
+               Output: t1.a, cte.count
+               Hash Cond: (t1.a = cte.a)
+               ->  Seq Scan on rpt.t1
+                     Output: t1.a
+               ->  Hash
+                     Output: cte.count, cte.a
+                     ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                           Output: cte.count, cte.a
+                           Hash Key: cte.a
+                           ->  Result
+                                 Output: cte.count, cte.a
+                                 ->  Subquery Scan on cte
+                                       Output: cte.count, cte.a
+                                       ->  Shared Scan (share slice:id 2:0)
+                                             Output: share0_ref2.a, share0_ref2.count
+         ->  Hash
+               Output: share0_ref1.a, share0_ref1.count
+               ->  Redistribute Motion 1:3  (slice3; segments: 1)
+                     Output: share0_ref1.a, share0_ref1.count
+                     Hash Key: share0_ref1.a
+                     ->  Result
+                           Output: share0_ref1.a, share0_ref1.count
+                           ->  Shared Scan (share slice:id 3:0)
+                                 Output: share0_ref1.a, share0_ref1.count
+                                 ->  GroupAggregate
+                                       Output: t2.a, count(*)
+                                       Group Key: t2.a
+                                       Filter: ((count(*))::double precision > random())
+                                       ->  Sort
+                                             Output: t2.a
+                                             Sort Key: t2.a
+                                             ->  Seq Scan on rpt.t2
+                                                   Output: t2.a
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', gp_cte_sharing = 'on', optimizer = 'off'
+(41 rows)
+
+set gp_cte_sharing = off;
+explain (costs off, verbose) with cte as (
+    select a, a * random() from t2
+)
+select * from cte join t1 using(a);
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t2.a, (((t2.a)::double precision * random()))
+   ->  Hash Join
+         Output: t2.a, (((t2.a)::double precision * random()))
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Hash
+               Output: t2.a, (((t2.a)::double precision * random()))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: t2.a, (((t2.a)::double precision * random()))
+                     Hash Key: t2.a
+                     ->  Result
+                           Output: t2.a, (((t2.a)::double precision * random()))
+                           ->  Seq Scan on rpt.t2
+                                 Output: t2.a, ((t2.a)::double precision * random())
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(18 rows)
+
+explain (costs off, verbose) with cte as (
+    select a, count(*) from t2 group by a having count(*) > random()
+)
+select * from cte join t1 using(a);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t2.a, (count(*))
+   ->  Hash Join
+         Output: t2.a, (count(*))
+         Hash Cond: (t1.a = t2.a)
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Hash
+               Output: t2.a, (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: t2.a, (count(*))
+                     Hash Key: t2.a
+                     ->  Result
+                           Output: t2.a, (count(*))
+                           ->  GroupAggregate
+                                 Output: t2.a, count(*)
+                                 Group Key: t2.a
+                                 Filter: ((count(*))::double precision > random())
+                                 ->  Sort
+                                       Output: t2.a
+                                       Sort Key: t2.a
+                                       ->  Seq Scan on rpt.t2
+                                             Output: t2.a
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(25 rows)
+
+reset gp_cte_sharing;
+-- ensure that the volatile function is executed on one segment
+-- if it is in target list or having qual of subplan of multiset function
+explain (costs off, verbose) select * from (
+    SELECT count(*) as a FROM anytable_out( TABLE( SELECT random()::int from t2 ) )
+) a join t1 using(a);
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (count(*))
+   ->  Hash Join
+         Output: (count(*))
+         Inner Unique: true
+         Hash Cond: (t1.a = (count(*)))
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Hash
+               Output: (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: (count(*))
+                     Hash Key: (count(*))
+                     ->  Aggregate
+                           Output: count(*)
+                           ->  Result
+                                 ->  Table Function Scan on pg_catalog.anytable_out
+                                       ->  Seq Scan on rpt.t2
+                                             Output: (random())::integer
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(21 rows)
+
+explain (costs off, verbose) select * from (
+    SELECT anytable_out::varchar::int as a, count(*) FROM anytable_out( TABLE( SELECT * from t2 ) )
+    group by a having count(*) > random()
+) a join t1 using(a);
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (((anytable_out)::character varying)::integer), (count(*))
+   ->  Hash Join
+         Output: (((anytable_out)::character varying)::integer), (count(*))
+         Inner Unique: true
+         Hash Cond: (t1.a = (((anytable_out)::character varying)::integer))
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Hash
+               Output: (((anytable_out)::character varying)::integer), (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: (((anytable_out)::character varying)::integer), (count(*))
+                     Hash Key: (((anytable_out)::character varying)::integer)
+                     ->  Result
+                           Output: (((anytable_out)::character varying)::integer), (count(*))
+                           ->  GroupAggregate
+                                 Output: (((anytable_out)::character varying)::integer), count(*)
+                                 Group Key: (((anytable_out)::character varying)::integer)
+                                 Filter: ((count(*))::double precision > random())
+                                 ->  Sort
+                                       Output: (((anytable_out)::character varying)::integer)
+                                       Sort Key: (((anytable_out)::character varying)::integer)
+                                       ->  Table Function Scan on pg_catalog.anytable_out
+                                             Output: ((anytable_out)::character varying)::integer
+                                             ->  Seq Scan on rpt.t2
+                                                   Output: t2.a, t2.b
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(28 rows)
+
+-- ensure that the volatile function is executed on one segment
+-- if it is in the union target list or having qual
+explain (costs off, verbose) select * from (
+    select random() as a from t2
+    union
+    select random() as a from t2
+)
+a join t_hashdist on a.a = t_hashdist.a;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (random()), t_hashdist.a, t_hashdist.b, t_hashdist.c
+   ->  Hash Join
+         Output: (random()), t_hashdist.a, t_hashdist.b, t_hashdist.c
+         Inner Unique: true
+         Hash Cond: ((t_hashdist.a)::double precision = (random()))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+               Hash Key: (t_hashdist.a)::double precision
+               ->  Seq Scan on rpt.t_hashdist
+                     Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+         ->  Hash
+               Output: (random())
+               ->  Redistribute Motion 1:3  (slice3; segments: 1)
+                     Output: (random())
+                     Hash Key: (random())
+                     ->  HashAggregate
+                           Output: (random())
+                           Group Key: (random())
+                           ->  Append
+                                 ->  Result
+                                       Output: (random())
+                                       ->  Seq Scan on rpt.t2
+                                             Output: random()
+                                 ->  Result
+                                       Output: (random())
+                                       ->  Seq Scan on rpt.t2 t2_1
+                                             Output: random()
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(30 rows)
+
+explain (costs off, verbose) select * from (
+    select a, count(*) from t2 group by a having count(*) > random()
+    union
+    select a, count(*) from t2 group by a
+)
+a join t_hashdist on a.a = t_hashdist.a;
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t2.a, (count(*)), t_hashdist.a, t_hashdist.b, t_hashdist.c
+   ->  Hash Join
+         Output: t2.a, (count(*)), t_hashdist.a, t_hashdist.b, t_hashdist.c
+         Hash Cond: (t_hashdist.a = t2.a)
+         ->  Seq Scan on rpt.t_hashdist
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+         ->  Hash
+               Output: t2.a, (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: t2.a, (count(*))
+                     Hash Key: t2.a
+                     ->  HashAggregate
+                           Output: t2.a, (count(*))
+                           Group Key: t2.a, (count(*))
+                           ->  Append
+                                 ->  Result
+                                       Output: t2.a, (count(*))
+                                       ->  GroupAggregate
+                                             Output: t2.a, count(*)
+                                             Group Key: t2.a
+                                             Filter: ((count(*))::double precision > random())
+                                             ->  Sort
+                                                   Output: t2.a
+                                                   Sort Key: t2.a
+                                                   ->  Seq Scan on rpt.t2
+                                                         Output: t2.a
+                                 ->  GroupAggregate
+                                       Output: t2_1.a, count(*)
+                                       Group Key: t2_1.a
+                                       ->  Sort
+                                             Output: t2_1.a
+                                             Sort Key: t2_1.a
+                                             ->  Seq Scan on rpt.t2 t2_1
+                                                   Output: t2_1.a
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(37 rows)
+
+-- if there is a volatile function in the target list of a plan with the locus type
+-- General or Segment General, then such a plan should be executed on single
+-- segment, since it is assumed that nodes with such locus types will give the same
+-- result on all segments, which is impossible for a volatile function.
+-- start_ignore
+drop table if exists d;
+NOTICE:  table "d" does not exist, skipping
+drop table if exists r;
+NOTICE:  table "r" does not exist, skipping
+-- end_ignore
+create table r (a int, b int) distributed replicated;
+create table d (b int, a int default 1) distributed by (b);
+insert into d select * from generate_series(0, 20) j;
+-- change distribution without reorganize
+alter table d set distributed randomly;
+insert into r values (1, 1), (2, 2), (3, 3);
+with cte as (
+    select a, b * random() as rand from r
+)
+select count(distinct(rand)) from cte join d on cte.a = d.a;
+ count 
+-------
+     1
+(1 row)
+
+drop table t1;
+drop table t2;
+drop table r;
+drop table d;
+-- start_ignore
 drop schema rpt cascade;
 NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table foo

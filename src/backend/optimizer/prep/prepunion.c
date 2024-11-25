@@ -57,6 +57,7 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbutil.h"
 #include "commands/tablecmds.h"
+#include "optimizer/optimizer.h"
 
 static RelOptInfo *recurse_set_operations(Node *setOp, PlannerInfo *root,
 										  List *colTypes, List *colCollations,
@@ -303,6 +304,16 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 		 */
 		path = (Path *) create_subqueryscan_path(root, rel, subpath,
 												 NIL, cdbpathlocus_from_subquery(root, rel, subpath), NULL);
+
+		/*
+		 * Greenplum specific behavior:
+		 * If the path is general or segmentgeneral locus and contains
+		 * volatile target list of havingQual, we should turn it into
+		 * singleQE.
+		 */
+		List *exprList = lappend(list_make1(subquery->havingQual),
+								 subpath->pathtarget->exprs);
+		path = turn_volatile_seggen_to_singleqe(root, path, (Node *) exprList);
 
 		add_path(rel, path);
 

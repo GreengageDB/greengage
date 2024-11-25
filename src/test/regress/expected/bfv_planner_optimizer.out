@@ -804,6 +804,339 @@ drop table t2_12146;
 drop table t3_12146;
 drop table t4_12146;
 reset allow_system_table_mods;
+set gp_cte_sharing = on;
+-- ensure that the volatile function is executed on one segment
+-- if it is in the CTE target list or having qual
+explain (costs off, verbose) with cte as (
+    select a * random() as a from generate_series(1, 5) a
+)
+select * from cte join (select * from t_hashdist join cte using(a)) b using(a);
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Sequence
+   Output: share0_ref3.a, t_hashdist.b, t_hashdist.c
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1.a
+         ->  Function Scan on pg_catalog.generate_series
+               Output: ((generate_series.generate_series)::double precision * random())
+               Function Call: generate_series(1, 5)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: share0_ref3.a, t_hashdist.b, t_hashdist.c
+         ->  Hash Join
+               Output: share0_ref3.a, t_hashdist.b, t_hashdist.c
+               Hash Cond: (share0_ref3.a = share0_ref2.a)
+               ->  Redistribute Motion 1:3  (slice2)
+                     Output: share0_ref3.a
+                     Hash Key: share0_ref3.a
+                     ->  Shared Scan (share slice:id 2:0)
+                           Output: share0_ref3.a
+               ->  Hash
+                     Output: t_hashdist.b, t_hashdist.c, share0_ref2.a
+                     ->  Hash Join
+                           Output: t_hashdist.b, t_hashdist.c, share0_ref2.a
+                           Hash Cond: (share0_ref2.a = (t_hashdist.a)::double precision)
+                           ->  Redistribute Motion 1:3  (slice3)
+                                 Output: share0_ref2.a
+                                 Hash Key: share0_ref2.a
+                                 ->  Shared Scan (share slice:id 3:0)
+                                       Output: share0_ref2.a
+                           ->  Hash
+                                 Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                                 ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                       Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                                       Hash Key: (t_hashdist.a)::double precision
+                                       ->  Seq Scan on public.t_hashdist
+                                             Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', gp_cte_sharing = 'on'
+(36 rows)
+
+explain (costs off, verbose) with cte as (
+    select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
+)
+select * from cte join (select * from t_hashdist join cte using(a)) b using(a);
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: share0_ref3.generate_series, share0_ref3.count, t_hashdist.b, t_hashdist.c, share0_ref2.count
+   ->  Sequence
+         Output: share0_ref3.generate_series, share0_ref3.count, t_hashdist.b, t_hashdist.c, share0_ref2.count
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.generate_series, share0_ref1.count
+               ->  Result
+                     Output: generate_series.generate_series, (count())
+                     One-Time Filter: (gp_execution_segment() = 2)
+                     ->  Result
+                           Output: generate_series.generate_series, (count())
+                           Filter: (((count()))::double precision > random())
+                           ->  HashAggregate
+                                 Output: count(), count(), generate_series.generate_series
+                                 Group Key: generate_series.generate_series
+                                 ->  Function Scan on pg_catalog.generate_series
+                                       Output: generate_series.generate_series
+                                       Function Call: generate_series(1, 5)
+         ->  Hash Join
+               Output: share0_ref3.generate_series, share0_ref3.count, t_hashdist.b, t_hashdist.c, share0_ref2.count
+               Hash Cond: (share0_ref3.generate_series = t_hashdist.a)
+               ->  Shared Scan (share slice:id 1:0)
+                     Output: share0_ref3.generate_series, share0_ref3.count
+               ->  Hash
+                     Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, share0_ref2.count
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, share0_ref2.count
+                           ->  Hash Join
+                                 Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, share0_ref2.count
+                                 Hash Cond: (share0_ref2.generate_series = t_hashdist.a)
+                                 ->  Shared Scan (share slice:id 2:0)
+                                       Output: share0_ref2.generate_series, share0_ref2.count
+                                 ->  Hash
+                                       Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                                       ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                             Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                                             ->  Seq Scan on public.t_hashdist
+                                                   Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', gp_cte_sharing = 'on'
+(40 rows)
+
+set gp_cte_sharing = off;
+explain (costs off, verbose) with cte as (
+    select a, a * random() from generate_series(1, 5) a
+)
+select * from cte join t_hashdist using(a);
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Sequence
+   Output: share0_ref2.generate_series, share0_ref2."?column?", t_hashdist.b, t_hashdist.c
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1.generate_series, share0_ref1."?column?"
+         ->  Function Scan on pg_catalog.generate_series
+               Output: generate_series.generate_series, ((generate_series.generate_series)::double precision * random())
+               Function Call: generate_series(1, 5)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: share0_ref2.generate_series, share0_ref2."?column?", t_hashdist.b, t_hashdist.c
+         ->  Hash Join
+               Output: share0_ref2.generate_series, share0_ref2."?column?", t_hashdist.b, t_hashdist.c
+               Hash Cond: (share0_ref2.generate_series = t_hashdist.a)
+               ->  Redistribute Motion 1:3  (slice2)
+                     Output: share0_ref2.generate_series, share0_ref2."?column?"
+                     Hash Key: share0_ref2.generate_series
+                     ->  Shared Scan (share slice:id 2:0)
+                           Output: share0_ref2.generate_series, share0_ref2."?column?"
+               ->  Hash
+                     Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                     ->  Seq Scan on public.t_hashdist
+                           Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(23 rows)
+
+explain (costs off, verbose) with cte as (
+    select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
+)
+select * from cte join t_hashdist using(a);
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: share0_ref2.generate_series, share0_ref2.count, t_hashdist.b, t_hashdist.c
+   ->  Sequence
+         Output: share0_ref2.generate_series, share0_ref2.count, t_hashdist.b, t_hashdist.c
+         ->  Shared Scan (share slice:id 1:0)
+               Output: share0_ref1.generate_series, share0_ref1.count
+               ->  Result
+                     Output: generate_series.generate_series, (count())
+                     Filter: (((count()))::double precision > random())
+                     ->  HashAggregate
+                           Output: count(), count(), generate_series.generate_series
+                           Group Key: generate_series.generate_series
+                           ->  Function Scan on pg_catalog.generate_series
+                                 Output: generate_series.generate_series
+                                 Function Call: generate_series(1, 5)
+         ->  Hash Join
+               Output: share0_ref2.generate_series, share0_ref2.count, t_hashdist.b, t_hashdist.c
+               Hash Cond: (share0_ref2.generate_series = t_hashdist.a)
+               ->  Result
+                     Output: share0_ref2.generate_series, share0_ref2.count
+                     ->  Shared Scan (share slice:id 1:0)
+                           Output: share0_ref2.generate_series, share0_ref2.count
+               ->  Hash
+                     Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                     ->  Seq Scan on public.t_hashdist
+                           Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(28 rows)
+
+reset gp_cte_sharing;
+-- ensure that the volatile function is executed on one segment
+-- if it is in the union target list or having qual
+explain (costs off, verbose) select * from (
+    select random() as a from generate_series(1, 5)
+    union
+    select random() as a from generate_series(1, 5)
+)
+a join t_hashdist on a.a = t_hashdist.a;
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (random()), t_hashdist.a, t_hashdist.b, t_hashdist.c
+   ->  Hash Join
+         Output: (random()), t_hashdist.a, t_hashdist.b, t_hashdist.c
+         Hash Cond: ((random()) = (t_hashdist.a)::double precision)
+         ->  HashAggregate
+               Output: (random())
+               Group Key: (random())
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: (random())
+                     Hash Key: (random())
+                     ->  Append
+                           ->  Result
+                                 Output: random()
+                                 One-Time Filter: (gp_execution_segment() = 1)
+                                 ->  Function Scan on pg_catalog.generate_series
+                                       Function Call: generate_series(1, 5)
+                           ->  Result
+                                 Output: random()
+                                 One-Time Filter: (gp_execution_segment() = 1)
+                                 ->  Function Scan on pg_catalog.generate_series generate_series_1
+                                       Function Call: generate_series(1, 5)
+         ->  Hash
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                     Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+                     Hash Key: (t_hashdist.a)::double precision
+                     ->  Seq Scan on public.t_hashdist
+                           Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(31 rows)
+
+explain (costs off, verbose) select * from (
+    select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
+    union
+    select a, count(*) from generate_series(1, 5) a group by a
+)
+a join t_hashdist on a.a = t_hashdist.a;
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: generate_series.generate_series, (count()), t_hashdist.a, t_hashdist.b, t_hashdist.c
+   ->  Hash Join
+         Output: generate_series.generate_series, (count()), t_hashdist.a, t_hashdist.b, t_hashdist.c
+         Hash Cond: (generate_series.generate_series = t_hashdist.a)
+         ->  Result
+               Output: generate_series.generate_series, (count())
+               ->  HashAggregate
+                     Output: generate_series.generate_series, (count())
+                     Group Key: generate_series.generate_series, (count())
+                     ->  Append
+                           ->  Result
+                                 Output: generate_series.generate_series, (count())
+                                 Filter: (((count()))::double precision > random())
+                                 ->  HashAggregate
+                                       Output: count(), count(), generate_series.generate_series
+                                       Group Key: generate_series.generate_series
+                                       ->  Function Scan on pg_catalog.generate_series
+                                             Output: generate_series.generate_series
+                                             Function Call: generate_series(1, 5)
+                           ->  HashAggregate
+                                 Output: generate_series_1.generate_series, count()
+                                 Group Key: generate_series_1.generate_series
+                                 ->  Function Scan on pg_catalog.generate_series generate_series_1
+                                       Output: generate_series_1.generate_series
+                                       Function Call: generate_series(1, 5)
+         ->  Hash
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+               ->  Seq Scan on public.t_hashdist
+                     Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(32 rows)
+
+-- ensure that the volatile function is executed on one segment
+-- if it is in target list or having qual of subplan of multiset function
+explain (costs off, verbose) select * from (
+    SELECT count(*) as a FROM anytable_out( TABLE( SELECT random()::int from generate_series(1, 5) a ) )
+) a join t_hashdist using(a);
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (count(*)), t_hashdist.b, t_hashdist.c
+   ->  Hash Join
+         Output: (count(*)), t_hashdist.b, t_hashdist.c
+         Inner Unique: true
+         Hash Cond: (t_hashdist.a = (count(*)))
+         ->  Seq Scan on public.t_hashdist
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+         ->  Hash
+               Output: (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: (count(*))
+                     Hash Key: (count(*))
+                     ->  Aggregate
+                           Output: count(*)
+                           ->  Table Function Scan on pg_catalog.anytable_out
+                                 Output: anytable_out
+                                 ->  Function Scan on pg_catalog.generate_series a
+                                       Output: (random())::integer
+                                       Function Call: generate_series(1, 5)
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(22 rows)
+
+explain (costs off, verbose) select * from (
+    SELECT anytable_out::varchar::int as a, count(*) FROM anytable_out( TABLE( SELECT * from generate_series(1, 5) a ) )
+    group by a having count(*) > random()
+) a join t_hashdist using(a);
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (((anytable_out)::character varying)::integer), (count(*)), t_hashdist.b, t_hashdist.c
+   ->  Hash Join
+         Output: (((anytable_out)::character varying)::integer), (count(*)), t_hashdist.b, t_hashdist.c
+         Inner Unique: true
+         Hash Cond: (t_hashdist.a = (((anytable_out)::character varying)::integer))
+         ->  Seq Scan on public.t_hashdist
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
+         ->  Hash
+               Output: (((anytable_out)::character varying)::integer), (count(*))
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: (((anytable_out)::character varying)::integer), (count(*))
+                     Hash Key: (((anytable_out)::character varying)::integer)
+                     ->  HashAggregate
+                           Output: (((anytable_out)::character varying)::integer), count(*)
+                           Group Key: ((anytable_out)::character varying)::integer
+                           Filter: ((count(*))::double precision > random())
+                           ->  Table Function Scan on pg_catalog.anytable_out
+                                 Output: ((anytable_out)::character varying)::integer
+                                 ->  Function Scan on pg_catalog.generate_series a
+                                       Output: a.a
+                                       Function Call: generate_series(1, 5)
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(24 rows)
+
+-- if there is a volatile function in the target list of a plan with the locus type
+-- General or Segment General, then such a plan should be executed on single
+-- segment, since it is assumed that nodes with such locus types will give the same
+-- result on all segments, which is impossible for a volatile function.
+-- start_ignore
+drop table if exists d;
+-- end_ignore
+create table d (b int, a int default 1) distributed by (b);
+insert into d select * from generate_series(0, 20) j;
+-- change distribution without reorganize
+alter table d set distributed randomly;
+with cte as (
+    select a as a, a * random() as rand from generate_series(0, 3)a
+)
+select count(distinct(rand)) from cte join d on cte.a = d.a;
+ count 
+-------
+     1
+(1 row)
+
+drop table d;
 -- start_ignore
 drop table if exists bfv_planner_x;
 drop table if exists testbadsql;

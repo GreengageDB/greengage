@@ -441,6 +441,81 @@ drop table t4_12146;
 
 reset allow_system_table_mods;
 
+set gp_cte_sharing = on;
+
+-- ensure that the volatile function is executed on one segment
+-- if it is in the CTE target list or having qual
+explain (costs off, verbose) with cte as (
+    select a * random() as a from generate_series(1, 5) a
+)
+select * from cte join (select * from t_hashdist join cte using(a)) b using(a);
+
+explain (costs off, verbose) with cte as (
+    select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
+)
+select * from cte join (select * from t_hashdist join cte using(a)) b using(a);
+
+set gp_cte_sharing = off;
+
+explain (costs off, verbose) with cte as (
+    select a, a * random() from generate_series(1, 5) a
+)
+select * from cte join t_hashdist using(a);
+
+explain (costs off, verbose) with cte as (
+    select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
+)
+select * from cte join t_hashdist using(a);
+
+reset gp_cte_sharing;
+
+-- ensure that the volatile function is executed on one segment
+-- if it is in the union target list or having qual
+explain (costs off, verbose) select * from (
+    select random() as a from generate_series(1, 5)
+    union
+    select random() as a from generate_series(1, 5)
+)
+a join t_hashdist on a.a = t_hashdist.a;
+
+explain (costs off, verbose) select * from (
+    select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
+    union
+    select a, count(*) from generate_series(1, 5) a group by a
+)
+a join t_hashdist on a.a = t_hashdist.a;
+
+-- ensure that the volatile function is executed on one segment
+-- if it is in target list or having qual of subplan of multiset function
+explain (costs off, verbose) select * from (
+    SELECT count(*) as a FROM anytable_out( TABLE( SELECT random()::int from generate_series(1, 5) a ) )
+) a join t_hashdist using(a);
+
+explain (costs off, verbose) select * from (
+    SELECT anytable_out::varchar::int as a, count(*) FROM anytable_out( TABLE( SELECT * from generate_series(1, 5) a ) )
+    group by a having count(*) > random()
+) a join t_hashdist using(a);
+
+-- if there is a volatile function in the target list of a plan with the locus type
+-- General or Segment General, then such a plan should be executed on single
+-- segment, since it is assumed that nodes with such locus types will give the same
+-- result on all segments, which is impossible for a volatile function.
+-- start_ignore
+drop table if exists d;
+-- end_ignore
+create table d (b int, a int default 1) distributed by (b);
+
+insert into d select * from generate_series(0, 20) j;
+-- change distribution without reorganize
+alter table d set distributed randomly;
+
+with cte as (
+    select a as a, a * random() as rand from generate_series(0, 3)a
+)
+select count(distinct(rand)) from cte join d on cte.a = d.a;
+
+drop table d;
+
 -- start_ignore
 drop table if exists bfv_planner_x;
 drop table if exists testbadsql;

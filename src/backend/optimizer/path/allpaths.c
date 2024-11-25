@@ -2786,9 +2786,20 @@ set_tablefunction_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rt
 							make_tlist_from_pathtarget(subpath->pathtarget));
 
 		/* Generate appropriate path */
-		add_path(rel, (Path *)
-				 create_tablefunction_path(root, rel, subpath,
-										   pathkeys, required_outer));
+		Path *path = (Path *) create_tablefunction_path(root, rel, subpath,
+													   pathkeys,
+													   required_outer);
+
+		/*
+		 * Greenplum specific behavior:
+		 * If the path is general or segmentgeneral locus and contains
+		 * volatile target list of havingQual, we should turn it into
+		 * singleQE.
+		 */
+		List *exprList = lappend(list_make1(rte->subquery->havingQual),
+								 subpath->pathtarget->exprs);
+		path = turn_volatile_seggen_to_singleqe(root, path, (Node *) exprList);
+		add_path(rel, path);
 	}
 }
 
@@ -3108,12 +3119,22 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 											 make_tlist_from_pathtarget(subpath->pathtarget));
 
 		/* Generate appropriate path */
-		add_path(rel, create_ctescan_path(root,
-										  rel,
-										  is_shared ? NULL : subpath,
-										  locus,
-										  pathkeys,
-										  required_outer));
+		Path *path= create_ctescan_path(root,
+										 rel,
+										 is_shared ? NULL : subpath,
+										 locus,
+										 pathkeys,
+										 required_outer);
+		/*
+		 * Greenplum specific behavior:
+		 * If the path is general or segmentgeneral locus and contains
+		 * volatile target list of havingQual, we should turn it into
+		 * singleQE.
+		 */
+		List *exprList = lappend(list_make1(subquery->havingQual),
+								 subpath->pathtarget->exprs);
+		path = turn_volatile_seggen_to_singleqe(root, path, (Node *) exprList);
+		add_path(rel, path);
 	}
 }
 
