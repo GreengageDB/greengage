@@ -132,6 +132,9 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 
 -- Resume execution of compact phase and block at syncrep on one segment.
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+-- Dispatcher shouldn't proceed until status_version in FtsVersion in FtsProbeInfo is updated,
+-- ensuring the backends are restarted before they start the post-cleanup phase.
+2: SELECT gp_inject_fault('vacuum_rel_finished_one_relation', 'suspend', '', '', 'vacuum_progress_ao_column', 1, 1, 0, 1) FROM master();
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- stop the mirror should turn off syncrep
 2: SELECT pg_ctl(datadir, 'stop', 'immediate') FROM gp_segment_configuration WHERE content = 1 AND role = 'm';
@@ -141,6 +144,10 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 2: SELECT gp_inject_fault('vacuum_worker_changed', 'suspend', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
 -- resume walsender and let it exit so that mirror stop can be detected
 2: SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+-- wait for the mirror stop to be detected (timeout 2 minutes)
+2: SELECT wait_for_mirror_down(1::smallint, 120);
+2: SELECT gp_inject_fault('vacuum_rel_finished_one_relation', 'reset', dbid) FROM master();
+
 -- Ensure we enter into the target logic which stops cumulative data but
 -- initializes a new vacrelstats at the beginning of post-cleanup phase.
 -- Also all segments should reach to the same "vacuum_worker_changed" point

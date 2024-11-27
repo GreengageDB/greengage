@@ -371,6 +371,13 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 --------------------------
  Success:                 
 (1 row)
+-- Dispatcher shouldn't proceed until status_version in FtsVersion in FtsProbeInfo is updated,
+-- ensuring the backends are restarted before they start the post-cleanup phase.
+2: SELECT gp_inject_fault('vacuum_rel_finished_one_relation', 'suspend', '', '', 'vacuum_progress_ao_row', 1, 1, 0, 1) FROM master();
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
 2: SELECT gp_inject_fault('vacuum_ao_after_compact', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
  gp_inject_fault 
 -----------------
@@ -400,6 +407,18 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 --------------------------
  Success:                 
 (1 row)
+-- wait for the mirror stop to be detected (timeout 2 minutes)
+2: SELECT wait_for_mirror_down(1::smallint, 120);
+ wait_for_mirror_down 
+----------------------
+ t                    
+(1 row)
+2: SELECT gp_inject_fault('vacuum_rel_finished_one_relation', 'reset', dbid) FROM master();
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
 -- Ensure we enter into the target logic which stops cumulative data but
 -- initializes a new vacrelstats at the beginning of post-cleanup phase.
 -- Also all segments should reach to the same "vacuum_worker_changed" point
@@ -450,14 +469,14 @@ select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, he
 select gp_segment_id, relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum where gp_segment_id > -1;
  gp_segment_id | relname                | phase                         | heap_blks_total | heap_blks_scanned | heap_blks_vacuumed | index_vacuum_count | max_dead_tuples | num_dead_tuples 
 ---------------+------------------------+-------------------------------+-----------------+-------------------+--------------------+--------------------+-----------------+-----------------
- 0             | vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
- 2             | vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
- 1             | vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
+ 2             | vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 19                 | 2                  | 0               | 0               
+ 0             | vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 19                 | 2                  | 0               | 0               
+ 1             | vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 19                 | 2                  | 0               | 0               
 (3 rows)
 select relid::regclass as relname, phase, heap_blks_total, heap_blks_scanned, heap_blks_vacuumed, index_vacuum_count, max_dead_tuples, num_dead_tuples from gp_stat_progress_vacuum_summary;
  relname                | phase                         | heap_blks_total | heap_blks_scanned | heap_blks_vacuumed | index_vacuum_count | max_dead_tuples | num_dead_tuples 
 ------------------------+-------------------------------+-----------------+-------------------+--------------------+--------------------+-----------------+-----------------
- vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 0                  | 0                  | 0               | 0               
+ vacuum_progress_ao_row | append-optimized post-cleanup | 0               | 0                 | 57                 | 6                  | 0               | 0               
 (1 row)
 
 2: SELECT gp_inject_fault('vacuum_ao_post_cleanup_end', 'reset', dbid) FROM gp_segment_configuration WHERE content > -1 AND role = 'p';
