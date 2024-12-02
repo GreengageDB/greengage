@@ -190,10 +190,7 @@ update constraints_tab SET notnullcol = NULL, positivecol =-1;
       <dxl:ColumnStatistics Mdid="1.16410.1.0.0" Name="id" Width="4.000000" NullFreq="0.000000" NdvRemain="0.000000" FreqRemain="0.000000" ColStatsMissing="true"/>
     </dxl:Metadata>
     <dxl:Query>
-      <dxl:OutputColumns>
-        <dxl:Ident ColId="11" ColName="notnullcol" TypeMdid="0.25.1.0"/>
-        <dxl:Ident ColId="12" ColName="positivecol" TypeMdid="0.23.1.0"/>
-      </dxl:OutputColumns>
+      <dxl:OutputColumns/>
       <dxl:CTEList/>
       <dxl:LogicalUpdate DeleteColumns="1,2,3" InsertColumns="1,11,12" CtidCol="4" SegmentIdCol="10" PreserveOids="false">
         <dxl:TableDescriptor Mdid="6.16410.1.0" TableName="constraints_tab">
@@ -239,7 +236,7 @@ update constraints_tab SET notnullcol = NULL, positivecol =-1;
       </dxl:LogicalUpdate>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="1">
-      <dxl:DMLUpdate Columns="0,1,2" ActionCol="12" CtidCol="3" SegmentIdCol="9" PreserveOids="false">
+      <dxl:DMLUpdate Columns="0,1,2" ActionCol="22" CtidCol="3" SegmentIdCol="9" PreserveOids="false">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="431.078182" Rows="1.000000" Width="1"/>
         </dxl:Properties>
@@ -255,21 +252,20 @@ update constraints_tab SET notnullcol = NULL, positivecol =-1;
             <dxl:Ident ColId="2" ColName="positivecol" TypeMdid="0.23.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
+        <dxl:ProjList/>
         <dxl:TableDescriptor Mdid="6.16410.1.0" TableName="constraints_tab">
           <dxl:Columns>
-            <dxl:Column ColId="13" Attno="1" ColName="id" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="14" Attno="2" ColName="notnullcol" TypeMdid="0.25.1.0" ColWidth="8"/>
-            <dxl:Column ColId="15" Attno="3" ColName="positivecol" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="16" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
-            <dxl:Column ColId="17" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="18" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="19" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="20" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="21" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
-            <dxl:Column ColId="22" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="12" Attno="1" ColName="id" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="15" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
+            <dxl:Column ColId="16" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="17" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="18" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="19" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="20" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
+            <dxl:Column ColId="21" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
-        <dxl:Split DeleteColumns="0,1,2" InsertColumns="0,10,11" ActionCol="12" CtidCol="3" SegmentIdCol="9" PreserveOids="false">
+        <dxl:Split DeleteColumns="0,1,2" InsertColumns="0,10,11" ActionCol="22" CtidCol="3" SegmentIdCol="9" PreserveOids="false">
           <dxl:Properties>
             <dxl:Cost StartupCost="0" TotalCost="431.000057" Rows="2.000000" Width="30"/>
           </dxl:Properties>
@@ -289,7 +285,7 @@ update constraints_tab SET notnullcol = NULL, positivecol =-1;
             <dxl:ProjElem ColId="9" Alias="gp_segment_id">
               <dxl:Ident ColId="9" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="12" Alias="ColRef_0012">
+            <dxl:ProjElem ColId="22" Alias="ColRef_0022">
               <dxl:DMLAction/>
             </dxl:ProjElem>
           </dxl:ProjList>

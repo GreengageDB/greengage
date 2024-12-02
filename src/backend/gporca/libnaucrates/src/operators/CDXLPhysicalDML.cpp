@@ -172,11 +172,14 @@ CDXLPhysicalDML::SerializeToDXL(CXMLSerializer *xml_serializer,
 	// serialize project list
 	(*node)[0]->SerializeToDXL(xml_serializer);
 
+	// serialize project list for returning list
+	(*node)[1]->SerializeToDXL(xml_serializer);
+
 	// serialize table descriptor
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 
 	// serialize physical child
-	(*node)[1]->SerializeToDXL(xml_serializer);
+	(*node)[2]->SerializeToDXL(xml_serializer);
 
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);
@@ -194,8 +197,8 @@ CDXLPhysicalDML::SerializeToDXL(CXMLSerializer *xml_serializer,
 void
 CDXLPhysicalDML::AssertValid(const CDXLNode *node, BOOL validate_children) const
 {
-	GPOS_ASSERT(2 == node->Arity());
-	CDXLNode *child_dxlnode = (*node)[1];
+	GPOS_ASSERT(3 == node->Arity());
+	CDXLNode *child_dxlnode = (*node)[2];
 	GPOS_ASSERT(EdxloptypePhysical ==
 				child_dxlnode->GetOperator()->GetDXLOperatorType());
 

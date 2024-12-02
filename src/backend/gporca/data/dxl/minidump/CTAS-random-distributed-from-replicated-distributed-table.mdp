@@ -243,8 +243,8 @@
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
-          <dxl:Column ColId="10" Attno="1" ColName="a" TypeMdid="0.25.1.0"/>
-          <dxl:Column ColId="11" Attno="2" ColName="b" TypeMdid="0.23.1.0"/>
+          <dxl:Column ColId="12" Attno="1" ColName="a" TypeMdid="0.25.1.0"/>
+          <dxl:Column ColId="13" Attno="2" ColName="b" TypeMdid="0.23.1.0"/>
         </dxl:Columns>
         <dxl:CTASOptions OnCommitAction="NOOP"/>
         <dxl:ProjList>
@@ -266,8 +266,8 @@
             <dxl:ProjElem ColId="1" Alias="b">
               <dxl:Ident ColId="1" ColName="b" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="9" Alias="ColRef_0009">
-              <dxl:Ident ColId="9" ColName="ColRef_0009" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="11" Alias="ColRef_0011">
+              <dxl:Ident ColId="11" ColName="ColRef_0011" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
@@ -283,7 +283,7 @@
               <dxl:ProjElem ColId="1" Alias="b">
                 <dxl:Ident ColId="1" ColName="b" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="9" Alias="ColRef_0009">
+              <dxl:ProjElem ColId="11" Alias="ColRef_0011">
                 <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
               </dxl:ProjElem>
             </dxl:ProjList>
@@ -316,7 +316,7 @@
                   </dxl:ProjElem>
                 </dxl:ProjList>
                 <dxl:Filter/>
-                <dxl:TableDescriptor Mdid="6.24577.1.0" TableName="test_replicated" LockMode="1">
+                <dxl:TableDescriptor Mdid="6.24577.1.0" TableName="test_replicated">
                   <dxl:Columns>
                     <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.25.1.0" ColWidth="8"/>
                     <dxl:Column ColId="1" Attno="2" ColName="b" TypeMdid="0.23.1.0" ColWidth="4"/>

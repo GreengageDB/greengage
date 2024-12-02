@@ -382,13 +382,7 @@
       <dxl:MDCast Mdid="3.23.1.0;701.1.0" Name="float8" BinaryCoercible="false" SourceTypeId="0.23.1.0" DestinationTypeId="0.701.1.0" CastFuncId="0.316.1.0" CoercePathType="1"/>
     </dxl:Metadata>
     <dxl:Query>
-      <dxl:OutputColumns>
-        <dxl:Ident ColId="23" ColName="country_code" TypeMdid="0.25.1.0"/>
-        <dxl:Ident ColId="24" ColName="country_name" TypeMdid="0.25.1.0"/>
-        <dxl:Ident ColId="27" ColName="lang_count" TypeMdid="0.23.1.0"/>
-        <dxl:Ident ColId="28" ColName="area" TypeMdid="0.701.1.0"/>
-        <dxl:Ident ColId="29" ColName="gnp" TypeMdid="0.701.1.0"/>
-      </dxl:OutputColumns>
+      <dxl:OutputColumns/>
       <dxl:CTEList>
         <dxl:LogicalCTEProducer CTEId="1" Columns="19,1,10">
           <dxl:LogicalGroupBy>
@@ -509,9 +503,9 @@
       </dxl:LogicalInsert>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="1180">
-      <dxl:DMLInsert Columns="38,39,42,43,44" ActionCol="48" CtidCol="0" SegmentIdCol="0">
+      <dxl:DMLInsert Columns="38,39,42,43,44" ActionCol="60" CtidCol="0" SegmentIdCol="0">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="867.122533" Rows="96.000000" Width="36"/>
+          <dxl:Cost StartupCost="0" TotalCost="867.122533" Rows="96.000000" Width="1"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList>
@@ -531,20 +525,17 @@
             <dxl:Ident ColId="44" ColName="gnp" TypeMdid="0.701.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
+        <dxl:ProjList/>
         <dxl:TableDescriptor Mdid="6.57387.1.0" TableName="countries_results">
           <dxl:Columns>
-            <dxl:Column ColId="49" Attno="1" ColName="country_code" TypeMdid="0.25.1.0" ColWidth="8"/>
-            <dxl:Column ColId="50" Attno="2" ColName="country_name" TypeMdid="0.25.1.0" ColWidth="8"/>
-            <dxl:Column ColId="51" Attno="3" ColName="lang_count" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="52" Attno="4" ColName="area" TypeMdid="0.701.1.0" ColWidth="8"/>
-            <dxl:Column ColId="53" Attno="5" ColName="gnp" TypeMdid="0.701.1.0" ColWidth="8"/>
-            <dxl:Column ColId="54" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
-            <dxl:Column ColId="55" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="56" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="57" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="58" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="59" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
-            <dxl:Column ColId="60" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="45" Attno="1" ColName="country_code" TypeMdid="0.25.1.0" ColWidth="8"/>
+            <dxl:Column ColId="50" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
+            <dxl:Column ColId="51" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="52" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="53" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="54" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="55" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
+            <dxl:Column ColId="56" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
         <dxl:Result>
@@ -559,7 +550,7 @@
               <dxl:Ident ColId="39" ColName="?column?" TypeMdid="0.25.1.0"/>
             </dxl:ProjElem>
             <dxl:ProjElem ColId="42" Alias="lang_count">
-              <dxl:FuncExpr FuncId="0.480.1.0" FuncRetSet="false" TypeMdid="0.23.1.0">
+              <dxl:FuncExpr FuncId="0.480.1.0" FuncRetSet="false" TypeMdid="0.23.1.0" FuncVariadic="false">
                 <dxl:Ident ColId="19" ColName="lang_count" TypeMdid="0.20.1.0"/>
               </dxl:FuncExpr>
             </dxl:ProjElem>
@@ -573,7 +564,7 @@
                 <dxl:Ident ColId="41" ColName="?column?" TypeMdid="0.23.1.0"/>
               </dxl:Cast>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="48" Alias="ColRef_0048">
+            <dxl:ProjElem ColId="60" Alias="ColRef_0060">
               <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
             </dxl:ProjElem>
           </dxl:ProjList>
@@ -663,7 +654,7 @@
                   </dxl:GroupingColumns>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="19" Alias="lang_count">
-                      <dxl:AggFunc AggMdid="0.2803.1.0" AggDistinct="false" AggStage="Normal" AggKind="n" >
+                      <dxl:AggFunc AggMdid="0.2803.1.0" AggDistinct="false" AggStage="Normal" AggKind="n">
                         <dxl:ValuesList ParamType="aggargs"/>
                         <dxl:ValuesList ParamType="aggdirectargs"/>
                         <dxl:ValuesList ParamType="aggorder"/>

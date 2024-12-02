@@ -492,11 +492,6 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 	// We therefore need to check permissions before we go into optimization for all RTEs, including the ones not explicitly referred in the query, e.g. views.
 	CTranslatorUtils::CheckRTEPermissions(m_query->rtable);
 
-	// RETURNING is not supported yet.
-	if (m_query->returningList)
-		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
-				   GPOS_WSZ_LIT("RETURNING clause"));
-
 	CDXLNode *child_dxlnode = NULL;
 	IntToUlongMap *sort_group_attno_to_colid_mapping =
 		GPOS_NEW(m_mp) IntToUlongMap(m_mp);
@@ -817,7 +812,32 @@ CTranslatorQueryToDXL::TranslateInsertQueryToDXL()
 		query_dxlnode = project_dxlnode;
 	}
 
-	return GPOS_NEW(m_mp) CDXLNode(m_mp, insert_dxlnode, query_dxlnode);
+	CDXLNode *log_insert_dxlnode =
+		GPOS_NEW(m_mp) CDXLNode(m_mp, insert_dxlnode, query_dxlnode);
+
+	CRefCount::SafeRelease(m_dxl_query_output_cols);
+	if (NULL != m_query->returningList)
+	{
+		IntToUlongMap *output_attno_to_colid_mapping =
+			GPOS_NEW(m_mp) IntToUlongMap(m_mp);
+
+		log_insert_dxlnode = ProcessReturningList(
+			log_insert_dxlnode, table_descr, output_attno_to_colid_mapping);
+
+		// this array is filled earlier with target list and was used to get colids by their indices earlier
+		// now fill it with what will truly be returned
+		m_dxl_query_output_cols = CreateDXLOutputCols(
+			m_query->returningList, output_attno_to_colid_mapping);
+
+		output_attno_to_colid_mapping->Release();
+	}
+	else
+	{
+		// we can safely set it to empty array here as we aren't outputting in this path
+		m_dxl_query_output_cols = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
+	}
+
+	return log_insert_dxlnode;
 }
 
 //---------------------------------------------------------------------------
@@ -1139,6 +1159,53 @@ CTranslatorQueryToDXL::GetSystemColId(INT attribute_number)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorQueryToDXL::ProcessReturningList
+//
+//	@doc: Wrap dxl node in logical project with return columns from returningList
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorQueryToDXL::ProcessReturningList(
+	CDXLNode *dml_dxlnode, CDXLTableDescr *table_descr,
+	IntToUlongMap *output_attno_to_colid_mapping)
+{
+	GPOS_ASSERT(m_query->returningList != NULL);
+
+	CMappingVarColId *var_to_colid_map = GPOS_NEW(m_mp) CMappingVarColId(m_mp);
+	var_to_colid_map->LoadTblColumns(m_query_level, m_query->resultRelation,
+									 table_descr);
+
+	CDXLNode *returning_proj_list_dxlnode =
+		GPOS_NEW(m_mp) CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLScalarProjList(m_mp));
+
+	ListCell *lc = NULL;
+	ForEach(lc, m_query->returningList)
+	{
+		TargetEntry *target_entry = (TargetEntry *) lfirst(lc);
+
+		CDXLNode *project_elem_dxlnode = TranslateExprToDXLProject(
+			target_entry->expr, target_entry->resname, var_to_colid_map, true);
+
+		ULONG colid =
+			CDXLScalarProjElem::Cast(project_elem_dxlnode->GetOperator())->Id();
+		StoreAttnoColIdMapping(output_attno_to_colid_mapping,
+							   target_entry->resno, colid);
+
+		returning_proj_list_dxlnode->AddChild(project_elem_dxlnode);
+	}
+
+	CDXLNode *project_dxlnode =
+		GPOS_NEW(m_mp) CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLLogicalProject(m_mp));
+	project_dxlnode->AddChild(returning_proj_list_dxlnode);
+	project_dxlnode->AddChild(dml_dxlnode);
+
+	GPOS_DELETE(var_to_colid_map);
+
+	return project_dxlnode;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorQueryToDXL::TranslateDeleteQueryToDXL
 //
 //	@doc:
@@ -1214,7 +1281,32 @@ CTranslatorQueryToDXL::TranslateDeleteQueryToDXL()
 		CDXLLogicalDelete(m_mp, table_descr, ctid_colid, segid_colid,
 						  delete_colid_array, tableoid_colid);
 
-	return GPOS_NEW(m_mp) CDXLNode(m_mp, delete_dxlop, query_dxlnode);
+	CDXLNode *log_delete_dxlnode =
+		GPOS_NEW(m_mp) CDXLNode(m_mp, delete_dxlop, query_dxlnode);
+
+	CRefCount::SafeRelease(m_dxl_query_output_cols);
+	if (NULL != m_query->returningList)
+	{
+		IntToUlongMap *output_attno_to_colid_mapping =
+			GPOS_NEW(m_mp) IntToUlongMap(m_mp);
+
+		log_delete_dxlnode = ProcessReturningList(
+			log_delete_dxlnode, table_descr, output_attno_to_colid_mapping);
+
+		// this array is filled earlier with target list and was used to get colids by their indices earlier
+		// now fill it with what will truly be returned
+		m_dxl_query_output_cols = CreateDXLOutputCols(
+			m_query->returningList, output_attno_to_colid_mapping);
+
+		output_attno_to_colid_mapping->Release();
+	}
+	else
+	{
+		// we can safely set it to empty array here as we aren't outputting in this path
+		m_dxl_query_output_cols = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
+	}
+
+	return log_delete_dxlnode;
 }
 
 //---------------------------------------------------------------------------
@@ -1328,7 +1420,32 @@ CTranslatorQueryToDXL::TranslateUpdateQueryToDXL()
 		m_mp, table_descr, ctid_colid, segmentid_colid, delete_colid_array,
 		insert_colid_array, has_oids, tuple_oid_colid, tableoid_colid);
 
-	return GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopupdate, query_dxlnode);
+	CDXLNode *log_update_dxlnode =
+		GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopupdate, query_dxlnode);
+
+	CRefCount::SafeRelease(m_dxl_query_output_cols);
+	if (NULL != m_query->returningList)
+	{
+		IntToUlongMap *output_attno_to_colid_mapping =
+			GPOS_NEW(m_mp) IntToUlongMap(m_mp);
+
+		log_update_dxlnode = ProcessReturningList(
+			log_update_dxlnode, table_descr, output_attno_to_colid_mapping);
+
+		// this array is filled earlier with target list and was used to get colids by their indices earlier
+		// now fill it with what will truly be returned
+		m_dxl_query_output_cols = CreateDXLOutputCols(
+			m_query->returningList, output_attno_to_colid_mapping);
+
+		output_attno_to_colid_mapping->Release();
+	}
+	else
+	{
+		// we can safely set it to empty array here as we aren't outputting in this path
+		m_dxl_query_output_cols = GPOS_NEW(m_mp) CDXLNodeArray(m_mp);
+	}
+
+	return log_update_dxlnode;
 }
 
 //---------------------------------------------------------------------------
@@ -3892,8 +4009,23 @@ CTranslatorQueryToDXL::TranslateDerivedTablesToDXL(const RangeTblEntry *rte,
 CDXLNode *
 CTranslatorQueryToDXL::TranslateExprToDXL(Expr *expr)
 {
+	return TranslateExprToDXL(expr, m_var_to_colid_map);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorQueryToDXL::TranslateExprToDXL
+//
+//	@doc:
+//		Translate the Expr into a CDXLScalar node with specified mapping
+//
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorQueryToDXL::TranslateExprToDXL(Expr *expr,
+										  CMappingVarColId *var_to_colid_map)
+{
 	CDXLNode *scalar_dxlnode =
-		m_scalar_translator->TranslateScalarToDXL(expr, m_var_to_colid_map);
+		m_scalar_translator->TranslateScalarToDXL(expr, var_to_colid_map);
 	GPOS_ASSERT(NULL != scalar_dxlnode);
 
 	return scalar_dxlnode;
@@ -4446,10 +4578,28 @@ CTranslatorQueryToDXL::TranslateExprToDXLProject(Expr *expr,
 												 const CHAR *alias_name,
 												 BOOL insist_new_colids)
 {
+	return TranslateExprToDXLProject(expr, alias_name, m_var_to_colid_map,
+									 insist_new_colids);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorQueryToDXL::TranslateExprToDXLProject
+//
+//	@doc:
+//		Create a DXL project element node from the target list entry or var.
+//		The function allocates memory in the translator memory pool, and the caller
+//		is responsible for freeing it.
+//---------------------------------------------------------------------------
+CDXLNode *
+CTranslatorQueryToDXL::TranslateExprToDXLProject(
+	Expr *expr, const CHAR *alias_name, CMappingVarColId *var_to_colid_map,
+	BOOL insist_new_colids)
+{
 	GPOS_ASSERT(NULL != expr);
 
 	// construct a scalar operator
-	CDXLNode *child_dxlnode = TranslateExprToDXL(expr);
+	CDXLNode *child_dxlnode = TranslateExprToDXL(expr, var_to_colid_map);
 
 	// get the id and alias for the proj elem
 	ULONG project_elem_id;

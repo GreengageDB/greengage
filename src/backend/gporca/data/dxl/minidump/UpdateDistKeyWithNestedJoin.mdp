@@ -602,9 +602,7 @@ WHERE t1.id1 = t2.id1;
       </dxl:GPDBScalarOp>
     </dxl:Metadata>
     <dxl:Query>
-      <dxl:OutputColumns>
-        <dxl:Ident ColId="11" ColName="id1" TypeMdid="0.23.1.0"/>
-      </dxl:OutputColumns>
+      <dxl:OutputColumns/>
       <dxl:CTEList/>
       <dxl:LogicalUpdate DeleteColumns="1,2" InsertColumns="11,2" CtidCol="3" SegmentIdCol="9" PreserveOids="false">
         <dxl:TableDescriptor Mdid="6.57388.1.0" TableName="tab1" LockMode="7">
@@ -680,7 +678,7 @@ WHERE t1.id1 = t2.id1;
       </dxl:LogicalUpdate>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="17">
-      <dxl:DMLUpdate Columns="0,1" ActionCol="27" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
+      <dxl:DMLUpdate Columns="0,1" ActionCol="36" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="4755.378785" Rows="60001.000000" Width="1"/>
         </dxl:Properties>
@@ -693,17 +691,17 @@ WHERE t1.id1 = t2.id1;
             <dxl:Ident ColId="1" ColName="id2" TypeMdid="0.23.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
+        <dxl:ProjList/>
         <dxl:TableDescriptor Mdid="6.57388.1.0" TableName="tab1">
           <dxl:Columns>
-            <dxl:Column ColId="28" Attno="1" ColName="id1" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="29" Attno="2" ColName="id2" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="30" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
-            <dxl:Column ColId="31" Attno="-2" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="32" Attno="-3" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="33" Attno="-4" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="34" Attno="-5" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="35" Attno="-6" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
-            <dxl:Column ColId="36" Attno="-7" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="27" Attno="1" ColName="id1" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="29" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
+            <dxl:Column ColId="30" Attno="-2" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="31" Attno="-3" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="32" Attno="-4" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="33" Attno="-5" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="34" Attno="-6" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
+            <dxl:Column ColId="35" Attno="-7" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
         <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
@@ -723,8 +721,8 @@ WHERE t1.id1 = t2.id1;
             <dxl:ProjElem ColId="8" Alias="gp_segment_id">
               <dxl:Ident ColId="8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="27" Alias="ColRef_0027">
-              <dxl:Ident ColId="27" ColName="ColRef_0027" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="36" Alias="ColRef_0036">
+              <dxl:Ident ColId="36" ColName="ColRef_0036" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
@@ -734,7 +732,7 @@ WHERE t1.id1 = t2.id1;
               <dxl:Ident ColId="0" ColName="id1" TypeMdid="0.23.1.0"/>
             </dxl:HashExpr>
           </dxl:HashExprList>
-          <dxl:Split DeleteColumns="0,1" InsertColumns="10,1" ActionCol="27" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
+          <dxl:Split DeleteColumns="0,1" InsertColumns="10,1" ActionCol="36" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="1315.067048" Rows="120002.000000" Width="22"/>
             </dxl:Properties>
@@ -751,7 +749,7 @@ WHERE t1.id1 = t2.id1;
               <dxl:ProjElem ColId="8" Alias="gp_segment_id">
                 <dxl:Ident ColId="8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="27" Alias="ColRef_0027">
+              <dxl:ProjElem ColId="36" Alias="ColRef_0036">
                 <dxl:DMLAction/>
               </dxl:ProjElem>
             </dxl:ProjList>

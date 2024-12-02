@@ -178,9 +178,9 @@
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
-          <dxl:Column ColId="4" Attno="1" ColName="time" TypeMdid="0.1184.1.0"/>
-          <dxl:Column ColId="5" Attno="2" ColName="device_id" TypeMdid="0.23.1.0"/>
-          <dxl:Column ColId="6" Attno="3" ColName="cpu_usage" TypeMdid="0.23.1.0"/>
+          <dxl:Column ColId="7" Attno="1" ColName="time" TypeMdid="0.1184.1.0"/>
+          <dxl:Column ColId="8" Attno="2" ColName="device_id" TypeMdid="0.23.1.0"/>
+          <dxl:Column ColId="9" Attno="3" ColName="cpu_usage" TypeMdid="0.23.1.0"/>
         </dxl:Columns>
         <dxl:CTASOptions OnCommitAction="NOOP"/>
         <dxl:ProjList>
@@ -208,8 +208,8 @@
             <dxl:ProjElem ColId="2" Alias="cpu_usage">
               <dxl:Ident ColId="2" ColName="cpu_usage" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="3" Alias="ColRef_0003">
-              <dxl:Ident ColId="3" ColName="ColRef_0003" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="6" Alias="ColRef_0006">
+              <dxl:Ident ColId="6" ColName="ColRef_0006" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
@@ -228,7 +228,7 @@
               <dxl:ProjElem ColId="2" Alias="cpu_usage">
                 <dxl:ConstValue TypeMdid="0.23.1.0" Value="100"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="3" Alias="ColRef_0003">
+              <dxl:ProjElem ColId="6" Alias="ColRef_0006">
                 <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
               </dxl:ProjElem>
             </dxl:ProjList>

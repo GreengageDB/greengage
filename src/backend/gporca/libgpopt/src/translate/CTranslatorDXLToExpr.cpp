@@ -1398,9 +1398,15 @@ CTranslatorDXLToExpr::PexprLogicalInsert(const CDXLNode *dxlnode)
 	CColRefArray *colref_array =
 		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulSourceCols);
 
-	return GPOS_NEW(m_mp) CExpression(
-		m_mp, GPOS_NEW(m_mp) CLogicalInsert(m_mp, ptabdesc, colref_array),
-		pexprChild);
+	CLogicalInsert *pexprLogInsert =
+		GPOS_NEW(m_mp) CLogicalInsert(m_mp, ptabdesc, colref_array);
+
+	// add mapping between the DXL ColId and CColRef to m_phmulcr
+	ConstructDXLColId2ColRefMapping(
+		pdxlopInsert->GetDXLTableDescr()->GetColumnDescr(),
+		pexprLogInsert->PdrgpcrOutput());
+
+	return GPOS_NEW(m_mp) CExpression(m_mp, pexprLogInsert, pexprChild);
 }
 
 //---------------------------------------------------------------------------
@@ -1447,11 +1453,16 @@ CTranslatorDXLToExpr::PexprLogicalDelete(const CDXLNode *dxlnode)
 	CColRefArray *colref_array =
 		CTranslatorDXLToExprUtils::Pdrgpcr(m_mp, m_phmulcr, pdrgpulCols);
 
-	return GPOS_NEW(m_mp) CExpression(
-		m_mp,
+	CLogicalDelete *pexprLogDelete = 
 		GPOS_NEW(m_mp) CLogicalDelete(m_mp, ptabdesc, colref_array, pcrCtid,
-									  pcrSegmentId, pcrTableOid),
-		pexprChild);
+									  pcrSegmentId, pcrTableOid);
+
+	// add mapping between the DXL ColId and CColRef to m_phmulcr
+	ConstructDXLColId2ColRefMapping(
+		pdxlopDelete->GetDXLTableDescr()->GetColumnDescr(),
+		pexprLogDelete->PdrgpcrOutput());
+
+	return GPOS_NEW(m_mp) CExpression(m_mp, pexprLogDelete, pexprChild);
 }
 
 //---------------------------------------------------------------------------
@@ -1509,12 +1520,16 @@ CTranslatorDXLToExpr::PexprLogicalUpdate(const CDXLNode *dxlnode)
 		pcrTupleOid = LookupColRef(m_phmulcr, tuple_oid);
 	}
 
-	return GPOS_NEW(m_mp) CExpression(
-		m_mp,
-		GPOS_NEW(m_mp)
-			CLogicalUpdate(m_mp, ptabdesc, pdrgpcrDelete, pdrgpcrInsert,
-						   pcrCtid, pcrSegmentId, pcrTupleOid, pcrTableOid),
-		pexprChild);
+	CLogicalUpdate *pexprLogUpdate = GPOS_NEW(m_mp)
+		CLogicalUpdate(m_mp, ptabdesc, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
+					   pcrSegmentId, pcrTupleOid, pcrTableOid);
+
+	// add mapping between the DXL ColId and CColRef to m_phmulcr
+	ConstructDXLColId2ColRefMapping(
+		pdxlopUpdate->GetDXLTableDescr()->GetColumnDescr(),
+		pexprLogUpdate->PdrgpcrOutput());
+
+	return GPOS_NEW(m_mp) CExpression(m_mp, pexprLogUpdate, pexprChild);
 }
 
 //---------------------------------------------------------------------------

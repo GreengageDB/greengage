@@ -1330,6 +1330,7 @@ typedef struct DML
 	AttrNumber	tupleoidColIdx;	/* index of tuple oid column into the target list */
 	AttrNumber	tableoidColIdx; /* index of table oid column into the target list */
 	bool		canSetTag;		/* calculate processed tuples */
+	List	   *returningList;	/* return-values list (of TargetEntry) */
 } DML;
 
 /*

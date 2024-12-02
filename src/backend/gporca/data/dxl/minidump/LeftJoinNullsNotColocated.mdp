@@ -427,9 +427,9 @@ on id2 = id3 distributed by (id1);
           <dxl:DistrOpclass Mdid="0.10055.1.0"/>
         </dxl:DistrOpclasses>
         <dxl:Columns>
-          <dxl:Column ColId="25" Attno="1" ColName="id1" TypeMdid="0.20.1.0"/>
-          <dxl:Column ColId="26" Attno="2" ColName="id2" TypeMdid="0.20.1.0"/>
-          <dxl:Column ColId="27" Attno="3" ColName="id3" TypeMdid="0.20.1.0"/>
+          <dxl:Column ColId="28" Attno="1" ColName="id1" TypeMdid="0.20.1.0"/>
+          <dxl:Column ColId="29" Attno="2" ColName="id2" TypeMdid="0.20.1.0"/>
+          <dxl:Column ColId="30" Attno="3" ColName="id3" TypeMdid="0.20.1.0"/>
         </dxl:Columns>
         <dxl:CTASOptions OnCommitAction="NOOP"/>
         <dxl:ProjList>
@@ -457,7 +457,7 @@ on id2 = id3 distributed by (id1);
             <dxl:ProjElem ColId="16" Alias="id3">
               <dxl:Ident ColId="16" ColName="id3" TypeMdid="0.20.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="24" Alias="ColRef_0024">
+            <dxl:ProjElem ColId="27" Alias="ColRef_0027">
               <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
             </dxl:ProjElem>
           </dxl:ProjList>

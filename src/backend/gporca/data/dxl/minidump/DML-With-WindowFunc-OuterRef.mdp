@@ -367,7 +367,7 @@
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
-          <dxl:Column ColId="22" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>
+          <dxl:Column ColId="23" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>
         </dxl:Columns>
         <dxl:CTASOptions OnCommitAction="NOOP"/>
         <dxl:ProjList>
@@ -383,7 +383,7 @@
             <dxl:ProjElem ColId="0" Alias="i">
               <dxl:Ident ColId="0" ColName="i" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="21" Alias="ColRef_0021">
+            <dxl:ProjElem ColId="22" Alias="ColRef_0022">
               <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
             </dxl:ProjElem>
           </dxl:ProjList>

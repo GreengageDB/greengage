@@ -177,10 +177,7 @@
       </dxl:Relation>
     </dxl:Metadata>
     <dxl:Query>
-      <dxl:OutputColumns>
-        <dxl:Ident ColId="2" ColName="a" TypeMdid="0.23.1.0"/>
-        <dxl:Ident ColId="3" ColName="id" TypeMdid="0.23.1.0"/>
-      </dxl:OutputColumns>
+      <dxl:OutputColumns/>
       <dxl:CTEList/>
       <dxl:LogicalInsert InsertColumns="2,3">
         <dxl:TableDescriptor Mdid="6.319084.1.1" TableName="m">
@@ -221,9 +218,9 @@
       </dxl:LogicalInsert>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="5">
-      <dxl:DMLInsert Columns="1,2" ActionCol="3" CtidCol="0" SegmentIdCol="0">
+      <dxl:DMLInsert Columns="1,2" ActionCol="12" CtidCol="0" SegmentIdCol="0">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="0.047000" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="0.047000" Rows="1.000000" Width="1"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList>
@@ -234,17 +231,16 @@
             <dxl:Ident ColId="2" ColName="id" TypeMdid="0.23.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
+        <dxl:ProjList/>
         <dxl:TableDescriptor Mdid="6.319084.1.1" TableName="m">
           <dxl:Columns>
-            <dxl:Column ColId="4" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>
-            <dxl:Column ColId="5" Attno="2" ColName="id" TypeMdid="0.23.1.0"/>
-            <dxl:Column ColId="6" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0"/>
-            <dxl:Column ColId="7" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0"/>
-            <dxl:Column ColId="8" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0"/>
-            <dxl:Column ColId="9" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0"/>
-            <dxl:Column ColId="10" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0"/>
-            <dxl:Column ColId="11" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0"/>
-            <dxl:Column ColId="12" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
+            <dxl:Column ColId="5" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0"/>
+            <dxl:Column ColId="6" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0"/>
+            <dxl:Column ColId="7" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0"/>
+            <dxl:Column ColId="8" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0"/>
+            <dxl:Column ColId="9" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0"/>
+            <dxl:Column ColId="10" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0"/>
+            <dxl:Column ColId="11" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
         <dxl:Assert ErrorCode="23502">
@@ -258,8 +254,8 @@
             <dxl:ProjElem ColId="2" Alias="id">
               <dxl:Ident ColId="2" ColName="id" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="3" Alias="ColRef_0003">
-              <dxl:Ident ColId="3" ColName="ColRef_0003" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="12" Alias="ColRef_0012">
+              <dxl:Ident ColId="12" ColName="ColRef_0012" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:AssertConstraintList>
@@ -276,15 +272,15 @@
               <dxl:Cost StartupCost="0" TotalCost="0.000113" Rows="1.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
-              <dxl:ProjElem ColId="3" Alias="ColRef_0003">
+              <dxl:ProjElem ColId="12" Alias="ColRef_0012">
                 <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
               </dxl:ProjElem>
               <dxl:ProjElem ColId="1" Alias="a">
                 <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
               </dxl:ProjElem>
               <dxl:ProjElem ColId="2" Alias="id">
-                <dxl:FuncExpr FuncId="0.480.1.0" FuncRetSet="false" TypeMdid="0.23.1.0">
-                  <dxl:FuncExpr FuncId="0.1574.1.0" FuncRetSet="false" TypeMdid="0.20.1.0">
+                <dxl:FuncExpr FuncId="0.480.1.0" FuncRetSet="false" TypeMdid="0.23.1.0" FuncVariadic="false">
+                  <dxl:FuncExpr FuncId="0.1574.1.0" FuncRetSet="false" TypeMdid="0.20.1.0" FuncVariadic="false">
                     <dxl:ConstValue TypeMdid="0.2205.1.0" Value="g94EAA=="/>
                   </dxl:FuncExpr>
                 </dxl:FuncExpr>
