@@ -14,8 +14,9 @@ RUN set -eux; \
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Packages for tests
     apt install -y rsync iproute2 fakeroot lsof sudo python3.11 python3.11-dev openjdk-17-jdk libipc-run-perl; \
+    apt install -y protobuf-compiler; \
 # Install allure-behave for behave tests
-    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0; \
+    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0 protobuf==3.20.0; \
     pip3 cache purge
 
 WORKDIR /home/gpadmin
