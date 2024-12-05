@@ -105,4 +105,5 @@ installcheck:
 	$(MAKE) -C gp_subtransaction_overflow installcheck
 	$(MAKE) -C gp_check_functions installcheck
 	$(MAKE) -C arenadata_toolkit installcheck
+	$(MAKE) -C arenadata_toolkit/isolation2 installcheck
 

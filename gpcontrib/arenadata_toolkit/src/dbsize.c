@@ -9,6 +9,7 @@
 #include "access/heapam.h"
 #include "cdb/cdbvars.h"
 #include "common/relpath.h"
+#include "catalog/namespace.h"
 #include "fmgr.h"
 #include "funcapi.h"
 #include "miscadmin.h"
@@ -25,6 +26,8 @@
 #include "catalog/pg_tablespace.h"
 #include "storage/lock.h"
 
+#include "dbsize.h"
+
 PG_MODULE_MAGIC;
 
 /*
@@ -33,14 +36,16 @@ PG_MODULE_MAGIC;
  */
 #define MAXPATHLEN_WITHSEGNO (MAXPGPATH + 12)
 
-static int64 calculate_relation_size(Relation rel, ForkNumber forknum);
+static int64 calculate_relation_size(Relation rel, ForkNumber forknum, bool softCalc);
 static int64 get_heap_storage_total_bytes(Relation rel,
 							 ForkNumber forknum, char *relpath);
-static int64 get_ao_storage_total_bytes(Relation rel, char *relpath);
+static int64 get_ao_storage_total_bytes(Relation rel, char *relpath, bool softCalc);
 static bool calculate_ao_storage_perSegFile(const int segno, void *ctx);
 static void fill_relation_seg_path(char *buf, int bufLen,
 					   const char *relpath, int segNo);
 static int64 calculate_toast_table_size(Oid toastrelid, ForkNumber forknum);
+static int64 get_heap_storage_total_bytes_soft(char *relpath);
+static bool calculate_ao_storage_perSegFile_soft(const int segno, void *ctx);
 
 /*
  * Structure used to accumulate the size of AO/CO relation from callback.
@@ -75,7 +80,7 @@ adb_relation_storage_size(PG_FUNCTION_ARGS)
 	if (relOid == 0 || rel->rd_node.relNode == 0)
 		size = 0;
 	else
-		size = calculate_relation_size(rel, forkNumber);
+		size = calculate_relation_size(rel, forkNumber, false);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -102,9 +107,14 @@ adb_relation_storage_size(PG_FUNCTION_ARGS)
  * dbsize.c. Thus calculation of size for heap/AO/CO relations is supported
  * (AO/CO relations don't have any extra forks, so only main fork is supported)
  * In other cases zero value is returned.
+ *
+ * softCalc parameter stands for indicator whether one can ignore stat() call
+ * errors. In this mode rel is not fully initialized and the lock on relation
+ * is not acquired. Therefore, the size calculation will be fuzzy since
+ * anything could happen with segment files.
  */
 static int64
-calculate_relation_size(Relation rel, ForkNumber forknum)
+calculate_relation_size(Relation rel, ForkNumber forknum, bool softCalc)
 {
 	bool		isAOMainFork = RelationIsAppendOptimized(rel) && forknum == MAIN_FORKNUM;
 
@@ -114,9 +124,9 @@ calculate_relation_size(Relation rel, ForkNumber forknum)
 	char	   *relpath = relpathbackend(rel->rd_node, rel->rd_backend, forknum);
 
 	if (RelationIsHeap(rel))
-		return get_heap_storage_total_bytes(rel, forknum, relpath);
+		return softCalc ? get_heap_storage_total_bytes_soft(relpath) : get_heap_storage_total_bytes(rel, forknum, relpath);
 
-	return get_ao_storage_total_bytes(rel, relpath);
+	return get_ao_storage_total_bytes(rel, relpath, softCalc);
 }
 
 static void
@@ -163,7 +173,7 @@ static int64
 calculate_toast_table_size(Oid toastrelid, ForkNumber forknum)
 {
 	Relation toastRel = relation_open(toastrelid, AccessShareLock);
-	int64    size = calculate_relation_size(toastRel, forknum);
+	int64    size = calculate_relation_size(toastRel, forknum, false);
 
 	relation_close(toastRel, AccessShareLock);
 	return size;
@@ -207,9 +217,14 @@ get_heap_storage_total_bytes(Relation rel, ForkNumber forknum, char *relpath)
 
 /*
  * Function calculates the size of AO/CO tables.
+ *
+ * softCalc parameter stands for indicator whether one can ignore stat() call
+ * errors. In this mode rel is not fully initialized and the lock on relation
+ * is not acquired. Therefore, the size calculation will be fuzzy since
+ * anything could happen with segment files.
  */
 static int64
-get_ao_storage_total_bytes(Relation rel, char *relpath)
+get_ao_storage_total_bytes(Relation rel, char *relpath, bool softCalc)
 {
 	struct calculate_ao_storage_callback_ctx ctx = {
 		.relfilenode_path = relpath,
@@ -223,9 +238,17 @@ get_ao_storage_total_bytes(Relation rel, char *relpath)
 	 * operations (for ex: CTAS) zero segment will store tuples). Thus
 	 * calculate segno=0 manually.
 	 */
-	(void) calculate_ao_storage_perSegFile(0, &ctx);
+	if (softCalc)
+	{
+		(void) calculate_ao_storage_perSegFile_soft(0, &ctx);
+		ao_foreach_extent_file(calculate_ao_storage_perSegFile_soft, &ctx);
+	}
+	else
+	{
+		(void) calculate_ao_storage_perSegFile(0, &ctx);
+		ao_foreach_extent_file(calculate_ao_storage_perSegFile, &ctx);
+	}
 
-	ao_foreach_extent_file(calculate_ao_storage_perSegFile, &ctx);
 	return ctx.total_size;
 }
 
@@ -369,4 +392,134 @@ PG_FUNCTION_INFO_V1(adb_hba_file_rules);
 Datum adb_hba_file_rules(PG_FUNCTION_ARGS)
 {
 	return pg_hba_file_rules(fcinfo);
+}
+/*
+ * Calculates relation size among all the forks. No lock is acquired on table.
+ * RelationData is partially initialized. Only necessary fields are taken from
+ * pg_class tuple to determine segment file location.
+ */
+int64
+dbsize_calc_size(Form_pg_class pg_class_data)
+{
+	RelationData	rel = {0};
+	int64		size = 0;
+
+	/*
+	 * Initialize Relfilenode field of RelationData.
+	 */
+	if (pg_class_data->reltablespace)
+		rel.rd_node.spcNode = pg_class_data->reltablespace;
+	else
+		rel.rd_node.spcNode = MyDatabaseTableSpace;
+	if (rel.rd_node.spcNode == GLOBALTABLESPACE_OID)
+		rel.rd_node.dbNode = InvalidOid;
+	else
+		rel.rd_node.dbNode = MyDatabaseId;
+
+	if (pg_class_data->relfilenode)
+		rel.rd_node.relNode = pg_class_data->relfilenode;
+
+	if (rel.rd_node.relNode == 0)
+		return size;
+
+	rel.rd_rel = pg_class_data;
+
+	/*
+	 * Initialize BackendId field of RelationData.
+	 */
+	switch (rel.rd_rel->relpersistence)
+	{
+		case RELPERSISTENCE_UNLOGGED:
+		case RELPERSISTENCE_PERMANENT:
+			rel.rd_backend = InvalidBackendId;
+			rel.rd_islocaltemp = false;
+			break;
+		case RELPERSISTENCE_TEMP:
+			if (isTempOrToastNamespace(rel.rd_rel->relnamespace))
+			{
+				rel.rd_backend = TempRelBackendId;
+				rel.rd_islocaltemp = true;
+			}
+			else
+			{
+				rel.rd_backend = TempRelBackendId;
+				rel.rd_islocaltemp = false;
+			}
+			break;
+		default:
+			elog(ERROR, "invalid relpersistence: %c",
+					rel.rd_rel->relpersistence);
+			break;
+	}
+
+	size += calculate_relation_size(&rel, MAIN_FORKNUM, true);
+	size += calculate_relation_size(&rel, FSM_FORKNUM, true);
+	size += calculate_relation_size(&rel, VISIBILITYMAP_FORKNUM, true);
+	size += calculate_relation_size(&rel, INIT_FORKNUM, true);
+
+	return size;
+}
+
+/*
+ * Function calculates the size of heap tables.
+ *
+ * The errors of stat() call are ignored
+ */
+static int64
+get_heap_storage_total_bytes_soft(char *relpath)
+{
+	int64		totalsize = 0;
+	char		segPath[MAXPATHLEN_WITHSEGNO];
+
+	/*
+	 * Ordinary relation, including heap and index. They take form of
+	 * relationpath, or relationpath.%d There will be no holes, therefore, we
+	 * can stop when we reach the first non-existing file.
+	 */
+	for (int segno = 0;; segno++)
+	{
+		struct stat fst;
+
+		CHECK_FOR_INTERRUPTS();
+
+		fill_relation_seg_path(segPath, MAXPATHLEN_WITHSEGNO, relpath, segno);
+		if (stat(segPath, &fst) < 0)
+		{
+			ereport(DEBUG1, (errcode_for_file_access(),
+							errmsg("[arenadata_toolkit] could not stat file %s: %m", segPath)));
+			break;
+		}
+		totalsize += fst.st_size;
+	}
+
+	return totalsize;
+}
+
+/*
+ * Function calculates the size of ao segment files.
+ *
+ * The errors of stat() call are ignored.
+ */
+static bool
+calculate_ao_storage_perSegFile_soft(const int segno, void *ctx)
+{
+	struct stat fst;
+	char		segPath[MAXPATHLEN_WITHSEGNO];
+	struct calculate_ao_storage_callback_ctx *calcCtx = ctx;
+
+	CHECK_FOR_INTERRUPTS();
+
+	fill_relation_seg_path(segPath, MAXPATHLEN_WITHSEGNO,
+						   calcCtx->relfilenode_path, segno);
+
+	if (stat(segPath, &fst) < 0)
+	{
+		ereport(DEBUG1, (errcode_for_file_access(),
+						errmsg("[arenadata_toolkit] could not access file %s: %m", segPath)));
+		return false;
+	}
+	else
+		calcCtx->total_size += fst.st_size;
+
+	return true;
 }

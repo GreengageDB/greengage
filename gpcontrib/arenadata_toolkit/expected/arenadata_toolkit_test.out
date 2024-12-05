@@ -112,31 +112,63 @@ SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY o
  db_files_history_backup_YYYYMMDDtHHMMSS                    | table   | a          | 
  db_files_history_backup_YYYYMMDDtHHMMSS_1_prt_default_part | table   | a          | 
  db_files_history_backup_YYYYMMDDtHHMMSS_1_prt_pYYYYMM      | table   | a          | 
+ is_initial_snapshot_triggered                              | table   | v          | {owner=arwdDxt/owner,=r/owner}
  operation_exclude                                          | table   | a          | 
-(24 rows)
+ tables_track                                               | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ tracking_get_track_master                                  | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_get_track_segments                                | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_is_initial_snapshot_triggered_master              | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_is_initial_snapshot_triggered_segments            | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_is_segment_initialized                            | proc    | -          | {owner=X/owner}
+ tracking_register_db                                       | proc    | -          | {owner=X/owner}
+ tracking_register_schema                                   | proc    | -          | {owner=X/owner}
+ tracking_set_relkinds                                      | proc    | -          | {owner=X/owner}
+ tracking_set_relstorages                                   | proc    | -          | {owner=X/owner}
+ tracking_set_snapshot_on_recovery                          | proc    | -          | {owner=X/owner}
+ tracking_track_version                                     | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_trigger_initial_snapshot                          | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_unregister_db                                     | proc    | -          | {owner=X/owner}
+ tracking_unregister_schema                                 | proc    | -          | {owner=X/owner}
+(40 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
 	toolkit_objects_info objs ON d.objid = objs.objid JOIN
 	pg_extension e ON d.refobjid = e.oid
 WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
-                objname                | objtype |      extname      | deptype 
----------------------------------------+---------+-------------------+---------
- __db_files_current                    | table   | arenadata_toolkit | e
- __db_files_current_unmapped           | table   | arenadata_toolkit | e
- __db_segment_files                    | table   | arenadata_toolkit | e
- adb_collect_table_stats               | proc    | arenadata_toolkit | e
- adb_create_tables                     | proc    | arenadata_toolkit | e
- adb_get_relfilenodes                  | proc    | arenadata_toolkit | e
- adb_hba_file_rules                    | proc    | arenadata_toolkit | e
- adb_hba_file_rules_view               | table   | arenadata_toolkit | e
- adb_relation_storage_size             | proc    | arenadata_toolkit | e
- adb_relation_storage_size_on_segments | proc    | arenadata_toolkit | e
- adb_skew_coefficients                 | table   | arenadata_toolkit | e
- adb_vacuum_strategy                   | proc    | arenadata_toolkit | e
- adb_vacuum_strategy_newest_first      | proc    | arenadata_toolkit | e
- adb_vacuum_strategy_newest_last       | proc    | arenadata_toolkit | e
-(14 rows)
+                     objname                     | objtype |      extname      | deptype 
+-------------------------------------------------+---------+-------------------+---------
+ __db_files_current                              | table   | arenadata_toolkit | e
+ __db_files_current_unmapped                     | table   | arenadata_toolkit | e
+ __db_segment_files                              | table   | arenadata_toolkit | e
+ adb_collect_table_stats                         | proc    | arenadata_toolkit | e
+ adb_create_tables                               | proc    | arenadata_toolkit | e
+ adb_get_relfilenodes                            | proc    | arenadata_toolkit | e
+ adb_hba_file_rules                              | proc    | arenadata_toolkit | e
+ adb_hba_file_rules_view                         | table   | arenadata_toolkit | e
+ adb_relation_storage_size                       | proc    | arenadata_toolkit | e
+ adb_relation_storage_size_on_segments           | proc    | arenadata_toolkit | e
+ adb_skew_coefficients                           | table   | arenadata_toolkit | e
+ adb_vacuum_strategy                             | proc    | arenadata_toolkit | e
+ adb_vacuum_strategy_newest_first                | proc    | arenadata_toolkit | e
+ adb_vacuum_strategy_newest_last                 | proc    | arenadata_toolkit | e
+ is_initial_snapshot_triggered                   | table   | arenadata_toolkit | e
+ tables_track                                    | table   | arenadata_toolkit | e
+ tracking_get_track_master                       | proc    | arenadata_toolkit | e
+ tracking_get_track_segments                     | proc    | arenadata_toolkit | e
+ tracking_is_initial_snapshot_triggered_master   | proc    | arenadata_toolkit | e
+ tracking_is_initial_snapshot_triggered_segments | proc    | arenadata_toolkit | e
+ tracking_is_segment_initialized                 | proc    | arenadata_toolkit | e
+ tracking_register_db                            | proc    | arenadata_toolkit | e
+ tracking_register_schema                        | proc    | arenadata_toolkit | e
+ tracking_set_relkinds                           | proc    | arenadata_toolkit | e
+ tracking_set_relstorages                        | proc    | arenadata_toolkit | e
+ tracking_set_snapshot_on_recovery               | proc    | arenadata_toolkit | e
+ tracking_track_version                          | proc    | arenadata_toolkit | e
+ tracking_trigger_initial_snapshot               | proc    | arenadata_toolkit | e
+ tracking_unregister_db                          | proc    | arenadata_toolkit | e
+ tracking_unregister_schema                      | proc    | arenadata_toolkit | e
+(30 rows)
 
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit CASCADE;
@@ -153,53 +185,85 @@ SELECT arenadata_toolkit.adb_create_tables();
 -- show toolkit objects (and their grants) that belongs to arenadata_toolkit schema after creating
 -- extension and calling adb_create_tables
 SELECT objname, objtype, objstorage, objacl FROM toolkit_objects_info ORDER BY objname;
-                objname                | objtype | objstorage |             objacl             
----------------------------------------+---------+------------+--------------------------------
- __db_files_current                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_files_current_unmapped           | table   | v          | {owner=arwdDxt/owner,=r/owner}
- __db_segment_files                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
- adb_collect_table_stats               | proc    | -          | {owner=X/owner}
- adb_create_tables                     | proc    | -          | {owner=X/owner}
- adb_get_relfilenodes                  | proc    | -          | {=X/owner,owner=X/owner}
- adb_hba_file_rules                    | proc    | -          | {owner=X/owner}
- adb_hba_file_rules_view               | table   | v          | {owner=arwdDxt/owner}
- adb_relation_storage_size             | proc    | -          | {=X/owner,owner=X/owner}
- adb_relation_storage_size_on_segments | proc    | -          | {=X/owner,owner=X/owner}
- adb_skew_coefficients                 | table   | v          | {owner=arwdDxt/owner,=r/owner}
- adb_vacuum_strategy                   | proc    | -          | {owner=X/owner}
- adb_vacuum_strategy_newest_first      | proc    | -          | {owner=X/owner}
- adb_vacuum_strategy_newest_last       | proc    | -          | {owner=X/owner}
- arenadata_toolkit                     | schema  | -          | {owner=UC/owner,=U/owner}
- daily_operation                       | table   | a          | {owner=arwdDxt/owner}
- db_files_current                      | table   | h          | {owner=arwdDxt/owner,=r/owner}
- db_files_history                      | table   | a          | {owner=arwdDxt/owner}
- db_files_history_1_prt_default_part   | table   | a          | {owner=arwdDxt/owner}
- db_files_history_1_prt_pYYYYMM        | table   | a          | {owner=arwdDxt/owner}
- operation_exclude                     | table   | a          | {owner=arwdDxt/owner}
-(21 rows)
+                     objname                     | objtype | objstorage |             objacl             
+-------------------------------------------------+---------+------------+--------------------------------
+ __db_files_current                              | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_files_current_unmapped                     | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ __db_segment_files                              | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ adb_collect_table_stats                         | proc    | -          | {owner=X/owner}
+ adb_create_tables                               | proc    | -          | {owner=X/owner}
+ adb_get_relfilenodes                            | proc    | -          | {=X/owner,owner=X/owner}
+ adb_hba_file_rules                              | proc    | -          | {owner=X/owner}
+ adb_hba_file_rules_view                         | table   | v          | {owner=arwdDxt/owner}
+ adb_relation_storage_size                       | proc    | -          | {=X/owner,owner=X/owner}
+ adb_relation_storage_size_on_segments           | proc    | -          | {=X/owner,owner=X/owner}
+ adb_skew_coefficients                           | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ adb_vacuum_strategy                             | proc    | -          | {owner=X/owner}
+ adb_vacuum_strategy_newest_first                | proc    | -          | {owner=X/owner}
+ adb_vacuum_strategy_newest_last                 | proc    | -          | {owner=X/owner}
+ arenadata_toolkit                               | schema  | -          | {owner=UC/owner,=U/owner}
+ daily_operation                                 | table   | a          | {owner=arwdDxt/owner}
+ db_files_current                                | table   | h          | {owner=arwdDxt/owner,=r/owner}
+ db_files_history                                | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_1_prt_default_part             | table   | a          | {owner=arwdDxt/owner}
+ db_files_history_1_prt_p202410                  | table   | a          | {owner=arwdDxt/owner}
+ is_initial_snapshot_triggered                   | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ operation_exclude                               | table   | a          | {owner=arwdDxt/owner}
+ tables_track                                    | table   | v          | {owner=arwdDxt/owner,=r/owner}
+ tracking_get_track_master                       | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_get_track_segments                     | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_is_initial_snapshot_triggered_master   | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_is_initial_snapshot_triggered_segments | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_is_segment_initialized                 | proc    | -          | {owner=X/owner}
+ tracking_register_db                            | proc    | -          | {owner=X/owner}
+ tracking_register_schema                        | proc    | -          | {owner=X/owner}
+ tracking_set_relkinds                           | proc    | -          | {owner=X/owner}
+ tracking_set_relstorages                        | proc    | -          | {owner=X/owner}
+ tracking_set_snapshot_on_recovery               | proc    | -          | {owner=X/owner}
+ tracking_track_version                          | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_trigger_initial_snapshot               | proc    | -          | {=X/owner,owner=X/owner}
+ tracking_unregister_db                          | proc    | -          | {owner=X/owner}
+ tracking_unregister_schema                      | proc    | -          | {owner=X/owner}
+(37 rows)
 
 -- check that toolkit objects now depends on extension
 SELECT objname, objtype, extname, deptype FROM pg_depend d JOIN
 	toolkit_objects_info objs ON d.objid = objs.objid JOIN
 	pg_extension e ON d.refobjid = e.oid
 WHERE d.deptype = 'e' AND e.extname = 'arenadata_toolkit' ORDER BY objname;
-                objname                | objtype |      extname      | deptype 
----------------------------------------+---------+-------------------+---------
- __db_files_current                    | table   | arenadata_toolkit | e
- __db_files_current_unmapped           | table   | arenadata_toolkit | e
- __db_segment_files                    | table   | arenadata_toolkit | e
- adb_collect_table_stats               | proc    | arenadata_toolkit | e
- adb_create_tables                     | proc    | arenadata_toolkit | e
- adb_get_relfilenodes                  | proc    | arenadata_toolkit | e
- adb_hba_file_rules                    | proc    | arenadata_toolkit | e
- adb_hba_file_rules_view               | table   | arenadata_toolkit | e
- adb_relation_storage_size             | proc    | arenadata_toolkit | e
- adb_relation_storage_size_on_segments | proc    | arenadata_toolkit | e
- adb_skew_coefficients                 | table   | arenadata_toolkit | e
- adb_vacuum_strategy                   | proc    | arenadata_toolkit | e
- adb_vacuum_strategy_newest_first      | proc    | arenadata_toolkit | e
- adb_vacuum_strategy_newest_last       | proc    | arenadata_toolkit | e
-(14 rows)
+                     objname                     | objtype |      extname      | deptype 
+-------------------------------------------------+---------+-------------------+---------
+ __db_files_current                              | table   | arenadata_toolkit | e
+ __db_files_current_unmapped                     | table   | arenadata_toolkit | e
+ __db_segment_files                              | table   | arenadata_toolkit | e
+ adb_collect_table_stats                         | proc    | arenadata_toolkit | e
+ adb_create_tables                               | proc    | arenadata_toolkit | e
+ adb_get_relfilenodes                            | proc    | arenadata_toolkit | e
+ adb_hba_file_rules                              | proc    | arenadata_toolkit | e
+ adb_hba_file_rules_view                         | table   | arenadata_toolkit | e
+ adb_relation_storage_size                       | proc    | arenadata_toolkit | e
+ adb_relation_storage_size_on_segments           | proc    | arenadata_toolkit | e
+ adb_skew_coefficients                           | table   | arenadata_toolkit | e
+ adb_vacuum_strategy                             | proc    | arenadata_toolkit | e
+ adb_vacuum_strategy_newest_first                | proc    | arenadata_toolkit | e
+ adb_vacuum_strategy_newest_last                 | proc    | arenadata_toolkit | e
+ is_initial_snapshot_triggered                   | table   | arenadata_toolkit | e
+ tables_track                                    | table   | arenadata_toolkit | e
+ tracking_get_track_master                       | proc    | arenadata_toolkit | e
+ tracking_get_track_segments                     | proc    | arenadata_toolkit | e
+ tracking_is_initial_snapshot_triggered_master   | proc    | arenadata_toolkit | e
+ tracking_is_initial_snapshot_triggered_segments | proc    | arenadata_toolkit | e
+ tracking_is_segment_initialized                 | proc    | arenadata_toolkit | e
+ tracking_register_db                            | proc    | arenadata_toolkit | e
+ tracking_register_schema                        | proc    | arenadata_toolkit | e
+ tracking_set_relkinds                           | proc    | arenadata_toolkit | e
+ tracking_set_relstorages                        | proc    | arenadata_toolkit | e
+ tracking_set_snapshot_on_recovery               | proc    | arenadata_toolkit | e
+ tracking_track_version                          | proc    | arenadata_toolkit | e
+ tracking_trigger_initial_snapshot               | proc    | arenadata_toolkit | e
+ tracking_unregister_db                          | proc    | arenadata_toolkit | e
+ tracking_unregister_schema                      | proc    | arenadata_toolkit | e
+(30 rows)
 
 DROP EXTENSION arenadata_toolkit;
 DROP SCHEMA arenadata_toolkit CASCADE;

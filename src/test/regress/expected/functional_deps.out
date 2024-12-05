@@ -16,6 +16,9 @@ CREATE TEMP TABLE articles_in_category (
     changed date,
     PRIMARY KEY (article_id, category_id)
 );
+-- The patch https://github.com/arenadata/gpdb/pull/1117 changes the parser
+-- behavior so that queries with ungrouped columns by non-key attributes in
+-- groups no longer work.
 -- test functional dependencies based on primary keys/unique constraints
 -- base tables
 -- group by primary key (OK)
@@ -165,15 +168,49 @@ explain (costs off) select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join fun
  Optimizer: Postgres query optimizer
 (17 rows)
 
-select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join funcdep2 t2 on t1.b = t2.b group by t1.a;
+select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join funcdep2 t2 on t1.b = t2.b group by t1.a order by t1.a;
  sum | a | b | c 
 -----+---+---+---
-   1 | 3 | 1 | 1
-   1 | 2 | 1 | 1
    1 | 1 | 1 | 1
+   1 | 2 | 1 | 1
+   1 | 3 | 1 | 1
 (3 rows)
 
-explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), ());
+-- modified for ungrouped columns
+explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), (a,b));
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   ->  GroupAggregate
+         Group Key: "rollup".prelim_aggref_1, "rollup".prelim_aggref_2, "rollup"."grouping", "rollup"."group_id"
+         ->  Subquery Scan on "rollup"
+               ->  Sort
+                     Sort Key: rollup_1.prelim_aggref_1, rollup_1.prelim_aggref_2, (Grouping), (group_id())
+                     ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                           Hash Key: rollup_1.prelim_aggref_1, rollup_1.prelim_aggref_2, (Grouping), group_id()
+                           ->  GroupAggregate
+                                 Group Key: rollup_1.prelim_aggref_1, rollup_1."grouping", rollup_1."group_id", rollup_1.prelim_aggref_2
+                                 ->  Subquery Scan on rollup_1
+                                       ->  GroupAggregate
+                                             Group Key: funcdep1.a, funcdep1.b
+                                             ->  Sort
+                                                   Sort Key: funcdep1.a, funcdep1.b
+                                                   ->  Seq Scan on funcdep1
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), (a,b));
+ sum | c | d | grouping 
+-----+---+---+----------
+   1 | 1 | 1 |        0
+   1 | 1 | 1 |        0
+   1 | 1 | 1 |        0
+   1 | 1 | 1 |        0
+   1 | 1 | 1 |        0
+   1 | 1 | 1 |        0
+(6 rows)
+
+explain (costs off) select sum(b), sum(c), sum(d), grouping(a) from funcdep1 group by rollup(a);
                                                   QUERY PLAN                                                   
 ---------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
@@ -195,76 +232,96 @@ explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by grou
  Optimizer: Postgres query optimizer
 (17 rows)
 
-select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), ());
- sum | c | d | grouping 
------+---+---+----------
-   1 | 1 | 1 |        0
-   1 | 1 | 1 |        0
-   1 | 1 | 1 |        0
-   3 | 1 | 1 |        1
+select sum(b), sum(c), sum(d), grouping(a) from funcdep1 group by rollup(a);
+ sum | sum | sum | grouping 
+-----+-----+-----+----------
+   1 |   1 |   1 |        0
+   1 |   1 |   1 |        0
+   1 |   1 |   1 |        0
+   3 |   3 |   3 |        1
 (4 rows)
 
-explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by rollup(a);
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   ->  GroupAggregate
-         Group Key: "rollup".prelim_aggref_1, "rollup"."grouping", "rollup"."group_id"
-         ->  Subquery Scan on "rollup"
-               ->  Sort
-                     Sort Key: rollup_1.prelim_aggref_1, (Grouping), (group_id())
-                     ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                           Hash Key: rollup_1.prelim_aggref_1, (Grouping), group_id()
-                           ->  GroupAggregate
-                                 Group Key: rollup_1."grouping", rollup_1."group_id", rollup_1.prelim_aggref_1
-                                 ->  Subquery Scan on rollup_1
-                                       ->  GroupAggregate
-                                             Group Key: funcdep1.a
-                                             ->  Sort
-                                                   Sort Key: funcdep1.a
-                                                   ->  Seq Scan on funcdep1
+explain (costs off) select sum(d), a, b, c, grouping(a) from funcdep1 group by cube(a,b,c);
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice4; segments: 3)
+   ->  Append
+         ->  GroupAggregate
+               Group Key: "rollup".c, "rollup".b, "rollup".a, "rollup"."grouping", "rollup"."group_id"
+               ->  Subquery Scan on "rollup"
+                     ->  Sort
+                           Sort Key: rollup_1.c, rollup_1.b, rollup_1.a, (Grouping), (group_id())
+                           ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                                 Hash Key: rollup_1.c, rollup_1.b, rollup_1.a, (Grouping), group_id()
+                                 ->  GroupAggregate
+                                       Group Key: rollup_1."grouping", rollup_1."group_id", rollup_1.a, rollup_1.c, rollup_1.b
+                                       ->  Subquery Scan on rollup_1
+                                             ->  GroupAggregate
+                                                   Group Key: rollup_2.c, rollup_2."grouping", rollup_2."group_id", rollup_2.b, rollup_2.a
+                                                   ->  Subquery Scan on rollup_2
+                                                         ->  GroupAggregate
+                                                               Group Key: rollup_3.c, rollup_3.b, rollup_3."grouping", rollup_3."group_id", rollup_3.a
+                                                               ->  Subquery Scan on rollup_3
+                                                                     ->  GroupAggregate
+                                                                           Group Key: share0_ref1.c, share0_ref1.b, share0_ref1.a
+                                                                           ->  Sort
+                                                                                 Sort Key: share0_ref1.c, share0_ref1.b, share0_ref1.a
+                                                                                 ->  Shared Scan (share slice:id 1:0)
+                                                                                       ->  Materialize
+                                                                                             ->  Seq Scan on funcdep1
+         ->  GroupAggregate
+               Group Key: rollup_4.a, rollup_4.c, rollup_4.b, rollup_4."grouping", rollup_4."group_id"
+               ->  Subquery Scan on rollup_4
+                     ->  Sort
+                           Sort Key: rollup_5.a, rollup_5.c, rollup_5.b, (Grouping), (group_id())
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: rollup_5.a, rollup_5.c, rollup_5.b, (Grouping), group_id()
+                                 ->  GroupAggregate
+                                       Group Key: rollup_5.a, rollup_5."grouping", rollup_5."group_id", rollup_5.c, rollup_5.b
+                                       ->  Subquery Scan on rollup_5
+                                             ->  GroupAggregate
+                                                   Group Key: share0_ref2.a, share0_ref2.c, share0_ref2.b
+                                                   ->  Sort
+                                                         Sort Key: share0_ref2.a, share0_ref2.c, share0_ref2.b
+                                                         ->  Shared Scan (share slice:id 2:0)
+         ->  GroupAggregate
+               Group Key: rollup_6.b, rollup_6.a, rollup_6.c, rollup_6."grouping", rollup_6."group_id"
+               ->  Subquery Scan on rollup_6
+                     ->  Sort
+                           Sort Key: rollup_7.b, rollup_7.a, rollup_7.c, (Grouping), (group_id())
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: rollup_7.b, rollup_7.a, rollup_7.c, (Grouping), group_id()
+                                 ->  GroupAggregate
+                                       Group Key: rollup_7.b, rollup_7."grouping", rollup_7."group_id", rollup_7.a, rollup_7.c
+                                       ->  Subquery Scan on rollup_7
+                                             ->  GroupAggregate
+                                                   Group Key: share0_ref3.b, share0_ref3.a, share0_ref3.c
+                                                   ->  Sort
+                                                         Sort Key: share0_ref3.b, share0_ref3.a, share0_ref3.c
+                                                         ->  Shared Scan (share slice:id 3:0)
  Optimizer: Postgres query optimizer
-(17 rows)
+(56 rows)
 
-select sum(b), c, d, grouping(a) from funcdep1 group by rollup(a);
- sum | c | d | grouping 
------+---+---+----------
-   1 | 1 | 1 |        0
-   1 | 1 | 1 |        0
-   1 | 1 | 1 |        0
-   3 | 1 | 1 |        1
-(4 rows)
-
-explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by cube(a);
-                                                  QUERY PLAN                                                   
----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   ->  GroupAggregate
-         Group Key: "rollup".prelim_aggref_1, "rollup"."grouping", "rollup"."group_id"
-         ->  Subquery Scan on "rollup"
-               ->  Sort
-                     Sort Key: rollup_1.prelim_aggref_1, (Grouping), (group_id())
-                     ->  Redistribute Motion 3:3  (slice1; segments: 3)
-                           Hash Key: rollup_1.prelim_aggref_1, (Grouping), group_id()
-                           ->  GroupAggregate
-                                 Group Key: rollup_1."grouping", rollup_1."group_id", rollup_1.prelim_aggref_1
-                                 ->  Subquery Scan on rollup_1
-                                       ->  GroupAggregate
-                                             Group Key: funcdep1.a
-                                             ->  Sort
-                                                   Sort Key: funcdep1.a
-                                                   ->  Seq Scan on funcdep1
- Optimizer: Postgres query optimizer
-(17 rows)
-
-select sum(b), c, d, grouping(a) from funcdep1 group by cube(a);
- sum | c | d | grouping 
------+---+---+----------
-   1 | 1 | 1 |        0
-   1 | 1 | 1 |        0
-   1 | 1 | 1 |        0
-   3 | 1 | 1 |        1
-(4 rows)
+select sum(d), a, b, c, grouping(a) from funcdep1 group by cube(a,b,c) order by a, b, c;
+ sum | a | b | c | grouping 
+-----+---+---+---+----------
+   1 | 1 | 1 | 1 |        0
+   1 | 1 | 1 |   |        0
+   1 | 1 |   | 1 |        0
+   1 | 1 |   |   |        0
+   1 | 2 | 1 | 1 |        0
+   1 | 2 | 1 |   |        0
+   1 | 2 |   | 1 |        0
+   1 | 2 |   |   |        0
+   1 | 3 | 1 | 1 |        0
+   1 | 3 | 1 |   |        0
+   1 | 3 |   | 1 |        0
+   1 | 3 |   |   |        0
+   3 |   | 1 | 1 |        1
+   3 |   | 1 |   |        1
+   3 |   |   | 1 |        1
+   3 |   |   |   |        1
+(16 rows)
 
 explain (costs off) select count(distinct b), c, d from funcdep1 group by a;
                                         QUERY PLAN                                         
@@ -387,7 +444,7 @@ explain (verbose on, costs off) select a, b , sum(c + d), e from mfuncdep1 join 
                                              ->  Seq Scan on public.mfuncdep1
                                                    Output: mfuncdep1.a, mfuncdep1.b, mfuncdep1.c, mfuncdep1.d, mfuncdep1.e
  Optimizer: Postgres query optimizer
- Settings: enable_groupagg=off
+ Settings: enable_groupagg=off, optimizer=off
 (28 rows)
 
 select a, b , sum(c + d), e from mfuncdep1 join mfuncdep2 on c = b2 group by a,b order by 1;
@@ -784,72 +841,6 @@ SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a)) ORDER BY a, b;
  25 | text0 | 0
 (25 rows)
 
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a, b, c;
- a  |   b   | c 
-----+-------+---
-  1 | text1 | 0
-  2 | text2 | 1
-  3 | text3 | 0
-  4 | text4 | 1
-  5 | text0 | 0
-  6 | text1 | 1
-  7 | text2 | 0
-  8 | text3 | 1
-  9 | text4 | 0
- 10 | text0 | 1
- 11 | text1 | 0
- 12 | text2 | 1
- 13 | text3 | 0
- 14 | text4 | 1
- 15 | text0 | 0
- 16 | text1 | 1
- 17 | text2 | 0
- 18 | text3 | 1
- 19 | text4 | 0
- 20 | text0 | 1
- 21 | text1 | 0
- 22 | text2 | 1
- 23 | text3 | 0
- 24 | text4 | 1
- 25 | text0 | 0
-    |       |  
-(26 rows)
-
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), (b)) ORDER BY a, b;
- a  |   b   | c 
-----+-------+---
-  1 |       | 0
-  2 |       | 1
-  3 |       | 0
-  4 |       | 1
-  5 |       | 0
-  6 |       | 1
-  7 |       | 0
-  8 |       | 1
-  9 |       | 0
- 10 |       | 1
- 11 |       | 0
- 12 |       | 1
- 13 |       | 0
- 14 |       | 1
- 15 |       | 0
- 16 |       | 1
- 17 |       | 0
- 18 |       | 1
- 19 |       | 0
- 20 |       | 1
- 21 |       | 0
- 22 |       | 1
- 23 |       | 0
- 24 |       | 1
- 25 |       | 0
-    | text0 |  
-    | text1 |  
-    | text2 |  
-    | text3 |  
-    | text4 |  
-(30 rows)
-
 SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b)) ORDER BY a, b;
  a  |   b   | c 
 ----+-------+---
@@ -880,180 +871,171 @@ SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b)) ORDER BY a, b;
  25 | text0 | 0
 (25 rows)
 
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b), (a), ()) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b), (a), (a,c)) ORDER BY a, b, c;
  a  |   b   | c 
 ----+-------+---
-  1 | text1 | 0
+  1 | text1 |  
   1 |       | 0
-  2 | text2 | 1
+  1 |       |  
+  2 | text2 |  
   2 |       | 1
-  3 | text3 | 0
+  2 |       |  
+  3 | text3 |  
   3 |       | 0
-  4 | text4 | 1
+  3 |       |  
+  4 | text4 |  
   4 |       | 1
-  5 | text0 | 0
+  4 |       |  
+  5 | text0 |  
   5 |       | 0
-  6 | text1 | 1
+  5 |       |  
+  6 | text1 |  
   6 |       | 1
-  7 | text2 | 0
+  6 |       |  
+  7 | text2 |  
   7 |       | 0
-  8 | text3 | 1
+  7 |       |  
+  8 | text3 |  
   8 |       | 1
-  9 | text4 | 0
+  8 |       |  
+  9 | text4 |  
   9 |       | 0
- 10 | text0 | 1
+  9 |       |  
+ 10 | text0 |  
  10 |       | 1
- 11 | text1 | 0
+ 10 |       |  
+ 11 | text1 |  
  11 |       | 0
- 12 | text2 | 1
+ 11 |       |  
+ 12 | text2 |  
  12 |       | 1
- 13 | text3 | 0
+ 12 |       |  
+ 13 | text3 |  
  13 |       | 0
- 14 | text4 | 1
+ 13 |       |  
+ 14 | text4 |  
  14 |       | 1
- 15 | text0 | 0
+ 14 |       |  
+ 15 | text0 |  
  15 |       | 0
- 16 | text1 | 1
+ 15 |       |  
+ 16 | text1 |  
  16 |       | 1
- 17 | text2 | 0
+ 16 |       |  
+ 17 | text2 |  
  17 |       | 0
- 18 | text3 | 1
+ 17 |       |  
+ 18 | text3 |  
  18 |       | 1
- 19 | text4 | 0
+ 18 |       |  
+ 19 | text4 |  
  19 |       | 0
- 20 | text0 | 1
+ 19 |       |  
+ 20 | text0 |  
  20 |       | 1
- 21 | text1 | 0
+ 20 |       |  
+ 21 | text1 |  
  21 |       | 0
- 22 | text2 | 1
+ 21 |       |  
+ 22 | text2 |  
  22 |       | 1
- 23 | text3 | 0
+ 22 |       |  
+ 23 | text3 |  
  23 |       | 0
- 24 | text4 | 1
+ 23 |       |  
+ 24 | text4 |  
  24 |       | 1
- 25 | text0 | 0
+ 24 |       |  
+ 25 | text0 |  
  25 |       | 0
-    |       |  
-(51 rows)
+ 25 |       |  
+(75 rows)
 
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, a), ()) ORDER BY a, b, c;
- a  |   b   | c 
-----+-------+---
-  1 | text1 | 0
-  2 | text2 | 1
-  3 | text3 | 0
-  4 | text4 | 1
-  5 | text0 | 0
-  6 | text1 | 1
-  7 | text2 | 0
-  8 | text3 | 1
-  9 | text4 | 0
- 10 | text0 | 1
- 11 | text1 | 0
- 12 | text2 | 1
- 13 | text3 | 0
- 14 | text4 | 1
- 15 | text0 | 0
- 16 | text1 | 1
- 17 | text2 | 0
- 18 | text3 | 1
- 19 | text4 | 0
- 20 | text0 | 1
- 21 | text1 | 0
- 22 | text2 | 1
- 23 | text3 | 0
- 24 | text4 | 1
- 25 | text0 | 0
-    |       |  
-(26 rows)
-
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, a), ()) ORDER BY a, b, c; -- fail
+ERROR:  column "test_table1.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, ...
+                  ^
 -- Check rollup
-SELECT a, b, c FROM test_table1 GROUP BY ROLLUP (a) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY ROLLUP (a,b,c) ORDER BY a, b, c;
  a  |   b   | c 
 ----+-------+---
   1 | text1 | 0
+  1 | text1 |  
+  1 |       |  
   2 | text2 | 1
+  2 | text2 |  
+  2 |       |  
   3 | text3 | 0
+  3 | text3 |  
+  3 |       |  
   4 | text4 | 1
+  4 | text4 |  
+  4 |       |  
   5 | text0 | 0
+  5 | text0 |  
+  5 |       |  
   6 | text1 | 1
+  6 | text1 |  
+  6 |       |  
   7 | text2 | 0
+  7 | text2 |  
+  7 |       |  
   8 | text3 | 1
+  8 | text3 |  
+  8 |       |  
   9 | text4 | 0
+  9 | text4 |  
+  9 |       |  
  10 | text0 | 1
+ 10 | text0 |  
+ 10 |       |  
  11 | text1 | 0
+ 11 | text1 |  
+ 11 |       |  
  12 | text2 | 1
+ 12 | text2 |  
+ 12 |       |  
  13 | text3 | 0
+ 13 | text3 |  
+ 13 |       |  
  14 | text4 | 1
+ 14 | text4 |  
+ 14 |       |  
  15 | text0 | 0
+ 15 | text0 |  
+ 15 |       |  
  16 | text1 | 1
+ 16 | text1 |  
+ 16 |       |  
  17 | text2 | 0
+ 17 | text2 |  
+ 17 |       |  
  18 | text3 | 1
+ 18 | text3 |  
+ 18 |       |  
  19 | text4 | 0
+ 19 | text4 |  
+ 19 |       |  
  20 | text0 | 1
+ 20 | text0 |  
+ 20 |       |  
  21 | text1 | 0
+ 21 | text1 |  
+ 21 |       |  
  22 | text2 | 1
+ 22 | text2 |  
+ 22 |       |  
  23 | text3 | 0
+ 23 | text3 |  
+ 23 |       |  
  24 | text4 | 1
+ 24 | text4 |  
+ 24 |       |  
  25 | text0 | 0
+ 25 | text0 |  
+ 25 |       |  
     |       |  
-(26 rows)
-
-SELECT a, b, c FROM test_table1 GROUP BY ROLLUP (a, b) ORDER BY a, b, c;
- a  |   b   | c 
-----+-------+---
-  1 | text1 | 0
-  1 |       | 0
-  2 | text2 | 1
-  2 |       | 1
-  3 | text3 | 0
-  3 |       | 0
-  4 | text4 | 1
-  4 |       | 1
-  5 | text0 | 0
-  5 |       | 0
-  6 | text1 | 1
-  6 |       | 1
-  7 | text2 | 0
-  7 |       | 0
-  8 | text3 | 1
-  8 |       | 1
-  9 | text4 | 0
-  9 |       | 0
- 10 | text0 | 1
- 10 |       | 1
- 11 | text1 | 0
- 11 |       | 0
- 12 | text2 | 1
- 12 |       | 1
- 13 | text3 | 0
- 13 |       | 0
- 14 | text4 | 1
- 14 |       | 1
- 15 | text0 | 0
- 15 |       | 0
- 16 | text1 | 1
- 16 |       | 1
- 17 | text2 | 0
- 17 |       | 0
- 18 | text3 | 1
- 18 |       | 1
- 19 | text4 | 0
- 19 |       | 0
- 20 | text0 | 1
- 20 |       | 1
- 21 | text1 | 0
- 21 |       | 0
- 22 | text2 | 1
- 22 |       | 1
- 23 | text3 | 0
- 23 |       | 0
- 24 | text4 | 1
- 24 |       | 1
- 25 | text0 | 0
- 25 |       | 0
-    |       |  
-(51 rows)
+(76 rows)
 
 -- Check expressions in target list
 SELECT a, b, c, 1+(a+c)*2 AS exp_ac FROM test_table1 GROUP BY a ORDER BY a, b, c, exp_ac;
@@ -1146,104 +1128,116 @@ SELECT 1+(a+c)*2 AS exp_ac_1, 100+(a+c)*2 AS exp_ac_2 FROM test_table1 GROUP BY 
        51 |      150
 (25 rows)
 
-SELECT 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a;
+SELECT 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) ORDER BY a;
  exp_ac | a  
 --------+----
       3 |  1
+      3 |  1
+      7 |  2
       7 |  2
       7 |  3
+      7 |  3
+     11 |  4
      11 |  4
      11 |  5
+     11 |  5
+     15 |  6
      15 |  6
      15 |  7
+     15 |  7
+     19 |  8
      19 |  8
      19 |  9
+     19 |  9
+     23 | 10
      23 | 10
      23 | 11
+     23 | 11
+     27 | 12
      27 | 12
      27 | 13
+     27 | 13
+     31 | 14
      31 | 14
      31 | 15
+     31 | 15
+     35 | 16
      35 | 16
      35 | 17
+     35 | 17
+     39 | 18
      39 | 18
      39 | 19
+     39 | 19
+     43 | 20
      43 | 20
      43 | 21
+     43 | 21
+     47 | 22
      47 | 22
      47 | 23
+     47 | 23
+     51 | 24
      51 | 24
      51 | 25
-        |   
-(26 rows)
+     51 | 25
+(50 rows)
 
 -- Check together with aggregate functions in target list
-SELECT count(*) AS cnt, 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a;
+SELECT count(*) AS cnt, 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) ORDER BY a;
  cnt | exp_ac | a  
 -----+--------+----
    1 |      3 |  1
+   1 |      3 |  1
+   1 |      7 |  2
    1 |      7 |  2
    1 |      7 |  3
+   1 |      7 |  3
+   1 |     11 |  4
    1 |     11 |  4
    1 |     11 |  5
+   1 |     11 |  5
+   1 |     15 |  6
    1 |     15 |  6
    1 |     15 |  7
+   1 |     15 |  7
+   1 |     19 |  8
    1 |     19 |  8
    1 |     19 |  9
+   1 |     19 |  9
+   1 |     23 | 10
    1 |     23 | 10
    1 |     23 | 11
+   1 |     23 | 11
+   1 |     27 | 12
    1 |     27 | 12
    1 |     27 | 13
+   1 |     27 | 13
+   1 |     31 | 14
    1 |     31 | 14
    1 |     31 | 15
+   1 |     31 | 15
+   1 |     35 | 16
    1 |     35 | 16
    1 |     35 | 17
+   1 |     35 | 17
+   1 |     39 | 18
    1 |     39 | 18
    1 |     39 | 19
+   1 |     39 | 19
+   1 |     43 | 20
    1 |     43 | 20
    1 |     43 | 21
+   1 |     43 | 21
+   1 |     47 | 22
    1 |     47 | 22
    1 |     47 | 23
+   1 |     47 | 23
+   1 |     51 | 24
    1 |     51 | 24
    1 |     51 | 25
-  25 |        |   
-(26 rows)
-
-SELECT avg(c) AS avg_c, c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c, c;
-         avg_c          | c 
-------------------------+---
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.00000000000000000000 | 0
- 0.40000000000000000000 |  
- 0.40000000000000000000 |  
- 0.40000000000000000000 |  
- 0.48000000000000000000 |  
- 0.60000000000000000000 |  
- 0.60000000000000000000 |  
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
- 1.00000000000000000000 | 1
-(31 rows)
+   1 |     51 | 25
+(50 rows)
 
 -- Check with grouping function in target list
 SELECT grouping(a) AS g_a, a, b FROM test_table1 GROUP BY GROUPING SETS ((a)) ORDER BY a;
@@ -1276,7 +1270,7 @@ SELECT grouping(a) AS g_a, a, b FROM test_table1 GROUP BY GROUPING SETS ((a)) OR
    0 | 25 | text0
 (25 rows)
 
-SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c, c;
+SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c;
  g_a | g_b |         avg_c          
 -----+-----+------------------------
    0 |   1 | 0.00000000000000000000
@@ -1312,122 +1306,121 @@ SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 
    0 |   1 | 1.00000000000000000000
 (31 rows)
 
-SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c, c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c, c;
- g_a | g_b |         avg_c          | c 
------+-----+------------------------+---
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   0 |   1 | 0.00000000000000000000 | 0
-   1 |   0 | 0.40000000000000000000 |  
-   1 |   0 | 0.40000000000000000000 |  
-   1 |   0 | 0.40000000000000000000 |  
-   1 |   1 | 0.48000000000000000000 |  
-   1 |   0 | 0.60000000000000000000 |  
-   1 |   0 | 0.60000000000000000000 |  
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-   0 |   1 | 1.00000000000000000000 | 1
-(31 rows)
-
 -- Check aggregate functions in ORDER BY clause
-SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY avg(c), a, b;
+SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) ORDER BY avg(c), a, b;
  a  |   b   
 ----+-------
   1 | text1
+  1 | 
   3 | text3
+  3 | 
   5 | text0
+  5 | 
   7 | text2
+  7 | 
   9 | text4
+  9 | 
  11 | text1
+ 11 | 
  13 | text3
+ 13 | 
  15 | text0
+ 15 | 
  17 | text2
+ 17 | 
  19 | text4
+ 19 | 
  21 | text1
+ 21 | 
  23 | text3
+ 23 | 
  25 | text0
-    | 
+ 25 | 
   2 | text2
+  2 | 
   4 | text4
+  4 | 
   6 | text1
+  6 | 
   8 | text3
+  8 | 
  10 | text0
+ 10 | 
  12 | text2
+ 12 | 
  14 | text4
+ 14 | 
  16 | text1
+ 16 | 
  18 | text3
+ 18 | 
  20 | text0
+ 20 | 
  22 | text2
+ 22 | 
  24 | text4
-(26 rows)
+ 24 | 
+(50 rows)
 
 -- Check aggregate functions in HAVING clause
-SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), ()) HAVING avg(c) > 0 ORDER BY avg(c), a, b;
+SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) HAVING avg(c) > 0 ORDER BY avg(c), a, b;
  a  |   b   
 ----+-------
-    | 
   2 | text2
+  2 | 
   4 | text4
+  4 | 
   6 | text1
+  6 | 
   8 | text3
+  8 | 
  10 | text0
+ 10 | 
  12 | text2
+ 12 | 
  14 | text4
+ 14 | 
  16 | text1
+ 16 | 
  18 | text3
+ 18 | 
  20 | text0
+ 20 | 
  22 | text2
+ 22 | 
  24 | text4
-(13 rows)
+ 24 | 
+(24 rows)
 
 -- Check grouping functions in HAVING clause
-SELECT grouping(a) AS g_a, a, b, c FROM test_table1 GROUP BY ROLLUP (a) HAVING grouping(a) = 0 ORDER BY a, b, c;
- g_a | a  |   b   | c 
------+----+-------+---
-   0 |  1 | text1 | 0
-   0 |  2 | text2 | 1
-   0 |  3 | text3 | 0
-   0 |  4 | text4 | 1
-   0 |  5 | text0 | 0
-   0 |  6 | text1 | 1
-   0 |  7 | text2 | 0
-   0 |  8 | text3 | 1
-   0 |  9 | text4 | 0
-   0 | 10 | text0 | 1
-   0 | 11 | text1 | 0
-   0 | 12 | text2 | 1
-   0 | 13 | text3 | 0
-   0 | 14 | text4 | 1
-   0 | 15 | text0 | 0
-   0 | 16 | text1 | 1
-   0 | 17 | text2 | 0
-   0 | 18 | text3 | 1
-   0 | 19 | text4 | 0
-   0 | 20 | text0 | 1
-   0 | 21 | text1 | 0
-   0 | 22 | text2 | 1
-   0 | 23 | text3 | 0
-   0 | 24 | text4 | 1
-   0 | 25 | text0 | 0
+SELECT grouping(a) AS g_a, a, avg(c) as avg_c FROM test_table1 GROUP BY ROLLUP (a) HAVING grouping(a) = 0 ORDER BY a, avg_c;
+ g_a | a  |         avg_c          
+-----+----+------------------------
+   0 |  1 | 0.00000000000000000000
+   0 |  2 | 1.00000000000000000000
+   0 |  3 | 0.00000000000000000000
+   0 |  4 | 1.00000000000000000000
+   0 |  5 | 0.00000000000000000000
+   0 |  6 | 1.00000000000000000000
+   0 |  7 | 0.00000000000000000000
+   0 |  8 | 1.00000000000000000000
+   0 |  9 | 0.00000000000000000000
+   0 | 10 | 1.00000000000000000000
+   0 | 11 | 0.00000000000000000000
+   0 | 12 | 1.00000000000000000000
+   0 | 13 | 0.00000000000000000000
+   0 | 14 | 1.00000000000000000000
+   0 | 15 | 0.00000000000000000000
+   0 | 16 | 1.00000000000000000000
+   0 | 17 | 0.00000000000000000000
+   0 | 18 | 1.00000000000000000000
+   0 | 19 | 0.00000000000000000000
+   0 | 20 | 1.00000000000000000000
+   0 | 21 | 0.00000000000000000000
+   0 | 22 | 1.00000000000000000000
+   0 | 23 | 0.00000000000000000000
+   0 | 24 | 1.00000000000000000000
+   0 | 25 | 0.00000000000000000000
 (25 rows)
 
 SELECT 1+(a+c)*2 AS exp_ac_1, b, grouping(b) AS g_b FROM test_table1 GROUP BY a, b HAVING grouping(b) = 0 ORDER BY exp_ac_1, b;
@@ -1461,76 +1454,124 @@ SELECT 1+(a+c)*2 AS exp_ac_1, b, grouping(b) AS g_b FROM test_table1 GROUP BY a,
 (25 rows)
 
 SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ())
-	HAVING  grouping(a) = 1 AND grouping(b) = 1 ORDER BY avg_c, c;
+	HAVING  grouping(a) = 1 AND grouping(b) = 1 ORDER BY avg_c;
  g_a | g_b |         avg_c          
 -----+-----+------------------------
    1 |   1 | 0.48000000000000000000
 (1 row)
 
 -- Check sub-query
-SELECT * FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a) AS sub_t;
+SELECT * FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), (a,c)) ORDER BY a) AS sub_t;
  a  |   b   | c 
 ----+-------+---
+  1 | text1 |  
   1 | text1 | 0
+  2 | text2 |  
   2 | text2 | 1
+  3 | text3 |  
   3 | text3 | 0
+  4 | text4 |  
   4 | text4 | 1
+  5 | text0 |  
   5 | text0 | 0
+  6 | text1 |  
   6 | text1 | 1
   7 | text2 | 0
+  7 | text2 |  
+  8 | text3 |  
   8 | text3 | 1
+  9 | text4 |  
   9 | text4 | 0
  10 | text0 | 1
+ 10 | text0 |  
+ 11 | text1 |  
  11 | text1 | 0
+ 12 | text2 |  
  12 | text2 | 1
  13 | text3 | 0
+ 13 | text3 |  
+ 14 | text4 |  
  14 | text4 | 1
+ 15 | text0 |  
  15 | text0 | 0
  16 | text1 | 1
+ 16 | text1 |  
+ 17 | text2 |  
  17 | text2 | 0
+ 18 | text3 |  
  18 | text3 | 1
+ 19 | text4 |  
  19 | text4 | 0
+ 20 | text0 |  
  20 | text0 | 1
  21 | text1 | 0
+ 21 | text1 |  
  22 | text2 | 1
+ 22 | text2 |  
+ 23 | text3 |  
  23 | text3 | 0
+ 24 | text4 |  
  24 | text4 | 1
+ 25 | text0 |  
  25 | text0 | 0
-    |       |  
-(26 rows)
+(50 rows)
 
-SELECT sub_t.a, sub_t.b, sub_t.c FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a) AS sub_t 
-GROUP BY GROUPING SETS ((sub_t.a, sub_t.b, sub_t.c), ()) ORDER BY sub_t.a;
+SELECT sub_t.a, sub_t.b, sub_t.c FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), (a,c)) ORDER BY a, c) AS sub_t 
+GROUP BY GROUPING SETS ((sub_t.a, sub_t.b, sub_t.c), ()) ORDER BY sub_t.a, sub_t.b, sub_t.c;
  a  |   b   | c 
 ----+-------+---
   1 | text1 | 0
+  1 | text1 |  
   2 | text2 | 1
+  2 | text2 |  
   3 | text3 | 0
+  3 | text3 |  
   4 | text4 | 1
+  4 | text4 |  
   5 | text0 | 0
+  5 | text0 |  
   6 | text1 | 1
+  6 | text1 |  
   7 | text2 | 0
+  7 | text2 |  
   8 | text3 | 1
+  8 | text3 |  
   9 | text4 | 0
+  9 | text4 |  
  10 | text0 | 1
+ 10 | text0 |  
  11 | text1 | 0
+ 11 | text1 |  
  12 | text2 | 1
+ 12 | text2 |  
  13 | text3 | 0
+ 13 | text3 |  
  14 | text4 | 1
+ 14 | text4 |  
  15 | text0 | 0
+ 15 | text0 |  
  16 | text1 | 1
+ 16 | text1 |  
  17 | text2 | 0
+ 17 | text2 |  
  18 | text3 | 1
+ 18 | text3 |  
  19 | text4 | 0
+ 19 | text4 |  
  20 | text0 | 1
+ 20 | text0 |  
  21 | text1 | 0
+ 21 | text1 |  
  22 | text2 | 1
+ 22 | text2 |  
  23 | text3 | 0
+ 23 | text3 |  
  24 | text4 | 1
+ 24 | text4 |  
  25 | text0 | 0
+ 25 | text0 |  
     |       |  
-    |       |  
-(27 rows)
+(51 rows)
 
 SELECT (SELECT c) FROM test_table1 GROUP BY a ORDER BY a;
  c 
@@ -1608,68 +1649,30 @@ SELECT a, b, c FROM test_table2 GROUP BY a, c ORDER BY a, c;
  5 | text|5|1|  |  1
 (10 rows)
 
-SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c), (a)) ORDER BY a, c;
- a |     b      | c  
----+------------+----
- 1 | text|1|-1| | -1
- 1 | text|1|1|  |  1
- 1 |            |   
- 2 | text|2|-1| | -1
- 2 | text|2|1|  |  1
- 2 |            |   
- 3 | text|3|-1| | -1
- 3 | text|3|1|  |  1
- 3 |            |   
- 4 | text|4|-1| | -1
- 4 | text|4|1|  |  1
- 4 |            |   
- 5 | text|5|-1| | -1
- 5 | text|5|1|  |  1
- 5 |            |   
-(15 rows)
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c), (a)) ORDER BY a, c; -- fail
+ERROR:  column "test_table2.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, ...
+                  ^
+SELECT grouping(a) AS g_a, grouping(c) AS g_c, count(*) AS cnt, a, avg(c) FROM test_table2 GROUP BY GROUPING SETS ((a, c), () ) ORDER BY a, c;
+ g_a | g_c | cnt | a |           avg           
+-----+-----+-----+---+-------------------------
+   0 |   0 |   1 | 1 | -1.00000000000000000000
+   0 |   0 |   1 | 1 |  1.00000000000000000000
+   0 |   0 |   1 | 2 | -1.00000000000000000000
+   0 |   0 |   1 | 2 |  1.00000000000000000000
+   0 |   0 |   1 | 3 | -1.00000000000000000000
+   0 |   0 |   1 | 3 |  1.00000000000000000000
+   0 |   0 |   1 | 4 | -1.00000000000000000000
+   0 |   0 |   1 | 4 |  1.00000000000000000000
+   0 |   0 |   1 | 5 | -1.00000000000000000000
+   0 |   0 |   1 | 5 |  1.00000000000000000000
+   1 |   1 |  10 |   |  0.00000000000000000000
+(11 rows)
 
-SELECT grouping(a) AS g_a, grouping(c) AS g_c, count(*) AS cnt, a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c), (a) ) ORDER BY a, c;
- g_a | g_c | cnt | a |     b      | c  
------+-----+-----+---+------------+----
-   0 |   0 |   1 | 1 | text|1|-1| | -1
-   0 |   0 |   1 | 1 | text|1|1|  |  1
-   0 |   1 |   2 | 1 |            |   
-   0 |   0 |   1 | 2 | text|2|-1| | -1
-   0 |   0 |   1 | 2 | text|2|1|  |  1
-   0 |   1 |   2 | 2 |            |   
-   0 |   0 |   1 | 3 | text|3|-1| | -1
-   0 |   0 |   1 | 3 | text|3|1|  |  1
-   0 |   1 |   2 | 3 |            |   
-   0 |   0 |   1 | 4 | text|4|-1| | -1
-   0 |   0 |   1 | 4 | text|4|1|  |  1
-   0 |   1 |   2 | 4 |            |   
-   0 |   0 |   1 | 5 | text|5|-1| | -1
-   0 |   0 |   1 | 5 | text|5|1|  |  1
-   0 |   1 |   2 | 5 |            |   
-(15 rows)
-
-SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM test_table2 GROUP BY GROUPING SETS (a, c, (a, c) ) ORDER BY g_a, g_c, a, c;
- g_a | g_c | a |     b      | c  
------+-----+---+------------+----
-   0 |   0 | 1 | text|1|-1| | -1
-   0 |   0 | 1 | text|1|1|  |  1
-   0 |   0 | 2 | text|2|-1| | -1
-   0 |   0 | 2 | text|2|1|  |  1
-   0 |   0 | 3 | text|3|-1| | -1
-   0 |   0 | 3 | text|3|1|  |  1
-   0 |   0 | 4 | text|4|-1| | -1
-   0 |   0 | 4 | text|4|1|  |  1
-   0 |   0 | 5 | text|5|-1| | -1
-   0 |   0 | 5 | text|5|1|  |  1
-   0 |   1 | 1 |            |   
-   0 |   1 | 2 |            |   
-   0 |   1 | 3 |            |   
-   0 |   1 | 4 |            |   
-   0 |   1 | 5 |            |   
-   1 |   0 |   |            | -1
-   1 |   0 |   |            |  1
-(17 rows)
-
+SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM test_table2 GROUP BY GROUPING SETS (a, c, (a, c) ) ORDER BY g_a, g_c, a, c; -- fail
+ERROR:  column "test_table2.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM ...
+                                                          ^
 SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c) ) ORDER BY g_a, g_c, a, c;
  g_a | g_c | a |     b      | c  
 -----+-----+---+------------+----
@@ -1795,24 +1798,821 @@ SELECT l.a, l.b, r.a, r.b FROM test_table1 AS l JOIN test_table3 AS r ON l.a=r.a
  10 | text0 | 10 | t3-text0
 (10 rows)
 
-SELECT grouping(l.a) AS g_l_a, grouping(r.a) AS g_r_a, grouping(r.c) AS g_r_c, l.a, l.b, r.a, r.b, r.c
+SELECT grouping(l.a) AS g_l_a, grouping(r.a) AS g_r_a, grouping(r.c) AS g_r_c, l.a, r.a, r.c
 	FROM test_table1 AS l JOIN test_table3 AS r ON l.a=r.a GROUP BY GROUPING SETS ((l.a, r.a), (r.c), ()) ORDER BY l.a, r.c;
- g_l_a | g_r_a | g_r_c | a  |   b   | a  |    b     | c 
--------+-------+-------+----+-------+----+----------+---
-     0 |     0 |     1 |  1 | text1 |  1 | t3-text1 |  
-     0 |     0 |     1 |  2 | text2 |  2 | t3-text2 |  
-     0 |     0 |     1 |  3 | text3 |  3 | t3-text3 |  
-     0 |     0 |     1 |  4 | text4 |  4 | t3-text4 |  
-     0 |     0 |     1 |  5 | text0 |  5 | t3-text0 |  
-     0 |     0 |     1 |  6 | text1 |  6 | t3-text1 |  
-     0 |     0 |     1 |  7 | text2 |  7 | t3-text2 |  
-     0 |     0 |     1 |  8 | text3 |  8 | t3-text3 |  
-     0 |     0 |     1 |  9 | text4 |  9 | t3-text4 |  
-     0 |     0 |     1 | 10 | text0 | 10 | t3-text0 |  
-     1 |     1 |     0 |    |       |    |          | 0
-     1 |     1 |     0 |    |       |    |          | 1
-     1 |     1 |     1 |    |       |    |          |  
+ g_l_a | g_r_a | g_r_c | a  | a  | c 
+-------+-------+-------+----+----+---
+     0 |     0 |     1 |  1 |  1 |  
+     0 |     0 |     1 |  2 |  2 |  
+     0 |     0 |     1 |  3 |  3 |  
+     0 |     0 |     1 |  4 |  4 |  
+     0 |     0 |     1 |  5 |  5 |  
+     0 |     0 |     1 |  6 |  6 |  
+     0 |     0 |     1 |  7 |  7 |  
+     0 |     0 |     1 |  8 |  8 |  
+     0 |     0 |     1 |  9 |  9 |  
+     0 |     0 |     1 | 10 | 10 |  
+     1 |     1 |     0 |    |    | 0
+     1 |     1 |     0 |    |    | 1
+     1 |     1 |     1 |    |    |  
 (13 rows)
+
+-- Checking for ungrouped columns in TargetList
+-- grouping expression and GROUP BY
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b),()), a ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Mixing grouping sets with simple group by lists
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 |       | 0
+  1 |       | 0
+  2 | text2 | 1
+  2 |       | 1
+  2 |       | 1
+  3 | text3 | 0
+  3 |       | 0
+  3 |       | 0
+  4 | text4 | 1
+  4 |       | 1
+  4 |       | 1
+  5 | text0 | 0
+  5 |       | 0
+  5 |       | 0
+  6 | text1 | 1
+  6 |       | 1
+  6 |       | 1
+  7 | text2 | 0
+  7 |       | 0
+  7 |       | 0
+  8 | text3 | 1
+  8 |       | 1
+  8 |       | 1
+  9 | text4 | 0
+  9 |       | 0
+  9 |       | 0
+ 10 | text0 | 1
+ 10 |       | 1
+ 10 |       | 1
+ 11 | text1 | 0
+ 11 |       | 0
+ 11 |       | 0
+ 12 | text2 | 1
+ 12 |       | 1
+ 12 |       | 1
+ 13 | text3 | 0
+ 13 |       | 0
+ 13 |       | 0
+ 14 | text4 | 1
+ 14 |       | 1
+ 14 |       | 1
+ 15 | text0 | 0
+ 15 |       | 0
+ 15 |       | 0
+ 16 | text1 | 1
+ 16 |       | 1
+ 16 |       | 1
+ 17 | text2 | 0
+ 17 |       | 0
+ 17 |       | 0
+ 18 | text3 | 1
+ 18 |       | 1
+ 18 |       | 1
+ 19 | text4 | 0
+ 19 |       | 0
+ 19 |       | 0
+ 20 | text0 | 1
+ 20 |       | 1
+ 20 |       | 1
+ 21 | text1 | 0
+ 21 |       | 0
+ 21 |       | 0
+ 22 | text2 | 1
+ 22 |       | 1
+ 22 |       | 1
+ 23 | text3 | 0
+ 23 |       | 0
+ 23 |       | 0
+ 24 | text4 | 1
+ 24 |       | 1
+ 24 |       | 1
+ 25 | text0 | 0
+ 25 |       | 0
+ 25 |       | 0
+(75 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY a, GROUPING SETS ((a),(b),()) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Mixing grouping sets with simple group by lists
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 |       | 0
+  1 |       | 0
+  2 | text2 | 1
+  2 |       | 1
+  2 |       | 1
+  3 | text3 | 0
+  3 |       | 0
+  3 |       | 0
+  4 | text4 | 1
+  4 |       | 1
+  4 |       | 1
+  5 | text0 | 0
+  5 |       | 0
+  5 |       | 0
+  6 | text1 | 1
+  6 |       | 1
+  6 |       | 1
+  7 | text2 | 0
+  7 |       | 0
+  7 |       | 0
+  8 | text3 | 1
+  8 |       | 1
+  8 |       | 1
+  9 | text4 | 0
+  9 |       | 0
+  9 |       | 0
+ 10 | text0 | 1
+ 10 |       | 1
+ 10 |       | 1
+ 11 | text1 | 0
+ 11 |       | 0
+ 11 |       | 0
+ 12 | text2 | 1
+ 12 |       | 1
+ 12 |       | 1
+ 13 | text3 | 0
+ 13 |       | 0
+ 13 |       | 0
+ 14 | text4 | 1
+ 14 |       | 1
+ 14 |       | 1
+ 15 | text0 | 0
+ 15 |       | 0
+ 15 |       | 0
+ 16 | text1 | 1
+ 16 |       | 1
+ 16 |       | 1
+ 17 | text2 | 0
+ 17 |       | 0
+ 17 |       | 0
+ 18 | text3 | 1
+ 18 |       | 1
+ 18 |       | 1
+ 19 | text4 | 0
+ 19 |       | 0
+ 19 |       | 0
+ 20 | text0 | 1
+ 20 |       | 1
+ 20 |       | 1
+ 21 | text1 | 0
+ 21 |       | 0
+ 21 |       | 0
+ 22 | text2 | 1
+ 22 |       | 1
+ 22 |       | 1
+ 23 | text3 | 0
+ 23 |       | 0
+ 23 |       | 0
+ 24 | text4 | 1
+ 24 |       | 1
+ 24 |       | 1
+ 25 | text0 | 0
+ 25 |       | 0
+ 25 |       | 0
+(75 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),(b),()); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),()); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY a, GROUPING SETS ((a),(b), ROLLUP (a)) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Mixing grouping sets with simple group by lists
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 |       | 0
+  1 |       | 0
+  1 |       | 0
+  2 | text2 | 1
+  2 |       | 1
+  2 |       | 1
+  2 |       | 1
+  3 | text3 | 0
+  3 |       | 0
+  3 |       | 0
+  3 |       | 0
+  4 | text4 | 1
+  4 |       | 1
+  4 |       | 1
+  4 |       | 1
+  5 | text0 | 0
+  5 |       | 0
+  5 |       | 0
+  5 |       | 0
+  6 | text1 | 1
+  6 |       | 1
+  6 |       | 1
+  6 |       | 1
+  7 | text2 | 0
+  7 |       | 0
+  7 |       | 0
+  7 |       | 0
+  8 | text3 | 1
+  8 |       | 1
+  8 |       | 1
+  8 |       | 1
+  9 | text4 | 0
+  9 |       | 0
+  9 |       | 0
+  9 |       | 0
+ 10 | text0 | 1
+ 10 |       | 1
+ 10 |       | 1
+ 10 |       | 1
+ 11 | text1 | 0
+ 11 |       | 0
+ 11 |       | 0
+ 11 |       | 0
+ 12 | text2 | 1
+ 12 |       | 1
+ 12 |       | 1
+ 12 |       | 1
+ 13 | text3 | 0
+ 13 |       | 0
+ 13 |       | 0
+ 13 |       | 0
+ 14 | text4 | 1
+ 14 |       | 1
+ 14 |       | 1
+ 14 |       | 1
+ 15 | text0 | 0
+ 15 |       | 0
+ 15 |       | 0
+ 15 |       | 0
+ 16 | text1 | 1
+ 16 |       | 1
+ 16 |       | 1
+ 16 |       | 1
+ 17 | text2 | 0
+ 17 |       | 0
+ 17 |       | 0
+ 17 |       | 0
+ 18 | text3 | 1
+ 18 |       | 1
+ 18 |       | 1
+ 18 |       | 1
+ 19 | text4 | 0
+ 19 |       | 0
+ 19 |       | 0
+ 19 |       | 0
+ 20 | text0 | 1
+ 20 |       | 1
+ 20 |       | 1
+ 20 |       | 1
+ 21 | text1 | 0
+ 21 |       | 0
+ 21 |       | 0
+ 21 |       | 0
+ 22 | text2 | 1
+ 22 |       | 1
+ 22 |       | 1
+ 22 |       | 1
+ 23 | text3 | 0
+ 23 |       | 0
+ 23 |       | 0
+ 23 |       | 0
+ 24 | text4 | 1
+ 24 |       | 1
+ 24 |       | 1
+ 24 |       | 1
+ 25 | text0 | 0
+ 25 |       | 0
+ 25 |       | 0
+ 25 |       | 0
+(100 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),(b), ROLLUP (a)); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY a, GROUPING SETS ((a),(b), CUBE (a)) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Mixing grouping sets with simple group by lists
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 |       | 0
+  1 |       | 0
+  1 |       | 0
+  2 | text2 | 1
+  2 |       | 1
+  2 |       | 1
+  2 |       | 1
+  3 | text3 | 0
+  3 |       | 0
+  3 |       | 0
+  3 |       | 0
+  4 | text4 | 1
+  4 |       | 1
+  4 |       | 1
+  4 |       | 1
+  5 | text0 | 0
+  5 |       | 0
+  5 |       | 0
+  5 |       | 0
+  6 | text1 | 1
+  6 |       | 1
+  6 |       | 1
+  6 |       | 1
+  7 | text2 | 0
+  7 |       | 0
+  7 |       | 0
+  7 |       | 0
+  8 | text3 | 1
+  8 |       | 1
+  8 |       | 1
+  8 |       | 1
+  9 | text4 | 0
+  9 |       | 0
+  9 |       | 0
+  9 |       | 0
+ 10 | text0 | 1
+ 10 |       | 1
+ 10 |       | 1
+ 10 |       | 1
+ 11 | text1 | 0
+ 11 |       | 0
+ 11 |       | 0
+ 11 |       | 0
+ 12 | text2 | 1
+ 12 |       | 1
+ 12 |       | 1
+ 12 |       | 1
+ 13 | text3 | 0
+ 13 |       | 0
+ 13 |       | 0
+ 13 |       | 0
+ 14 | text4 | 1
+ 14 |       | 1
+ 14 |       | 1
+ 14 |       | 1
+ 15 | text0 | 0
+ 15 |       | 0
+ 15 |       | 0
+ 15 |       | 0
+ 16 | text1 | 1
+ 16 |       | 1
+ 16 |       | 1
+ 16 |       | 1
+ 17 | text2 | 0
+ 17 |       | 0
+ 17 |       | 0
+ 17 |       | 0
+ 18 | text3 | 1
+ 18 |       | 1
+ 18 |       | 1
+ 18 |       | 1
+ 19 | text4 | 0
+ 19 |       | 0
+ 19 |       | 0
+ 19 |       | 0
+ 20 | text0 | 1
+ 20 |       | 1
+ 20 |       | 1
+ 20 |       | 1
+ 21 | text1 | 0
+ 21 |       | 0
+ 21 |       | 0
+ 21 |       | 0
+ 22 | text2 | 1
+ 22 |       | 1
+ 22 |       | 1
+ 22 |       | 1
+ 23 | text3 | 0
+ 23 |       | 0
+ 23 |       | 0
+ 23 |       | 0
+ 24 | text4 | 1
+ 24 |       | 1
+ 24 |       | 1
+ 24 |       | 1
+ 25 | text0 | 0
+ 25 |       | 0
+ 25 |       | 0
+ 25 |       | 0
+(100 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),(b), CUBE (a)); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((...
+                     ^
+-- only grouping expression
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b),()); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a), GROUPING SETS (a,()) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Multiple grouping sets specifications
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 | text1 | 0
+  2 | text2 | 1
+  2 | text2 | 1
+  3 | text3 | 0
+  3 | text3 | 0
+  4 | text4 | 1
+  4 | text4 | 1
+  5 | text0 | 0
+  5 | text0 | 0
+  6 | text1 | 1
+  6 | text1 | 1
+  7 | text2 | 0
+  7 | text2 | 0
+  8 | text3 | 1
+  8 | text3 | 1
+  9 | text4 | 0
+  9 | text4 | 0
+ 10 | text0 | 1
+ 10 | text0 | 1
+ 11 | text1 | 0
+ 11 | text1 | 0
+ 12 | text2 | 1
+ 12 | text2 | 1
+ 13 | text3 | 0
+ 13 | text3 | 0
+ 14 | text4 | 1
+ 14 | text4 | 1
+ 15 | text0 | 0
+ 15 | text0 | 0
+ 16 | text1 | 1
+ 16 | text1 | 1
+ 17 | text2 | 0
+ 17 | text2 | 0
+ 18 | text3 | 1
+ 18 | text3 | 1
+ 19 | text4 | 0
+ 19 | text4 | 0
+ 20 | text0 | 1
+ 20 | text0 | 1
+ 21 | text1 | 0
+ 21 | text1 | 0
+ 22 | text2 | 1
+ 22 | text2 | 1
+ 23 | text3 | 0
+ 23 | text3 | 0
+ 24 | text4 | 1
+ 24 | text4 | 1
+ 25 | text0 | 0
+ 25 | text0 | 0
+(50 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a), GROUPING SETS (b,()) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Multiple grouping sets specifications
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 |       | 0
+  2 | text2 | 1
+  2 |       | 1
+  3 | text3 | 0
+  3 |       | 0
+  4 | text4 | 1
+  4 |       | 1
+  5 | text0 | 0
+  5 |       | 0
+  6 | text1 | 1
+  6 |       | 1
+  7 | text2 | 0
+  7 |       | 0
+  8 | text3 | 1
+  8 |       | 1
+  9 | text4 | 0
+  9 |       | 0
+ 10 | text0 | 1
+ 10 |       | 1
+ 11 | text1 | 0
+ 11 |       | 0
+ 12 | text2 | 1
+ 12 |       | 1
+ 13 | text3 | 0
+ 13 |       | 0
+ 14 | text4 | 1
+ 14 |       | 1
+ 15 | text0 | 0
+ 15 |       | 0
+ 16 | text1 | 1
+ 16 |       | 1
+ 17 | text2 | 0
+ 17 |       | 0
+ 18 | text3 | 1
+ 18 |       | 1
+ 19 | text4 | 0
+ 19 |       | 0
+ 20 | text0 | 1
+ 20 |       | 1
+ 21 | text1 | 0
+ 21 |       | 0
+ 22 | text2 | 1
+ 22 |       | 1
+ 23 | text3 | 0
+ 23 |       | 0
+ 24 | text4 | 1
+ 24 |       | 1
+ 25 | text0 | 0
+ 25 |       | 0
+(50 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (b), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (b), ...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a,()), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+ERROR:  column "test_table1.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a,()...
+                  ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a,()), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+ERROR:  column "test_table1.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a,()...
+                  ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (GROUPING SETS (GROUPING SETS (a),a)),
+		                                 GROUPING SETS (b,()) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
+ a  |   b   | c 
+----+-------+---
+  1 | text1 | 0
+  1 | text1 | 0
+  1 |       | 0
+  1 |       | 0
+  2 | text2 | 1
+  2 | text2 | 1
+  2 |       | 1
+  2 |       | 1
+  3 | text3 | 0
+  3 | text3 | 0
+  3 |       | 0
+  3 |       | 0
+  4 | text4 | 1
+  4 | text4 | 1
+  4 |       | 1
+  4 |       | 1
+  5 | text0 | 0
+  5 | text0 | 0
+  5 |       | 0
+  5 |       | 0
+  6 | text1 | 1
+  6 | text1 | 1
+  6 |       | 1
+  6 |       | 1
+  7 | text2 | 0
+  7 | text2 | 0
+  7 |       | 0
+  7 |       | 0
+  8 | text3 | 1
+  8 | text3 | 1
+  8 |       | 1
+  8 |       | 1
+  9 | text4 | 0
+  9 | text4 | 0
+  9 |       | 0
+  9 |       | 0
+ 10 | text0 | 1
+ 10 | text0 | 1
+ 10 |       | 1
+ 10 |       | 1
+ 11 | text1 | 0
+ 11 | text1 | 0
+ 11 |       | 0
+ 11 |       | 0
+ 12 | text2 | 1
+ 12 | text2 | 1
+ 12 |       | 1
+ 12 |       | 1
+ 13 | text3 | 0
+ 13 | text3 | 0
+ 13 |       | 0
+ 13 |       | 0
+ 14 | text4 | 1
+ 14 | text4 | 1
+ 14 |       | 1
+ 14 |       | 1
+ 15 | text0 | 0
+ 15 | text0 | 0
+ 15 |       | 0
+ 15 |       | 0
+ 16 | text1 | 1
+ 16 | text1 | 1
+ 16 |       | 1
+ 16 |       | 1
+ 17 | text2 | 0
+ 17 | text2 | 0
+ 17 |       | 0
+ 17 |       | 0
+ 18 | text3 | 1
+ 18 | text3 | 1
+ 18 |       | 1
+ 18 |       | 1
+ 19 | text4 | 0
+ 19 | text4 | 0
+ 19 |       | 0
+ 19 |       | 0
+ 20 | text0 | 1
+ 20 | text0 | 1
+ 20 |       | 1
+ 20 |       | 1
+ 21 | text1 | 0
+ 21 | text1 | 0
+ 21 |       | 0
+ 21 |       | 0
+ 22 | text2 | 1
+ 22 | text2 | 1
+ 22 |       | 1
+ 22 |       | 1
+ 23 | text3 | 0
+ 23 | text3 | 0
+ 23 |       | 0
+ 23 |       | 0
+ 24 | text4 | 1
+ 24 | text4 | 1
+ 24 |       | 1
+ 24 |       | 1
+ 25 | text0 | 0
+ 25 | text0 | 0
+ 25 |       | 0
+ 25 |       | 0
+(100 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (GROUPING SETS (GROUPING SETS (b),a)),
+		                                 GROUPING SETS (b,()); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (GROU...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), GROUPING SETS ((a),(c))) ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
+ a  |   b   | c 
+----+-------+---
+  1 |       |  
+  1 |       |  
+  2 |       |  
+  2 |       |  
+  3 |       |  
+  3 |       |  
+  4 |       |  
+  4 |       |  
+  5 |       |  
+  5 |       |  
+  6 |       |  
+  6 |       |  
+  7 |       |  
+  7 |       |  
+  8 |       |  
+  8 |       |  
+  9 |       |  
+  9 |       |  
+ 10 |       |  
+ 10 |       |  
+ 11 |       |  
+ 11 |       |  
+ 12 |       |  
+ 12 |       |  
+ 13 |       |  
+ 13 |       |  
+ 14 |       |  
+ 14 |       |  
+ 15 |       |  
+ 15 |       |  
+ 16 |       |  
+ 16 |       |  
+ 17 |       |  
+ 17 |       |  
+ 18 |       |  
+ 18 |       |  
+ 19 |       |  
+ 19 |       |  
+ 20 |       |  
+ 20 |       |  
+ 21 |       |  
+ 21 |       |  
+ 22 |       |  
+ 22 |       |  
+ 23 |       |  
+ 23 |       |  
+ 24 |       |  
+ 24 |       |  
+ 25 |       |  
+ 25 |       |  
+    | text0 |  
+    | text1 |  
+    | text2 |  
+    | text3 |  
+    | text4 |  
+    |       | 0
+    |       | 1
+(57 rows)
+
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), GROUPING SETS ((a),())); --fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), GROUPING SETS ((a),(b)), GROUPING SETS ((a),())); --fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),...
+                     ^
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), ROLLUP(a)); -- fail
+ERROR:  column "test_table1.c" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),...
+                     ^
+-- composite Primary Key
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c),()), a; -- fail
+ERROR:  column "test_table2.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c...
+                  ^
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c),()), a, c ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Mixing grouping sets with simple group by lists
+ a |     b      | c  
+---+------------+----
+ 1 | text|1|-1| | -1
+ 1 | text|1|-1| | -1
+ 1 | text|1|1|  |  1
+ 1 | text|1|1|  |  1
+ 2 | text|2|-1| | -1
+ 2 | text|2|-1| | -1
+ 2 | text|2|1|  |  1
+ 2 | text|2|1|  |  1
+ 3 | text|3|-1| | -1
+ 3 | text|3|-1| | -1
+ 3 | text|3|1|  |  1
+ 3 | text|3|1|  |  1
+ 4 | text|4|-1| | -1
+ 4 | text|4|-1| | -1
+ 4 | text|4|1|  |  1
+ 4 | text|4|1|  |  1
+ 5 | text|5|-1| | -1
+ 5 | text|5|-1| | -1
+ 5 | text|5|1|  |  1
+ 5 | text|5|1|  |  1
+(20 rows)
+
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c), GROUPING SETS (a,c)); -- fail
+ERROR:  column "test_table2.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c...
+                  ^
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS (a,c), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+ERROR:  column "test_table2.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS (a,c)...
+                  ^
+SELECT a, b, c FROM test_table2 GROUP BY ROLLUP (a,c), a; -- fail
+ERROR:  column "test_table2.b" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: SELECT a, b, c FROM test_table2 GROUP BY ROLLUP (a,c), a;
+                  ^
+SELECT a, b, c FROM test_table2 GROUP BY ROLLUP (a,c), a, c ORDER BY a, b, c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Mixing grouping sets with simple group by lists
+ a |     b      | c  
+---+------------+----
+ 1 | text|1|-1| | -1
+ 1 | text|1|-1| | -1
+ 1 | text|1|-1| | -1
+ 1 | text|1|1|  |  1
+ 1 | text|1|1|  |  1
+ 1 | text|1|1|  |  1
+ 2 | text|2|-1| | -1
+ 2 | text|2|-1| | -1
+ 2 | text|2|-1| | -1
+ 2 | text|2|1|  |  1
+ 2 | text|2|1|  |  1
+ 2 | text|2|1|  |  1
+ 3 | text|3|-1| | -1
+ 3 | text|3|-1| | -1
+ 3 | text|3|-1| | -1
+ 3 | text|3|1|  |  1
+ 3 | text|3|1|  |  1
+ 3 | text|3|1|  |  1
+ 4 | text|4|-1| | -1
+ 4 | text|4|-1| | -1
+ 4 | text|4|-1| | -1
+ 4 | text|4|1|  |  1
+ 4 | text|4|1|  |  1
+ 4 | text|4|1|  |  1
+ 5 | text|5|-1| | -1
+ 5 | text|5|-1| | -1
+ 5 | text|5|-1| | -1
+ 5 | text|5|1|  |  1
+ 5 | text|5|1|  |  1
+ 5 | text|5|1|  |  1
+(30 rows)
 
 DROP TABLE test_table1;
 DROP TABLE test_table2;
