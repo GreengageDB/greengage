@@ -20,6 +20,10 @@ CREATE TEMP TABLE articles_in_category (
     PRIMARY KEY (article_id, category_id)
 );
 
+-- The patch https://github.com/arenadata/gpdb/pull/1117 changes the parser
+-- behavior so that queries with ungrouped columns by non-key attributes in
+-- groups no longer work.
+
 -- test functional dependencies based on primary keys/unique constraints
 
 -- base tables
@@ -121,14 +125,15 @@ insert into funcdep1 values(3,1,1,1);
 insert into funcdep2 values(1,1,1,1);
 
 explain (costs off) select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join funcdep2 t2 on t1.b = t2.b group by t1.a;
-select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join funcdep2 t2 on t1.b = t2.b group by t1.a;
+select sum(t2.a), t1.a, t1.b, t1.c from funcdep1 t1 join funcdep2 t2 on t1.b = t2.b group by t1.a order by t1.a;
 
-explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), ());
-select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), ());
-explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by rollup(a);
-select sum(b), c, d, grouping(a) from funcdep1 group by rollup(a);
-explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by cube(a);
-select sum(b), c, d, grouping(a) from funcdep1 group by cube(a);
+-- modified for ungrouped columns
+explain (costs off) select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), (a,b));
+select sum(b), c, d, grouping(a) from funcdep1 group by grouping sets((a), (a,b));
+explain (costs off) select sum(b), sum(c), sum(d), grouping(a) from funcdep1 group by rollup(a);
+select sum(b), sum(c), sum(d), grouping(a) from funcdep1 group by rollup(a);
+explain (costs off) select sum(d), a, b, c, grouping(a) from funcdep1 group by cube(a,b,c);
+select sum(d), a, b, c, grouping(a) from funcdep1 group by cube(a,b,c) order by a, b, c;
 
 explain (costs off) select count(distinct b), c, d from funcdep1 group by a;
 select count(distinct b), c, d from funcdep1 group by a;
@@ -338,46 +343,41 @@ SELECT a, b, c FROM test_table1 GROUP BY a, b ORDER BY a;
 SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a)) ORDER BY a;
 SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), (a)) ORDER BY a;
 SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a)) ORDER BY a, b;
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a, b, c;
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), (b)) ORDER BY a, b;
 SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b)) ORDER BY a, b;
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b), (a), ()) ORDER BY a, b, c;
-SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, a), ()) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, b), (a), (a,c)) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a, a), ()) ORDER BY a, b, c; -- fail
 -- Check rollup
-SELECT a, b, c FROM test_table1 GROUP BY ROLLUP (a) ORDER BY a, b, c;
-SELECT a, b, c FROM test_table1 GROUP BY ROLLUP (a, b) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY ROLLUP (a,b,c) ORDER BY a, b, c;
 -- Check expressions in target list
 SELECT a, b, c, 1+(a+c)*2 AS exp_ac FROM test_table1 GROUP BY a ORDER BY a, b, c, exp_ac;
 SELECT 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY a ORDER BY a;
 SELECT 1+(a+c)*2 AS exp_ac_1, 100+(a+c)*2 AS exp_ac_2 FROM test_table1 GROUP BY a ORDER BY exp_ac_1;
-SELECT 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a;
+SELECT 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) ORDER BY a;
 -- Check together with aggregate functions in target list
-SELECT count(*) AS cnt, 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a;
-SELECT avg(c) AS avg_c, c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c, c;
+SELECT count(*) AS cnt, 1+(a+c)*2 AS exp_ac, a FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) ORDER BY a;
 -- Check with grouping function in target list
 SELECT grouping(a) AS g_a, a, b FROM test_table1 GROUP BY GROUPING SETS ((a)) ORDER BY a;
-SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c, c;
-SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c, c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c, c;
+SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ()) ORDER BY avg_c;
 -- Check aggregate functions in ORDER BY clause
-SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY avg(c), a, b;
+SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) ORDER BY avg(c), a, b;
 -- Check aggregate functions in HAVING clause
-SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), ()) HAVING avg(c) > 0 ORDER BY avg(c), a, b;
+SELECT a, b FROM test_table1 GROUP BY GROUPING SETS ((a), (a,b)) HAVING avg(c) > 0 ORDER BY avg(c), a, b;
 -- Check grouping functions in HAVING clause
-SELECT grouping(a) AS g_a, a, b, c FROM test_table1 GROUP BY ROLLUP (a) HAVING grouping(a) = 0 ORDER BY a, b, c;
+SELECT grouping(a) AS g_a, a, avg(c) as avg_c FROM test_table1 GROUP BY ROLLUP (a) HAVING grouping(a) = 0 ORDER BY a, avg_c;
 SELECT 1+(a+c)*2 AS exp_ac_1, b, grouping(b) AS g_b FROM test_table1 GROUP BY a, b HAVING grouping(b) = 0 ORDER BY exp_ac_1, b;
 SELECT grouping(a) AS g_a, grouping(b) AS g_b, avg(c) AS avg_c FROM test_table1 GROUP BY GROUPING SETS ((a), (b), ())
-	HAVING  grouping(a) = 1 AND grouping(b) = 1 ORDER BY avg_c, c;
+	HAVING  grouping(a) = 1 AND grouping(b) = 1 ORDER BY avg_c;
 -- Check sub-query
-SELECT * FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a) AS sub_t;
-SELECT sub_t.a, sub_t.b, sub_t.c FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), ()) ORDER BY a) AS sub_t 
-GROUP BY GROUPING SETS ((sub_t.a, sub_t.b, sub_t.c), ()) ORDER BY sub_t.a;
+SELECT * FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), (a,c)) ORDER BY a) AS sub_t;
+SELECT sub_t.a, sub_t.b, sub_t.c FROM (SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a), (a,c)) ORDER BY a, c) AS sub_t 
+GROUP BY GROUPING SETS ((sub_t.a, sub_t.b, sub_t.c), ()) ORDER BY sub_t.a, sub_t.b, sub_t.c;
 SELECT (SELECT c) FROM test_table1 GROUP BY a ORDER BY a;
 SELECT b, (SELECT c FROM (SELECT c) AS alias_test_table1) FROM test_table1 GROUP BY a ORDER BY a;
 -- Check cases with primary key consisting of more than 1 column
 SELECT a, b, c FROM test_table2 GROUP BY a, c ORDER BY a, c;
-SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c), (a)) ORDER BY a, c;
-SELECT grouping(a) AS g_a, grouping(c) AS g_c, count(*) AS cnt, a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c), (a) ) ORDER BY a, c;
-SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM test_table2 GROUP BY GROUPING SETS (a, c, (a, c) ) ORDER BY g_a, g_c, a, c;
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c), (a)) ORDER BY a, c; -- fail
+SELECT grouping(a) AS g_a, grouping(c) AS g_c, count(*) AS cnt, a, avg(c) FROM test_table2 GROUP BY GROUPING SETS ((a, c), () ) ORDER BY a, c;
+SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM test_table2 GROUP BY GROUPING SETS (a, c, (a, c) ) ORDER BY g_a, g_c, a, c; -- fail
 SELECT grouping(a) AS g_a, grouping(c) AS g_c, a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a, c) ) ORDER BY g_a, g_c, a, c;
 -- Check cases with join and grouping by primary key of one of the tables
 SELECT l.a, l.b, count(r.b) AS cnt FROM test_table1 AS l JOIN test_table2 AS r ON l.a=r.a GROUP BY l.a ORDER BY l.a;
@@ -394,8 +394,44 @@ SELECT l.a, l.b, avg(l.a + l.c) AS agg_expr FROM test_table1 AS l JOIN test_tabl
 SELECT l.a, l.b, avg(r.a + l.c) + count(r.b) AS agg_expr FROM test_table1 AS l JOIN test_table2 AS r ON l.a=r.a GROUP BY l.a ORDER BY l.a;
 -- Check cases with join of 2 tables on their primary key
 SELECT l.a, l.b, r.a, r.b FROM test_table1 AS l JOIN test_table3 AS r ON l.a=r.a GROUP BY l.a, r.a ORDER BY l.a;
-SELECT grouping(l.a) AS g_l_a, grouping(r.a) AS g_r_a, grouping(r.c) AS g_r_c, l.a, l.b, r.a, r.b, r.c
+SELECT grouping(l.a) AS g_l_a, grouping(r.a) AS g_r_a, grouping(r.c) AS g_r_c, l.a, r.a, r.c
 	FROM test_table1 AS l JOIN test_table3 AS r ON l.a=r.a GROUP BY GROUPING SETS ((l.a, r.a), (r.c), ()) ORDER BY l.a, r.c;
+
+-- Checking for ungrouped columns in TargetList
+
+-- grouping expression and GROUP BY
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b),()), a ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY a, GROUPING SETS ((a),(b),()) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),(b),()); -- fail
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),()); -- fail
+SELECT a, b, c FROM test_table1 GROUP BY a, GROUPING SETS ((a),(b), ROLLUP (a)) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),(b), ROLLUP (a)); -- fail
+SELECT a, b, c FROM test_table1 GROUP BY a, GROUPING SETS ((a),(b), CUBE (a)) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY b, GROUPING SETS ((a),(b), CUBE (a)); -- fail
+
+-- only grouping expression
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b),()); -- fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a), GROUPING SETS (a,()) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a), GROUPING SETS (b,()) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (b), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a,()), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (a,()), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (GROUPING SETS (GROUPING SETS (a),a)),
+		                                 GROUPING SETS (b,()) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS (GROUPING SETS (GROUPING SETS (b),a)),
+		                                 GROUPING SETS (b,()); -- fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), GROUPING SETS ((a),(c))) ORDER BY a, b, c;
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), GROUPING SETS ((a),())); --fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), GROUPING SETS ((a),(b)), GROUPING SETS ((a),())); --fail
+SELECT a, b, c FROM test_table1 GROUP BY GROUPING SETS ((a),(b), ROLLUP(a)); -- fail
+
+-- composite Primary Key
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c),()), a; -- fail
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c),()), a, c ORDER BY a, b, c;
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS ((a,c), GROUPING SETS (a,c)); -- fail
+SELECT a, b, c FROM test_table2 GROUP BY GROUPING SETS (a,c), GROUPING SETS (a,()) ORDER BY a, b, c; -- fail
+SELECT a, b, c FROM test_table2 GROUP BY ROLLUP (a,c), a; -- fail
+SELECT a, b, c FROM test_table2 GROUP BY ROLLUP (a,c), a, c ORDER BY a, b, c;
 
 DROP TABLE test_table1;
 DROP TABLE test_table2;
