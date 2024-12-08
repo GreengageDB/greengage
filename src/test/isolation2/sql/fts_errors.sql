@@ -114,6 +114,11 @@ select wait_until_all_segments_synchronized();
 -- verify no segment is down after recovery
 select count(*) from gp_segment_configuration where status = 'd';
 
+-- start_ignore
+-- After error, temp schemas may still exist at segments
+-- Let's remove all such temporary schemas for inactive connections
+! psql -d isolation2test -f ../regress/sql/remove_temp_schemas.sql;
+-- end_ignore
 !\retcode gpconfig -r gp_fts_probe_retries --coordinatoronly;
 !\retcode gpconfig -r gp_gang_creation_retry_count --skipvalidation --coordinatoronly;
 !\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation --coordinatoronly;

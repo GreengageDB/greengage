@@ -827,3 +827,8 @@ SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration;
 -- Apply settings
 \! gpstop -u;
 --- end_ignore
+-- start_ignore
+-- After error, temp schemas may still exist at segments
+-- Let's remove all such temporary schemas for inactive connections
+\i sql/remove_temp_schemas.sql
+-- end_ignore

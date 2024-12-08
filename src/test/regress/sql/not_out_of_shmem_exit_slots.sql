@@ -174,3 +174,8 @@ SET debug_dtm_action_target=protocol;
 SET debug_dtm_action_protocol=commit_prepared;
 SET debug_dtm_action=fail_begin_command;
 DROP TABLE foo_stg;
+-- start_ignore
+-- After error, temp schemas may still exist at segments
+-- Let's remove all such temporary schemas for inactive connections
+\i sql/remove_temp_schemas.sql
+-- end_ignore

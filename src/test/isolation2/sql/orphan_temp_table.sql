@@ -60,3 +60,8 @@
 -- there shouldn't be any temporary namespaces left after the session quits
 5: SELECT count(*) FROM pg_namespace where (nspname like '%pg_temp_%' or nspname like '%pg_toast_temp_%') and oid > 16386;
 5q:
+-- start_ignore
+-- After error, temp schemas may still exist at segments
+-- Let's remove all such temporary schemas for inactive connections
+! psql -d isolation2test -f ../regress/sql/remove_temp_schemas.sql;
+-- end_ignore

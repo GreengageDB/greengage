@@ -61,3 +61,8 @@
 1: alter system reset autovacuum_naptime;
 1: alter system reset autovacuum_vacuum_threshold;
 1: !\retcode gpstop -u;
+-- start_ignore
+-- After error, temp schemas may still exist at segments
+-- Let's remove all such temporary schemas for inactive connections
+! psql -d isolation2test -f ../regress/sql/remove_temp_schemas.sql;
+-- end_ignore
