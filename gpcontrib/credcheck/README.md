@@ -440,6 +440,8 @@ ERROR:  password type is not a plain text
 
 To allow the use of encrypted password in CREATE or ALTER ROLE, enable configuration custom
 variable `credcheck.encrypted_password_allowed`.
+
+This also affect the `\password` psql command as it sends encrypted passord to the backend.
  
 Username checks will not get enforced while create an user without password, and while renaming the user if the user doesn't have a password defined.
 
