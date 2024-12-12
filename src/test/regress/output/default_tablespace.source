@@ -111,3 +111,10 @@ drop database database_for_default_tablespace;
 drop database database_with_tablespace;
 drop tablespace some_default_tablespace;
 drop tablespace some_database_tablespace;
+-- ensure modified GUCs when starting a new slice does not error
+create tablespace some_default_tablespace location '@testtablespace@_default_tablespace';
+set default_tablespace to some_default_tablespace;
+drop tablespace some_default_tablespace;
+create table table_under_database_with_default_tablespace (a int);
+insert into table_under_database_with_default_tablespace select random() from generate_series(1, 10);
+drop table table_under_database_with_default_tablespace;
