@@ -298,5 +298,13 @@ execute on initplan;
 explain select array(select f from hello_initplan() as f);
 select array(select f from hello_initplan() as f);
 
-
+-- Test INITPLAN functions with projections
+DROP TABLE IF EXISTS t8_function_scan;
+-- should succeed and add 3 rows with IDs (112, 223, 334)
+CREATE TABLE t8_function_scan AS SELECT country_id+1 AS a, country FROM get_country();
+-- should succeed and add 3 rows with IDs (113, 224, 335)
+INSERT INTO t8_function_scan SELECT country_id+2 AS a, country FROM get_country();
+-- should have 6 rows without any NULL entries
+SELECT * FROM t8_function_scan ORDER BY a;
+DROP TABLE t8_function_scan;
 

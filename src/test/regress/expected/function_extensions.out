@@ -577,3 +577,22 @@ select array(select f from hello_initplan() as f);
  {hello}
 (1 row)
 
+-- Test INITPLAN functions with projections
+DROP TABLE IF EXISTS t8_function_scan;
+-- should succeed and add 3 rows with IDs (112, 223, 334)
+CREATE TABLE t8_function_scan AS SELECT country_id+1 AS a, country FROM get_country();
+-- should succeed and add 3 rows with IDs (113, 224, 335)
+INSERT INTO t8_function_scan SELECT country_id+2 AS a, country FROM get_country();
+-- should have 6 rows without any NULL entries
+SELECT * FROM t8_function_scan ORDER BY a;
+  a  | country 
+-----+---------
+ 112 | INDIA
+ 113 | INDIA
+ 223 | CANADA
+ 224 | CANADA
+ 334 | USA
+ 335 | USA
+(6 rows)
+
+DROP TABLE t8_function_scan;

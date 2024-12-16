@@ -1970,6 +1970,8 @@ pathtarget_contains_rowidexpr(PathTarget *pathtarget)
 	return false;
 }
 
+static bool is_function_scan_on_initplan(PlannerInfo *root, Path *best_path);
+
 /*
  * create_projection_plan
  *
@@ -2026,8 +2028,8 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path, int flags)
 		 * Tell create_plan_recurse that we're going to ignore the tlist it
 		 * produces.
 		 */
-		subplan = create_plan_recurse(root, best_path->subpath,
-									  CP_IGNORE_TLIST);
+		int subplan_flags = is_function_scan_on_initplan(root, best_path->subpath) ? 0 : CP_IGNORE_TLIST;
+		subplan = create_plan_recurse(root, best_path->subpath, subplan_flags);
 		Assert(is_projection_capable_plan(subplan));
 		tlist = build_path_tlist(root, &best_path->path);
 	}
@@ -8204,6 +8206,65 @@ cdbpathtoplan_create_motion_plan(PlannerInfo *root,
 
 	return motion;
 }								/* cdbpathtoplan_create_motion_plan */
+
+/*
+ * is_function_scan_on_initplan
+ *
+ * CDB: gpdb specific function to check if a function scan should be executed on an initplan.
+ */
+static bool
+is_function_scan_on_initplan(PlannerInfo *root, Path *best_path) {
+	Index				scan_relid = best_path->parent->relid;
+	RangeTblEntry 	   *rte;
+	RangeTblFunction   *rtfunc;
+	FuncExpr		   *funcexpr;
+	char				exec_location;
+
+	if (best_path->pathtype != T_FunctionScan)
+		return false;
+
+	/*
+	 * In utility mode (or when planning a local query in QE), ignore EXECUTE
+	 * ON markings and run the function the normal way.
+	 */
+	if (Gp_role != GP_ROLE_DISPATCH)
+		return false;
+
+	/* Current function scan is already in an initplan, do nothing. */
+	if (!get_allow_append_initplan_for_function_scan())
+		return false;
+
+	/*
+	 * If INITPLAN function is executed on QD, there is no
+	 * need to add additional initplan to run this function.
+	 * Recall that the reason to introduce INITPLAN function
+	 * is that function runing on QE can not do dispatch.
+	 */
+	if (root->curSlice->parentIndex == -1)
+		return false;
+
+	/* it should be a function base rel... */
+	Assert(scan_relid > 0);
+	rte = planner_rt_fetch(scan_relid, root);
+	Assert(rte->rtekind == RTE_FUNCTION);
+
+	/* Currently we limit function number to one */
+	if (list_length(rte->functions) != 1)
+		return false;
+
+	rtfunc = (RangeTblFunction *) linitial(rte->functions);
+	
+	if (!IsA(rtfunc->funcexpr, FuncExpr))
+		return false;
+
+	/* function must be specified EXECUTE ON INITPLAN */
+	funcexpr = (FuncExpr *) rtfunc->funcexpr;
+	exec_location = func_exec_location(funcexpr->funcid);
+	if (exec_location != PROEXECLOCATION_INITPLAN)
+		return false;
+	
+	return true;
+}
 
 /*
  * append_initplan_for_function_scan
