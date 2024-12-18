@@ -23,6 +23,17 @@ CREATE TABLE REG_REGION (R_REGIONKEY INT, R_NAME CHAR(25), R_COMMENT VARCHAR(152
 -- select * from check_ps;
 -- select * from check_env;
 
+-- Helper to remove the output files
+DROP EXTERNAL WEB TABLE IF EXISTS clean_out_files;
+CREATE EXTERNAL WEB TABLE clean_out_files (x text)
+EXECUTE E'(rm -f @abs_srcdir@/data/gpfdist2/lineitem.tbl.out.zst @abs_srcdir@/data/gpfdist2/test_quote.csv)'
+on SEGMENT 0
+FORMAT 'text';
+
+SELECT * FROM clean_out_files;
+
+DROP EXTERNAL WEB TABLE clean_out_files;
+
 -- end_ignore
 
 
