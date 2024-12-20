@@ -22,7 +22,6 @@ resources:
     access_token: ((gpdb-git-access-token))
     disable_forks: true
     ignore_paths:
-    - gpdb-doc/*
     - README*
 
 - name: gpdb6-rocky8-build

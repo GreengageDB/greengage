@@ -467,7 +467,6 @@ resources:
 {% endif %}
     uri: ((gpdb-git-remote))
     ignore_paths:
-    - gpdb-doc/*
     - README*
 
 {% if os_type == "centos6" or os_type == "centos7" or os_type == "rhel8" %}
@@ -477,7 +476,6 @@ resources:
     branch: ((gpdb-git-branch))
     uri: ((gpdb-git-remote))
     ignore_paths:
-      - gpdb-doc/*
       - README*
   version:
     ref: d1d3a143cf1804552afedaa3be0ad54c14986605
