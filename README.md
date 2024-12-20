@@ -179,12 +179,6 @@ throughout the codebase, but a few larger additions worth noting:
   manual is maintained separately and only the reference pages used
   to build man pages are here.
 
-* __gpdb-doc/__
-
-  Contains the Greenplum documentation in DITA XML format. Refer to
-  `gpdb-doc/README.md` for information on how to build, and work with
-  the documentation.
-
 * __ci/__
 
   Contains configuration files for the GPDB continuous integration system.

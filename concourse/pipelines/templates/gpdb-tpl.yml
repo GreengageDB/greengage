@@ -419,7 +419,6 @@ resources:
     branch: ((gpdb-git-branch))
     uri: ((gpdb-git-remote))
     ignore_paths:
-    - gpdb-doc/*
     - README*
 
 {% if "icw" in test_sections %}

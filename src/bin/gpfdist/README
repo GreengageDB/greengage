@@ -1,7 +1,3 @@
-Docs
---------
-See gpdb-doc/dita/utility_guide/admin_utilities/gpfdist.xml
-
 Compiling
 -------------
 ## Do not source greenplum_path.sh (although you can find $GPHOME in there)
