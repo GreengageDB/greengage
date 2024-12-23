@@ -942,6 +942,11 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 		if (shared)
 			ctxt->shared_inputs[sisc->share_id].producer_slice_id = motId;
 		share_info->participant_slices = bms_add_member(share_info->participant_slices, motId);
+		if (currentSlice->directDispatch.haveProcessedAnyCalculations)
+			MergeDirectDispatchCalculationInfo(
+				&share_info->directDispatch,
+				&currentSlice->directDispatch
+			);
 
 		sisc->this_slice_id = motId;
 	}
@@ -993,6 +998,7 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 
 		sisc->producer_slice_id = pershare->producer_slice_id;
 		sisc->nconsumers = bms_num_members(pershare->participant_slices) - 1;
+		currentSlice->directDispatch = pershare->directDispatch;
 
 		/*
 		 * The SISC's plan contains modifying operation, which

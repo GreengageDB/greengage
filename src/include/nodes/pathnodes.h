@@ -121,6 +121,7 @@ typedef struct ApplyShareInputContextPerShare
 {
 	int			producer_slice_id;
 	Bitmapset  *participant_slices;
+	DirectDispatchInfo directDispatch;
 } ApplyShareInputContextPerShare;
 
 typedef struct ApplyShareInputContext
