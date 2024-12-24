@@ -36,14 +36,14 @@ docker-compose -p $project -f arenadata/docker-compose.yaml exec -T cdw \
 set +e
 #run tests
 docker-compose -p $project -f arenadata/docker-compose.yaml exec -Tu gpadmin cdw bash -ex <<EOF
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
         export LDFLAGS="-L\${GPHOME}/lib"
         export CPPFLAGS="-I\${GPHOME}/include"
         export USER=gpadmin
 
         cd /home/gpadmin/gpdb_src
-        ./configure --prefix=/usr/local/greenplum-db-devel \
+        ./configure --prefix=/usr/local/greengage-db-devel \
             --without-zlib --without-rt --without-libcurl \
             --without-libedit-preferred --without-docdir --without-readline \
             --disable-gpcloud --disable-gpfdist --disable-orca \

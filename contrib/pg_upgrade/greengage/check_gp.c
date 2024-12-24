@@ -1,10 +1,10 @@
 /*
  *	check_gp.c
  *
- *	Greenplum specific server checks and output routines
+ *	Greengage specific server checks and output routines
  *
  *	Any compatibility checks which are version dependent (testing for issues in
- *	specific versions of Greenplum) should be placed in their respective
+ *	specific versions of Greengage) should be placed in their respective
  *	version_old_gpdb{MAJORVERSION}.c file.  The checks in this file supplement
  *	the checks present in check.c, which is the upstream file for performing
  *	checks against a PostgreSQL cluster.
@@ -14,12 +14,12 @@
  *	contrib/pg_upgrade/check_gp.c
  */
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 #include "check_gp.h"
 
 #include <sys/wait.h>
 
-static int check_greenplum_parallel_jobs;
+static int check_greengage_parallel_jobs;
 typedef void (*check_function)(void);
 
 static void check_covering_aoindex(void);
@@ -40,19 +40,19 @@ static void check_views_with_fabricated_anyarray_casts(void);
 static void check_views_with_fabricated_unknown_casts(void);
 static void check_views_referencing_deprecated_tables(void);
 static void check_views_referencing_deprecated_columns(void);
-static void parallel_check_greenplum(check_function check_func);
+static void parallel_check_greengage(check_function check_func);
 static bool parallel_checks_reap_child(bool wait_for_child);
 
 /*
- *	check_greenplum
+ *	check_greengage
  *
  *	Rather than exporting all checks, we export a single API function which in
- *	turn is responsible for running Greenplum checks. This function should be
+ *	turn is responsible for running Greengage checks. This function should be
  *	executed after all PostgreSQL checks. The order of the checks should not
  *	matter.
  */
 void
-check_greenplum(void)
+check_greengage(void)
 {
 	int i = 0;
 	check_function check_functions[64] = {
@@ -78,12 +78,12 @@ check_greenplum(void)
 		NULL /* indicator for end of check functions */
 	};
 
-	pg_log(PG_REPORT, "\nStarting Parallel Greenplum Checks\n");
+	pg_log(PG_REPORT, "\nStarting Parallel Greengage Checks\n");
 	pg_log(PG_REPORT, "==================================\n");
 
 	while (check_functions[i])
 	{
-		parallel_check_greenplum(check_functions[i]);
+		parallel_check_greengage(check_functions[i]);
 		i++;
 	}
 
@@ -93,12 +93,12 @@ check_greenplum(void)
 }
 
 /*
- *	parallel_check_greenplum
+ *	parallel_check_greengage
  *
  *	Do given check in parallel execution.
  */
 static void
-parallel_check_greenplum(check_function check_func)
+parallel_check_greengage(check_function check_func)
 {
 	pid_t		child;
 
@@ -110,11 +110,11 @@ parallel_check_greenplum(check_function check_func)
 		while (parallel_checks_reap_child(false) == true);
 
 		/* must we wait for a finished child? */
-		if (check_greenplum_parallel_jobs >= user_opts.jobs)
+		if (check_greengage_parallel_jobs >= user_opts.jobs)
 			parallel_checks_reap_child(true);
 
 		/* set this before we start the job */
-		check_greenplum_parallel_jobs++;
+		check_greengage_parallel_jobs++;
 
 		/* Ensure stdio state is quiesced before forking */
 		fflush(NULL);
@@ -146,7 +146,7 @@ parallel_checks_reap_child(bool wait_for_child)
 	int			work_status;
 	pid_t		child;
 
-	if (user_opts.jobs <= 1 || check_greenplum_parallel_jobs == 0)
+	if (user_opts.jobs <= 1 || check_greengage_parallel_jobs == 0)
 		return false;
 
 	child = waitpid(-1, &work_status, wait_for_child ? 0 : WNOHANG);
@@ -158,7 +158,7 @@ parallel_checks_reap_child(bool wait_for_child)
 		set_check_fatal_occured();
 
 	/* do this after job has been removed */
-	check_greenplum_parallel_jobs--;
+	check_greengage_parallel_jobs--;
 
 	return true;
 }
@@ -186,7 +186,7 @@ check_online_expansion(void)
 	 * We only need to check the cluster expansion status on master.
 	 * On the other hand the status can not be detected correctly on segments.
 	 */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		return;
 
 	start_parallel_check(check_name);
@@ -943,7 +943,7 @@ check_for_array_of_partition_table_types(void)
 }
 
 /*
- * Greenplum 6 does not support large objects, but 5 does.
+ * Greengage 6 does not support large objects, but 5 does.
  */
 static void
 check_large_objects(void)
@@ -1005,14 +1005,14 @@ check_large_objects(void)
  * check_invalid_indexes
  *
  * Check if there are any invalid indexes and let the users know that.
- * In greenplum, upgrade for bitmap and bpchar_pattern_ops indexes is not supported,
+ * In greengage, upgrade for bitmap and bpchar_pattern_ops indexes is not supported,
  * these indexes are marked invalid during the upgrade of the master database, and are reset
  * to valid state at the start of segment upgrade. Since, there is no way to identify what
  * indexes are marked invalid by pg_upgrade vs what were already invalid in the source cluster,
  * there is an expectation that the old cluster does not have any invalid index.
  *
  * Note: Indexes are marked invalid with CREATE INDEX CONCURRENTLY statement, however, its
- * not supported in Greenplum, so we shouldn't have any invalid indexes in the source cluster
+ * not supported in Greengage, so we shouldn't have any invalid indexes in the source cluster
  * to start with.
  */
 static void

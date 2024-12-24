@@ -3,7 +3,7 @@
  * old_tablespace_file_gp.c
  *
  * Definitions of functions to manage the interface between pg_upgrade and
- * greenplum's storage of the old_tablespace_file_contents.
+ * greengage's storage of the old_tablespace_file_contents.
  *
  * Copyright (c) 2019-Present Pivotal Software, Inc.
  *

@@ -286,7 +286,7 @@ static void postgresExplainForeignModify(ModifyTableState *mtstate,
 static bool postgresAnalyzeForeignTable(Relation relation,
 							AcquireSampleRowsFunc *func,
 							BlockNumber *totalpages);
-static int greenplumCheckIsGreenplum(ForeignServer *server, UserMapping *user);
+static int greengageCheckIsGreengage(ForeignServer *server, UserMapping *user);
 
 /*
  * Helper functions
@@ -1674,12 +1674,12 @@ postgresIsForeignRelUpdatable(Relation rel)
 		return 0;
 
 	/*
-	 * Greenplum only supports INSERT, because UPDATE/DELETE SELECT requires
+	 * Greengage only supports INSERT, because UPDATE/DELETE SELECT requires
 	 * the hidden column gp_segment_id and the other "ModifyTable mixes
 	 * distributed and entry-only tables" issue.
 	 */
 	UserMapping *user = GetUserMapping(rel->rd_rel->relowner, table->serverid);
-	if (greenplumCheckIsGreenplum(server, user))
+	if (greengageCheckIsGreengage(server, user))
 		return (1 << CMD_INSERT);
 	else
 		return (1 << CMD_INSERT) | (1 << CMD_UPDATE) | (1 << CMD_DELETE);
@@ -2779,7 +2779,7 @@ conversion_error_callback(void *arg)
 }
 
 static int
-greenplumCheckIsGreenplum(ForeignServer *server, UserMapping *user)
+greengageCheckIsGreengage(ForeignServer *server, UserMapping *user)
 {
 	PGconn     *conn;
 	PGresult   *res;
@@ -2796,7 +2796,7 @@ greenplumCheckIsGreenplum(ForeignServer *server, UserMapping *user)
 	if (PQntuples(res) == 0)
 		pgfdw_report_error(ERROR, res, conn, true, query);
 
-	ret = strstr(PQgetvalue(res, 0, 0), "Greenplum Database") ? 1 : 0;
+	ret = strstr(PQgetvalue(res, 0, 0), "Greengage Database") ? 1 : 0;
 
 	PQclear(res);
 	ReleaseConnection(conn);

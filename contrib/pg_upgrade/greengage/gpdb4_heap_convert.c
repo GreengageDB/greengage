@@ -5,7 +5,7 @@
  */
 #include "postgres_fe.h"
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 
 #include "access/htup_details.h"
 #include "access/xlogdefs.h"

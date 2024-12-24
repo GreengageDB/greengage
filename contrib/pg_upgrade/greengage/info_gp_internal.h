@@ -2,7 +2,7 @@
  *
  * info_gp_internal.h
  *
- * Greenplum specific logic for determining tablespace paths
+ * Greengage specific logic for determining tablespace paths
  * for a given tablespace_oid.
  *
  * Copyright (c) 2019-Present Pivotal Software, Inc.

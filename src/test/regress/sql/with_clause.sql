@@ -379,8 +379,8 @@ WITH RECURSIVE r1 AS (
 SELECT * FROM r1 LIMIT 1;
 
 -- GPDB
--- Greenplum does not support window functions in recursive part's target list
--- See issue https://github.com/greenplum-db/gpdb/issues/13299 for details.
+-- Greengage does not support window functions in recursive part's target list
+-- See issue https://github.com/GreengageDB/greengage/issues/13299 for details.
 -- Previously the following SQL will PANIC or Assert Fail if compiled with assert.
 create table t_window_ordered_set_agg_rte(a bigint, b bigint, c bigint);
 
@@ -460,8 +460,8 @@ with cte as (
     returning i
 ) select count(*) from cte where i < (select avg(i) from cte);
 
--- Greenplum fails to execute SELECT INTO and CREATE TABLE AS statements, whose
--- queries contain modifying CTEs, because Greenplum cannot have two writer
+-- Greengage fails to execute SELECT INTO and CREATE TABLE AS statements, whose
+-- queries contain modifying CTEs, because Greengage cannot have two writer
 -- segworker groups, and during execution an error is thrown. Showing
 -- the error during planning stage would be more effective, therefore this test
 -- checks this behaviour.

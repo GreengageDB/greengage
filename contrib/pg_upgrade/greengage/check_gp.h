@@ -1,8 +1,8 @@
 /*
- *	greenplum/check_gp.h
+ *	greengage/check_gp.h
  *
  *	Portions Copyright (c) 2019-Present, Pivotal Software Inc
- *	contrib/pg_upgrade/greenplum/check_gp.h
+ *	contrib/pg_upgrade/greengage/check_gp.h
  */
 void check_heterogeneous_partition(void);
 

@@ -1,14 +1,14 @@
 /*
  *	version_gp.c
  *
- *	Greenplum version-specific routines for upgrades
+ *	Greengage version-specific routines for upgrades
  *
  *	Copyright (c) 2016-Present Pivotal Software, Inc
  *	contrib/pg_upgrade/version_gp.c
  */
 #include "postgres_fe.h"
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 
 #include "access/transam.h"
 
@@ -151,7 +151,7 @@ invalidate_indexes(void)
 }
 
 /*
- * In greenplum, after collecting the relation information, bitmap
+ * In greengage, after collecting the relation information, bitmap
  * indexes are marked as invalid. The same catalog is copied to the segment,
  * and when information is collected about the objects, invalid indexes are
  * not considered from the new segment. But the segment should be reset to
@@ -167,7 +167,7 @@ reset_invalid_indexes(void)
 {
 
 	/* Should be run only on segment databases */
-	Assert(!is_greenplum_dispatcher_mode());
+	Assert(!is_greengage_dispatcher_mode());
 	Assert(!user_opts.check);
 
 	prep_status("Resetting indexes marked as invalid");

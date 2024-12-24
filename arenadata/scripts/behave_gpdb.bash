@@ -9,7 +9,7 @@ function gen_env(){
 		cat > /opt/run_test.sh <<-EOF
 		set -ex
 
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
+		source /usr/local/greengage-db-devel/greengage_path.sh
 
 		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
@@ -41,7 +41,7 @@ function _main() {
 		fi
 
 		# Run inside a subshell so it does not pollute the environment after
-		# sourcing greenplum_path
+		# sourcing greengage_path
 		time (make_cluster)
 
 		time gen_env

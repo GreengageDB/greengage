@@ -2,16 +2,16 @@
  *
  * tablespace_gp.c
  *
- * Greenplum specific functions for preparing pg_upgrade to perform an upgrade
- * of Greenplum's tablespaces.
+ * Greengage specific functions for preparing pg_upgrade to perform an upgrade
+ * of Greengage's tablespaces.
  * 
  * Copyright (c) 2019-Present Pivotal Software, Inc.
  *
  */
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 #include "old_tablespace_file_gp.h"
 #include "tablespace_gp_internal.h"
-#include "greenplum_cluster_info_internal.h"
+#include "greengage_cluster_info_internal.h"
 #include "old_tablespace_file_gp_internal.h"
 
 #define OLD_TABLESPACES_FILE    "old_tablespaces.txt"
@@ -87,7 +87,7 @@ populate_old_cluster_with_old_tablespaces(ClusterInfo *oldCluster,
 	set_old_tablespace_file_contents(
 		filter_old_tablespace_file_for_dbid(
 			contents,
-			get_gp_dbid(oldCluster->greenplum_cluster_info)));
+			get_gp_dbid(oldCluster->greengage_cluster_info)));
 
 	clear_old_tablespace_file_contents(contents);
 }
@@ -96,7 +96,7 @@ void
 populate_gpdb6_cluster_tablespace_suffix(ClusterInfo *cluster)
 {
 	cluster->tablespace_suffix = psprintf("/%d/GPDB_6_%d",
-	                                      get_gp_dbid(cluster->greenplum_cluster_info),
+	                                      get_gp_dbid(cluster->greengage_cluster_info),
 	                                      cluster->controldata.cat_ver);
 }
 

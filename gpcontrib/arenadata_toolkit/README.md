@@ -3,7 +3,7 @@
 `arenadata_toolkit` starting from version 1.7 represents a GPDB extension that efficiently tracks file system changes (extend, truncate, create, unlink operations) using space-efficient Bloom filters stored in shared memory. This extension is particularly useful for monitoring and maintaining database files sizes across a distributed environment.
 
 The main purpose of this code is achieving fast database size calculation and tracking file changes at relation
-level. The extension implements a probabilistic tracking system using Bloom filters to monitor file changes across Greenplum segments. It utilizes shared memory for state management and employs background workers to maintain consistency. 
+level. The extension implements a probabilistic tracking system using Bloom filters to monitor file changes across Greengage segments. It utilizes shared memory for state management and employs background workers to maintain consistency. 
 
 #### Configuring GPDB and extension usage
 Since extension uses shared memory, configuration on all GPDB segments must be changed by setting

@@ -1,14 +1,14 @@
-#include "greenplum_cluster_info.h"
-#include "greenplum_cluster_info_internal.h"
-#include "pg_upgrade_greenplum.h"
+#include "greengage_cluster_info.h"
+#include "greengage_cluster_info_internal.h"
+#include "pg_upgrade_greengage.h"
 
 char *
-greenplum_extra_pg_ctl_flags(GreenplumClusterInfo *info)
+greengage_extra_pg_ctl_flags(GreengageClusterInfo *info)
 {
 	int gp_dbid;
 	int gp_content_id;
 
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		gp_dbid       = 1;
 		gp_content_id = -1;

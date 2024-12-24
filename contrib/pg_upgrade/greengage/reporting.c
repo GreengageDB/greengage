@@ -6,7 +6,7 @@
  *	Copyright (c) 2017-Present, Pivotal Software Inc.
  */
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 
 #include <time.h>
 
