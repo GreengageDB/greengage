@@ -14,7 +14,7 @@ set optimizer_trace_fallback=on;
 set enable_seqscan=off;
 -- Basic scenario
 CREATE TABLE test_basic_cover_index_@amname@(a int, b int, c int) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_test_basic_index_@amname@ ON test_basic_cover_index_@amname@(a) INCLUDE (b);
 INSERT INTO test_basic_cover_index_@amname@ SELECT i, i+i, i*i FROM generate_series(1, 100)i;
@@ -105,7 +105,7 @@ SELECT b FROM view_test_cover_indexes_without_filter_@amname@ WHERE a<42;
 -- Use different column types to check that the scan associates the correct
 -- type to the correct column
 CREATE TABLE test_various_col_types_@amname@(inttype int, texttype text, decimaltype decimal(10,2)) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'inttype' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'inttype' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_various_col_types_@amname@ SELECT i, 'texttype'||i, i FROM generate_series(1,9999) i;
 CREATE INDEX i_test_various_col_types_@amname@ ON test_various_col_types_@amname@(inttype) INCLUDE (texttype);
@@ -155,7 +155,7 @@ EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) SELECT decimaltype, boxtyp
 -- Alter (add/drop) columns to check that the correct data is read from the
 -- physical scan.
 CREATE TABLE test_add_drop_columns_@amname@(a bigint, aa bigint, b bigint, bb bigint, c bigint, d bigint) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE test_add_drop_columns_@amname@ DROP COLUMN aa;
 INSERT INTO test_add_drop_columns_@amname@ SELECT i, 2 * i, 3 * i, 4 * i, 5 * i FROM generate_series(1, 100000)i;
@@ -260,7 +260,7 @@ SELECT a, b, c FROM test_replicated_@amname@ WHERE c>42;
 -- Check that the best cover index is chosen for a plan when multiple cover
 -- indexes are available.
 CREATE TABLE test_select_best_cover_@amname@(a int, b int, c int) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_test_select_best_cover_a_@amname@ ON test_select_best_cover_@amname@(a);
 CREATE INDEX i_test_select_best_cover_a_b_@amname@ ON test_select_best_cover_@amname@(a) INCLUDE (b);
@@ -345,7 +345,7 @@ SELECT b FROM test_select_best_cover_@amname@ WHERE a>42 AND b>42 AND c>42;
 --
 -- Check that cover indexes can be used with DML operations
 CREATE TABLE test_dml_using_cover_index_@amname@(a int, b int, c int) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_test_dml_using_cover_index_@amname@ ON test_dml_using_cover_index_@amname@(a) INCLUDE (b);
 INSERT INTO test_dml_using_cover_index_@amname@ SELECT i, i+i, i*i FROM generate_series(1, 100)i;
@@ -528,7 +528,7 @@ SELECT a, b FROM test_index_types_@amname@ WHERE a<@ box '(0,0,3,3)';
 --
 -- Check that partial cover indexes may be used
 CREATE TABLE test_partial_index_@amname@(a int, b int, c int) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_test_partial_index_@amname@ ON test_partial_index_@amname@(a) INCLUDE (b) WHERE a<42;
 INSERT INTO test_partial_index_@amname@ SELECT i, i+i, i*i FROM generate_series(1, 100)i;
@@ -678,7 +678,7 @@ SELECT b, c FROM test_unique_index_include_@amname@ WHERE a > 5;
 -- Test drop behavior
 --
 CREATE TABLE test_cover_index_drop_@amname@(a int, b int, c int) USING @amname@;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX i_test_cover_index_drop_@amname@ ON test_cover_index_drop_@amname@(a) INCLUDE (b);
 INSERT INTO test_cover_index_drop_@amname@ SELECT i, i+i, i*i FROM generate_series(1, 10)i;

@@ -1594,7 +1594,7 @@ get_oprjoin(Oid opno)
 /*
  * Does table have update triggers?
  *
- * From Greenplum 7, the Postgres planner expands partitioned table's children,
+ * From Greengage 7, the Postgres planner expands partitioned table's children,
  * including directly and indirectly, and generates a plan for each child table,
  * but ORCA doesn't do that.
  *
@@ -3973,7 +3973,7 @@ get_index_isclustered(Oid index_oid)
 	return isclustered;
 }
 
-/*				---------- Greenplum specific ----------				 */
+/*				---------- Greengage specific ----------				 */
 
 /*
  * function_exists

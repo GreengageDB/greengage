@@ -3,8 +3,8 @@ package hub
 import (
 	"os/exec"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/idl"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/idl"
 )
 
 // Common interface for all hub side streaming RPC servers

@@ -115,7 +115,7 @@ select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM ge
 select explain_filter('EXPLAIN (FORMAT XML, COSTS OFF) SELECT * FROM generate_series(1, 10);');
 
 -- Test for an old bug in printing Sequence nodes in JSON/XML format
--- (https://github.com/greenplum-db/gpdb/issues/9410)
+-- (https://github.com/GreengageDB/greengage/issues/9410)
 CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EVERY(1));
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;');
 
@@ -172,7 +172,7 @@ RESET jit_above_cost;
 RESET gp_explain_jit;
 RESET optimizer_jit_above_cost;
 
--- Greenplum hash table extra message
+-- Greengage hash table extra message
 CREATE TABLE test_src_tbl AS
 SELECT i % 10000 AS a, i % 10000 + 1 AS b FROM generate_series(1, 50000) i DISTRIBUTED BY (a);
 ANALYZE test_src_tbl;

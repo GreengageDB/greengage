@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/test/integration/testutils"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/test/integration/testutils"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 func TestStartSuccess(t *testing.T) {

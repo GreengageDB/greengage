@@ -486,7 +486,7 @@ ProcArrayEndTransaction(PGPROC *proc, TransactionId latestXid)
 		if (LWLockConditionalAcquire(ProcArrayLock, LW_EXCLUSIVE))
 		{
 			/*
-			 * Greenplum needs to clear things of pgxact too in the case that
+			 * Greengage needs to clear things of pgxact too in the case that
 			 * the distributed XID is valid but XID is not.
 			 */
 			ProcArrayEndTransactionInternal(proc, pgxact, latestXid);
@@ -659,7 +659,7 @@ ProcArrayGroupClearXid(PGPROC *proc, TransactionId latestXid)
 		TMGXACT	   *tmGxact = &allTmGxact[nextidx];
 
 		/*
-		 * Greenplum needs to clear things of pgxact too in the case that the
+		 * Greengage needs to clear things of pgxact too in the case that the
 		 * distributed XID is valid but XID is not.
 		 */
 		ProcArrayEndTransactionInternal(nextproc, pgxact, nextproc->procArrayGroupMemberXid);
@@ -2185,7 +2185,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 
 	/*
 	 * Support for true serializable isolation is not yet implemented in
-	 * Greenplum.  See merge fixme in assign_XactIsoLevel().
+	 * Greengage.  See merge fixme in assign_XactIsoLevel().
 	 */
 	Assert(XactIsoLevel < XACT_SERIALIZABLE);
 

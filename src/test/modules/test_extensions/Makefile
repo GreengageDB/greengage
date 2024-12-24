@@ -15,7 +15,7 @@ DATA = test_ext1--1.0.sql test_ext2--1.0.sql test_ext3--1.0.sql \
        test_ext_cau--1.0--1.1.sql test_ext_cau--1.0.sql \
        test_ext_cau--1.1.sql test_ext_cau--unpackaged--1.0.sql
 
-REGRESS = test_extensions #test_extdepend TODO: enable this test after https://github.com/greenplum-db/gpdb/issues/14532
+REGRESS = test_extensions #test_extdepend TODO: enable this test after https://github.com/GreengageDB/greengage/issues/14532
 
 # force C locale for output stability
 NO_LOCALE = 1

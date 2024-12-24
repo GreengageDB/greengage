@@ -1421,7 +1421,7 @@ swap_relation_files(Oid r1, Oid r2, bool target_is_pg_class,
 		relform1->relminmxid = cutoffMulti;
 	}
 	/*
-	 * Greenplum: append-optimized tables do not have a valid relfrozenxid.
+	 * Greengage: append-optimized tables do not have a valid relfrozenxid.
 	 * Overwrite the entry for both relations.
 	 */
 	if (relform1->relkind != RELKIND_INDEX && IsAccessMethodAO(relform1->relam))

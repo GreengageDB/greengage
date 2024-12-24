@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/cli"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/cli"
 )
 
 func main() {

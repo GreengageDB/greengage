@@ -120,7 +120,7 @@ extern void WalUsageAccumDiff(WalUsage *dst, const WalUsage *add,
 
 #define GP_INSTRUMENT_OPTS (gp_enable_query_metrics ? INSTRUMENT_ROWS : INSTRUMENT_NONE)
 
-/* Greenplum query metrics */
+/* Greengage query metrics */
 typedef struct InstrumentationHeader
 {
 	void	   *head;

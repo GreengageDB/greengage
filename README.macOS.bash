@@ -91,7 +91,7 @@ cat << EOF
 
 ================
 
-Please source greenplum_path.sh after compiling database, then
+Please source greengage_path.sh after compiling database, then
 
 pip3 install --user -r python-dependencies.txt
 

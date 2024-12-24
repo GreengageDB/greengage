@@ -582,7 +582,7 @@ DROP TABLE test_index_with_orderby_limit;
 -- Test Case: Test on a regular table with mixed data type columns.
 -- Purpose: Validate if IndexScan with correct scan direction is used on expected index for queries with order by and limit.
 CREATE TABLE zoo (a int, b text, c float, d int, e text, f int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO zoo select i, CONCAT('col_b', i)::text, i/3.2, i+1, CONCAT('col_e', i)::text, i+3 from generate_series(1,10000) i;
 -- Inserting nulls to verify results match when index key specifies nulls first or desc
@@ -1929,7 +1929,7 @@ DROP TABLE test_ao_table;
 -- Purpose: Evaluate if Forward/Backward IndexScan works on query with order by and limit, with other type of indices
 -- Note: No other index type apart from btree support IndexScans
 CREATE TABLE test_multi_index_types_table(a int, b int, c float, d text, e tsquery, f tsvector);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- create a bitmap index
 create index bitmap_a on test_multi_index_types_table using bitmap(a);
@@ -2026,7 +2026,7 @@ explain(costs off) select f from test_multi_index_types_table order by f limit 3
 DROP TABLE test_multi_index_types_table;
 -- Purpose: Test Forward/Backward IndexScan over views
 create table test_on_views(a int, b int, c float);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_on_views SELECT i+3, i, i/4.2 from generate_series(1,100) i;
 -- create a index on column b
@@ -2080,7 +2080,7 @@ DROP TABLE test_on_views;
 -- Purpose: Test Forward/Backward IndexScan over partial indices
 -- ORCA_FEATURE_NOT_SUPPORTED: partial indexes are not supported
 create table test_on_partial_indices(a int, b int, c float);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- create a partial index on column b
 create index partial_index on test_on_partial_indices(b desc) where b<54;
@@ -2196,7 +2196,7 @@ DROP TABLE test_on_unique_column;
 -- Purpose: Test Forward/Backward IndexScan with order by on Index Expressions
 -- ORCA_FEATURE_NOT_SUPPORTED: Indexes on Expressions are not supported by ORCA
 create table test_on_index_expressions(a int, b int, c float);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX expr_index_a on test_on_index_expressions using btree(a);
 analyze test_on_index_expressions;
@@ -2288,7 +2288,7 @@ CREATE TYPE custom_data_type AS (
     name VARCHAR,
     age INTEGER);
 create table test_on_custom_data_type(a int, b float, c custom_data_type);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index index_on_custom_type on test_on_custom_data_type using btree(c);
 insert into test_on_custom_data_type select i, i/3, (concat('person', i), i)::custom_data_type from generate_series(1,100)i;
@@ -2460,7 +2460,7 @@ DROP TABLE sales_data;
 -- Purpose: Test DynamicIndexScan on partition table with holes and a default partition
 -- Currently, ORCA doesn't support DynamicIndex(Only)Scan on partition tables.
 CREATE TABLE tbl_range (id int, col1 int, col2 int, col3 int) PARTITION BY RANGE (col1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE p1 PARTITION OF tbl_range FOR VALUES FROM (100) TO (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2501,7 +2501,7 @@ DROP TABLE tbl_range;
 -- Purpose: This section includes tests on general table where backward index scan could be used, but is not used currently since
 --          those cases are not supported as part of this initial addition of backward index support.
 CREATE TABLE test_yet_unsupported_backwrd_idxscan_cases (a int, b text, c float, d int, e int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- single col index with default order
 CREATE INDEX index_a on test_yet_unsupported_backwrd_idxscan_cases using btree(a);
@@ -2694,10 +2694,10 @@ DROP TABLE test_yet_unsupported_backwrd_idxscan_cases;
 -- generate IndexScan alternatives for NL joins. This tests the case where
 -- IndexScan's order property could be used for joining two tables
 CREATE TABLE employee(id int, name text, dep_id int, salary int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE department(dep_id int, dep_name text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dep_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dep_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX index_salary on employee using btree(salary);
 ANALYZE employee;
@@ -2745,10 +2745,10 @@ DROP TABLE department;
 -- we don't generate IndexScan alternative for union all, also we don't support
 -- MergeAppend. But documenting this case for reference
 CREATE TABLE table1(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE table2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX tab1_idx on table1 using btree(b);
 CREATE INDEX tab2_idx on table2 using btree(b);
@@ -3125,10 +3125,10 @@ DROP TABLE test_partition_table;
 -- where IndexScan's order property could be used for joining two partition
 -- tables
 CREATE TABLE part_employee(id int, name text, dep_id int, salary int) PARTITION BY range(id) (start (0) end(10000) every(2000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_department(dep_id int, dep_name text) PARTITION BY range(dep_id) (start (0) end(10000) every(2000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dep_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dep_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX part_index_id on part_employee using btree(id);
 ANALYZE part_employee;
@@ -3203,10 +3203,10 @@ DROP TABLE part_department;
 -- we don't generate DynamicIndexScan alternative for union all, also we don't
 -- support MergeAppend. But documenting this case for reference
 CREATE TABLE part_table1(a int, b int) PARTITION BY range(a) (start (0) end(100) every(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_table2(a int, b int) PARTITION BY range(a) (start (0) end(100) every(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX part_tab1_idx on part_table1 using btree(a);
 CREATE INDEX part_tab2_idx on part_table2 using btree(a);
@@ -3673,7 +3673,7 @@ drop table min_max_aggregates;
 CREATE TABLE table1 (a int, b int, c int);
 CREATE INDEX t1_c_idx on table1 using btree(c);
 CREATE TABLE table2 (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX t2_c_idx on table2 using btree(c);
 INSERT INTO table1 select i, i, i from generate_series(1,100) i;

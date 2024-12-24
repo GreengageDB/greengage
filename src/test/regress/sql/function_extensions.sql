@@ -289,7 +289,7 @@ CREATE TABLE t7_function_scan AS SELECT * FROM  get_country() UNION ALL SELECT 1
 SELECT count(*) FROM t7_function_scan;
 
 -- Test INITPLAN functions in INITPLAN
--- more details could be found at https://github.com/greenplum-db/gpdb/issues/16679
+-- more details could be found at https://github.com/GreengageDB/greengage/issues/16679
 create or replace function hello_initplan() returns setof text as $$
 return ["hello"]
 $$ language plpython3u

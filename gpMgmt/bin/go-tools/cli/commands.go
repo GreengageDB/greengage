@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/idl"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/idl"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )

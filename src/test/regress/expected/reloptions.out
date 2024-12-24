@@ -52,7 +52,7 @@ ERROR:  invalid value for integer option "fillfactor": true
 -- Simple ALTER TABLE
 ALTER TABLE reloptions_test SET (fillfactor=31,
 	autovacuum_analyze_scale_factor = 0.3);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                                   reloptions                                  
 ------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
 
 -- Set boolean option to true without specifying value
 ALTER TABLE reloptions_test SET (autovacuum_enabled, fillfactor=32);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                                  reloptions                                  
 -----------------------------------------------------------------------------
@@ -79,8 +79,8 @@ SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
 -- Resetting all values causes the column to become null
 ALTER TABLE reloptions_test RESET (autovacuum_enabled,
 	autovacuum_analyze_scale_factor);
-WARNING:  autovacuum is not supported in Greenplum
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass AND
        reloptions IS NULL;
  reloptions 
@@ -153,7 +153,7 @@ SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
 (1 row)
 
 ALTER TABLE reloptions_test SET (toast.autovacuum_vacuum_cost_delay = 24);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
             reloptions             
 -----------------------------------
@@ -161,7 +161,7 @@ SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
 (1 row)
 
 ALTER TABLE reloptions_test RESET (toast.autovacuum_vacuum_cost_delay);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
  reloptions 
 ------------

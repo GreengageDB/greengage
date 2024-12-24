@@ -211,7 +211,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString,
 	 * (The setting will be restored at the end of this routine, or in case of
 	 * error, transaction abort will clean things up.)
 	 *
-	 * Greenplum delays setting the current user until the query is dispatched
+	 * Greengage delays setting the current user until the query is dispatched
 	 * to QEs.
 	 */
 	if (saved_uid != owner_uid)

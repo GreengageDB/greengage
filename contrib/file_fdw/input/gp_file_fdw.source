@@ -1,5 +1,5 @@
 --
--- Test foreign-data wrapper file_fdw. Greenplum MPP specific
+-- Test foreign-data wrapper file_fdw. Greengage MPP specific
 --
 --
 -- start_matchsubs

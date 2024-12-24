@@ -11,10 +11,10 @@
 -- end_matchsubs
 -- Given I have two distributed tables
 create table choose_seqscan_t1(id1 int,id2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table choose_seqscan_t2(id1 int,id2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- and they have some data
 insert into choose_seqscan_t1 select i+1,i from generate_series(1,50)i;
@@ -169,7 +169,7 @@ explain select t1.id1, (select count(*) from generate_series(1,5) g, choose_seqs
 -- first, and then filter the join result based on the correlation qual "t1.id1 = t2.id1". But
 -- the planner isn't smart enough to generate that plan, currently.
 create table choose_seqscan_t3(id1 int,id2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index bidx3 on choose_seqscan_t3(id1);
 insert into choose_seqscan_t3 select i+1,i from generate_series(1,50)i;
@@ -216,7 +216,7 @@ drop table if exists choose_seqscan_t2;
 -- end_ignore
 -- Given I have one replicated table
 create table choose_indexscan_t1(id1 int, id2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table choose_indexscan_t2(id1 int, id2 int) distributed replicated;
 -- and it has data
@@ -257,7 +257,7 @@ select (select id1 from (select * from choose_indexscan_t2) foo where id2=choose
 
 -- start_ignore
 -- GPDB_96_MERGE_FIXME: we no longer choose an index scan here, because the planner cannot
--- easily determine that it's safe. See https://github.com/greenplum-db/gpdb/issues/8648.
+-- easily determine that it's safe. See https://github.com/GreengageDB/greengage/issues/8648.
 -- I hope we can get that back with the 9.6 upper planner pathification.
 -- end_ignore
 explain select (select id1 from (select * from choose_indexscan_t2) foo where id2=choose_indexscan_t1.id2) from choose_indexscan_t1;
@@ -281,7 +281,7 @@ explain select (select id1 from (select * from choose_indexscan_t2) foo where id
 -- table is scanned in the QD. (Catalog tables are present with same contents
 -- on all segments, too, so we could alternatively perform scan the catalog
 -- table oon one of the segments.)
--- https://github.com/greenplum-db/gpdb/issues/8648
+-- https://github.com/GreengageDB/greengage/issues/8648
 create table mytables (tablename text, explanation text) distributed replicated;
 insert into mytables values ('pg_class', 'contains all relations');
 create index on mytables(tablename);

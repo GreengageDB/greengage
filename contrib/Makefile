@@ -4,7 +4,7 @@ subdir = contrib
 top_builddir = ..
 include $(top_builddir)/src/Makefile.global
 
-# Greenplum specific changes to the targetlist:
+# Greengage specific changes to the targetlist:
 # tsearch2 is currently disabled due to test failures.
 # cube and the related earthdistance are disabled since GPDB define CUBE
 # as a keyword. lo is disabled since large objects aren't supported.
@@ -53,7 +53,7 @@ SUBDIRS = \
 		unaccent	\
 		vacuumlo
 
-# Greenplum-specific additions (to ease merge pain).
+# Greengage-specific additions (to ease merge pain).
 SUBDIRS += \
 		formatter \
 		formatter_fixedwidth \

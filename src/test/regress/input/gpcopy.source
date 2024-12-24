@@ -1,5 +1,5 @@
 --
--- This test suite tests COPY code that is unique to greenplum db.
+-- This test suite tests COPY code that is unique to greengage db.
 --
 
 --

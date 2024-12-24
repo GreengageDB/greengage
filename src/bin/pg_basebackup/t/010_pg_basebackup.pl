@@ -39,7 +39,7 @@ $node->set_replication_conf();
 $node->reload;
 
 command_fails(['pg_basebackup', '-D', "$tempdir/backup" ],
-	'pg_basebackup fails without specifiying the target greenplum db id');
+	'pg_basebackup fails without specifiying the target greengage db id');
 
 $node->command_fails(
 	[ 'pg_basebackup', '-D', "$tempdir/backup", '--target-gp-dbid', '123' ],
@@ -577,7 +577,7 @@ my $file_corrupt2 = $node->safe_psql('postgres',
 my $block_size = $node->safe_psql('postgres', 'SHOW block_size;');
 
 # induce corruption
-# Greenplum invokes pg_ctl to start, haven't defined $self->{_pid}
+# Greengage invokes pg_ctl to start, haven't defined $self->{_pid}
 # $node->stop;
 system_or_bail 'pg_ctl', '-D', $pgdata, 'stop';
 $node->corrupt_page_checksum($file_corrupt1, 0);
@@ -592,7 +592,7 @@ $node->command_checks_all(
 rmtree("$tempdir/backup_corrupt");
 
 # induce further corruption in 5 more blocks
-# Greenplum invokes pg_ctl to start, haven't defined $self->{_pid}
+# Greengage invokes pg_ctl to start, haven't defined $self->{_pid}
 # $node->stop;
 system_or_bail 'pg_ctl', '-D', $pgdata, 'stop';
 for my $i (1 .. 5)
@@ -610,7 +610,7 @@ $node->command_checks_all(
 rmtree("$tempdir/backup_corrupt2");
 
 # induce corruption in a second file
-# Greenplum invokes pg_ctl to start, haven't defined $self->{_pid}
+# Greengage invokes pg_ctl to start, haven't defined $self->{_pid}
 # $node->stop;
 system_or_bail 'pg_ctl', '-D', $pgdata, 'stop';
 $node->corrupt_page_checksum($file_corrupt2, 0);

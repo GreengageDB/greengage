@@ -165,7 +165,7 @@ select makedcomp(1,2);
 select makedcomp(2,1);  -- fail
 select * from makedcomp(1,2) m;
 -- GPDB_12_12_MERGE_FIXME
--- https://github.com/greenplum-db/gpdb/pull/14517
+-- https://github.com/GreengageDB/greengage/pull/14517
 -- start_ignore
 select m, m is not null from makedcomp(1,2) m;
 -- end_ignore
@@ -803,7 +803,7 @@ drop domain testdomain1;
 
 --
 -- Create Domain will dispatch collation
--- See github issue: https://github.com/greenplum-db/gpdb/issues/12015
+-- See github issue: https://github.com/GreengageDB/greengage/issues/12015
 --
 
 create domain testdomain_issue_12015 as text collate "C";
@@ -824,7 +824,7 @@ from
 -- ORCA shouldn't fail for data corruption while translating query to DXL
 -- for a constant domain value of the following text related types:
 -- char, bpchar, name.
--- github issue: https://github.com/greenplum-db/gpdb/issues/14155
+-- github issue: https://github.com/GreengageDB/greengage/issues/14155
 --
 
 create table test_table_14155(txtime timestamptz default now(), user_role text);

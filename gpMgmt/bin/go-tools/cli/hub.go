@@ -12,11 +12,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
 )
 
 var (
@@ -73,9 +73,9 @@ func configureCmd() *cobra.Command {
 	viper.AutomaticEnv()
 	// TODO: Adding input validation
 	configureCmd.Flags().IntVar(&agentPort, "agent-port", constants.DefaultAgentPort, `Port on which the agents should listen`)
-	configureCmd.Flags().StringVar(&gpHome, "gphome", "/usr/local/greenplum-db", `Path to GPDB installation`)
+	configureCmd.Flags().StringVar(&gpHome, "gphome", "/usr/local/greengage-db", `Path to GPDB installation`)
 	configureCmd.Flags().IntVar(&hubPort, "hub-port", constants.DefaultHubPort, `Port on which the hub should listen`)
-	configureCmd.Flags().StringVar(&hubLogDir, "log-dir", greenplum.GetDefaultHubLogDir(), `Path to gp hub log directory`)
+	configureCmd.Flags().StringVar(&hubLogDir, "log-dir", greengage.GetDefaultHubLogDir(), `Path to gp hub log directory`)
 	configureCmd.Flags().StringVar(&serviceName, "service-name", constants.DefaultServiceName, `Name for the generated systemd service file`)
 	configureCmd.Flags().StringVar(&serviceDir, "service-dir", fmt.Sprintf(DefaultServiceDir, os.Getenv("USER")), `Path to service file directory`)
 	configureCmd.Flags().StringVar(&serviceUser, "service-user", os.Getenv("USER"), `User for whom to configure the service`)

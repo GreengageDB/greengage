@@ -1,11 +1,11 @@
-module github.com/greenplum-db/gpdb/gp
+module github.com/GreengageDB/greengage/gp
 
 go 1.21
 
 require (
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.3
-	github.com/greenplum-db/gp-common-go-libs v1.0.16
+	github.com/GreengageDB/gp-common-go-libs v1.0.16
 	github.com/lib/pq v1.10.2
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.16.0

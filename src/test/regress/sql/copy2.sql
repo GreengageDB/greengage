@@ -405,7 +405,7 @@ COPY rls_t1 (a, b) TO stdout;
 RESET SESSION AUTHORIZATION;
 
 -- test with INSTEAD OF INSERT trigger on a view
--- INSTEAD OF triggers are not supported in Greenplum
+-- INSTEAD OF triggers are not supported in Greengage
 /*
  * CREATE TABLE instead_of_insert_tbl(id serial, name text);
  * CREATE VIEW instead_of_insert_tbl_view AS SELECT ''::text AS str;
@@ -434,7 +434,7 @@ RESET SESSION AUTHORIZATION;
 -- Test of COPY optimization with view using INSTEAD OF INSERT
 -- trigger when relation is created in the same transaction as
 -- when COPY is executed.
--- INSTEAD OF triggers are not supported in Greenplum
+-- INSTEAD OF triggers are not supported in Greengage
 /*
  * BEGIN;
  * CREATE VIEW instead_of_insert_tbl_view_2 as select ''::text as str;

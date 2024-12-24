@@ -1327,7 +1327,7 @@ CREATE INDEX hash_name_index ON hash_name_heap USING hash (random name_ops);
 CREATE INDEX hash_txt_index ON hash_txt_heap USING hash (random text_ops);
 CREATE INDEX hash_f8_index ON hash_f8_heap USING hash (random float8_ops) WITH (fillfactor=60);
 CREATE UNLOGGED TABLE unlogged_hash_table (id int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX unlogged_hash_index ON unlogged_hash_table USING hash (id int4_ops);
 DROP TABLE unlogged_hash_table;
@@ -1452,7 +1452,7 @@ create index hash_f8_index_3 on hash_f8_heap(random) where seqno > 1000;
 -- Unfortunately this only tests about half the code paths because there are
 -- no concurrent updates happening to the table at the same time.
 --
--- Concurrent index building is not currently supported in Greenplum.
+-- Concurrent index building is not currently supported in Greengage.
 --start_ignore
 CREATE TABLE concur_heap (f1 text, f2 text, dk text) distributed by (dk);
 -- empty table
@@ -1538,7 +1538,7 @@ Distributed by: (dk)
 -- PRESERVE ROWS, the default.
 CREATE TEMP TABLE concur_temp (f1 int, f2 text)
   ON COMMIT PRESERVE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX CONCURRENTLY concur_temp_ind ON concur_temp(f1);
@@ -1550,7 +1550,7 @@ DROP TABLE concur_temp;
 BEGIN;
 CREATE TEMP TABLE concur_temp (f1 int, f2 text)
   ON COMMIT DROP;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
 -- Fails when running in a transaction.
@@ -1560,7 +1560,7 @@ COMMIT;
 -- ON COMMIT DELETE ROWS
 CREATE TEMP TABLE concur_temp (f1 int, f2 text)
   ON COMMIT DELETE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX CONCURRENTLY concur_temp_ind ON concur_temp(f1);
@@ -1570,7 +1570,7 @@ ERROR:  index "concur_temp_ind" does not exist
 DROP TABLE concur_temp;
 --
 -- Try some concurrent index drops
--- Greenplum: The functionality of these tests is replicated in gp_index
+-- Greengage: The functionality of these tests is replicated in gp_index
 --
 DROP INDEX CONCURRENTLY "concur_index2";				-- works
 ERROR:  index "concur_index2" does not exist
@@ -2204,7 +2204,7 @@ INSERT INTO concur_reindex_tab VALUES  (1, 'a');
 INSERT INTO concur_reindex_tab VALUES  (2, 'a');
 -- Reindex concurrently of exclusion constraint currently not supported
 CREATE TABLE concur_reindex_tab3 (c1 int, c2 int4range, EXCLUDE USING gist (c2 WITH &&));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  exclusion constraint is not compatible with the table's distribution policy
 DETAIL:  Distribution key column "c1" is not included in the constraint.
@@ -2311,7 +2311,7 @@ SELECT obj_description('testcomment_idx1'::regclass, 'pg_class');
 DROP TABLE testcomment;
 -- Check that indisclustered updates are preserved
 CREATE TABLE concur_clustered(i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX concur_clustered_i_idx ON concur_clustered(i);
 ALTER TABLE concur_clustered CLUSTER ON concur_clustered_i_idx;
@@ -2327,7 +2327,7 @@ SELECT indexrelid::regclass, indisclustered FROM pg_index
 DROP TABLE concur_clustered;
 -- Check that indisreplident updates are preserved.
 CREATE TABLE concur_replident(i int NOT NULL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX concur_replident_i_idx ON concur_replident(i);
 ALTER TABLE concur_replident REPLICA IDENTITY
@@ -2549,7 +2549,7 @@ CREATE OR REPLACE FUNCTION compare_relfilenode_part(tabname text)
   $func$ LANGUAGE plpgsql;
 --  Check that expected relfilenodes are changed, non-concurrent case.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
@@ -2570,7 +2570,7 @@ SELECT * FROM compare_relfilenode_part('reindex_index_status');
 DROP TABLE reindex_index_status;
 -- concurrent case.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
@@ -2611,7 +2611,7 @@ ROLLBACK;
 -- Check that expected relfilenodes are changed, non-concurrent case.
 -- Note that the partition tree changes of the *indexes* need to be checked.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
@@ -2632,7 +2632,7 @@ SELECT * FROM compare_relfilenode_part('reindex_index_status');
 DROP TABLE reindex_index_status;
 -- concurrent case.
 SELECT create_relfilenode_part('reindex_index_status', 'concur_reindex_part_index');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
  create_relfilenode_part 
 -------------------------
@@ -2740,7 +2740,7 @@ DROP TABLE concur_reindex_tab4;
 -- definitions of the rebuilt indexes should match the original
 -- definitions.
 CREATE TABLE concur_exprs_tab (c1 int , c2 boolean);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_exprs_tab (c1, c2) VALUES (1369652450, FALSE),
   (414515746, TRUE),
@@ -2856,7 +2856,7 @@ DROP TABLE concur_exprs_tab;
 -- ON COMMIT PRESERVE ROWS, the default.
 CREATE TEMP TABLE concur_temp_tab_1 (c1 int, c2 text)
   ON COMMIT PRESERVE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp_tab_1 VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind_1 ON concur_temp_tab_1(c2);
@@ -2872,7 +2872,7 @@ COMMIT;
 -- ON COMMIT DELETE ROWS
 CREATE TEMP TABLE concur_temp_tab_2 (c1 int, c2 text)
   ON COMMIT DELETE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX concur_temp_ind_2 ON concur_temp_tab_2(c2);
 REINDEX TABLE CONCURRENTLY concur_temp_tab_2;
@@ -2883,7 +2883,7 @@ ERROR:  REINDEX CONCURRENTLY is not supported
 BEGIN;
 CREATE TEMP TABLE concur_temp_tab_3 (c1 int, c2 text)
   ON COMMIT PRESERVE ROWS;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO concur_temp_tab_3 VALUES (1, 'foo'), (2, 'bar');
 CREATE INDEX concur_temp_ind_3 ON concur_temp_tab_3(c2);
@@ -2896,7 +2896,7 @@ CREATE TABLE reindex_temp_before AS
 SELECT oid, relname, relfilenode, relkind, reltoastrelid
   FROM pg_class
   WHERE relname IN ('concur_temp_ind_1', 'concur_temp_ind_2');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT pg_my_temp_schema()::regnamespace as temp_schema_name \gset
 REINDEX SCHEMA CONCURRENTLY :temp_schema_name;

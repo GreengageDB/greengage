@@ -28,7 +28,7 @@ run:
     # Set max_connections values if specified
     if (( $COORDINATOR_MAX_CONNECT > 0 && $SEGMENT_MAX_CONNECT > 0 )); then
         ssh -n cdw "
-          source /usr/local/greenplum-db-devel/greenplum_path.sh
+          source /usr/local/greengage-db-devel/greengage_path.sh
           export COORDINATOR_DATA_DIRECTORY='/data/gpdata/coordinator/gpseg-1'
           gpconfig -c max_connections -v $SEGMENT_MAX_CONNECT -m $COORDINATOR_MAX_CONNECT
         "
@@ -36,7 +36,7 @@ run:
 
     # ensure cluster is stopped
     ssh -n cdw "
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export COORDINATOR_DATA_DIRECTORY='/data/gpdata/coordinator/gpseg-1'
         if [ -d \$COORDINATOR_DATA_DIRECTORY ]; then gpstop -a; fi
     "
@@ -96,7 +96,7 @@ run:
 
     # start cluster back up
     ssh -n cdw "
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export COORDINATOR_DATA_DIRECTORY='/data/gpdata/coordinator/gpseg-1'
         if [ -d \$COORDINATOR_DATA_DIRECTORY ]; then gpstart -a; fi
     "
@@ -109,7 +109,7 @@ run:
         source /home/gpadmin/gpdb_src/concourse/scripts/common.bash
         install_python_requirements_on_multi_host /home/gpadmin/gpdb_src/gpMgmt/requirements-dev.txt
 
-        # Enable coverage.py on all hosts. (This modifies greenplum_path.sh and must
+        # Enable coverage.py on all hosts. (This modifies greengage_path.sh and must
         # come before the source below.)
         setup_coverage /home/gpadmin/gpdb_src
 

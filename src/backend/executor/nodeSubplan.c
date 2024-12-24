@@ -818,8 +818,8 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
 											   subplan->plan_id - 1);
 
 	/*
-	 * Greenplum specific behavior:
-	 *   Greenplum preprcess initplans before dispatching the main plan,
+	 * Greengage specific behavior:
+	 *   Greengage preprcess initplans before dispatching the main plan,
 	 *   so QEs never need to ExecInitSubPlan for initplans.
 	 *   Only do the following check when on QD or it is not initplan.
 	 */
@@ -1093,7 +1093,7 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
  */
 
 /*
- * Greenplum Database Changes:
+ * Greengage Database Changes:
  * In the case where this is running on the dispatcher, and it's a parallel
  * dispatch subplan, we need to dispatch the query to the qExecs as well, like
  * in ExecutorRun. Except in this case we don't have to worry about insert
@@ -1551,7 +1551,7 @@ ExecReScanSetParamPlan(SubPlanState *node, PlanState *parent)
 }
 
 /*
- * Greenplum specific code.
+ * Greengage specific code.
  * Prebuild the hash table of hash subplan to
  * get rid of interconnect UDP deadlock.
  */

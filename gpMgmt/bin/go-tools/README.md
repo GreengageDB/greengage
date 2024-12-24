@@ -10,7 +10,7 @@ The basic steps required are to
 #### Checkout the code (if not already done)
 ```
 mkdir ~/workspace & cd ~/workspace
-git clone git@github.com:greenplum-db/gpdb.git
+git clone git@github.com:GreengageDB/greengage.git
 ```
 
 #### Get dependency and set env

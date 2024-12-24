@@ -426,7 +426,7 @@ resources:
   type: git
   source:
     branch: main
-    uri: https://github.com/greenplum-db/filedump.git
+    uri: https://github.com/GreengageDB/filedump.git
 {% endif %}
 
 {% if os_type == compile_platform or (os_type != compile_platform and "icw" in test_sections) %}
@@ -537,14 +537,14 @@ resources:
   source:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/published/main/greenplum-db-(.*)-[[ dist ]]-x86_64((rc-build-type-gcs)).rpm
+    regexp: server/published/main/greengage-db-(.*)-[[ dist ]]-x86_64((rc-build-type-gcs)).rpm
 
-- name: greenplum-database-release
+- name: greengage-database-release
   type: git
   icon: git
   source:
     branch: main
-    uri: https://github.com/greenplum-db/greenplum-database-release.git
+    uri: https://github.com/GreengageDB/greengage.git
 
 - name: license_file
   type: gcs
@@ -552,7 +552,7 @@ resources:
   source:
     bucket: ((gcs-bucket-for-oss))
     json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: osl/released/gpdb6/open_source_license_greenplum-database-6.0.0-97773a0-(.*).txt
+    regexp: osl/released/gpdb6/open_source_license_greengage-database-6.0.0-97773a0-(.*).txt
 
 {% endif %}
 - name: bin_gpdb
@@ -609,7 +609,7 @@ resources:
   source:
     bucket: ((gcs-bucket-intermediates))
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: ((pipeline-name))/bin_gpdb_clients_windows/greenplum-clients-x86_64.tar.gz
+    versioned_file: ((pipeline-name))/bin_gpdb_clients_windows/greengage-clients-x86_64.tar.gz
 {% endif %}
 
 {% if os_type != compile_platform and pipeline_target == "prod" %}
@@ -751,7 +751,7 @@ jobs:
       - get: gpdb_package
         resource: previous_gpdb
         params:
-          globs: [greenplum-db-7*-el8-x86_64.rpm]
+          globs: [greengage-db-7*-el8-x86_64.rpm]
       - get: gpdb7-[[ compile_platform ]]-build
   - task: generate_previous_bin_gpdb
     file: gpdb_src/concourse/tasks/extract_package.yml
@@ -798,7 +798,7 @@ jobs:
       REMOTE_KEY: ((remote_win_key_build))
   - put: bin_gpdb_clients_windows
     params:
-      file: "gpdb_artifacts/greenplum-clients-x86_64.tar.gz"
+      file: "gpdb_artifacts/greengage-clients-x86_64.tar.gz"
 
 - name: publish_server_builds
   old_name: Publish Server Builds
@@ -2081,19 +2081,19 @@ jobs:
             passed: [gate_release_candidate_start]
 {% endif %}
           - get: gpdb7-[[ compile_platform ]]-build
-          - get: greenplum-database-release
+          - get: greengage-database-release
           - get: license_file
     - task: create_gpdb_rpm_package_[[ os_type ]]
-      file: greenplum-database-release/ci/concourse/tasks/build-gpdb-rpm.yml
+      file: greengage-database-release/ci/concourse/tasks/build-gpdb-rpm.yml
       image: gpdb7-[[ compile_platform ]]-build
       output_mapping:
         gpdb_rpm_installer: gpdb_rpm_[[ os_type ]]
       params:
         PLATFORM: "[[ os_type ]]"
-        GPDB_NAME: greenplum-db-7
+        GPDB_NAME: greengage-db-7
         GPDB_RELEASE: 1
         GPDB_LICENSE: VMware, Inc. or its affiliates EULA
-        GPDB_URL: https://github.com/greenplum-db/gpdb
+        GPDB_URL: https://github.com/GreengageDB/greengage
         GPDB_OSS: false
     - task: rename_rc_artifacts
       image: gpdb7-[[ compile_platform ]]-build
@@ -2115,9 +2115,9 @@ jobs:
 {% if build_test_rc_rpm %}
               # Uniquely name the rpm using the github username and test branch
               # to prevent filename collisions on GCS.
-              cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greenplum-db-[[ git_username ]]-[[ git_branch ]]-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
+              cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greengage-db-[[ git_username ]]-[[ git_branch ]]-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
 {% else %}
-              cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greenplum-db-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
+              cp -v gpdb_rpm_[[ os_type ]]/*.rpm renamed_gpdb_rpm_[[ os_type ]]/greengage-db-${gpdb_semver}-[[ dist ]]-x86_64${RC_BUILD_TYPE_GCS}.rpm
 {% endif %}
     - in_parallel:
         steps:

@@ -694,7 +694,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 	 * The first stage's output is Partially Aggregated. The paths are
 	 * collected to the ctx->partial_rel, by calling add_path(). We do *not*
 	 * use add_partial_path(), these partially aggregated paths are considered
-	 * more like MPP paths in Greenplum in general.
+	 * more like MPP paths in Greengage in general.
 	 *
 	 * First consider sorted Aggregate paths.
 	 */
@@ -2648,7 +2648,7 @@ fetch_multi_dqas_info(PlannerInfo *root,
 			 * affect the semantics, so we ignore it here.
 			 * For conversions that are not binary-compatible, the exprs are wrapped
 			 * with other types of node, e.g., CoerceViaIO.
-			 * Relevent bug report: https://github.com/greenplum-db/gpdb/issues/14096
+			 * Relevent bug report: https://github.com/GreengageDB/greengage/issues/14096
 			 */
 			while (naked_tle_expr && IsA(naked_tle_expr, RelabelType))
 				naked_tle_expr = ((RelabelType *) naked_tle_expr)->arg;

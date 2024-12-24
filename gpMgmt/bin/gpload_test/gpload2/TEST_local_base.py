@@ -78,7 +78,7 @@ def getPortCoordinatorOnly(host = 'localhost',coordinator_value = None,
     coordinator_pattern = r"Context:\s*-1\s*Value:\s*\d+"
     command = "gpconfig -s %s" % ( "port" )
 
-    cmd = "source %s/greenplum_path.sh; export COORDINATOR_DATA_DIRECTORY=%s; export PGPORT=%s; %s" \
+    cmd = "source %s/greengage_path.sh; export COORDINATOR_DATA_DIRECTORY=%s; export PGPORT=%s; %s" \
            % (gphome, cdd, port, command)
 
     (ok,out) = run(cmd)

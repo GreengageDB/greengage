@@ -763,7 +763,7 @@ cdbCopyEndInternal(CdbCopy *c, char *abort_msg,
 					 errdetail("%s", io_err_msg.data)));
 	}
 
-	/* Please refer to https://github.com/greenplum-db/gpdb/issues/14126 */
+	/* Please refer to https://github.com/GreengageDB/greengage/issues/14126 */
 	if (c->is_replicated && c->copy_in)
 	{
 		total_rows_completed = first_segment_rows_completed;

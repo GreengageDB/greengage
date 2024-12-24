@@ -66,7 +66,7 @@ ifeq ($(shell $(PERL) -V:usemultiplicity), usemultiplicity='define';)
 endif
 endif
 
-# Add Greenplum specific tests
+# Add Greengage specific tests
 REGRESS += plperl_gp
 # where to find psql for running the tests
 PSQLDIR = $(bindir)

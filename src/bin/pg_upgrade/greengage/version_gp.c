@@ -1,14 +1,14 @@
 /*
  *	version_gp.c
  *
- *	Greenplum version-specific routines for upgrades
+ *	Greengage version-specific routines for upgrades
  *
  *	Copyright (c) 2016-Present VMware, Inc. or its affiliates
  *	contrib/pg_upgrade/version_gp.c
  */
 #include "postgres_fe.h"
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 
 #include "access/transam.h"
 

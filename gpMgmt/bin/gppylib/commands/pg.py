@@ -400,7 +400,7 @@ class PgBaseBackup(Command):
             if max_rate:
                 cmd_tokens.append('--max-rate')
                 cmd_tokens.append(max_rate)
-        # This is needed to handle Greenplum tablespaces
+        # This is needed to handle Greengage tablespaces
         cmd_tokens.append('--target-gp-dbid')
         cmd_tokens.append(str(target_gp_dbid))
         

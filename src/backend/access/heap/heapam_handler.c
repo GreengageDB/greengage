@@ -418,9 +418,9 @@ tuple_lock_retry:
 			for (;;)
 			{
 				/*
-				 * Greenplum specific error message
+				 * Greengage specific error message
 				 * Split-update is used to implment update on distribute keys
-				 * of hash partitioned table in Greenplum. UPDATE on distkeys
+				 * of hash partitioned table in Greengage. UPDATE on distkeys
 				 * is similar to upstream's UPDATE on partition keys. We will
 				 * store bit info in the tuple's head to mark it is split-updated,
 				 * so the blocked transaction which also wants to update or delete

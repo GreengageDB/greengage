@@ -680,7 +680,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			if (enc == PG_SQL_ASCII)
 				continue;		/* C/POSIX are already in the catalog */
 			/*
-			 * Greenplum specific behavior: this function in Greenplum can only be called after a full cluster is
+			 * Greengage specific behavior: this function in Greengage can only be called after a full cluster is
 			 * built, this is different from Postgres which might call this function during initdb. When reaching
 			 * here, it must be in a database session, we can just ignore the collations not match current database's
 			 * encoding because they cannot be used in this database.

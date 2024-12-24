@@ -10915,7 +10915,7 @@
    prorettype => '_int4', proargtypes => '_int4',
    prosrc => 'aggregate_dummy' },
 
-# Greenplum Analytic functions
+# Greengage Analytic functions
 { oid => 6212, descr => 'perform matrix addition on two conformable matrices',
    proname => 'int2_matrix_accum', proisstrict => 'f', prorettype => '_int8', proargtypes => '_int8 _int2', prosrc => 'matrix_add' },
 
@@ -10975,7 +10975,7 @@
 
 # 3241-324? reserved for unpivot, see pivot.c 
 
-# Greenplum MPP exposed internally-defined functions. 
+# Greengage MPP exposed internally-defined functions. 
 { oid => 5065, descr => 'view mpp pgdatabase state',
    proname => 'gp_pgdatabase', prorows => '1000', proisstrict => 'f', proretset => 't', provolatile => 'v', prorettype => 'record', proargtypes => '', prosrc => 'gp_pgdatabase__' },
 

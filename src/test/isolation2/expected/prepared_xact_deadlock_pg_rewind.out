@@ -24,9 +24,9 @@ ALTER SYSTEM
 -- start_ignore
 20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Starting gpstop with args: -u
 20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Gathering information and validating the environment...
-20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Segment details from coordinator...
-20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
+20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
 20230807:17:11:47:067341 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -124,10 +124,10 @@ select wait_until_all_segments_synchronized();
 !\retcode gprecoverseg -ar;
 -- start_ignore
 20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Starting gprecoverseg with args: -ar
-20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
-20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 12.12 (Greenplum Database 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev) on x86_64-apple-darwin22.6.0, compiled by Homebrew clang version 16.0.5, 64-bit compiled on Aug  7 2023 09:58:41 (with assert checking) Bhuvnesh C.'
+20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
+20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 12.12 (Greengage Database 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev) on x86_64-apple-darwin22.6.0, compiled by Homebrew clang version 16.0.5, 64-bit compiled on Aug  7 2023 09:58:41 (with assert checking) Bhuvnesh C.'
 20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Segment details from coordinator...
-20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Greenplum instance recovery parameters
+20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Greengage instance recovery parameters
 20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:----------------------------------------------------------
 20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Recovery type              = Rebalance
 20230807:17:12:03:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:----------------------------------------------------------
@@ -155,8 +155,8 @@ select wait_until_all_segments_synchronized();
 20230807:17:12:06:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Triggering segment reconfiguration
 20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Starting segment synchronization
 20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-=============================START ANOTHER RECOVER=========================================
-20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
-20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 12.12 (Greenplum Database 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev) on x86_64-apple-darwin22.6.0, compiled by Homebrew clang version 16.0.5, 64-bit compiled on Aug  7 2023 09:58:41 (with assert checking) Bhuvnesh C.'
+20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
+20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 12.12 (Greengage Database 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev) on x86_64-apple-darwin22.6.0, compiled by Homebrew clang version 16.0.5, 64-bit compiled on Aug  7 2023 09:58:41 (with assert checking) Bhuvnesh C.'
 20230807:17:12:10:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Segment details from coordinator...
 20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Successfully finished pg_controldata /Users/tmarbin/workspace/gpdb/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0 for dbid 2:
 stdout: pg_control version number:            12010700
@@ -271,7 +271,7 @@ Mock authentication nonce:            e9e26648a2e4ba839e9edbcf76868f6cffb98773b9
 
 stderr: 
 20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Greenplum instance recovery parameters
+20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Greengage instance recovery parameters
 20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:----------------------------------------------------------
 20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:-Recovery type              = Standard
 20230807:17:12:11:067700 gprecoverseg:tmarbin7MD6R:tmarbin-[INFO]:----------------------------------------------------------
@@ -340,9 +340,9 @@ select remove_bogus_file(datadir, setting) from pg_settings, gp_segment_configur
 -- start_ignore
 20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Starting gpstop with args: -u
 20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Gathering information and validating the environment...
-20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Segment details from coordinator...
-20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
+20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
 20230807:17:12:15:068219 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

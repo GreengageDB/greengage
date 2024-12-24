@@ -16,7 +16,7 @@
 /*
  * This is the default value for wal_segment_size to be used when initdb is run
  * without the --wal-segsize option.  It must be a valid segment size.
- * gpdb: Greenplum uses 64M wal segment file size by default.
+ * gpdb: Greengage uses 64M wal segment file size by default.
  */
 #define DEFAULT_XLOG_SEG_SIZE	(64*1024*1024)
 

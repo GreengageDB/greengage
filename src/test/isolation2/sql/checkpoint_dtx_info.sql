@@ -54,7 +54,7 @@
 3: select count(1) from twopcbug;
 
 -- Validate CHECKPOINT XLOG record length, verifying issue
--- https://github.com/greenplum-db/gpdb/issues/12977.
+-- https://github.com/GreengageDB/greengage/issues/12977.
 -- The extended CHECKPOINT WAL record contains global transaction
 -- information, it could exceed the previous expected length in
 -- SizeOfXLogRecordDataHeaderShort, result in crash recovery

@@ -36,7 +36,7 @@ try:
     from gppylib.utils import escape_string
 
 except ImportError as e:
-    sys.exit('Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+    sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 EXECNAME = 'analyzedb'
 STATEFILE_DIR = 'db_analyze'

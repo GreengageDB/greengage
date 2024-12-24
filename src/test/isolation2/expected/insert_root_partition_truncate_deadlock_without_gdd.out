@@ -4,7 +4,7 @@
 -- and execute, some might be blocked by other sessions and lead to global
 -- deadlock. This test file is in GDD suites, it verify that such deadlock can
 -- be broken by GDD.
--- See Issue https://github.com/greenplum-db/gpdb/issues/13652 for details.
+-- See Issue https://github.com/GreengageDB/greengage/issues/13652 for details.
 
 -- NOTE: this test case is better to run both with GDD and withoug GDD.
 -- with GDD it is running within gdd test suites to test GDD can break the deadlock;

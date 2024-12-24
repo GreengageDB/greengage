@@ -279,7 +279,7 @@ CREATE TRUSTED PROTOCOL demoprot_non_superuser (readfunc = 'read_from_file', wri
 RESET ROLE;
 
 -- Test "DROP OWNED BY" when everything of the protocol is granted to some user.
--- GitHub Issue #12748: https://github.com/greenplum-db/gpdb/issues/12748
+-- GitHub Issue #12748: https://github.com/GreengageDB/greengage/issues/12748
 CREATE TRUSTED PROTOCOL dummy_protocol_issue_12748 (readfunc = 'read_from_file', writefunc = 'write_to_file');
 CREATE ROLE test_role_issue_12748;
 GRANT ALL ON PROTOCOL dummy_protocol_issue_12748 TO test_role_issue_12748;
@@ -289,7 +289,7 @@ DROP ROLE test_role_issue_12748;
 DROP PROTOCOL dummy_protocol_issue_12748;
 
 -- Test pg_exttable's encoding: QE's encoding should be consistent with QD
--- GitHub Issue #9727: https://github.com/greenplum-db/gpdb/issues/9727
+-- GitHub Issue #9727: https://github.com/GreengageDB/greengage/issues/9727
 SET client_encoding = 'ISO-8859-1';
 CREATE EXTERNAL TABLE issue_9727 (d varchar(20)) location ('gpfdist://9727/d.dat') format 'csv' (DELIMITER '|');
 SELECT encoding from pg_exttable where urilocation='{gpfdist://9727:8080/d.dat}';
@@ -298,7 +298,7 @@ DROP FOREIGN TABLE issue_9727;
 RESET client_encoding;
 
 -- Test external table location escape
--- GitHub Issue #17179: https://github.com/greenplum-db/gpdb/issues/17179
+-- GitHub Issue #17179: https://github.com/GreengageDB/greengage/issues/17179
 CREATE READABLE EXTERNAL TABLE public.test_ext
 (
   id integer

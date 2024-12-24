@@ -383,7 +383,7 @@ usage(void)
 	printf(_("  -E, --exclude          exclude path names\n"));
 	printf(_("      --exclude-from=FILE\n"
 			 "                         get path names to exclude from FILE\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 

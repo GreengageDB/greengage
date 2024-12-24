@@ -1029,7 +1029,7 @@ SH_STAT(SH_TYPE * tb)
 }
 
 /*
- * Greenplum specific
+ * Greengage specific
  *
  * Collect some statistics about the state of the hashtable. Major code was
  * copied from SH_STAT() with some modifications to keep consistent with GPDB6.

@@ -73,7 +73,7 @@ select similarity('---', '####---');
 (1 row)
 
 CREATE TABLE test_trgm(t text COLLATE "C");
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \copy test_trgm from 'data/trgm.data'
 select t,similarity(t,'qwertyu0988') as sml from test_trgm where t % 'qwertyu0988' order by sml desc, t;
@@ -3505,7 +3505,7 @@ select count(*) from test_trgm where t ~ '[qwerty]{2}-?[qwerty]{2}';
 (1 row)
 
 create table test2(t text COLLATE "C");
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test2 values ('abcdef');
 insert into test2 values ('quark');
@@ -3922,7 +3922,7 @@ select * from test2 where t ~ '/\d+/-\d';
 
 -- Check similarity threshold (bug #14202)
 CREATE TEMP TABLE restaurants (city text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO restaurants SELECT 'Warsaw' FROM generate_series(1, 10000);
 INSERT INTO restaurants SELECT 'Szczecin' FROM generate_series(1, 10000);

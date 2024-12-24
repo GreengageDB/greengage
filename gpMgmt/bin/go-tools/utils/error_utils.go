@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/grpc/status"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
 )
 
 func FormatGrpcError(err error) error {

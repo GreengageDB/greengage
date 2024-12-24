@@ -639,7 +639,7 @@ ExecInitPartitionInfo(ModifyTableState *mtstate, EState *estate,
      * will rebuild ri_RelationDesc later. So we assign 1 for it instead of 0
      * which cause failure in EPQ process, and fwd scenarios should still keep 0
      * since it will handle 0 in their own fwd process.
-     * related issue https://github.com/greenplum-db/gpdb/issues/14935
+     * related issue https://github.com/GreengageDB/greengage/issues/14935
      */ 
     InitResultRelInfo(leaf_part_rri,
 					  partrel,

@@ -393,7 +393,7 @@ static void postgresGetForeignUpperPaths(PlannerInfo *root,
 										 RelOptInfo *input_rel,
 										 RelOptInfo *output_rel,
 										 void *extra);
-static int greenplumCheckIsGreenplum(ForeignServer *server, UserMapping *user);
+static int greengageCheckIsGreengage(ForeignServer *server, UserMapping *user);
 
 /*
  * Helper functions
@@ -2255,11 +2255,11 @@ postgresIsForeignRelUpdatable(Relation rel)
 		return 0;
 
 	/*
-	 * Greenplum only supports INSERT, because UPDATE/DELETE SELECT requires
+	 * Greengage only supports INSERT, because UPDATE/DELETE SELECT requires
 	 * the hidden column gp_segment_id and the other "ModifyTable mixes
 	 * distributed and entry-only tables" issue.
 	 */
-	bool isGreenplum = false;
+	bool isGreengage = false;
 	UserMapping *user = GetUserMapping(rel->rd_rel->relowner, table->serverid);
 	if (is_multi_servers(server, table->exec_location))
 	{
@@ -2268,16 +2268,16 @@ postgresIsForeignRelUpdatable(Relation rel)
 		for (index = 0; index < server->num_segments; ++index)
 		{
 			rewrite_server_options(server, index);
-			if (greenplumCheckIsGreenplum(server, user))
+			if (greengageCheckIsGreengage(server, user))
 				break;
 		}
 		if (index != server->num_segments)
-			isGreenplum = true;
+			isGreengage = true;
 	}
 	else
-		isGreenplum = greenplumCheckIsGreenplum(server, user);
+		isGreengage = greengageCheckIsGreengage(server, user);
 
-	if (isGreenplum)
+	if (isGreengage)
 		return (1 << CMD_INSERT);
 	else
 		return (1 << CMD_INSERT) | (1 << CMD_UPDATE) | (1 << CMD_DELETE);
@@ -7275,7 +7275,7 @@ find_em_for_rel_target(PlannerInfo *root, EquivalenceClass *ec,
 }
 
 static int
-greenplumCheckIsGreenplum(ForeignServer *server, UserMapping *user)
+greengageCheckIsGreengage(ForeignServer *server, UserMapping *user)
 {
 	PGconn     *conn;
 	PGresult   *res;
@@ -7291,7 +7291,7 @@ greenplumCheckIsGreenplum(ForeignServer *server, UserMapping *user)
 	if (PQntuples(res) == 0)
 		pgfdw_report_error(ERROR, res, conn, true, query);
 
-	ret = strstr(PQgetvalue(res, 0, 0), "Greenplum Database") ? 1 : 0;
+	ret = strstr(PQgetvalue(res, 0, 0), "Greengage Database") ? 1 : 0;
 
 	PQclear(res);
 	ReleaseConnection(conn);

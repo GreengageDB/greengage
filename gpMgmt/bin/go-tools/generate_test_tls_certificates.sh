@@ -8,13 +8,13 @@ mkdir ./certificates
 openssl req -x509 -sha256 -newkey rsa:4096 -days 365 -nodes \
     -keyout ./certificates/ca-key.pem \
     -out ./certificates/ca-cert.pem \
-    -subj "/C=US/ST=California/L=Palo Alto/O=Greenplum/OU=GPDB/CN=$1" \
+    -subj "/C=US/ST=California/L=Palo Alto/O=Greengage/OU=GPDB/CN=$1" \
 
 # Generate private key and certificate signing request for the server
 openssl req -newkey rsa:4096 -nodes \
     -keyout ./certificates/server-key.pem \
     -out ./certificates/server-request.pem \
-    -subj "/C=US/ST=California/L=Palo Alto/O=Greenplum/OU=GPDB/CN=$1" -sha256
+    -subj "/C=US/ST=California/L=Palo Alto/O=Greengage/OU=GPDB/CN=$1" -sha256
 
 # Create a configuration file for certificate extensions
 echo "subjectAltName=DNS:$1,DNS:localhost,IP:0.0.0.0" > ./certificates/extensions.conf

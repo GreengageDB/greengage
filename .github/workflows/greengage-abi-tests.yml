@@ -1,4 +1,4 @@
-name: Greenplum ABI Tests
+name: Greengage ABI Tests
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
       - name: Fetch source
         uses: actions/checkout@v3
 
-      - name: Get Greenplum version variables
+      - name: Get Greengage version variables
         id: vars
         run: |
           remote_repo='https://github.com/arenadata/gpdb.git'
@@ -85,7 +85,7 @@ jobs:
           cp uctags-2023.07.05-linux-x86_64/bin/* /usr/bin/
           which ctags
 
-      - name: Download Greenplum source code
+      - name: Download Greengage source code
         uses: actions/checkout@v3
         with:
           repository: ${{ matrix.repo }}
@@ -99,10 +99,10 @@ jobs:
           yum install -y epel-release
           yum install -y abi-dumper
 
-      - name: Build Greenplum
+      - name: Build Greengage
         run: |
           ## TODO: Since abi-dumper requires debug info and it's hard to inject CFLAGS via the script for
-          ## releasing Greenplum, we have to manually configure it here. Probably we can improve it in future.
+          ## releasing Greengage, we have to manually configure it here. Probably we can improve it in future.
           pushd gpdb_src
           CC='gcc -m64' \
           CFLAGS='-Og -g3 -Wno-maybe-uninitialized' LDFLAGS='-Wl,--enable-new-dtags -Wl,--export-dynamic' \
@@ -110,13 +110,13 @@ jobs:
                       --enable-orca --with-libxml --with-pythonsrc-ext --with-uuid=e2fs --with-pgport=5432 --enable-tap-tests \
                       --enable-debug-extensions --with-perl --with-python --with-openssl --with-pam --with-ldap --with-includes="" \
                       --with-libraries="" --disable-rpath \
-                      --prefix=/usr/local/greenplum-db-devel \
-                      --mandir=/usr/local/greenplum-db-devel/man
+                      --prefix=/usr/local/greengage-db-devel \
+                      --mandir=/usr/local/greengage-db-devel/man
           make -j`nproc` && make install
 
       - name: Dump ABI
         run: |
-          abi-dumper -lver ${{ matrix.ref }} -skip-cxx -public-headers /usr/local/greenplum-db-devel/include/${{ needs.abi-dump-setup.outputs.ABI_HEADERS }} -o postgres-${{ matrix.ref }}.abi /usr/local/greenplum-db-devel/bin/postgres
+          abi-dumper -lver ${{ matrix.ref }} -skip-cxx -public-headers /usr/local/greengage-db-devel/include/${{ needs.abi-dump-setup.outputs.ABI_HEADERS }} -o postgres-${{ matrix.ref }}.abi /usr/local/greengage-db-devel/bin/postgres
 
       - name: Upload ABI files
         uses: actions/upload-artifact@v3

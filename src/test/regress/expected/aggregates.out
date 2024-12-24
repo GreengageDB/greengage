@@ -2059,7 +2059,7 @@ select least_agg(variadic array[q1,q2]) from int8_tbl;
 
 -- string_agg bytea tests
 create table bytea_test_table(gpDistKey int, v bytea);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'gpdistkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'gpdistkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select string_agg(v, '') from bytea_test_table;
  string_agg 
@@ -3063,7 +3063,7 @@ create table agg_group_1 as
 select g%100000 as c1, sum(g::numeric) as c2, count(*) as c3
   from generate_series(0, 199999) g
   group by g%100000;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table agg_group_2 as
 select * from
@@ -3075,7 +3075,7 @@ select * from
     from generate_series(0, 1999) g
     where g < r.a
     group by g/2) as s;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set jit_above_cost to default;
 create table agg_group_3 as
@@ -3105,7 +3105,7 @@ create table agg_hash_1 as
 select g%100000 as c1, sum(g::numeric) as c2, count(*) as c3
   from generate_series(0, 199999) g
   group by g%100000;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table agg_hash_2 as
 select * from
@@ -3117,7 +3117,7 @@ select * from
     from generate_series(0, 1999) g
     where g < r.a
     group by g/2) as s;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set jit_above_cost to default;
 create table agg_hash_3 as
@@ -3165,7 +3165,7 @@ drop table agg_hash_1;
 --  drop table agg_hash_2;
 drop table agg_hash_3;
 drop table agg_hash_4;
--- GitHub issue https://github.com/greenplum-db/gpdb/issues/12061
+-- GitHub issue https://github.com/GreengageDB/greengage/issues/12061
 -- numsegments of the general locus should be -1 on create_minmaxagg_path
 -- This test can be nondeterministic depending on the number of entries in pg_class
 set enable_indexonlyscan=off;

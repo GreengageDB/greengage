@@ -167,7 +167,7 @@ static void ExplainYAMLLineStarting(ExplainState *es);
 static void escape_yaml(StringInfo buf, const char *str);
 static int countLeafPartTables(Oid relId);
 
-/* Include the Greenplum EXPLAIN extensions */
+/* Include the Greengage EXPLAIN extensions */
 #include "explain_gp.c"
 
 
@@ -818,7 +818,7 @@ ExplainPrintSettings(ExplainState *es)
 	struct config_generic **gucs = NULL;
 
 	/* bail out if information about settings not requested */
-	/* Greenplum prints some GUCs when verbose too */
+	/* Greengage prints some GUCs when verbose too */
 	if (!es->settings && !es->verbose)
 		return;
 
@@ -3471,7 +3471,7 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 	/*
 	 * Gather QEs' sort statistics
 	 *
-	 * shared_info stores workers' info, but Greenplum stores QEs'
+	 * shared_info stores workers' info, but Greengage stores QEs'
 	 */
 	int64 peakSpaceUsed = 0;
 	int64 totalSpaceUsed = 0;
@@ -3655,7 +3655,7 @@ show_hashagg_info(AggState *aggstate, ExplainState *es)
 	}
 
 	/*
-	 * Greenplums outputs hash aggregate information in "Extra Text" via
+	 * Greengage outputs hash aggregate information in "Extra Text" via
 	 * cdbexplainbuf, hash_agg_update_metrics() is never called on QD.
 	 */
 	if (Gp_role != GP_ROLE_UTILITY || !es->analyze)

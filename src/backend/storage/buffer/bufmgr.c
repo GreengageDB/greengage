@@ -795,7 +795,7 @@ ReadBuffer_common(SMgrRelation smgr, char relpersistence, ForkNumber forkNum,
 	bool		found;
 	bool		isExtend;
 	/*
-	 * Temp tables in Greenplum use shared buffers so that backends executing
+	 * Temp tables in Greengage use shared buffers so that backends executing
 	 * multiple slices of the same query can share them.
 	 */
 	bool		isLocalBuf = false; /* SmgrIsTemp(smgr); */
@@ -1958,7 +1958,7 @@ BufferSync(int flags)
 		buf_state = LockBufHdr(bufHdr);
 
 		/*
-		 * Temp tables in Greenplum use shared buffers.  Filter buffers
+		 * Temp tables in Greengage use shared buffers.  Filter buffers
 		 * belonging to temp tables out during checkpoint.
 		 */
 		if ((buf_state & mask) == mask && !(buf_state & BM_TEMP))
@@ -3089,7 +3089,7 @@ DropRelFileNodeBuffers(RelFileNodeBackend rnode, ForkNumber forkNum,
 {
 	int			i;
 
-	/* Temp tables use shared buffers in Greenplum */
+	/* Temp tables use shared buffers in Greengage */
 	/* If it's a local relation, it's localbuf.c's problem. */
 #if 0
 	if (RelFileNodeBackendIsTemp(rnode))
@@ -3156,7 +3156,7 @@ DropRelFileNodesAllBuffers(RelFileNodeBackend *rnodes, int nnodes)
 
 	nodes = palloc(sizeof(RelFileNode) * nnodes);	/* non-local relations */
 
-	/* Temp tables use shared buffers in Greenplum */
+	/* Temp tables use shared buffers in Greengage */
 	/* If it's a local relation, it's localbuf.c's problem. */
 	for (i = 0; i < nnodes; i++)
 	{

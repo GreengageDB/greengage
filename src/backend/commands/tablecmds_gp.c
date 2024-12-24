@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * tablecmds_gp.c
- *	  Greenplum extensions for ALTER TABLE.
+ *	  Greengage extensions for ALTER TABLE.
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -156,7 +156,7 @@ GpFindTargetPartition(Relation parent, GpAlterPartitionId *partid,
 			 *
 			 * And if user do use the GPDB's syntax, we still have cases that the partition
 			 * table's namespace different from it's parent namespace. See issue:
-			 * https://github.com/greenplum-db/gpdb/issues/9903.
+			 * https://github.com/GreengageDB/greengage/issues/9903.
 			 * Users could always use PARTITION FOR or pg syntax instead.
 			 */
 			RangeVar	*partrv;
@@ -1483,7 +1483,7 @@ ATExecGPPartCmds(Relation origrel, AlterTableCmd *cmd)
 
 	/* 
 	 * The pg_stat_last_operation table contains metadata tracking 
-	 * information about operations on database objects. Greenplum 
+	 * information about operations on database objects. Greengage 
 	 * Database updates this table when a database object is 
 	 * created, altered, truncated, vacuumed, analyzed, or 
 	 * partitioned, and when privileges are granted to an object.

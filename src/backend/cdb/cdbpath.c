@@ -59,7 +59,7 @@ typedef struct
 
 /*
  * We introduced execute on initplan option for function at
- * https://github.com/greenplum-db/gpdb/pull/9542, which introduced
+ * https://github.com/GreengageDB/greengage/pull/9542, which introduced
  * a new location option for function: EXECUTE ON INITPLAN and run
  * the f() on initplan.
  *
@@ -1429,7 +1429,7 @@ cdbpath_motion_for_join(PlannerInfo *root,
 			 * to distinguish each logical row in that case. So force the
 			 * input to a single node first in that case.
 			 *
-			 * In previous Greenplum versions, we assumed that we can generate
+			 * In previous Greengage versions, we assumed that we can generate
 			 * a unique row ID for General paths, by generating the same
 			 * sequence of numbers on each segment. That works as long as the
 			 * rows are in the same order on each segment, but it seemed like
@@ -2678,7 +2678,7 @@ make_splitupdate_path(PlannerInfo *root, Path *subpath, Index rti)
 	rte = planner_rt_fetch(rti, root);
 
 	/*
-	 * Firstly, Trigger is not supported officially by Greenplum.
+	 * Firstly, Trigger is not supported officially by Greengage.
 	 *
 	 * Secondly, the update trigger is processed in ExecUpdate.
 	 * however, splitupdate will execute ExecSplitUpdate_Insert
@@ -2688,7 +2688,7 @@ make_splitupdate_path(PlannerInfo *root, Path *subpath, Index rti)
 	 * PostgreSQL fires the row-level DELETE, INSERT, and BEFORE
 	 * UPDATE triggers, but not row-level AFTER UPDATE triggers,
 	 * if you UPDATE a partitioning key column.
-	 * Doing a similar thing doesn't help Greenplum likely, the
+	 * Doing a similar thing doesn't help Greengage likely, the
 	 * behavior would be uncertain since some triggers happen on
 	 * segments and they may require cross segments data changes.
 	 *

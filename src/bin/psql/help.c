@@ -71,7 +71,7 @@ usage(unsigned short int pager)
 	 */
 	output = PageOutput(62, pager ? &(pset.popt.topt) : NULL);
 
-	fprintf(output, _("psql is the PostgreSQL interactive terminal (Greenplum version).\n\n"));
+	fprintf(output, _("psql is the PostgreSQL interactive terminal (Greengage version).\n\n"));
 	fprintf(output, _("Usage:\n"));
 	fprintf(output, _("  psql [OPTION]... [DBNAME [USERNAME]]\n\n"));
 
@@ -145,7 +145,7 @@ usage(unsigned short int pager)
 	fprintf(output, _("\nFor more information, type \"\\?\" (for internal commands) or \"\\help\" (for SQL\n"
 					  "commands) from within psql, or consult the psql section in the PostgreSQL\n"
 					  "documentation.\n\n"));
-	fprintf(output, _("Report bugs to <bugs@greenplum.org>.\n"));
+	fprintf(output, _("Report bugs to <bugs@greengagedb.org>.\n"));
 
 	ClosePager(output);
 }
@@ -683,7 +683,7 @@ void
 print_copyright(void)
 {
 	puts(
-		 "Greenplum Database version of PostgreSQL Database Management System\n"
+		 "Greengage Database version of PostgreSQL Database Management System\n"
 		 "Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group\n\n"
 		 "Portions Copyright (c) 2014-Present VMware, Inc. or its affiliates.\n\n"
 		 "Portions Copyright (c) 2011-2014 EMC\n\n"

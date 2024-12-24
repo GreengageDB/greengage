@@ -128,8 +128,8 @@ ExecutorCheckPerms_hook_type ExecutorCheckPerms_hook = NULL;
 
 
 /*
- * Greenplum specific code:
- *   Greenplum introduces auto_stats for a long time, please refer to
+ * Greengage specific code:
+ *   Greengage introduces auto_stats for a long time, please refer to
  *   https://groups.google.com/a/greenplum.org/g/gpdb-dev/c/bAyw2KBP6yE/m/hmoWikrPAgAJ
  *   for details and decision of auto_stats.
  *
@@ -666,7 +666,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * queryDesc->ddesc->oidAssignments be set, these OIDs are
 			 * also dispatched to QEs.
 			 *
-			 * For details please see github issue https://github.com/greenplum-db/gpdb/issues/10760
+			 * For details please see github issue https://github.com/GreengageDB/greengage/issues/10760
 			 */
 			if (queryDesc->ddesc != NULL)
 			{
@@ -835,7 +835,7 @@ ExecutorRun(QueryDesc *queryDesc,
 			bool execute_once)
 {
 	/*
-	 * Greenplum specific code:
+	 * Greengage specific code:
 	 * auto_stats() needs to know if it is inside procedure call so
 	 * we maintain executor_run_nesting_level here. See detailed comments
 	 * at the definition of the static variable executor_run_nesting_level.
@@ -1884,12 +1884,12 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			switch (rc->markType)
 			{
 				/*
-				 * Greenplum specific behavior:
+				 * Greengage specific behavior:
 				 * The implementation of select statement with locking clause
 				 * (for update | no key update | share | key share) in postgres
 				 * is to hold RowShareLock on tables during parsing stage, and
 				 * generate a LockRows plan node for executor to lock the tuples.
-				 * It is not easy to lock tuples in Greenplum database, since
+				 * It is not easy to lock tuples in Greengage database, since
 				 * tuples may be fetched through motion nodes.
 				 *
 				 * But when Global Deadlock Detector is enabled, and the select
@@ -2166,7 +2166,7 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation)
 			 * get here anyway, it's not worth great exertion to get).
 			 */
 			/*
-			 * GPDB_91_MERGE_FIXME: In Greenplum, views are treated as non
+			 * GPDB_91_MERGE_FIXME: In Greengage, views are treated as non
 			 * partitioned relations, gp_distribution_policy contains no entry
 			 * for views.  Consequently, flow of a ModifyTable node for a view
 			 * is determined such that it is not dispatched to segments.
@@ -2182,7 +2182,7 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation)
 					(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 					 errmsg("cannot change view \"%s\"",
 							RelationGetRelationName(resultRel)),
-					 errhint("changing views is not supported in Greenplum")));
+					 errhint("changing views is not supported in Greengage")));
 
 			switch (operation)
 			{
@@ -4215,7 +4215,7 @@ attrMapExpr(TupleConversionMap *map, Node *expr)
 }
 
 /*
- * Greenplum specific code:
+ * Greengage specific code:
  * For details, see comments at the definition of static var executor_run_nesting_level
  */
 bool

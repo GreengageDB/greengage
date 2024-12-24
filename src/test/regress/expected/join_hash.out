@@ -1,7 +1,7 @@
 --
 -- exercises for the hash join code
 --
--- GPDB: Greenplum doesn't support parallel scans at the moment, so all the upstream
+-- GPDB: Greengage doesn't support parallel scans at the moment, so all the upstream
 -- parallelism tests don't really apply. We still run the tests, but they won't
 -- exercise parallelism.
 begin;
@@ -65,7 +65,7 @@ analyze simple;
 create table bigger_than_it_looks as
   select generate_series(1, 60000) as id, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 alter table bigger_than_it_looks set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 alter table bigger_than_it_looks set (parallel_workers = 2);
 analyze bigger_than_it_looks;
 update pg_class set reltuples = 1000 where relname = 'bigger_than_it_looks';
@@ -74,7 +74,7 @@ update pg_class set reltuples = 1000 where relname = 'bigger_than_it_looks';
 -- 2 rows, but actually there are 20,000 rows with the same key.
 create table extremely_skewed (id int, t text);
 alter table extremely_skewed set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 alter table extremely_skewed set (parallel_workers = 2);
 analyze extremely_skewed;
 insert into extremely_skewed
@@ -904,7 +904,7 @@ rollback to settings;
 -- NOTE: I (Heikki) could not cajole the planner to create a
 -- plan like in upstream. I accepted the plan you get, but now this doesn't
 -- exercise the special code path it's supposed to.
--- Greenplum does not support parallel scan or parallel hash join now, the
+-- Greengage does not support parallel scan or parallel hash join now, the
 -- following cases will not hit the code path is supposed to be. We leave
 -- it here for maybe future wrk.
 savepoint settings;

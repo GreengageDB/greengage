@@ -387,7 +387,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 		 * Then comment out the below codes on the dispatcher side and leave
 		 * the current comment to avoid futher upstream merge issues.
 		 * The pgstat is updated in function transientrel_shutdown on QE side.
-		 * This related to issue: https://github.com/greenplum-db/gpdb/issues/11375
+		 * This related to issue: https://github.com/GreengageDB/greengage/issues/11375
 		 */
 		// pgstat_count_truncate(matviewRel);
 		// if (!stmt->skipData)
@@ -426,12 +426,12 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	uint64		processed;
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * MPP architecture need to make sure OIDs of the temp table are the same
 	 * among QD and all QEs. It stores the OID in the static variable dispatch_oids.
 	 * This variable will be consumed for each dispatch.
 	 *
-	 * During planning, Greenplum might pre-evalute some function expr, this will
+	 * During planning, Greengage might pre-evalute some function expr, this will
 	 * lead to dispatch if the function is in SQL or PLPGSQL and consume the above
 	 * static variable. So later refresh matview's dispatch will not find the
 	 * oid on QEs.
@@ -439,7 +439,7 @@ refresh_matview_datafill(DestReceiver *dest, Query *query,
 	 * We first store the OIDs information in a local variable, and then restore
 	 * it for later refresh matview's dispatch to solve the above issue.
 	 *
-	 * See Github Issue for details: https://github.com/greenplum-db/gpdb/issues/11956
+	 * See Github Issue for details: https://github.com/GreengageDB/greengage/issues/11956
 	 */
 	List       *saved_dispatch_oids = SaveOidAssignments();
 
@@ -701,7 +701,7 @@ transientrel_shutdown(DestReceiver *self)
 		 * QD, so both the segments and coordinator will have pgstat for this
 		 * relation. See pgstat_combine_from_qe(pgstat.c) for more details.
 		 * Here each QE will count it's pgstat and report to QD if needed.
-		 * This related to issue: https://github.com/greenplum-db/gpdb/issues/11375
+		 * This related to issue: https://github.com/GreengageDB/greengage/issues/11375
 		 */
 		pgstat_count_truncate(matviewRel);
 		if (!myState->skipData)
@@ -824,7 +824,7 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	 * keep ".*" from being expanded into multiple columns in a SELECT list.
 	 * Compare ruleutils.c's get_variable().
 	 *
-	 * Greenplum doesn't use this hack since it needs to expand and get the
+	 * Greengage doesn't use this hack since it needs to expand and get the
 	 * distribution columns.
 	 *
 	 */

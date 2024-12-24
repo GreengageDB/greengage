@@ -25,9 +25,9 @@
 \! gpstop -au;
 20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Starting gpstop with args: -au
 20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Gathering information and validating the environment...
-20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Obtaining Segment details from coordinator...
-20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.64.g42f3fff56a6 build dev'
+20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.64.g42f3fff56a6 build dev'
 20230817:14:40:31:2852058 gpstop:bdoil-ub:bdoil-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
 begin;
@@ -246,8 +246,8 @@ select gp_inject_fault('all', 'reset', dbid) from gp_segment_configuration;
 \! gpstop -au;
 20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Starting gpstop with args: -au
 20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Gathering information and validating the environment...
-20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Obtaining Segment details from coordinator...
-20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.64.g42f3fff56a6 build dev'
+20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.64.g42f3fff56a6 build dev'
 20230817:14:40:43:2852538 gpstop:bdoil-ub:bdoil-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore

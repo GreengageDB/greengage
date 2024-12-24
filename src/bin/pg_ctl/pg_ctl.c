@@ -40,7 +40,7 @@ typedef long pgpid_t;
 
 
 /* postgres version ident string */
-#define PM_VERSIONSTR "postgres (Greenplum Database) " PG_VERSION "\n"
+#define PM_VERSIONSTR "postgres (Greengage Database) " PG_VERSION "\n"
 
 typedef enum
 {
@@ -1008,7 +1008,7 @@ do_init(void)
 	char	   *cmd;
 
 	if (exec_path == NULL)
-		exec_path = find_other_exec_or_die(argv0, "initdb", "initdb (Greenplum Database) " PG_VERSION "\n");
+		exec_path = find_other_exec_or_die(argv0, "initdb", "initdb (Greengage Database) " PG_VERSION "\n");
 
 	if (pgdata_opt == NULL)
 		pgdata_opt = "";
@@ -2377,7 +2377,7 @@ do_help(void)
 	printf(_("  -w, --wait             wait until operation completes (default)\n"));
 	printf(_("  -W, --no-wait          do not wait until operation completes\n"));
 	printf(_("  -?, --help             show this help, then exit\n"));
-	printf(_("  --gp-version           output Greenplum version information, then exit\n"));
+	printf(_("  --gp-version           output Greengage version information, then exit\n"));
 	printf(_("(The default is to wait for shutdown, but not for start or restart.)\n\n"));
 	printf(_("If the -D option is omitted, the environment variable PGDATA is used.\n"));
 
@@ -2414,7 +2414,7 @@ do_help(void)
 	printf(_("  demand     start service on demand\n"));
 #endif
 
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
@@ -2624,12 +2624,12 @@ main(int argc, char **argv)
 		}
 		else if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			printf("%s (Greenplum Database) %s\n", progname, PG_VERSION);
+			printf("%s (Greengage Database) %s\n", progname, PG_VERSION);
 			exit(0);
 		}
 		else if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			printf("%s (Greenplum Database) %s\n", progname, GP_VERSION);
+			printf("%s (Greengage Database) %s\n", progname, GP_VERSION);
 			exit(0);
 		}
 	}

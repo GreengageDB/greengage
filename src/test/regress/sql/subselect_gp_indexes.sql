@@ -78,7 +78,7 @@ explain select (select id1 from (select * from choose_indexscan_t2) foo where id
 -- table is scanned in the QD. (Catalog tables are present with same contents
 -- on all segments, too, so we could alternatively perform scan the catalog
 -- table oon one of the segments.)
--- https://github.com/greenplum-db/gpdb/issues/8648
+-- https://github.com/GreengageDB/greengage/issues/8648
 create table mytables (tablename text, explanation text) distributed replicated;
 insert into mytables values ('pg_class', 'contains all relations');
 create index on mytables(tablename);

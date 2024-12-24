@@ -63,7 +63,7 @@ BUILD_ENV = $($(OS)_ENV)
 
 .PHONY: build build_linux build_mac
 build:
-	$(BUILD_ENV) go build -o gp $(BUILD_FLAGS) github.com/greenplum-db/gpdb/gp
+	$(BUILD_ENV) go build -o gp $(BUILD_FLAGS) github.com/GreengageDB/greengage/gp
 
 build_linux: OS := LINUX
 build_mac: OS := MAC
@@ -78,7 +78,7 @@ cert:
 BUILD_FLAGS = -gcflags="all=-N -l"
 
 install:
-	GOBIN=$(GPHOME)/bin go install $(BUILD_FLAGS) github.com/greenplum-db/gpdb/gp
+	GOBIN=$(GPHOME)/bin go install $(BUILD_FLAGS) github.com/GreengageDB/greengage/gp
 
 # goimports supports a superset of the formatting rules gofmt supports, but
 # gofmt allows custom formatting rules so we include both for now

@@ -56,7 +56,7 @@ LIBS := $(filter-out -lpgport -lpgcommon, $(LIBS)) $(LDAP_LIBS_BE) $(ICU_LIBS)
 # The backend doesn't need everything that's in LIBS, however
 LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))
 
-# Greenplum uses threads in the backend
+# Greengage uses threads in the backend
 LIBS := $(LIBS) -lpthread
 
 ifeq ($(with_systemd),yes)
@@ -71,7 +71,7 @@ ifneq ($(PORTNAME), cygwin)
 ifneq ($(PORTNAME), win32)
 ifneq ($(PORTNAME), aix)
 
-# Due to Greenplum's MPP architecture, the postgres process needs to connect to
+# Due to Greengage's MPP architecture, the postgres process needs to connect to
 # databases, some symbols from frontend are compiled to the postgres binary.
 # Some extensions requires frontend symbols and are dynamically linked to libpq.so.
 # However, some symbols are not safe to be exported both in the postgres binary

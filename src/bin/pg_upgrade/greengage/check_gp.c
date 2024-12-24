@@ -1,10 +1,10 @@
 /*
  *	check_gp.c
  *
- *	Greenplum specific server checks and output routines
+ *	Greengage specific server checks and output routines
  *
  *	Any compatibility checks which are version dependent (testing for issues in
- *	specific versions of Greenplum) should be placed in their respective
+ *	specific versions of Greengage) should be placed in their respective
  *	version_old_gpdb{MAJORVERSION}.c file.  The checks in this file supplement
  *	the checks present in check.c, which is the upstream file for performing
  *	checks against a PostgreSQL cluster.
@@ -14,7 +14,7 @@
  *	contrib/pg_upgrade/check_gp.c
  */
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 #include "catalog/pg_class_d.h"
 
 #define RELSTORAGE_EXTERNAL	'x'
@@ -33,15 +33,15 @@ static void check_views_with_removed_types(void);
 static void check_for_disallowed_pg_operator(void);
 
 /*
- *	check_greenplum
+ *	check_greengage
  *
  *	Rather than exporting all checks, we export a single API function which in
- *	turn is responsible for running Greenplum checks. This function should be
+ *	turn is responsible for running Greengage checks. This function should be
  *	executed after all PostgreSQL checks. The order of the checks should not
  *	matter.
  */
 void
-check_greenplum(void)
+check_greengage(void)
 {
 	check_online_expansion();
 	check_external_partition();
@@ -73,7 +73,7 @@ check_online_expansion(void)
 	 * We only need to check the cluster expansion status on master.
 	 * On the other hand the status can not be detected correctly on segments.
 	 */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		return;
 
 	prep_status("Checking for online expansion status");

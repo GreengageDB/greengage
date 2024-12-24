@@ -13,7 +13,7 @@
 #include "fe_utils/string_utils.h"
 #include "mb/pg_wchar.h"
 #include "pg_upgrade.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static void check_new_cluster_is_empty(void);
 static void check_databases_are_compatible(void);
@@ -117,9 +117,9 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	check_for_isn_and_int8_passing_mismatch(&old_cluster);
 
 	/*
-	 * Check for various Greenplum failure cases
+	 * Check for various Greengage failure cases
 	 */
-	check_greenplum();
+	check_greengage();
 
 	/* GPDB 7 removed support for SHA-256 hashed passwords */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 905)
@@ -169,7 +169,7 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 		old_cluster.controldata.cat_ver < JSONB_FORMAT_CHANGE_CAT_VER)
 		check_for_jsonb_9_4_usage(&old_cluster);
 
-	/* For now, the issue exists only for Greenplum 6.x/PostgreSQL 9.4 */
+	/* For now, the issue exists only for Greengage 6.x/PostgreSQL 9.4 */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) == 904)
 	{
 		check_for_appendonly_materialized_view_with_relfrozenxid(&old_cluster);
@@ -182,7 +182,7 @@ dump_old_cluster:
 	 * While not a check option, we do this now because this is the only time
 	 * the old server is running.
 	 */
-	if (!user_opts.check && is_greenplum_dispatcher_mode())
+	if (!user_opts.check && is_greengage_dispatcher_mode())
 		generate_old_dump();
 
 	if (!live_check)
@@ -309,11 +309,11 @@ check_cluster_versions(void)
 	 */
 
 	/*
-	 * Upgrading from anything older than an 9.4 based Greenplum (GPDB6) is not supported.
+	 * Upgrading from anything older than an 9.4 based Greengage (GPDB6) is not supported.
 	 */
 
 	if (GET_MAJOR_VERSION(old_cluster.major_version) < 904)
-		pg_fatal("This utility can only upgrade from Greenplum version 6 and later.\n");
+		pg_fatal("This utility can only upgrade from Greengage version 6 and later.\n");
 
 	/* Ensure binaries match the designated data directories */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) !=
@@ -331,7 +331,7 @@ check_cluster_versions(void)
 
 	/* Only current PG version is supported as a target */
 	if (GET_MAJOR_VERSION(new_cluster.major_version) != GET_MAJOR_VERSION(PG_VERSION_NUM))
-		pg_fatal("This utility can only upgrade to Greenplum version %s.\n",
+		pg_fatal("This utility can only upgrade to Greengage version %s.\n",
 				 PG_MAJORVERSION);
 
 	/*
@@ -340,7 +340,7 @@ check_cluster_versions(void)
 	 * older versions.
 	 */
 	if (old_cluster.major_version > new_cluster.major_version)
-		pg_fatal("This utility cannot be used to downgrade to older major Greenplum versions.\n");
+		pg_fatal("This utility cannot be used to downgrade to older major Greengage versions.\n");
 
 	/* Ensure binaries match the designated data directories */
 	if (GET_MAJOR_VERSION(new_cluster.major_version) !=
@@ -458,7 +458,7 @@ check_new_cluster_is_empty(void)
 	 * place from the QD at this point, so the cluster cannot be tested for
 	 * being empty.
 	 */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		return;
 
 	for (dbnum = 0; dbnum < new_cluster.dbarr.ndbs; dbnum++)
@@ -792,13 +792,13 @@ check_is_install_user(ClusterInfo *cluster)
 	 * users might match users defined in the old cluster and generate an
 	 * error during pg_dump restore.
 	 *
-	 * However, in Greenplum, if we are upgrading a segment, its users have
+	 * However, in Greengage, if we are upgrading a segment, its users have
 	 * already been replicated to it from the master via gpupgrade.  Hence,
 	 * we only need to do this check for the QD.  In other words, the
-	 * Greenplum cluster upgrade scheme will overwrite the QE's schema
+	 * Greengage cluster upgrade scheme will overwrite the QE's schema
 	 * with the QD's schema, making this check inappropriate for a QE upgrade.
 	 */
-	if (is_greenplum_dispatcher_mode() &&
+	if (is_greengage_dispatcher_mode() &&
 		cluster == &new_cluster &&
 		atooid(PQgetvalue(res, 0, 0)) != 1)
 		pg_fatal("Only the install user can be defined in the new cluster.\n");
@@ -1401,7 +1401,7 @@ get_canonical_locale_name(int category, const char *locale)
  * with latest code.
  * See the PR for details:
  *
- * https://github.com/greenplum-db/gpdb/pull/11662/
+ * https://github.com/GreengageDB/greengage/pull/11662/
  */
 static void
 check_for_appendonly_materialized_view_with_relfrozenxid(ClusterInfo *cluster)

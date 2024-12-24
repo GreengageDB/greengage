@@ -422,10 +422,10 @@ class GpAddMirrorsProgram:
             return self.__generateMirrorsToBuild(gpEnv, gpArray)
 
     def __displayAddMirrors(self, gpEnv, mirrorBuilder, gpArray):
-        logger.info('Greenplum Add Mirrors Parameters')
+        logger.info('Greengage Add Mirrors Parameters')
         logger.info('--------------------------------------------')
-        logger.info('Greenplum coordinator data directory    = %s' % gpEnv.getCoordinatorDataDir())
-        logger.info('Greenplum coordinator port              = %d' % gpEnv.getCoordinatorPort())
+        logger.info('Greengage coordinator data directory    = %s' % gpEnv.getCoordinatorDataDir())
+        logger.info('Greengage coordinator port              = %d' % gpEnv.getCoordinatorPort())
         logger.info('Batch size                              = %d' % self.__options.batch_size)
         logger.info('Segment batch size                      = %d' % self.__options.segment_batch_size)
 

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gp/testutils"
-	"github.com/greenplum-db/gpdb/gp/testutils/exectest"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/postgres"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	"github.com/GreengageDB/greengage/gp/testutils"
+	"github.com/GreengageDB/greengage/gp/testutils/exectest"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/postgres"
 )
 
 func init() {
@@ -69,7 +69,7 @@ func TestRunExecCommand(t *testing.T) {
 			t.Fatalf("got %q, want %q", calledUtility, expectedUtility)
 		}
 
-		expectedArgs := "-c source gpHome/greenplum_path.sh &&"
+		expectedArgs := "-c source gpHome/greengage_path.sh &&"
 		if !strings.HasPrefix(calledArgs, expectedArgs) {
 			t.Fatalf("got %q, want prefix %q", calledArgs, expectedArgs)
 		}

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 func TestProgressBar(t *testing.T) {

@@ -271,12 +271,12 @@ transformOptionalSelectInto(ParseState *pstate, Node *parseTree)
 		SelectStmt *stmt = (SelectStmt *) parseTree;
 
 		/*
-		 * Greenplum specific behavior:
+		 * Greengage specific behavior:
 		 * The implementation of select statement with locking clause
 		 * (for update | no key update | share | key share) in postgres
 		 * is to hold RowShareLock on tables during parsing stage, and
 		 * generate a LockRows plan node for executor to lock the tuples.
-		 * It is not easy to lock tuples in Greenplum database, since
+		 * It is not easy to lock tuples in Greengage database, since
 		 * tuples may be fetched through motion nodes.
 		 *
 		 * But when Global Deadlock Detector is enabled, and the select
@@ -496,7 +496,7 @@ transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 
@@ -601,7 +601,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 
@@ -649,7 +649,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	}
 
 	/*
-	 * Greenplum specific behavior.
+	 * Greengage specific behavior.
 	 * conflict update may lock tuples on segments and behaves like
 	 * update. So we might consider if to upgrade lockmode for this
 	 * case.
@@ -976,11 +976,11 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 													stmt->onConflictClause);
 
 	/*
-	 * Greenplum specific behavior.
+	 * Greengage specific behavior.
 	 * OnConflictUpdate may modify the distkey of the table,
 	 * this can lead to wrong data distribution. Add a check
 	 * here and raise error for such case.
-	 * This fixes the github issue: https://github.com/greenplum-db/gpdb/issues/9444
+	 * This fixes the github issue: https://github.com/GreengageDB/greengage/issues/9444
 	 */
 	if (isOnConflictUpdate)
 		sanity_check_on_conflict_update(rte->relid,
@@ -2689,7 +2689,7 @@ transformUpdateStmt(ParseState *pstate, UpdateStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 

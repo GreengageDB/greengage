@@ -14,7 +14,7 @@
 --
 -- --------------------------------------------------------------------
 
--- pg_tablespace_location wrapper functions to see Greenplum cluster-wide tablespace locations
+-- pg_tablespace_location wrapper functions to see Greengage cluster-wide tablespace locations
 CREATE FUNCTION gp_tablespace_segment_location (IN tblspc_oid oid, OUT gp_segment_id int, OUT tblspc_loc text)
 RETURNS SETOF RECORD AS
 $$

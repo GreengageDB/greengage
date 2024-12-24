@@ -118,12 +118,12 @@ docker run --rm -it gpdb7_regress:latest bash -c "gpdb_src/concourse/scripts/uni
 1. Run the next commands in container
    ```bash
    source gpdb_src/concourse/scripts/common.bash
-   # this command unpack binaries to `/usr/local/greenplum-db-devel/`
+   # this command unpack binaries to `/usr/local/greengage-db-devel/`
    install_and_configure_gpdb
    gpdb_src/concourse/scripts/setup_gpadmin_user.bash
    make_cluster
    su - gpadmin -c '
-   source /usr/local/greenplum-db-devel/greenplum_path.sh;
+   source /usr/local/greengage-db-devel/greengage_path.sh;
    source gpdb_src/gpAux/gpdemo/gpdemo-env.sh;
    psql postgres'
    ```
@@ -168,7 +168,7 @@ Tests use `allure-behave` package and store allure output files in `allure-resul
 Also, the allure report for each failed test has gpdb logs attached files. See `gpMgmt/test/behave_utils/arenadata/formatter.py`
 It required to add `gpMgmt/tests` directory to `PYTHONPATH`. 
 
-Greenplum cluster in Docker containers has its own peculiarities in preparing a cluster for tests.
+Greengage cluster in Docker containers has its own peculiarities in preparing a cluster for tests.
 All tests are run in one way or another on the demo cluster, wherever possible.
 For example, cross_subnet tests or tests with tag `concourse_cluster` currently not worked because of too complex cluster preconditions.
 

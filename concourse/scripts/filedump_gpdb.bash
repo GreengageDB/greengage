@@ -28,7 +28,7 @@ function gen_env(){
 		    done
 		    exit 1
 		}
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
+		source /usr/local/greengage-db-devel/greengage_path.sh
 		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 		cd "\${1}/filedump_src"
 		PG_TEST_EXTRA="kerberos ssl" make -s ${MAKE_TEST_COMMAND}

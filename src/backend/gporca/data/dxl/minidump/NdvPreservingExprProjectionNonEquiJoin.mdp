@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 	  Test case: Projecting column with an ndv-preserving expression such as a+1 should still result in a relatively good cardinality estimate when this colref is used in joins. In the below plan, we should estimate ~10 rows instead of 100
 

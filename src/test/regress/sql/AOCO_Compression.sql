@@ -1795,7 +1795,7 @@ LEFT JOIN pg_type_encoding te ON (t.oid=te.typid)
 WHERE t.typname in ('mood_encoded', '_mood_encoded');
 
 -- get_ao_compression_ratio when the relation is a partitioned table with ao table children.
--- please refer to https://github.com/greenplum-db/gpdb/issues/14876
+-- please refer to https://github.com/GreengageDB/greengage/issues/14876
 CREATE TABLE public.partitioned_table_14876
 (id SERIAL, value TEXT, sales_date date)
 WITH (appendoptimized=true, orientation=column, compresstype=zlib, compresslevel=5)

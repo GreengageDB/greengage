@@ -186,7 +186,7 @@ def main():
     with closing(psycopg2.connect(**connectionInfo)) as connection:
         with closing(connection.cursor()) as cursor:
             num_segments = get_num_segments(cursor)
-    sys.stdout.writelines(['\n-- Greenplum database Statistics Dump',
+    sys.stdout.writelines(['\n-- Greengage database Statistics Dump',
                            '\n-- Database: ' + db,
                            '\n-- Num Segments: ' + str(num_segments),
                            '\n-- Date:     ' + timestamp.date().isoformat(),

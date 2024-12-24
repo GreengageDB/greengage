@@ -67,7 +67,7 @@ CREATE TABLE document (
     dauthor     name,
     dtitle      text
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 GRANT ALL ON document TO public;
 INSERT INTO document VALUES
     ( 1, 11, 1, 'regress_rls_bob', 'my first novel'),
@@ -1075,7 +1075,7 @@ CREATE TABLE part_document (
     dauthor     name,
     dtitle      text
 ) PARTITION BY RANGE (cid);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'did' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT ALL ON part_document TO public;
 -- Create partitions for document categories
@@ -1591,10 +1591,10 @@ ERROR:  new row violates row-level security policy "pp3" for table "part_documen
 SET SESSION AUTHORIZATION regress_rls_alice;
 SET row_security TO ON;
 CREATE TABLE dependee (x integer, y integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE dependent (x integer, y integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY d1 ON dependent FOR ALL
     TO PUBLIC
@@ -1619,7 +1619,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM dependent; -- After drop, should be unqualifie
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE rec1 (x integer, y integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY r1 ON rec1 USING (x = (SELECT r.x FROM rec1 r WHERE y = r.y));
 ALTER TABLE rec1 ENABLE ROW LEVEL SECURITY;
@@ -1631,7 +1631,7 @@ ERROR:  infinite recursion detected in policy for relation "rec1"
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE rec2 (a integer, b integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER POLICY r1 ON rec1 USING (x = (SELECT a FROM rec2 WHERE b = y));
 CREATE POLICY r2 ON rec2 USING (a = (SELECT x FROM rec1 WHERE y = b));
@@ -1672,11 +1672,11 @@ ERROR:  infinite recursion detected in policy for relation "rec1"
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE s1 (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO s1 (SELECT x, md5(x::text) FROM generate_series(-10,10) x);
 CREATE TABLE s2 (x int, y text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO s2 (SELECT x, md5(x::text) FROM generate_series(-6,6) x);
 GRANT SELECT ON s1, s2 TO regress_rls_bob;
@@ -2322,7 +2322,7 @@ NOTICE:  f_leak => yyyyyy
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE b1 (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO b1 (SELECT x, md5(x::text) FROM generate_series(-10,10) x);
 CREATE POLICY p1 ON b1 USING (a % 2 = 0);
@@ -2592,10 +2592,10 @@ ERROR:  new row violates row-level security policy for table "document"
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE z1 (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE z2 (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT SELECT ON z1,z2 TO regress_rls_group1, regress_rls_group2,
     regress_rls_bob, regress_rls_carol;
@@ -2978,7 +2978,7 @@ DROP VIEW rls_view;
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE x1 (a int, b text, c text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT ALL ON x1 TO PUBLIC;
 INSERT INTO x1 VALUES
@@ -3098,10 +3098,10 @@ NOTICE:  f_leak => fgh_updt_updt
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE y1 (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE y2 (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT ALL ON y1, y2 TO regress_rls_bob;
 CREATE POLICY p1 ON y1 FOR ALL USING (a % 2 = 0);
@@ -3252,7 +3252,7 @@ EXPLAIN (COSTS OFF) SELECT * FROM y2 WHERE f_leak('abc');
 CREATE TABLE test_qual_pushdown (
     abc text
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'abc' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'abc' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test_qual_pushdown VALUES ('abc'),('def');
 ANALYZE test_qual_pushdown;
@@ -3322,7 +3322,7 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table t2
 drop cascades to table t3
 CREATE TABLE t1 (a integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT SELECT ON t1 TO regress_rls_bob, regress_rls_carol;
 CREATE POLICY p1 ON t1 TO regress_rls_bob USING ((a % 2) = 0);
@@ -3371,7 +3371,7 @@ EXPLAIN (COSTS OFF) EXECUTE role_inval;
 RESET SESSION AUTHORIZATION;
 DROP TABLE t1 CASCADE;
 CREATE TABLE t1 (a integer, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p1 ON t1 USING (a % 2 = 0);
 ALTER TABLE t1 ENABLE ROW LEVEL SECURITY;
@@ -3486,7 +3486,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 --
 SET SESSION AUTHORIZATION regress_rls_bob;
 CREATE TABLE t2 (a integer, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t2 (SELECT * FROM t1);
 EXPLAIN (COSTS OFF) INSERT INTO t2 (SELECT * FROM t1);
@@ -3566,10 +3566,10 @@ SELECT * FROM t4;
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE blog (id integer, author text, post text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE comment (blog_id integer, message text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'blog_id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'blog_id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT ALL ON blog, comment TO regress_rls_bob;
 CREATE POLICY blog_1 ON blog USING (id % 2 = 0);
@@ -3742,7 +3742,7 @@ RESET SESSION AUTHORIZATION;
 DROP TABLE copy_t CASCADE;
 ERROR:  table "copy_t" does not exist
 CREATE TABLE copy_t (a integer, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p1 ON copy_t USING (a % 2 = 0);
 ALTER TABLE copy_t ENABLE ROW LEVEL SECURITY;
@@ -3829,7 +3829,7 @@ ERROR:  permission denied for table copy_t
 RESET SESSION AUTHORIZATION;
 SET row_security TO ON;
 CREATE TABLE copy_rel_to (a integer, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p1 ON copy_rel_to USING (a % 2 = 0);
 ALTER TABLE copy_rel_to ENABLE ROW LEVEL SECURITY;
@@ -3899,7 +3899,7 @@ DROP TABLE copy_rel_to CASCADE;
 -- Check WHERE CURRENT OF
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE current_check (currentid int, payload text, rlsuser text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'currentid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'currentid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT ALL ON current_check TO PUBLIC;
 INSERT INTO current_check VALUES
@@ -4156,7 +4156,7 @@ ROLLBACK; -- cleanup
 --
 BEGIN;
 CREATE TABLE t (c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p ON t USING (c % 2 = 1);
 ALTER TABLE t ENABLE ROW LEVEL SECURITY;
@@ -4189,10 +4189,10 @@ ROLLBACK;
 --
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE r1 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE r2 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
@@ -4289,7 +4289,7 @@ DROP TABLE r2;
 SET SESSION AUTHORIZATION regress_rls_alice;
 SET row_security = on;
 CREATE TABLE r1 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO r1 VALUES (10), (20);
 CREATE POLICY p1 ON r1 USING (false);
@@ -4341,9 +4341,9 @@ SET SESSION AUTHORIZATION regress_rls_alice;
 SET row_security = on;
 CREATE TABLE r1 (a int PRIMARY KEY);
 CREATE TABLE r2 (a int REFERENCES r1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
 -- Create policies on r2 which prevent the
@@ -4378,9 +4378,9 @@ DROP TABLE r1;
 -- Ensure cascaded DELETE works
 CREATE TABLE r1 (a int PRIMARY KEY);
 CREATE TABLE r2 (a int REFERENCES r1 ON DELETE CASCADE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
 -- Create policies on r2 which prevent the
@@ -4408,9 +4408,9 @@ DROP TABLE r1;
 -- Ensure cascaded UPDATE works
 CREATE TABLE r1 (a int PRIMARY KEY);
 CREATE TABLE r2 (a int REFERENCES r1 ON UPDATE CASCADE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 INSERT INTO r1 VALUES (10), (20);
 INSERT INTO r2 VALUES (10), (20);
 -- Create policies on r2 which prevent the
@@ -4442,7 +4442,7 @@ DROP TABLE r1;
 SET SESSION AUTHORIZATION regress_rls_alice;
 SET row_security = on;
 CREATE TABLE r1 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p1 ON r1 FOR SELECT USING (false);
 CREATE POLICY p2 ON r1 FOR INSERT WITH CHECK (true);
@@ -4534,10 +4534,10 @@ DROP TABLE r1;
 -- Check dependency handling
 RESET SESSION AUTHORIZATION;
 CREATE TABLE dep1 (c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE dep2 (c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY dep_p1 ON dep1 TO regress_rls_bob USING (c1 > (select max(dep2.c1) from dep2));
 ALTER POLICY dep_p1 ON dep1 TO regress_rls_bob,regress_rls_carol;
@@ -4591,10 +4591,10 @@ RESET SESSION AUTHORIZATION;
 CREATE ROLE regress_rls_dob_role1;
 CREATE ROLE regress_rls_dob_role2;
 CREATE TABLE dob_t1 (c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE dob_t2 (c1 int) PARTITION BY RANGE (c1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p1 ON dob_t1 TO regress_rls_dob_role1 USING (true);
 DROP OWNED BY regress_rls_dob_role1;
@@ -4619,11 +4619,11 @@ DROP USER regress_rls_dob_role1;
 DROP USER regress_rls_dob_role2;
 -- Bug #15708: view + table with RLS should check policies as view owner
 CREATE TABLE ref_tbl (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO ref_tbl VALUES (1);
 CREATE TABLE rls_tbl (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO rls_tbl VALUES (10);
 ALTER TABLE rls_tbl ENABLE ROW LEVEL SECURITY;
@@ -4654,7 +4654,7 @@ DROP TABLE rls_tbl;
 DROP TABLE ref_tbl;
 -- Leaky operator test
 CREATE TABLE rls_tbl (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO rls_tbl SELECT x/10 FROM generate_series(1, 100) x;
 ANALYZE rls_tbl;
@@ -4678,7 +4678,7 @@ DROP TABLE rls_tbl;
 -- Bug #16006: whole-row Vars in a policy don't play nice with sub-selects
 SET SESSION AUTHORIZATION regress_rls_alice;
 CREATE TABLE rls_tbl (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE POLICY p1 ON rls_tbl USING (rls_tbl >= ROW(1,1,1));
 ALTER TABLE rls_tbl ENABLE ROW LEVEL SECURITY;
@@ -4725,7 +4725,7 @@ DROP TABLE rls_tbl;
 RESET SESSION AUTHORIZATION;
 -- CVE-2023-2455: inlining an SRF may introduce an RLS dependency
 create table rls_t (c text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into rls_t values ('invisible to bob');
 alter table rls_t enable row level security;
@@ -4802,7 +4802,7 @@ DROP ROLE regress_rls_group2;
 -- pg_dump/pg_restore
 CREATE SCHEMA regress_rls_schema;
 CREATE TABLE rls_tbl (c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE rls_tbl ENABLE ROW LEVEL SECURITY;
 CREATE POLICY p1 ON rls_tbl USING (c1 > 5);
@@ -4810,7 +4810,7 @@ CREATE POLICY p2 ON rls_tbl FOR SELECT USING (c1 <= 3);
 CREATE POLICY p3 ON rls_tbl FOR UPDATE USING (c1 <= 3) WITH CHECK (c1 > 5);
 CREATE POLICY p4 ON rls_tbl FOR DELETE USING (c1 <= 3);
 CREATE TABLE rls_tbl_force (c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE rls_tbl_force ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rls_tbl_force FORCE ROW LEVEL SECURITY;

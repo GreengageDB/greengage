@@ -21,15 +21,15 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gp/agent"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/idl/mock_idl"
-	"github.com/greenplum-db/gpdb/gp/testutils"
-	"github.com/greenplum-db/gpdb/gp/testutils/exectest"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	"github.com/GreengageDB/greengage/gp/agent"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/idl/mock_idl"
+	"github.com/GreengageDB/greengage/gp/testutils"
+	"github.com/GreengageDB/greengage/gp/testutils/exectest"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 func init() {

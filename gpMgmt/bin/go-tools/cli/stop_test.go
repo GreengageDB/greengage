@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenplum-db/gpdb/gp/cli"
+	"github.com/GreengageDB/greengage/gp/cli"
 
 	"github.com/golang/mock/gomock"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/idl/mock_idl"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/idl/mock_idl"
 )
 
 func TestStopAgentService(t *testing.T) {

@@ -585,7 +585,7 @@ drop table foo_p;
 -- Same as above, but the input is ordered so that the inserts to the heap
 -- partition happen first. Had a bug related flushing the multi-insert
 -- buffers in that scenario at one point.
--- (https://github.com/greenplum-db/gpdb/issues/6678
+-- (https://github.com/GreengageDB/greengage/issues/6678
 create table mixed_ao_part(distkey int, partkey int)
 with (appendonly=true) distributed by(distkey)
 partition by range(partkey) (
@@ -2100,7 +2100,7 @@ alter table it add primary key(i);
 select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
 -- FIXME: dropping a primary key doesn't currently work correctly. It doesn't
 -- drop the key on the partitions, only the parent. See
--- https://github.com/greenplum-db/gpdb/issues/3750
+-- https://github.com/GreengageDB/greengage/issues/3750
 --
 -- alter table it add primary key(i);
 -- select schemaname, tablename, indexname from pg_indexes where schemaname = 'public' and tablename like 'it%';
@@ -3753,7 +3753,7 @@ select typname from pg_type where typarray = '_xchg_tab1'::regtype;
 -- Test with an incomplete operator class. Create a custom operator class and
 -- only define equality on it. You can't do much with that.
 --
--- Before GPDB 7, Greenplum used to allow creating the table, but you got an
+-- Before GPDB 7, Greengage used to allow creating the table, but you got an
 -- error when inserting to it. Nowadays we rely on PostgreSQL partitioning
 -- code, which rejects it at CREATE TABLE already.
 create type employee_type as (empid int, empname text);
@@ -3779,7 +3779,7 @@ create table employee_table(timest date, user_id numeric(16,0) not null, tag1 ch
 -- Test partition table with ACL.
 -- We grant default SELECT permission to a new user, this new user should be
 -- able to SELECT from any partition table we create later.
--- (https://github.com/greenplum-db/gpdb/issues/9524)
+-- (https://github.com/GreengageDB/greengage/issues/9524)
 DROP TABLE IF EXISTS user_prt_acl.t_part_acl;
 DROP SCHEMA IF EXISTS user_prt_acl;
 DROP ROLE IF EXISTS user_prt_acl;
@@ -4152,7 +4152,7 @@ select d from test_listPartition where d='2022-10-23' or d=('2022-10-23'::date -
 drop table test_listPartition;
 
 -- Test case witt missing " for special-char in subpartition template name
--- Please refer to https://github.com/greenplum-db/gpdb/issues/16558
+-- Please refer to https://github.com/GreengageDB/greengage/issues/16558
 CREATE TABLE public.logs_issue_16558
 (
   log_id integer,

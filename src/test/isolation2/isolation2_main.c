@@ -112,7 +112,7 @@ isolation_start_test(const char *testname,
 	 * sql_isolation_testcase.py is using psycopg2 to connect to server. Psycopg2 requires the server
 	 * using PGDATESTYLE='ISO, MDY', otherwise psycopg2 will try to execute "SET DATESTYLE='ISO, MDY'"
 	 * after the connection being established. However, the pg_regress hardcoded PGDATESTYLE to 'Postgres, MDY',
-	 * while in Greenplum, the 'SET' command is not allowed to execute in a retrieve connection
+	 * while in Greengage, the 'SET' command is not allowed to execute in a retrieve connection
 	 * (PGOPTIONS='-c gp_retrieve_conn=true'). To workaround this issue, we set 'DATESTYLE' to 'ISO, MDY'
 	 * before invoking sql_isolation_testcase.py.
 	 */

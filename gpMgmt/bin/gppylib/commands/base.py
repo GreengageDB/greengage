@@ -506,7 +506,7 @@ class RemoteExecutionContext(LocalExecutionContext):
         cmd.cmdStr = cmd.cmdStr.replace('\\','\\\\').replace('"', '\\"')
         cmd.cmdStr = "ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 " \
                      "{targethost} \"{gphome} {cmdstr}\"".format(targethost=self.targetHost,
-                                                                 gphome=". %s/greenplum_path.sh;" % self.gphome,
+                                                                 gphome=". %s/greengage_path.sh;" % self.gphome,
                                                                  cmdstr=cmd.cmdStr)
         LocalExecutionContext.execute(self, cmd, pickled=pickled, start_new_session=start_new_session)
         if (cmd.get_stderr().startswith('ssh_exchange_identification: Connection closed by remote host')):

@@ -310,7 +310,7 @@ test_access(
 	"gssencmode=disable",
 	"succeeds with GSS encryption disabled and hostnogssenc hba");
 
-# Greenplum tests for expiration, remove if upstream adds the similar tests
+# Greengage tests for expiration, remove if upstream adds the similar tests
 # Rewrite the pg_hba.conf to allow us doing the "ALTER USER" commands
 unlink($node->data_dir . '/pg_hba.conf');
 $node->append_conf('pg_hba.conf', qq{local all all trust});

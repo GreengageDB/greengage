@@ -571,7 +571,7 @@ SELECT oid, typname, typtype, typelem, typarray, typarray
     oid != ALL(ARRAY['gtsvector', 'pg_node_tree',
                      'pg_ndistinct', 'pg_dependencies', 'pg_mcv_list',
                      'xml']::regtype[]) AND
-    -- Discard Greenplum extra types, textrange3 was created by a test
+    -- Discard Greengage extra types, textrange3 was created by a test
     oid != ALL(ARRAY['complex', 'gp_hyperloglog_estimator',
                      'textrange3']::regtype[]) AND
     -- Discard arrays.

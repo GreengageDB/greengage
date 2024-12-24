@@ -7,8 +7,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 func TestFormatGrpcError(t *testing.T) {

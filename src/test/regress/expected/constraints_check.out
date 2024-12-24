@@ -1,5 +1,5 @@
 -- loose over-eager constraint exclusion
--- please refer to https://github.com/greenplum-db/gpdb/issues/10287
+-- please refer to https://github.com/GreengageDB/greengage/issues/10287
 CREATE TABLE t_issue_10287(a INT CHECK(a = 1));
 INSERT INTO t_issue_10287 VALUES (NULL);
 SELECT * FROM t_issue_10287 WHERE a IS NULL;

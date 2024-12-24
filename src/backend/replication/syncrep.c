@@ -509,7 +509,7 @@ SyncRepInitConfig(void)
 	priority = SyncRepGetStandbyPriority();
 
 	/*
-	 * Greenplum: primary/standby replication is considered synchronous even
+	 * Greengage: primary/standby replication is considered synchronous even
 	 * when synchronous_standby_names GUC is not set.
 	 */
 	if (IS_QUERY_DISPATCHER() && MyWalSnd->is_for_gp_walreceiver)

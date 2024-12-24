@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbutil.c
- *	  Internal utility support functions for Greenplum Database/PostgreSQL.
+ *	  Internal utility support functions for Greengage Database/PostgreSQL.
  *
  * Portions Copyright (c) 2005-2011, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -1119,14 +1119,14 @@ ensureInterconnectAddress(void)
 	Assert(interconnect_address && strlen(interconnect_address) > 0);
 }
 /*
- * performs all necessary setup required for Greenplum Database mode.
+ * performs all necessary setup required for Greengage Database mode.
  *
  * This includes cdblink_setup() and initializing the Motion Layer.
  */
 void
 cdb_setup(void)
 {
-	elog(DEBUG1, "Initializing Greenplum components...");
+	elog(DEBUG1, "Initializing Greengage components...");
 
 	if (Gp_role != GP_ROLE_UTILITY)
 	{
@@ -1165,7 +1165,7 @@ cdb_setup(void)
 }
 
 /*
- * performs all necessary cleanup required when leaving Greenplum
+ * performs all necessary cleanup required when leaving Greengage
  * Database mode.  This is also called when the process exits.
  *
  * NOTE: the arguments to this function are here only so that we can
@@ -1178,7 +1178,7 @@ void
 cdb_cleanup(int code pg_attribute_unused(), Datum arg
 						pg_attribute_unused())
 {
-	elog(DEBUG1, "Cleaning up Greenplum components...");
+	elog(DEBUG1, "Cleaning up Greengage components...");
 
 	DisconnectAndDestroyAllGangs(true);
 

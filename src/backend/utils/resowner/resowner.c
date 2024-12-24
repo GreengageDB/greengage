@@ -485,7 +485,7 @@ ResourceOwnerRelease(ResourceOwner owner,
 					 bool isTopLevel)
 {
 	/*
-	 * Greenplum: For some reason we've been calling this when the owner is NULL.
+	 * Greengage: For some reason we've been calling this when the owner is NULL.
 	 */
 	if (owner == NULL)
 	{

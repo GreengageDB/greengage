@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 type Command struct {

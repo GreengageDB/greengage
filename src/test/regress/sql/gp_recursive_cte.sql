@@ -511,7 +511,7 @@ WITH RECURSIVE x(a) as
     select a+1 from x where a<10
 )
 select * from x ;
--- issues: https://github.com/greenplum-db/gpdb/issues/16422
+-- issues: https://github.com/GreengageDB/greengage/issues/16422
 -- Without a reference to CTE in subselect and with a group clause
 CREATE TABLE test_cte (a int, b int);
 EXPLAIN (costs off)

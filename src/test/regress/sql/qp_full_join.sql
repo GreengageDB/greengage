@@ -10,7 +10,7 @@
 drop schema if exists full_join cascade;
 -- end_ignore
 
--- greenplum
+-- greengage
 create schema full_join;
 set search_path=full_join;
 set optimizer_trace_fallback=on;

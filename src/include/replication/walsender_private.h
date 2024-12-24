@@ -100,7 +100,7 @@ typedef struct WalSnd
 	TimestampTz replyTime;
 
 	/*
-	 * Indicates whether the WalSnd represents a connection with a Greenplum
+	 * Indicates whether the WalSnd represents a connection with a Greengage
 	 * mirror in streaming mode
 	 */
 	bool 		is_for_gp_walreceiver;

@@ -1478,7 +1478,7 @@ SELECT user_name FROM users_test_1_prt_p2020;
 -- Expect C
 SELECT user_name FROM users_test_1_prt_extra;
 
--- Github issue: https://github.com/greenplum-db/gpdb/issues/9460
+-- Github issue: https://github.com/GreengageDB/greengage/issues/9460
 -- When creating unique or primary key index on Partition table,
 -- the cols in index must contain all partition keys.
 CREATE TABLE t_idx_col_contain_partkey(a int, b int) DISTRIBUTED BY (a)
@@ -1832,7 +1832,7 @@ PARTITION BY RANGE (col2)
   (START (1) END (10) EVERY (1::myint));
 
 CREATE OPERATOR + (LEFTARG = myint, RIGHTARG = myint, PROCEDURE = myint_pl_myint, COMMUTATOR = + );
--- Now, we can create the partitioned table with Greenplum syntax.
+-- Now, we can create the partitioned table with Greengage syntax.
 CREATE TABLE issue_14956_part_table_with_customed_type
 (
   col1 int4,

@@ -1282,7 +1282,7 @@ LogicalTapeSetBlocks(LogicalTapeSet *lts)
 {
 #ifdef USE_ASSERT_CHECKING
 	/*
-	 * Greenplum interrupts the sort and set QueryFinishPending on purpose in
+	 * Greengage interrupts the sort and set QueryFinishPending on purpose in
 	 * the test query_finish_pending.sql, skipping the assertion for that case.
 	 */
 	if (!QueryFinishPending)

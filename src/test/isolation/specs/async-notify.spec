@@ -32,7 +32,7 @@ step notifys1	{
 	COMMIT;
 }
 step usage		{ SELECT pg_notification_queue_usage() > 0 AS nonzero; }
-# GPDB: use more rows than in upstream, because Greenplum is compiled with a
+# GPDB: use more rows than in upstream, because Greengage is compiled with a
 # larger SLRU block size, and we need to fill at least one page to make
 # pg_notification_queue_usage() non-zero.
 step bignotify	{ SELECT count(pg_notify('c1', s::text)) FROM generate_series(1, 10000) s; }

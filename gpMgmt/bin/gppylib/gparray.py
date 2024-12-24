@@ -6,7 +6,7 @@
   gparray.py:
 
     Contains three classes representing configuration information of a
-    Greenplum array:
+    Greengage array:
 
       GpArray - The primary interface - collection of all Segment within an array
       Segment    - represents configuration information for a single dbid
@@ -85,7 +85,7 @@ class InvalidSegmentConfiguration(Exception):
 class Segment:
     """
     Segment class representing configuration information for a single dbid
-    within a Greenplum Array.
+    within a Greengage Array.
     """
 
     # --------------------------------------------------------------------
@@ -772,9 +772,9 @@ def createSegmentRowsFromSegmentList( newHostlist
 # ============================================================================
 class GpArray:
     """
-    GpArray is a python class that describes a Greenplum array.
+    GpArray is a python class that describes a Greengage array.
 
-    A Greenplum array consists of:
+    A Greengage array consists of:
       coordinator         - The primary QD for the array
       standby coordinator - The mirror QD for the array [optional]
       segmentPairs array  - an array of segmentPairs within the cluster

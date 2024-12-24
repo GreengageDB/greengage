@@ -154,7 +154,7 @@ sub GenerateFiles
 	  || confess("Could not open configure.in for reading\n");
 	while (<$c>)
 	{
-		if (/^AC_INIT\(\[Greenplum Database\], \[([^\]]+)\]/)
+		if (/^AC_INIT\(\[Greengage Database\], \[([^\]]+)\]/)
 		{
 			$self->{gpdbver} = $1;
 			$self->{gpdbmajorver} = substr $1, 0, 1;

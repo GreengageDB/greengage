@@ -2126,7 +2126,7 @@ ExecScanHashBucket(HashState *hashState, HashJoinState *hjstate,
 				   ExprContext *econtext)
 {
 	/*
-	 * Greenplum specific behavior.
+	 * Greengage specific behavior.
 	 * Using hashqualclauses to support hash join on 'IS NOT DISTINCT FROM'
 	 * as well as '='.
 	 */
@@ -2192,7 +2192,7 @@ ExecParallelScanHashBucket(HashState *hashState, HashJoinState *hjstate,
 						   ExprContext *econtext)
 {
 	/*
-	 * Greenplum specific behavior.
+	 * Greengage specific behavior.
 	 * Using hashqualclauses to support hash join on 'IS NOT DISTINCT FROM'
 	 * as well as '='.
 	 */

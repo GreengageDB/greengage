@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/utils"
 	"github.com/vbauerster/mpb/v8"
 )
 

@@ -1,5 +1,5 @@
 /*
- * Greenplum System Summary Views
+ * Greengage System Summary Views
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -8,10 +8,10 @@
  * src/backend/catalog/system_views_gp_summary.sql
  *
 
- * This file contains summary views for various Greenplum system catalog
+ * This file contains summary views for various Greengage system catalog
  * views. These summary views are designed to provide aggregated or averaged
  * information for partitioned and replicated tables, considering multiple
- * segments in a Greenplum database.
+ * segments in a Greengage database.
  *
  * Note: this file is read in single-user -j mode, which means that the
  * command terminator is semicolon-newline-newline; whenever the backend

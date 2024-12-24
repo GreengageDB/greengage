@@ -8273,7 +8273,7 @@ StartupXLOG(void)
 	/* Reload shared-memory state for prepared transactions */
 	RecoverPreparedTransactions();
 
-	/* Greenplum extra logging */
+	/* Greengage extra logging */
 	if (IsNormalProcessingMode())
 		ereport(LOG, (errmsg("database system is ready")));
 
@@ -9614,7 +9614,7 @@ CreateCheckPoint(int flags)
 	XLogBeginInsert();
 	XLogRegisterData((char *) (&checkPoint), sizeof(checkPoint));
 
-	/* Greenplum checkpoints have extra info */
+	/* Greengage checkpoints have extra info */
 	XLogRegisterData((char *) dtxCheckPointInfo, dtxCheckPointInfoSize);
 
 	recptr = XLogInsert(RM_XLOG_ID,
@@ -10314,7 +10314,7 @@ KeepLogSeg(XLogRecPtr recptr, XLogSegNo *logSegNo)
 	 * Calculate how many segments are kept by slots first, adjusting for
 	 * max_slot_wal_keep_size.
 	 *
-	 * Greenplum: coordinator needs a different way to determine the keep
+	 * Greengage: coordinator needs a different way to determine the keep
 	 * point as replication slot is not created there.
 	 */
 	keep = IS_QUERY_DISPATCHER() ?

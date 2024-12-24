@@ -22,7 +22,7 @@ DESCRIPTION
 The gpsync utility allows you to copy one or more files from the 
 specified hosts to other specified hosts in one command using 
 remote synchronization. For example, you can copy a file
-from the Greenplum Database coordinator host to all of the segment
+from the Greengage Database coordinator host to all of the segment
 hosts at the same time.
 
 To specify the hosts involved in the remote sync session, use the -f
@@ -125,7 +125,7 @@ Copy the file named myfuncs.so to the specified location on
 the hosts named sdw1 and sdw2:
 
 gpsync -h sdw1 -h sdw2 myfuncs.so \
-=:/usr/local/greenplum-db/lib
+=:/usr/local/greengage-db/lib
 
 
 *****************************************************

@@ -742,10 +742,10 @@ pgfdw_xact_callback(XactEvent event, void *arg)
 				case XACT_EVENT_PRE_PREPARE:
 
 					/*
-					 * FDW update is not the same as Greenplum segments update,
+					 * FDW update is not the same as Greengage segments update,
 					 * doesn't need the two-phase commit.
 					 *
-					 * Besides that, Greenplum prepares on many cases including
+					 * Besides that, Greengage prepares on many cases including
 					 * DTX distributing for MPP usages, just break here.
 					 */
 					break;

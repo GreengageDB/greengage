@@ -1,5 +1,5 @@
 -- https://gist.github.com/kainwen/df7c0d3149684e1256d31b5c39e02de7#file-gp7-sql
--- This test is included in https://github.com/greenplum-db/gpdb/issues/14982
+-- This test is included in https://github.com/GreengageDB/greengage/issues/14982
 -- The test creates an operator that performs absolute value comparisons of the input data.
 -- The operator belongs to a customized btree opfamily 16433, which supports cross-type (20, 23) comparisons.
 -- The test then creates two tables, t1 and t2.
@@ -12,7 +12,7 @@
 -- Internally, operator |=| of opfamily 16433 is treated as operator = of opfamily 1977 or 1976, and generated
 -- incorrect hash join condition and unjustified partition pruning. This fix compares the operator to the
 -- column's opfamily, thence deriving correct properties from the predicates.
--- greenplum
+-- greengage
 create schema partition_prune_opfamily;
 set search_path=partition_prune_opfamily;
 SET optimizer_trace_fallback=on;
@@ -264,7 +264,7 @@ partition by list (b)
   partition p1 values (1),
   partition p2 values (-1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2 (a int, b int8)
 partition by list (b)
@@ -272,7 +272,7 @@ partition by list (b)
   partition p1 values (1),
   partition p2 values (-1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 values (1,1), (1,-1), (-1,1), (-1,-1);
 insert into t2 values (1,1), (1,-1), (-1,1), (-1,-1);

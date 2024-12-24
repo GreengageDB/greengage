@@ -2358,7 +2358,7 @@ _readRangeTblFunction(void)
 }
 
 /*
- * Greenplum Database additions for serialization support
+ * Greengage Database additions for serialization support
  * These are currently not used (see outfastc ad readfast.c)
  */
 #include "nodes/plannodes.h"

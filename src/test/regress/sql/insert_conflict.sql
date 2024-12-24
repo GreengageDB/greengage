@@ -478,7 +478,7 @@ insert into parted_conflict_test_1 values (1, 'a') on conflict (a) do nothing;
 insert into parted_conflict_test_1 values (1, 'b') on conflict (a) do update set b = excluded.b;
 
 -- start_ignore
--- Greenplum could not update the distribution column on conflict
+-- Greengage could not update the distribution column on conflict
 -- index on b required, which doesn't exist in parent
 insert into parted_conflict_test values (2, 'b') on conflict (b) do update set a = excluded.a;
 
@@ -563,7 +563,7 @@ alter table parted_conflict attach partition parted_conflict_1 for values from (
 truncate parted_conflict;
 insert into parted_conflict values (50, 'cincuenta', 1);
 -- start_ignore
--- Greenplum could not update the distribution column on conflict
+-- Greengage could not update the distribution column on conflict
 insert into parted_conflict values (50, 'cincuenta', 2)
   on conflict (a, b) do update set (a, b, c) = row(excluded.*)
   where parted_conflict = (50, text 'cincuenta', 1) and
@@ -595,7 +595,7 @@ truncate parted_conflict;
 
 insert into parted_conflict values (0, 'cero', 1);
 
--- Greenplum: this won't trigger, because the INSERT/UPDATE happens on the QEs,
+-- Greengage: this won't trigger, because the INSERT/UPDATE happens on the QEs,
 -- but FOR STATEMENT triggers could not be triggered on a QE
 insert into parted_conflict values(0, 'cero', 1)
   on conflict (a,b) do update set c = parted_conflict.c + 1;

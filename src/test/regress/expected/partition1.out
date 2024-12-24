@@ -727,7 +727,7 @@ drop table foz cascade;
 -- complain if create table as select (CTAS)
 CREATE TABLE rank1 (id int,
 rank int, year date, gender char(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rank2 as select * from rank1
 DISTRIBUTED BY (id, gender, year)
@@ -787,7 +787,7 @@ alter table hhh add partition end ('2010-02-01');
 -- MPP-3607 - ADD PARTITION with open intervals
 create table no_end1 (aa int, bb int) partition by range (bb)
 (partition foo start(3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- fail overlap
 alter table no_end1 add partition baz end (4);
@@ -801,7 +801,7 @@ alter table no_end1 add partition baz start (2);
 alter table no_end1 add partition baz2 end (1);
 create table no_start1 (aa int, bb int) partition by range (bb)
 (partition foo end(3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- fail overlap (because next partition has no start)
 alter table no_start1 add partition baz start (2);
@@ -833,7 +833,7 @@ create table jjj (aa int, bb date)
 partition by range(bb)
 (partition j1 end (date '2008-01-01'),
 partition j2 end (date '2009-01-01'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- must have a name
 alter table jjj add default partition;
@@ -854,7 +854,7 @@ partition by range(bb)
 (partition j1 end (date '2008-01-01'),
 partition j2 end (date '2009-01-01'),
 default partition j3);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table jjj add default partition j3 ;
 ERROR:  relation "jjj_1_prt_j3" already exists
@@ -1203,7 +1203,7 @@ partition by range(bb)
 partition j2 end (date '2009-01-01'),
 default partition j3,
 default partition j4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "jjj_1_prt_j3" conflicts with existing default partition "jjj_1_prt_j4"
 -- check default
@@ -1288,7 +1288,7 @@ create table d (i int, j int) partition by list(j)
 (partition a values(1, 2, NULL),
  partition b values(3, 4)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into d values(1, 1);
 insert into d values(1, 2);
@@ -1315,7 +1315,7 @@ drop table d cascade;
 -- Reject NULL values
 create table d (i int,  j int) partition by range(j)
 (partition a start (1) end(10), partition b start(11) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into d values (1, 1);
 insert into d values (1, 2);
@@ -1327,7 +1327,7 @@ drop table  d cascade;
 create table d (i int,  j int) partition by range(j)
 (partition a start (1) end(10), partition b start(11) end(20),
 default partition abc);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into d values (1, 1);
 insert into d values (1, 2);
@@ -2170,7 +2170,7 @@ create table mpp14613_list(
     default partition others,
     start(1) end(5) every(1)
  );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mpp14613_range(
   a int,
@@ -2189,7 +2189,7 @@ create table mpp14613_range(
      default partition others,
      start(1) end(5) every(1)
  );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- SPLIT partition
 alter table mpp14613_list alter partition others split partition subothers at (10) into (partition b1, partition subothers);
@@ -2214,7 +2214,7 @@ create table foo(
     default partition others,
     start(1) end(5) every(1)
  );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table foo alter partition others split partition subothers at (10) into (partition b1, partition subothers);
 ERROR:  SPLIT PARTITION is not currently supported when leaf partition is list partitioned in multi level partition table
@@ -2229,7 +2229,7 @@ drop table foo;
 -- Drop index on a partitioned table. The indexes on the partitions are removed.
 --
 create table pt_indx_tab (c1 integer, c2 int, c3 text) partition by range (c1) (partition A start (integer '0') end (integer '5') every (integer '1'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create unique index pt_indx_drop on pt_indx_tab(c1);
 select count(*) from pg_index where indrelid='pt_indx_tab'::regclass;
@@ -2277,7 +2277,7 @@ CREATE TABLE mpp7635_aoi_table2 (id INTEGER)
  PARTITION BY RANGE (id)
   (START (0) END (200000) EVERY (100000))
 ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO mpp7635_aoi_table2(id) VALUES (0);
 -- Create index
@@ -2427,7 +2427,7 @@ SELECT user_name FROM users_test_1_prt_extra;
  C
 (1 row)
 
--- Github issue: https://github.com/greenplum-db/gpdb/issues/9460
+-- Github issue: https://github.com/GreengageDB/greengage/issues/9460
 -- When creating unique or primary key index on Partition table,
 -- the cols in index must contain all partition keys.
 CREATE TABLE t_idx_col_contain_partkey(a int, b int) DISTRIBUTED BY (a)
@@ -2834,7 +2834,7 @@ CREATE TABLE validation_syntax_tbl (a int)
         PARTITION p1 START (1) END (3)
         );
 CREATE TABLE exchange_tbl (a int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO exchange_tbl VALUES (100);
 ALTER TABLE validation_syntax_tbl EXCHANGE PARTITION p1 WITH TABLE exchange_tbl WITH VALIDATION;
@@ -2880,7 +2880,7 @@ PARTITION BY RANGE(col2)
 ERROR:  relation "partitioned_table_with_very_long_name_123456789_1_prt_partthree" already exists
 -- Test not supported partition strategy with legacy GPDB syntax
 create table hashpart_gpspec (a int, b int) partition by hash (b) (partition p1 start (1) end (2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  Not supported partition strategy
 -- Test (START (VAL1) END (VAL2) EVERY (INTERVAL_VAL)) syntax against customed types.
@@ -2928,7 +2928,7 @@ LINE 8:   (START (1) END (10) EVERY (1::myint));
                                      ^
 HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
 CREATE OPERATOR + (LEFTARG = myint, RIGHTARG = myint, PROCEDURE = myint_pl_myint, COMMUTATOR = + );
--- Now, we can create the partitioned table with Greenplum syntax.
+-- Now, we can create the partitioned table with Greengage syntax.
 CREATE TABLE issue_14956_part_table_with_customed_type
 (
   col1 int4,

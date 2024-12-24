@@ -1628,7 +1628,7 @@ heap_create_with_catalog(const char *relname,
 	 * only tables.
 	 *
 	 * GPDB:
-	 * In Greenplum, if user using the GPDB's create partition table syntax,
+	 * In Greengage, if user using the GPDB's create partition table syntax,
 	 * it may failed with typename collision since the child partition table
 	 * name is generated from user input, which may cause relarrayname exceed
 	 * NAMEDATALEN and gets truncated. Then the name may same with other child

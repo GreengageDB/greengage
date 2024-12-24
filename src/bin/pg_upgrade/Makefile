@@ -11,11 +11,11 @@ OBJS = check.o controldata.o dump.o exec.o file.o function.o info.o \
        option.o parallel.o pg_upgrade.o relfilenode.o server.o \
        tablespace.o util.o version.o $(WIN32RES)
 
-# Source files specific to Greenplum
-OBJS += greenplum/aotable.o greenplum/version_gp.o \
-		greenplum/check_gp.o greenplum/reporting.o \
-		greenplum/aomd_filehandler.o greenplum/option_gp.o \
-		greenplum/controldata_gp.o greenplum/util.o
+# Source files specific to Greengage
+OBJS += greengage/aotable.o greengage/version_gp.o \
+		greengage/check_gp.o greengage/reporting.o \
+		greengage/aomd_filehandler.o greengage/option_gp.o \
+		greengage/controldata_gp.o greengage/util.o
 
 override CPPFLAGS := -DDLSUFFIX=\"$(DLSUFFIX)\" -I$(srcdir) -I$(libpq_srcdir) $(CPPFLAGS)
 LDFLAGS_INTERNAL += -L$(top_builddir)/src/fe_utils -lpgfeutils $(libpq_pgport)
@@ -40,8 +40,8 @@ clean distclean maintainer-clean:
 				 reindex_hash.sql clusterConfigPostgresAddonsFile clusterConfigFile \
 				 gpdemo-env.sh hostfile regression.diffs aomd_filehandler.c
 
-greenplum/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
-	rm -f $@ && cd greenplum && $(LN_S) ../$< aomd_filehandler.c
+greengage/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
+	rm -f $@ && cd greengage && $(LN_S) ../$< aomd_filehandler.c
 
 # When $(MAKE) is present, make automatically infers that this is a
 # recursive make. which is not actually what we want here, as that

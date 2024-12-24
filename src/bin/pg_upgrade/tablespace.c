@@ -10,7 +10,7 @@
 #include "postgres_fe.h"
 
 #include "pg_upgrade.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static void get_tablespace_paths(void);
 static void set_tablespace_directory_suffix(ClusterInfo *cluster);

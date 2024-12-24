@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="2E71C10F-7A48-4F14-B13A-B3FC349037E0" Language="1033" Manufacturer="Pivotal, Inc." Name="Greenplum Clients" Version="__VERSION_PLACEHOLDER__" UpgradeCode="0EE0DD2B-0504-4B60-85E8-604852D07A9F">
-    <Package Compressed="yes" Comments="Greenplum Clients" InstallerVersion="200" Languages="1033" Manufacturer="Greenplum, Inc." Platform="x64" />
+  <Product Id="2E71C10F-7A48-4F14-B13A-B3FC349037E0" Language="1033" Manufacturer="Pivotal, Inc." Name="Greengage Clients" Version="__VERSION_PLACEHOLDER__" UpgradeCode="0EE0DD2B-0504-4B60-85E8-604852D07A9F">
+    <Package Compressed="yes" Comments="Greengage Clients" InstallerVersion="200" Languages="1033" Manufacturer="Greengage, Inc." Platform="x64" />
     <UI>
       <Property Id="ErrorDialog"><![CDATA[ErrorDlg]]></Property>
       <Property Id="DefaultUIFont"><![CDATA[DlgFont8]]></Property>
@@ -1094,13 +1094,13 @@ If you want to review or change any of your installation settings, click Back. C
     <Binary Id="Up" SourceFile="Binary\Up.ico" />
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder" Name="PFiles">
-        <Directory Id="gpdir" Name="Greenplum">
-          <Directory Id="BASEDIR" Name="greenplum-clients" ShortName="bizgres1">
+        <Directory Id="gpdir" Name="Greengage">
+          <Directory Id="BASEDIR" Name="greengage-clients" ShortName="bizgres1">
             <Component Id="TOPLEVELTextFiles" DiskId="1" Guid="CBED1D6A-228F-4AD2-AAD3-198B42323A22">
               <Environment Id="CLIENTS_ENV" Action="set" Permanent="no" System="yes" Part="all" Name="GPHOME_CLIENTS" Value="[BASEDIR]" />
               <Environment Id="PYTHON_ENV" Action="set" Permanent="no" System="yes" Part="last" Name="PYTHONPATH" Value="%GPHOME_CLIENTS%\lib\python" />
               <Environment Id="PATH_ENV" Action="set" Permanent="no" System="yes" Part="last" Name="PATH" Value="%GPHOME_CLIENTS%bin;%GPHOME_CLIENTS%lib" />
-              <File Id="greenplum_clients_path.bat" Name="greenplum_clients_path.bat" ShortName="BIZGRES1.BAT" Source="$(var.SRCDIR)\greenplum_clients_path.bat" />
+              <File Id="greengage_clients_path.bat" Name="greengage_clients_path.bat" ShortName="BIZGRES1.BAT" Source="$(var.SRCDIR)\greengage_clients_path.bat" />
               <File Id="LICENSE" Name="Pivotal License" ShortName="LICENSE" Source="$(var.SRCDIR)\LICENSE" />
               <File Id="NOTICE" Name="Thirdpary Notice" ShortName="NOTICE" Source="$(var.SRCDIR)\NOTICE" />
               <File Id="VERSION" Name="GPDB Clients Version" ShortName="VERSION" Source="$(var.SRCDIR)\VERSION" />
@@ -1144,10 +1144,10 @@ If you want to review or change any of your installation settings, click Back. C
         </Directory>
       </Directory>
     </Directory>
-    <Media Id="1" Cabinet="greenplumClientTools.cab" EmbedCab="yes" CompressionLevel="mszip" />
-    <Feature Id="Base" Level="1" ConfigurableDirectory="BASEDIR" Title="Greenplum DB Clients" Display="expand" AllowAdvertise="no" Description="Greenplum DB Clients">
+    <Media Id="1" Cabinet="greengageClientTools.cab" EmbedCab="yes" CompressionLevel="mszip" />
+    <Feature Id="Base" Level="1" ConfigurableDirectory="BASEDIR" Title="Greengage DB Clients" Display="expand" AllowAdvertise="no" Description="Greengage DB Clients">
       <ComponentRef Id="TOPLEVELTextFiles" />
-      <Feature Id="psql" Level="1" Title="Greenplum DB client command line tools" Description="Greenplum DB client command line tools" AllowAdvertise="no" Display="expand">
+      <Feature Id="psql" Level="1" Title="Greengage DB client command line tools" Description="Greengage DB client command line tools" AllowAdvertise="no" Display="expand">
         <ComponentRef Id="TOPLEVELbin" />
         <ComponentRef Id="GPPYlib" />
       </Feature>

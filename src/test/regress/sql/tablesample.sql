@@ -42,7 +42,7 @@ FETCH NEXT FROM tablesample_cur;
 FETCH NEXT FROM tablesample_cur;
 FETCH NEXT FROM tablesample_cur;
 
--- Greenplum: Going backwards on cursors is not supported. By closing the
+-- Greengage: Going backwards on cursors is not supported. By closing the
 -- cursor and starting again we pass the tests and keep the file closer to
 -- upstream. We do test the rescan methods of tablesample afterwards.
 CLOSE tablesample_cur;
@@ -71,7 +71,7 @@ select count(*) from person;
 -- check that collations get assigned within the tablesample arguments
 SELECT count(*) FROM test_tablesample TABLESAMPLE bernoulli (('1'::text < '0'::text)::int);
 
--- Greenplum: Test rescan paths by forcing a nested loop
+-- Greengage: Test rescan paths by forcing a nested loop
 CREATE TABLE ttr1 (a int, b int) DISTRIBUTED BY (a);
 CREATE TABLE ttr2 (a int, b int) DISTRIBUTED BY (a);
 INSERT INTO ttr1 VALUES (1, 1), (12, 1), (31, 1), (NULL, NULL);
@@ -112,7 +112,7 @@ select pct, count(unique1) from
   lateral (select * from tenk1 tablesample system (pct)) ss
   group by pct;
 
--- Greenplum: we do have to test min/max pct tests though
+-- Greengage: we do have to test min/max pct tests though
 select 0 as pct, count(*) from tenk1 tablesample bernoulli (0)
 union all
 select 100 as pct, count(*) from tenk1 tablesample bernoulli (100);

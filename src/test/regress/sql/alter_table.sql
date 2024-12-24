@@ -3145,7 +3145,7 @@ select c.relname, r.rolname from pg_class c join pg_roles r on c.relowner = r.oi
 alter table only atown_part owner to atown_r2;
 select c.relname, r.rolname from pg_class c join pg_roles r on c.relowner = r.oid where relname like 'atown_part%';
 
--- please refer to:  https://github.com/greenplum-db/gpdb/issues/15034
+-- please refer to:  https://github.com/GreengageDB/greengage/issues/15034
 create table transform_issue_15034(c DECIMAL);
 alter table transform_issue_15034 alter c SET DEFAULT (((0.1)>(0.9) IS UNKNOWN)::INT)::MONEY;
 drop table transform_issue_15034;
@@ -3160,7 +3160,7 @@ DROP TABLE table_issue_15494;
 CREATE TABLE IF NOT EXISTS table_issue_15494(c0 boolean);
 ALTER TABLE table_issue_15494 ALTER c0 SET DEFAULT ((1.5::FLOAT) NOTNULL);
 DROP TABLE table_issue_15494;
--- please refer to:  https://github.com/greenplum-db/gpdb/issues/16805
+-- please refer to:  https://github.com/GreengageDB/greengage/issues/16805
 create table IF NOT EXISTS float2double_table(c1 float,c2 float,c3 float);
 create index float2double_table_idx_c1c2c3 on float2double_table(c1,c2,c3);
 create unique index float2double_table_uniqidx_c1c2c3 on float2double_table(c1,c2,c3);

@@ -3787,7 +3787,7 @@ create_nestloop_path(PlannerInfo *root,
 	}
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * If we find the join locus is general or segmentgeneral,
 	 * we should check the joinqual, if it contains volatile functions
 	 * we have to turn the join path to singleQE.
@@ -5493,7 +5493,7 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
  * 'offset_est' is the estimated value of the OFFSET expression
  * 'count_est' is the estimated value of the LIMIT expression
  *
- * Greenplum specific change: the return type is changed to Path
+ * Greengage specific change: the return type is changed to Path
  * because at the end of function, we need to check if it is
  * segment general locus and may create other kind of path.
  */
@@ -5533,7 +5533,7 @@ create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 							offset_est, count_est);
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * If the limit path's locus is general or segmentgeneral
 	 * we have to make it singleQE.
 	 */

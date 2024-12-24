@@ -261,7 +261,7 @@ WITH t1 AS (SELECT * FROM ft1 WHERE c1 <= 10) SELECT t2.c1, t2.c2, t2.c3, t2.c4 
 -- fixed values
 SELECT 'fixed', NULL FROM ft1 t1 WHERE c1 = 1;
 -- Test forcing the remote server to produce sorted data for a merge join.
-/* In Greenplum, enable_hashjoin is on by default; enable_nestloop and enable_mergejoin are false by default. */
+/* In Greengage, enable_hashjoin is on by default; enable_nestloop and enable_mergejoin are false by default. */
 SET enable_hashjoin TO false;
 SET enable_nestloop TO false;
 SET enable_mergejoin TO true;
@@ -529,7 +529,7 @@ WITH t (c1_1, c1_3, c2_1) AS MATERIALIZED (SELECT t1.c1, t1.c3, t2.c1 FROM ft1 t
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT t1.ctid, t1, t2, t1.c1 FROM ft1 t1 JOIN ft2 t2 ON (t1.c1 = t2.c1) ORDER BY t1.c3, t1.c1 OFFSET 100 LIMIT 10;
 -- SEMI JOIN, not pushed down
--- In Greenplum, enable_mergejoin is false by default.
+-- In Greengage, enable_mergejoin is false by default.
 SET enable_mergejoin TO true;
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT t1.c1 FROM ft1 t1 WHERE EXISTS (SELECT 1 FROM ft2 t2 WHERE t1.c1 = t2.c1) ORDER BY t1.c1 OFFSET 100 LIMIT 10;
@@ -1111,7 +1111,7 @@ DROP FUNCTION f_test(int);
 CREATE FOREIGN TABLE reindex_foreign (c1 int, c2 int)
   SERVER pgserver2 OPTIONS (table_name 'reindex_local');
 REINDEX TABLE reindex_foreign; -- error
--- In greenplum, REINDEX CONCURRENTLY is not supported.
+-- In greengage, REINDEX CONCURRENTLY is not supported.
 REINDEX TABLE CONCURRENTLY reindex_foreign; -- error
 DROP FOREIGN TABLE reindex_foreign;
 -- partitions and foreign tables
@@ -1122,7 +1122,7 @@ CREATE FOREIGN TABLE reind_fdw_10_20 PARTITION OF reind_fdw_parent
   FOR VALUES FROM (10) TO (20)
   SERVER pgserver OPTIONS (table_name 'reind_local_10_20');
 REINDEX TABLE reind_fdw_parent; -- ok
--- In greenplum, REINDEX CONCURRENTLY is not supported.
+-- In greengage, REINDEX CONCURRENTLY is not supported.
 REINDEX TABLE CONCURRENTLY reind_fdw_parent; -- ok
 DROP TABLE reind_fdw_parent;
 
@@ -1164,7 +1164,7 @@ COMMIT;
 create foreign table ft3 (f1 text collate "C", f2 text, f3 varchar(10))
   server pgserver options (table_name 'loct3', use_remote_estimate 'true');
 -- create table loct3 (f1 text collate "C" unique, f2 text, f3 varchar(10) unique) DISTRIBUTED BY (f1);
--- SQL above in greenplum will report error as follows.
+-- SQL above in greengage will report error as follows.
 -- ERROR:  UNIQUE or PRIMARY KEY definitions are incompatible with each other
 -- So change it to SQL as follows.
 create table loct3 (f1 text collate "C", f2 text, f3 varchar(10)) DISTRIBUTED BY (f1);
@@ -1470,8 +1470,8 @@ UPDATE rw_view SET b = b + 5;
 UPDATE rw_view SET b = b + 5; -- should fail
 EXPLAIN (VERBOSE, COSTS OFF)
 UPDATE rw_view SET b = b + 15;
--- In greenplum, table parent_tbl and foreign_tbl have different data distribution policy.
--- Greenplum don't support update/delete to such table as parent_tbl.
+-- In greengage, table parent_tbl and foreign_tbl have different data distribution policy.
+-- Greengage don't support update/delete to such table as parent_tbl.
 -- So here we disable the SQL below.
 -- UPDATE rw_view SET b = b + 15; -- ok
 SELECT * FROM foreign_tbl;
@@ -1541,7 +1541,7 @@ BEGIN
 	RETURN NULL;
 END;$$;
 
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- CREATE TRIGGER trig_stmt_before BEFORE DELETE OR INSERT OR UPDATE ON rem1
 --	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
@@ -1605,7 +1605,7 @@ update rem1 set f2 = f2 || f2;
 -- cleanup
 DROP TRIGGER trig_row_before ON rem1;
 DROP TRIGGER trig_row_after ON rem1;
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- DROP TRIGGER trig_stmt_before ON rem1;
 -- DROP TRIGGER trig_stmt_after ON rem1;
@@ -1794,7 +1794,7 @@ DROP TRIGGER trig_row_after ON rem1;
 -- Test direct foreign table modification functionality
 
 -- Test with statement-level triggers
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- CREATE TRIGGER trig_stmt_before
 --	BEFORE DELETE OR INSERT OR UPDATE ON rem1
@@ -1805,7 +1805,7 @@ EXPLAIN (verbose, costs off)
 DELETE FROM rem1;                 -- can be pushed down
 -- DROP TRIGGER trig_stmt_before ON rem1;
 
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- CREATE TRIGGER trig_stmt_after
 --	AFTER DELETE OR INSERT OR UPDATE ON rem1
@@ -1897,7 +1897,7 @@ SELECT tableoid::regclass, * FROM a;
 SELECT tableoid::regclass, * FROM b;
 SELECT tableoid::regclass, * FROM ONLY a;
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 UPDATE a SET aa = 'zzzzzz' WHERE aa LIKE 'aaaa%';
@@ -1912,7 +1912,7 @@ SELECT tableoid::regclass, * FROM a;
 SELECT tableoid::regclass, * FROM b;
 SELECT tableoid::regclass, * FROM ONLY a;
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 UPDATE a SET aa = 'newtoo';
@@ -1972,7 +1972,7 @@ explain (verbose, costs off)
 select * from bar where f1 in (select f1 from foo) for share;
 select * from bar where f1 in (select f1 from foo) for share;
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 -- Now check SELECT FOR UPDATE/SHARE with an inherited source table,
@@ -2054,12 +2054,12 @@ RESET enable_mergejoin;
 begin;
 declare c cursor for select * from bar where f1 = 7;
 fetch from c;
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /* update bar set f2 = null where current of c; */
 rollback;
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 explain (verbose, costs off)
@@ -2079,7 +2079,7 @@ CREATE TRIGGER trig_row_after
 AFTER UPDATE OR DELETE ON bar2
 FOR EACH ROW EXECUTE PROCEDURE trigger_data(23,'skidoo');
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 explain (verbose, costs off)
@@ -2119,7 +2119,7 @@ insert into remt2 values (2, 'bar');
 analyze remt1;
 analyze remt2;
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 explain (verbose, costs off)
@@ -2164,8 +2164,8 @@ select tableoid::regclass, * FROM itrtest;
 select tableoid::regclass, * FROM remp1;
 select tableoid::regclass, * FROM remp2;
 
--- In greenplum, table itrtest and remp1(remp2) have different data distribution policy.
--- Greenplum don't support update/delete to such table as itrtest.
+-- In greengage, table itrtest and remp1(remp2) have different data distribution policy.
+-- Greengage don't support update/delete to such table as itrtest.
 -- So here we disable the SQL below.
 /* delete from itrtest; */
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'delete from loct1;'
@@ -2183,8 +2183,8 @@ insert into itrtest values (1, 'bar') on conflict (a) do update set b = excluded
 
 select tableoid::regclass, * FROM itrtest;
 
--- In greenplum, table itrtest and remp1(remp2) have different data distribution policy.
--- Greenplum don't support update/delete to such table as itrtest.
+-- In greengage, table itrtest and remp1(remp2) have different data distribution policy.
+-- Greengage don't support update/delete to such table as itrtest.
 -- So here we disable the SQL below.
 /* delete from itrtest; */
 
@@ -2222,7 +2222,7 @@ drop table itrtest;
 -- drop table loct1;
 -- drop table loct2;
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- SQLs below are disable here.
 /*
 -- Test update tuple routing
@@ -2404,7 +2404,7 @@ alter foreign table rem2 drop constraint rem2_f1positive;
 
 delete from rem2;
 
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- Test local triggers
 /*

@@ -432,7 +432,7 @@ cdbpullup_missingVarWalker(Expr *node, void *targetlist)
 
 	/*
 	 * Should also consider PlaceHolderVar in the targetlist.
-	 * See github issue: https://github.com/greenplum-db/gpdb/issues/10315
+	 * See github issue: https://github.com/GreengageDB/greengage/issues/10315
 	 */
 	if (IsA(node, Var) || IsA(node, PlaceHolderVar))
 	{

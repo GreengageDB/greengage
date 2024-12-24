@@ -7,10 +7,10 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/postgres"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/postgres"
 )
 
 // MakeSegment is an RPC which creates a new segment instance with the specified

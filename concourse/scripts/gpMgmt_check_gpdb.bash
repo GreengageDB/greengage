@@ -18,7 +18,7 @@ function gen_env(){
 		exit 1
 		}
 
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
+		source /usr/local/greengage-db-devel/greengage_path.sh
 		source \${base_path}/gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
 		cd \${base_path}/gpdb_src/gpMgmt/bin
@@ -37,7 +37,7 @@ function setup_gpadmin_user() {
 function _main() {
 
     # Run some of the following commands in a subshell so that they do not
-    # pollute the environment after sourcing greenplum_path.
+    # pollute the environment after sourcing greengage_path.
     (install_and_configure_gpdb)
     setup_gpadmin_user
     (make_cluster)

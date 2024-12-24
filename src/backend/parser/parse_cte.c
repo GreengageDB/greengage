@@ -165,7 +165,7 @@ transformWithClause(ParseState *pstate, WithClause *withClause)
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("only one modifying WITH clause allowed per query"),
-						 errdetail("Greenplum Database currently only support CTEs with one writable clause."),
+						 errdetail("Greengage Database currently only support CTEs with one writable clause."),
 						 errhint("Rewrite the query to only include one writable CTE clause.")));
 
 			pstate->p_hasModifyingCTE = true;

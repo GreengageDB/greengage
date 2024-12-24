@@ -5,9 +5,9 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/greenplum-db/gpdb/gp/constants"
+	"github.com/GreengageDB/greengage/gp/constants"
 
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 func TestLoadServerCredentials(t *testing.T) {

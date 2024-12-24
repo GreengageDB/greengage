@@ -26,7 +26,7 @@
 drop schema if exists join_universal cascade;
 -- end_ignore
 
--- greenplum
+-- greengage
 create schema join_universal;
 set search_path=join_universal;
 set optimizer_trace_fallback=on;

@@ -1,4 +1,4 @@
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2018 VMware, Inc. or its affiliates.
 
 #include "unittest/dxl/CParseHandlerOptimizerConfigSerializeTest.h"

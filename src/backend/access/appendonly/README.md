@@ -1,6 +1,6 @@
 For historical reasons, append-optimized tables are also called
 "append-only". They used to be truly append-only in previous versions
-of Greenplum, but these days they can in fact be updated and deleted
+of Greengage, but these days they can in fact be updated and deleted
 from. The segment files that store the tuples at the storage level are
 append-only - data is never in-place updated or overwritten physically -
 but from a user's point of view, the table can be updated and deleted
@@ -311,8 +311,8 @@ is not less than AORelationVersion_GP7, index only scan is selectable; otherwise
 disabled because we are still working with a gapped block directory which can't be used
 as a source of tuple visibility determination.
 
-[1] https://github.com/greenplum-db/gpdb/commit/258ec966b26929430fc5dc9f6e6fe09854644302
-[2] https://github.com/greenplum-db/gpdb/commit/9d7cfbf62d06cf4825de6589b321c11d7596a947
+[1] https://github.com/GreengageDB/greengage/commit/258ec966b26929430fc5dc9f6e6fe09854644302
+[2] https://github.com/GreengageDB/greengage/commit/9d7cfbf62d06cf4825de6589b321c11d7596a947
 
 # Missing values
 
@@ -353,4 +353,4 @@ corresponding block directory entry that represent their row numbers. This is
 because the block directory describes what is stored in physical blocks. We 
 should not ever need to scan it for the missing values, so we should be fine.
 
-[1] https://github.com/greenplum-db/gpdb/commit/16828d5c0273b4fe5f10f42588005f16b415b2d8
+[1] https://github.com/GreengageDB/greengage/commit/16828d5c0273b4fe5f10f42588005f16b415b2d8

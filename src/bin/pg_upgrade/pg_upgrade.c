@@ -50,7 +50,7 @@
 #include <langinfo.h>
 #endif
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static void prepare_new_cluster(void);
 static void prepare_new_globals(void);
@@ -224,7 +224,7 @@ main(int argc, char **argv)
 	/* -- NEW -- */
 	start_postmaster(&new_cluster, true);
 
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		prepare_new_globals();
 
@@ -241,7 +241,7 @@ main(int argc, char **argv)
 	 */
 	restore_aosegment_tables();
 
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		/* freeze master data *right before* stopping */
 		freeze_master_data();
@@ -262,7 +262,7 @@ main(int argc, char **argv)
 								 old_cluster.pgdata, new_cluster.pgdata);
 
 	/* For non-master segments, uniquify the system identifier. */
-	if (!is_greenplum_dispatcher_mode())
+	if (!is_greengage_dispatcher_mode())
 		reset_system_identifier();
 
 	prep_status("Sync data directory to disk");
@@ -573,7 +573,7 @@ prepare_new_cluster(void)
 	 * AO tables can't be analyzed because their aoseg tuple counts don't match
 	 * those on disk. We therefore skip this step for segments.
 	 */
-	if (is_greenplum_dispatcher_mode())
+	if (is_greengage_dispatcher_mode())
 	{
 		prep_status("Analyzing all rows in the new cluster");
 		exec_prog(UTILITY_LOG_FILE, NULL, true, true,

@@ -59,6 +59,6 @@ then run command `ldconfig`.
    ssh <hostname of your machine>  # e.g., ssh briarwood (You can use `hostname` to get the hostname of your machine.)
    ```
 
-1. Set up your system configuration by following the installation guide on [docs.greenplum.org](https://docs.greenplum.org)
+1. Set up your system configuration by following the installation guide on [docs.greengagedb.org](https://docs.greengagedb.org)
 
 

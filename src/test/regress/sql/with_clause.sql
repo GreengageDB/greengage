@@ -369,8 +369,8 @@ WITH RECURSIVE r1 AS (
 SELECT * FROM r1 LIMIT 1;
 
 -- GPDB
--- Greenplum does not support window functions in recursive part's target list
--- See issue https://github.com/greenplum-db/gpdb/issues/13299 for details.
+-- Greengage does not support window functions in recursive part's target list
+-- See issue https://github.com/GreengageDB/greengage/issues/13299 for details.
 -- Previously the following SQL will PANIC or Assert Fail if compiled with assert.
 create table t_window_ordered_set_agg_rte(a bigint, b bigint, c bigint);
 

@@ -306,7 +306,7 @@ recurse_set_operations(Node *setOp, PlannerInfo *root,
 												 NIL, cdbpathlocus_from_subquery(root, rel, subpath), NULL);
 
 		/*
-		 * Greenplum specific behavior:
+		 * Greengage specific behavior:
 		 * If the path is general or segmentgeneral locus and contains
 		 * volatile target list of havingQual, we should turn it into
 		 * singleQE.
@@ -586,7 +586,7 @@ generate_recursion_path(SetOperationStmt *setOp, PlannerInfo *root,
 
 	/*
 	 * GPDB:
-	 * https://github.com/greenplum-db/gpdb/issues/16772
+	 * https://github.com/GreengageDB/greengage/issues/16772
 	 * If we use union rather than union all we should deduplicate the tuples.
 	 * When the locus of recursive union path is Partitioned,
 	 * It recursive union node only deduplicates the tuples on its segment.

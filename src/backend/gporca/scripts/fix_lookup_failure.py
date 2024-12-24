@@ -12,7 +12,7 @@ import base64
 import hashlib
 
 # the DXL namespace used
-ns = {'dxl': 'http://greenplum.com/dxl/2010/12/'}
+ns = {'dxl': 'http://greengagedb.org/dxl/2010/12/'}
 
 # GPDBScalarOp tags that this program knows how to fix (Mdid is used without such a tag in the MDP)
 # TODO: Add many more such MDIds
@@ -55,7 +55,7 @@ glob_header_to_thread = ""
 glob_xml_comment = ""
 
 def convert_one_mdp(file_path, mdid):
-    et.register_namespace('dxl', 'http://greenplum.com/dxl/2010/12/')
+    et.register_namespace('dxl', 'http://greengagedb.org/dxl/2010/12/')
     xml_parser = et.XMLParser(target=et.TreeBuilder(insert_comments=True))
     tree = et.parse(file_path, xml_parser)
     root = tree.getroot()

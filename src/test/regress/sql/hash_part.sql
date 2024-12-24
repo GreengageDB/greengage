@@ -90,7 +90,7 @@ DROP TABLE mcinthash;
 DROP TABLE text_hashp;
 
 -- Test case for AO Hash partitioning table
--- https://github.com/greenplum-db/gpdb/pull/17280
+-- https://github.com/GreengageDB/greengage/pull/17280
 CREATE TABLE tbl_17280(c0 int) PARTITION BY HASH(c0) WITH (appendonly=true);
 CREATE INDEX idx_17280 ON tbl_17280 USING HASH(c0) WHERE (c0!=0);
 -- should not panic

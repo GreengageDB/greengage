@@ -2,9 +2,9 @@
 #	Filename:-		gp_bash_functions.sh
 #	Status:-		Released
 #	Author:-		G L Coombe (Greenplum)
-#	Contact:-		gcoombe@greenplum.com
+#	Contact:-		support@greengagedb.org
 #	Release date:-		March 2006
-#	Release stat:-		Greenplum Internal
+#	Release stat:-		Greengage Internal
 #                               Copyright (c) Metapa 2005. All Rights Reserved.
 #                               Copyright (c) Greenplum 2005. All Rights Reserved
 #	Brief descn:-		Common functions used by various scripts
@@ -20,13 +20,13 @@ fi
 declare -a CMDPATH
 CMDPATH=(/usr/kerberos/bin /usr/sfw/bin /opt/sfw/bin /usr/local/bin /bin /usr/bin /sbin /usr/sbin /usr/ucb /sw/bin)
 
-#GPPATH is the list of possible locations for the Greenplum Database binaries, in precedence order
+#GPPATH is the list of possible locations for the Greengage Database binaries, in precedence order
 declare -a GPPATH
 GPPATH=( $GPHOME $MPPHOME $BIZHOME )
 if [ ${#GPPATH[@]} -eq 0 ];then
 	echo "[FATAL]:-GPHOME environment variable is required to run GPDB but could not be found."
-	echo "Please set it by sourcing the  greenplum_path.sh  in your GPDB installation directory."
-	echo "Example: ''. /usr/local/gpdb/greenplum_path.sh''"
+	echo "Please set it by sourcing the  greengage_path.sh  in your GPDB installation directory."
+	echo "Example: ''. /usr/local/gpdb/greengage_path.sh''"
 	exit 1
 fi
 
@@ -111,20 +111,20 @@ PROG_PIDNAME=`echo $$ $PROG_NAME | awk '{printf "%06d %s\n", $1, $2}'`
 CALL_HOST=`$HOSTNAME|$CUT -d. -f1`
 
 #******************************************************************************
-# Locate the postgres routines from the Greenplum release
+# Locate the postgres routines from the Greengage release
 #******************************************************************************
 PSQLBIN=`findMppPath`
 
 if [ x"$PSQLBIN" = x"" ];then
-		echo "Problem in gp_bash_functions, command '$GP_UNIQUE_COMMAND' not found in Greenplum path."
-		echo "Try setting GPHOME to the location of your Greenplum distribution."
+		echo "Problem in gp_bash_functions, command '$GP_UNIQUE_COMMAND' not found in Greengage path."
+		echo "Try setting GPHOME to the location of your Greengage distribution."
 		exit 1
 fi
 
 PSQLBIN=`$DIRNAME $PSQLBIN`
 SCRIPTDIR="`$DIRNAME $PSQLBIN`/bin"
 #******************************************************************************
-# Greenplum Scripts
+# Greengage Scripts
 #******************************************************************************
 GPINITSYSTEM=$SCRIPTDIR/gpinitsystem
 GPCONFIG=$SCRIPTDIR/gpconfig
@@ -135,14 +135,14 @@ GPSTATE=$SCRIPTDIR/gpstate
 GPSTOP=$SCRIPTDIR/gpstop
 GPDOCDIR=${GPHOME}/docs/cli_help/
 #******************************************************************************
-# Greenplum Command Variables
+# Greengage Command Variables
 #******************************************************************************
 INITDB=$PSQLBIN/initdb
 PG_CTL=$PSQLBIN/pg_ctl
 PSQL=$PSQLBIN/psql
 
 #******************************************************************************
-# Greenplum OS Settings
+# Greengage OS Settings
 #******************************************************************************
 OS_OPENFILES=65535
 #******************************************************************************
@@ -312,7 +312,7 @@ ERROR_EXIT () {
 		DEBUG_LEVEL=1
 		if [ $BACKOUT_FILE ]; then
 				if [ -s $BACKOUT_FILE ]; then
-						LOG_MSG "[WARN]:-Script has left Greenplum Database in an incomplete state"
+						LOG_MSG "[WARN]:-Script has left Greengage Database in an incomplete state"
 						LOG_MSG "[WARN]:-Run command bash $BACKOUT_FILE on coordinator to remove these changes"
 						$ECHO "$RM -f $BACKOUT_FILE" >> $BACKOUT_FILE
 				fi
@@ -1127,9 +1127,9 @@ CHK_GPDB_ID () {
 		elif [ x$GPDB_GROUPID_CHK == x$COORDINATOR_INITDB_GROUPID ] && [ x"x" == x"$GROUP_EXECUTE" ] ; then
 		    LOG_MSG "[INFO]:-Current group id of $GPDB_GROUPID, matches initdb group id of $COORDINATOR_INITDB_GROUPID"
 		else
-			LOG_MSG "[WARN]:-File permission mismatch.  The $GPDB_ID_CHK owns the Greenplum Database installation directory."
+			LOG_MSG "[WARN]:-File permission mismatch.  The $GPDB_ID_CHK owns the Greengage Database installation directory."
 			LOG_MSG "[WARN]:-You are currently logged in as $COORDINATOR_INITDB_ID and may not have sufficient"
-			LOG_MSG "[WARN]:-permissions to run the Greenplum binaries and management utilities."
+			LOG_MSG "[WARN]:-permissions to run the Greengage binaries and management utilities."
 		fi
 
 		if [ x"" != x"$USER" ];then
@@ -1179,7 +1179,7 @@ SET_GP_USER_PW () {
       --variable=username="$USER_NAME" \
       --variable=password="$GP_PASSWD" <<< "$alter_statement" >> $LOG_FILE 2>&1
 
-    ERROR_CHK $? "update Greenplum superuser password" 1
+    ERROR_CHK $? "update Greengage superuser password" 1
     LOG_MSG "[INFO]:-End Function $FUNCNAME"
 }
 

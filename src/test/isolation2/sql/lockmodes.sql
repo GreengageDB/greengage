@@ -32,7 +32,7 @@ create table t_lockmods1 (c int) distributed randomly;
 
 create table t_lockmods_rep(c int) distributed replicated;
 
--- See github issue: https://github.com/greenplum-db/gpdb/issues/9449
+-- See github issue: https://github.com/GreengageDB/greengage/issues/9449
 -- upsert may lock tuples on segment, so we should upgrade lock level
 -- on QD if GDD is disabled.
 create table t_lockmods_upsert(a int, b int) distributed by (a);
@@ -324,7 +324,7 @@ create table t_lockmods_ao1 (c int) with (appendonly=true) distributed randomly;
 -- For detailed behavior and notes, please refer below
 -- cases's comments.
 -- Details: https://groups.google.com/a/greenplum.org/g/gpdb-dev/c/wAPKpJzhbpM
--- Issue: https://github.com/greenplum-db/gpdb/issues/13652
+-- Issue: https://github.com/GreengageDB/greengage/issues/13652
 1:DROP TABLE IF EXISTS t_lockmods_part_tbl_dml;
 
 1:CREATE TABLE t_lockmods_part_tbl_dml (a int, b int, c int) PARTITION BY RANGE(b) (START(1) END(3) EVERY(1));

@@ -11,9 +11,9 @@ ALTER SYSTEM SET gp_autovacuum_scope = catalog_ao_aux;
 \! gpstop -u;
 20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Starting gpstop with args: -u
 20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Gathering information and validating the environment...
-20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Segment details from coordinator...
-20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.2+dev.73.gda1d38d4d0 build dev'
+20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.2+dev.73.gda1d38d4d0 build dev'
 20230403:14:05:43:574687 gpstop:ajrdevbox:ajr-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
 CREATE TABLE autovac_ao(i int, j int) USING ao_row distributed BY (i);
@@ -88,9 +88,9 @@ ALTER SYSTEM RESET gp_autovacuum_scope;
 \! gpstop -u;
 20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Starting gpstop with args: -u
 20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Gathering information and validating the environment...
-20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Segment details from coordinator...
-20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.2+dev.73.gda1d38d4d0 build dev'
+20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.2+dev.73.gda1d38d4d0 build dev'
 20230403:14:05:50:574748 gpstop:ajrdevbox:ajr-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
 -- clean up database

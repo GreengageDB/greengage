@@ -12,11 +12,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/greenplum-db/gpdb/gp/constants"
+	"github.com/GreengageDB/greengage/gp/constants"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/testutils/exectest"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/testutils/exectest"
 )
 
 var (
@@ -167,7 +167,7 @@ func GenerateDarwinServiceFileContents(process string, gpHome string, serviceNam
 
 func GenerateLinuxServiceFileContents(process string, gpHome string, serviceName string) string {
 	template := `[Unit]
-Description=Greenplum Database management utility %[1]s
+Description=Greengage Database management utility %[1]s
 
 [Service]
 Type=simple

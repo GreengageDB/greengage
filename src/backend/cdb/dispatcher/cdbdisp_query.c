@@ -74,7 +74,7 @@ typedef struct
 } SliceVec;
 
 /*
- * Parameter structure for Greenplum Database Queries
+ * Parameter structure for Greengage Database Queries
  */
 typedef struct DispatchCommandQueryParms
 {

@@ -18,15 +18,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/greenplum-db/gp-common-go-libs/dbconn"
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/idl/mock_idl"
-	"github.com/greenplum-db/gpdb/gp/testutils"
-	"github.com/greenplum-db/gpdb/gp/testutils/exectest"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
+	"github.com/GreengageDB/gp-common-go-libs/dbconn"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/idl/mock_idl"
+	"github.com/GreengageDB/greengage/gp/testutils"
+	"github.com/GreengageDB/greengage/gp/testutils/exectest"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
 )
 
 func init() {
@@ -95,7 +95,7 @@ func TestCreateSegments(t *testing.T) {
 	}
 	hubServer := hub.New(hubConfig, nil)
 
-	segs := []greenplum.Segment{
+	segs := []greengage.Segment{
 		{
 			Port:        1111,
 			DataDir:     "/gpseg0",
@@ -471,7 +471,7 @@ func TestValidateEnvironment(t *testing.T) {
 	}
 	hubServer := hub.New(hubConfig, nil)
 
-	segs := []greenplum.Segment{
+	segs := []greengage.Segment{
 		{
 			Port:        1111,
 			DataDir:     "/gpseg-1",
@@ -956,7 +956,7 @@ func TestSetGpUserPasswd(t *testing.T) {
 	})
 }
 
-func segmentToProto(seg greenplum.Segment) *idl.Segment {
+func segmentToProto(seg greengage.Segment) *idl.Segment {
 	return &idl.Segment{
 		Port:          int32(seg.Port),
 		DataDirectory: seg.DataDir,

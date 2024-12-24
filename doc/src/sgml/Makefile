@@ -26,7 +26,7 @@ top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
 
-# Don't build the upstream HTML docs or man pages in Greenplum.
+# Don't build the upstream HTML docs or man pages in Greengage.
 #all: html man
 all:
 

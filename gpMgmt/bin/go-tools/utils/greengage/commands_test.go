@@ -1,15 +1,15 @@
-package greenplum_test
+package greengage_test
 
 import (
 	"os"
 	"os/exec"
 	"testing"
 
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gp/testutils"
-	"github.com/greenplum-db/gpdb/gp/testutils/exectest"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	"github.com/GreengageDB/greengage/gp/testutils"
+	"github.com/GreengageDB/greengage/gp/testutils/exectest"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
 )
 
 func init() {
@@ -32,7 +32,7 @@ func TestGpCommand(t *testing.T) {
 		expected     string
 	}{
 		{
-			gpCmdOptions: &greenplum.GpStart{
+			gpCmdOptions: &greengage.GpStart{
 				DataDirectory: "gpseg",
 			},
 			expected: `gpHome/bin/gpstart -a -d gpseg`,
@@ -52,7 +52,7 @@ func TestGpCommand(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(GpCommandSuccess)
 		defer utils.ResetSystemFunctions()
 
-		gpCmdOptions := &greenplum.GpStart{
+		gpCmdOptions := &greengage.GpStart{
 			DataDirectory: "gpseg",
 		}
 		out, err := utils.RunExecCommand(gpCmdOptions, "gpHome")
@@ -72,7 +72,7 @@ func TestGpCommand(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(GpCommandFailure)
 		defer utils.ResetSystemFunctions()
 
-		gpCmdOptions := &greenplum.GpStart{
+		gpCmdOptions := &greengage.GpStart{
 			DataDirectory: "gpseg",
 		}
 		out, err := utils.RunExecCommand(gpCmdOptions, "gpHome")

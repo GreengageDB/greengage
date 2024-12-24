@@ -1,5 +1,5 @@
 -- https://gist.github.com/kainwen/df7c0d3149684e1256d31b5c39e02de7#file-gp7-sql
--- This test is included in https://github.com/greenplum-db/gpdb/issues/14982
+-- This test is included in https://github.com/GreengageDB/greengage/issues/14982
 
 -- The test creates an operator that performs absolute value comparisons of the input data.
 -- The operator belongs to a customized btree opfamily 16433, which supports cross-type (20, 23) comparisons.
@@ -16,7 +16,7 @@
 -- incorrect hash join condition and unjustified partition pruning. This fix compares the operator to the
 -- column's opfamily, thence deriving correct properties from the predicates.
 
--- greenplum
+-- greengage
 create schema partition_prune_opfamily;
 set search_path=partition_prune_opfamily;
 SET optimizer_trace_fallback=on;

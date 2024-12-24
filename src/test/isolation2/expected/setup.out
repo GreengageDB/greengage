@@ -5,9 +5,9 @@
 ! gpstop -u;
 20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Starting gpstop with args: -u
 20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Gathering information and validating the environment...
-20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Obtaining Segment details from coordinator...
-20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
+20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.5+dev.40.gba435b5c3b9 build dev'
 20230807:17:11:44:067174 gpstop:tmarbin7MD6R:tmarbin-[INFO]:-Signalling all postmaster processes to reload
 
 create or replace language plpython3u;
@@ -58,7 +58,7 @@ CREATE FUNCTION
 --
 -- pg_ctl_start:
 --
--- Start a specific greenplum segment
+-- Start a specific greengage segment
 --
 -- intentionally separate from pg_ctl() because it needs more information
 --

@@ -26,7 +26,7 @@
  *	  appear in a raw SELECT, though.
  *
  *    N.B. Faster variants of these functions (producing illegible output)
- *         are supplied in outfast.c for use in Greenplum Database serialization.  The
+ *         are supplied in outfast.c for use in Greengage Database serialization.  The
  *         function in this file are intended to produce legible output.
  *
  *-------------------------------------------------------------------------

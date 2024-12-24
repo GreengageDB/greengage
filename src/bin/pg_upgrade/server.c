@@ -13,7 +13,7 @@
 #include "fe_utils/string_utils.h"
 #include "pg_upgrade.h"
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static PGconn *get_db_conn(ClusterInfo *cluster, const char *db_name);
 
@@ -248,7 +248,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 		version_opts = " -c synchronous_standby_names='' --xid_warn_limit=10000000";
 	else
 	{
-		if (is_greenplum_dispatcher_mode())
+		if (is_greengage_dispatcher_mode())
 			version_opts =
 				" -c gp_dbid=1 -c gp_contentid=-1 -c gp_num_contents_in_cluster=1";
 		else

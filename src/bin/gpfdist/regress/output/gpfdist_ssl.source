@@ -60,7 +60,7 @@ CREATE TABLE tbl_on_heap (
             s1 text, s2 text, s3 text, dt timestamp,
             n1 smallint, n2 integer, n3 bigint, n4 decimal,
             n5 numeric, n6 real, n7 double precision);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO tbl_on_heap VALUES
 ('aaa','twoa','shpits','2011-06-01 12:30:30',23,732,834567,45.67,789.123,7.12345,123.456789),
@@ -107,7 +107,7 @@ CREATE TABLE tbl_on_heap2 (
             s1 text, s2 text, s3 text, dt timestamp,
             n1 smallint, n2 integer, n3 bigint, n4 decimal,
             n5 numeric, n6 real, n7 double precision);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP EXTERNAL TABLE IF EXISTS tbl2;
 NOTICE:  foreign table "tbl2" does not exist, skipping
@@ -130,7 +130,7 @@ CREATE TABLE tbl_on_heap (
             s1 text, s2 text, s3 text, dt timestamp,
             n1 smallint, n2 integer, n3 bigint, n4 decimal,
             n5 numeric, n6 real, n7 double precision);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP EXTERNAL TABLE IF EXISTS tbl;
 CREATE EXTERNAL TABLE tbl (s1 text, s2 text, s3 text, dt timestamp,n1 smallint, n2 integer, n3 bigint, n4 decimal, n5 numeric, n6 real, n7 double precision)
@@ -161,7 +161,7 @@ CREATE TABLE tbl_on_heap (
             s1 text, s2 text, s3 text, dt timestamp,
             n1 smallint, n2 integer, n3 bigint, n4 decimal,
             n5 numeric, n6 real, n7 double precision);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP EXTERNAL TABLE IF EXISTS tbl;
 CREATE EXTERNAL TABLE tbl (s1 text, s2 text, s3 text, dt timestamp,n1 smallint, n2 integer, n3 bigint, n4 decimal, n5 numeric, n6 real, n7 double precision)
@@ -180,7 +180,7 @@ CREATE TABLE tbl_on_heap (
             s1 text, s2 text, s3 text, dt timestamp,
             n1 smallint, n2 integer, n3 bigint, n4 decimal,
             n5 numeric, n6 real, n7 double precision);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP EXTERNAL TABLE IF EXISTS tbl;
 CREATE EXTERNAL TABLE tbl (s1 text, s2 text, s3 text, dt timestamp,n1 smallint, n2 integer, n3 bigint, n4 decimal, n5 numeric, n6 real, n7 double precision)
@@ -213,7 +213,7 @@ SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl. effective url: https://localhost:7070/gpfdist_ssl/tbl1.tbl.  (seg0 slice1 172.17.0.2:25432 pid=59537)
 DETAIL:  SSL certificate problem: self signed certificate
 SET verify_gpfdists_cert=off; 
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
 -----+------+--------+--------------------------+----+-----+--------+-------+---------+---------+------------
@@ -252,7 +252,7 @@ SELECT * FROM tbl;
 ERROR:  could not open CA certificate file root.crt: No such file or directory  (seg0 slice1 localhost:7000 pid=23827)
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
@@ -290,7 +290,7 @@ SELECT * FROM tbl;
 
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
@@ -328,7 +328,7 @@ SELECT * FROM tbl;
 
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
@@ -404,7 +404,7 @@ SELECT * FROM tbl;
 
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
@@ -442,7 +442,7 @@ SELECT * FROM tbl;
 
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
@@ -494,7 +494,7 @@ SELECT * FROM tbl;
 
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
  s1  |  s2  |   s3   |            dt            | n1 | n2  |   n3   |  n4   |   n5    |   n6    |     n7     
@@ -547,7 +547,7 @@ SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; SSL certificate problem: self signed certificate  (seg0 slice1 localhost:7000 pid=1504)
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; error:14094410:SSL routines:ssl3_read_bytes:sslv3 alert handshake failure  (seg0 slice1 localhost:7000 pid=1504)
@@ -577,7 +577,7 @@ SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; SSL certificate problem: self signed certificate  (seg0 slice1 localhost:7000 pid=1504)
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; error:14094410:SSL routines:ssl3_read_bytes:sslv3 alert handshake failure  (seg0 slice1 localhost:7000 pid=1504)
@@ -591,7 +591,7 @@ SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; error:14094410:SSL routines:ssl3_read_bytes:sslv3 alert handshake failure  (seg0 slice1 localhost:7000 pid=1504)
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; error:14094410:SSL routines:ssl3_read_bytes:sslv3 alert handshake failure  (seg0 slice1 localhost:7000 pid=1504)
@@ -605,7 +605,7 @@ SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; error:14094418:SSL routines:ssl3_read_bytes:tlsv1 alert unknown ca  (seg0 slice1 localhost:7000 pid=19723)
 -- start_ignore
 SET verify_gpfdists_cert=off;
-WARNING:  verify_gpfdists_cert=off. Greenplum Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
+WARNING:  verify_gpfdists_cert=off. Greengage Database will stop validating the gpfdists SSL certificate for connections between segments and gpfdists
 -- end_ignore
 SELECT * FROM tbl;
 ERROR:  connection with gpfdist failed for "gpfdists://localhost:7070/gpfdist_ssl/tbl1.tbl", effective url: "https://localhost:7070/gpfdist_ssl/tbl1.tbl": ; error:14094418:SSL routines:ssl3_read_bytes:tlsv1 alert unknown ca  (seg0 slice1 localhost:7000 pid=19723)

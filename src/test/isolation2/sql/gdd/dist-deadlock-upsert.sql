@@ -1,4 +1,4 @@
--- See github issue: https://github.com/greenplum-db/gpdb/issues/9449
+-- See github issue: https://github.com/GreengageDB/greengage/issues/9449
 -- insert into t values (x, x) on conflict (a, b) do update set b = yyy.
 -- this kind of statement may lock tuples in segment and may lead to
 -- global deadlock when GDD is enabled.

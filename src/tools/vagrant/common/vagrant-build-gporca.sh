@@ -7,8 +7,8 @@ rm -fr gpos
 rm -fr gporca
 
 pushd ~
-  git clone https://github.com/greenplum-db/gpos
-  git clone https://github.com/greenplum-db/gporca
+  git clone https://github.com/GreengageDB/gpos
+  git clone https://github.com/GreengageDB/gporca
 popd
 
 export CC="ccache cc"

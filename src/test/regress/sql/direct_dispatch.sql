@@ -610,7 +610,7 @@ abort;
 set test_print_direct_dispatch_info=off;
 set allow_system_table_mods=off;
 
--- https://github.com/greenplum-db/gpdb/issues/14887
+-- https://github.com/GreengageDB/greengage/issues/14887
 -- If opno of clause does not belong to opfamily of distributed key,
 -- do not use direct dispatch to resolve wrong result
 create table t_14887(a varchar);

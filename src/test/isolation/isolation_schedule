@@ -9,19 +9,19 @@
 #
 #############################################################
 
-# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greenplum
+# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greengage
 # does not enforce foreign key constraints:
 # fk-contention, fk-partitioned-1, fk-partitioned-2, propagate-lock-delete
 #
-# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greenplum
+# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greengage
 # does not support statement trigger:
 # alter-table-3, create-trigger
 #
-# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greenplum
+# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greengage
 # does not support CREATE INDEX CONCURRENTLY or REINDEX CONCURRENTLY:
 # reindex-concurrently, multiple-cic
 #
-# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greenplum
+# GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: disabled these tests because Greengage
 # does not support serializable transactions:
 # read-only-anomaly-2, read-only-anomaly-3, read-write-unique, read-write-unique-2,
 # read-write-unique-3, read-write-unique-4, simple-write-skew, receipt-report, 
@@ -73,7 +73,7 @@ test: insert-conflict-do-nothing
 test: insert-conflict-do-nothing-2
 test: insert-conflict-do-update
 test: insert-conflict-do-update-2
-# insert-conflict-do-update-3 is disabled related to issue https://github.com/greenplum-db/gpdb/issues/15635
+# insert-conflict-do-update-3 is disabled related to issue https://github.com/GreengageDB/greengage/issues/15635
 #test: insert-conflict-do-update-3
 test: insert-conflict-toast
 test: insert-conflict-specconflict

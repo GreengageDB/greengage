@@ -27,7 +27,7 @@
 drop schema if exists join_union_all cascade;
 NOTICE:  schema "join_union_all" does not exist, skipping
 -- end_ignore
--- greenplum
+-- greengage
 create schema join_union_all;
 set search_path=join_union_all;
 set optimizer_trace_fallback=on;
@@ -35,37 +35,37 @@ set optimizer_trace_fallback=on;
 set optimizer_enable_push_join_below_union_all=on; -- default off
 -- distributed, 1 column, 1k rows
 create table dist_small_1(c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dist_small_1 select generate_series(1,1000);
 -- distributed, 1 column, 1k rows
 create table dist_small_2(c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dist_small_2 select generate_series(1,1000);
 -- distributed, 1 column, 100k rows
 create table dist_large_1(c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dist_large_1 select generate_series(1,100000);
 -- distributed, 1 column, 100k rows
 create table dist_large_2(c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dist_large_2 select generate_series(1,100000);
 -- distributed, 1 column, 100k rows
 create table dist_large_ao(c1 int) with (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dist_large_ao select generate_series(1,100000);
 -- distributed, 1 column, char(4), 1k rows
 create table char_small_1(c1 char(4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into char_small_1 select generate_series(1,1000);
 -- distributed, 1 column, char(3), 100 rows
 create table char_small_2(c1 char(3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into char_small_2 select generate_series(1,100);
 -- distributed, 0 rows
@@ -73,21 +73,21 @@ insert into char_small_2 select generate_series(1,100);
 -- as needed by this test suite to demonstrate the join below union
 -- all alternative
 create table inner_1(cc int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cc' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cc' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- randomly, 10 rows
 create table inner_2(cc int) distributed randomly;
 insert into inner_2 select generate_series(1,10);
 -- distributed, 0 rows
 create table inner_3(cc varchar);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cc' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cc' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- partition table, 2 columns, 100k rows, join on partition key
 CREATE TABLE part (c1 int, c2 int) partition by list(c2) (
 partition part1 VALUES (1, 2, 3, 4), 
 partition part2 VALUES (5, 6, 7), 
 partition part3 VALUES (8, 9, 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO part SELECT i, i%10 FROM generate_series(1, 100000) i;
 -- distribution table, 2 columns, 100k rows, join on distribution key

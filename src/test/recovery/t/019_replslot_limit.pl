@@ -40,8 +40,8 @@ $node_standby->append_conf('postgresql.conf', "primary_slot_name = 'rep1'");
 
 $node_standby->start;
 
-# Greenplum: perform CHECKPOINT just before recording restart_lsn. We need to
-# do this because Greenplum replication slot's restart_lsn is set to whichever
+# Greengage: perform CHECKPOINT just before recording restart_lsn. We need to
+# do this because Greengage replication slot's restart_lsn is set to whichever
 # smaller between the confirmed received lsn and the last checkpoint's redo lsn.
 # Refer commit 055c57d for more context.
 $node_primary->safe_psql('postgres', "CHECKPOINT;");
@@ -75,8 +75,8 @@ is($result, "reserved|t", 'check that slot is working');
 # The standby can reconnect to primary
 $node_standby->start;
 
-# Greenplum: perform CHECKPOINT just before recording restart_lsn. We need to
-# do this because Greenplum replication slot's restart_lsn is set to whichever
+# Greengage: perform CHECKPOINT just before recording restart_lsn. We need to
+# do this because Greengage replication slot's restart_lsn is set to whichever
 # smaller between the confirmed received lsn and the last checkpoint's redo lsn.
 # Refer commit 055c57d for more context.
 $node_primary->safe_psql('postgres', "CHECKPOINT;");
@@ -107,8 +107,8 @@ is($result, "reserved", 'check that safe_wal_size gets close to the current LSN'
 
 # The standby can reconnect to primary
 $node_standby->start;
-# Greenplum: perform CHECKPOINT just before recording restart_lsn. We need to
-# do this because Greenplum replication slot's restart_lsn is set to whichever
+# Greengage: perform CHECKPOINT just before recording restart_lsn. We need to
+# do this because Greengage replication slot's restart_lsn is set to whichever
 # smaller between the confirmed received lsn and the last checkpoint's redo lsn.
 # Refer commit 055c57d for more context.
 $node_primary->safe_psql('postgres', "CHECKPOINT;");
@@ -127,8 +127,8 @@ $result = $node_primary->safe_psql('postgres', "ALTER SYSTEM SET wal_keep_size t
 
 # The standby can reconnect to primary
 $node_standby->start;
-# Greenplum: perform CHECKPOINT just before recording restart_lsn. We need to
-# do this because Greenplum replication slot's restart_lsn is set to whichever
+# Greengage: perform CHECKPOINT just before recording restart_lsn. We need to
+# do this because Greengage replication slot's restart_lsn is set to whichever
 # smaller between the confirmed received lsn and the last checkpoint's redo lsn.
 # Refer commit 055c57d for more context.
 $node_primary->safe_psql('postgres', "CHECKPOINT;");
@@ -251,9 +251,9 @@ $node_primary->stop('immediate');
 $node_standby->stop('immediate');
 
 my $node_primary2 = PostgreSQL::Test::Cluster->new('primary2');
-# Greenplum: explicitly set --wal-segsize=16, otherwise test will fail
+# Greengage: explicitly set --wal-segsize=16, otherwise test will fail
 # with `"min_wal_size" must be at least twice "wal_segment_size"`` as
-# Greenplum's default wal_segment_size is 64 MB
+# Greengage's default wal_segment_size is 64 MB
 $node_primary2->init(allows_streaming => 1, extra => ['--wal-segsize=16']);
 $node_primary2->append_conf(
 	'postgresql.conf', qq(

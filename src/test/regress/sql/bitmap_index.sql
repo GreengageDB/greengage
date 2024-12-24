@@ -400,7 +400,7 @@ DROP TABLE test_bmsparse;
 
 
 -- test the scenario that we need read the same batch words many times
--- more detials can be found at https://github.com/greenplum-db/gpdb/issues/13446
+-- more detials can be found at https://github.com/GreengageDB/greengage/issues/13446
 SET enable_seqscan = OFF;
 SET enable_bitmapscan = OFF;
 

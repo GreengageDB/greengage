@@ -350,7 +350,7 @@ select sum(distinct a) filter (where a in (select x from dqa_f2 where x = a)), s
 
 select count(distinct a) filter (where a > 3),count( distinct b) filter (where a > 4), sum(distinct b) filter( where a > 4) from dqa_f1;
 
--- fix hang of multi-dqa with filter (https://github.com/greenplum-db/gpdb/issues/14728)
+-- fix hang of multi-dqa with filter (https://github.com/GreengageDB/greengage/issues/14728)
 select count(distinct a) filter (where a > 3), count(distinct b) from dqa_f1;
 
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
@@ -366,7 +366,7 @@ explain select sum(distinct a) filter (where a in (select x from dqa_f2 where x 
 explain select count(distinct a) filter (where a > 3),count( distinct b) filter (where a > 4), sum(distinct b) filter( where a > 4) from dqa_f1;
 
 -- MultiDQA with filter (enable_hashagg = off)
--- Related issue: https://github.com/greenplum-db/gpdb/issues/14728#issuecomment-1422341729
+-- Related issue: https://github.com/GreengageDB/greengage/issues/14728#issuecomment-1422341729
 set enable_hashagg = off;
 set enable_groupagg = on;
 

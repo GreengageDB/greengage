@@ -1030,7 +1030,7 @@ PostmasterMain(int argc, char *argv[])
 	 * If gp_role is not set, use utility role instead.
 	 *
 	 * A single node coordinator or segment is set to utility, which is not
-	 * before Greenplum 7.
+	 * before Greengage 7.
 	 */
 	if (Gp_role == GP_ROLE_UNDEFINED)
 		SetConfigOption("gp_role", "utility", PGC_POSTMASTER, PGC_S_DYNAMIC_DEFAULT);

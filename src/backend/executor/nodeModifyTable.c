@@ -2428,14 +2428,14 @@ ExecModifyTable(PlanState *pstate)
 	/*
 	 * Check cdbcomponent_allocateIdleQE()
 	 *
-	 * In some cases Greenplum has more than one QE on on segment writing the
+	 * In some cases Greengage has more than one QE on on segment writing the
 	 * external data via foreign tables.
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE && !Gp_is_writer &&
 		resultRelInfo->ri_RelationDesc->rd_rel->relkind != RELKIND_FOREIGN_TABLE)
 	{
 		/*
-		 * Current Greenplum MPP architecture only support one writer gang, and
+		 * Current Greengage MPP architecture only support one writer gang, and
 		 * only writer gang can execute DML nodes. There is no code path to reach
 		 * here. For writable CTE case as below:
 		 *

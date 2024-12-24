@@ -91,7 +91,7 @@ CREATE TABLE ctas_dst as SELECT col1,col3,col4,col5 FROM ctas_src order by 1;
 -- This will fail to find some of the rows, if they're distributed incorrectly.
 SELECT * FROM ctas_src, ctas_dst WHERE ctas_src.col1 = ctas_dst.col1;
 
--- Github Issue 9365: https://github.com/greenplum-db/gpdb/issues/9365
+-- Github Issue 9365: https://github.com/GreengageDB/greengage/issues/9365
 -- Previously, the following CTAS case miss dispatching OIDs to QEs, which leads to
 -- errors.
 CREATE OR REPLACE FUNCTION array_unnest_2d_to_1d(
@@ -162,7 +162,7 @@ drop table t2_github_issue_10760;
 reset optimizer;
 
 -- CTAS with no data will not lead to catalog inconsistent
--- See github issue: https://github.com/greenplum-db/gpdb/issues/11999
+-- See github issue: https://github.com/GreengageDB/greengage/issues/11999
 create or replace function mv_action_select_issue_11999() returns bool language sql as
 'declare c cursor for select 1/0; select true';
 

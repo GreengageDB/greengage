@@ -1,5 +1,5 @@
 ## ----------------------------------------------------------------------
-## Travis CI build script for Greenplum Database Open Source Project.
+## Travis CI build script for Greengage Database Open Source Project.
 ## ----------------------------------------------------------------------
 
 language: cpp
@@ -233,7 +233,7 @@ script:
             $C
         travis_wait 50 make -s
         make -s install
-        source ${TRAVIS_BUILD_DIR}/gpsql/greenplum_path.sh
+        source ${TRAVIS_BUILD_DIR}/gpsql/greengage_path.sh
         if [ -z "$tests" ] || [ "$tests" = "unit" ]; then
             make -s unittest-check
         fi
@@ -267,7 +267,7 @@ script:
             $C
         travis_wait 50 make -s
         make -s install
-        source ${TRAVIS_BUILD_DIR}/gpsql/greenplum_path.sh
+        source ${TRAVIS_BUILD_DIR}/gpsql/greengage_path.sh
         make -s unittest-check
         make -C gpAux/gpdemo cluster
         source gpAux/gpdemo/gpdemo-env.sh
@@ -299,12 +299,12 @@ script:
             $C
         travis_wait 40 make -s
         make -s install
-        source ${TRAVIS_BUILD_DIR}/gpsql/greenplum_path.sh
+        source ${TRAVIS_BUILD_DIR}/gpsql/greengage_path.sh
         make -s unittest-check
       fi
 
 after_script:
   - ccache --show-stats
-  - source ${TRAVIS_BUILD_DIR}/gpsql/greenplum_path.sh
+  - source ${TRAVIS_BUILD_DIR}/gpsql/greengage_path.sh
   - postgres --version
   - gpssh --version

@@ -690,7 +690,7 @@ setcpulimit_v2(Oid group, int cpu_hard_limit)
  * our cpu_weight, which default value is 100, so we need to adjust it.
  *
  * The weight in the range [1, 10000], so the cpu_weight is in range [1, 976.5625].
- * In Greenplum, we define the range [1, 500].
+ * In Greengage, we define the range [1, 500].
  */
 static void
 setcpuweight_v2(Oid group, int shares)

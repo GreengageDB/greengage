@@ -115,7 +115,7 @@ test: privileges
 test: init_privs
 test: security_label
 test: collate
-# MATERIALIZED_VIEW_FIXME : matview is not supported on greenplum. Enable the test when the feature is ready.
+# MATERIALIZED_VIEW_FIXME : matview is not supported on greengage. Enable the test when the feature is ready.
 #test: matview
 test: lock
 test: replica_identity

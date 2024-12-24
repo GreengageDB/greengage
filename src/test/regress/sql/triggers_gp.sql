@@ -1,7 +1,7 @@
 --
 -- Extra GPDB tests for triggers
 --
--- We generally claim that triggers are not supported in Greenplum, period.
+-- We generally claim that triggers are not supported in Greengage, period.
 -- But row-level AFTER triggers actually do work to some extent, even though
 -- we've never documented how exactly they behave. This file covers those
 -- cases.
@@ -12,7 +12,7 @@
 -- This file aims to cover the things that behave sanely, even though we don't
 -- officially support anything to do with triggers.
 --
--- Even though we claim that triggers are not supported in Greenplum, users
+-- Even though we claim that triggers are not supported in Greengage, users
 -- were still allowed to create them. As such, restoring from GP6 that has
 -- triggers will cause issues; we now have a new GUC gp_enable_statement_trigger
 -- to let pg_restore by pass this issue and create the trigger anyway.

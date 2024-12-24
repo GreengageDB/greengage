@@ -4,21 +4,21 @@
 --
 -- create required tables
 CREATE TABLE CHAR_STRINGS_TBL(f1 char(4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO CHAR_STRINGS_TBL (f1) VALUES ('a'),
 ('ab'),
 ('abcd'),
 ('abcd    ');
 CREATE TABLE VARCHAR_STRINGS_TBL(f1 varchar(4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO VARCHAR_STRINGS_TBL (f1) VALUES ('a'),
 ('ab'),
 ('abcd'),
 ('abcd    ');
 CREATE TABLE TEXT_STRINGS_TBL (f1 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TEXT_STRINGS_TBL VALUES ('doh!'),
 ('hi de ho neighbor');
@@ -1332,7 +1332,7 @@ SELECT text 'text' || varchar ' and varchar' AS "Concat text to varchar";
 -- test substr with toasted text values
 --
 CREATE TABLE toasttest(f1 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into toasttest values(repeat('1234567890',10000));
 insert into toasttest values(repeat('1234567890',10000));
@@ -1414,7 +1414,7 @@ DROP TABLE toasttest;
 -- test substr with toasted bytea values
 --
 CREATE TABLE toasttest(f1 bytea);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into toasttest values("decode"(repeat('1234567890',10000),'escape'));
 insert into toasttest values(pg_catalog.decode(repeat('1234567890',10000),'escape'));
@@ -1468,7 +1468,7 @@ DROP TABLE toasttest;
 -- datum must be given a 4-byte header because there are no bits to indicate
 -- compression in a 1-byte header
 CREATE TABLE toasttest (c char(4096));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO toasttest VALUES('x');
 SELECT length(c), c::text FROM toasttest;

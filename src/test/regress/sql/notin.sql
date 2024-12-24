@@ -433,7 +433,7 @@ select * from table_source4 where c3 = 'INC' and c4 = '0000000001' and c2 not in
 
 --
 -- Multi Column NOT-IN
--- Please refer to https://github.com/greenplum-db/gpdb/issues/12930
+-- Please refer to https://github.com/GreengageDB/greengage/issues/12930
 --
 create table t1_12930(a int not null, b int not null);
 create table t2_12930(a int not null, b int not null);
@@ -515,7 +515,7 @@ select * from r1_12930
 inner join t1_12930 on a = x
 where (x, b) not in (select a,b from t2_12930);
 
--- test for issue https://github.com/greenplum-db/gpdb/issues/13212
+-- test for issue https://github.com/GreengageDB/greengage/issues/13212
 create table t1_13212(a int not null, b int not null);
 create table t2_13212(a int not null, b int not null);
 explain (costs off)  select 1 from t1_13212 where (NULL, b) not in (select a, b from t2_13212);

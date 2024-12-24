@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
     Objective: Given a table with multiple indexes, if a scan hint is used
     specifying an index (e.g. our_incredible_index), then that's the index that

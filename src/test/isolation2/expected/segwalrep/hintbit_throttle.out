@@ -113,9 +113,9 @@ SELECT wait_until_all_segments_synchronized();
 -- start_ignore
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Starting gpstop with args: -u
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Gathering information and validating the environment...
-20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Obtaining Segment details from coordinator...
-20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-beta.1+dev.82.g0281df93bb6 build dev'
+20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-beta.1+dev.82.g0281df93bb6 build dev'
 20230428:13:32:51:1967400 gpstop:station6:pivotal-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

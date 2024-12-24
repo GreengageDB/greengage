@@ -18,7 +18,7 @@ sudo yum install -y python3-pip
 # These dependencies are installed by `yum install`
 # pip3 install -r python-dependencies.txt
 
-#For all Greenplum Database host systems running RHEL, CentOs or Rocky8, SELinux must either be Disabled or configured to allow unconfined access to Greenplum processes, directories, and the gpadmin user.
+#For all Greengage Database host systems running RHEL, CentOs or Rocky8, SELinux must either be Disabled or configured to allow unconfined access to Greengage processes, directories, and the gpadmin user.
 setenforce 0
 sudo tee -a /etc/selinux/config << EOF
 SELINUX=disabled
@@ -31,7 +31,7 @@ EOF
 
 sudo systemctl stop firewalld.service
 
-#Configure kernel settings so the system is optimized for Greenplum Database.
+#Configure kernel settings so the system is optimized for Greengage Database.
 sudo tee -a /etc/sysctl.d/10-gpdb.conf << EOF
 kernel.msgmax = 65536
 kernel.msgmnb = 65536

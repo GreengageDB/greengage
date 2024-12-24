@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 Objective: Should generate a plan with bitmap scans on all 3 partitions of different types. It must NOT generate an index scan, since index scans are not supported on AO tables
 create table t ( a int, b int)

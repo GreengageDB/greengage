@@ -12,10 +12,10 @@ ssh -n cdw "
     set -eux -o pipefail
 
     export PATH=/usr/local/go/bin:\$PATH
-    source /usr/local/greenplum-db-devel/greenplum_path.sh
+    source /usr/local/greengage-db-devel/greengage_path.sh
 
     chmod +x gp
-    gpsync -f /tmp/hostfile_all gp =:/usr/local/greenplum-db-devel/bin/gp
+    gpsync -f /tmp/hostfile_all gp =:/usr/local/greengage-db-devel/bin/gp
     cd /home/gpadmin/gpdb_src/gpMgmt/bin/go-tools
     ./ci/scripts/generate_ssl_cert_multi_host.bash
 

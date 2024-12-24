@@ -6,7 +6,7 @@
  *	Copyright (c) 2017-Present, VMware, Inc. or its affiliates.
  */
 
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 
 #include <time.h>
 

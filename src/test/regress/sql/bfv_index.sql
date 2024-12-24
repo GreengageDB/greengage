@@ -42,7 +42,7 @@ update pg_index set indisvalid=false where indrelid='bfv_tab1_with_invalid_index
 reset allow_system_table_mods;
 explain select * from bfv_tab1_with_invalid_index where unique1>42;
 -- Cannot currently upgrade table with invalid index
--- (see https://github.com/greenplum-db/gpdb/issues/10805).
+-- (see https://github.com/GreengageDB/greengage/issues/10805).
 drop table bfv_tab1_with_invalid_index;
 
 reset gp_enable_relsize_collection;

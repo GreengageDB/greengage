@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbvars.h
- *	  definitions for Greenplum-specific global variables
+ *	  definitions for Greengage-specific global variables
  *
  * Portions Copyright (c) 2003-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -24,7 +24,7 @@
 #include "catalog/gp_segment_configuration.h" /* COORDINATOR_CONTENT_ID */
 
 /*
- * ----- Declarations of Greenplum-specific global variables ------
+ * ----- Declarations of Greengage-specific global variables ------
  */
 
 #define WRITER_IS_MISSING_MSG "reader could not find writer proc entry"
@@ -89,7 +89,7 @@ extern bool Gp_is_writer;
 /* Parameter gp_session_id
  *
  * This run time parameter indicates a unique id to identify a particular user
- * session throughout the entire Greenplum array.
+ * session throughout the entire Greengage array.
  */
 extern int gp_session_id;
 #define InvalidGpSessionId	(-1)
@@ -498,7 +498,7 @@ extern int gp_log_fts;
 extern int gp_log_interconnect;
 
 /* --------------------------------------------------------------------------------------------------
- * Greenplum Optimizer GUCs
+ * Greengage Optimizer GUCs
  */
 
 /*
@@ -576,7 +576,7 @@ extern bool gp_selectivity_damping_sigsort;
 /*
  * "gp_enable_agg_distinct"
  *
- * May Greenplum redistribute on the argument of a lone aggregate distinct in
+ * May Greengage redistribute on the argument of a lone aggregate distinct in
  * order to use 2-phase aggregation?
  *
  * The code does uses planner estimates to decide whether to use this feature,
@@ -587,7 +587,7 @@ extern bool gp_enable_agg_distinct;
 /*
  * "gp_enable_agg_distinct_pruning"
  *
- * May Greenplum use grouping in the first phases of 3-phase aggregation to
+ * May Greengage use grouping in the first phases of 3-phase aggregation to
  * prune values from DISTINCT-qualified aggregate function arguments?
  *
  * The code uses planner estimates to decide whether to use this feature,
@@ -595,7 +595,7 @@ extern bool gp_enable_agg_distinct;
  */
 extern bool gp_enable_dqa_pruning;
 
-/* May Greenplum apply Unique operator (and possibly a Sort) in parallel prior
+/* May Greengage apply Unique operator (and possibly a Sort) in parallel prior
  * to the collocation motion for a Unique operator?  The idea is to reduce
  * the number of rows moving over the interconnect.
  *
@@ -605,7 +605,7 @@ extern bool gp_enable_dqa_pruning;
  */
 extern bool gp_enable_preunique;
 
-/* May Greenplum dump statistics for all segments as a huge ugly string
+/* May Greengage dump statistics for all segments as a huge ugly string
  * during EXPLAIN ANALYZE?
  *
  */
@@ -616,7 +616,7 @@ extern bool gp_enable_explain_allstat;
  */
 extern int explain_memory_verbosity;
 
-/* May Greenplum restrict ORDER BY sorts to the first N rows if the ORDER BY
+/* May Greengage restrict ORDER BY sorts to the first N rows if the ORDER BY
  * is wrapped by a LIMIT clause (where N=OFFSET+LIMIT)?
  *
  * The code does not currently use planner estimates for this.  If enabled,

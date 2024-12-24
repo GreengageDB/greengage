@@ -80,16 +80,16 @@ run_resgroup_icw_test() {
 		done
 		exit 1
 	}
-        source /usr/local/greenplum-db-devel/greenplum_path.sh
+        source /usr/local/greengage-db-devel/greengage_path.sh
         export LDFLAGS="-L\${GPHOME}/lib"
         export CPPFLAGS="-I\${GPHOME}/include"
         export BLDWRAP_POSTGRES_CONF_ADDONS=${BLDWRAP_POSTGRES_CONF_ADDONS}
 
         cd /home/gpadmin/gpdb_src
-        sed -i 's/explain_format//g' src/test/regress/greenplum_schedule
-        sed -i '/resource_manager_switch/,/resource_manager_restore/d' src/test/regress/greenplum_schedule
+        sed -i 's/explain_format//g' src/test/regress/greengage_schedule
+        sed -i '/resource_manager_switch/,/resource_manager_restore/d' src/test/regress/greengage_schedule
         echo>src/test/isolation2/isolation2_resqueue_schedule
-        ./configure --prefix=/usr/local/greenplum-db-devel --disable-orca --enable-gpfdist \
+        ./configure --prefix=/usr/local/greengage-db-devel --disable-orca --enable-gpfdist \
          --enable-gpcloud --enable-orafce --enable-tap-tests \
          --with-gssapi --with-libxml --with-openssl --with-perl --with-python \
          --with-uuid=e2fs --with-llvm --with-zstd PYTHON=python3.11 PKG_CONFIG_PATH="${GPHOME}/lib/pkgconfig" ${CONFIGURE_FLAGS}

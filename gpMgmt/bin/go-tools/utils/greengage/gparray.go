@@ -1,4 +1,4 @@
-package greenplum
+package greengage
 
 import (
 	"errors"
@@ -7,10 +7,10 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	"github.com/greenplum-db/gp-common-go-libs/dbconn"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/gp-common-go-libs/dbconn"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 type Segment struct {

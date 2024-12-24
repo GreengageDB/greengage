@@ -144,9 +144,9 @@ ALTER SYSTEM RESET autovacuum;
 \! gpstop -u;
 20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Starting gpstop with args: -u
 20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Gathering information and validating the environment...
-20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Obtaining Segment details from coordinator...
-20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.18102.g5fee1f1ac9 build dev'
+20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.18102.g5fee1f1ac9 build dev'
 20230222:13:14:00:121401 gpstop:ajrdevbox:ajr-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
 \c regression

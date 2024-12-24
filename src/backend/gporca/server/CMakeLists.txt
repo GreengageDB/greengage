@@ -546,9 +546,9 @@ add_orca_test(CBucketTest)
 add_orca_test(CHistogramTest)
 add_orca_test(CMCVTest)
 add_orca_test(CJoinCardinalityTest)
-# FIXME: the following test was first introduced in greenplum-db/gporca#360,
-# reverted in greenplum-db/gporca#442, and re-added in
-# greenplum-db/gporca#506 (NOT! because only the CMakeLists.txt part was
+# FIXME: the following test was first introduced in greengage-db/gporca#360,
+# reverted in greengage-db/gporca#442, and re-added in
+# greengage-db/gporca#506 (NOT! because only the CMakeLists.txt part was
 # added back). Resurrect this.
 if (FALSE)
 add_orca_test(CJoinCardinalityNDVBasedEqPredTest)

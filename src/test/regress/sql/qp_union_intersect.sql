@@ -723,7 +723,7 @@ select * from t_test_append_hash;
 -- gp_execution_segment() = <some segid> the filter segid is randomly picked.
 -- So the result plan's direct dispatch info is also random. We print the plan
 -- and ignore it for better debugging info if error happens.
--- See github issue https://github.com/greenplum-db/gpdb/issues/9874 for details.
+-- See github issue https://github.com/GreengageDB/greengage/issues/9874 for details.
 
 create table t_github_issue_9874 (a int) distributed by (a);
 -- start_ignore
@@ -768,7 +768,7 @@ select * from generate_series(100, 105);
 --
 -- We used to have a bug in creation of MergeAppend paths, so that this failed
 -- with "could not find pathkey item to sort" error.  See
--- https://github.com/greenplum-db/gpdb/issues/5695
+-- https://github.com/GreengageDB/greengage/issues/5695
 --
 create table mergeappend_test ( a int, b int, x int ) distributed by (a,b);
 insert into mergeappend_test select g/100, g/100, g from generate_series(1, 500) g;
@@ -789,7 +789,7 @@ order by 1,2;
 
 -- This used to trip an assertion in MotionStateFinderWalker(), when we were
 -- missing support for MergeAppend in planstate_walk_kids().
--- (https://github.com/greenplum-db/gpdb/issues/6668)
+-- (https://github.com/GreengageDB/greengage/issues/6668)
 select a, b, array_dims(array_agg(x)) from mergeappend_test r group by a, b
 union all
 select null, null, array_dims(array_agg(x)) FROM mergeappend_test r, pg_sleep(0)

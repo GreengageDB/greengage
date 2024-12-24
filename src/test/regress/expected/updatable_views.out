@@ -809,7 +809,7 @@ $$
 LANGUAGE plpgsql;
 CREATE TRIGGER rw_view1_ins_trig INSTEAD OF INSERT ON rw_view1
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
  WHERE table_name LIKE 'rw_view%'
@@ -846,7 +846,7 @@ SELECT table_name, column_name, is_updatable
 
 CREATE TRIGGER rw_view1_upd_trig INSTEAD OF UPDATE ON rw_view1
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
  WHERE table_name LIKE 'rw_view%'
@@ -883,7 +883,7 @@ SELECT table_name, column_name, is_updatable
 
 CREATE TRIGGER rw_view1_del_trig INSTEAD OF DELETE ON rw_view1
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
  WHERE table_name LIKE 'rw_view%'
@@ -2013,7 +2013,7 @@ LANGUAGE plpgsql;
 CREATE TRIGGER rw_view1_trig
   INSTEAD OF INSERT OR UPDATE OR DELETE ON rw_view1
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 CREATE VIEW rw_view2 AS
   SELECT * FROM rw_view1 WHERE a > 0 WITH LOCAL CHECK OPTION;
 INSERT INTO rw_view2 VALUES (-5); -- should fail
@@ -2022,8 +2022,8 @@ DETAIL:  Failing row contains (-5, null).
 INSERT INTO rw_view2 VALUES (5); -- ok
 INSERT INTO rw_view2 VALUES (50); -- ok, but not in view
 UPDATE rw_view2 SET a = a - 10; -- should fail
--- Greenplum doesn't fail because nothing was inserted into view, which is
--- because Greenplum doesn't support INSTEAD OF triggers.
+-- Greengage doesn't fail because nothing was inserted into view, which is
+-- because Greengage doesn't support INSTEAD OF triggers.
 SELECT * FROM base_tbl;
  a  | b 
 ----+---
@@ -3125,7 +3125,7 @@ $$
 language plpgsql;
 create trigger base_tab_def_view_instrig instead of insert on base_tab_def_view
   for each row execute function base_tab_def_view_instrig_func();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 truncate base_tab_def;
 insert into base_tab_def values (1);
 insert into base_tab_def values (2), (3);

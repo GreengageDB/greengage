@@ -16,11 +16,11 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/greenplum-db/gp-common-go-libs/dbconn"
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/idl"
+	"github.com/GreengageDB/gp-common-go-libs/dbconn"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/idl"
 )
 
 type MockPlatform struct {

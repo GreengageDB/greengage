@@ -175,7 +175,7 @@ insert into test values (1, 1, 1);
 2q:
 
 -- test ORCA partition table
--- related github issue https://github.com/greenplum-db/gpdb/issues/14935
+-- related github issue https://github.com/GreengageDB/greengage/issues/14935
 create table test(a int, b int, c int) partition by range(b) (start (1) end (7) every (3));
 insert into test values (1, 1, 1), (1, 2, 1);
 1: begin;
@@ -198,7 +198,7 @@ insert into test values (1, 1, 1), (1, 2, 1);
 -- to follow the update link to fetch the new tuple. The
 -- other transaction should raise error for such case.
 -- the following case should be tested with GDD enabled.
--- See github issue: https://github.com/greenplum-db/gpdb/issues/8919
+-- See github issue: https://github.com/GreengageDB/greengage/issues/8919
 
 0:create table t_splitupdate_raise_error (a int, b int) distributed by (a);
 0:insert into t_splitupdate_raise_error values (1, 1);

@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2011 EMC Corp.
 //
 //	@filename:
@@ -1610,7 +1610,7 @@ CTranslatorExprToDXL::PdxlnDynamicIndexScan(
 	// TODO: we assume that the index are always forward access for partition
 	// tables as ORCA currently doesn't support backward scans on partition
 	// tables.
-	// Related Github Issue: https://github.com/greenplum-db/gpdb/issues/16237
+	// Related Github Issue: https://github.com/GreengageDB/greengage/issues/16237
 	CDXLNode *pdxlnDIS = nullptr;
 	if (indexOnly)
 	{

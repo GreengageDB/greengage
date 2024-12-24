@@ -396,7 +396,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 		config->honor_order_by = false;
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * config->may_rescan is used to guide if
 	 * we should add materialize path over motion
 	 * in the left tree of a join.
@@ -422,7 +422,7 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 	best_path = get_cheapest_fractional_path(final_rel, tuple_fraction);
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Here we only need to handle general locus path,
 	 * segmentgeneral is correct because of later processing.
 	 * If we find that it is a general locus path that
@@ -1931,7 +1931,7 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	 * Those clauses could be throwed in correlated and uncorrelated sublinks,
 	 * it will not change the correctness of the results, except windowClause.
 	 *
-	 * Because Greenplum will try to simplify the EXISTS sublink that has Window
+	 * Because Greengage will try to simplify the EXISTS sublink that has Window
 	 * Function Node, if we just drop windowClause but not drop WindowFunc node
 	 * for a window agg, it'll cause inconsistent and error will happend.
 	 */

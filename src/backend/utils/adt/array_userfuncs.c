@@ -866,7 +866,7 @@ array_agg_deserialize(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(result);
 }
 
-/* Greenplum Database Additions: */
+/* Greengage Database Additions: */
 
 
 /*-----------------------------------------------------------------------------

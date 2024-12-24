@@ -1,4 +1,4 @@
--- Test the Greenplum 'gp_%' system views
+-- Test the Greengage 'gp_%' system views
 
 -- Select the 'pg_%' system views that do not have a 'gp_%' counterpart.
 -- This serves as a boundary-checking test for any missing 'pg_%' system view

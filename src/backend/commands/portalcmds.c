@@ -122,7 +122,7 @@ PerformCursorOpen(DeclareCursorStmt *cstmt, ParamListInfo params,
 	{
 		/*ereport(ERROR,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("scrollable cursors are not yet supported in Greenplum Database")));*/
+				 errmsg("scrollable cursors are not yet supported in Greengage Database")));*/
 
 		cstmt->options -= CURSOR_OPT_SCROLL;
 	}
@@ -503,7 +503,7 @@ PersistHoldablePortal(Portal portal)
 		 * the offset between the holdStore and the cursor's nominal position
 		 * explicitly.
 		 *
-		 * Greenplum doesn't allow scanning backwards in MPP! skip this call
+		 * Greengage doesn't allow scanning backwards in MPP! skip this call
 		 * and skip the reset position call few lines down.
 		 */
 		if (portal->cursorOptions & CURSOR_OPT_SCROLL && Gp_role == GP_ROLE_UTILITY)

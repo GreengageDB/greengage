@@ -11,12 +11,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 var (
@@ -115,7 +115,7 @@ ValidatePgVersionFn gets current version of gpdb and compares with version from 
 returns error if version do not match.
 */
 func ValidatePgVersionFn(expectedVersion string, gpHome string) error {
-	localPgVersion, err := greenplum.GetPostgresGpVersion(gpHome)
+	localPgVersion, err := greengage.GetPostgresGpVersion(gpHome)
 	if err != nil {
 		return err
 	}

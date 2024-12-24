@@ -113,7 +113,7 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 
 	/*
 	 * Local buffers are used for temp tables in PostgreSQL.  As temp tables
-	 * use shared buffers in Greenplum, we shouldn't be useing local buffers
+	 * use shared buffers in Greengage, we shouldn't be useing local buffers
 	 * for anything.
 	 */
 	Assert(false);
@@ -333,7 +333,7 @@ DropRelFileNodeLocalBuffers(RelFileNode rnode, ForkNumber forkNum,
 
 	/*
 	 * Local buffers are used for temp tables in PostgreSQL.  As temp tables
-	 * use shared buffers in Greenplum, we shouldn't be useing local buffers
+	 * use shared buffers in Greengage, we shouldn't be useing local buffers
 	 * for anything.
 	 */
 	Assert(false);

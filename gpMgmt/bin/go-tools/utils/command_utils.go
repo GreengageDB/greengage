@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
 )
 
 type CommandBuilder interface {
@@ -21,7 +21,7 @@ func NewExecCommand(cmdBuilder CommandBuilder, gpHome string) *exec.Cmd {
 
 func NewGpSourcedCommand(cmdBuilder CommandBuilder, gpHome string) *exec.Cmd {
 	cmd := cmdBuilder.BuildExecCommand(gpHome)
-	gpSourceFilePath := filepath.Join(gpHome, "greenplum_path.sh")
+	gpSourceFilePath := filepath.Join(gpHome, "greengage_path.sh")
 
 	return System.ExecCommand("bash", "-c", fmt.Sprintf("source %s && %s", gpSourceFilePath, cmd.String()))
 }

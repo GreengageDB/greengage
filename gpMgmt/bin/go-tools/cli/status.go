@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/idl"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/idl"
 	"github.com/spf13/cobra"
 )
 

@@ -92,8 +92,8 @@ cmpSelectivity
  * This functions just simply call clauselist_selectivity_extended() 
  * and set use_damping to false.
  * 
- * Greenplum specific behavior:
- * Greenplum calls clauselist_selectivity_extended() directly.
+ * Greengage specific behavior:
+ * Greengage calls clauselist_selectivity_extended() directly.
  * Function clauselist_selectivity() is kept for external fdw.
  *  
  * See clauselist_selectivity_extended() for more information.

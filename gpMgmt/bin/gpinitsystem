@@ -2,7 +2,7 @@
 #	Filename:-		gpinitsystem
 #	Status:-		Released	
 #	Author:-		L Lonergan/G Coombe	
-#	Contact:-		gcoombe@greenplum.com
+#	Contact:-		support@greengagedb.org
 #	Release date:-		March 2006
 #	Release stat:-		Released
 #                               Copyright (c) Metapa 2005. All Rights Reserved.
@@ -48,7 +48,7 @@ VERBOSE=1
 INTERACTIVE=1
 MIRRORING=0
 INST_COUNT=0
-# Greenplum database specific parameters
+# Greengage database specific parameters
 GP_USER=$USER_NAME
 # System table names
 GP_TBL=gp_id
@@ -106,7 +106,7 @@ USAGE () {
 		$ECHO
 		$ECHO "      `basename $0` -c gp_config_file [OPTIONS]"
 		$ECHO
-		$ECHO "      Creates a new Greenplum Database instance on a Coordinator host and a number of"
+		$ECHO "      Creates a new Greengage Database instance on a Coordinator host and a number of"
 		$ECHO "      segment instance hosts."
 		$ECHO
 		$ECHO "      General options:"
@@ -126,19 +126,19 @@ USAGE () {
 		$ECHO "          Applies to coordinator and all segments."
 		$ECHO "      -B, <number> run this batch of create segment processes in parallel [default $BATCH_DEFAULT]"
 		$ECHO "      -c, gp_config_file [mandatory]"
-		$ECHO "          Supplies all Greenplum configuration information required by this utility."
+		$ECHO "          Supplies all Greengage configuration information required by this utility."
 		$ECHO "          Full description of all parameters contained within the example file"
 		$ECHO "          supplied with this distribution."
 		$ECHO "          Also see file $HELP_DOC_NAME for greater detail on"
 		$ECHO "          the operation and configuration of this script"
-		$ECHO "      -e, <password>, password to set for Greenplum superuser in database [default $GP_PASSWD]"
+		$ECHO "      -e, <password>, password to set for Greengage superuser in database [default $GP_PASSWD]"
 		$ECHO "      -S, standby_datadir [optional]"
 		$ECHO "      -h, gp_hostlist_file [optional]"
 		$ECHO "          Contains a list of all segment instance hostnames required to participate in"
-		$ECHO "          the new Greenplum instance. Normally set in gp_config_file."
+		$ECHO "          the new Greengage instance. Normally set in gp_config_file."
 		$ECHO "      -I, <input_configuration_file>"
 		$ECHO "          The full path and filename of an input configuration file, which defines the"
-		$ECHO "          Greenplum Database members and segments using the QD_PRIMARY_ARRAY and"
+		$ECHO "          Greengage Database members and segments using the QD_PRIMARY_ARRAY and"
 		$ECHO "          PRIMARY_ARRAY parameters. The input configuration file is typically created by"
 		$ECHO "          using gpinitsystem with the -O <output_configuration_file> option. You must"
 		$ECHO "          provide either the -c <cluster_configuration_file> option or the -I"
@@ -146,15 +146,15 @@ USAGE () {
 		$ECHO "      -m, maximum number of connections for coordinator instance [default ${DEFAULT_QD_MAX_CONNECT}]"
 		$ECHO "      -n, <locale>, setting for locale to be set when database initialized [defaults to system locale]"
 		$ECHO "      -O, <output_configuration_file>"
-		$ECHO "          When used with the -O option, gpinitsystem does not create a new Greenplum"
+		$ECHO "          When used with the -O option, gpinitsystem does not create a new Greengage"
 		$ECHO "          Database cluster but instead writes the supplied cluster configuration"
 		$ECHO "          information to the specified output_configuration_file. This file defines"
-		$ECHO "          Greenplum Database members and segments using the QD_PRIMARY_ARRAY and"
+		$ECHO "          Greengage Database members and segments using the QD_PRIMARY_ARRAY and"
 		$ECHO "          PRIMARY_ARRAY parameters, and can be later used with -I"
 		$ECHO "          <input_configuration_file> to initialize a new cluster."
 		$ECHO "      -p, postgresql_conf_gp_additions [optional]"
 		$ECHO "          List of additional PostgreSQL parameters to be applied to each Coordinator/Segment"
-		$ECHO "          postgresql.conf file during Greenplum database initialization."
+		$ECHO "          postgresql.conf file during Greengage database initialization."
 		$ECHO "      -P, standby_port [optional]"
 		$ECHO "      -s, standby_hostname [optional]"
 		$ECHO
@@ -248,7 +248,7 @@ CHK_PARAMS () {
 		    $CAT $CLUSTER_CONFIG|$GREP -v "^\s*\(#.*\)\?$" >> $LOG_FILE
 		    LOG_MSG "[INFO]:-Completed $CLUSTER_CONFIG dump to logfile"
 		    # Source the cluster configuration file
-		    LOG_MSG "[INFO]:-Reading Greenplum configuration file $CLUSTER_CONFIG" 1
+		    LOG_MSG "[INFO]:-Reading Greengage configuration file $CLUSTER_CONFIG" 1
 			. $CLUSTER_CONFIG
 		    ASSIGN_COORDINATOR_VARS
 		    
@@ -265,7 +265,7 @@ CHK_PARAMS () {
 		    fi
 
 		else
-		    LOG_MSG "[INFO]:-Reading Greenplum input configuration file $INPUT_CONFIG"
+		    LOG_MSG "[INFO]:-Reading Greengage input configuration file $INPUT_CONFIG"
 		    READ_INPUT_CONFIG
 		fi
 
@@ -1034,7 +1034,7 @@ DISPLAY_CONFIG () {
 		export QD_DIR=$GP_DIR
 	if [ x"" != x"$INTERACTIVE" ];then
 		SET_VAR $QD_PRIMARY_ARRAY
-		LOG_MSG "[INFO]:-Greenplum Database Creation Parameters" 1
+		LOG_MSG "[INFO]:-Greengage Database Creation Parameters" 1
 		LOG_MSG "[INFO]:---------------------------------------" 1
 		LOG_MSG "[INFO]:-Coordinator Configuration" 1
 		LOG_MSG "[INFO]:---------------------------------------" 1
@@ -1042,7 +1042,7 @@ DISPLAY_CONFIG () {
 		LOG_MSG "[INFO]:-Coordinator port           = $COORDINATOR_PORT" 1
 		LOG_MSG "[INFO]:-Coordinator instance dir   = $GP_DIR" 1
 		LOG_MSG "[INFO]:-Coordinator LOCALE         = $LOCALE_SETTING" 1
-		LOG_MSG "[INFO]:-Greenplum segment prefix   = $SEG_PREFIX" 1
+		LOG_MSG "[INFO]:-Greengage segment prefix   = $SEG_PREFIX" 1
 		LOG_MSG "[INFO]:-Coordinator Database       = $DATABASE_NAME" 1
 		LOG_MSG "[INFO]:-Coordinator connections    = $COORDINATOR_MAX_CONNECT" 1
 		LOG_MSG "[INFO]:-Coordinator buffers        = $COORDINATOR_SHARED_BUFFERS" 1
@@ -1105,7 +1105,7 @@ DISPLAY_CONFIG () {
             LOG_MSG "[INFO]:-Mirroring config           = OFF" 1
         fi
         LOG_MSG "[INFO]:----------------------------------------" 1
-        LOG_MSG "[INFO]:-Greenplum Primary Segment Configuration" 1
+        LOG_MSG "[INFO]:-Greengage Primary Segment Configuration" 1
         LOG_MSG "[INFO]:----------------------------------------" 1
         for I in "${QE_PRIMARY_ARRAY[@]}"
         do
@@ -1114,7 +1114,7 @@ DISPLAY_CONFIG () {
         done
         if [ $MIRRORING -ne 0 ]; then
             LOG_MSG "[INFO]:---------------------------------------" 1
-            LOG_MSG "[INFO]:-Greenplum Mirror Segment Configuration" 1
+            LOG_MSG "[INFO]:-Greengage Mirror Segment Configuration" 1
             LOG_MSG "[INFO]:---------------------------------------" 1
             for I in  "${QE_MIRROR_ARRAY[@]}"
             do
@@ -1123,7 +1123,7 @@ DISPLAY_CONFIG () {
             done
         fi
 
-		GET_REPLY "Continue with Greenplum creation" 
+		GET_REPLY "Continue with Greengage creation" 
 	fi
 	LOG_MSG "[INFO]:-End Function $FUNCNAME"
 }
@@ -1202,7 +1202,7 @@ CREATE_QD_DB () {
 		BACKOUT_COMMAND "if [ -d $GP_DIR ]; then $RM -Rf $GP_DIR; fi"
 		BACKOUT_COMMAND "$ECHO Removing Coordinator data directory files"
 		LOG_MSG "[INFO]:-Completed Coordinator instance initialization"
-		$ECHO "#Greenplum specific configuration parameters for Coordinator instance database" >> ${GP_DIR}/$PG_CONF
+		$ECHO "#Greengage specific configuration parameters for Coordinator instance database" >> ${GP_DIR}/$PG_CONF
 		$ECHO "#------------------------------------------------------------------------" >> ${GP_DIR}/$PG_CONF
 		LOG_MSG "[INFO]:-Setting the Coordinator port to $GP_PORT"
 		SED_PG_CONF ${GP_DIR}/$PG_CONF "$PORT_TXT" port=$GP_PORT 0
@@ -1403,16 +1403,16 @@ REGISTER_MIRRORS () {
 
 STOP_QD_PRODUCTION () {
     LOG_MSG "[INFO]:-Start Function $FUNCNAME"
-    LOG_MSG "[INFO]:-Restarting the Greenplum instance in production mode" 1
+    LOG_MSG "[INFO]:-Restarting the Greengage instance in production mode" 1
     if [ -f $GPSTOP ]; then
         GPSTOP_OPTS=$(OUTPUT_LEVEL_OPTS)
         export COORDINATOR_DATA_DIRECTORY=${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1
         $GPSTOP -a -l $LOG_DIR -m -d $COORDINATOR_DATA_DIRECTORY $GPSTOP_OPTS
         RETVAL=$?
         if [ $RETVAL -eq 0 ]; then
-            LOG_MSG "[INFO]:-Successfully shutdown the new Greenplum instance"
+            LOG_MSG "[INFO]:-Successfully shutdown the new Greengage instance"
         else
-            ERROR_EXIT "[FATAL]:-Error from Greenplum instance shutdown, check log files"
+            ERROR_EXIT "[FATAL]:-Error from Greengage instance shutdown, check log files"
         fi
     else
         ERROR_EXIT "[FATAL]:-$GPSTOP not located"
@@ -1460,12 +1460,12 @@ START_QD_PRODUCTION () {
 	$GPSTART -a -l $LOG_DIR -d $COORDINATOR_DATA_DIRECTORY $GPSTART_OPTS
 
         if [ $? -eq 0 ];then
-            LOG_MSG "[INFO]:-Successfully started new Greenplum instance"
+            LOG_MSG "[INFO]:-Successfully started new Greengage instance"
         else
 
             # this text is duplicated below
             LOG_MSG "[WARN]:" 1
-            LOG_MSG "[WARN]:-Failed to start Greenplum instance; review gpstart output to" 1
+            LOG_MSG "[WARN]:-Failed to start Greengage instance; review gpstart output to" 1
             LOG_MSG "[WARN]:- determine why gpstart failed and reinitialize cluster after resolving" 1
             LOG_MSG "[WARN]:- issues.  Not all initialization tasks have completed so the cluster" 1
             LOG_MSG "[WARN]:- should not be used." 1
@@ -1479,9 +1479,9 @@ START_QD_PRODUCTION () {
 
                 RETVAL=$?
                 if [ $RETVAL -eq 0 ]; then
-                    LOG_MSG "[INFO]:-Successfully shutdown the Greenplum instance" 1
+                    LOG_MSG "[INFO]:-Successfully shutdown the Greengage instance" 1
                 else
-                    ERROR_EXIT "[FATAL]:-Error from Greenplum instance shutdown, check log files"
+                    ERROR_EXIT "[FATAL]:-Error from Greengage instance shutdown, check log files"
                 fi
             else
                 LOG_MSG "[WARN]:-$GPSTOP not located" 1
@@ -1489,7 +1489,7 @@ START_QD_PRODUCTION () {
 
             # this text is duplicated above
             LOG_MSG "[WARN]:" 1
-            LOG_MSG "[WARN]:-Failed to start Greenplum instance; review gpstart output to" 1
+            LOG_MSG "[WARN]:-Failed to start Greengage instance; review gpstart output to" 1
             LOG_MSG "[WARN]:- determine why gpstart failed and reinitialize cluster after resolving" 1
             LOG_MSG "[WARN]:- issues.  Not all initialization tasks have completed so the cluster" 1
             LOG_MSG "[WARN]:- should not be used." 1
@@ -1499,7 +1499,7 @@ START_QD_PRODUCTION () {
     else
 	ERROR_EXIT "[FATAL]:-$GPSTART not located"
     fi
-    LOG_MSG "[INFO]:-Completed restart of Greenplum instance in production mode" 1
+    LOG_MSG "[INFO]:-Completed restart of Greengage instance in production mode" 1
     LOG_MSG "[INFO]:-End Function $FUNCNAME"
 }
 
@@ -1568,7 +1568,7 @@ FORCE_FTS_PROBE () {
             $PSQL -p $GP_PORT -d "$DEFAULTDB" -A -t -c "select * from gp_segment_configuration where (mode = 'n' or status = 'd') and content != -1;" >> $LOG_FILE 2>&1
             $PSQL -p $GP_PORT -d "$DEFAULTDB" -A -t -c "select * from gp_stat_replication where sync_error != 'none' or sync_state != 'sync';" >> $LOG_FILE 2>&1
             LOG_MSG "[WARN]:" 1
-            LOG_MSG "[WARN]:-Failed to start Greenplum instance; please review gpinitsystem log to determine failure." 1
+            LOG_MSG "[WARN]:-Failed to start Greengage instance; please review gpinitsystem log to determine failure." 1
             ERROR_EXIT "[FATAL]:-Some primary/mirror segment pairs were found to be not in sync"
             break;
         fi
@@ -1699,7 +1699,7 @@ READ_INPUT_CONFIG () {
     $CAT $INPUT_CONFIG|$GREP -v "^\s*\(#.*\)\?$" >> $LOG_FILE
     LOG_MSG "[INFO]:-Completed $INPUT_CONFIG dump to logfile"
     # Source the cluster configuration file
-    LOG_MSG "[INFO]:-Reading Greenplum configuration file $INPUT_CONFIG"
+    LOG_MSG "[INFO]:-Reading Greengage configuration file $INPUT_CONFIG"
 
     . $INPUT_CONFIG
     SET_VAR $QD_PRIMARY_ARRAY
@@ -2010,14 +2010,14 @@ if [ x"" != x"$STANDBY_HOSTNAME" ];then
 fi
 
 SCAN_LOG
-LOG_MSG "[INFO]:-Greenplum Database instance successfully created" 1
+LOG_MSG "[INFO]:-Greengage Database instance successfully created" 1
 LOG_MSG "[INFO]:-------------------------------------------------------" 1
 LOG_MSG "[INFO]:-To complete the environment configuration, please " 1
 LOG_MSG "[INFO]:-update $USER_NAME .bashrc file with the following" 1
-LOG_MSG "[INFO]:-1. Ensure that the greenplum_path.sh file is sourced" 1
+LOG_MSG "[INFO]:-1. Ensure that the greengage_path.sh file is sourced" 1
 LOG_MSG "[INFO]:-2. Add \"export COORDINATOR_DATA_DIRECTORY=${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1\"" 1
-LOG_MSG "[INFO]:-   to access the Greenplum scripts for this instance:" 1
-LOG_MSG "[INFO]:-   or, use -d ${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1 option for the Greenplum scripts" 1
+LOG_MSG "[INFO]:-   to access the Greengage scripts for this instance:" 1
+LOG_MSG "[INFO]:-   or, use -d ${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1 option for the Greengage scripts" 1
 LOG_MSG "[INFO]:-   Example gpstate -d ${COORDINATOR_DIRECTORY}/${SEG_PREFIX}-1" 1
 LOG_MSG "[INFO]:-Script log file = $LOG_FILE" 1
 LOG_MSG "[INFO]:-To remove instance, run gpdeletesystem utility" 1
@@ -2031,7 +2031,7 @@ if [ x"" != x"$STANDBY_HOSTNAME" ];then
 		*) LOG_MSG "[WARN]:-Standby Coordinator failed to initialize" 1
 	esac
 else
-    LOG_MSG "[INFO]:-To initialize a Standby Coordinator Segment for this Greenplum instance" 1
+    LOG_MSG "[INFO]:-To initialize a Standby Coordinator Segment for this Greengage instance" 1
     LOG_MSG "[INFO]:-Review options for gpinitstandby" 1
 fi
 
@@ -2040,7 +2040,7 @@ LOG_MSG "[INFO]:-The Coordinator ${COORDINATOR_DATA_DIRECTORY}/$PG_HBA post gpin
 LOG_MSG "[INFO]:-has been configured to allow all hosts within this new" 1
 LOG_MSG "[INFO]:-array to intercommunicate. Any hosts external to this" 1
 LOG_MSG "[INFO]:-new array must be explicitly added to this file" 1
-LOG_MSG "[INFO]:-Refer to the Greenplum Admin support guide which is" 1
+LOG_MSG "[INFO]:-Refer to the Greengage Admin support guide which is" 1
 LOG_MSG "[INFO]:-located in the $GPHOME/docs directory" 1
 LOG_MSG "[INFO]:-------------------------------------------------------" 1
 

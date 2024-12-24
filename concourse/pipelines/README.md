@@ -92,7 +92,7 @@ fly -t prod \
     -p gpdb_main \
     -c gpdb_main-generated.yml \
     -l ~/workspace/gpdb/concourse/vars/common_prod.yml \
-    -v gpdb-git-remote=https://github.com/greenplum-db/gpdb.git \
+    -v gpdb-git-remote=https://github.com/GreengageDB/greengage.git \
     -v gpdb-git-branch=main \
     -v pipeline-name=gpdb_main
 
@@ -102,7 +102,7 @@ fly -t prod \
     -c gpdb_main-generated.yml \
     -l ~/workspace/gpdb/concourse/vars/common_prod.yml \
     -l ~/workspace/gpdb/concourse/vars/without_asserts_common_prod.yml \
-    -v gpdb-git-remote=https://github.com/greenplum-db/gpdb.git \
+    -v gpdb-git-remote=https://github.com/GreengageDB/greengage.git \
     -v gpdb-git-branch=main \
     -v pipeline-name=gpdb_main_without_asserts
 ```

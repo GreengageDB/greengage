@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 
    create table fooJoinPruning (a int, b int, c int,d int,e int,f int,g int,constraint idx1 unique(a,b),constraint idx2 unique(a,c,d));

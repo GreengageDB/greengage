@@ -1,7 +1,7 @@
 --
 -- exercises for the hash join code
 --
--- GPDB: Greenplum doesn't support parallel scans at the moment, so all the upstream
+-- GPDB: Greengage doesn't support parallel scans at the moment, so all the upstream
 -- parallelism tests don't really apply. We still run the tests, but they won't
 -- exercise parallelism.
 
@@ -475,7 +475,7 @@ rollback to settings;
 -- plan like in upstream. I accepted the plan you get, but now this doesn't
 -- exercise the special code path it's supposed to.
 
--- Greenplum does not support parallel scan or parallel hash join now, the
+-- Greengage does not support parallel scan or parallel hash join now, the
 -- following cases will not hit the code path is supposed to be. We leave
 -- it here for maybe future wrk.
 

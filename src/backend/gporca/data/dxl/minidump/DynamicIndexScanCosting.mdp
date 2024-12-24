@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<dxl:DXLMessage xmlns:dxl="http://greenplum.com/dxl/2010/12/">
+<dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
          Objective: Test dynamic index scan costing when there is a mismatch in the predicate and index columns
          observe that idx_bar_pt_a is selected in the final plan.

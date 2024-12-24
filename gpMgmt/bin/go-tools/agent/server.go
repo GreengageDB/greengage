@@ -6,8 +6,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )

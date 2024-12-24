@@ -8,13 +8,13 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"github.com/greenplum-db/gp-common-go-libs/dbconn"
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
-	"github.com/greenplum-db/gpdb/gp/utils/postgres"
+	"github.com/GreengageDB/gp-common-go-libs/dbconn"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
+	"github.com/GreengageDB/greengage/gp/utils/postgres"
 )
 
 var execOnDatabaseFunc = ExecOnDatabase
@@ -58,7 +58,7 @@ func (s *Server) MakeCluster(request *idl.MakeClusterRequest, stream idl.Hub_Mak
 
 	hubStream.StreamLogMsg("Starting to register primary segments with the coordinator")
 
-	conn, err := greenplum.ConnectDatabase(request.GpArray.Coordinator.HostName, int(request.GpArray.Coordinator.Port))
+	conn, err := greengage.ConnectDatabase(request.GpArray.Coordinator.HostName, int(request.GpArray.Coordinator.Port))
 	if err != nil {
 		return utils.LogAndReturnError(fmt.Errorf("connecting to database: %w", err))
 	}
@@ -68,18 +68,18 @@ func (s *Server) MakeCluster(request *idl.MakeClusterRequest, stream idl.Hub_Mak
 		return utils.LogAndReturnError(err)
 	}
 
-	err = greenplum.RegisterCoordinator(request.GpArray.Coordinator, conn)
+	err = greengage.RegisterCoordinator(request.GpArray.Coordinator, conn)
 	if err != nil {
 		return utils.LogAndReturnError(err)
 	}
 
-	err = greenplum.RegisterPrimaries(request.GetPrimarySegments(), conn)
+	err = greengage.RegisterPrimaries(request.GetPrimarySegments(), conn)
 	if err != nil {
 		return utils.LogAndReturnError(err)
 	}
 	hubStream.StreamLogMsg("Successfully registered primary segments with the coordinator")
 
-	gpArray := greenplum.NewGpArray()
+	gpArray := greengage.NewGpArray()
 	err = gpArray.ReadGpSegmentConfig(conn)
 	if err != nil {
 		return utils.LogAndReturnError(err)
@@ -112,14 +112,14 @@ func (s *Server) MakeCluster(request *idl.MakeClusterRequest, stream idl.Hub_Mak
 
 	shutdownCoordinator = false
 
-	hubStream.StreamLogMsg("Restarting the Greenplum cluster in production mode")
+	hubStream.StreamLogMsg("Restarting the Greengage cluster in production mode")
 	err = s.StopCoordinator(&hubStream, request.GpArray.Coordinator.DataDirectory)
 	if err != nil {
 		return utils.LogAndReturnError(err)
 	}
 
 	// TODO: Replace this with the new gp start once it is complete
-	gpstartOptions := &greenplum.GpStart{
+	gpstartOptions := &greengage.GpStart{
 		DataDirectory: request.GpArray.Coordinator.DataDirectory,
 		Verbose:       request.Verbose,
 	}
@@ -128,7 +128,7 @@ func (s *Server) MakeCluster(request *idl.MakeClusterRequest, stream idl.Hub_Mak
 	if err != nil {
 		return utils.LogAndReturnError(fmt.Errorf("executing gpstart: %w", err))
 	}
-	hubStream.StreamLogMsg("Completed restart of Greenplum cluster in production mode")
+	hubStream.StreamLogMsg("Completed restart of Greengage cluster in production mode")
 
 	hubStream.StreamLogMsg("Creating core GPDB extensions")
 	err = CreateGpToolkitExt(conn)
@@ -151,7 +151,7 @@ func (s *Server) MakeCluster(request *idl.MakeClusterRequest, stream idl.Hub_Mak
 		}
 	}
 
-	hubStream.StreamLogMsg("Setting Greenplum superuser password")
+	hubStream.StreamLogMsg("Setting Greengage superuser password")
 	err = SetGpUserPasswd(conn, request.ClusterParams.SuPassword)
 	if err != nil {
 		return utils.LogAndReturnError(err)
@@ -188,7 +188,7 @@ func (s *Server) ValidateEnvironment(stream hubStreamer, request *idl.MakeCluste
 
 	// Get local gpVersion
 
-	localPgVersion, err := greenplum.GetPostgresGpVersion(s.GpHome)
+	localPgVersion, err := greengage.GetPostgresGpVersion(s.GpHome)
 	if err != nil {
 		gplog.Error("fetching postgres gp-version:%v", err)
 		return err
@@ -311,7 +311,7 @@ func (s *Server) StopCoordinator(stream hubStreamer, pgdata string) error {
 	return nil
 }
 
-func (s *Server) CreateSegments(stream hubStreamer, segs []greenplum.Segment, clusterParams *idl.ClusterParams, coordinatorAddrs []string) error {
+func (s *Server) CreateSegments(stream hubStreamer, segs []greengage.Segment, clusterParams *idl.ClusterParams, coordinatorAddrs []string) error {
 	hostSegmentMap := map[string][]*idl.Segment{}
 	for _, seg := range segs {
 		segReq := &idl.Segment{

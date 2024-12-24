@@ -1,7 +1,7 @@
 package status
 
 import (
-	"github.com/greenplum-db/gpdb/gp/test/integration/testutils"
+	"github.com/GreengageDB/greengage/gp/test/integration/testutils"
 	"os"
 	"strings"
 	"testing"

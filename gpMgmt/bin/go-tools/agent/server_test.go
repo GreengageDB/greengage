@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	agent "github.com/greenplum-db/gpdb/gp/agent"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/testutils"
+	"github.com/GreengageDB/gp-common-go-libs/testhelper"
+	agent "github.com/GreengageDB/greengage/gp/agent"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/testutils"
 )
 
 func TestStartServer(t *testing.T) {

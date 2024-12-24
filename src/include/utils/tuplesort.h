@@ -84,8 +84,8 @@ typedef struct TuplesortInstrumentation
 	TuplesortSpaceType spaceType;	/* type of space spaceUsed represents */
 	long		spaceUsed;		/* space consumption, in kB */
 
-	Size		workmemused;  /* Greenplum specific */
-	Size		execmemused;  /* Greenplum specific */
+	Size		workmemused;  /* Greengage specific */
+	Size		execmemused;  /* Greengage specific */
 } TuplesortInstrumentation;
 
 

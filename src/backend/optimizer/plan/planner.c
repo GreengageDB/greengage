@@ -2758,12 +2758,12 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 		Path	   *path = (Path *) lfirst(lc);
 
 		/*
-		 * Greenplum specific behavior:
+		 * Greengage specific behavior:
 		 * The implementation of select statement with locking clause
 		 * (for update | no key update | share | key share) in postgres
 		 * is to hold RowShareLock on tables during parsing stage, and
 		 * generate a LockRows plan node for executor to lock the tuples.
-		 * It is not easy to lock tuples in Greenplum database, since
+		 * It is not easy to lock tuples in Greengage database, since
 		 * tuples may be fetched through motion nodes.
 		 *
 		 * But when Global Deadlock Detector is enabled, and the select
@@ -2779,19 +2779,19 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 			if (parse->canOptSelectLockingClause)
 			{
 				/*
-				 * Greenplum specific behavior:
+				 * Greengage specific behavior:
 				 * LockRowsPath will clear the pathkeys info since
 				 * when some other transactions concurrently update
 				 * the same relation then it cannot guarantee the order.
 				 * Postgres will not consider parallel path for the
 				 * select statement with locking clause (it sets parallel_safe
 				 * to false and parallel_workers to 0 in function
-				 * create_lockrows_path). However, Greenplum contains many
+				 * create_lockrows_path). However, Greengage contains many
 				 * segments and is innately parallel. If we simply clear
 				 * the pathkey here, then if later we need a gather, we will
 				 * not choose merge gather so even if there is no concurrent
 				 * transaction, the data is not in order. See Github issue:
-				 * https://github.com/greenplum-db/gpdb/issues/9724.
+				 * https://github.com/GreengageDB/greengage/issues/9724.
 				 * So here, just before the finaly gather, we save the pathkeys
 				 * and then invoke create_lockrows_path. In the following
 				 * gather, if we found saved_pathkeys is not NIL, we just

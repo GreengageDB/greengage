@@ -93,13 +93,13 @@ CREATE TABLE "S 1"."T 4" (
 );
 -- Disable autovacuum for these tables to avoid unexpected effects of that
 ALTER TABLE "S 1"."T 1" SET (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 ALTER TABLE "S 1"."T 2" SET (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 ALTER TABLE "S 1"."T 3" SET (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 ALTER TABLE "S 1"."T 4" SET (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 INSERT INTO "S 1"."T 1"
 	SELECT id,
 	       id % 10,
@@ -474,7 +474,7 @@ SELECT 'fixed', NULL FROM ft1 t1 WHERE c1 = 1;
 (1 row)
 
 -- Test forcing the remote server to produce sorted data for a merge join.
-/* In Greenplum, enable_hashjoin is on by default; enable_nestloop and enable_mergejoin are false by default. */
+/* In Greengage, enable_hashjoin is on by default; enable_nestloop and enable_mergejoin are false by default. */
 SET enable_hashjoin TO false;
 SET enable_nestloop TO false;
 SET enable_mergejoin TO true;
@@ -2096,7 +2096,7 @@ SELECT t1.ctid, t1, t2, t1.c1 FROM ft1 t1 JOIN ft2 t2 ON (t1.c1 = t2.c1) ORDER B
 (6 rows)
 
 -- SEMI JOIN, not pushed down
--- In Greenplum, enable_mergejoin is false by default.
+-- In Greengage, enable_mergejoin is false by default.
 SET enable_mergejoin TO true;
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT t1.c1 FROM ft1 t1 WHERE EXISTS (SELECT 1 FROM ft2 t2 WHERE t1.c1 = t2.c1) ORDER BY t1.c1 OFFSET 100 LIMIT 10;
@@ -4554,13 +4554,13 @@ CREATE FOREIGN TABLE reindex_foreign (c1 int, c2 int)
   SERVER pgserver2 OPTIONS (table_name 'reindex_local');
 REINDEX TABLE reindex_foreign; -- error
 ERROR:  "reindex_foreign" is not a table or materialized view
--- In greenplum, REINDEX CONCURRENTLY is not supported.
+-- In greengage, REINDEX CONCURRENTLY is not supported.
 REINDEX TABLE CONCURRENTLY reindex_foreign; -- error
 ERROR:  REINDEX CONCURRENTLY is not supported
 DROP FOREIGN TABLE reindex_foreign;
 -- partitions and foreign tables
 CREATE TABLE reind_fdw_parent (c1 int) PARTITION BY RANGE (c1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE reind_fdw_0_10 PARTITION OF reind_fdw_parent
   FOR VALUES FROM (0) TO (10);
@@ -4569,7 +4569,7 @@ CREATE FOREIGN TABLE reind_fdw_10_20 PARTITION OF reind_fdw_parent
   FOR VALUES FROM (10) TO (20)
   SERVER pgserver OPTIONS (table_name 'reind_local_10_20');
 REINDEX TABLE reind_fdw_parent; -- ok
--- In greenplum, REINDEX CONCURRENTLY is not supported.
+-- In greengage, REINDEX CONCURRENTLY is not supported.
 REINDEX TABLE CONCURRENTLY reind_fdw_parent; -- ok
 ERROR:  REINDEX CONCURRENTLY is not supported
 DROP TABLE reind_fdw_parent;
@@ -4645,7 +4645,7 @@ CREATE TABLE
 create foreign table ft3 (f1 text collate "C", f2 text, f3 varchar(10))
   server pgserver options (table_name 'loct3', use_remote_estimate 'true');
 -- create table loct3 (f1 text collate "C" unique, f2 text, f3 varchar(10) unique) DISTRIBUTED BY (f1);
--- SQL above in greenplum will report error as follows.
+-- SQL above in greengage will report error as follows.
 -- ERROR:  UNIQUE or PRIMARY KEY definitions are incompatible with each other
 -- So change it to SQL as follows.
 create table loct3 (f1 text collate "C", f2 text, f3 varchar(10)) DISTRIBUTED BY (f1);
@@ -6913,7 +6913,7 @@ CREATE TRIGGER
 CREATE FOREIGN TABLE foreign_tbl (a int, b int)
   SERVER pgserver OPTIONS (table_name 'child_tbl');
 CREATE TABLE parent_tbl (a int, b int) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE parent_tbl ATTACH PARTITION foreign_tbl FOR VALUES FROM (0) TO (100);
 CREATE VIEW rw_view AS SELECT * FROM parent_tbl
@@ -6994,8 +6994,8 @@ UPDATE rw_view SET b = b + 15;
  Settings: constraint_exclusion = 'off', optimizer = 'off'
 (8 rows)
 
--- In greenplum, table parent_tbl and foreign_tbl have different data distribution policy.
--- Greenplum don't support update/delete to such table as parent_tbl.
+-- In greengage, table parent_tbl and foreign_tbl have different data distribution policy.
+-- Greengage don't support update/delete to such table as parent_tbl.
 -- So here we disable the SQL below.
 -- UPDATE rw_view SET b = b + 15; -- ok
 SELECT * FROM foreign_tbl;
@@ -7127,7 +7127,7 @@ BEGIN
 		TG_ARGV[0], TG_OP, TG_WHEN, TG_LEVEL;
 	RETURN NULL;
 END;$$;
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- CREATE TRIGGER trig_stmt_before BEFORE DELETE OR INSERT OR UPDATE ON rem1
 --	FOR EACH STATEMENT EXECUTE PROCEDURE trigger_func();
@@ -7213,7 +7213,7 @@ NOTICE:  OLD: (1,update),NEW: (1,updateupdate)
 -- cleanup
 DROP TRIGGER trig_row_before ON rem1;
 DROP TRIGGER trig_row_after ON rem1;
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- DROP TRIGGER trig_stmt_before ON rem1;
 -- DROP TRIGGER trig_stmt_after ON rem1;
@@ -7505,7 +7505,7 @@ DROP TRIGGER
 -- DROP TRIGGER trig_local_before ON loc1;
 -- Test direct foreign table modification functionality
 -- Test with statement-level triggers
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- CREATE TRIGGER trig_stmt_before
 --	BEFORE DELETE OR INSERT OR UPDATE ON rem1
@@ -7533,7 +7533,7 @@ DELETE FROM rem1;                 -- can be pushed down
 (5 rows)
 
 -- DROP TRIGGER trig_stmt_before ON rem1;
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- CREATE TRIGGER trig_stmt_after
 --	AFTER DELETE OR INSERT OR UPDATE ON rem1
@@ -7732,10 +7732,10 @@ DROP TRIGGER trig_row_after_delete ON rem1;
 -- test inheritance features
 -- ===================================================================
 CREATE TABLE a (aa TEXT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE a SET (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'CREATE TABLE loct (aa TEXT, bb TEXT);'
 CREATE TABLE
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'ALTER TABLE loct SET (autovacuum_enabled = 'false');'
@@ -7777,7 +7777,7 @@ SELECT tableoid::regclass, * FROM ONLY a;
  a        | aaaaa
 (3 rows)
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 UPDATE a SET aa = 'zzzzzz' WHERE aa LIKE 'aaaa%';
@@ -7813,7 +7813,7 @@ SELECT tableoid::regclass, * FROM ONLY a;
  a        | aaaaa
 (3 rows)
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 UPDATE a SET aa = 'newtoo';
@@ -7839,33 +7839,33 @@ CREATE TABLE
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'create table loct2 (f1 int, f2 int, f3 int);'
 CREATE TABLE
 create table loct1 (f1 int, f2 int, f3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table loct2 (f1 int, f2 int, f3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'alter table loct1 set (autovacuum_enabled = 'false');'
 ALTER TABLE
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'alter table loct2 set (autovacuum_enabled = 'false');'
 ALTER TABLE
 alter table loct1 set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 alter table loct2 set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 create table foo (f1 int, f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create foreign table foo2 (f3 int) inherits (foo)
   server pgserver options (table_name 'loct1');
 create table bar (f1 int, f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create foreign table bar2 (f3 int) inherits (bar)
   server pgserver options (table_name 'loct2');
 alter table foo set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 alter table bar set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 insert into foo values(1,1);
 insert into foo values(3,3);
 insert into foo2 values(2,2,2);
@@ -7960,7 +7960,7 @@ select * from bar where f1 in (select f1 from foo) for share;
   4 | 44
 (4 rows)
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 -- Now check SELECT FOR UPDATE/SHARE with an inherited source table,
@@ -8144,11 +8144,11 @@ fetch from c;
   7 | 77
 (1 row)
 
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /* update bar set f2 = null where current of c; */
 rollback;
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 explain (verbose, costs off)
@@ -8165,7 +8165,7 @@ FOR EACH ROW EXECUTE PROCEDURE trigger_data(23,'skidoo');
 CREATE TRIGGER trig_row_after
 AFTER UPDATE OR DELETE ON bar2
 FOR EACH ROW EXECUTE PROCEDURE trigger_data(23,'skidoo');
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 explain (verbose, costs off)
@@ -8189,7 +8189,7 @@ drop table loct1;
 drop table loct2;
 -- Test pushing down UPDATE/DELETE joins to the remote server
 create table parent (a int, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'create table loct1 (a int, b text);'
 CREATE TABLE
@@ -8208,7 +8208,7 @@ insert into remt2 values (1, 'foo');
 insert into remt2 values (2, 'bar');
 analyze remt1;
 analyze remt2;
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- So SQLs below are disable here.
 /*
 explain (verbose, costs off)
@@ -8233,7 +8233,7 @@ drop table parent;
 -- ===================================================================
 -- Test insert tuple routing
 create table itrtest (a int, b text) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'create table loct1 (a int check (a in (1)), b text);'
 CREATE TABLE
@@ -8293,8 +8293,8 @@ select tableoid::regclass, * FROM remp2;
  remp2    | test2 | 2
 (3 rows)
 
--- In greenplum, table itrtest and remp1(remp2) have different data distribution policy.
--- Greenplum don't support update/delete to such table as itrtest.
+-- In greengage, table itrtest and remp1(remp2) have different data distribution policy.
+-- Greengage don't support update/delete to such table as itrtest.
 -- So here we disable the SQL below.
 /* delete from itrtest; */
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'delete from loct1;'
@@ -8327,8 +8327,8 @@ select tableoid::regclass, * FROM itrtest;
  remp1    | 1 | foo
 (1 row)
 
--- In greenplum, table itrtest and remp1(remp2) have different data distribution policy.
--- Greenplum don't support update/delete to such table as itrtest.
+-- In greengage, table itrtest and remp1(remp2) have different data distribution policy.
+-- Greengage don't support update/delete to such table as itrtest.
 -- So here we disable the SQL below.
 /* delete from itrtest; */
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'drop index loct1_idx;'
@@ -8389,7 +8389,7 @@ DROP TABLE
 DROP TABLE
 -- drop table loct1;
 -- drop table loct2;
--- Greenplum don't support that ModifyTable mixes distributed and entry-only tables.
+-- Greengage don't support that ModifyTable mixes distributed and entry-only tables.
 -- SQLs below are disable here.
 /*
 -- Test update tuple routing
@@ -8499,7 +8499,7 @@ drop table utrtest;
 */
 -- Test copy tuple routing
 create table ctrtest (a int, b text) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'create table loct1 (a int check (a in (1)), b text);'
 CREATE TABLE
@@ -8591,7 +8591,7 @@ alter foreign table rem2 drop constraint rem2_f1positive;
 ALTER TABLE
 -- alter table loc2 drop constraint loc2_f1positive;
 delete from rem2;
--- In greenplum, Triggers for statements are not yet supported.
+-- In greengage, Triggers for statements are not yet supported.
 -- So SQLs below are disable here.
 -- Test local triggers
 /*
@@ -9127,7 +9127,7 @@ INSERT 0 125
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'INSERT INTO fprt1_p2 SELECT i, i, to_char(i/50, $$FM0000$$) FROM generate_series(250, 499, 2) i;'
 INSERT 0 125
 CREATE TABLE fprt1 (a int, b int, c varchar) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- CREATE TABLE fprt1_p1 (LIKE fprt1);
 -- CREATE TABLE fprt1_p2 (LIKE fprt1);
@@ -9163,7 +9163,7 @@ INSERT 0 84
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'INSERT INTO fprt2_p2 SELECT i, i, to_char(i/50, $$FM0000$$) FROM generate_series(250, 499, 3) i;'
 INSERT 0 84
 CREATE TABLE fprt2 (a int, b int, c varchar) PARTITION BY RANGE(b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- CREATE TABLE fprt2_p1 (LIKE fprt2);
 -- CREATE TABLE fprt2_p2 (LIKE fprt2);
@@ -9370,7 +9370,7 @@ RESET enable_partitionwise_join;
 -- test partitionwise aggregates
 -- ===================================================================
 CREATE TABLE pagg_tab (a int, b int, c text) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \! env PGOPTIONS='' psql -p ${PG_PORT} contrib_regression -c 'CREATE TABLE pagg_tab (a int, b int, c text) PARTITION BY RANGE(a);'
 CREATE TABLE

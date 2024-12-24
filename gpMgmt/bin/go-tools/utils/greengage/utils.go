@@ -1,13 +1,13 @@
-package greenplum
+package greengage
 
 import (
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/greenplum-db/gp-common-go-libs/operating"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/postgres"
+	"github.com/GreengageDB/gp-common-go-libs/operating"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/postgres"
 )
 
 func GetPostgresGpVersion(gpHome string) (string, error) {

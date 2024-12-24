@@ -166,7 +166,7 @@ static TupleTableSlot *ExecProcNodeInstr(PlanState *node);
 #endif
 static TupleTableSlot *ExecProcNodeGPDB(PlanState *node);
 
-/* Greenplum specific helper function */
+/* Greengage specific helper function */
 static void prefetch_subplans(PlanState *ps);
 static List *find_all_mat_nodes(PlanState *ps);
 
@@ -586,7 +586,7 @@ ExecProcNodeFirst(PlanState *node)
 	 *
 	 * GPDB: Unfortunately, GPDB has a bunch of extra stuff that we need
 	 * to do on every node, so we cannot make use of this upstream optimization.
-	 * ExecProcNodeGPDB() is a wrapper that does all the Greenplum-specific
+	 * ExecProcNodeGPDB() is a wrapper that does all the Greengage-specific
 	 * extra stuff.
 	 */
 #if 0
@@ -1514,7 +1514,7 @@ ExecSetTupleBound(int64 tuples_needed, PlanState *child_node)
 }
 
 /*
- * Greenplum specific code.
+ * Greengage specific code.
  * Interconnect UDP deadlock might happen between outer plan and SubPlans.
  * This kind of deadlock in fact is not directly related to Join Plan. To
  * Get rid of this kind of deadlock, the method here is to prefetch all
@@ -1565,7 +1565,7 @@ prefetch_subplans(PlanState *node)
 }
 
 /*
- * Greenplum specific code.
+ * Greengage specific code.
  * Here we do not use planstate_tree_walker is because
  * we do not want to walk into InitPlans. InitPlans are
  * separately dispatched before the main plan.

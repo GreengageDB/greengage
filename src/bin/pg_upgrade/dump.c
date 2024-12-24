@@ -13,7 +13,7 @@
 
 #include "fe_utils/string_utils.h"
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 void
 generate_old_dump(void)

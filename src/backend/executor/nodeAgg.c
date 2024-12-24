@@ -2038,7 +2038,7 @@ hash_agg_update_metrics(AggState *aggstate, bool from_tape, int npartitions)
 
 	/* update hashentrysize estimate based on contents */
 	/*
-	 * Greenplum doesn't use hashentrysize in the instrumentation, it will
+	 * Greengage doesn't use hashentrysize in the instrumentation, it will
 	 * calculate hash table chain length to get an accurate number.
 	 *
 	 * See the following code to collect hash table statistic info.
@@ -4856,7 +4856,7 @@ ExecEndAgg(AggState *node)
 }
 
 /*
- * It's quite different from upstream, because Greenplum share some same works
+ * It's quite different from upstream, because Greengage share some same works
  * with ExecEagerFreeAgg() here.
  */
 void
@@ -4871,7 +4871,7 @@ ExecReScanAgg(AggState *node)
 	node->agg_done = false;
 
 	/*
-	 * Greenplum: on streaming mode, the hash table's status is complex, just
+	 * Greengage: on streaming mode, the hash table's status is complex, just
 	 * don't reuse it at all.
 	 */
 	if (node->aggstrategy == AGG_HASHED && !node->streaming)
@@ -5275,7 +5275,7 @@ void
 agg_hash_explain_extra_message(AggState *aggstate)
 {
 	/*
-	 * Check cdbexplain_depositStatsToNode(), Greenplum only saves extra
+	 * Check cdbexplain_depositStatsToNode(), Greengage only saves extra
 	 * message text for the most interesting winning qExecs.
 	 */
 	StringInfo hbuf = aggstate->ss.ps.cdbexplainbuf;

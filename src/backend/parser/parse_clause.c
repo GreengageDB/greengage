@@ -304,10 +304,10 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 	 * parserOpenTable upgrades the lock to Exclusive mode for distributed
 	 * tables.
 	 *
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Statement `insert on conflict do update` should be considered
 	 * like update when deducting lockmode. See github issue:
-	 * https://github.com/greenplum-db/gpdb/issues/9449
+	 * https://github.com/GreengageDB/greengage/issues/9449
 	 */
 	if (pstate->p_is_insert && !pstate->p_is_on_conflict_update)
 	{
@@ -328,7 +328,7 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 		pstate->p_target_relation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{
 		/*
-		 * Greenplum specific code:
+		 * Greengage specific code:
 		 * When GDD is disabled, and we are inserting into a partition table,
 		 * then we need to lock all leaf partitions. The reason is:
 		 *    1. we cannot predict which leaf partitions will be inserted
@@ -338,7 +338,7 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 		 *       first hold locks on leaf partition and block others; however,
 		 *       on some segments, this session's insert will be blocked by
 		 *       others. Thus we have risk to have global deadlock.
-		 * See issue https://github.com/greenplum-db/gpdb/issues/13652 for details.
+		 * See issue https://github.com/GreengageDB/greengage/issues/13652 for details.
 		 */
 		(void) find_all_inheritors(RelationGetRelid(pstate->p_target_relation),
 								   lockmode, NULL);

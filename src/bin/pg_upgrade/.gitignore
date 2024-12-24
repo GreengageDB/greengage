@@ -9,4 +9,4 @@
 /tmp_check/
 
 # GPDB files
-/greenplum/aomd_filehandler.c
+/greengage/aomd_filehandler.c

@@ -694,7 +694,7 @@ GetNewRelFileNode(Oid reltablespace, Relation pg_class, char relpersistence)
 	 * relfilenode assignments during a binary-upgrade run should be
 	 * determined by commands in the dump script.
 	 *
-	 * GPDB: Totally OK in Greenplum. We don't use the table's OID as its
+	 * GPDB: Totally OK in Greengage. We don't use the table's OID as its
 	 * initial relfilenode, and rely on this in binary upgrade, too.
 	 */
 	//Assert(!IsBinaryUpgrade);

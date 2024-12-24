@@ -239,7 +239,7 @@ typedef struct CopyStateData
 	int			raw_buf_index;	/* next byte to process */
 	int			raw_buf_len;	/* total # of bytes stored */
 
-	/* Greenplum Database specific variables */
+	/* Greengage Database specific variables */
 	FmgrInfo   *enc_conversion_proc; /* conv proc from exttbl encoding to
 										server or the other way around */
 	bool		escape_off;		/* treat backslashes as non-special? */
@@ -261,7 +261,7 @@ typedef struct CopyStateData
 
 	bool		delim_off;		/* delimiter is set to OFF? */
 
-/* end Greenplum Database specific variables */
+/* end Greengage Database specific variables */
 } CopyStateData;
 
 typedef struct CopyStateData *CopyState;

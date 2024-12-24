@@ -3,14 +3,14 @@ package configure
 import (
 	"flag"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
 	"os"
 	"testing"
 
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/hub"
-	"github.com/greenplum-db/gpdb/gp/test/integration/testutils"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/hub"
+	"github.com/GreengageDB/greengage/gp/test/integration/testutils"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 const (
@@ -53,7 +53,7 @@ func init() {
 		Port:        constants.DefaultHubPort,
 		AgentPort:   constants.DefaultAgentPort,
 		Hostnames:   []string{},
-		LogDir:      greenplum.GetDefaultHubLogDir(),
+		LogDir:      greengage.GetDefaultHubLogDir(),
 		ServiceName: constants.DefaultServiceName,
 		GpHome:      testutils.GpHome,
 		Credentials: cred,

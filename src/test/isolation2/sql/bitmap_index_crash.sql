@@ -40,7 +40,7 @@
 3:SELECT gp_inject_fault('fts_probe', 'reset', dbid) FROM gp_segment_configuration WHERE role='p' AND content=-1;
 
 -- Test bitmap index replay XLog after crash
--- More details could be found at https://github.com/greenplum-db/gpdb/issues/13517
+-- More details could be found at https://github.com/GreengageDB/greengage/issues/13517
 drop table if exists test_bitmap;
 create table test_bitmap(
     id int, type int

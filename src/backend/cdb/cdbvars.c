@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * cdbvars.c
- *	  Provides storage areas and processing routines for Greenplum Database variables
+ *	  Provides storage areas and processing routines for Greengage Database variables
  *	  managed by GUC.
  *
  * Portions Copyright (c) 2003-2010, Greenplum inc
@@ -50,7 +50,7 @@
 
 
 
-GpRoleValue Gp_role;			/* Role paid by this Greenplum Database
+GpRoleValue Gp_role;			/* Role paid by this Greengage Database
 								 * backend */
 char	   *gp_role_string;		/* Staging area for guc.c */
 
@@ -256,7 +256,7 @@ int			gp_udpic_network_disable_ipv6 = 0;
 uint32		gp_interconnect_id = 0;
 
 /* --------------------------------------------------------------------------------------------------
- * Greenplum Optimizer GUCs
+ * Greengage Optimizer GUCs
  */
 
 double		gp_motion_cost_per_row = 0;
@@ -273,7 +273,7 @@ int			gp_hashjoin_tuples_per_bucket = 5;
 /* Analyzing aid */
 int			gp_motion_slice_noop = 0;
 
-/* Greenplum Database Experimental Feature GUCs */
+/* Greengage Database Experimental Feature GUCs */
 bool		gp_enable_explain_allstat = false;
 bool		gp_enable_motion_deadlock_sanity = false;	/* planning time sanity
 														 * check */
@@ -384,7 +384,7 @@ static GpRoleValue string_to_role(const char *string);
 
 
 /*
- * Convert a Greenplum Database role string (as for gp_role) to an
+ * Convert a Greengage Database role string (as for gp_role) to an
  * enum value of type GpRoleValue. Return GP_ROLE_UNDEFINED in case the
  * string is unrecognized.
  */

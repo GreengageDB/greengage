@@ -4,7 +4,7 @@
  *		Functions to ensure that QD and QEs use same OIDs for catalog objects.
  *
  *
- * In Greenplum, it's important that most objects, like relations, functions,
+ * In Greengage, it's important that most objects, like relations, functions,
  * operators, have the same OIDs in the coordinator and all QE nodes.  Otherwise
  * query plans generated in the coordinator will not work on the QE nodes, because
  * they use the coordinator's OIDs to refer to objects.
@@ -208,7 +208,7 @@ ClearOidAssignmentsOnCommit(void)
  * in a specific memorycontext, normally the memorycontext will be
  * reset at the end of transaction.
  *
- * Greenplum's MPP architecture need to make some OIDs consistent
+ * Greengage's MPP architecture need to make some OIDs consistent
  * among coordinator and segments (like table OIDs). The oid assignments
  * are generated on QD and then dispatched to QEs. A single SQL might
  * involve sever dispatch events, for example, there are some functions
@@ -447,7 +447,7 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 				oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 			else
 				/*
-				 * On QE, Greenplum requires a pre-assigned OID to keep QD and
+				 * On QE, Greengage requires a pre-assigned OID to keep QD and
 				 * QEs synchronized, whether in binary upgrade or not.
 				 */
 				elog(ERROR, "no pre-assigned OID for %s tuple \"%s\" (namespace:%u keyOid1:%u keyOid2:%u)",

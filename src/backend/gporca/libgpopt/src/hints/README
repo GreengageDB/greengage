@@ -5,7 +5,7 @@ A hint allows the user to override the optimizer in order to coerce a plan
 shape by disregarding its estimated cost compared to alternative plans. It may
 only be used to coerce plans that exist in ORCA's plan space.
 
-In Greenplum, plan hints are enabled through a custom extension [1] that
+In Greengage, plan hints are enabled through a custom extension [1] that
 provides a similar interface to pg_hint_plan [2], which is based on Postgres.
 
 

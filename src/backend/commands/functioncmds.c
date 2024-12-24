@@ -618,7 +618,7 @@ compute_common_attribute(ParseState *pstate,
 		 * Do nothing.
 		 *
 		 * This "data_access" DefElem was created in gram.y for compatibility,
-		 * Greenplum now allows the syntax of data access indicator, but
+		 * Greengage now allows the syntax of data access indicator, but
 		 * ignores it from here on.
 		 */
 	}

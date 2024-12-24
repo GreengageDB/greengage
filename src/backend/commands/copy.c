@@ -1927,7 +1927,7 @@ BeginCopy(ParseState *pstate,
 
 	oldcontext = MemoryContextSwitchTo(cstate->copycontext);
 
-	/* Greenplum needs this to detect custom protocol */
+	/* Greengage needs this to detect custom protocol */
 	if (rel)
 		cstate->rel = rel;
 
@@ -2867,7 +2867,7 @@ CopyToDispatch(CopyState cstate)
 	/* XXX: lock all partitions */
 
 	/*
-	 * Start a COPY command in every db of every segment in Greenplum Database.
+	 * Start a COPY command in every db of every segment in Greengage Database.
 	 *
 	 * From this point in the code we need to be extra careful
 	 * about error handling. ereport() must not be called until
@@ -4423,7 +4423,7 @@ CopyFrom(CopyState cstate)
 			 * In COPY FROM ON SEGMENT, check the distribution key in the
 			 * QE.
 			 * Note: For partitioned tables, the order of the root table's columns can be
-			 * inconsistent with the order of the partition's columns and Greenplum/PostgreSQL
+			 * inconsistent with the order of the partition's columns and Greengage/PostgreSQL
 			 * allows such behavior. When they have different orders, we need to re-order the
 			 * TupleTableSlot (myslot) to make it match the partition's columns (see execute_attr_map_slot()
 			 * for details). We must perform this check before the re-ordering of TupleTableslot,
@@ -6620,7 +6620,7 @@ CopyReadLineText(CopyState cstate)
 
 			/*
 			* We need to recognize the EOL.
-			* Github issue: https://github.com/greenplum-db/gpdb/issues/12454
+			* Github issue: https://github.com/GreengageDB/greengage/issues/12454
 			*/
 			if(c2 == '\n')
 			{

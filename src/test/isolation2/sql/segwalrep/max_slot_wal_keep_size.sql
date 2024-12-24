@@ -54,8 +54,8 @@ CREATE TABLE t_slot_size_limit(a int, fname text);
 -- advance WAL beyond max_slot_wal_keep_size in the next few steps.
 -- In 6X_STABLE Checkpointer should retain WAL up to this prepare LSN, otherwise we
 -- will never be able to finish this transaction.  Recording two-phase
--- commit state like this in WAL records is legacy Greenplum specific
--- behavior.  In Greenplum 7+ and PostgreSQL, two-phase
+-- commit state like this in WAL records is legacy Greengage specific
+-- behavior.  In Greengage 7+ and PostgreSQL, two-phase
 -- state file is used to record this state, and checkpointer does not
 -- need to be mindful of prepare WAL records.
 3&: INSERT INTO t_slot_size_limit SELECT generate_series(101,120);

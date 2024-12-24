@@ -251,7 +251,7 @@ reset enable_hashjoin; reset enable_mergejoin; reset enable_nestloop;
 -- was rescannable, if the NestLoop was used on the inner side of another
 -- NestLoop.
 --
--- See https://github.com/greenplum-db/gpdb/issues/6769.
+-- See https://github.com/GreengageDB/greengage/issues/6769.
 --
 create table a (i int4);
 create table b (i int4);
@@ -333,7 +333,7 @@ select * from b, lateral (select * from a, c where b.i = a.i and (a.i + b.i) = c
 -- outerParams. Previously, we do not handle this case correct and forgot
 -- to set the Params for nestloop in econtext. The outer Param is a compound
 -- data type instead of simple integer, it will lead to PANIC.
--- See Github Issue: https://github.com/greenplum-db/gpdb/issues/9679
+-- See Github Issue: https://github.com/GreengageDB/greengage/issues/9679
 -- for details.
 create type mytype_prefetch_params as (x int, y int);
 alter table b add column mt_col mytype_prefetch_params;
@@ -560,7 +560,7 @@ join baz on varchar_3=text_any;
 
 --
 -- Test case for Hash Join rescan after squelched without hashtable built
--- See https://github.com/greenplum-db/gpdb/pull/15590
+-- See https://github.com/GreengageDB/greengage/pull/15590
 --
 --- Lateral Join
 set from_collapse_limit = 1;

@@ -19,11 +19,11 @@ import (
 	"google.golang.org/grpc/reflection"
 	grpcStatus "google.golang.org/grpc/status"
 
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
-	"github.com/greenplum-db/gpdb/gp/constants"
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/testutils/exectest"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/gp-common-go-libs/gplog"
+	"github.com/GreengageDB/greengage/gp/constants"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/testutils/exectest"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 var (
@@ -157,8 +157,8 @@ func (s *Server) StartAllAgents() error {
 		remoteCmd = append(remoteCmd, "-h", host)
 	}
 	remoteCmd = append(remoteCmd, platform.GetStartAgentCommandString(s.ServiceName)...)
-	greenplumPathSh := filepath.Join(s.GpHome, "greenplum_path.sh")
-	cmd := execCommand(constants.ShellPath, "-c", fmt.Sprintf("source %s && gpssh %s", greenplumPathSh, strings.Join(remoteCmd, " ")))
+	greengagePathSh := filepath.Join(s.GpHome, "greengage_path.sh")
+	cmd := execCommand(constants.ShellPath, "-c", fmt.Sprintf("source %s && gpssh %s", greengagePathSh, strings.Join(remoteCmd, " ")))
 	output, err := cmd.CombinedOutput()
 	strOutput := string(output)
 	if err != nil {
@@ -379,13 +379,13 @@ func copyConfigFileToAgents(conf *Config, ConfigFilePath string) error {
 	for _, host := range conf.Hostnames {
 		hostList = append(hostList, "-h", host)
 	}
-	greenplumPathSh := filepath.Join(conf.GpHome, "greenplum_path.sh")
+	greengagePathSh := filepath.Join(conf.GpHome, "greengage_path.sh")
 	if len(hostList) < 1 {
 		return fmt.Errorf("hostlist should not be empty. No hosts to copy files")
 	}
 
 	remoteCmd := append(hostList, ConfigFilePath, fmt.Sprintf("=:%s", ConfigFilePath))
-	cmd := execCommand(constants.ShellPath, "-c", fmt.Sprintf("source %s && gpsync %s", greenplumPathSh, strings.Join(remoteCmd, " ")))
+	cmd := execCommand(constants.ShellPath, "-c", fmt.Sprintf("source %s && gpsync %s", greengagePathSh, strings.Join(remoteCmd, " ")))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("could not copy gp.conf file to segment hosts: %w, Command Output: %s", err, string(output))

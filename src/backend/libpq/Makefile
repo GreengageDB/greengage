@@ -26,18 +26,18 @@ ifeq ($(with_gssapi),yes)
 OBJS += be-gssapi-common.o be-secure-gssapi.o
 endif
 
-# Greenplum objects follow
+# Greengage objects follow
 OBJS += fe-protocol3.o fe-connect.o \
         fe-exec.o pqexpbuffer.o fe-auth.o fe-misc.o fe-protocol2.o fe-secure.o \
 	fe-auth-scram.o \
         $(filter getpeereid.o, $(LIBOBJS))
 
-# Greenplum OpenSSL objects follow
+# Greengage OpenSSL objects follow
 ifeq ($(with_openssl),yes)
 OBJS += fe-secure-common.o fe-secure-openssl.o
 endif
 
-# Greenplum GSSAPI objects follow
+# Greengage GSSAPI objects follow
 ifeq ($(with_gssapi),yes)
 OBJS += fe-gssapi-common.o fe-secure-gssapi.o
 endif

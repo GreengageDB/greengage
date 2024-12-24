@@ -2662,11 +2662,11 @@ usage(const char *progname)
 	printf(_("  -S, --sync-only           only sync data directory\n"));
 	printf(_("\nOther options:\n"));
 	printf(_("  -V, --version             output version information, then exit\n"));
-	printf(_("      --gp-version          output Greenplum version information, then exit\n"));
+	printf(_("      --gp-version          output Greengage version information, then exit\n"));
 	printf(_("  -?, --help                show this help, then exit\n"));
 	printf(_("\nIf the data directory is not specified, the environment variable PGDATA\n"
 			 "is used.\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 static void
@@ -3296,7 +3296,7 @@ initialize_data_directory(void)
 
 	load_exttable(cmdfd);
 
-	/* sets up the Greenplum Database admin schema */
+	/* sets up the Greengage Database admin schema */
 	setup_cdb_schema(cmdfd);
 
 	vacuum_db(cmdfd);
@@ -3381,12 +3381,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("initdb (Greenplum Database) " PG_VERSION);
+			puts("initdb (Greengage Database) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("initdb (Greenplum Database) " GP_VERSION);
+			puts("initdb (Greengage Database) " GP_VERSION);
 			exit(0);
 		}
 	}

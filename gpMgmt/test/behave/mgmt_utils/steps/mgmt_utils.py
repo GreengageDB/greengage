@@ -729,7 +729,7 @@ def impl(context, command, hostname):
     run_command_remote(context,
                        command,
                        hostname,
-                       os.getenv("GPHOME") + '/greenplum_path.sh',
+                       os.getenv("GPHOME") + '/greengage_path.sh',
                        'export COORDINATOR_DATA_DIRECTORY=%s' % coordinator_data_dir)
     if has_exception(context):
         raise context.exception
@@ -769,7 +769,7 @@ def impl(context, HOST, port, dir, ctxt):
     remote_gphome = os.environ.get('GPHOME')
     if not dir.startswith("/"):
         dir = os.environ.get(dir)
-    gp_source_file = os.path.join(remote_gphome, 'greenplum_path.sh')
+    gp_source_file = os.path.join(remote_gphome, 'greengage_path.sh')
     gpfdist = Gpfdist('gpfdist on host %s' % host, dir, port, os.path.join(dir, 'gpfdist.pid'), int(ctxt), host,
                       gp_source_file)
     gpfdist.startGpfdist()
@@ -782,7 +782,7 @@ def impl(context, HOST, port, dir, ctxt):
     remote_gphome = os.environ.get('GPHOME')
     if not dir.startswith("/"):
         dir = os.environ.get(dir)
-    gp_source_file = os.path.join(remote_gphome, 'greenplum_path.sh')
+    gp_source_file = os.path.join(remote_gphome, 'greengage_path.sh')
     gpfdist = Gpfdist('gpfdist on host %s' % host, dir, port, os.path.join(dir, 'gpfdist.pid'), int(ctxt), host,
                       gp_source_file)
     gpfdist.cleanupGpfdist()
@@ -1024,7 +1024,7 @@ def impl(context, filepath):
         run_command_remote(context,
                            cmd,
                            context.standby_hostname,
-                           os.getenv("GPHOME") + '/greenplum_path.sh',
+                           os.getenv("GPHOME") + '/greengage_path.sh',
                            'export COORDINATOR_DATA_DIRECTORY=%s' % context.standby_data_dir,
                            validateAfter=True)
     except:
@@ -1161,7 +1161,7 @@ def impl(context, coordinator, standby):
     run_command_remote(context,
                        cmd,
                        context.coordinator_hostname,
-                       os.getenv("GPHOME") + '/greenplum_path.sh',
+                       os.getenv("GPHOME") + '/greengage_path.sh',
                        'export COORDINATOR_DATA_DIRECTORY=%s' % context.standby_data_dir)
 
     context.stdout_position = 0
@@ -1278,7 +1278,7 @@ def impl(context, command):
     run_command_remote(context,
                        cmd,
                        context.standby_hostname,
-                       os.getenv("GPHOME") + '/greenplum_path.sh',
+                       os.getenv("GPHOME") + '/greengage_path.sh',
                        'export COORDINATOR_DATA_DIRECTORY=%s' % context.standby_data_dir,
                        validateAfter=False)
 
@@ -1353,7 +1353,7 @@ def impl(context):
     run_command_remote(context,
                        cmd,
                        context.standby_hostname,
-                       os.getenv("GPHOME") + '/greenplum_path.sh',
+                       os.getenv("GPHOME") + '/greengage_path.sh',
                        'export COORDINATOR_DATA_DIRECTORY=%s' % context.standby_data_dir)
 
 
@@ -1432,7 +1432,7 @@ def stop_segments(context, where_clause):
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
         subprocess.check_call(['ssh', seg.getSegmentHostName(),
-                               'source %s/greenplum_path.sh && pg_ctl stop -m fast -D %s -w -t 120' % (
+                               'source %s/greengage_path.sh && pg_ctl stop -m fast -D %s -w -t 120' % (
                                    pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg.getSegmentDataDirectory()))
                                ])
 
@@ -1466,7 +1466,7 @@ def stop_segments_immediate(context, where_clause):
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
         subprocess.check_call(['ssh', seg.getSegmentHostName(),
-                               'source %s/greenplum_path.sh && pg_ctl stop -m immediate -D %s -w' % (
+                               'source %s/greengage_path.sh && pg_ctl stop -m immediate -D %s -w' % (
                                    pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg.getSegmentDataDirectory()))
                                ])
 
@@ -2198,7 +2198,7 @@ def impl(context, filename):
 @given('the gpfdists occupying port {port} on host "{hostfile}"')
 def impl(context, port, hostfile):
     remote_gphome = os.environ.get('GPHOME')
-    gp_source_file = os.path.join(remote_gphome, 'greenplum_path.sh')
+    gp_source_file = os.path.join(remote_gphome, 'greengage_path.sh')
     source_map_file = os.environ.get(hostfile)
     dir = '/tmp'
     ctxt = 2
@@ -2215,7 +2215,7 @@ def impl(context, port, hostfile):
 @then('the gpfdists running on port {port} get cleaned up from host "{hostfile}"')
 def impl(context, port, hostfile):
     remote_gphome = os.environ.get('GPHOME')
-    gp_source_file = os.path.join(remote_gphome, 'greenplum_path.sh')
+    gp_source_file = os.path.join(remote_gphome, 'greengage_path.sh')
     source_map_file = os.environ.get(hostfile)
     dir = '/tmp'
     ctxt = 2
@@ -2348,7 +2348,7 @@ def impl(context, table, dbname, segid):
     port = port.strip()
     host = host.strip()
     user = os.environ.get('USER')
-    source_file = os.path.join(os.environ.get('GPHOME'), 'greenplum_path.sh')
+    source_file = os.path.join(os.environ.get('GPHOME'), 'greengage_path.sh')
     # Yes, the below line is ugly.  It looks much uglier when done with separate strings, given the multiple levels of escaping required.
     remote_cmd = """
 ssh %s "source %s; export PGUSER=%s; export PGPORT=%s; export PGOPTIONS=\\\"-c gp_role=utility\\\"; psql -d %s -c \\\"SET allow_system_table_mods=true; DELETE FROM pg_attribute where attrelid=\'%s\'::regclass::oid;\\\""
@@ -2364,7 +2364,7 @@ def impl(context, table, dbname, segid):
     port = port.strip()
     host = host.strip()
     user = os.environ.get('USER')
-    source_file = os.path.join(os.environ.get('GPHOME'), 'greenplum_path.sh')
+    source_file = os.path.join(os.environ.get('GPHOME'), 'greengage_path.sh')
     # Yes, the below line is ugly.  It looks much uglier when done with separate strings, given the multiple levels of escaping required.
     remote_cmd = """
 ssh %s "source %s; export PGUSER=%s; export PGPORT=%s; export PGOPTIONS=\\\"-c gp_role=utility\\\"; psql -d %s -c \\\"SET allow_system_table_mods=true; UPDATE pg_class SET relnatts=relnatts + 2 WHERE relname=\'%s\';\\\""
@@ -2578,14 +2578,14 @@ def impl(context, location):
     directory location for all hosts in the cluster.
     """
     gphome = os.environ["GPHOME"]
-    greenplum_path = path.join(gphome, 'greenplum_path.sh')
+    greengage_path = path.join(gphome, 'greengage_path.sh')
 
-    # First replace the GPHOME envvar in greenplum_path.sh.
+    # First replace the GPHOME envvar in greengage_path.sh.
     subprocess.check_call([
         'sed',
         '-i.bak', # we use this backup later
         '-e', r's|^GPHOME=.*$|GPHOME={}|'.format(location),
-        greenplum_path,
+        greengage_path,
     ])
 
     try:
@@ -2605,9 +2605,9 @@ def impl(context, location):
         ])
 
     finally:
-        # Put greenplum_path.sh back the way it was.
+        # Put greengage_path.sh back the way it was.
         subprocess.check_call([
-            'mv', '{}.bak'.format(greenplum_path), greenplum_path
+            'mv', '{}.bak'.format(greengage_path), greengage_path
         ])
 
 @given('all files in gpAdminLogs directory are deleted')

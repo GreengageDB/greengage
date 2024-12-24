@@ -29,11 +29,11 @@ function build_arch() {
 ## ----------------------------------------------------------------------
 
 function install_gpdb() {
-    mkdir -p /usr/local/greenplum-db-devel
+    mkdir -p /usr/local/greengage-db-devel
     if [[ "${CONFIGURE_FLAGS}" =~ enable-cassert && -d bin_gpdb_with_llvm_asserts ]]; then
-      tar -xzf bin_gpdb_with_llvm_asserts/bin_gpdb_with_llvm_asserts.tar.gz -C /usr/local/greenplum-db-devel
+      tar -xzf bin_gpdb_with_llvm_asserts/bin_gpdb_with_llvm_asserts.tar.gz -C /usr/local/greengage-db-devel
     else
-      tar -xzf bin_gpdb/bin_gpdb.tar.gz -C /usr/local/greenplum-db-devel
+      tar -xzf bin_gpdb/bin_gpdb.tar.gz -C /usr/local/greengage-db-devel
     fi
 }
 
@@ -136,7 +136,7 @@ EOF
 function setup_configure_vars() {
     # We need to add GPHOME paths for configure to check for packaged
     # libraries (e.g. ZStandard).
-    source /usr/local/greenplum-db-devel/greenplum_path.sh
+    source /usr/local/greengage-db-devel/greengage_path.sh
     export LDFLAGS="-L${GPHOME}/lib"
     export CPPFLAGS="-I${GPHOME}/include"
 }
@@ -146,7 +146,7 @@ function configure() {
     # The full set of configure options which were used for building the
     # tree must be used here as well since the toplevel Makefile depends
     # on these options for deciding what to test. Since we don't ship
-    ./configure --prefix=/usr/local/greenplum-db-devel --disable-orca --enable-gpcloud --enable-orafce --enable-tap-tests --with-gssapi --with-libxml --with-openssl --with-perl --with-python --with-uuid=e2fs --with-llvm --with-zstd PYTHON=python3.11 PKG_CONFIG_PATH="${GPHOME}/lib/pkgconfig" ${CONFIGURE_FLAGS}
+    ./configure --prefix=/usr/local/greengage-db-devel --disable-orca --enable-gpcloud --enable-orafce --enable-tap-tests --with-gssapi --with-libxml --with-openssl --with-perl --with-python --with-uuid=e2fs --with-llvm --with-zstd PYTHON=python3.11 PKG_CONFIG_PATH="${GPHOME}/lib/pkgconfig" ${CONFIGURE_FLAGS}
 
     popd
 }
@@ -159,17 +159,17 @@ function install_and_configure_gpdb() {
 }
 
 function make_cluster() {
-    source /usr/local/greenplum-db-devel/greenplum_path.sh
+    source /usr/local/greengage-db-devel/greengage_path.sh
     export BLDWRAP_POSTGRES_CONF_ADDONS=${BLDWRAP_POSTGRES_CONF_ADDONS}
     export STATEMENT_MEM=250MB
     pushd gpdb_src/gpAux/gpdemo
 
-    su gpadmin -c "source /usr/local/greenplum-db-devel/greenplum_path.sh; LANG=en_US.utf8 make create-demo-cluster WITH_MIRRORS=${WITH_MIRRORS:-true}"
+    su gpadmin -c "source /usr/local/greengage-db-devel/greengage_path.sh; LANG=en_US.utf8 make create-demo-cluster WITH_MIRRORS=${WITH_MIRRORS:-true}"
 
     if [[ "$MAKE_TEST_COMMAND" =~ gp_interconnect_type=proxy ]]; then
         # generate the addresses for proxy mode
         su gpadmin -c bash -- -e <<EOF
-      source /usr/local/greenplum-db-devel/greenplum_path.sh
+      source /usr/local/greengage-db-devel/greengage_path.sh
       source $PWD/gpdemo-env.sh
 
       delta=-3000
@@ -223,7 +223,7 @@ function install_python_requirements_on_multi_host() {
 
 function setup_coverage() {
     # Enables coverage.py on all hosts in the cluster. Note that this function
-    # modifies greenplum_path.sh, so callers need to source that file AFTER this
+    # modifies greengage_path.sh, so callers need to source that file AFTER this
     # is done.
     local gpdb_src_dir="$1"
     local commit_sha=$(head -1 "$gpdb_src_dir/.git/HEAD")
@@ -246,12 +246,12 @@ COVEOF
 
     # Now copy everything over to the hosts.
     while read -r host; do
-        scp /tmp/sitecustomize.py "$host":/usr/local/greenplum-db-devel/lib/python
-        scp /tmp/coveragerc "$host":/usr/local/greenplum-db-devel
+        scp /tmp/sitecustomize.py "$host":/usr/local/greengage-db-devel/lib/python
+        scp /tmp/coveragerc "$host":/usr/local/greengage-db-devel
         ssh "$host" "mkdir -p $coverage_path" </dev/null
 
-        # Enable coverage instrumentation after sourcing greenplum_path.
-        ssh "$host" "echo 'export COVERAGE_PROCESS_START=/usr/local/greenplum-db-devel/coveragerc' >> /usr/local/greenplum-db-devel/greenplum_path.sh" </dev/null
+        # Enable coverage instrumentation after sourcing greengage_path.
+        ssh "$host" "echo 'export COVERAGE_PROCESS_START=/usr/local/greengage-db-devel/coveragerc' >> /usr/local/greengage-db-devel/greengage_path.sh" </dev/null
     done </tmp/hostfile_all
 }
 

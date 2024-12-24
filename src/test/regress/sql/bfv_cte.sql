@@ -247,7 +247,7 @@ JOIN ttt ON cte.oid = ttt.tc2;
 
 --
 -- Test bug fix for reader-writer communication in Share Input Scan (SISC)
--- https://github.com/greenplum-db/gpdb/issues/16429
+-- https://github.com/GreengageDB/greengage/issues/16429
 --
 -- Helper function
 CREATE OR REPLACE FUNCTION wait_until_query_output_to_file(file_path text) RETURNS VOID AS $$

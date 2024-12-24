@@ -4,14 +4,14 @@
 rm -rf ./certificates
 mkdir ./certificates
 
-source /usr/local/greenplum-db-devel/greenplum_path.sh
+source /usr/local/greengage-db-devel/greengage_path.sh
 
 # Generate private key and self-signed certificate for the Certificate Authority (CA) on cdw
 echo "Generating CA certificate on cdw"
 openssl req -x509 -newkey rsa:4096 -days 365 -nodes \
     -keyout ./certificates/ca-key.pem \
     -out ./certificates/ca-cert.pem \
-    -subj "/C=US/ST=California/L=Palo Alto/O=Greenplum/OU=GPDB/CN=cdw" \
+    -subj "/C=US/ST=California/L=Palo Alto/O=Greengage/OU=GPDB/CN=cdw" \
 
 # Generate server certificates for each host and copy them to respective hosts
 while read host; do
@@ -21,7 +21,7 @@ while read host; do
     openssl req -newkey rsa:4096 -nodes \
         -keyout ./certificates/server-key.pem \
         -out ./certificates/server-request.pem \
-        -subj "/C=US/ST=California/L=Palo Alto/O=Greenplum/OU=GPDB/CN=$host"
+        -subj "/C=US/ST=California/L=Palo Alto/O=Greengage/OU=GPDB/CN=$host"
 
     # Sign the server certificate using the CA
     echo "subjectAltName=DNS:$host,DNS:localhost,IP:0.0.0.0" > ./certificates/extensions.conf

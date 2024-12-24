@@ -403,7 +403,7 @@ typedef struct xl_xact_distributed_forget
  * ----------------
  */
 
-/* Greenplum Database specific */ 
+/* Greengage Database specific */ 
 extern void SetSharedTransactionId_writer(DtxContext distributedTransactionContext);
 extern void SetSharedTransactionId_reader(FullTransactionId xid, CommandId cid, DtxContext distributedTransactionContext);
 extern bool IsTransactionState(void);

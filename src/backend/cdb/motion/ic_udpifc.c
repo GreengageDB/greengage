@@ -3071,7 +3071,7 @@ SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable)
 			 * Then user have to set a bigger gp_interconnect_cursor_ic_table_size value and
 			 * try the query again, it is a workaround.
 			 *
-			 * More backgrounds please see: https://github.com/greenplum-db/gpdb/pull/16458
+			 * More backgrounds please see: https://github.com/GreengageDB/greengage/pull/16458
 			 */
 			else
 			{

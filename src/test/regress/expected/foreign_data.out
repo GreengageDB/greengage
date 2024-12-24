@@ -2087,7 +2087,7 @@ Server: test
 -- Expect: success
 \! pg_dump -t public.foreign_table foreign_tables_test_db
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 
 -- Dumped from database version 12.12
@@ -2121,7 +2121,7 @@ SERVER test;
 ALTER FOREIGN TABLE public.foreign_table OWNER TO regress_foreign_data_user;
 
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 
 -- End of pg_dump output
@@ -2131,7 +2131,7 @@ RESET default_table_access_method;
 RESET gp_default_storage_options;
 \! pg_dump -t public.foreign_table foreign_tables_test_db
 --
--- Greenplum Database database dump
+-- Greengage Database database dump
 --
 
 -- Dumped from database version 12.12
@@ -2165,7 +2165,7 @@ SERVER test;
 ALTER FOREIGN TABLE public.foreign_table OWNER TO regress_foreign_data_user;
 
 --
--- Greenplum Database database dump complete
+-- Greengage Database database dump complete
 --
 
 -- End of pg_dump output

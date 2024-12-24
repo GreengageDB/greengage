@@ -159,7 +159,7 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("pg_resetwal (Greenplum Database) " GP_VERSION);
+			puts("pg_resetwal (Greengage Database) " GP_VERSION);
 			exit(0);
 		}
 	}
@@ -672,7 +672,7 @@ AcceptWarning(void)
 	/* initialize response to empty string. */
 	response[0] = 0;
 
-	printf(_("WARNING: Do not use this on Greenplum. %s might cause data loss\n"
+	printf(_("WARNING: Do not use this on Greengage. %s might cause data loss\n"
 			"and render system irrecoverable. Do you wish to proceed? [yes/no] "), progname);
 
 	/* Reading up to 4 letters instead of just 3 to ensure something like
@@ -1561,5 +1561,5 @@ usage(void)
 	printf(_("      --next-gxid=GXID             set next distributed transaction ID\n"));
 	printf(_("      --wal-segsize=SIZE           size of WAL segments, in megabytes\n"));
 	printf(_("  -?, --help                       show this help, then exit\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }

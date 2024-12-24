@@ -44,7 +44,7 @@ ifeq ($(enable_gpfdist), yes)
 SUBDIRS+=gpfdist
 endif
 
-# Greenplum additions
+# Greengage additions
 SUBDIRS += gpnetbench
 
 $(recurse)

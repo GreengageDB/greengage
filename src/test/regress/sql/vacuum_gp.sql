@@ -141,7 +141,7 @@ where c.oid = a.segrelid and
 	   (a.relid = 'ao_empty'::regclass or
 	    a.relid = 'aocs_empty'::regclass);
 -- Verify that age of toast table is updated by vacuum.
--- AOCS doesn't have a valid reltoastrelid from Greenplum 7.
+-- AOCS doesn't have a valid reltoastrelid from Greengage 7.
 select 0 < age(relfrozenxid) as age_positive,
        age(relfrozenxid) < 100 as age_within_limit
 from pg_class where oid in (select reltoastrelid from pg_class
@@ -220,7 +220,7 @@ VACUUM (ANALYZE, VERBOSE) s_serial;
 DROP SEQUENCE s_serial;
 VACUUM gp_toolkit.__gp_log_coordinator_ext;
 
--- Vacuum related access control tests (Issue: https://github.com/greenplum-db/gpdb/issues/9001)
+-- Vacuum related access control tests (Issue: https://github.com/GreengageDB/greengage/issues/9001)
 -- Given a non-super-user role
 CREATE ROLE non_super_user_vacuum;
 -- And a heap table with auxiliary relations under the pg_toast namespace.

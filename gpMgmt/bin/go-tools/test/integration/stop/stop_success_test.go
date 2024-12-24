@@ -1,8 +1,8 @@
 package stop
 
 import (
-	"github.com/greenplum-db/gpdb/gp/test/integration/testutils"
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/test/integration/testutils"
+	"github.com/GreengageDB/greengage/gp/utils"
 	"strings"
 	"testing"
 )

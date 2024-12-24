@@ -38,12 +38,12 @@ struct List;
  * Disable 64-bit words for big-endian machine because we are lacking
  * big-endian machine.
  * We do have an implemention unverified and a lot of discussions.
- * See: https://github.com/greenplum-db/gpdb/pull/14529
+ * See: https://github.com/GreengageDB/greengage/pull/14529
  *
  * TODO: enable 64-bit words for big-endian machine if possible
  */
 
-/* FIXME: tbm_bitmapword is Greenplum specific 64-bit wide type used for
+/* FIXME: tbm_bitmapword is Greengage specific 64-bit wide type used for
  * TID bitmaps. Since we have enabled 64-bit bms, can we start using
  * bitmapword for TID bitmaps, just like upastream, and eliminate
  * tbm_bitmapword?

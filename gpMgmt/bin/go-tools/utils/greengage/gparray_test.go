@@ -1,4 +1,4 @@
-package greenplum_test
+package greengage_test
 
 import (
 	"database/sql/driver"
@@ -10,10 +10,10 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 
-	"github.com/greenplum-db/gpdb/gp/idl"
-	"github.com/greenplum-db/gpdb/gp/testutils"
-	"github.com/greenplum-db/gpdb/gp/utils"
-	"github.com/greenplum-db/gpdb/gp/utils/greenplum"
+	"github.com/GreengageDB/greengage/gp/idl"
+	"github.com/GreengageDB/greengage/gp/testutils"
+	"github.com/GreengageDB/greengage/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils/greengage"
 )
 
 func TestConnectDatabase(t *testing.T) {
@@ -23,7 +23,7 @@ func TestConnectDatabase(t *testing.T) {
 			t.Fatalf("unexpected error: %#v", err)
 		}
 
-		conn, err := greenplum.ConnectDatabase("testhost", 5432)
+		conn, err := greengage.ConnectDatabase("testhost", 5432)
 		if err != nil {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -43,7 +43,7 @@ func TestConnectDatabase(t *testing.T) {
 		}
 		defer utils.ResetSystemFunctions()
 
-		_, err := greenplum.ConnectDatabase("testhost", 7000)
+		_, err := greengage.ConnectDatabase("testhost", 7000)
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("got %#v, want %#v", err, expectedErr)
 		}
@@ -55,7 +55,7 @@ func TestConnectDatabase(t *testing.T) {
 		}
 		defer utils.ResetSystemFunctions()
 
-		_, err := greenplum.ConnectDatabase("testhost", 5432)
+		_, err := greengage.ConnectDatabase("testhost", 5432)
 		if err != nil {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -76,7 +76,7 @@ func TestReadGpSegmentConfig(t *testing.T) {
 
 		expectedErr := errors.New("Empty gp_segment_configuration")
 
-		gpArray := greenplum.NewGpArray()
+		gpArray := greengage.NewGpArray()
 		err = gpArray.ReadGpSegmentConfig(mockConnection)
 		if errors.Is(err, expectedErr) {
 			t.Fatalf("got %#v, want %#v", err, expectedErr)
@@ -98,13 +98,13 @@ func TestReadGpSegmentConfig(t *testing.T) {
 		sqlMock.ExpectQuery("SELECT dbid, content, role, preferred_role, mode, status, port, datadir, hostname, address " +
 			"FROM pg_catalog.gp_segment_configuration ORDER BY content ASC, role DESC;").WillReturnRows(fakeRows)
 
-		result := []greenplum.Segment{
+		result := []greengage.Segment{
 			{1, -1, "p", "p", "n", "u", 7000, "temp.com", "temp.com", "/tmp/demo/0"},
 			{2, 0, "p", "p", "s", "u", 7002, "temp.com", "temp.com", "/tmp/demo/1"},
 			{3, 1, "p", "p", "s", "u", 7003, "temp.com", "temp.com", "/tmp/demo/2"},
 			{4, 3, "p", "p", "s", "u", 7004, "temp.com", "temp.com", "/tmp/demo/3"},
 		}
-		gpArray := greenplum.NewGpArray()
+		gpArray := greengage.NewGpArray()
 		_ = gpArray.ReadGpSegmentConfig(mockConnection)
 		if !reflect.DeepEqual(gpArray.Segments, result) {
 			t.Fatalf("got %v, want %v", gpArray.Segments, result)
@@ -128,12 +128,12 @@ func TestGpArray_GetPrimarySegments(t *testing.T) {
 		sqlMock.ExpectQuery("SELECT dbid, content, role, preferred_role, mode, status, port, datadir, hostname, address " +
 			"FROM pg_catalog.gp_segment_configuration ORDER BY content ASC, role DESC;").WillReturnRows(fakeRows)
 
-		expResult := []greenplum.Segment{
+		expResult := []greengage.Segment{
 			{2, 0, "p", "p", "s", "u", 7002, "temp.com", "temp.com", "/tmp/demo/1"},
 			{3, 1, "p", "p", "s", "u", 7003, "temp.com", "temp.com", "/tmp/demo/2"},
 			{4, 3, "p", "p", "s", "u", 7004, "temp.com", "temp.com", "/tmp/demo/3"},
 		}
-		gpArray := greenplum.NewGpArray()
+		gpArray := greengage.NewGpArray()
 		_ = gpArray.ReadGpSegmentConfig(mockConnection)
 
 		result, _ := gpArray.GetPrimarySegments()
@@ -154,7 +154,7 @@ func TestGpArray_GetPrimarySegments(t *testing.T) {
 		sqlMock.ExpectQuery("SELECT dbid, content, role, preferred_role, mode, status, port, datadir, hostname, address " +
 			"FROM pg_catalog.gp_segment_configuration ORDER BY content ASC, role DESC;").WillReturnRows(fakeRows)
 
-		gpArray := greenplum.NewGpArray()
+		gpArray := greengage.NewGpArray()
 		err = gpArray.ReadGpSegmentConfig(mockConnection)
 		if err != nil {
 			t.Fatalf("unexpected error: %#v", err)
@@ -187,7 +187,7 @@ func Test_RegisterPrimaries(t *testing.T) {
 				DataDirectory: "/temp/seg/0",
 			},
 		}
-		err = greenplum.RegisterPrimaries(segs, mockConnection)
+		err = greengage.RegisterPrimaries(segs, mockConnection)
 		if err == nil {
 			t.Fatalf("Unexpected error")
 		}
@@ -213,7 +213,7 @@ func Test_RegisterPrimaries(t *testing.T) {
 				DataDirectory: "/temp/seg/0",
 			},
 		}
-		err = greenplum.RegisterPrimaries(segs, mockConnection)
+		err = greengage.RegisterPrimaries(segs, mockConnection)
 		if err == nil {
 			t.Fatalf("Unexpected error")
 		}
@@ -238,7 +238,7 @@ func Test_RegisterPrimaries(t *testing.T) {
 				DataDirectory: "/temp/seg/0",
 			},
 		}
-		err = greenplum.RegisterPrimaries(segs, mockConnection)
+		err = greengage.RegisterPrimaries(segs, mockConnection)
 		if err != nil {
 			t.Fatalf("Unexpected error")
 		}
@@ -258,7 +258,7 @@ func Test_RegisterCoordinator(t *testing.T) {
 			WillReturnError(err)
 
 		var segs idl.Segment
-		err = greenplum.RegisterCoordinator(&segs, mockConnection)
+		err = greengage.RegisterCoordinator(&segs, mockConnection)
 		if err == nil {
 			t.Fatalf("Unexpected error")
 		}
@@ -279,7 +279,7 @@ func Test_RegisterCoordinator(t *testing.T) {
 			HostAddress:   "temp.com",
 			DataDirectory: "/temp/seg/0",
 		}
-		err = greenplum.RegisterCoordinator(&segs, mockConnection)
+		err = greengage.RegisterCoordinator(&segs, mockConnection)
 		if err != nil {
 			t.Fatalf("Unexpected error")
 		}

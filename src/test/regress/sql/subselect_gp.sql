@@ -1067,10 +1067,10 @@ select * from foo where
 
 -- When creating plan with subquery and CTE, it sets the useless flow for the plan.
 -- But we only need flow for the topmost plan and child of the motion. See commit
--- https://github.com/greenplum-db/gpdb/commit/93abe741cd67f04958e2951edff02b45ab6e280f for detail
+-- https://github.com/GreengageDB/greengage/commit/93abe741cd67f04958e2951edff02b45ab6e280f for detail
 -- The extra flow will cause subplan set wrong motionType and cause an ERROR
 -- unexpected gang size: XX
--- This related to issue: https://github.com/greenplum-db/gpdb/issues/12371
+-- This related to issue: https://github.com/GreengageDB/greengage/issues/12371
 create table extra_flow_dist(a int, b int, c date);
 create table extra_flow_dist1(a int, b int);
 
@@ -1182,7 +1182,7 @@ explain (verbose, costs off) select * from (
 extra_flow_dist1
 where dt < '2010-01-01'::date;
 
--- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/greenplum-db/gpdb/issues/12656.
+-- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/GreengageDB/greengage/issues/12656.
 -- For EXISTS SubLink, we don’t need to care about the data deduplication problem, we can delete DISTINCT ON clause and
 -- ORDER BY clause with confidence, because we only care about whether the data exists.
 -- But for ANY SubLink, wo can't do this, because we not only care about the existence of data, but also the content of
@@ -1359,7 +1359,7 @@ explain (COSTS OFF) with t0 AS (
 SELECT c FROM t0;
 
 -- Test push predicate into subquery
--- more details could be found at https://github.com/greenplum-db/gpdb/issues/8429
+-- more details could be found at https://github.com/GreengageDB/greengage/issues/8429
 CREATE TABLE foo_predicate_pushdown (a int, b  int);
 CREATE TABLE bar_predicate_pushdown (c int, d int);
 explain (costs off) select * from (   
@@ -1370,7 +1370,7 @@ DROP TABLE bar_predicate_pushdown;
 
 --
 -- Test case for ORCA semi join with random table
--- See https://github.com/greenplum-db/gpdb/issues/16611
+-- See https://github.com/GreengageDB/greengage/issues/16611
 --
 --- case for random distribute 
 create table table_left (l1 int, l2 int) distributed by (l1);
@@ -1414,7 +1414,7 @@ select * from table_left where exists (select 1 from table_right where l1 = r1);
 drop table table_left;
 drop table table_right;
 -- test cross params of initplan
--- https://github.com/greenplum-db/gpdb/issues/16268
+-- https://github.com/GreengageDB/greengage/issues/16268
 create table tmp (a varchar, b varchar, c varchar);
 select (SELECT EXISTS
                  (SELECT

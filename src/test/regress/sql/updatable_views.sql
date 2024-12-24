@@ -979,8 +979,8 @@ INSERT INTO rw_view2 VALUES (-5); -- should fail
 INSERT INTO rw_view2 VALUES (5); -- ok
 INSERT INTO rw_view2 VALUES (50); -- ok, but not in view
 UPDATE rw_view2 SET a = a - 10; -- should fail
--- Greenplum doesn't fail because nothing was inserted into view, which is
--- because Greenplum doesn't support INSTEAD OF triggers.
+-- Greengage doesn't fail because nothing was inserted into view, which is
+-- because Greengage doesn't support INSTEAD OF triggers.
 SELECT * FROM base_tbl;
 
 -- Check option won't cascade down to base view with INSTEAD OF triggers

@@ -26,7 +26,7 @@
 #include <linux/fs.h>
 #endif
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 #ifdef WIN32
 static int	win32_pghardlink(const char *src, const char *dst);

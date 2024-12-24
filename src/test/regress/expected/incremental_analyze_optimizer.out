@@ -88,7 +88,7 @@ CREATE TABLE foo (
     c62_circlearray circle[],
     c63_inc_analyze_composite_array inc_analyze_composite[]
 ) PARTITION BY RANGE (b) (START (0) END(6) EVERY(3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TYPE input_fields AS
 (
@@ -1536,7 +1536,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Test merging leaf stats where HLL is empty
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo select i, i%6, repeat('aaaa', 100000) FROM generate_series(1, 100)i;
 ANALYZE foo;
@@ -1551,7 +1551,7 @@ SELECT * FROM pg_stats WHERE tablename like 'foo%' and attname = 'c' ORDER BY at
 -- Test ANALYZE full scan HLL
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%3, 'text_'||i%100 FROM generate_series(1,1000)i; 
 INSERT INTO foo SELECT i, i%3+3, 'text_'||i%200 FROM generate_series(1,1000)i; 
@@ -1575,7 +1575,7 @@ SELECT tablename, n_distinct FROM pg_stats WHERE tablename like 'foo%' ORDER BY 
 -- Do not merge stats from only one partition while other partitions have not been analyzed yet
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1;
@@ -1590,7 +1590,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Merge stats from both partitions
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1;
@@ -1612,7 +1612,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- No stats after merging 
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ANALYZE foo_1_prt_1;
 ANALYZE foo_1_prt_2;
@@ -1624,7 +1624,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Merge stats from only one partition
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 SET allow_system_table_mods=true;
@@ -1642,7 +1642,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- Merge stats from only one partition one column
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i, i%6, i%6 FROM generate_series(1,100)i; 
 ANALYZE foo_1_prt_1(c);
@@ -1656,7 +1656,7 @@ SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_
 -- FULL SCAN HLL and the other has HLL from sample
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 ANALYZE foo_1_prt_1;
@@ -1667,7 +1667,7 @@ HINT:  Re-run ANALYZE or ANALYZE FULLSCAN
 -- Do not collect samples while merging stats
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 SET default_statistics_target = 4;
@@ -1791,7 +1791,7 @@ DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text)
 	PARTITION BY RANGE (b) 
 		(START (0) END (8) EVERY (4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i%130, i%8, 'something'||i::text FROM generate_series(1,1000)i;
 set optimizer_analyze_root_partition=off;
@@ -1835,7 +1835,7 @@ DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int, c text)
 	PARTITION BY RANGE (b) 
 		(START (0) END (8) EVERY (4));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i%130, i%8, 'something'||i::text FROM generate_series(1,1000)i;
 set optimizer_analyze_root_partition=off;
@@ -1915,7 +1915,7 @@ SELECT relname, relpages, reltuples FROM pg_class WHERE relname LIKE 'incr_analy
 -- Do not collect samples while merging stats
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo (a int, b int) PARTITION BY RANGE (b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo SELECT i,i%3 FROM generate_series(1,10)i;
 ANALYZE foo_1_prt_1;
@@ -1964,7 +1964,7 @@ FROM pg_statistic WHERE starelid = 'simple_table_no_hll'::regclass;
 set optimizer_analyze_root_partition to off;
 DROP TABLE IF EXISTS foo;
 CREATE TABLE foo(a int) PARTITION BY RANGE(a) (start (0) INCLUSIVE END (20) EVERY (10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo values (5),(15);
 ANALYZE (verbose, rootpartition off) foo;

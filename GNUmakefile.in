@@ -42,7 +42,7 @@ ifneq ($(with_uuid),no)
 endif
 	$(MAKE) -C gpMgmt all
 	$(MAKE) -C gpcontrib all
-	+@echo "All of Greenplum Database successfully made. Ready to install."
+	+@echo "All of Greengage Database successfully made. Ready to install."
 
 docs:
 	$(MAKE) -C doc all
@@ -92,7 +92,7 @@ ifneq ($(with_uuid),no)
 endif
 	$(MAKE) -C gpMgmt $@
 	$(MAKE) -C gpcontrib $@
-	+@echo "Greenplum Database installation complete."
+	+@echo "Greengage Database installation complete."
 
 install-docs:
 	$(MAKE) -C doc install
@@ -157,17 +157,17 @@ check-tests installcheck installcheck-parallel installcheck-tests: submake-gener
 	$(MAKE) -C src/test/regress $@
 
 check:
-	if [ ! -f $(prefix)/greenplum_path.sh ]; then \
+	if [ ! -f $(prefix)/greengage_path.sh ]; then \
 		$(MAKE) -C $(top_builddir) install; \
 	fi
-	. $(prefix)/greenplum_path.sh; \
+	. $(prefix)/greengage_path.sh; \
 	if pg_isready 1>/dev/null; then \
 	  $(MAKE) -C $(top_builddir) installcheck; \
 	else \
 	  if [ ! -f $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh ]; then \
-	    . $(prefix)/greenplum_path.sh && $(MAKE) -C $(top_builddir) create-demo-cluster; \
+	    . $(prefix)/greengage_path.sh && $(MAKE) -C $(top_builddir) create-demo-cluster; \
 	  fi; \
-	  . $(prefix)/greenplum_path.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
+	  . $(prefix)/greengage_path.sh && . $(top_builddir)/gpAux/gpdemo/gpdemo-env.sh && $(MAKE) -C $(top_builddir) installcheck; \
 	fi
 
 $(call recurse,check-world,src/test src/pl src/interfaces/ecpg contrib src/bin gpcontrib,check)

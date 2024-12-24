@@ -2427,7 +2427,7 @@ StartTransaction(void)
 	/*
 	 * Transactions may be started while recovery is in progress, if
 	 * hot standby is enabled.  This mode is not supported in
-	 * Greenplum yet.
+	 * Greengage yet.
 	 */
 	AssertImply(DistributedTransactionContext != DTX_CONTEXT_LOCAL_ONLY,
 				!s->startedInRecovery);
@@ -3559,11 +3559,11 @@ AbortTransaction(void)
 		AtEOXact_Buffers(false);
 		AtEOXact_RelationCache(false);
 		/*
-		 * Greenplum specific behavior:
+		 * Greengage specific behavior:
 		 *   We pass is_commit to true even we are here Aborting Transaction.
-		 *   Greenplum has writer gang and reader gangs, only writer gang can
+		 *   Greengage has writer gang and reader gangs, only writer gang can
 		 *   modify database (like catalog ...), and gang can be reused in
-		 *   Greenplum in the same session. Thus when we abort a transaction,
+		 *   Greengage in the same session. Thus when we abort a transaction,
 		 *   we still have to tell other reader gangs to abort those catcaches.
 		 *   EntryDB is reader gang in coordinator, we also want to tell them
 		 *   to invalidate catcache when QD abort.
@@ -5713,7 +5713,7 @@ AbortOutOfAnyTransaction(void)
 	AtAbort_Memory();
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Some QEs might already be in Abort State, they still need
 	 * to reset Extension related global vars, so we invoke them
 	 * here (not AbortTransction).

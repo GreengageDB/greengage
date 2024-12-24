@@ -600,7 +600,7 @@ pg_relation_size(PG_FUNCTION_ARGS)
 	if (get_fn_expr_argtype(fcinfo->flinfo, 1) == BOOLOID)
 	{
 		/*
-		 * For Greenplum, it does not make sense to provide a requested
+		 * For Greengage, it does not make sense to provide a requested
 		 * forkname for AO tables as they do not have other forks.  Instead we
 		 * accept a boolean argument for whether or not to include the AO
 		 * auxiliary tables in reporting the size of the AO relation.

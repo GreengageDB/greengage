@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2010 Greenplum, Inc.
 //
 //	@filename:
@@ -1108,7 +1108,7 @@ CTranslatorDXLToPlStmt::TranslateIndexConditions(
 
 		// FIXME: Remove this translation from BoolExpr to NullTest when ORCA gets rid of
 		// translation of 'x IS NOT NULL' to 'NOT (x IS NULL)'. Here's the ticket that tracks
-		// the issue: https://github.com/greenplum-db/gpdb/issues/16294
+		// the issue: https://github.com/GreengageDB/greengage/issues/16294
 
 		// Translate index condition CDXLScalarBoolExpr of format 'NOT (col IS NULL)'
 		// to CDXLScalarNullTest 'col IS NOT NULL', because IndexScan only

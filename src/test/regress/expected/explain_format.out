@@ -67,8 +67,8 @@ CREATE TABLE apples(id int PRIMARY KEY, type text);
 INSERT INTO apples(id) SELECT generate_series(1, 100000);
 CREATE TABLE box_locations(id int PRIMARY KEY, address text);
 CREATE TABLE boxes(id int PRIMARY KEY, apple_id int REFERENCES apples(id), location_id int REFERENCES box_locations(id));
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 --- Check Explain Text format output
 select explain_filter('EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
                                              explain_filter                                             
@@ -603,9 +603,9 @@ explain_filter
 </explain>
 (1 row)
 -- Test for an old bug in printing Sequence nodes in JSON/XML format
--- (https://github.com/greenplum-db/gpdb/issues/9410)
+-- (https://github.com/GreengageDB/greengage/issues/9410)
 CREATE TABLE jsonexplaintest (i int4) PARTITION BY RANGE (i) (START(1) END(3) EVERY(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;');
 explain_filter_to_json
@@ -613,7 +613,7 @@ explain_filter_to_json
 (1 row)
 -- Check Explain Text format output with jit enable
 CREATE TABLE jit_explain_output(c1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO jit_explain_output SELECT generate_series(1,100);
 SET jit = on;
@@ -688,7 +688,7 @@ RESET jit;
 RESET jit_above_cost;
 RESET gp_explain_jit;
 RESET optimizer_jit_above_cost;
--- Greenplum hash table extra message
+-- Greengage hash table extra message
 CREATE TABLE test_src_tbl AS
 SELECT i % 10000 AS a, i % 10000 + 1 AS b FROM generate_series(1, 50000) i DISTRIBUTED BY (a);
 ANALYZE test_src_tbl;
@@ -698,7 +698,7 @@ SET statement_mem = '1000kB';
 -- Hashagg with spilling
 CREATE TABLE test_hashagg_spill AS
 SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select explain_filter('EXPLAIN ANALYZE SELECT a, COUNT(DISTINCT b) AS b FROM test_src_tbl GROUP BY a;');
 explain_filter
@@ -724,7 +724,7 @@ Execution Time: N.N ms
 -- Hashagg with grouping sets
 CREATE TABLE test_hashagg_groupingsets AS
 SELECT a, avg(b) AS b FROM test_src_tbl GROUP BY grouping sets ((a), (b));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- The planner generates multiple hash tables but ORCA uses Shared Scan.
 WITH query_plan (et) AS
@@ -869,7 +869,7 @@ RESET optimizer_enable_tablescan;
 RESET optimizer_enable_bitmapscan;
 -- Test Allstats formatting
 create table allstat_test(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set gp_enable_explain_allstat=true;
 explain (analyze, format json) select * from allstat_test;

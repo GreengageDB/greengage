@@ -12,7 +12,7 @@ ERROR:  constraint "dup_constraint" for relation "dupconstr" already exists
 drop table dupconstr;
 --
 -- Alter datatype of column with constraint should raise meaningful error
--- See github issue: https://github.com/greenplum-db/gpdb/issues/10561
+-- See github issue: https://github.com/GreengageDB/greengage/issues/10561
 --
 create table contype (i int4 primary key, j int check (j < 100));
 alter table contype alter i type numeric; --error
@@ -30,7 +30,7 @@ drop table contype;
 --
 create domain mytype as text;
 create temp table at_foo (f1 text, f2 mytype, f3 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into at_foo values('aa','bb','cc');
 drop domain mytype cascade;
@@ -39,7 +39,7 @@ alter table at_foo alter f1 TYPE varchar(10);
 drop table at_foo;
 create domain mytype as int;
 create temp table at_foo (f1 text, f2 mytype, f3 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into at_foo values('aa',0,'cc');
 drop domain mytype cascade;
@@ -49,7 +49,7 @@ alter table at_foo alter f1 TYPE varchar(10);
 -- adding a constraint. There was a bug on that in ORCA, once upon a time
 -- (MPP-20207)
 CREATE TABLE altable(a int, b text, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE altable DROP COLUMN b;
 ALTER TABLE altable ADD CONSTRAINT c_check CHECK (c > 0);
@@ -266,22 +266,22 @@ CREATE TABLE issue_14279_taptest_table (
     col1 BIGINT,
     col2 TEXT NOT NULL DEFAULT 'stuff', FOREIGN KEY (col2) REFERENCES issue_14279_fk_reference(col2))
   PARTITION BY RANGE (col1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE TABLE issue_14279_taptest_table_p3000000000 (
     LIKE issue_14279_taptest_table
     INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 ALTER TABLE issue_14279_taptest_table ATTACH PARTITION issue_14279_taptest_table_p3000000000 FOR VALUES FROM (3000000000) TO (3000000100);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 BEGIN;
 CREATE TABLE issue_14279_taptest_table_p3000000100 (
     LIKE issue_14279_taptest_table
     INCLUDING DEFAULTS INCLUDING CONSTRAINTS);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 ALTER TABLE issue_14279_taptest_table ATTACH PARTITION issue_14279_taptest_table_p3000000100 FOR VALUES FROM (3000000100) TO (3000000200);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 END;
 INSERT INTO issue_14279_taptest_table SELECT generate_series(3000000000, 3000000001);
 INSERT INTO issue_14279_taptest_table SELECT generate_series(3000000100, 3000000101);

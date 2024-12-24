@@ -449,7 +449,7 @@ DELETE FROM aocotest WHERE CURRENT OF c;
 ROLLBACK;
 
 -- Negative: cursor with limit/offset against ordinary table
--- The issue: https://github.com/greenplum-db/gpdb/issues/9838
+-- The issue: https://github.com/GreengageDB/greengage/issues/9838
 CREATE TABLE tidscan_9838(id integer);
 INSERT INTO tidscan_9838 (id) VALUES (1), (2), (3);
 BEGIN;

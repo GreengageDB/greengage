@@ -1,7 +1,7 @@
 /*--------------------------------------------------------------------
  * guc_gp.c
  *
- * Additional Greenplum-specific GUCs are defined in this file, to
+ * Additional Greengage-specific GUCs are defined in this file, to
  * avoid adding so much stuff to guc.c. This makes it easier to diff
  * and merge with upstream.
  *
@@ -3261,7 +3261,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_max_partition_level", PGC_SUSET, PRESET_OPTIONS,
-			gettext_noop("Sets the maximum number of levels allowed when creating a partitioned table using Greenplum classic syntax."),
+			gettext_noop("Sets the maximum number of levels allowed when creating a partitioned table using Greengage classic syntax."),
 			gettext_noop("Use 0 for no limit."),
 			GUC_SUPERUSER_ONLY
 		},
@@ -3722,7 +3722,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		 *   +HINT:  Try enlarging the gp_interconnect_tcp_listener_backlog GUC value and OS net.core.somaxconn parameter
 		 *   +WARNING:  SetupTCPInterconnect: too many expected incoming connections(144), Interconnect setup might possibly fail
 		 * This is because the plan fallback from orca to planner, and planner
-		 * removes the motion under modifytable plannode by the PR: https://github.com/greenplum-db/gpdb/pull/9183
+		 * removes the motion under modifytable plannode by the PR: https://github.com/GreengageDB/greengage/pull/9183
 		 * We should consider to remove the locus check in the PR 9183 and that would fix the case.
 		 * Also we should find out why orca fallback to planner for this simple case.
 		 */
@@ -3851,7 +3851,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_session_id", PGC_BACKEND, CLIENT_CONN_OTHER,
-			gettext_noop("Global ID used to uniquely identify a particular session in an Greenplum Database array"),
+			gettext_noop("Global ID used to uniquely identify a particular session in an Greengage Database array"),
 			NULL,
 			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
 		},
@@ -3915,7 +3915,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_vmem_protect_limit", PGC_POSTMASTER, RESOURCES_MEM,
-			gettext_noop("Virtual memory limit (in MB) of Greenplum memory protection."),
+			gettext_noop("Virtual memory limit (in MB) of Greengage memory protection."),
 			NULL,
 		},
 		&gp_vmem_protect_limit,
@@ -4299,7 +4299,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	 * So, a small value may make user confused: why my postmaster restarts; but a big value
 	 * is also not good: the txn keeps retrying in dispatch, it may block other txns.
 	 *
-	 * After a long discussion: https://github.com/greenplum-db/gpdb/pull/15632, we choose a
+	 * After a long discussion: https://github.com/GreengageDB/greengage/pull/15632, we choose a
 	 * compromise default value: 600s(10min) here.
 	 */
 	{
@@ -4319,7 +4319,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	{
 		/* Can't be set in postgresql.conf */
 		{"gp_server_version_num", PGC_INTERNAL, PRESET_OPTIONS,
-			gettext_noop("Shows the Greenplum server version as an integer."),
+			gettext_noop("Shows the Greengage server version as an integer."),
 			NULL,
 			GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
 		},
@@ -4728,7 +4728,7 @@ struct config_string ConfigureNamesString_gp[] =
 	{
 		/* Can't be set in postgresql.conf */
 		{"gp_server_version", PGC_INTERNAL, PRESET_OPTIONS,
-			gettext_noop("Shows the Greenplum server version."),
+			gettext_noop("Shows the Greengage server version."),
 			NULL,
 			GUC_REPORT | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
 		},
@@ -5182,7 +5182,7 @@ static bool
 check_verify_gpfdists_cert(bool *newval, void **extra, GucSource source)
 {
 	if (!*newval && Gp_role == GP_ROLE_DISPATCH)
-		elog(WARNING, "verify_gpfdists_cert=off. Greenplum Database will stop validating "
+		elog(WARNING, "verify_gpfdists_cert=off. Greengage Database will stop validating "
 				"the gpfdists SSL certificate for connections between segments and gpfdists");
 	return true;
 }

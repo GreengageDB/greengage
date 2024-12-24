@@ -1267,12 +1267,12 @@ addRangeTableEntry(ParseState *pstate,
 	 * AccessShareLock otherwise.
 	 */
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * The implementation of select statement with locking clause
 	 * (for update | no key update | share | key share) in postgres
 	 * is to hold RowShareLock on tables during parsing stage, and
 	 * generate a LockRows plan node for executor to lock the tuples.
-	 * It is not easy to lock tuples in Greenplum database, since
+	 * It is not easy to lock tuples in Greengage database, since
 	 * tuples may be fetched through motion nodes.
 	 *
 	 * But when Global Deadlock Detector is enabled, and the select

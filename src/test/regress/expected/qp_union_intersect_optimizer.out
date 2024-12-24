@@ -1896,7 +1896,7 @@ select * from t_test_append_hash;
 -- gp_execution_segment() = <some segid> the filter segid is randomly picked.
 -- So the result plan's direct dispatch info is also random. We print the plan
 -- and ignore it for better debugging info if error happens.
--- See github issue https://github.com/greenplum-db/gpdb/issues/9874 for details.
+-- See github issue https://github.com/GreengageDB/greengage/issues/9874 for details.
 create table t_github_issue_9874 (a int) distributed by (a);
 -- start_ignore
 explain (costs off)
@@ -1929,7 +1929,7 @@ select * from t_github_issue_9874 where a = 1;
 begin;
 create table rt1(a int, b int) distributed replicated;
 create table t1(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 select i, i+1 from generate_series(6, 9) i;
 insert into rt1 select i, i+1 from generate_series(1, 5) i;
@@ -2015,7 +2015,7 @@ select * from generate_series(100, 105);
 --
 -- We used to have a bug in creation of MergeAppend paths, so that this failed
 -- with "could not find pathkey item to sort" error.  See
--- https://github.com/greenplum-db/gpdb/issues/5695
+-- https://github.com/GreengageDB/greengage/issues/5695
 --
 create table mergeappend_test ( a int, b int, x int ) distributed by (a,b);
 insert into mergeappend_test select g/100, g/100, g from generate_series(1, 500) g;
@@ -2062,7 +2062,7 @@ order by 1,2;
 
 -- This used to trip an assertion in MotionStateFinderWalker(), when we were
 -- missing support for MergeAppend in planstate_walk_kids().
--- (https://github.com/greenplum-db/gpdb/issues/6668)
+-- (https://github.com/GreengageDB/greengage/issues/6668)
 select a, b, array_dims(array_agg(x)) from mergeappend_test r group by a, b
 union all
 select null, null, array_dims(array_agg(x)) FROM mergeappend_test r, pg_sleep(0)

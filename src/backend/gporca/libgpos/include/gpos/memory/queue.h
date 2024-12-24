@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-// Greenplum Database
+// Greengage Database
 // Copyright (c) 2024 VMware, Inc. or its affiliates
 //---------------------------------------------------------------------------
 #ifndef GPOS_queue_H

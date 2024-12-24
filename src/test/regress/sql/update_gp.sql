@@ -338,7 +338,7 @@ SELECT * from update_gp_foo;
 -- may lead to wrong data distribution. We will check this before
 -- planning, if a `insert on conflict do update` statement set the
 -- dist keys of the table, it will raise an error.
--- See github issue: https://github.com/greenplum-db/gpdb/issues/9444
+-- See github issue: https://github.com/GreengageDB/greengage/issues/9444
 create table t_insert_on_conflict_update_distkey(a int, b int) distributed by (a);
 create unique index uidx_t_insert_on_conflict_update_distkey on t_insert_on_conflict_update_distkey(a, b);
 
@@ -382,7 +382,7 @@ SELECT tableoid::regclass, * FROM update_gp_rangep ORDER BY orig_a;
 SELECT tableoid::regclass, * FROM update_gp_rangep WHERE b = 1;
 
 -- Test for update with LASJ_NOTIN
--- See Issue: https://github.com/greenplum-db/gpdb/issues/13265
+-- See Issue: https://github.com/GreengageDB/greengage/issues/13265
 -- Actually main branch does not have the above issue even main
 -- does have the same problematic code (other parts of code are
 -- refactored). Also cherry-pick the case to main and keep it

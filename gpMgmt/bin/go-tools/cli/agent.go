@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/greenplum-db/gpdb/gp/agent"
+	"github.com/GreengageDB/greengage/gp/agent"
 	"github.com/spf13/cobra"
 )
 

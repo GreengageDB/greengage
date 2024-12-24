@@ -1,9 +1,9 @@
-package greenplum
+package greengage
 
 import (
 	"os/exec"
 
-	"github.com/greenplum-db/gpdb/gp/utils"
+	"github.com/GreengageDB/greengage/gp/utils"
 )
 
 const (

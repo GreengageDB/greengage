@@ -88,10 +88,10 @@
 ProcessUtility_hook_type ProcessUtility_hook = NULL;
 
 /*
- * Greenplumn specific code:
+ * Greengage specific code:
  *   for detailed comments, please refer to the comments at the
  *   definition of executor_run_nesting_level in execMain.c.
- *   Greenplum now support create procedure, so auto_stats also
+ *   Greengage now support create procedure, so auto_stats also
  *   need to take inside a procedure as inside function call.
  *   process_utility_nesting_level >= 2 implies in function call
  *   when calling from procedure.
@@ -397,7 +397,7 @@ ProcessUtility(PlannedStmt *pstmt,
 										MyProc->queryCommandId);
 #endif
 	/*
-	 * Greenplum specific code:
+	 * Greengage specific code:
 	 *   Please refer to the comments at the definition of process_utility_nesting_level.
 	 */
 	process_utility_nesting_level++;
@@ -544,7 +544,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("PREPARE TRANSACTION is not yet supported in Greenplum Database")));
+									errmsg("PREPARE TRANSACTION is not yet supported in Greengage Database")));
 
 						}
 						PreventCommandDuringRecovery("PREPARE TRANSACTION");
@@ -560,7 +560,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("COMMIT PREPARED is not yet supported in Greenplum Database")));
+									errmsg("COMMIT PREPARED is not yet supported in Greengage Database")));
 						}
 						PreventInTransactionBlock(isTopLevel, "COMMIT PREPARED");
 						PreventCommandDuringRecovery("COMMIT PREPARED");
@@ -571,7 +571,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("ROLLBACK PREPARED is not yet supported in Greenplum Database")));
+									errmsg("ROLLBACK PREPARED is not yet supported in Greengage Database")));
 						}
 						PreventInTransactionBlock(isTopLevel, "ROLLBACK PREPARED");
 						PreventCommandDuringRecovery("ROLLBACK PREPARED");
@@ -1370,7 +1370,7 @@ ProcessUtilitySlow(ParseState *pstate,
 							else
 							{
 								/*
-								 * Greenplum specific behavior
+								 * Greengage specific behavior
 								 * If intoQuery field is set, it means this is Create Matview.
 								 * To keep catalog consistent, QEs should also store the viewquery.
 								 * The call chain is:
@@ -1824,7 +1824,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					}
 
 					/*
-					 * Greenplum specific behavior:
+					 * Greengage specific behavior:
 					 * Postgres will pass false for is_alter_table for DefineIndex.
 					 * This argument is only used at two places in DefineIndex (in original postgres code):
 					 *   1. the function index_check_primary_key
@@ -1836,8 +1836,8 @@ ProcessUtilitySlow(ParseState *pstate,
 					 *   building a new relation with index here.
 					 *   for 2, I do not think it will mislead the user if we print it as CreateStmt.
 					 *
-					 * But for Greenplum, is_alter_table matters a lot and has to be set false here:
-					 * DefineIndex need to dispatch, and if it is_alter_table is true, Greenplum will
+					 * But for Greengage, is_alter_table matters a lot and has to be set false here:
+					 * DefineIndex need to dispatch, and if it is_alter_table is true, Greengage will
 					 * take this as a sub command of AlterTable stmt, thus it will not dispatch and
 					 * lead to errors. Thus, we comment off the following code and pass false for
 					 * is_alter_table for DefineIndex here.

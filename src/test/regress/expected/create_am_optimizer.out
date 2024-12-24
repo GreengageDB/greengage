@@ -268,7 +268,7 @@ DROP TABLE heaptable;
 -- children will remain untouched
 CREATE TABLE am_partitioned(x INT, y INT)
   PARTITION BY hash (x);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE am_partitioned_1 PARTITION OF am_partitioned FOR VALUES WITH (MODULUS 3,REMAINDER 0);
 CREATE TABLE am_partitioned_2 PARTITION OF am_partitioned FOR VALUES WITH (MODULUS 3,REMAINDER 1);

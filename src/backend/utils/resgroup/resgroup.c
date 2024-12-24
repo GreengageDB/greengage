@@ -526,7 +526,7 @@ InitResGroups(void)
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						 errmsg("cgroup is not properly configured to use the cpuset feature"),
 						 errhint("Extra cgroup configurations are required to enable this feature, "
-								 "please refer to the Greenplum Documentations for details")));
+								 "please refer to the Greengage Documentations for details")));
 			}
 
 			Assert(caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
@@ -3207,7 +3207,7 @@ EnsureCpusetIsAvailable(int elevel)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("cgroup is not properly configured to use the cpuset feature"),
 				 errhint("Extra cgroup configurations are required to enable this feature, "
-						 "please refer to the Greenplum Documentations for details")));
+						 "please refer to the Greengage Documentations for details")));
 
 		return false;
 	}

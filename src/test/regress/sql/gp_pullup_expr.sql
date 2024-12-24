@@ -1,4 +1,4 @@
--- This case is based on the reproduce steps reported on https://github.com/greenplum-db/gpdb/issues/15149
+-- This case is based on the reproduce steps reported on https://github.com/GreengageDB/greengage/issues/15149
 
 CREATE TABLE issue_15149(c1 varchar);
 
