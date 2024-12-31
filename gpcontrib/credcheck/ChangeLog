@@ -1,3 +1,22 @@
+2024-12-31 - Version 3.0.0
+
+This release adds a new feature to exclude a list of users from being banned
+and fixes bugs reported by users since last release.
+
+  - Fix ban count with ssl.
+  - Fix compilation with PG11.
+  - Add new configuration variable to exclude some users from being banned.
+    With credcheck.whitelist_auth_failure you can set a whitelist of usernames
+    that must be excluded from this behavior. Example of use:
+          credcheck.whitelist_auth_failure = 'appuser1,appuser2'
+    Thanks to Kennycwc for the feature request.
+  - Update regression test expected output.
+  - Add a note about the \password command. Thanks to tsoulabail for the report.
+  - Fix test for password reuse.
+  - Fix pg_banned_role.roleid value. Thanks to Julien Rouhaud for the patch.
+  - Move the project under HexaCluster GitHub account.
+  - Update copyright year.
+
 2024-08-03 - Version 2.8.0
 
 This release adds the compatibility with PostgreSQL 17. Upgrade require a
