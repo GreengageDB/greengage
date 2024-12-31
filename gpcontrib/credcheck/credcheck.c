@@ -2302,7 +2302,7 @@ save_auth_failure(Port *port, Oid userid)
 	/*
 	if (port->ssl_in_use)
 		fail_cnt = 0.5;
-		*/
+	*/
 
 	Assert(port->user_name != NULL);
 
@@ -2328,7 +2328,7 @@ save_auth_failure(Port *port, Oid userid)
 			fail_cnt = entry->failure_count + 0.5;
 		else
 		*/
-		fail_cnt = entry->failure_count + 1;
+			fail_cnt = entry->failure_count + 1;
 
 		elog(DEBUG1, "Remove entry in auth failure hash table for user %s", port->user_name);
 		hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
