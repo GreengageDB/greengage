@@ -8,7 +8,7 @@
  *
  * Copyright (c) 2021-2023: MigOps Inc
  * Copyright (c) 2023: Gilles Darold
- * Copyright (c) 2024: HexaCluster Corp
+ * Copyright (c) 2024-2025: HexaCluster Corp
  *
  *-------------------------------------------------------------------------
  */
@@ -215,6 +215,7 @@ static char *username_contain = NULL;
 static bool username_contain_password = true;
 static bool username_ignore_case = false;
 static char *username_whitelist = NULL;
+static char *max_auth_whitelist = NULL;
 
 /* Password flags*/
 static int password_min_length = 1;
@@ -245,7 +246,7 @@ char *str_to_sha256(const char *str, const char *salt);
 #endif
 
 bool check_whitelist(char **newval, void **extra, GucSource source);
-bool is_in_whitelist(char *username);
+bool is_in_whitelist(char *username, char *whitelist);
 
 static char *to_nlower(const char *str, size_t max) {
   char *lower_str;
@@ -506,27 +507,29 @@ check_whitelist(char **newval, void **extra, GucSource source)
 
 /* check if the username is in the whitelist */
 bool
-is_in_whitelist(char *username)
+is_in_whitelist(char *username, char *whitelist)
 {
 	char       *rawstring;
 	List       *elemlist;
 	ListCell   *l;
-	int len =  strlen(username_whitelist);
+	int len =  0;
 
 	Assert(username != NULL);
+	Assert(whitelist != NULL);
 
+	len =  strlen(whitelist);
 	if (len == 0)
 		return false;
 
 	/* Need a modifiable copy of string */
 	rawstring = palloc0(sizeof(char) * (len+1));
-	strcpy(rawstring, username_whitelist);
+	strcpy(rawstring, whitelist);
 	/* Parse string into list of identifiers */
 	if (!SplitIdentifierString(rawstring, ',', &elemlist))
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-				errmsg("username list is invalid: %s", username_whitelist)));
+				errmsg("username list is invalid: %s", whitelist)));
 		list_free(elemlist);
 		pfree(rawstring);
 		return false;
@@ -550,6 +553,7 @@ is_in_whitelist(char *username)
 
 	return false;
 }
+
 
 static void password_check(const char *username, const char *password)
 {
@@ -1243,7 +1247,7 @@ check_password(const char *username, const char *password,
 #ifdef USE_CRACKLIB
 			const char *reason;
 #endif
-			if (is_in_whitelist((char *)username))
+			if (is_in_whitelist((char *)username, username_whitelist))
 				break;
 
 			statement_has_password = true;
@@ -1329,6 +1333,11 @@ _PG_init(void)
 				NULL,
 				NULL);
 
+	DefineCustomStringVariable(
+				"credcheck.whitelist_auth_failure",
+				gettext_noop("comma separated list of username to exclude from max authentication failure check"), NULL,
+				&max_auth_whitelist, "", PGC_SUSET, 0, check_whitelist, NULL, NULL);
+
 #if PG_VERSION_NUM < 150000
 	EmitWarningsOnPlaceholders("credcheck");
 
@@ -1401,7 +1410,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			/* We only take care of user renaming */
 			if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
 			{
-				if (is_in_whitelist(stmt->newname) || is_in_whitelist(stmt->subname))
+				if (is_in_whitelist(stmt->newname, username_whitelist) || is_in_whitelist(stmt->subname, username_whitelist))
 					break;
 			
 				/* check the validity of the username */
@@ -1424,7 +1433,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			DefElem    *dpassword = NULL;
 			DefElem    *dvalidUntil = NULL;
 
-			if (is_in_whitelist(stmt->role->rolename))
+			if (is_in_whitelist(stmt->role->rolename, username_whitelist))
 				break;
 
 			/* Extract options from the statement node tree */
@@ -1485,7 +1494,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			DefElem    *dpassword = NULL;
 			DefElem    *dvalidUntil = NULL;
 
-			if (is_in_whitelist(stmt->role))
+			if (is_in_whitelist(stmt->role, username_whitelist))
 				break;
 
 			/* check the validity of the username */
@@ -2195,6 +2204,14 @@ credcheck_max_auth_failure(Port *port, int status)
 	/* Inject a short delay if authentication failed. */
 	if (status != STATUS_OK)
 		pg_usleep(1000L * auth_delay_milliseconds);
+
+	/* get out if the user is whitelisted for auth failure */
+	if (is_in_whitelist(port->user_name, max_auth_whitelist))
+	{
+		if (prev_ClientAuthentication)
+			prev_ClientAuthentication(port, status);
+		return;
+	}
 
 	/* check for max auth failure */
 	if (fail_max > 0 && status != STATUS_EOF)

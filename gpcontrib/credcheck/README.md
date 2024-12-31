@@ -417,6 +417,11 @@ psql: error: connection to server at "localhost" (127.0.0.1), port 5432 failed: 
 connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "toban_user"
 ```
 
+If you want to exclude some users from being banned, like application users for example, you can set a whitelist of username that must be excluded from this behavior.
+```
+	credcheck.whitelist_auth_failure = 'appuser1,appuser2'
+```
+
 ### [Authentication delay](#authentication-delay)
 
 This feature allow a pause on authentication failure. Setting `credcheck.auth_delay_ms` causes the server to pause for a given number of milliseconds before reporting authentication failure. This makes brute-force attacks on database passwords more difficult. 
@@ -475,7 +480,7 @@ This extension is free software distributed under the PostgreSQL License.
 
     Copyright (c) 2021-2023 MigOps Inc.
     Copyright (c) 2023 Gilles Darold
-    Copyright (c) 2024 HexaCluster Corp
+    Copyright (c) 2024-2025 HexaCluster Corp
 
 ### [Credits](#credits)
 
