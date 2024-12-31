@@ -192,14 +192,16 @@ static void pghist_shmem_request(void);
 static void pghist_shmem_startup(void);
 static void pgph_shmem_startup(void);
 static void pgaf_shmem_startup(void);
+#if PG_VERSION_NUM >= 120000
 static int  entry_cmp(const void *lhs, const void *rhs);
+#endif
 static Size pgph_memsize(void);
 static void pg_password_history_internal(FunctionCallInfo fcinfo);
 static void fix_log(ErrorData *edata);
 static Size pgaf_memsize(void);
 static void credcheck_max_auth_failure(Port *port, int status);
 static float get_auth_failure(const char *username, Oid userid, int status);
-static float save_auth_failure(const char *username, Oid userid);
+static float save_auth_failure(Port *port, Oid userid);
 static void remove_auth_failure(const char *username, Oid userid);
 static void pg_banned_role_internal(FunctionCallInfo fcinfo);
 
@@ -939,6 +941,7 @@ rename_user_in_history(const char *username, const char *newname)
 /*
  * qsort comparator for sorting into increasing usage order
  */
+#if PG_VERSION_NUM >= 120000
 static int
 entry_cmp(const void *lhs, const void *rhs)
 {
@@ -952,6 +955,7 @@ entry_cmp(const void *lhs, const void *rhs)
         else
                 return 0;
 }
+#endif
 
 static void
 remove_password_from_history(const char *username, const char *password, int numentries)
@@ -1430,8 +1434,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			ListCell      *option;
 			char          *password;
 			bool           save_password = false;
-			DefElem    *dpassword = NULL;
 			DefElem    *dvalidUntil = NULL;
+			DefElem    *dpassword = NULL;
 
 			if (is_in_whitelist(stmt->role->rolename, username_whitelist))
 				break;
@@ -1476,9 +1480,11 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 							errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
 			}
 
+#if PG_VERSION_NUM >= 120000
 			/* The password can be saved into the history */
 			if (save_password)
 				save_password_in_history(stmt->role->rolename, password);
+#endif
 			break;
 		}
 
@@ -1552,8 +1558,10 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 						errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
 			/* The password can be saved into the history */
+#if PG_VERSION_NUM >= 120000
 			if (save_password)
 				save_password_in_history(stmt->role, password);
+#endif
 			break;
 		}
 
@@ -2224,7 +2232,7 @@ credcheck_max_auth_failure(Port *port, int status)
 
 			/* register the auth failure if we not reach allowed max failure */
 			if (status == STATUS_ERROR && fail_num <= fail_max)
-				fail_num = save_auth_failure(port->user_name, userOid);
+				fail_num = save_auth_failure(port, userOid);
 
 			/* reject, this account has been banned */
 			if (fail_num >= fail_max)
@@ -2285,16 +2293,18 @@ get_auth_failure(const char *username, Oid userid, int status)
 }
 
 static float
-save_auth_failure(const char *username, Oid userid)
+save_auth_failure(Port *port, Oid userid)
 {
 	pgafHashKey key;
 	pgafEntry  *entry;
-	float fail_cnt = 0.5;
+	float fail_cnt = 1;
 
-	if (!EnableSSL)
-		fail_cnt = 1;
+	/*
+	if (port->ssl_in_use)
+		fail_cnt = 0.5;
+		*/
 
-	Assert(username != NULL);
+	Assert(port->user_name != NULL);
 
 	if (fail_max == 0)
 		return 0;
@@ -2313,15 +2323,17 @@ save_auth_failure(const char *username, Oid userid)
 	entry = (pgafEntry *) hash_search(pgaf_hash, &key, HASH_FIND, NULL);
 	if (entry)
 	{
-		if (EnableSSL)
+		/*
+		if (port->ssl_in_use)
 			fail_cnt = entry->failure_count + 0.5;
 		else
-			fail_cnt = entry->failure_count + 1;
+		*/
+		fail_cnt = entry->failure_count + 1;
 
-		elog(DEBUG1, "Remove entry in auth failure hash table for user %s", username);
+		elog(DEBUG1, "Remove entry in auth failure hash table for user %s", port->user_name);
 		hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
 	}
-	elog(DEBUG1, "Add new entry in auth failure hash table for user %s (%d, %f)", username, userid, fail_cnt);
+	elog(DEBUG1, "Add new entry in auth failure hash table for user %s (%d, %f)", port->user_name, userid, fail_cnt);
 
 	/* OK to create a new hashtable entry */
 	entry = pgaf_entry_alloc(&key, fail_cnt);
