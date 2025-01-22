@@ -11,7 +11,9 @@ clusters="~concourse_cluster"
 if [ $# -eq 0 ]
 then
   # TODO cross_subnet and gpssh tests are excluded
-  features=`ls $behave_tests_dir -1 | grep feature | grep -v -E "cross_subnet|gpssh" | sed 's/\.feature$//'`
+  # FIXME! sigar is requred for gpperfmon tests
+  # FIXME! /home/gpadmin/sqldump/dump.sql is required for gpexpand tests
+  features=`ls $behave_tests_dir -1 | grep feature | grep -v -E "cross_subnet|gpssh|gpperfmon|gpexpand" | sed 's/\.feature$//'`
 else
   for feature in $@
   do

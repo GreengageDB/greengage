@@ -1,17 +1,8 @@
 FROM centos:centos7 as base
 
-ARG sigar=https://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-1.6.5-1056.git2932df5.el7.x86_64.rpm
-ARG sigar_headers=http://downloads.adsw.io/ADB/6.22.0_arenadata38/centos/7/community/x86_64/sigar-headers-1.6.5-1056.git2932df5.el7.x86_64.rpm
-ARG CENTOS_REPOS_URL="http://mirror.adsw.io"
-
 # Reinstall glibc-common. This is necessary to get langpacks in docker
 # because docker images don't contain them.
-# Change URL for repos, because Centos 7 EOL 30.06.2024
-RUN sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=os\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/centos/\$releasever/os/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo && \
-    sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=updates\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/centos/\$releasever/updates/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo && \
-    sed -i "s|mirrorlist=http://mirrorlist.centos.org/?release=\$releasever\&arch=\$basearch\&repo=extras\&infra=\$infra|baseurl=$CENTOS_REPOS_URL/centos/\$releasever/extras/\$basearch|g" /etc/yum.repos.d/CentOS-Base.repo && \
-    sed -i 's/\(override_install_langs*\)/# \1/' /etc/yum.conf && \
-    yum -y reinstall glibc-common && \
+RUN yum -y reinstall glibc-common && \
 	yum clean all
 
 # Install some basic utilities and build tools
@@ -67,8 +58,6 @@ RUN yum -y install centos-release-scl && \
     echo -e 'export JAVA_HOME=/etc/alternatives/java_sdk' >> /etc/profile.d/jdk_home.sh && \
     echo -e 'export PATH=$JAVA_HOME/bin:$PATH' >> /etc/profile.d/jdk_home.sh && \
     echo -e 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
-
-RUN rpm -i $sigar && rpm -i $sigar_headers
 
 # Install pg_bsd_indent used by pgindent utility.
 # Remove sources (with artifacts) and archive.

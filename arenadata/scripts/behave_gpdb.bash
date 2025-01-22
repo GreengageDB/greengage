@@ -13,13 +13,6 @@ function gen_env(){
 
 		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
 
-		if [[ ${FEATURE} == "gpexpand" ]]; then
-			mkdir -p /home/gpadmin/sqldump
-			wget -nv https://rt.adsw.io/artifactory/common/dump.sql.xz -O /home/gpadmin/sqldump/dump.sql.xz
-
-			xz -d /home/gpadmin/sqldump/dump.sql.xz
-		fi
-
 		cd "\${1}/gpdb_src/gpMgmt/"
 		BEHAVE_TAGS="${BEHAVE_TAGS}"
 		BEHAVE_FLAGS="${BEHAVE_FLAGS}"
