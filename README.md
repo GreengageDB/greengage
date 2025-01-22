@@ -1,9 +1,4 @@
-**Concourse Pipeline** [![Concourse Build Status](https://prod.ci.gpdb.pivotal.io/api/v1/teams/main/pipelines/gpdb_main/badge)](https://prod.ci.gpdb.pivotal.io/teams/main/pipelines/gpdb_main) |
-**Travis Build** [![Travis Build Status](https://travis-ci.org/GreengageDB/greengage.svg?branch=main)](https://travis-ci.org/GreengageDB/greengage)
-
-----------------------------------------------------------------------
-
-![Greengage](logo-greengage.svg)
+![Greengage](ggdb_32x32.svg)
 
 Greengage Database (GPDB) is an advanced, fully featured, open
 source data warehouse, based on PostgreSQL. It provides powerful and rapid analytics on
