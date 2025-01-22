@@ -1,18 +1,18 @@
 # Contributing
 
-Greengage is maintained by a core team of developers with commit rights to the [main GPDB repository](https://github.com/arenadata/gpdb) on GitHub. At the same time, we are very eager to receive contributions from anybody in the wider Greengage community. This section covers all you need to know if you want to see your code or documentation changes be added to Greengage and appear in the future releases.
+Greengage is maintained by a core team of developers with commit rights to the [main Greengage repository](https://github.com/GreengageDB/greengage) on GitHub. At the same time, we are very eager to receive contributions from anybody in the wider Greengage community. This section covers all you need to know if you want to see your code or documentation changes be added to Greengage and appear in the future releases.
 
 ## Getting started
 
 Greengage is developed on GitHub, and anybody wishing to contribute to it will have to [have a GitHub account](https://github.com/signup) and be familiar with [Git tools and workflow](https://wiki.postgresql.org/wiki/Working_with_Git).
 
-Once you have your GitHub account, [fork](https://github.com/arenadata/gpdb/fork) this repository so that you can have your private copy to start hacking on and to use as source of pull requests.
+Once you have your GitHub account, [fork](https://github.com/GreengageDB/greengage/fork) this repository so that you can have your private copy to start hacking on and to use as source of pull requests.
 
 ## Licensing of Greengage contributions
 
 If the contribution you're submitting is original work, you can assume that Arenadata will release it as part of an overall Greengage release available to the downstream consumers under the Apache License, Version 2.0. However, in addition to that, Arenadata may also decide to release it under a different license (such as PostgreSQL License to the upstream consumers that require it. A typical example here would be Arenadata upstreaming your contribution back to PostgreSQL community (which can be done either verbatim or your contribution being upstreamed as part of the larger changeset).
 
-If the contribution you're submitting is NOT original work you have to indicate the name of the license and also make sure that it is similar in terms to the Apache License 2.0. Apache Software Foundation maintains a list of these licenses under [Category A](https://www.apache.org/legal/resolved.html#category-a). In addition to that, you may be required to make proper attribution in the [NOTICE file](https://github.com/arenadata/gpdb/blob/adb-6.x/NOTICE) file similar to [these examples](https://github.com/arenadata/gpdb/blob/adb-6.x/NOTICE#L278).
+If the contribution you're submitting is NOT original work you have to indicate the name of the license and also make sure that it is similar in terms to the Apache License 2.0. Apache Software Foundation maintains a list of these licenses under [Category A](https://www.apache.org/legal/resolved.html#category-a). In addition to that, you may be required to make proper attribution in the [NOTICE file](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE) file similar to [these examples](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE#L278).
 
 Finally, keep in mind that it is NEVER a good idea to remove licensing headers from the work that is not your original one. Even if you are using parts of the file that originally had a licensing header at the top you should err on the side of preserving it. As always, if you are not quite sure about the licensing implications of your contributions, feel free to reach out to us.
 
