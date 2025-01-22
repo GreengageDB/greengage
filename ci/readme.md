@@ -5,7 +5,7 @@
 Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
 
 ```bash 
-docker build -t gpdb6_regress:latest -f arenadata/Dockerfile .
+docker build -t gpdb6_regress:latest -f ci/Dockerfile.ubuntu .
 ```
 
 
@@ -28,7 +28,7 @@ docker run --name gpdb6_opt_on --rm -it -e TEST_OS=centos \
 ## ORCA linter
 
 ```bash
-docker build -t orca-linter:test -f arenadata/Dockerfile.linter .
+docker build -t orca-linter:test -f ci/Dockerfile.linter .
 docker run --rm -it orca-linter:test
 ```
 
@@ -68,16 +68,17 @@ Behave tests now can run locally with docker-compose.
 Feature files are located in `gpMgmt/test/behave/mgmt_utils`
 Before run tests you need to build a docker-image
 ```bash
-docker build -t "hub.adsw.io/library/gpdb6_regress:${BRANCH_NAME}" -f arenadata/Dockerfile .
+docker build -t "greengage6_regress:${BRANCH_NAME}" -f ci/Dockerfile.ubuntu .
 ```
 
 Command to run features:
 ```bash
 # Run all tests
-bash arenadata/scripts/run_behave_tests.bash
+export IMAGE="greengage6_regress:${BRANCH_NAME}"
+bash ci/scripts/run_behave_tests.bash
 
 # Run specific features
-bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
+bash ci/scripts/run_behave_tests.bash gpstart gpstop
 ```
 
 
@@ -97,5 +98,5 @@ Docker containers have installed `sigar` libraries. It is required only for `gpp
 ## Resource group test
 
 ```bash
-bash arenadata/scripts/run_resgroup_test.bash
+bash ci/scripts/run_resgroup_test.bash
 ```
