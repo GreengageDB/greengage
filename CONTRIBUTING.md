@@ -8,11 +8,9 @@ Greengage is developed on GitHub, and anybody wishing to contribute to it will h
 
 Once you have your GitHub account, fork this repository so that you can have your private copy to start hacking on and to use as source of pull requests.
 
-Anybody contributing to Greengage has to be covered by either the Corporate or the Individual Contributor License Agreement. If you have not previously done so, please fill out and submit the [Contributor License Agreement](https://cla.vmware.com/cla/1/preview). Note that we do allow for really trivial changes to be contributed without a CLA if they fall under the rubric of obvious fixes. However, since our GitHub workflow checks for CLA by default you may find it easier to submit one instead of claiming an "obvious fix" exception.
-
 ## Licensing of Greengage contributions
 
-If the contribution you're submitting is original work, you can assume that VMware will release it as part of an overall Greengage release available to the downstream consumers under the Apache License, Version 2.0. However, in addition to that, VMware may also decide to release it under a different license (such as PostgreSQL License to the upstream consumers that require it. A typical example here would be VMware upstreaming your contribution back to PostgreSQL community (which can be done either verbatim or your contribution being upstreamed as part of the larger changeset).
+If the contribution you're submitting is original work, you can assume that we will release it as part of an overall Greengage release available to the downstream consumers under the Apache License, Version 2.0. However, in addition to that, we may also decide to release it under a different license (such as PostgreSQL License to the upstream consumers that require it. A typical example here would be we upstreaming your contribution back to PostgreSQL community (which can be done either verbatim or your contribution being upstreamed as part of the larger changeset).
 
 If the contribution you're submitting is NOT original work you have to indicate the name of the license and also make sure that it is similar in terms to the Apache License 2.0. Apache Software Foundation maintains a list of these licenses under Category A. In addition to that, you may be required to make proper attribution in the NOTICE file file similar to these examples.
 
@@ -51,15 +49,9 @@ Things which slow down patch approval
  - missing to accompany tests (or reproducible steps at minimum)
  - submitting the patch against STABLE branch where the fix also applies to main branch
 
-## Submissions against 5X_STABLE
-
-Need strong justification of impact for the issue being solved by submission. Given this code line has been released and running in production from long time, community is very conservative at making changes to this release branch. Only very critical bugs like data loss/unavailability, affecting upgrades to higher versions and such are considered for acceptance for this release line.
-
 ## Validation checks and CI
 
-Once you submit your pull request, you will immediately see a number of validation checks performed by our automated CI pipelines. There also will be a CLA check telling you whether your CLA was recognized. If any of these checks fails, you will need to update your pull request to take care of the issue. Pull requests with failed validation checks are very unlikely to receive any further peer review from the community members.
-
-Keep in mind that the most common reason for a failed CLA check is a mismatch between an email on file and an email recorded in the commits submitted as part of the pull request.
+Once you submit your pull request, you will immediately see a number of validation checks performed by our automated CI pipelines. If any of these checks fails, you will need to update your pull request to take care of the issue. Pull requests with failed validation checks are very unlikely to receive any further peer review from the community members.
 
 If you cannot figure out why a certain validation check failed, feel free to ask on the developer's mailing list, but make sure to include a direct link to a pull request in your email.
 
