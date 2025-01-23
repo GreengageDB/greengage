@@ -4,7 +4,8 @@
  *	  Parallelize a PostgreSQL sequential plan tree.
  *
  * Portions Copyright (c) 2004-2008, Greenplum inc
- * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
+ * Portions Copyright (c) 2012-2024 VMware, Inc. or its affiliates.
+ * Portions Copyright (c) 2025-Present, Greengage Community
  *
  *
  * IDENTIFICATION
