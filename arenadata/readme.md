@@ -8,14 +8,6 @@ for Ubuntu:
 docker build -t gpdb8_u22:latest -f arenadata/Dockerfile.ubuntu .
 ```
 
-CI pushes docker images to the internal registry for each branch. We can pull it with usage of:
-
-* branch name as tag (latest for `adb-8.x` branch)
-* commit hash:
-  ```bash
-  docker pull hub.adsw.io/library/gpdb8_u22:1353d81
-  ```
-
 ## Full regression tests suite run
 
 We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_gpdb.bash) in container to create demo cluster and run different test suites against it:
