@@ -44,12 +44,12 @@ run_feature() {
     local project="${feature}_demo"
   fi
   echo "Started $feature behave tests on cluster $cluster and project $project"
-  docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env up -d
+  docker-compose -p $project -f ci/docker-compose.yaml --env-file ci/.env up -d
   # Prepare ALL containers first
-  local services=$(docker-compose -p $project -f arenadata/docker-compose.yaml config --services | tr '\n' ' ')
+  local services=$(docker-compose -p $project -f ci/docker-compose.yaml config --services | tr '\n' ' ')
   for service in $services
   do
-    docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
+    docker-compose -p $project -f ci/docker-compose.yaml exec -T \
       $service bash -c "mkdir -p /data/gpdata && chmod -R 777 /data &&
         source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
        ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
@@ -59,21 +59,21 @@ run_feature() {
   # Add host keys to known_hosts after containers setup
   for service in $services
   do
-    docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
+    docker-compose -p $project -f ci/docker-compose.yaml exec -T \
       $service bash -c "ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts" &
   done
   wait
 
-  docker-compose -p $project -f arenadata/docker-compose.yaml exec -T \
+  docker-compose -p $project -f ci/docker-compose.yaml exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
       -o /tmp/allure-results"  \
-    cdw gpdb_src/arenadata/scripts/behave_gpdb.bash
+    cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  docker-compose -p $project -f arenadata/docker-compose.yaml --env-file arenadata/.env down -v
+  docker-compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
 
   if [[ $status > 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
   exit $status

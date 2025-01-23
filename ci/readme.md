@@ -5,11 +5,11 @@
 Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
 for Ubuntu:
 ```bash
-docker build -t gpdb7_u22:latest -f arenadata/Dockerfile.ubuntu .
+docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
 ```
 for Rocky Linux:
 ```bash
-docker build -t gpdb7_regress:latest -f arenadata/Dockerfile .
+docker build -t gpdb7_regress:latest -f ci/Dockerfile .
 ```
 
 ## Full regression tests suite run
@@ -75,7 +75,7 @@ To use gdb inside the container, add the `--privileged` flag to the run command.
 ## ORCA linter
 
 ```bash
-docker build -t orca-linter:test -f arenadata/Dockerfile.linter .
+docker build -t orca-linter:test -f ci/Dockerfile.linter .
 docker run --rm -it orca-linter:test
 ```
 
@@ -128,11 +128,11 @@ Feature files are located in `gpMgmt/test/behave/mgmt_utils`
 Before run tests you need to build a docker-image
 for Ubuntu:
 ```bash
-docker build -t "hub.adsw.io/library/gpdb7_u22:${BRANCH_NAME}" -f arenadata/Dockerfile.ubuntu .
+docker build -t "greengage7_u22:${BRANCH_NAME}" -f ci/Dockerfile.ubuntu .
 ```
 for Rocky Linux:
 ```bash
-docker build -t "hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME}" -f arenadata/Dockerfile .
+docker build -t "greengage7_regress:${BRANCH_NAME}" -f ci/Dockerfile .
 ```
 
 Command to run features:
@@ -140,19 +140,19 @@ Command to run features:
 for Ubuntu:
 ```bash
 # Run all tests
-IMAGE=hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash
+IMAGE=greengage7_u22:${BRANCH_NAME} bash ci/scripts/run_behave_tests.bash
 
 # Run specific features
-IMAGE=hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
+IMAGE=greengage7_u22:${BRANCH_NAME} bash ci/scripts/run_behave_tests.bash gpstart gpstop
 ```
 
 for Rocky Linux:
 ```bash
 # Run all tests
-bash arenadata/scripts/run_behave_tests.bash
+IMAGE=greengage7_regress:${BRANCH_NAME} bash ci/scripts/run_behave_tests.bash
 
 # Run specific features
-bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
+IMAGE=greengage7_regress:${BRANCH_NAME} bash ci/scripts/run_behave_tests.bash gpstart gpstop
 ```
 
 
