@@ -2,8 +2,6 @@
 
 version: "3"
 services:
-  #image can be either hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME}-x86-64 or
-  #hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME}-ppc64le depending on the arch
   cdw:
     image: "${IMAGE}"
     working_dir: /home/gpadmin

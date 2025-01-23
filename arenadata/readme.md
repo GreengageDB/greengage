@@ -12,14 +12,6 @@ for Rocky Linux:
 docker build -t gpdb7_regress:latest -f arenadata/Dockerfile .
 ```
 
-CI pushes docker images to the internal registry for each branch. We can pull it with usage of:
-
-* branch name as tag (latest for `adb-7.x` branch)
-* commit hash:
-  ```bash
-  docker pull hub.adsw.io/library/gpdb7_regress:1353d81
-  ```
-
 ## Full regression tests suite run
 
 We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_gpdb.bash) in container to create demo cluster and run different test suites against it:
