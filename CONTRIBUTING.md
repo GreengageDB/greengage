@@ -10,7 +10,7 @@ Once you have your GitHub account, [fork](https://github.com/GreengageDB/greenga
 
 ## Licensing of Greengage contributions
 
-If the contribution you're submitting is original work, you can assume that Arenadata will release it as part of an overall Greengage release available to the downstream consumers under the Apache License, Version 2.0. However, in addition to that, Arenadata may also decide to release it under a different license (such as PostgreSQL License to the upstream consumers that require it. A typical example here would be Arenadata upstreaming your contribution back to PostgreSQL community (which can be done either verbatim or your contribution being upstreamed as part of the larger changeset).
+If the contribution you're submitting is original work, you can assume that we will release it as part of an overall Greengage release available to the downstream consumers under the Apache License, Version 2.0. However, in addition to that, we may also decide to release it under a different license (such as PostgreSQL License to the upstream consumers that require it. A typical example here would be we upstreaming your contribution back to PostgreSQL community (which can be done either verbatim or your contribution being upstreamed as part of the larger changeset).
 
 If the contribution you're submitting is NOT original work you have to indicate the name of the license and also make sure that it is similar in terms to the Apache License 2.0. Apache Software Foundation maintains a list of these licenses under [Category A](https://www.apache.org/legal/resolved.html#category-a). In addition to that, you may be required to make proper attribution in the [NOTICE file](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE) file similar to [these examples](https://github.com/GreengageDB/greengage/blob/adb-6.x/NOTICE#L278).
 
@@ -40,7 +40,11 @@ If the change you're working on touches functionality that is common between Pos
 
 Once you are ready to share your work with the Greengage core team and the rest of the Greengage community, you should push all the commits to a branch in your own repository forked from our one and [send us a pull request](https://help.github.com/articles/about-pull-requests/).
 
-For now, we require all pull requests to be submitted against the adb-7.1.0 branch, but over time, once there are many supported open source releases of Greengage in the wild, you may decide to submit your pull requests against an active release branch if the change is only applicable to a given release. Patches for Greengage 6 should be submitted against the adb-6.x-dev branch. This branch is merged into the adb-6.x branch when a new release is ready.
+We require all pull requests to be submitted against the main branch (clearly stating if the change needs to be back-ported to STABLE branches). If the change is ONLY applicable to given STABLE branch, you may decide to submit your pull requests against an active STABLE release branch.
+
+Things which slow down patch approval
+ - missing to accompany tests (or reproducible steps at minimum)
+ - submitting the patch against STABLE branch where the fix also applies to main branch
 
 ## Validation checks and CI
 
