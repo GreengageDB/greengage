@@ -45,158 +45,168 @@ ExecDMLExplainEnd(PlanState *planstate, struct StringInfoData *buf)
 TupleTableSlot*
 ExecDML(DMLState *node)
 {
-
-	PlanState *outerNode = outerPlanState(node);
-	DML *plannode = (DML *) node->ps.plan;
-
-	Assert(outerNode != NULL);
-
-	TupleTableSlot *slot = ExecProcNode(outerNode);
-
-	if (TupIsNull(slot))
+	for (;;)
 	{
-		return NULL;
-	}
+		PlanState *outerNode = outerPlanState(node);
+		DML *plannode = (DML *) node->ps.plan;
 
-	bool isnull = false;
-	int action = DatumGetUInt32(slot_getattr(slot, plannode->actionColIdx, &isnull));
-	Assert(!isnull);
+		Assert(outerNode != NULL);
 
-	bool isUpdate = false;
-	if (node->ps.state->es_plannedstmt->commandType == CMD_UPDATE)
-	{
-		isUpdate = true;
-	}
+		TupleTableSlot *slot = ExecProcNode(outerNode);
+		TupleTableSlot *resultSlot = NULL;
 
-	Assert(action == DML_INSERT || action == DML_DELETE);
-
-
-	/*
-	 * Reset per-tuple memory context to free any expression evaluation
-	 * storage allocated in the previous tuple cycle.
-	 */
-	ExprContext *econtext = node->ps.ps_ExprContext;
-	ResetExprContext(econtext);
-
-	/* Prepare cleaned-up tuple by projecting it and filtering junk columns */
-	econtext->ecxt_outertuple = slot;
-	TupleTableSlot *projectedSlot = ExecProject(node->ps.ps_ProjInfo, NULL);
-
-	/* remove 'junk' columns from tuple */
-	node->cleanedUpSlot = ExecFilterJunk(node->junkfilter, projectedSlot);
-
-	/*
-	 * If we are modifying a leaf partition we have to ensure that partition
-	 * selection operation will consider leaf partition's attributes as
-	 * coherent with root partition's attribute numbers, because partition
-	 * selection is performed using root's attribute numbers (all partition
-	 * rules are based on the parent relation's tuple descriptor). In case
-	 * when child partition has different attribute numbers from root's due to
-	 * dropped columns, the partition selection may go wrong without extra
-	 * validation.
-	 */
-	if (node->ps.state->es_result_partitions)
-	{
-		ResultRelInfo *relInfo = node->ps.state->es_result_relations;
-
-		/*
-		 * The DML is done on a leaf partition. In order to reuse the map,
-		 * it will be allocated at es_result_relations.
-		 */
-		if (RelationGetRelid(relInfo->ri_RelationDesc) !=
-			node->ps.state->es_result_partitions->part->parrelid &&
-			action != DML_DELETE)
-			makePartitionCheckMap(node->ps.state, relInfo);
-
-		/*
-		 * DML node always performs partition selection, and if we want to
-		 * reuse the map built in makePartitionCheckMap, we are allowed to
-		 * reassign es_result_relation_info, because ExecInsert, ExecDelete
-		 * changes it with target partition anyway. Moreover, without
-		 * inheritance plan (ORCA never builds such plans) the
-		 * es_result_relations will contain the only relation.
-		 */
-		node->ps.state->es_result_relation_info = relInfo;
-	}
-
-	if (DML_INSERT == action)
-	{
-		/* Respect any given tuple Oid when updating a tuple. */
-		if (isUpdate && plannode->tupleoidColIdx != 0)
+		if (TupIsNull(slot))
 		{
-			Oid			oid;
-			HeapTuple	htuple;
-
-			isnull = false;
-			oid = slot_getattr(slot, plannode->tupleoidColIdx, &isnull);
-			htuple = ExecFetchSlotHeapTuple(node->cleanedUpSlot);
-			Assert(htuple == node->cleanedUpSlot->PRIVATE_tts_heaptuple);
-			HeapTupleSetOid(htuple, oid);
+			return NULL;
 		}
 
-		/*
-		 * The plan origin is required since ExecInsert performs different
-		 * actions depending on the type of plan (constraint enforcement and
-		 * triggers.)
-		 */
-		ExecInsert(node->cleanedUpSlot,
-				   NULL,
-				   node->ps.state,
-				   node->canSetTag,
-				   PLANGEN_OPTIMIZER /* Plan origin */,
-				   isUpdate,
-				   InvalidOid);
-	}
-	else /* DML_DELETE */
-	{
-		int32 segid = GpIdentity.segindex;
-		Datum ctid = slot_getattr(slot, plannode->ctidColIdx, &isnull);
-		Oid tableoid = InvalidOid;
-
+		bool isnull = false;
+		int action = DatumGetUInt32(slot_getattr(slot, plannode->actionColIdx, &isnull));
 		Assert(!isnull);
 
-		if (AttributeNumberIsValid(plannode->tableoidColIdx))
+		bool isUpdate = false;
+		if (node->ps.state->es_plannedstmt->commandType == CMD_UPDATE)
 		{
-			Datum dtableoid = slot_getattr(slot, plannode->tableoidColIdx, &isnull);
-			tableoid = isnull ? InvalidOid : DatumGetObjectId(dtableoid);
+			isUpdate = true;
+		}
+
+		Assert(action == DML_INSERT || action == DML_DELETE);
+
+
+		/*
+		* Reset per-tuple memory context to free any expression evaluation
+		* storage allocated in the previous tuple cycle.
+		*/
+		ExprContext *econtext = node->ps.ps_ExprContext;
+		ResetExprContext(econtext);
+
+		/* Prepare cleaned-up tuple by projecting it and filtering junk columns */
+		econtext->ecxt_outertuple = slot;
+		TupleTableSlot *projectedSlot = ExecProject(node->ps.ps_ProjInfo, NULL);
+
+		/* remove 'junk' columns from tuple */
+		node->cleanedUpSlot = ExecFilterJunk(node->junkfilter, projectedSlot);
+
+		/*
+		* If we are modifying a leaf partition we have to ensure that partition
+		* selection operation will consider leaf partition's attributes as
+		* coherent with root partition's attribute numbers, because partition
+		* selection is performed using root's attribute numbers (all partition
+		* rules are based on the parent relation's tuple descriptor). In case
+		* when child partition has different attribute numbers from root's due to
+		* dropped columns, the partition selection may go wrong without extra
+		* validation.
+		*/
+		if (node->ps.state->es_result_partitions)
+		{
+			ResultRelInfo *relInfo = node->ps.state->es_result_relations;
+
+			/*
+			* The DML is done on a leaf partition. In order to reuse the map,
+			* it will be allocated at es_result_relations.
+			*/
+			if (RelationGetRelid(relInfo->ri_RelationDesc) !=
+				node->ps.state->es_result_partitions->part->parrelid &&
+				action != DML_DELETE)
+				makePartitionCheckMap(node->ps.state, relInfo);
+
+			/*
+			* DML node always performs partition selection, and if we want to
+			* reuse the map built in makePartitionCheckMap, we are allowed to
+			* reassign es_result_relation_info, because ExecInsert, ExecDelete
+			* changes it with target partition anyway. Moreover, without
+			* inheritance plan (ORCA never builds such plans) the
+			* es_result_relations will contain the only relation.
+			*/
+			node->ps.state->es_result_relation_info = relInfo;
+		}
+
+		if (DML_INSERT == action)
+		{
+			/* Respect any given tuple Oid when updating a tuple. */
+			if (isUpdate && plannode->tupleoidColIdx != 0)
+			{
+				Oid			oid;
+				HeapTuple	htuple;
+
+				isnull = false;
+				oid = slot_getattr(slot, plannode->tupleoidColIdx, &isnull);
+				htuple = ExecFetchSlotHeapTuple(node->cleanedUpSlot);
+				Assert(htuple == node->cleanedUpSlot->PRIVATE_tts_heaptuple);
+				HeapTupleSetOid(htuple, oid);
+			}
+
+			/*
+			* The plan origin is required since ExecInsert performs different
+			* actions depending on the type of plan (constraint enforcement and
+			* triggers.)
+			*/
+			resultSlot = ExecInsert(node->cleanedUpSlot,
+					NULL,
+					node->ps.state,
+					node->canSetTag,
+					PLANGEN_OPTIMIZER /* Plan origin */,
+					isUpdate,
+					InvalidOid);
+		}
+		else /* DML_DELETE */
+		{
+			int32 segid = GpIdentity.segindex;
+			Datum ctid = slot_getattr(slot, plannode->ctidColIdx, &isnull);
+			Oid tableoid = InvalidOid;
+
+			Assert(!isnull);
+
+			if (AttributeNumberIsValid(plannode->tableoidColIdx))
+			{
+				Datum dtableoid = slot_getattr(slot, plannode->tableoidColIdx, &isnull);
+				tableoid = isnull ? InvalidOid : DatumGetObjectId(dtableoid);
+			}
+
+			/*
+			* If tableoid is valid, it means that we are executing UPDATE/DELETE
+			* on partitioned table (root partition). In order to avoid partition
+			* pruning in ExecDelete one can use tableoid to build target
+			* ResultRelInfo for the leaf partition.
+			*/
+			if (OidIsValid(tableoid) && node->ps.state->es_result_partitions)
+				node->ps.state->es_result_relation_info =
+					targetid_get_partition(tableoid, node->ps.state, true);
+
+			ItemPointer  tupleid = (ItemPointer) DatumGetPointer(ctid);
+			ItemPointerData tuple_ctid = *tupleid;
+			tupleid = &tuple_ctid;
+
+			if (AttributeNumberIsValid(node->segid_attno))
+			{
+				segid = DatumGetInt32(slot_getattr(slot, node->segid_attno, &isnull));
+				Assert(!isnull);
+			}
+
+			/* Correct tuple count by ignoring deletes when splitting tuples. */
+			resultSlot = ExecDelete(tupleid,
+					segid,
+					NULL, /* GPDB_91_MERGE_FIXME: oldTuple? */
+					node->cleanedUpSlot,
+					NULL /* DestReceiver */,
+					node->ps.state,
+					isUpdate ? false : node->canSetTag, /* if "isUpdate",
+															ExecInsert() will be run after
+															ExecDelete() so canSetTag should be set
+															properly in ExecInsert(). */
+					PLANGEN_OPTIMIZER /* Plan origin */,
+					isUpdate);
 		}
 
 		/*
-		 * If tableoid is valid, it means that we are executing UPDATE/DELETE
-		 * on partitioned table (root partition). In order to avoid partition
-		 * pruning in ExecDelete one can use tableoid to build target
-		 * ResultRelInfo for the leaf partition.
+		 * If we got a RETURNING result, return it to caller.  We'll continue
+		 * the work on next call.
 		 */
-		if (OidIsValid(tableoid) && node->ps.state->es_result_partitions)
-			node->ps.state->es_result_relation_info =
-				targetid_get_partition(tableoid, node->ps.state, true);
-
-		ItemPointer  tupleid = (ItemPointer) DatumGetPointer(ctid);
-		ItemPointerData tuple_ctid = *tupleid;
-		tupleid = &tuple_ctid;
-
-		if (AttributeNumberIsValid(node->segid_attno))
+		if (!TupIsNull(resultSlot))
 		{
-			segid = DatumGetInt32(slot_getattr(slot, node->segid_attno, &isnull));
-			Assert(!isnull);
+			return resultSlot;
 		}
-
-		/* Correct tuple count by ignoring deletes when splitting tuples. */
-		ExecDelete(tupleid,
-				   segid,
-				   NULL, /* GPDB_91_MERGE_FIXME: oldTuple? */
-				   node->cleanedUpSlot,
-				   NULL /* DestReceiver */,
-				   node->ps.state,
-				   isUpdate ? false : node->canSetTag, /* if "isUpdate",
-														  ExecInsert() will be run after
-														  ExecDelete() so canSetTag should be set
-														  properly in ExecInsert(). */
-				   PLANGEN_OPTIMIZER /* Plan origin */,
-				   isUpdate);
 	}
-
-	return slot;
 }
 
 /**
@@ -274,6 +284,30 @@ ExecInitDML(DML *node, EState *estate, int eflags)
 	dmlstate->junkfilter = ExecInitJunkFilter(node->plan.targetlist,
 			dmlstate->ps.state->es_result_relation_info->ri_RelationDesc->rd_att->tdhasoid,
 			dmlstate->cleanedUpSlot);
+
+	/*
+	 * Initialize RETURNING projections if needed.
+	 */
+	if (node->returningList)
+	{
+		TupleTableSlot *slot;
+
+		/* Initialize result tuple slot and assign its rowtype */
+		TupleDesc tupDesc = ExecTypeFromTL(node->returningList, false);
+
+		/* Set up a slot for the output of the RETURNING projection(s) */
+		ExecAssignResultType(&dmlstate->ps, tupDesc);
+		slot = dmlstate->ps.ps_ResultTupleSlot;
+
+		List *rliststate = (List *) ExecInitExpr((Expr *) node->returningList, &dmlstate->ps);
+		resultRelInfo->ri_projectReturning =
+			ExecBuildProjectionInfo(rliststate, dmlstate->ps.ps_ExprContext, slot,
+									resultRelInfo->ri_RelationDesc->rd_att);
+
+		// ExecDelete() needs this for some reason
+		if (estate->es_trig_tuple_slot == NULL)
+			estate->es_trig_tuple_slot = ExecInitExtraTupleSlot(estate);
+	}
 
 	/*
 	 * The comment below is related to ExecInsert(). The code works correctly,

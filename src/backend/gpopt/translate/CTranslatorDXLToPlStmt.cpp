@@ -4171,7 +4171,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	m_dxl_to_plstmt_context->AddRTE(rte);
 
 	CDXLNode *project_list_dxlnode = (*dml_dxlnode)[0];
-	CDXLNode *child_dxlnode = (*dml_dxlnode)[1];
+	CDXLNode *project_list_output_dxlnode = (*dml_dxlnode)[1];
+	CDXLNode *child_dxlnode = (*dml_dxlnode)[2];
 
 	CDXLTranslateContext child_context(m_mp, false,
 									   output_context->GetColIdToParamIdMap());
@@ -4187,6 +4188,10 @@ CTranslatorDXLToPlStmt::TranslateDXLDml(
 	List *dml_target_list =
 		TranslateDXLProjList(project_list_dxlnode,
 							 NULL,	// translate context for the base table
+							 child_contexts, output_context);
+
+	dml->returningList =
+		TranslateDXLProjList(project_list_output_dxlnode, &base_table_context,
 							 child_contexts, output_context);
 
 	// Create target list with nulls if rel has dropped cols. DELETE may have

@@ -1312,7 +1312,7 @@ CXformUtils::PexprLogicalPartitionSelector(CMemoryPool *mp,
 CExpression *
 CXformUtils::PexprLogicalDMLOverProject(
 	CMemoryPool *mp, CExpression *pexprChild, CLogicalDML::EDMLOperator edmlop,
-	CTableDescriptor *ptabdesc, CColRefArray *colref_array, CColRef *pcrCtid,
+	CTableDescriptor *ptabdesc, CColRefArray *colref_array, CColRefArray *pdrgpcrOutput, CColRef *pcrCtid,
 	CColRef *pcrSegmentId, CColRef *pcrTableOid)
 {
 	GPOS_ASSERT(CLogicalDML::EdmlInsert == edmlop ||
@@ -1353,7 +1353,7 @@ CXformUtils::PexprLogicalDMLOverProject(
 
 	CExpression *pexprDML = GPOS_NEW(mp) CExpression(
 		mp,
-		GPOS_NEW(mp) CLogicalDML(mp, edmlop, ptabdesc, colref_array,
+		GPOS_NEW(mp) CLogicalDML(mp, edmlop, ptabdesc, colref_array, pdrgpcrOutput,
 								 GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/,
 								 pcrAction, pcrCtid, pcrSegmentId,
 								 NULL /*pcrTupleOid*/, pcrTableOid),
@@ -1402,6 +1402,39 @@ CXformUtils::FTriggersExist(CLogicalDML::EDMLOperator edmlop,
 		{
 			return true;
 		}
+	}
+
+	return false;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CXformUtils::FTriggersExist
+//
+//	@doc:
+//		Check whether there are any row-level triggers on
+//		the given table that match the given DML operation
+//
+//---------------------------------------------------------------------------
+BOOL
+CXformUtils::FTriggersExist(CLogicalDML::EDMLOperator edmlop,
+							CTableDescriptor *ptabdesc)
+{
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	const IMDRelation *pmdrel = md_accessor->RetrieveRel(ptabdesc->MDId());
+	const ULONG ulTriggers = pmdrel->TriggerCount();
+
+	for (ULONG ul = 0; ul < ulTriggers; ul++)
+	{
+		const IMDTrigger *pmdtrigger =
+			md_accessor->RetrieveTrigger(pmdrel->TriggerMDidAt(ul));
+		if (!pmdtrigger->IsEnabled() || !pmdtrigger->ExecutesOnRowLevel() ||
+			!FTriggerApplies(edmlop, pmdtrigger))
+		{
+			continue;
+		}
+
+		return true;
 	}
 
 	return false;

@@ -1219,6 +1219,7 @@ _outDML(StringInfo str, const DML *node)
 	WRITE_INT_FIELD(tupleoidColIdx);
 	WRITE_INT_FIELD(tableoidColIdx);
 	WRITE_BOOL_FIELD(canSetTag);
+	WRITE_NODE_FIELD(returningList);
 
 	_outPlanInfo(str, (Plan *) node);
 }

@@ -80,6 +80,9 @@ CXformDelete2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRefArray *colref_array = popDelete->Pdrgpcr();
 	colref_array->AddRef();
 
+	CColRefArray *pdrgpcrOutput = popDelete->PdrgpcrOutput();
+	pdrgpcrOutput->AddRef();
+
 	CColRef *pcrCtid = popDelete->PcrCtid();
 
 	CColRef *pcrSegmentId = popDelete->PcrSegmentId();
@@ -93,7 +96,7 @@ CXformDelete2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// create logical DML
 	CExpression *pexprAlt = CXformUtils::PexprLogicalDMLOverProject(
 		mp, pexprChild, CLogicalDML::EdmlDelete, ptabdesc, colref_array,
-		pcrCtid, pcrSegmentId, pcrTableOid);
+		pdrgpcrOutput, pcrCtid, pcrSegmentId, pcrTableOid);
 
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);

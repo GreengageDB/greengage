@@ -211,6 +211,10 @@ private:
 	// translate an Expr into CDXLNode
 	CDXLNode *TranslateExprToDXL(Expr *expr);
 
+	// translate an Expr into CDXLNode with specified mapping
+	CDXLNode *TranslateExprToDXL(Expr *expr,
+								 CMappingVarColId *var_to_colid_map);
+
 	// translate the JoinExpr (inside FromExpr) into a CDXLLogicalJoin node
 	CDXLNode *TranslateJoinExprInFromToDXL(JoinExpr *join_expr);
 
@@ -296,6 +300,11 @@ private:
 
 	// translate a target list entry or a join alias entry into a project element
 	CDXLNode *TranslateExprToDXLProject(Expr *expr, const CHAR *alias_name,
+										BOOL insist_new_colids = false);
+
+	// translate a target list entry or a join alias entry into a project element using specified mapping
+	CDXLNode *TranslateExprToDXLProject(Expr *expr, const CHAR *alias_name,
+										CMappingVarColId *var_to_colid_map,
 										BOOL insist_new_colids = false);
 
 	// translate a CTE into a DXL logical CTE operator
@@ -422,6 +431,11 @@ private:
 
 	// returns the corresponding ColId for the given system attribute numbber
 	ULONG GetSystemColId(INT attribute_number);
+
+	// Wrap dxl node in logical project with return columns from returningList
+	CDXLNode *ProcessReturningList(
+		CDXLNode *dml_dxlnode, CDXLTableDescr *table_descr,
+		IntToUlongMap *output_attno_to_colid_mapping);
 
 public:
 	// dtor

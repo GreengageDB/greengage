@@ -87,6 +87,13 @@ public:
 	// user id
 	ULONG GetExecuteAsUserId() const;
 
+	// get the column descriptor array
+	const CDXLColDescrArray *
+	GetColumnDescr() const
+	{
+		return m_dxl_column_descr_array;
+	}
+
 	// get the column descriptor at the given position
 	const CDXLColDescr *GetColumnDescrAt(ULONG idx) const;
 

@@ -37,7 +37,8 @@ using namespace gpopt;
 //---------------------------------------------------------------------------
 CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 						   CTableDescriptor *ptabdesc,
-						   CColRefArray *pdrgpcrSource, CBitSet *pbsModified,
+						   CColRefArray *pdrgpcrSource,
+						   CColRefArray *pdrgpcrOutput, CBitSet *pbsModified,
 						   CColRef *pcrAction, CColRef *pcrCtid,
 						   CColRef *pcrSegmentId, CColRef *pcrTupleOid,
 						   CColRef *pcrTableOid)
@@ -45,6 +46,7 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 	  m_edmlop(edmlop),
 	  m_ptabdesc(ptabdesc),
 	  m_pdrgpcrSource(pdrgpcrSource),
+	  m_pdrgpcrOutput(pdrgpcrOutput),
 	  m_pbsModified(pbsModified),
 	  m_pcrAction(pcrAction),
 	  m_pcrTableOid(pcrTableOid),
@@ -53,11 +55,14 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 	  m_pcrTupleOid(pcrTupleOid),
 	  m_pds(NULL),
 	  m_pos(NULL),
-	  m_pcrsRequiredLocal(NULL)
+	  m_pcrsRequiredLocal(NULL),
+	  m_isCTAS(IMDId::EmdidGPDBCtas == ptabdesc->MDId()->MdidType()),
+	  m_hasTriggers(CXformUtils::FTriggersExist(edmlop, ptabdesc))
 {
 	GPOS_ASSERT(CLogicalDML::EdmlSentinel != edmlop);
 	GPOS_ASSERT(NULL != ptabdesc);
 	GPOS_ASSERT(NULL != pdrgpcrSource);
+	GPOS_ASSERT(NULL != pdrgpcrOutput);
 	GPOS_ASSERT(NULL != pbsModified);
 	GPOS_ASSERT(NULL != pcrAction);
 	GPOS_ASSERT_IMP(
@@ -66,6 +71,17 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 
 	m_pds =
 		CPhysical::PdsCompute(m_mp, m_ptabdesc, pdrgpcrSource, pcrSegmentId);
+
+	if (ptabdesc->ConvertHashToRandom())
+	{
+		// Treating a hash distributed table as random during planning
+		m_pdsOutput = GPOS_NEW(m_mp) CDistributionSpecRandom();
+	}
+	else
+	{
+		m_pdsOutput = CPhysical::PdsCompute(m_mp, ptabdesc, pdrgpcrOutput,
+											NULL /* gp_segment_id */);
+	}
 
 	if (CDistributionSpec::EdtHashed == m_pds->Edt() &&
 		ptabdesc->ConvertHashToRandom())
@@ -150,9 +166,11 @@ CPhysicalDML::~CPhysicalDML()
 {
 	m_ptabdesc->Release();
 	m_pdrgpcrSource->Release();
+	m_pdrgpcrOutput->Release();
 	m_pbsModified->Release();
 	m_pds->Release();
 	m_pos->Release();
+	m_pdsOutput->Release();
 	m_pcrsRequiredLocal->Release();
 }
 
@@ -251,7 +269,11 @@ CPhysicalDML::PcrsRequired(CMemoryPool *mp,
 		"Required properties can only be computed on the relational child");
 
 	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp, *m_pcrsRequiredLocal);
-	pcrs->Union(pcrsRequired);
+
+	if (m_isCTAS || m_hasTriggers)
+	{
+		pcrs->Union(pcrsRequired);
+	}
 
 	return pcrs;
 }
@@ -379,7 +401,25 @@ CPhysicalDML::FProvidesReqdCols(CExpressionHandle &exprhdl,
 								ULONG  // ulOptReq
 ) const
 {
-	return FUnaryProvidesReqdCols(exprhdl, pcrsRequired);
+	if (m_isCTAS)
+	{
+		return FUnaryProvidesReqdCols(exprhdl, pcrsRequired);
+	}
+
+	GPOS_ASSERT(NULL != pcrsRequired);
+
+	CColRefSet *pcrs = GPOS_NEW(m_mp) CColRefSet(m_mp);
+	pcrs->Include(m_pdrgpcrOutput);
+
+	if (m_hasTriggers)
+	{
+		pcrs->Include(m_pdrgpcrSource);
+	}
+
+	BOOL result = pcrs->ContainsAll(pcrsRequired);
+	pcrs->Release();
+
+	return result;
 }
 
 //---------------------------------------------------------------------------
@@ -394,7 +434,13 @@ CDistributionSpec *
 CPhysicalDML::PdsDerive(CMemoryPool *,	//mp,
 						CExpressionHandle &exprhdl) const
 {
-	return PdsDerivePassThruOuter(exprhdl);
+	if (m_isCTAS)
+	{
+		return PdsDerivePassThruOuter(exprhdl);
+	}
+
+	m_pdsOutput->AddRef();
+	return m_pdsOutput;
 }
 
 //---------------------------------------------------------------------------
@@ -428,6 +474,8 @@ CPhysicalDML::HashValue() const
 	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrTableOid));
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrSource));
+	ulHash =
+		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrOutput));
 
 	if (CLogicalDML::EdmlDelete == m_edmlop ||
 		CLogicalDML::EdmlUpdate == m_edmlop)
@@ -461,7 +509,8 @@ CPhysicalDML::Matches(COperator *pop) const
 			   m_pcrSegmentId == popDML->PcrSegmentId() &&
 			   m_pcrTupleOid == popDML->PcrTupleOid() &&
 			   m_ptabdesc->MDId()->Equals(popDML->Ptabdesc()->MDId()) &&
-			   m_pdrgpcrSource->Equals(popDML->PdrgpcrSource());
+			   m_pdrgpcrSource->Equals(popDML->PdrgpcrSource()) &&
+			   m_pdrgpcrOutput->Equals(popDML->PdrgpcrOutput());
 	}
 
 	return false;
@@ -622,6 +671,37 @@ CPhysicalDML::OsPrint(IOstream &os) const
 		os << ", ";
 		m_pcrSegmentId->OsPrint(os);
 	}
+
+	os << ", Output Columns: [";
+	CUtils::OsPrintDrgPcr(os, m_pdrgpcrOutput);
+	os << "] Key sets: {";
+
+	const ULONG ulColumns = m_pdrgpcrOutput->Size();
+	const CBitSetArray *pdrgpbsKeys = m_ptabdesc->PdrgpbsKeys();
+	for (ULONG ul = 0; ul < pdrgpbsKeys->Size(); ul++)
+	{
+		CBitSet *pbs = (*pdrgpbsKeys)[ul];
+		if (0 < ul)
+		{
+			os << ", ";
+		}
+		os << "[";
+		ULONG ulPrintedKeys = 0;
+		for (ULONG ulKey = 0; ulKey < ulColumns; ulKey++)
+		{
+			if (pbs->Get(ulKey))
+			{
+				if (0 < ulPrintedKeys)
+				{
+					os << ",";
+				}
+				os << ulKey;
+				ulPrintedKeys++;
+			}
+		}
+		os << "]";
+	}
+	os << "}";
 
 	return os;
 }

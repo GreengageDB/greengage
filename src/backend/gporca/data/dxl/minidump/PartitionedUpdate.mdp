@@ -197,9 +197,7 @@
       </dxl:GPDBScalarOp>
     </dxl:Metadata>
     <dxl:Query>
-      <dxl:OutputColumns>
-        <dxl:Ident ColId="10" ColName="i" TypeMdid="0.23.1.0"/>
-      </dxl:OutputColumns>
+      <dxl:OutputColumns/>
       <dxl:CTEList/>
       <dxl:LogicalUpdate DeleteColumns="1,2" InsertColumns="10,2" CtidCol="3" SegmentIdCol="9" PreserveOids="false" OidCol="8">
         <dxl:TableDescriptor Mdid="6.16438.1.0" TableName="test">
@@ -246,7 +244,7 @@
       </dxl:LogicalUpdate>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="1">
-      <dxl:DMLUpdate Columns="0,1" ActionCol="10" CtidCol="2" OidCol="7" SegmentIdCol="8" PreserveOids="false">
+      <dxl:DMLUpdate Columns="0,1" ActionCol="19" CtidCol="2" OidCol="7" SegmentIdCol="8" PreserveOids="false">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="431.067820" Rows="1.000000" Width="1"/>
         </dxl:Properties>
@@ -259,17 +257,17 @@
             <dxl:Ident ColId="1" ColName="j" TypeMdid="0.23.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
+        <dxl:ProjList/>
         <dxl:TableDescriptor Mdid="6.16438.1.0" TableName="test">
           <dxl:Columns>
-            <dxl:Column ColId="11" Attno="1" ColName="i" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="12" Attno="2" ColName="j" TypeMdid="0.23.1.0" ColWidth="4"/>
-            <dxl:Column ColId="13" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
-            <dxl:Column ColId="14" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="15" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="16" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
-            <dxl:Column ColId="17" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
-            <dxl:Column ColId="18" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
-            <dxl:Column ColId="19" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="10" Attno="1" ColName="i" TypeMdid="0.23.1.0" ColWidth="4"/>
+            <dxl:Column ColId="12" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
+            <dxl:Column ColId="13" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="14" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="15" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0" ColWidth="4"/>
+            <dxl:Column ColId="16" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0" ColWidth="4"/>
+            <dxl:Column ColId="17" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
+            <dxl:Column ColId="18" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
         <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
@@ -292,8 +290,8 @@
             <dxl:ProjElem ColId="8" Alias="gp_segment_id">
               <dxl:Ident ColId="8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="10" Alias="ColRef_0010">
-              <dxl:Ident ColId="10" ColName="ColRef_0010" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="19" Alias="ColRef_0019">
+              <dxl:Ident ColId="19" ColName="ColRef_0019" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
@@ -303,7 +301,7 @@
               <dxl:Ident ColId="0" ColName="i" TypeMdid="0.23.1.0"/>
             </dxl:HashExpr>
           </dxl:HashExprList>
-          <dxl:Split DeleteColumns="0,1" InsertColumns="9,1" ActionCol="10" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
+          <dxl:Split DeleteColumns="0,1" InsertColumns="9,1" ActionCol="19" CtidCol="2" SegmentIdCol="8" PreserveOids="false">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="431.000058" Rows="2.000000" Width="26"/>
             </dxl:Properties>
@@ -323,7 +321,7 @@
               <dxl:ProjElem ColId="8" Alias="gp_segment_id">
                 <dxl:Ident ColId="8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="10" Alias="ColRef_0010">
+              <dxl:ProjElem ColId="19" Alias="ColRef_0019">
                 <dxl:DMLAction/>
               </dxl:ProjElem>
             </dxl:ProjList>

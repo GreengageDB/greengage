@@ -40,6 +40,9 @@ private:
 	// columns to insert
 	CColRefArray *m_pdrgpcrInsert;
 
+	// returning columns
+	CColRefArray *m_pdrgpcrOutput;
+
 	// ctid column
 	CColRef *m_pcrCtid;
 
@@ -64,6 +67,13 @@ public:
 				   CColRefArray *pdrgpcrDelete, CColRefArray *pdrgpcrInsert,
 				   CColRef *pcrCtid, CColRef *pcrSegmentId,
 				   CColRef *pcrTupleOid, CColRef *pcrTableOid);
+
+	// ctor
+	CLogicalUpdate(CMemoryPool *mp, CTableDescriptor *ptabdesc,
+				   CColRefArray *pdrgpcrDelete, CColRefArray *pdrgpcrInsert,
+				   CColRefArray *pdrgpcrOutput, CColRef *pcrCtid,
+				   CColRef *pcrSegmentId, CColRef *pcrTupleOid,
+				   CColRef *pcrTableOid);
 
 	// dtor
 	virtual ~CLogicalUpdate();
@@ -94,6 +104,13 @@ public:
 	PdrgpcrInsert() const
 	{
 		return m_pdrgpcrInsert;
+	}
+
+	// output columns
+	CColRefArray *
+	PdrgpcrOutput() const
+	{
+		return m_pdrgpcrOutput;
 	}
 
 	// ctid column

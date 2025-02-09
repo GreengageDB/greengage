@@ -163,10 +163,7 @@
       </dxl:Relation>
     </dxl:Metadata>
     <dxl:Query>
-      <dxl:OutputColumns>
-        <dxl:Ident ColId="2" ColName="col2" TypeMdid="0.23.1.0"/>
-        <dxl:Ident ColId="3" ColName="col3" TypeMdid="0.25.1.0"/>
-      </dxl:OutputColumns>
+      <dxl:OutputColumns/>
       <dxl:CTEList/>
       <dxl:LogicalInsert InsertColumns="14,2,3">
         <dxl:TableDescriptor Mdid="6.1171244.1.1" TableName="inserttest">
@@ -211,9 +208,9 @@
       </dxl:LogicalInsert>
     </dxl:Query>
     <dxl:Plan Id="0" SpaceSize="2">
-      <dxl:DMLInsert Columns="3,1,2" ActionCol="4" CtidCol="0" SegmentIdCol="0">
+      <dxl:DMLInsert Columns="3,1,2" ActionCol="14" CtidCol="0" SegmentIdCol="0">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="0.039158" Rows="1.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="0.039158" Rows="1.000000" Width="1"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo>
           <dxl:KeyValue>
@@ -231,18 +228,17 @@
             <dxl:Ident ColId="2" ColName="col3" TypeMdid="0.25.1.0"/>
           </dxl:ProjElem>
         </dxl:ProjList>
+        <dxl:ProjList/>
         <dxl:TableDescriptor Mdid="6.1171244.1.1" TableName="inserttest">
           <dxl:Columns>
-            <dxl:Column ColId="5" Attno="1" ColName="col1" TypeMdid="0.23.1.0"/>
-            <dxl:Column ColId="6" Attno="2" ColName="col2" TypeMdid="0.23.1.0"/>
-            <dxl:Column ColId="7" Attno="3" ColName="col3" TypeMdid="0.25.1.0"/>
-            <dxl:Column ColId="8" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0"/>
-            <dxl:Column ColId="9" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0"/>
-            <dxl:Column ColId="10" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0"/>
-            <dxl:Column ColId="11" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0"/>
-            <dxl:Column ColId="12" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0"/>
-            <dxl:Column ColId="13" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0"/>
-            <dxl:Column ColId="14" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
+            <dxl:Column ColId="4" Attno="1" ColName="col1" TypeMdid="0.23.1.0"/>
+            <dxl:Column ColId="7" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0"/>
+            <dxl:Column ColId="8" Attno="-3" ColName="xmin" TypeMdid="0.28.1.0"/>
+            <dxl:Column ColId="9" Attno="-4" ColName="cmin" TypeMdid="0.29.1.0"/>
+            <dxl:Column ColId="10" Attno="-5" ColName="xmax" TypeMdid="0.28.1.0"/>
+            <dxl:Column ColId="11" Attno="-6" ColName="cmax" TypeMdid="0.29.1.0"/>
+            <dxl:Column ColId="12" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0"/>
+            <dxl:Column ColId="13" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0"/>
           </dxl:Columns>
         </dxl:TableDescriptor>
         <dxl:RedistributeMotion InputSegments="0" OutputSegments="0,1" DuplicateSensitive="true">
@@ -259,8 +255,8 @@
             <dxl:ProjElem ColId="2" Alias="col3">
               <dxl:Ident ColId="2" ColName="col3" TypeMdid="0.25.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="4" Alias="ColRef_0004">
-              <dxl:Ident ColId="4" ColName="ColRef_0004" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="14" Alias="ColRef_0014">
+              <dxl:Ident ColId="14" ColName="ColRef_0014" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
@@ -284,8 +280,8 @@
               <dxl:ProjElem ColId="2" Alias="col3">
                 <dxl:Ident ColId="2" ColName="col3" TypeMdid="0.25.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="4" Alias="ColRef_0004">
-                <dxl:Ident ColId="4" ColName="ColRef_0004" TypeMdid="0.23.1.0"/>
+              <dxl:ProjElem ColId="14" Alias="ColRef_0014">
+                <dxl:Ident ColId="14" ColName="ColRef_0014" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
             </dxl:ProjList>
             <dxl:AssertConstraintList>
@@ -302,7 +298,7 @@
                 <dxl:Cost StartupCost="0" TotalCost="0.000021" Rows="1.000000" Width="20"/>
               </dxl:Properties>
               <dxl:ProjList>
-                <dxl:ProjElem ColId="4" Alias="ColRef_0004">
+                <dxl:ProjElem ColId="14" Alias="ColRef_0014">
                   <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
                 </dxl:ProjElem>
                 <dxl:ProjElem ColId="3" Alias="col1">

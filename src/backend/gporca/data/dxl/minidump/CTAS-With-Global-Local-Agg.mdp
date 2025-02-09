@@ -717,7 +717,7 @@
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
-          <dxl:Column ColId="13" Attno="1" ColName="avg" TypeMdid="0.1700.1.0"/>
+          <dxl:Column ColId="14" Attno="1" ColName="avg" TypeMdid="0.1700.1.0"/>
         </dxl:Columns>
         <dxl:CTASOptions OnCommitAction="NOOP"/>
         <dxl:ProjList>
@@ -733,7 +733,7 @@
             <dxl:ProjElem ColId="10" Alias="avg">
               <dxl:Ident ColId="10" ColName="avg" TypeMdid="0.1700.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="12" Alias="ColRef_0012">
+            <dxl:ProjElem ColId="13" Alias="ColRef_0013">
               <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
             </dxl:ProjElem>
           </dxl:ProjList>
@@ -757,9 +757,9 @@
               <dxl:GroupingColumns/>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="10" Alias="avg">
-                  <dxl:AggFunc AggMdid="0.2101.1.0" AggDistinct="false" AggStage="Final" AggKind="n" >
+                  <dxl:AggFunc AggMdid="0.2101.1.0" AggDistinct="false" AggStage="Final" AggKind="n">
                     <dxl:ValuesList ParamType="aggargs">
-                    <dxl:Ident ColId="11" ColName="ColRef_0011" TypeMdid="0.1016.1.0"/>
+                      <dxl:Ident ColId="12" ColName="ColRef_0012" TypeMdid="0.1016.1.0"/>
                     </dxl:ValuesList>
                     <dxl:ValuesList ParamType="aggdirectargs"/>
                     <dxl:ValuesList ParamType="aggorder"/>
@@ -773,8 +773,8 @@
                   <dxl:Cost StartupCost="0" TotalCost="438.378816" Rows="1.000000" Width="8"/>
                 </dxl:Properties>
                 <dxl:ProjList>
-                  <dxl:ProjElem ColId="11" Alias="ColRef_0011">
-                    <dxl:Ident ColId="11" ColName="ColRef_0011" TypeMdid="0.1016.1.0"/>
+                  <dxl:ProjElem ColId="12" Alias="ColRef_0012">
+                    <dxl:Ident ColId="12" ColName="ColRef_0012" TypeMdid="0.1016.1.0"/>
                   </dxl:ProjElem>
                 </dxl:ProjList>
                 <dxl:Filter/>
@@ -785,10 +785,10 @@
                   </dxl:Properties>
                   <dxl:GroupingColumns/>
                   <dxl:ProjList>
-                    <dxl:ProjElem ColId="11" Alias="ColRef_0011">
-                      <dxl:AggFunc AggMdid="0.2101.1.0" AggDistinct="false" AggStage="Partial" AggKind="n" >
+                    <dxl:ProjElem ColId="12" Alias="ColRef_0012">
+                      <dxl:AggFunc AggMdid="0.2101.1.0" AggDistinct="false" AggStage="Partial" AggKind="n">
                         <dxl:ValuesList ParamType="aggargs">
-                        <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
+                          <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
                         </dxl:ValuesList>
                         <dxl:ValuesList ParamType="aggdirectargs"/>
                         <dxl:ValuesList ParamType="aggorder"/>

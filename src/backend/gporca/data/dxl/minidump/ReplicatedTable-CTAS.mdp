@@ -99,8 +99,8 @@
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
-          <dxl:Column ColId="2" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>
-          <dxl:Column ColId="3" Attno="2" ColName="b" TypeMdid="0.23.1.0"/>
+          <dxl:Column ColId="4" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>
+          <dxl:Column ColId="5" Attno="2" ColName="b" TypeMdid="0.23.1.0"/>
         </dxl:Columns>
         <dxl:CTASOptions OnCommitAction="NOOP"/>
         <dxl:ProjList>
@@ -122,8 +122,8 @@
             <dxl:ProjElem ColId="0" Alias="generate_series">
               <dxl:Ident ColId="0" ColName="generate_series" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
-            <dxl:ProjElem ColId="1" Alias="ColRef_0001">
-              <dxl:Ident ColId="1" ColName="ColRef_0001" TypeMdid="0.23.1.0"/>
+            <dxl:ProjElem ColId="3" Alias="ColRef_0003">
+              <dxl:Ident ColId="3" ColName="ColRef_0003" TypeMdid="0.23.1.0"/>
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
@@ -133,7 +133,7 @@
               <dxl:Cost StartupCost="0" TotalCost="0.012000" Rows="1000.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
-              <dxl:ProjElem ColId="1" Alias="ColRef_0001">
+              <dxl:ProjElem ColId="3" Alias="ColRef_0003">
                 <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
               </dxl:ProjElem>
               <dxl:ProjElem ColId="0" Alias="generate_series">

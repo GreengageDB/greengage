@@ -42,6 +42,9 @@ private:
 	// array of source columns
 	CColRefArray *m_pdrgpcrSource;
 
+	// returning columns
+	CColRefArray *m_pdrgpcrOutput;
+
 	// set of modified columns from the target table
 	CBitSet *m_pbsModified;
 
@@ -67,8 +70,17 @@ private:
 	// required order spec
 	COrderSpec *m_pos;
 
+	// output distribution
+	CDistributionSpec *m_pdsOutput;
+
 	// required columns by local members
 	CColRefSet *m_pcrsRequiredLocal;
+
+	// in case of CTAS dml node will output source columns
+	const BOOL m_isCTAS; 
+
+	// is there any triggers for this kind of dml operation
+	const BOOL m_hasTriggers; 
 
 	// compute required order spec
 	COrderSpec *PosComputeRequired(CMemoryPool *mp, CTableDescriptor *ptabdesc);
@@ -83,9 +95,9 @@ public:
 	// ctor
 	CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 				 CTableDescriptor *ptabdesc, CColRefArray *pdrgpcrSource,
-				 CBitSet *pbsModified, CColRef *pcrAction, CColRef *pcrCtid,
-				 CColRef *pcrSegmentId, CColRef *pcrTupleOid,
-				 CColRef *prcTableOid);
+				 CColRefArray *pdrgpcrOutput, CBitSet *pbsModified,
+				 CColRef *pcrAction, CColRef *pcrCtid, CColRef *pcrSegmentId,
+				 CColRef *pcrTupleOid, CColRef *prcTableOid);
 
 	// dtor
 	virtual ~CPhysicalDML();
@@ -160,6 +172,13 @@ public:
 		return m_pdrgpcrSource;
 	}
 
+	// output columns
+	virtual CColRefArray *
+	PdrgpcrOutput() const
+	{
+		return m_pdrgpcrOutput;
+	}
+
 	// match function
 	virtual BOOL Matches(COperator *pop) const;
 
@@ -171,6 +190,13 @@ public:
 	FInputOrderSensitive() const
 	{
 		return false;
+	}
+
+	// does dml node has corresponding triggers
+	virtual BOOL
+	HasTriggers() const
+	{
+		return m_hasTriggers;
 	}
 
 	//-------------------------------------------------------------------------------------

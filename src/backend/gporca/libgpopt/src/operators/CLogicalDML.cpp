@@ -37,6 +37,7 @@ CLogicalDML::CLogicalDML(CMemoryPool *mp)
 	: CLogical(mp),
 	  m_ptabdesc(NULL),
 	  m_pdrgpcrSource(NULL),
+	  m_pdrgpcrOutput(NULL),
 	  m_pbsModified(NULL),
 	  m_pcrAction(NULL),
 	  m_pcrTableOid(NULL),
@@ -57,7 +58,8 @@ CLogicalDML::CLogicalDML(CMemoryPool *mp)
 //---------------------------------------------------------------------------
 CLogicalDML::CLogicalDML(CMemoryPool *mp, EDMLOperator edmlop,
 						 CTableDescriptor *ptabdesc,
-						 CColRefArray *pdrgpcrSource, CBitSet *pbsModified,
+						 CColRefArray *pdrgpcrSource,
+						 CColRefArray *pdrgpcrOutput, CBitSet *pbsModified,
 						 CColRef *pcrAction, CColRef *pcrCtid,
 						 CColRef *pcrSegmentId, CColRef *pcrTupleOid,
 						 CColRef *pcrTableOid)
@@ -65,6 +67,7 @@ CLogicalDML::CLogicalDML(CMemoryPool *mp, EDMLOperator edmlop,
 	  m_edmlop(edmlop),
 	  m_ptabdesc(ptabdesc),
 	  m_pdrgpcrSource(pdrgpcrSource),
+	  m_pdrgpcrOutput(pdrgpcrOutput),
 	  m_pbsModified(pbsModified),
 	  m_pcrAction(pcrAction),
 	  m_pcrTableOid(pcrTableOid),
@@ -81,6 +84,7 @@ CLogicalDML::CLogicalDML(CMemoryPool *mp, EDMLOperator edmlop,
 					NULL != pcrCtid && NULL != pcrSegmentId);
 
 	m_pcrsLocalUsed->Include(m_pdrgpcrSource);
+	m_pcrsLocalUsed->Include(m_pdrgpcrOutput);
 	m_pcrsLocalUsed->Include(m_pcrAction);
 	if (NULL != m_pcrTableOid)
 	{
@@ -116,6 +120,7 @@ CLogicalDML::~CLogicalDML()
 {
 	CRefCount::SafeRelease(m_ptabdesc);
 	CRefCount::SafeRelease(m_pdrgpcrSource);
+	CRefCount::SafeRelease(m_pdrgpcrOutput);
 	CRefCount::SafeRelease(m_pbsModified);
 }
 
@@ -143,7 +148,8 @@ CLogicalDML::Matches(COperator *pop) const
 		   m_pcrSegmentId == popDML->PcrSegmentId() &&
 		   m_pcrTupleOid == popDML->PcrTupleOid() &&
 		   m_ptabdesc->MDId()->Equals(popDML->Ptabdesc()->MDId()) &&
-		   m_pdrgpcrSource->Equals(popDML->PdrgpcrSource());
+		   m_pdrgpcrSource->Equals(popDML->PdrgpcrSource()) &&
+		   m_pdrgpcrOutput->Equals(popDML->PdrgpcrOutput());
 }
 
 //---------------------------------------------------------------------------
@@ -162,6 +168,8 @@ CLogicalDML::HashValue() const
 	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrAction));
 	ulHash =
 		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrSource));
+	ulHash =
+		gpos::CombineHashes(ulHash, CUtils::UlHashColArray(m_pdrgpcrOutput));
 	ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(m_pcrTableOid));
 
 	if (EdmlDelete == m_edmlop || EdmlUpdate == m_edmlop)
@@ -189,6 +197,18 @@ CLogicalDML::PopCopyWithRemappedColumns(CMemoryPool *mp,
 {
 	CColRefArray *colref_array =
 		CUtils::PdrgpcrRemap(mp, m_pdrgpcrSource, colref_mapping, must_exist);
+
+	CColRefArray *pdrgpcrOutput = NULL;
+	if (must_exist)
+	{
+		pdrgpcrOutput =
+			CUtils::PdrgpcrRemapAndCreate(mp, m_pdrgpcrOutput, colref_mapping);
+	}
+	else
+	{
+		pdrgpcrOutput = CUtils::PdrgpcrRemap(mp, m_pdrgpcrOutput,
+											 colref_mapping, must_exist);
+	}
 	CColRef *pcrAction =
 		CUtils::PcrRemap(m_pcrAction, colref_mapping, must_exist);
 
@@ -225,9 +245,9 @@ CLogicalDML::PopCopyWithRemappedColumns(CMemoryPool *mp,
 
 	m_ptabdesc->AddRef();
 
-	return GPOS_NEW(mp)
-		CLogicalDML(mp, m_edmlop, m_ptabdesc, colref_array, m_pbsModified,
-					pcrAction, pcrCtid, pcrSegmentId, pcrTupleOid, pcrTableOid);
+	return GPOS_NEW(mp) CLogicalDML(
+		mp, m_edmlop, m_ptabdesc, colref_array, pdrgpcrOutput, m_pbsModified,
+		pcrAction, pcrCtid, pcrSegmentId, pcrTupleOid, pcrTableOid);
 }
 
 //---------------------------------------------------------------------------
@@ -245,6 +265,7 @@ CLogicalDML::DeriveOutputColumns(CMemoryPool *mp,
 {
 	CColRefSet *pcrsOutput = GPOS_NEW(mp) CColRefSet(mp);
 	pcrsOutput->Include(m_pdrgpcrSource);
+	pcrsOutput->Include(m_pdrgpcrOutput);
 	if (NULL != m_pcrCtid)
 	{
 		GPOS_ASSERT(NULL != m_pcrSegmentId);
@@ -276,6 +297,7 @@ CLogicalDML::DerivePropertyConstraint(CMemoryPool *mp,
 {
 	CColRefSet *pcrsOutput = GPOS_NEW(mp) CColRefSet(mp);
 	pcrsOutput->Include(m_pdrgpcrSource);
+	pcrsOutput->Include(m_pdrgpcrOutput);
 	CPropConstraint *ppc = PpcDeriveConstraintRestrict(mp, exprhdl, pcrsOutput);
 	pcrsOutput->Release();
 
@@ -291,10 +313,13 @@ CLogicalDML::DerivePropertyConstraint(CMemoryPool *mp,
 //
 //---------------------------------------------------------------------------
 CKeyCollection *
-CLogicalDML::DeriveKeyCollection(CMemoryPool *,	 // mp
-								 CExpressionHandle &exprhdl) const
+CLogicalDML::DeriveKeyCollection(CMemoryPool *mp,
+								 CExpressionHandle &  // exprhdl
+) const
 {
-	return PkcDeriveKeysPassThru(exprhdl, 0 /* ulChild */);
+	const CBitSetArray *pdrgpbs = m_ptabdesc->PdrgpbsKeys();
+
+	return CLogical::PkcKeysBaseTable(mp, pdrgpbs, m_pdrgpcrOutput);
 }
 
 //---------------------------------------------------------------------------
@@ -385,6 +410,38 @@ CLogicalDML::OsPrint(IOstream &os) const
 		os << ", ";
 		m_pcrSegmentId->OsPrint(os);
 	}
+
+	os << ", Output Columns: [";
+	CUtils::OsPrintDrgPcr(os, m_pdrgpcrOutput);
+	os << "] Key sets: {";
+
+	const ULONG ulColumns = m_pdrgpcrOutput->Size();
+	const CBitSetArray *pdrgpbsKeys = m_ptabdesc->PdrgpbsKeys();
+	for (ULONG ul = 0; ul < pdrgpbsKeys->Size(); ul++)
+	{
+		CBitSet *pbs = (*pdrgpbsKeys)[ul];
+		if (0 < ul)
+		{
+			os << ", ";
+		}
+		os << "[";
+		ULONG ulPrintedKeys = 0;
+		for (ULONG ulKey = 0; ulKey < ulColumns; ulKey++)
+		{
+			if (pbs->Get(ulKey))
+			{
+				if (0 < ulPrintedKeys)
+				{
+					os << ",";
+				}
+				os << ulKey;
+				ulPrintedKeys++;
+			}
+		}
+		os << "]";
+	}
+	os << "}";
+
 
 	return os;
 }

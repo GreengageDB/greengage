@@ -80,6 +80,9 @@ CXformInsert2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRefArray *pdrgpcrSource = popInsert->PdrgpcrSource();
 	pdrgpcrSource->AddRef();
 
+	CColRefArray *pdrgpcrOutput = popInsert->PdrgpcrOutput();
+	pdrgpcrOutput->AddRef();
+
 	// child of insert operator
 	CExpression *pexprChild = (*pexpr)[0];
 	pexprChild->AddRef();
@@ -87,6 +90,7 @@ CXformInsert2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	// create logical DML
 	CExpression *pexprAlt = CXformUtils::PexprLogicalDMLOverProject(
 		mp, pexprChild, CLogicalDML::EdmlInsert, ptabdesc, pdrgpcrSource,
+		pdrgpcrOutput,
 		NULL,  //pcrCtid
 		NULL,  //pcrSegmentId
 		NULL   //pcrTable

@@ -2240,6 +2240,7 @@ _readDML(void)
 	READ_INT_FIELD(tupleoidColIdx);
 	READ_INT_FIELD(tableoidColIdx);
 	READ_BOOL_FIELD(canSetTag);
+	READ_NODE_FIELD(returningList);
 
 	readPlanInfo((Plan *)local_node);
 
