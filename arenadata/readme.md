@@ -5,19 +5,15 @@
 Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
 for Ubuntu:
 ```bash
-docker build -t gpdb7_u22:latest -f arenadata/Dockerfile.ubuntu .
-```
-for Rocky Linux:
-```bash
-docker build -t gpdb7_regress:latest -f arenadata/Dockerfile .
+docker build -t gpdb8_u22:latest -f arenadata/Dockerfile.ubuntu .
 ```
 
 CI pushes docker images to the internal registry for each branch. We can pull it with usage of:
 
-* branch name as tag (latest for `adb-7.x` branch)
+* branch name as tag (latest for `adb-8.x` branch)
 * commit hash:
   ```bash
-  docker pull hub.adsw.io/library/gpdb7_regress:1353d81
+  docker pull hub.adsw.io/library/gpdb8_u22:1353d81
   ```
 
 ## Full regression tests suite run
@@ -25,16 +21,9 @@ CI pushes docker images to the internal registry for each branch. We can pull it
 We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_gpdb.bash) in container to create demo cluster and run different test suites against it:
 for Ubuntu:
 ```bash
- docker run --name gpdb7_opt_on --rm -it -e TEST_OS=ubuntu \
+ docker run --name gpdb8_opt_on --rm -it -e TEST_OS=ubuntu \
   -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on' installcheck-world" \
-  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_u22:latest \
-  /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
-```
-for Rocky Linux:
-```bash
- docker run --name gpdb7_opt_on --rm -it -e TEST_OS=centos \
-  -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on' installcheck-world" \
-  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_regress:latest \
+  --sysctl "kernel.sem=500 1024000 200 4096" gpdb8_u22:latest \
   /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
 ```
 
@@ -46,32 +35,18 @@ for Rocky Linux:
 * optimizer=on
 for Ubuntu:
 ```bash
- docker run --name gpdb7_opt_on --rm -it -e TEST_OS=ubuntu \
+ docker run --name gpdb8_opt_on --rm -it -e TEST_OS=ubuntu \
   -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on -c jit=on -c jit_above_cost=0 -c optimizer_jit_above_cost=0 -c gp_explain_jit=off' installcheck" \
-  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_u22:latest \
-  /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
-```
-for Rocky Linux:
-```bash
- docker run --name gpdb7_opt_on --rm -it -e TEST_OS=centos \
-  -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=on -c jit=on -c jit_above_cost=0 -c optimizer_jit_above_cost=0 -c gp_explain_jit=off' installcheck" \
-  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_regress:latest \
+  --sysctl "kernel.sem=500 1024000 200 4096" gpdb8_u22:latest \
   /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
 ```
 
 * optimizer=off
 for Ubuntu:
 ```bash
- docker run --name gpdb7_opt_on --rm -it -e TEST_OS=ubuntu \
+ docker run --name gpdb8_opt_on --rm -it -e TEST_OS=ubuntu \
   -e MAKE_TEST_COMMAND="make -k PGOPTIONS='-c optimizer=off -c jit=on -c jit_above_cost=0 -c gp_explain_jit=off' installcheck" \
-  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_u22:latest \
-  /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
-```
-for Rocky Linux:
-```bash
- docker run --name gpdb7_opt_on --rm -it -e TEST_OS=centos \
-  -e MAKE_TEST_COMMAND="make -k PGOPTIONS='-c optimizer=off -c jit=on -c jit_above_cost=0 -c gp_explain_jit=off' installcheck" \
-  --sysctl "kernel.sem=500 1024000 200 4096" gpdb7_regress:latest \
+  --sysctl "kernel.sem=500 1024000 200 4096" gpdb8_u22:latest \
   /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
 ```
 
@@ -93,12 +68,7 @@ The work directory must be clean to pass this test. Please, stage or even commit
 
 for Ubuntu:
 ```bash
-docker run --rm -it gpdb7_u22:latest bash -c "gpdb_src/concourse/scripts/unit_tests_gporca.bash"
-```
-for Rocky Linux:
-
-```bash
-docker run --rm -it gpdb7_regress:latest bash -c "gpdb_src/concourse/scripts/unit_tests_gporca.bash"
+docker run --rm -it gpdb8_u22:latest bash -c "gpdb_src/concourse/scripts/unit_tests_gporca.bash"
 ```
 
 ## How to run demo cluster inside docker container manually
@@ -107,13 +77,8 @@ docker run --rm -it gpdb7_regress:latest bash -c "gpdb_src/concourse/scripts/uni
 1. Start container with
   for Ubuntu:
    ```bash
-   docker run --name gpdb7_demo --rm -it --sysctl 'kernel.sem=500 1024000 200 4096' gpdb7_u22:latest \
+   docker run --name gpdb8_demo --rm -it --sysctl 'kernel.sem=500 1024000 200 4096' gpdb8_u22:latest \
      bash
-   ```
-  for Rocky Linux:
-   ```bash
-   docker run --name gpdb7_demo --rm -it --sysctl 'kernel.sem=500 1024000 200 4096' gpdb7_regress:latest \
-     scl enable devtoolset-7 llvm-toolset-7 bash
    ```
 1. Run the next commands in container
    ```bash
@@ -136,11 +101,7 @@ Feature files are located in `gpMgmt/test/behave/mgmt_utils`
 Before run tests you need to build a docker-image
 for Ubuntu:
 ```bash
-docker build -t "hub.adsw.io/library/gpdb7_u22:${BRANCH_NAME}" -f arenadata/Dockerfile.ubuntu .
-```
-for Rocky Linux:
-```bash
-docker build -t "hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME}" -f arenadata/Dockerfile .
+docker build -t "hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME}" -f arenadata/Dockerfile.ubuntu .
 ```
 
 Command to run features:
@@ -148,21 +109,11 @@ Command to run features:
 for Ubuntu:
 ```bash
 # Run all tests
-IMAGE=hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash
+IMAGE=hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash
 
 # Run specific features
-IMAGE=hub.adsw.io/library/gpdb7_regress:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
+IMAGE=hub.adsw.io/library/gpdb8_u22:${BRANCH_NAME} bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
 ```
-
-for Rocky Linux:
-```bash
-# Run all tests
-bash arenadata/scripts/run_behave_tests.bash
-
-# Run specific features
-bash arenadata/scripts/run_behave_tests.bash gpstart gpstop
-```
-
 
 Tests use `allure-behave` package and store allure output files in `allure-results` folder
 **NOTE** that `allure-behave` has too old a version because it is compatible with `python2`.
@@ -175,4 +126,31 @@ For example, cross_subnet tests or tests with tag `concourse_cluster` currently 
 
 Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
 
-Docker containers have installed `sigar` libraries. It is required only for `gpperfmon` tests.
+## Resource group tests
+
+1. Build or pull from internal registry (see above) needed image
+2. Start container with
+   for Ubuntu:
+   ```bash
+   docker run -it -e TEST_OS=ubuntu --sysctl 'kernel.sem=500 1024000 200 4096' --privileged gpdb8_u22:latest bash
+   ```
+3. Run the next commands in container:
+   ```
+   cd /home/gpadmin/
+   ssh-keygen -A
+   /usr/sbin/sshd
+   source gpdb_src/concourse/scripts/common.bash
+   install_and_configure_gpdb
+   gpdb_src/concourse/scripts/setup_gpadmin_user.bash
+   make_cluster
+   chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}
+   mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
+   chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
+   chown -R gpadmin:gpadmin /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
+   sudo -u gpadmin -- bash -c "
+     source /usr/local/greenplum-db-devel/greenplum_path.sh
+     source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
+     make -C /home/gpadmin/gpdb_src/src/test/regress
+     make PGOPTIONS='-c optimizer=off -c statement_mem=125MB' installcheck-resgroup -C gpdb_src/
+   "
+   ```

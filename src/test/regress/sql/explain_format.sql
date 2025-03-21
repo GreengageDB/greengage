@@ -27,8 +27,21 @@
 -- s/Buckets: \d+/Buckets: ###/
 -- m/Batches: \d+/
 -- s/Batches: \d+/Batches: ###/
+-- m/^Settings:.*/
+-- s/,?\s*optimizer_jit\w*\s*=\s*[^,\n]+//g
+-- m/^Settings:.*/
+-- s/,?\s*jit\w*\s*=\s*[^,\n]+//g
+-- m/^Settings:.*/
+-- s/^Settings:[,\s]*/Settings: /
+-- m/^Settings:.*/
+-- s/,?\s*optimizer\w*\s*=\s*'off'//g
 -- end_matchsubs
---
+-- ignore variable JIT gucs which can be shown when SETTINGS=ON
+-- start_matchignore
+-- m/^\s+jit\w*:/
+-- m/\s*optimizer:\s*"off"/
+-- m/^\s+optimizer_jit\w*:/
+-- end_matchignore
 -- DEFAULT syntax
 CREATE TABLE apples(id int PRIMARY KEY, type text);
 INSERT INTO apples(id) SELECT generate_series(1, 100000);
