@@ -39,6 +39,7 @@
 #include "catalog/catversion.h"
 #include "catalog/pg_control.h"
 #include "catalog/pg_database.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "commands/progress.h"
 #include "commands/tablespace.h"
 #include "common/controldata_utils.h"
@@ -7570,6 +7571,14 @@ StartupXLOG(void)
 					TimeLineID	prevTLI = ThisTimeLineID;
 					uint8		info = record->xl_info & ~XLR_INFO_MASK;
 
+					if ((info == XLOG_CHECKPOINT_SHUTDOWN) ||
+						(info == XLOG_END_OF_RECOVERY))
+					{
+						RemovePendingDeletesForPreparedTransactions();
+						/* Clean up orphaned files */
+						PdlRedoDropFiles();
+					}
+
 					if (info == XLOG_CHECKPOINT_SHUTDOWN)
 					{
 						CheckPoint	checkPoint;
@@ -8147,6 +8156,10 @@ StartupXLOG(void)
 		}
 		else
 			CreateCheckPoint(CHECKPOINT_END_OF_RECOVERY | CHECKPOINT_IMMEDIATE);
+
+		RemovePendingDeletesForPreparedTransactions();
+		/* Clean up orphaned files */
+		PdlRedoDropFiles();
 	}
 
 	if (ArchiveRecoveryRequested)
@@ -9640,6 +9653,13 @@ CreateCheckPoint(int flags)
 	 */
 	getDtxCheckPointInfo(&dtxCheckPointInfo, &dtxCheckPointInfoSize);
 
+	/*
+	 * There should be no open transactions by the moment of shutdown,
+	 * therefore add XLOG_PENDING_DELETE only when we are not shutting down.
+	 */
+	if (!shutdown)
+		PdlXLogInsert();
+
 	CheckPointGuts(checkPoint.redo, flags);
 
 	vxids = GetVirtualXIDsDelayingChkptEnd(&nvxids);
@@ -11092,6 +11112,10 @@ xlog_redo(XLogReaderState *record)
 
 		/* Keep track of full_page_writes */
 		lastFullPageWrites = fpw;
+	}
+	else if (info == XLOG_PENDING_DELETE)
+	{
+		PdlRedoXLogRecord(record);
 	}
 }
 

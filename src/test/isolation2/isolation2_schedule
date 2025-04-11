@@ -1,3 +1,6 @@
+test: gp_orphaned_files
+test: gp_orphaned_files_fts_promote
+
 # test dispatch
 test: gpdispatch
 

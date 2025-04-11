@@ -430,6 +430,8 @@ bool		gp_log_endpoints = false;
 /* optional reject to  parse ambigous 5-digits date in YYYMMDD format */
 bool		gp_allow_date_field_width_5digits = false;
 
+bool		gp_track_pending_delete = true;
+
 /* GUCs for Just In Time (JIT) compilation */
 double		optimizer_jit_above_cost;
 double		optimizer_jit_inline_above_cost;
@@ -3052,6 +3054,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_detect_data_correctness,
 		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_track_pending_delete", PGC_POSTMASTER, CUSTOM_OPTIONS,
+			gettext_noop("Enable extended pending deletion tracking to avoid "
+						 "accumulation of orphaned files."),
+			gettext_noop("Disabling this turns off storing relation nodes in "
+						 "shmem, dumping them to WAL and removing of files "
+						 "during recovery.")
+		},
+		&gp_track_pending_delete,
+		true,
 		NULL, NULL, NULL
 	},
 

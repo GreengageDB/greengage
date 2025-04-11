@@ -13,3 +13,7 @@
 const FmgrBuiltin fmgr_builtins[] = { };
 
 const int fmgr_nbuiltins = 0;
+const Oid fmgr_last_builtin_oid = 0;
+const uint16 fmgr_builtin_oid_index[1] = {
+  InvalidOidBuiltinMapping
+};

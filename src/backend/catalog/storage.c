@@ -21,12 +21,14 @@
 
 #include "miscadmin.h"
 
+#include "access/transam.h"
 #include "access/visibilitymap.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
 #include "access/xlogutils.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "catalog/storage_xlog.h"
 #include "common/relpath.h"
 #include "commands/dbcommands.h"
@@ -61,10 +63,20 @@ typedef struct PendingRelDelete
 	RelFileNodePendingDelete relnode;		/* relation that may need to be deleted */
 	bool		atCommit;		/* T=delete at commit; F=delete at abort */
 	int			nestLevel;		/* xact nesting level of request */
+	dsa_pointer shmemPtr;		/* ptr to shared pending delete list node */
 	struct PendingRelDelete *next;	/* linked-list link */
 } PendingRelDelete;
 
 static PendingRelDelete *pendingDeletes = NULL; /* head of linked list */
+
+static void
+PendingRelDeleteFree(PendingRelDelete *pending)
+{
+	Assert(pending != NULL);
+	if (DsaPointerIsValid(pending->shmemPtr))
+		PdlShmemRemove(pending->shmemPtr);
+	pfree(pending);
+}
 
 /*
  * RelationCreateStorage
@@ -84,6 +96,7 @@ RelationCreateStorage(RelFileNode rnode, char relpersistence, SMgrImpl smgr_whic
 	SMgrRelation srel;
 	BackendId	backend;
 	bool		needs_wal;
+	TransactionId xid = InvalidTransactionId;
 
 	switch (relpersistence)
 	{
@@ -108,7 +121,14 @@ RelationCreateStorage(RelFileNode rnode, char relpersistence, SMgrImpl smgr_whic
 	smgrcreate(srel, MAIN_FORKNUM, false);
 
 	if (needs_wal)
+	{
+		/*
+		 * Call GetCurrentTransactionId before log_smgrcreate, because
+		 * XLOG_SMGR_CREATE WAL record should be always linked to XID
+		 */
+		xid = GetCurrentTransactionId();
 		log_smgrcreate(&srel->smgr_rnode.node, MAIN_FORKNUM, smgr_which);
+	}
 
 	/* Add the relation to the list of stuff to delete at abort */
 	pending = (PendingRelDelete *)
@@ -119,6 +139,7 @@ RelationCreateStorage(RelFileNode rnode, char relpersistence, SMgrImpl smgr_whic
 	pending->nestLevel = GetCurrentTransactionNestLevel();
 	pending->relnode.smgr_which = smgr_which;
 	pending->next = pendingDeletes;
+	pending->shmemPtr = PdlShmemAdd(&pending->relnode, xid);
 	pendingDeletes = pending;
 
 	return srel;
@@ -141,7 +162,9 @@ log_smgrcreate(const RelFileNode *rnode, ForkNumber forkNum, SMgrImpl impl)
 
 	XLogBeginInsert();
 	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
-	XLogInsert(RM_SMGR_ID, XLOG_SMGR_CREATE | XLR_SPECIAL_REL_UPDATE);
+	XLogRecPtr recptr = XLogInsert(RM_SMGR_ID, XLOG_SMGR_CREATE | XLR_SPECIAL_REL_UPDATE);
+
+	XLogFlush(recptr);
 }
 
 /*
@@ -163,6 +186,7 @@ RelationDropStorage(Relation rel)
 	pending->relnode.smgr_which =
 		RelationIsAppendOptimized(rel) ? SMGR_AO : SMGR_MD;
 	pending->next = pendingDeletes;
+	pending->shmemPtr = InvalidDsaPointer;
 	pendingDeletes = pending;
 
 	/*
@@ -214,7 +238,7 @@ RelationPreserveStorage(RelFileNode rnode, bool atCommit)
 				prev->next = next;
 			else
 				pendingDeletes = next;
-			pfree(pending);
+			PendingRelDeleteFree(pending);
 			/* prev does not change */
 		}
 		else
@@ -496,7 +520,7 @@ smgrDoPendingDeletes(bool isCommit)
 				srels[nrels++] = srel;
 			}
 			/* must explicitly free the list entry */
-			pfree(pending);
+			PendingRelDeleteFree(pending);
 			/* prev does not change */
 		}
 	}
@@ -596,7 +620,7 @@ PostPrepare_smgr(void)
 		next = pending->next;
 		pendingDeletes = next;
 		/* must explicitly free the list entry */
-		pfree(pending);
+		PendingRelDeleteFree(pending);
 	}
 }
 
@@ -644,9 +668,25 @@ smgr_redo(XLogReaderState *record)
 	{
 		xl_smgr_create *xlrec = (xl_smgr_create *) XLogRecGetData(record);
 		SMgrRelation reln;
+		PendingRelXactDelete pd =
+		{
+			.relnode =
+			{
+				.node = xlrec->rnode,
+				.smgr_which = xlrec->impl,
+				/*
+				 * Temp relations are not logged in WAL, so it is always false
+				 * here.
+				 */
+				.isTempRelation = false
+			},
+			.xid = XLogRecGetXid(record)
+		};
 
 		reln = smgropen(xlrec->rnode, InvalidBackendId, xlrec->impl);
 		smgrcreate(reln, xlrec->forkNum, true);
+
+		PdlRedoAdd(&pd);
 	}
 	else if (info == XLOG_SMGR_TRUNCATE)
 	{
