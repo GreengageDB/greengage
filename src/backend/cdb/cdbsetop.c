@@ -239,7 +239,7 @@ adjust_setop_arguments(PlannerInfo *root, List *pathlist, List *tlist_list, GpSe
 		if (subpath != adjusted_path)
 		{
 			subpath = adjusted_path;
-			pathcell->data.ptr_value = subpath;
+			pathcell->ptr_value = subpath;
 		}
 	}
 

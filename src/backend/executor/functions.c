@@ -1318,7 +1318,7 @@ PG_TRY();
 		es = es->next;
 		while (!es)
 		{
-			eslc = lnext(eslc);
+			eslc = lnext(eslist, eslc);
 			if (!eslc)
 				break;			/* end of function */
 

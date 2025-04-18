@@ -60,7 +60,6 @@ extern void InitProcessGlobals(void);
 
 extern int	MaxLivePostmasterChildren(void);
 
-extern int	GetNumShmemAttachedBgworkers(void);
 extern bool PostmasterMarkPIDForWorkerNotify(int);
 
 extern void ResetMirrorReadyFlag(void);

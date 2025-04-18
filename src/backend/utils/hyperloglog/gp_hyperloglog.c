@@ -1076,7 +1076,7 @@ gp_hyperloglog_out(PG_FUNCTION_ARGS)
 	datalen = VARSIZE_ANY_EXHDR(data);
 	resultlen = pg_b64_enc_len(datalen);
 	result = palloc(resultlen + 1);
-	res = pg_b64_encode(VARDATA_ANY(data),datalen, result);
+	res = pg_b64_encode(VARDATA_ANY(data),datalen, result, resultlen);
 
 	/* Make this FATAL 'cause we've trodden on memory ... */
 	if (res > resultlen)
@@ -1097,7 +1097,7 @@ gp_hyperloglog_in(PG_FUNCTION_ARGS)
 	datalen = strlen(data);
 	resultlen = pg_b64_dec_len(datalen);
 	result = palloc(VARHDRSZ + resultlen);
-	res = pg_b64_decode(data, datalen, VARDATA(result));
+	res = pg_b64_decode(data, datalen, VARDATA(result), resultlen);
 
 	/* Make this FATAL 'cause we've trodden on memory ... */
 	if (res > resultlen)

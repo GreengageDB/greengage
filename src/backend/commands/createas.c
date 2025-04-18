@@ -245,7 +245,7 @@ create_ctas_nodata(List *tlist, IntoClause *into, QueryDesc *queryDesc)
 			if (lc)
 			{
 				colname = strVal(lfirst(lc));
-				lc = lnext(lc);
+				lc = lnext(into->colNames, lc);
 			}
 			else
 				colname = tle->resname;
@@ -605,7 +605,7 @@ intorel_initplan(struct QueryDesc *queryDesc, int eflags)
 		if (lc)
 		{
 			colname = strVal(lfirst(lc));
-			lc = lnext(lc);
+			lc = lnext(into->colNames, lc);
 		}
 		else
 			colname = NameStr(attribute->attname);

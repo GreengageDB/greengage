@@ -1377,7 +1377,7 @@ setup_connection(Archive *AH, const char *dumpencoding,
 	{
 		PQExpBuffer query = createPQExpBuffer();
 
-		appendPQExpBuffer(query, "SET TRANSACTION SNAPSHOT ");
+		appendPQExpBufferStr(query, "SET TRANSACTION SNAPSHOT ");
 		appendStringLiteralConn(query, AH->sync_snapshot_id, conn);
 		ExecuteSqlStatement(AH, query->data);
 		destroyPQExpBuffer(query);
@@ -1487,8 +1487,8 @@ expand_schema_name_patterns(Archive *fout,
 
 	for (cell = patterns->head; cell; cell = cell->next)
 	{
-		appendPQExpBuffer(query,
-						  "SELECT oid FROM pg_catalog.pg_namespace n\n");
+		appendPQExpBufferStr(query,
+							 "SELECT oid FROM pg_catalog.pg_namespace n\n");
 		processSQLNamePattern(GetConnection(fout), query, cell->val, false,
 							  false, NULL, "n.nspname", NULL, NULL);
 
@@ -3074,15 +3074,23 @@ dumpDatabase(Archive *fout)
 		appendPQExpBufferStr(creaQry, " ENCODING = ");
 		appendStringLiteralAH(creaQry, encoding, fout);
 	}
-	if (strlen(collate) > 0)
+	if (strlen(collate) > 0 && strcmp(collate, ctype) == 0)
 	{
-		appendPQExpBufferStr(creaQry, " LC_COLLATE = ");
+		appendPQExpBufferStr(creaQry, " LOCALE = ");
 		appendStringLiteralAH(creaQry, collate, fout);
 	}
-	if (strlen(ctype) > 0)
+	else
 	{
-		appendPQExpBufferStr(creaQry, " LC_CTYPE = ");
-		appendStringLiteralAH(creaQry, ctype, fout);
+		if (strlen(collate) > 0)
+		{
+			appendPQExpBufferStr(creaQry, " LC_COLLATE = ");
+			appendStringLiteralAH(creaQry, collate, fout);
+		}
+		if (strlen(ctype) > 0)
+		{
+			appendPQExpBufferStr(creaQry, " LC_CTYPE = ");
+			appendStringLiteralAH(creaQry, ctype, fout);
+		}
 	}
 
 	/*
@@ -3971,7 +3979,7 @@ dumpPolicy(Archive *fout, const PolicyInfo *polinfo)
 	if (polinfo->polwithcheck != NULL)
 		appendPQExpBuffer(query, " WITH CHECK (%s)", polinfo->polwithcheck);
 
-	appendPQExpBuffer(query, ";\n");
+	appendPQExpBufferStr(query, ";\n");
 
 	appendPQExpBuffer(delqry, "DROP POLICY %s", fmtId(polinfo->polname));
 	appendPQExpBuffer(delqry, " ON %s;\n", fmtQualifiedDumpable(tbinfo));
@@ -5589,9 +5597,9 @@ getAccessMethods(Archive *fout, int *numAccessMethods)
 	query = createPQExpBuffer();
 
 	/* Select all access methods from pg_am table */
-	appendPQExpBuffer(query, "SELECT tableoid, oid, amname, amtype, "
-					  "amhandler::pg_catalog.regproc AS amhandler "
-					  "FROM pg_am");
+	appendPQExpBufferStr(query, "SELECT tableoid, oid, amname, amtype, "
+						 "amhandler::pg_catalog.regproc AS amhandler "
+						 "FROM pg_am");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -7076,9 +7084,7 @@ getInherits(Archive *fout, int *numInherits)
 
 	/*
 	 * Find all the inheritance information, excluding implicit inheritance
-	 * via partitioning.  We handle that case using getPartitions(), because
-	 * we want more information about partitions than just the parent-child
-	 * relationship.
+	 * via partitioning.
 	 */
 	appendPQExpBufferStr(query, "SELECT inhrelid, inhparent FROM pg_inherits");
 
@@ -8439,10 +8445,10 @@ getTransforms(Archive *fout, int *numTransforms)
 
 	query = createPQExpBuffer();
 
-	appendPQExpBuffer(query, "SELECT tableoid, oid, "
-					  "trftype, trflang, trffromsql::oid, trftosql::oid "
-					  "FROM pg_transform "
-					  "ORDER BY 3,4");
+	appendPQExpBufferStr(query, "SELECT tableoid, oid, "
+						 "trftype, trflang, trffromsql::oid, trftosql::oid "
+						 "FROM pg_transform "
+						 "ORDER BY 3,4");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -12884,7 +12890,7 @@ dumpTransform(Archive *fout, const TransformInfo *transform)
 	if (transform->trftosql)
 	{
 		if (transform->trffromsql)
-			appendPQExpBuffer(defqry, ", ");
+			appendPQExpBufferStr(defqry, ", ");
 
 		if (tosqlFuncInfo)
 		{
@@ -12902,7 +12908,7 @@ dumpTransform(Archive *fout, const TransformInfo *transform)
 			pg_log_warning("bogus value in pg_transform.trftosql field");
 	}
 
-	appendPQExpBuffer(defqry, ");\n");
+	appendPQExpBufferStr(defqry, ");\n");
 
 	appendPQExpBuffer(labelq, "TRANSFORM FOR %s LANGUAGE %s",
 					  transformType, lanname);
@@ -13272,10 +13278,10 @@ dumpAccessMethod(Archive *fout, const AccessMethodInfo *aminfo)
 	switch (aminfo->amtype)
 	{
 		case AMTYPE_INDEX:
-			appendPQExpBuffer(q, "TYPE INDEX ");
+			appendPQExpBufferStr(q, "TYPE INDEX ");
 			break;
 		case AMTYPE_TABLE:
-			appendPQExpBuffer(q, "TYPE TABLE ");
+			appendPQExpBufferStr(q, "TYPE TABLE ");
 			break;
 		default:
 			pg_log_warning("invalid type \"%c\" of access method \"%s\"",
@@ -13937,23 +13943,23 @@ dumpCollation(Archive *fout, const CollInfo *collinfo)
 	qcollname = pg_strdup(fmtId(collinfo->dobj.name));
 
 	/* Get collation-specific details */
-	appendPQExpBuffer(query, "SELECT ");
+	appendPQExpBufferStr(query, "SELECT ");
 
 	if (fout->remoteVersion >= 100000)
-		appendPQExpBuffer(query,
-						  "collprovider, "
-						  "collversion, ");
+		appendPQExpBufferStr(query,
+							 "collprovider, "
+							 "collversion, ");
 	else
-		appendPQExpBuffer(query,
-						  "'c' AS collprovider, "
-						  "NULL AS collversion, ");
+		appendPQExpBufferStr(query,
+							 "'c' AS collprovider, "
+							 "NULL AS collversion, ");
 
 	if (fout->remoteVersion >= 120000)
-		appendPQExpBuffer(query,
-						  "collisdeterministic, ");
+		appendPQExpBufferStr(query,
+							 "collisdeterministic, ");
 	else
-		appendPQExpBuffer(query,
-						  "true AS collisdeterministic, ");
+		appendPQExpBufferStr(query,
+							 "true AS collisdeterministic, ");
 
 	appendPQExpBuffer(query,
 					  "collcollate, "
@@ -13988,7 +13994,7 @@ dumpCollation(Archive *fout, const CollInfo *collinfo)
 		/* to allow dumping pg_catalog; not accepted on input */
 		appendPQExpBufferStr(q, "default");
 	else
-		fatal("unrecognized collation provider: %s\n",
+		fatal("unrecognized collation provider: %s",
 			  collprovider);
 
 	if (strcmp(PQgetvalue(res, 0, i_collisdeterministic), "f") == 0)
@@ -14169,7 +14175,7 @@ format_aggregate_signature(const AggInfo *agginfo, Archive *fout, bool honor_quo
 		appendPQExpBufferStr(&buf, agginfo->aggfn.dobj.name);
 
 	if (agginfo->aggfn.nargs == 0)
-		appendPQExpBuffer(&buf, "(*)");
+		appendPQExpBufferStr(&buf, "(*)");
 	else
 	{
 		appendPQExpBufferChar(&buf, '(');
@@ -15505,7 +15511,7 @@ dumpACL(Archive *fout, DumpId objDumpId, DumpId altDumpId,
 	if (dopt->binary_upgrade && privtype == 'e' &&
 		initprivs && *initprivs != '\0')
 	{
-		appendPQExpBuffer(sql, "SELECT pg_catalog.binary_upgrade_set_record_init_privs(true);\n");
+		appendPQExpBufferStr(sql, "SELECT pg_catalog.binary_upgrade_set_record_init_privs(true);\n");
 		if (!buildACLCommands(name, subname, nspname, type,
 							  initprivs, acldefault, owner,
 							  "", fout->remoteVersion, sql))
@@ -17911,7 +17917,7 @@ dumpConstraint(Archive *fout, const ConstraintInfo *coninfo)
 			}
 
 			if (indxinfo->indnkeyattrs < indxinfo->indnattrs)
-				appendPQExpBuffer(q, ") INCLUDE (");
+				appendPQExpBufferStr(q, ") INCLUDE (");
 
 			for (k = indxinfo->indnkeyattrs; k < indxinfo->indnattrs; k++)
 			{
@@ -18290,9 +18296,9 @@ dumpSequence(Archive *fout, const TableInfo *tbinfo)
 						  "ALTER COLUMN %s ADD GENERATED ",
 						  fmtId(owning_tab->attnames[tbinfo->owning_col - 1]));
 		if (owning_tab->attidentity[tbinfo->owning_col - 1] == ATTRIBUTE_IDENTITY_ALWAYS)
-			appendPQExpBuffer(query, "ALWAYS");
+			appendPQExpBufferStr(query, "ALWAYS");
 		else if (owning_tab->attidentity[tbinfo->owning_col - 1] == ATTRIBUTE_IDENTITY_BY_DEFAULT)
-			appendPQExpBuffer(query, "BY DEFAULT");
+			appendPQExpBufferStr(query, "BY DEFAULT");
 		appendPQExpBuffer(query, " AS IDENTITY (\n    SEQUENCE NAME %s\n",
 						  fmtQualifiedDumpable(tbinfo));
 	}

@@ -1203,8 +1203,8 @@ FillPortalStore(Portal portal, bool isTopLevel)
 
 			/*
 			 * Run the portal to completion just as for the default
-			 * MULTI_QUERY case, but send the primary query's output to the
-			 * tuplestore.  Auxiliary query outputs are discarded.  Set the
+			 * PORTAL_MULTI_QUERY case, but send the primary query's output to
+			 * the tuplestore.  Auxiliary query outputs are discarded. Set the
 			 * portal's holdSnapshot to the snapshot used (or a copy of it).
 			 */
 			PortalRunMulti(portal, isTopLevel, true,
@@ -1518,7 +1518,7 @@ PortalRunMulti(Portal portal,
 		 * Increment command counter between queries, but not after the last
 		 * one.
 		 */
-		if (lnext(stmtlist_item) != NULL)
+		if (lnext(portal->stmts, stmtlist_item) != NULL)
 			CommandCounterIncrement();
 
 		/*

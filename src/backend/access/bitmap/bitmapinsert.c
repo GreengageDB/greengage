@@ -1397,7 +1397,7 @@ _bitmap_write_new_bitmapwords(Relation rel,
 			MarkBufferDirty(buffer);
 
 			/* Update the 'next' pointer on this page, before moving on */
-			buffer_cell = lnext(buffer_cell);
+			buffer_cell = lnext(perpage_buffers, buffer_cell);
 			Assert(buffer_cell);
 			nextBlkNo = BufferGetBlockNumber((Buffer) lfirst_int(buffer_cell));
 

@@ -173,7 +173,7 @@ ExecRecursiveUnion(PlanState *pstate)
 }
 
 /* ----------------------------------------------------------------
- *		ExecInitRecursiveUnionScan
+ *		ExecInitRecursiveUnion
  * ----------------------------------------------------------------
  */
 RecursiveUnionState *
@@ -283,7 +283,7 @@ ExecInitRecursiveUnion(RecursiveUnion *node, EState *estate, int eflags)
 }
 
 /* ----------------------------------------------------------------
- *		ExecEndRecursiveUnionScan
+ *		ExecEndRecursiveUnion
  *
  *		frees any storage allocated through C routines.
  * ----------------------------------------------------------------

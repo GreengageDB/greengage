@@ -18,7 +18,7 @@ if sys.version_info < (3, 5, 0):
                      % os.path.split(__file__)[-1])
     sys.exit(1)
 
-MAIN_VERSION = [7,99,99]    # version number for main
+MAIN_VERSION = [8,99,99]    # version number for main
 
 
 #============================================================
@@ -49,7 +49,8 @@ class GpVersion:
                 '4.3',
                 '5',
                 '6',
-                '7'
+                '7',
+                '8',
     ]
 
     #------------------------------------------------------------

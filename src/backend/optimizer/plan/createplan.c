@@ -2459,10 +2459,9 @@ create_groupingsets_plan(PlannerInfo *root, GroupingSetsPath *best_path)
 	chain = NIL;
 	if (list_length(rollups) > 1)
 	{
-		ListCell   *lc2 = lnext(list_head(rollups));
 		bool		is_first_sort = ((RollupData *) linitial(rollups))->is_hashed;
 
-		for_each_cell(lc, lc2)
+		for_each_cell(lc, rollups, list_second_cell(rollups))
 		{
 			RollupData *rollup = lfirst(lc);
 			AttrNumber *new_grpColIdx;
@@ -3229,7 +3228,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 		Form_pg_attribute	attr;
 
 		tle = (TargetEntry *) lfirst(lc);
-		lc = lnext(lc);
+		lc = lnext(subplan->targetlist, lc);
 		Assert(tle);
 
 		attr = &resultDesc->attrs[attrIdx - 1];
@@ -3250,7 +3249,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	lastresno = list_length(splitupdate->plan.targetlist);
 
 	/* Copy all junk attributes. */
-	for (; lc != NULL; lc = lnext(lc))
+	for (; lc != NULL; lc = lnext(subplan->targetlist, lc))
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
 		TargetEntry *newtle;
@@ -5238,7 +5237,7 @@ create_mergejoin_plan(PlannerInfo *root,
 				elog(ERROR, "outer pathkeys do not match mergeclauses");
 			opathkey = (PathKey *) lfirst(lop);
 			opeclass = opathkey->pk_eclass;
-			lop = lnext(lop);
+			lop = lnext(outerpathkeys, lop);
 			if (oeclass != opeclass)
 				elog(ERROR, "outer pathkeys do not match mergeclauses");
 		}
@@ -5265,7 +5264,7 @@ create_mergejoin_plan(PlannerInfo *root,
 			if (ieclass == ipeclass)
 			{
 				/* successful first match to this inner pathkey */
-				lip = lnext(lip);
+				lip = lnext(innerpathkeys, lip);
 				first_inner_match = true;
 			}
 		}
@@ -5896,7 +5895,7 @@ fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol)
 				else
 					elog(ERROR, "index key does not match expected index column");
 			}
-			indexpr_item = lnext(indexpr_item);
+			indexpr_item = lnext(index->indexprs, indexpr_item);
 		}
 	}
 

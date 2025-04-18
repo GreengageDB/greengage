@@ -5144,7 +5144,7 @@ DispatchSyncPGVariable(struct config_generic * gconfig)
 					char	   *curname = (char *) lfirst(lc);
 
 					appendStringInfoString(&buffer, quote_literal_cstr(curname));
-					if (lnext(lc))
+					if (lnext(namelist, lc))
 						appendStringInfoString(&buffer, ", ");
 				}
 			}

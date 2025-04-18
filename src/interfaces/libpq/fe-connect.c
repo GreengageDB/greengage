@@ -2867,8 +2867,8 @@ keep_going:						/* We will come back to here until there is
 				}
 				else if (!conn->gctx && conn->gssencmode[0] == 'r')
 				{
-					appendPQExpBuffer(&conn->errorMessage,
-									  libpq_gettext("GSSAPI encryption required, but was impossible (possibly no ccache, no server support, or using a local socket)\n"));
+					appendPQExpBufferStr(&conn->errorMessage,
+										 libpq_gettext("GSSAPI encryption required, but was impossible (possibly no ccache, no server support, or using a local socket)\n"));
 					goto error_return;
 				}
 #endif
@@ -5193,6 +5193,8 @@ parseServiceFile(const char *serviceFile,
 
 	while ((line = fgets(buf, sizeof(buf), f)) != NULL)
 	{
+		int			len;
+
 		linenr++;
 
 		if (strlen(line) >= sizeof(buf) - 1)
@@ -5205,16 +5207,17 @@ parseServiceFile(const char *serviceFile,
 			return 2;
 		}
 
-		/* ignore EOL at end of line */
-		if (strlen(line) && line[strlen(line) - 1] == '\n')
-			line[strlen(line) - 1] = 0;
+		/* ignore whitespace at end of line, especially the newline */
+		len = strlen(line);
+		while (len > 0 && isspace((unsigned char) line[len - 1]))
+			line[--len] = '\0';
 
-		/* ignore leading blanks */
+		/* ignore leading whitespace too */
 		while (*line && isspace((unsigned char) line[0]))
 			line++;
 
 		/* ignore comments and empty lines */
-		if (strlen(line) == 0 || line[0] == '#')
+		if (line[0] == '\0' || line[0] == '#')
 			continue;
 
 		/* Check for right groupname */
@@ -7083,14 +7086,10 @@ passwordFromFile(const char *hostname, const char *port, const char *dbname,
 
 		len = strlen(buf);
 
-		/* Remove trailing newline */
-		if (len > 0 && buf[len - 1] == '\n')
-		{
+		/* Remove trailing newline, including \r in case we're on Windows */
+		while (len > 0 && (buf[len - 1] == '\n' ||
+						   buf[len - 1] == '\r'))
 			buf[--len] = '\0';
-			/* Handle DOS-style line endings, too, even when not on Windows */
-			if (len > 0 && buf[len - 1] == '\r')
-				buf[--len] = '\0';
-		}
 
 		if (len == 0)
 			continue;

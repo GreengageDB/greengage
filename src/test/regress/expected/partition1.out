@@ -2244,7 +2244,7 @@ partition by list (b)
      default partition other
    );
 alter table mpp18179 alter column b type varchar(20);
-ERROR:  cannot alter type of column named in partition key
+ERROR:  cannot alter column "b" because it is part of the partition key of relation "mpp18179"
 --
 -- Drop index on partitioned table, and recreate it.
 --

@@ -2204,9 +2204,9 @@ create table list_test(a int, b int, c int) distributed by (a)
   (partition b values(1));
 -- should fail
 alter table list_test drop column b;
-ERROR:  cannot drop column named in partition key
+ERROR:  cannot drop column "b" because it is part of the partition key of relation "list_test"
 alter table list_test drop column c;
-ERROR:  cannot drop column named in partition key
+ERROR:  cannot drop column "c" because it is part of the partition key of relation "list_test_1_prt_b"
 drop table list_test;
 -- MPP-3678: allow exchange and split on tables with subpartitioning
 CREATE TABLE rank_exc (
@@ -4560,7 +4560,7 @@ ERROR:  insufficient columns in PRIMARY KEY constraint definition
 alter table at
     alter column b
 	type numeric;
-ERROR:  cannot alter type of column named in partition key
+ERROR:  cannot alter column "b" because it is part of the partition key of relation "at"
 	
 -- MPP-17606 end
 -- MPP-17707 start

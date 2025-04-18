@@ -782,6 +782,7 @@ cdbpath_eclass_constant_is_hashable(EquivalenceClass *ec, Oid hashOpFamily)
 
 static bool
 cdbpath_match_preds_to_distkey_tail(CdbpathMatchPredsContext *ctx,
+									List *lst,
 									ListCell *distkeycell)
 {
 	DistributionKey *distkey = (DistributionKey *) lfirst(distkeycell);
@@ -864,10 +865,10 @@ cdbpath_match_preds_to_distkey_tail(CdbpathMatchPredsContext *ctx,
 		ctx->colocus_eq_locus = false;
 
 	/* Match remaining partkey items. */
-	distkeycell = lnext(distkeycell);
+	distkeycell = lnext(lst, distkeycell);
 	if (distkeycell)
 	{
-		if (!cdbpath_match_preds_to_distkey_tail(ctx, distkeycell))
+		if (!cdbpath_match_preds_to_distkey_tail(ctx, lst, distkeycell))
 			return false;
 	}
 
@@ -924,7 +925,7 @@ cdbpath_match_preds_to_distkey(PlannerInfo *root,
 	ctx.colocus = colocus;
 	ctx.colocus_eq_locus = true;
 
-	return cdbpath_match_preds_to_distkey_tail(&ctx, list_head(locus.distkey));
+	return cdbpath_match_preds_to_distkey_tail(&ctx, locus.distkey, list_head(locus.distkey));
 }
 
 

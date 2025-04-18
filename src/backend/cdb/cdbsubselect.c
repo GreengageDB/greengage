@@ -731,7 +731,7 @@ inline static bool
 has_resjunk(List *tlist)
 {
 	bool		resjunk = false;
-	Node	   *tlnode = (Node *) (lfirst(tlist->tail));
+	Node	   *tlnode = (Node *) (lfirst(list_tail(tlist)));
 
 	if (IsA(tlnode, TargetEntry))
 	{

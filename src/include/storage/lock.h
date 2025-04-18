@@ -669,4 +669,4 @@ extern bool VirtualXactLock(VirtualTransactionId vxid, bool wait);
 /* Check whether a waiter's request lockmode conflict with the holder's hold mask */
 extern bool CheckWaitLockModeConflictHoldMask(LOCKTAG tag, LOCKMODE waitLockMode, LOCKMASK holderMask);
 
-#endif							/* LOCK_H */
+#endif							/* LOCK_H_ */

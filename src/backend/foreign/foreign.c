@@ -38,7 +38,6 @@ char
 SeparateOutMppExecute(List **options)
 {
 	ListCell *lc = NULL;
-	ListCell *prev = NULL;
 	char *mpp_execute = NULL;
 	char exec_location = FTEXECLOCATION_NOT_DEFINED;
 
@@ -66,10 +65,9 @@ SeparateOutMppExecute(List **options)
 								mpp_execute)));
 			}
 
-			*options = list_delete_cell(*options, lc, prev);
+			*options = foreach_delete_current(*options, lc);
 			break;
 		}
-		prev = lc;
 	}
 
 	return exec_location;
@@ -80,7 +78,6 @@ int32
 SeparateOutNumSegments(List **options)
 {
 	ListCell *lc = NULL;
-	ListCell *prev = NULL;
 	char *num_segments_str = NULL;
 	int32 num_segments = 0;
 
@@ -101,11 +98,9 @@ SeparateOutNumSegments(List **options)
 								num_segments)));
 			}
 
-			*options = list_delete_cell(*options, lc, prev);
+			*options = foreach_delete_current(*options, lc);
 			break;
 		}
-
-		prev = lc;
 	}
 	return num_segments;
 }

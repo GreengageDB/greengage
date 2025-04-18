@@ -175,7 +175,7 @@ static inline struct Plan *exec_subplan_get_plan(struct PlannedStmt *plannedstmt
 static inline void exec_subplan_put_plan(struct PlannedStmt *plannedstmt, SubPlan *subplan, struct Plan *plan)
 {
 	ListCell *cell = list_nth_cell(plannedstmt->subplans, subplan->plan_id-1);
-	cell->data.ptr_value = plan;
+	cell->ptr_value = plan;
 }
 
 /*
