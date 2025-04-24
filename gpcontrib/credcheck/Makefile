@@ -7,7 +7,7 @@ EXTVERSION = $(shell grep default_version $(EXTENSION).control | \
 #PG_CPPFLAGS = -DUSE_CRACKLIB '-DCRACKLIB_DICTPATH="/usr/lib/cracklib_dict"'
 #SHLIB_LINK = -lcrack
 
-PG_CPPFLAGS += -Wno-ignored-attributes
+PG_CPPFLAGS += -Wno-ignored-attributes -flto
 
 MODULE_big = credcheck
 OBJS = credcheck.o $(WIN32RES)
