@@ -46,7 +46,8 @@ typedef struct curlhandle_t
 {
 	CURL			*handle;		/* The curl handle */
 #ifdef USE_ZSTD
-	ZSTD_DCtx		*zstd_dctx;		/* The zstd context */
+	ZSTD_DCtx		*zstd_dctx;		/* The zstd decompression context */
+	ZSTD_CCtx		*zstd_cctx;		/* The zstd compression context */
 #endif
 	struct curl_slist *x_httpheader;	/* list of headers */
 	bool		in_multi_handle;	/* T, if the handle is in global
@@ -85,7 +86,8 @@ typedef struct
 
 	struct
 	{
-		char	   *ptr;		/* palloc-ed buffer */
+		char	   	*ptr;		/* palloc-ed buffer */
+		char		*cptr;
 		int			max;
 		int			bot,
 					top;
@@ -96,7 +98,7 @@ typedef struct
 				eof;			/* error & eof flags */
 	int			gp_proto;
 	
-	int 			zstd;			/* if gpfdist zstd compress is enabled, it equals 1 */
+	int 			zstd;			/* if gpfdist zstd compression is enabled, it equals 1 */
 	int 			lastsize;		/* Recording the compressed data size */
 	
 	char	   		*http_response;
@@ -118,7 +120,6 @@ typedef struct
 #define HOST_NAME_SIZE 100
 #define FDIST_TIMEOUT  408
 #define MAX_TRY_WAIT_TIME 64
-
 /*
  * SSL support GUCs - should be added soon. Until then we will use stubs
  *
@@ -188,6 +189,7 @@ static curlhandle_t *open_curl_handles;
 
 static bool url_curl_resowner_callback_registered;
 
+
 static curlhandle_t *
 create_curlhandle(void)
 {
@@ -200,6 +202,7 @@ create_curlhandle(void)
 
 #ifdef USE_ZSTD
 	h->zstd_dctx = NULL;
+	h->zstd_cctx = NULL;
 #endif
 
 	h->owner = CurrentResourceOwner;
@@ -250,6 +253,11 @@ destroy_curlhandle(curlhandle_t *h)
 	{
 		ZSTD_freeDCtx(h->zstd_dctx);
 		h->zstd_dctx = NULL;
+	}
+	if (h->zstd_cctx) 
+	{
+		ZSTD_freeCCtx(h->zstd_cctx);
+		h->zstd_cctx = NULL;
 	}
 #endif
 	pfree(h);
@@ -312,14 +320,19 @@ header_callback(void *ptr_, size_t size, size_t nmemb, void *userp)
 	Assert(size == 1);
 
 	/*
-	 * parse the http response line (code and message) from
+	 * Parse the http response line (code and message) from
 	 * the http header that we get. Basically it's the whole
 	 * first line (e.g: "HTTP/1.0 400 time out"). We do this
 	 * in order to capture any error message that comes from
 	 * gpfdist, and later use it to report the error string in
 	 * check_response() to the database user.
+	 * As we can get multiple header blocks for multiple HTTP
+	 * messages, we need to parse all headers and get the last
+	 * one. First header may contain only successfull status and
+	 * no info about the error.
 	 */
-	if (url->http_response == 0)
+
+	if (len > 5 && *ptr == 'H' && 0 == strncmp("HTTP/", ptr, 5))
 	{
 		int 	n = nmemb;
 		char* 	p;
@@ -334,6 +347,9 @@ header_callback(void *ptr_, size_t size, size_t nmemb, void *userp)
 
 			if (n > 0 && (p[n-1] == '\r' || p[n-1] == '\n'))
 				p[--n] = 0;
+
+			if (url->http_response)
+				pfree(url->http_response);
 
 			url->http_response = p;
 		}
@@ -400,7 +416,15 @@ header_callback(void *ptr_, size_t size, size_t nmemb, void *userp)
 			buf[i] = 0;
 #ifdef USE_ZSTD
 			url->zstd = strtol(buf, 0, 0);
-			if (!url->for_write && url->zstd)
+
+			if (url->for_write && url->zstd)
+			{	
+				url->curl->zstd_cctx = ZSTD_createCCtx();
+				// allocate out.cptr whose size equals to out.ptr
+				url->out.cptr = (char *) palloc(writable_external_table_bufsize * 1024);
+				url->lastsize = 0;
+			}
+			else if (url->zstd)
 			{
 				url->curl->zstd_dctx = ZSTD_createDCtx();
 				url->lastsize = ZSTD_initDStream(url->curl->zstd_dctx);
@@ -1258,6 +1282,9 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	set_httpheader(file, "X-GP-SEGMENT-COUNT", ev->GP_SEGMENT_COUNT);
 	set_httpheader(file, "X-GP-LINE-DELIM-STR", ev->GP_LINE_DELIM_STR);
 	set_httpheader(file, "X-GP-LINE-DELIM-LENGTH", ev->GP_LINE_DELIM_LENGTH);
+#ifdef USE_ZSTD
+		set_httpheader(file, "X-GP-ZSTD", "1");
+#endif
 
 	if (forwrite)
 	{
@@ -1278,9 +1305,6 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	{
 		/* read specific - (TODO: unclear why some of these are needed) */
 		set_httpheader(file, "X-GP-PROTO", "1");
-#ifdef USE_ZSTD
-		set_httpheader(file, "X-GP-ZSTD", "1");
-#endif
 		set_httpheader(file, "X-GP-MASTER_HOST", ev->GP_MASTER_HOST);
 		set_httpheader(file, "X-GP-MASTER_PORT", ev->GP_MASTER_PORT);
 		set_httpheader(file, "X-GP-CSVOPT", ev->GP_CSVOPT);
@@ -1323,7 +1347,6 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 
 		/* cert is stored PEM coded in file... */
 		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLCERTTYPE, "PEM");
-
 		/* set the cert for client authentication */
 		if (extssl_cert != NULL)
 		{
@@ -1331,12 +1354,12 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 			snprintf(extssl_cer_full, MAXPGPATH, "%s/%s", DataDir, extssl_cert);
 
 			if (!is_file_exists(extssl_cer_full))
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not open certificate file \"%s\": %m",
-								extssl_cer_full)));
-
-			CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLCERT, extssl_cer_full);
+			{
+				elog(LOG, "could not open certificate file \"%s\": %m", extssl_cer_full);
+				CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLCERT, NULL);
+			}
+			else
+				CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLCERT, extssl_cer_full);
 		}
 
 		/* set the key passphrase */
@@ -1352,12 +1375,12 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 			snprintf(extssl_key_full, MAXPGPATH, "%s/%s", DataDir, extssl_key);
 
 			if (!is_file_exists(extssl_key_full))
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not open private key file \"%s\": %m",
-								extssl_key_full)));
-
-			CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLKEY, extssl_key_full);
+			{
+				elog(LOG, "could not open private key file \"%s\": %m", extssl_key_full);
+				CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLKEY, NULL);
+			}
+			else
+				CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLKEY, extssl_key_full);
 		}
 
 		/* set the file with the CA certificates, for validating the server */
@@ -1367,12 +1390,22 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 			snprintf(extssl_cas_full, MAXPGPATH, "%s/%s", DataDir, extssl_ca);
 
 			if (!is_file_exists(extssl_cas_full))
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not open private key file \"%s\": %m",
-								extssl_cas_full)));
-
-			CURL_EASY_SETOPT(file->curl->handle, CURLOPT_CAINFO, extssl_cas_full);
+			{
+				if (verify_gpfdists_cert)
+				{
+					ereport(ERROR,
+							(errcode_for_file_access(),
+							errmsg("could not open CA certificate file \"%s\": %m",
+									extssl_cas_full)));
+				}
+				else 
+				{
+					elog(LOG, "could not open CA certificate file \"%s\": %m", extssl_cas_full);
+					CURL_EASY_SETOPT(file->curl->handle, CURLOPT_CAINFO, NULL);
+				}
+			}
+			else
+				CURL_EASY_SETOPT(file->curl->handle, CURLOPT_CAINFO, extssl_cas_full);
 		}
 
 		/* set cert verification */
@@ -1485,6 +1518,13 @@ url_curl_fclose(URL_FILE *fileg, bool failOnError, const char *relname)
 		file->out.ptr = NULL;
 	}
 
+	if (file->out.cptr)
+	{
+		Assert(file->for_write);
+		pfree(file->out.cptr);
+		file->out.cptr = NULL;
+	}
+
 	file->gp_proto = 0;
 	file->error = file->eof = 0;
 	memset(&file->in, 0, sizeof(file->in));
@@ -1548,10 +1588,11 @@ decompress_zstd_data(ZSTD_DCtx* ctx, ZSTD_inBuffer* bin, ZSTD_outBuffer* bout)
 {
 	
 	size_t ret;
-	/* Ret indicates the number of bytes of next data frame to be decompressed.
-	 * And if an error occur in ZSTD_decompressStream, ret will be a error number.
-	 * If ZSTD_isError is true, the ret is a error number.
-	 * The content of the error can be got by ZSTD_getErrorName..
+	/* 
+	 * The return value ret indicates the number of bytes of next data frame to be decompressed.
+	 * And if an error occurs in ZSTD_decompressStream, ret will be an error number.
+	 * If ZSTD_isError is true, the ret is an error number.
+	 * The content of the error can be got by ZSTD_getErrorName.
 	 */
 	ret = ZSTD_decompressStream(ctx, bout, bin);
 
@@ -1562,6 +1603,12 @@ decompress_zstd_data(ZSTD_DCtx* ctx, ZSTD_inBuffer* bin, ZSTD_outBuffer* bout)
 				errmsg("ZSTD_decompressStream failed, error is %s", ZSTD_getErrorName(ret))));
 	}
 	return ret;
+}
+
+static int
+compress_zstd_data(URL_CURL_FILE *file)
+{
+	return ZSTD_compressCCtx(file->curl->zstd_cctx, file->out.cptr, file->out.top, file->out.ptr, file->out.top, file->zstd);
 }
 #endif
 
@@ -1729,25 +1776,38 @@ gp_proto1_read(char *buf, int bufsz, URL_CURL_FILE *file, CopyState pstate, char
 
 	if (file->zstd)
 	{
-		/* 'lastsize' is the number of bytes required for next decompression.
+		/* 
+		 * 'lastsize' is the number of bytes required for next decompression.
 		 * 'left_bytes' is the number of bytes remained in 'file->in.ptr'.
-		 * If left_bytes is less than 'lastsize', the next decompression
+		 * If 'left_bytes' is less than 'lastsize', the next decompression
 		 * can't complete in a decompression operation. Thus, when 
-		 * 'file->lastsize > left_bytes', we need more bytes and fill_buffer is called.
+		 * 'file->lastsize > left_bytes', we need more bytes and fill_buffer() is called.
 		 * 
 		 * When the condition 'file->block.datalen == len' is met, a new
-		 * request just start. In this case lastsize is an init value, and 
-		 * cannot provide the information about how many bytes required
+		 * request just starts. In this case, lastsize is an init value, and 
+		 * can not provide the information about how many bytes required
 		 * to finish the first frame decompression. In this case, enough
-		 * bytes(more than ZSTD_DStreamInSize() returning) should be filled
+		 * bytes (more than ZSTD_DStreamInSize() returning) should be filled
 		 * into 'file->in.ptr' to ensure that the first decompression 
-		 * completing.
+		 * will complete successfully.
 		 */
 		if (file->lastsize > left_bytes || file->block.datalen == len)
 		{
 #ifdef USE_ZSTD
 			int wantsz = ZSTD_DStreamInSize() - left_bytes;
 			fill_buffer(file, wantsz);
+			/* Gpfdist could be aborted unexpectedly. Thus gpdb would recieve the partial data, which 
+			 * is unable to be decompressed correctly. In this case, gpdb will report a decompression
+			 * error. However, the error is not the real cause of the abortion. So we add a judge here,
+			 * to check if gpdb get enough data to decompress. The missing data means the network problem.
+			 */
+			left_bytes = (file->in.top - file->in.bot);
+			if (file->lastsize > left_bytes && file->block.datalen)
+			{
+				ereport(ERROR,
+					(errcode(ERRCODE_CONNECTION_FAILURE),
+					 errmsg("connection to gpfdist error: stream ends unexpectedly")));
+			}
 #endif
 		}
 	} 
@@ -1762,7 +1822,7 @@ gp_proto1_read(char *buf, int bufsz, URL_CURL_FILE *file, CopyState pstate, char
 
 	n = file->in.top - file->in.bot;
 
-	/* if gpfdist closed connection prematurely or died catch it here */
+	/* if gpfdist closed connection prematurely or died, catch it here */
 	if (n == 0 && !file->eof)
 	{
 		file->error = 1;
@@ -1783,11 +1843,12 @@ gp_proto1_read(char *buf, int bufsz, URL_CURL_FILE *file, CopyState pstate, char
 	if (file->zstd && file->curl->zstd_dctx && !file->eof)
 	{
 		int ret;
-		/* It is absolutely to put the decompression code in a loop.
+		/* 
+		 * I think it is correct to put the decompression code in a loop.
 		 * Since not every call of decompress_zstd_data will get data into bout.
 		 * However, even thought there is no data in bout, the call of 
 		 * decompress_zstd_data is neccersary for following decompression.
-		 * If a empty buf is returned to gpdb, the error will occur. 
+		 * If an empty buf is returned to gpdb, the error will occur. 
 		 * So the loop ensures that we push forward the decompression until there 
 		 * is data in bout.
 		 */
@@ -1819,6 +1880,7 @@ gp_proto1_read(char *buf, int bufsz, URL_CURL_FILE *file, CopyState pstate, char
 
 	return n;
 }
+
 /*
  * gp_proto0_write
  *
@@ -1827,9 +1889,20 @@ gp_proto1_read(char *buf, int bufsz, URL_CURL_FILE *file, CopyState pstate, char
  */
 static void
 gp_proto0_write(URL_CURL_FILE *file, CopyState pstate)
-{
-	char*		buf = file->out.ptr;
-	int		nbytes = file->out.top;
+{	
+	char*		buf;
+	int		nbytes;
+#ifdef USE_ZSTD
+	if(file->zstd){
+		nbytes = compress_zstd_data(file);
+		buf = file->out.cptr;
+	}
+	else
+#endif
+	{
+		buf = file->out.ptr;
+	 	nbytes = file->out.top;
+	}
 
 	if (nbytes == 0)
 		return;
@@ -1926,11 +1999,18 @@ curl_fwrite(char *buf, int nbytes, URL_CURL_FILE *file, CopyState pstate)
 			char*	newbuf;
 
 			newbuf = repalloc(file->out.ptr, n);
-
 			if (!newbuf)
 				elog(ERROR, "out of memory (curl_fwrite)");
-
 			file->out.ptr = newbuf;
+			
+			if (file->zstd) 
+			{
+				newbuf = repalloc(file->out.cptr, n);
+				if (!newbuf)
+					elog(ERROR, "out of compress memory (curl_fwrite)");
+				file->out.cptr = newbuf;
+			}
+
 			file->out.max = n;
 
 			Assert(nbytes < file->out.max);

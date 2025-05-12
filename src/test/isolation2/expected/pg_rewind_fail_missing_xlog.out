@@ -2,6 +2,11 @@
 -- is removed/recylced in checkpointer, gprecoverseg (based on pg_rewind) would
 -- would fail.
 
+CREATE OR REPLACE LANGUAGE plpython3u;
+CREATE
+CREATE OR REPLACE FUNCTION connectSeg(n int, port int, hostname text) RETURNS bool AS $$ import os import subprocess import time for i in range(n): try: subprocess.run(["psql", "-h", str(hostname), "-p", str(port), "postgres", "-Xc", "select 1;"], env={"PGOPTIONS": "-c gp_role=utility", "PATH": os.getenv("PATH")}, check=True) return True except Exception as e: time.sleep(1) raise Exception("wait connection timeout") $$ LANGUAGE plpython3u;
+CREATE
+
 CREATE TABLE tst_missing_tbl (a int);
 CREATE
 INSERT INTO tst_missing_tbl values(2),(1),(5);
@@ -187,6 +192,12 @@ INSERT 3
 ---------------------------
  t                         
 (1 row)
+-- Wait for the segment promotion finished and accept the connection
+3: select connectSeg(600,port,hostname) from gp_segment_configuration where content = 1 and role = 'p';
+ connectseg 
+------------
+ t          
+(1 row)
 -- Wait for the end of recovery CHECKPOINT completed after the mirror was promoted
 3: SELECT gp_inject_fault('checkpoint_after_redo_calculated', 'skip', dbid) FROM gp_segment_configuration WHERE role='p' AND content = 1;
  gp_inject_fault 
@@ -246,6 +257,8 @@ server closed the connection unexpectedly
 
 -- Cleanup
 5: DROP TABLE tst_missing_tbl;
+DROP
+5: DROP FUNCTION connectSeg;
 DROP
 !\retcode gprecoverseg -ar;
 (exited with code 0)

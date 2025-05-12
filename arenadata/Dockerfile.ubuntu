@@ -1,0 +1,53 @@
+FROM ubuntu:22.04 AS base
+
+COPY README.Ubuntu.bash ./
+
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    ./README.Ubuntu.bash; \
+    rm README.Ubuntu.bash; \
+# The en_US.UTF-8 locale is needed to run GPDB
+    locale-gen en_US.UTF-8; \
+# To run sshd directly, but not using `/etc/init.d/ssh start`
+    mkdir /run/sshd; \
+# Alter precedence in favor of IPv4 during resolving
+    echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
+# Packages for tests
+    apt install -y rsync iproute2 fakeroot lsof sudo python3.11 python3.11-dev openjdk-17-jdk libipc-run-perl; \
+    apt install -y protobuf-compiler libpq-dev libossp-uuid-dev; \
+# Install allure-behave for behave tests
+    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0 protobuf==3.20.0; \
+    pip3 install PyGreSQL; \
+    pip3 cache purge
+
+WORKDIR /home/gpadmin
+
+RUN mkdir -p /gpadmin/.ssh/ && cat >> /gpadmin/.ssh/config <<-EOF
+Host *
+    StrictHostKeyChecking no
+EOF
+
+FROM base AS build
+
+COPY . gpdb_src
+
+RUN mkdir /home/gpadmin/bin_gpdb
+
+ENV TARGET_OS_VERSION=22
+ENV TARGET_OS=ubuntu
+ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
+ENV SKIP_UNITTESTS=
+# To set default locale for unittests
+ENV LANG=en_US.UTF-8
+ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --with-llvm --with-openssl --enable-cassert --enable-debug --enable-depend --with-libxml --with-uuid=ossp --with-perl --enable-mapreduce --enable-orafce"
+
+# Compile with running mocking tests
+RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+
+FROM base AS code
+COPY . gpdb_src
+RUN rm -rf gpdb_src/.git/
+
+FROM base AS test
+COPY --from=code /home/gpadmin/gpdb_src gpdb_src
+COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb

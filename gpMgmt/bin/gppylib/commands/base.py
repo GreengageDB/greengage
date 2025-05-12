@@ -28,7 +28,6 @@ import time
 
 from gppylib import gplog
 from gppylib import gpsubprocess
-from pg import DB
 
 logger = gplog.get_default_logger()
 
@@ -628,8 +627,7 @@ class SQLCommand(Command):
 
         # if self.conn is not set we cannot cancel.
         if self.cancel_conn:
-            DB(self.cancel_conn).cancel()
-
+            self.cancel_conn.cancel()
 
 def run_remote_commands(name, commands):
     """
