@@ -1,0 +1,42 @@
+-- start_ignore
+CREATE EXTENSION gp_inject_fault;
+DROP FUNCTION gp_mock_cdbdispatchcommand(amount int);
+DROP ROLE role_oom_test;
+DROP RESOURCE GROUP rg_oom_test;
+-- end_ignore
+CREATE RESOURCE GROUP rg_oom_test
+WITH (cpu_max_percent=20, memory_limit=20);
+CREATE ROLE role_oom_test RESOURCE GROUP rg_oom_test;
+CREATE OR REPLACE FUNCTION gp_mock_cdbdispatchcommand(amount int)
+RETURNS SETOF text AS '@abs_srcdir@/../regress/regress.so',
+'gp_mock_cdbdispatchcommand' LANGUAGE C;
+
+1: SET ROLE TO role_oom_test;
+
+-- Freeze coordinator's session after it reads results from segments.
+SELECT gp_inject_fault('check_dispatch_result_end', 'suspend', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+-- Send the heavy query.
+1&: SELECT count(*) FROM gp_mock_cdbdispatchcommand(1000000);
+
+-- Wait until we receive everything.
+SELECT gp_wait_until_triggered_fault('check_dispatch_result_end', 1, dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+-- The query should've used ~110 MB of memory. Allow some error.
+WITH r AS (
+  SELECT memory_usage AS mb
+  FROM gp_toolkit.gp_resgroup_status_per_host WHERE groupname = 'rg_oom_test'
+)
+SELECT r.mb < 150 AS "under 150 MB", r.mb > 90 AS "above 90 MB"
+FROM r;
+
+SELECT gp_inject_fault('check_dispatch_result_end', 'reset', dbid) FROM
+gp_segment_configuration WHERE role = 'p' AND content = -1;
+
+1<:
+
+DROP FUNCTION gp_mock_cdbdispatchcommand(amount int);
+DROP ROLE role_oom_test;
+DROP RESOURCE GROUP rg_oom_test;
