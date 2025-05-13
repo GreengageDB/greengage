@@ -101,7 +101,7 @@ OBJS += regress_gp.o
 # We need the objects only for the missing symbols. Non-hidden symbols will be
 # pulled from the postgres binary, just to save you some hair on your head.
 LIBPQ_BE_SRCS = fe-protocol3.c fe-connect.c fe-exec.c pqexpbuffer.c fe-auth.c \
-	fe-misc.c fe-protocol2.c fe-secure.c fe-auth-scram.c
+	fe-misc.c fe-protocol2.c fe-secure.c fe-auth-scram.c libpq-events.c
 LIBPQ_BE_OBJS = $(LIBPQ_BE_SRCS:%.c=%.o)
 
 OBJS += $(LIBPQ_BE_OBJS)

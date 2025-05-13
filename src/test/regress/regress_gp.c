@@ -24,6 +24,7 @@
 
 #include "libpq-fe.h"
 #include "libpq-int.h"
+#include "libpq-events.h"
 #include "pgstat.h"
 #include "access/transam.h"
 #include "access/xact.h"
@@ -115,6 +116,9 @@ extern Datum broken_int4out(PG_FUNCTION_ARGS);
 
 /* fts tests */
 extern Datum gp_fts_probe_stats(PG_FUNCTION_ARGS);
+
+/* libpq events test */
+extern Datum gp_check_libpq_events(PG_FUNCTION_ARGS);
 
 /* Triggers */
 
@@ -2338,4 +2342,171 @@ gp_raise_sigint(PG_FUNCTION_ARGS)
 	CHECK_FOR_INTERRUPTS();
 
 	pg_unreachable();
+}
+
+typedef struct
+{
+	int cur_tuple_idx;
+	int cur_segment_idx;
+	int cur_segment_tuple_idx;
+
+	int n_segments;
+	int n_tuples;
+
+	Datum some_text;
+	struct pg_result **pg_results;
+} gp_mock_cdbdispatchcommand_status;
+
+/*
+ * This test function mocks CdbDispatchCommand() with a customizable amount of
+ * tuples.
+ */
+PG_FUNCTION_INFO_V1(gp_mock_cdbdispatchcommand);
+Datum
+gp_mock_cdbdispatchcommand(PG_FUNCTION_ARGS)
+{
+	FuncCallContext *func_ctx;
+	gp_mock_cdbdispatchcommand_status *my_status;
+
+	int arg_tuple_amount = PG_GETARG_INT32(0);
+
+	if (arg_tuple_amount <= 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("gp_mock_cdbdispatchcommand() should only be "
+							   "called with it's parameter greater than 0")));
+	}
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		func_ctx = SRF_FIRSTCALL_INIT();
+
+		MemoryContext oldcontext =
+			MemoryContextSwitchTo(func_ctx->multi_call_memory_ctx);
+
+		my_status = palloc0(sizeof(gp_mock_cdbdispatchcommand_status));
+
+		/* Cache the return result. */
+		my_status->some_text = CStringGetTextDatum("sometext");
+
+		/* Send the command to segments from QD. */
+		if (Gp_role == GP_ROLE_DISPATCH)
+		{
+			char *query =
+				psprintf("SELECT * FROM gp_mock_cdbdispatchcommand(%d)",
+						 arg_tuple_amount);
+
+			CdbPgResults cdb_pgresults = {0};
+			CdbDispatchCommand(query, DF_WITH_SNAPSHOT, &cdb_pgresults);
+
+			pfree(query);
+
+			Assert(cdb_pgresults.numResults > 0);
+
+			for (int i = 0; i < cdb_pgresults.numResults; i++)
+			{
+				Assert(PQresultStatus(cdb_pgresults.pg_results[i]) ==
+					   PGRES_TUPLES_OK);
+				my_status->n_tuples += PQntuples(cdb_pgresults.pg_results[i]);
+			}
+
+			my_status->n_segments = cdb_pgresults.numResults;
+			my_status->pg_results = cdb_pgresults.pg_results;
+		}
+
+		func_ctx->user_fctx = my_status;
+
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	func_ctx = SRF_PERCALL_SETUP();
+	my_status = func_ctx->user_fctx;
+
+	/* Generate fake tuples from every segment. */
+	if (my_status->cur_tuple_idx < arg_tuple_amount)
+	{
+		my_status->cur_tuple_idx++;
+		SRF_RETURN_NEXT(func_ctx, my_status->some_text);
+	}
+
+	/* Receive tuples from the loop above on master. */
+	if (Gp_role == GP_ROLE_DISPATCH)
+	{
+		while (my_status->cur_segment_idx < my_status->n_segments)
+		{
+			PGresult *res = my_status->pg_results[my_status->cur_segment_idx];
+
+			if (my_status->cur_segment_tuple_idx < PQntuples(res))
+			{
+				Datum ret = CStringGetTextDatum(
+					PQgetvalue(res, my_status->cur_segment_tuple_idx, 0));
+
+				my_status->cur_segment_tuple_idx++;
+				SRF_RETURN_NEXT(func_ctx, ret);
+			}
+
+			PQclear(res);
+
+			my_status->cur_segment_idx++;
+			my_status->cur_segment_tuple_idx = 0;
+		}
+
+		pfree(my_status->pg_results);
+	}
+
+	SRF_RETURN_DONE(func_ctx);
+}
+
+static int
+check_libpq_events_example_proc(PGEventId evtId, void *evtInfo,
+								void *passThrough)
+{
+	return 1;
+}
+
+PG_FUNCTION_INFO_V1(gp_check_libpq_events);
+Datum
+gp_check_libpq_events(PG_FUNCTION_ARGS)
+{
+	PGconn *conn;
+	PGresult *res;
+
+	conn = PQconnectdb("");
+	if (!conn)
+	{
+		ereport(ERROR, (errmsg("PQconnectdb returned NULL")));
+	}
+
+	/* PGEVT_REGISTER */
+	if (!PQregisterEventProc(conn, check_libpq_events_example_proc,
+							 "gp_check_libpq_events", NULL))
+	{
+		PQfinish(conn);
+		ereport(ERROR, (errmsg("PQregisterEventProc failed")));
+	}
+
+	/* calls dupEvents() */
+	res = PQmakeEmptyPGresult(conn, PGRES_COMMAND_OK);
+	if (!res)
+	{
+		PQfinish(conn);
+		ereport(ERROR, (errmsg("PQmakeEmptyPGresult failed")));
+	}
+
+	/* PGEVT_RESULTCREATE */
+	if (!PQfireResultCreateEvents(conn, res))
+	{
+		/* PGEVT_RESULTDESTROY */
+		PQclear(res);
+		PQfinish(conn);
+		ereport(ERROR, (errmsg("PQfireResultCreateEvents failed")));
+	}
+
+	/* PGEVT_RESULTDESTROY */
+	PQclear(res);
+
+	/* PGEVT_CONNDESTROY */
+	PQfinish(conn);
+
+	PG_RETURN_BOOL(true);
 }

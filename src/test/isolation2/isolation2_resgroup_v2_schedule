@@ -49,4 +49,6 @@ test: resgroup/resgroup_large_group_id
 # parallel retrieve cursor integration
 test: resgroup/resgroup_parallel_retrieve
 
+test: resgroup/resgroup_oom
+
 test: resgroup/resgroup_disable_resgroup
