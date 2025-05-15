@@ -563,8 +563,8 @@ RestoreArchive(Archive *AHX)
 							 */
 							if (strncmp(dropStmt, "ALTER TABLE", 11) == 0)
 							{
-								appendPQExpBuffer(ftStmt,
-												  "ALTER TABLE IF EXISTS");
+								appendPQExpBufferStr(ftStmt,
+													 "ALTER TABLE IF EXISTS");
 								dropStmt = dropStmt + 11;
 							}
 
@@ -4957,7 +4957,7 @@ CloneArchive(ArchiveHandle *AH)
 		 * any data to/from the database.
 		 */
 		initPQExpBuffer(&connstr);
-		appendPQExpBuffer(&connstr, "dbname=");
+		appendPQExpBufferStr(&connstr, "dbname=");
 		appendConnStrVal(&connstr, PQdb(AH->connection));
 		pghost = PQhost(AH->connection);
 		pgport = PQport(AH->connection);

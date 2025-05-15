@@ -341,7 +341,7 @@ list_qsort_arg(List *list, qsort_arg_comparator cmp, void *arg)
 
 	i = 0;
 	foreach(cell, list)
-		cell->data.ptr_value = create_stmts[i++];
+		cell->ptr_value = create_stmts[i++];
 
 	pfree(create_stmts);
 }
@@ -409,7 +409,7 @@ deduceImplicitRangeBounds(ParseState *pstate, Relation parentrel, List *stmts, b
 			}
 			if (!stmt->partbound->upperdatums)
 			{
-				Node *next = lc->next ? lfirst(lc->next) : NULL;
+				Node *next = lnext(stmts, lc) ? lfirst(lnext(stmts, lc)) : NULL;
 				if (next)
 				{
 					CreateStmt *nextstmt = (CreateStmt *)next;
@@ -979,7 +979,6 @@ static char *
 extract_tablename_from_options(List **options)
 {
 	ListCell *o_lc;
-	ListCell *prev_lc = NULL;
 	char *tablename = NULL;
 
 	foreach (o_lc, *options)
@@ -999,11 +998,10 @@ extract_tablename_from_options(List **options)
 						 errmsg("invalid tablename specification")));
 
 			char *relname_str = defGetString(pDef);
-			*options = list_delete_cell(*options, o_lc, prev_lc);
+			*options = foreach_delete_current(*options, o_lc);
 			tablename = pstrdup(relname_str);
 			break;
 		}
-		prev_lc = o_lc;
 	}
 
 	return tablename;

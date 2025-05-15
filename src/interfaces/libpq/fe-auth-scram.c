@@ -328,14 +328,23 @@ build_client_first_message(fe_scram_state *state)
 		return NULL;
 	}
 
-	state->client_nonce = malloc(pg_b64_enc_len(SCRAM_RAW_NONCE_LEN) + 1);
+	encoded_len = pg_b64_enc_len(SCRAM_RAW_NONCE_LEN);
+	/* don't forget the zero-terminator */
+	state->client_nonce = malloc(encoded_len + 1);
 	if (state->client_nonce == NULL)
 	{
 		printfPQExpBuffer(&conn->errorMessage,
 						  libpq_gettext("out of memory\n"));
 		return NULL;
 	}
-	encoded_len = pg_b64_encode(raw_nonce, SCRAM_RAW_NONCE_LEN, state->client_nonce);
+	encoded_len = pg_b64_encode(raw_nonce, SCRAM_RAW_NONCE_LEN,
+								state->client_nonce, encoded_len);
+	if (encoded_len < 0)
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+						  libpq_gettext("could not encode nonce\n"));
+		return NULL;
+	}
 	state->client_nonce[encoded_len] = '\0';
 
 	/*
@@ -353,7 +362,7 @@ build_client_first_message(fe_scram_state *state)
 	if (strcmp(state->sasl_mechanism, SCRAM_SHA_256_PLUS_NAME) == 0)
 	{
 		Assert(conn->ssl_in_use);
-		appendPQExpBuffer(&buf, "p=tls-server-end-point");
+		appendPQExpBufferStr(&buf, "p=tls-server-end-point");
 	}
 #ifdef HAVE_PGTLS_GET_PEER_CERTIFICATE_HASH
 	else if (conn->ssl_in_use)
@@ -361,7 +370,7 @@ build_client_first_message(fe_scram_state *state)
 		/*
 		 * Client supports channel binding, but thinks the server does not.
 		 */
-		appendPQExpBuffer(&buf, "y");
+		appendPQExpBufferChar(&buf, 'y');
 	}
 #endif
 	else
@@ -369,7 +378,7 @@ build_client_first_message(fe_scram_state *state)
 		/*
 		 * Client does not support channel binding.
 		 */
-		appendPQExpBuffer(&buf, "n");
+		appendPQExpBufferChar(&buf, 'n');
 	}
 
 	if (PQExpBufferDataBroken(buf))
@@ -413,6 +422,7 @@ build_client_final_message(fe_scram_state *state)
 	PGconn	   *conn = state->conn;
 	uint8		client_proof[SCRAM_KEY_LEN];
 	char	   *result;
+	int			encoded_len;
 
 	initPQExpBuffer(&buf);
 
@@ -432,6 +442,7 @@ build_client_final_message(fe_scram_state *state)
 		size_t		cbind_header_len;
 		char	   *cbind_input;
 		size_t		cbind_input_len;
+		int			encoded_cbind_len;
 
 		/* Fetch hash data of server's SSL certificate */
 		cbind_data =
@@ -444,7 +455,7 @@ build_client_final_message(fe_scram_state *state)
 			return NULL;
 		}
 
-		appendPQExpBuffer(&buf, "c=");
+		appendPQExpBufferStr(&buf, "c=");
 
 		/* p=type,, */
 		cbind_header_len = strlen("p=tls-server-end-point,,");
@@ -458,13 +469,26 @@ build_client_final_message(fe_scram_state *state)
 		memcpy(cbind_input, "p=tls-server-end-point,,", cbind_header_len);
 		memcpy(cbind_input + cbind_header_len, cbind_data, cbind_data_len);
 
-		if (!enlargePQExpBuffer(&buf, pg_b64_enc_len(cbind_input_len)))
+		encoded_cbind_len = pg_b64_enc_len(cbind_input_len);
+		if (!enlargePQExpBuffer(&buf, encoded_cbind_len))
 		{
 			free(cbind_data);
 			free(cbind_input);
 			goto oom_error;
 		}
-		buf.len += pg_b64_encode(cbind_input, cbind_input_len, buf.data + buf.len);
+		encoded_cbind_len = pg_b64_encode(cbind_input, cbind_input_len,
+										  buf.data + buf.len,
+										  encoded_cbind_len);
+		if (encoded_cbind_len < 0)
+		{
+			free(cbind_data);
+			free(cbind_input);
+			termPQExpBuffer(&buf);
+			printfPQExpBuffer(&conn->errorMessage,
+							  "could not encode cbind data for channel binding\n");
+			return NULL;
+		}
+		buf.len += encoded_cbind_len;
 		buf.data[buf.len] = '\0';
 
 		free(cbind_data);
@@ -482,10 +506,10 @@ build_client_final_message(fe_scram_state *state)
 	}
 #ifdef HAVE_PGTLS_GET_PEER_CERTIFICATE_HASH
 	else if (conn->ssl_in_use)
-		appendPQExpBuffer(&buf, "c=eSws");	/* base64 of "y,," */
+		appendPQExpBufferStr(&buf, "c=eSws");	/* base64 of "y,," */
 #endif
 	else
-		appendPQExpBuffer(&buf, "c=biws");	/* base64 of "n,," */
+		appendPQExpBufferStr(&buf, "c=biws");	/* base64 of "n,," */
 
 	if (PQExpBufferDataBroken(buf))
 		goto oom_error;
@@ -503,12 +527,22 @@ build_client_final_message(fe_scram_state *state)
 						   state->client_final_message_without_proof,
 						   client_proof);
 
-	appendPQExpBuffer(&buf, ",p=");
-	if (!enlargePQExpBuffer(&buf, pg_b64_enc_len(SCRAM_KEY_LEN)))
+	appendPQExpBufferStr(&buf, ",p=");
+	encoded_len = pg_b64_enc_len(SCRAM_KEY_LEN);
+	if (!enlargePQExpBuffer(&buf, encoded_len))
 		goto oom_error;
-	buf.len += pg_b64_encode((char *) client_proof,
-							 SCRAM_KEY_LEN,
-							 buf.data + buf.len);
+	encoded_len = pg_b64_encode((char *) client_proof,
+								SCRAM_KEY_LEN,
+								buf.data + buf.len,
+								encoded_len);
+	if (encoded_len < 0)
+	{
+		termPQExpBuffer(&buf);
+		printfPQExpBuffer(&conn->errorMessage,
+						  libpq_gettext("could not encode client proof\n"));
+		return NULL;
+	}
+	buf.len += encoded_len;
 	buf.data[buf.len] = '\0';
 
 	result = strdup(buf.data);
@@ -536,6 +570,7 @@ read_server_first_message(fe_scram_state *state, char *input)
 	char	   *endptr;
 	char	   *encoded_salt;
 	char	   *nonce;
+	int			decoded_salt_len;
 
 	state->server_first_message = strdup(input);
 	if (state->server_first_message == NULL)
@@ -577,7 +612,8 @@ read_server_first_message(fe_scram_state *state, char *input)
 		/* read_attr_value() has generated an error string */
 		return false;
 	}
-	state->salt = malloc(pg_b64_dec_len(strlen(encoded_salt)));
+	decoded_salt_len = pg_b64_dec_len(strlen(encoded_salt));
+	state->salt = malloc(decoded_salt_len);
 	if (state->salt == NULL)
 	{
 		printfPQExpBuffer(&conn->errorMessage,
@@ -586,7 +622,8 @@ read_server_first_message(fe_scram_state *state, char *input)
 	}
 	state->saltlen = pg_b64_decode(encoded_salt,
 								   strlen(encoded_salt),
-								   state->salt);
+								   state->salt,
+								   decoded_salt_len);
 	if (state->saltlen < 0)
 	{
 		printfPQExpBuffer(&conn->errorMessage,
@@ -670,7 +707,8 @@ read_server_final_message(fe_scram_state *state, char *input)
 
 	server_signature_len = pg_b64_decode(encoded_server_signature,
 										 strlen(encoded_server_signature),
-										 decoded_server_signature);
+										 decoded_server_signature,
+										 server_signature_len);
 	if (server_signature_len != SCRAM_KEY_LEN)
 	{
 		free(decoded_server_signature);

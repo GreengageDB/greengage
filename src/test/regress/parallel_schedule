@@ -105,11 +105,12 @@ test: brin gin gist spgist privileges init_privs security_label collate matview 
 # ----------
 # Another group of parallel tests
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan
+test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan collate.icu.utf8
 
 # rules cannot run concurrently with any test that creates
 # a view or rule in the public schema
-test: psql psql_crosstab amutils stats_ext
+# collate.*.utf8 tests cannot be run in parallel with each other
+test: psql psql_crosstab amutils stats_ext collate.linux.utf8
 #
 # 'rules' test is disabled in GPDB. Maintaining the list of views in it is
 # too painful, and there are also errors because of cross-segment UPDATEs

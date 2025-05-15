@@ -725,6 +725,8 @@ static const struct tsearch_config_match tsearch_config_languages[] =
 	{"french", "French"},
 	{"german", "de"},
 	{"german", "German"},
+	{"greek", "el"},
+	{"greek", "Greek"},
 	{"hungarian", "hu"},
 	{"hungarian", "Hungarian"},
 	{"indonesian", "id"},
@@ -1074,7 +1076,7 @@ test_config_settings(void)
 	else
 		printf("%dkB\n", n_buffers * (BLCKSZ / 1024));
 
-	printf(_("selecting default timezone ... "));
+	printf(_("selecting default time zone ... "));
 	fflush(stdout);
 	default_timezone = select_default_timezone(share_path);
 	printf("%s\n", default_timezone ? default_timezone : "GMT");
@@ -2180,7 +2182,7 @@ make_template0(FILE *cmdfd)
 		"CREATE DATABASE template0 IS_TEMPLATE = true ALLOW_CONNECTIONS = false;\n\n",
 
 		/*
-		 * We use the OID of template0 to determine lastsysoid
+		 * We use the OID of template0 to determine datlastsysoid
 		 */
 		"UPDATE pg_database SET datlastsysoid = "
 		"    (SELECT oid FROM pg_database "
@@ -2736,7 +2738,7 @@ setup_bin_paths(const char *argv0)
 			pg_log_error("The program \"postgres\" is needed by %s but was not found in the\n"
 						 "same directory as \"%s\".\n"
 						 "Check your installation.",
-						 full_path, progname);
+						 progname, full_path);
 		else
 			pg_log_error("The program \"postgres\" was found by \"%s\"\n"
 						 "but was not the same version as %s.\n"

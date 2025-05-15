@@ -20,8 +20,8 @@ m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
-AC_INIT([Greenplum Database], [7.0.0-alpha.0], [support@greenplum.org])
-[PG_PACKAGE_VERSION=12beta2]
+AC_INIT([Greenplum Database], [8.0.0-alpha.0], [support@greenplum.org])
+[PG_PACKAGE_VERSION=13alpha0]
 AC_SUBST(PG_PACKAGE_VERSION)
 
 dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
@@ -1154,30 +1154,6 @@ fi
 PGAC_ARG_REQ(with, apr-config,
              [PATH], [path to apr-1-config utility])
 AC_SUBST(with_apr_config)
-
-#
-# Elf
-#
-
-# Assume system is ELF if it predefines __ELF__ as 1,
-# otherwise believe host_os based default.
-case $host_os in
-    freebsd1*|freebsd2*) elf=no;;
-    freebsd3*|freebsd4*) elf=yes;;
-esac
-
-AC_EGREP_CPP(yes,
-[#if __ELF__
-  yes
-#endif
-],
-[ELF_SYS=true],
-[if test "X$elf" = "Xyes" ; then
-  ELF_SYS=true
-else
-  ELF_SYS=
-fi])
-AC_SUBST(ELF_SYS)
 
 #
 # Assignments

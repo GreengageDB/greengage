@@ -684,7 +684,7 @@ durable_rename(const char *oldfile, const char *newfile, int elevel)
 			return -1;
 		}
 
-		if (CloseTransientFile(fd))
+		if (CloseTransientFile(fd) != 0)
 		{
 			ereport(elevel,
 					(errcode_for_file_access(),
@@ -934,7 +934,7 @@ count_usable_fds(int max_to_probe, int *usable_fds, int *already_open)
 
 /*
  * set_max_safe_fds
- *		Determine number of filedescriptors that fd.c is allowed to use
+ *		Determine number of file descriptors that fd.c is allowed to use
  */
 void
 set_max_safe_fds(void)
@@ -1084,7 +1084,7 @@ LruDelete(File file)
 	 * Close the file.  We aren't expecting this to fail; if it does, better
 	 * to leak the FD than to mess up our internal state.
 	 */
-	if (close(vfdP->fd))
+	if (close(vfdP->fd) != 0)
 		elog(vfdP->fdstate & FD_TEMP_FILE_LIMIT ? LOG : data_sync_elevel(LOG),
 			 "could not close file \"%s\": %m", vfdP->fileName);
 	vfdP->fd = VFD_CLOSED;
@@ -1794,7 +1794,7 @@ FileClose(File file)
 	if (!FileIsNotOpen(file))
 	{
 		/* close the file */
-		if (gp_retry_close(vfdP->fd))
+		if (gp_retry_close(vfdP->fd) != 0)
 		{
 			/*
 			 * We may need to panic on failure to close non-temporary files;
@@ -3380,7 +3380,8 @@ SyncDataDirectory(void)
  *
  * Errors are reported at level elevel, which might be ERROR or less.
  *
- * See also walkdir in initdb.c, which is a frontend version of this logic.
+ * See also walkdir in file_utils.c, which is a frontend version of this
+ * logic.
  */
 static void
 walkdir(const char *path,
@@ -3474,7 +3475,7 @@ pre_sync_fname(const char *fname, bool isdir, int elevel)
 	 */
 	pg_flush_data(fd, 0, 0);
 
-	if (CloseTransientFile(fd))
+	if (CloseTransientFile(fd) != 0)
 		ereport(elevel,
 				(errcode_for_file_access(),
 				 errmsg("could not close file \"%s\": %m", fname)));
@@ -3576,7 +3577,7 @@ fsync_fname_ext(const char *fname, bool isdir, bool ignore_perm, int elevel)
 		return -1;
 	}
 
-	if (CloseTransientFile(fd))
+	if (CloseTransientFile(fd) != 0)
 	{
 		ereport(elevel,
 				(errcode_for_file_access(),

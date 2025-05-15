@@ -24,9 +24,8 @@
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
-#include "commands/tablespace.h"
-#include "postmaster/postmaster.h"
 #include "lib/ilist.h"
+#include "postmaster/postmaster.h"
 #include "storage/bufmgr.h"
 #include "storage/ipc.h"
 #include "storage/md.h"
@@ -50,6 +49,7 @@ static const f_smgr smgrsw[] = {
 	{
 		.smgr_init = mdinit,
 		.smgr_shutdown = NULL,
+		.smgr_open = mdopen,
 		.smgr_close = mdclose,
 		.smgr_create = mdcreate,
 		.smgr_exists = mdexists,
@@ -73,6 +73,7 @@ static const f_smgr smgrsw[] = {
 	{
 		.smgr_init = mdinit,
 		.smgr_shutdown = NULL,
+		.smgr_open = mdopen,
 		.smgr_close = mdclose,
 		.smgr_create = mdcreate,
 		.smgr_exists = mdexists,
@@ -224,8 +225,6 @@ smgropen(RelFileNode rnode, BackendId backend, SMgrImpl which)
 	/* Initialize it if not present before */
 	if (!found)
 	{
-		int			forknum;
-
 		/* hash_search already filled in the lookup key */
 		reln->smgr_owner = NULL;
 		reln->smgr_targblock = InvalidBlockNumber;
@@ -234,9 +233,8 @@ smgropen(RelFileNode rnode, BackendId backend, SMgrImpl which)
 		reln->smgr_which = which;
 		reln->storageManager = smgr(backend, rnode, which);
 
-		/* mark it not open */
-		for (forknum = 0; forknum <= MAX_FORKNUM; forknum++)
-			reln->md_num_open_segs[forknum] = 0;
+		/* implementation-specific initialization */
+		smgrsw[reln->smgr_which].smgr_open(reln);
 
 		/* it has no owner yet */
 		dlist_push_tail(&unowned_relns, &reln->node);
@@ -385,35 +383,11 @@ smgrclosenode(RelFileNodeBackend rnode)
  *		Given an already-created (but presumably unused) SMgrRelation,
  *		cause the underlying disk file or other storage for the fork
  *		to be created.
- *
- *		If isRedo is true, it is okay for the underlying file to exist
- *		already because we are in a WAL replay sequence.
  */
 void
 smgrcreate(SMgrRelation reln, ForkNumber forknum, bool isRedo)
 {
-	/*
-	 * Exit quickly in WAL replay mode if we've already opened the file. If
-	 * it's open, it surely must exist.
-	 */
-	if (isRedo && reln->md_num_open_segs[forknum] > 0)
-		return;
-
-	/*
-	 * We may be using the target table space for the first time in this
-	 * database, so create a per-database subdirectory if needed.
-	 *
-	 * XXX this is a fairly ugly violation of module layering, but this seems
-	 * to be the best place to put the check.  Maybe TablespaceCreateDbspace
-	 * should be here and not in commands/tablespace.c?  But that would imply
-	 * importing a lot of stuff that smgr.c oughtn't know, either.
-	 */
-	TablespaceCreateDbspace(reln->smgr_rnode.node.spcNode,
-							reln->smgr_rnode.node.dbNode,
-							isRedo);
-
-    (*reln->storageManager).smgr_create(reln, forknum, isRedo);
-
+	smgrsw[reln->smgr_which].smgr_create(reln, forknum, isRedo);
 	if (file_create_hook)
 		(*file_create_hook)(reln->smgr_rnode);
 }

@@ -12,6 +12,7 @@ set allow_system_table_mods=on;
 
 set local min_parallel_table_scan_size = 0;
 set local parallel_setup_cost = 0;
+set local enable_hashjoin = on;
 
 -- Extract bucket and batch counts from an explain analyze plan.  In
 -- general we can't make assertions about how many batches (or

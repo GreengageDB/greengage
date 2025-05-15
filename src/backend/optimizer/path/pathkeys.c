@@ -376,9 +376,7 @@ generate_implied_quals(PlannerInfo *root)
  *	  entry if there's not one already.
  *
  * Note that this function must not be used until after we have completed
- * merging EquivalenceClasses.  (We don't try to enforce that here; instead,
- * equivclass.c will complain if a merge occurs after root->canon_pathkeys
- * has become nonempty.)
+ * merging EquivalenceClasses.
  */
 PathKey *
 make_canonical_pathkey(PlannerInfo *root,
@@ -388,6 +386,10 @@ make_canonical_pathkey(PlannerInfo *root,
 	PathKey    *pk;
 	ListCell   *lc;
 	MemoryContext oldcontext;
+
+	/* Can't make canonical pathkeys if the set of ECs might still change */
+	if (!root->ec_merging_done)
+		elog(ERROR, "too soon to build canonical pathkeys");
 
 	/* The passed eclass might be non-canonical, so chase up to the top */
 	while (eclass->ec_merged)
@@ -2116,7 +2118,7 @@ make_inner_pathkeys_for_merge(PlannerInfo *root,
 			if (!lop)
 				elog(ERROR, "too few pathkeys for mergeclauses");
 			opathkey = (PathKey *) lfirst(lop);
-			lop = lnext(lop);
+			lop = lnext(outer_pathkeys, lop);
 			lastoeclass = opathkey->pk_eclass;
 			if (oeclass != lastoeclass)
 				elog(ERROR, "outer pathkeys do not match mergeclause");
@@ -2196,7 +2198,7 @@ trim_mergeclauses_for_inner_pathkeys(PlannerInfo *root,
 	lip = list_head(pathkeys);
 	pathkey = (PathKey *) lfirst(lip);
 	pathkey_ec = pathkey->pk_eclass;
-	lip = lnext(lip);
+	lip = lnext(pathkeys, lip);
 	matched_pathkey = false;
 
 	/* Scan mergeclauses to see how many we can use */
@@ -2223,7 +2225,7 @@ trim_mergeclauses_for_inner_pathkeys(PlannerInfo *root,
 				break;
 			pathkey = (PathKey *) lfirst(lip);
 			pathkey_ec = pathkey->pk_eclass;
-			lip = lnext(lip);
+			lip = lnext(pathkeys, lip);
 			matched_pathkey = false;
 		}
 

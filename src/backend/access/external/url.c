@@ -168,13 +168,13 @@ base16_encode(char *raw, int len, char *encoded)
 static char *
 get_eol_delimiter(List *params)
 {
-	ListCell   *lc = params->head;
+	ListCell   *lc = list_head(params);
 
 	while (lc)
 	{
-		if (pg_strcasecmp(((DefElem *) lc->data.ptr_value)->defname, "line_delim") == 0)
-			return pstrdup(((Value *) ((DefElem *) lc->data.ptr_value)->arg)->val.str);
-		lc = lc->next;
+		if (pg_strcasecmp(((DefElem *) lc->ptr_value)->defname, "line_delim") == 0)
+			return pstrdup(((Value *) ((DefElem *) lc->ptr_value)->arg)->val.str);
+		lc = lnext(params, lc);
 	}
 	return pstrdup("");
 }

@@ -1086,7 +1086,6 @@ static Oid
 lookupCustomFormatter(List **options, bool iswritable)
 {
 	ListCell   *cell;
-	ListCell   *prev = NULL;
 	char	   *formatter_name;
 	List	   *funcname = NIL;
 	Oid			procOid = InvalidOid;
@@ -1106,10 +1105,9 @@ lookupCustomFormatter(List **options, bool iswritable)
 		{
 			formatter_name = defGetString(defel);
 			funcname = list_make1(makeString(formatter_name));
-			*options = list_delete_cell(*options, cell, prev);
+			*options = foreach_delete_current(*options, cell);
 			break;
 		}
-		prev = cell;
 	}
 	if (list_length(funcname) == 0)
 		ereport(ERROR,

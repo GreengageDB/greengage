@@ -581,33 +581,24 @@ cleanupComponentIdleQEs(CdbComponentDatabaseInfo *cdi, bool includeWriter)
 	SegmentDatabaseDescriptor	*segdbDesc;
 	MemoryContext				oldContext;
 	ListCell 					*curItem = NULL;
-	ListCell					*nextItem = NULL;
-	ListCell 					*prevItem = NULL;
 
 	Assert(CdbComponentsContext);
 	oldContext = MemoryContextSwitchTo(CdbComponentsContext);
-	curItem = list_head(cdi->freelist);
 
-	while (curItem != NULL)
+	foreach(curItem, cdi->freelist)
 	{
 		segdbDesc = (SegmentDatabaseDescriptor *)lfirst(curItem);
-		nextItem = lnext(curItem);
 		Assert(segdbDesc);
 
 		if (segdbDesc->isWriter && !includeWriter)
 		{
-			prevItem = curItem;
-			curItem = nextItem;
 			continue;
 		}
 
-		cdi->freelist = list_delete_cell(cdi->freelist, curItem, prevItem); 
+		cdi->freelist = foreach_delete_current(cdi->freelist, curItem);
 		DECR_COUNT(cdi, numIdleQEs);
 
 		cdbconn_termSegmentDescriptor(segdbDesc);
-
-		curItem = nextItem;
-
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -779,8 +770,6 @@ cdbcomponent_allocateIdleQE(int contentId, SegmentType segmentType)
 	SegmentDatabaseDescriptor	*segdbDesc = NULL;
 	CdbComponentDatabaseInfo	*cdbinfo;
 	ListCell 					*curItem = NULL;
-	ListCell 					*nextItem = NULL;
-	ListCell					*prevItem = NULL;
 	MemoryContext 				oldContext;
 	bool						isWriter;
 
@@ -792,24 +781,20 @@ cdbcomponent_allocateIdleQE(int contentId, SegmentType segmentType)
 	 * Always try to pop from the head.  Make sure to push them back to head
 	 * in cdbcomponent_recycleIdleQE().
 	 */
-	curItem = list_head(cdbinfo->freelist);
-	while (curItem != NULL)
+	foreach(curItem, cdbinfo->freelist)
 	{
 		SegmentDatabaseDescriptor *tmp =
 				(SegmentDatabaseDescriptor *)lfirst(curItem);
 
-		nextItem = lnext(curItem);
 		Assert(tmp);
 
 		if ((segmentType == SEGMENTTYPE_EXPLICT_WRITER && !tmp->isWriter) ||
 			(segmentType == SEGMENTTYPE_EXPLICT_READER && tmp->isWriter))
 		{
-			prevItem = curItem;
-			curItem = nextItem;
 			continue;
 		}
 
-		cdbinfo->freelist = list_delete_cell(cdbinfo->freelist, curItem, prevItem); 
+		cdbinfo->freelist = foreach_delete_current(cdbinfo->freelist, curItem);
 		/* update numIdleQEs */
 		DECR_COUNT(cdbinfo, numIdleQEs);
 
@@ -930,11 +915,11 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 
 		for (cell = list_head(segdbDesc->segment_database_info->freelist);
 			 cell && ((SegmentDatabaseDescriptor *) lfirst(cell))->isWriter;
-			 lastWriter = cell, cell = lnext(cell)) ;
+			 lastWriter = cell, cell = lnext(segdbDesc->segment_database_info->freelist, cell)) ;
 
 		if (lastWriter)
-			lappend_cell(segdbDesc->segment_database_info->freelist,
-						 lastWriter, segdbDesc);
+			segdbDesc->segment_database_info->freelist =
+				lappend(segdbDesc->segment_database_info->freelist, segdbDesc);
 		else
 			segdbDesc->segment_database_info->freelist =
 				lcons(segdbDesc, segdbDesc->segment_database_info->freelist);

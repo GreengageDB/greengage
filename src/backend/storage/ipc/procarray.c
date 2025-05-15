@@ -1542,10 +1542,11 @@ GetLocalOldestXmin(Relation rel, int flags)
 		result = replication_slot_xmin;
 
 	/*
-	 * After locks have been released and defer_cleanup_age has been applied,
-	 * check whether we need to back up further to make logical decoding
-	 * possible. We need to do so if we're computing the global limit (rel =
-	 * NULL) or if the passed relation is a catalog relation of some kind.
+	 * After locks have been released and vacuum_defer_cleanup_age has been
+	 * applied, check whether we need to back up further to make logical
+	 * decoding possible. We need to do so if we're computing the global limit
+	 * (rel = NULL) or if the passed relation is a catalog relation of some
+	 * kind.
 	 */
 	if (!(flags & PROCARRAY_SLOTS_XMIN) &&
 		(rel == NULL ||
@@ -4018,7 +4019,7 @@ FindProcByGpSessionId(long gp_session_id)
 }
 
 /* ----------------------------------------------
- *		KnownAssignedTransactions sub-module
+ *		KnownAssignedTransactionIds sub-module
  * ----------------------------------------------
  */
 
@@ -4057,7 +4058,7 @@ FindProcByGpSessionId(long gp_session_id)
  *
  * When we throw away subXIDs from KnownAssignedXids, we need to keep track of
  * that, similarly to tracking overflow of a PGPROC's subxids array.  We do
- * that by remembering the lastOverflowedXID, ie the last thrown-away subXID.
+ * that by remembering the lastOverflowedXid, ie the last thrown-away subXID.
  * As long as that is within the range of interesting XIDs, we have to assume
  * that subXIDs are missing from snapshots.  (Note that subXID overflow occurs
  * on primary when 65th subXID arrives, whereas on standby it occurs when 64th

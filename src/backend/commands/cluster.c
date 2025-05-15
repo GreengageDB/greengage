@@ -1853,7 +1853,7 @@ get_tables_to_cluster(MemoryContext cluster_context)
 		rvtc = (RelToCluster *) palloc(sizeof(RelToCluster));
 		rvtc->tableOid = index->indrelid;
 		rvtc->indexOid = index->indexrelid;
-		rvs = lcons(rvtc, rvs);
+		rvs = lappend(rvs, rvtc);
 
 		MemoryContextSwitchTo(old_context);
 	}

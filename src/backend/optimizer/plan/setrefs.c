@@ -191,9 +191,11 @@ static bool cdb_extract_plan_dependencies_walker(Node *node,
 /**
  * This method establishes asserts on the inputs to set_plan_references.
  */
-static void set_plan_references_input_asserts(PlannerGlobal *glob, Plan *plan, List *rtable)
+static void set_plan_references_input_asserts(PlannerInfo *root, Plan *plan)
 {
+	PlannerGlobal *glob = root->glob;
 	/* Note that rtable MAY be NULL */
+	List *rtable = root->parse->rtable;
 
 	/* Ensure that plan refers to vars that have varlevelsup = 0 AND varno is in the rtable */
 	List *allVars = extract_nodes(glob, (Node *) plan, T_Var);
@@ -216,7 +218,8 @@ static void set_plan_references_input_asserts(PlannerGlobal *glob, Plan *plan, L
          * GPDB codes should revise to work with the new varno.
          */
 		Assert((var->varno == OUTER_VAR || var->varno == INDEX_VAR
-				|| (var->varno > 0 && var->varno <= list_length(rtable) + list_length(glob->finalrtable)))
+				|| (var->varno > 0 && var->varno <= list_length(rtable) + list_length(glob->finalrtable))
+				|| (var->varno >= 0 && var->varno < root->simple_rel_array_size))
 				&& "Plan contains var that refer outside the rtable.");
 
 #if 0
@@ -357,7 +360,7 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 	 * This method formalizes our assumptions about the input to set_plan_references.
 	 * This will hopefully, help us debug any problems.
 	 */
-	set_plan_references_input_asserts(glob, plan, root->parse->rtable);
+	set_plan_references_input_asserts(root, plan);
 #endif
 
 	/*

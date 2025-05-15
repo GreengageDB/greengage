@@ -2604,8 +2604,8 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 				*targetlist = lappend(*targetlist, restle);
 			}
 
-			pct = pct ? lnext(pct) : NULL;
-			pcm = pcm ? lnext(pcm) : NULL;
+			pct = pct ? lnext(preselected_coltypes, pct) : NULL;
+			pcm = pcm ? lnext(preselected_coltypmods, pcm) : NULL;
 		}
 	}
 }
@@ -2809,7 +2809,7 @@ transformUpdateTargetList(ParseState *pstate, List *origTlist)
 		target_rte->updatedCols = bms_add_member(target_rte->updatedCols,
 												 attrno - FirstLowInvalidHeapAttributeNumber);
 
-		orig_tl = lnext(orig_tl);
+		orig_tl = lnext(origTlist, orig_tl);
 	}
 	if (orig_tl != NULL)
 		elog(ERROR, "UPDATE target count mismatch --- internal error");

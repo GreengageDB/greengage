@@ -361,8 +361,7 @@ fileGetOptions(Oid foreigntableid,
 	ForeignServer *server;
 	ForeignDataWrapper *wrapper;
 	List	   *options;
-	ListCell   *lc,
-			   *prev;
+	ListCell   *lc;
 
 	/*
 	 * Extract options from FDW objects.  We ignore user mappings because
@@ -388,7 +387,6 @@ fileGetOptions(Oid foreigntableid,
 	 */
 	*filename = NULL;
 	*is_program = false;
-	prev = NULL;
 	foreach(lc, options)
 	{
 		DefElem    *def = (DefElem *) lfirst(lc);
@@ -396,17 +394,16 @@ fileGetOptions(Oid foreigntableid,
 		if (strcmp(def->defname, "filename") == 0)
 		{
 			*filename = defGetString(def);
-			options = list_delete_cell(options, lc, prev);
+			options = foreach_delete_current(options, lc);
 			break;
 		}
 		else if (strcmp(def->defname, "program") == 0)
 		{
 			*filename = defGetString(def);
 			*is_program = true;
-			options = list_delete_cell(options, lc, prev);
+			options = foreach_delete_current(options, lc);
 			break;
 		}
-		prev = lc;
 	}
 
 	/*

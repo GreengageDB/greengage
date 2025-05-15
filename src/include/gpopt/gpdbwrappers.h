@@ -38,7 +38,6 @@ struct Query;
 using ScanKey = struct ScanKeyData *;
 struct Bitmapset;
 struct Plan;
-struct ListCell;
 struct TargetEntry;
 struct Expr;
 struct ExtTableEntry;
@@ -666,23 +665,23 @@ void GPDBLockRelationOid(Oid reloid, int lockmode);
 }  //namespace gpdb
 
 #define ForEach(cell, l) \
-	for ((cell) = gpdb::ListHead(l); (cell) != NULL; (cell) = lnext(cell))
+	for ((cell) = gpdb::ListHead(l); (cell) != NULL; (cell) = lnext(l, cell))
 
 #define ForBoth(cell1, list1, cell2, list2)                                \
 	for ((cell1) = gpdb::ListHead(list1), (cell2) = gpdb::ListHead(list2); \
 		 (cell1) != NULL && (cell2) != NULL;                               \
-		 (cell1) = lnext(cell1), (cell2) = lnext(cell2))
+		 (cell1) = lnext(list1, cell1), (cell2) = lnext(list2, cell2))
 
 #define ForThree(cell1, list1, cell2, list2, cell3, list3)                 \
 	for ((cell1) = gpdb::ListHead(list1), (cell2) = gpdb::ListHead(list2), \
 		(cell3) = gpdb::ListHead(list3);                                   \
 		 (cell1) != NULL && (cell2) != NULL && (cell3) != NULL;            \
-		 (cell1) = lnext(cell1), (cell2) = lnext(cell2),                   \
-		(cell3) = lnext(cell3))
+		 (cell1) = lnext(list1, cell1), (cell2) = lnext(list2, cell2),     \
+		(cell3) = lnext(list3, cell3))
 
 #define ForEachWithCount(cell, list, counter)                          \
 	for ((cell) = gpdb::ListHead(list), (counter) = 0; (cell) != NULL; \
-		 (cell) = lnext(cell), ++(counter))
+		 (cell) = lnext(list, cell), ++(counter))
 
 #define ListMake1(x1) gpdb::LPrepend(x1, NIL)
 

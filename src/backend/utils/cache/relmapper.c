@@ -754,7 +754,7 @@ load_relmap_file(bool shared)
 	}
 	pgstat_report_wait_end();
 
-	if (CloseTransientFile(fd))
+	if (CloseTransientFile(fd) != 0)
 		ereport(FATAL,
 				(errcode_for_file_access(),
 				 errmsg("could not close file \"%s\": %m",
@@ -893,7 +893,7 @@ write_relmap_file(bool shared, RelMapFile *newmap,
 						mapfilename)));
 	pgstat_report_wait_end();
 
-	if (CloseTransientFile(fd))
+	if (CloseTransientFile(fd) != 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not close file \"%s\": %m",

@@ -23,7 +23,8 @@
 
 /*
  * conns[0] is the global setup, teardown, and watchdog connection.  Additional
- * connections represent spec-defined sessions.
+ * connections represent spec-defined sessions.  We also track the backend
+ * PID, in numeric and string formats, for each connection.
  */
 typedef struct IsoConnInfo
 {

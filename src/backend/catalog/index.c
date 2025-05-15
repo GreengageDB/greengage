@@ -397,7 +397,7 @@ ConstructTupleDescriptor(Relation heapRelation,
 			if (indexpr_item == NULL)	/* shouldn't happen */
 				elog(ERROR, "too few entries in indexprs list");
 			indexkey = (Node *) lfirst(indexpr_item);
-			indexpr_item = lnext(indexpr_item);
+			indexpr_item = lnext(indexInfo->ii_Expressions, indexpr_item);
 
 			/*
 			 * Lookup the expression type in pg_type for the type length etc.
@@ -447,7 +447,7 @@ ConstructTupleDescriptor(Relation heapRelation,
 		if (colnames_item == NULL)	/* shouldn't happen */
 			elog(ERROR, "too few entries in colnames list");
 		namestrcpy(&to->attname, (const char *) lfirst(colnames_item));
-		colnames_item = lnext(colnames_item);
+		colnames_item = lnext(indexColNames, colnames_item);
 
 		/*
 		 * Check the opclass and index AM to see if either provides a keytype
@@ -1273,7 +1273,8 @@ Oid
 index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const char *newName)
 {
 	Relation	indexRelation;
-	IndexInfo  *indexInfo;
+	IndexInfo  *oldInfo,
+			   *newInfo;
 	Oid			newIndexId = InvalidOid;
 	HeapTuple	indexTuple,
 				classTuple;
@@ -1284,11 +1285,22 @@ index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const char
 	int2vector *indcoloptions;
 	bool		isnull;
 	List	   *indexColNames = NIL;
+	List	   *indexExprs = NIL;
+	List	   *indexPreds = NIL;
 
 	indexRelation = index_open(oldIndexId, RowExclusiveLock);
 
-	/* New index uses the same index information as old index */
-	indexInfo = BuildIndexInfo(indexRelation);
+	/* The new index needs some information from the old index */
+	oldInfo = BuildIndexInfo(indexRelation);
+
+	/*
+	 * Concurrent build of an index with exclusion constraints is not
+	 * supported.
+	 */
+	if (oldInfo->ii_ExclusionOps != NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("concurrent index creation for exclusion constraints is not supported")));
 
 	/* Get the array of class and column options IDs from index info */
 	indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(oldIndexId));
@@ -1312,14 +1324,64 @@ index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const char
 								  Anum_pg_class_reloptions, &isnull);
 
 	/*
-	 * Extract the list of column names to be used for the index creation.
+	 * Fetch the list of expressions and predicates directly from the
+	 * catalogs.  This cannot rely on the information from IndexInfo of the
+	 * old index as these have been flattened for the planner.
 	 */
-	for (int i = 0; i < indexInfo->ii_NumIndexAttrs; i++)
+	if (oldInfo->ii_Expressions != NIL)
+	{
+		Datum		exprDatum;
+		char	   *exprString;
+
+		exprDatum = SysCacheGetAttr(INDEXRELID, indexTuple,
+									Anum_pg_index_indexprs, &isnull);
+		Assert(!isnull);
+		exprString = TextDatumGetCString(exprDatum);
+		indexExprs = (List *) stringToNode(exprString);
+		pfree(exprString);
+	}
+	if (oldInfo->ii_Predicate != NIL)
+	{
+		Datum		predDatum;
+		char	   *predString;
+
+		predDatum = SysCacheGetAttr(INDEXRELID, indexTuple,
+									Anum_pg_index_indpred, &isnull);
+		Assert(!isnull);
+		predString = TextDatumGetCString(predDatum);
+		indexPreds = (List *) stringToNode(predString);
+
+		/* Also convert to implicit-AND format */
+		indexPreds = make_ands_implicit((Expr *) indexPreds);
+		pfree(predString);
+	}
+
+	/*
+	 * Build the index information for the new index.  Note that rebuild of
+	 * indexes with exclusion constraints is not supported, hence there is no
+	 * need to fill all the ii_Exclusion* fields.
+	 */
+	newInfo = makeIndexInfo(oldInfo->ii_NumIndexAttrs,
+							oldInfo->ii_NumIndexKeyAttrs,
+							oldInfo->ii_Am,
+							indexExprs,
+							indexPreds,
+							oldInfo->ii_Unique,
+							false,	/* not ready for inserts */
+							true);
+
+	/*
+	 * Extract the list of column names and the column numbers for the new
+	 * index information.  All this information will be used for the index
+	 * creation.
+	 */
+	for (int i = 0; i < oldInfo->ii_NumIndexAttrs; i++)
 	{
 		TupleDesc	indexTupDesc = RelationGetDescr(indexRelation);
 		Form_pg_attribute att = TupleDescAttr(indexTupDesc, i);
 
 		indexColNames = lappend(indexColNames, NameStr(att->attname));
+		newInfo->ii_IndexAttrNumbers[i] = oldInfo->ii_IndexAttrNumbers[i];
 	}
 
 	/*
@@ -1335,7 +1397,7 @@ index_concurrently_create_copy(Relation heapRelation, Oid oldIndexId, const char
 							  InvalidOid,	/* parentIndexRelid */
 							  InvalidOid,	/* parentConstraintId */
 							  InvalidOid,	/* relFileNode */
-							  indexInfo,
+							  newInfo,
 							  indexColNames,
 							  indexRelation->rd_rel->relam,
 							  indexRelation->rd_rel->reltablespace,
@@ -2547,7 +2609,7 @@ FormIndexDatum(struct IndexInfo *indexInfo,
 			iDatum = ExecEvalExprSwitchContext((ExprState *) lfirst(indexpr_item),
 											   GetPerTupleExprContext(estate),
 											   &isNull);
-			indexpr_item = lnext(indexpr_item);
+			indexpr_item = lnext(indexInfo->ii_ExpressionsState, indexpr_item);
 		}
 		values[i] = iDatum;
 		isnull[i] = isNull;

@@ -17,7 +17,7 @@
  * the second number as hundreds and the third number.  For example,
  * if the backend is 4.2.1, the number is 40201
  */
-#define GP_VERSION_NUM 70000
+#define GP_VERSION_NUM 80000
 #endif
 
 /**

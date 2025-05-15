@@ -454,7 +454,7 @@ cdbpathlocus_from_subquery(struct PlannerInfo *root,
 			if (parentrel)
 			{
 				parentexpr = lfirst(lc2);
-				lc2 = lnext(lc2);
+				lc2 = lnext(parentrel->reltarget->exprs, lc2);
 			}
 
 			if (!IsA(expr, Var))

@@ -21,19 +21,18 @@
  * Safe list foreach which supports in-place deletion.
  */
 #define gdd_list_foreach_safe(iter, _list) \
-	for ((iter).list = (_list), \
-		 (iter).prev = NULL, \
-		 (iter).cell = list_head((iter).list); \
-		 (iter).cell != NULL; \
-		 (iter).prev = (iter).cell, \
-		 (iter).cell = (iter).cell ? lnext((iter).cell) : list_head((iter).list))
+	for ((iter).list = (_list), (iter).i = 0; \
+		 ((iter).list != NIL && \
+		 (iter).i < (iter).list->length) ? \
+		 ((iter).cell = &(iter).list->elements[(iter).i], true) : \
+		 ((iter).cell = NULL, false); \
+		 (iter).i++)
 
 /*
  * Helper functions to get the information stored in iter.
  */
 #define gdd_list_iter_get_list(iter) ((iter).list)
 #define gdd_list_iter_get_cell(iter) ((iter).cell)
-#define gdd_list_iter_get_prev(iter) ((iter).prev)
 
 /*
  * Helper function to get the current pointer at iter.
@@ -44,12 +43,9 @@
  * In-place delete the list cell at iter.
  * By using this you must re-get the list via gdd_list_iter_get_list().
  */
-#define gdd_list_iter_delete(iter) do \
-{ \
-	(iter).list = list_delete_cell((iter).list, (iter).cell, (iter).prev); \
-	(iter).prev = (iter).list != NIL ? (iter).prev : NULL; \
-	(iter).cell = (iter).prev; \
-} while (0)
+#define gdd_list_iter_delete(iter) \
+	((iter).i--, \
+	 (List *) ((iter).list = list_delete_cell((iter).list, (iter).cell)))
 
 
 /*
@@ -171,7 +167,7 @@ struct GddListIter
 {
 	List		*list;
 	ListCell	*cell;
-	ListCell	*prev;
+	int			i;				/* current element index */
 };
 
 /*

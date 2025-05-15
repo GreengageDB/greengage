@@ -420,7 +420,7 @@ print_expr(const Node *expr, const List *rtable)
 		foreach(l, e->args)
 		{
 			print_expr(lfirst(l), rtable);
-			if (lnext(l))
+			if (lnext(e->args, l))
 				printf(",");
 		}
 		printf(")");
@@ -463,7 +463,7 @@ print_pathkeys(const List *pathkeys, const List *rtable)
 			print_expr((Node *) mem->em_expr, rtable);
 		}
 		printf(")");
-		if (lnext(i))
+		if (lnext(pathkeys, i))
 			printf(", ");
 	}
 	printf(")\n");

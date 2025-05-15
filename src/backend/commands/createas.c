@@ -245,7 +245,7 @@ create_ctas_nodata(List *tlist, IntoClause *into, QueryDesc *queryDesc)
 			if (lc)
 			{
 				colname = strVal(lfirst(lc));
-				lc = lnext(lc);
+				lc = lnext(into->colNames, lc);
 			}
 			else
 				colname = tle->resname;
@@ -605,7 +605,7 @@ intorel_initplan(struct QueryDesc *queryDesc, int eflags)
 		if (lc)
 		{
 			colname = strVal(lfirst(lc));
-			lc = lnext(lc);
+			lc = lnext(into->colNames, lc);
 		}
 		else
 			colname = NameStr(attribute->attname);
@@ -758,6 +758,9 @@ intorel_shutdown(DestReceiver *self)
 	FreeBulkInsertState(myState->bistate);
 
 	table_finish_bulk_insert(myState->rel, myState->ti_options);
+
+	if (myState->rel->rd_tableam)
+		table_dml_finish(myState->rel);
 
 	/* close rel, but keep lock until commit */
 	table_close(myState->rel, NoLock);

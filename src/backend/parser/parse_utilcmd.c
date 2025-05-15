@@ -1192,7 +1192,7 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 			 * find sequence owned by old column; extract sequence parameters;
 			 * build new create sequence command
 			 */
-			seq_relid = getOwnedSequence(RelationGetRelid(relation), attribute->attnum);
+			seq_relid = getIdentitySequence(RelationGetRelid(relation), attribute->attnum, false);
 			seq_options = sequence_options(seq_relid);
 			generateSerialExtraStmts(cxt, def,
 									 InvalidOid, seq_options, true,
@@ -1710,7 +1710,7 @@ generateClonedIndexStmt(RangeVar *heapRel, Relation source_idx,
 			if (indexpr_item == NULL)
 				elog(ERROR, "too few entries in indexprs list");
 			indexkey = (Node *) lfirst(indexpr_item);
-			indexpr_item = lnext(indexpr_item);
+			indexpr_item = lnext(indexprs, indexpr_item);
 
 			/* Adjust Vars to match new table's column numbering */
 			indexkey = map_variable_attnos(indexkey,
@@ -4306,7 +4306,7 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 					if (attnum != InvalidAttrNumber &&
 						TupleDescAttr(tupdesc, attnum - 1)->attidentity)
 					{
-						Oid			seq_relid = getOwnedSequence(relid, attnum);
+						Oid			seq_relid = getIdentitySequence(relid, attnum, false);
 						Oid			typeOid = typenameTypeId(pstate, def->typeName);
 						AlterSeqStmt *altseqstmt = makeNode(AlterSeqStmt);
 
@@ -4357,7 +4357,6 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 					ListCell   *lc;
 					List	   *newseqopts = NIL;
 					List	   *newdef = NIL;
-					List	   *seqlist;
 					AttrNumber	attnum;
 
 					/*
@@ -4378,14 +4377,13 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 
 					if (attnum)
 					{
-						seqlist = getOwnedSequences(relid, attnum);
-						if (seqlist)
+						Oid			seq_relid = getIdentitySequence(relid, attnum, true);
+
+						if (seq_relid)
 						{
 							AlterSeqStmt *seqstmt;
-							Oid			seq_relid;
 
 							seqstmt = makeNode(AlterSeqStmt);
-							seq_relid = linitial_oid(seqlist);
 							seqstmt->sequence = makeRangeVar(get_namespace_name(get_rel_namespace(seq_relid)),
 															 get_rel_name(seq_relid), -1);
 							seqstmt->options = newseqopts;

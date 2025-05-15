@@ -517,9 +517,9 @@ RangeVarGetCreationNamespace(const RangeVar *newRelation)
  * permission on the target namespace, this function will instead signal
  * an ERROR.
  *
- * If non-NULL, *existing_oid is set to the OID of any existing relation with
- * the same name which already exists in that namespace, or to InvalidOid if
- * no such relation exists.
+ * If non-NULL, *existing_relation_id is set to the OID of any existing relation
+ * with the same name which already exists in that namespace, or to InvalidOid
+ * if no such relation exists.
  *
  * If lockmode != NoLock, the specified lock mode is acquired on the existing
  * relation, if any, provided that the current user owns the target relation.
@@ -2422,7 +2422,7 @@ TSParserIsVisible(Oid prsId)
 /*
  * get_ts_dict_oid - find a TS dictionary by possibly qualified name
  *
- * If not found, returns InvalidOid if failOK, else throws error
+ * If not found, returns InvalidOid if missing_ok, else throws error
  */
 Oid
 get_ts_dict_oid(List *names, bool missing_ok)
@@ -3489,7 +3489,7 @@ OverrideSearchPathMatchesCurrent(OverrideSearchPath *path)
 	if (path->addTemp)
 	{
 		if (lc && lfirst_oid(lc) == myTempNamespace)
-			lc = lnext(lc);
+			lc = lnext(activeSearchPath, lc);
 		else
 			return false;
 	}
@@ -3497,7 +3497,7 @@ OverrideSearchPathMatchesCurrent(OverrideSearchPath *path)
 	if (path->addCatalog)
 	{
 		if (lc && lfirst_oid(lc) == PG_CATALOG_NAMESPACE)
-			lc = lnext(lc);
+			lc = lnext(activeSearchPath, lc);
 		else
 			return false;
 	}
@@ -3508,7 +3508,7 @@ OverrideSearchPathMatchesCurrent(OverrideSearchPath *path)
 	foreach(lcp, path->schemas)
 	{
 		if (lc && lfirst_oid(lc) == lfirst_oid(lcp))
-			lc = lnext(lc);
+			lc = lnext(activeSearchPath, lc);
 		else
 			return false;
 	}

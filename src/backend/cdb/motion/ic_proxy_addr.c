@@ -65,15 +65,13 @@ static List *ic_proxy_unknown_addrs = NIL;
 static ICProxyAddr *ic_proxy_my_addr = NULL;
 
 /*
- * Compare function for list_qsort().
- *
- * The real type of the arguments is "const ListCell **".
+ * Compare function for list_sort().
  */
 static int
-ic_proxy_addr_compare_dbid(const void *a, const void *b)
+ic_proxy_addr_compare_dbid(const ListCell *a, const ListCell *b)
 {
-	const ICProxyAddr *addr1 = lfirst(*(const ListCell **) a);
-	const ICProxyAddr *addr2 = lfirst(*(const ListCell **) b);
+	const ICProxyAddr *addr1 = lfirst(a);
+	const ICProxyAddr *addr2 = lfirst(b);
 
 	return addr1->dbid - addr2->dbid;
 }
@@ -104,13 +102,13 @@ ic_proxy_classify_addresses(List *oldaddrs, List *newaddrs)
 		{
 			/* the address is removed */
 			ic_proxy_removed_addrs = lappend(ic_proxy_removed_addrs, old);
-			lcold = lnext(lcold);
+			lcold = lnext(oldaddrs, lcold);
 		}
 		else if (old->dbid > new->dbid)
 		{
 			/* the address is newly added */
 			ic_proxy_added_addrs = lappend(ic_proxy_added_addrs, new);
-			lcnew = lnext(lcnew);
+			lcnew = lnext(newaddrs, lcnew);
 		}
 		/*
 		 * note that the new->sockaddr is not filled yet, so we must compare
@@ -122,19 +120,19 @@ ic_proxy_classify_addresses(List *oldaddrs, List *newaddrs)
 			/* the address is updated */
 			ic_proxy_removed_addrs = lappend(ic_proxy_removed_addrs, old);
 			ic_proxy_added_addrs = lappend(ic_proxy_added_addrs, new);
-			lcold = lnext(lcold);
-			lcnew = lnext(lcnew);
+			lcold = lnext(oldaddrs, lcold);
+			lcnew = lnext(newaddrs, lcnew);
 		}
 		else
 		{
 			/* the address is unchanged */
-			lcold = lnext(lcold);
-			lcnew = lnext(lcnew);
+			lcold = lnext(oldaddrs, lcold);
+			lcnew = lnext(newaddrs, lcnew);
 		}
 	}
 
 	/* all the addresses remaining in the old list are removed */
-	for ( ; lcold; lcold = lnext(lcold))
+	for ( ; lcold; lcold = lnext(oldaddrs, lcold))
 	{
 		ICProxyAddr *old = lfirst(lcold);
 
@@ -142,7 +140,7 @@ ic_proxy_classify_addresses(List *oldaddrs, List *newaddrs)
 	}
 
 	/* all the addresses remaining in the new list are newly added */
-	for ( ; lcnew; lcnew = lnext(lcnew))
+	for ( ; lcnew; lcnew = lnext(newaddrs, lcnew))
 	{
 		ICProxyAddr *new = lfirst(lcnew);
 
@@ -252,7 +250,7 @@ ic_proxy_reload_addresses(uv_loop_t *loop)
 	 * before reloading the config file. we should sort ic_proxy_addrs by dbid to
 	 * avoid mis-disconnecting of addrs.
 	 */
-	ic_proxy_addrs = list_qsort(ic_proxy_addrs, ic_proxy_addr_compare_dbid);
+	list_sort(ic_proxy_addrs, ic_proxy_addr_compare_dbid);
 	ic_proxy_prev_addrs = ic_proxy_addrs;
 	ic_proxy_addrs = NULL;
 
@@ -326,8 +324,7 @@ ic_proxy_reload_addresses(uv_loop_t *loop)
 	}
 
 	/* sort the new addrs so it's easy to diff */
-	ic_proxy_unknown_addrs = list_qsort(ic_proxy_unknown_addrs,
-										ic_proxy_addr_compare_dbid);
+	list_sort(ic_proxy_unknown_addrs, ic_proxy_addr_compare_dbid);
 
 	/* the last thing is to classify the addrs */
 	ic_proxy_classify_addresses(ic_proxy_prev_addrs /* oldaddrs */,
