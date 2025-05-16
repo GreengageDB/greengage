@@ -1071,14 +1071,14 @@ get_all_vacuum_rels(int options)
 }
 
 /*
- * vacuum_set_xid_limits() -- compute oldest-Xmin and freeze cutoff points
+ * vacuum_set_xid_limits() -- compute oldestXmin and freeze cutoff points
  *
  * The output parameters are:
  * - oldestXmin is the cutoff value used to distinguish whether tuples are
  *	 DEAD or RECENTLY_DEAD (see HeapTupleSatisfiesVacuum).
  * - freezeLimit is the Xid below which all Xids are replaced by
  *	 FrozenTransactionId during vacuum.
- * - xidFullScanLimit (computed from table_freeze_age parameter)
+ * - xidFullScanLimit (computed from freeze_table_age parameter)
  *	 represents a minimum Xid value; a table whose relfrozenxid is older than
  *	 this will have a full-table vacuum applied to it, to freeze tuples across
  *	 the whole table.  Vacuuming a table younger than this value can use a

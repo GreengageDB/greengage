@@ -896,7 +896,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 
 	parseCreateReplSlotOptions(cmd, &reserve_wal, &snapshot_action);
 
-	/* setup state for XLogReadPage */
+	/* setup state for XLogRead */
 	sendTimeLineIsHistoric = false;
 	sendTimeLine = ThisTimeLineID;
 

@@ -1665,7 +1665,7 @@ ApplyWorkerMain(Datum main_arg)
 	{
 		char	   *syncslotname;
 
-		/* This is table synchroniation worker, call initial sync. */
+		/* This is table synchronization worker, call initial sync. */
 		syncslotname = LogicalRepSyncTableStart(&origin_startpos);
 
 		/* The slot name needs to be allocated in permanent memory context. */

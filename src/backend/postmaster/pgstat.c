@@ -928,7 +928,7 @@ pgstat_report_stat(bool force)
 				this_msg->m_nentries = 0;
 			}
 		}
-		/* zero out TableStatus structs after use */
+		/* zero out PgStat_TableStatus structs after use */
 		MemSet(tsa->tsa_entries, 0,
 			   tsa->tsa_used * sizeof(PgStat_TableStatus));
 		tsa->tsa_used = 0;
@@ -3316,10 +3316,10 @@ pgstat_progress_end_command(void)
 {
 	volatile PgBackendStatus *beentry = MyBEEntry;
 
-	if (!beentry)
+	if (!beentry || !pgstat_track_activities)
 		return;
-	if (!pgstat_track_activities
-		&& beentry->st_progress_command == PROGRESS_COMMAND_INVALID)
+
+	if (beentry->st_progress_command == PROGRESS_COMMAND_INVALID)
 		return;
 
 	PGSTAT_BEGIN_WRITE_ACTIVITY(beentry);
@@ -6592,7 +6592,7 @@ pgstat_recv_resetcounter(PgStat_MsgResetcounter *msg, int len)
 }
 
 /* ----------
- * pgstat_recv_resetshared() -
+ * pgstat_recv_resetsharedcounter() -
  *
  *	Reset some shared statistics of the cluster.
  * ----------

@@ -654,8 +654,8 @@ DefineIndex(Oid relationId,
 	 * is part of the key columns, and anything equal to and over is part of
 	 * the INCLUDE columns.
 	 */
-	allIndexParams = list_concat(list_copy(stmt->indexParams),
-								 list_copy(stmt->indexIncludingParams));
+	allIndexParams = list_concat_copy(stmt->indexParams,
+									  stmt->indexIncludingParams);
 	numberOfAttributes = list_length(allIndexParams);
 
 	if (numberOfAttributes <= 0)
@@ -1363,8 +1363,7 @@ DefineIndex(Oid relationId,
 				childidxs = RelationGetIndexList(childrel);
 				attmap =
 					convert_tuples_by_name_map(RelationGetDescr(childrel),
-											   parentDesc,
-											   gettext_noop("could not convert row type"));
+											   parentDesc);
 				maplen = parentDesc->natts;
 
 				foreach(cell, childidxs)

@@ -3159,42 +3159,48 @@ select * from int4_tbl a full join int4_tbl b on false;
 --
 -- test for ability to use a cartesian join when necessary
 --
+create temp table q1 as select 1 as q1;
+create temp table q2 as select 0 as q2;
+analyze q1;
+analyze q2;
 explain (costs off)
 select * from
   tenk1 join int4_tbl on f1 = twothousand,
-  int4(sin(1)) q1,
-  int4(sin(0)) q2
+  q1, q2
 where q1 = thousand or q2 = thousand;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (tenk1.twothousand = int4_tbl.f1)
          ->  Nested Loop
-               ->  Function Scan on q2
-               ->  Nested Loop
-                     ->  Function Scan on q1
-                     ->  Bitmap Heap Scan on tenk1
-                           Recheck Cond: ((q1.q1 = thousand) OR (q2.q2 = thousand))
-                           ->  BitmapOr
-                                 ->  Bitmap Index Scan on tenk1_thous_tenthous
-                                       Index Cond: (thousand = q1.q1)
-                                 ->  Bitmap Index Scan on tenk1_thous_tenthous
-                                       Index Cond: (thousand = q2.q2)
-         ->  Hash
                ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                     ->  Seq Scan on q2
+               ->  Materialize
+                     ->  Nested Loop
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Seq Scan on q1
+                           ->  Bitmap Heap Scan on tenk1
+                                 Recheck Cond: ((q1.q1 = thousand) OR (q2.q2 = thousand))
+                                 ->  BitmapOr
+                                       ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                             Index Cond: (thousand = q1.q1)
+                                       ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                             Index Cond: (thousand = q2.q2)
+         ->  Hash
+               ->  Broadcast Motion 3:3  (slice4; segments: 3)
                      ->  Seq Scan on int4_tbl
  Optimizer: Postgres query optimizer
-(18 rows)
+(22 rows)
 
 explain (costs off)
 select * from
   tenk1 join int4_tbl on f1 = twothousand,
-  int4(sin(1)) q1,
-  int4(sin(0)) q2
+  q1, q2
 where thousand = (q1 + q2);
-                             QUERY PLAN                              
----------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (tenk1.thousand = (q1.q1 + q2.q2))
@@ -3205,11 +3211,14 @@ where thousand = (q1 + q2);
                      ->  Broadcast Motion 3:3  (slice2; segments: 3)
                            ->  Seq Scan on int4_tbl
          ->  Hash
-               ->  Nested Loop
-                     ->  Function Scan on q1
-                     ->  Function Scan on q2
+               ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                     ->  Nested Loop
+                           ->  Seq Scan on q1
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                       ->  Seq Scan on q2
  Optimizer: Postgres query optimizer
-(14 rows)
+(17 rows)
 
 --
 -- test ability to generate a suitable plan for a star-schema query
@@ -3365,6 +3374,160 @@ where t1.unique2 < 42 and t1.stringu1 > t2.stringu2;
       11 | WFAAAA   |       3 | LKIAAA
 (1 row)
 
+--
+-- test inlining of immutable functions
+--
+create function f_immutable_int4(i integer) returns integer as
+$$ begin return i; end; $$ language plpgsql immutable;
+-- check optimization of function scan with join
+explain (costs off)
+select unique1 from tenk1, (select * from f_immutable_int4(1) x) x
+where x = unique1;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: (unique1 = 1)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain (verbose, costs off)
+select unique1, x.*
+from tenk1, (select *, random() from f_immutable_int4(1) x) x
+where x = unique1;
+                                                                                                                         QUERY PLAN                                                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: tenk1.unique1, (1), (random())
+   ->  Hash Join
+         Output: tenk1.unique1, (1), (random())
+         Hash Cond: (tenk1.unique1 = (1))
+         ->  Seq Scan on public.tenk1
+               Output: tenk1.unique1, tenk1.unique2, tenk1.two, tenk1.four, tenk1.ten, tenk1.twenty, tenk1.hundred, tenk1.thousand, tenk1.twothousand, tenk1.fivethous, tenk1.tenthous, tenk1.odd, tenk1.even, tenk1.stringu1, tenk1.stringu2, tenk1.string4
+         ->  Hash
+               Output: (1), (random())
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Output: (1), (random())
+                     Hash Key: (1)
+                     ->  Result
+                           Output: 1, random()
+ Optimizer: Postgres query optimizer
+ Settings: optimizer = 'off'
+(16 rows)
+
+explain (costs off)
+select unique1 from tenk1, f_immutable_int4(1) x where x = unique1;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: (unique1 = 1)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain (costs off)
+select unique1 from tenk1, lateral f_immutable_int4(1) x where x = unique1;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: (unique1 = 1)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain (costs off)
+select unique1, x from tenk1 join f_immutable_int4(1) x on unique1 = x;
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: (unique1 = 1)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+explain (costs off)
+select unique1, x from tenk1 left join f_immutable_int4(1) x on unique1 = x;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop Left Join
+         Join Filter: (tenk1.unique1 = 1)
+         ->  Seq Scan on tenk1
+         ->  Materialize
+               ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+explain (costs off)
+select unique1, x from tenk1 right join f_immutable_int4(1) x on unique1 = x;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Nested Loop Left Join
+   ->  Result
+   ->  Materialize
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Index Only Scan using tenk1_unique1 on tenk1
+                     Index Cond: (unique1 = 1)
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+explain (costs off)
+select unique1, x from tenk1 full join f_immutable_int4(1) x on unique1 = x;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Full Join
+         Hash Cond: (tenk1.unique1 = (1))
+         ->  Seq Scan on tenk1
+         ->  Hash
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                     Hash Key: (1)
+                     ->  Result
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+-- check that pullup of a const function allows further const-folding
+explain (costs off)
+select unique1 from tenk1, f_immutable_int4(1) x where x = 42;
+        QUERY PLAN        
+--------------------------
+ Result
+   One-Time Filter: false
+(2 rows)
+
+-- test inlining of immutable functions with PlaceHolderVars
+explain (costs off)
+select nt3.id
+from nt3 as nt3
+  left join
+    (select nt2.*, (nt2.b1 or i4 = 42) AS b3
+     from nt2 as nt2
+       left join
+         f_immutable_int4(0) i4
+         on i4 = nt2.nt1_id
+    ) as ss2
+    on ss2.id = nt3.nt2_id
+where nt3.id = 1 and ss2.b3;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Right Join
+         Hash Cond: (nt2.id = nt3.nt2_id)
+         Filter: ((nt2.b1 OR ((0) = 42)))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: 1
+               ->  Nested Loop Left Join
+                     Join Filter: (0 = nt2.nt1_id)
+                     ->  Index Scan using nt2_pkey on nt2
+                     ->  Materialize
+                           ->  Result
+         ->  Hash
+               ->  Seq Scan on nt3
+                     Filter: (id = 1)
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+drop function f_immutable_int4(int);
 --
 -- test extraction of restriction OR clauses from join OR clause
 -- (we used to only do this for indexable clauses)

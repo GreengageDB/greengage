@@ -484,8 +484,7 @@ Where column_reference_storage_directive is:
       Creates the table as a <firstterm>partition</firstterm> of the specified
       parent table. The table can be created either as a partition for specific
       values using <literal>FOR VALUES</literal> or as a default partition
-      using <literal>DEFAULT</literal>.  This option is not available for
-      hash-partitioned tables.
+      using <literal>DEFAULT</literal>.
      </para>
 
      <para>
@@ -576,16 +575,15 @@ Where column_reference_storage_directive is:
 
      <para>
       If <literal>DEFAULT</literal> is specified, the table will be
-      created as a default partition of the parent table. The parent can
-      either be a list or range partitioned table. A partition key value
+      created as the default partition of the parent table.  This option
+      is not available for hash-partitioned tables.  A partition key value
       not fitting into any other partition of the given parent will be
-      routed to the default partition. There can be only one default
-      partition for a given parent table.
+      routed to the default partition.
      </para>
 
      <para>
       When a table has an existing <literal>DEFAULT</literal> partition and
-      a new partition is added to it, the existing default partition must
+      a new partition is added to it, the default partition must
       be scanned to verify that it does not contain any rows which properly
       belong in the new partition.  If the default partition contains a
       large number of rows, this may be slow.  The scan will be skipped if
@@ -2174,7 +2172,7 @@ CREATE TABLE cities_partdef
   </refsect2>
 
   <refsect2>
-   <title>Non-deferred Uniqueness Constraints</title>
+   <title>Non-Deferred Uniqueness Constraints</title>
 
    <para>
     When a <literal>UNIQUE</literal> or <literal>PRIMARY KEY</literal> constraint is
@@ -2262,7 +2260,7 @@ CREATE TABLE cities_partdef
   </refsect2>
 
   <refsect2>
-   <title>Zero-column Tables</title>
+   <title>Zero-Column Tables</title>
 
    <para>
     <productname>PostgreSQL</productname> allows a table of no columns
@@ -2335,9 +2333,9 @@ CREATE TABLE cities_partdef
     Typed tables implement a subset of the SQL standard.  According to
     the standard, a typed table has columns corresponding to the
     underlying composite type as well as one other column that is
-    the <quote>self-referencing column</quote>.  PostgreSQL does not
-    support these self-referencing columns explicitly, but the same
-    effect can be had using the OID feature.
+    the <quote>self-referencing column</quote>.
+    <productname>PostgreSQL</productname> does not support self-referencing
+    columns explicitly.
    </para>
   </refsect2>
 

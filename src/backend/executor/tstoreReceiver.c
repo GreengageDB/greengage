@@ -21,7 +21,7 @@
 #include "postgres.h"
 
 #include "access/heapam.h"
-#include "access/tuptoaster.h"
+#include "access/detoast.h"
 #include "executor/tstoreReceiver.h"
 
 

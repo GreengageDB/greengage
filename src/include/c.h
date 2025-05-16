@@ -772,7 +772,7 @@ typedef NameData *Name;
 #define Trap(condition, errorType) \
 	do { \
 		if (condition) \
-			ExceptionalCondition(CppAsString(condition), (errorType), \
+			ExceptionalCondition(#condition, (errorType), \
 								 __FILE__, __LINE__); \
 	} while (0)
 
@@ -785,20 +785,34 @@ typedef NameData *Name;
  */
 #define TrapMacro(condition, errorType) \
 	((bool) (! (condition) || \
-			 (ExceptionalCondition(CppAsString(condition), (errorType), \
+			 (ExceptionalCondition(#condition, (errorType), \
 								   __FILE__, __LINE__), 0)))
 
 #define Assert(condition) \
-		Trap(!(condition), "FailedAssertion")
+	do { \
+		if (!(condition)) \
+			ExceptionalCondition(#condition, "FailedAssertion", \
+								 __FILE__, __LINE__); \
+	} while (0)
 
 #define AssertMacro(condition) \
-		((void) TrapMacro(!(condition), "FailedAssertion"))
+	((void) ((condition) || \
+			 (ExceptionalCondition(#condition, "FailedAssertion", \
+								   __FILE__, __LINE__), 0)))
 
 #define AssertArg(condition) \
-		Trap(!(condition), "BadArgument")
+	do { \
+		if (!(condition)) \
+			ExceptionalCondition(#condition, "BadArgument", \
+								 __FILE__, __LINE__); \
+	} while (0)
 
 #define AssertState(condition) \
-		Trap(!(condition), "BadState")
+	do { \
+		if (!(condition)) \
+			ExceptionalCondition(#condition, "BadState", \
+								 __FILE__, __LINE__); \
+	} while (0)
 
 #define AssertImply(cond1, cond2) \
 		Trap(!(!(cond1) || (cond2)), "AssertImply failed")

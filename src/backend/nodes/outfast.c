@@ -39,6 +39,7 @@
 #include "utils/datum.h"
 #include "catalog/heap.h"
 #include "cdb/cdbgang.h"
+#include "utils/expandeddatum.h"
 #include "utils/workfile_mgr.h"
 #include "parser/parsetree.h"
 

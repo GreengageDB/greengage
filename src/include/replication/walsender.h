@@ -14,7 +14,6 @@
 
 #include <signal.h>
 
-#include "fmgr.h"
 #include "access/xlogdefs.h"
 
 /*

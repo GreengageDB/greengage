@@ -1801,7 +1801,6 @@ _bt_insert_parent(Relation rel,
 			stack = &fakestack;
 			stack->bts_blkno = BufferGetBlockNumber(pbuf);
 			stack->bts_offset = InvalidOffsetNumber;
-			stack->bts_btentry = InvalidBlockNumber;
 			stack->bts_parent = NULL;
 			_bt_relbuf(rel, pbuf);
 		}
@@ -1823,8 +1822,7 @@ _bt_insert_parent(Relation rel,
 		 * new downlink will be inserted at the correct offset. Even buf's
 		 * parent may have changed.
 		 */
-		stack->bts_btentry = bknum;
-		pbuf = _bt_getstackbuf(rel, stack);
+		pbuf = _bt_getstackbuf(rel, stack, bknum);
 
 		/*
 		 * Now we can unlock the right child. The left child will be unlocked
@@ -1838,7 +1836,7 @@ _bt_insert_parent(Relation rel,
 					 errmsg_internal("failed to re-find parent key in index \"%s\" for split pages %u/%u",
 									 RelationGetRelationName(rel), bknum, rbknum)));
 
-		/* Recursively update the parent */
+		/* Recursively insert into the parent */
 		_bt_insertonpg(rel, NULL, pbuf, buf, stack->bts_parent,
 					   new_item, stack->bts_offset + 1,
 					   is_only);
@@ -1905,21 +1903,37 @@ _bt_finish_split(Relation rel, Buffer lbuf, BTStack stack)
 }
 
 /*
- *	_bt_getstackbuf() -- Walk back up the tree one step, and find the item
- *						 we last looked at in the parent.
+ *	_bt_getstackbuf() -- Walk back up the tree one step, and find the pivot
+ *						 tuple whose downlink points to child page.
  *
- *		This is possible because we save the downlink from the parent item,
- *		which is enough to uniquely identify it.  Insertions into the parent
- *		level could cause the item to move right; deletions could cause it
- *		to move left, but not left of the page we previously found it in.
+ *		Caller passes child's block number, which is used to identify
+ *		associated pivot tuple in parent page using a linear search that
+ *		matches on pivot's downlink/block number.  The expected location of
+ *		the pivot tuple is taken from the stack one level above the child
+ *		page.  This is used as a starting point.  Insertions into the
+ *		parent level could cause the pivot tuple to move right; deletions
+ *		could cause it to move left, but not left of the page we previously
+ *		found it on.
  *
- *		Adjusts bts_blkno & bts_offset if changed.
+ *		Caller can use its stack to relocate the pivot tuple/downlink for
+ *		any same-level page to the right of the page found by its initial
+ *		descent.  This is necessary because of the possibility that caller
+ *		moved right to recover from a concurrent page split.  It's also
+ *		convenient for certain callers to be able to step right when there
+ *		wasn't a concurrent page split, while still using their original
+ *		stack.  For example, the checkingunique _bt_doinsert() case may
+ *		have to step right when there are many physical duplicates, and its
+ *		scantid forces an insertion to the right of the "first page the
+ *		value could be on".
  *
- *		Returns write-locked buffer, or InvalidBuffer if item not found
- *		(should not happen).
+ *		Returns write-locked parent page buffer, or InvalidBuffer if pivot
+ *		tuple not found (should not happen).  Adjusts bts_blkno &
+ *		bts_offset if changed.  Page split caller should insert its new
+ *		pivot tuple for its new right sibling page on parent page, at the
+ *		offset number bts_offset + 1.
  */
 Buffer
-_bt_getstackbuf(Relation rel, BTStack stack)
+_bt_getstackbuf(Relation rel, BTStack stack, BlockNumber child)
 {
 	BlockNumber blkno;
 	OffsetNumber start;
@@ -1981,7 +1995,7 @@ _bt_getstackbuf(Relation rel, BTStack stack)
 				itemid = PageGetItemId(page, offnum);
 				item = (IndexTuple) PageGetItem(page, itemid);
 
-				if (BTreeInnerTupleGetDownLink(item) == stack->bts_btentry)
+				if (BTreeInnerTupleGetDownLink(item) == child)
 				{
 					/* Return accurate pointer to where link is now */
 					stack->bts_blkno = blkno;
@@ -1997,7 +2011,7 @@ _bt_getstackbuf(Relation rel, BTStack stack)
 				itemid = PageGetItemId(page, offnum);
 				item = (IndexTuple) PageGetItem(page, itemid);
 
-				if (BTreeInnerTupleGetDownLink(item) == stack->bts_btentry)
+				if (BTreeInnerTupleGetDownLink(item) == child)
 				{
 					/* Return accurate pointer to where link is now */
 					stack->bts_blkno = blkno;
@@ -2009,6 +2023,9 @@ _bt_getstackbuf(Relation rel, BTStack stack)
 
 		/*
 		 * The item we're looking for moved right at least one page.
+		 *
+		 * Lehman and Yao couple/chain locks when moving right here, which we
+		 * can avoid.  See nbtree/README.
 		 */
 		if (P_RIGHTMOST(opaque))
 		{

@@ -56,10 +56,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "access/detoast.h"
 #include "access/heapam.h"
 #include "access/rewriteheap.h"
 #include "access/transam.h"
-#include "access/tuptoaster.h"
 #include "access/xact.h"
 #include "access/xlog_internal.h"
 #include "catalog/catalog.h"
@@ -1381,7 +1381,7 @@ ReorderBufferCopySnap(ReorderBuffer *rb, Snapshot orig_snap,
 	snap->subxip[i++] = txn->xid;
 
 	/*
-	 * nsubxcnt isn't decreased when subtransactions abort, so count manually.
+	 * subxcnt isn't decreased when subtransactions abort, so count manually.
 	 * Since it's an upper boundary it is safe to use it for the allocation
 	 * above.
 	 */
@@ -1553,7 +1553,7 @@ ReorderBufferCommit(ReorderBuffer *rb, TransactionId xid,
 
 					relation = RelationIdGetRelation(reloid);
 
-					if (relation == NULL)
+					if (!RelationIsValid(relation))
 						elog(ERROR, "could not open relation with OID %u (for filenode \"%s\")",
 							 reloid,
 							 relpathperm(change->data.tp.relnode,
@@ -1671,7 +1671,7 @@ ReorderBufferCommit(ReorderBuffer *rb, TransactionId xid,
 
 							relation = RelationIdGetRelation(relid);
 
-							if (relation == NULL)
+							if (!RelationIsValid(relation))
 								elog(ERROR, "could not open relation with OID %u", relid);
 
 							if (!RelationIsLogicallyLogged(relation))
@@ -3031,6 +3031,10 @@ ReorderBufferToastReplace(ReorderBuffer *rb, ReorderBufferTXN *txn,
 	desc = RelationGetDescr(relation);
 
 	toast_rel = RelationIdGetRelation(relation->rd_rel->reltoastrelid);
+	if (!RelationIsValid(toast_rel))
+		elog(ERROR, "could not open relation with OID %u",
+			 relation->rd_rel->reltoastrelid);
+
 	toast_desc = RelationGetDescr(toast_rel);
 
 	/* should we allocate from stack instead? */
@@ -3368,7 +3372,7 @@ ApplyLogicalMappingFile(HTAB *tuplecid_data, Oid relid, const char *fname)
 
 
 /*
- * Check whether the TransactionOid 'xid' is in the pre-sorted array 'xip'.
+ * Check whether the TransactionId 'xid' is in the pre-sorted array 'xip'.
  */
 static bool
 TransactionIdInArray(TransactionId xid, TransactionId *xip, Size num)

@@ -98,7 +98,7 @@ typedef struct AppendOnlyInsertDescData
 
 	/*
 	 * These serve the equivalent purpose of the uppercase constants of the same
-	 * name in tuptoaster.h but here we make these values dynamic.
+	 * name in heaptoast.h but here we make these values dynamic.
 	 */	
 	int32			toast_tuple_threshold;
 	int32			toast_tuple_target;

@@ -662,7 +662,7 @@ get_join_index_paths(PlannerInfo *root, RelOptInfo *rel,
 			}
 		}
 
-		/* Add restriction clauses (this is nondestructive to rclauseset) */
+		/* Add restriction clauses */
 		clauseset.indexclauses[indexcol] =
 			list_concat(clauseset.indexclauses[indexcol],
 						rclauseset->indexclauses[indexcol]);
@@ -1227,8 +1227,7 @@ build_paths_for_OR(PlannerInfo *root, RelOptInfo *rel,
 			{
 				/* Form all_clauses if not done already */
 				if (all_clauses == NIL)
-					all_clauses = list_concat(list_copy(clauses),
-											  other_clauses);
+					all_clauses = list_concat_copy(clauses, other_clauses);
 
 				if (!predicate_implied_by(index->indpred, all_clauses, false))
 					continue;	/* can't use it at all */
@@ -1293,7 +1292,7 @@ generate_bitmap_or_paths(PlannerInfo *root, RelOptInfo *rel,
 	 * We can use both the current and other clauses as context for
 	 * build_paths_for_OR; no need to remove ORs from the lists.
 	 */
-	all_clauses = list_concat(list_copy(clauses), other_clauses);
+	all_clauses = list_concat_copy(clauses, other_clauses);
 
 	foreach(lc, clauses)
 	{
@@ -1529,8 +1528,7 @@ choose_bitmap_and(PlannerInfo *root, RelOptInfo *rel, List *paths)
 		pathinfo = pathinfoarray[i];
 		paths = list_make1(pathinfo->path);
 		costsofar = bitmap_scan_cost_est(root, rel, pathinfo->path);
-		qualsofar = list_concat(list_copy(pathinfo->quals),
-								list_copy(pathinfo->preds));
+		qualsofar = list_concat_copy(pathinfo->quals, pathinfo->preds);
 		clauseidsofar = bms_copy(pathinfo->clauseids);
 
 		for (j = i + 1; j < npaths; j++)
@@ -1566,10 +1564,8 @@ choose_bitmap_and(PlannerInfo *root, RelOptInfo *rel, List *paths)
 			{
 				/* keep new path in paths, update subsidiary variables */
 				costsofar = newcost;
-				qualsofar = list_concat(qualsofar,
-										list_copy(pathinfo->quals));
-				qualsofar = list_concat(qualsofar,
-										list_copy(pathinfo->preds));
+				qualsofar = list_concat(qualsofar, pathinfo->quals);
+				qualsofar = list_concat(qualsofar, pathinfo->preds);
 				clauseidsofar = bms_add_members(clauseidsofar,
 												pathinfo->clauseids);
 			}
@@ -1872,7 +1868,7 @@ find_indexpath_quals(Path *bitmapqual, List **quals, List **preds)
 
 			*quals = lappend(*quals, iclause->rinfo->clause);
 		}
-		*preds = list_concat(*preds, list_copy(ipath->indexinfo->indpred));
+		*preds = list_concat(*preds, ipath->indexinfo->indpred);
 	}
 	else
 		elog(ERROR, "unrecognized node type: %d", nodeTag(bitmapqual));

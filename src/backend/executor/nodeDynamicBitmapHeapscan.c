@@ -158,7 +158,7 @@ initNextTableToScan(DynamicBitmapHeapScanState *node)
 	 * FIXME: should we use execute_attr_map_tuple instead? Seems like a
 	 * higher level abstraction that fits the bill
 	 */
-	attMap = convert_tuples_by_name_map_if_req(partTupDesc, lastTupDesc, "unused msg");
+	attMap = convert_tuples_by_name_map_if_req(partTupDesc, lastTupDesc);
 	table_close(lastScannedRel, AccessShareLock);
 
 	/* If attribute remapping is not necessary, then do not change the varattno */

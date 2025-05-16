@@ -912,7 +912,12 @@ DecodeMultiInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 	if (FilterByOrigin(ctx, XLogRecGetOrigin(r)))
 		return;
 
+	/*
+	 * As multi_insert is not used for catalogs yet, the block should always
+	 * have data even if a full-page write of it is taken.
+	 */
 	tupledata = XLogRecGetBlockData(r, 0, &tuplelen);
+	Assert(tupledata != NULL);
 
 	data = tupledata;
 	for (i = 0; i < xlrec->ntuples; i++)
@@ -928,6 +933,10 @@ DecodeMultiInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 
 		memcpy(&change->data.tp.relnode, &rnode, sizeof(RelFileNode));
 
+		xlhdr = (xl_multi_insert_tuple *) SHORTALIGN(data);
+		data = ((char *) xlhdr) + SizeOfMultiInsertTuple;
+		datalen = xlhdr->datalen;
+
 		/*
 		 * CONTAINS_NEW_TUPLE will always be set currently as multi_insert
 		 * isn't used for catalogs, but better be future proof.
@@ -938,10 +947,6 @@ DecodeMultiInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 		if (xlrec->flags & XLH_INSERT_CONTAINS_NEW_TUPLE)
 		{
 			HeapTupleHeader header;
-
-			xlhdr = (xl_multi_insert_tuple *) SHORTALIGN(data);
-			data = ((char *) xlhdr) + SizeOfMultiInsertTuple;
-			datalen = xlhdr->datalen;
 
 			change->data.tp.newtuple =
 				ReorderBufferGetTupleBuf(ctx->reorder, datalen);
@@ -965,8 +970,6 @@ DecodeMultiInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 			memcpy((char *) tuple->tuple.t_data + SizeofHeapTupleHeader,
 				   (char *) data,
 				   datalen);
-			data += datalen;
-
 			header->t_infomask = xlhdr->t_infomask;
 			header->t_infomask2 = xlhdr->t_infomask2;
 			header->t_hoff = xlhdr->t_hoff;
@@ -985,6 +988,9 @@ DecodeMultiInsert(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 
 		ReorderBufferQueueChange(ctx->reorder, XLogRecGetXid(r),
 								 buf->origptr, change);
+
+		/* move to the next xl_multi_insert_tuple entry */
+		data += datalen;
 	}
 	Assert(data == tupledata + tuplelen);
 }

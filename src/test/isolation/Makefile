@@ -79,7 +79,7 @@ installcheck: all gpdiff.pl gpstringsubs.pl install-tests
 check: all
 	$(pg_isolation_regress_check) --schedule=$(srcdir)/isolation_schedule
 
-# Versions of the check tests that include the prepared_transactions test
+# Versions of the check tests that include the prepared-transactions test
 # It only makes sense to run these if set up to use prepared transactions,
 # via TEMP_CONFIG for the check case, or via the postgresql.conf for the
 # installcheck case.

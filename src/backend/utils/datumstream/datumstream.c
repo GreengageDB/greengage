@@ -20,8 +20,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include "access/detoast.h"
+#include "access/heaptoast.h"
 #include "access/tupmacs.h"
-#include "access/tuptoaster.h"
 
 #include "catalog/pg_attribute_encoding.h"
 #include "cdb/cdbappendonlyam.h"

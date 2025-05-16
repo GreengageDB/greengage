@@ -889,11 +889,12 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 		pull_up_sublinks(root);
 
 	/*
-	 * Scan the rangetable for set-returning functions, and inline them if
-	 * possible (producing subqueries that might get pulled up next).
-	 * Recursion issues here are handled in the same way as for SubLinks.
+	 * Scan the rangetable for function RTEs, do const-simplification on them,
+	 * and then inline them if possible (producing subqueries that might get
+	 * pulled up next).  Recursion issues here are handled in the same way as
+	 * for SubLinks.
 	 */
-	inline_set_returning_functions(root);
+	preprocess_function_rtes(root);
 
 	/*
 	 * Check to see if any subqueries in the jointree can be merged into this
@@ -1359,7 +1360,9 @@ preprocess_expression(PlannerInfo *root, Node *expr, int kind)
 	}
 
 	/*
-	 * Simplify constant expressions.
+	 * Simplify constant expressions.  For function RTEs, this was already
+	 * done by preprocess_function_rtes ... but we have to do it again if the
+	 * RTE is LATERAL and might have contained join alias variables.
 	 *
 	 * Note: an essential effect of this is to convert named-argument function
 	 * calls to positional notation and insert the current actual values of
@@ -1373,7 +1376,9 @@ preprocess_expression(PlannerInfo *root, Node *expr, int kind)
 	 * careful to maintain AND/OR flatness --- that is, do not generate a tree
 	 * with AND directly under AND, nor OR directly under OR.
 	 */
-	expr = eval_const_expressions(root, expr);
+	if (!(kind == EXPRKIND_RTFUNC ||
+		  (kind == EXPRKIND_RTFUNC_LATERAL && !root->hasJoinRTEs)))
+		expr = eval_const_expressions(root, expr);
 
 	/*
 	 * If it's a qual or havingQual, canonicalize it.
@@ -4190,10 +4195,6 @@ reorder_grouping_sets(List *groupingsets, List *sortclause)
 			}
 		}
 
-		/*
-		 * Safe to use list_concat (which shares cells of the second arg)
-		 * because we know that new_elems does not share cells with anything.
-		 */
 		previous = list_concat(previous, new_elems);
 
 		gs->set = list_copy(previous);
@@ -5050,7 +5051,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 					{
 						if (bms_is_member(i, hash_items))
 							hash_sets = list_concat(hash_sets,
-													list_copy(rollup->gsets_data));
+													rollup->gsets_data);
 						else
 							rollups = lappend(rollups, rollup);
 						++i;
@@ -5865,7 +5866,7 @@ make_group_input_target(PlannerInfo *root, PathTarget *final_target)
  * a regular aggregation node would, plus any aggregates used in HAVING;
  * except that the Aggref nodes should be marked as partial aggregates.
  *
- * In addition, we'd better emit any Vars and PlaceholderVars that are
+ * In addition, we'd better emit any Vars and PlaceHolderVars that are
  * used outside of Aggrefs in the aggregation tlist and HAVING.  (Presumably,
  * these would be Vars that are grouped by or used in grouping expressions.)
  *
@@ -6355,8 +6356,7 @@ make_pathkeys_for_window(PlannerInfo *root, WindowClause *wc,
 				 errdetail("Window ordering columns must be of sortable datatypes.")));
 
 	/* Okay, make the combined pathkeys */
-	window_sortclauses = list_concat(list_copy(wc->partitionClause),
-									 list_copy(wc->orderClause));
+	window_sortclauses = list_concat_copy(wc->partitionClause, wc->orderClause);
 	window_pathkeys = make_pathkeys_for_sortclauses(root,
 													window_sortclauses,
 													tlist);
@@ -8532,7 +8532,7 @@ make_new_rollups_for_hash_grouping_set(PlannerInfo        *root,
 		if (!rollup->hashable)
 			return NULL;
 
-		sets_data = list_concat(sets_data, list_copy(rollup->gsets_data));
+		sets_data = list_concat(sets_data, rollup->gsets_data);
 	}
 	foreach(lc, sets_data)
 	{

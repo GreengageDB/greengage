@@ -85,6 +85,7 @@ static int	ldapServiceLookup(const char *purl, PQconninfoOption *options,
 #include "common/ip.h"
 #include "common/link-canary.h"
 #include "common/scram-common.h"
+#include "common/string.h"
 #include "mb/pg_wchar.h"
 #include "port/pg_bswap.h"
 
@@ -202,7 +203,7 @@ typedef struct _internalPQconninfoOption
 	char	   *keyword;		/* The keyword of the option			*/
 	char	   *envvar;			/* Fallback environment variable name	*/
 	char	   *compiled;		/* Fallback compiled in default value	*/
-	char	   *val;			/* Option's current value, or NULL		 */
+	char	   *val;			/* Option's current value, or NULL		*/
 	char	   *label;			/* Label for field in connect dialog	*/
 	char	   *dispchar;		/* Indicates how to display this field in a
 								 * connect dialog. Values are: "" Display
@@ -1335,9 +1336,9 @@ connectOptions2(PGconn *conn)
 		if (strcmp(conn->gssencmode, "require") == 0)
 		{
 			conn->status = CONNECTION_BAD;
-			printfPQExpBuffer(
-							  &conn->errorMessage,
-							  libpq_gettext("no GSSAPI support; cannot require GSSAPI\n"));
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("gssencmode value \"%s\" invalid when GSSAPI support is not compiled in\n"),
+							  conn->gssencmode);
 			return false;
 		}
 #endif
@@ -1610,19 +1611,19 @@ getHostaddr(PGconn *conn, char *host_addr, int host_addr_len)
 
 	if (addr->ss_family == AF_INET)
 	{
-		if (inet_net_ntop(AF_INET,
-						  &((struct sockaddr_in *) addr)->sin_addr.s_addr,
-						  32,
-						  host_addr, host_addr_len) == NULL)
+		if (pg_inet_net_ntop(AF_INET,
+							 &((struct sockaddr_in *) addr)->sin_addr.s_addr,
+							 32,
+							 host_addr, host_addr_len) == NULL)
 			host_addr[0] = '\0';
 	}
 #ifdef HAVE_IPV6
 	else if (addr->ss_family == AF_INET6)
 	{
-		if (inet_net_ntop(AF_INET6,
-						  &((struct sockaddr_in6 *) addr)->sin6_addr.s6_addr,
-						  128,
-						  host_addr, host_addr_len) == NULL)
+		if (pg_inet_net_ntop(AF_INET6,
+							 &((struct sockaddr_in6 *) addr)->sin6_addr.s6_addr,
+							 128,
+							 host_addr, host_addr_len) == NULL)
 			host_addr[0] = '\0';
 	}
 #endif
@@ -1746,7 +1747,7 @@ parse_int_param(const char *value, int *result, PGconn *conn,
 	}
 
 	appendPQExpBuffer(&conn->errorMessage,
-					  libpq_gettext("invalid integer value \"%s\" for keyword \"%s\"\n"),
+					  libpq_gettext("invalid integer value \"%s\" for connection option \"%s\"\n"),
 					  value, context);
 	return false;
 }
@@ -2842,13 +2843,13 @@ keep_going:						/* We will come back to here until there is
 #ifdef ENABLE_GSS
 
 				/*
-				 * If GSSAPI is enabled and we have a ccache, try to set it up
-				 * before sending startup messages.  If it's already
+				 * If GSSAPI is enabled and we have a credential cache, try to
+				 * set it up before sending startup messages.  If it's already
 				 * operating, don't try SSL and instead just build the startup
 				 * packet.
 				 */
 				if (conn->try_gss && !conn->gctx)
-					conn->try_gss = pg_GSS_have_ccache(&conn->gcred);
+					conn->try_gss = pg_GSS_have_cred_cache(&conn->gcred);
 				if (conn->try_gss && !conn->gctx)
 				{
 					ProtocolVersion pv = pg_hton32(NEGOTIATE_GSS_CODE);
@@ -2868,7 +2869,7 @@ keep_going:						/* We will come back to here until there is
 				else if (!conn->gctx && conn->gssencmode[0] == 'r')
 				{
 					appendPQExpBufferStr(&conn->errorMessage,
-										 libpq_gettext("GSSAPI encryption required, but was impossible (possibly no ccache, no server support, or using a local socket)\n"));
+										 libpq_gettext("GSSAPI encryption required but was impossible (possibly no credential cache, no server support, or using a local socket)\n"));
 					goto error_return;
 				}
 #endif
@@ -3528,6 +3529,13 @@ keep_going:						/* We will come back to here until there is
 					return PGRES_POLLING_WRITING;
 				}
 
+				/* Almost there now ... */
+				conn->status = CONNECTION_CHECK_TARGET;
+				goto keep_going;
+			}
+
+		case CONNECTION_CHECK_TARGET:
+			{
 				/*
 				 * If a read-write connection is required, see if we have one.
 				 *
@@ -3570,66 +3578,36 @@ keep_going:						/* We will come back to here until there is
 			}
 
 		case CONNECTION_SETENV:
-
-			/*
-			 * Do post-connection housekeeping (only needed in protocol 2.0).
-			 *
-			 * We pretend that the connection is OK for the duration of these
-			 * queries.
-			 */
-			conn->status = CONNECTION_OK;
-
-			switch (pqSetenvPoll(conn))
 			{
-				case PGRES_POLLING_OK:	/* Success */
-					break;
-
-				case PGRES_POLLING_READING: /* Still going */
-					conn->status = CONNECTION_SETENV;
-					return PGRES_POLLING_READING;
-
-				case PGRES_POLLING_WRITING: /* Still going */
-					conn->status = CONNECTION_SETENV;
-					return PGRES_POLLING_WRITING;
-
-				default:
-					goto error_return;
-			}
-
-			/*
-			 * If a read-write connection is required, see if we have one.
-			 * (This should match the stanza in the CONNECTION_AUTH_OK case
-			 * above.)
-			 *
-			 * Servers before 7.4 lack the transaction_read_only GUC, but by
-			 * the same token they don't have any read-only mode, so we may
-			 * just skip the test in that case.
-			 */
-			if (conn->sversion >= 70400 &&
-				conn->target_session_attrs != NULL &&
-				strcmp(conn->target_session_attrs, "read-write") == 0)
-			{
-				if (!saveErrorMessage(conn, &savedMessage))
-					goto error_return;
-
+				/*
+				 * Do post-connection housekeeping (only needed in protocol 2.0).
+				 *
+				 * We pretend that the connection is OK for the duration of these
+				 * queries.
+				 */
 				conn->status = CONNECTION_OK;
-				if (!PQsendQuery(conn,
-								 "SHOW transaction_read_only"))
+
+				switch (pqSetenvPoll(conn))
 				{
-					restoreErrorMessage(conn, &savedMessage);
-					goto error_return;
+					case PGRES_POLLING_OK:	/* Success */
+						break;
+
+					case PGRES_POLLING_READING: /* Still going */
+						conn->status = CONNECTION_SETENV;
+						return PGRES_POLLING_READING;
+
+					case PGRES_POLLING_WRITING: /* Still going */
+						conn->status = CONNECTION_SETENV;
+						return PGRES_POLLING_WRITING;
+
+					default:
+						goto error_return;
 				}
-				conn->status = CONNECTION_CHECK_WRITABLE;
-				restoreErrorMessage(conn, &savedMessage);
-				return PGRES_POLLING_READING;
+
+				/* Almost there now ... */
+				conn->status = CONNECTION_CHECK_TARGET;
+				goto keep_going;
 			}
-
-			/* We can release the address list now. */
-			release_conn_addrinfo(conn);
-
-			/* We are open for business! */
-			conn->status = CONNECTION_OK;
-			return PGRES_POLLING_OK;
 
 		case CONNECTION_CONSUME:
 			{
@@ -3827,8 +3805,8 @@ internal_ping(PGconn *conn)
 	 * PQPING_NO_RESPONSE.  This result could be somewhat misleading for a
 	 * pre-7.4 server, since it won't send back a SQLSTATE, but those are long
 	 * out of support.  Another corner case where the server could return a
-	 * failure without a SQLSTATE is fork failure, but NO_RESPONSE isn't
-	 * totally unreasonable for that anyway.  We expect that every other
+	 * failure without a SQLSTATE is fork failure, but PQPING_NO_RESPONSE
+	 * isn't totally unreasonable for that anyway.  We expect that every other
 	 * failure case in a modern server will produce a report with a SQLSTATE.
 	 *
 	 * NOTE: whenever we get around to making libpq generate SQLSTATEs for
@@ -3992,7 +3970,10 @@ freePGconn(PGconn *conn)
 			if (conn->connhost[i].port != NULL)
 				free(conn->connhost[i].port);
 			if (conn->connhost[i].password != NULL)
+			{
+				explicit_bzero(conn->connhost[i].password, strlen(conn->connhost[i].password));
 				free(conn->connhost[i].password);
+			}
 		}
 		free(conn->connhost);
 	}
@@ -4026,7 +4007,10 @@ freePGconn(PGconn *conn)
 	if (conn->pguser)
 		free(conn->pguser);
 	if (conn->pgpass)
+	{
+		explicit_bzero(conn->pgpass, strlen(conn->pgpass));
 		free(conn->pgpass);
+	}
 	if (conn->pgpassfile)
 		free(conn->pgpassfile);
 	if (conn->keepalives)
@@ -7084,12 +7068,8 @@ passwordFromFile(const char *hostname, const char *port, const char *dbname,
 		if (fgets(buf, sizeof(buf), fp) == NULL)
 			break;
 
-		len = strlen(buf);
-
-		/* Remove trailing newline, including \r in case we're on Windows */
-		while (len > 0 && (buf[len - 1] == '\n' ||
-						   buf[len - 1] == '\r'))
-			buf[--len] = '\0';
+		/* strip trailing newline and carriage return */
+		len = pg_strip_crlf(buf);
 
 		if (len == 0)
 			continue;
@@ -7107,6 +7087,7 @@ passwordFromFile(const char *hostname, const char *port, const char *dbname,
 		if (!ret)
 		{
 			/* Out of memory. XXX: an error message would be nice. */
+			explicit_bzero(buf, sizeof(buf));
 			return NULL;
 		}
 
@@ -7123,6 +7104,7 @@ passwordFromFile(const char *hostname, const char *port, const char *dbname,
 	}
 
 	fclose(fp);
+	explicit_bzero(buf, sizeof(buf));
 	return NULL;
 
 #undef LINELEN

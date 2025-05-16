@@ -125,6 +125,7 @@ static Plan *set_append_references(PlannerInfo *root,
 static Plan *set_mergeappend_references(PlannerInfo *root,
 										MergeAppend *mplan,
 										int rtoffset);
+static void set_hash_references(PlannerInfo *root, Plan *plan, int rtoffset);
 static Node *fix_scan_expr(PlannerInfo *root, Node *node, int rtoffset);
 static Node *fix_scan_expr_mutator(Node *node, fix_scan_expr_context *context);
 static bool fix_scan_expr_walker(Node *node, fix_scan_expr_context *context);
@@ -871,6 +872,9 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 			break;
 
 		case T_Hash:
+			set_hash_references(root, plan, rtoffset);
+			break;
+
 		case T_Material:
 		case T_Sort:
 		case T_Unique:
@@ -1196,7 +1200,7 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 				splan->resultRelIndex = list_length(root->glob->resultRelations);
 				root->glob->resultRelations =
 					list_concat(root->glob->resultRelations,
-								list_copy(splan->resultRelations));
+								splan->resultRelations);
 
 				/*
 				 * If the main target relation is a partitioned table, also
@@ -1752,6 +1756,36 @@ set_mergeappend_references(PlannerInfo *root,
 	return (Plan *) mplan;
 }
 
+/*
+ * set_hash_references
+ *	   Do set_plan_references processing on a Hash node
+ */
+static void
+set_hash_references(PlannerInfo *root, Plan *plan, int rtoffset)
+{
+	Hash	   *hplan = (Hash *) plan;
+	Plan	   *outer_plan = plan->lefttree;
+	indexed_tlist *outer_itlist;
+
+	/*
+	 * Hash's hashkeys are used when feeding tuples into the hashtable,
+	 * therefore have them reference Hash's outer plan (which itself is the
+	 * inner plan of the HashJoin).
+	 */
+	outer_itlist = build_tlist_index(outer_plan->targetlist);
+	hplan->hashkeys = (List *)
+		fix_upper_expr(root,
+					   (Node *) hplan->hashkeys,
+					   outer_itlist,
+					   OUTER_VAR,
+					   rtoffset);
+
+	/* Hash doesn't project */
+	set_dummy_tlist_references(plan, rtoffset);
+
+	/* Hash nodes don't have their own quals */
+	Assert(plan->qual == NIL);
+}
 
 /*
  * copyVar
@@ -2098,6 +2132,15 @@ set_join_references(PlannerInfo *root, Join *join, int rtoffset)
 											inner_itlist,
 											(Index) 0,
 											rtoffset);
+		/*
+		 * HashJoin's hashkeys are used to look for matching tuples from its
+		 * outer plan (not the Hash node!) in the hashtable.
+		 */
+		hj->hashkeys = (List *) fix_upper_expr(root,
+											   (Node *) hj->hashkeys,
+											   outer_itlist,
+											   OUTER_VAR,
+											   rtoffset);
 	}
 
 	/*

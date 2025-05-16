@@ -2053,6 +2053,10 @@ ProcessUtilitySlow(ParseState *pstate,
 				address = CreateStatistics((CreateStatsStmt *) parsetree);
 				break;
 
+			case T_AlterStatsStmt:
+				address = AlterStatistics((AlterStatsStmt *) parsetree);
+				break;
+
 			case T_AlterCollationStmt:
 				address = AlterCollation((AlterCollationStmt *) parsetree);
 				break;
@@ -3269,6 +3273,10 @@ CreateCommandTag(Node *parsetree)
 			tag = "CREATE STATISTICS";
 			break;
 
+		case T_AlterStatsStmt:
+			tag = "ALTER STATISTICS";
+			break;
+
 		case T_DeallocateStmt:
 			{
 				DeallocateStmt *stmt = (DeallocateStmt *) parsetree;
@@ -3867,6 +3875,10 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_CreateStatsStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_AlterStatsStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

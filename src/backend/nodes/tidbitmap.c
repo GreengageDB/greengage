@@ -1204,7 +1204,7 @@ tbm_next_page(TBMIterator *iterator, bool *more)
 	{
 		PagetableEntry *e;
 
-		/* In ONE_PAGE state, we don't allocate an spages[] array */
+		/* In TBM_ONE_PAGE state, we don't allocate an spages[] array */
 		if (tbm->status == TBM_ONE_PAGE)
 			e = &tbm->entry1;
 		else

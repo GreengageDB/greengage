@@ -291,7 +291,7 @@ static int	nextTempTableSpace = 0;
  * LruInsert	   - put a file at the front of the Lru ring and open it
  * ReleaseLruFile  - Release an fd by closing the last entry in the Lru ring
  * ReleaseLruFiles - Release fd(s) until we're under the max_safe_fds limit
- * AllocateVfd	   - grab a free (or new) file record (from VfdArray)
+ * AllocateVfd	   - grab a free (or new) file record (from VfdCache)
  * FreeVfd		   - free a file record
  *
  * The Least Recently Used ring is a doubly linked list that begins and
@@ -330,8 +330,6 @@ static int	FreeDesc(AllocateDesc *desc);
 
 static void AtProcExit_Files(int code, Datum arg);
 static void CleanupTempFiles(bool isCommit, bool isProcExit);
-static void RemovePgTempFilesInDir(const char *tmpdirname, bool missing_ok,
-								   bool unlink_all);
 static void RemovePgTempRelationFiles(const char *tsdirname);
 static void RemovePgTempRelationFilesInDbspace(const char *dbspacedirname);
 
@@ -2062,10 +2060,6 @@ retry:
 	{
 		/*
 		 * Maintain fileSize and temporary_files_size if it's a temp file.
-		 *
-		 * If seekPos is -1 (unknown), this will do nothing; but we could only
-		 * get here in that state if we're not enforcing temporary_files_size,
-		 * so we don't care.
 		 */
 		if (vfdP->fdstate & FD_TEMP_FILE_LIMIT)
 		{
@@ -3069,11 +3063,10 @@ RemovePgTempFiles(void)
 
 	/*
 	 * In EXEC_BACKEND case there is a pgsql_tmp directory at the top level of
-	 * DataDir as well.
+	 * DataDir as well.  However, that is *not* cleaned here because doing so
+	 * would create a race condition.  It's done separately, earlier in
+	 * postmaster startup.
 	 */
-#ifdef EXEC_BACKEND
-	RemovePgTempFilesInDir(PG_TEMP_FILES_DIR, true, false);
-#endif
 }
 
 /*
@@ -3091,7 +3084,7 @@ RemovePgTempFiles(void)
  * (These two flags could be replaced by one, but it seems clearer to keep
  * them separate.)
  */
-static void
+void
 RemovePgTempFilesInDir(const char *tmpdirname, bool missing_ok, bool unlink_all)
 {
 	DIR		   *temp_dir;

@@ -4458,7 +4458,8 @@ child_triggers(Oid relationId, int32 triggerType)
  *
  *		Given the index OID and column number,
  *		return opclass of the index column
- *			or InvalidOid if the index was not found.
+ *			or InvalidOid if the index was not found
+ *				or column is non-key one.
  */
 Oid
 get_index_column_opclass(Oid index_oid, int attno)
@@ -4481,11 +4482,20 @@ get_index_column_opclass(Oid index_oid, int attno)
 	/* caller is supposed to guarantee this */
 	Assert(attno > 0 && attno <= rd_index->indnatts);
 
+	/* Non-key attributes don't have an opclass */
+	if (attno > rd_index->indnkeyatts)
+	{
+		ReleaseSysCache(tuple);
+		return InvalidOid;
+	}
+
 	datum = SysCacheGetAttr(INDEXRELID, tuple,
 							Anum_pg_index_indclass, &isnull);
 	Assert(!isnull);
 
 	indclass = ((oidvector *) DatumGetPointer(datum));
+
+	Assert(attno <= indclass->dim1);
 	opclass = indclass->values[attno - 1];
 
 	ReleaseSysCache(tuple);
