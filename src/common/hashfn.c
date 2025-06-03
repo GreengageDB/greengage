@@ -161,7 +161,7 @@
 uint32
 hash_bytes(const unsigned char *k, int keylen)
 {
-	register uint32 a,
+	uint32		a,
 				b,
 				c,
 				len;
@@ -174,7 +174,7 @@ hash_bytes(const unsigned char *k, int keylen)
 	if (((uintptr_t) k & UINT32_ALIGN_MASK) == 0)
 	{
 		/* Code path for aligned source data */
-		register const uint32 *ka = (const uint32 *) k;
+		const uint32 *ka = (const uint32 *) k;
 
 		/* handle most of the key */
 		while (len >= 12)
@@ -387,7 +387,7 @@ hash_bytes(const unsigned char *k, int keylen)
 uint64
 hash_bytes_extended(const unsigned char *k, int keylen, uint64 seed)
 {
-	register uint32 a,
+	uint32		a,
 				b,
 				c,
 				len;
@@ -413,7 +413,7 @@ hash_bytes_extended(const unsigned char *k, int keylen, uint64 seed)
 	if (((uintptr_t) k & UINT32_ALIGN_MASK) == 0)
 	{
 		/* Code path for aligned source data */
-		register const uint32 *ka = (const uint32 *) k;
+		const uint32 *ka = (const uint32 *) k;
 
 		/* handle most of the key */
 		while (len >= 12)
@@ -625,7 +625,7 @@ hash_bytes_extended(const unsigned char *k, int keylen, uint64 seed)
 uint32
 hash_bytes_uint32(uint32 k)
 {
-	register uint32 a,
+	uint32		a,
 				b,
 				c;
 
@@ -646,7 +646,7 @@ hash_bytes_uint32(uint32 k)
 uint64
 hash_bytes_uint32_extended(uint32 k, uint64 seed)
 {
-	register uint32 a,
+	uint32		a,
 				b,
 				c;
 

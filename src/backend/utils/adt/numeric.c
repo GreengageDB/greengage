@@ -2663,6 +2663,9 @@ numeric_div_opt_error(Numeric num1, Numeric num2, bool *have_error)
 	Numeric		res;
 	int			rscale;
 
+	if (have_error)
+		*have_error = false;
+
 	/*
 	 * Handle NaN
 	 */
@@ -2778,6 +2781,9 @@ numeric_mod_opt_error(Numeric num1, Numeric num2, bool *have_error)
 	NumericVar	arg1;
 	NumericVar	arg2;
 	NumericVar	result;
+
+	if (have_error)
+		*have_error = false;
 
 	if (NUMERIC_IS_NAN(num1) || NUMERIC_IS_NAN(num2))
 		return make_result(&const_nan);
@@ -3541,6 +3547,9 @@ numeric_int4_opt_error(Numeric num, bool *have_error)
 {
 	NumericVar	x;
 	int32		result;
+
+	if (have_error)
+		*have_error = false;
 
 	/* XXX would it be better to return NULL? */
 	if (NUMERIC_IS_NAN(num))
@@ -6651,6 +6660,9 @@ make_result_opt_error(const NumericVar *var, bool *have_error)
 	int			sign = var->sign;
 	int			n;
 	Size		len;
+
+	if (have_error)
+		*have_error = false;
 
 	if (sign == NUMERIC_NAN)
 	{

@@ -56,12 +56,13 @@
  */
 #include "postgres.h"
 
-#include "access/tuptoaster.h"
+#include "access/heaptoast.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "executor/execExpr.h"
 #include "executor/nodeSubplan.h"
 #include "funcapi.h"
+#include "utils/array.h"
 #include "utils/memutils.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
@@ -3435,9 +3436,7 @@ ExecEvalConvertRowtype(ExprState *state, ExprEvalStep *op, ExprContext *econtext
 		old_cxt = MemoryContextSwitchTo(econtext->ecxt_per_query_memory);
 
 		/* prepare map from old to new attribute numbers */
-		op->d.convert_rowtype.map =
-			convert_tuples_by_name(indesc, outdesc,
-								   gettext_noop("could not convert row type"));
+		op->d.convert_rowtype.map = convert_tuples_by_name(indesc, outdesc);
 		op->d.convert_rowtype.initialized = true;
 
 		MemoryContextSwitchTo(old_cxt);

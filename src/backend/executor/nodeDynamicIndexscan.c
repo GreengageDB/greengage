@@ -334,7 +334,7 @@ IndexScan_GetColumnMapping(Oid oldOid, Oid newOid)
 	TupleDesc oldTupDesc = oldRel->rd_att;
 	TupleDesc newTupDesc = newRel->rd_att;
 
-	attMap = convert_tuples_by_name_map_if_req(oldTupDesc, newTupDesc, "unused msg");
+	attMap = convert_tuples_by_name_map_if_req(oldTupDesc, newTupDesc);
 
 	heap_close(oldRel, AccessShareLock);
 	heap_close(newRel, AccessShareLock);

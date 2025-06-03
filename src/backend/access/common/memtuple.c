@@ -13,10 +13,10 @@
 
 #include "postgres.h"
 
+#include "access/heaptoast.h"
 #include "access/memtup.h"
 #include "access/tupmacs.h"
 #include "access/transam.h"
-#include "access/tuptoaster.h"
 #include "catalog/pg_type.h"
 #include "utils/expandeddatum.h"
 

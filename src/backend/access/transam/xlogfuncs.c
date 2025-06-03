@@ -281,7 +281,7 @@ pg_stop_backup_v2(PG_FUNCTION_ARGS)
 	values[0] = LSNGetDatum(stoppoint);
 
 	tuplestore_putvalues(tupstore, tupdesc, values, nulls);
-	tuplestore_donestoring(typstore);
+	tuplestore_donestoring(tupstore);
 
 	return (Datum) 0;
 }
@@ -773,6 +773,8 @@ pg_promote(PG_FUNCTION_ARGS)
 #define WAITS_PER_SECOND 10
 	for (i = 0; i < WAITS_PER_SECOND * wait_seconds; i++)
 	{
+		int			rc;
+
 		ResetLatch(MyLatch);
 
 		if (!RecoveryInProgress())
@@ -780,10 +782,17 @@ pg_promote(PG_FUNCTION_ARGS)
 
 		CHECK_FOR_INTERRUPTS();
 
-		(void) WaitLatch(MyLatch,
-						 WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-						 1000L / WAITS_PER_SECOND,
-						 WAIT_EVENT_PROMOTE);
+		rc = WaitLatch(MyLatch,
+					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					   1000L / WAITS_PER_SECOND,
+					   WAIT_EVENT_PROMOTE);
+
+		/*
+		 * Emergency bailout if postmaster has died.  This is to avoid the
+		 * necessity for manual cleanup of all postmaster children.
+		 */
+		if (rc & WL_POSTMASTER_DEATH)
+			PG_RETURN_BOOL(false);
 	}
 
 	ereport(WARNING,

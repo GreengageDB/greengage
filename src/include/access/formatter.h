@@ -18,6 +18,7 @@
 
 #include "access/htup.h"
 #include "access/tupdesc.h"
+#include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "nodes/nodes.h"

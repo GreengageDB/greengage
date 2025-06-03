@@ -66,3 +66,13 @@ CREATE FUNCTION bm_bitmap_page_items(IN page bytea,
     RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'bm_bitmap_page_items_bytea'
     LANGUAGE C STRICT PARALLEL SAFE;
+
+-- heap_tuple_infomask_flags()
+--
+CREATE FUNCTION heap_tuple_infomask_flags(
+       t_infomask integer,
+       t_infomask2 integer,
+       decode_combined boolean DEFAULT false)
+RETURNS text[]
+AS 'MODULE_PATHNAME', 'heap_tuple_infomask_flags'
+LANGUAGE C STRICT PARALLEL SAFE;

@@ -17,6 +17,7 @@
 #define AOSEGFILES_H
 
 #include "catalog/pg_appendonly.h"
+#include "fmgr.h"
 #include "utils/rel.h"
 #include "utils/snapshot.h"
 

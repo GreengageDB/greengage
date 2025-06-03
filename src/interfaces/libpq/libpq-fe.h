@@ -68,7 +68,8 @@ typedef enum
 								 * connection. */
 	CONNECTION_CONSUME,			/* Wait for any pending message and consume
 								 * them. */
-	CONNECTION_GSS_STARTUP		/* Negotiating GSSAPI. */
+	CONNECTION_GSS_STARTUP,		/* Negotiating GSSAPI. */
+	CONNECTION_CHECK_TARGET		/* Check if we have a proper target connection */
 } ConnStatusType;
 
 typedef enum
@@ -301,7 +302,7 @@ extern PQconninfoOption *PQconninfo(PGconn *conn);
 extern void PQconninfoFree(PQconninfoOption *connOptions);
 
 /*
- * close the current connection and restablish a new one with the same
+ * close the current connection and reestablish a new one with the same
  * parameters
  */
 /* Asynchronous (non-blocking) */
@@ -582,10 +583,10 @@ extern void PQdisplayTuples(const PGresult *res,
 
 extern void PQprintTuples(const PGresult *res,
 						  FILE *fout,	/* output stream */
-						  int printAttName, /* print attribute names */
-						  int terseOutput,	/* delimiter bars */
-						  int width);	/* width of column, if 0, use variable
-										 * width */
+						  int PrintAttNames,	/* print attribute names */
+						  int TerseOutput,	/* delimiter bars */
+						  int colWidth);	/* width of column, if 0, use
+											 * variable width */
 
 
 /* === in fe-lobj.c === */

@@ -26,7 +26,7 @@
 #include "access/relscan.h"
 #include "access/tableam.h"
 #include "access/transam.h"
-#include "access/tuptoaster.h"
+#include "access/toast_internals.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "catalog/pg_am.h"
@@ -1809,7 +1809,7 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 
 /*
  * Get a list of tables that the current user owns and
- * have indisclustered set.  Return the list in a List * of rvsToCluster
+ * have indisclustered set.  Return the list in a List * of RelToCluster
  * with the tableOid and the indexOid on which the table is already
  * clustered.
  */

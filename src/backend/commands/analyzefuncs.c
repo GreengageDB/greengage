@@ -1,8 +1,9 @@
 #include "postgres.h"
 
 #include "access/aocssegfiles.h"
+#include "access/detoast.h"
+#include "access/heaptoast.h"
 #include "access/table.h"
-#include "access/tuptoaster.h"
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_type.h"
 #include "cdb/cdbappendonlyam.h"

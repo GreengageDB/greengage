@@ -339,7 +339,7 @@ float8in(PG_FUNCTION_ARGS)
 }
 
 /* Convenience macro: set *have_error flag (if provided) or throw error */
-#define RETURN_ERROR(throw_error) \
+#define RETURN_ERROR(throw_error, have_error) \
 do { \
 	if (have_error) { \
 		*have_error = true; \
@@ -379,6 +379,9 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 	char	   *endptr;
 	bool 		literal_inf = true;
 
+	if (have_error)
+		*have_error = false;
+
 	/* skip leading whitespace */
 	while (*num != '\0' && isspace((unsigned char) *num))
 		num++;
@@ -391,7 +394,8 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 		RETURN_ERROR(ereport(ERROR,
 							 (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 							  errmsg("invalid input syntax for type %s: \"%s\"",
-									 type_name, orig_string))));
+									 type_name, orig_string))),
+					 have_error);
 
 	errno = 0;
 	val = strtold(num, &endptr);
@@ -466,9 +470,9 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 				errnumber[endptr - num] = '\0';
 				RETURN_ERROR(ereport(ERROR,
 									 (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-									  errmsg("\"%s\" is out of range for "
-											 "type double precision",
-											 errnumber))));
+									  errmsg("\"%s\" is out of range for type double precision",
+											 errnumber))),
+							 have_error);
 			}
 		}
 		else
@@ -476,7 +480,8 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 								 (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 								  errmsg("invalid input syntax for type "
 										 "%s: \"%s\"",
-										 type_name, orig_string))));
+										 type_name, orig_string))),
+						 have_error);
 	}
 #ifdef HAVE_BUGGY_SOLARIS_STRTOD
 	else
@@ -503,7 +508,8 @@ float8in_internal_opt_error(char *num, char **endptr_p,
 							 (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 							  errmsg("invalid input syntax for type "
 									 "%s: \"%s\"",
-									 type_name, orig_string))));
+									 type_name, orig_string))),
+					 have_error);
 
 	/*
 	 * strtod does not support values from 1e-323 to 1e-308 for double datatype in rhel6

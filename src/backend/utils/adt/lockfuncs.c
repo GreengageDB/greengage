@@ -934,15 +934,6 @@ pg_isolation_test_session_is_blocked(PG_FUNCTION_ARGS)
 #define SET_LOCKTAG_INT32(tag, key1, key2) \
 	SET_LOCKTAG_ADVISORY(tag, MyDatabaseId, key1, key2, 2)
 
-static void
-PreventAdvisoryLocksInParallelMode(void)
-{
-	if (IsInParallelMode())
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_TRANSACTION_STATE),
-				 errmsg("cannot use advisory locks during a parallel operation")));
-}
-
 /*
  * pg_advisory_lock(int8) - acquire exclusive lock on an int8 key
  */
@@ -952,7 +943,6 @@ pg_advisory_lock_int8(PG_FUNCTION_ARGS)
 	int64		key = PG_GETARG_INT64(0);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	(void) LockAcquire(&tag, ExclusiveLock, true, false);
@@ -970,7 +960,6 @@ pg_advisory_xact_lock_int8(PG_FUNCTION_ARGS)
 	int64		key = PG_GETARG_INT64(0);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	(void) LockAcquire(&tag, ExclusiveLock, false, false);
@@ -987,7 +976,6 @@ pg_advisory_lock_shared_int8(PG_FUNCTION_ARGS)
 	int64		key = PG_GETARG_INT64(0);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	(void) LockAcquire(&tag, ShareLock, true, false);
@@ -1005,7 +993,6 @@ pg_advisory_xact_lock_shared_int8(PG_FUNCTION_ARGS)
 	int64		key = PG_GETARG_INT64(0);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	(void) LockAcquire(&tag, ShareLock, false, false);
@@ -1025,7 +1012,6 @@ pg_try_advisory_lock_int8(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	res = LockAcquire(&tag, ExclusiveLock, true, true);
@@ -1046,7 +1032,6 @@ pg_try_advisory_xact_lock_int8(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	res = LockAcquire(&tag, ExclusiveLock, false, true);
@@ -1066,7 +1051,6 @@ pg_try_advisory_lock_shared_int8(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	res = LockAcquire(&tag, ShareLock, true, true);
@@ -1087,7 +1071,6 @@ pg_try_advisory_xact_lock_shared_int8(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	res = LockAcquire(&tag, ShareLock, false, true);
@@ -1107,7 +1090,6 @@ pg_advisory_unlock_int8(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	bool		res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	res = LockRelease(&tag, ExclusiveLock, true);
@@ -1127,7 +1109,6 @@ pg_advisory_unlock_shared_int8(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	bool		res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT64(tag, key);
 
 	res = LockRelease(&tag, ShareLock, true);
@@ -1145,7 +1126,6 @@ pg_advisory_lock_int4(PG_FUNCTION_ARGS)
 	int32		key2 = PG_GETARG_INT32(1);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	(void) LockAcquire(&tag, ExclusiveLock, true, false);
@@ -1164,7 +1144,6 @@ pg_advisory_xact_lock_int4(PG_FUNCTION_ARGS)
 	int32		key2 = PG_GETARG_INT32(1);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	(void) LockAcquire(&tag, ExclusiveLock, false, false);
@@ -1182,7 +1161,6 @@ pg_advisory_lock_shared_int4(PG_FUNCTION_ARGS)
 	int32		key2 = PG_GETARG_INT32(1);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	(void) LockAcquire(&tag, ShareLock, true, false);
@@ -1201,7 +1179,6 @@ pg_advisory_xact_lock_shared_int4(PG_FUNCTION_ARGS)
 	int32		key2 = PG_GETARG_INT32(1);
 	LOCKTAG		tag;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	(void) LockAcquire(&tag, ShareLock, false, false);
@@ -1222,7 +1199,6 @@ pg_try_advisory_lock_int4(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	res = LockAcquire(&tag, ExclusiveLock, true, true);
@@ -1244,7 +1220,6 @@ pg_try_advisory_xact_lock_int4(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	res = LockAcquire(&tag, ExclusiveLock, false, true);
@@ -1265,7 +1240,6 @@ pg_try_advisory_lock_shared_int4(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	res = LockAcquire(&tag, ShareLock, true, true);
@@ -1287,7 +1261,6 @@ pg_try_advisory_xact_lock_shared_int4(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	LockAcquireResult res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	res = LockAcquire(&tag, ShareLock, false, true);
@@ -1308,7 +1281,6 @@ pg_advisory_unlock_int4(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	bool		res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	res = LockRelease(&tag, ExclusiveLock, true);
@@ -1329,7 +1301,6 @@ pg_advisory_unlock_shared_int4(PG_FUNCTION_ARGS)
 	LOCKTAG		tag;
 	bool		res;
 
-	PreventAdvisoryLocksInParallelMode();
 	SET_LOCKTAG_INT32(tag, key1, key2);
 
 	res = LockRelease(&tag, ShareLock, true);

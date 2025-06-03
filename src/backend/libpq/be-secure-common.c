@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "common/string.h"
 #include "libpq/libpq.h"
 #include "storage/fd.h"
 
@@ -86,6 +87,7 @@ run_ssl_passphrase_command(const char *prompt, bool is_server_start, char *buf, 
 	{
 		if (ferror(fh))
 		{
+			explicit_bzero(buf, size);
 			ereport(loglevel,
 					(errcode_for_file_access(),
 					 errmsg("could not read from command \"%s\": %m",
@@ -97,6 +99,7 @@ run_ssl_passphrase_command(const char *prompt, bool is_server_start, char *buf, 
 	pclose_rc = ClosePipeStream(fh);
 	if (pclose_rc == -1)
 	{
+		explicit_bzero(buf, size);
 		ereport(loglevel,
 				(errcode_for_file_access(),
 				 errmsg("could not close pipe to external command: %m")));
@@ -104,6 +107,7 @@ run_ssl_passphrase_command(const char *prompt, bool is_server_start, char *buf, 
 	}
 	else if (pclose_rc != 0)
 	{
+		explicit_bzero(buf, size);
 		ereport(loglevel,
 				(errcode_for_file_access(),
 				 errmsg("command \"%s\" failed",
@@ -112,11 +116,8 @@ run_ssl_passphrase_command(const char *prompt, bool is_server_start, char *buf, 
 		goto error;
 	}
 
-	/* strip trailing newline, including \r in case we're on Windows */
-	len = strlen(buf);
-	while (len > 0 && (buf[len - 1] == '\n' ||
-					   buf[len - 1] == '\r'))
-		buf[--len] = '\0';
+	/* strip trailing newline and carriage return */
+	len = pg_strip_crlf(buf);
 
 error:
 	pfree(command.data);

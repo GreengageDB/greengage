@@ -15,6 +15,7 @@
 #endif
 
 #include "getopt_long.h"
+#include "common/string.h"
 #include "utils/pidfile.h"
 
 #include "pg_upgrade.h"
@@ -228,6 +229,9 @@ parseCommandLine(int argc, char *argv[])
 		}
 	}
 
+	if (optind < argc)
+		pg_fatal("too many command-line arguments (first is \"%s\")\n", argv[optind]);
+
 	if ((log_opts.internal = fopen_priv(INTERNAL_LOG_FILE, "a")) == NULL)
 		pg_fatal("could not open log file \"%s\": %m\n", INTERNAL_LOG_FILE);
 
@@ -307,7 +311,7 @@ usage(void)
 	printf(_("Options:\n"));
 	printf(_("  -b, --old-bindir=BINDIR       old cluster executable directory\n"));
 	printf(_("  -B, --new-bindir=BINDIR       new cluster executable directory (default\n"
-			 "                                same directory as pg_upgrade)"));
+			 "                                same directory as pg_upgrade)\n"));
 	printf(_("  -c, --check                   check clusters only, don't change any data\n"));
 	printf(_("  -d, --old-datadir=DATADIR     old cluster data directory\n"));
 	printf(_("  -D, --new-datadir=DATADIR     new cluster data directory\n"));
@@ -425,7 +429,6 @@ adjust_data_dir(ClusterInfo *cluster)
 				cmd_output[MAX_STRING];
 	FILE	   *fp,
 			   *output;
-	int			len;
 
 	/* Initially assume config dir and data dir are the same */
 	cluster->pgconfig = pg_strdup(cluster->pgdata);
@@ -466,12 +469,8 @@ adjust_data_dir(ClusterInfo *cluster)
 
 	pclose(output);
 
-	/* Remove trailing newline, handling Windows newlines as well */
-	len = strlen(cmd_output);
-	while (len > 0 &&
-		   (cmd_output[len - 1] == '\n' ||
-			cmd_output[len - 1] == '\r'))
-		cmd_output[--len] = '\0';
+	/* strip trailing newline and carriage return */
+	(void) pg_strip_crlf(cmd_output);
 
 	cluster->pgdata = pg_strdup(cmd_output);
 
@@ -532,15 +531,9 @@ get_sock_dir(ClusterInfo *cluster, bool live_check)
 					sscanf(line, "%hu", &old_cluster.port);
 				if (lineno == LOCK_FILE_LINE_SOCKET_DIR)
 				{
-					int			len;
-
+					/* strip trailing newline and carriage return */
 					cluster->sockdir = pg_strdup(line);
-					/* strip off newline, handling Windows newlines as well */
-					len = strlen(cluster->sockdir);
-					while (len > 0 &&
-						   (cluster->sockdir[len - 1] == '\n' ||
-							cluster->sockdir[len - 1] == '\r'))
-						cluster->sockdir[--len] = '\0';
+					(void) pg_strip_crlf(cluster->sockdir);
 				}
 			}
 			fclose(fp);

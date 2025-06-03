@@ -5062,11 +5062,10 @@ select i, a from
 
 explain (verbose, costs off)
 select consumes_rw_array(a), a from returns_rw_array(1) a;
-             QUERY PLAN              
--------------------------------------
- Function Scan on a
-   Output: consumes_rw_array(a), a
-   Function Call: '{1,1}'::integer[]
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Result
+   Output: consumes_rw_array('{1,1}'::integer[]), '{1,1}'::integer[]
  Optimizer: Postgres query optimizer
 (4 rows)
 

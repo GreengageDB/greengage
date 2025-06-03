@@ -475,14 +475,10 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 					#   fatal
 					#   panic (effectively off)
 
-#log_min_duration_statement = -1	# logs statements and their durations
-					# according to log_statement_sample_rate. -1 is disabled,
-					# 0 logs all statements, > 0 logs only statements running
-					# at least this number of milliseconds.
-
-#log_statement_sample_rate = 1.0	# Fraction of logged statements exceeding
-					# log_min_duration_statement to be logged.
-					# 1.0 logs all such statements, 0.0 never logs.
+#log_min_duration_statement = -1	# -1 is disabled, 0 logs all statements
+					# and their durations, > 0 logs only
+					# statements running at least this number
+					# of milliseconds
 
 #log_transaction_sample_rate = 0.0	# Fraction of transactions whose statements
 					# are logged regardless of their duration. 1.0 logs all
@@ -627,6 +623,9 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 #search_path = '"$user", public'	# schema names
 #row_security = on
 #default_tablespace = ''		# a tablespace name, '' uses the default
+#temp_tablespaces = ''			# a list of tablespace names, '' uses
+					# only default tablespace
+#default_table_access_method = 'heap'
 #check_function_bodies = on
 #default_transaction_isolation = 'read committed'
 #default_transaction_read_only = off
@@ -780,12 +779,13 @@ gp_vmem_protect_limit = 8192  #Virtual memory limit (in MB).
 #------------------------------------------------------------------------------
 
 # These options allow settings to be loaded from files other than the
-# default postgresql.conf.
+# default postgresql.conf.  Note that these are directives, not variable
+# assignments, so they can usefully be given more than once.
 
-#include_dir = ''			# include files ending in '.conf' from
+#include_dir = '...'			# include files ending in '.conf' from
 					# a directory, e.g., 'conf.d'
-#include_if_exists = ''			# include file only if it exists
-#include = 'special.conf'				# include file
+#include_if_exists = '...'		# include file only if it exists
+#include = 'special.conf'		# include file
 include = 'internal.auto.conf'		# GP_INTERNAL_AUTO_CONF_FILE_NAME which sets the gp_dbid
 
 

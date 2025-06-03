@@ -35,16 +35,17 @@
 #include "utils/memutils.h"
 #endif
 
-static bool allocate_recordbuf(XLogReaderState *state, uint32 reclength);
 
+static void report_invalid_record(XLogReaderState *state, const char *fmt,...)
+			pg_attribute_printf(2, 3);
+static bool allocate_recordbuf(XLogReaderState *state, uint32 reclength);
+static int	ReadPageInternal(XLogReaderState *state, XLogRecPtr pageptr,
+							 int reqLen);
+static void XLogReaderInvalReadState(XLogReaderState *state);
 static bool ValidXLogRecordHeader(XLogReaderState *state, XLogRecPtr RecPtr,
 								  XLogRecPtr PrevRecPtr, XLogRecord *record, bool randAccess);
 static bool ValidXLogRecord(XLogReaderState *state, XLogRecord *record,
 							XLogRecPtr recptr);
-static int	ReadPageInternal(XLogReaderState *state, XLogRecPtr pageptr,
-							 int reqLen);
-static void report_invalid_record(XLogReaderState *state, const char *fmt,...) pg_attribute_printf(2, 3);
-
 static void ResetDecoder(XLogReaderState *state);
 static bool zstd_decompress_backupblock(const char *source, int32 slen,
 										char *dest, int32 rawsize,
@@ -667,7 +668,7 @@ err:
 /*
  * Invalidate the xlogreader's read state to force a re-read.
  */
-void
+static void
 XLogReaderInvalReadState(XLogReaderState *state)
 {
 	state->readSegNo = 0;
@@ -748,7 +749,7 @@ ValidXLogRecordHeader(XLogReaderState *state, XLogRecPtr RecPtr,
  * We assume all of the record (that is, xl_tot_len bytes) has been read
  * into memory at *record.  Also, ValidXLogRecordHeader() has accepted the
  * record's header, which means in particular that xl_tot_len is at least
- * SizeOfXlogRecord.
+ * SizeOfXLogRecord.
  */
 static bool
 ValidXLogRecord(XLogReaderState *state, XLogRecord *record, XLogRecPtr recptr)

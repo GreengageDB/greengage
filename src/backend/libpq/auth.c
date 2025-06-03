@@ -2168,7 +2168,7 @@ interpret_ident_response(const char *ident_response,
 /*
  *	Talk to the ident server on "remote_addr" and find out who
  *	owns the tcp connection to "local_addr"
- *	It the username successfully retrieved, check the usermap.
+ *	If the username is successfully retrieved, check the usermap.
  *
  *	XXX: Using WaitLatchOrSocket() and doing a CHECK_FOR_INTERRUPTS() if the
  *	latch was set would improve the responsiveness to timeouts/cancellations.

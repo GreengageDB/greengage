@@ -403,4 +403,4 @@ extern void ResLockWaitCancel(void);
 extern bool ProcCanSetMppSessionId(void);
 extern void ProcNewMppSessionId(int *newSessionId);
 
-#endif							/* PROC_H */
+#endif							/* _PROC_H_ */

@@ -1639,6 +1639,32 @@ SELECT count(*) FROM test_tsvector WHERE a @@ to_tsquery('345&qwerty');
      1
 (1 row)
 
+-- Test inlining of immutable constant functions
+-- to_tsquery(text) is not immutable, so it won't be inlined
+-- GPDB: Stable function inlining is performed for to_tsquery.
+-- Thus, we carry a few EXPLAIN diffs from upstream.
+explain (costs off)
+select * from test_tsquery, to_tsquery('new') q where txtsample @@ q;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on test_tsquery
+         Filter: (txtsample @@ '''new'''::tsquery)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- to_tsquery(regconfig, text) is an immutable function.
+-- That allows us to get rid of using function scan and join at all.
+explain (costs off)
+select * from test_tsquery, to_tsquery('english', 'new') q where txtsample @@ q;
+                    QUERY PLAN                     
+---------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on test_tsquery
+         Filter: (txtsample @@ '''new'''::tsquery)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
 -- test finding items in GIN's pending list
 create temp table pendtest (ts tsvector);
 create index pendtest_idx on pendtest using gin(ts);

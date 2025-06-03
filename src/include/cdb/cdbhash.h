@@ -15,6 +15,7 @@
 #ifndef CDBHASH_H
 #define CDBHASH_H
 
+#include "fmgr.h"
 #include "utils/rel.h"
 
 /* GUC */

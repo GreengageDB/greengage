@@ -13,8 +13,8 @@
  */
 
 #include "postgres.h"
+#include "access/heaptoast.h"
 #include "access/tupmacs.h"
-#include "access/tuptoaster.h"
 #include "utils/datumstreamblock.h"
 #include "utils/guc.h"
 

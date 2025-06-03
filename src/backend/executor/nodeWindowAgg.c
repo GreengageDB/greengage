@@ -48,6 +48,7 @@
 #include "parser/parse_oper.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/expandeddatum.h"
 #include "utils/datum.h"
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
@@ -100,7 +101,7 @@ typedef struct WindowStatePerFuncData
 	bool		resulttypeByVal;
 
 	bool		plain_agg;		/* is it just a plain aggregate function? */
-	int			aggno;			/* if so, index of its PerAggData */
+	int			aggno;			/* if so, index of its WindowStatePerAggData */
 
 	WindowObject winobj;		/* object used in window function API */
 }			WindowStatePerFuncData;
@@ -168,7 +169,7 @@ typedef struct WindowStatePerAggData
 				resulttypeByVal,
 				transtypeByVal;
 
-	int			wfuncno;		/* index of associated PerFuncData */
+	int			wfuncno;		/* index of associated WindowStatePerFuncData */
 
 	/* Context holding transition value and possibly other subsidiary data */
 	MemoryContext aggcontext;	/* may be private, or winstate->aggcontext */

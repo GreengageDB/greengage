@@ -920,18 +920,29 @@ SlruReportIOError(SlruCtl ctl, int pageno, TransactionId xid)
 							   path, offset)));
 			break;
 		case SLRU_READ_FAILED:
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not access status of transaction %u", xid),
-					 errdetail("Could not read from file \"%s\" at offset %u: %m.",
-							   path, offset)));
+			if (errno)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not access status of transaction %u", xid),
+						 errdetail("Could not read from file \"%s\" at offset %u: %m.",
+								   path, offset)));
+			else
+				ereport(ERROR,
+						(errmsg("could not access status of transaction %u", xid),
+						 errdetail("Could not read from file \"%s\" at offset %u: read too few bytes.", path, offset)));
 			break;
 		case SLRU_WRITE_FAILED:
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not access status of transaction %u", xid),
-					 errdetail("Could not write to file \"%s\" at offset %u: %m.",
-							   path, offset)));
+			if (errno)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not access status of transaction %u", xid),
+						 errdetail("Could not write to file \"%s\" at offset %u: %m.",
+								   path, offset)));
+			else
+				ereport(ERROR,
+						(errmsg("could not access status of transaction %u", xid),
+						 errdetail("Could not write to file \"%s\" at offset %u: wrote too few bytes.",
+								   path, offset)));
 			break;
 		case SLRU_FSYNC_FAILED:
 			ereport(data_sync_elevel(ERROR),
@@ -1379,7 +1390,7 @@ SlruScanDirCbDeleteAll(SlruCtl ctl, char *filename, int segpage, void *data)
 }
 
 /*
- * Scan the SimpleLRU directory and apply a callback to each file found in it.
+ * Scan the SimpleLru directory and apply a callback to each file found in it.
  *
  * If the callback returns true, the scan is stopped.  The last return value
  * from the callback is returned.

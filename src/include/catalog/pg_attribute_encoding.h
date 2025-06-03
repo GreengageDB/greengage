@@ -20,6 +20,7 @@
 
 #include "catalog/genbki.h"
 #include "catalog/pg_attribute_encoding_d.h"
+#include "fmgr.h"
 #include "utils/rel.h"
 
 /* ----------------

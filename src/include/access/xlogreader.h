@@ -229,15 +229,11 @@ extern bool XLogReaderValidatePageHeader(XLogReaderState *state,
 extern bool XLogReaderValidatePageHeader(XLogReaderState *state,
 					XLogRecPtr recptr, char *phdr);
 
-/* Invalidate read state */
-extern void XLogReaderInvalReadState(XLogReaderState *state);
-
 /* In GPDB, this is needed in the backend, too, for WAL replication tests. */
 /* #ifdef FRONTEND */
 #if 1
 extern XLogRecPtr XLogFindNextRecord(XLogReaderState *state, XLogRecPtr RecPtr);
 #endif							/* FRONTEND */
-
 /* Functions for decoding an XLogRecord */
 
 extern bool DecodeXLogRecord(XLogReaderState *state, XLogRecord *record,
@@ -263,7 +259,7 @@ extern bool DecodeXLogRecord(XLogReaderState *state, XLogRecord *record,
 extern FullTransactionId XLogRecGetFullXid(XLogReaderState *record);
 #endif
 
-extern bool RestoreBlockImage(XLogReaderState *recoder, uint8 block_id, char *dst);
+extern bool RestoreBlockImage(XLogReaderState *record, uint8 block_id, char *page);
 extern char *XLogRecGetBlockData(XLogReaderState *record, uint8 block_id, Size *len);
 extern bool XLogRecGetBlockTag(XLogReaderState *record, uint8 block_id,
 							   RelFileNode *rnode, ForkNumber *forknum,

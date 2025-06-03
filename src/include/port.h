@@ -332,9 +332,6 @@ extern int	gettimeofday(struct timeval *tp, struct timezone *tzp);
  * Default "extern" declarations or macro substitutes for library routines.
  * When necessary, these routines are provided by files in src/port/.
  */
-#ifndef HAVE_CRYPT
-extern char *crypt(const char *key, const char *setting);
-#endif
 
 /* WIN32 handled in port/win32_port.h */
 #ifndef WIN32
@@ -382,6 +379,10 @@ extern int	isinf(double x);
 #endif							/* __has_builtin(isinf) */
 #endif							/* __clang__ && !__cplusplus */
 #endif							/* !HAVE_ISINF */
+
+#ifndef HAVE_EXPLICIT_BZERO
+extern void explicit_bzero(void *buf, size_t len);
+#endif
 
 #ifndef HAVE_STRTOF
 extern float strtof(const char *nptr, char **endptr);
@@ -505,8 +506,8 @@ extern int	pg_codepage_to_encoding(UINT cp);
 #endif
 
 /* port/inet_net_ntop.c */
-extern char *inet_net_ntop(int af, const void *src, int bits,
-						   char *dst, size_t size);
+extern char *pg_inet_net_ntop(int af, const void *src, int bits,
+							  char *dst, size_t size);
 
 /* port/pg_strong_random.c */
 extern bool pg_strong_random(void *buf, size_t len);
