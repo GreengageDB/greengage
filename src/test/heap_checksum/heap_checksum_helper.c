@@ -14,6 +14,8 @@ PG_FUNCTION_INFO_V1(invalidate_buffers);
 Datum
 invalidate_buffers(PG_FUNCTION_ARGS)
 {
+	BlockNumber	block = 0;
+	ForkNumber	fork = MAIN_FORKNUM;
 	RelFileNodeBackend  rnodebackend;
 
 	rnodebackend.node.spcNode = PG_GETARG_OID(0);
@@ -22,7 +24,7 @@ invalidate_buffers(PG_FUNCTION_ARGS)
 
 	rnodebackend.backend = InvalidBackendId; /* not temporary/local */
 
-	DropRelFileNodeBuffers(rnodebackend, MAIN_FORKNUM, 0);
+	DropRelFileNodeBuffers(rnodebackend, &fork, 1, &block);
 
 	PG_RETURN_BOOL(true);
 }

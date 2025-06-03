@@ -4880,7 +4880,7 @@ pg_extprotocol_aclmask(Oid ptcOid, Oid roleid,
     if (superuser_arg(roleid))
         return mask;
 
-    rel = heap_open(ExtprotocolRelationId, AccessShareLock);
+    rel = table_open(ExtprotocolRelationId, AccessShareLock);
 
     ScanKeyInit(&scankey, Anum_pg_extprotocol_oid,
                 BTEqualStrategyNumber, F_OIDEQ,
@@ -4930,7 +4930,7 @@ pg_extprotocol_aclmask(Oid ptcOid, Oid roleid,
 
     /* Finish up scan and close pg_extprotocol catalog. */
     systable_endscan(sscan);
-    heap_close(rel, AccessShareLock);
+    table_close(rel, AccessShareLock);
 
     return result;
 }
@@ -6569,8 +6569,8 @@ CopyRelationAcls(Oid srcId, Oid destId)
 	CatCList   *attlist;
 	int			i;
 
-	pg_class_rel = heap_open(RelationRelationId, RowExclusiveLock);
-	pg_attribute_rel = heap_open(AttributeRelationId, RowExclusiveLock);
+	pg_class_rel = table_open(RelationRelationId, RowExclusiveLock);
+	pg_attribute_rel = table_open(AttributeRelationId, RowExclusiveLock);
 
 	/* Look up the ACL on the source relation. */
 	srcTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(srcId));
@@ -6697,8 +6697,8 @@ CopyRelationAcls(Oid srcId, Oid destId)
 
 	ReleaseSysCache(srcTuple);
 	ReleaseSysCache(destTuple);
-	heap_close(pg_class_rel, RowExclusiveLock);
-	heap_close(pg_attribute_rel, RowExclusiveLock);
+	table_close(pg_class_rel, RowExclusiveLock);
+	table_close(pg_attribute_rel, RowExclusiveLock);
 
 	/* Make these updates visible */
 	CommandCounterIncrement();

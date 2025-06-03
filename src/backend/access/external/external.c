@@ -134,7 +134,7 @@ GetExtTableEntryIfExists(Oid relid)
 	if (!HeapTupleIsValid(fttuple))
 	{
 		systable_endscan(ftscan);
-		heap_close(pg_foreign_table_rel, RowExclusiveLock);
+		table_close(pg_foreign_table_rel, RowExclusiveLock);
 
 		return NULL;
 	}

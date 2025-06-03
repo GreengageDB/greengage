@@ -86,7 +86,7 @@ InsertInitialAOCSFileSegInfo(Relation prel, int32 segno, int32 nvp, Oid segrelid
 	/* New segments are always created in the latest format */
 	formatVersion = AORelationVersion_GetLatest();
 
-	segrel = heap_open(segrelid, RowExclusiveLock);
+	segrel = table_open(segrelid, RowExclusiveLock);
 
 	values[Anum_pg_aocs_segno - 1] = Int32GetDatum(segno);
 	values[Anum_pg_aocs_vpinfo - 1] = PointerGetDatum(vpinfo);
@@ -118,7 +118,7 @@ InsertInitialAOCSFileSegInfo(Relation prel, int32 segno, int32 nvp, Oid segrelid
 		ReleaseBuffer(buf);
 
 	heap_freetuple(segtup);
-	heap_close(segrel, RowExclusiveLock);
+	table_close(segrel, RowExclusiveLock);
 
 	pfree(vpinfo);
 	pfree(nulls);
@@ -163,7 +163,7 @@ GetAOCSFileSegInfo(Relation prel,
                               &segrelid, NULL, NULL,
                               NULL, NULL);
 
-	segrel = heap_open(segrelid, AccessShareLock);
+	segrel = table_open(segrelid, AccessShareLock);
 	tupdesc = RelationGetDescr(segrel);
 
 	/* Scan aoseg relation for tuple. */
@@ -197,7 +197,7 @@ GetAOCSFileSegInfo(Relation prel,
 	{
 		/* This segment file does not have an entry. */
 		systable_endscan(scan);
-		heap_close(segrel, AccessShareLock);
+		table_close(segrel, AccessShareLock);
 
 		if (locked)
 			ereport(ERROR,
@@ -255,7 +255,7 @@ GetAOCSFileSegInfo(Relation prel,
 
 	heap_freetuple(fssegtup);
 	systable_endscan(scan);
-	heap_close(segrel, AccessShareLock);
+	table_close(segrel, AccessShareLock);
 
 	return seginfo;
 }
@@ -293,7 +293,7 @@ GetAllAOCSFileSegInfo(Relation prel,
 												   appendOnlyMetaDataSnapshot,
 												   totalseg);
 
-	heap_close(pg_aocsseg_rel, AccessShareLock);
+	table_close(pg_aocsseg_rel, AccessShareLock);
 
 	return results;
 }
@@ -512,7 +512,7 @@ MarkAOCSFileSegInfoAwaitingDrop(Relation prel, int segno)
 							  NULL, NULL);
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 
-	segrel = heap_open(segrelid, RowExclusiveLock);
+	segrel = table_open(segrelid, RowExclusiveLock);
 	tupdesc = RelationGetDescr(segrel);
 
 	/*
@@ -605,7 +605,7 @@ ClearAOCSFileSegInfo(Relation prel, int segno)
 							  NULL, NULL);
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 
-	segrel = heap_open(segrelid, RowExclusiveLock);
+	segrel = table_open(segrelid, RowExclusiveLock);
 	tupdesc = RelationGetDescr(segrel);
 
 	/*
@@ -696,7 +696,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 	int			i;
 	AOCSVPInfo *vpinfo = create_aocs_vpinfo(nvp);
 
-	segrel = heap_open(idesc->segrelid, RowExclusiveLock);
+	segrel = table_open(idesc->segrelid, RowExclusiveLock);
 	tupdesc = RelationGetDescr(segrel);
 
 	/*
@@ -835,7 +835,7 @@ UpdateAOCSFileSegInfo(AOCSInsertDesc idesc)
 	pfree(vpinfo);
 
 	systable_endscan(scan);
-	heap_close(segrel, RowExclusiveLock);
+	table_close(segrel, RowExclusiveLock);
 }
 
 /*
@@ -894,7 +894,7 @@ AOCSFileSegInfoAddVpe(Relation prel, int32 segno,
                               NULL,
                               &segrelid, NULL, NULL,
                               NULL, NULL);
-	segrel = heap_open(segrelid, RowExclusiveLock);
+	segrel = table_open(segrelid, RowExclusiveLock);
 	tupdesc = RelationGetDescr(segrel);
 
 	/*
@@ -988,7 +988,7 @@ AOCSFileSegInfoAddVpe(Relation prel, int32 segno,
 	 * AccessExclusive lock on the AOCS relation OID.
 	 */
 	systable_endscan(scan);
-	heap_close(segrel, NoLock);
+	table_close(segrel, NoLock);
 }
 
 void
@@ -1014,7 +1014,7 @@ AOCSFileSegInfoAddCount(Relation prel, int32 segno,
                               &segrelid, NULL, NULL,
                               NULL, NULL);
 
-	segrel = heap_open(segrelid, RowExclusiveLock);
+	segrel = table_open(segrelid, RowExclusiveLock);
 	tupdesc = RelationGetDescr(segrel);
 
 	/*
@@ -1080,7 +1080,7 @@ AOCSFileSegInfoAddCount(Relation prel, int32 segno,
 	heap_freetuple(newtup);
 
 	systable_endscan(scan);
-	heap_close(segrel, RowExclusiveLock);
+	table_close(segrel, RowExclusiveLock);
 }
 
 extern Datum aocsvpinfo_decode(PG_FUNCTION_ARGS);
@@ -1186,7 +1186,7 @@ gp_aocsseg_internal(PG_FUNCTION_ARGS, Oid aocsRelOid)
 
 		context->aocsRelOid = aocsRelOid;
 
-		aocsRel = heap_open(aocsRelOid, AccessShareLock);
+		aocsRel = table_open(aocsRelOid, AccessShareLock);
 		if (!RelationIsAoCols(aocsRel))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1201,7 +1201,7 @@ gp_aocsseg_internal(PG_FUNCTION_ARGS, Oid aocsRelOid)
                                   appendOnlyMetaDataSnapshot,
                                   &segrelid, NULL, NULL,
                                   NULL, NULL);
-		pg_aocsseg_rel = heap_open(segrelid, AccessShareLock);
+		pg_aocsseg_rel = table_open(segrelid, AccessShareLock);
 
 		context->aocsSegfileArray = GetAllAOCSFileSegInfo_pg_aocsseg_rel(
 																		 aocsRel->rd_rel->relnatts,
@@ -1210,8 +1210,8 @@ gp_aocsseg_internal(PG_FUNCTION_ARGS, Oid aocsRelOid)
 																		 appendOnlyMetaDataSnapshot,
 																		 &context->totalAocsSegFiles);
 
-		heap_close(pg_aocsseg_rel, AccessShareLock);
-		heap_close(aocsRel, AccessShareLock);
+		table_close(pg_aocsseg_rel, AccessShareLock);
+		table_close(aocsRel, AccessShareLock);
 
 		/* Iteration positions. */
 		context->segfileArrayIndex = 0;
@@ -1396,10 +1396,10 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
 
 		context->aocsRelOid = aocsRelOid;
 
-		aocsRel = heap_open(aocsRelOid, AccessShareLock);
+		aocsRel = table_open(aocsRelOid, AccessShareLock);
 		if (!RelationIsAoCols(aocsRel))
 		{
-			heap_close(aocsRel, AccessShareLock);
+			table_close(aocsRel, AccessShareLock);
 			ereport(ERROR,
 			        (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				        errmsg("'%s' is not an append-only columnar relation",
@@ -1415,7 +1415,7 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
                                   &segrelid, NULL, NULL,
                                   NULL, NULL);
 
-		pg_aocsseg_rel = heap_open(segrelid, AccessShareLock);
+		pg_aocsseg_rel = table_open(segrelid, AccessShareLock);
 
 		context->aocsSegfileArray = GetAllAOCSFileSegInfo_pg_aocsseg_rel(
 																		 RelationGetNumberOfAttributes(aocsRel),
@@ -1424,8 +1424,8 @@ gp_aocsseg_history(PG_FUNCTION_ARGS)
 																		 SnapshotAny, //Get ALL tuples from pg_aocsseg_ % including aborted and in - progress ones.
 																		 & context->totalAocsSegFiles);
 
-		heap_close(pg_aocsseg_rel, AccessShareLock);
-		heap_close(aocsRel, AccessShareLock);
+		table_close(pg_aocsseg_rel, AccessShareLock);
+		table_close(aocsRel, AccessShareLock);
 
 		/* Iteration positions. */
 		context->segfileArrayIndex = 0;
@@ -1542,7 +1542,7 @@ aocol_compression_ratio_internal(Relation parentrel)
 	/*
 	 * open the aoseg relation
 	 */
-	aosegrel = heap_open(segrelid, AccessShareLock);
+	aosegrel = table_open(segrelid, AccessShareLock);
 
 	/*
 	 * assemble our query string.
@@ -1562,7 +1562,7 @@ aocol_compression_ratio_internal(Relation parentrel)
 						 get_namespace_name(RelationGetNamespace(aosegrel)),
 						 RelationGetRelationName(aosegrel));
 
-	heap_close(aosegrel, AccessShareLock);
+	table_close(aosegrel, AccessShareLock);
 
 	PG_TRY();
 	{

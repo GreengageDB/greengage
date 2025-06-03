@@ -210,7 +210,7 @@ AppendOnlyBlockDirectory_Init_forSearch(
 	Assert(OidIsValid(blkdirrelid));
 
 	blockDirectory->blkdirRel =
-		heap_open(blkdirrelid, AccessShareLock);
+		table_open(blkdirrelid, AccessShareLock);
 
 	Assert(OidIsValid(blkdiridxid));
 
@@ -277,7 +277,7 @@ AppendOnlyBlockDirectory_Init_forUniqueChecks(
 	blockDirectory->numColumnGroups = numColumnGroups;
 	blockDirectory->proj = NULL;
 
-	blockDirectory->blkdirRel = heap_open(blkdirrelid, AccessShareLock);
+	blockDirectory->blkdirRel = table_open(blkdirrelid, AccessShareLock);
 	blockDirectory->blkdirIdx = index_open(blkdiridxid, AccessShareLock);
 
 	init_internal(blockDirectory);
@@ -333,7 +333,7 @@ AppendOnlyBlockDirectory_Init_forInsert(
 	Assert(OidIsValid(blkdirrelid));
 
 	blockDirectory->blkdirRel =
-		heap_open(blkdirrelid, RowExclusiveLock);
+		table_open(blkdirrelid, RowExclusiveLock);
 
 	Assert(OidIsValid(blkdiridxid));
 
@@ -409,7 +409,7 @@ AppendOnlyBlockDirectory_Init_addCol(
 	 * segment.
 	 */
 	blockDirectory->blkdirRel =
-		heap_open(blkdirrelid, RowExclusiveLock);
+		table_open(blkdirrelid, RowExclusiveLock);
 
 	Assert(OidIsValid(blkdiridxid));
 
@@ -1498,7 +1498,7 @@ AppendOnlyBlockDirectory_End_forInsert(
 					  blockDirectory->isAOCol)));
 
 	index_close(blockDirectory->blkdirIdx, RowExclusiveLock);
-	heap_close(blockDirectory->blkdirRel, RowExclusiveLock);
+	table_close(blockDirectory->blkdirRel, RowExclusiveLock);
 	CatalogCloseIndexes(blockDirectory->indinfo);
 
 	MemoryContextDelete(blockDirectory->memoryContext);
@@ -1521,7 +1521,7 @@ AppendOnlyBlockDirectory_End_forSearch(
 
 	if (blockDirectory->blkdirIdx)
 		index_close(blockDirectory->blkdirIdx, AccessShareLock);
-	heap_close(blockDirectory->blkdirRel, AccessShareLock);
+	table_close(blockDirectory->blkdirRel, AccessShareLock);
 
 	MemoryContextDelete(blockDirectory->memoryContext);
 }
@@ -1568,7 +1568,7 @@ AppendOnlyBlockDirectory_End_addCol(
 	 * of alter-table transaction.
 	 */
 	index_close(blockDirectory->blkdirIdx, NoLock);
-	heap_close(blockDirectory->blkdirRel, NoLock);
+	table_close(blockDirectory->blkdirRel, NoLock);
 	CatalogCloseIndexes(blockDirectory->indinfo);
 
 	MemoryContextDelete(blockDirectory->memoryContext);
@@ -1593,7 +1593,7 @@ AppendOnlyBlockDirectory_End_forUniqueChecks(AppendOnlyBlockDirectory *blockDire
 							blockDirectory->blkdirIdx->rd_id)));
 
 	index_close(blockDirectory->blkdirIdx, AccessShareLock);
-	heap_close(blockDirectory->blkdirRel, AccessShareLock);
+	table_close(blockDirectory->blkdirRel, AccessShareLock);
 
 	MemoryContextDelete(blockDirectory->memoryContext);
 }

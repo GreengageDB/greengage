@@ -1053,12 +1053,12 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		 * We use a RowExclusiveLock but hold it till end of transaction so
 		 * that two DDL operations will not deadlock between QEs
 		 */
-		pg_class_desc = heap_open(RelationRelationId, RowExclusiveLock);
-		pg_type_desc = heap_open(TypeRelationId, RowExclusiveLock);
+		pg_class_desc = table_open(RelationRelationId, RowExclusiveLock);
+		pg_type_desc = table_open(TypeRelationId, RowExclusiveLock);
 
 		LockRelationOid(DependRelationId, RowExclusiveLock);
 
-		heap_close(pg_class_desc, NoLock);  /* gonna update, so don't unlock */
+		table_close(pg_class_desc, NoLock);  /* gonna update, so don't unlock */
 
 		stmt->relKind = relkind;
 
@@ -1069,7 +1069,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		stmt->relation->schemaname = get_namespace_name(namespaceId);
 		MemoryContextSwitchTo(oldContext);
 
-		heap_close(pg_type_desc, NoLock);
+		table_close(pg_type_desc, NoLock);
 	}
 	else if (Gp_role == GP_ROLE_EXECUTE)
 	{
@@ -1763,7 +1763,7 @@ relid_set_new_relfilenode(Oid relid)
 
 		rel = relation_open(relid, AccessExclusiveLock);
 		RelationSetNewRelfilenode(rel, rel->rd_rel->relpersistence);
-		heap_close(rel, NoLock);
+		table_close(rel, NoLock);
 	}
 }
 
@@ -5611,7 +5611,7 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				errmsg("cannot rewrite temporary tables of other sessions")));
 		}
-		heap_close(OldHeap, NoLock);
+		table_close(OldHeap, NoLock);
 
 		/*
 		 * GPDB_12_MERGE_FIXME: This is a AM specific optimization, currently
@@ -6114,7 +6114,7 @@ ATAocsWriteNewColumns(AlteredTableInfo *tab)
 		newval->exprstate = ExecPrepareExpr((Expr *) newval->expr, estate);
 	}
 
-	rel = heap_open(tab->relid, NoLock);
+	rel = table_open(tab->relid, NoLock);
 	Assert(RelationIsAoCols(rel));
 
 	/*
@@ -6232,7 +6232,7 @@ ATAocsWriteNewColumns(AlteredTableInfo *tab)
 
 
 	FreeExecutorState(estate);
-	heap_close(rel, NoLock);
+	table_close(rel, NoLock);
 	UnregisterSnapshot(snapshot);
 }
 
@@ -6402,6 +6402,16 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 											   table_slot_callbacks(oldrel));
 			newslot = MakeSingleTupleTableSlot(newTupDesc,
 											   table_slot_callbacks(newrel));
+
+			/*
+			 * Set all columns in the new slot to NULL initially, to ensure
+			 * columns added as part of the rewrite are initialized to
+			 * NULL. That is necessary as tab->newvals will not contain an
+			 * expression for columns with a NULL default, e.g. when adding a
+			 * column without a default together with a column with a default
+			 * requiring an actual rewrite.
+			 */
+			ExecStoreAllNullTuple(newslot);
 		}
 		else
 		{
@@ -7643,13 +7653,13 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			foreach (lc, all_inheritors)
 			{
 				Oid r = lfirst_oid(lc);
-				Relation rel = heap_open(r, NoLock);
+				Relation rel = table_open(r, NoLock);
 				AlteredTableInfo *childtab;
 				childtab = ATGetQueueEntry(wqueue, rel);
 
 				if (RelationIsAoCols(rel))
 					childtab->rewrite |= AT_REWRITE_NEW_COLUMNS_ONLY_AOCS;
-				heap_close(rel, NoLock);
+				table_close(rel, NoLock);
 			}
 		}
 	}
@@ -12008,9 +12018,9 @@ ATExecDropConstraint(Relation rel, const char *constrName,
 			Relation	frel;
 
 			/* Must match lock taken by RemoveTriggerById: */
-			frel = heap_open(con->confrelid, AccessExclusiveLock);
+			frel = table_open(con->confrelid, AccessExclusiveLock);
 			CheckTableNotInUse(frel, "ALTER TABLE");
-			heap_close(frel, NoLock);
+			table_close(frel, NoLock);
 		}
 
 		/*

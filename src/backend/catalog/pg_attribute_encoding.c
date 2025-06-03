@@ -48,7 +48,7 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, Datum attoptions)
 	
 	Assert(attnum != InvalidAttrNumber);
 
-	rel = heap_open(AttributeEncodingRelationId, RowExclusiveLock);
+	rel = table_open(AttributeEncodingRelationId, RowExclusiveLock);
 
 	MemSet(nulls, 0, sizeof(nulls));
 	values[Anum_pg_attribute_encoding_attrelid - 1] = ObjectIdGetDatum(relid);
@@ -62,7 +62,7 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, Datum attoptions)
 
 	heap_freetuple(tuple);
 
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 }
 
 static void
@@ -81,7 +81,7 @@ update_attribute_encoding_entry(Oid relid, AttrNumber attnum, Datum newattoption
 	MemSet(nulls, false, sizeof(nulls));
 	MemSet(repl, false, sizeof(repl));
 
-	rel = heap_open(AttributeEncodingRelationId, RowExclusiveLock);
+	rel = table_open(AttributeEncodingRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&skey[0],
 				Anum_pg_attribute_encoding_attrelid,
@@ -108,7 +108,7 @@ update_attribute_encoding_entry(Oid relid, AttrNumber attnum, Datum newattoption
 	heap_freetuple(newtup);
 
 	systable_endscan(scan);
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 }
 /*
  * Get the set of functions implementing a compression algorithm.
@@ -148,7 +148,7 @@ get_rel_attoptions(Oid relid, AttrNumber max_attno)
 	SysScanDesc scan;
 	HeapTuple		tuple;
 	Datum		   *dats;
-	Relation 		pgae = heap_open(AttributeEncodingRelationId,
+	Relation 		pgae = table_open(AttributeEncodingRelationId,
 									 AccessShareLock);
 
 	/* used for attbyval and len below */
@@ -184,7 +184,7 @@ get_rel_attoptions(Oid relid, AttrNumber max_attno)
 
 	systable_endscan(scan);
 
-	heap_close(pgae, AccessShareLock);
+	table_close(pgae, AccessShareLock);
 
 	return dats;
 
@@ -378,7 +378,7 @@ RemoveAttributeEncodingsByRelid(Oid relid)
 	SysScanDesc scan;
 	HeapTuple	tup;
 
-	rel = heap_open(AttributeEncodingRelationId, RowExclusiveLock);
+	rel = table_open(AttributeEncodingRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&skey,
 				Anum_pg_attribute_encoding_attrelid,
@@ -393,5 +393,5 @@ RemoveAttributeEncodingsByRelid(Oid relid)
 
 	systable_endscan(scan);
 
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 }

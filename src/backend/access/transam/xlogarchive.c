@@ -72,6 +72,13 @@ RestoreArchivedFile(char *path, const char *xlogfname,
 
 	char        contentid[12];  /* sign, 10 digits and '\0' */
 
+	/*
+	 * Ignore restore_command when not in archive recovery (meaning
+	 * we are in crash recovery).
+	 */
+	if (!ArchiveRecoveryRequested)
+		goto not_available;
+
 	/* In standby mode, restore_command might not be supplied */
 	if (recoveryRestoreCommand == NULL || strcmp(recoveryRestoreCommand, "") == 0)
 		goto not_available;

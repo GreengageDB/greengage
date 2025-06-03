@@ -541,7 +541,7 @@ AppendOptimizedCollectDeadSegments(Relation aorel)
 	GetAppendOnlyEntryAuxOids(aorel->rd_id, appendOnlyMetaDataSnapshot,
 							  &segrelid, NULL, NULL, NULL, NULL);
 	
-	pg_aoseg_rel = heap_open(segrelid, AccessShareLock);
+	pg_aoseg_rel = table_open(segrelid, AccessShareLock);
 	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
 
 	aoscan = systable_beginscan(pg_aoseg_rel, InvalidOid, false, appendOnlyMetaDataSnapshot, 0, NULL);
@@ -626,7 +626,7 @@ AppendOptimizedCollectDeadSegments(Relation aorel)
 	}
 	systable_endscan(aoscan);
 
-	heap_close(pg_aoseg_rel, AccessShareLock);
+	table_close(pg_aoseg_rel, AccessShareLock);
 
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 
@@ -701,7 +701,7 @@ AppendOptimizedTruncateToEOF(Relation aorel)
 	GetAppendOnlyEntryAuxOids(aorel->rd_id, appendOnlyMetaDataSnapshot,
 							  &segrelid, NULL, NULL, NULL, NULL);
 
-	pg_aoseg_rel = heap_open(segrelid, AccessShareLock);
+	pg_aoseg_rel = table_open(segrelid, AccessShareLock);
 	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
 
 	aoscan = systable_beginscan(pg_aoseg_rel, InvalidOid, false, appendOnlyMetaDataSnapshot, 0, NULL);
@@ -757,7 +757,7 @@ AppendOptimizedTruncateToEOF(Relation aorel)
 	}
 	systable_endscan(aoscan);
 	UnlockRelationForExtension(aorel, ExclusiveLock);
-	heap_close(pg_aoseg_rel, AccessShareLock);
+	table_close(pg_aoseg_rel, AccessShareLock);
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }
 

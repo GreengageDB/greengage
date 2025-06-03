@@ -694,7 +694,7 @@ cdb_estimate_partitioned_numtuples(Relation rel)
 		totaltuples += childtuples;
 
 		if (childrel != rel)
-			heap_close(childrel, NoLock);
+			table_close(childrel, NoLock);
 	}
 	return totaltuples;
 }
@@ -2364,12 +2364,12 @@ has_stored_generated_columns(PlannerInfo *root, Index rti)
 	bool		result = false;
 
 	/* Assume we already have adequate lock */
-	relation = heap_open(rte->relid, NoLock);
+	relation = table_open(rte->relid, NoLock);
 
 	tupdesc = RelationGetDescr(relation);
 	result = tupdesc->constr && tupdesc->constr->has_generated_stored;
 
-	heap_close(relation, NoLock);
+	table_close(relation, NoLock);
 
 	return result;
 }

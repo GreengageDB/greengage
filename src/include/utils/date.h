@@ -86,12 +86,17 @@ static inline DateADT date_pl_days(DateADT date, int32 days)
 /* date.c */
 extern int32 anytime_typmod_check(bool istz, int32 typmod);
 extern double date2timestamp_no_overflow(DateADT dateVal);
+extern Timestamp date2timestamp_opt_error(DateADT dateVal, bool *have_error);
+extern TimestampTz date2timestamptz_opt_error(DateADT dateVal, bool *have_error);
 extern void EncodeSpecialDate(DateADT dt, char *str);
 extern DateADT GetSQLCurrentDate(void);
 extern TimeTzADT *GetSQLCurrentTime(int32 typmod);
 extern TimeADT GetSQLLocalTime(int32 typmod);
 extern int	time2tm(TimeADT time, struct pg_tm *tm, fsec_t *fsec);
 extern int	timetz2tm(TimeTzADT *time, struct pg_tm *tm, fsec_t *fsec, int *tzp);
+extern int	tm2time(struct pg_tm *tm, fsec_t fsec, TimeADT *result);
+extern int	tm2timetz(struct pg_tm *tm, fsec_t fsec, int tz, TimeTzADT *result);
+extern void AdjustTimeForTypmod(TimeADT *time, int32 typmod);
 
 extern float8 time_li_fraction(TimeADT x, TimeADT x0, TimeADT x1,
 							   bool *eq_bounds, bool *eq_abscissas);

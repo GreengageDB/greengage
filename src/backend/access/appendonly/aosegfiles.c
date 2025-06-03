@@ -110,7 +110,7 @@ InsertInitialSegnoEntry(Relation parentrel, int segno)
 
 	GetAppendOnlyEntryAuxOids(parentrel->rd_id, NULL, &segrelid, NULL, NULL, NULL, NULL);
 
-	pg_aoseg_rel = heap_open(segrelid, RowExclusiveLock);
+	pg_aoseg_rel = table_open(segrelid, RowExclusiveLock);
 
 	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
 	natts = pg_aoseg_dsc->natts;

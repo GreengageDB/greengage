@@ -88,7 +88,7 @@ setAOFormatVersion(PG_FUNCTION_ARGS)
 	systable_endscan(scan);
 
 	/* Done. Clean up. */
-	heap_close(aosegrel, RowExclusiveLock);
+	table_close(aosegrel, RowExclusiveLock);
 
 	pfree(replace);
 	pfree(isnull);

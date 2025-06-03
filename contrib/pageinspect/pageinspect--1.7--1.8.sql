@@ -72,7 +72,8 @@ AS 'MODULE_PATHNAME', 'bm_bitmap_page_items_bytea'
 CREATE FUNCTION heap_tuple_infomask_flags(
        t_infomask integer,
        t_infomask2 integer,
-       decode_combined boolean DEFAULT false)
-RETURNS text[]
+       raw_flags OUT text[],
+       combined_flags OUT text[])
+RETURNS record
 AS 'MODULE_PATHNAME', 'heap_tuple_infomask_flags'
 LANGUAGE C STRICT PARALLEL SAFE;

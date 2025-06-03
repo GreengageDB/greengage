@@ -99,7 +99,7 @@ be_lo_open(PG_FUNCTION_ARGS)
 		(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		 errmsg("large objects are not supported")));
 
-#if FSDB
+#ifdef FSDB
 	elog(DEBUG4, "lo_open(%u,%d)", lobjId, mode);
 #endif
 
@@ -126,7 +126,7 @@ be_lo_close(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("invalid large-object descriptor: %d", fd)));
 
-#if FSDB
+#ifdef FSDB
 	elog(DEBUG4, "lo_close(%d)", fd);
 #endif
 

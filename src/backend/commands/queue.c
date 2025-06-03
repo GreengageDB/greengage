@@ -310,7 +310,7 @@ AlterResqueueCapabilityEntry(Oid queueid,
 		{
 			bWithout = true;
 
-			rel = heap_open(ResourceTypeRelationId, RowExclusiveLock);
+			rel = table_open(ResourceTypeRelationId, RowExclusiveLock);
 			tupdesc = RelationGetDescr(rel);
 
 			goto L_loop_cont;
@@ -440,7 +440,7 @@ AlterResqueueCapabilityEntry(Oid queueid,
 	}
 
 	if (bWithout)
-		heap_close(rel, RowExclusiveLock); /* close pg_resourcetype */
+		table_close(rel, RowExclusiveLock); /* close pg_resourcetype */
 
 	if (bCreate)
 	{
@@ -451,7 +451,7 @@ AlterResqueueCapabilityEntry(Oid queueid,
 		 * corresponding match in dupcheck -- if no entry then add the
 		 * one to the WITH list (elems) with the default. 
 		 */
-		rel = heap_open(ResourceTypeRelationId, RowExclusiveLock);
+		rel = table_open(ResourceTypeRelationId, RowExclusiveLock);
 		tupdesc = RelationGetDescr(rel);
 
 		/* Note: key is empty - scan entire table */
@@ -508,12 +508,12 @@ AlterResqueueCapabilityEntry(Oid queueid,
 		} /* end while heaptuple is valid */
 		systable_endscan(sscan);
 
-		heap_close(rel, RowExclusiveLock); /* close pg_resourcetype */
+		table_close(rel, RowExclusiveLock); /* close pg_resourcetype */
 	} /* end if bCreate */
 
 	/* insert/update valid entries in pg_resqueuecapability */
 
-	rel = heap_open(ResQueueCapabilityRelationId, RowExclusiveLock);
+	rel = table_open(ResQueueCapabilityRelationId, RowExclusiveLock);
 
 	foreach(lc, elems)
 	{
@@ -633,7 +633,7 @@ AlterResqueueCapabilityEntry(Oid queueid,
 
 	} /* end foreach elem */
 
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 } /* end AlterResqueueCapabilityEntry */
 
 /* MPP-6923: */				  
@@ -650,7 +650,7 @@ GetResqueueCapabilityEntry(Oid  queueid)
 	Assert(IsTransactionState());
 
 	/* SELECT * FROM pg_resqueuecapability WHERE resqueueid = :1 */
-	rel = heap_open(ResQueueCapabilityRelationId, AccessShareLock);
+	rel = table_open(ResQueueCapabilityRelationId, AccessShareLock);
 
 	tupdesc = RelationGetDescr(rel);
 
@@ -691,7 +691,7 @@ GetResqueueCapabilityEntry(Oid  queueid)
 	}
 	systable_endscan(sscan);
 
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 	
 	return (elems);
 } /* end GetResqueueCapabilityEntry */
@@ -864,7 +864,7 @@ CreateQueue(CreateQueueStmt *stmt)
 	 * Check the pg_resqueue relation to be certain the queue doesn't already
 	 * exist. 
 	 */
-	pg_resqueue_rel = heap_open(ResQueueRelationId, RowExclusiveLock);
+	pg_resqueue_rel = table_open(ResQueueRelationId, RowExclusiveLock);
 	pg_resqueue_dsc = RelationGetDescr(pg_resqueue_rel);
 
 	/**
@@ -872,7 +872,7 @@ CreateQueue(CreateQueueStmt *stmt)
 	 * this catalog table later.
 	 */
 	Relation resqueueCapabilityRel = 
-			heap_open(ResQueueCapabilityRelationId, RowExclusiveLock);
+			table_open(ResQueueCapabilityRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
 				Anum_pg_resqueue_rsqname,
@@ -984,8 +984,8 @@ CreateQueue(CreateQueueStmt *stmt)
 				);
 	}
 
-	heap_close(resqueueCapabilityRel, NoLock);
-	heap_close(pg_resqueue_rel, NoLock);
+	table_close(resqueueCapabilityRel, NoLock);
+	table_close(pg_resqueue_rel, NoLock);
 }
 
 
@@ -1226,12 +1226,12 @@ AlterQueue(AlterQueueStmt *stmt)
 	 * Check the pg_resqueue relation to be certain the queue already
 	 * exists. 
 	 */
-	pg_resqueue_rel = heap_open(ResQueueRelationId, RowExclusiveLock);
+	pg_resqueue_rel = table_open(ResQueueRelationId, RowExclusiveLock);
 
 	/**
 	 * Get database locks in anticipation that we'll need to access this catalog table later.
 	 */
-	Relation resqueueCapabilityRel = heap_open(ResQueueCapabilityRelationId, RowExclusiveLock);
+	Relation resqueueCapabilityRel = table_open(ResQueueCapabilityRelationId, RowExclusiveLock);
 	pg_resqueue_dsc = RelationGetDescr(pg_resqueue_rel);
 
 	ScanKeyInit(&scankey,
@@ -1388,7 +1388,7 @@ AlterQueue(AlterQueueStmt *stmt)
 		}
 	}
 
-	heap_close(resqueueCapabilityRel, NoLock);
+	table_close(resqueueCapabilityRel, NoLock);
 
 	/* MPP-6929, MPP-7583: metadata tracking */
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -1405,7 +1405,7 @@ AlterQueue(AlterQueueStmt *stmt)
 						   "ALTER", alter_subtype
 				);
 	}
-	heap_close(pg_resqueue_rel, NoLock);
+	table_close(pg_resqueue_rel, NoLock);
 }
 
 
@@ -1436,12 +1436,12 @@ DropQueue(DropQueueStmt *stmt)
 	 * Check the pg_resqueue relation to be certain the queue already
 	 * exists. 
 	 */
-	pg_resqueue_rel = heap_open(ResQueueRelationId, RowExclusiveLock);
+	pg_resqueue_rel = table_open(ResQueueRelationId, RowExclusiveLock);
 	
 	/**
 	 * Get database locks in anticipation that we'll need to access this catalog table later.
 	 */
-	Relation resqueueCapabilityRel = heap_open(ResQueueCapabilityRelationId, RowExclusiveLock);
+	Relation resqueueCapabilityRel = table_open(ResQueueCapabilityRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
 				Anum_pg_resqueue_rsqname,
@@ -1467,7 +1467,7 @@ DropQueue(DropQueueStmt *stmt)
 	/*
 	 * Check to see if any roles are in this queue.
 	 */
-	Relation authIdRel = heap_open(AuthIdRelationId, RowExclusiveLock);
+	Relation authIdRel = table_open(AuthIdRelationId, RowExclusiveLock);
 	ScanKeyInit(&authid_scankey,
 				Anum_pg_authid_rolresqueue,
 				BTEqualStrategyNumber, F_OIDEQ,
@@ -1490,7 +1490,7 @@ DropQueue(DropQueueStmt *stmt)
 						stmt->queue)));
 
 	systable_endscan(authid_scan);
-	heap_close(authIdRel, RowExclusiveLock);
+	table_close(authIdRel, RowExclusiveLock);
 
 	/*
 	 * Delete the queue from the catalog.
@@ -1559,9 +1559,9 @@ DropQueue(DropQueueStmt *stmt)
 	systable_endscan(sscan);
 
 
-	heap_close(resqueueCapabilityRel, NoLock);
+	table_close(resqueueCapabilityRel, NoLock);
 
-	heap_close(pg_resqueue_rel, NoLock);
+	table_close(pg_resqueue_rel, NoLock);
 }
 
 Oid
@@ -1573,7 +1573,7 @@ get_resqueue_oid(const char *queuename, bool missing_ok)
 	HeapTuple	tuple;
 	Oid			oid;
 
-	rel = heap_open(ResQueueRelationId, AccessShareLock);
+	rel = table_open(ResQueueRelationId, AccessShareLock);
 	ScanKeyInit(&scankey, Anum_pg_resqueue_rsqname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(queuename));
@@ -1587,7 +1587,7 @@ get_resqueue_oid(const char *queuename, bool missing_ok)
 		oid = InvalidOid;
 
 	systable_endscan(scan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	if (!OidIsValid(oid) && !missing_ok)
 		ereport(ERROR,

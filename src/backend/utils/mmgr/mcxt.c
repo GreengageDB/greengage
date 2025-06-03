@@ -627,10 +627,10 @@ MemoryContextSetPeakSpace(MemoryContext context, Size nbytes)
  * Find the memory allocated to blocks for this memory context. If recurse is
  * true, also include children.
  */
-int64
+Size
 MemoryContextMemAllocated(MemoryContext context, bool recurse)
 {
-	int64 total = context->mem_allocated;
+	Size	total = context->mem_allocated;
 
 	AssertArg(MemoryContextIsValid(context));
 

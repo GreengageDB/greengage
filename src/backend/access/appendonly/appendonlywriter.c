@@ -24,7 +24,7 @@
 #include "access/appendonlytid.h"		/* AOTupleId_MaxRowNum  */
 #include "access/appendonlywriter.h"
 #include "access/aocssegfiles.h"		/* AOCS */
-#include "access/heapam.h"				/* heap_open */
+#include "access/heapam.h"				/* table_open */
 #include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
@@ -267,7 +267,7 @@ LockSegnoForWrite(Relation rel, int segno)
 
 	UnlockRelationForExtension(rel, ExclusiveLock);
 
-	heap_close(pg_aoseg_rel, AccessShareLock);
+	table_close(pg_aoseg_rel, AccessShareLock);
 
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 
@@ -452,7 +452,7 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 	 * Now pick a segment that is not in use, and is not over the allowed
 	 * size threshold (90% full).
 	 */
-	pg_aoseg_rel = heap_open(segrelid, AccessShareLock);
+	pg_aoseg_rel = table_open(segrelid, AccessShareLock);
 	pg_aoseg_dsc = RelationGetDescr(pg_aoseg_rel);
 
 	/*
@@ -609,7 +609,7 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 				(errmsg("Segno chosen for append-only relation \"%s\" is %d",
 						RelationGetRelationName(rel), chosen_segno)));
 
-	heap_close(pg_aoseg_rel, AccessShareLock);
+	table_close(pg_aoseg_rel, AccessShareLock);
 
 	return chosen_segno;
 }

@@ -236,6 +236,10 @@ RelationTruncate(Relation rel, BlockNumber nblocks)
 {
 	bool		fsm;
 	bool		vm;
+	bool		need_fsm_vacuum = false;
+	ForkNumber	forks[MAX_FORKNUM];
+	BlockNumber	blocks[MAX_FORKNUM];
+	int		nforks = 0;
 
 	/* Open it at the smgr level if not already done */
 	RelationOpenSmgr(rel);
@@ -247,15 +251,35 @@ RelationTruncate(Relation rel, BlockNumber nblocks)
 	rel->rd_smgr->smgr_fsm_nblocks = InvalidBlockNumber;
 	rel->rd_smgr->smgr_vm_nblocks = InvalidBlockNumber;
 
-	/* Truncate the FSM first if it exists */
+	/* Prepare for truncation of MAIN fork of the relation */
+	forks[nforks] = MAIN_FORKNUM;
+	blocks[nforks] = nblocks;
+	nforks++;
+
+	/*  Prepare for truncation of the FSM if it exists */
 	fsm = smgrexists(rel->rd_smgr, FSM_FORKNUM);
 	if (fsm)
-		FreeSpaceMapTruncateRel(rel, nblocks);
+	{
+		blocks[nforks] = FreeSpaceMapPrepareTruncateRel(rel, nblocks);
+		if (BlockNumberIsValid(blocks[nforks]))
+		{
+			forks[nforks] = FSM_FORKNUM;
+			nforks++;
+			need_fsm_vacuum = true;
+		}
+	}
 
-	/* Truncate the visibility map too if it exists. */
+	/* Prepare for truncation of the visibility map too if it exists */
 	vm = smgrexists(rel->rd_smgr, VISIBILITYMAP_FORKNUM);
 	if (vm)
-		visibilitymap_truncate(rel, nblocks);
+	{
+		blocks[nforks] = visibilitymap_prepare_truncate(rel, nblocks);
+		if (BlockNumberIsValid(blocks[nforks]))
+		{
+			forks[nforks] = VISIBILITYMAP_FORKNUM;
+			nforks++;
+		}
+	}
 
 	/*
 	 * We WAL-log the truncation before actually truncating, which means
@@ -295,8 +319,16 @@ RelationTruncate(Relation rel, BlockNumber nblocks)
 			XLogFlush(lsn);
 	}
 
-	/* Do the real work */
-	smgrtruncate(rel->rd_smgr, MAIN_FORKNUM, nblocks);
+	/* Do the real work to truncate relation forks */
+	smgrtruncate(rel->rd_smgr, forks, nforks, blocks);
+
+	/*
+	 * Update upper-level FSM pages to account for the truncation.
+	 * This is important because the just-truncated pages were likely
+	 * marked as all-free, and would be preferentially selected.
+	 */
+	if (need_fsm_vacuum)
+		FreeSpaceMapVacuumRange(rel, nblocks, InvalidBlockNumber);
 }
 
 /*
@@ -612,6 +644,10 @@ smgr_redo(XLogReaderState *record)
 		xl_smgr_truncate *xlrec = (xl_smgr_truncate *) XLogRecGetData(record);
 		SMgrRelation reln;
 		Relation	rel;
+		ForkNumber	forks[MAX_FORKNUM];
+		BlockNumber	blocks[MAX_FORKNUM];
+		int		nforks = 0;
+		bool		need_fsm_vacuum = false;
 
 		/*
 		 * AO-specific implementation of SMGR is not needed because truncate
@@ -645,23 +681,54 @@ smgr_redo(XLogReaderState *record)
 		 */
 		XLogFlush(lsn);
 
+		/* Prepare for truncation of MAIN fork */
 		if ((xlrec->flags & SMGR_TRUNCATE_HEAP) != 0)
 		{
-			smgrtruncate(reln, MAIN_FORKNUM, xlrec->blkno);
+			forks[nforks] = MAIN_FORKNUM;
+			blocks[nforks] = xlrec->blkno;
+			nforks++;
 
 			/* Also tell xlogutils.c about it */
 			XLogTruncateRelation(xlrec->rnode, MAIN_FORKNUM, xlrec->blkno);
 		}
 
-		/* Truncate FSM and VM too */
+		/* Prepare for truncation of FSM and VM too */
 		rel = CreateFakeRelcacheEntry(xlrec->rnode);
 
 		if ((xlrec->flags & SMGR_TRUNCATE_FSM) != 0 &&
 			smgrexists(reln, FSM_FORKNUM))
-			FreeSpaceMapTruncateRel(rel, xlrec->blkno);
+		{
+			blocks[nforks] = FreeSpaceMapPrepareTruncateRel(rel, xlrec->blkno);
+			if (BlockNumberIsValid(blocks[nforks]))
+			{
+				forks[nforks] = FSM_FORKNUM;
+				nforks++;
+				need_fsm_vacuum = true;
+			}
+		}
 		if ((xlrec->flags & SMGR_TRUNCATE_VM) != 0 &&
 			smgrexists(reln, VISIBILITYMAP_FORKNUM))
-			visibilitymap_truncate(rel, xlrec->blkno);
+		{
+			blocks[nforks] = visibilitymap_prepare_truncate(rel, xlrec->blkno);
+			if (BlockNumberIsValid(blocks[nforks]))
+			{
+				forks[nforks] = VISIBILITYMAP_FORKNUM;
+				nforks++;
+			}
+		}
+
+		/* Do the real work to truncate relation forks */
+		if (nforks > 0)
+			smgrtruncate(reln, forks, nforks, blocks);
+
+		/*
+		 * Update upper-level FSM pages to account for the truncation.
+		 * This is important because the just-truncated pages were likely
+		 * marked as all-free, and would be preferentially selected.
+		 */
+		if (need_fsm_vacuum)
+			FreeSpaceMapVacuumRange(rel, xlrec->blkno,
+									InvalidBlockNumber);
 
 		FreeFakeRelcacheEntry(rel);
 	}

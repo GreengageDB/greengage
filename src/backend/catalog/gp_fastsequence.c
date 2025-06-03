@@ -274,7 +274,7 @@ int64 ReadLastSequence(Oid objid, int64 objmod)
 	HeapTuple tuple;
 	int64 lastSequence;
 
-	gp_fastsequence_rel = heap_open(FastSequenceRelationId, AccessShareLock);
+	gp_fastsequence_rel = table_open(FastSequenceRelationId, AccessShareLock);
 	tupleDesc = RelationGetDescr(gp_fastsequence_rel);
 
 	/*
@@ -324,7 +324,7 @@ int64 ReadLastSequence(Oid objid, int64 objmod)
 	 * is an insert operation has acquired a lock first on segment and is
 	 * trying to acquire a lock on the Master. Deadlock!
 	 */
-	heap_close(gp_fastsequence_rel, AccessShareLock);
+	table_close(gp_fastsequence_rel, AccessShareLock);
 
 	return lastSequence;
 }

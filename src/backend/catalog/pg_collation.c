@@ -154,7 +154,7 @@ CollationCreate(const char *collname, Oid collnamespace,
 			checkMembershipInCurrentExtension(&myself);
 
 			/* OK to skip */
-			heap_close(rel, NoLock);
+			table_close(rel, NoLock);
 			ereport(NOTICE,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("collation \"%s\" already exists, skipping",

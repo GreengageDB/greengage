@@ -444,7 +444,7 @@ SerializeTuple(TupleTableSlot *slot, SerTupInfo *pSerInfo, struct directTranspor
 						memcpy(values, slot->tts_values, tupdesc->natts * sizeof(Datum));
 					}
 					Assert(&values[i] != &slot->tts_values[i]);
-					values[i] = PointerGetDatum(heap_tuple_fetch_attr((struct varlena *)
+					values[i] = PointerGetDatum(detoast_external_attr((struct varlena *)
 																DatumGetPointer(val)));
 				}
 			}

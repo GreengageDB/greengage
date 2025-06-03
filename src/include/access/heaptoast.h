@@ -95,7 +95,7 @@
 	 VARHDRSZ)
 
 /* ----------
- * toast_insert_or_update -
+ * heap_toast_insert_or_update -
  *
  *	Called by heap_insert() and heap_update().
  *
@@ -106,23 +106,25 @@
  *	toasted data to be inserted frozen as well.
  * ----------
  */
-extern HeapTuple toast_insert_or_update(Relation rel,
-										HeapTuple newtup, HeapTuple oldtup,
-										int toast_tuple_target,
-										bool isFrozen, int options);
+extern HeapTuple heap_toast_insert_or_update(Relation rel, HeapTuple newtup,
+											 HeapTuple oldtup,
+											 int toast_tuple_target,
+											 bool isFrozen, int options);
 
-extern MemTuple toast_insert_or_update_memtup(Relation rel,
-											  MemTuple newtup, MemTuple oldtup,
-											  MemTupleBinding *pbind, int toast_tuple_target,
-											  bool isFrozen, int options);
+extern MemTuple mem_toast_insert_or_update(Relation rel, MemTuple newtup,
+										   MemTuple oldtup,
+										   MemTupleBinding *pbind,
+										   int toast_tuple_target,
+										   bool isFrozen, int options);
 
 /* ----------
- * toast_delete -
+ * heap_toast_delete -
  *
  *	Called by heap_delete().
  * ----------
  */
-extern void toast_delete(Relation rel, HeapTuple oldtup, bool is_speculative);
+extern void heap_toast_delete(Relation rel, HeapTuple oldtup,
+							  bool is_speculative);
 
 /* ----------
  * varattrib_untoast_ptr_len

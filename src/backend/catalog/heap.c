@@ -947,7 +947,7 @@ void MetaTrackUpdObject(Oid		classid,
 		ii++;
 	}
 	systable_endscan(desc);
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 
 	/* add it if it didn't already exist */
 	if (!ii)

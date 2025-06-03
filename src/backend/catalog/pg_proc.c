@@ -586,7 +586,7 @@ ProcedureCreate(const char *procedureName,
 			SysScanDesc scan;
 			HeapTuple   depTup;
 
-			depRel = heap_open(DependRelationId, AccessShareLock);
+			depRel = table_open(DependRelationId, AccessShareLock);
 
 			/*
 			 * This is equivalent to:
@@ -618,7 +618,7 @@ ProcedureCreate(const char *procedureName,
 			}
 			systable_endscan(scan);
 
-			heap_close(depRel, AccessShareLock);
+			table_close(depRel, AccessShareLock);
 		}
 
 		/*

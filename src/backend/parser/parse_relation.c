@@ -1311,7 +1311,7 @@ addRangeTableEntry(ParseState *pstate,
 					(errmsg("Upgrade the lockmode to ExclusiveLock on table(%s) and ingore the wait policy.",
 					 RelationGetRelationName(rel))));
 
-		heap_close(rel, NoLock);
+		table_close(rel, NoLock);
 
 	}
 	else

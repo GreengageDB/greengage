@@ -1354,7 +1354,7 @@ ConstraintGetPrimaryKeyOf(Oid relid, AttrNumber attno, Oid *pkrelid, AttrNumber 
 	ScanKeyData skey;
 	HeapTuple	tup;
 
-	conDesc = heap_open(ConstraintRelationId, AccessShareLock);
+	conDesc = table_open(ConstraintRelationId, AccessShareLock);
 
 	found = false;
 
@@ -1416,7 +1416,7 @@ ConstraintGetPrimaryKeyOf(Oid relid, AttrNumber attno, Oid *pkrelid, AttrNumber 
 	}
 
 	systable_endscan(conscan);
-	heap_close(conDesc, AccessShareLock);
+	table_close(conDesc, AccessShareLock);
 
 	return found;
 }

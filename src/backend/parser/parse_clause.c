@@ -300,7 +300,7 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 	 * CDB: Acquire ExclusiveLock if it is a distributed relation and we are
 	 * doing UPDATE or DELETE activity or `insert on conflict do update`.
 	 *
-	 * We should use heap_openrv instead of parserOpenTable for inserts because
+	 * We should use table_openrv instead of parserOpenTable for inserts because
 	 * parserOpenTable upgrades the lock to Exclusive mode for distributed
 	 * tables.
 	 *
@@ -312,7 +312,7 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 	if (pstate->p_is_insert && !pstate->p_is_on_conflict_update)
 	{
 		setup_parser_errposition_callback(&pcbstate, pstate, relation->location);
-		pstate->p_target_relation = heap_openrv(relation, RowExclusiveLock);
+		pstate->p_target_relation = table_openrv(relation, RowExclusiveLock);
 		cancel_parser_errposition_callback(&pcbstate);
 	}
 	else

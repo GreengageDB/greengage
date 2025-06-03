@@ -1430,8 +1430,8 @@ XlogReadTwoPhaseData(XLogRecPtr lsn, char **buf, int *len)
 	char	   *errormsg;
 	TimeLineID	save_currtli = ThisTimeLineID;
 
-	xlogreader = XLogReaderAllocate(wal_segment_size, &read_local_xlog_page,
-									NULL);
+	xlogreader = XLogReaderAllocate(wal_segment_size, NULL,
+									&read_local_xlog_page, NULL);
 	if (!xlogreader)
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
