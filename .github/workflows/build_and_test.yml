@@ -27,9 +27,15 @@ jobs:
         with:
           version: latest
 
-      - name: Build Docker image
-        run: |
-          docker build -t "gpdb6_u22:${GITHUB_SHA}" -f ci/Dockerfile.ubuntu .
+      - name: Build and export
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./ci/Dockerfile.ubuntu
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache,mode=max
+          tags: gpdb6_u22:${{ github.sha }}
+          outputs: type=docker,dest=${{ runner.temp }}/${{ github.sha }}.tar
 
   regression:
     needs: build
@@ -47,7 +53,8 @@ jobs:
 
       - name: Regression test with optimizer=${{ matrix.optimizer }}
         run: |
+          docker load --input ${{ runner.temp }}/${{ github.sha }}.tar
           docker run --name gpdb6_opt_on --rm -e TEST_OS=centos \
             -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
-            --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_u22::${GITHUB_SHA} \
+            --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_u22::${{ github.sha }} \
             bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
