@@ -30,3 +30,24 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t "gpdb6_u22:${GITHUB_SHA}" -f ci/Dockerfile.ubuntu .
+
+  regression:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        optimizer: [on, off]
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
+
+      - name: Regression test with optimizer=${{ matrix.optimizer }}
+        run: |
+          docker run --name gpdb6_opt_on --rm -it -e TEST_OS=centos \
+            -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
+            --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_regress:latest \
+           bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
