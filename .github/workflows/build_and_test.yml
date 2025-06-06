@@ -49,5 +49,5 @@ jobs:
         run: |
           docker run --name gpdb6_opt_on --rm -e TEST_OS=centos \
             -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
-            --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_regress:latest \
+            --sysctl 'kernel.sem=500 1024000 200 4096' gpdb6_u22::${GITHUB_SHA}" \
             bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
