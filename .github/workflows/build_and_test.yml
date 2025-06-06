@@ -44,7 +44,7 @@ jobs:
           cache-to: type=gha,mode=max
           push: true # ${{ github.event_name == 'push' }}
           tags: |
-            ghcr.io/Stolb27/gpdb6_u22:${{ github.sha }}
+            ghcr.io/stolb27/gpdb6_u22:${{ github.sha }}
 
   regression:
     needs: build
@@ -72,5 +72,5 @@ jobs:
           docker load --input ${{ runner.temp }}/${{ github.sha }}.tar
           docker run --name gpdb6_opt_on --rm -e TEST_OS=centos \
             -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
-            --sysctl 'kernel.sem=500 1024000 200 4096' ghcr.io/Stolb27/gpdb6_u22:${{ github.sha }} \
+            --sysctl 'kernel.sem=500 1024000 200 4096' ghcr.io/stolb27/gpdb6_u22:${{ github.sha }} \
             bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
