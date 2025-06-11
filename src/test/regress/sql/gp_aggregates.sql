@@ -166,3 +166,26 @@ drop table multiagg_with_subquery;
 
 -- Unique node numGroups > 0 assertion
 SELECT DISTINCT avg(c1) FROM generate_series(1,2) c1;
+
+-- Check for COUNT bug
+create table count_bug_empty (a int, b int);
+create table count_bug_one (a int, b int);
+insert into count_bug_one values (0, 0);
+
+-- Should return zeros
+select * from count_bug_one
+where count_bug_one.a in (
+  select count(*) from count_bug_empty
+  where count_bug_one.b = count_bug_empty.b
+);
+
+-- Should be empty
+select * from count_bug_one
+where count_bug_one.a in (
+  select count(*) from count_bug_empty
+  where count_bug_one.b = count_bug_empty.b
+  group by (count_bug_empty.a)
+);
+
+drop table count_bug_empty;
+drop table count_bug_one;

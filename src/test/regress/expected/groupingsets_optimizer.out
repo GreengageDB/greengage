@@ -886,36 +886,11 @@ explain (costs off)
 
 select v.c, (select count(*) from gstest2 group by () having v.c)
   from (values (false),(true)) v(c) order by v.c;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: {TARGETENTRY :expr {VAR :varno 1 :varattno 2 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1} :resno 1 :resname count :ressortgroupref 0 :resorigtbl 0 :resorigcol 0 :resjunk false} not supported in DXL
- c | count 
----+-------
- f |      
- t |     9
-(2 rows)
-
+ERROR:  unrecognized node type: 771 (nodeFuncs.c:3424)
 explain (costs off)
   select v.c, (select count(*) from gstest2 group by () having v.c)
     from (values (false),(true)) v(c) order by v.c;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: {TARGETENTRY :expr {VAR :varno 1 :varattno 2 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1} :resno 1 :resname count :ressortgroupref 0 :resorigtbl 0 :resorigcol 0 :resjunk false} not supported in DXL
-                                QUERY PLAN                                
---------------------------------------------------------------------------
- Sort
-   Sort Key: "*VALUES*".column1
-   ->  Values Scan on "*VALUES*"
-         SubPlan 1
-           ->  Aggregate
-                 Group Key: ()
-                 Filter: "*VALUES*".column1
-                 ->  Result
-                       One-Time Filter: "*VALUES*".column1
-                       ->  Materialize
-                             ->  Gather Motion 3:1  (slice1; segments: 3)
-                                   ->  Seq Scan on gstest2
- Optimizer: Postgres query optimizer
-(13 rows)
-
+ERROR:  unrecognized node type: 771 (nodeFuncs.c:3424)
 -- HAVING with GROUPING queries
 select ten, grouping(ten) from onek
 group by grouping sets(ten) having grouping(ten) >= 0
