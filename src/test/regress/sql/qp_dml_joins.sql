@@ -249,7 +249,7 @@ CREATE TABLE dml_heap_pt_r (
 	d numeric)
 DISTRIBUTED BY (a)
 partition by range(b) (
-	start(1) end(301) every(10));
+	start(1) end(301) every(20));
 
 CREATE TABLE dml_heap_pt_s (
 	a int ,
@@ -258,7 +258,7 @@ CREATE TABLE dml_heap_pt_s (
 	d numeric)
 DISTRIBUTED BY (b)
 partition by range(a) (
-	start(1) end(101) every(10),
+	start(1) end(101) every(20),
 	default partition def);
 
 CREATE TABLE dml_heap_pt_p (
