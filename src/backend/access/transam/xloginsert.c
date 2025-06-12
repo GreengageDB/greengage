@@ -641,6 +641,8 @@ XLogRecordAssemble(RmgrId rmid, uint8 info,
 											cbimg.hole_length,
 											regbuf->compressed_page,
 											&compressed_len);
+				if (!is_compressed)
+					elog(LOG, "WAL compression failed, using uncompressed image");
 			}
 
 			/*
@@ -852,7 +854,10 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 	{
 		cxt = ZSTD_createCCtx();
 		if (!cxt)
-			elog(ERROR, "out of memory");
+		{
+			elog(LOG, "out of memory");
+			return false;
+		}
 	}
 
 	len = ZSTD_compressCCtx(cxt,
@@ -861,8 +866,11 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 							COMPRESS_LEVEL);
 
 	if (ZSTD_isError(len))
-		elog(ERROR, "compression failed: %s uncompressed len %d",
+	{
+		elog(LOG, "compression failed: %s uncompressed len %d",
 			 ZSTD_getErrorName(len), orig_len);
+		len = -1;		/* failure */
+	}
 
 	/*
 	 * We recheck the actual size even if ZSTD reports success and
