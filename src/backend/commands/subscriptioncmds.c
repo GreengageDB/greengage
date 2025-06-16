@@ -505,16 +505,11 @@ CreateSubscription(CreateSubscriptionStmt *stmt, bool isTopLevel)
 								slotname)));
 			}
 		}
-		PG_CATCH();
+		PG_FINALLY();
 		{
-			/* Close the connection in case of failure. */
 			walrcv_disconnect(wrconn);
-			PG_RE_THROW();
 		}
 		PG_END_TRY();
-
-		/* And we are done with the remote side. */
-		walrcv_disconnect(wrconn);
 	}
 	else
 		ereport(WARNING,
@@ -1098,15 +1093,11 @@ DropSubscription(DropSubscriptionStmt *stmt, bool isTopLevel)
 
 		walrcv_clear_result(res);
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
-		/* Close the connection in case of failure */
 		walrcv_disconnect(wrconn);
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	walrcv_disconnect(wrconn);
 
 	pfree(cmd.data);
 

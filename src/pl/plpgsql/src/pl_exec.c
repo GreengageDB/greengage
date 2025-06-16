@@ -23,6 +23,7 @@
 #include "access/tupconvert.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "cdb/cdbvars.h"
 #include "commands/defrem.h"
 #include "executor/execExpr.h"
 #include "executor/spi.h"
@@ -34,6 +35,7 @@
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
 #include "parser/scansup.h"
+#include "plpgsql.h"
 #include "storage/proc.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -47,11 +49,6 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
-
-#include "cdb/cdbvars.h"
-
-#include "plpgsql.h"
-
 
 typedef struct
 {

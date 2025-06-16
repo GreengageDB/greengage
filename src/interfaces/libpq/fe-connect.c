@@ -33,10 +33,16 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "common/ip.h"
+#include "common/link-canary.h"
+#include "common/scram-common.h"
+#include "common/string.h"
+#include "fe-auth.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
-#include "fe-auth.h"
+#include "mb/pg_wchar.h"
 #include "pg_config_paths.h"
+#include "port/pg_bswap.h"
 
 #ifdef WIN32
 #include "win32.h"
@@ -81,14 +87,6 @@ typedef struct timeval LDAP_TIMEVAL;
 static int	ldapServiceLookup(const char *purl, PQconninfoOption *options,
 							  PQExpBuffer errorMessage);
 #endif
-
-#include "common/ip.h"
-#include "common/link-canary.h"
-#include "common/scram-common.h"
-#include "common/string.h"
-#include "mb/pg_wchar.h"
-#include "port/pg_bswap.h"
-
 
 #ifndef WIN32
 #define PGPASSFILE ".pgpass"
@@ -1768,6 +1766,8 @@ parse_int_param(const char *value, int *result, PGconn *conn,
 	char	   *end;
 	long		numval;
 
+	Assert(value != NULL);
+
 	*result = 0;
 
 	/* strtol(3) skips leading whitespaces */
@@ -1785,10 +1785,10 @@ parse_int_param(const char *value, int *result, PGconn *conn,
 	 * Skip any trailing whitespace; if anything but whitespace remains before
 	 * the terminating character, fail
 	 */
-	while (*end && *end != '\0' && isspace((unsigned char) *end))
+	while (*end != '\0' && isspace((unsigned char) *end))
 		end++;
 
-	if (*end && *end != '\0')
+	if (*end != '\0')
 		goto error;
 
 	*result = numval;

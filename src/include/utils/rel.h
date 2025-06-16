@@ -363,10 +363,14 @@ typedef struct ViewOptions
  * RelationIsSecurityView
  *		Returns whether the relation is security view, or not.  Note multiple
  *		eval of argument!
+ *	GPDB
+ *		In GPDB, we also use this macro for materialized views.
  */
-#define RelationIsSecurityView(relation)	\
-	((relation)->rd_options ?				\
-	 ((ViewOptions *) (relation)->rd_options)->security_barrier : false)
+#define RelationIsSecurityView(relation, parseTree)							 \
+	(AssertMacro(relation->rd_rel->relkind == RELKIND_VIEW ||				 \
+(relation->rd_rel->relkind == RELKIND_MATVIEW && parsetree->expandMatViews)),\
+	 (relation)->rd_options ?												\
+	  ((ViewOptions *) (relation)->rd_options)->security_barrier : false)
 
 /*
  * RelationHasCheckOption
@@ -374,7 +378,8 @@ typedef struct ViewOptions
  *		or the cascaded check option.  Note multiple eval of argument!
  */
 #define RelationHasCheckOption(relation)									\
-	((relation)->rd_options &&												\
+	(AssertMacro(relation->rd_rel->relkind == RELKIND_VIEW),				\
+	 (relation)->rd_options &&												\
 	 ((ViewOptions *) (relation)->rd_options)->check_option !=				\
 	 VIEW_OPTION_CHECK_OPTION_NOT_SET)
 
@@ -384,7 +389,8 @@ typedef struct ViewOptions
  *		option.  Note multiple eval of argument!
  */
 #define RelationHasLocalCheckOption(relation)								\
-	((relation)->rd_options &&												\
+	(AssertMacro(relation->rd_rel->relkind == RELKIND_VIEW),				\
+	 (relation)->rd_options &&												\
 	 ((ViewOptions *) (relation)->rd_options)->check_option ==				\
 	 VIEW_OPTION_CHECK_OPTION_LOCAL)
 
@@ -394,7 +400,8 @@ typedef struct ViewOptions
  *		option.  Note multiple eval of argument!
  */
 #define RelationHasCascadedCheckOption(relation)							\
-	((relation)->rd_options &&												\
+	(AssertMacro(relation->rd_rel->relkind == RELKIND_VIEW),				\
+	 (relation)->rd_options &&												\
 	 ((ViewOptions *) (relation)->rd_options)->check_option ==				\
 	  VIEW_OPTION_CHECK_OPTION_CASCADED)
 

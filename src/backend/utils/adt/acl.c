@@ -30,6 +30,7 @@
 #include "common/hashfn.h"
 #include "foreign/foreign.h"
 #include "funcapi.h"
+#include "lib/qunique.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/array.h"
@@ -1487,8 +1488,7 @@ aclmembers(const Acl *acl, Oid **roleids)
 	Oid		   *list;
 	const AclItem *acldat;
 	int			i,
-				j,
-				k;
+				j;
 
 	if (acl == NULL || ACL_NUM(acl) == 0)
 	{
@@ -1520,21 +1520,14 @@ aclmembers(const Acl *acl, Oid **roleids)
 	/* Sort the array */
 	qsort(list, j, sizeof(Oid), oid_cmp);
 
-	/* Remove duplicates from the array */
-	k = 0;
-	for (i = 1; i < j; i++)
-	{
-		if (list[k] != list[i])
-			list[++k] = list[i];
-	}
-
 	/*
 	 * We could repalloc the array down to minimum size, but it's hardly worth
 	 * it since it's only transient memory.
 	 */
 	*roleids = list;
 
-	return k + 1;
+	/* Remove duplicates from the array */
+	return qunique(list, j, sizeof(Oid), oid_cmp);
 }
 
 

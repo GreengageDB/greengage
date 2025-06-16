@@ -615,7 +615,7 @@ elif test "$PORTNAME" = "hpux"; then
   PGAC_PROG_CXX_CFLAGS_OPT([+Olibmerrno])
 fi
 
-AC_SUBST(CFLAGS_VECTOR, $CFLAGS_VECTOR)
+AC_SUBST(CFLAGS_VECTOR)
 
 # Determine flags used to emit bitcode for JIT inlining. Need to test
 # for behaviour changing compiler flags, to keep compatibility with
@@ -676,8 +676,11 @@ CXXFLAGS="$CXXFLAGS $user_CXXFLAGS"
 BITCODE_CFLAGS="$BITCODE_CFLAGS $user_BITCODE_CFLAGS"
 BITCODE_CXXFLAGS="$BITCODE_CXXFLAGS $user_BITCODE_CXXFLAGS"
 
-AC_SUBST(BITCODE_CFLAGS, $BITCODE_CFLAGS)
-AC_SUBST(BITCODE_CXXFLAGS, $BITCODE_CXXFLAGS)
+AC_SUBST(BITCODE_CFLAGS)
+AC_SUBST(BITCODE_CXXFLAGS)
+
+# The template file must set up CFLAGS_SL; we don't support user override
+AC_SUBST(CFLAGS_SL)
 
 # Check if the compiler still works with the final flag settings
 # (note, we're not checking that for CXX, which is optional)
@@ -1324,7 +1327,7 @@ AC_SEARCH_LIBS(sched_yield, rt)
 AC_SEARCH_LIBS(gethostbyname_r, nsl)
 # Cygwin:
 AC_SEARCH_LIBS(shmget, cygipc)
-# *BSD
+# *BSD:
 AC_SEARCH_LIBS(backtrace_symbols, execinfo)
 
 if test "$with_readline" = yes; then
@@ -1539,6 +1542,7 @@ AC_HEADER_STDBOOL
 AC_CHECK_HEADERS(m4_normalize([
 	atomic.h
 	copyfile.h
+	execinfo.h
 	fp_class.h
 	getopt.h
 	ieeefp.h
@@ -1822,7 +1826,6 @@ PGAC_STRUCT_SOCKADDR_STORAGE_MEMBERS
 PGAC_STRUCT_ADDRINFO
 AC_TYPE_INTPTR_T
 AC_TYPE_UINTPTR_T
-AC_TYPE_LONG_LONG_INT
 
 PGAC_TYPE_LOCALE_T
 
@@ -2629,6 +2632,10 @@ if test "$with_perl" = yes; then
   # On most platforms, if perl.h is there then libperl.so will be too, but at
   # this writing Debian packages them separately.  There is no known reason to
   # waste cycles on separate probes for the Tcl or Python libraries, though.
+  # On some Red Hat platforms, the link attempt can fail if we don't use
+  # CFLAGS_SL while building the test program.
+  ac_save_CFLAGS=$CFLAGS
+  CFLAGS="$CFLAGS $CFLAGS_SL"
   pgac_save_LIBS=$LIBS
   LIBS="$perl_embed_ldflags"
   AC_MSG_CHECKING([for libperl])
@@ -2640,6 +2647,7 @@ if test "$with_perl" = yes; then
     [AC_MSG_RESULT(no)
      AC_MSG_ERROR([libperl library is required for Perl])])
   LIBS=$pgac_save_LIBS
+  CFLAGS=$ac_save_CFLAGS
   CPPFLAGS=$ac_save_CPPFLAGS
 fi
 

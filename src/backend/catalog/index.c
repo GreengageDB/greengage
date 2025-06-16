@@ -1538,6 +1538,7 @@ index_concurrently_swap(Oid newIndexId, Oid oldIndexId, const char *oldName)
 				newIndexTuple;
 	Form_pg_index oldIndexForm,
 				newIndexForm;
+	bool		isPartition;
 	Oid			indexConstraintOid;
 	List	   *constraintOids = NIL;
 	ListCell   *lc;
@@ -1567,8 +1568,10 @@ index_concurrently_swap(Oid newIndexId, Oid oldIndexId, const char *oldName)
 	namestrcpy(&newClassForm->relname, NameStr(oldClassForm->relname));
 	namestrcpy(&oldClassForm->relname, oldName);
 
-	/* Copy partition flag to track inheritance properly */
+	/* Swap the partition flags to track inheritance properly */
+	isPartition = newClassForm->relispartition;
 	newClassForm->relispartition = oldClassForm->relispartition;
+	oldClassForm->relispartition = isPartition;
 
 	CatalogTupleUpdate(pg_class, &oldClassTuple->t_self, oldClassTuple);
 	CatalogTupleUpdate(pg_class, &newClassTuple->t_self, newClassTuple);
@@ -1744,8 +1747,12 @@ index_concurrently_swap(Oid newIndexId, Oid oldIndexId, const char *oldName)
 	}
 
 	/*
-	 * Move all dependencies of and on the old index to the new one
+	 * Move all dependencies of and on the old index to the new one.  First
+	 * remove any dependencies that the new index may have to provide an
+	 * initial clean state for the dependency switch, and then move all the
+	 * dependencies from the old index to the new one.
 	 */
+	deleteDependencyRecordsFor(RelationRelationId, newIndexId, false);
 	changeDependenciesOf(RelationRelationId, oldIndexId, newIndexId);
 	changeDependenciesOn(RelationRelationId, oldIndexId, newIndexId);
 
@@ -3555,14 +3562,12 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 		/* Note: we do not need to re-establish pkey setting */
 		index_build(heapRelation, iRel, indexInfo, true, true);
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
 		/* Make sure flag gets cleared on error exit */
 		ResetReindexProcessing();
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
-	ResetReindexProcessing();
 
 	/*
 	 * If the index is marked invalid/not-ready/dead (ie, it's from a failed
@@ -3821,14 +3826,12 @@ reindex_relation(Oid relid, int flags, int options)
 			i++;
 		}
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
 		/* Make sure list gets cleared on error exit */
 		ResetReindexPending();
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
-	ResetReindexPending();
 
 	/*
 	 * Close rel, but continue to hold the lock.

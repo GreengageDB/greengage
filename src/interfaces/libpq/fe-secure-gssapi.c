@@ -20,9 +20,9 @@
  */
 #include "c.h"
 
+#include "fe-gssapi-common.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
-#include "fe-gssapi-common.h"
 #include "port/pg_bswap.h"
 
 

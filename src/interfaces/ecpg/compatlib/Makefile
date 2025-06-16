@@ -35,7 +35,9 @@ SHLIB_EXPORTS = exports.txt
 
 SHLIB_EXPORTS = exports.txt
 
-OBJS= informix.o $(WIN32RES)
+OBJS = \
+	$(WIN32RES) \
+	informix.o
 
 PKG_CONFIG_REQUIRES_PRIVATE = libecpg libpgtypes
 

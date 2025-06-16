@@ -253,6 +253,9 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	Assert(SyncRepQueueIsOrderedByLSN(mode));
 	LWLockRelease(SyncRepLock);
 
+	/* holdoff interrupters to prevent cancellation of sync with the mirror */
+	HOLD_INTERRUPTS();
+
 	elogif(debug_walrepl_syncrep, LOG,
 			"syncrep wait -- This backend is now inserted in the syncrep queue.");
 
@@ -400,6 +403,8 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 		set_ps_display(new_status, false);
 		pfree(new_status);
 	}
+
+	RESUME_INTERRUPTS();
 }
 
 /*
@@ -454,10 +459,18 @@ SyncRepCancelWait(void)
 void
 SyncRepCleanupAtProcExit(void)
 {
+	/*
+	 * First check if we are removed from the queue without the lock to not
+	 * slow down backend exit.
+	 */
 	if (!SHMQueueIsDetached(&(MyProc->syncRepLinks)))
 	{
 		LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
-		SHMQueueDelete(&(MyProc->syncRepLinks));
+
+		/* maybe we have just been removed, so recheck */
+		if (!SHMQueueIsDetached(&(MyProc->syncRepLinks)))
+			SHMQueueDelete(&(MyProc->syncRepLinks));
+
 		LWLockRelease(SyncRepLock);
 	}
 }
@@ -612,6 +625,8 @@ SyncRepReleaseWaiters(void)
 /*
  * Calculate the synced Write, Flush and Apply positions among sync standbys.
  *
+ * The caller must hold SyncRepLock.
+ *
  * Return false if the number of sync standbys is less than
  * synchronous_standby_names specifies. Otherwise return true and
  * store the positions into *writePtr, *flushPtr and *applyPtr.
@@ -624,6 +639,8 @@ SyncRepGetSyncRecPtr(XLogRecPtr *writePtr, XLogRecPtr *flushPtr,
 					 XLogRecPtr *applyPtr, bool *am_sync)
 {
 	List	   *sync_standbys;
+
+	Assert(LWLockHeldByMe(SyncRepLock));
 
 	*writePtr = InvalidXLogRecPtr;
 	*flushPtr = InvalidXLogRecPtr;
@@ -795,6 +812,7 @@ SyncRepGetSyncStandbys(bool *am_sync)
 	int			i;
 	volatile WalSnd *walsnd;	/* Use volatile pointer to prevent code
 								 * rearrangement */
+	Assert(LWLockHeldByMe(SyncRepLock));
 
 	/* Set default result */
 	if (am_sync != NULL)
@@ -1124,7 +1142,7 @@ SyncRepGetStandbyPriority(void)
  * Pass all = true to wake whole queue; otherwise, just wake up to
  * the walsender's LSN.
  *
- * Must hold SyncRepLock.
+ * The caller must hold SyncRepLock in exclusive mode.
  */
 int
 SyncRepWakeQueue(bool all, int mode)
@@ -1135,6 +1153,7 @@ SyncRepWakeQueue(bool all, int mode)
 	int			numprocs = 0;
 
 	Assert(mode >= 0 && mode < NUM_SYNC_REP_WAIT_MODE);
+	Assert(LWLockHeldByMeInMode(SyncRepLock, LW_EXCLUSIVE));
 	Assert(SyncRepQueueIsOrderedByLSN(mode));
 
 	proc = (PGPROC *) SHMQueueNext(&(WalSndCtl->SyncRepQueue[mode]),
@@ -1211,8 +1230,8 @@ SyncRepUpdateSyncStandbysDefined(void)
 
 		/*
 		 * If synchronous_standby_names has been reset to empty, it's futile
-		 * for backends to continue to waiting.  Since the user no longer
-		 * wants synchronous replication, we'd better wake them up.
+		 * for backends to continue waiting.  Since the user no longer wants
+		 * synchronous replication, we'd better wake them up.
 		 */
 		if (!sync_standbys_defined)
 		{

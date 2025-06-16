@@ -986,7 +986,7 @@ execute_extension_script(Node *stmt,
 
 		execute_sql_string(c_sql);
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
 		/*
 		 * For QEs, the two global variables will be reset
@@ -999,17 +999,9 @@ execute_extension_script(Node *stmt,
 		 * Restore the GUC variables we set above.
 		 */
 		AtEOXact_GUC(true, save_nestlevel);
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
-	creating_extension = false;
-	CurrentExtensionObject = InvalidOid;
-
-	/*
-	 * Restore the GUC variables we set above.
-	 */
-	AtEOXact_GUC(true, save_nestlevel);
 	if (Gp_role == GP_ROLE_DISPATCH && stmt != NULL)
 	{
 		/* We must reset QE CurrentExtensionObject to InvalidOid */
