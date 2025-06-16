@@ -124,7 +124,7 @@ extern Size MemoryContextSetPeakSpace(MemoryContext context, Size nbytes);
 #define MemoryContextDelete(context)    (MemoryContextDeleteImpl(context, __FILE__, PG_FUNCNAME_MACRO, __LINE__))
 extern void MemoryContextDeleteImpl(MemoryContext context, const char* sfile, const char *func, int sline);
 
-extern int64 MemoryContextMemAllocated(MemoryContext context, bool recurse);
+extern Size MemoryContextMemAllocated(MemoryContext context, bool recurse);
 extern void MemoryContextStats(MemoryContext context);
 extern void MemoryContextStatsDetail(MemoryContext context, int max_children);
 extern void MemoryContextAllowInCriticalSection(MemoryContext context,

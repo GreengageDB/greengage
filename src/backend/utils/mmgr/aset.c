@@ -690,7 +690,8 @@ AllocSetReset(MemoryContext context)
 {
 	AllocSet	set = (AllocSet) context;
 	AllocBlock	block;
-	Size		keepersize PG_USED_FOR_ASSERTS_ONLY = set->keeper->endptr - ((char *) set);
+	Size		keepersize PG_USED_FOR_ASSERTS_ONLY
+		= set->keeper->endptr - ((char *) set);
 
 	AssertArg(AllocSetIsValid(set));
 
@@ -764,7 +765,8 @@ AllocSetDelete(MemoryContext context, MemoryContext parent)
 {
 	AllocSet	set = (AllocSet) context;
 	AllocBlock	block = set->blocks;
-	Size		keepersize PG_USED_FOR_ASSERTS_ONLY = set->keeper->endptr - ((char *) set);
+	Size		keepersize PG_USED_FOR_ASSERTS_ONLY
+		= set->keeper->endptr - ((char *) set);
 
 	AssertArg(AllocSetIsValid(set));
 
@@ -1349,8 +1351,9 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
 		chksize = MAXALIGN(chksize);
 
 		/* Do the realloc */
-		oldblksize = UserPtr_GetUserPtrSize(block);
 		blksize = chksize + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+		oldblksize = UserPtr_GetUserPtrSize(block);
+
 		block = (AllocBlock) gp_realloc(block, blksize);
 		if (block == NULL)
 		{
@@ -1359,7 +1362,9 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
 			return NULL;
 		}
 
-		context->mem_allocated += blksize - oldblksize;
+		/* updated separately, not to underflow when (oldblksize > blksize) */
+		context->mem_allocated -= oldblksize;
+		context->mem_allocated += blksize;
 
 		block->freeptr = block->endptr = ((char *) block) + blksize;
 
@@ -1750,7 +1755,7 @@ AllocSetCheck(MemoryContext context)
 	const char *name = set->header.name;
 	AllocBlock	prevblock;
 	AllocBlock	block;
-	int64		total_allocated = 0;
+	Size		total_allocated = 0;
 
 	for (prevblock = NULL, block = set->blocks;
 		 block != NULL;

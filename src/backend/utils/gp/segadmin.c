@@ -134,7 +134,7 @@ get_availableDbId()
 								   HASH_ELEM | HASH_FUNCTION);
 
 	/* scan GpSegmentConfigRelationId */
-	Relation	rel = heap_open(GpSegmentConfigRelationId, AccessExclusiveLock);
+	Relation	rel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
 	HeapTuple	tuple;
 	SysScanDesc sscan;
 
@@ -147,7 +147,7 @@ get_availableDbId()
 	}
 	systable_endscan(sscan);
 
-	heap_close(rel, NoLock);
+	table_close(rel, NoLock);
 
 	/* search for available dbid */
 	for (int32 dbid = 1;; dbid++)
@@ -172,7 +172,7 @@ get_availableDbId()
 static int16
 get_maxcontentid()
 {
-	Relation	rel = heap_open(GpSegmentConfigRelationId, AccessExclusiveLock);
+	Relation	rel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
 	int16		contentid = 0;
 	HeapTuple	tuple;
 	SysScanDesc sscan;
@@ -184,7 +184,7 @@ get_maxcontentid()
 						((Form_gp_segment_configuration) GETSTRUCT(tuple))->content);
 	}
 	systable_endscan(sscan);
-	heap_close(rel, NoLock);
+	table_close(rel, NoLock);
 
 	return contentid;
 }
@@ -582,7 +582,7 @@ gp_remove_segment_mirror(PG_FUNCTION_ARGS)
 	mirroring_sanity_check(MASTER_ONLY | SUPERUSER, "gp_remove_segment_mirror");
 
 	/* avoid races */
-	rel = heap_open(GpSegmentConfigRelationId, AccessExclusiveLock);
+	rel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
 
 	pridbid = contentid_get_dbid(contentid, GP_SEGMENT_CONFIGURATION_ROLE_PRIMARY, false /* false == current, not
 								   * preferred, role */ );
@@ -600,7 +600,7 @@ gp_remove_segment_mirror(PG_FUNCTION_ARGS)
 
 	remove_segment(pridbid, mirdbid);
 
-	heap_close(rel, NoLock);
+	table_close(rel, NoLock);
 
 	PG_RETURN_BOOL(true);
 }
@@ -647,7 +647,7 @@ gp_add_master_standby(PG_FUNCTION_ARGS)
 		elog(ERROR, "only a single master standby may be defined");
 
 	/* Lock exclusively to avoid concurrent changes */
-	gprel = heap_open(GpSegmentConfigRelationId, AccessExclusiveLock);
+	gprel = table_open(GpSegmentConfigRelationId, AccessExclusiveLock);
 
 	maxdbid = get_maxdbid();
 
@@ -679,7 +679,7 @@ gp_add_master_standby(PG_FUNCTION_ARGS)
 
 	add_segment_config_entry(config);
 	
-	heap_close(gprel, NoLock);
+	table_close(gprel, NoLock);
 
 	PG_RETURN_INT16(config->dbid);
 }

@@ -2835,10 +2835,10 @@ ExecBRDeleteTriggers(EState *estate, EPQState *epqstate,
 	Assert(HeapTupleIsValid(fdw_trigtuple) ^ ItemPointerIsValid(tupleid));
 	if (fdw_trigtuple == NULL)
 	{
-		TupleTableSlot *newSlot;
+		TupleTableSlot *epqslot_candidate = NULL;
 
 		if (!GetTupleForTrigger(estate, epqstate, relinfo, tupleid,
-								LockTupleExclusive, slot, &newSlot))
+								LockTupleExclusive, slot, &epqslot_candidate))
 			return false;
 
 		/*
@@ -2846,9 +2846,9 @@ ExecBRDeleteTriggers(EState *estate, EPQState *epqstate,
 		 * function requested for the updated tuple, skip the trigger
 		 * execution.
 		 */
-		if (newSlot != NULL && epqslot != NULL)
+		if (epqslot_candidate != NULL && epqslot != NULL)
 		{
-			*epqslot = newSlot;
+			*epqslot = epqslot_candidate;
 			return false;
 		}
 
@@ -3094,11 +3094,11 @@ ExecBRUpdateTriggers(EState *estate, EPQState *epqstate,
 	Assert(HeapTupleIsValid(fdw_trigtuple) ^ ItemPointerIsValid(tupleid));
 	if (fdw_trigtuple == NULL)
 	{
-		TupleTableSlot *newSlot = NULL;
+		TupleTableSlot *epqslot_candidate = NULL;
 
 		/* get a copy of the on-disk tuple we are planning to update */
 		if (!GetTupleForTrigger(estate, epqstate, relinfo, tupleid,
-								lockmode, oldslot, &newSlot))
+								lockmode, oldslot, &epqslot_candidate))
 			return false;		/* cancel the update action */
 
 		/*
@@ -3113,11 +3113,14 @@ ExecBRUpdateTriggers(EState *estate, EPQState *epqstate,
 		 * nor our caller have any more interest in the prior contents of that
 		 * slot.
 		 */
-		if (newSlot != NULL)
+		if (epqslot_candidate != NULL)
 		{
-			TupleTableSlot *slot = ExecFilterJunk(relinfo->ri_junkFilter, newSlot);
+			TupleTableSlot *epqslot_clean;
 
-			ExecCopySlot(newslot, slot);
+			epqslot_clean = ExecFilterJunk(relinfo->ri_junkFilter, epqslot_candidate);
+
+			if (newslot != epqslot_clean)
+				ExecCopySlot(newslot, epqslot_clean);
 		}
 
 		trigtuple = ExecFetchSlotHeapTuple(oldslot, true, &should_free_trig);
@@ -3385,7 +3388,7 @@ GetTupleForTrigger(EState *estate,
 				   ItemPointer tid,
 				   LockTupleMode lockmode,
 				   TupleTableSlot *oldslot,
-				   TupleTableSlot **newSlot)
+				   TupleTableSlot **epqslot)
 {
 	Relation	relation = relinfo->ri_RelationDesc;
 
@@ -3395,13 +3398,13 @@ GetTupleForTrigger(EState *estate,
 
 	Assert(RelationIsHeap(relation));
 
-	if (newSlot != NULL)
+	if (epqslot != NULL)
 	{
 		TM_Result	test;
 		TM_FailureData tmfd;
 		int			lockflags = 0;
 
-		*newSlot = NULL;
+		*epqslot = NULL;
 
 		/* caller must pass an epqstate if EvalPlanQual is possible */
 		Assert(epqstate != NULL);
@@ -3441,21 +3444,20 @@ GetTupleForTrigger(EState *estate,
 			case TM_Ok:
 				if (tmfd.traversed)
 				{
-					TupleTableSlot *epqslot;
-
-					epqslot = EvalPlanQual(epqstate,
-										   relation,
-										   relinfo->ri_RangeTableIndex,
-										   oldslot);
+					*epqslot = EvalPlanQual(epqstate,
+											relation,
+											relinfo->ri_RangeTableIndex,
+											oldslot);
 
 					/*
 					 * If PlanQual failed for updated tuple - we must not
 					 * process this tuple!
 					 */
-					if (TupIsNull(epqslot))
+					if (TupIsNull(*epqslot))
+					{
+						*epqslot = NULL;
 						return false;
-
-					*newSlot = epqslot;
+					}
 				}
 				break;
 

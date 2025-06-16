@@ -4164,7 +4164,7 @@ get_comparison_operator(Oid oidLeft, Oid oidRight, CmpType cmpt)
 			return InvalidOid;
 	}
 
-	pg_amop = heap_open(AccessMethodOperatorRelationId, AccessShareLock);
+	pg_amop = table_open(AccessMethodOperatorRelationId, AccessShareLock);
 
 	/*
 	 * SELECT * FROM pg_amop
@@ -4201,7 +4201,7 @@ get_comparison_operator(Oid oidLeft, Oid oidRight, CmpType cmpt)
 	}
 
 	systable_endscan(sscan);
-	heap_close(pg_amop, AccessShareLock);
+	table_close(pg_amop, AccessShareLock);
 
 	return result;
 }
@@ -4226,7 +4226,7 @@ has_subclass_slow(Oid relationId)
 		return false;
 	}
 
-	rel = heap_open(InheritsRelationId, AccessShareLock);
+	rel = table_open(InheritsRelationId, AccessShareLock);
 
 	ScanKeyInit(&scankey, Anum_pg_inherits_inhparent,
 				BTEqualStrategyNumber, F_OIDEQ,
@@ -4240,7 +4240,7 @@ has_subclass_slow(Oid relationId)
 
 	systable_endscan(sscan);
 
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return result;
 }

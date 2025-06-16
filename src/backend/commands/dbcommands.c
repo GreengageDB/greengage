@@ -30,6 +30,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/multixact.h"
 #include "access/tableam.h"
 #include "access/xact.h"
 #include "access/xloginsert.h"
@@ -129,14 +130,14 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	Relation	rel;
 	Oid			src_dboid = InvalidOid;
 	Oid			src_owner;
-	int			src_encoding = 0;
+	int			src_encoding = -1;
 	char	   *src_collate = NULL;
 	char	   *src_ctype = NULL;
 	bool		src_istemplate;
 	bool		src_allowconn;
 	Oid			src_lastsysoid = InvalidOid;
 	TransactionId src_frozenxid = InvalidTransactionId;
-	MultiXactId src_minmxid = InvalidTransactionId;
+	MultiXactId src_minmxid = InvalidMultiXactId;
 	Oid			src_deftablespace = InvalidOid;
 	volatile Oid dst_deftablespace;
 	Relation	pg_database_rel;

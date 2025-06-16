@@ -568,7 +568,7 @@ initCgroup(void)
 /*
  * Load the resource groups in shared memory. Note this
  * can only be done after enough setup has been done. This uses
- * heap_open etc which in turn requires shared memory to be set up.
+ * table_open etc which in turn requires shared memory to be set up.
  */
 void
 InitResGroups(void)

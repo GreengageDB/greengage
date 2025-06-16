@@ -173,7 +173,7 @@ AcquireRewriteLocks(Query *parsetree,
 				 * AccessShareLock.
 				 *
 				 * CDB: The proper lock mode depends on whether the relation is
-				 * local or distributed, which is discovered by heap_open().
+				 * local or distributed, which is discovered by table_open().
 				 * To handle this we make use of CdbOpenRelation().
 				 * 
 				 * For update should hold ExclusiveLock, see the discussion on

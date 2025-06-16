@@ -52,7 +52,7 @@ deleteProcCallbacks(Oid profnoid)
 	 *
 	 * DELETE FROM pg_proc_callback WHERE profnoid = :1
 	 */
-	rel = heap_open(ProcCallbackRelationId, RowExclusiveLock);
+	rel = table_open(ProcCallbackRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&skey,
 				Anum_pg_proc_callback_profnoid,
@@ -66,7 +66,7 @@ deleteProcCallbacks(Oid profnoid)
 
 	systable_endscan(scan);
 
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 }
 
 
@@ -134,7 +134,7 @@ lookupProcCallback(Oid profnoid, char promethod)
 	Assert(OidIsValid(profnoid));
 
 	/* open pg_proc_callback */
-	rel = heap_open(ProcCallbackRelationId, AccessShareLock);
+	rel = table_open(ProcCallbackRelationId, AccessShareLock);
 
 	/* Lookup (profnoid, promethod) from index */
 	/* (profnoid, promethod) is guaranteed unique by the index */
@@ -164,7 +164,7 @@ lookupProcCallback(Oid profnoid, char promethod)
 		result = InvalidOid;
 
 	systable_endscan(scan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return result;
 }

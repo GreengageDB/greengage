@@ -24,7 +24,7 @@ gp_segment_config_has_mirrors()
 	SysScanDesc scan;
 	HeapTuple tuple;
 
-	rel = heap_open(GpSegmentConfigRelationId, AccessShareLock);
+	rel = table_open(GpSegmentConfigRelationId, AccessShareLock);
 
 	/*
 	 * SELECT dbid FROM gp_segment_configuration
@@ -46,7 +46,7 @@ gp_segment_config_has_mirrors()
 	mirrors_exist = HeapTupleIsValid(tuple);
 
 	systable_endscan(scan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return mirrors_exist;
 }

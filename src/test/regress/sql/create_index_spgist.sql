@@ -228,6 +228,12 @@ SELECT * FROM quad_point_tbl_ord_seq3 seq FULL JOIN kd_point_tbl_ord_idx3 idx
 ON seq.n = idx.n
 WHERE seq.dist IS DISTINCT FROM idx.dist;
 
+-- check ORDER BY distance to NULL
+SELECT DISTINCT ON (i) p FROM kd_point_tbl,
+    (VALUES (1, point '1,2'), (2, NULL), (3, '1234,5678')) pts(i, pt)
+ORDER BY i, p <-> pt, p <-> '0,0';
+
+
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM radix_text_tbl WHERE t = 'P0123456789abcdef';
 SELECT count(*) FROM radix_text_tbl WHERE t = 'P0123456789abcdef';

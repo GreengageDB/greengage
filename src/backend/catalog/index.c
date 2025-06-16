@@ -813,6 +813,51 @@ index_create(Relation heapRelation,
 				 errmsg("user-defined indexes on system catalog tables are not supported")));
 
 	/*
+	 * Btree text_pattern_ops uses text_eq as the equality operator, which is
+	 * fine as long as the collation is deterministic; text_eq then reduces to
+	 * bitwise equality and so it is semantically compatible with the other
+	 * operators and functions in that opclass.  But with a nondeterministic
+	 * collation, text_eq could yield results that are incompatible with the
+	 * actual behavior of the index (which is determined by the opclass's
+	 * comparison function).  We prevent such problems by refusing creation of
+	 * an index with that opclass and a nondeterministic collation.
+	 *
+	 * The same applies to varchar_pattern_ops and bpchar_pattern_ops.  If we
+	 * find more cases, we might decide to create a real mechanism for marking
+	 * opclasses as incompatible with nondeterminism; but for now, this small
+	 * hack suffices.
+	 *
+	 * Another solution is to use a special operator, not text_eq, as the
+	 * equality opclass member; but that is undesirable because it would
+	 * prevent index usage in many queries that work fine today.
+	 */
+	for (i = 0; i < indexInfo->ii_NumIndexKeyAttrs; i++)
+	{
+		Oid			collation = collationObjectId[i];
+		Oid			opclass = classObjectId[i];
+
+		if (collation)
+		{
+			if ((opclass == TEXT_BTREE_PATTERN_OPS_OID ||
+				 opclass == VARCHAR_BTREE_PATTERN_OPS_OID ||
+				 opclass == BPCHAR_BTREE_PATTERN_OPS_OID) &&
+				!get_collation_isdeterministic(collation))
+			{
+				HeapTuple	classtup;
+
+				classtup = SearchSysCache1(CLAOID, ObjectIdGetDatum(opclass));
+				if (!HeapTupleIsValid(classtup))
+					elog(ERROR, "cache lookup failed for operator class %u", opclass);
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("nondeterministic collations are not supported for operator class \"%s\"",
+								NameStr(((Form_pg_opclass) GETSTRUCT(classtup))->opcname))));
+				ReleaseSysCache(classtup);
+			}
+		}
+	}
+
+	/*
 	 * Concurrent index build on a system catalog is unsafe because we tend to
 	 * release locks before committing in catalogs.
 	 */
@@ -2173,6 +2218,10 @@ index_drop(Oid indexId, bool concurrent, bool concurrent_lock_mode)
 		 * possible if one of the transactions in question is blocked trying
 		 * to acquire an exclusive lock on our table.  The lock code will
 		 * detect deadlock and error out properly.
+		 *
+		 * Note: we report progress through WaitForLockers() unconditionally
+		 * here, even though it will only be used when we're called by REINDEX
+		 * CONCURRENTLY and not when called by DROP INDEX CONCURRENTLY.
 		 */
 		WaitForLockers(heaplocktag, AccessExclusiveLock, true);
 
@@ -2188,7 +2237,7 @@ index_drop(Oid indexId, bool concurrent, bool concurrent_lock_mode)
 
 		/*
 		 * Wait till every transaction that saw the old index state has
-		 * finished.
+		 * finished.  See above about progress reporting.
 		 */
 		WaitForLockers(heaplocktag, AccessExclusiveLock, true);
 
@@ -3404,6 +3453,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 	Oid			namespaceId;
 	volatile bool skipped_constraint = false;
 	PGRUsage	ru0;
+	bool		progress = (options & REINDEXOPT_REPORT_PROGRESS) != 0;
 
 	pg_rusage_init(&ru0);
 
@@ -3416,12 +3466,15 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 	heapId = IndexGetRelation(indexId, false);
 	heapRelation = table_open(heapId, ShareLock);
 
-	pgstat_progress_start_command(PROGRESS_COMMAND_CREATE_INDEX,
-								  heapId);
-	pgstat_progress_update_param(PROGRESS_CREATEIDX_COMMAND,
-								 PROGRESS_CREATEIDX_COMMAND_REINDEX);
-	pgstat_progress_update_param(PROGRESS_CREATEIDX_INDEX_OID,
-								 indexId);
+	if (progress)
+	{
+		pgstat_progress_start_command(PROGRESS_COMMAND_CREATE_INDEX,
+									  heapId);
+		pgstat_progress_update_param(PROGRESS_CREATEIDX_COMMAND,
+									 PROGRESS_CREATEIDX_COMMAND_REINDEX);
+		pgstat_progress_update_param(PROGRESS_CREATEIDX_INDEX_OID,
+									 indexId);
+	}
 
 	namespaceId = RelationGetNamespace(heapRelation);
 
@@ -3431,8 +3484,9 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 	 */
 	iRel = index_open(indexId, AccessExclusiveLock);
 
-	pgstat_progress_update_param(PROGRESS_CREATEIDX_ACCESS_METHOD_OID,
-								 iRel->rd_rel->relam);
+	if (progress)
+		pgstat_progress_update_param(PROGRESS_CREATEIDX_ACCESS_METHOD_OID,
+									 iRel->rd_rel->relam);
 
 	/*
 	 * Partitioned indexes should never get processed here, as they have no
@@ -3634,7 +3688,8 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 				 errdetail_internal("%s",
 									pg_rusage_show(&ru0))));
 
-	pgstat_progress_end_command();
+	if (progress)
+		pgstat_progress_end_command();
 
 	/* Close rels, but keep locks */
 	index_close(iRel, NoLock);

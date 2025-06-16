@@ -157,6 +157,11 @@ static int	ldapServiceLookup(const char *purl, PQconninfoOption *options,
 #define DefaultTty		""
 #define DefaultOption	""
 #define DefaultAuthtype		  ""
+#ifdef USE_SSL
+#define DefaultChannelBinding	"prefer"
+#else
+#define DefaultChannelBinding	"disable"
+#endif
 #define DefaultTargetSessionAttrs	"any"
 #ifdef USE_SSL
 #define DefaultSSLMode "prefer"
@@ -243,6 +248,10 @@ static const internalPQconninfoOption PQconninfoOptions[] = {
 	{"passfile", "PGPASSFILE", NULL, NULL,
 		"Database-Password-File", "", 64,
 	offsetof(struct pg_conn, pgpassfile)},
+
+	{"channel_binding", "PGCHANNELBINDING", NULL, NULL,
+		"Channel-Binding", "", 7,	/* sizeof("require") */
+	offsetof(struct pg_conn, channel_binding)},
 
 	{"connect_timeout", "PGCONNECT_TIMEOUT", NULL, NULL,
 		"Connect-timeout", "", 10,	/* strlen(INT32_MAX) == 10 */
@@ -1270,6 +1279,29 @@ connectOptions2(PGconn *conn)
 	}
 
 	/*
+	 * validate channel_binding option
+	 */
+	if (conn->channel_binding)
+	{
+		if (strcmp(conn->channel_binding, "disable") != 0
+			&& strcmp(conn->channel_binding, "prefer") != 0
+			&& strcmp(conn->channel_binding, "require") != 0)
+		{
+			conn->status = CONNECTION_BAD;
+			printfPQExpBuffer(&conn->errorMessage,
+							  libpq_gettext("invalid channel_binding value: \"%s\"\n"),
+							  conn->channel_binding);
+			return false;
+		}
+	}
+	else
+	{
+		conn->channel_binding = strdup(DefaultChannelBinding);
+		if (!conn->channel_binding)
+			goto oom_error;
+	}
+
+	/*
 	 * validate sslmode option
 	 */
 	if (conn->sslmode)
@@ -1727,7 +1759,7 @@ useKeepalives(PGconn *conn)
 /*
  * Parse and try to interpret "value" as an integer value, and if successful,
  * store it in *result, complaining if there is any trailing garbage or an
- * overflow.
+ * overflow.  This allows any number of leading and trailing whitespaces.
  */
 static bool
 parse_int_param(const char *value, int *result, PGconn *conn,
@@ -1738,14 +1770,31 @@ parse_int_param(const char *value, int *result, PGconn *conn,
 
 	*result = 0;
 
+	/* strtol(3) skips leading whitespaces */
 	errno = 0;
 	numval = strtol(value, &end, 10);
-	if (errno == 0 && *end == '\0' && numval == (int) numval)
-	{
-		*result = numval;
-		return true;
-	}
 
+	/*
+	 * If no progress was done during the parsing or an error happened, fail.
+	 * This tests properly for overflows of the result.
+	 */
+	if (value == end || errno != 0 || numval != (int) numval)
+		goto error;
+
+	/*
+	 * Skip any trailing whitespace; if anything but whitespace remains before
+	 * the terminating character, fail
+	 */
+	while (*end && *end != '\0' && isspace((unsigned char) *end))
+		end++;
+
+	if (*end && *end != '\0')
+		goto error;
+
+	*result = numval;
+	return true;
+
+error:
 	appendPQExpBuffer(&conn->errorMessage,
 					  libpq_gettext("invalid integer value \"%s\" for connection option \"%s\"\n"),
 					  value, context);
@@ -2050,7 +2099,11 @@ connectDBComplete(PGconn *conn)
 	{
 		if (!parse_int_param(conn->connect_timeout, &timeout, conn,
 							 "connect_timeout"))
+		{
+			/* mark the connection as bad to report the parsing failure */
+			conn->status = CONNECTION_BAD;
 			return 0;
+		}
 
 		if (timeout > 0)
 		{
@@ -3580,10 +3633,11 @@ keep_going:						/* We will come back to here until there is
 		case CONNECTION_SETENV:
 			{
 				/*
-				 * Do post-connection housekeeping (only needed in protocol 2.0).
+				 * Do post-connection housekeeping (only needed in protocol
+				 * 2.0).
 				 *
-				 * We pretend that the connection is OK for the duration of these
-				 * queries.
+				 * We pretend that the connection is OK for the duration of
+				 * these queries.
 				 */
 				conn->status = CONNECTION_OK;
 
@@ -4013,6 +4067,8 @@ freePGconn(PGconn *conn)
 	}
 	if (conn->pgpassfile)
 		free(conn->pgpassfile);
+	if (conn->channel_binding)
+		free(conn->channel_binding);
 	if (conn->keepalives)
 		free(conn->keepalives);
 	if (conn->keepalives_idle)

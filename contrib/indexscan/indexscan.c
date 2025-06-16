@@ -211,7 +211,7 @@ readindex(PG_FUNCTION_ARGS)
 	if (!irel)
 		irel = index_open(info->ireloid, NoLock);
 	if (!hrel && info->hreloid != InvalidOid)
-		hrel = heap_open(info->hreloid, NoLock);
+		hrel = table_open(info->hreloid, NoLock);
 
 	while (info->blkno < info->num_pages)
 	{
@@ -261,14 +261,14 @@ readindex(PG_FUNCTION_ARGS)
 		result = HeapTupleGetDatum(tuple);
 
 		if (hrel != NULL)
-			heap_close(hrel, NoLock);
+			table_close(hrel, NoLock);
 		index_close(irel, NoLock);
 
 		SRF_RETURN_NEXT(funcctx, result);
 	}
 
 	if (hrel != NULL)
-		heap_close(hrel, AccessShareLock);
+		table_close(hrel, AccessShareLock);
 	index_close(irel, AccessShareLock);
 	SRF_RETURN_DONE(funcctx);
 }

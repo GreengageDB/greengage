@@ -163,6 +163,17 @@ initNextTableToScan(DynamicSeqScanState *node)
 
 	node->seqScanState = ExecInitSeqScanForPartition(&plan->seqscan, estate,
 													 currentRelation);
+
+	PlanState  *planstate = &node->seqScanState->ss.ps;
+
+	if (!planstate->ps_ProjInfo &&
+		scanState->ps.resultops == &TTSOpsVirtual &&
+		planstate->resultops != &TTSOpsVirtual)
+	{
+		ExecInitResultSlot(planstate, &TTSOpsVirtual);
+		ExecAssignProjectionInfo(planstate, partTupDesc);
+	}
+
 	return true;
 }
 

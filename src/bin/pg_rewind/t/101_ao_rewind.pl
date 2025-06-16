@@ -115,7 +115,7 @@ sub run_test
 	# "in production" in the control file. At the beginning of
 	# pg_rewind, a single-user mode postgres session should be run to
 	# ensure clean shutdown on the target instance.
-	RewindTest::run_pg_rewind($test_mode, stop_master_mode => 'immediate');
+	RewindTest::run_pg_rewind($test_mode);
 
 	check_query(
 		'SELECT * FROM aotbl1',

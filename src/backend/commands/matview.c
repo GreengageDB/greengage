@@ -551,7 +551,7 @@ transientrel_init(QueryDesc *queryDesc)
 	matviewOid = RangeVarGetRelidExtended(refreshClause->relation,
 										  lockmode, 0,
 										  RangeVarCallbackOwnsTable, NULL);
-	matviewRel = heap_open(matviewOid, NoLock);
+	matviewRel = table_open(matviewOid, NoLock);
 
 	/*
 	 * Tentatively mark the matview as populated or not (this will roll back
@@ -583,7 +583,7 @@ transientrel_init(QueryDesc *queryDesc)
 	queryDesc->dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent,
 													 relpersistence, refreshClause->skipData);
 
-	heap_close(matviewRel, NoLock);
+	table_close(matviewRel, NoLock);
 }
 
 /*

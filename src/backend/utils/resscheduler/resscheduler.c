@@ -184,7 +184,7 @@ InitResPortalIncrementHash(void)
 /*
  * InitResQueues -- initialize the resource queues in shared memory. Note this
  * can only be done after enough setup has been done. This uses
- * heap_open etc which in turn requires shared memory to be set up.
+ * table_open etc which in turn requires shared memory to be set up.
  */
 
 void 
@@ -206,7 +206,7 @@ InitResQueues(void)
 	 * first.
 	 */
 	/* XXX XXX: should this be rowexclusive ? */
-	Relation relResqueue = heap_open(ResQueueRelationId, AccessShareLock);
+	Relation relResqueue = table_open(ResQueueRelationId, AccessShareLock);
 	LockRelationOid(ResQueueCapabilityRelationId, RowExclusiveLock);
 	LWLockAcquire(ResQueueLock, LW_EXCLUSIVE);
 
@@ -215,7 +215,7 @@ InitResQueues(void)
 		/* Hash table has already been loaded */
 		LWLockRelease(ResQueueLock);
 		UnlockRelationOid(ResQueueCapabilityRelationId, RowExclusiveLock);
-		heap_close(relResqueue, AccessShareLock);
+		table_close(relResqueue, AccessShareLock);
 		return;
 	}
 
@@ -253,7 +253,7 @@ InitResQueues(void)
 	systable_endscan(sscan);
 	LWLockRelease(ResQueueLock);
 	UnlockRelationOid(ResQueueCapabilityRelationId, RowExclusiveLock);
-	heap_close(relResqueue, AccessShareLock);
+	table_close(relResqueue, AccessShareLock);
 
 	if (!queuesok)
 		ereport(PANIC,
@@ -933,7 +933,7 @@ GetResQueueIdForName(char	*name)
 	HeapTuple	tuple;
 	Oid			queueid;
 
-	rel = heap_open(ResQueueRelationId, AccessShareLock);
+	rel = table_open(ResQueueRelationId, AccessShareLock);
 
 	/* SELECT oid FROM pg_resqueue WHERE rsqname = :1 */
 	ScanKeyInit(&scankey,
@@ -950,7 +950,7 @@ GetResQueueIdForName(char	*name)
 		queueid = InvalidOid;
 
 	systable_endscan(scan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return queueid;
 }

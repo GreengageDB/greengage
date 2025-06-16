@@ -29,7 +29,7 @@ endif
 
 OBJS=	fe-auth.o fe-auth-scram.o fe-connect.o fe-exec.o fe-misc.o fe-print.o fe-lobj.o \
 	fe-protocol2.o fe-protocol3.o pqexpbuffer.o fe-secure.o \
-	libpq-events.o
+	legacy-pqsignal.o libpq-events.o
 
 # src/backend/utils/mb
 OBJS += encnames.o wchar.o
@@ -139,6 +139,6 @@ clean distclean: clean-lib
 # Remove files we (may have) symlinked in from other places
 	rm -f encnames.c wchar.c
 
-maintainer-clean: distclean maintainer-clean-lib
+maintainer-clean: distclean
 	$(MAKE) -C test $@
 	rm -f libpq-dist.rc

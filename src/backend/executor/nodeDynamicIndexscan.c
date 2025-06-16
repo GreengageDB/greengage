@@ -328,16 +328,16 @@ IndexScan_GetColumnMapping(Oid oldOid, Oid newOid)
 
 	AttrNumber	  *attMap;
 
-	Relation oldRel = heap_open(oldOid, AccessShareLock);
-	Relation newRel = heap_open(newOid, AccessShareLock);
+	Relation oldRel = table_open(oldOid, AccessShareLock);
+	Relation newRel = table_open(newOid, AccessShareLock);
 
 	TupleDesc oldTupDesc = oldRel->rd_att;
 	TupleDesc newTupDesc = newRel->rd_att;
 
 	attMap = convert_tuples_by_name_map_if_req(oldTupDesc, newTupDesc);
 
-	heap_close(oldRel, AccessShareLock);
-	heap_close(newRel, AccessShareLock);
+	table_close(oldRel, AccessShareLock);
+	table_close(newRel, AccessShareLock);
 
 	return attMap;
 }

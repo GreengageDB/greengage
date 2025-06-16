@@ -1148,7 +1148,7 @@ CheckPWChallengeAuth(Port *port, char **logdetail)
 	 * If 'md5' authentication is allowed, decide whether to perform 'md5' or
 	 * 'scram-sha-256' authentication based on the type of password the user
 	 * has.  If it's an MD5 hash, we must do MD5 authentication, and if it's a
-	 * SCRAM verifier, we must do SCRAM authentication.
+	 * SCRAM secret, we must do SCRAM authentication.
 	 *
 	 * If MD5 authentication is not allowed, always use SCRAM.  If the user
 	 * had an MD5 password, CheckSCRAMAuth() will fail.
@@ -3235,7 +3235,7 @@ CheckCertAuth(Port *port)
 		if (port->hba->clientcert == clientCertFull && port->hba->auth_method != uaCert)
 		{
 			ereport(LOG,
-					(errmsg("certificate validation (clientcert=verify-full) failed for user \"%s\": cn mismatch",
+					(errmsg("certificate validation (clientcert=verify-full) failed for user \"%s\": CN mismatch",
 							port->user_name)));
 		}
 	}
@@ -3871,7 +3871,7 @@ check_auth_time_constraints_internal(char *rolname, TimestampTz timestamp)
 
 	ReleaseSysCache(roleTup);
 	/* Walk pg_auth_time_constraint for entries belonging to this user. */
-	reltimeconstr = heap_open(AuthTimeConstraintRelationId, AccessShareLock);
+	reltimeconstr = table_open(AuthTimeConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
 				Anum_pg_auth_time_constraint_authid,
@@ -3930,7 +3930,7 @@ check_auth_time_constraints_internal(char *rolname, TimestampTz timestamp)
 
 	/* Clean up. */
 	systable_endscan(scan);
-	heap_close(reltimeconstr, AccessShareLock);
+	table_close(reltimeconstr, AccessShareLock);
 
 	/* Time constraints shouldn't be added to superuser roles */
 	if (found && isRoleSuperuser)

@@ -43,8 +43,8 @@ static void syncTargetDirectory(void);
 static void sanityChecks(void);
 static void findCommonAncestorTimeline(XLogRecPtr *recptr, int *tliIndex);
 static void ensureCleanShutdown(const char *argv0);
-static int32 get_target_dbid(const char *argv0);
 static void disconnect_atexit(void);
+static int32 get_target_dbid(const char *argv0);
 
 static ControlFileData ControlFile_target;
 static ControlFileData ControlFile_source;
@@ -81,13 +81,14 @@ usage(const char *progname)
 	printf(_("  -D, --target-pgdata=DIRECTORY  existing data directory to modify\n"));
 	printf(_("      --source-pgdata=DIRECTORY  source data directory to synchronize with\n"));
 	printf(_("      --source-server=CONNSTR    source server to synchronize with\n"));
-	printf(_("  -S, --slot=SLOTNAME            replication slot to use\n"));
 	printf(_("  -R, --write-recovery-conf      write configuration for replication\n"
 			 "                                 (requires --source-server)\n"));
+	printf(_("  -S, --slot=SLOTNAME            replication slot to use\n"));
 	printf(_("  -n, --dry-run                  stop before modifying anything\n"));
 	printf(_("  -N, --no-sync                  do not wait for changes to be written\n"
 			 "                                 safely to disk\n"));
 	printf(_("  -P, --progress                 write progress messages\n"));
+	printf(_("      --no-ensure-shutdown       do not automatically fix unclean shutdown\n"));
 	printf(_("      --debug                    write a lot of debug messages\n"));
 	printf(_("  -V, --version                  output version information, then exit\n"));
 	printf(_("  -?, --help                     show this help, then exit\n"));
@@ -105,6 +106,7 @@ main(int argc, char **argv)
 		{"slot", required_argument, NULL, 'S'},
 		{"source-pgdata", required_argument, NULL, 1},
 		{"source-server", required_argument, NULL, 2},
+		{"no-ensure-shutdown", no_argument, NULL, 4},
 		{"version", no_argument, NULL, 'V'},
 		{"dry-run", no_argument, NULL, 'n'},
 		{"no-sync", no_argument, NULL, 'N'},
@@ -121,6 +123,7 @@ main(int argc, char **argv)
 	XLogRecPtr	chkptredo;
 	size_t		size;
 	char	   *buffer;
+	bool		no_ensure_shutdown = false;
 	bool		rewind_needed;
 	XLogRecPtr	endrec;
 	TimeLineID	endtli;
@@ -187,8 +190,13 @@ main(int argc, char **argv)
 			case 1:				/* --source-pgdata */
 				datadir_source = pg_strdup(optarg);
 				break;
+
 			case 2:				/* --source-server */
 				connstr_source = pg_strdup(optarg);
+				break;
+
+			case 4:
+				no_ensure_shutdown = true;
 				break;
 		}
 	}
@@ -286,11 +294,15 @@ main(int argc, char **argv)
 	pg_free(buffer);
 
 	/*
-	 * If the target instance was not cleanly shut down, run a single-user
-	 * postgres session really quickly and reload the control file to get the
-	 * new state.
+	 * If the target instance was not cleanly shut down, start and stop the
+	 * target cluster once in single-user mode to enforce recovery to finish,
+	 * ensuring that the cluster can be used by pg_rewind.  Note that if
+	 * no_ensure_shutdown is specified, pg_rewind ignores this step, and users
+	 * need to make sure by themselves that the target cluster is in a clean
+	 * state.
 	 */
-	if (ControlFile_target.state != DB_SHUTDOWNED &&
+	if (!no_ensure_shutdown &&
+		ControlFile_target.state != DB_SHUTDOWNED &&
 		ControlFile_target.state != DB_SHUTDOWNED_IN_RECOVERY)
 	{
 		ensureCleanShutdown(argv[0]);
@@ -359,7 +371,7 @@ main(int argc, char **argv)
 	if (!rewind_needed)
 	{
 		pg_log_info("no rewind required");
-		if (writerecoveryconf)
+		if (writerecoveryconf && !dry_run)
 			WriteRecoveryConfig(conn, datadir_target,
 								GenerateRecoveryConfig(conn, replication_slot));
 		exit(0);
@@ -457,7 +469,8 @@ main(int argc, char **argv)
 	ControlFile_new.minRecoveryPoint = endrec;
 	ControlFile_new.minRecoveryPointTLI = endtli;
 	ControlFile_new.state = DB_IN_ARCHIVE_RECOVERY;
-	update_controlfile(datadir_target, &ControlFile_new, do_sync);
+	if (!dry_run)
+		update_controlfile(datadir_target, &ControlFile_new, do_sync);
 
 	if (writerecoveryconf)
 		WriteRecoveryConfig(conn, datadir_target,
@@ -466,6 +479,10 @@ main(int argc, char **argv)
 	if (showprogress)
 		pg_log_info("syncing target data directory");
 	syncTargetDirectory();
+
+	if (writerecoveryconf && !dry_run)
+		WriteRecoveryConfig(conn, datadir_target,
+							GenerateRecoveryConfig(conn, NULL));
 
 	pg_log_info("Done!");
 
@@ -881,70 +898,6 @@ syncTargetDirectory(void)
 	fsync_fname(".", true); /* due to new file backup_label. */
 }
 
-/*
- * Ensure clean shutdown of target instance by launching single-user mode
- * postgres to do crash recovery.
- */
-static void
-ensureCleanShutdown(const char *argv0)
-{
-	int		ret;
-#define MAXCMDLEN (2 * MAXPGPATH)
-	char	exec_path[MAXPGPATH];
-	char	cmd[MAXCMDLEN];
-
-	/* locate postgres binary */
-	if ((ret = find_other_exec(argv0, "postgres",
-							   "postgres (Greenplum Database) " PG_VERSION "\n",
-							   exec_path)) < 0)
-	{
-		char        full_path[MAXPGPATH];
-
-		if (find_my_exec(argv0, full_path) < 0)
-			strlcpy(full_path, progname, sizeof(full_path));
-
-		if (ret == -1)
-			pg_fatal("The program \"postgres\" is needed by %s but was \n"
-					 "not found in the same directory as \"%s\".\n"
-					 "Check your installation.\n", progname, full_path);
-		else
-			pg_fatal("The program \"postgres\" was found by \"%s\"\n"
-					 "but was not the same version as %s.\n"
-					 "Check your installation.\n", full_path, progname);
-	}
-
-	/* only skip processing after ensuring presence of postgres */
-	if (dry_run)
-		return;
-
-	/* finally run postgres single-user mode */
-	/*
-	 * gpdb: use postgres instead of template1, else the below postgres
-	 * instance might hang in the below scenario:
-	 *
-	 * 1. There was a prepared but not finished "create database " dtx
-	 *    transaction which was recovered during crash recovery in the startup
-	 *    process and thus it holds the lock of database template1 since
-	 *    by default template1 is the template for database creation.
-	 *
-	 * 2. Single mode postgres process will execute the below code in
-	 * InitPostgres() after finishing crash recovery (i.e. calling
-	 * startupXLOG()) and then hang due to lock conflict.
-	 *
-	 *    LockSharedObject(DatabaseRelationId, ...);
-	 *
-	 * DB_FOR_COMMON_ACCESS is used in fts probe, dtx recovery, gdd so it's
-	 * hard to have the above kind of dtx transaction on DB_FOR_COMMON_ACCESS
-	 * since the commands (e.g. create database with template
-	 * DB_FOR_COMMON_ACCESS) would fail.
-	 */
-	snprintf(cmd, MAXCMDLEN, "\"%s\" --single -D \"%s\" %s < %s",
-			 exec_path, datadir_target, DB_FOR_COMMON_ACCESS, DEVNULL);
-
-	if (system(cmd) != 0)
-		pg_fatal("postgres single-user mode of target instance failed for command: %s", cmd);
-}
-
 static int32
 get_target_dbid(const char *argv0)
 {
@@ -1001,6 +954,85 @@ get_target_dbid(const char *argv0)
 	dbid = (int32) parsed_dbid;
 
 	return dbid;
+}
+
+/*
+ * Ensure clean shutdown of target instance by launching single-user mode
+ * postgres to do crash recovery.
+ */
+static void
+ensureCleanShutdown(const char *argv0)
+{
+	int			ret;
+#define MAXCMDLEN (2 * MAXPGPATH)
+	char		exec_path[MAXPGPATH];
+	char		cmd[MAXCMDLEN];
+
+	/* locate postgres binary */
+	if ((ret = find_other_exec(argv0, "postgres",
+							   PG_BACKEND_VERSIONSTR,
+							   exec_path)) < 0)
+	{
+		char		full_path[MAXPGPATH];
+
+		if (find_my_exec(argv0, full_path) < 0)
+			strlcpy(full_path, progname, sizeof(full_path));
+
+		if (ret == -1)
+			pg_fatal("The program \"%s\" is needed by %s but was\n"
+					 "not found in the same directory as \"%s\".\n"
+					 "Check your installation.",
+					 "postgres", progname, full_path);
+		else
+			pg_fatal("The program \"%s\" was found by \"%s\" but was\n"
+					 "not the same version as %s.\n"
+					 "Check your installation.",
+					 "postgres", full_path, progname);
+	}
+
+	pg_log_info("executing \"%s\" for target server to complete crash recovery",
+				exec_path);
+
+	/*
+	 * Skip processing if requested, but only after ensuring presence of
+	 * postgres.
+	 */
+	if (dry_run)
+		return;
+
+	/*
+	 * Finally run postgres in single-user mode.  There is no need to use
+	 * fsync here.  This makes the recovery faster, and the target data folder
+	 * is synced at the end anyway.
+	 */
+	/*
+	 * gpdb: use postgres instead of template1, else the below postgres
+	 * instance might hang in the below scenario:
+	 *
+	 * 1. There was a prepared but not finished "create database " dtx
+	 *    transaction which was recovered during crash recovery in the startup
+	 *    process and thus it holds the lock of database template1 since
+	 *    by default template1 is the template for database creation.
+	 *
+	 * 2. Single mode postgres process will execute the below code in
+	 * InitPostgres() after finishing crash recovery (i.e. calling
+	 * startupXLOG()) and then hang due to lock conflict.
+	 *
+	 *    LockSharedObject(DatabaseRelationId, ...);
+	 *
+	 * DB_FOR_COMMON_ACCESS is used in fts probe, dtx recovery, gdd so it's
+	 * hard to have the above kind of dtx transaction on DB_FOR_COMMON_ACCESS
+	 * since the commands (e.g. create database with template
+	 * DB_FOR_COMMON_ACCESS) would fail.
+	 */
+	snprintf(cmd, MAXCMDLEN, "\"%s\" --single -D \"%s\" %s < %s",
+			 exec_path, datadir_target, DB_FOR_COMMON_ACCESS, DEVNULL);
+
+	if (system(cmd) != 0)
+	{
+		pg_log_error("postgres single-user mode of target instance failed");
+		pg_fatal("Command was: %s", cmd);
+	}
 }
 
 static void

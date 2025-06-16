@@ -1067,7 +1067,7 @@ fetch_leaf_attnum(Oid leafRelid, const char* attname)
 	Form_pg_attribute attForm;
 	AttrNumber	result = InvalidAttrNumber;
 
-	rel = heap_open(AttributeRelationId, AccessShareLock);
+	rel = table_open(AttributeRelationId, AccessShareLock);
 
 	ScanKeyInit(&skey[0],
 				Anum_pg_attribute_attrelid,
@@ -1089,7 +1089,7 @@ fetch_leaf_attnum(Oid leafRelid, const char* attname)
 	}
 
 	systable_endscan(sscan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return result;
 }
@@ -1133,7 +1133,7 @@ fetch_leaf_att_stats(Oid leafRelid, AttrNumber leafAttNum)
 	}
 
 	systable_endscan(sscan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return tuple;
 }

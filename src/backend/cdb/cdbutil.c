@@ -1531,7 +1531,7 @@ dbid_get_dbinfo(int16 dbid)
 	if (!IS_QUERY_DISPATCHER())
 		elog(ERROR, "dbid_get_dbinfo() executed on execution segment");
 
-	rel = heap_open(GpSegmentConfigRelationId, AccessShareLock);
+	rel = table_open(GpSegmentConfigRelationId, AccessShareLock);
 
 	/* SELECT * FROM gp_segment_configuration WHERE dbid = :1 */
 	ScanKeyInit(&scankey,
@@ -1630,7 +1630,7 @@ dbid_get_dbinfo(int16 dbid)
 	}
 
 	systable_endscan(scan);
-	heap_close(rel, NoLock);
+	table_close(rel, NoLock);
 
 	return i;
 }
@@ -1658,7 +1658,7 @@ contentid_get_dbid(int16 contentid, char role, bool getPreferredRoleNotCurrentRo
 	if (!IS_QUERY_DISPATCHER())
 		elog(ERROR, "contentid_get_dbid() executed on execution segment");
 
-	rel = heap_open(GpSegmentConfigRelationId, AccessShareLock);
+	rel = table_open(GpSegmentConfigRelationId, AccessShareLock);
 
 	/* XXX XXX: CHECK THIS  XXX jic 2011/12/09 */
 	if (getPreferredRoleNotCurrentRole)
@@ -1707,7 +1707,7 @@ contentid_get_dbid(int16 contentid, char role, bool getPreferredRoleNotCurrentRo
 
 	/* no need to hold the lock, it's a catalog */
 	systable_endscan(scan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return dbid;
 }

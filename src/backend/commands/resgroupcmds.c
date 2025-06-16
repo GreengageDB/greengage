@@ -289,7 +289,7 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	 * Check the pg_resgroup relation to be certain the resource group already
 	 * exists.
 	 */
-	pg_resgroup_rel = heap_open(ResGroupRelationId, RowExclusiveLock);
+	pg_resgroup_rel = table_open(ResGroupRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
 				Anum_pg_resgroup_rsgname,
@@ -341,7 +341,7 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	 */
 	simple_heap_delete(pg_resgroup_rel, &tuple->t_self);
 	systable_endscan(sscan);
-	heap_close(pg_resgroup_rel, NoLock);
+	table_close(pg_resgroup_rel, NoLock);
 
 	/* drop the extended attributes for this resource group */
 	deleteResgroupCapabilities(groupid);
@@ -438,7 +438,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	 * AccessExclusiveLock is not compatible with any other lock.
 	 * ExclusiveLock and AccessShareLock are compatible.
 	 */
-	pg_resgroupcapability_rel = heap_open(ResGroupCapabilityRelationId,
+	pg_resgroupcapability_rel = table_open(ResGroupCapabilityRelationId,
 										  ExclusiveLock);
 
 	/* Load current resource group capabilities */
@@ -505,7 +505,7 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 									  groupid, limitType, value, "");
 	}
 
-	heap_close(pg_resgroupcapability_rel, NoLock);
+	table_close(pg_resgroupcapability_rel, NoLock);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -764,7 +764,7 @@ ResGroupCheckForRole(Oid groupId)
 	Relation pg_resgroupcapability_rel;
 	ResGroupCaps caps;
 
-	pg_resgroupcapability_rel = heap_open(ResGroupCapabilityRelationId,
+	pg_resgroupcapability_rel = table_open(ResGroupCapabilityRelationId,
 										  AccessShareLock);
 
 	/* Load current resource group capabilities */
@@ -775,7 +775,7 @@ ResGroupCheckForRole(Oid groupId)
 				 errmsg("you cannot assign a role to this resource group"),
 				 errdetail("The memory_auditor property for this group is not the default.")));
 
-	heap_close(pg_resgroupcapability_rel, AccessShareLock);
+	table_close(pg_resgroupcapability_rel, AccessShareLock);
 }
 
 /*
@@ -1461,7 +1461,7 @@ deleteResgroupCapabilities(Oid groupid)
 	ScanKeyData	 scankey;
 	SysScanDesc	 sscan;
 
-	resgroup_capability_rel = heap_open(ResGroupCapabilityRelationId,
+	resgroup_capability_rel = table_open(ResGroupCapabilityRelationId,
 										RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
@@ -1478,7 +1478,7 @@ deleteResgroupCapabilities(Oid groupid)
 
 	systable_endscan(sscan);
 
-	heap_close(resgroup_capability_rel, NoLock);
+	table_close(resgroup_capability_rel, NoLock);
 }
 
 /*
@@ -1491,7 +1491,7 @@ checkAuthIdForDrop(Oid groupId)
 	ScanKeyData	 authidScankey;
 	SysScanDesc	 authidScan;
 
-	authIdRel = heap_open(AuthIdRelationId, RowExclusiveLock);
+	authIdRel = table_open(AuthIdRelationId, RowExclusiveLock);
 	ScanKeyInit(&authidScankey,
 				Anum_pg_authid_rolresgroup,
 				BTEqualStrategyNumber, F_OIDEQ,
@@ -1506,7 +1506,7 @@ checkAuthIdForDrop(Oid groupId)
 				 errmsg("resource group is used by at least one role")));
 
 	systable_endscan(authidScan);
-	heap_close(authIdRel, RowExclusiveLock);
+	table_close(authIdRel, RowExclusiveLock);
 }
 /*
  * Convert a C str to a integer value.

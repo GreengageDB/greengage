@@ -289,6 +289,9 @@ llvm_compile_expr(ExprState *state)
 					if (op->d.fetch.fixed)
 						tts_ops = op->d.fetch.kind;
 
+					/* step should not have been generated */
+					Assert(tts_ops != &TTSOpsVirtual);
+
 					if (opcode == EEOP_INNER_FETCHSOME)
 						v_slot = v_innerslot;
 					else if (opcode == EEOP_OUTER_FETCHSOME)
@@ -299,9 +302,6 @@ llvm_compile_expr(ExprState *state)
 					/*
 					 * Check if all required attributes are available, or
 					 * whether deforming is required.
-					 *
-					 * TODO: skip nvalid check if slot is fixed and known to
-					 * be a virtual slot.
 					 */
 					v_nvalid =
 						l_load_struct_gep(b, v_slot,

@@ -118,7 +118,7 @@ _bitmap_create_lov_heapandindex(Relation rel,
 		Assert(OidIsValid(idxid));
 		*lovIndexOid = idxid;
 
-		lovHeap = heap_open(heapid, AccessExclusiveLock);
+		lovHeap = table_open(heapid, AccessExclusiveLock);
 		lovIndex = index_open(idxid, AccessExclusiveLock);
 
 		RelationSetNewRelfilenode(lovHeap, lovHeap->rd_rel->relpersistence);
@@ -153,7 +153,7 @@ _bitmap_create_lov_heapandindex(Relation rel,
 		_bt_relbuf(lovIndex, btree_metabuf);
 
 		index_close(lovIndex, NoLock);
-		heap_close(lovHeap, NoLock);
+		table_close(lovHeap, NoLock);
 
 		return;
 	}
@@ -195,7 +195,7 @@ _bitmap_create_lov_heapandindex(Relation rel,
 	CommandCounterIncrement();
 
 	/* ShareLock is not really needed here, but take it anyway */
-	lov_heap_rel = heap_open(heapid, ShareLock);
+	lov_heap_rel = table_open(heapid, ShareLock);
 
 	objAddr.classId = RelationRelationId;
 	objAddr.objectId = heapid;
@@ -264,7 +264,7 @@ _bitmap_create_lov_heapandindex(Relation rel,
 						 NULL);
 	*lovIndexOid = idxid;
 
-	heap_close(lov_heap_rel, NoLock);
+	table_close(lov_heap_rel, NoLock);
 }
 
 /*
@@ -310,7 +310,7 @@ _bitmap_open_lov_heapandindex(Relation rel pg_attribute_unused(), BMMetaPage met
 							  Relation *lovHeapP, Relation *lovIndexP,
 							  LOCKMODE lockMode)
 {
-	*lovHeapP = heap_open(metapage->bm_lov_heapId, lockMode);
+	*lovHeapP = table_open(metapage->bm_lov_heapId, lockMode);
 	*lovIndexP = index_open(metapage->bm_lov_indexId, lockMode);
 }
 
@@ -356,7 +356,7 @@ void
 _bitmap_close_lov_heapandindex(Relation lovHeap, Relation lovIndex,
 							   LOCKMODE lockMode)
 {
-	heap_close(lovHeap, lockMode);
+	table_close(lovHeap, lockMode);
 	index_close(lovIndex, lockMode);
 }
 

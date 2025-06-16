@@ -91,7 +91,7 @@ get_type_encoding(TypeName *typname)
 
 	typid = typenameTypeId(NULL, typname);
 
-	rel = heap_open(TypeEncodingRelationId, AccessShareLock);
+	rel = table_open(TypeEncodingRelationId, AccessShareLock);
 
 	/* SELECT typoptions FROM pg_type_encoding where typid = :1 */
 	ScanKeyInit(&scankey,
@@ -119,7 +119,7 @@ get_type_encoding(TypeName *typname)
 	}
 
 	systable_endscan(sscan);
-	heap_close(rel, AccessShareLock);
+	table_close(rel, AccessShareLock);
 
 	return out;
 }
@@ -135,7 +135,7 @@ remove_type_encoding(Oid typid)
 	SysScanDesc 	sscan;
 	HeapTuple 	tuple;
 
-	rel = heap_open(TypeEncodingRelationId, RowExclusiveLock);
+	rel = table_open(TypeEncodingRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
 				Anum_pg_type_encoding_typid,
@@ -150,7 +150,7 @@ remove_type_encoding(Oid typid)
 	}
 	systable_endscan(sscan);
 
-	heap_close(rel, RowExclusiveLock);
+	table_close(rel, RowExclusiveLock);
 }
 
 /*
@@ -166,7 +166,7 @@ update_type_encoding(Oid typid, Datum typoptions)
 	HeapTuple	tup;
 
 	/* SELECT * FROM pg_type_encoding WHERE typid = :1 FOR UPDATE */
-	pgtypeenc = heap_open(TypeEncodingRelationId, RowExclusiveLock);
+	pgtypeenc = table_open(TypeEncodingRelationId, RowExclusiveLock);
 	ScanKeyInit(&scankey, Anum_pg_type_encoding_typid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(typid));
@@ -199,7 +199,7 @@ update_type_encoding(Oid typid, Datum typoptions)
 		add_type_encoding(typid, typoptions);
 	}	
 	systable_endscan(scan);
-	heap_close(pgtypeenc, NoLock);
+	table_close(pgtypeenc, NoLock);
 
 }
 
