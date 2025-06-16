@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-v7-rockylinux8:
-    uses: GreengageDB/greengage-ci.github/workflows/greengage-reusable-build.yml@main
+    uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
     with:
       version: 7
       target_os: rockylinux
