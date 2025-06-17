@@ -1,4 +1,4 @@
-![Greengage](ggdb_100x100.png)
+# ![Greengage](ggdb_100x100.png)
 
 Greengage Database (GPDB) is an advanced, fully featured, open
 source data warehouse, based on PostgreSQL. It provides powerful and rapid analytics on
@@ -26,20 +26,23 @@ into fragments that are executed in the segments, and collects the results.
 More information can be found on the [project website](https://greengagedb.org/).
 
 ## Building Greengage Database with GPORCA
+
 GPORCA is a cost-based optimizer which is used by Greengage Database in
 conjunction with the PostgreSQL planner.  It is also known as just ORCA, and
 Pivotal Optimizer. The code for GPORCA resides src/backend/gporca. It is built
 automatically by default.
 
 ### Installing dependencies (for macOS developers)
+
 Follow [these macOS steps](README.macOS.md) for getting your system ready for GPDB
 
 ### Installing dependencies (for Linux developers)
+
 Follow [appropriate linux steps](README.linux.md) for getting your system ready for GPDB
 
 ### Build the database
 
-```
+```bash
 # Configure build environment to install at /usr/local/gpdb
 ./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/gpdb
 
@@ -61,23 +64,25 @@ standbys for segments and coordinator for the demo cluster can be changed
 on the fly.
 Instead of `make create-demo-cluster`, consider:
 
-```
+```bash
 DATADIRS=/tmp/gpdb-cluster PORT_BASE=5555 NUM_PRIMARY_MIRROR_PAIRS=1 WITH_MIRRORS=false make create-demo-cluster
 ```
 
 The TCP port for the regression test can be changed on the fly:
 
-```
+```bash
 PGPORT=5555 make installcheck-world
 ```
 
 To turn GPORCA off and use Postgres planner for query optimization:
-```
+
+```bash
 set optimizer=off;
 ```
 
 If you want to clean all generated files
-```
+
+```bash
 make distclean
 ```
 
@@ -85,7 +90,7 @@ make distclean
 
 * The default regression tests
 
-```
+```bash
 make installcheck-world
 ```
 
@@ -116,7 +121,8 @@ make installcheck-world
 
 Currently, GPDB is built with GPORCA by default. If you want to build GPDB
 without GPORCA, configure requires `--disable-orca` flag to be set.
-```
+
+```bash
 # Clean environment
 make distclean
 
@@ -139,7 +145,6 @@ gpperfmon is dependent on several libraries like apr, apu, and libsigar
 GPDB supports Python3 with plpython3u UDF
 
 See [how to enable Python3](src/pl/plpython/README.md) for details.
-
 
 ### Building GPDB client tools on Windows
 
