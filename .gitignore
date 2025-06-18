@@ -67,3 +67,4 @@ compile_commands.json
 /Debug/
 /Release/
 /CMakeLists.txt
+/ssh_keys/
