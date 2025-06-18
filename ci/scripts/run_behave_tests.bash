@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+[ -z "$DOCKER_COMPOSE" ] && source ${MY_PATH:=$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)}/docker_compose_detect.sh
 set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
@@ -47,7 +48,7 @@ run_feature() {
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
-  docker-compose -p $project -f ci/docker-compose.yaml exec -T \
+  $DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
@@ -56,7 +57,7 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  docker-compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
+  $DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
 
   if [[ $status > 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
   exit $status

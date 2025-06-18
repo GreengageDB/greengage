@@ -1,10 +1,11 @@
 #!/bin/bash
+[ -z "$DOCKER_COMPOSE" ] && source ${MY_PATH:=$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)}/docker_compose_detect.sh
 set -eox pipefail
 
 project="resgroup"
 
 function cleanup {
-  docker-compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down
+  $DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml --env-file ci/.env down
 }
 
 mkdir ssh_keys -p
@@ -21,7 +22,7 @@ bash ci/scripts/init_containers.sh $project cdw sdw1
 for service in 'cdw' 'sdw1'
 do
   #grant access rights to group controllers
-  docker-compose -p $project -f ci/docker-compose.yaml exec -T $service bash -c "
+  $DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml exec -T $service bash -c "
     chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset} &&
     mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb &&
     chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb &&
@@ -29,13 +30,13 @@ do
 done
 
 #create cluster
-docker-compose -p $project -f ci/docker-compose.yaml exec -T cdw \
+$DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml exec -T cdw \
  bash -c "source gpdb_src/concourse/scripts/common.bash && HOSTS_LIST='sdw1' make_cluster"
 
 #disable exit on error to allow log collection regardless of return code
 set +e
 #run tests
-docker-compose -p $project -f ci/docker-compose.yaml exec -Tu gpadmin cdw bash -ex <<EOF
+$DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml exec -Tu gpadmin cdw bash -ex <<EOF
         source /usr/local/greengage-db-devel/greengage_path.sh
         source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
         export LDFLAGS="-L\${GPHOME}/lib"
@@ -72,7 +73,7 @@ EOF1
 EOF
 
 exitcode=$?
-docker-compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
+$DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
   cd /home/gpadmin
   tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
   tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
@@ -81,7 +82,7 @@ docker-compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
   tar --ignore-failed-read -czf /logs/results.tar.gz gpdb_src/src/test/isolation2/results/resgroup/ gpdb_src/src/test/isolation2/regression.diffs
 EOF
 
-docker-compose -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
+$DOCKER_COMPOSE -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
   cd /home/gpadmin
   tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
   tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
