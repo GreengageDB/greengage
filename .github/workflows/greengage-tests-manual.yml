@@ -33,19 +33,19 @@ on:
         description: 'Enable debug mode'
         type: boolean
         default: false
-      run_behave_tests:
-        description: 'Run Behave tests'
+      run_regression_tests:
+        description: 'Run Regression tests'
         type: boolean
         default: true
-      run_regression_gpstop:
+      run_behave_gpstop:
         description: 'Run Regression gpstop feature'
         type: boolean
         default: true
-      run_regression_gpstart:
+      run_behave_gpstart:
         description: 'Run Regression gpstart feature'
         type: boolean
         default: true
-      run_regression_gpcheck:
+      run_behave_gpcheck:
         description: 'Run Regression gpcheck feature'
         type: boolean
         default: true
@@ -105,7 +105,7 @@ jobs:
           esac
 
   behave-tests:
-    if: inputs.run_behave_tests
+    if: inputs.run_behave_gpstop || inputs.run_behave_gpstart || inputs.run_behave_gpcheck
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@main
     with:
@@ -114,11 +114,14 @@ jobs:
       target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
       python3: ${{ needs.parse_os.outputs.python3 }}
       ref: ${{ inputs.target_branch }}
+      run_behave_gpstop: ${{ inputs.run_behave_gpstop }}
+      run_behave_gpstart: ${{ inputs.run_behave_gpstart }}
+      run_behave_gpcheck: ${{ inputs.run_behave_gpcheck }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   regression-tests:
-    if: inputs.run_regression_gpstop || inputs.run_regression_gpstart || inputs.run_regression_gpcheck
+    if: inputs.run_regression_tests
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@main
     with:
@@ -127,8 +130,5 @@ jobs:
       target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
       python3: ${{ needs.parse_os.outputs.python3 }}
       ref: ${{ inputs.target_branch }}
-      run_regression_gpstop: ${{ inputs.run_regression_gpstop }}
-      run_regression_gpstart: ${{ inputs.run_regression_gpstart }}
-      run_regression_gpcheck: ${{ inputs.run_regression_gpcheck }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
