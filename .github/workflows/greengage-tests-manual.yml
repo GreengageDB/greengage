@@ -37,10 +37,18 @@ on:
         description: 'Run Behave tests'
         type: boolean
         default: true
-      run_regression_tests:
-        description: 'Run Regression tests'
+      run_regression_gpstop:
+        description: 'Run Regression gpstop feature'
         type: boolean
-        default: false
+        default: true
+      run_regression_gpstart:
+        description: 'Run Regression gpstart feature'
+        type: boolean
+        default: true
+      run_regression_gpcheck:
+        description: 'Run Regression gpcheck feature'
+        type: boolean
+        default: true
 
 jobs:
   parse-os:
@@ -104,20 +112,23 @@ jobs:
       version: ${{ needs.parse-os.outputs.version }}
       target_os: ${{ needs.parse-os.outputs.target_os }}
       target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
-      python3: ${{ needs.parse-os.outputs.python3 }}
+      python3: ${{ needs.parse_os.outputs.python3 }}
       ref: ${{ inputs.target_branch }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   regression-tests:
-    if: inputs.run_regression_tests
+    if: inputs.run_regression_gpstop || inputs.run_regression_gpstart || inputs.run_regression_gpcheck
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@main
     with:
       version: ${{ needs.parse-os.outputs.version }}
       target_os: ${{ needs.parse-os.outputs.target_os }}
       target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
-      python3: ${{ needs.parse-os.outputs.python3 }}
+      python3: ${{ needs.parse_os.outputs.python3 }}
       ref: ${{ inputs.target_branch }}
+      run_regression_gpstop: ${{ inputs.run_regression_gpstop }}
+      run_regression_gpstart: ${{ inputs.run_regression_gpstart }}
+      run_regression_gpcheck: ${{ inputs.run_regression_gpcheck }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
