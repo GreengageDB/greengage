@@ -38,15 +38,15 @@ on:
         type: boolean
         default: true
       run_behave_gpstop:
-        description: 'Run Regression gpstop feature'
+        description: 'Run Behave gpstop feature'
         type: boolean
         default: true
       run_behave_gpstart:
-        description: 'Run Regression gpstart feature'
+        description: 'Run Behave gpstart feature'
         type: boolean
         default: true
       run_behave_gpcheck:
-        description: 'Run Regression gpcheck feature'
+        description: 'Run Behave gpcheck feature'
         type: boolean
         default: true
 
