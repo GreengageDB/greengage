@@ -33,6 +33,14 @@ on:
         description: 'Enable debug mode'
         type: boolean
         default: false
+      run_behave_tests:
+        description: 'Run Behave tests'
+        type: boolean
+        default: true
+      run_regression_tests:
+        description: 'Run Regression tests'
+        type: boolean
+        default: false
 
 jobs:
   parse-os:
@@ -88,9 +96,23 @@ jobs:
               ;;
           esac
 
-  manual-build:
+  behave-tests:
+    if: inputs.run_behave_tests
     needs: parse-os
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests.yml@main
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@main
+    with:
+      version: ${{ needs.parse-os.outputs.version }}
+      target_os: ${{ needs.parse-os.outputs.target_os }}
+      target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
+      python3: ${{ needs.parse-os.outputs.python3 }}
+      ref: ${{ inputs.target_branch }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  regression-tests:
+    if: inputs.run_regression_tests
+    needs: parse-os
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@main
     with:
       version: ${{ needs.parse-os.outputs.version }}
       target_os: ${{ needs.parse-os.outputs.target_os }}
