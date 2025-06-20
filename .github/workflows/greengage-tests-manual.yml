@@ -33,20 +33,12 @@ on:
         description: 'Enable debug mode'
         type: boolean
         default: false
+      run_behave_tests:
+        description: 'Run Behave tests'
+        type: boolean
+        default: true
       run_regression_tests:
         description: 'Run Regression tests'
-        type: boolean
-        default: true
-      run_gpstop:
-        description: 'Run gpstop Behave feature'
-        type: boolean
-        default: true
-      run_gpstart:
-        description: 'Run gpstart Behave feature'
-        type: boolean
-        default: true
-      run_gpcheck:
-        description: 'Run gpcheck Behave feature'
         type: boolean
         default: true
 
@@ -105,7 +97,7 @@ jobs:
           esac
 
   behave-tests:
-    if: inputs.run_gpstop || inputs.run_gpstart || inputs.run_gpcheck
+    if: inputs.run_behave_tests
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@main
     with:
@@ -114,9 +106,6 @@ jobs:
       target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
       python3: ${{ needs.parse_os.outputs.python3 }}
       ref: ${{ inputs.target_branch }}
-      run_gpstop: ${{ inputs.run_gpstop }}
-      run_gpstart: ${{ inputs.run_gpstart }}
-      run_gpcheck: ${{ inputs.run_gpcheck }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
