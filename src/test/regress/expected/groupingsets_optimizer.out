@@ -886,11 +886,31 @@ explain (costs off)
 
 select v.c, (select count(*) from gstest2 group by () having v.c)
   from (values (false),(true)) v(c) order by v.c;
-ERROR:  unrecognized node type: 771 (nodeFuncs.c:3424)
+ c | count 
+---+-------
+ f |      
+ t |     9
+(2 rows)
+
 explain (costs off)
   select v.c, (select count(*) from gstest2 group by () having v.c)
     from (values (false),(true)) v(c) order by v.c;
-ERROR:  unrecognized node type: 771 (nodeFuncs.c:3424)
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Result
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Nested Loop Left Join
+               Join Filter: "Values".column1
+               ->  Values Scan on "Values"
+               ->  Materialize
+                     ->  Finalize Aggregate
+                           ->  Gather Motion 3:1  (slice1; segments: 3)
+                                 ->  Partial Aggregate
+                                       ->  Seq Scan on gstest2
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
+
 -- HAVING with GROUPING queries
 select ten, grouping(ten) from onek
 group by grouping sets(ten) having grouping(ten) >= 0

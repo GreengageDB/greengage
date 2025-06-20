@@ -34,9 +34,6 @@ insert into gstest2 values (1, 1, 1, 1, 1);
 insert into gstest2 values (2, 2, 2, 2, 1);
 select d from gstest2 group by grouping sets ((a,b), (a));
 
--- Orca falls back due to HAVING clause with outer references
-select v.c, (select count(*) from gstest1 group by () having v.c) from (values (false),(true)) v(c);
-
 -- Orca falls back due to grouping function with multiple arguments
 select a, b, grouping(a,b), sum(v), count(*), max(v) from gstest1 group by rollup (a,b);
 -- Orca falls back due to grouping function with outer references
