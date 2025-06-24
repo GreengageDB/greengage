@@ -34,15 +34,19 @@ on:
         type: boolean
         default: false
       run_behave_tests:
-        description: 'Run Behave tests'
+        description: 'Behave tests'
         type: boolean
         default: true
       run_regression_tests_gh:
-        description: 'Run Regression tests (GH)'
+        description: 'Regression tests (GH)'
         type: boolean
         default: true
       run_regression_tests_gc:
-        description: 'Run Regression tests (GC)'
+        description: 'Regression tests (GC)'
+        type: boolean
+        default: true
+      run_orca_tests:
+        description: 'ORCA Linter & Unit tests'
         type: boolean
         default: true
 
@@ -130,6 +134,19 @@ jobs:
     if: inputs.run_regression_tests_gc
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression-gc.yml@main
+    with:
+      version: ${{ needs.parse-os.outputs.version }}
+      target_os: ${{ needs.parse-os.outputs.target_os }}
+      target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
+      python3: ${{ needs.parse_os.outputs.python3 }}
+      ref: ${{ inputs.target_branch }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  orca-tests:
+    if: inputs.run_orca_tests
+    needs: parse-os
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@main
     with:
       version: ${{ needs.parse-os.outputs.version }}
       target_os: ${{ needs.parse-os.outputs.target_os }}
