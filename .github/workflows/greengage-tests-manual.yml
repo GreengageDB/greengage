@@ -109,10 +109,23 @@ jobs:
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
-  regression-tests:
+  regression-tests-gh:
     if: inputs.run_regression_tests
     needs: parse-os
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@main
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression-gh.yml@main
+    with:
+      version: ${{ needs.parse-os.outputs.version }}
+      target_os: ${{ needs.parse-os.outputs.target_os }}
+      target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
+      python3: ${{ needs.parse_os.outputs.python3 }}
+      ref: ${{ inputs.target_branch }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  regression-tests-gc:
+    if: inputs.run_regression_tests
+    needs: parse-os
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression-gc.yml@main
     with:
       version: ${{ needs.parse-os.outputs.version }}
       target_os: ${{ needs.parse-os.outputs.target_os }}
