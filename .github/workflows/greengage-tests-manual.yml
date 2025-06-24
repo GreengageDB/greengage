@@ -37,8 +37,12 @@ on:
         description: 'Run Behave tests'
         type: boolean
         default: true
-      run_regression_tests:
-        description: 'Run Regression tests'
+      run_regression_tests_gh:
+        description: 'Run Regression tests (GH)'
+        type: boolean
+        default: true
+      run_regression_tests_gc:
+        description: 'Run Regression tests (GC)'
         type: boolean
         default: true
 
@@ -110,7 +114,7 @@ jobs:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   regression-tests-gh:
-    if: inputs.run_regression_tests
+    if: inputs.run_regression_tests_gh
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression-gh.yml@main
     with:
@@ -123,7 +127,7 @@ jobs:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   regression-tests-gc:
-    if: inputs.run_regression_tests
+    if: inputs.run_regression_tests_gc
     needs: parse-os
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression-gc.yml@main
     with:
