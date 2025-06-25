@@ -133,7 +133,7 @@ jobs:
             --cpus=4 \
             --memory=8 \
             --containerd=none \
-            --set '.mounts=[{"location":"~/","writable":true}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
+            --set '.mounts=[{"location":"/","writable":true}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
             template://almalinux-8
 
       - name: Install dockerd in the guest VM
