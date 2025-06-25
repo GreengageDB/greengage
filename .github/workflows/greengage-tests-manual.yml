@@ -49,6 +49,10 @@ on:
         description: 'ORCA Linter & Unit tests'
         type: boolean
         default: true
+      run_resgroup_tests:
+        description: 'Resource groups tests'
+        type: boolean
+        default: true
 
 jobs:
   parse-os:
@@ -155,3 +159,17 @@ jobs:
       ref: ${{ inputs.target_branch }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  resgroup-tests:
+    if: inputs.run_resgroup_tests
+    needs: parse-os
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@main
+    with:
+      version: ${{ needs.parse-os.outputs.version }}
+      target_os: ${{ needs.parse-os.outputs.target_os }}
+      target_os_version: ${{ needs.parse-os.outputs.target_os_version }}
+      python3: ${{ needs.parse_os.outputs.python3 }}
+      ref: ${{ inputs.target_branch }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
