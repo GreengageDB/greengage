@@ -133,6 +133,7 @@ jobs:
             --cpus=4 \
             --memory=8 \
             --containerd=none \
+            --mount-type 9p \
             --set '.mounts=[{"location":"~/","writable":true, "9p": { "securityModel": "mapped-xattr", "cache": "mmap"}}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
             template://almalinux-8
 
