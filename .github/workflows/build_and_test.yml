@@ -112,6 +112,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - name: Setup Lima
         uses: lima-vm/lima-actions/setup@v1
         id: lima-actions-setup
