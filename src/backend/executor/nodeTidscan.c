@@ -28,6 +28,7 @@
 #include "cdb/cdbvars.h"
 #include "executor/execdebug.h"
 #include "executor/nodeTidscan.h"
+#include "lib/qunique.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "storage/bufmgr.h"
@@ -262,21 +263,13 @@ TidListEval(TidScanState *tidstate)
 	 */
 	if (numTids > 1)
 	{
-		int			lastTid;
-		int			i;
-
 		/* CurrentOfExpr could never appear OR'd with something else */
 		Assert(!tidstate->tss_isCurrentOf);
 
 		qsort((void *) tidList, numTids, sizeof(ItemPointerData),
 			  itemptr_comparator);
-		lastTid = 0;
-		for (i = 1; i < numTids; i++)
-		{
-			if (!ItemPointerEquals(&tidList[lastTid], &tidList[i]))
-				tidList[++lastTid] = tidList[i];
-		}
-		numTids = lastTid + 1;
+		numTids = qunique(tidList, numTids, sizeof(ItemPointerData),
+						  itemptr_comparator);
 	}
 
 	tidstate->tss_TidList = tidList;

@@ -1,4 +1,5 @@
 /* items in this file should be ordered */
+		"backtrace_functions",
 		"bytea_output",
 		"client_min_messages",
 		"commit_delay",
@@ -92,6 +93,7 @@
 		"log_duration",
 		"log_error_verbosity",
 		"log_executor_stats",
+		"log_min_duration_sample",
 		"log_min_duration_statement",
 		"log_min_error_statement",
 		"log_min_messages",

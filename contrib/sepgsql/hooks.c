@@ -20,11 +20,10 @@
 #include "executor/executor.h"
 #include "fmgr.h"
 #include "miscadmin.h"
+#include "sepgsql.h"
 #include "tcop/utility.h"
 #include "utils/guc.h"
 #include "utils/queryenvironment.h"
-
-#include "sepgsql.h"
 
 PG_MODULE_MAGIC;
 
@@ -373,13 +372,11 @@ sepgsql_utility_command(PlannedStmt *pstmt,
 									context, params, queryEnv,
 									dest, completionTag);
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
 		sepgsql_context_info = saved_context_info;
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
-	sepgsql_context_info = saved_context_info;
 }
 
 /*

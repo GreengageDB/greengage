@@ -15,10 +15,6 @@
  */
 #include "postgres_fe.h"
 
-#include "pg_backup_archiver.h"
-#include "pg_backup_utils.h"
-#include "pg_dump.h"
-
 #include <ctype.h>
 
 #include "catalog/pg_class_d.h"
@@ -31,7 +27,9 @@
 #include "catalog/pg_type_d.h"
 #include "common/hashfn.h"
 #include "fe_utils/string_utils.h"
-
+#include "pg_backup_archiver.h"
+#include "pg_backup_utils.h"
+#include "pg_dump.h"
 
 /*
  * Variables for mapping DumpId to DumpableObject

@@ -11,9 +11,8 @@
 
 #include "fe_utils/connect.h"
 #include "fe_utils/string_utils.h"
-#include "pg_upgrade.h"
-
 #include "greenplum/pg_upgrade_greenplum.h"
+#include "pg_upgrade.h"
 
 static PGconn *get_db_conn(ClusterInfo *cluster, const char *db_name);
 

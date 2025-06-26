@@ -23,6 +23,9 @@
 #include "cdb/cdbvars.h"                /* gp_reraise_signal */
 
 #include <unistd.h>
+#ifdef HAVE_EXECINFO_H
+#include <execinfo.h>
+#endif
 
 /*
  * ExceptionalCondition - Handles the failure of an Assert()
@@ -49,6 +52,16 @@ ExceptionalCondition(const char *conditionName,
 				
 	/* Usually this shouldn't be needed, but make sure the msg went out */
 	fflush(stderr);
+
+#ifdef HAVE_BACKTRACE_SYMBOLS
+	{
+		void	   *buf[100];
+		int			nframes;
+
+		nframes = backtrace(buf, lengthof(buf));
+		backtrace_symbols_fd(buf, nframes, fileno(stderr));
+	}
+#endif
 
 #ifdef SLEEP_ON_ASSERT
 

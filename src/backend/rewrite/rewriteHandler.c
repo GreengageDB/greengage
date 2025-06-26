@@ -1829,7 +1829,7 @@ ApplyRetrieveRule(Query *parsetree,
 
 	rte->rtekind = RTE_SUBQUERY;
 	rte->subquery = rule_action;
-	rte->security_barrier = RelationIsSecurityView(relation);
+	rte->security_barrier = RelationIsSecurityView(relation, parsetree);
 	/* Clear fields that should not be set in a subquery RTE */
 	rte->relid = InvalidOid;
 	rte->relkind = 0;
@@ -3423,7 +3423,7 @@ rewriteTargetView(Query *parsetree, Relation view)
 
 		ChangeVarNodes(viewqual, base_rt_index, new_rt_index, 0);
 
-		if (RelationIsSecurityView(view))
+		if (RelationIsSecurityView(view, parsetree))
 		{
 			/*
 			 * The view's quals go in front of existing barrier quals: those

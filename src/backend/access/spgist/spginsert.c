@@ -40,7 +40,7 @@ typedef struct
 
 /* Callback to process one heap tuple during table_index_build_scan */
 static void
-spgistBuildCallback(Relation index, ItemPointer tupleId, Datum *values,
+spgistBuildCallback(Relation index, ItemPointer tid, Datum *values,
 					bool *isnull, bool tupleIsAlive, void *state)
 {
 	SpGistBuildState *buildstate = (SpGistBuildState *) state;
@@ -55,7 +55,7 @@ spgistBuildCallback(Relation index, ItemPointer tupleId, Datum *values,
 	 * lock on some buffer.  So we need to be willing to retry.  We can flush
 	 * any temp data when retrying.
 	 */
-	while (!spgdoinsert(index, &buildstate->spgstate, tupleId,
+	while (!spgdoinsert(index, &buildstate->spgstate, tid,
 						*values, *isnull))
 	{
 		MemoryContextReset(buildstate->tmpCtx);

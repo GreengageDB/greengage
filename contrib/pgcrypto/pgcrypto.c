@@ -34,13 +34,13 @@
 #include <ctype.h>
 
 #include "parser/scansup.h"
+#include "pgcrypto.h"
+#include "px-crypt.h"
+#include "px.h"
 #include "utils/builtins.h"
 #include "utils/uuid.h"
 #include "utils/guc.h"
 
-#include "px.h"
-#include "px-crypt.h"
-#include "pgcrypto.h"
 #include "pgp.h"
 
 PG_MODULE_MAGIC;

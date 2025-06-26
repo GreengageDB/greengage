@@ -13,11 +13,18 @@ top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
 override CPPFLAGS := -I. -I$(srcdir) $(CPPFLAGS)
-
 override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
-OBJS = walsender.o walreceiverfuncs.o walreceiver.o basebackup.o \
-	repl_gram.o slot.o slotfuncs.o syncrep.o syncrep_gram.o
+OBJS = \
+	basebackup.o \
+	repl_gram.o \
+	slot.o \
+	slotfuncs.o \
+	syncrep.o \
+	syncrep_gram.o \
+	walreceiver.o \
+	walreceiverfuncs.o \
+	walsender.o
 
 OBJS += gp_replication.o
 

@@ -1866,13 +1866,11 @@ ProcessUtilitySlow(ParseState *pstate,
 					address = ExecRefreshMatView((RefreshMatViewStmt *) parsetree,
 												 queryString, params, completionTag);
 				}
-				PG_CATCH();
+				PG_FINALLY();
 				{
 					EventTriggerUndoInhibitCommandCollection();
-					PG_RE_THROW();
 				}
 				PG_END_TRY();
-				EventTriggerUndoInhibitCommandCollection();
 				break;
 
 			case T_CreateTrigStmt:
@@ -2081,16 +2079,12 @@ ProcessUtilitySlow(ParseState *pstate,
 			EventTriggerDDLCommandEnd(parsetree);
 		}
 	}
-	PG_CATCH();
+	PG_FINALLY();
 	{
 		if (needCleanup)
 			EventTriggerEndCompleteQuery();
-		PG_RE_THROW();
 	}
 	PG_END_TRY();
-
-	if (needCleanup)
-		EventTriggerEndCompleteQuery();
 }
 
 /*
@@ -2842,7 +2836,14 @@ CreateCommandTag(Node *parsetree)
 			break;
 
 		case T_RenameStmt:
-			tag = AlterObjectTypeCommandTag(((RenameStmt *) parsetree)->renameType);
+			/*
+			 * When the column is renamed, the command tag is created
+			 * from its relation type
+			 */
+			tag = AlterObjectTypeCommandTag(
+				((RenameStmt *) parsetree)->renameType == OBJECT_COLUMN ?
+				((RenameStmt *) parsetree)->relationType :
+				((RenameStmt *) parsetree)->renameType);
 			break;
 
 		case T_AlterObjectDependsStmt:
