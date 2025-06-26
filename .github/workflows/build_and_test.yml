@@ -12,174 +12,182 @@ on:
       - 'ci/**'
 
 jobs:
-  # build:
-  #   name: Build and run unit tests
-  #   runs-on: ubuntu-latest
+  build:
+    name: Build and run unit tests
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #         filter: tree:0
-  #         submodules: 'recursive'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+          submodules: 'recursive'
 
-  #     - name: Login to GHCR
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ghcr.io
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
-  #       with:
-  #         version: latest
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
 
-  #     - name: Set image name
-  #       run: |
-  #         echo "IMAGE=ghcr.io/${REPO,,}_6_u22:${HASH}" >>${GITHUB_ENV}
-  #       env:
-  #         REPO: '${{ github.repository }}'
-  #         HASH: '${{ github.sha }}'
+      - name: Set image name
+        run: |
+          echo "IMAGE=ghcr.io/${REPO,,}_6_u22:${HASH}" >>${GITHUB_ENV}
+        env:
+          REPO: '${{ github.repository }}'
+          HASH: '${{ github.sha }}'
 
-  #     - name: Build and export
-  #       uses: docker/build-push-action@v6
-  #       with:
-  #         context: .
-  #         file: ./ci/Dockerfile.ubuntu
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
-  #         push: true # ${{ github.event_name == 'push' }}
-  #         tags: ${{ env.IMAGE }}
+      - name: Check Orca code style
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./ci/Dockerfile.linter
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-  # regression:
-  #   name: Installcheck World with optimizer=${{ matrix.optimizer }}
-  #   needs: build
-  #   runs-on: ubuntu-latest
+      - name: Build and export
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./ci/Dockerfile.ubuntu
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: true # ${{ github.event_name == 'push' }}
+          tags: ${{ env.IMAGE }}
 
-  #   strategy:
-  #     matrix:
-  #       optimizer: [on, off]
+  regression:
+    name: Installcheck World with optimizer=${{ matrix.optimizer }}
+    needs: build
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - name: Move /var/lib/docker/
-  #       run: sudo mv /var/lib/docker/ "${GITHUB_WORKSPACE}/docker"
+    strategy:
+      matrix:
+        optimizer: [on, off]
 
-  #     - name: Maximize build space
-  #       uses: easimon/maximize-build-space@master
-  #       with:
-  #         root-reserve-mb: 512
-  #         temp-reserve-mb: 32
-  #         swap-size-mb: 32
-  #         remove-dotnet: 'true'
-  #         remove-android: 'true'
-  #         remove-haskell: 'true'
-  #         remove-codeql: 'true'
-  #         remove-docker-images: 'true'
-  #         build-mount-path: '/var/lib/docker/'
+    steps:
+      - name: Move /var/lib/docker/
+        run: sudo mv /var/lib/docker/ "${GITHUB_WORKSPACE}/docker"
 
-  #     - name: Restore /var/lib/docker/
-  #       run: sudo sh -c "mv ${GITHUB_WORKSPACE}/docker/* /var/lib/docker"
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 512
+          temp-reserve-mb: 32
+          swap-size-mb: 32
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          build-mount-path: '/var/lib/docker/'
 
-  #     - name: Login to GHCR
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ghcr.io
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore /var/lib/docker/
+        run: sudo sh -c "mv ${GITHUB_WORKSPACE}/docker/* /var/lib/docker"
 
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
-  #       with:
-  #         version: latest
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - name: Regression test with optimizer=${{ matrix.optimizer }}
-  #       run: |
-  #         docker run --name gpdb6_opt_on --rm -e TEST_OS=ubuntu \
-  #           -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
-  #           --sysctl 'kernel.sem=500 1024000 200 4096' ghcr.io/${REPO,,}_6_u22:${HASH} \
-  #           bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
-  #       env:
-  #         REPO: '${{ github.repository }}'
-  #         HASH: '${{ github.sha }}'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
 
-  # resgroup:
-  #   name: Resource groups tests
-  #   needs: build
-  #   runs-on: ubuntu-latest
+      - name: Regression test with optimizer=${{ matrix.optimizer }}
+        run: |
+          docker run --name gpdb6_opt_on --rm -e TEST_OS=ubuntu \
+            -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
+            --sysctl 'kernel.sem=500 1024000 200 4096' ghcr.io/${REPO,,}_6_u22:${HASH} \
+            bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
+        env:
+          REPO: '${{ github.repository }}'
+          HASH: '${{ github.sha }}'
 
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #         filter: tree:0
+  resgroup:
+    name: Resource groups tests
+    needs: build
+    runs-on: ubuntu-latest
 
-  #     - name: Login to GHCR
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ghcr.io
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
 
-  #     - name: Set up Docker Compose
-  #       uses: docker/setup-compose-action@v1
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - name: Setup Lima
-  #       uses: lima-vm/lima-actions/setup@v1
-  #       id: lima-actions-setup
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
 
-  #     - uses: actions/cache@v4
-  #       with:
-  #         path: ~/.cache/lima
-  #         key: lima-${{ steps.lima-actions-setup.outputs.version }}
+      - name: Setup Lima
+        uses: lima-vm/lima-actions/setup@v1
+        id: lima-actions-setup
 
-  #     - name: Start the guest VM
-  #       run: |
-  #         set -eux
-  #         # containerd=none is set because the built-in containerd support conflicts with Docker
-  #         limactl start \
-  #           --name=default \
-  #           --cpus=4 \
-  #           --memory=8 \
-  #           --containerd=none \
-  #           --mount-type 9p \
-  #           --set '.mounts=[{"location":"~/","writable":true, "9p": { "securityModel": "mapped-xattr", "cache": "mmap"}}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
-  #           template://ubuntu-20.04.yaml
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/lima
+          key: lima-${{ steps.lima-actions-setup.outputs.version }}
 
-  #     - name: Install dockerd in the guest VM
-  #       run: |
-  #         set -eux
-  #         lima sudo mkdir -p /etc/systemd/system/docker.socket.d
-  #         cat <<-EOF | lima sudo tee /etc/systemd/system/docker.socket.d/override.conf
-  #         [Socket]
-  #         SocketUser=$(whoami)
-  #         EOF
-  #         lima curl -fsSL https://get.docker.com -o get-docker.sh
-  #         lima sudo sh get-docker.sh
+      - name: Start the guest VM
+        run: |
+          set -eux
+          # containerd=none is set because the built-in containerd support conflicts with Docker
+          limactl start \
+            --name=default \
+            --cpus=4 \
+            --memory=8 \
+            --containerd=none \
+            --mount-type 9p \
+            --set '.mounts=[{"location":"~/","writable":true, "9p": { "securityModel": "mapped-xattr", "cache": "mmap"}}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
+            template://ubuntu-20.04.yaml
 
-  #     - name: Configure the host to use dockerd in the guest VM
-  #       run: |
-  #         set -eux
-  #         sudo systemctl disable --now docker.service docker.socket
-  #         export DOCKER_HOST="unix://$(limactl ls --format '{{.Dir}}/sock/docker.sock' default)"
-  #         echo "DOCKER_HOST=${DOCKER_HOST}" >>$GITHUB_ENV
-  #         docker info
-  #         docker version
+      - name: Install dockerd in the guest VM
+        run: |
+          set -eux
+          lima sudo mkdir -p /etc/systemd/system/docker.socket.d
+          cat <<-EOF | lima sudo tee /etc/systemd/system/docker.socket.d/override.conf
+          [Socket]
+          SocketUser=$(whoami)
+          EOF
+          lima curl -fsSL https://get.docker.com -o get-docker.sh
+          lima sudo sh get-docker.sh
 
-  #     - name: Resource groups test
-  #       run: |
-  #         export IMAGE="ghcr.io/${REPO,,}_6_u22:${HASH}"
-  #         ln -f -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
-  #         ./ci/scripts/run_resgroup_test.bash
-  #       env:
-  #         REPO: '${{ github.repository }}'
-  #         HASH: '${{ github.sha }}'
+      - name: Configure the host to use dockerd in the guest VM
+        run: |
+          set -eux
+          sudo systemctl disable --now docker.service docker.socket
+          export DOCKER_HOST="unix://$(limactl ls --format '{{.Dir}}/sock/docker.sock' default)"
+          echo "DOCKER_HOST=${DOCKER_HOST}" >>$GITHUB_ENV
+          docker info
+          docker version
+
+      - name: Resource groups test
+        run: |
+          export IMAGE="ghcr.io/${REPO,,}_6_u22:${HASH}"
+          ln -f -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+          ./ci/scripts/run_resgroup_test.bash
+        env:
+          REPO: '${{ github.repository }}'
+          HASH: '${{ github.sha }}'
 
   behavior:
     name: Behavior tests for management tools
-    # needs: build
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
@@ -225,4 +233,24 @@ jobs:
           ./ci/scripts/run_behave_tests.bash
         env:
           REPO: '${{ github.repository }}'
-          HASH: d927f0824c83f8a20aa45f408aefc1cedff23f33
+          HASH: '${{ github.sha }}'
+
+  orca_minidumps:
+    name: Orca minidump tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Orca minidump tests
+        run: |
+          export IMAGE="ghcr.io/${REPO,,}_6_u22:${HASH}"
+          docker run --rm ${IMAGE} gpdb_src/concourse/scripts/unit_tests_gporca.bash
+        env:
+          REPO: '${{ github.repository }}'
+          HASH: '${{ github.sha }}'
