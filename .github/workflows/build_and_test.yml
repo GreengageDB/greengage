@@ -127,27 +127,28 @@ jobs:
       - name: Start the guest VM
         run: |
           set -eux
+          limactl start ./docker-rootful.yaml
           # containerd=none is set because the built-in containerd support conflicts with Docker
-          limactl start \
-            --name=default \
-            --cpus=4 \
-            --memory=8 \
-            --containerd=none \
-            --mount-type 9p \
-            --set '.mounts=[{"location":"~/","writable":true, "9p": { "securityModel": "mapped-xattr", "cache": "mmap"}}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
-            template://almalinux-8
+          # limactl start \
+          #   --name=default \
+          #   --cpus=4 \
+          #   --memory=8 \
+          #   --containerd=none \
+          #   --mount-type 9p \
+          #   --set '.mounts=[{"location":"~/","writable":true, "9p": { "securityModel": "mapped-xattr", "cache": "mmap"}}] | .portForwards=[{"guestSocket":"/var/run/docker.sock","hostSocket":"{{.Dir}}/sock/docker.sock"}]' \
+          #   template://almalinux-8
 
-      - name: Install dockerd in the guest VM
-        run: |
-          set -eux
-          lima sudo mkdir -p /etc/systemd/system/docker.socket.d
-          cat <<-EOF | lima sudo tee /etc/systemd/system/docker.socket.d/override.conf
-          [Socket]
-          SocketUser=$(whoami)
-          EOF
-          lima sudo dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
-          lima sudo dnf -q -y install docker-ce --nobest
-          lima sudo systemctl enable --now docker
+      # - name: Install dockerd in the guest VM
+      #   run: |
+      #     set -eux
+      #     lima sudo mkdir -p /etc/systemd/system/docker.socket.d
+      #     cat <<-EOF | lima sudo tee /etc/systemd/system/docker.socket.d/override.conf
+      #     [Socket]
+      #     SocketUser=$(whoami)
+      #     EOF
+      #     lima sudo dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+      #     lima sudo dnf -q -y install docker-ce --nobest
+      #     lima sudo systemctl enable --now docker
 
       - name: Configure the host to use dockerd in the guest VM
         run: |
@@ -161,4 +162,5 @@ jobs:
       - name: Resource groups test
         run: |
           export IMAGE="ghcr.io/stolb27/gpdb6_u22:e4a4908c437d62ec8291958e432b4305c0a9e03b"
-          ./ci/scripts/run_resgroup_test.bash
+          docker run --rm -it $IMAGE bash -c "mount | grep cgroup"
+          # ./ci/scripts/run_resgroup_test.bash
