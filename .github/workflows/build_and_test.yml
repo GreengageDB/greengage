@@ -127,7 +127,7 @@ jobs:
       - name: Start the guest VM
         run: |
           set -eux
-          limactl start template://docker-rootful.yaml
+          limactl start --name=default template://docker-rootful.yaml
           # containerd=none is set because the built-in containerd support conflicts with Docker
           # limactl start \
           #   --name=default \
