@@ -44,7 +44,7 @@ jobs:
           cache-to: type=gha,mode=max
           push: true # ${{ github.event_name == 'push' }}
           tags: |
-            ghcr.io/${{ GITHUB_REPOSITORY }}_6_u22:${{ github.sha }}
+            ghcr.io/${{ github.repository }}_6_u22:${{ github.sha }}
 
   regression:
     needs: build
@@ -90,7 +90,7 @@ jobs:
         run: |
           docker run --name gpdb6_opt_on --rm -e TEST_OS=ubuntu \
             -e MAKE_TEST_COMMAND="-k PGOPTIONS='-c optimizer=${{ matrix.optimizer }}' installcheck-world" \
-            --sysctl 'kernel.sem=500 1024000 200 4096' ghcr.io/${{ GITHUB_REPOSITORY }}_u22:${{ github.sha }} \
+            --sysctl 'kernel.sem=500 1024000 200 4096' ghcr.io/${{ github.repository }}_u22:${{ github.sha }} \
             bash /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb.bash
 
   resgroup:
@@ -159,6 +159,6 @@ jobs:
 
       - name: Resource groups test
         run: |
-          export IMAGE="ghcr.io/${{ GITHUB_REPOSITORY }}_6_u22:e4a4908c437d62ec8291958e432b4305c0a9e03b"
+          export IMAGE="ghcr.io/${{ github.repository }}_6_u22:e4a4908c437d62ec8291958e432b4305c0a9e03b"
           ln -f -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
           ./ci/scripts/run_resgroup_test.bash
