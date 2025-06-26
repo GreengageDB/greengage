@@ -98,12 +98,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          filter: tree:0
-          submodules: 'recursive'
+      # - name: Checkout repository
+      #   uses: actions/checkout@v4
+      #   with:
+      #     fetch-depth: 0
+      #     filter: tree:0
+      #     submodules: 'recursive'
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -162,5 +162,5 @@ jobs:
       - name: Resource groups test
         run: |
           export IMAGE="ghcr.io/stolb27/gpdb6_u22:e4a4908c437d62ec8291958e432b4305c0a9e03b"
-          docker run --rm -it $IMAGE bash -c "mount | grep cgroup"
+          docker run --rm $IMAGE bash -c "mount | grep cgroup"
           # ./ci/scripts/run_resgroup_test.bash
