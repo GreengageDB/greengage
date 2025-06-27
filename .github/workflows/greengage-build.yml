@@ -1,0 +1,29 @@
+name: Greengage Auto Build
+
+on:
+  push:
+    tags: ['7.*']
+  pull_request:
+    branches: ['*']
+    tags: ['7.*']
+
+jobs:
+  build-v7-ubuntu22:
+    uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
+    with:
+      version: 7
+      target_os: ubuntu
+      target_os_version: 22
+      python3: ''
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  # build-v7-rockylinux8:
+  #   uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
+  #   with:
+  #     version: 7
+  #     target_os: rockylinux
+  #     target_os_version: 8
+  #     python3: ''
+  #   secrets:
+  #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}
