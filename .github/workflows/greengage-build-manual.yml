@@ -11,6 +11,7 @@ on:
         options:
           - '7.x'
           - 'main'
+          - 'ADBDEV-7564'
       os_combination:
         description: 'Target OS (MUST be compatible with Version)'
         required: true
