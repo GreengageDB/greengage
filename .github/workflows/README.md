@@ -22,7 +22,7 @@ The workflow coordinates a sequence of isolated stages—build, test, and upload
 - The workflow relies on reusable workflows from the `greengagedb/greengage-ci` repository, which may change independently. It passes minimal inputs (`version`, `target_os`) and a custom token to ensure compatibility.
 - A matrix strategy processes `ubuntu` and `centos` in parallel, with `fail-fast` enabled to halt on any failure.
 - The build stage produces a temporary SHA-tagged image, which is retagged as a branch or tag-based image during the upload stage if tests pass.
-- A custom secret (`GHCR_TOKEN`) is required for container registry access.
+- A custom secret (`GITHUB_TOKEN`) is required for container registry access.
 
 ## Limitations
 

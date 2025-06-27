@@ -23,7 +23,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GHCR_TOKEN }}  # Custom token for pushing image with commit SHA tag
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Custom token for pushing image with commit SHA tag
 
   behave-tests:
     needs: build  # Wait for build to complete
@@ -36,7 +36,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GHCR_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
 
   regression-tests:
     needs: build
@@ -49,7 +49,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GHCR_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
 
   orca-tests:
     needs: build
@@ -62,7 +62,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GHCR_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
 
   resgroup-tests:
     needs: build
@@ -75,7 +75,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GHCR_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
 
   upload:
     needs: [behave-tests, regression-tests, orca-tests, resgroup-tests]  # Wait for all tests
@@ -90,4 +90,4 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GHCR_TOKEN }}  # Custom token for retagging and pushing final image
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Custom token for retagging and pushing final image
