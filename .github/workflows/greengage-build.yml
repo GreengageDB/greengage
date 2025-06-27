@@ -1,29 +1,34 @@
 name: Greengage Auto Build
 
+env:
+  version: 7
+
 on:
   push:
-    tags: ['7.*']
+    tags: ['${{ env.version }}.*']
   pull_request:
     branches: ['*']
-    tags: ['7.*']
+    tags: ['${{ env.version }}.*']
 
 jobs:
-  build-v7-ubuntu22:
+  build-ubuntu:
+    # Job for building on Ubuntu, runs in parallel with other jobs
     uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
     with:
-      version: 7
+      version: ${{ env.version }}
       target_os: ubuntu
       target_os_version: ''
-      python3: ''
     secrets:
+      # GitHub token for authentication
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
-  # build-v7-rockylinux8:
+  # build-rockylinux:
+  #   # Job for building on Rocky Linux, runs in parallel with other jobs
   #   uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
   #   with:
-  #     version: 7
+  #     version: ${{ env.version }}
   #     target_os: rockylinux
   #     target_os_version: 8
-  #     python3: ''
   #   secrets:
+  #     # GitHub token for authentication
   #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}
