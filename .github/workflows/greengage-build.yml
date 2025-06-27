@@ -1,14 +1,14 @@
 name: Greengage Auto Build
 
-env:
-  version: 7
-
 on:
   push:
-    tags: ['${{ env.version }}.*']
+    tags: ['7.*']
   pull_request:
     branches: ['*']
-    tags: ['${{ env.version }}.*']
+    tags: ['7.*']
+
+env:
+  version: 7
 
 jobs:
   build-ubuntu:
