@@ -1,5 +1,8 @@
 FROM centos:centos7 as base
 
+# Update EOL repos
+RUN sed -i 's|mirrorlist|#mirrorlist|g; s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+
 # Reinstall glibc-common. This is necessary to get langpacks in docker
 # because docker images don't contain them.
 RUN yum -y reinstall glibc-common && \
@@ -47,7 +50,7 @@ RUN ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa && \
 
 # newer version of gcc and run environment for gpdb
 RUN yum -y install centos-release-scl && \
-    sed -i "s|mirrorlist=http://mirrorlist.centos.org?arch=\$basearch\&release=7\&repo=sclo-rh|baseurl=$CENTOS_REPOS_URL/sc-lo/\$releasever/rh/\$basearch/|g" /etc/yum.repos.d/CentOS-SCLo-scl-rh.repo && \
+    sed -i 's|mirrorlist|#mirrorlist|g; s|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && \
     sed -i "s|enabled=1|enabled=0|g" /etc/yum.repos.d/CentOS-SCLo-scl.repo && \
     yum -y install --nogpgcheck devtoolset-7-gcc devtoolset-7-gcc-c++ && yum clean all && \
     pip --no-cache-dir install psi && \
