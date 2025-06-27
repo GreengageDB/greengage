@@ -1,0 +1,31 @@
+name: Greengage Auto Build
+
+on:
+  push:
+    tags: ['6.*']
+  pull_request:
+    branches: ['*']
+    tags: ['6.*']
+
+jobs:
+  build-ubuntu:
+    # Job for building on Ubuntu, runs in parallel with other jobs
+    uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
+    with:
+      version: 6
+      target_os: ubuntu
+      target_os_version: ''
+    secrets:
+      # GitHub token for authentication
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-centos:
+    # Job for building on CentOS, runs in parallel with other jobs
+    uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
+    with:
+      version: 6
+      target_os: centos
+      target_os_version: ''
+    secrets:
+      # GitHub token for authentication
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
