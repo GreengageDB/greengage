@@ -7,15 +7,12 @@ on:
     branches: ['*']
     tags: ['7.*']
 
-env:
-  version: 7
-
 jobs:
   build-ubuntu:
     # Job for building on Ubuntu, runs in parallel with other jobs
     uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
     with:
-      version: ${{ env.version }}
+      version: 7
       target_os: ubuntu
       target_os_version: ''
     secrets:
@@ -26,7 +23,7 @@ jobs:
   #   # Job for building on Rocky Linux, runs in parallel with other jobs
   #   uses: GreengageDB/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
   #   with:
-  #     version: ${{ env.version }}
+  #     version: 7
   #     target_os: rockylinux
   #     target_os_version: 8
   #   secrets:
