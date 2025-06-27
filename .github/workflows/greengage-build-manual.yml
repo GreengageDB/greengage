@@ -14,11 +14,12 @@ on:
       os_combination:
         description: 'Target OS (MUST be compatible with Version)'
         required: true
-        default: 'Ubuntu 22'
+        default: 'Ubuntu'
         type: choice
         options:
-          - 'CentOS 7 (for 6.x only)'
+          - 'Ubuntu'
           - 'Ubuntu 22'
+          - 'CentOS 7 (for 6.x only)'
           - 'RockyLinux 8 (for 7.x only)'
       logLevel:
         description: 'Log level'
@@ -59,14 +60,14 @@ jobs:
 
           # Validate OS combination and parse
           case "${{ inputs.os_combination }}" in
-            "CentOS 7 (for 6.x only)")
-              if [[ "$version" != "6" ]]; then
-                echo "Error: CentOS 7 is only compatible with version 6" >&2
-                exit 1
+            "Ubuntu")
+              echo "target_os=ubuntu" >> $GITHUB_OUTPUT
+              echo "target_os_version=" >> $GITHUB_OUTPUT
+              if [[ "$version" == "6" ]]; then
+                echo "python3=python3" >> $GITHUB_OUTPUT
+              else
+                echo "python3=" >> $GITHUB_OUTPUT
               fi
-              echo "target_os=centos" >> $GITHUB_OUTPUT
-              echo "target_os_version=7" >> $GITHUB_OUTPUT
-              echo "python3=" >> $GITHUB_OUTPUT
               ;;
             "Ubuntu 22")
               echo "target_os=ubuntu" >> $GITHUB_OUTPUT
@@ -76,6 +77,15 @@ jobs:
               else
                 echo "python3=" >> $GITHUB_OUTPUT
               fi
+              ;;
+            "CentOS 7 (for 6.x only)")
+              if [[ "$version" != "6" ]]; then
+                echo "Error: CentOS 7 is only compatible with version 6" >&2
+                exit 1
+              fi
+              echo "target_os=centos" >> $GITHUB_OUTPUT
+              echo "target_os_version=7" >> $GITHUB_OUTPUT
+              echo "python3=" >> $GITHUB_OUTPUT
               ;;
             "RockyLinux 8 (for 7.x only)")
               if [[ "$version" != "7" ]]; then
