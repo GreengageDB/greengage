@@ -21,7 +21,6 @@
 #include "utils/guc.h"
 #include "utils/timestamp.h"
 
-#include "access/twophase_xlog.h"
 #include "cdb/cdbpublic.h"
 
 /*

@@ -99,6 +99,7 @@
 		"log_min_messages",
 		"log_statement_stats",
 		"maintenance_work_mem",
+		"logical_decoding_work_mem",
 		"max_parallel_workers_per_gather",
 		"max_statement_mem",
 		"memory_profiler_dataset_id",

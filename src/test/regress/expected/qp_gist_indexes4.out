@@ -769,17 +769,17 @@ SELECT * FROM geometricTypesPartition
 
 EXPLAIN SELECT * FROM geometricTypesPartition 
  WHERE c ~= SeedToCircle(101);
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=100.49..2673.65 rows=54 width=92)
-   ->  Append  (cost=100.49..2673.65 rows=18 width=92)
-         ->  Bitmap Heap Scan on geometrictypespartition_1_prt_1  (cost=100.49..1336.82 rows=9 width=92)
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=4.48..50.71 rows=54 width=92)
+   ->  Append  (cost=4.48..49.99 rows=18 width=92)
+         ->  Bitmap Heap Scan on geometrictypespartition_1_prt_1 geometrictypespartition  (cost=4.48..24.95 rows=9 width=92)
                Recheck Cond: (c ~= '<(8479,-3121),8441>'::circle)
-               ->  Bitmap Index Scan on geometrictypespartition_1_prt_1_c_idx  (cost=0.00..100.48 rows=9 width=0)
+               ->  Bitmap Index Scan on geometrictypespartition_1_prt_1_c_idx  (cost=0.00..4.48 rows=9 width=0)
                      Index Cond: (c ~= '<(8479,-3121),8441>'::circle)
-         ->  Bitmap Heap Scan on geometrictypespartition_1_prt_2  (cost=100.49..1336.82 rows=9 width=92)
+         ->  Bitmap Heap Scan on geometrictypespartition_1_prt_2 geometrictypespartition_1  (cost=4.48..24.95 rows=9 width=92)
                Recheck Cond: (c ~= '<(8479,-3121),8441>'::circle)
-               ->  Bitmap Index Scan on geometrictypespartition_1_prt_2_c_idx  (cost=0.00..100.48 rows=9 width=0)
+               ->  Bitmap Index Scan on geometrictypespartition_1_prt_2_c_idx  (cost=0.00..4.48 rows=9 width=0)
                      Index Cond: (c ~= '<(8479,-3121),8441>'::circle)
  Optimizer: Postgres query optimizer
 (11 rows)

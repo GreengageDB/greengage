@@ -1690,7 +1690,7 @@ OidSendFunctionCall(Oid functionId, Datum val)
 /*-------------------------------------------------------------------------
  *		Support routines for standard maybe-pass-by-reference datatypes
  *
- * int8, float4, and float8 can be passed by value if Datum is wide enough.
+ * int8 and float8 can be passed by value if Datum is wide enough.
  * (For backwards-compatibility reasons, we allow pass-by-ref to be chosen
  * at compile time even if pass-by-val is possible.)
  *
@@ -1710,21 +1710,6 @@ Int64GetDatum(int64 X)
 	*retval = X;
 	return PointerGetDatum(retval);
 }
-#endif							/* USE_FLOAT8_BYVAL */
-
-#ifndef USE_FLOAT4_BYVAL
-
-Datum
-Float4GetDatum(float4 X)
-{
-	float4	   *retval = (float4 *) palloc(sizeof(float4));
-
-	*retval = X;
-	return PointerGetDatum(retval);
-}
-#endif
-
-#ifndef USE_FLOAT8_BYVAL
 
 Datum
 Float8GetDatum(float8 X)
@@ -1734,7 +1719,7 @@ Float8GetDatum(float8 X)
 	*retval = X;
 	return PointerGetDatum(retval);
 }
-#endif
+#endif							/* USE_FLOAT8_BYVAL */
 
 #endif /* GPDB */
 

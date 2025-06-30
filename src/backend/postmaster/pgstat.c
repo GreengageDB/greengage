@@ -32,8 +32,6 @@
 #include <sys/select.h>
 #endif
 
-#include "pgstat.h"
-
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/tableam.h"
@@ -50,6 +48,7 @@
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
+#include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fork_process.h"
 #include "postmaster/postmaster.h"
@@ -80,7 +79,6 @@
 #include "libpq/pqformat.h"
 #include "utils/faultinjector.h"
 #include "utils/lsyscache.h"
-
 
 /* ----------
  * Timer definitions.

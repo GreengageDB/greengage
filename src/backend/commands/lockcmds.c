@@ -20,15 +20,15 @@
 #include "catalog/pg_inherits.h"
 #include "commands/lockcmds.h"
 #include "miscadmin.h"
+#include "nodes/nodeFuncs.h"
 #include "parser/parse_clause.h"
+#include "rewrite/rewriteHandler.h"
 #include "storage/lmgr.h"
 #include "utils/acl.h"
 #include "utils/lsyscache.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
 #include "utils/syscache.h"
-#include "rewrite/rewriteHandler.h"
-#include "nodes/nodeFuncs.h"
 
 static void LockTableRecurse(Oid reloid, LOCKMODE lockmode, bool nowait, Oid userid);
 static AclResult LockTableAclCheck(Oid relid, LOCKMODE lockmode, Oid userid);

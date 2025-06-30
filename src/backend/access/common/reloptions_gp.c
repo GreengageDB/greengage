@@ -36,11 +36,6 @@
 #include "nodes/makefuncs.h"
 
 /*
- * Helper macro used for validation
- */
-#define KIND_IS_APPENDOPTIMIZED(kind) (((kind) & RELOPT_KIND_APPENDOPTIMIZED) != 0)
-
-/*
  * GPDB reloptions specification.
  */
 
@@ -840,15 +835,12 @@ validate_and_adjust_options(StdRdOptions *result,
 	relopt_value *complevel_opt;
 	relopt_value *checksum_opt;
 
+	Assert(kind == RELOPT_KIND_APPENDOPTIMIZED);
+
 	/* blocksize */
 	blocksize_opt = get_option_set(options, num_options, SOPT_BLOCKSIZE);
 	if (blocksize_opt != NULL)
 	{
-		if (!KIND_IS_APPENDOPTIMIZED(kind) && validate)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("usage of parameter \"blocksize\" in a non relation object is not supported")));
-
 		result->blocksize = blocksize_opt->values.int_val;
 
 		if (result->blocksize < MIN_APPENDONLY_BLOCK_SIZE ||
@@ -870,11 +862,6 @@ validate_and_adjust_options(StdRdOptions *result,
 	comptype_opt = get_option_set(options, num_options, SOPT_COMPTYPE);
 	if (comptype_opt != NULL)
 	{
-		if (!KIND_IS_APPENDOPTIMIZED(kind) && validate)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("usage of parameter \"compresstype\" in a non relation object is not supported")));
-
 		if (!compresstype_is_valid(comptype_opt->values.string_val))
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
@@ -889,11 +876,6 @@ validate_and_adjust_options(StdRdOptions *result,
 	complevel_opt = get_option_set(options, num_options, SOPT_COMPLEVEL);
 	if (complevel_opt != NULL)
 	{
-		if (!KIND_IS_APPENDOPTIMIZED(kind) && validate)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("usage of parameter \"compresslevel\" in a non relation object is not supported")));
-
 		result->compresslevel = complevel_opt->values.int_val;
 
 		if (result->compresstype[0] &&
@@ -1005,11 +987,6 @@ validate_and_adjust_options(StdRdOptions *result,
 	checksum_opt = get_option_set(options, num_options, SOPT_CHECKSUM);
 	if (checksum_opt != NULL)
 	{
-		if (!KIND_IS_APPENDOPTIMIZED(kind) && validate)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("usage of parameter \"checksum\" in a non relation object is not supported")));
-
 		result->checksum = checksum_opt->values.bool_val;
 	}
 
@@ -1024,9 +1001,9 @@ void
 validate_and_refill_options(StdRdOptions *result, relopt_value *options,
 							int numrelopts, relopt_kind kind, bool validate)
 {
-	if (validate &&
-		ao_storage_opts_changed &&
-		KIND_IS_APPENDOPTIMIZED(kind))
+	Assert(kind == RELOPT_KIND_APPENDOPTIMIZED);
+
+	if (validate && ao_storage_opts_changed)
 	{
 		if (!(get_option_set(options, numrelopts, SOPT_BLOCKSIZE)))
 			result->blocksize = ao_storage_opts.blocksize;
@@ -1050,6 +1027,8 @@ parse_validate_reloptions(StdRdOptions *result, Datum reloptions,
 {
 	relopt_value *options;
 	int			num_options;
+
+	Assert(kind == RELOPT_KIND_APPENDOPTIMIZED);
 
 	options = parseRelOptions(reloptions, validate, kind, &num_options);
 

@@ -433,8 +433,6 @@ free_readfile(char **optlines)
 		free(curr_line);
 
 	free(optlines);
-
-	return;
 }
 
 /*

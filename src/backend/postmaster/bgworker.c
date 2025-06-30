@@ -14,9 +14,8 @@
 
 #include <unistd.h>
 
-#include "cdb/ic_proxy_bgworker.h"
-#include "libpq/pqsignal.h"
 #include "access/parallel.h"
+#include "libpq/pqsignal.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "port/atomics.h"
@@ -38,6 +37,7 @@
 #include "utils/ps_status.h"
 #include "utils/timeout.h"
 
+#include "cdb/ic_proxy_bgworker.h"
 #include "postmaster/backoff.h"
 #include "postmaster/fts.h"
 #include "utils/gdd.h"

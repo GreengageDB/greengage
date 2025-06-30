@@ -19,8 +19,6 @@
 
 #include "postgres.h"
 
-#include "miscadmin.h"
-
 #include "access/visibilitymap.h"
 #include "access/xact.h"
 #include "access/xlog.h"
@@ -28,8 +26,9 @@
 #include "access/xlogutils.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
-#include "common/relpath.h"
 #include "commands/dbcommands.h"
+#include "common/relpath.h"
+#include "miscadmin.h"
 #include "storage/freespace.h"
 #include "storage/smgr.h"
 #include "utils/memutils.h"

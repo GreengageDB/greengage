@@ -788,8 +788,8 @@ explain (costs off)
    UNION ALL
    SELECT ab FROM t2) t
   ORDER BY 1 LIMIT 8;
-                         QUERY PLAN                         
-------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((t1.a || t1.b))
@@ -797,9 +797,9 @@ explain (costs off)
                ->  Merge Append
                      Sort Key: ((t1.a || t1.b))
                      ->  Index Scan using t1_ab_idx on t1
-                     ->  Index Scan using t1c_ab_idx on t1c
+                     ->  Index Scan using t1c_ab_idx on t1c t1_1
                      ->  Index Scan using t2_pkey on t2
-                     ->  Index Scan using t2c_pkey on t2c
+                     ->  Index Scan using t2c_pkey on t2c t2_1
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -844,8 +844,8 @@ select event_id
          Sort Key: events.event_id
          ->  Index Scan using events_pkey on events
          ->  Sort
-               Sort Key: events_child.event_id
-               ->  Seq Scan on events_child
+               Sort Key: events_1.event_id
+               ->  Seq Scan on events_child events_1
          ->  Index Scan using other_events_pkey on other_events
  Optimizer: Postgres query optimizer
 (10 rows)

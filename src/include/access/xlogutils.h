@@ -54,9 +54,8 @@ extern int	read_local_xlog_page(XLogReaderState *state,
 extern void XLogReadDetermineTimeline(XLogReaderState *state,
 									  XLogRecPtr wantPage, uint32 wantLength);
 
-extern void XLogAOSegmentFile(RelFileNode rnode, uint32 segmentFileNum);
+extern void WALReadRaiseError(WALReadError *errinfo);
 
-extern void XLogReadDetermineTimeline(XLogReaderState *state,
-					XLogRecPtr wantPage, uint32 wantLength);
+extern void XLogAOSegmentFile(RelFileNode rnode, uint32 segmentFileNum);
 
 #endif

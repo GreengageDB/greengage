@@ -19,15 +19,15 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#include "libpq-fe.h"
-#include "libpq/pqcomm.h"
-#include "pqexpbuffer.h"
 #include "access/xlog.h"
 #include "catalog/pg_type.h"
 #include "funcapi.h"
+#include "libpq-fe.h"
+#include "libpq/pqcomm.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "pqexpbuffer.h"
 #include "replication/walreceiver.h"
 #include "storage/proc.h"
 #include "utils/builtins.h"

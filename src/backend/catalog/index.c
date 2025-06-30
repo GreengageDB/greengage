@@ -48,12 +48,12 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
-#include "catalog/pg_description.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_description.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
-#include "catalog/pg_operator.h"
 #include "catalog/pg_opclass.h"
+#include "catalog/pg_operator.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
@@ -86,7 +86,6 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/tuplesort.h"
-#include "utils/snapmgr.h"
 
 #include "catalog/oid_dispatch.h"
 #include "cdb/cdbappendonlyam.h"
@@ -2403,6 +2402,56 @@ BuildIndexInfo(Relation index)
 	}
 
 	ii->ii_Am = index->rd_rel->relam;
+
+	return ii;
+}
+
+/* ----------------
+ *		BuildDummyIndexInfo
+ *			Construct a dummy IndexInfo record for an open index
+ *
+ * This differs from the real BuildIndexInfo in that it will never run any
+ * user-defined code that might exist in index expressions or predicates.
+ * Instead of the real index expressions, we return null constants that have
+ * the right types/typmods/collations.  Predicates and exclusion clauses are
+ * just ignored.  This is sufficient for the purpose of truncating an index,
+ * since we will not need to actually evaluate the expressions or predicates;
+ * the only thing that's likely to be done with the data is construction of
+ * a tupdesc describing the index's rowtype.
+ * ----------------
+ */
+IndexInfo *
+BuildDummyIndexInfo(Relation index)
+{
+	IndexInfo  *ii;
+	Form_pg_index indexStruct = index->rd_index;
+	int			i;
+	int			numAtts;
+
+	/* check the number of keys, and copy attr numbers into the IndexInfo */
+	numAtts = indexStruct->indnatts;
+	if (numAtts < 1 || numAtts > INDEX_MAX_KEYS)
+		elog(ERROR, "invalid indnatts %d for index %u",
+			 numAtts, RelationGetRelid(index));
+
+	/*
+	 * Create the node, using dummy index expressions, and pretending there is
+	 * no predicate.
+	 */
+	ii = makeIndexInfo(indexStruct->indnatts,
+					   indexStruct->indnkeyatts,
+					   index->rd_rel->relam,
+					   RelationGetDummyIndexExpressions(index),
+					   NIL,
+					   indexStruct->indisunique,
+					   indexStruct->indisready,
+					   false);
+
+	/* fill in attribute numbers */
+	for (i = 0; i < numAtts; i++)
+		ii->ii_IndexAttrNumbers[i] = indexStruct->indkey.values[i];
+
+	/* We ignore the exclusion constraint if any */
 
 	return ii;
 }

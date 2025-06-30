@@ -30,8 +30,8 @@
 
 #include "libpq/libpq.h"
 #include "miscadmin.h"
-#include "utils/ps_status.h"
 #include "utils/guc.h"
+#include "utils/ps_status.h"
 
 #include "cdb/cdbvars.h"        /* Gp_role, GpIdentity.segindex, currentSliceId */
 

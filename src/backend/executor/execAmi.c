@@ -30,6 +30,7 @@
 #include "executor/nodeFunctionscan.h"
 #include "executor/nodeGather.h"
 #include "executor/nodeGatherMerge.h"
+// #include "executor/nodeGroup.h" // Group node has been disabled in GPDB
 #include "executor/nodeHash.h"
 #include "executor/nodeHashjoin.h"
 #include "executor/nodeIndexonlyscan.h"
@@ -72,9 +73,8 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-
-static bool TargetListSupportsBackwardScan(List *targetlist);
 static bool IndexSupportsBackwardScan(Oid indexid);
+static bool TargetListSupportsBackwardScan(List *targetlist);
 
 
 /*

@@ -52,15 +52,16 @@
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "libpq/pqsignal.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/execnodes.h"            /* Slice, SliceTable */
 #include "nodes/print.h"
 #include "optimizer/optimizer.h"
-#include "pgstat.h"
-#include "pg_trace.h"
 #include "parser/analyze.h"
 #include "parser/parser.h"
 #include "pg_getopt.h"
+#include "pg_trace.h"
+#include "pgstat.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/fts.h"
 #include "postmaster/postmaster.h"
@@ -86,7 +87,6 @@
 #include "utils/snapmgr.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
-#include "mb/pg_wchar.h"
 
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
@@ -102,7 +102,6 @@
 #include "access/twophase.h"
 #include "postmaster/backoff.h"
 #include "utils/resource_manager.h"
-
 #include "utils/session_state.h"
 #include "utils/vmem_tracker.h"
 
@@ -5245,7 +5244,18 @@ PostgresMain(int argc, char *argv[],
 			}
 			else
 			{
+				/* Send out notify signals and transmit self-notifies */
 				ProcessCompletedNotifies();
+
+				/*
+				 * Also process incoming notifies, if any.  This is mostly to
+				 * ensure stable behavior in tests: if any notifies were
+				 * received during the just-finished transaction, they'll be
+				 * seen by the client before ReadyForQuery is.
+				 */
+				if (notifyInterruptPending)
+					ProcessNotifyInterrupt();
+
 				pgstat_report_stat(false);
 				pgstat_report_queuestat();
 

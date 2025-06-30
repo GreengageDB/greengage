@@ -891,7 +891,10 @@ CREATE VIEW pg_stat_replication AS
             W.replay_lag,
             W.sync_priority,
             W.sync_state,
-            W.reply_time
+            W.reply_time,
+            W.spill_txns,
+            W.spill_count,
+            W.spill_bytes
     FROM pg_stat_get_activity(NULL) AS S
         JOIN pg_stat_get_wal_senders() AS W ON (S.pid = W.pid)
         LEFT JOIN pg_authid AS U ON (S.usesysid = U.oid);
@@ -924,7 +927,8 @@ CREATE VIEW gp_stat_replication AS
      client_port integer, backend_start timestamptz, backend_xmin xid, state text,
      sent_lsn pg_lsn, write_lsn pg_lsn, flush_lsn pg_lsn, replay_lsn pg_lsn,
      write_lag interval, flush_lag interval, replay_lag interval,
-     sync_priority int4, sync_state text, reply_time timestamptz)
+     sync_priority int4, sync_state text, reply_time timestamptz,
+     spill_txns int8, spill_count int8, spill_bytes int8)
     UNION ALL
     (
         SELECT G.gp_segment_id
@@ -933,6 +937,7 @@ CREATE VIEW gp_stat_replication AS
             , R.sent_lsn, R.write_lsn, R.flush_lsn, R.replay_lsn
             , R.write_lag, R.flush_lag, R.replay_lag
             , R.sync_priority, R.sync_state, R.reply_time
+            , R.spill_txns, R.spill_count, R.spill_bytes
             , G.sync_error
         FROM (
             SELECT E.*
@@ -949,7 +954,8 @@ CREATE VIEW gp_stat_replication AS
          backend_xmin xid, state text,
          sent_lsn pg_lsn, write_lsn pg_lsn, flush_lsn pg_lsn, replay_lsn pg_lsn,
          write_lag interval, flush_lag interval, replay_lag interval,
-         sync_priority int4, sync_state text, reply_time timestamptz)
+         sync_priority int4, sync_state text, reply_time timestamptz,
+         spill_txns int8, spill_count int8, spill_bytes int8)
          ON G.gp_segment_id = R.gp_segment_id
     );
 
@@ -998,7 +1004,8 @@ CREATE VIEW pg_stat_ssl AS
             S.ssl_client_dn AS client_dn,
             S.ssl_client_serial AS client_serial,
             S.ssl_issuer_dn AS issuer_dn
-    FROM pg_stat_get_activity(NULL) AS S;
+    FROM pg_stat_get_activity(NULL) AS S
+    WHERE S.client_port IS NOT NULL;
 
 CREATE VIEW pg_stat_gssapi AS
     SELECT
@@ -1006,7 +1013,8 @@ CREATE VIEW pg_stat_gssapi AS
             S.gss_auth AS gss_authenticated,
             S.gss_princ AS principal,
             S.gss_enc AS encrypted
-    FROM pg_stat_get_activity(NULL) AS S;
+    FROM pg_stat_get_activity(NULL) AS S
+    WHERE S.client_port IS NOT NULL;
 
 CREATE VIEW pg_replication_slots AS
     SELECT

@@ -10019,21 +10019,21 @@ set optimizer_enable_dynamictablescan = off;
 explain select * from orca.bm_dyn_test_onepart where i=2 and t='2';
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  No plan has been computed for required properties
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..6.85 rows=22 width=10)
    ->  Append  (cost=0.00..6.55 rows=7 width=10)
-         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part0  (cost=0.00..1.10 rows=1 width=10)
+         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part0 bm_dyn_test_onepart  (cost=0.00..1.10 rows=1 width=10)
                Filter: ((i = 2) AND (t = '2'::text))
-         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part1  (cost=0.00..1.10 rows=1 width=10)
+         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part1 bm_dyn_test_onepart_1  (cost=0.00..1.10 rows=1 width=10)
                Filter: ((i = 2) AND (t = '2'::text))
-         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part2  (cost=0.00..1.10 rows=2 width=10)
+         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part2 bm_dyn_test_onepart_2  (cost=0.00..1.10 rows=2 width=10)
                Filter: ((i = 2) AND (t = '2'::text))
-         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part3  (cost=0.00..1.10 rows=1 width=10)
+         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part3 bm_dyn_test_onepart_3  (cost=0.00..1.10 rows=1 width=10)
                Filter: ((i = 2) AND (t = '2'::text))
-         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part4  (cost=0.00..1.10 rows=1 width=10)
+         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part4 bm_dyn_test_onepart_4  (cost=0.00..1.10 rows=1 width=10)
                Filter: ((i = 2) AND (t = '2'::text))
-         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part5  (cost=0.00..1.01 rows=1 width=10)
+         ->  Seq Scan on bm_dyn_test_onepart_1_prt_part5 bm_dyn_test_onepart_5  (cost=0.00..1.01 rows=1 width=10)
                Filter: ((i = 2) AND (t = '2'::text))
  Optimizer: Postgres query optimizer
 (15 rows)
@@ -10078,17 +10078,17 @@ analyze orca.bm_dyn_test_multilvl_part;
 explain select * from orca.bm_dyn_test_multilvl_part where year = 2019;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Multi-level partitioned tables
-                                                        QUERY PLAN                                                        
---------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..7.95 rows=53 width=18)
-   ->  Append  (cost=0.00..6.89 rows=18 width=18)
-         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_1_3_prt_usa  (cost=0.00..1.00 rows=1 width=44)
+                                                                      QUERY PLAN                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..5.13 rows=59 width=18)
+   ->  Append  (cost=0.00..4.34 rows=20 width=18)
+         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_1_3_prt_usa bm_dyn_test_multilvl_part  (cost=0.00..1.01 rows=1 width=44)
                Filter: (year = 2019)
-         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_1_3_prt_other_regions  (cost=0.00..1.00 rows=1 width=44)
+         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_1_3_prt_other_regions bm_dyn_test_multilvl_part_1  (cost=0.00..1.01 rows=1 width=44)
                Filter: (year = 2019)
-         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_2_3_prt_usa  (cost=0.00..3.62 rows=17 width=16)
+         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_2_3_prt_usa bm_dyn_test_multilvl_part_2  (cost=0.00..1.21 rows=17 width=16)
                Filter: (year = 2019)
-         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_2_3_prt_other_regions  (cost=0.00..1.00 rows=1 width=44)
+         ->  Seq Scan on bm_dyn_test_multilvl_part_1_prt_2_2_prt_2_3_prt_other_regions bm_dyn_test_multilvl_part_3  (cost=0.00..1.01 rows=1 width=44)
                Filter: (year = 2019)
  Optimizer: Postgres query optimizer
 (11 rows)

@@ -254,7 +254,7 @@ typedef struct xl_xact_subxacts
 
 typedef struct xl_xact_relfilenodes
 {
-	int			nrels;			/* number of subtransaction XIDs */
+	int			nrels;			/* number of relations */
 	RelFileNodePendingDelete xnodes[FLEXIBLE_ARRAY_MEMBER];
 } xl_xact_relfilenodes;
 #define MinSizeOfXactRelfilenodes offsetof(xl_xact_relfilenodes, xnodes)
@@ -317,6 +317,28 @@ typedef struct xl_xact_abort
 	/* xl_xact_origin follows if XINFO_HAS_ORIGIN, stored unaligned! */
 } xl_xact_abort;
 #define MinSizeOfXactAbort sizeof(xl_xact_abort)
+
+typedef struct xl_xact_prepare
+{
+	uint32		magic;			/* format identifier */
+	uint32		total_len;		/* actual file length */
+	TransactionId xid;			/* original transaction XID */
+	Oid			database;		/* OID of database it was in */
+	TimestampTz prepared_at;	/* time of preparation */
+	Oid			owner;			/* user running the transaction */
+	int32		nsubxacts;		/* number of following subxact XIDs */
+	int32		ncommitrels;	/* number of delete-on-commit rels */
+	int32		nabortrels;		/* number of delete-on-abort rels */
+	int32		ncommitdbs;		/* number of delete-on-commit dbs */
+	int32		nabortdbs;		/* number of delete-on-abort dbs */
+	int32		ninvalmsgs;		/* number of cache invalidation messages */
+	bool		initfileinval;	/* does relcache init file need invalidation? */
+	Oid			tablespace_oid_to_delete_on_abort;
+	Oid			tablespace_oid_to_delete_on_commit;
+	uint16		gidlen;			/* length of the GID - GID follows the header */
+	XLogRecPtr	origin_lsn;		/* lsn of this record at origin node */
+	TimestampTz origin_timestamp;	/* time of prepare at origin node */
+} xl_xact_prepare;
 
 /*
  * Commit/Abort records in the above form are a bit verbose to parse, so
@@ -503,6 +525,7 @@ extern const char *xact_identify(uint8 info);
 /* also in xactdesc.c, so they can be shared between front/backend code */
 extern void ParseCommitRecord(uint8 info, xl_xact_commit *xlrec, xl_xact_parsed_commit *parsed);
 extern void ParseAbortRecord(uint8 info, xl_xact_abort *xlrec, xl_xact_parsed_abort *parsed);
+extern void ParsePrepareRecord(uint8 info, xl_xact_prepare *xlrec, xl_xact_parsed_prepare *parsed);
 
 extern void EnterParallelMode(void);
 extern void ExitParallelMode(void);

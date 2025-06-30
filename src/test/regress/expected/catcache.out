@@ -10,18 +10,18 @@ insert into dml_14027_union_s select generate_series(1,1), generate_series(1,1);
 begin;
 drop table dml_14027_union_s_1_prt_def;
 explain select count(distinct(b)) from dml_14027_union_s;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
  Finalize Aggregate  (cost=321.22..321.23 rows=1 width=8)
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=321.17..321.22 rows=3 width=8)
          ->  Partial Aggregate  (cost=321.17..321.18 rows=1 width=8)
                ->  HashAggregate  (cost=317.00..320.33 rows=333 width=32)
-                     Group Key: dml_14027_union_s_1_prt_2.b
+                     Group Key: dml_14027_union_s.b
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=282.00..312.00 rows=1000 width=32)
-                           Hash Key: dml_14027_union_s_1_prt_2.b
+                           Hash Key: dml_14027_union_s.b
                            ->  Streaming HashAggregate  (cost=282.00..292.00 rows=1000 width=32)
-                                 Group Key: dml_14027_union_s_1_prt_2.b
-                                 ->  Seq Scan on dml_14027_union_s_1_prt_2  (cost=0.00..199.33 rows=16533 width=32)
+                                 Group Key: dml_14027_union_s.b
+                                 ->  Seq Scan on dml_14027_union_s_1_prt_2 dml_14027_union_s  (cost=0.00..199.33 rows=16533 width=32)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -33,11 +33,11 @@ select count(distinct(b)) from dml_14027_union_s;
 
 rollback;
 explain update dml_14027_union_s set a = (select null union select null)::numeric;
-                                               QUERY PLAN                                               
---------------------------------------------------------------------------------------------------------
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
  Update on dml_14027_union_s  (cost=0.07..1969.41 rows=66133 width=46)
-   Update on dml_14027_union_s_1_prt_2
-   Update on dml_14027_union_s_1_prt_def
+   Update on dml_14027_union_s_1_prt_2 dml_14027_union_s_1
+   Update on dml_14027_union_s_1_prt_def dml_14027_union_s_2
    InitPlan 1 (returns $0)  (slice1)
      ->  HashAggregate  (cost=0.06..0.07 rows=2 width=32)
            Group Key: (NULL::text)
@@ -46,10 +46,10 @@ explain update dml_14027_union_s set a = (select null union select null)::numeri
                  ->  Result  (cost=0.00..0.01 rows=1 width=32)
    ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..984.67 rows=33067 width=46)
          ->  Split  (cost=0.00..323.33 rows=33067 width=46)
-               ->  Seq Scan on dml_14027_union_s_1_prt_2  (cost=0.00..323.33 rows=16533 width=46)
+               ->  Seq Scan on dml_14027_union_s_1_prt_2 dml_14027_union_s_1  (cost=0.00..323.33 rows=16533 width=46)
    ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..984.67 rows=33067 width=46)
          ->  Split  (cost=0.00..323.33 rows=33067 width=46)
-               ->  Seq Scan on dml_14027_union_s_1_prt_def  (cost=0.00..323.33 rows=16533 width=46)
+               ->  Seq Scan on dml_14027_union_s_1_prt_def dml_14027_union_s_2  (cost=0.00..323.33 rows=16533 width=46)
  Optimizer: Postgres query optimizer
 (16 rows)
 

@@ -16,8 +16,8 @@
  */
 #include "postgres.h"
 
-#include "catalog/pg_type.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
@@ -40,7 +40,6 @@
 #include "cdb/cdbmutate.h"
 #include "nodes/makefuncs.h"
 #include "parser/parsetree.h"
-
 
 /* These parameters are set by GUC */
 int			from_collapse_limit;

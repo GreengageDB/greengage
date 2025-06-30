@@ -23,7 +23,7 @@
 #include "access/htup_details.h"
 #include "access/nbtree.h"
 #include "access/reloptions.h"
-#include "access/spgist.h"
+#include "access/spgist_private.h"
 #include "catalog/pg_type.h"
 #include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbvars.h"
@@ -502,6 +502,15 @@ static bool need_initialization = true;
 static void initialize_reloptions(void);
 static void parse_one_reloption(relopt_value *option, char *text_str,
 								int text_len, bool validate);
+
+/*
+ * Get the length of a string reloption (either default or the user-defined
+ * value).  This is used for allocation purposes when building a set of
+ * relation options.
+ */
+#define GET_STRING_RELOPTION_LEN(option) \
+	((option).isset ? strlen((option).values.string_val) : \
+	 ((relopt_string *) (option).gen)->default_len)
 
 /*
  * initialize_reloptions
@@ -1108,8 +1117,10 @@ extractRelOptions(HeapTuple tuple, TupleDesc tupdesc,
 		case RELKIND_RELATION:
 		case RELKIND_TOASTVALUE:
 		case RELKIND_MATVIEW:
-		case RELKIND_PARTITIONED_TABLE:
 			options = heap_reloptions(classForm->relkind, datum, false);
+			break;
+		case RELKIND_PARTITIONED_TABLE:
+			options = partitioned_table_reloptions(datum, false);
 			break;
 		case RELKIND_VIEW:
 			options = view_reloptions(datum, false);
@@ -1374,7 +1385,7 @@ parse_one_reloption(relopt_value *option, char *text_str, int text_len,
  * "base" should be sizeof(struct) of the reloptions struct (StdRdOptions or
  * equivalent).
  */
-void *
+static void *
 allocateReloptStruct(Size base, relopt_value *options, int numoptions)
 {
 	Size		size = base;
@@ -1398,7 +1409,7 @@ allocateReloptStruct(Size base, relopt_value *options, int numoptions)
  * elems, of length numelems, is the table describing the allowed options.
  * When validate is true, it is expected that all options appear in elems.
  */
-void
+static void
 fillRelOptions(void *rdopts, Size basesize,
 			   relopt_value *options, int numoptions,
 			   bool validate,
@@ -1526,8 +1537,6 @@ default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 		offsetof(StdRdOptions, user_catalog_table)},
 		{"parallel_workers", RELOPT_TYPE_INT,
 		offsetof(StdRdOptions, parallel_workers)},
-		{"vacuum_cleanup_index_scale_factor", RELOPT_TYPE_REAL,
-		offsetof(StdRdOptions, vacuum_cleanup_index_scale_factor)},
 		{"vacuum_index_cleanup", RELOPT_TYPE_BOOL,
 		offsetof(StdRdOptions, vacuum_index_cleanup)},
 		{"vacuum_truncate", RELOPT_TYPE_BOOL,
@@ -1585,11 +1594,29 @@ build_reloptions(Datum reloptions, bool validate,
 	fillRelOptions(rdopts, relopt_struct_size, options, numoptions,
 				   validate, relopt_elems, num_relopt_elems);
 
-	validate_and_refill_options(rdopts, options, numoptions, kind, validate);
+	if (kind == RELOPT_KIND_APPENDOPTIMIZED)
+	{
+		/* ensure we allocated anougth memory for StdRdOptions */
+		Assert(relopt_struct_size == sizeof(StdRdOptions));
+		validate_and_refill_options(rdopts, options, numoptions, kind, validate);
+	}
 
 	free_options_deep(options, numoptions);
 
 	return rdopts;
+}
+
+/*
+ * Option parser for partitioned tables
+ */
+bytea *
+partitioned_table_reloptions(Datum reloptions, bool validate)
+{
+	/*
+	 * GPDB: we maintain reloptions for partition roots to support reloption
+	 * inheritance and hierarchy wide ALTER TABLE SET().
+	 */
+	return default_reloptions(reloptions, validate, RELOPT_KIND_HEAP);
 }
 
 /*
@@ -1634,15 +1661,7 @@ heap_reloptions(char relkind, Datum reloptions, bool validate)
 			return (bytea *) rdopts;
 		case RELKIND_RELATION:
 		case RELKIND_MATVIEW:
-				return default_reloptions(reloptions, validate,
-										  RELOPT_KIND_HEAP);
-		case RELKIND_PARTITIONED_TABLE:
-			/*
-			 * GPDB: we maintain reloptions for partition roots to support reloption
-			 * inheritance and hierarchy wide ALTER TABLE SET().
-			 */
-			return default_reloptions(reloptions, validate,
-									  RELOPT_KIND_HEAP);
+			return default_reloptions(reloptions, validate, RELOPT_KIND_HEAP);
 		default:
 			/* other relkinds are not supported */
 			return NULL;

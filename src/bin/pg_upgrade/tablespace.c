@@ -108,8 +108,6 @@ get_tablespace_paths(void)
 	PQclear(res);
 
 	PQfinish(conn);
-
-	return;
 }
 
 

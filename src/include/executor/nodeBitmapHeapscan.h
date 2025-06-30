@@ -14,8 +14,8 @@
 #ifndef NODEBITMAPHEAPSCAN_H
 #define NODEBITMAPHEAPSCAN_H
 
-#include "nodes/execnodes.h"
 #include "access/parallel.h"
+#include "nodes/execnodes.h"
 
 extern BitmapHeapScanState *ExecInitBitmapHeapScan(BitmapHeapScan *node, EState *estate, int eflags);
 extern BitmapHeapScanState *ExecInitBitmapHeapScanForPartition(BitmapHeapScan *node, EState *estate, int eflags, Relation currentRelation);
