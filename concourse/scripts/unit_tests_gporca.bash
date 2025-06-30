@@ -26,7 +26,7 @@ function test_orca
 
 function _main
 {
-  mkdir gpdb_src/gpAux/ext
+  mkdir -p gpdb_src/gpAux/ext
   build_xerces
   test_orca
 }
