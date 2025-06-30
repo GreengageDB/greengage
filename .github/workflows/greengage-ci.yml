@@ -43,8 +43,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, rockylinux]
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression-gh.yml@main
+        target_os: [ubuntu, centos]
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@main
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
