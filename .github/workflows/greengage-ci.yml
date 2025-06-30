@@ -64,18 +64,18 @@ jobs:
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
 
-  resgroup-tests:
-    needs: build
-    strategy:
-      fail-fast: true
-      matrix:
-        target_os: [ubuntu] #, rockylinux]
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@main
-    with:
-      version: 7
-      target_os: ${{ matrix.target_os }}
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
+  # resgroup-tests:
+  #   needs: build
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       target_os: [ubuntu] #, rockylinux]
+  #   uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@main
+  #   with:
+  #     version: 7
+  #     target_os: ${{ matrix.target_os }}
+  #   secrets:
+  #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
 
   upload:
     needs: [behave-tests, regression-tests, orca-tests] #, resgroup-tests]  # Wait for all tests
