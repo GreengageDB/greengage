@@ -1,30 +1,53 @@
 # Greengage CI Workflow
 
-- `greengage-ci.yml` is GitHub Actions workflow manages the continuous integration pipeline for the Greengage project, orchestrating build, test, and upload stages across multiple operating systems. It leverages reusable workflows from a separate repository to maintain modularity and flexibility.
+This repository contains the main CI pipeline for the Greengage project, orchestrating the build, test, and upload stages for containerized environments. The pipeline is designed to be flexible, with parameterized inputs for version and target operating systems, allowing it to adapt to different branches and configurations.
 
-## Purpose
+## Overview
 
-The workflow coordinates a sequence of isolated stages—build, test, and upload—ensuring each stage completes successfully before the next begins. It uses a matrix strategy to process multiple operating systems in parallel, halting the pipeline if any stage fails, to ensure reliability.
+The `Greengage CI` workflow triggers on:
 
-## Workflow Stages
+- **Push events** for versioned release tags.
+- **Pull requests** to any branch.
 
-1. **Build Stage**: Invokes a reusable workflow to build Docker images for each target OS, pushing them to a container registry with a temporary commit short SHA tag for subsequent testing.
-2. **Test Stage**: Executes multiple test suites (behavior, regression, orca, and resource group tests) for each target OS, dependent on the build stage, using the SHA-tagged images. All tests must pass for the upload stage to proceed.
-3. **Upload Stage**: Calls the "Reusable Docker Retag and Upload Workflow" to retag the SHA-tagged images as developer (branch name) or production (tag name) images and push them to the container registry, executed only if all tests succeed.
+It executes the following jobs in a matrix strategy for multiple target operating systems:
 
-## Triggers
+- **Build**: Constructs and pushes Docker images to the GitHub Container Registry (GHCR) with development commit SHA tag.
+- **Tests**: Runs multiple test suites, including:
+  - Behave tests
+  - Regression tests
+  - Orca tests
+  - Resource group tests
+- **Upload**: Retags and pushes final Docker images to GHCR after successful tests.
 
-- **Push**: Runs on tags matching `6.*` for versioned releases.
-- **Pull Request**: Runs on pull requests for any branch.
+## Configuration
+
+The workflow is parameterized to support flexibility:
+
+- **Version**: Specifies the Greengage version, configurable per branch.
+- **Target OS**: Supports multiple operating systems, defined in the matrix strategy.
+
+All jobs use reusable workflows stored in the `greengagedb/greengage-ci` repository, accessible publicly for detailed inspection.
+
+## Usage
+
+To use this pipeline:
+
+1. Ensure the repository has a valid `GITHUB_TOKEN` with `packages: write` permissions for GHCR access.
+2. Configure the version and target OS parameters in the branch-specific workflow configuration.
+3. Push a tag or create a pull request to trigger the pipeline.
+
+## Additional Documentation
+
+Detailed README files for each process are available in the `README` directory of the `greengagedb/greengage-ci` repository. For example:
+
+- Build process: [README/REUSABLE-BUILD.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-BUILD.md)
+- Behave tests: [README/REUSABLE-TESTS-BEHAVE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-BEHAVE.md)
+- Regression tests: [README/REUSABLE-TESTS-REGRESSION.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-REGRESSION.md)
+- Orca tests: [README/REUSABLE-TESTS-ORCA.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-ORCA.md)
+- Resource group tests: [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
+- Upload process: [README/REUSABLE-UPLOAD.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-UPLOAD.md)
 
 ## Notes
 
-- The workflow relies on reusable workflows from the `greengagedb/greengage-ci` repository, which may change independently. It passes minimal inputs (`version`, `target_os`) and a custom token to ensure compatibility.
-- A matrix strategy processes `ubuntu` and `centos` in parallel, with `fail-fast` enabled to halt on any failure.
-- The build stage produces a temporary SHA-tagged image, which is retagged as a branch or tag-based image during the upload stage if tests pass.
-- A custom secret (`GITHUB_TOKEN`) is required for container registry access.
-
-## Limitations
-
-- The workflow depends on the correct functioning of external reusable workflows.
-- Any failure in a stage (e.g., build or test for any OS) halts subsequent stages.
+- The pipeline uses a `fail-fast: true` strategy to stop on any matrix job failure, ensuring quick feedback.
+- For specific details on each stage, refer to the respective reusable workflow files and their READMEs in the `greengagedb/greengage-ci` repository.
