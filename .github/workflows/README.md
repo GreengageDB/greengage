@@ -11,13 +11,13 @@ The `Greengage CI` workflow triggers on:
 
 It executes the following jobs in a matrix strategy for multiple target operating systems:
 
-- **Build**: Constructs and pushes Docker images to the GitHub Container Registry (GHCR) with development commit SHA tag. Runs for pull requests and push to tags.
+- **Build**: Constructs and pushes Docker images to the GitHub Container Registry (GHCR) with development commit SHA tag and branchname tag. Runs for pull requests and all push events (main and tags).
 - **Tests**: Runs multiple test suites only for pull requests, including:
   - Behave tests
   - Regression tests
   - Orca tests
   - Resource group tests
-- **Upload**: Retags and pushes final Docker images to GHCR and optionally DockerHub. Runs for push to `main` (unconditionally, retags to `latest`) and tags (after build, uses tag like `6.28.2`).
+- **Upload**: Retags and pushes final Docker images to GHCR and optionally DockerHub. Runs for push to `main` (retags to `latest`) and tags (uses tag like `6.28.2`) after build.
 
 ## Configuration
 
@@ -51,6 +51,5 @@ Detailed README files for each process are available in the `README` directory o
 ## Notes
 
 - The pipeline uses a `fail-fast: true` strategy to stop on any matrix job failure, ensuring quick feedback.
-- For push to `main`, only the upload stage runs, using images from the pull request.
-- The full process, including build, tests, and upload, runs only before pull request approval. For tags, a rebuild without tests occurs to update the product version, using the closest tag to HEAD. If DockerHub credentials (`DOCKERHUB_TOKEN`, `DOCKERHUB_USERNAME`) are missing or invalid, DockerHub upload is skipped, but other processes (GHCR upload, etc.) are unaffected.
+- The full process, including build, tests, and upload, runs only before pull request approval. For push events (main or tags), a build occurs to ensure correct commit references and product version, using the closest tag to HEAD, followed by upload. If DockerHub credentials (`DOCKERHUB_TOKEN`, `DOCKERHUB_USERNAME`) are missing or invalid, DockerHub upload is skipped, but other processes (GHCR upload, etc.) are unaffected.
 - For specific details on each stage, refer to the respective reusable workflow files and their READMEs in the `greengagedb/greengage-ci` repository.
