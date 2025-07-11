@@ -27,25 +27,26 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "access/aomd.h"
-#include "access/htup_details.h"
-#include "catalog/catalog.h"
-#include "miscadmin.h"
 #include "access/xlogutils.h"
 #include "access/xlog.h"
+#include "access/xlogutils.h"
 #include "commands/tablespace.h"
+#include "miscadmin.h"
+#include "pg_trace.h"
 #include "pgstat.h"
 #include "postmaster/bgwriter.h"
-#include "storage/fd.h"
 #include "storage/bufmgr.h"
+#include "storage/fd.h"
 #include "storage/md.h"
 #include "storage/relfilenode.h"
 #include "storage/smgr.h"
 #include "storage/sync.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
-#include "pg_trace.h"
 
+#include "access/aomd.h"
+#include "access/htup_details.h"
+#include "catalog/catalog.h"
 #include "catalog/pg_tablespace.h"
 #include "utils/faultinjector.h"
 

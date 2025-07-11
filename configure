@@ -17070,6 +17070,12 @@ _ACEOF
 
 
 
+if test "$ac_cv_header_stdbool_h" = yes -a "$ac_cv_sizeof_bool" = 1; then
+
+$as_echo "#define PG_USE_STDBOOL 1" >>confdefs.h
+
+fi
+
 
 ##
 ## Functions, global variables
@@ -19078,30 +19084,6 @@ cat >>confdefs.h <<_ACEOF
 #define SIZEOF_LONG $ac_cv_sizeof_long
 _ACEOF
 
-
-
-# In GPDB, float4 and float8 are always passed by value. There is
-# GPDB-specific code that assumes that in various places, so it's not
-# configurable.
-float4passbyval=true
-
-$as_echo "#define USE_FLOAT4_BYVAL 1" >>confdefs.h
-
-
-cat >>confdefs.h <<_ACEOF
-#define FLOAT4PASSBYVAL $float4passbyval
-_ACEOF
-
-
-# Note: this setting also controls int8 and related types such as timestamp.
-float8passbyval=true
-
-$as_echo "#define USE_FLOAT8_BYVAL 1" >>confdefs.h
-
-
-cat >>confdefs.h <<_ACEOF
-#define FLOAT8PASSBYVAL $float8passbyval
-_ACEOF
 
 
 # Determine memory alignment requirements for the basic C data types.

@@ -10,8 +10,9 @@
 #define COMMON_H
 
 #include "common/username.h"
-#include "libpq-fe.h"
+#include "fe_utils/cancel.h"
 #include "getopt_long.h"		/* pgrminclude ignore */
+#include "libpq-fe.h"
 #include "pqexpbuffer.h"		/* pgrminclude ignore */
 
 enum trivalue
@@ -59,11 +60,5 @@ extern void appendQualifiedRelation(PQExpBuffer buf, const char *name,
 									PGconn *conn, bool echo);
 
 extern bool yesno_prompt(const char *question);
-
-extern void setup_cancel_handler(void);
-
-extern void SetCancelConn(PGconn *conn);
-extern void ResetCancelConn(void);
-
 
 #endif							/* COMMON_H */

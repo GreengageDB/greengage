@@ -30,8 +30,8 @@
 #include "commands/alter.h"
 #include "commands/async.h"
 #include "commands/cluster.h"
-#include "commands/comment.h"
 #include "commands/collationcmds.h"
+#include "commands/comment.h"
 #include "commands/conversioncmds.h"
 #include "commands/copy.h"
 #include "commands/createas.h"
@@ -42,8 +42,8 @@
 #include "commands/explain.h"
 #include "commands/extension.h"
 #include "commands/extprotocolcmds.h"
-#include "commands/matview.h"
 #include "commands/lockcmds.h"
+#include "commands/matview.h"
 #include "commands/policy.h"
 #include "commands/portalcmds.h"
 #include "commands/prepare.h"
@@ -73,8 +73,8 @@
 #include "utils/acl.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
-#include "utils/syscache.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "access/table.h"
 #include "catalog/oid_dispatch.h"
@@ -669,8 +669,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 
 		case T_DropdbStmt:
 			{
-				DropdbStmt *stmt = (DropdbStmt *) parsetree;
-
 				/* no event triggers for global objects */
 				if (Gp_role != GP_ROLE_EXECUTE)
 				{
@@ -680,7 +678,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 					 */
 					PreventInTransactionBlock(isTopLevel, "DROP DATABASE");
 				}
-				dropdb(stmt->dbname, stmt->missing_ok);
+				DropDatabase(pstate, (DropdbStmt *) parsetree);
 			}
 			break;
 

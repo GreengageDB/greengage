@@ -21,9 +21,8 @@
 #include "miscadmin.h"
 #endif
 
-#include "storage/bufmgr.h"
 #include "storage/buf_internals.h"
-
+#include "storage/bufmgr.h"
 
 BufferDescPadded *BufferDescriptors;
 char	   *BufferBlocks;

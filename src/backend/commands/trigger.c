@@ -2585,7 +2585,7 @@ ExecBRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 					 TupleTableSlot *slot)
 {
 	TriggerDesc *trigdesc = relinfo->ri_TrigDesc;
-	HeapTuple	newtuple = false;
+	HeapTuple	newtuple = NULL;
 	bool		should_free;
 	TriggerData LocTriggerData;
 	int			i;
@@ -3247,7 +3247,7 @@ ExecIRUpdateTriggers(EState *estate, ResultRelInfo *relinfo,
 {
 	TriggerDesc *trigdesc = relinfo->ri_TrigDesc;
 	TupleTableSlot *oldslot = ExecGetTriggerOldSlot(estate, relinfo);
-	HeapTuple	newtuple = false;
+	HeapTuple	newtuple = NULL;
 	bool		should_free;
 	TriggerData LocTriggerData;
 	int			i;

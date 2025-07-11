@@ -162,16 +162,15 @@ EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: hash partitioning
-                QUERY PLAN                 
--------------------------------------------
+                  QUERY PLAN                  
+----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: hp0.a, hp0.b
-   ->  Seq Scan on orca_static_pruning.hp0
-         Output: hp0.a, hp0.b
-         Filter: (hp0.b = 42)
+   Output: hp.a, hp.b
+   ->  Seq Scan on orca_static_pruning.hp0 hp
+         Output: hp.a, hp.b
+         Filter: (hp.b = 42)
  Optimizer: Postgres query optimizer
- Settings: optimizer=on
-(7 rows)
+(6 rows)
 
 :qry ;
 INFO:  GPORCA failed to produce a plan, falling back to planner

@@ -166,10 +166,10 @@ create table coll_pruning_a partition of coll_pruning for values in ('a');
 create table coll_pruning_b partition of coll_pruning for values in ('b');
 create table coll_pruning_def partition of coll_pruning default;
 explain (costs off) select * from coll_pruning where a collate "C" = 'a' collate "C";
-                 QUERY PLAN                  
----------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on coll_pruning_a
+   ->  Seq Scan on coll_pruning_a coll_pruning
          Filter: (a = 'a'::text COLLATE "C")
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -180,11 +180,11 @@ explain (costs off) select * from coll_pruning where a collate "POSIX" = 'a' col
 ---------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on coll_pruning_a
+         ->  Seq Scan on coll_pruning_a coll_pruning
                Filter: ((a)::text = 'a'::text COLLATE "POSIX")
-         ->  Seq Scan on coll_pruning_b
+         ->  Seq Scan on coll_pruning_b coll_pruning_1
                Filter: ((a)::text = 'a'::text COLLATE "POSIX")
-         ->  Seq Scan on coll_pruning_def
+         ->  Seq Scan on coll_pruning_def coll_pruning_2
                Filter: ((a)::text = 'a'::text COLLATE "POSIX")
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -216,7 +216,7 @@ explain (costs off) select * from rlp where a < 1;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on rlp1
+   ->  Seq Scan on rlp1 rlp
          Filter: (a < 1)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -225,7 +225,7 @@ explain (costs off) select * from rlp where 1 > a;	/* commuted */
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on rlp1
+   ->  Seq Scan on rlp1 rlp
          Filter: (1 > a)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -235,9 +235,9 @@ explain (costs off) select * from rlp where a <= 1;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: (a <= 1)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: (a <= 1)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -246,7 +246,7 @@ explain (costs off) select * from rlp where a = 1;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp2
+   ->  Seq Scan on rlp2 rlp
          Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -255,7 +255,7 @@ explain (costs off) select * from rlp where a = 1::bigint;		/* same as above */
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp2
+   ->  Seq Scan on rlp2 rlp
          Filter: (a = '1'::bigint)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -265,121 +265,121 @@ explain (costs off) select * from rlp where a = 1::numeric;		/* no pruning */
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp_2
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_3
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_4
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_5
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_6
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_7
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_8
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_9
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_10
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_11
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_12
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp_default_null
+         ->  Seq Scan on rlp_default_null rlp_13
                Filter: ((a)::numeric = '1'::numeric)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_14
                Filter: ((a)::numeric = '1'::numeric)
  Optimizer: Postgres query optimizer
 (33 rows)
 
 explain (costs off) select * from rlp where a <= 10;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: (a <= 10)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: (a <= 10)
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_2
                Filter: (a <= 10)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_3
                Filter: (a <= 10)
  Optimizer: Postgres query optimizer
 (11 rows)
 
 explain (costs off) select * from rlp where a > 10;
-                 QUERY PLAN                  
----------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp
                Filter: (a > 10)
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_1
                Filter: (a > 10)
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_2
                Filter: (a > 10)
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_3
                Filter: (a > 10)
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_4
                Filter: (a > 10)
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_5
                Filter: (a > 10)
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_6
                Filter: (a > 10)
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_7
                Filter: (a > 10)
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_8
                Filter: (a > 10)
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_9
                Filter: (a > 10)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_10
                Filter: (a > 10)
  Optimizer: Postgres query optimizer
 (25 rows)
 
 explain (costs off) select * from rlp where a < 15;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: (a < 15)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: (a < 15)
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_2
                Filter: (a < 15)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_3
                Filter: (a < 15)
  Optimizer: Postgres query optimizer
 (11 rows)
 
 explain (costs off) select * from rlp where a <= 15;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: (a <= 15)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: (a <= 15)
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp_2
                Filter: (a <= 15)
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_3
                Filter: (a <= 15)
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_4
                Filter: (a <= 15)
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_5
                Filter: (a <= 15)
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_6
                Filter: (a <= 15)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_7
                Filter: (a <= 15)
  Optimizer: Postgres query optimizer
 (19 rows)
@@ -389,37 +389,37 @@ explain (costs off) select * from rlp where a > 15 and b = 'ab';
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_1
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_2
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_3
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_4
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_5
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_6
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_7
                Filter: ((a > 15) AND ((b)::text = 'ab'::text))
  Optimizer: Postgres query optimizer
 (19 rows)
 
 explain (costs off) select * from rlp where a = 16;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp
                Filter: (a = 16)
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_1
                Filter: (a = 16)
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_2
                Filter: (a = 16)
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_3
                Filter: (a = 16)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -428,7 +428,7 @@ explain (costs off) select * from rlp where a = 16 and b in ('not', 'in', 'here'
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp3_default
+   ->  Seq Scan on rlp3_default rlp
          Filter: ((a = 16) AND ((b)::text = ANY ('{not,in,here}'::text[])))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -437,7 +437,7 @@ explain (costs off) select * from rlp where a = 16 and b < 'ab';
                        QUERY PLAN                        
 ---------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp3_default
+   ->  Seq Scan on rlp3_default rlp
          Filter: (((b)::text < 'ab'::text) AND (a = 16))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -447,9 +447,9 @@ explain (costs off) select * from rlp where a = 16 and b <= 'ab';
 ----------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp
                Filter: (((b)::text <= 'ab'::text) AND (a = 16))
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_1
                Filter: (((b)::text <= 'ab'::text) AND (a = 16))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -458,7 +458,7 @@ explain (costs off) select * from rlp where a = 16 and b is null;
                  QUERY PLAN                 
 --------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp3nullxy
+   ->  Seq Scan on rlp3nullxy rlp
          Filter: ((b IS NULL) AND (a = 16))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -468,13 +468,13 @@ explain (costs off) select * from rlp where a = 16 and b is not null;
 ------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp
                Filter: ((b IS NOT NULL) AND (a = 16))
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_1
                Filter: ((b IS NOT NULL) AND (a = 16))
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_2
                Filter: ((b IS NOT NULL) AND (a = 16))
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_3
                Filter: ((b IS NOT NULL) AND (a = 16))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -483,57 +483,57 @@ explain (costs off) select * from rlp where a is null;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp_default_null
+   ->  Seq Scan on rlp_default_null rlp
          Filter: (a IS NULL)
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from rlp where a is not null;
-                 QUERY PLAN                  
----------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp_2
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_3
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_4
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_5
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_6
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_7
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_8
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_9
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_10
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_11
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_12
                Filter: (a IS NOT NULL)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_13
                Filter: (a IS NOT NULL)
  Optimizer: Postgres query optimizer
 (31 rows)
 
 explain (costs off) select * from rlp where a > 30;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp
                Filter: (a > 30)
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_1
                Filter: (a > 30)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_2
                Filter: (a > 30)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -542,41 +542,41 @@ explain (costs off) select * from rlp where a = 30;	/* only default is scanned *
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp_default_30
+   ->  Seq Scan on rlp_default_30 rlp
          Filter: (a = 30)
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from rlp where a <= 31;
-                 QUERY PLAN                  
----------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: (a <= 31)
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: (a <= 31)
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp_2
                Filter: (a <= 31)
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_3
                Filter: (a <= 31)
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_4
                Filter: (a <= 31)
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_5
                Filter: (a <= 31)
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_6
                Filter: (a <= 31)
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_7
                Filter: (a <= 31)
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_8
                Filter: (a <= 31)
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_9
                Filter: (a <= 31)
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_10
                Filter: (a <= 31)
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_11
                Filter: (a <= 31)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_12
                Filter: (a <= 31)
  Optimizer: Postgres query optimizer
 (29 rows)
@@ -585,7 +585,7 @@ explain (costs off) select * from rlp where a = 1 or a = 7;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 2:1  (slice1; segments: 2)
-   ->  Seq Scan on rlp2
+   ->  Seq Scan on rlp2 rlp
          Filter: ((a = 1) OR (a = 7))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -595,29 +595,29 @@ explain (costs off) select * from rlp where a = 1 or b = 'ab';
 -------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp_1
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp_2
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_3
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_4
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_5
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_6
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_7
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp_default_10
+         ->  Seq Scan on rlp_default_10 rlp_8
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_9
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp_default_null
+         ->  Seq Scan on rlp_default_null rlp_10
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_11
                Filter: ((a = 1) OR ((b)::text = 'ab'::text))
  Optimizer: Postgres query optimizer
 (27 rows)
@@ -627,9 +627,9 @@ explain (costs off) select * from rlp where a > 20 and a < 27;
 -----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp
                Filter: ((a > 20) AND (a < 27))
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_1
                Filter: ((a > 20) AND (a < 27))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -638,25 +638,25 @@ explain (costs off) select * from rlp where a = 29;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp4_default
+   ->  Seq Scan on rlp4_default rlp
          Filter: (a = 29)
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from rlp where a >= 29;
-                 QUERY PLAN                  
----------------------------------------------
+                    QUERY PLAN                     
+---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp
                Filter: (a >= 29)
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_1
                Filter: (a >= 29)
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_2
                Filter: (a >= 29)
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_3
                Filter: (a >= 29)
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_4
                Filter: (a >= 29)
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -666,9 +666,9 @@ explain (costs off) select * from rlp where a < 1 or (a > 20 and a < 25);
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp1
+         ->  Seq Scan on rlp1 rlp
                Filter: ((a < 1) OR ((a > 20) AND (a < 25)))
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_1
                Filter: ((a < 1) OR ((a > 20) AND (a < 25)))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -679,9 +679,9 @@ explain (costs off) select * from rlp where a = 20 or a = 40;
 ----------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp
                Filter: ((a = 20) OR (a = 40))
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_1
                Filter: ((a = 20) OR (a = 40))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -699,37 +699,37 @@ explain (costs off) select * from rlp where a > 1 and a = 10;	/* only default */
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on rlp_default_10
+   ->  Seq Scan on rlp_default_10 rlp
          Filter: ((a > 1) AND (a = 10))
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from rlp where a > 1 and a >=15;	/* rlp3 onwards, including default */
-                  QUERY PLAN                   
------------------------------------------------
+                     QUERY PLAN                     
+----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_1
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_2
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_3
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp4_1
+         ->  Seq Scan on rlp4_1 rlp_4
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp4_2
+         ->  Seq Scan on rlp4_2 rlp_5
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp4_default
+         ->  Seq Scan on rlp4_default rlp_6
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp5_1
+         ->  Seq Scan on rlp5_1 rlp_7
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp5_default
+         ->  Seq Scan on rlp5_default rlp_8
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp_default_30
+         ->  Seq Scan on rlp_default_30 rlp_9
                Filter: ((a > 1) AND (a >= 15))
-         ->  Seq Scan on rlp_default_default
+         ->  Seq Scan on rlp_default_default rlp_10
                Filter: ((a > 1) AND (a >= 15))
  Optimizer: Postgres query optimizer
 (25 rows)
@@ -747,15 +747,15 @@ explain (costs off) select * from rlp where (a = 1 and a = 3) or (a > 1 and a = 
 -------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on rlp2
+         ->  Seq Scan on rlp2 rlp
                Filter: (((a = 1) AND (a = 3)) OR ((a > 1) AND (a = 15)))
-         ->  Seq Scan on rlp3abcd
+         ->  Seq Scan on rlp3abcd rlp_1
                Filter: (((a = 1) AND (a = 3)) OR ((a > 1) AND (a = 15)))
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp_2
                Filter: (((a = 1) AND (a = 3)) OR ((a > 1) AND (a = 15)))
-         ->  Seq Scan on rlp3nullxy
+         ->  Seq Scan on rlp3nullxy rlp_3
                Filter: (((a = 1) AND (a = 3)) OR ((a > 1) AND (a = 15)))
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_4
                Filter: (((a = 1) AND (a = 3)) OR ((a > 1) AND (a = 15)))
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -772,15 +772,15 @@ create table mc3p5 partition of mc3p for values from (11, 1, 1) to (20, 10, 10);
 create table mc3p6 partition of mc3p for values from (20, 10, 10) to (20, 20, 20);
 create table mc3p7 partition of mc3p for values from (20, 20, 20) to (maxvalue, maxvalue, maxvalue);
 explain (costs off) select * from mc3p where a = 1;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: (a = 1)
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: (a = 1)
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_2
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -790,9 +790,9 @@ explain (costs off) select * from mc3p where a = 1 and abs(b) < 1;
 --------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: ((a = 1) AND (abs(b) < 1))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_1
                Filter: ((a = 1) AND (abs(b) < 1))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -802,11 +802,11 @@ explain (costs off) select * from mc3p where a = 1 and abs(b) = 1;
 --------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: ((a = 1) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: ((a = 1) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_2
                Filter: ((a = 1) AND (abs(b) = 1))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -816,9 +816,9 @@ explain (costs off) select * from mc3p where a = 1 and abs(b) = 1 and c < 8;
 --------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: ((c < 8) AND (a = 1) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: ((c < 8) AND (a = 1) AND (abs(b) = 1))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -828,69 +828,69 @@ explain (costs off) select * from mc3p where a = 10 and abs(b) between 5 and 35;
 -----------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p
                Filter: ((a = 10) AND (abs(b) >= 5) AND (abs(b) <= 35))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_1
                Filter: ((a = 10) AND (abs(b) >= 5) AND (abs(b) <= 35))
-         ->  Seq Scan on mc3p3
+         ->  Seq Scan on mc3p3 mc3p_2
                Filter: ((a = 10) AND (abs(b) >= 5) AND (abs(b) <= 35))
-         ->  Seq Scan on mc3p4
+         ->  Seq Scan on mc3p4 mc3p_3
                Filter: ((a = 10) AND (abs(b) >= 5) AND (abs(b) <= 35))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_4
                Filter: ((a = 10) AND (abs(b) >= 5) AND (abs(b) <= 35))
  Optimizer: Postgres query optimizer
 (13 rows)
 
 explain (costs off) select * from mc3p where a > 10;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p
                Filter: (a > 10)
-         ->  Seq Scan on mc3p6
+         ->  Seq Scan on mc3p6 mc3p_1
                Filter: (a > 10)
-         ->  Seq Scan on mc3p7
+         ->  Seq Scan on mc3p7 mc3p_2
                Filter: (a > 10)
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_3
                Filter: (a > 10)
  Optimizer: Postgres query optimizer
 (11 rows)
 
 explain (costs off) select * from mc3p where a >= 10;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_1
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p3
+         ->  Seq Scan on mc3p3 mc3p_2
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p4
+         ->  Seq Scan on mc3p4 mc3p_3
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p_4
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p6
+         ->  Seq Scan on mc3p6 mc3p_5
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p7
+         ->  Seq Scan on mc3p7 mc3p_6
                Filter: (a >= 10)
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_7
                Filter: (a >= 10)
  Optimizer: Postgres query optimizer
 (19 rows)
 
 explain (costs off) select * from mc3p where a < 10;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: (a < 10)
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: (a < 10)
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_2
                Filter: (a < 10)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -900,13 +900,13 @@ explain (costs off) select * from mc3p where a <= 10 and abs(b) < 10;
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: ((a <= 10) AND (abs(b) < 10))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: ((a <= 10) AND (abs(b) < 10))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_2
                Filter: ((a <= 10) AND (abs(b) < 10))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_3
                Filter: ((a <= 10) AND (abs(b) < 10))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -915,7 +915,7 @@ explain (costs off) select * from mc3p where a = 11 and abs(b) = 0;
                  QUERY PLAN                  
 ---------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc3p_default
+   ->  Seq Scan on mc3p_default mc3p
          Filter: ((a = 11) AND (abs(b) = 0))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -924,35 +924,35 @@ explain (costs off) select * from mc3p where a = 20 and abs(b) = 10 and c = 100;
                          QUERY PLAN                         
 ------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc3p6
+   ->  Seq Scan on mc3p6 mc3p
          Filter: ((a = 20) AND (c = 100) AND (abs(b) = 10))
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from mc3p where a > 20;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p7
+         ->  Seq Scan on mc3p7 mc3p
                Filter: (a > 20)
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_1
                Filter: (a > 20)
  Optimizer: Postgres query optimizer
 (7 rows)
 
 explain (costs off) select * from mc3p where a >= 20;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p
                Filter: (a >= 20)
-         ->  Seq Scan on mc3p6
+         ->  Seq Scan on mc3p6 mc3p_1
                Filter: (a >= 20)
-         ->  Seq Scan on mc3p7
+         ->  Seq Scan on mc3p7 mc3p_2
                Filter: (a >= 20)
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_3
                Filter: (a >= 20)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -962,13 +962,13 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1 and c = 1) or
 ---------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_1
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)))
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p_2
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_3
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -978,15 +978,15 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1 and c = 1) or
 --------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_2
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1))
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p_3
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_4
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1))
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -996,15 +996,15 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1 and c = 1) or
 -------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1) OR (a = 1))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1) OR (a = 1))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_2
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1) OR (a = 1))
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p_3
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1) OR (a = 1))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_4
                Filter: (((a = 1) AND (abs(b) = 1) AND (c = 1)) OR ((a = 10) AND (abs(b) = 5) AND (c = 10)) OR ((a > 11) AND (a < 20)) OR (a < 1) OR (a = 1))
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -1014,23 +1014,23 @@ explain (costs off) select * from mc3p where a = 1 or abs(b) = 1 or c = 1;
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_2
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p3
+         ->  Seq Scan on mc3p3 mc3p_3
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p4
+         ->  Seq Scan on mc3p4 mc3p_4
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p5
+         ->  Seq Scan on mc3p5 mc3p_5
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p6
+         ->  Seq Scan on mc3p6 mc3p_6
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p7
+         ->  Seq Scan on mc3p7 mc3p_7
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_8
                Filter: ((a = 1) OR (abs(b) = 1) OR (c = 1))
  Optimizer: Postgres query optimizer
 (21 rows)
@@ -1040,17 +1040,17 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1) or (a = 10 a
 ------------------------------------------------------------------------------------
  Gather Motion 2:1  (slice1; segments: 2)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 10)))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 10)))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_2
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 10)))
-         ->  Seq Scan on mc3p3
+         ->  Seq Scan on mc3p3 mc3p_3
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 10)))
-         ->  Seq Scan on mc3p4
+         ->  Seq Scan on mc3p4 mc3p_4
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 10)))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_5
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 10)))
  Optimizer: Postgres query optimizer
 (15 rows)
@@ -1060,13 +1060,13 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1) or (a = 10 a
 -----------------------------------------------------------------------------------
  Gather Motion 2:1  (slice1; segments: 2)
    ->  Append
-         ->  Seq Scan on mc3p0
+         ->  Seq Scan on mc3p0 mc3p
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 9)))
-         ->  Seq Scan on mc3p1
+         ->  Seq Scan on mc3p1 mc3p_1
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 9)))
-         ->  Seq Scan on mc3p2
+         ->  Seq Scan on mc3p2 mc3p_2
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 9)))
-         ->  Seq Scan on mc3p_default
+         ->  Seq Scan on mc3p_default mc3p_3
                Filter: (((a = 1) AND (abs(b) = 1)) OR ((a = 10) AND (abs(b) = 9)))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1081,17 +1081,17 @@ create table mc2p3 partition of mc2p for values from (2, minvalue) to (2, 1);
 create table mc2p4 partition of mc2p for values from (2, 1) to (2, maxvalue);
 create table mc2p5 partition of mc2p for values from (2, maxvalue) to (maxvalue, maxvalue);
 explain (costs off) select * from mc2p where a < 2;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc2p0
+         ->  Seq Scan on mc2p0 mc2p
                Filter: (a < 2)
-         ->  Seq Scan on mc2p1
+         ->  Seq Scan on mc2p1 mc2p_1
                Filter: (a < 2)
-         ->  Seq Scan on mc2p2
+         ->  Seq Scan on mc2p2 mc2p_2
                Filter: (a < 2)
-         ->  Seq Scan on mc2p_default
+         ->  Seq Scan on mc2p_default mc2p_3
                Filter: (a < 2)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1100,25 +1100,25 @@ explain (costs off) select * from mc2p where a = 2 and b < 1;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc2p3
+   ->  Seq Scan on mc2p3 mc2p
          Filter: ((b < 1) AND (a = 2))
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from mc2p where a > 1;
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                  
+---------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mc2p2
+         ->  Seq Scan on mc2p2 mc2p
                Filter: (a > 1)
-         ->  Seq Scan on mc2p3
+         ->  Seq Scan on mc2p3 mc2p_1
                Filter: (a > 1)
-         ->  Seq Scan on mc2p4
+         ->  Seq Scan on mc2p4 mc2p_2
                Filter: (a > 1)
-         ->  Seq Scan on mc2p5
+         ->  Seq Scan on mc2p5 mc2p_3
                Filter: (a > 1)
-         ->  Seq Scan on mc2p_default
+         ->  Seq Scan on mc2p_default mc2p_4
                Filter: (a > 1)
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -1127,7 +1127,7 @@ explain (costs off) select * from mc2p where a = 1 and b > 1;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc2p2
+   ->  Seq Scan on mc2p2 mc2p
          Filter: ((b > 1) AND (a = 1))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1137,7 +1137,7 @@ explain (costs off) select * from mc2p where a = 1 and b is null;
                 QUERY PLAN                 
 -------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc2p_default
+   ->  Seq Scan on mc2p_default mc2p
          Filter: ((b IS NULL) AND (a = 1))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1146,7 +1146,7 @@ explain (costs off) select * from mc2p where a is null and b is null;
                   QUERY PLAN                   
 -----------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc2p_default
+   ->  Seq Scan on mc2p_default mc2p
          Filter: ((a IS NULL) AND (b IS NULL))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1155,7 +1155,7 @@ explain (costs off) select * from mc2p where a is null and b = 1;
                 QUERY PLAN                 
 -------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc2p_default
+   ->  Seq Scan on mc2p_default mc2p
          Filter: ((a IS NULL) AND (b = 1))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1164,7 +1164,7 @@ explain (costs off) select * from mc2p where a is null;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on mc2p_default
+   ->  Seq Scan on mc2p_default mc2p
          Filter: (a IS NULL)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1173,7 +1173,7 @@ explain (costs off) select * from mc2p where b is null;
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on mc2p_default
+   ->  Seq Scan on mc2p_default mc2p
          Filter: (b IS NULL)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1273,7 +1273,7 @@ explain (costs off)  select * from boolrangep where not a and not b and c = 25;
                      QUERY PLAN                     
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on boolrangep_ff1
+   ->  Seq Scan on boolrangep_ff1 boolrangep
          Filter: ((NOT a) AND (NOT b) AND (c = 25))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1404,22 +1404,48 @@ explain (costs off) select * from coercepart where a = all (null::text[]);
 (5 rows)
 
 drop table coercepart;
-CREATE TABLE part (a INT, b INT) PARTITION BY LIST (a);
+CREATE TABLE part (a INT, b INT) DISTRIBUTED BY (a) PARTITION BY LIST (a);
 CREATE TABLE part_p1 PARTITION OF part FOR VALUES IN (-2,-1,0,1,2);
 CREATE TABLE part_p2 PARTITION OF part DEFAULT PARTITION BY RANGE(a);
 CREATE TABLE part_p2_p1 PARTITION OF part_p2 DEFAULT;
+CREATE TABLE part_rev (b INT, c INT, a INT) DISTRIBUTED BY (a);
+ALTER TABLE part ATTACH PARTITION part_rev FOR VALUES IN (3);  -- fail
+ERROR:  table "part_rev" contains column "c" not found in parent "part"
+DETAIL:  The new partition may contain only the columns present in parent.
+ALTER TABLE part_rev DROP COLUMN c;
+ALTER TABLE part ATTACH PARTITION part_rev FOR VALUES IN (3);  -- now it's ok
 INSERT INTO part VALUES (-1,-1), (1,1), (2,NULL), (NULL,-2),(NULL,NULL);
 EXPLAIN (COSTS OFF) SELECT tableoid::regclass as part, a, b FROM part WHERE a IS NULL ORDER BY 1, 2, 3;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   Merge Key: ((part_p2_p1.tableoid)::regclass), part_p2_p1.a, part_p2_p1.b
+   Merge Key: ((part.tableoid)::regclass), part.a, part.b
    ->  Sort
-         Sort Key: ((part_p2_p1.tableoid)::regclass), part_p2_p1.a, part_p2_p1.b
-         ->  Seq Scan on part_p2_p1
+         Sort Key: ((part.tableoid)::regclass), part.a, part.b
+         ->  Seq Scan on part_p2_p1 part
                Filter: (a IS NULL)
  Optimizer: Postgres query optimizer
 (7 rows)
+
+EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM part p(x) ORDER BY x;
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: p.x, p.b
+   Merge Key: p.x
+   ->  Sort
+         Output: p.x, p.b
+         Sort Key: p.x
+         ->  Append
+               ->  Seq Scan on public.part_p1 p
+                     Output: p.x, p.b
+               ->  Seq Scan on public.part_rev p_1
+                     Output: p_1.x, p_1.b
+               ->  Seq Scan on public.part_p2_p1 p_2
+                     Output: p_2.x, p_2.b
+ Optimizer: Postgres query optimizer
+ Settings: plan_cache_mode = 'force_generic_plan'
+(15 rows)
 
 --
 -- some more cases
@@ -1586,9 +1612,9 @@ explain (costs off) select * from rlp where a = 15 and b <> 'ab' and b <> 'cd' a
 ------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on rlp3efgh
+         ->  Seq Scan on rlp3efgh rlp
                Filter: ((b IS NOT NULL) AND ((b)::text <> 'ab'::text) AND ((b)::text <> 'cd'::text) AND ((b)::text <> 'xy'::text) AND (a = 15))
-         ->  Seq Scan on rlp3_default
+         ->  Seq Scan on rlp3_default rlp_1
                Filter: ((b IS NOT NULL) AND ((b)::text <> 'ab'::text) AND ((b)::text <> 'cd'::text) AND ((b)::text <> 'xy'::text) AND (a = 15))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1602,15 +1628,15 @@ create table coll_pruning_multi2 partition of coll_pruning_multi for values from
 create table coll_pruning_multi3 partition of coll_pruning_multi for values from ('b', 'a') to ('b', 'e');
 -- no pruning, because no value for the leading key
 explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'e' collate "C";
-                          QUERY PLAN                          
---------------------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on coll_pruning_multi1
+         ->  Seq Scan on coll_pruning_multi1 coll_pruning_multi
                Filter: (substr(a, 1) = 'e'::text COLLATE "C")
-         ->  Seq Scan on coll_pruning_multi2
+         ->  Seq Scan on coll_pruning_multi2 coll_pruning_multi_1
                Filter: (substr(a, 1) = 'e'::text COLLATE "C")
-         ->  Seq Scan on coll_pruning_multi3
+         ->  Seq Scan on coll_pruning_multi3 coll_pruning_multi_2
                Filter: (substr(a, 1) = 'e'::text COLLATE "C")
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1621,9 +1647,9 @@ explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'a' co
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on coll_pruning_multi1
+         ->  Seq Scan on coll_pruning_multi1 coll_pruning_multi
                Filter: (substr(a, 1) = 'a'::text COLLATE "POSIX")
-         ->  Seq Scan on coll_pruning_multi2
+         ->  Seq Scan on coll_pruning_multi2 coll_pruning_multi_1
                Filter: (substr(a, 1) = 'a'::text COLLATE "POSIX")
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1633,7 +1659,7 @@ explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'e' co
                                                QUERY PLAN                                                
 ---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on coll_pruning_multi2
+   ->  Seq Scan on coll_pruning_multi2 coll_pruning_multi
          Filter: ((substr(a, 1) = 'e'::text COLLATE "C") AND (substr(a, 1) = 'a'::text COLLATE "POSIX"))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1728,13 +1754,13 @@ explain (costs off) select * from hp where a = 1;
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: (a = 1)
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: (a = 1)
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: (a = 1)
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1744,13 +1770,13 @@ explain (costs off) select * from hp where b = 'xxx';
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: (b = 'xxx'::text)
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: (b = 'xxx'::text)
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: (b = 'xxx'::text)
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: (b = 'xxx'::text)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1760,13 +1786,13 @@ explain (costs off) select * from hp where a is null;
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: (a IS NULL)
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: (a IS NULL)
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: (a IS NULL)
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: (a IS NULL)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1776,13 +1802,13 @@ explain (costs off) select * from hp where b is null;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: (b IS NULL)
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: (b IS NULL)
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: (b IS NULL)
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: (b IS NULL)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1792,13 +1818,13 @@ explain (costs off) select * from hp where a < 1 and b = 'xxx';
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: ((a < 1) AND (b = 'xxx'::text))
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: ((a < 1) AND (b = 'xxx'::text))
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: ((a < 1) AND (b = 'xxx'::text))
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: ((a < 1) AND (b = 'xxx'::text))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1808,13 +1834,13 @@ explain (costs off) select * from hp where a <> 1 and b = 'yyy';
 --------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: ((a <> 1) AND (b = 'yyy'::text))
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: ((a <> 1) AND (b = 'yyy'::text))
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: ((a <> 1) AND (b = 'yyy'::text))
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: ((a <> 1) AND (b = 'yyy'::text))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1824,13 +1850,13 @@ explain (costs off) select * from hp where a <> 1 and b <> 'xxx';
 ---------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: ((a <> 1) AND (b <> 'xxx'::text))
-         ->  Seq Scan on hp1
+         ->  Seq Scan on hp1 hp_1
                Filter: ((a <> 1) AND (b <> 'xxx'::text))
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_2
                Filter: ((a <> 1) AND (b <> 'xxx'::text))
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_3
                Filter: ((a <> 1) AND (b <> 'xxx'::text))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -1841,7 +1867,7 @@ explain (costs off) select * from hp where a is null and b is null;
                   QUERY PLAN                   
 -----------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on hp0
+   ->  Seq Scan on hp0 hp
          Filter: ((a IS NULL) AND (b IS NULL))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1850,7 +1876,7 @@ explain (costs off) select * from hp where a = 1 and b is null;
                 QUERY PLAN                 
 -------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on hp1
+   ->  Seq Scan on hp1 hp
          Filter: ((b IS NULL) AND (a = 1))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1859,7 +1885,7 @@ explain (costs off) select * from hp where a = 1 and b = 'xxx';
                    QUERY PLAN                    
 -------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on hp0
+   ->  Seq Scan on hp0 hp
          Filter: ((a = 1) AND (b = 'xxx'::text))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1868,7 +1894,7 @@ explain (costs off) select * from hp where a is null and b = 'xxx';
                      QUERY PLAN                      
 -----------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on hp2
+   ->  Seq Scan on hp2 hp
          Filter: ((a IS NULL) AND (b = 'xxx'::text))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1877,7 +1903,7 @@ explain (costs off) select * from hp where a = 2 and b = 'xxx';
                    QUERY PLAN                    
 -------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on hp3
+   ->  Seq Scan on hp3 hp
          Filter: ((a = 2) AND (b = 'xxx'::text))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1886,7 +1912,7 @@ explain (costs off) select * from hp where a = 1 and b = 'abcde';
                     QUERY PLAN                     
 ---------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on hp2
+   ->  Seq Scan on hp2 hp
          Filter: ((a = 1) AND (b = 'abcde'::text))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1896,11 +1922,11 @@ explain (costs off) select * from hp where (a = 1 and b = 'abcde') or (a = 2 and
 -------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 2:1  (slice1; segments: 2)
    ->  Append
-         ->  Seq Scan on hp0
+         ->  Seq Scan on hp0 hp
                Filter: (((a = 1) AND (b = 'abcde'::text)) OR ((a = 2) AND (b = 'xxx'::text)) OR ((a IS NULL) AND (b IS NULL)))
-         ->  Seq Scan on hp2
+         ->  Seq Scan on hp2 hp_1
                Filter: (((a = 1) AND (b = 'abcde'::text)) OR ((a = 2) AND (b = 'xxx'::text)) OR ((a IS NULL) AND (b IS NULL)))
-         ->  Seq Scan on hp3
+         ->  Seq Scan on hp3 hp_2
                Filter: (((a = 1) AND (b = 'abcde'::text)) OR ((a = 2) AND (b = 'xxx'::text)) OR ((a IS NULL) AND (b IS NULL)))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1934,11 +1960,11 @@ explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 2, 3);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 6
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b3 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b3 ab_2 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -1949,17 +1975,17 @@ explain (analyze, costs off, summary off, timing off) execute ab_q1 (1, 2, 3);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 3
-         ->  Seq Scan on ab_a1_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b1 ab (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a1_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b2 ab_1 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a1_b3 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b3 ab_2 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_3 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_4 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b3 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b3 ab_5 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
  Optimizer: Postgres query optimizer
 (16 rows)
@@ -1974,9 +2000,9 @@ explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 2);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 4
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a2_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -1987,13 +2013,13 @@ explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 4);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 2
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a2_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a3_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b1 ab_2 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a3_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b2 ab_3 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2010,11 +2036,11 @@ explain (analyze, costs off, summary off, timing off) execute ab_q2 (2, 2);
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 6
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < $0))
-         ->  Seq Scan on ab_a2_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=0 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < $0))
-         ->  Seq Scan on ab_a2_b3 (never executed)
+         ->  Seq Scan on ab_a2_b3 ab_2 (never executed)
                Filter: ((a >= $1) AND (a <= $2) AND (b < $0))
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2030,11 +2056,11 @@ explain (analyze, costs off, summary off, timing off) execute ab_q3 (2, 2);
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 6
-         ->  Seq Scan on ab_a1_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b2 ab (actual rows=0 loops=1)
                Filter: ((b >= $1) AND (b <= $2) AND (a < $0))
-         ->  Seq Scan on ab_a2_b2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=0 loops=1)
                Filter: ((b >= $1) AND (b <= $2) AND (a < $0))
-         ->  Seq Scan on ab_a3_b2 (never executed)
+         ->  Seq Scan on ab_a3_b2 ab_2 (never executed)
                Filter: ((b >= $1) AND (b <= $2) AND (a < $0))
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2131,18 +2157,18 @@ set parallel_tuple_cost = 0;
 set min_parallel_table_scan_size = 0;
 set max_parallel_workers_per_gather = 2;
 select explain_parallel_append('execute ab_q4 (2, 2)');
-                         explain_parallel_append                         
--------------------------------------------------------------------------
+                          explain_parallel_append                          
+---------------------------------------------------------------------------
  Finalize Aggregate (actual rows=N loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Append (actual rows=N loops=N)
                      Subplans Removed: 6
-                     ->  Seq Scan on ab_a2_b1 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a2_b1 ab (actual rows=N loops=N)
                            Filter: ((a >= $1) AND (a <= $2) AND (b < 4))
-                     ->  Seq Scan on ab_a2_b2 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=N loops=N)
                            Filter: ((a >= $1) AND (a <= $2) AND (b < 4))
-                     ->  Seq Scan on ab_a2_b3 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a2_b3 ab_2 (actual rows=N loops=N)
                            Filter: ((a >= $1) AND (a <= $2) AND (b < 4))
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2158,11 +2184,11 @@ select explain_parallel_append('execute ab_q5 (1, 1, 1)');
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Append (actual rows=N loops=N)
                      Subplans Removed: 6
-                     ->  Seq Scan on ab_a1_b1 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a1_b1 ab (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a1_b2 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a1_b2 ab_1 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a1_b3 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a1_b3 ab_2 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2175,17 +2201,17 @@ select explain_parallel_append('execute ab_q5 (2, 3, 3)');
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Append (actual rows=N loops=N)
                      Subplans Removed: 3
-                     ->  Seq Scan on ab_a2_b1 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a2_b1 ab (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a2_b2 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a2_b2 ab_1 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a2_b3 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a2_b3 ab_2 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a3_b1 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a3_b1 ab_3 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a3_b2 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a3_b2 ab_4 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
-                     ->  Seq Scan on ab_a3_b3 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a3_b3 ab_5 (actual rows=N loops=N)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
  Optimizer: Postgres query optimizer
 (18 rows)
@@ -2200,15 +2226,15 @@ select explain_parallel_append('execute ab_q5 (33, 44, 55)');
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Append (actual rows=N loops=N)
                      Subplans Removed: 8
-                     ->  Seq Scan on ab_a1_b1 (never executed)
+                     ->  Seq Scan on ab_a1_b1 ab (never executed)
                            Filter: ((b < 4) AND (a = ANY (ARRAY[$1, $2, $3])))
  Optimizer: Postgres query optimizer
 (8 rows)
 
 -- Test Parallel Append with PARAM_EXEC Params
 select explain_parallel_append('select count(*) from ab where (a = (select 1) or a = (select 3)) and b = 2');
-                        explain_parallel_append                         
-------------------------------------------------------------------------
+                          explain_parallel_append                          
+---------------------------------------------------------------------------
  Finalize Aggregate (actual rows=N loops=N)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=N loops=N)
@@ -2217,11 +2243,11 @@ select explain_parallel_append('select count(*) from ab where (a = (select 1) or
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Append (actual rows=N loops=N)
-                     ->  Seq Scan on ab_a1_b2 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a1_b2 ab (actual rows=N loops=N)
                            Filter: ((b = 2) AND ((a = $0) OR (a = $1)))
-                     ->  Seq Scan on ab_a2_b2 (never executed)
+                     ->  Seq Scan on ab_a2_b2 ab_1 (never executed)
                            Filter: ((b = 2) AND ((a = $0) OR (a = $1)))
-                     ->  Seq Scan on ab_a3_b2 (actual rows=N loops=N)
+                     ->  Seq Scan on ab_a3_b2 ab_2 (actual rows=N loops=N)
                            Filter: ((b = 2) AND ((a = $0) OR (a = $1)))
  Optimizer: Postgres query optimizer
 (15 rows)
@@ -2253,22 +2279,22 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
-                     Merge Cond: (ab_a1_b1.a = a.a)
+                     Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
-                           Sort Key: ab_a1_b1.a
+                           Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
                            Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
-                                 ->  Bitmap Heap Scan on ab_a1_b1 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b1 ab (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{0,0,1}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{0,0,1}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b2 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{0,0,1}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{0,0,1}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b3 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{0,0,1}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{0,0,1}'::integer[]))
@@ -2285,8 +2311,8 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
 -- Ensure the same partitions are pruned when we make the nested loop
 -- parameter an Expr rather than a plain Param.
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a + 0 where a.a in(0, 0, 1)');
-                                      explain_parallel_append                                      
----------------------------------------------------------------------------------------------------
+                                        explain_parallel_append                                         
+--------------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=N loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
@@ -2296,23 +2322,23 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                            ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                  Filter: (a = ANY ('{0,0,1}'::integer[]))
                      ->  Append (actual rows=N loops=N)
-                           ->  Index Scan using ab_a1_b1_a_idx on ab_a1_b1 (actual rows=N loops=N)
+                           ->  Index Scan using ab_a1_b1_a_idx on ab_a1_b1 ab (actual rows=N loops=N)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a1_b2_a_idx on ab_a1_b2 (actual rows=N loops=N)
+                           ->  Index Scan using ab_a1_b2_a_idx on ab_a1_b2 ab_1 (actual rows=N loops=N)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a1_b3_a_idx on ab_a1_b3 (actual rows=N loops=N)
+                           ->  Index Scan using ab_a1_b3_a_idx on ab_a1_b3 ab_2 (actual rows=N loops=N)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a2_b1_a_idx on ab_a2_b1 (never executed)
+                           ->  Index Scan using ab_a2_b1_a_idx on ab_a2_b1 ab_3 (never executed)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a2_b2_a_idx on ab_a2_b2 (never executed)
+                           ->  Index Scan using ab_a2_b2_a_idx on ab_a2_b2 ab_4 (never executed)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a2_b3_a_idx on ab_a2_b3 (never executed)
+                           ->  Index Scan using ab_a2_b3_a_idx on ab_a2_b3 ab_5 (never executed)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a3_b1_a_idx on ab_a3_b1 (never executed)
+                           ->  Index Scan using ab_a3_b1_a_idx on ab_a3_b1 ab_6 (never executed)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a3_b2_a_idx on ab_a3_b2 (never executed)
+                           ->  Index Scan using ab_a3_b2_a_idx on ab_a3_b2 ab_7 (never executed)
                                  Index Cond: (a = (a.a + 0))
-                           ->  Index Scan using ab_a3_b3_a_idx on ab_a3_b3 (never executed)
+                           ->  Index Scan using ab_a3_b3_a_idx on ab_a3_b3 ab_8 (never executed)
                                  Index Cond: (a = (a.a + 0))
  Optimizer: Postgres query optimizer
 (28 rows)
@@ -2325,34 +2351,34 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 2:1  (slice1; segments: 2) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
-                     Merge Cond: (ab_a1_b1.a = a.a)
+                     Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
-                           Sort Key: ab_a1_b1.a
+                           Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 50kB
                            Executor Memory: 51kB  Segments: 2  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
-                                 ->  Bitmap Heap Scan on ab_a1_b1 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b1 ab (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,3}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b2 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,3}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b3 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,3}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a3_b1 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a3_b1 ab_3 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,3}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a3_b1_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a3_b2 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a3_b2 ab_4 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,3}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a3_b2_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a3_b3 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a3_b3 ab_5 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,3}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a3_b3_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,3}'::integer[]))
@@ -2373,22 +2399,22 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
-                     Merge Cond: (ab_a1_b1.a = a.a)
+                     Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
-                           Sort Key: ab_a1_b1.a
+                           Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
                            Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
-                                 ->  Bitmap Heap Scan on ab_a1_b1 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b1 ab (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b2 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b3 (actual rows=N loops=N)
+                                 ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (actual rows=N loops=N)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=N loops=N)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
@@ -2410,22 +2436,22 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
-                     Merge Cond: (ab_a1_b1.a = a.a)
+                     Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
-                           Sort Key: ab_a1_b1.a
+                           Sort Key: ab.a
                            Sort Method:  quicksort  Memory: 25kB
                            Executor Memory: 26kB  Segments: 1  Max: 26kB (segment 1)
                            ->  Append (actual rows=N loops=N)
                                  Partition Selectors: $0
-                                 ->  Bitmap Heap Scan on ab_a1_b1 (never executed)
+                                 ->  Bitmap Heap Scan on ab_a1_b1 ab (never executed)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b1_a_idx (never executed)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b2 (never executed)
+                                 ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (never executed)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
-                                 ->  Bitmap Heap Scan on ab_a1_b3 (never executed)
+                                 ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (never executed)
                                        Recheck Cond: (a = ANY ('{1,0,0}'::integer[]))
                                        ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                                              Index Cond: (a = ANY ('{1,0,0}'::integer[]))
@@ -2462,47 +2488,47 @@ select * from ab where a = (select max(a) from lprt_a) and b = (select max(a)-1 
                  ->  Partial Aggregate (actual rows=1 loops=1)
                        ->  Seq Scan on lprt_a lprt_a_1 (actual rows=100 loops=1)
    ->  Append (actual rows=0 loops=1)
-         ->  Bitmap Heap Scan on ab_a1_b1 (never executed)
+         ->  Bitmap Heap Scan on ab_a1_b1 ab (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a1_b1_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a1_b2 (never executed)
+         ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a1_b3 (never executed)
+         ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a2_b1 (never executed)
+         ->  Bitmap Heap Scan on ab_a2_b1 ab_3 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a2_b1_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a2_b2 (never executed)
+         ->  Bitmap Heap Scan on ab_a2_b2 ab_4 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a2_b2_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a2_b3 (never executed)
+         ->  Bitmap Heap Scan on ab_a2_b3 ab_5 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a2_b3_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a3_b1 (never executed)
+         ->  Bitmap Heap Scan on ab_a3_b1 ab_6 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a3_b1_a_idx (never executed)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a3_b2 (actual rows=0 loops=1)
+         ->  Bitmap Heap Scan on ab_a3_b2 ab_7 (actual rows=0 loops=1)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a3_b2_a_idx (actual rows=0 loops=1)
                      Index Cond: (a = $0)
-         ->  Bitmap Heap Scan on ab_a3_b3 (never executed)
+         ->  Bitmap Heap Scan on ab_a3_b3 ab_8 (never executed)
                Recheck Cond: (a = $0)
                Filter: (b = $1)
                ->  Bitmap Index Scan on ab_a3_b3_a_idx (never executed)
@@ -2513,45 +2539,45 @@ select * from ab where a = (select max(a) from lprt_a) and b = (select max(a)-1 
 -- Test run-time partition pruning with UNION ALL parents
 explain (analyze, costs off, summary off, timing off)
 select * from (select * from ab where a = 1 union all select * from ab) ab where b = (select 1);
-                                  QUERY PLAN                                  
+                                     QUERY PLAN                                      
 -------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=0 loops=1)
          ->  Append (actual rows=0 loops=1)
-               ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_b1_1 (actual rows=0 loops=1)
+               ->  Bitmap Heap Scan on ab_a1_b1 ab_9 (actual rows=0 loops=1)
                      Recheck Cond: (a = 1)
                      Filter: (b = $0)
                      ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
                            Index Cond: (a = 1)
-               ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_b2_1 (never executed)
+               ->  Bitmap Heap Scan on ab_a1_b2 ab_10 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = $0)
                      ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                            Index Cond: (a = 1)
-               ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_b3_1 (never executed)
+               ->  Bitmap Heap Scan on ab_a1_b3 ab_11 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = $0)
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                            Index Cond: (a = 1)
-         ->  Seq Scan on ab_a1_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b1 ab (actual rows=0 loops=1)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a1_b2 (never executed)
+         ->  Seq Scan on ab_a1_b2 ab_1 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a1_b3 (never executed)
+         ->  Seq Scan on ab_a1_b3 ab_2 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_3 (actual rows=0 loops=1)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a2_b2 (never executed)
+         ->  Seq Scan on ab_a2_b2 ab_4 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a2_b3 (never executed)
+         ->  Seq Scan on ab_a2_b3 ab_5 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a3_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b1 ab_6 (actual rows=0 loops=1)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a3_b2 (never executed)
+         ->  Seq Scan on ab_a3_b2 ab_7 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a3_b3 (never executed)
+         ->  Seq Scan on ab_a3_b3 ab_8 (never executed)
                Filter: (b = $0)
  Optimizer: Postgres query optimizer
 (39 rows)
@@ -2559,24 +2585,24 @@ select * from (select * from ab where a = 1 union all select * from ab) ab where
 -- A case containing a UNION ALL with a non-partitioned child.
 explain (analyze, costs off, summary off, timing off)
 select * from (select * from ab where a = 1 union all (values(10,5)) union all select * from ab) ab where b = (select 1);
-                                  QUERY PLAN                                  
+                                     QUERY PLAN                                      
 -------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=0 loops=1)
          ->  Append (actual rows=0 loops=1)
-               ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_b1_1 (actual rows=0 loops=1)
+               ->  Bitmap Heap Scan on ab_a1_b1 ab_9 (actual rows=0 loops=1)
                      Recheck Cond: (a = 1)
                      Filter: (b = $0)
                      ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
                            Index Cond: (a = 1)
-               ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_b2_1 (never executed)
+               ->  Bitmap Heap Scan on ab_a1_b2 ab_10 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = $0)
                      ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                            Index Cond: (a = 1)
-               ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_b3_1 (never executed)
+               ->  Bitmap Heap Scan on ab_a1_b3 ab_11 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = $0)
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
@@ -2585,23 +2611,23 @@ select * from (select * from ab where a = 1 union all (values(10,5)) union all s
                One-Time Filter: (gp_execution_segment() = 0)
                ->  Result (actual rows=0 loops=1)
                      One-Time Filter: (5 = $0)
-         ->  Seq Scan on ab_a1_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b1 ab (actual rows=0 loops=1)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a1_b2 (never executed)
+         ->  Seq Scan on ab_a1_b2 ab_1 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a1_b3 (never executed)
+         ->  Seq Scan on ab_a1_b3 ab_2 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a2_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_3 (actual rows=0 loops=1)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a2_b2 (never executed)
+         ->  Seq Scan on ab_a2_b2 ab_4 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a2_b3 (never executed)
+         ->  Seq Scan on ab_a2_b3 ab_5 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a3_b1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b1 ab_6 (actual rows=0 loops=1)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a3_b2 (never executed)
+         ->  Seq Scan on ab_a3_b2 ab_7 (never executed)
                Filter: (b = $0)
-         ->  Seq Scan on ab_a3_b3 (never executed)
+         ->  Seq Scan on ab_a3_b3 ab_8 (never executed)
                Filter: (b = $0)
  Optimizer: Postgres query optimizer
 (43 rows)
@@ -2630,19 +2656,19 @@ explain (analyze, costs off, summary off, timing off) execute ab_q6(1);
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 12
-         ->  Seq Scan on ab_a1_b1 (never executed)
+         ->  Seq Scan on ab_a1_b1 ab (never executed)
                Filter: ((a = $1) AND (b = $0))
-         ->  Seq Scan on ab_a1_b2 (never executed)
+         ->  Seq Scan on ab_a1_b2 ab_1 (never executed)
                Filter: ((a = $1) AND (b = $0))
-         ->  Seq Scan on ab_a1_b3 (never executed)
+         ->  Seq Scan on ab_a1_b3 ab_2 (never executed)
                Filter: ((a = $1) AND (b = $0))
          ->  Seq Scan on xy_1 (actual rows=0 loops=1)
                Filter: ((x = $1) AND (y = $0))
-         ->  Seq Scan on ab_a1_b1 ab_a1_b1_1 (never executed)
+         ->  Seq Scan on ab_a1_b1 ab_3 (never executed)
                Filter: ((a = $1) AND (b = $0))
-         ->  Seq Scan on ab_a1_b2 ab_a1_b2_1 (never executed)
+         ->  Seq Scan on ab_a1_b2 ab_4 (never executed)
                Filter: ((a = $1) AND (b = $0))
-         ->  Seq Scan on ab_a1_b3 ab_a1_b3_1 (never executed)
+         ->  Seq Scan on ab_a1_b3 ab_5 (never executed)
                Filter: ((a = $1) AND (b = $0))
  Optimizer: Postgres query optimizer
 (20 rows)
@@ -2669,63 +2695,63 @@ update ab_a1 set b = 3 from ab where ab.a = 1 and ab.a = ab_a1.a;
                                         QUERY PLAN                                         
 -------------------------------------------------------------------------------------------
  Update on ab_a1 (actual rows=0 loops=1)
-   Update on ab_a1_b1
-   Update on ab_a1_b2
-   Update on ab_a1_b3
+   Update on ab_a1_b1 ab_a1_1
+   Update on ab_a1_b2 ab_a1_2
+   Update on ab_a1_b3 ab_a1_3
    ->  Nested Loop (actual rows=0 loops=1)
-         ->  Bitmap Heap Scan on ab_a1_b1 (actual rows=0 loops=1)
+         ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_1 (actual rows=0 loops=1)
                Recheck Cond: (a = 1)
                ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
                      Index Cond: (a = 1)
          ->  Materialize (never executed)
                ->  Append (never executed)
-                     ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_b1_1 (never executed)
+                     ->  Bitmap Heap Scan on ab_a1_b1 ab (never executed)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b1_a_idx (never executed)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_b2_1 (never executed)
+                     ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (never executed)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_b3_1 (never executed)
+                     ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (never executed)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                                  Index Cond: (a = 1)
    ->  Nested Loop (actual rows=1 loops=1)
-         ->  Bitmap Heap Scan on ab_a1_b2 (actual rows=1 loops=1)
+         ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_2 (actual rows=1 loops=1)
                Recheck Cond: (a = 1)
                ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=1 loops=1)
                      Index Cond: (a = 1)
          ->  Materialize (actual rows=1 loops=1)
                ->  Append (actual rows=1 loops=1)
-                     ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_b1_1 (actual rows=0 loops=1)
+                     ->  Bitmap Heap Scan on ab_a1_b1 ab (actual rows=0 loops=1)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_b2_1 (actual rows=1 loops=1)
+                     ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (actual rows=1 loops=1)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=1 loops=1)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_b3_1 (actual rows=0 loops=1)
+                     ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (actual rows=0 loops=1)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1 loops=1)
                                  Index Cond: (a = 1)
    ->  Nested Loop (actual rows=0 loops=1)
-         ->  Bitmap Heap Scan on ab_a1_b3 (actual rows=0 loops=1)
+         ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_3 (actual rows=0 loops=1)
                Recheck Cond: (a = 1)
                ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1 loops=1)
                      Index Cond: (a = 1)
          ->  Materialize (never executed)
                ->  Append (never executed)
-                     ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_b1_1 (never executed)
+                     ->  Bitmap Heap Scan on ab_a1_b1 ab (never executed)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b1_a_idx (never executed)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_b2_1 (never executed)
+                     ->  Bitmap Heap Scan on ab_a1_b2 ab_1 (never executed)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_b3_1 (never executed)
+                     ->  Bitmap Heap Scan on ab_a1_b3 ab_2 (never executed)
                            Recheck Cond: (a = 1)
                            ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                                  Index Cond: (a = 1)
@@ -2757,7 +2783,7 @@ update ab_a1 set b = 3 from ab_a2 where ab_a2.b = (select 1);
                            ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=1 loops=1)
                                  ->  Hash Join (actual rows=1 loops=1)
                                        Hash Cond: ((1) = ab_a2.b)
-                                       Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
+                                       Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 262144 buckets.
                                        ->  Result (actual rows=1 loops=1)
                                              One-Time Filter: (gp_execution_segment() = 2)
                                              ->  Result (actual rows=1 loops=1)
@@ -3024,7 +3050,7 @@ explain (analyze, costs off, summary off, timing off) execute part_abc_q1 (1, 2,
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Seq Scan on part_abc_p1 (actual rows=0 loops=1)
+   ->  Seq Scan on part_abc_p1 part_abc (actual rows=0 loops=1)
          Filter: ((a = $1) AND (b = $2) AND (c = $3))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -3059,7 +3085,7 @@ explain (analyze, costs off, summary off, timing off)  execute q1 (1,1);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_1_1 (actual rows=0 loops=1)
+         ->  Seq Scan on listp_1_1 listp (actual rows=0 loops=1)
                Filter: (b = ANY (ARRAY[$1, $2]))
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -3070,7 +3096,7 @@ explain (analyze, costs off, summary off, timing off)  execute q1 (2,2);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_2_1 (actual rows=0 loops=1)
+         ->  Seq Scan on listp_2_1 listp (actual rows=0 loops=1)
                Filter: (b = ANY (ARRAY[$1, $2]))
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -3083,7 +3109,7 @@ explain (analyze, costs off, summary off, timing off)  execute q1 (0,0);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_1_1 (never executed)
+         ->  Seq Scan on listp_1_1 listp (never executed)
                Filter: (b = ANY (ARRAY[$1, $2]))
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -3098,7 +3124,7 @@ explain (analyze, costs off, summary off, timing off)  execute q1 (1,2,2,0);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_1_1 (actual rows=0 loops=1)
+         ->  Seq Scan on listp_1_1 listp (actual rows=0 loops=1)
                Filter: ((b = ANY (ARRAY[$1, $2])) AND ($3 <> b) AND ($4 <> b))
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -3111,7 +3137,7 @@ explain (analyze, costs off, summary off, timing off)  execute q1 (1,2,2,1);
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    ->  Append (actual rows=0 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_1_1 (never executed)
+         ->  Seq Scan on listp_1_1 listp (never executed)
                Filter: ((b = ANY (ARRAY[$1, $2])) AND ($3 <> b) AND ($4 <> b))
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -3125,9 +3151,9 @@ select * from listp where a = (select null::int);
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=0 loops=1)
-         ->  Seq Scan on listp_1_1 (never executed)
+         ->  Seq Scan on listp_1_1 listp (never executed)
                Filter: (a = $0)
-         ->  Seq Scan on listp_2_1 (never executed)
+         ->  Seq Scan on listp_2_1 listp_1 (never executed)
                Filter: (a = $0)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -3272,11 +3298,11 @@ select * from mc3p where a < 3 and abs(b) = 1;
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
    ->  Append (actual rows=2 loops=1)
-         ->  Seq Scan on mc3p0 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p0 mc3p (actual rows=1 loops=1)
                Filter: ((a < 3) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p1 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p1 mc3p_1 (actual rows=1 loops=1)
                Filter: ((a < 3) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p2 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p2 mc3p_2 (actual rows=1 loops=1)
                Filter: ((a < 3) AND (abs(b) = 1))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -3297,7 +3323,7 @@ execute ps1(1);
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=1 loops=1)
          Subplans Removed: 2
-         ->  Seq Scan on mc3p1 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p1 mc3p (actual rows=1 loops=1)
                Filter: ((a = $1) AND (abs(b) < $0))
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -3314,9 +3340,9 @@ execute ps2(1);
      ->  Result (actual rows=1 loops=1)
    ->  Append (actual rows=2 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on mc3p0 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p0 mc3p (actual rows=1 loops=1)
                Filter: ((a <= $1) AND (abs(b) < $0))
-         ->  Seq Scan on mc3p1 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p1 mc3p_1 (actual rows=1 loops=1)
                Filter: ((a <= $1) AND (abs(b) < $0))
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -3403,17 +3429,17 @@ create index on ma_test (b);
 analyze ma_test;
 prepare mt_q1 (int) as select a from ma_test where a >= $1 and a % 10 = 5 order by b;
 explain (analyze, costs off, summary off, timing off) execute mt_q1(15);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-   Merge Key: ma_test_p2.b
+   Merge Key: ma_test.b
    ->  Merge Append (actual rows=1 loops=1)
-         Sort Key: ma_test_p2.b
+         Sort Key: ma_test.b
          Subplans Removed: 1
-         ->  Index Scan using ma_test_p2_b_idx on ma_test_p2 (actual rows=1 loops=1)
+         ->  Index Scan using ma_test_p2_b_idx on ma_test_p2 ma_test (actual rows=1 loops=1)
                Filter: ((a >= $1) AND ((a % 10) = 5))
                Rows Removed by Filter: 1
-         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 (actual rows=1 loops=1)
+         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 ma_test_1 (actual rows=1 loops=1)
                Filter: ((a >= $1) AND ((a % 10) = 5))
                Rows Removed by Filter: 2
  Optimizer: Postgres query optimizer
@@ -3427,14 +3453,14 @@ execute mt_q1(15);
 (2 rows)
 
 explain (analyze, costs off, summary off, timing off) execute mt_q1(25);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
-   Merge Key: ma_test_p3.b
+   Merge Key: ma_test.b
    ->  Merge Append (actual rows=1 loops=1)
-         Sort Key: ma_test_p3.b
+         Sort Key: ma_test.b
          Subplans Removed: 2
-         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 (actual rows=1 loops=1)
+         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 ma_test (actual rows=1 loops=1)
                Filter: ((a >= $1) AND ((a % 10) = 5))
                Rows Removed by Filter: 2
  Optimizer: Postgres query optimizer
@@ -3448,14 +3474,14 @@ execute mt_q1(25);
 
 -- Ensure MergeAppend behaves correctly when no subplans match
 explain (analyze, costs off, summary off, timing off) execute mt_q1(35);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   Merge Key: ma_test_p1.b
+   Merge Key: ma_test.b
    ->  Merge Append (actual rows=0 loops=1)
-         Sort Key: ma_test_p1.b
+         Sort Key: ma_test.b
          Subplans Removed: 2
-         ->  Index Scan using ma_test_p1_b_idx on ma_test_p1 (never executed)
+         ->  Index Scan using ma_test_p1_b_idx on ma_test_p1 ma_test (never executed)
                Filter: ((a >= $1) AND ((a % 10) = 5))
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -3573,19 +3599,19 @@ select tableoid::regclass, * from pph_arrpart order by 1;
 (3 rows)
 
 explain (costs off) select * from pph_arrpart where a = '{1}';
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on pph_arrpart2
+   ->  Seq Scan on pph_arrpart2 pph_arrpart
          Filter: (a = '{1}'::integer[])
  Optimizer: Postgres query optimizer
 (4 rows)
 
 explain (costs off) select * from pph_arrpart where a = '{1, 2}';
-                QUERY PLAN                
-------------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on pph_arrpart1
+   ->  Seq Scan on pph_arrpart1 pph_arrpart
          Filter: (a = '{1,2}'::integer[])
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -3595,9 +3621,9 @@ explain (costs off) select * from pph_arrpart where a in ('{4, 5}', '{1}');
 ----------------------------------------------------------------------------
  Gather Motion 2:1  (slice1; segments: 2)
    ->  Append
-         ->  Seq Scan on pph_arrpart1
+         ->  Seq Scan on pph_arrpart1 pph_arrpart
                Filter: ((a = '{4,5}'::integer[]) OR (a = '{1}'::integer[]))
-         ->  Seq Scan on pph_arrpart2
+         ->  Seq Scan on pph_arrpart2 pph_arrpart_1
                Filter: ((a = '{4,5}'::integer[]) OR (a = '{1}'::integer[]))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -3812,7 +3838,7 @@ explain (costs off) select * from inh_lp where a = 1;
    ->  Append
          ->  Seq Scan on inh_lp
                Filter: (a = 1)
-         ->  Seq Scan on inh_lp1
+         ->  Seq Scan on inh_lp1 inh_lp_1
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -3822,10 +3848,10 @@ explain (costs off) update inh_lp set value = 10 where a = 1;
 -------------------------------------
  Update on inh_lp
    Update on inh_lp
-   Update on inh_lp1
+   Update on inh_lp1 inh_lp_1
    ->  Seq Scan on inh_lp
          Filter: (a = 1)
-   ->  Seq Scan on inh_lp1
+   ->  Seq Scan on inh_lp1 inh_lp_1
          Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -3835,10 +3861,10 @@ explain (costs off) delete from inh_lp where a = 1;
 -------------------------------------
  Delete on inh_lp
    Delete on inh_lp
-   Delete on inh_lp1
+   Delete on inh_lp1 inh_lp_1
    ->  Seq Scan on inh_lp
          Filter: (a = 1)
-   ->  Seq Scan on inh_lp1
+   ->  Seq Scan on inh_lp1 inh_lp_1
          Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -3935,9 +3961,9 @@ where s.a = 1 and s.b = 1 and s.c = (select 1);
    InitPlan 1 (returns $0)  (slice2)
      ->  Result
    ->  Append
-         ->  Seq Scan on p1
+         ->  Seq Scan on p1 p
                Filter: ((a = 1) AND (b = 1) AND (c = $0))
-         ->  Seq Scan on q111
+         ->  Seq Scan on q111 q1
                Filter: ((a = 1) AND (b = 1) AND (c = $0))
          ->  Result
                One-Time Filter: (gp_execution_segment() = 0)
@@ -3978,9 +4004,9 @@ explain (costs off) execute q (1, 1);
      ->  Result
    ->  Append
          Subplans Removed: 1
-         ->  Seq Scan on p1
+         ->  Seq Scan on p1 p
                Filter: ((a = $1) AND (b = $2) AND (c = $0))
-         ->  Seq Scan on q111
+         ->  Seq Scan on q111 q1
                Filter: ((a = $1) AND (b = $2) AND (c = $0))
          ->  Result
                One-Time Filter: (gp_execution_segment() = 0)
@@ -4014,7 +4040,7 @@ select * from listp where a = (select 2) and b <> 10;
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
    InitPlan 1 (returns $0)  (slice2)
      ->  Result (actual rows=1 loops=1)
-   ->  Seq Scan on listp1 (actual rows=0 loops=1)
+   ->  Seq Scan on listp1 listp (actual rows=0 loops=1)
          Filter: ((b <> 10) AND (a = $0))
  Optimizer: Postgres query optimizer
 (6 rows)

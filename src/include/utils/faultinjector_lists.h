@@ -53,7 +53,7 @@ FI_TYPE(FaultInjectorTypeWaitUntilTriggered, "wait_until_triggered")
 #ifdef FI_DDL_STATEMENT
 FI_DDL_STATEMENT(DDLNotSpecified = 0, "")
 FI_DDL_STATEMENT(CreateDatabase, "create_database")
-FI_DDL_STATEMENT(DropDatabase, "drop_database")
+FI_DDL_STATEMENT(Drop_Database, "drop_database")
 FI_DDL_STATEMENT(CreateTable, "create_table")
 FI_DDL_STATEMENT(DropTable, "drop_table")
 FI_DDL_STATEMENT(CreateIndex, "create_index")

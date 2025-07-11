@@ -34,9 +34,9 @@
 #include "access/htup_details.h"
 #include "executor/executor.h"
 #include "executor/nodeSubplan.h"
+#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "miscadmin.h"
 #include "utils/array.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -50,7 +50,6 @@
 #include "cdb/ml_ipc.h"
 #include "executor/nodeShareInputScan.h"
 #include "pgstat.h"
-
 
 static Datum ExecHashSubPlan(SubPlanState *node,
 							 ExprContext *econtext,

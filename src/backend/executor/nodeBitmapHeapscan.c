@@ -57,8 +57,8 @@
 #include "parser/parsetree.h"
 #include "nodes/tidbitmap.h"
 #include "utils/rel.h"
-#include "utils/spccache.h"
 #include "utils/snapmgr.h"
+#include "utils/spccache.h"
 
 #include "cdb/cdbvars.h" /* gp_select_invisible */
 

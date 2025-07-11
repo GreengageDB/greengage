@@ -278,7 +278,6 @@
 #include "utils/memutils.h"
 #include "utils/syscache.h"
 #include "utils/tuplesort.h"
-#include "utils/datum.h"
 
 #include "cdb/cdbexplain.h"
 #include "lib/stringinfo.h"             /* StringInfo */

@@ -1950,6 +1950,13 @@ AC_CHECK_SIZEOF([bool], [],
 #include <stdbool.h>
 #endif])
 
+dnl We use <stdbool.h> if we have it and it declares type bool as having
+dnl size 1.  Otherwise, c.h will fall back to declaring bool as unsigned char.
+if test "$ac_cv_header_stdbool_h" = yes -a "$ac_cv_sizeof_bool" = 1; then
+  AC_DEFINE([PG_USE_STDBOOL], 1,
+            [Define to 1 to use <stdbool.h> to define type bool.])
+fi
+
 
 ##
 ## Functions, global variables
@@ -2312,18 +2319,6 @@ PGAC_C_BUILTIN_OP_OVERFLOW
 AC_CHECK_SIZEOF([void *])
 AC_CHECK_SIZEOF([size_t])
 AC_CHECK_SIZEOF([long])
-
-# In GPDB, float4 and float8 are always passed by value. There is
-# GPDB-specific code that assumes that in various places, so it's not
-# configurable.
-float4passbyval=true
-AC_DEFINE([USE_FLOAT4_BYVAL], 1, [Define to 1 if you want float4 values to be passed by value. (Always defined in GPDB)])
-AC_DEFINE_UNQUOTED([FLOAT4PASSBYVAL], [$float4passbyval], [float4 values are passed by value if 'true', by reference if 'false' (always true in GPDB)])
-
-# Note: this setting also controls int8 and related types such as timestamp.
-float8passbyval=true
-AC_DEFINE([USE_FLOAT8_BYVAL], 1, [Define to 1 if you want float8, int8, etc values to be passed by value. (Always defined in GPDB)])
-AC_DEFINE_UNQUOTED([FLOAT8PASSBYVAL], [$float8passbyval], [float8, int8, and related values are passed by value if 'true', by reference if 'false' (always true in GPDB)])
 
 # Determine memory alignment requirements for the basic C data types.
 

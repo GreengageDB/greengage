@@ -59,6 +59,7 @@
 
 #include "common/int.h"
 #include "common/logging.h"
+#include "fe_utils/cancel.h"
 #include "fe_utils/conditional.h"
 #include "getopt_long.h"
 #include "libpq-fe.h"
@@ -3913,6 +3914,9 @@ initGenerateDataClientSide(PGconn *con)
 			exit(1);
 		}
 
+		if (CancelRequested)
+			break;
+
 		/*
 		 * If we want to stick with the original logging, print a message each
 		 * 100k inserted rows.
@@ -4138,6 +4142,9 @@ runInitSteps(const char *initialize_steps)
 	if ((con = doConnect()) == NULL)
 		exit(1);
 
+	setup_cancel_handler(NULL);
+	SetCancelConn(con);
+
 	for (step = initialize_steps; *step != '\0'; step++)
 	{
 		instr_time	start;
@@ -4205,6 +4212,7 @@ runInitSteps(const char *initialize_steps)
 	}
 
 	fprintf(stderr, "done in %.2f s (%s).\n", run_time, stats.data);
+	ResetCancelConn();
 	PQfinish(con);
 	termPQExpBuffer(&stats);
 }

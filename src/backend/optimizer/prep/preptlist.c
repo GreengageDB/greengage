@@ -49,8 +49,8 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
-#include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
+#include "parser/parsetree.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
 

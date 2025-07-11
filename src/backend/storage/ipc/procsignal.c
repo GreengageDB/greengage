@@ -21,7 +21,6 @@
 #include "commands/async.h"
 #include "miscadmin.h"
 #include "replication/walsender.h"
-#include "storage/latch.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "storage/proc.h"

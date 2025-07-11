@@ -61,8 +61,8 @@
 #include "replication/slot.h"
 #include "storage/copydir.h"
 #include "storage/fd.h"
-#include "storage/lmgr.h"
 #include "storage/ipc.h"
+#include "storage/lmgr.h"
 #include "storage/md.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
@@ -892,7 +892,7 @@ createdb_failure_callback(int code, Datum arg)
  * DROP DATABASE
  */
 void
-dropdb(const char *dbname, bool missing_ok)
+dropdb(const char *dbname, bool missing_ok, bool force)
 {
 	Oid			db_id = InvalidOid;
 	bool		db_istemplate = true;
@@ -1007,6 +1007,14 @@ dropdb(const char *dbname, bool missing_ok)
 				 errdetail_plural("There is %d subscription.",
 								  "There are %d subscriptions.",
 								  nsubscriptions, nsubscriptions)));
+
+
+	/*
+	 * Attempt to terminate all existing connections to the target database if
+	 * the user has requested to do so.
+	 */
+	if (force)
+		TerminateOtherDBBackends(db_id);
 
 	/*
 	 * Check for other backends in the target database.  (Because we hold the
@@ -1583,6 +1591,31 @@ movedb_failure_callback(int code, Datum arg)
 #endif
 
 /*
+ * Process options and call dropdb function.
+ */
+void
+DropDatabase(ParseState *pstate, DropdbStmt *stmt)
+{
+	bool		force = false;
+	ListCell   *lc;
+
+	foreach(lc, stmt->options)
+	{
+		DefElem    *opt = (DefElem *) lfirst(lc);
+
+		if (strcmp(opt->defname, "force") == 0)
+			force = true;
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("unrecognized DROP DATABASE option \"%s\"", opt->defname),
+					 parser_errposition(pstate, opt->location)));
+	}
+
+	dropdb(stmt->dbname, stmt->missing_ok, force);
+}
+
+/*
  * ALTER DATABASE name ...
  */
 Oid
@@ -2116,6 +2149,11 @@ remove_dbtablespaces(Oid db_id)
 	Relation	rel;
 	TableScanDesc scan;
 	HeapTuple	tuple;
+	List		*ltblspc = NIL;
+	ListCell	*cell;
+	int		ntblspc;
+	int		i;
+	Oid		*tablespace_ids;
 
 	rel = table_open(TableSpaceRelationId, AccessShareLock);
 	scan = table_beginscan_catalog(rel, 0, NULL);
@@ -2144,22 +2182,40 @@ remove_dbtablespaces(Oid db_id)
 					(errmsg("some useless files may be left behind in old database directory \"%s\"",
 							dstpath)));
 
-		/* Record the filesystem change in XLOG */
-		{
-			xl_dbase_drop_rec xlrec;
-
-			xlrec.db_id = db_id;
-			xlrec.tablespace_id = dsttablespace;
-
-			XLogBeginInsert();
-			XLogRegisterData((char *) &xlrec, sizeof(xl_dbase_drop_rec));
-
-			(void) XLogInsert(RM_DBASE_ID,
-							  XLOG_DBASE_DROP | XLR_SPECIAL_REL_UPDATE);
-		}
-
+		ltblspc = lappend_oid(ltblspc, dsttablespace);
 		pfree(dstpath);
 	}
+
+	ntblspc = list_length(ltblspc);
+	if (ntblspc == 0)
+	{
+		table_endscan(scan);
+		table_close(rel, AccessShareLock);
+		return;
+	}
+
+	tablespace_ids = (Oid *) palloc(ntblspc * sizeof(Oid));
+	i = 0;
+	foreach(cell, ltblspc)
+		tablespace_ids[i++] = lfirst_oid(cell);
+
+	/* Record the filesystem change in XLOG */
+	{
+		xl_dbase_drop_rec xlrec;
+
+		xlrec.db_id = db_id;
+		xlrec.ntablespaces = ntblspc;
+
+		XLogBeginInsert();
+		XLogRegisterData((char *) &xlrec, MinSizeOfDbaseDropRec);
+		XLogRegisterData((char *) tablespace_ids, ntblspc * sizeof(Oid));
+
+		(void) XLogInsert(RM_DBASE_ID,
+						  XLOG_DBASE_DROP | XLR_SPECIAL_REL_UPDATE);
+	}
+
+	list_free(ltblspc);
+	pfree(tablespace_ids);
 
 	table_endscan(scan);
 	table_close(rel, AccessShareLock);
@@ -2392,8 +2448,7 @@ dbase_redo(XLogReaderState *record)
 	{
 		xl_dbase_drop_rec *xlrec = (xl_dbase_drop_rec *) XLogRecGetData(record);
 		char	   *dst_path;
-
-		dst_path = GetDatabasePath(xlrec->db_id, xlrec->tablespace_id);
+		int			i;
 
 		if (InHotStandby)
 		{
@@ -2423,11 +2478,17 @@ dbase_redo(XLogReaderState *record)
 		/* Clean out the xlog relcache too */
 		XLogDropDatabase(xlrec->db_id);
 
-		/* And remove the physical files */
-		if (!rmtree(dst_path, true))
-			ereport(WARNING,
-					(errmsg("some useless files may be left behind in old database directory \"%s\"",
-							dst_path)));
+		for (i = 0; i < xlrec->ntablespaces; i++)
+		{
+			dst_path = GetDatabasePath(xlrec->db_id, xlrec->tablespace_ids[i]);
+
+			/* And remove the physical files */
+			if (!rmtree(dst_path, true))
+				ereport(WARNING,
+						(errmsg("some useless files may be left behind in old database directory \"%s\"",
+								dst_path)));
+			pfree(dst_path);
+		}
 
 		if (InHotStandby)
 		{

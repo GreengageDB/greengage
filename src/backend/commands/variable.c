@@ -25,14 +25,14 @@
 #include "catalog/pg_authid.h"
 #include "cdb/cdbvars.h"
 #include "commands/variable.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/syscache.h"
 #include "utils/snapmgr.h"
+#include "utils/syscache.h"
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
-#include "mb/pg_wchar.h"
 
 /*
  * DATESTYLE

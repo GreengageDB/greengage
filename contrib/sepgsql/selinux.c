@@ -360,6 +360,9 @@ static struct
 				"lock", SEPG_DB_TABLE__LOCK
 			},
 			{
+				"truncate", SEPG_DB_TABLE__TRUNCATE
+			},
+			{
 				NULL, 0UL
 			},
 		}
@@ -806,8 +809,6 @@ sepgsql_compute_avd(const char *scontext,
 		if (avd_ex.auditdeny & av_code_ex)
 			avd->auditdeny |= av_code;
 	}
-
-	return;
 }
 
 /*

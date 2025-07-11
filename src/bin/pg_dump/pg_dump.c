@@ -16057,8 +16057,6 @@ dumpTable(Archive *fout, const TableInfo *tbinfo)
 	}
 
 	free(namecopy);
-
-	return;
 }
 
 static void

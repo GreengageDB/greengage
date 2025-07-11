@@ -16,13 +16,13 @@ $query$ AS qry \gset
 SET optimizer_trace_fallback TO on;
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                QUERY PLAN                 
--------------------------------------------
+                  QUERY PLAN                  
+----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: rp2.a, rp2.b, rp2.c
-   ->  Seq Scan on orca_static_pruning.rp2
-         Output: rp2.a, rp2.b, rp2.c
-         Filter: (rp2.b > 4200)
+   Output: rp.a, rp.b, rp.c
+   ->  Seq Scan on orca_static_pruning.rp2 rp
+         Output: rp.a, rp.b, rp.c
+         Filter: (rp.b > 4200)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -39,13 +39,13 @@ WHERE b = 4201
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                QUERY PLAN                 
--------------------------------------------
+                  QUERY PLAN                  
+----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: rp2.a, rp2.b, rp2.c
-   ->  Seq Scan on orca_static_pruning.rp2
-         Output: rp2.a, rp2.b, rp2.c
-         Filter: (rp2.b = 4201)
+   Output: rp.a, rp.b, rp.c
+   ->  Seq Scan on orca_static_pruning.rp2 rp
+         Output: rp.a, rp.b, rp.c
+         Filter: (rp.b = 4201)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -62,13 +62,13 @@ WHERE b IN (4201, 4200)
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                        QUERY PLAN                        
-----------------------------------------------------------
+                       QUERY PLAN                        
+---------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: rp2.a, rp2.b, rp2.c
-   ->  Seq Scan on orca_static_pruning.rp2
-         Output: rp2.a, rp2.b, rp2.c
-         Filter: (rp2.b = ANY ('{4201,4200}'::integer[]))
+   Output: rp.a, rp.b, rp.c
+   ->  Seq Scan on orca_static_pruning.rp2 rp
+         Output: rp.a, rp.b, rp.c
+         Filter: (rp.b = ANY ('{4201,4200}'::integer[]))
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -95,13 +95,13 @@ WHERE b > 42
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                QUERY PLAN                 
--------------------------------------------
+                  QUERY PLAN                  
+----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: lp2.a, lp2.b
-   ->  Seq Scan on orca_static_pruning.lp2
-         Output: lp2.a, lp2.b
-         Filter: (lp2.b > 42)
+   Output: lp.a, lp.b
+   ->  Seq Scan on orca_static_pruning.lp2 lp
+         Output: lp.a, lp.b
+         Filter: (lp.b > 42)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -117,13 +117,13 @@ WHERE b = 42
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                QUERY PLAN                 
--------------------------------------------
+                  QUERY PLAN                  
+----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: lp2.a, lp2.b
-   ->  Seq Scan on orca_static_pruning.lp2
-         Output: lp2.a, lp2.b
-         Filter: (lp2.b = 42)
+   Output: lp.a, lp.b
+   ->  Seq Scan on orca_static_pruning.lp2 lp
+         Output: lp.a, lp.b
+         Filter: (lp.b = 42)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -150,13 +150,13 @@ WHERE b = 42
 $query$ AS qry \gset
 EXPLAIN (COSTS OFF, VERBOSE)
 :qry ;
-                QUERY PLAN                 
--------------------------------------------
+                  QUERY PLAN                  
+----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: hp0.a, hp0.b
-   ->  Seq Scan on orca_static_pruning.hp0
-         Output: hp0.a, hp0.b
-         Filter: (hp0.b = 42)
+   Output: hp.a, hp.b
+   ->  Seq Scan on orca_static_pruning.hp0 hp
+         Output: hp.a, hp.b
+         Filter: (hp.b = 42)
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -184,21 +184,21 @@ CREATE INDEX rp_bitmap_idx ON rp_multi_inds USING bitmap(b);
 SET optimizer_enable_dynamictablescan TO off;
 SET optimizer_trace_fallback TO on;
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 11 OR c = 4201);
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: rp_multi_inds_part2.a, rp_multi_inds_part2.b, rp_multi_inds_part2.c
-   ->  Bitmap Heap Scan on orca_static_pruning.rp_multi_inds_part2
-         Output: rp_multi_inds_part2.a, rp_multi_inds_part2.b, rp_multi_inds_part2.c
-         Recheck Cond: ((rp_multi_inds_part2.b = 11) AND ((rp_multi_inds_part2.c = 11) OR (rp_multi_inds_part2.c = 4201)))
+   Output: rp_multi_inds.a, rp_multi_inds.b, rp_multi_inds.c
+   ->  Bitmap Heap Scan on orca_static_pruning.rp_multi_inds_part2 rp_multi_inds
+         Output: rp_multi_inds.a, rp_multi_inds.b, rp_multi_inds.c
+         Recheck Cond: ((rp_multi_inds.b = 11) AND ((rp_multi_inds.c = 11) OR (rp_multi_inds.c = 4201)))
          ->  BitmapAnd
                ->  Bitmap Index Scan on rp_multi_inds_part2_b_idx
-                     Index Cond: (rp_multi_inds_part2.b = 11)
+                     Index Cond: (rp_multi_inds.b = 11)
                ->  BitmapOr
                      ->  Bitmap Index Scan on rp_multi_inds_part2_c_idx
-                           Index Cond: (rp_multi_inds_part2.c = 11)
+                           Index Cond: (rp_multi_inds.c = 11)
                      ->  Bitmap Index Scan on rp_multi_inds_part2_c_idx
-                           Index Cond: (rp_multi_inds_part2.c = 4201)
+                           Index Cond: (rp_multi_inds.c = 4201)
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
 (15 rows)
@@ -229,20 +229,20 @@ SET enable_hashjoin TO off;
 SET enable_mergejoin TO off;
 SET enable_nestloop TO on;
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM foo JOIN bar on foo.a = bar.a AND foo.b = 11;
-                                       QUERY PLAN                                       
-----------------------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: foo_part2.a, foo_part2.b, bar.a
+   Output: foo.a, foo.b, bar.a
    ->  Nested Loop
-         Output: foo_part2.a, foo_part2.b, bar.a
-         Join Filter: (foo_part2.a = bar.a)
+         Output: foo.a, foo.b, bar.a
+         Join Filter: (foo.a = bar.a)
          ->  Seq Scan on orca_static_pruning.bar
                Output: bar.a
          ->  Materialize
-               Output: foo_part2.a, foo_part2.b
-               ->  Seq Scan on orca_static_pruning.foo_part2
-                     Output: foo_part2.a, foo_part2.b
-                     Filter: (foo_part2.b = 11)
+               Output: foo.a, foo.b
+               ->  Seq Scan on orca_static_pruning.foo_part2 foo
+                     Output: foo.a, foo.b
+                     Filter: (foo.b = 11)
  Optimizer: Postgres query optimizer
  Settings: enable_hashjoin=off, enable_mergejoin=off, enable_nestloop=on, optimizer=off
 (14 rows)
@@ -283,10 +283,10 @@ EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert SELECT * FROM rp_insert;
 --------------------------------------------------------------
  Insert on orca_static_pruning.rp_insert
    ->  Append
-         ->  Seq Scan on orca_static_pruning.rp_insert_part_1
-               Output: rp_insert_part_1.a, rp_insert_part_1.b
-         ->  Seq Scan on orca_static_pruning.rp_insert_part_2
-               Output: rp_insert_part_2.a, rp_insert_part_2.b
+         ->  Seq Scan on orca_static_pruning.rp_insert_part_1 rp_insert_1
+               Output: rp_insert_1.a, rp_insert_1.b
+         ->  Seq Scan on orca_static_pruning.rp_insert_part_2 rp_insert_2
+               Output: rp_insert_2.a, rp_insert_2.b
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
 (8 rows)

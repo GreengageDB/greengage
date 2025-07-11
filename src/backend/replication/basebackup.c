@@ -24,8 +24,8 @@
 #include "libpq/pqformat.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
-#include "pgtar.h"
 #include "pgstat.h"
+#include "pgtar.h"
 #include "port.h"
 #include "postmaster/syslogger.h"
 #include "replication/basebackup.h"
@@ -58,7 +58,6 @@
 #include "utils/guc.h"
 #include "utils/snapmgr.h"
 #include "utils/tarrable.h"
-
 
 typedef struct
 {

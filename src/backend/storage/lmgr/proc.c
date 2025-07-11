@@ -49,7 +49,6 @@
 #include "replication/syncrep.h"
 #include "replication/walsender.h"
 #include "storage/condition_variable.h"
-#include "storage/standby.h"
 #include "storage/ipc.h"
 #include "storage/spin.h"
 #include "storage/sinval.h"
@@ -59,20 +58,20 @@
 #include "storage/procarray.h"
 #include "storage/procsignal.h"
 #include "storage/spin.h"
-#include "utils/faultinjector.h"
+#include "storage/standby.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
-
-#include "utils/sharedsnapshot.h"  /*SharedLocalSnapshotSlot*/
 
 #include "cdb/cdblocaldistribxact.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"  /*Gp_is_writer*/
 #include "port/atomics.h"
 #include "postmaster/fts.h"
+#include "utils/faultinjector.h"
 #include "utils/resource_manager.h"
 #include "utils/resscheduler.h"
 #include "utils/session_state.h"
+#include "utils/sharedsnapshot.h"  /*SharedLocalSnapshotSlot*/
 
 /* GUC variables */
 int			DeadlockTimeout = 1000;

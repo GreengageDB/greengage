@@ -820,8 +820,8 @@ EXPLAIN SELECT b FROM bar GROUP BY b;
    ->  HashAggregate  (cost=18.50..18.60 rows=4 width=4)
          Group Key: bar_1_prt_1.b
          ->  Append  (cost=0.00..16.00 rows=334 width=4)
-               ->  Seq Scan on bar_1_prt_1  (cost=0.00..8.00 rows=167 width=4)
-               ->  Seq Scan on bar_1_prt_2  (cost=0.00..8.00 rows=167 width=4)
+               ->  Seq Scan on bar_1_prt_1 bar  (cost=0.00..8.00 rows=167 width=4)
+               ->  Seq Scan on bar_1_prt_2 bar_1  (cost=0.00..8.00 rows=167 width=4)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -902,9 +902,9 @@ EXPLAIN SELECT * FROM part_tbl WHERE profile_key = 99999999;
 ----------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.02 rows=2 width=25)
    ->  Append  (cost=0.00..2.02 rows=1 width=25)
-         ->  Seq Scan on part_tbl_1_prt_p20151110_2_prt_package5  (cost=0.00..1.01 rows=1 width=25)
+         ->  Seq Scan on part_tbl_1_prt_p20151110_2_prt_package5 part_tbl  (cost=0.00..1.01 rows=1 width=25)
                Filter: profile_key = 99999999::numeric
-         ->  Seq Scan on part_tbl_1_prt_p20151110_2_prt_other_services  (cost=0.00..1.01 rows=1 width=25)
+         ->  Seq Scan on part_tbl_1_prt_p20151110_2_prt_other_services part_tbl_1  (cost=0.00..1.01 rows=1 width=25)
                Filter: profile_key = 99999999::numeric
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -982,9 +982,9 @@ explain select * from r_part where a in (7,8); -- should eliminate partitions
 ----------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..2.02 rows=2 width=8)
    ->  Append  (cost=0.00..2.02 rows=1 width=8)
-         ->  Seq Scan on r_part_1_prt_7  (cost=0.00..1.01 rows=1 width=8)
+         ->  Seq Scan on r_part_1_prt_7 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: a = ANY ('{7,8}'::integer[])
-         ->  Seq Scan on r_part_1_prt_8  (cost=0.00..1.01 rows=1 width=8)
+         ->  Seq Scan on r_part_1_prt_8 r_part_1  (cost=0.00..1.01 rows=1 width=8)
                Filter: a = ANY ('{7,8}'::integer[])
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1017,7 +1017,7 @@ explain select * from r_part where a = 1 order by a,b; -- should eliminate parti
    Merge Key: r_part_1_prt_1.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
          Sort Key: r_part_1_prt_1.b
-         ->  Seq Scan on r_part_1_prt_1  (cost=0.00..1.01 rows=1 width=8)
+         ->  Seq Scan on r_part_1_prt_1 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1030,7 +1030,7 @@ explain execute f1(1); -- should eliminate partitions
    Merge Key: r_part_1_prt_1.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
          Sort Key: r_part_1_prt_1.b
-         ->  Seq Scan on r_part_1_prt_1  (cost=0.00..1.01 rows=1 width=8)
+         ->  Seq Scan on r_part_1_prt_1 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 1)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1043,7 +1043,7 @@ explain execute f2(2); -- should eliminate partitions
    Merge Key: r_part_1_prt_2.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
          Sort Key: r_part_1_prt_2.b
-         ->  Seq Scan on r_part_1_prt_2  (cost=0.00..1.01 rows=1 width=8)
+         ->  Seq Scan on r_part_1_prt_2 r_part  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 2)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1055,7 +1055,7 @@ explain select * from r_co where a=2; -- should eliminate partitions
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=0.00..1.03 rows=1 width=8)
-   ->  Seq Scan on r_co_1_prt_2  (cost=0.00..1.01 rows=1 width=8)
+   ->  Seq Scan on r_co_1_prt_2 r_co  (cost=0.00..1.01 rows=1 width=8)
          Filter: (a = 2)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1067,10 +1067,10 @@ explain execute f3(2); -- should eliminate partitions
                                  QUERY PLAN                                 
 ----------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=1.02..1.05 rows=1 width=8)
-   Merge Key: r_co_1_prt_2.b
+   Merge Key: r_co.b
    ->  Sort  (cost=1.02..1.03 rows=1 width=8)
-         Sort Key: r_co_1_prt_2.b
-         ->  Seq Scan on r_co_1_prt_2  (cost=0.00..1.01 rows=1 width=8)
+         Sort Key: r_co.b
+         ->  Seq Scan on r_co_1_prt_2 r_co  (cost=0.00..1.01 rows=1 width=8)
                Filter: (a = 2)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -1103,7 +1103,7 @@ explain select * from fact where dd < '2009-01-02'::date; -- partitions eliminat
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1  (cost=0.00..1.00 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1112,7 +1112,7 @@ explain select * from fact where dd < to_date('2009-01-02','YYYY-MM-DD'); -- par
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1  (cost=0.00..1.00 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1121,7 +1121,7 @@ explain select * from fact where dd < current_date; --partitions eliminated
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1  (cost=0.00..1.01 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.01 rows=1 width=40)
          Filter: (dd < '03-12-2021'::date)
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -1133,7 +1133,7 @@ explain execute f1('2009-01-02'::date); -- should eliminate partitions
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1  (cost=0.00..1.00 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1143,7 +1143,7 @@ explain execute f1(to_date('2009-01-02', 'YYYY-MM-DD')); -- should eliminate par
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.02 rows=1 width=40)
-   ->  Seq Scan on fact_1_prt_1  (cost=0.00..1.00 rows=1 width=40)
+   ->  Seq Scan on fact_1_prt_1 fact  (cost=0.00..1.00 rows=1 width=40)
          Filter: (dd < '01-02-2009'::date)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -1176,8 +1176,8 @@ EXPLAIN (COSTS OFF) DELETE FROM delete_from_indexed_pt WHERE b=1;
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Delete on delete_from_indexed_pt
-   Delete on delete_from_indexed_pt_1_prt_1
-   ->  Bitmap Heap Scan on delete_from_indexed_pt_1_prt_1
+   Delete on delete_from_indexed_pt_1_prt_1 delete_from_indexed_pt_1
+   ->  Bitmap Heap Scan on delete_from_indexed_pt_1_prt_1 delete_from_indexed_pt_1
          Recheck Cond: (b = 1)
          ->  Bitmap Index Scan on delete_from_indexed_pt_1_prt_1_b_idx
                Index Cond: (b = 1)
@@ -1212,28 +1212,28 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
                                                           QUERY PLAN                                                           
 -------------------------------------------------------------------------------------------------------------------------------
  Delete on delete_from_pt (actual rows=0 loops=1)
-   Delete on delete_from_pt_1_prt_1
-   Delete on delete_from_pt_1_prt_2
-   Delete on delete_from_pt_1_prt_3
+   Delete on delete_from_pt_1_prt_1 delete_from_pt_1
+   Delete on delete_from_pt_1_prt_2 delete_from_pt_2
+   Delete on delete_from_pt_1_prt_3 delete_from_pt_3
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=1 loops=1)
          ->  Hash Semi Join (actual rows=2 loops=1)
-               Hash Cond: (delete_from_pt_1_prt_1.b = t.a)
+               Hash Cond: (delete_from_pt_1.b = t.a)
                Extra Text: (seg1)   Hash chain length 2.0 avg, 2 max, using 1 of 65536 buckets.
                ->  Redistribute Motion 3:3  (slice2; segments: 3) (actual rows=3 loops=1)
-                     Hash Key: delete_from_pt_1_prt_1.b
-                     ->  Seq Scan on delete_from_pt_1_prt_1 (actual rows=3 loops=1)
+                     Hash Key: delete_from_pt_1.b
+                     ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_1 (actual rows=3 loops=1)
                ->  Hash (actual rows=2 loops=1)
                      Buckets: 65536  Batches: 1  Memory Usage: 513kB
                      ->  Redistribute Motion 3:3  (slice3; segments: 3) (actual rows=2 loops=1)
                            Hash Key: t.a
                            ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1_prt_1_1.b = t.a)
+                                 Hash Cond: (delete_from_pt_4.b = t.a)
                                  Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 65536 buckets.
                                  ->  Append (actual rows=3 loops=1)
                                        Partition Selectors: $1
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_1_prt_1_1 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_1_prt_2_1 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_1_prt_3_1 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_4 (actual rows=3 loops=1)
+                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_5 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_6 (never executed)
                                  ->  Hash (actual rows=1 loops=1)
                                        Buckets: 65536  Batches: 1  Memory Usage: 513kB
                                        ->  Partition Selector (selector id: $1) (actual rows=1 loops=1)
@@ -1241,22 +1241,22 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
                                                    ->  Seq Scan on t (actual rows=1 loops=1)
    ->  Explicit Redistribute Motion 3:3  (slice5; segments: 3) (actual rows=0 loops=1)
          ->  Hash Semi Join (actual rows=0 loops=1)
-               Hash Cond: (delete_from_pt_1_prt_2.b = t.a)
+               Hash Cond: (delete_from_pt_2.b = t.a)
                ->  Redistribute Motion 3:3  (slice6; segments: 3) (actual rows=0 loops=1)
-                     Hash Key: delete_from_pt_1_prt_2.b
-                     ->  Seq Scan on delete_from_pt_1_prt_2 (actual rows=3 loops=1)
+                     Hash Key: delete_from_pt_2.b
+                     ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_2 (actual rows=3 loops=1)
                ->  Hash (actual rows=2 loops=1)
                      Buckets: 65536  Batches: 1  Memory Usage: 513kB
                      ->  Redistribute Motion 3:3  (slice7; segments: 3) (actual rows=2 loops=1)
                            Hash Key: t.a
                            ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1_prt_1_1.b = t.a)
+                                 Hash Cond: (delete_from_pt_4.b = t.a)
                                  Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 65536 buckets.
                                  ->  Append (actual rows=3 loops=1)
                                        Partition Selectors: $2
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_1_prt_1_1 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_1_prt_2_1 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_1_prt_3_1 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_4 (actual rows=3 loops=1)
+                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_5 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_6 (never executed)
                                  ->  Hash (actual rows=1 loops=1)
                                        Buckets: 65536  Batches: 1  Memory Usage: 513kB
                                        ->  Partition Selector (selector id: $2) (actual rows=1 loops=1)
@@ -1264,22 +1264,22 @@ EXPLAIN (COSTS OFF, TIMING OFF, SUMMARY OFF, ANALYZE) DELETE FROM delete_from_pt
                                                    ->  Seq Scan on t (actual rows=1 loops=1)
    ->  Explicit Redistribute Motion 3:3  (slice9; segments: 3) (actual rows=0 loops=1)
          ->  Hash Semi Join (actual rows=0 loops=1)
-               Hash Cond: (delete_from_pt_1_prt_3.b = t.a)
+               Hash Cond: (delete_from_pt_3.b = t.a)
                ->  Redistribute Motion 3:3  (slice10; segments: 3) (actual rows=0 loops=1)
-                     Hash Key: delete_from_pt_1_prt_3.b
-                     ->  Seq Scan on delete_from_pt_1_prt_3 (actual rows=0 loops=1)
+                     Hash Key: delete_from_pt_3.b
+                     ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_3 (actual rows=0 loops=1)
                ->  Hash (actual rows=2 loops=1)
                      Buckets: 65536  Batches: 1  Memory Usage: 513kB
                      ->  Redistribute Motion 3:3  (slice11; segments: 3) (actual rows=2 loops=1)
                            Hash Key: t.a
                            ->  Hash Join (actual rows=1 loops=1)
-                                 Hash Cond: (delete_from_pt_1_prt_1_1.b = t.a)
+                                 Hash Cond: (delete_from_pt_4.b = t.a)
                                  Extra Text: (seg0)   Hash chain length 1.0 avg, 1 max, using 1 of 65536 buckets.
                                  ->  Append (actual rows=3 loops=1)
                                        Partition Selectors: $3
-                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_1_prt_1_1 (actual rows=3 loops=1)
-                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_1_prt_2_1 (never executed)
-                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_1_prt_3_1 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_1 delete_from_pt_4 (actual rows=3 loops=1)
+                                       ->  Seq Scan on delete_from_pt_1_prt_2 delete_from_pt_5 (never executed)
+                                       ->  Seq Scan on delete_from_pt_1_prt_3 delete_from_pt_6 (never executed)
                                  ->  Hash (actual rows=1 loops=1)
                                        Buckets: 65536  Batches: 1  Memory Usage: 513kB
                                        ->  Partition Selector (selector id: $3) (actual rows=1 loops=1)

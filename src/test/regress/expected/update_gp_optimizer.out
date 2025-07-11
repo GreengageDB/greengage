@@ -80,15 +80,15 @@ explain (costs off) update base_tbl set a=a+1;
 ---------------------------------------------------------------
  Update on base_tbl
    Update on base_tbl
-   Update on child_a
-   Update on child_b
+   Update on child_a base_tbl_1
+   Update on child_b base_tbl_2
    ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
          ->  Split
                ->  Seq Scan on base_tbl
    ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
          ->  Split
-               ->  Seq Scan on child_a
-   ->  Seq Scan on child_b
+               ->  Seq Scan on child_a base_tbl_1
+   ->  Seq Scan on child_b base_tbl_2
  Optimizer: Postgres query optimizer
 (12 rows)
 

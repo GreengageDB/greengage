@@ -43,8 +43,8 @@
 #include "optimizer/planmain.h"
 #include "optimizer/subselect.h"
 #include "optimizer/tlist.h"
-#include "parser/parsetree.h"
 #include "parser/parse_clause.h"
+#include "parser/parsetree.h"
 #include "rewrite/rewriteManip.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -53,7 +53,6 @@
 #include "cdb/cdbsetop.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
-
 
 static bool find_minmax_aggs_walker(Node *node, List **context);
 static bool build_minmax_path(PlannerInfo *root, MinMaxAggInfo *mminfo,
