@@ -7,7 +7,7 @@ env:
 on:
   push:
     tags: ['6.*']   # Trigger on tags for versioned releases
-  pull_request:
+  pull_request_target:
     branches: ['*'] # Trigger on pull requests for all branches
 
 jobs:
