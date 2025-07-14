@@ -794,8 +794,8 @@ var_for_grouped_window_expr(grouped_window_ctx * ctx, Node *expr, bool force)
 		var->vartypmod = exprTypmod((Node *) tle->expr);
 		var->varcollid = exprCollation((Node *) tle->expr);
 		var->varlevelsup = 0;
-		var->varnoold = 1;
-		var->varoattno = tle->resno;
+		var->varnosyn = 1;
+		var->varattnosyn = tle->resno;
 		var->location = 0;
 	}
 

@@ -2957,8 +2957,8 @@ explain select * from qp_misc_jiras.tbl6833_anl; -- should not hit cdbRelSize();
 ---------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..20000000002.11 rows=6 width=12)
    ->  Append  (cost=10000000000.00..20000000002.03 rows=2 width=12)
-         ->  Seq Scan on tbl6833_anl_1_prt_bb_1 tbl6833_anl  (cost=10000000000.00..10000000001.01 rows=1 width=12)
-         ->  Seq Scan on tbl6833_anl_1_prt_bb_2 tbl6833_anl_1  (cost=10000000000.00..10000000001.01 rows=1 width=12)
+         ->  Seq Scan on tbl6833_anl_1_prt_bb_1 tbl6833_anl_1  (cost=10000000000.00..10000000001.01 rows=1 width=12)
+         ->  Seq Scan on tbl6833_anl_1_prt_bb_2 tbl6833_anl_2  (cost=10000000000.00..10000000001.01 rows=1 width=12)
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -2977,8 +2977,8 @@ explain select * from qp_misc_jiras.tbl6833_vac; -- should not hit cdbRelSize();
 ---------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..20000000002.11 rows=6 width=12)
    ->  Append  (cost=10000000000.00..20000000002.03 rows=2 width=12)
-         ->  Seq Scan on tbl6833_vac_1_prt_bb_1 tbl6833_vac  (cost=10000000000.00..10000000001.01 rows=1 width=12)
-         ->  Seq Scan on tbl6833_vac_1_prt_bb_2 tbl6833_vac_1  (cost=10000000000.00..10000000001.01 rows=1 width=12)
+         ->  Seq Scan on tbl6833_vac_1_prt_bb_1 tbl6833_vac_1  (cost=10000000000.00..10000000001.01 rows=1 width=12)
+         ->  Seq Scan on tbl6833_vac_1_prt_bb_2 tbl6833_vac_2  (cost=10000000000.00..10000000001.01 rows=1 width=12)
  Optimizer: Postgres query optimizer
 (5 rows)
 

@@ -7858,8 +7858,11 @@ from
 group by 
     2*b.g,
     lower(f);
-ERROR:  unresolved grouping key in window query
-HINT:  You might need to use explicit aliases and/or to refer to grouping keys in the same way throughout the query.
+ ?column? | lower | sum 
+----------+-------+-----
+        2 | b     |   2
+(1 row)
+
 -- End MPP-12082
 -- MPP-12913
 select count(*) over (partition by 1 order by cn rows between 1 preceding and 1 preceding) from sale;
@@ -8518,18 +8521,18 @@ EXPLAIN WITH cte as (SELECT *, row_number() over () FROM window_part_sales) SELE
    ->  WindowAgg  (cost=0.00..17687.00 rows=560400 width=48)
          ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..10682.00 rows=560400 width=40)
                ->  Append  (cost=0.00..3210.00 rows=186800 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_2_2_prt_other_regions window_part_sales_1  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_2  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_3_2_prt_other_regions window_part_sales_3  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_4  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_4_2_prt_other_regions window_part_sales_5  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_6  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_5_2_prt_other_regions window_part_sales_7  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_8  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_6_2_prt_other_regions window_part_sales_9  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_10  (cost=0.00..189.67 rows=15567 width=40)
-                     ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_other_regions window_part_sales_11  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_2_2_prt_other_regions window_part_sales_2  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_3  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_3_2_prt_other_regions window_part_sales_4  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_5  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_4_2_prt_other_regions window_part_sales_6  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_7  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_5_2_prt_other_regions window_part_sales_8  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_9  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_6_2_prt_other_regions window_part_sales_10  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_11  (cost=0.00..189.67 rows=15567 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_other_regions window_part_sales_12  (cost=0.00..189.67 rows=15567 width=40)
  Optimizer: Postgres query optimizer
 (18 rows)
 
@@ -8545,17 +8548,17 @@ EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY region) FROM wind
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1373.84 rows=93 width=40)
                      Hash Key: window_part_sales.region
                      ->  Append  (cost=0.00..1371.97 rows=93 width=40)
-                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_2  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_2  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_3  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_3  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_4  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_4  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_5  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_5  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_6  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
  Optimizer: Postgres query optimizer
 (21 rows)
@@ -8572,13 +8575,13 @@ EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1070.90 rows=36 width=40)
                      Hash Key: window_part_sales.date, window_part_sales.region
                      ->  Append  (cost=0.00..1070.18 rows=36 width=40)
-                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales  (cost=0.00..267.50 rows=9 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_1  (cost=0.00..267.50 rows=9 width=40)
                                  Filter: ((date > '03-01-2011'::date) AND (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_1  (cost=0.00..267.50 rows=9 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_2  (cost=0.00..267.50 rows=9 width=40)
                                  Filter: ((date > '03-01-2011'::date) AND (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_2  (cost=0.00..267.50 rows=9 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_3  (cost=0.00..267.50 rows=9 width=40)
                                  Filter: ((date > '03-01-2011'::date) AND (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_3  (cost=0.00..267.50 rows=9 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_4  (cost=0.00..267.50 rows=9 width=40)
                                  Filter: ((date > '03-01-2011'::date) AND (region = 'usa'::text))
  Optimizer: Postgres query optimizer
 (17 rows)
@@ -8595,25 +8598,25 @@ EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1373.84 rows=93 width=40)
                      Hash Key: window_part_sales.date, window_part_sales.region
                      ->  Append  (cost=0.00..1371.97 rows=93 width=40)
-                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_2  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_2  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_3  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_3  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_4  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_4  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_5  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_5  (cost=0.00..228.58 rows=16 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_6  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
  Optimizer: Postgres query optimizer
 (21 rows)
 
 -- When there is a disjunct in the filter predicates, it is not possible to push down either into the window function.
 EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM window_part_sales) SELECT * FROM cte WHERE date > '2011-03-01' OR region = 'usa';
-                                                                            QUERY PLAN                                                                            
-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=8047.41..11166.97 rows=155978 width=48)
    ->  WindowAgg  (cost=8047.41..9087.26 rows=51993 width=48)
          Partition By: window_part_sales.date, window_part_sales.region
@@ -8622,25 +8625,25 @@ EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..3974.82 rows=51993 width=40)
                      Hash Key: window_part_sales.date, window_part_sales.region
                      ->  Append  (cost=0.00..2934.96 rows=51993 width=40)
-                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_1  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_2  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_2  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_3  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_other_regions window_part_sales_3  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_other_regions window_part_sales_4  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_4  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_5  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_other_regions window_part_sales_5  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_other_regions window_part_sales_6  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_6  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_7  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_other_regions window_part_sales_7  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_other_regions window_part_sales_8  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_8  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_9  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
-                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_other_regions window_part_sales_9  (cost=0.00..267.50 rows=5199 width=40)
+                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_other_regions window_part_sales_10  (cost=0.00..267.50 rows=5199 width=40)
                                  Filter: ((date > '03-01-2011'::date) OR (region = 'usa'::text))
  Optimizer: Postgres query optimizer
 (29 rows)

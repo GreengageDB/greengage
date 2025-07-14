@@ -97,7 +97,7 @@ sub mkvcbuild
 	$solution = CreateSolution($vsVersion, $config);
 
 	our @pgportfiles = qw(
-	  chklocale.c explicit_bzero.c fls.c fseeko.c getrusage.c inet_aton.c random.c
+	  chklocale.c explicit_bzero.c fls.c fseeko.c getpeereid.c getrusage.c inet_aton.c random.c
 	  srandom.c getaddrinfo.c gettimeofday.c inet_net_ntop.c kill.c open.c
 	  erand48.c snprintf.c strlcat.c strlcpy.c dirmod.c noblock.c path.c
 	  dirent.c dlopen.c getopt.c getopt_long.c
@@ -256,8 +256,6 @@ sub mkvcbuild
 	$libpq->AddLibrary('ws2_32.lib');
 	$libpq->AddLibrary('wldap32.lib') if ($solution->{options}->{ldap});
 	$libpq->UseDef('src/interfaces/libpq/libpqdll.def');
-	$libpq->ReplaceFile('src/interfaces/libpq/libpqrc.c',
-		'src/interfaces/libpq/libpq.rc');
 	$libpq->AddReference($libpgcommon, $libpgport);
 
 	# The OBJS scraper doesn't know about ifdefs, so remove appropriate files
@@ -310,7 +308,7 @@ sub mkvcbuild
 	$libecpgcompat->AddIncludeDir('src/interfaces/ecpg/include');
 	$libecpgcompat->AddIncludeDir('src/interfaces/libpq');
 	$libecpgcompat->UseDef('src/interfaces/ecpg/compatlib/compatlib.def');
-	$libecpgcompat->AddReference($pgtypes, $libecpg, $libpgport);
+	$libecpgcompat->AddReference($pgtypes, $libecpg, $libpgport, $libpgcommon);
 
 	my $ecpg = $solution->AddProject('ecpg', 'exe', 'interfaces',
 		'src/interfaces/ecpg/preproc');

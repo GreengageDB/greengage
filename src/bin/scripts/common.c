@@ -4,7 +4,7 @@
  *		Common support routines for bin/scripts/
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/bin/scripts/common.c
@@ -19,6 +19,7 @@
 
 #include "common.h"
 #include "common/logging.h"
+#include "fe_utils/cancel.h"
 #include "fe_utils/connect.h"
 #include "fe_utils/string_utils.h"
 
@@ -352,8 +353,7 @@ splitTableColumnsSpec(const char *spec, int encoding,
 		else
 			cp += PQmblen(cp, encoding);
 	}
-	*table = pg_strdup(spec);
-	(*table)[cp - spec] = '\0'; /* no strndup */
+	*table = pnstrdup(spec, cp - spec);
 	*columns = cp;
 }
 

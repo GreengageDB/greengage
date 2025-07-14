@@ -96,7 +96,7 @@ static void
 DynamicIndexScan_ReMapColumns(DynamicIndexScan *dIndexScan, Oid oldOid, Oid newOid)
 {
 	IndexScan *indexScan = &dIndexScan->indexscan;
-	AttrNumber *attMap;
+	AttrMap	   *attMap;
 
 	Assert(OidIsValid(newOid));
 
@@ -123,7 +123,7 @@ DynamicIndexScan_ReMapColumns(DynamicIndexScan *dIndexScan, Oid oldOid, Oid newO
 		change_varattnos_of_a_varno((Node *) indexScan->indexqualorig,
 									attMap, indexScan->scan.scanrelid);
 
-		pfree(attMap);
+		free_attrmap(attMap);
 	}
 }
 
@@ -320,13 +320,13 @@ ExecReScanDynamicIndex(DynamicIndexScanState *node)
  *
  *             Returns NULL for identical mapping.
  */
-AttrNumber*
+AttrMap*
 IndexScan_GetColumnMapping(Oid oldOid, Oid newOid)
 {
 	if (oldOid == newOid)
 		return NULL;
 
-	AttrNumber	  *attMap;
+	AttrMap		  *attMap;
 
 	Relation oldRel = table_open(oldOid, AccessShareLock);
 	Relation newRel = table_open(newOid, AccessShareLock);
@@ -334,7 +334,7 @@ IndexScan_GetColumnMapping(Oid oldOid, Oid newOid)
 	TupleDesc oldTupDesc = oldRel->rd_att;
 	TupleDesc newTupDesc = newRel->rd_att;
 
-	attMap = convert_tuples_by_name_map_if_req(oldTupDesc, newTupDesc);
+	attMap = build_attrmap_by_name_if_req(oldTupDesc, newTupDesc);
 
 	table_close(oldRel, AccessShareLock);
 	table_close(newRel, AccessShareLock);

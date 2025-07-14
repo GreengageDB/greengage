@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -418,6 +418,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	glob->finalrowmarks = NIL;
 	glob->resultRelations = NIL;
 	glob->rootResultRelations = NIL;
+	glob->appendRelations = NIL;
 	glob->relationOids = NIL;
 	glob->invalItems = NIL;
 	glob->paramExecTypes = NIL;
@@ -672,6 +673,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	Assert(glob->resultRelations == NIL);
 	Assert(parse == root->parse);
 	Assert(glob->rootResultRelations == NIL);
+	Assert(glob->appendRelations == NIL);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -735,6 +737,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	result->rtable = glob->finalrtable;
 	result->resultRelations = glob->resultRelations;
 	result->rootResultRelations = glob->rootResultRelations;
+	result->appendRelations = glob->appendRelations;
 	result->subplans = glob->subplans;
 	result->subplan_sliceIds = glob->subplan_sliceIds;
 	result->rewindPlanIDs = glob->rewindPlanIDs;
@@ -1506,6 +1509,7 @@ inheritance_planner(PlannerInfo *root)
 	Index		rootRelation = 0;
 	List	   *final_rtable = NIL;
 	List	   *final_rowmarks = NIL;
+	List	   *final_appendrels = NIL;
 	int			save_rel_array_size = 0;
 	RelOptInfo **save_rel_array = NULL;
 	AppendRelInfo **save_append_rel_array = NULL;
@@ -1974,12 +1978,13 @@ inheritance_planner(PlannerInfo *root)
 		 * modified subquery RTEs into final_rtable, to ensure we have sane
 		 * copies of those.  Also save the first non-excluded child's version
 		 * of the rowmarks list; we assume all children will end up with
-		 * equivalent versions of that.
+		 * equivalent versions of that.  Likewise for append_rel_list.
 		 */
 		if (final_rtable == NIL)
 		{
 			final_rtable = subroot->parse->rtable;
 			final_rowmarks = subroot->rowMarks;
+			final_appendrels = subroot->append_rel_list;
 		}
 		else
 		{
@@ -2117,8 +2122,9 @@ inheritance_planner(PlannerInfo *root)
 			root->simple_rte_array[rti++] = rte;
 		}
 
-		/* Put back adjusted rowmarks, too */
+		/* Put back adjusted rowmarks and appendrels, too */
 		root->rowMarks = final_rowmarks;
+		root->append_rel_list = final_appendrels;
 	}
 
 	/*

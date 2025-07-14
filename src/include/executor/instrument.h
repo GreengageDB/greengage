@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2001-2019, PostgreSQL Global Development Group
+ * Copyright (c) 2001-2020, PostgreSQL Global Development Group
  *
  * src/include/executor/instrument.h
  *
@@ -58,20 +58,20 @@ typedef struct Instrumentation
 	bool		need_bufusage;	/* true if we need buffer usage data */
 	/* Info about current plan cycle: */
 	bool		running;		/* true if we've completed first tuple */
-	instr_time	starttime;		/* Start time of current iteration of node */
-	instr_time	counter;		/* Accumulated runtime for this node */
-	double		firsttuple;		/* Time for first tuple of this cycle */
-	uint64		tuplecount;		/* Tuples emitted so far this cycle */
-	BufferUsage	bufusage_start;	/* Buffer usage at start */
+	instr_time	starttime;		/* start time of current iteration of node */
+	instr_time	counter;		/* accumulated runtime for this node */
+	double		firsttuple;		/* time for first tuple of this cycle */
+	uint64		tuplecount;		/* # of tuples emitted so far this cycle */
+	BufferUsage	bufusage_start;	/* buffer usage at start */
 	/* Accumulated statistics across all completed cycles: */
-	double		startup;		/* Total startup time (in seconds) */
-	double		total;			/* Total total time (in seconds) */
-	uint64		ntuples;		/* Total tuples produced */
-	double		ntuples2;		/* Secondary node-specific tuple counter */
+	double		startup;		/* total startup time (in seconds) */
+	double		total;			/* total time (in seconds) */
+	uint64		ntuples;		/* total tuples produced */
+	double		ntuples2;		/* secondary node-specific tuple counter */
 	uint64		nloops;			/* # of run cycles for this node */
-	double		nfiltered1;		/* # tuples removed by scanqual or joinqual */
-	double		nfiltered2;		/* # tuples removed by "other" quals */
-	BufferUsage	bufusage;		/* Total buffer usage */
+	double		nfiltered1;		/* # of tuples removed by scanqual or joinqual */
+	double		nfiltered2;		/* # of tuples removed by "other" quals */
+	BufferUsage	bufusage;		/* total buffer usage */
 
 	double		execmemused;	/* CDB: executor memory used (bytes) */
 	double		workmemused;	/* CDB: work_mem actually used (bytes) */

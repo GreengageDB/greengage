@@ -555,11 +555,11 @@ explain (costs off) select * from nv_parent where d between '2011-08-01' and '20
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on nv_parent
+         ->  Seq Scan on nv_parent nv_parent_1
                Filter: ((d >= '08-01-2011'::date) AND (d <= '08-31-2011'::date))
-         ->  Seq Scan on nv_child_2010 nv_parent_1
+         ->  Seq Scan on nv_child_2010 nv_parent_2
                Filter: ((d >= '08-01-2011'::date) AND (d <= '08-31-2011'::date))
-         ->  Seq Scan on nv_child_2011 nv_parent_2
+         ->  Seq Scan on nv_child_2011 nv_parent_3
                Filter: ((d >= '08-01-2011'::date) AND (d <= '08-31-2011'::date))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -570,11 +570,11 @@ explain (costs off) select * from nv_parent where d between '2011-08-01'::date a
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on nv_parent
+         ->  Seq Scan on nv_parent nv_parent_1
                Filter: ((d >= '08-01-2011'::date) AND (d <= '08-31-2011'::date))
-         ->  Seq Scan on nv_child_2010 nv_parent_1
+         ->  Seq Scan on nv_child_2010 nv_parent_2
                Filter: ((d >= '08-01-2011'::date) AND (d <= '08-31-2011'::date))
-         ->  Seq Scan on nv_child_2011 nv_parent_2
+         ->  Seq Scan on nv_child_2011 nv_parent_3
                Filter: ((d >= '08-01-2011'::date) AND (d <= '08-31-2011'::date))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -584,13 +584,13 @@ explain (costs off) select * from nv_parent where d between '2009-08-01'::date a
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on nv_parent
+         ->  Seq Scan on nv_parent nv_parent_1
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
-         ->  Seq Scan on nv_child_2010 nv_parent_1
+         ->  Seq Scan on nv_child_2010 nv_parent_2
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
-         ->  Seq Scan on nv_child_2011 nv_parent_2
+         ->  Seq Scan on nv_child_2011 nv_parent_3
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
-         ->  Seq Scan on nv_child_2009 nv_parent_3
+         ->  Seq Scan on nv_child_2009 nv_parent_4
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -602,11 +602,11 @@ explain (costs off) select * from nv_parent where d between '2009-08-01'::date a
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on nv_parent
+         ->  Seq Scan on nv_parent nv_parent_1
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
-         ->  Seq Scan on nv_child_2010 nv_parent_1
+         ->  Seq Scan on nv_child_2010 nv_parent_2
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
-         ->  Seq Scan on nv_child_2009 nv_parent_2
+         ->  Seq Scan on nv_child_2009 nv_parent_3
                Filter: ((d >= '08-01-2009'::date) AND (d <= '08-31-2009'::date))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -2029,28 +2029,30 @@ Indexes:
 Distributed Replicated
 
 drop table anothertab;
-create table another (f1 int, f2 text);
-insert into another values(1, 'one');
-insert into another values(2, 'two');
-insert into another values(3, 'three');
+-- test that USING expressions are parsed before column alter type / drop steps
+create table another (f1 int, f2 text, f3 text);
+insert into another values(1, 'one', 'uno');
+insert into another values(2, 'two', 'due');
+insert into another values(3, 'three', 'tre');
 select * from another;
- f1 |  f2   
-----+-------
-  1 | one
-  2 | two
-  3 | three
+ f1 |  f2   | f3  
+----+-------+-----
+  1 | one   | uno
+  2 | two   | due
+  3 | three | tre
 (3 rows)
 
 alter table another
-  alter f1 type text using f2 || ' more',
-  alter f2 type bigint using f1 * 10;
+  alter f1 type text using f2 || ' and ' || f3 || ' more',
+  alter f2 type bigint using f1 * 10,
+  drop column f3;
 ERROR:  cannot alter type of a column used in a distribution policy
 select * from another;
- f1 |  f2   
-----+-------
-  1 | one
-  2 | two
-  3 | three
+ f1 |  f2   | f3  
+----+-------+-----
+  1 | one   | uno
+  2 | two   | due
+  3 | three | tre
 (3 rows)
 
 drop table another;
@@ -3639,7 +3641,7 @@ NOTICE:  column "c2" of relation "test_add_column" already exists, skipping
 
 ALTER TABLE test_add_column
 	ADD COLUMN c2 integer, -- fail because c2 already exists
-	ADD COLUMN c3 integer;
+	ADD COLUMN c3 integer primary key;
 ERROR:  column "c2" of relation "test_add_column" already exists
 \d test_add_column
           Table "public.test_add_column"
@@ -3650,45 +3652,115 @@ ERROR:  column "c2" of relation "test_add_column" already exists
 
 ALTER TABLE test_add_column
 	ADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists
-	ADD COLUMN c3 integer; -- fail because c3 already exists
+	ADD COLUMN c3 integer primary key;
 NOTICE:  column "c2" of relation "test_add_column" already exists, skipping
+ERROR:  cannot add column with primary key constraint
 \d test_add_column
           Table "public.test_add_column"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  c1     | integer |           |          | 
  c2     | integer |           |          | 
- c3     | integer |           |          | 
 
 ALTER TABLE test_add_column
 	ADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists
-	ADD COLUMN IF NOT EXISTS c3 integer; -- skipping because c3 already exists
+	ADD COLUMN IF NOT EXISTS c3 integer primary key; -- skipping because c3 already exists
 NOTICE:  column "c2" of relation "test_add_column" already exists, skipping
-NOTICE:  column "c3" of relation "test_add_column" already exists, skipping
+ERROR:  cannot add column with primary key constraint
 \d test_add_column
           Table "public.test_add_column"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  c1     | integer |           |          | 
  c2     | integer |           |          | 
- c3     | integer |           |          | 
 
 ALTER TABLE test_add_column
 	ADD COLUMN IF NOT EXISTS c2 integer, -- skipping because c2 already exists
 	ADD COLUMN IF NOT EXISTS c3 integer, -- skipping because c3 already exists
-	ADD COLUMN c4 integer;
+	ADD COLUMN c4 integer REFERENCES test_add_column;
 NOTICE:  column "c2" of relation "test_add_column" already exists, skipping
-NOTICE:  column "c3" of relation "test_add_column" already exists, skipping
+ERROR:  there is no primary key for referenced table "test_add_column"
 \d test_add_column
           Table "public.test_add_column"
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  c1     | integer |           |          | 
  c2     | integer |           |          | 
- c3     | integer |           |          | 
- c4     | integer |           |          | 
+
+ALTER TABLE test_add_column
+	ADD COLUMN IF NOT EXISTS c4 integer REFERENCES test_add_column;
+ERROR:  there is no primary key for referenced table "test_add_column"
+\d test_add_column
+          Table "public.test_add_column"
+ Column |  Type   | Collation | Nullable | Default 
+--------+---------+-----------+----------+---------
+ c1     | integer |           |          | 
+ c2     | integer |           |          | 
+
+ALTER TABLE test_add_column
+	ADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 8);
+\d test_add_column
+                            Table "public.test_add_column"
+ Column |  Type   | Collation | Nullable |                   Default                   
+--------+---------+-----------+----------+---------------------------------------------
+ c1     | integer |           |          | 
+ c2     | integer |           |          | 
+ c5     | integer |           | not null | nextval('test_add_column_c5_seq'::regclass)
+Check constraints:
+    "test_add_column_c5_check" CHECK (c5 > 8)
+
+ALTER TABLE test_add_column
+	ADD COLUMN IF NOT EXISTS c5 SERIAL CHECK (c5 > 10);
+NOTICE:  column "c5" of relation "test_add_column" already exists, skipping
+\d test_add_column*
+                            Table "public.test_add_column"
+ Column |  Type   | Collation | Nullable |                   Default                   
+--------+---------+-----------+----------+---------------------------------------------
+ c1     | integer |           |          | 
+ c2     | integer |           |          | 
+ c5     | integer |           | not null | nextval('test_add_column_c5_seq'::regclass)
+Check constraints:
+    "test_add_column_c5_check" CHECK (c5 > 8)
+
+               Sequence "public.test_add_column_c5_seq"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache 
+---------+-------+---------+------------+-----------+---------+-------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+Owned by: public.test_add_column.c5
 
 DROP TABLE test_add_column;
+\d test_add_column*
+-- assorted cases with multiple ALTER TABLE steps
+CREATE TABLE ataddindex(f1 INT);
+INSERT INTO ataddindex VALUES (42), (43);
+CREATE UNIQUE INDEX ataddindexi0 ON ataddindex(f1);
+ALTER TABLE ataddindex
+  ADD PRIMARY KEY USING INDEX ataddindexi0,
+  ALTER f1 TYPE BIGINT;
+\d ataddindex
+            Table "public.ataddindex"
+ Column |  Type  | Collation | Nullable | Default 
+--------+--------+-----------+----------+---------
+ f1     | bigint |           | not null | 
+Indexes:
+    "ataddindexi0" PRIMARY KEY, btree (f1)
+
+DROP TABLE ataddindex;
+CREATE TABLE ataddindex(f1 VARCHAR(10)) DISTRIBUTED REPLICATED;
+INSERT INTO ataddindex(f1) VALUES ('foo'), ('a');
+ALTER TABLE ataddindex
+  ALTER f1 SET DATA TYPE TEXT,
+  ADD EXCLUDE ((f1 LIKE 'a') WITH =);
+\d ataddindex
+           Table "public.ataddindex"
+ Column | Type | Collation | Nullable | Default 
+--------+------+-----------+----------+---------
+ f1     | text |           |          | 
+Indexes:
+    "ataddindex_expr_excl" EXCLUDE USING btree ((f1 ~~ 'a'::text) WITH =)
+Distributed Replicated
+
+DROP TABLE ataddindex;
 -- unsupported constraint types for partitioned tables
 CREATE TABLE partitioned (
 	a int,

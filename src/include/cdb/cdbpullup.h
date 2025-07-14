@@ -34,7 +34,7 @@
  *      newvarlist -> an optional List of Expr which may contain Var nodes
  *              referencing the result of the projection.  The Var nodes in
  *              the new expr are copied from ones in this list if possible,
- *              to get their varnoold and varoattno settings.
+ *              to get their varnosyn and varattnosyn settings.
  *      newvarno = varno to be used in new Var nodes
  *
  * When calling this function on an expr which has NOT yet been transformed

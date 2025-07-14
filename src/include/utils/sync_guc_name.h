@@ -91,6 +91,7 @@
 		"log_btree_build_stats",
 		"log_dispatch_stats",
 		"log_duration",
+		"log_parameters_on_error",
 		"log_error_verbosity",
 		"log_executor_stats",
 		"log_min_duration_sample",

@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/executor/executor.h
@@ -660,5 +660,5 @@ extern ResultRelInfo *targetid_get_partition(Oid targetid, EState *estate, bool 
 extern ResultRelInfo *slot_get_partition(TupleTableSlot *slot, EState *estate, bool openIndices);
 
 extern void
-change_varattnos_of_a_varno(Node *node, const AttrNumber *newattno, Index varno);
+change_varattnos_of_a_varno(Node *node, const AttrMap *newattno, Index varno);
 #endif							/* EXECUTOR_H  */

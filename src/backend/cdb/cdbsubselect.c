@@ -814,7 +814,7 @@ mutate_targetlist(List *tlist)
 static int
 add_notin_subquery_rte(Query *parse, Query *subselect)
 {
-	RangeTblEntry *subq_rte;
+	ParseNamespaceItem *subq_nsitem;
 	int			subq_indx;
 
 	/*
@@ -823,16 +823,16 @@ add_notin_subquery_rte(Query *parse, Query *subselect)
 	 * refer to other RTEs in the parent query.
 	 */
 	subselect->targetList = mutate_targetlist(subselect->targetList);
-	subq_rte = addRangeTableEntryForSubquery(NULL,	/* pstate */
+	subq_nsitem = addRangeTableEntryForSubquery(NULL,	/* pstate */
 											 subselect,
 											 makeAlias("NotIn_SUBQUERY", NIL),
 											 false, /* not lateral */
 											 false /* inFromClause */ );
-	parse->rtable = lappend(parse->rtable, subq_rte);
+	parse->rtable = lappend(parse->rtable, subq_nsitem->p_rte);
 
 	/* assume new rte is at end */
 	subq_indx = list_length(parse->rtable);
-	Assert(subq_rte == rt_fetch(subq_indx, parse->rtable));
+	Assert(subq_nsitem->p_rte == rt_fetch(subq_indx, parse->rtable));
 
 	return subq_indx;
 }
@@ -843,7 +843,7 @@ add_notin_subquery_rte(Query *parse, Query *subselect)
 static int
 add_expr_subquery_rte(Query *parse, Query *subselect)
 {
-	RangeTblEntry *subq_rte;
+	ParseNamespaceItem *subq_nsitem;
 	int			subq_indx;
 
 	/**
@@ -866,16 +866,16 @@ add_expr_subquery_rte(Query *parse, Query *subselect)
 	 * It is marked as lateral, because any correlation quals will
 	 * refer to other RTEs in the parent query.
 	 */
-	subq_rte = addRangeTableEntryForSubquery(NULL,	/* pstate */
+	subq_nsitem = addRangeTableEntryForSubquery(NULL,	/* pstate */
 											 subselect,
 											 makeAlias("Expr_SUBQUERY", NIL),
 											 true, /* lateral */
 											 false /* inFromClause */ );
-	parse->rtable = lappend(parse->rtable, subq_rte);
+	parse->rtable = lappend(parse->rtable, subq_nsitem->p_rte);
 
 	/* assume new rte is at end */
 	subq_indx = list_length(parse->rtable);
-	Assert(subq_rte == rt_fetch(subq_indx, parse->rtable));
+	Assert(subq_nsitem->p_rte == rt_fetch(subq_indx, parse->rtable));
 
 	return subq_indx;
 }
@@ -1312,20 +1312,20 @@ fetch_targetlist_exprs(List *targetlist)
  *   BoolExpr [boolop=NOT_EXPR]
  *      BoolExpr [boolop=AND_EXPR]
  *        OpExpr [opno=96 opfuncid=65 opresulttype=16 opretset=false]
- *                Var [varno=1 varattno=1 vartype=23 varnoold=1 varoattno=1]
+ *                Var [varno=1 varattno=1 vartype=23 varnosyn=1 varattnosyn=1]
  *                Param [paramkind=PARAM_SUBLINK paramid=1 paramtype=23]
  *        OpExpr [opno=96 opfuncid=65 opresulttype=16 opretset=false]
- *                Var [varno=1 varattno=2 vartype=23 varnoold=1 varoattno=2]
+ *                Var [varno=1 varattno=2 vartype=23 varnosyn=1 varattnosyn=2]
  *                Param [paramkind=PARAM_SUBLINK paramid=2 paramtype=23]
  *
  *  For a two-col <> ALL query: select * from t1 where (a,b) <> (select a,b from t2)
  *  this testexpr should be:
  *  BoolExpr [boolop=OR_EXPR]
  *     OpExpr [opno=518 opfuncid=144 opresulttype=16 opretset=false]
- *              Var [varno=1 varattno=1 vartype=23 varnoold=1 varoattno=1]
+ *              Var [varno=1 varattno=1 vartype=23 varnosyn=1 varattnosyn=1]
  *              Param [paramkind=PARAM_SUBLINK paramid=1 paramtype=23]
  *      OpExpr [opno=518 opfuncid=144 opresulttype=16 opretset=false]
- *              Var [varno=1 varattno=2 vartype=23 varnoold=1 varoattno=2]
+ *              Var [varno=1 varattno=2 vartype=23 varnosyn=1 varattnosyn=2]
  *              Param [paramkind=PARAM_SUBLINK paramid=2 paramtype=23]
  *
  * This function fetches all the outer parts and put them in a list as the

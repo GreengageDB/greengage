@@ -3,7 +3,7 @@
  * subscriptioncmds.c
  *		subscription catalog manipulation functions
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -440,7 +440,6 @@ CreateSubscription(CreateSubscriptionStmt *stmt, bool isTopLevel)
 	 */
 	if (connect)
 	{
-		XLogRecPtr	lsn;
 		char	   *err;
 		WalReceiverConn *wrconn;
 		List	   *tables;
@@ -491,7 +490,7 @@ CreateSubscription(CreateSubscriptionStmt *stmt, bool isTopLevel)
 				Assert(slotname);
 
 				walrcv_create_slot(wrconn, slotname, false,
-								   CRS_NOEXPORT_SNAPSHOT, &lsn);
+								   CRS_NOEXPORT_SNAPSHOT, NULL);
 				ereport(NOTICE,
 						(errmsg("created replication slot \"%s\" on publisher",
 								slotname)));

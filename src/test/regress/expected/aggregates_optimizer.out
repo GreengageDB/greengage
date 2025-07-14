@@ -1063,26 +1063,26 @@ DETAIL:  Feature not supported: Inherited tables
                  Merge Key: minmaxtest.f1
                  ->  Merge Append
                        Sort Key: minmaxtest.f1
-                       ->  Index Only Scan using minmaxtesti on minmaxtest
+                       ->  Index Only Scan using minmaxtesti on minmaxtest minmaxtest_1
                              Index Cond: (f1 IS NOT NULL)
-                       ->  Index Only Scan using minmaxtest1i on minmaxtest1 minmaxtest_1
+                       ->  Index Only Scan using minmaxtest1i on minmaxtest1 minmaxtest_2
                              Index Cond: (f1 IS NOT NULL)
-                       ->  Index Only Scan Backward using minmaxtest2i on minmaxtest2 minmaxtest_2
+                       ->  Index Only Scan Backward using minmaxtest2i on minmaxtest2 minmaxtest_3
                              Index Cond: (f1 IS NOT NULL)
-                       ->  Index Only Scan using minmaxtest3i on minmaxtest3 minmaxtest_3
+                       ->  Index Only Scan using minmaxtest3i on minmaxtest3 minmaxtest_4
    InitPlan 2 (returns $1)  (slice3)
      ->  Limit
            ->  Gather Motion 3:1  (slice4; segments: 3)
-                 Merge Key: minmaxtest_4.f1
+                 Merge Key: minmaxtest_5.f1
                  ->  Merge Append
-                       Sort Key: minmaxtest_4.f1 DESC
-                       ->  Index Only Scan Backward using minmaxtesti on minmaxtest minmaxtest_4
+                       Sort Key: minmaxtest_5.f1 DESC
+                       ->  Index Only Scan Backward using minmaxtesti on minmaxtest minmaxtest_6
                              Index Cond: (f1 IS NOT NULL)
-                       ->  Index Only Scan Backward using minmaxtest1i on minmaxtest1 minmaxtest_5
+                       ->  Index Only Scan Backward using minmaxtest1i on minmaxtest1 minmaxtest_7
                              Index Cond: (f1 IS NOT NULL)
-                       ->  Index Only Scan using minmaxtest2i on minmaxtest2 minmaxtest_6
+                       ->  Index Only Scan using minmaxtest2i on minmaxtest2 minmaxtest_8
                              Index Cond: (f1 IS NOT NULL)
-                       ->  Index Only Scan Backward using minmaxtest3i on minmaxtest3 minmaxtest_7
+                       ->  Index Only Scan Backward using minmaxtest3i on minmaxtest3 minmaxtest_9
  Optimizer: Postgres query optimizer
 (28 rows)
 
@@ -1110,10 +1110,10 @@ DETAIL:  Feature not supported: Inherited tables
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Partial Aggregate
                            ->  Append
-                                 ->  Seq Scan on minmaxtest
-                                 ->  Seq Scan on minmaxtest1 minmaxtest_1
-                                 ->  Seq Scan on minmaxtest2 minmaxtest_2
-                                 ->  Seq Scan on minmaxtest3 minmaxtest_3
+                                 ->  Seq Scan on minmaxtest minmaxtest_1
+                                 ->  Seq Scan on minmaxtest1 minmaxtest_2
+                                 ->  Seq Scan on minmaxtest2 minmaxtest_3
+                                 ->  Seq Scan on minmaxtest3 minmaxtest_4
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -1222,8 +1222,8 @@ DETAIL:  Feature not supported: Inherited tables
    ->  HashAggregate
          Group Key: t1.a, t1.b, t1.c, t1.d
          ->  Append
-               ->  Seq Scan on t1
-               ->  Seq Scan on t1c t1_1
+               ->  Seq Scan on t1 t1_1
+               ->  Seq Scan on t1c t1_2
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -1264,6 +1264,38 @@ NOTICE:  drop cascades to table t1c
 drop table t2;
 drop table t3;
 drop table p_t1;
+--
+-- Test GROUP BY matching of join columns that are type-coerced due to USING
+--
+create temp table t1(f1 int, f2 bigint);
+create temp table t2(f1 bigint, f22 bigint);
+select f1 from t1 left join t2 using (f1) group by f1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  CTranslatorQueryToDXL.cpp:4060: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
+ f1 
+----
+(0 rows)
+
+select f1 from t1 left join t2 using (f1) group by t1.f1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  CTranslatorQueryToDXL.cpp:4060: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
+ f1 
+----
+(0 rows)
+
+select t1.f1 from t1 left join t2 using (f1) group by t1.f1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  CTranslatorQueryToDXL.cpp:4060: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr)
+ f1 
+----
+(0 rows)
+
+-- only this one should fail:
+select t1.f1 from t1 left join t2 using (f1) group by f1;
+ERROR:  column "t1.f1" must appear in the GROUP BY clause or be used in an aggregate function
+LINE 1: select t1.f1 from t1 left join t2 using (f1) group by f1;
+               ^
+drop table t1, t2;
 --
 -- Test combinations of DISTINCT and/or ORDER BY
 --

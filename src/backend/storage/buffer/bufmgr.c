@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1966,6 +1966,10 @@ BufferSync(int flags)
 		}
 
 		UnlockBufHdr(bufHdr, buf_state);
+
+		/* Check for barrier events in case NBuffers is large. */
+		if (ProcSignalBarrierPending)
+			ProcessProcSignalBarrier();
 	}
 
 	if (num_to_scan == 0)
@@ -2044,6 +2048,10 @@ BufferSync(int flags)
 		}
 
 		s->num_to_scan++;
+
+		/* Check for barrier events. */
+		if (ProcSignalBarrierPending)
+			ProcessProcSignalBarrier();
 	}
 
 	Assert(num_spaces > 0);
@@ -2132,6 +2140,8 @@ BufferSync(int flags)
 
 		/*
 		 * Sleep to throttle our I/O rate.
+		 *
+		 * (This will check for barrier events even if it doesn't sleep.)
 		 */
 		CheckpointWriteDelay(flags, (double) num_processed / num_to_scan);
 	}

@@ -363,6 +363,8 @@ int			cdb_total_slices = 0;
 int			cdb_total_plans = 0;
 int			cdb_max_slices = 0;
 
+bool		gp_dispatch_utility_statement = true;
+
 /*
  * Local macro to provide string values of numeric defines.
  */

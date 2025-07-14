@@ -8,7 +8,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1452,6 +1452,7 @@ convert_ANY_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	Query	   *subselect = (Query *) sublink->subselect;
 	Relids		upper_varnos;
 	int			rtindex;
+	ParseNamespaceItem *nsitem;
 	RangeTblEntry *rte;
 	RangeTblRef *rtr;
 	List	   *subquery_vars;
@@ -1538,11 +1539,12 @@ convert_ANY_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	 * If the subquery is correlated, i.e. it refers to any Vars of the
 	 * parent query, mark it as lateral.
 	 */
-	rte = addRangeTableEntryForSubquery(pstate,
-										subselect,
-										makeAlias("ANY_subquery", NIL),
-										correlated,	/* lateral */
-										false);
+	nsitem = addRangeTableEntryForSubquery(pstate,
+										   subselect,
+										   makeAlias("ANY_subquery", NIL),
+										   correlated,	/* lateral */
+										   false);
+	rte = nsitem->p_rte;
 	parse->rtable = lappend(parse->rtable, rte);
 	rtindex = list_length(parse->rtable);
 

@@ -688,11 +688,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: ((a % 2) = 0)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -717,11 +717,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b);
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: (((a % 2) = 0) AND f_leak(b))
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: (((a % 2) = 0) AND f_leak(b))
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -742,11 +742,11 @@ EXPLAIN (COSTS OFF) SELECT *, t1 FROM t1;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: ((a % 2) = 0)
 (9 rows)
 
@@ -766,11 +766,11 @@ EXPLAIN (COSTS OFF) SELECT *, t1 FROM t1;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: ((a % 2) = 0)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -791,11 +791,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1 FOR SHARE;
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: ((a % 2) = 0)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: ((a % 2) = 0)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -820,11 +820,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b) FOR SHARE;
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: (((a % 2) = 0) AND f_leak(b))
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: (((a % 2) = 0) AND f_leak(b))
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: (((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -886,11 +886,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b);
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: f_leak(b)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: f_leak(b)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: f_leak(b)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -930,11 +930,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b);
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: f_leak(b)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: f_leak(b)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: f_leak(b)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1033,11 +1033,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM part_document WHERE f_leak(dtitle);
            ->  Seq Scan on uaccount
                  Filter: (pguser = 'regress_rls_bob'::name)
    ->  Append
-         ->  Seq Scan on part_document_fiction part_document
+         ->  Seq Scan on part_document_fiction part_document_1
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_satire part_document_1
+         ->  Seq Scan on part_document_satire part_document_2
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_nonfiction part_document_2
+         ->  Seq Scan on part_document_nonfiction part_document_3
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -1078,11 +1078,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM part_document WHERE f_leak(dtitle);
            ->  Seq Scan on uaccount
                  Filter: (pguser = 'regress_rls_carol'::name)
    ->  Append
-         ->  Seq Scan on part_document_fiction part_document
+         ->  Seq Scan on part_document_fiction part_document_1
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_satire part_document_1
+         ->  Seq Scan on part_document_satire part_document_2
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_nonfiction part_document_2
+         ->  Seq Scan on part_document_nonfiction part_document_3
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -1234,11 +1234,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM part_document WHERE f_leak(dtitle);
            ->  Seq Scan on uaccount
                  Filter: (pguser = 'regress_rls_carol'::name)
    ->  Append
-         ->  Seq Scan on part_document_fiction part_document
+         ->  Seq Scan on part_document_fiction part_document_1
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_satire part_document_1
+         ->  Seq Scan on part_document_satire part_document_2
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_nonfiction part_document_2
+         ->  Seq Scan on part_document_nonfiction part_document_3
                Filter: ((dlevel <= $0) AND f_leak(dtitle))
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -1285,11 +1285,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM part_document WHERE f_leak(dtitle);
 ----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on part_document_fiction part_document
+         ->  Seq Scan on part_document_fiction part_document_1
                Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_satire part_document_1
+         ->  Seq Scan on part_document_satire part_document_2
                Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
-         ->  Seq Scan on part_document_nonfiction part_document_2
+         ->  Seq Scan on part_document_nonfiction part_document_3
                Filter: ((dauthor = 'regress_rls_carol'::name) AND f_leak(dtitle))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1582,11 +1582,11 @@ EXPLAIN (COSTS OFF) EXECUTE p1(2);
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: ((a <= 2) AND ((a % 2) = 0))
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: ((a <= 2) AND ((a % 2) = 0))
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: ((a <= 2) AND ((a % 2) = 0))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1626,11 +1626,11 @@ EXPLAIN (COSTS OFF) SELECT * FROM t1 WHERE f_leak(b);
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: f_leak(b)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: f_leak(b)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: f_leak(b)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1652,11 +1652,11 @@ EXPLAIN (COSTS OFF) EXECUTE p1(2);
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: (a <= 2)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: (a <= 2)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: (a <= 2)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1675,11 +1675,11 @@ EXPLAIN (COSTS OFF) EXECUTE p2(2);
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: (a = 2)
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: (a = 2)
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: (a = 2)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1700,11 +1700,11 @@ EXPLAIN (COSTS OFF) EXECUTE p2(2);
 ---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on t1
+         ->  Seq Scan on t1 t1_1
                Filter: ((a = 2) AND ((a % 2) = 0))
-         ->  Seq Scan on t2 t1_1
+         ->  Seq Scan on t2 t1_2
                Filter: ((a = 2) AND ((a % 2) = 0))
-         ->  Seq Scan on t3 t1_2
+         ->  Seq Scan on t3 t1_3
                Filter: ((a = 2) AND ((a % 2) = 0))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1851,11 +1851,11 @@ WHERE t1.a = 3 and t2.a = 3 AND f_leak(t1.b) AND f_leak(t2.b);
          ->  Materialize
                ->  Broadcast Motion 3:3  (slice1; segments: 3)
                      ->  Append
-                           ->  Seq Scan on t1
+                           ->  Seq Scan on t1 t1_1
                                  Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t2 t1_1
+                           ->  Seq Scan on t2 t1_2
                                  Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t3 t1_2
+                           ->  Seq Scan on t3 t1_3
                                  Filter: ((a = 3) AND ((a % 2) = 0) AND f_leak(b))
  Optimizer: Postgres query optimizer
 (14 rows)
@@ -1907,11 +1907,11 @@ AND f_leak(t1_1.b) AND f_leak(t1_2.b) RETURNING *, t1_1, t1_2;
                ->  Hash Join
                      Hash Cond: (t1_2.b = t1_1.b)
                      ->  Append
-                           ->  Seq Scan on t1 t1_2
+                           ->  Seq Scan on t1 t1_2_1
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t2 t1_2_1
+                           ->  Seq Scan on t2 t1_2_2
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t3 t1_2_2
+                           ->  Seq Scan on t3 t1_2_3
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
                      ->  Hash
                            ->  Broadcast Motion 3:3  (slice3; segments: 3)
@@ -1921,11 +1921,11 @@ AND f_leak(t1_1.b) AND f_leak(t1_2.b) RETURNING *, t1_1, t1_2;
                ->  Hash Join
                      Hash Cond: (t1_2.b = t1_1_1.b)
                      ->  Append
-                           ->  Seq Scan on t1 t1_2
+                           ->  Seq Scan on t1 t1_2_1
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t2 t1_2_1
+                           ->  Seq Scan on t2 t1_2_2
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t3 t1_2_2
+                           ->  Seq Scan on t3 t1_2_3
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
                      ->  Hash
                            ->  Broadcast Motion 3:3  (slice5; segments: 3)
@@ -1935,11 +1935,11 @@ AND f_leak(t1_1.b) AND f_leak(t1_2.b) RETURNING *, t1_1, t1_2;
                ->  Hash Join
                      Hash Cond: (t1_2.b = t1_1_2.b)
                      ->  Append
-                           ->  Seq Scan on t1 t1_2
+                           ->  Seq Scan on t1 t1_2_1
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t2 t1_2_1
+                           ->  Seq Scan on t2 t1_2_2
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
-                           ->  Seq Scan on t3 t1_2_2
+                           ->  Seq Scan on t3 t1_2_3
                                  Filter: ((a = 4) AND ((a % 2) = 0) AND f_leak(b))
                      ->  Hash
                            ->  Broadcast Motion 3:3  (slice7; segments: 3)

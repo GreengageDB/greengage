@@ -6,7 +6,7 @@
  * loaded as a dynamic module to avoid linking the main server binary with
  * libpq.
  *
- * Portions Copyright (c) 2010-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2020, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -80,6 +80,7 @@ static char *libpqrcv_create_slot(WalReceiverConn *conn,
 								  bool temporary,
 								  CRSSnapshotAction snapshot_action,
 								  XLogRecPtr *lsn);
+static pid_t libpqrcv_get_backend_pid(WalReceiverConn *conn);
 static WalRcvExecResult *libpqrcv_exec(WalReceiverConn *conn,
 									   const char *query,
 									   const int nRetTypes,
@@ -99,6 +100,7 @@ static WalReceiverFunctionsType PQWalReceiverFunctions = {
 	libpqrcv_receive,
 	libpqrcv_send,
 	libpqrcv_create_slot,
+	libpqrcv_get_backend_pid,
 	libpqrcv_exec,
 	libpqrcv_disconnect
 };
@@ -840,6 +842,10 @@ libpqrcv_create_slot(WalReceiverConn *conn, const char *slotname,
 				break;
 		}
 	}
+	else
+	{
+		appendStringInfoString(&cmd, " PHYSICAL RESERVE_WAL");
+	}
 
 	res = libpqrcv_PQexec(conn->streamConn, cmd.data);
 	pfree(cmd.data);
@@ -852,8 +858,10 @@ libpqrcv_create_slot(WalReceiverConn *conn, const char *slotname,
 						slotname, pchomp(PQerrorMessage(conn->streamConn)))));
 	}
 
-	*lsn = DatumGetLSN(DirectFunctionCall1Coll(pg_lsn_in, InvalidOid,
-											   CStringGetDatum(PQgetvalue(res, 0, 1))));
+	if (lsn)
+		*lsn = DatumGetLSN(DirectFunctionCall1Coll(pg_lsn_in, InvalidOid,
+												   CStringGetDatum(PQgetvalue(res, 0, 1))));
+
 	if (!PQgetisnull(res, 0, 2))
 		snapshot = pstrdup(PQgetvalue(res, 0, 2));
 	else
@@ -862,6 +870,15 @@ libpqrcv_create_slot(WalReceiverConn *conn, const char *slotname,
 	PQclear(res);
 
 	return snapshot;
+}
+
+/*
+ * Return PID of remote backend process.
+ */
+static pid_t
+libpqrcv_get_backend_pid(WalReceiverConn *conn)
+{
+	return PQbackendPID(conn->streamConn);
 }
 
 /*

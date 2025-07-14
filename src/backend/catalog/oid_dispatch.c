@@ -1449,7 +1449,11 @@ GetAssignedOidsForDispatch(void)
 	List	   *l;
 
 	l = dispatch_oids;
-	dispatch_oids = NIL;
+
+	/* Reset oids list only if we dispatch utility statement */
+	if (gp_dispatch_utility_statement)
+		dispatch_oids = NIL;
+
 	return l;
 }
 

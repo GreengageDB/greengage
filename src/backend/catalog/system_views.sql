@@ -3,7 +3,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2020, PostgreSQL Global Development Group
  *
  * src/backend/catalog/system_views.sql
  *
@@ -553,6 +553,12 @@ CREATE VIEW pg_config AS
 
 REVOKE ALL on pg_config FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION pg_config() FROM PUBLIC;
+
+CREATE VIEW pg_shmem_allocations AS
+    SELECT * FROM pg_get_shmem_allocations();
+
+REVOKE ALL ON pg_shmem_allocations FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION pg_get_shmem_allocations() FROM PUBLIC;
 
 -- Statistics views
 
@@ -1338,6 +1344,27 @@ CREATE VIEW pg_stat_bgwriter AS
         pg_stat_get_buf_fsync_backend() AS buffers_backend_fsync,
         pg_stat_get_buf_alloc() AS buffers_alloc,
         pg_stat_get_bgwriter_stat_reset_time() AS stats_reset;
+
+CREATE VIEW pg_stat_progress_analyze AS
+    SELECT
+        S.pid AS pid, S.datid AS datid, D.datname AS datname,
+        CAST(S.relid AS oid) AS relid,
+        CASE S.param1 WHEN 0 THEN 'initializing'
+                      WHEN 1 THEN 'acquiring sample rows'
+                      WHEN 2 THEN 'acquiring inherited sample rows'
+                      WHEN 3 THEN 'computing statistics'
+                      WHEN 4 THEN 'computing extended statistics'
+                      WHEN 5 THEN 'finalizing analyze'
+                      END AS phase,
+        S.param2 AS sample_blks_total,
+        S.param3 AS sample_blks_scanned,
+        S.param4 AS ext_stats_total,
+        S.param5 AS ext_stats_computed,
+        S.param6 AS child_tables_total,
+        S.param7 AS child_tables_done,
+        CAST(S.param8 AS oid) AS current_child_table_relid
+    FROM pg_stat_get_progress_info('ANALYZE') AS S
+        LEFT JOIN pg_database D ON S.datid = D.oid;
 
 CREATE VIEW pg_stat_progress_vacuum AS
     SELECT

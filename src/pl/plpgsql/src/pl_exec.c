@@ -3,7 +3,7 @@
  * pl_exec.c		- Executor for the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -29,6 +29,7 @@
 #include "executor/spi.h"
 #include "executor/spi_priv.h"
 #include "funcapi.h"
+#include "mb/stringinfo_mb.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
@@ -6869,7 +6870,16 @@ revalidate_rectypeid(PLpgSQL_rec *rec)
 	Assert(typ != NULL);
 	if (typ->tcache &&
 		typ->tcache->tupDesc_identifier == typ->tupdesc_id)
-		return;					/* known up-to-date */
+	{
+		/*
+		 * Although *typ is known up-to-date, it's possible that rectypeid
+		 * isn't, because *rec is cloned during each function startup from a
+		 * copy that we don't have a good way to update.  Hence, forcibly fix
+		 * rectypeid before returning.
+		 */
+		rec->rectypeid = typ->typoid;
+		return;
+	}
 
 	/*
 	 * typcache entry has suffered invalidation, so re-look-up the type name
@@ -8623,19 +8633,11 @@ format_expr_params(PLpgSQL_execstate *estate,
 		if (paramisnull)
 			appendStringInfoString(&paramstr, "NULL");
 		else
-		{
-			char	   *value = convert_value_to_string(estate, paramdatum, paramtypeid);
-			char	   *p;
-
-			appendStringInfoCharMacro(&paramstr, '\'');
-			for (p = value; *p; p++)
-			{
-				if (*p == '\'') /* double single quotes */
-					appendStringInfoCharMacro(&paramstr, *p);
-				appendStringInfoCharMacro(&paramstr, *p);
-			}
-			appendStringInfoCharMacro(&paramstr, '\'');
-		}
+			appendStringInfoStringQuoted(&paramstr,
+										 convert_value_to_string(estate,
+																 paramdatum,
+																 paramtypeid),
+										 0);
 
 		paramno++;
 	}
@@ -8673,19 +8675,11 @@ format_preparedparamsdata(PLpgSQL_execstate *estate,
 		if (ppd->nulls[paramno] == 'n')
 			appendStringInfoString(&paramstr, "NULL");
 		else
-		{
-			char	   *value = convert_value_to_string(estate, ppd->values[paramno], ppd->types[paramno]);
-			char	   *p;
-
-			appendStringInfoCharMacro(&paramstr, '\'');
-			for (p = value; *p; p++)
-			{
-				if (*p == '\'') /* double single quotes */
-					appendStringInfoCharMacro(&paramstr, *p);
-				appendStringInfoCharMacro(&paramstr, *p);
-			}
-			appendStringInfoCharMacro(&paramstr, '\'');
-		}
+			appendStringInfoStringQuoted(&paramstr,
+										 convert_value_to_string(estate,
+																 ppd->values[paramno],
+																 ppd->types[paramno]),
+										 0);
 	}
 
 	MemoryContextSwitchTo(oldcontext);

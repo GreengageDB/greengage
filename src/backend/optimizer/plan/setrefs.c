@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -126,6 +126,7 @@ static Plan *set_mergeappend_references(PlannerInfo *root,
 										MergeAppend *mplan,
 										int rtoffset);
 static void set_hash_references(PlannerInfo *root, Plan *plan, int rtoffset);
+static Relids offset_relid_set(Relids relids, int rtoffset);
 static Node *fix_scan_expr(PlannerInfo *root, Node *node, int rtoffset);
 static Node *fix_scan_expr_mutator(Node *node, fix_scan_expr_context *context);
 static bool fix_scan_expr_walker(Node *node, fix_scan_expr_context *context);
@@ -225,8 +226,8 @@ static void set_plan_references_input_asserts(PlannerInfo *root, Plan *plan)
 
 #if 0
 		/* ModifyTable plans have a funny target list, set up just for EXPLAIN. */
-		if (!IsA(plan, ModifyTable) && var->varno != var->varnoold)
-			Assert(false && "Varno and varnoold do not agree!");
+		if (!IsA(plan, ModifyTable) && var->varno != var->varnosyn)
+			Assert(false && "Varno and varnosyn do not agree!");
 #endif
 	}
 }
@@ -340,7 +341,8 @@ static void set_plan_references_output_asserts(PlannerGlobal *glob, Plan *plan)
  *
  * The flattened rangetable entries are appended to root->glob->finalrtable.
  * Also, rowmarks entries are appended to root->glob->finalrowmarks, and the
- * RT indexes of ModifyTable result relations to root->glob->resultRelations.
+ * RT indexes of ModifyTable result relations to root->glob->resultRelations,
+ * and flattened AppendRelInfos are appended to root->glob->appendRelations.
  * Plan dependencies are appended to root->glob->relationOids (for relations)
  * and root->glob->invalItems (for everything else).
  *
@@ -388,6 +390,31 @@ set_plan_references(PlannerInfo *root, Plan *plan)
 		newrc->prti += rtoffset;
 
 		glob->finalrowmarks = lappend(glob->finalrowmarks, newrc);
+	}
+
+	/*
+	 * Adjust RT indexes of AppendRelInfos and add to final appendrels list.
+	 * We assume the AppendRelInfos were built during planning and don't need
+	 * to be copied.
+	 */
+	foreach(lc, root->append_rel_list)
+	{
+		AppendRelInfo *appinfo = lfirst_node(AppendRelInfo, lc);
+
+		if (list_member_ptr(glob->appendRelations, appinfo))
+			continue;
+
+		/* adjust RT indexes */
+		appinfo->parent_relid += rtoffset;
+		appinfo->child_relid += rtoffset;
+
+		/*
+		 * Rather than adjust the translated_vars entries, just drop 'em.
+		 * Neither the executor nor EXPLAIN currently need that data.
+		 */
+		appinfo->translated_vars = NIL;
+
+		glob->appendRelations = lappend(glob->appendRelations, appinfo);
 	}
 
 	/* Now fix the Plan tree */
@@ -553,6 +580,8 @@ add_rte_to_flat_rtable(PlannerGlobal *glob, RangeTblEntry *rte)
 	newrte->tablesample = NULL;
 	newrte->subquery = NULL;
 	newrte->joinaliasvars = NIL;
+	newrte->joinleftcols = NIL;
+	newrte->joinrightcols = NIL;
 	newrte->functions = NIL;
 	newrte->tablefunc = NULL;
 	newrte->values_lists = NIL;
@@ -1548,16 +1577,7 @@ set_foreignscan_references(PlannerInfo *root,
 			fix_scan_list(root, fscan->fdw_recheck_quals, rtoffset);
 	}
 
-	/* Adjust fs_relids if needed */
-	if (rtoffset > 0)
-	{
-		Bitmapset  *tempset = NULL;
-		int			x = -1;
-
-		while ((x = bms_next_member(fscan->fs_relids, x)) >= 0)
-			tempset = bms_add_member(tempset, x + rtoffset);
-		fscan->fs_relids = tempset;
-	}
+	fscan->fs_relids = offset_relid_set(fscan->fs_relids, rtoffset);
 }
 
 /*
@@ -1620,16 +1640,7 @@ set_customscan_references(PlannerInfo *root,
 		lfirst(lc) = set_plan_refs(root, (Plan *) lfirst(lc), rtoffset);
 	}
 
-	/* Adjust custom_relids if needed */
-	if (rtoffset > 0)
-	{
-		Bitmapset  *tempset = NULL;
-		int			x = -1;
-
-		while ((x = bms_next_member(cscan->custom_relids, x)) >= 0)
-			tempset = bms_add_member(tempset, x + rtoffset);
-		cscan->custom_relids = tempset;
-	}
+	cscan->custom_relids = offset_relid_set(cscan->custom_relids, rtoffset);
 }
 
 /*
@@ -1670,6 +1681,8 @@ set_append_references(PlannerInfo *root,
 	 * look at those.
 	 */
 	set_dummy_tlist_references((Plan *) aplan, rtoffset);
+
+	aplan->apprelids = offset_relid_set(aplan->apprelids, rtoffset);
 
 	if (aplan->part_prune_info)
 	{
@@ -1733,6 +1746,8 @@ set_mergeappend_references(PlannerInfo *root,
 	 */
 	set_dummy_tlist_references((Plan *) mplan, rtoffset);
 
+	mplan->apprelids = offset_relid_set(mplan->apprelids, rtoffset);
+
 	if (mplan->part_prune_info)
 	{
 		foreach(l, mplan->part_prune_info->prune_infos)
@@ -1785,6 +1800,25 @@ set_hash_references(PlannerInfo *root, Plan *plan, int rtoffset)
 
 	/* Hash nodes don't have their own quals */
 	Assert(plan->qual == NIL);
+}
+
+/*
+ * offset_relid_set
+ *		Apply rtoffset to the members of a Relids set.
+ */
+static Relids
+offset_relid_set(Relids relids, int rtoffset)
+{
+	Relids		result = NULL;
+	int			rtindex;
+
+	/* If there's no offset to apply, we needn't recompute the value */
+	if (rtoffset == 0)
+		return relids;
+	rtindex = -1;
+	while ((rtindex = bms_next_member(relids, rtindex)) >= 0)
+		result = bms_add_member(result, rtindex + rtoffset);
+	return result;
 }
 
 /*
@@ -1989,8 +2023,8 @@ fix_scan_expr_mutator(Node *node, fix_scan_expr_context *context)
 		Assert(var->varno != OUTER_VAR);
 		if (!IS_SPECIAL_VARNO(var->varno))
 			var->varno += context->rtoffset;
-		if (var->varnoold > 0)
-			var->varnoold += context->rtoffset;
+		if (var->varnosyn > 0)
+			var->varnosyn += context->rtoffset;
 		return (Node *) var;
 	}
 	if (IsA(node, Param))
@@ -2463,15 +2497,16 @@ set_dummy_tlist_references(Plan *plan, int rtoffset)
 						 exprTypmod((Node *) oldvar),
 						 exprCollation((Node *) oldvar),
 						 0);
-		if (IsA(oldvar, Var))
+		if (IsA(oldvar, Var) &&
+			oldvar->varnosyn > 0)
 		{
-			newvar->varnoold = oldvar->varno + rtoffset;
-			newvar->varoattno = oldvar->varattno;
+			newvar->varnosyn = oldvar->varnosyn + rtoffset;
+			newvar->varattnosyn = oldvar->varattnosyn;
 		}
 		else
 		{
-			newvar->varnoold = 0;	/* wasn't ever a plain Var */
-			newvar->varoattno = 0;
+			newvar->varnosyn = 0;	/* wasn't ever a plain Var */
+			newvar->varattnosyn = 0;
 		}
 
 		tle = flatCopyTargetEntry(tle);
@@ -2523,15 +2558,16 @@ set_splitupdate_tlist_references(Plan *plan, int rtoffset)
 						 exprTypmod((Node *) oldvar),
 						 exprCollation((Node *) oldvar),
 						 0);
-		if (IsA(oldvar, Var))
+		if (IsA(oldvar, Var) &&
+			oldvar->varnosyn > 0)
 		{
-			newvar->varnoold = oldvar->varno + rtoffset;
-			newvar->varoattno = oldvar->varattno;
+			newvar->varnosyn = oldvar->varnosyn + rtoffset;
+			newvar->varattnosyn = oldvar->varattnosyn;
 		}
 		else
 		{
-			newvar->varnoold = 0;		/* wasn't ever a plain Var */
-			newvar->varoattno = 0;
+			newvar->varnosyn = 0;		/* wasn't ever a plain Var */
+			newvar->varattnosyn = 0;
 		}
 
 		tle = flatCopyTargetEntry(tle);
@@ -2670,7 +2706,7 @@ build_tlist_index_other_vars(List *tlist, Index ignore_rel)
  *
  * If a match is found, return a copy of the given Var with suitably
  * modified varno/varattno (to wit, newvarno and the resno of the TLE entry).
- * Also ensure that varnoold is incremented by rtoffset.
+ * Also ensure that varnosyn is incremented by rtoffset.
  * If no match, return NULL.
  */
 static Var *
@@ -2693,8 +2729,8 @@ search_indexed_tlist_for_var(Var *var, indexed_tlist *itlist,
 
 			newvar->varno = newvarno;
 			newvar->varattno = vinfo->resno;
-			if (newvar->varnoold > 0)
-				newvar->varnoold += rtoffset;
+			if (newvar->varnosyn > 0)
+				newvar->varnosyn += rtoffset;
 			return newvar;
 		}
 		vinfo++;
@@ -2736,8 +2772,8 @@ search_indexed_tlist_for_non_var(Expr *node,
 		Var		   *newvar;
 
 		newvar = makeVarFromTargetEntry(newvarno, tle);
-		newvar->varnoold = 0;	/* wasn't ever a plain Var */
-		newvar->varoattno = 0;
+		newvar->varnosyn = 0;	/* wasn't ever a plain Var */
+		newvar->varattnosyn = 0;
 		return newvar;
 	}
 	return NULL;				/* no match */
@@ -2773,8 +2809,8 @@ search_indexed_tlist_for_sortgroupref(Expr *node,
 			Var		   *newvar;
 
 			newvar = makeVarFromTargetEntry(newvarno, tle);
-			newvar->varnoold = 0;	/* wasn't ever a plain Var */
-			newvar->varoattno = 0;
+			newvar->varnosyn = 0;	/* wasn't ever a plain Var */
+			newvar->varattnosyn = 0;
 			return newvar;
 		}
 	}
@@ -2812,7 +2848,7 @@ search_indexed_tlist_for_sortgroupref(Expr *node,
  *		or NULL
  * 'acceptable_rel' is either zero or the rangetable index of a relation
  *		whose Vars may appear in the clause without provoking an error
- * 'rtoffset': how much to increment varnoold by
+ * 'rtoffset': how much to increment varnos by
  *
  * Returns the new expression tree.  The original clause structure is
  * not modified.
@@ -2982,8 +3018,8 @@ fix_join_expr_mutator(Node *node, fix_join_expr_context *context)
 		{
 			var = copyVar(var);
 			var->varno += context->rtoffset;
-			if (var->varnoold > 0)
-				var->varnoold += context->rtoffset;
+			if (var->varnosyn > 0)
+				var->varnosyn += context->rtoffset;
 			return (Node *) var;
 		}
 
@@ -3067,7 +3103,7 @@ fix_join_expr_mutator(Node *node, fix_join_expr_context *context)
  * 'node': the tree to be fixed (a target item or qual)
  * 'subplan_itlist': indexed target list for subplan (or index)
  * 'newvarno': varno to use for Vars referencing tlist elements
- * 'rtoffset': how much to increment varnoold by
+ * 'rtoffset': how much to increment varnos by
  *
  * The resulting tree is a copy of the original in which all Var nodes have
  * varno = newvarno, varattno = resno of corresponding targetlist element.

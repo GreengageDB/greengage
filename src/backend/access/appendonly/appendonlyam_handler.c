@@ -1927,6 +1927,29 @@ appendonly_relation_needs_toast_table(Relation rel)
 	return (tuple_length > TOAST_TUPLE_THRESHOLD);
 }
 
+static Oid
+appendonly_relation_toast_am(Relation rel)
+{
+	Assert(table_relation_needs_toast_table(rel));
+
+	/*
+	 * Toasts for AO_ROW tables are stored in heap tables
+	 */
+	return HEAP_TABLE_AM_OID;
+}
+
+static void
+appendonly_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
+							 int32 sliceoffset, int32 slicelength,
+							 struct varlena *result)
+{
+	/*
+	 * Toasts for AO_ROW tables are stored in heap tables
+	 */
+	return heap_fetch_toast_slice(toastrel, valueid, attrsize, sliceoffset,
+								  slicelength, result);
+}
+
 /* ------------------------------------------------------------------------
  * Planner related callbacks for the appendonly AM
  * ------------------------------------------------------------------------
@@ -2159,6 +2182,8 @@ static const TableAmRoutine ao_row_methods = {
 
 	.relation_size = appendonly_relation_size,
 	.relation_needs_toast_table = appendonly_relation_needs_toast_table,
+	.relation_toast_am = appendonly_relation_toast_am,
+	.relation_fetch_toast_slice = appendonly_fetch_toast_slice,
 
 	.relation_estimate_size = appendonly_estimate_rel_size,
 

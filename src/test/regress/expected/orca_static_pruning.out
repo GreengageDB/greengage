@@ -279,14 +279,14 @@ EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert VALUES (1, 1), (3, 3);
 
 INSERT INTO rp_insert VALUES (1, 1), (3, 3);
 EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert SELECT * FROM rp_insert;
-                          QUERY PLAN                          
---------------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Insert on orca_static_pruning.rp_insert
    ->  Append
-         ->  Seq Scan on orca_static_pruning.rp_insert_part_1 rp_insert_1
-               Output: rp_insert_1.a, rp_insert_1.b
-         ->  Seq Scan on orca_static_pruning.rp_insert_part_2 rp_insert_2
+         ->  Seq Scan on orca_static_pruning.rp_insert_part_1 rp_insert_2
                Output: rp_insert_2.a, rp_insert_2.b
+         ->  Seq Scan on orca_static_pruning.rp_insert_part_2 rp_insert_3
+               Output: rp_insert_3.a, rp_insert_3.b
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
 (8 rows)
