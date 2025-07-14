@@ -12,21 +12,21 @@ on:
     branches: ['*'] # Trigger on pull requests for all branches
 
 jobs:
-  build:
-    strategy:
-      fail-fast: true  # Stop on any failure in the matrix
-      matrix:
-        target_os: [ubuntu] #, centos]
-    permissions:
-      contents: read  # Explicit for default behavior
-      packages: write # Required for GHCR access
-      actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
-    with:
-      version: 6
-      target_os: ${{ matrix.target_os }}
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+  # build:
+  #   strategy:
+  #     fail-fast: true  # Stop on any failure in the matrix
+  #     matrix:
+  #       target_os: [ubuntu] #, centos]
+  #   permissions:
+  #     contents: read  # Explicit for default behavior
+  #     packages: write # Required for GHCR access
+  #     actions: write  # Required for artifact upload
+  #   uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@main
+  #   with:
+  #     version: 6
+  #     target_os: ${{ matrix.target_os }}
+  #   secrets:
+  #     ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   # behave-tests:
   #   needs: build  # Wait for build to complete
@@ -102,7 +102,7 @@ jobs:
 
   upload:
     if: github.event_name == 'push'  # For push to main or tags
-    needs: build  # For push (main or tags)
+    # needs: build  # For push (main or tags)
     strategy:
       fail-fast: true
       matrix:
