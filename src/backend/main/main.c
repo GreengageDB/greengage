@@ -362,6 +362,7 @@ init_locale(const char *categoryname, int category, const char *locale)
 static void
 help(const char *progname)
 {
+	printf(_("test\n"));
 	printf(_("%s is the PostgreSQL server.\n\n"), progname);
 	printf(_("Usage:\n  %s [OPTION]...\n\n"), progname);
 	printf(_("Options:\n"));
