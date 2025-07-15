@@ -179,3 +179,4 @@
 		"wal_sender_timeout",
 		"work_mem",
 		"zero_damaged_pages",
+		"gp_target_numsegments",

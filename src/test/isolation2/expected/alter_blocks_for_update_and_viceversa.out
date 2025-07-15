@@ -36,3 +36,73 @@ ALTER TABLE
 COMMIT
 1<:  <... completed>
 UPDATE 1
+
+-- Check ALTER REBALANCE
+1: DROP TABLE alter_block;
+DROP TABLE
+1: CREATE TABLE alter_block(a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO alter_block SELECT i, i FROM generate_series(1, 20)i;
+INSERT 0 20
+
+2: SET gp_target_numsegments = 2;
+SET
+
+-- Validate SELECT blocks the ALTER
+1: BEGIN;
+BEGIN
+2: BEGIN;
+BEGIN
+1: SELECT count(1), gp_segment_id FROM alter_block GROUP BY gp_segment_id ORDER BY gp_segment_id;
+ count | gp_segment_id 
+-------+---------------
+ 8     | 0             
+ 4     | 1             
+ 8     | 2             
+(3 rows)
+2&: ALTER TABLE alter_block REBALANCE;  <waiting ...>
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+ALTER TABLE
+2: ROLLBACK;
+ROLLBACK
+
+-- Validate UPDATE blocks the ALTER
+1: BEGIN;
+BEGIN
+2: BEGIN;
+BEGIN
+1: UPDATE alter_block SET b = b + 1 WHERE a = 1;
+UPDATE 1
+2&: ALTER TABLE alter_block REBALANCE;  <waiting ...>
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+ALTER TABLE
+2: ROLLBACK;
+ROLLBACK
+
+-- Validate ALTER blocks the SELECT
+1: BEGIN;
+BEGIN
+2: BEGIN;
+BEGIN
+2: ALTER TABLE alter_block REBALANCE;
+ALTER TABLE
+1&: SELECT count(1), gp_segment_id FROM alter_block GROUP BY gp_segment_id ORDER BY gp_segment_id;  <waiting ...>
+2: COMMIT;
+COMMIT
+1<:  <... completed>
+ count | gp_segment_id 
+-------+---------------
+ 12    | 0             
+ 8     | 1             
+(2 rows)
+1: COMMIT;
+COMMIT
+
+2: RESET gp_target_numsegments;
+RESET
+1: DROP TABLE alter_block;
+DROP TABLE

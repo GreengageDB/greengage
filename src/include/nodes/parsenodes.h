@@ -2019,7 +2019,9 @@ typedef enum AlterTableType
 	AT_PartTruncate,			/* Truncate */
 
 	/* kept at end for ABI hygiene */
-	AT_RepackTable				/* REPACK TABLE */
+	AT_RepackTable,				/* REPACK TABLE */
+
+	AT_Rebalance				/* REBALANCE */
 } AlterTableType;
 
 typedef struct ReplicaIdentityStmt

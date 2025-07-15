@@ -370,4 +370,5 @@ test: cancel_cleanup
 
 test: gp_orphaned_files
 
+test: alter_rebalance
 # end of tests

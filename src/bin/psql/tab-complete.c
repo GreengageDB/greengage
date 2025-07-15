@@ -1883,7 +1883,7 @@ psql_completion(const char *text, int start, int end)
 					  "ENABLE", "INHERIT", "NO INHERIT", "RENAME", "RESET",
 					  "OWNER TO", "SET", "VALIDATE CONSTRAINT",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
-					  "DETACH PARTITION");
+					  "DETACH PARTITION", "REBALANCE");
 	/* ALTER TABLE xxx ENABLE */
 	else if (Matches("ALTER", "TABLE", MatchAny, "ENABLE"))
 		COMPLETE_WITH("ALWAYS", "REPLICA", "ROW LEVEL SECURITY", "RULE",
