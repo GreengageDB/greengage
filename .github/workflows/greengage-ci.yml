@@ -6,9 +6,9 @@ env:
 
 on:
   push:
-    tags: ['6.*']  # Trigger on tags for versioned releases
+    tags: ['6.*']   # Trigger on tags for versioned releases
   pull_request:
-    branches: ['*']  # Trigger on pull requests for all branches
+    branches: ['*'] # Trigger on pull requests for all branches
 
 jobs:
   build:
@@ -25,7 +25,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Custom token for pushing image with commit SHA tag
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   behave-tests:
     needs: build  # Wait for build to complete
@@ -42,7 +42,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   regression-tests:
     needs: build
@@ -59,7 +59,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   orca-tests:
     needs: build
@@ -76,7 +76,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   resgroup-tests:
     needs: build
@@ -93,7 +93,7 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Token for test environment access
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   upload:
     needs: [behave-tests, regression-tests, orca-tests, resgroup-tests]  # Wait for all tests
@@ -110,4 +110,6 @@ jobs:
       version: 6
       target_os: ${{ matrix.target_os }}
     secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}  # Custom token for retagging and pushing final image
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
