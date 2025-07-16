@@ -221,6 +221,14 @@ typedef enum WalLevel
 } WalLevel;
 extern int	wal_level;
 
+/* Recovery states */
+typedef enum RecoveryState
+{
+	RECOVERY_STATE_CRASH = 0,	/* crash recovery */
+	RECOVERY_STATE_ARCHIVE,		/* archive recovery */
+	RECOVERY_STATE_DONE			/* currently in production */
+} RecoveryState;
+
 /* Is WAL archiving enabled (always or only while server is running normally)? */
 #define XLogArchivingActive() \
 	(XLogArchiveMode > ARCHIVE_MODE_OFF && wal_level >= WAL_LEVEL_ARCHIVE)
@@ -336,6 +344,7 @@ extern void UnpackCheckPointRecord(struct XLogRecord *record, CheckpointExtended
 extern void issue_xlog_fsync(int fd, XLogSegNo segno);
 
 extern bool RecoveryInProgress(void);
+extern RecoveryState GetRecoveryState(void);
 extern bool HotStandbyActive(void);
 extern bool HotStandbyActiveInReplay(void);
 extern bool XLogInsertAllowed(void);
@@ -392,7 +401,7 @@ extern void do_pg_abort_backup(void);
 #define BACKUP_LABEL_FILE		"backup_label"
 #define BACKUP_LABEL_OLD		"backup_label.old"
 
-/* Greenplum additions */
+/* Greengage additions */
 extern List *XLogReadTimeLineHistory(TimeLineID targetTLI);
 extern bool IsStandbyMode(void);
 extern bool IsCrashRecoveryOnly(void);

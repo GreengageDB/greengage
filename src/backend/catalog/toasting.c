@@ -14,6 +14,7 @@
  */
 #include "postgres.h"
 
+#include "access/genam.h"
 #include "access/tuptoaster.h"
 #include "access/xact.h"
 #include "catalog/binary_upgrade.h"
@@ -31,6 +32,7 @@
 #include "storage/lmgr.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
@@ -256,7 +258,7 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 		 * old-cluster table we haven't seen yet.
 		 */
 		/*
-		 * In Greenplum, partitioned tables are created in a single CREATE
+		 * In Greengage, partitioned tables are created in a single CREATE
 		 * TABLE statement instead of each member table individually. The
 		 * Oid preassignments are all done before the CREATE TABLE, so we
 		 * can't use and reset a single oid variable, but instead we use them
@@ -417,21 +419,36 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 	 */
 	class_rel = heap_open(RelationRelationId, RowExclusiveLock);
 
-	reltup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relOid));
-	if (!HeapTupleIsValid(reltup))
-		elog(ERROR, "cache lookup failed for relation %u", relOid);
-
-	((Form_pg_class) GETSTRUCT(reltup))->reltoastrelid = toast_relid;
-
 	if (!IsBootstrapProcessingMode())
 	{
 		/* normal case, use a transactional update */
+		reltup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relOid));
+		if (!HeapTupleIsValid(reltup))
+			elog(ERROR, "cache lookup failed for relation %u", relOid);
+
+		((Form_pg_class) GETSTRUCT(reltup))->reltoastrelid = toast_relid;
+
 		CatalogTupleUpdate(class_rel, &reltup->t_self, reltup);
 	}
 	else
 	{
 		/* While bootstrapping, we cannot UPDATE, so overwrite in-place */
-		heap_inplace_update(class_rel, reltup);
+
+		ScanKeyData key[1];
+		void	   *state;
+		HeapTuple oldtup;
+
+		ScanKeyInit(&key[0],
+					ObjectIdAttributeNumber,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(relOid));
+		oldtup = systable_inplace_update_begin(class_rel, ClassOidIndexId, true,
+											   NULL, 1, key, &reltup, &state);
+		if (!HeapTupleIsValid(reltup))
+			elog(ERROR, "cache lookup failed for relation %u", relOid);
+		((Form_pg_class) GETSTRUCT(reltup))->reltoastrelid = toast_relid;
+
+		systable_inplace_update_finish(state, oldtup, reltup);
 	}
 
 	heap_freetuple(reltup);

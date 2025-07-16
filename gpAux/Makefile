@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------
-# Makefile for Greenplum Database
+# Makefile for Greengage Database
 #---------------------------------------------------------------------
 
 # keep the default target above any targets from included makefiles
@@ -29,7 +29,7 @@ all : devel
 
 # Internal functions which are invoked by other rules within this makefile
 .PHONY : copydocs mgmtcopy copylibs
-.PHONY : greenplum_path RECONFIG HOMEDEP GPROOTDEP GPROOTDEP GPROOTFAIL
+.PHONY : greengage_path RECONFIG HOMEDEP GPROOTDEP GPROOTDEP GPROOTFAIL
 .PHONY : gccVersionCheck clients
 
 #---------------------------------------------------------------------
@@ -67,9 +67,9 @@ PLATFORM=platform
 BUILDDIR=$(GPPGDIR)
 
 RELEASE=devel
-GPDIR=greenplum-db-$(RELEASE)
-PLRDIR=greenplum-plr-$(RELEASE)
-CLIENTSDIR=greenplum-clients-$(RELEASE)
+GPDIR=greengage-db-$(RELEASE)
+PLRDIR=greengage-plr-$(RELEASE)
+CLIENTSDIR=greengage-clients-$(RELEASE)
 GPDOCDIR=$(CURDIR)/docs/release
 
 DISTPATH=$(GPROOT)/$(GPDIR)
@@ -232,7 +232,7 @@ define BUILD_STEPS
 	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) copydocs INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
-	@$(MAKE) greenplum_path INSTLOC=$(INSTLOC)
+	@$(MAKE) greengage_path INSTLOC=$(INSTLOC)
 	@$(MAKE) clients INSTLOC=$(INSTLOC) CLIENTSINSTLOC=$(CLIENTSINSTLOC)
 	@$(MAKE) set_scripts_version INSTLOC=$(CLIENTSINSTLOC)
 	@$(MAKE) copylicense INSTLOC=$(INSTLOC) \
@@ -242,7 +242,7 @@ endef
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
 	rm -rf $(DESTDIR)$(INSTLOC)
-	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greenplum_path_file
+	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greengage_path_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/fmgroids.h
@@ -355,7 +355,7 @@ CLIENTS_HOME_DIR=$(GPROOT)
 else
 CLIENTS_HOME_DIR=$(BLD_HOME)
 endif
-CLIENTSINSTLOC=$(CLIENTS_HOME_DIR)/greenplum-clients
+CLIENTSINSTLOC=$(CLIENTS_HOME_DIR)/greengage-clients
 CLIENTSINSTLOC_BIN=$(CLIENTSINSTLOC)/bin
 CLIENTSINSTLOC_BINEXT=$(CLIENTSINSTLOC)/bin/ext/
 CLIENTSINSTLOC_EXT=$(CLIENTSINSTLOC)/ext
@@ -439,7 +439,7 @@ endif
  endif
 	# ---- copy scripts fileset ----
 	mkdir -p $(CLIENTSINSTLOC)
-	cp -f client/scripts/greenplum_$@_path$(SCRIPT) $(CLIENTSINSTLOC)/
+	cp -f client/scripts/greengage_$@_path$(SCRIPT) $(CLIENTSINSTLOC)/
 
 	# ---- copy license files ----
 	cp ${BLD_TOP}/../LICENSE $(CLIENTSINSTLOC)
@@ -617,9 +617,9 @@ copylibs :
 	mkdir -p $(INSTLOC)/etc
 	mkdir -p $(INSTLOC)/include
 
-greenplum_path:
+greengage_path:
 	mkdir -p $(DESTDIR)$(INSTLOC)
-	$(BUILDDIR)/gpMgmt/bin/generate-greenplum-path.sh no > $(DESTDIR)$(INSTLOC)/greenplum_path.sh
+	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(DESTDIR)$(INSTLOC)/greengage_path.sh
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \

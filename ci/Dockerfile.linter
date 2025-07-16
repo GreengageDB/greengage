@@ -1,0 +1,12 @@
+FROM ubuntu:20.04
+
+RUN apt update && apt install -y git parallel clang-format-11 && \
+    ln -s /usr/bin/clang-format-11 /usr/bin/clang-format
+
+WORKDIR /opt/gpdb_src
+
+COPY . /opt/gpdb_src
+
+ENV CLANG_FORMAT=clang-format-11
+
+ENTRYPOINT src/tools/fmt gen && git diff --exit-code && src/tools/fmt chk

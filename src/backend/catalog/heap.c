@@ -1563,7 +1563,7 @@ heap_create_with_catalog(const char *relname,
 	 * Also not for the auxiliary heaps created for bitmap indexes or append-
 	 * only tables.
 	 *
-	 * In Greenplum, we do not create an array type for child
+	 * In Greengage, we do not create an array type for child
 	 * partitions. Child partitions are automatically named very similarly
 	 * which can cause typname collisions very easily. If there are a lot of
 	 * typname collisions, it's possible that makeArrayTypeName could fail to
@@ -1895,7 +1895,9 @@ heap_create_init_fork(Relation rel)
 {
 	RelationOpenSmgr(rel);
 	smgrcreate(rel->rd_smgr, INIT_FORKNUM, false);
-	log_smgrcreate(&rel->rd_smgr->smgr_rnode.node, INIT_FORKNUM);
+	log_smgrcreate(&rel->rd_smgr->smgr_rnode.node,
+				   INIT_FORKNUM,
+				   rel->rd_rel->relstorage);
 	smgrimmedsync(rel->rd_smgr, INIT_FORKNUM);
 }
 
