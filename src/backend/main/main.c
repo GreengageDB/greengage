@@ -175,12 +175,12 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("postgres (Greengage Database) " PG_VERSION);
+			puts("postgres (Greenplum Database) " PG_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			puts("postgres (Greengage Database) " GP_VERSION);
+			puts("postgres (Greenplum Database) " GP_VERSION);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--catalog-version") == 0 )
