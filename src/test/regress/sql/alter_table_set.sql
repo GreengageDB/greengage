@@ -101,6 +101,4 @@ select max(id) from tb_ao;
 select relstorage from pg_class where relname = 'tb_ao';
 
 -- Cleanup
-drop table tb_heap;
-drop table tb_aoco;
-drop table tb_ao;
+drop table tb_heap, tb_aoco, tb_ao;
