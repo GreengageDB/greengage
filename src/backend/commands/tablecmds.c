@@ -14773,7 +14773,17 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 
 		cs->options = opts;
 
-		if (RelationIsAoRows(rel))
+		if (!isTmpTableAo)
+		{
+			/*
+			 * Same but for heap tables, we have to manually specify
+			 * appendonly=false to avoid being affected by
+			 * gp_default_storage_options.
+			 */
+			if (!reloptions_has_opt(cs->options, "appendonly"))
+				cs->options = lappend(cs->options, makeDefElem("appendonly", (Node *) makeString("false")));
+		}
+		else if (RelationIsAoRows(rel))
 		{
 			/*
 			* In order to avoid being affected by the GUC of gp_default_storage_options,
@@ -14785,16 +14795,6 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 			* inconsistent with the original table.
 			*/
 			cs->options = build_ao_rel_storage_opts(cs->options, rel);
-		}
-		if (!isTmpTableAo)
-		{
-			/*
-			 * Same but for heap tables, we have to manually specify
-			 * appendonly=false to avoid being affected by
-			 * gp_default_storage_options.
-			 */
-			if (!reloptions_has_opt(cs->options, "appendonly"))
-				cs->options = lappend(cs->options, makeDefElem("appendonly", (Node *) makeString("false")));
 		}
 
 		if (RelationIsAoCols(rel) && useExistingColumnAttributes)
