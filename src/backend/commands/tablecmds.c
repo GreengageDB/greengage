@@ -14776,9 +14776,9 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 		if (!isTmpTableAo)
 		{
 			/*
-			 * Same but for heap tables, we have to manually specify
-			 * appendonly=false to avoid being affected by
-			 * gp_default_storage_options.
+			 * In order to avoid being affected by gp_default_storage_options,
+			 * we have to manually specify appendonly=false. This prevents
+			 * accidentally changing the access method to AO.
 			 */
 			if (!reloptions_has_opt(cs->options, "appendonly"))
 				cs->options = lappend(cs->options, makeDefElem("appendonly", (Node *) makeString("false")));
