@@ -14781,7 +14781,11 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 			 * accidentally changing the access method to AO.
 			 */
 			if (!reloptions_has_opt(cs->options, "appendonly"))
-				cs->options = lappend(cs->options, makeDefElem("appendonly", (Node *) makeString("false")));
+			{
+				DefElem *elem = makeDefElem("appendonly",
+											(Node *) makeString("false"));
+				cs->options = lappend(cs->options, elem);
+			}
 		}
 		else if (RelationIsAoRows(rel))
 		{
