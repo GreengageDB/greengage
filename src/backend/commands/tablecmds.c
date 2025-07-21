@@ -14794,7 +14794,7 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 			 * gp_default_storage_options.
 			 */
 			if (!reloptions_has_opt(cs->options, "appendonly"))
-				cs->options = lappend(cs->options, makeDefElem("appendonly", (Node *) makeString(pstrdup("false"))));
+				cs->options = lappend(cs->options, makeDefElem("appendonly", (Node *) makeString("false")));
 		}
 
 		if (RelationIsAoCols(rel) && useExistingColumnAttributes)
