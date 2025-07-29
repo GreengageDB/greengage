@@ -813,6 +813,7 @@ static char *pg_strdup_keyword_case(const char *s, const char *ref);
 static PGresult *exec_query(const char *query);
 
 static void get_previous_words(int point, char **previous_words, int nwords);
+static bool ends_with_paren(const char *word);
 
 #ifdef NOT_USED
 static char *quote_file_name(char *text, int match_type, char *quote_pointer);
@@ -1001,7 +1002,7 @@ psql_completion(const char *text, int start, int end)
 			 (pg_strcasecmp(prev3_wd, "AGGREGATE") == 0 ||
 			  pg_strcasecmp(prev3_wd, "FUNCTION") == 0))
 	{
-		if (prev_wd[strlen(prev_wd) - 1] == ')')
+		if (ends_with_paren(prev_wd))
 		{
 			static const char *const list_ALTERAGG[] =
 			{"OWNER TO", "RENAME TO", "SET SCHEMA", NULL};
@@ -2582,7 +2583,7 @@ psql_completion(const char *text, int start, int end)
 			   pg_strcasecmp(prev2_wd, "VIEW") == 0)) ||
 			 (pg_strcasecmp(prev4_wd, "DROP") == 0 &&
 			  pg_strcasecmp(prev3_wd, "AGGREGATE") == 0 &&
-			  prev_wd[strlen(prev_wd) - 1] == ')') ||
+			  ends_with_paren(prev_wd)) ||
 			 (pg_strcasecmp(prev4_wd, "DROP") == 0 &&
 			  pg_strcasecmp(prev3_wd, "EVENT") == 0 &&
 			  pg_strcasecmp(prev2_wd, "TRIGGER") == 0) ||
@@ -2938,7 +2939,7 @@ psql_completion(const char *text, int start, int end)
 	 */
 	else if (pg_strcasecmp(prev4_wd, "INSERT") == 0 &&
 			 pg_strcasecmp(prev3_wd, "INTO") == 0 &&
-			 prev_wd[strlen(prev_wd) - 1] == ')')
+			 ends_with_paren(prev_wd))
 	{
 		static const char *const list_INSERT[] =
 		{"SELECT", "TABLE", "VALUES", NULL};
@@ -3572,6 +3573,21 @@ psql_completion(const char *text, int start, int end)
 	{
 		completion_charp = "\\";
 		matches = completion_matches(text, complete_from_files);
+	}
+	/* Complete `CREATE TABLE` with `DISTRIBUTED` keyword after table's column list */
+	else if (pg_strcasecmp(prev4_wd, "CREATE") == 0 &&
+			 pg_strcasecmp(prev3_wd, "TABLE") == 0 &&
+			 ends_with_paren(prev_wd))
+	{
+		COMPLETE_WITH_CONST("DISTRIBUTED");
+	}
+	/* Complete `DISTRIBUTED` with `BY(`, `REPLICATED`, or `RANDOMLY` */
+	else if (pg_strcasecmp(prev_wd, "DISTRIBUTED") == 0)
+	{
+		static const char *const distributed_clause_options[] =
+		{"BY(", "REPLICATED", "RANDOMLY", NULL};
+
+		COMPLETE_WITH_LIST_CS(distributed_clause_options);
 	}
 
 	/*
@@ -4242,6 +4258,21 @@ get_previous_words(int point, char **previous_words, int nwords)
 
 		*previous_words++ = s;
 	}
+}
+
+/*
+ * Returns true if the given word ends with a right parenthesis ')'.
+ * Returns false if the input is NULL or the word is empty.
+ * This function is typically used to check if a SQL token ends with ')',
+ * for context-sensitive tab completion.
+ */
+static bool
+ends_with_paren(const char *word)
+{
+    size_t len;
+    if (!word || (len = strlen(word)) == 0)
+        return false;
+    return word[len - 1] == ')';
 }
 
 #ifdef NOT_USED
