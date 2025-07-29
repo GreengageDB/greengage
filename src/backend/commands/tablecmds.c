@@ -14772,8 +14772,8 @@ prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *distro, List
 		{
 			/*
 			 * In order to avoid being affected by gp_default_storage_options,
-			 * we have to manually specify appendonly=false. This prevents
-			 * accidentally changing the access method to AO.
+			 * we have to specify appendonly=false. This prevents accidentally
+			 * changing the access method to AO.
 			 */
 			if (!reloptions_has_opt(cs->options, "appendonly"))
 			{
