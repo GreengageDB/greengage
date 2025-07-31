@@ -18,6 +18,7 @@ It executes the following jobs in a matrix strategy for multiple target operatin
   - Orca tests
   - Resource group tests
 - **Upload**: Retags and pushes final Docker images to GHCR after successful tests.
+- **Package**: Rebuilds production-ready version without debug extensions and packages it as a Debian package (executed on push to main or tags).
 
 ## Configuration
 
@@ -46,6 +47,7 @@ Detailed README files for each process are available in the `README` directory o
 - Orca tests: [README/REUSABLE-TESTS-ORCA.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-ORCA.md)
 - Resource group tests: [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
 - Upload process: [README/REUSABLE-UPLOAD.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-UPLOAD.md)
+- Package process: [README/REUSABLE-PACKAGE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-PACKAGE.md)
 
 ## Notes
 
