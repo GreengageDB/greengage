@@ -113,3 +113,25 @@ jobs:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+  # ReBuild prod-redy version without debug extensions and pack it to deb
+  package:
+    if: github.event_name == 'push'  # For push to main or tags
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os: [ubuntu] #, centos]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions: write  # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@main
+    with:
+      version: 6
+      target_os: ${{ matrix.target_os }}
+      # test_lima:   ubuntu-22.04 # Lima Template (e.g., ubuntu-22.04) for deploy test. Skip if empty
+      test_docker: ubuntu:22.04 # Docker Image  (e.g., ubuntu:22.04, ubuntu:noble) for deploy test. Skip if empty
+      rebuild_builder: true     # Force rebuild builder even if it already exists
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}

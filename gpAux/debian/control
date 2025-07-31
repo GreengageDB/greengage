@@ -1,0 +1,24 @@
+Source: gpdb
+Maintainer: arenadata
+Section: database
+
+Package: gpdb
+Architecture: any
+Depends: ${shlibs:Depends},
+	 iputils-ping,
+	 less,
+	 openssh-client,
+	 openssh-server,
+	 openssl,
+	 rsync,
+	 sed,
+	 tar,
+	 zip,
+	 net-tools,
+	 less,
+	 iproute2,
+	 perl,
+	 libaprutil1,
+	 ${pythonRequires}
+Conflicts: gpdb-loaders
+Description: Greenplum MPP database enginer

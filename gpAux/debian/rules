@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+DH_VERBOSE = 1
+export DH_OPTIONS=-v
+export DEB_BUILD_OPTIONS=nocheck
+LSB_SI=$(shell lsb_release -si)
+
+ifeq ($(LSB_SI),AstraLinux)
+    DEPS=python-is-python2, python-psutil, python-yaml, python-lockfile, python-paramiko
+endif
+ifeq ($(LSB_SI),Ubuntu)
+    DEPS=python2.7
+endif
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	@echo "Skipping configure"
+
+override_dh_auto_clean:
+	@echo "Skipping clean"
+
+override_dh_auto_build:
+	@echo "Skipping autobuild"
+
+override_dh_auto_install:
+	@echo "=== COPY build/ TO debian/gpdb ==="
+	mkdir -p debian/gpdb
+	cp -a build/* debian/gpdb/
+
+override_dh_gencontrol:
+	dh_gencontrol -pgpdb -- -VpythonRequires="$(DEPS)"

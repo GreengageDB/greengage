@@ -343,6 +343,34 @@ endif
 	$(BUILD_STEPS)
 
 #---------------------------------------------------------------------
+# Packaging targets with changelog options
+#---------------------------------------------------------------------
+
+# Changelog generation pseudo-targets
+last-tag: ; @:		# Pseudo-target for --last-tag option
+all-commits: ; @:	# Pseudo-target for --all-commits option
+
+changelog : changelog-deb
+changelog-deb: $(MAKECMDGOALS)
+	@echo "Creating CHANGELOG"
+	@../ci/scripts/git2changelog deb \
+	  $(if $(filter last-tag,$(MAKECMDGOALS)),--last-tag) \
+	  $(if $(filter all-commits,$(MAKECMDGOALS)),--all-commits) \
+	  > debian/changelog 2> debian/changelog_errors.log
+	@head debian/changelog
+
+# Default packaging target
+pkg : pkg-deb
+
+# Build Debian package
+pkg-deb : GPROOT=$(CURDIR)/build/usr/lib
+pkg-deb : GPDIR=gpdb
+pkg-deb : dist
+pkg-deb : changelog-deb
+	@echo "Debian packages built in parent directory."
+	@debuild -us -uc -b
+
+#---------------------------------------------------------------------
 # clientTools
 #---------------------------------------------------------------------
 #
