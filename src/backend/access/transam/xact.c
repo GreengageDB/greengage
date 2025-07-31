@@ -3428,7 +3428,7 @@ AbortTransaction(void)
 	 * so that all mem/resource will be freed
 	 */
 	if (elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
-		DisconnectAndDestroyAllGangs(true);
+		DestroyAllGangs(true);
 
 	/* Release resource group slot at the end of a transaction */
 	if (ShouldUnassignResGroup())

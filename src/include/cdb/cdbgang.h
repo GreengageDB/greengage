@@ -74,6 +74,7 @@ extern List *getCdbProcessesForQD(int isPrimary);
 extern Gang *AllocateGang(struct CdbDispatcherState *ds, enum GangType type, List *segments);
 extern void RecycleGang(Gang *gp, bool forceDestroy);
 extern void DisconnectAndDestroyAllGangs(bool resetSession);
+extern void DestroyAllGangs(bool resetSession);
 extern void DisconnectAndDestroyUnusedQEs(void);
 
 extern void CheckForResetSession(void);

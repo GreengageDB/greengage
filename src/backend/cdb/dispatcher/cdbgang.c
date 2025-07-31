@@ -715,6 +715,34 @@ getCdbProcessesForQD(int isPrimary)
 }
 
 /*
+ * This function is used for case when we should just free memory (without any
+ * additional allocations).
+ */
+void
+DestroyAllGangs(bool resetSession)
+{
+	if (Gp_role == GP_ROLE_UTILITY)
+		return;
+
+	ELOG_DISPATCHER_DEBUG("DestroyAllGangs");
+
+	/* Destroy CurrentGangCreating before GangContext is reset */
+	if (CurrentGangCreating != NULL)
+	{
+		RecycleGang(CurrentGangCreating, true);
+		CurrentGangCreating = NULL;
+	}
+
+	/* destroy cdb_component_dbs, disconnect all connections with QEs */
+	cdbcomponent_destroyCdbComponents();
+
+	if (resetSession)
+		resetSessionForPrimaryGangLoss();
+
+	ELOG_DISPATCHER_DEBUG("DestroyAllGangs done");
+}
+
+/*
  * This function should not be used in the context of named portals
  * as it destroys the CdbComponentsContext, which is accessed later
  * during named portal cleanup.
@@ -735,7 +763,7 @@ DisconnectAndDestroyAllGangs(bool resetSession)
     }
 
 	/* cleanup all out bound dispatcher state */
-	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
+	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_destroyDispatcherHandle);
 	
 	/* destroy cdb_component_dbs, disconnect all connections with QEs */
 	cdbcomponent_destroyCdbComponents();
