@@ -11,7 +11,7 @@
 # - Default: only include commits with "(#[number])" in message
 
 # Regular expression for version tags
-RE_VERSION='[0-9]\+\([.-][0-9]\+\)*'
+RE_VERSION='^[0-9]\+\([.-][0-9]\+\)*'
 # Package name defaults to current directory name
 PACKAGE=${GPDIR:-gpdb}
 
