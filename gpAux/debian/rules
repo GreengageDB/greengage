@@ -4,12 +4,12 @@ DH_VERBOSE = 1
 export DH_OPTIONS=-v
 export DEB_BUILD_OPTIONS=nocheck
 LSB_SI=$(shell lsb_release -si)
+LSB_SR=$(shell lsb_release -sr)
 
-ifeq ($(LSB_SI),AstraLinux)
-    DEPS=python-is-python2, python-psutil, python-yaml, python-lockfile, python-paramiko
-endif
 ifeq ($(LSB_SI),Ubuntu)
-    DEPS=python2.7
+    ifeq ($(LSB_SR),22.04)
+        DEPS=python2.7
+    endif
 endif
 
 %:
