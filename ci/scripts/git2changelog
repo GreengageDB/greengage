@@ -74,9 +74,9 @@ function generate_deb_entry() {
     fi
 
     if [[ -n "$range_start" ]]; then
-        git --no-pager log --format="  * %s" $grep_filter "$range_start..$commit"
+        git --no-pager log --format="  * %s" "$grep_filter" "$range_start..$commit"
     else
-        git --no-pager log --format="  * %s" $grep_filter "$commit"
+        git --no-pager log --format="  * %s" "$grep_filter" "$commit"
     fi
 
     # Footer
@@ -97,8 +97,9 @@ function generate_rpm_entry() {
     fi
 
     # Get author info
-    local author_info=$(git --no-pager log --format="%an <%ae>" -n 1 "$commit")
-    local date_info=$(git --no-pager log --format="%aD" -n 1 "$commit" |
+    local author_info date_info
+    author_info=$(git --no-pager log --format="%an <%ae>" -n 1 "$commit")
+    date_info=$(git --no-pager log --format="%aD" -n 1 "$commit" |
                       awk '{print $1",", $3, $2, $4, $5}')
 
     # RPM header
@@ -111,9 +112,9 @@ function generate_rpm_entry() {
     fi
 
     if [[ -n "$range_start" ]]; then
-        git --no-pager log --format="- %s" $grep_filter "$range_start..$commit"
+        git --no-pager log --format="- %s" "$grep_filter" "$range_start..$commit"
     else
-        git --no-pager log --format="- %s" $grep_filter "$commit"
+        git --no-pager log --format="- %s" "$grep_filter" "$commit"
     fi
 
     echo
