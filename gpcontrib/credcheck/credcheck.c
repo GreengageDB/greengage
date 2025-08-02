@@ -31,6 +31,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_db_role_setting.h"
 #include "commands/user.h"
 #if PG_VERSION_NUM >= 140000
 #include "common/hmac.h"
@@ -48,6 +49,7 @@
 #include "storage/shmem.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
@@ -114,6 +116,7 @@ PG_MODULE_MAGIC;
 /* Hooks */
 static check_password_hook_type prev_check_password_hook = NULL;
 static ProcessUtility_hook_type prev_ProcessUtility = NULL;
+static ExecutorStart_hook_type prev_ExecutorStart = NULL;
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 #if PG_VERSION_NUM >= 150000
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
@@ -182,6 +185,7 @@ static HTAB *pgaf_hash = NULL;
 extern void _PG_init(void);
 extern void _PG_fini(void);
 static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
+static void cc_ExecutorStart(QueryDesc *queryDesc, int eflags);
 
 static void flush_password_history(void);
 static pgphEntry *pgph_entry_alloc(pgphHashKey *key, TimestampTz password_date);
@@ -204,6 +208,8 @@ static float get_auth_failure(const char *username, Oid userid, int status);
 static float save_auth_failure(Port *port, Oid userid);
 static void remove_auth_failure(const char *username, Oid userid);
 static void pg_banned_role_internal(FunctionCallInfo fcinfo);
+static void set_force_change_password(Oid databaseid, Oid roleid, char *valuestr);
+static void reset_force_change_password(Oid databaseid, Oid roleid);
 
 /* Username flags*/
 static int username_min_length = 1;
@@ -233,6 +239,8 @@ static bool password_ignore_case = false;
 static int password_valid_until = 0;
 static int password_valid_max = 0;
 static int auth_delay_milliseconds = 0;
+static bool password_change_first_login = false;
+static bool force_change_password = false;
 
 #if PG_VERSION_NUM >= 120000
 /*
@@ -831,7 +839,18 @@ password_guc()
 				gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
 					" with a maximum number of days"),
 				NULL, &password_valid_max, 0, 0, INT_MAX,
-				PGC_SUSET, 0, NULL, NULL, NULL);
+				PGC_SUSET, 1, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.password_change_first_login",
+				gettext_noop("force the user to change his password at first login"),
+				NULL, &password_change_first_login, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck_internal.force_change_password",
+				gettext_noop("force the user to change his password at first login"),
+				NULL, &force_change_password, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
 }
 
 #if PG_VERSION_NUM >= 120000
@@ -1344,6 +1363,7 @@ _PG_init(void)
 
 #if PG_VERSION_NUM < 150000
 	EmitWarningsOnPlaceholders("credcheck");
+	EmitWarningsOnPlaceholders("credcheck_internal");
 
         /*
          * Request additional shared resources.  (These are no-ops if we're not in
@@ -1356,6 +1376,7 @@ _PG_init(void)
         RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
 #else
 	MarkGUCPrefixReserved("credcheck");
+	MarkGUCPrefixReserved("credcheck_internal");
 
 #endif
 
@@ -1376,6 +1397,9 @@ _PG_init(void)
 
 	prev_ClientAuthentication = ClientAuthentication_hook;
 	ClientAuthentication_hook = credcheck_max_auth_failure;
+
+	prev_ExecutorStart = ExecutorStart_hook;
+	ExecutorStart_hook = cc_ExecutorStart;
 }
 
 void
@@ -1397,6 +1421,19 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
 	Node *parsetree = pstmt->utilityStmt;
 
+		/* at first login we don't allow anything else than password change */
+	/*
+	 * When first login we don't allow anything else than password change.
+	 * Command \password issue a "show password_encryption" query after
+	 * change password prompts, allow it. The \password command will be
+	 * rejected anyway because it uses encrypted password.
+	 */
+	if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
+		&& strcmp(debug_query_string, "show password_encryption") != 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("you must change your password first."))));
+
 	/* Execute the utility command before */
 	if (prev_ProcessUtility)
 		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
@@ -1411,6 +1448,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		case T_RenameStmt:
 		{
 			RenameStmt *stmt = (RenameStmt *)parsetree;
+
 			/* We only take care of user renaming */
 			if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
 			{
@@ -1455,7 +1493,13 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				}
 			}
 
+			if (dpassword == NULL && force_change_password)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("you must change your password first."))));
+
 #if PG_VERSION_NUM >= 120000
+			/* check the password set */
 			if (dpassword && dpassword->arg)
 			{
 				statement_has_password = true;
@@ -1463,6 +1507,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				save_password = check_password_reuse(stmt->role->rolename, password);
 			}
 #endif
+			/* when a valid until date is set check that it is > to password_valid_until */
 			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
 			{
 				int valid_until = check_valid_until(strVal(dvalidUntil->arg));
@@ -1471,6 +1516,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
 			}
+			/* check that the valid until date is not under the limit of days */
 			if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
 			{
 				int valid_max = check_valid_until(strVal(dvalidUntil->arg));
@@ -1485,6 +1531,12 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 			if (save_password)
 				save_password_in_history(stmt->role->rolename, password);
 #endif
+			if (force_change_password)
+			{
+				reset_force_change_password(0, get_role_oid(stmt->role->rolename, true));
+				force_change_password = false;
+			}
+
 			break;
 		}
 
@@ -1520,7 +1572,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					dvalidUntil = defel;
 				}
 			}
-
 #if PG_VERSION_NUM >= 120000
 			if (dpassword && dpassword->arg)
 			{
@@ -1553,12 +1604,17 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 						errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
 
 			/* check that a maximum number of days for password validity is defined */
-			if (password_valid_max > 0 && valid_max > password_valid_max)
+			if (password_valid_max > 0 && valid_max < password_valid_max)
 				ereport(ERROR,
 					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 						errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
-			/* The password can be saved into the history */
+
+			/* set force change password option if password_change_first_login is set */
+			if (password_change_first_login)
+				set_force_change_password(0, get_role_oid(stmt->role, true), "true");
+
 #if PG_VERSION_NUM >= 120000
+			/* The password can be saved into the history */
 			if (save_password)
 				save_password_in_history(stmt->role, password);
 #endif
@@ -2506,5 +2562,161 @@ pg_banned_role_internal(FunctionCallInfo fcinfo)
 	LWLockRelease(pgaf->lock);
 }
 
+static void
+cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
+{
+        elog(DEBUG1, "cc_ExecutorStart()");
 
+	/*
+	 * When first login we don't allow anything else than password change.
+	 * This rule is also checked in the ProcessUtility hook because we need
+	 * to allow the ALTER ROLE command to change the password. We must allow
+	 * SELECT CURRENT_USER which is sent by the \passwd command before
+	 * password change.
+	 */
+	if (strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
+	{
+		if (queryDesc->operation != CMD_UTILITY && force_change_password)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("you must change your password first."))));
+	}
+
+        /* Continue the normal behavior */
+        if (prev_ExecutorStart)
+                prev_ExecutorStart(queryDesc, eflags);
+        else
+                standard_ExecutorStart(queryDesc, eflags);
+
+        elog(DEBUG1, "End of cc_ExecutorStart()");
+}
+
+static void
+set_force_change_password(Oid databaseid, Oid roleid, char *valuestr)
+{
+	//HeapTuple       tuple;
+	Relation	rel;
+	ScanKeyData scankey[2];
+	SysScanDesc scan;
+
+	/* Get the old tuple, if any. */
+
+	rel = table_open(DbRoleSettingRelationId, RowExclusiveLock);
+	ScanKeyInit(&scankey[0],
+				Anum_pg_db_role_setting_setdatabase,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(databaseid));
+	ScanKeyInit(&scankey[1],
+				Anum_pg_db_role_setting_setrole,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+	scan = systable_beginscan(rel, DbRoleSettingDatidRolidIndexId, true,
+							  NULL, 2, scankey);
+	//tuple = systable_getnext(scan);
+
+	if (valuestr)
+	{
+		/* non-null valuestr means it's not RESET, so insert a new tuple */
+		HeapTuple	newtuple;
+		Datum		values[Natts_pg_db_role_setting];
+		bool		nulls[Natts_pg_db_role_setting];
+		ArrayType  *a;
+
+		memset(nulls, false, sizeof(nulls));
+
+		a = GUCArrayAdd(NULL, "credcheck_internal.force_change_password", valuestr);
+
+		values[Anum_pg_db_role_setting_setdatabase - 1] = ObjectIdGetDatum(databaseid);
+		values[Anum_pg_db_role_setting_setrole - 1] = ObjectIdGetDatum(roleid);
+		values[Anum_pg_db_role_setting_setconfig - 1] = PointerGetDatum(a);
+		newtuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
+
+		CatalogTupleInsert(rel, newtuple);
+	}
+	systable_endscan(scan);
+
+	/* Close pg_db_role_setting, but keep lock till commit */
+	table_close(rel, NoLock);
+}
+
+static void
+reset_force_change_password(Oid databaseid, Oid roleid)
+{
+	bool need_priv_escalation = !superuser(); /* we might be a SU */
+	Oid     save_userid;
+	int     save_sec_context;
+	HeapTuple	tuple;
+	Relation	rel;
+	ScanKeyData scankey[2];
+	SysScanDesc scan;
+
+	/* The setting reseet must be done as SU */
+	if (need_priv_escalation)
+	{
+		/* Get current user's Oid and security context */
+		GetUserIdAndSecContext(&save_userid, &save_sec_context);
+		/* Become superuser */
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context
+							| SECURITY_LOCAL_USERID_CHANGE
+							| SECURITY_RESTRICTED_OPERATION);
+	}
+
+	/* Get the old tuple, if any. */
+	rel = table_open(DbRoleSettingRelationId, RowExclusiveLock);
+	ScanKeyInit(&scankey[0],
+				Anum_pg_db_role_setting_setdatabase,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(databaseid));
+	ScanKeyInit(&scankey[1],
+				Anum_pg_db_role_setting_setrole,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+	scan = systable_beginscan(rel, DbRoleSettingDatidRolidIndexId, true,
+							  NULL, 2, scankey);
+	tuple = systable_getnext(scan);
+
+	if (HeapTupleIsValid(tuple))
+	{
+		Datum		repl_val[Natts_pg_db_role_setting];
+		bool		repl_null[Natts_pg_db_role_setting];
+		bool		repl_repl[Natts_pg_db_role_setting];
+		HeapTuple	newtuple;
+		Datum		datum;
+		bool		isnull;
+		ArrayType  *a;
+
+		memset(repl_repl, false, sizeof(repl_repl));
+		repl_repl[Anum_pg_db_role_setting_setconfig - 1] = true;
+		repl_null[Anum_pg_db_role_setting_setconfig - 1] = false;
+
+		/* Extract old value of setconfig */
+		datum = heap_getattr(tuple, Anum_pg_db_role_setting_setconfig,
+							 RelationGetDescr(rel), &isnull);
+		a = isnull ? NULL : DatumGetArrayTypeP(datum);
+
+		a = GUCArrayDelete(a, "credcheck_internal.force_change_password");
+
+		if (a)
+		{
+			repl_val[Anum_pg_db_role_setting_setconfig - 1] =
+				PointerGetDatum(a);
+
+			newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+										 repl_val, repl_null, repl_repl);
+			CatalogTupleUpdate(rel, &tuple->t_self, newtuple);
+		}
+		else
+			CatalogTupleDelete(rel, &tuple->t_self);
+	}
+
+	systable_endscan(scan);
+
+	/* Close pg_db_role_setting, but keep lock till commit */
+	table_close(rel, NoLock);
+
+	/* Restore user's privileges */
+	if (need_priv_escalation)
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+
+}
 

@@ -7,6 +7,7 @@
 	- [Password reuse policy](#password-reuse-policy)
 	- [Authentication failure ban](#authentication-failure-ban)
 	- [Authentication delay](#authentication-delay)
+	- [Force password change](#force-password-change)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -24,6 +25,7 @@ The `credcheck` PostgreSQL extension provides few general credential checks, whi
 - enforce use of an expiration date with a minimum of day for a password
 - define a password reuse policy
 - define the number of authentication failure allowed before a user is banned
+- force users to change their password after first login
 
 This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks. The settings can only be changed by a superuser.
 
@@ -89,6 +91,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_ignore_case      | password | ignore case while performing above checks           | on            | &check; Abc                 | &#10008; aXf                 |
 | password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days   | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
 | password_valid_max        | password | force use of VALID UNTIL clause in CREATE ROLE statement with a maximum number of days   | 365             | &check; CREATE ROLE abcd VALID UNTIL (now()+'6 months'::interval)::date | &#10008;  CREATE ROLE abcd VALID UNTIL (now()+'2 years'::interval)::date; |
+| password_valid_warn       | password | emit a warning N days before the password is about to expire | 0 (disabled) |  |  |
 
 There is also the `credcheck.whitelist` GUC that can be used to set a comma separated list of username to exclude from the password policy check. For example:
 ```
@@ -425,6 +428,37 @@ If you want to exclude some users from being banned, like application users for 
 ### [Authentication delay](#authentication-delay)
 
 This feature allow a pause on authentication failure. Setting `credcheck.auth_delay_ms` causes the server to pause for a given number of milliseconds before reporting authentication failure. This makes brute-force attacks on database passwords more difficult. 
+
+### [Force password change](#force-password-change)
+
+This feature allow to force the users to change their password after account creation. This behavior is enabled by setting `credcheck.password_change_first_login` to `true`. For example:
+
+```
+CREATE USER user1 PASSWORD 'Rkd89,34' VALID UNTIL '2050-12-31';
+```
+Then connect to PostgreSQL using the new user:
+```
+$ psql -h localhost -d test -U user1
+Password for user user1: 
+psql (17.5 (Ubuntu 17.5-1.pgdg24.04+1))
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off, ALPN: postgresql)
+Type "help" for help.
+
+test=> SELECT count(1) FROM pg_stat_activity;
+ERROR:  you must change your password first.
+test=> ALTER USER user1 PASSWORD 'Zkd89,34';
+ALTER ROLE
+test=> 
+test=> SELECT count(1) FROM pg_stat_activity;
+ count 
+-------
+     6
+(1 row)
+```
+You can also force any user to change his password at any time using:
+```
+ALTER USER user1 SET credcheck_internal.force_change_password = true;
+```
 
 ### [Limitations](#limitations)
 
