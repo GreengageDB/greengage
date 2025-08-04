@@ -74,9 +74,9 @@ function generate_deb_entry() {
     fi
 
     if [[ -n "$range_start" ]]; then
-        git --no-pager log --format="  * %s" "$grep_filter" "$range_start..$commit"
+        git --no-pager log --format="  * %s" $grep_filter "$range_start..$commit"
     else
-        git --no-pager log --format="  * %s" "$grep_filter" "$commit"
+        git --no-pager log --format="  * %s" $grep_filter "$commit"
     fi
 
     # Footer
@@ -112,9 +112,9 @@ function generate_rpm_entry() {
     fi
 
     if [[ -n "$range_start" ]]; then
-        git --no-pager log --format="- %s" "$grep_filter" "$range_start..$commit"
+        git --no-pager log --format="- %s" $grep_filter "$range_start..$commit"
     else
-        git --no-pager log --format="- %s" "$grep_filter" "$commit"
+        git --no-pager log --format="- %s" $grep_filter "$commit"
     fi
 
     echo
