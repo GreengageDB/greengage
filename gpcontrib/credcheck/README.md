@@ -8,6 +8,7 @@
 	- [Authentication failure ban](#authentication-failure-ban)
 	- [Authentication delay](#authentication-delay)
 	- [Force password change](#force-password-change)
+	- [Warning before password expire](#warning-before-password-expire)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -26,6 +27,7 @@ The `credcheck` PostgreSQL extension provides few general credential checks, whi
 - define a password reuse policy
 - define the number of authentication failure allowed before a user is banned
 - force users to change their password after first login
+- throw a warning N days before when the password user is about to expire
 
 This extension provides all the checks as configurable parameters. The default configuration settings, will not enforce any complex checks and will try to allow most of the credentials. By using `SET credcheck.<check-name> TO <some value>;` command, enforce new settings for the credential checks. The settings can only be changed by a superuser.
 
@@ -459,6 +461,45 @@ You can also force any user to change his password at any time using:
 ```
 ALTER USER user1 SET credcheck_internal.force_change_password = true;
 ```
+
+### [Warning before password expire](#warning-before-password-expire)
+
+To send a warning to the user N days before his password expires you can set the numpber of days
+before using the `credcheck.password_valid_warning` setting.
+
+The message will be: `WARNING: your password will expire in 7 days, please renew your password!`
+
+To enable this feature in all database, the credcheck extention must be created inside each database or
+as postgres supersuser execute the followind DDL in each database.
+```
+-- Add event trigger for valid until warning
+DROP FUNCTION warning_valid_until();
+CREATE OR REPLACE FUNCTION warning_valid_until()
+  RETURNS event_trigger AS
+$$
+DECLARE
+   warn_days integer;
+BEGIN
+        SELECT ((extract(epoch from valuntil) - extract(epoch from current_timestamp))/86400)::integer
+                INTO warn_days
+                FROM pg_catalog.pg_shadow WHERE usename = SESSION_USER ;
+        
+        IF ( warn_days <= current_setting('credcheck.password_valid_warning', true)::integer ) THEN
+                RAISE WARNING 'Your password will expire in % days, please renew your password!', warn_days;
+        END IF;
+END;
+$$
+LANGUAGE plpgsql
+SECURITY DEFINER
+;
+
+-- trigger definition
+CREATE EVENT TRIGGER valid_until_warning
+  ON login 
+  EXECUTE FUNCTION warning_valid_until();
+ALTER EVENT TRIGGER valid_until_warning ENABLE ALWAYS;
+```
+If you dont want to forget to apply these commands in new database, you can execute the DDLs into the `template0` database. Any new database will include the DDLs.
 
 ### [Limitations](#limitations)
 

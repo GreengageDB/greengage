@@ -237,6 +237,7 @@ static char *password_contain = NULL;
 static bool password_contain_username = true;
 static bool password_ignore_case = false;
 static int password_valid_until = 0;
+static int password_valid_warning = 0;
 static int password_valid_max = 0;
 static int auth_delay_milliseconds = 0;
 static bool password_change_first_login = false;
@@ -841,6 +842,11 @@ password_guc()
 				NULL, &password_valid_max, 0, 0, INT_MAX,
 				PGC_SUSET, 1, NULL, NULL, NULL);
 
+	DefineCustomIntVariable("credcheck.password_valid_warning",
+				gettext_noop("throw a warning N days before the password expires"),
+				NULL, &password_valid_warning, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
 	DefineCustomBoolVariable("credcheck.password_change_first_login",
 				gettext_noop("force the user to change his password at first login"),
 				NULL, &password_change_first_login, false, PGC_SUSET, 0,
@@ -1176,7 +1182,7 @@ check_password_reuse(const char *username, const char *password)
 				/* mark that the password hash was found in the history */
 				found = true;
 
-				/* Check the password age again the reuse interval */
+				/* Check the password age against the reuse interval */
 				if (password_reuse_interval > 0)
 				{
 					TimestampTz       dt_now = GetCurrentTimestamp();
@@ -2574,7 +2580,7 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	 * SELECT CURRENT_USER which is sent by the \passwd command before
 	 * password change.
 	 */
-	if (strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
+	if (debug_query_string != NULL && strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
 	{
 		if (queryDesc->operation != CMD_UTILITY && force_change_password)
 					ereport(ERROR,
