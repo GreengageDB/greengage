@@ -1,3 +1,0 @@
-#!/bin/sh
-set -e
-ln -sf python2.7 /usr/bin/python
