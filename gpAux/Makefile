@@ -351,7 +351,7 @@ last-tag: ; @:		# Pseudo-target for --last-tag option
 all-commits: ; @:	# Pseudo-target for --all-commits option
 
 changelog : changelog-deb
-changelog-deb: $(MAKECMDGOALS)
+changelog-deb:
 	@echo "Creating CHANGELOG"
 	@../ci/scripts/git2changelog deb \
 	  $(if $(filter last-tag,$(MAKECMDGOALS)),--last-tag) \
