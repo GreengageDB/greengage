@@ -1,5 +1,5 @@
 Source: gpdb
-Maintainer: arenadata
+Maintainer: Greengage <greengage@greengagedb.org>
 Section: database
 Build-Depends: debhelper (>= 13),
 	 dh-python,
