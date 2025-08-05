@@ -1,0 +1,53 @@
+-- @Description Ensures that aoseg statistics are correctly repaired if
+-- there is an inconsistency between master and segments.
+--
+CREATE TABLE vacuum_aoseg_repair_@orientation@ (a INT, b INT) WITH (appendonly=true, orientation=@orientation@);
+1: BEGIN;
+2: BEGIN;
+3: BEGIN;
+1: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+2: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+3: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+1: COMMIT;
+2: COMMIT;
+3: COMMIT;
+DELETE FROM vacuum_aoseg_repair_@orientation@ WHERE a <= 9000;
+
+-- Corrupt statistics on master
+4: BEGIN;
+4: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+
+-- We have to use dynamic SQL because we don't know table's OID in advance
+4: CREATE FUNCTION pg_temp.tmpfunc() returns void as $$
+declare
+	table_oid oid;	/* in func */
+  relstorage_var char;	/* in func */
+  aoseg_name text;	/* in func */
+begin
+  select 'vacuum_aoseg_repair_@orientation@'::regclass::oid into table_oid;	/* in func */
+  select relstorage into relstorage_var from pg_class where oid = table_oid;	/* in func */
+  if relstorage_var = 'c' then
+    select 'pg_aoseg.pg_aocsseg_' || table_oid into aoseg_name;	/* in func */
+  else
+    select 'pg_aoseg.pg_aoseg_' || table_oid into aoseg_name;	/* in func */
+  end if;	/* in func */
+
+  set local allow_system_table_mods = on;	/* in func */
+  execute 'UPDATE ' || aoseg_name || ' SET tupcount = 0 WHERE segno = 3';	/* in func */
+	set local allow_system_table_mods = off;	/* in func */
+end;	/* in func */
+$$ language plpgsql;
+4: SELECT pg_temp.tmpfunc();
+
+4: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+4: COMMIT;
+
+-- Make sure hash table is updated with corrupted statistics
+SELECT gp_toolkit.__gp_remove_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass);
+
+-- This VACUUM should fix it
+VACUUM vacuum_aoseg_repair_@orientation@;
+
+-- Check statistics
+SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+SELECT segno, total_tupcount, state FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0 ORDER BY segno;

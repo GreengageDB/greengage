@@ -170,6 +170,7 @@ extern int64 GetAOTotalBytes(Relation parentrel, Snapshot appendOnlyMetaDataSnap
 extern void FreeAllSegFileInfo(FileSegInfo **allSegInfo,
 				   int totalSegFiles);
 
+extern int64 gp_update_aorow_master_stats_internal(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot);
 extern Datum gp_update_ao_master_stats(PG_FUNCTION_ARGS);
 extern Datum get_ao_distribution(PG_FUNCTION_ARGS);
 extern Datum get_ao_compression_ratio(PG_FUNCTION_ARGS);
