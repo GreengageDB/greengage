@@ -141,6 +141,7 @@
 		"gp_allow_rename_relation_without_lock",
 		"gp_appendonly_compaction",
 		"gp_appendonly_compaction_threshold",
+		"gp_appendonly_vacuum_update_stats",
 		"gp_appendonly_verify_block_checksums",
 		"gp_appendonly_verify_write_block",
 		"gp_auth_time_override",

@@ -271,6 +271,7 @@ extern bool gp_local_distributed_cache_stats;
 extern bool gp_appendonly_verify_block_checksums;
 extern bool gp_appendonly_verify_write_block;
 extern bool gp_appendonly_compaction;
+extern bool gp_appendonly_vacuum_update_stats;
 extern bool enable_implicit_timeformat_YYYYMMDDHH24MISS;
 
 /*
