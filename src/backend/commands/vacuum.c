@@ -831,30 +831,38 @@ vacuumStatement_Relation(VacuumStmt *vacstmt, Oid relid,
 		 */
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
-			Snapshot appendOnlyMetaDataSnapshot = RegisterSnapshot(GetLatestSnapshot());
-			if (RelationIsAoRows(onerel))
-				gp_update_aorow_master_stats_internal(onerel, appendOnlyMetaDataSnapshot);
+			if (AORelIsHashEntryInUse(relid))
+			{
+				ereport(NOTICE,
+						(errmsg("skipped AO statistics sync because table is currently in use")));
+			}
 			else
 			{
-				Assert(RelationIsAoCols(onerel));
-				gp_update_aocol_master_stats_internal(onerel, appendOnlyMetaDataSnapshot);
+				Snapshot appendOnlyMetaDataSnapshot = RegisterSnapshot(GetLatestSnapshot());
+				if (RelationIsAoRows(onerel))
+					gp_update_aorow_master_stats_internal(onerel, appendOnlyMetaDataSnapshot);
+				else
+				{
+					Assert(RelationIsAoCols(onerel));
+					gp_update_aocol_master_stats_internal(onerel, appendOnlyMetaDataSnapshot);
+				}
+				UnregisterSnapshot(appendOnlyMetaDataSnapshot);
+
+				relation_close(onerel, lmode);
+
+				/* Statistics will only be updated after the transaction is commited */
+				PopActiveSnapshot();
+				CommitTransactionCommand();
+				StartTransactionCommand();
+				PushActiveSnapshot(GetTransactionSnapshot());
+
+				/* Remove the AO hash table entry to make sure it will be updated too */
+				LWLockAcquire(AOSegFileLock, LW_EXCLUSIVE);
+				AORelRemoveHashEntry(relid);
+				LWLockRelease(AOSegFileLock);
+
+				onerel = try_relation_open(relid, lmode, false /* dontwait */);
 			}
-			UnregisterSnapshot(appendOnlyMetaDataSnapshot);
-
-			relation_close(onerel, lmode);
-
-			/* Statistics will only be updated after the transaction is commited */
-			PopActiveSnapshot();
-			CommitTransactionCommand();
-			StartTransactionCommand();
-			PushActiveSnapshot(GetTransactionSnapshot());
-
-			/* Remove the AO hash table entry to make sure it will be updated too */
-			LWLockAcquire(AOSegFileLock, LW_EXCLUSIVE);
-			AORelRemoveHashEntry(relid);
-			LWLockRelease(AOSegFileLock);
-
-			onerel = try_relation_open(relid, lmode, false /* dontwait */);
 		}
 
 		vacstmt->appendonly_compaction_segno = NIL;

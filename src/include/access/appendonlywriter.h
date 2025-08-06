@@ -231,6 +231,7 @@ extern void UpdateMasterAosegTotalsFromSegments(Relation parentrel,
 									Snapshot appendOnlyMetaDataSnapshot, List *segmentNumList,
 									int64 modcount_added, List *appendonly_compaction_segno);
 extern bool AORelRemoveHashEntry(Oid relid);
+extern bool AORelIsHashEntryInUse(Oid relid);
 extern void AtCommit_AppendOnly(void);
 extern void AtAbort_AppendOnly(void);
 extern void AtEOXact_AppendOnly(void);

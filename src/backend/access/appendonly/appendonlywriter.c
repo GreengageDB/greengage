@@ -2211,6 +2211,12 @@ AtEOXact_AppendOnly(void)
 	appendOnlyInsertXact = false;
 }
 
+bool
+AORelIsHashEntryInUse(Oid relid) {
+	AORelHashEntry aoentry = AORelLookupHashEntry(relid);
+	return aoentry && is_entry_in_use_by_other_transactions(aoentry);
+}
+
 
 /*
  * Fetches a record from the in memory AO Rel Hash
