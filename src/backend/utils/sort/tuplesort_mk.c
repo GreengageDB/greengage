@@ -2878,6 +2878,18 @@ writetup_heap(Tuplesortstate_mk *state, LogicalTape *lt, MKEntry *e)
 	uint32		tuplen = memtuple_get_size(e->ptr);
 	long		ret = tuplen;
 
+	Assert(tuplen > sizeof(uint32));
+	if (tuplen <= sizeof(uint32))
+	{
+		const char *sortMethod = "";
+		const char *sortSpaceType = "";
+		long sortSpaceUsed = 0;
+		
+		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
+		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld	",
+			tuplen, sortMethod, sortSpaceType, sortSpaceUsed);
+	}
+
 	LogicalTapeWrite(state->tapeset, lt, e->ptr, tuplen);
 
 	if (state->randomAccess)	/* need trailing length word? */
@@ -2899,6 +2911,7 @@ freetup_heap(MKEntry *e)
 	e->ptr = NULL;
 }
 
+
 static void
 readtup_heap(Tuplesortstate_mk *state, TuplesortPos_mk *pos, MKEntry *e, LogicalTape *lt, uint32 len)
 {
@@ -2906,6 +2919,17 @@ readtup_heap(Tuplesortstate_mk *state, TuplesortPos_mk *pos, MKEntry *e, Logical
 	size_t		readSize;
 
 	Assert(is_under_sort_or_exec_ctxt(state));
+	
+	if (!is_len_memtuplen(len) && (memtuple_size_from_uint32(len) < sizeof(uint32))) 
+	{
+		const char *sortMethod = "";
+		const char *sortSpaceType = "";
+		long sortSpaceUsed = 0;
+		
+		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
+		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld	",
+			len, sortMethod, sortSpaceType, sortSpaceUsed);
+	}
 
 	MemSet(e, 0, sizeof(MKEntry));
 	e->ptr = palloc(memtuple_size_from_uint32(len));
