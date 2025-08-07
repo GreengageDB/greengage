@@ -1618,7 +1618,7 @@ def impl(context, seg):
     elif seg == "master":
         hostname = get_master_hostname()[0][0]
 
-    filename = os.path.join(os.getcwd(), './test/behave/mgmt_utils/steps/data/pid_background_script.py')
+    filename = os.path.join(os.getcwd(), './test/behave/mgmt_utils/pid_background_script.py')
 
     cmd = Command(name="Remove background script on remote host", cmdStr='rm -f /tmp/pid_background_script.py',
                   remoteHost=hostname, ctxt=REMOTE)
