@@ -2878,7 +2878,6 @@ writetup_heap(Tuplesortstate_mk *state, LogicalTape *lt, MKEntry *e)
 	uint32		tuplen = memtuple_get_size(e->ptr);
 	long		ret = tuplen;
 
-	Assert(tuplen > sizeof(uint32));
 	if (tuplen <= sizeof(uint32))
 	{
 		const char *sortMethod = "";
