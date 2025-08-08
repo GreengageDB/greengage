@@ -20,7 +20,6 @@ It executes the following jobs in a matrix strategy for multiple target operatin
 - **Package**: Rebuilds production-ready version without debug extensions and packages it as a Debian package (executed on push to main or tags).
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally DockerHub. Runs for push to `main` (retags to `latest`) and tags (uses tag like `6.28.2`) after build.
 
-
 ## Configuration
 
 The workflow is parameterized to support flexibility:
