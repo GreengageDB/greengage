@@ -25,4 +25,4 @@ Depends: ${shlibs:Depends},
 	 ${pythonRequires}
 Conflicts: gpdb-loaders,
 	 python-is-python3
-Description: Greenplum MPP database enginer
+Description: Greengage MPP database enginer
