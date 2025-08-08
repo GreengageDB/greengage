@@ -959,8 +959,7 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 			if (SIMPLE_FAULT_INJECTOR("cdb_freelist_append_oom") == FaultInjectorTypeSkip)
 			{
 				ereport(ERROR, (errcode(ERRCODE_GP_MEMPROT_KILL),
-						errmsg("Out of memory was emulated")
-				));
+						errmsg("Out of memory was emulated")));
 			}
 #endif
 			lappend_cell(segdbDesc->segment_database_info->freelist,

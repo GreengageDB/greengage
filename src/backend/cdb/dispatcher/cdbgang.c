@@ -714,9 +714,30 @@ getCdbProcessesForQD(int isPrimary)
 	return list;
 }
 
+static __DisconnectAndDestroyAllGangs(bool resetSession, bool needDisconnect)
+{
+	/* Destroy CurrentGangCreating before GangContext is reset */
+	if (CurrentGangCreating != NULL)
+	{
+		RecycleGang(CurrentGangCreating, true);
+		CurrentGangCreating = NULL;
+	}
+
+	/* cleanup all out bound dispatcher state */
+	if (needDisconnect)
+		CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_destroyDispatcherHandle);
+
+	/* destroy cdb_component_dbs, disconnect all connections with QEs */
+	cdbcomponent_destroyCdbComponents();
+
+	if (resetSession)
+		resetSessionForPrimaryGangLoss();
+}
+
 /*
  * This function is used for case when we should just free memory (without any
- * additional allocations).
+ * additional allocations) by not checking the query result and aborting the
+ * gang.
  */
 void
 DestroyAllGangs(bool resetSession)
@@ -725,20 +746,7 @@ DestroyAllGangs(bool resetSession)
 		return;
 
 	ELOG_DISPATCHER_DEBUG("DestroyAllGangs");
-
-	/* Destroy CurrentGangCreating before GangContext is reset */
-	if (CurrentGangCreating != NULL)
-	{
-		RecycleGang(CurrentGangCreating, true);
-		CurrentGangCreating = NULL;
-	}
-
-	/* destroy cdb_component_dbs, disconnect all connections with QEs */
-	cdbcomponent_destroyCdbComponents();
-
-	if (resetSession)
-		resetSessionForPrimaryGangLoss();
-
+	__DisconnectAndDestroyAllGangs(resetSession, false);
 	ELOG_DISPATCHER_DEBUG("DestroyAllGangs done");
 }
 
@@ -754,23 +762,7 @@ DisconnectAndDestroyAllGangs(bool resetSession)
 		return;
 
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs");
-
-    /* Destroy CurrentGangCreating before GangContext is reset */
-    if (CurrentGangCreating != NULL)
-    {
-        RecycleGang(CurrentGangCreating, true);
-        CurrentGangCreating = NULL;
-    }
-
-	/* cleanup all out bound dispatcher state */
-	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_destroyDispatcherHandle);
-	
-	/* destroy cdb_component_dbs, disconnect all connections with QEs */
-	cdbcomponent_destroyCdbComponents();
-
-	if (resetSession)
-		resetSessionForPrimaryGangLoss();
-
+	__DisconnectAndDestroyAllGangs(resetSession, true);
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs done");
 }
 

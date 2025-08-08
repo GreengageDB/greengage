@@ -35,8 +35,7 @@
 static int numNonExtendedDispatcherState = 0;
 
 dispatcher_handle_t *open_dispatcher_handles;
-static void cleanup_dispatcher_handle(dispatcher_handle_t *h);
-static void destroy_dispatcher_state_and_handle(dispatcher_handle_t *h);
+static void cleanup_dispatcher_handle(dispatcher_handle_t *h, bool only_destroy);
 
 static dispatcher_handle_t *find_dispatcher_handle(CdbDispatcherState *ds);
 static dispatcher_handle_t *allocate_dispatcher_handle(void);
@@ -366,7 +365,10 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	if (!ds)
 		return;
 #ifdef USE_ASSERT_CHECKING
-	/* Disallow re-entrance. It may be in case of AbortTransaction after error. */
+	/*
+	 * Disallow re-entrance. It may occur in case of OOM and recursive
+	 * AbortTransaction() calls.
+	 */
 	Assert (!ds->isGangDestroying || elog_geterrcode() != 0);
 	ds->isGangDestroying = true;
 #endif
@@ -509,7 +511,7 @@ find_dispatcher_handle(CdbDispatcherState *ds)
 }
 
 static void
-cleanup_dispatcher_handle(dispatcher_handle_t *h)
+cleanup_dispatcher_handle(dispatcher_handle_t *h, bool only_destroy)
 {
 	if (h->dispatcherState == NULL)
 	{
@@ -517,20 +519,11 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h)
 		return;
 	}
 
-	cdbdisp_cancelDispatch(h->dispatcherState);
-	cdbdisp_destroyDispatcherState(h->dispatcherState);
-}
+	if (only_destroy)
+		h->dispatcherState->forceDestroyGang = true;
+	else
+		cdbdisp_cancelDispatch(h->dispatcherState);
 
-static void
-destroy_dispatcher_state_and_handle(dispatcher_handle_t *h)
-{
-	if (h->dispatcherState == NULL)
-	{
-		destroy_dispatcher_handle(h);
-		return;
-	}
-
-	h->dispatcherState->forceDestroyGang = true;
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }
 
@@ -554,10 +547,10 @@ AtAbort_DispatcherState(void)
 	 * Cleanup all outbound dispatcher states belong to
 	 * current resource owner and its children
 	 */
-	if (ERRCODE_TO_CATEGORY(elog_geterrcode()) != ERRCODE_INSUFFICIENT_RESOURCES)
-		CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
-	else
-		CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_destroyDispatcherHandle);
+	CdbResourceOwnerWalker(CurrentResourceOwner,
+		ERRCODE_TO_CATEGORY(elog_geterrcode()) != ERRCODE_INSUFFICIENT_RESOURCES ?
+		cdbdisp_cleanupDispatcherHandle :
+		cdbdisp_destroyDispatcherHandle);
 
 	Assert(open_dispatcher_handles == NULL);
 
@@ -601,7 +594,7 @@ cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
 
 		if (curr->owner == owner)
 		{
-			cleanup_dispatcher_handle(curr);
+			cleanup_dispatcher_handle(curr, false);
 		}
 	}
 }
@@ -620,7 +613,7 @@ cdbdisp_destroyDispatcherHandle(const struct ResourceOwnerData *owner)
 
 		if (curr->owner == owner)
 		{
-			destroy_dispatcher_state_and_handle(curr);
+			cleanup_dispatcher_handle(curr, true);
 		}
 	}
 }
