@@ -90,7 +90,10 @@ insert into multi_part_table_distr_hashed select i, '2023-02-05', 'test2' from g
 insert into multi_part_table_distr_hashed select i, '2023-03-05', 'test1' from generate_series(1, 20)i;
 
 -- Now check shrink of the created tables into 2 segments
-set gp_target_numsegments = 2;
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+end;
 
 alter table table_distr_hashed rebalance;
 alter table table_distr_hashed_ao_row rebalance;
@@ -134,7 +137,10 @@ select *, (gp_segment_id < 2) as correct_segment_id from part_list_table_distr_r
 select *, gp_segment_id from multi_part_table_distr_hashed order by a, b, c;
 
 -- Check that new data is added only to reduced set of segments
-reset gp_target_numsegments;
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_reset_rebalance_numsegments();
+end;
 
 insert into table_distr_hashed select generate_series(21, 40);
 insert into table_distr_hashed_ao_row select generate_series(21, 40);
@@ -210,7 +216,11 @@ drop table part_list_table_distr_random;
 drop table multi_part_table_distr_hashed;
 
 -- Check that all newly created tables have data only on segments #0 and #1
-set gp_target_numsegments = 2;
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+end;
+
 create table new_table_distr_hashed(a int) distributed by (a);
 insert into new_table_distr_hashed select generate_series(1, 20);
 
@@ -325,7 +335,10 @@ select *, (gp_segment_id < 2) as correct_segment_id from new_table_into order by
 
 -- Validate the insertion works fine with the new tables
 -- after 'gp_target_numsegments' reset
-reset gp_target_numsegments;
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_reset_rebalance_numsegments();
+end;
 
 insert into new_table_ctas select generate_series(21, 40);
 insert into new_table_into select generate_series(21, 40);
@@ -408,13 +421,11 @@ insert into table_distr_hashed select generate_series(1, 20);
 select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
 
 begin;
-set gp_target_numsegments = 2;
-alter table table_distr_hashed rebalance;
+alter table table_distr_hashed rebalance 2;
 select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
 rollback;
 select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
 
-reset gp_target_numsegments;
 drop table table_distr_hashed;
 
 -- Check rebalance with parameter

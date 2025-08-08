@@ -1,0 +1,84 @@
+-- Test setting numsegments value for table creation during rebalance operation
+-- Test error throwing when catalog is not locked by gprebalance
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+ERROR:  ggrebalance not in progress, function can be used only under catalog lock
+select gp_toolkit.gp_get_rebalance_numsegments();
+ERROR:  ggrebalance not in progress, function can be used only under catalog lock
+select gp_toolkit.gp_reset_rebalance_numsegments();
+ERROR:  ggrebalance not in progress, function can be used only under catalog lock
+-- Test the numsegment value setting mechanics
+1: begin;
+BEGIN
+1: select gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+                        
+(1 row)
+2: create table t_reb (i int) distributed by (i);
+ERROR:  gpexpand in progress, catalog changes are disallowed.
+1: select gp_toolkit.gp_get_rebalance_numsegments();
+ gp_get_rebalance_numsegments 
+------------------------------
+ 2147483647                   
+(1 row)
+1: select gp_toolkit.gp_set_rebalance_numsegments(2);
+ gp_set_rebalance_numsegments 
+------------------------------
+ 2                            
+(1 row)
+1: select gp_toolkit.gp_get_rebalance_numsegments();
+ gp_get_rebalance_numsegments 
+------------------------------
+ 2                            
+(1 row)
+1: select gp_toolkit.gp_reset_rebalance_numsegments();
+ gp_reset_rebalance_numsegments 
+--------------------------------
+                                
+(1 row)
+1: select gp_toolkit.gp_get_rebalance_numsegments();
+ gp_get_rebalance_numsegments 
+------------------------------
+ 2147483647                   
+(1 row)
+1: select gp_toolkit.gp_set_rebalance_numsegments(2);
+ gp_set_rebalance_numsegments 
+------------------------------
+ 2                            
+(1 row)
+1: commit;
+COMMIT
+-- Test that newly created tables are using updated number of segmetns
+1: create table t_reb (i int) distributed by (i);
+CREATE TABLE
+1: select numsegments from gp_distribution_policy where localoid = 't_reb'::regclass;
+ numsegments 
+-------------
+ 2           
+(1 row)
+1: drop table t_reb;
+DROP TABLE
+
+1: begin;
+BEGIN
+1: select gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+                        
+(1 row)
+1: select gp_toolkit.gp_reset_rebalance_numsegments();
+ gp_reset_rebalance_numsegments 
+--------------------------------
+                                
+(1 row)
+1: create table t_reb (i int) distributed by (i);
+CREATE TABLE
+1: select  numsegments from gp_distribution_policy where localoid = 't_reb'::regclass;
+ numsegments 
+-------------
+ 3           
+(1 row)
+1: rollback;
+ROLLBACK
+1q: ... <quitting>
+2q: ... <quitting>

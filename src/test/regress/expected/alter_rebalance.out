@@ -75,7 +75,20 @@ insert into multi_part_table_distr_hashed select i, '2023-01-05', 'test1' from g
 insert into multi_part_table_distr_hashed select i, '2023-02-05', 'test2' from generate_series(1, 20)i;
 insert into multi_part_table_distr_hashed select i, '2023-03-05', 'test1' from generate_series(1, 20)i;
 -- Now check shrink of the created tables into 2 segments
-set gp_target_numsegments = 2;
+begin;
+select gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+ 
+(1 row)
+
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+ gp_set_rebalance_numsegments 
+------------------------------
+                            2
+(1 row)
+
+end;
 alter table table_distr_hashed rebalance;
 NOTICE:  REBALANCE to current default target number of segments 2
 alter table table_distr_hashed_ao_row rebalance;
@@ -656,7 +669,20 @@ select *, gp_segment_id from multi_part_table_distr_hashed order by a, b, c;
 (60 rows)
 
 -- Check that new data is added only to reduced set of segments
-reset gp_target_numsegments;
+begin;
+select gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+ 
+(1 row)
+
+select gp_toolkit.gp_reset_rebalance_numsegments();
+ gp_reset_rebalance_numsegments 
+--------------------------------
+ 
+(1 row)
+
+end;
 insert into table_distr_hashed select generate_series(21, 40);
 insert into table_distr_hashed_ao_row select generate_series(21, 40);
 insert into table_distr_hashed_ao_col select generate_series(21, 40);
@@ -1727,7 +1753,20 @@ drop table part_list_table_distr_hashed;
 drop table part_list_table_distr_random;
 drop table multi_part_table_distr_hashed;
 -- Check that all newly created tables have data only on segments #0 and #1
-set gp_target_numsegments = 2;
+begin;
+select gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+ 
+(1 row)
+
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+ gp_set_rebalance_numsegments 
+------------------------------
+                            2
+(1 row)
+
+end;
 create table new_table_distr_hashed(a int) distributed by (a);
 insert into new_table_distr_hashed select generate_series(1, 20);
 create table new_table_distr_hashed_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
@@ -1802,7 +1841,6 @@ insert into new_multi_part_table_distr_hashed select i, '2023-03-05', 'test1' fr
 -- Also check CTAS statement
 create table new_table_ctas as select a from generate_series(1, 20)a distributed by(a);
 select * into new_table_into from generate_series(1, 20)a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 select a, gp_segment_id from new_table_distr_hashed order by a;
  a  | gp_segment_id 
 ----+---------------
@@ -2405,7 +2443,20 @@ select *, (gp_segment_id < 2) as correct_segment_id from new_table_into order by
 
 -- Validate the insertion works fine with the new tables
 -- after 'gp_target_numsegments' reset
-reset gp_target_numsegments;
+begin;
+select gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+ 
+(1 row)
+
+select gp_toolkit.gp_reset_rebalance_numsegments();
+ gp_reset_rebalance_numsegments 
+--------------------------------
+ 
+(1 row)
+
+end;
 insert into new_table_ctas select generate_series(21, 40);
 insert into new_table_into select generate_series(21, 40);
 insert into new_table_distr_hashed select generate_series(21, 40);
@@ -3443,9 +3494,7 @@ select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id or
 (3 rows)
 
 begin;
-set gp_target_numsegments = 2;
-alter table table_distr_hashed rebalance;
-NOTICE:  REBALANCE to current default target number of segments 2
+alter table table_distr_hashed rebalance 2;
 select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
  count | gp_segment_id 
 -------+---------------
@@ -3462,7 +3511,6 @@ select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id or
      8 |             2
 (3 rows)
 
-reset gp_target_numsegments;
 drop table table_distr_hashed;
 -- Check rebalance with parameter
 create table table_distr_hashed(a int) distributed by (a);

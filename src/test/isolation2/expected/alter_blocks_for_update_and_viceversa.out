@@ -45,8 +45,6 @@ CREATE TABLE
 1: INSERT INTO alter_block SELECT i, i FROM generate_series(1, 20)i;
 INSERT 0 20
 
-2: SET gp_target_numsegments = 2;
-SET
 
 -- Validate SELECT blocks the ALTER
 1: BEGIN;
@@ -60,7 +58,7 @@ BEGIN
  4     | 1             
  8     | 2             
 (3 rows)
-2&: ALTER TABLE alter_block REBALANCE;  <waiting ...>
+2&: ALTER TABLE alter_block REBALANCE 2;  <waiting ...>
 1: COMMIT;
 COMMIT
 2<:  <... completed>
@@ -75,7 +73,7 @@ BEGIN
 BEGIN
 1: UPDATE alter_block SET b = b + 1 WHERE a = 1;
 UPDATE 1
-2&: ALTER TABLE alter_block REBALANCE;  <waiting ...>
+2&: ALTER TABLE alter_block REBALANCE 2;  <waiting ...>
 1: COMMIT;
 COMMIT
 2<:  <... completed>
@@ -88,7 +86,7 @@ ROLLBACK
 BEGIN
 2: BEGIN;
 BEGIN
-2: ALTER TABLE alter_block REBALANCE;
+2: ALTER TABLE alter_block REBALANCE 2;
 ALTER TABLE
 1&: SELECT count(1), gp_segment_id FROM alter_block GROUP BY gp_segment_id ORDER BY gp_segment_id;  <waiting ...>
 2: COMMIT;
@@ -102,7 +100,5 @@ COMMIT
 1: COMMIT;
 COMMIT
 
-2: RESET gp_target_numsegments;
-RESET
 1: DROP TABLE alter_block;
 DROP TABLE
