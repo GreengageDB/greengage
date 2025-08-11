@@ -714,7 +714,7 @@ getCdbProcessesForQD(int isPrimary)
 	return list;
 }
 
-static __DisconnectAndDestroyAllGangs(bool resetSession, bool needDisconnect)
+static void DisconnectAllGangsImpl(bool resetSession, bool needDisconnect)
 {
 	/* Destroy CurrentGangCreating before GangContext is reset */
 	if (CurrentGangCreating != NULL)
@@ -746,7 +746,7 @@ DestroyAllGangs(bool resetSession)
 		return;
 
 	ELOG_DISPATCHER_DEBUG("DestroyAllGangs");
-	__DisconnectAndDestroyAllGangs(resetSession, false);
+	DisconnectAllGangsImpl(resetSession, false);
 	ELOG_DISPATCHER_DEBUG("DestroyAllGangs done");
 }
 
@@ -762,7 +762,7 @@ DisconnectAndDestroyAllGangs(bool resetSession)
 		return;
 
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs");
-	__DisconnectAndDestroyAllGangs(resetSession, true);
+	DisconnectAllGangsImpl(resetSession, true);
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs done");
 }
 

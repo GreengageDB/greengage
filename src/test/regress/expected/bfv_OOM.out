@@ -1,6 +1,10 @@
 -- Test for correct processing AbortTransaction after getting OOM at
 -- cdbcomponent_recycleIdleQE and re-entering here from AbortTransaction.
-create table test_table (f1 text, f2 text, f3 text, f4 text)
+-- start_matchsubs
+-- m/WARNING:.*Any temporary tables for this session have been dropped because the gang was disconnected/
+-- s/session id \=\s*\d+/session id \= DUMMY/gm
+-- end_matchsubs
+create temp table test_table (f1 text, f2 text, f3 text, f4 text)
 distributed by (f1);
 create function test_function() returns setof test_table as
 $$
@@ -24,6 +28,7 @@ where role = 'p' and content = -1;
 (1 row)
 
 select * from test_view;
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 33)
 ERROR:  Out of memory was emulated
 CONTEXT:  PL/pgSQL function test_function() line 5 at FOR over SELECT rows
 select gp_inject_fault('cdb_freelist_append_oom', 'reset', dbid)
@@ -34,12 +39,3 @@ where role = 'p' and content = -1;
  Success:
 (1 row)
 
-select * from test_view;
- f1 | f2 | f3 | f4 
-----+----+----+----
-(0 rows)
-
--- Cleanup
-drop view test_view;
-drop function test_function();
-drop table test_table;
