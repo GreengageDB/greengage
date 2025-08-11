@@ -580,8 +580,9 @@ AtSubAbort_DispatcherState(void)
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 }
 
-void
-cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
+static void
+cleanup_open_dispatcher_handles(const struct ResourceOwnerData *owner,
+								bool only_destroy)
 {
 	dispatcher_handle_t *curr;
 	dispatcher_handle_t *next;
@@ -594,28 +595,21 @@ cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
 
 		if (curr->owner == owner)
 		{
-			cleanup_dispatcher_handle(curr, false);
+			cleanup_dispatcher_handle(curr, only_destroy);
 		}
 	}
 }
 
 void
+cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
+{
+	cleanup_open_dispatcher_handles(owner, false);
+}
+
+void
 cdbdisp_destroyDispatcherHandle(const struct ResourceOwnerData *owner)
 {
-	dispatcher_handle_t *curr;
-	dispatcher_handle_t *next;
-
-	next = open_dispatcher_handles;
-	while (next)
-	{
-		curr = next;
-		next = curr->next;
-
-		if (curr->owner == owner)
-		{
-			cleanup_dispatcher_handle(curr, true);
-		}
-	}
+	cleanup_open_dispatcher_handles(owner, true);
 }
 
 /*
