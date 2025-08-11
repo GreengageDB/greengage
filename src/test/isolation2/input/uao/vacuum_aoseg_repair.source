@@ -14,12 +14,11 @@ CREATE TABLE vacuum_aoseg_repair_@orientation@ (a INT, b INT) WITH (appendonly=t
 DELETE FROM vacuum_aoseg_repair_@orientation@ WHERE a <= 9000;
 
 -- Corrupt statistics on master
-4: BEGIN;
-4: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+BEGIN;
+SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
 
 -- We have to use dynamic SQL because we don't know table's OID in advance
-4: CREATE FUNCTION pg_temp.tmpfunc() returns void as $$
-declare
+DO $$declare
 	table_oid oid;	/* in func */
   relstorage_var char;	/* in func */
   aoseg_name text;	/* in func */
@@ -35,12 +34,10 @@ begin
   set local allow_system_table_mods = on;	/* in func */
   execute 'UPDATE ' || aoseg_name || ' SET tupcount = 0 WHERE segno = 3';	/* in func */
 	set local allow_system_table_mods = off;	/* in func */
-end;	/* in func */
-$$ language plpgsql;
-4: SELECT pg_temp.tmpfunc();
+end$$;
 
-4: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
-4: COMMIT;
+SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+COMMIT;
 
 -- Make sure hash table is updated with corrupted statistics
 SELECT gp_toolkit.__gp_remove_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass);
@@ -52,4 +49,4 @@ RESET gp_appendonly_vacuum_update_stats;
 
 -- Check statistics
 SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
-SELECT segno, total_tupcount, state FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0 ORDER BY segno;
+SELECT segno, total_tupcount, state FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0;

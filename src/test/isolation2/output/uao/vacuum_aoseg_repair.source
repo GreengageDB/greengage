@@ -25,9 +25,9 @@ DELETE FROM vacuum_aoseg_repair_@orientation@ WHERE a <= 9000;
 DELETE 27000
 
 -- Corrupt statistics on master
-4: BEGIN;
+BEGIN;
 BEGIN
-4: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
  segno | tupcount | state 
 -------+----------+-------
  1     | 10000    | 1     
@@ -36,23 +36,18 @@ BEGIN
 (3 rows)
 
 -- We have to use dynamic SQL because we don't know table's OID in advance
-4: CREATE FUNCTION pg_temp.tmpfunc() returns void as $$ declare table_oid oid;	/* in func */ relstorage_var char;	/* in func */ aoseg_name text;	/* in func */ begin select 'vacuum_aoseg_repair_@orientation@'::regclass::oid into table_oid;	/* in func */ select relstorage into relstorage_var from pg_class where oid = table_oid;	/* in func */ if relstorage_var = 'c' then select 'pg_aoseg.pg_aocsseg_' || table_oid into aoseg_name;	/* in func */ else select 'pg_aoseg.pg_aoseg_' || table_oid into aoseg_name;	/* in func */ end if;	/* in func */ 
-set local allow_system_table_mods = on;	/* in func */ execute 'UPDATE ' || aoseg_name || ' SET tupcount = 0 WHERE segno = 3';	/* in func */ set local allow_system_table_mods = off;	/* in func */ end;	/* in func */ $$ language plpgsql;
-CREATE
-4: SELECT pg_temp.tmpfunc();
- tmpfunc 
----------
-         
-(1 row)
+DO $$declare table_oid oid;	/* in func */ relstorage_var char;	/* in func */ aoseg_name text;	/* in func */ begin select 'vacuum_aoseg_repair_@orientation@'::regclass::oid into table_oid;	/* in func */ select relstorage into relstorage_var from pg_class where oid = table_oid;	/* in func */ if relstorage_var = 'c' then select 'pg_aoseg.pg_aocsseg_' || table_oid into aoseg_name;	/* in func */ else select 'pg_aoseg.pg_aoseg_' || table_oid into aoseg_name;	/* in func */ end if;	/* in func */ 
+set local allow_system_table_mods = on;	/* in func */ execute 'UPDATE ' || aoseg_name || ' SET tupcount = 0 WHERE segno = 3';	/* in func */ set local allow_system_table_mods = off;	/* in func */ end$$;
+DO
 
-4: SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
  segno | tupcount | state 
 -------+----------+-------
  1     | 10000    | 1     
  2     | 10000    | 1     
  3     | 0        | 1     
 (3 rows)
-4: COMMIT;
+COMMIT;
 COMMIT
 
 -- Make sure hash table is updated with corrupted statistics
@@ -81,7 +76,7 @@ SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orien
  5     | 1000     | 1     
  6     | 1000     | 1     
 (6 rows)
-SELECT segno, total_tupcount, state FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0 ORDER BY segno;
+SELECT segno, total_tupcount, state FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0;
  segno | total_tupcount | state 
 -------+----------------+-------
  4     | 1000           | 1     
