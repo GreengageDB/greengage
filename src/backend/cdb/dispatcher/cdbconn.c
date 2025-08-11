@@ -309,9 +309,6 @@ cdbconn_doConnectComplete(SegmentDatabaseDescriptor *segdbDesc)
 static void
 cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc)
 {
-	if (segdbDesc->conn == NULL)
-		return;
-
 	if (PQstatus(segdbDesc->conn) != CONNECTION_BAD)
 	{
 		PGTransactionStatusType status = PQtransactionStatus(segdbDesc->conn);
