@@ -11,8 +11,9 @@ BEGIN
 BEGIN
 1: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
 INSERT 10000
-2: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
-INSERT 10000
+-- Don't actually insert anything into segment file 2, just allocate it.
+2: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT 1 as a, 1 as b LIMIT 0;
+INSERT 0
 3: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
 INSERT 10000
 1: COMMIT;
@@ -22,16 +23,15 @@ COMMIT
 3: COMMIT;
 COMMIT
 DELETE FROM vacuum_aoseg_repair_@orientation@ WHERE a <= 9000;
-DELETE 27000
+DELETE 18000
 
 -- Corrupt statistics on master
 SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
  segno | tupcount | state 
 -------+----------+-------
  1     | 10000    | 1     
- 2     | 10000    | 1     
  3     | 10000    | 1     
-(3 rows)
+(2 rows)
 
 -- We have to use dynamic SQL because we don't know table's OID in advance
 DO $$declare table_oid oid;	/* in func */ relstorage_var char;	/* in func */ aoseg_name text;	/* in func */ begin select 'vacuum_aoseg_repair_@orientation@'::regclass::oid into table_oid;	/* in func */ select relstorage into relstorage_var from pg_class where oid = table_oid;	/* in func */ if relstorage_var = 'c' then select 'pg_aoseg.pg_aocsseg_' || table_oid into aoseg_name;	/* in func */ else select 'pg_aoseg.pg_aoseg_' || table_oid into aoseg_name;	/* in func */ end if;	/* in func */ 
@@ -42,9 +42,8 @@ SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orien
  segno | tupcount | state 
 -------+----------+-------
  1     | 10000    | 1     
- 2     | 10000    | 1     
  3     | 0        | 1     
-(3 rows)
+(2 rows)
 
 -- Make sure hash table is updated with corrupted statistics
 SELECT gp_toolkit.__gp_remove_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass);
@@ -62,23 +61,20 @@ RESET gp_appendonly_vacuum_update_stats;
 RESET
 
 -- Check statistics
--- In both the aoseg table and the cache, we expect to see three segment files with 1000 tuples each.
+-- In both the aoseg table and the cache, we expect to see two segment files with 1000 tuples each.
 -- No segments with 10000 tuples or more should be left unvacuumed.
 -- Segment files with 0 tuples are also acceptable.
 SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
  segno | tupcount | state 
 -------+----------+-------
  1     | 0        | 1     
- 2     | 0        | 1     
+ 2     | 1000     | 1     
  3     | 0        | 1     
  4     | 1000     | 1     
- 5     | 1000     | 1     
- 6     | 1000     | 1     
-(6 rows)
+(4 rows)
 SELECT segno, total_tupcount, state FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0;
  segno | total_tupcount | state 
 -------+----------------+-------
+ 2     | 1000           | 1     
  4     | 1000           | 1     
- 5     | 1000           | 1     
- 6     | 1000           | 1     
-(3 rows)
+(2 rows)

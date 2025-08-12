@@ -6,7 +6,8 @@ CREATE TABLE vacuum_aoseg_repair_@orientation@ (a INT, b INT) WITH (appendonly=t
 2: BEGIN;
 3: BEGIN;
 1: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
-2: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+-- Don't actually insert anything into segment file 2, just allocate it.
+2: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT 1 as a, 1 as b LIMIT 0;
 3: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
 1: COMMIT;
 2: COMMIT;
@@ -46,7 +47,7 @@ VACUUM vacuum_aoseg_repair_@orientation@;
 RESET gp_appendonly_vacuum_update_stats;
 
 -- Check statistics
--- In both the aoseg table and the cache, we expect to see three segment files with 1000 tuples each.
+-- In both the aoseg table and the cache, we expect to see two segment files with 1000 tuples each.
 -- No segments with 10000 tuples or more should be left unvacuumed.
 -- Segment files with 0 tuples are also acceptable.
 SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
