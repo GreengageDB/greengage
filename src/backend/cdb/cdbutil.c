@@ -970,7 +970,6 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 				lcons(segdbDesc, segdbDesc->segment_database_info->freelist);
 	}
 
-
 	/* update num of active and idle QEs */
 	DECR_COUNT(cdbinfo, numActiveQEs);
 	INCR_COUNT(cdbinfo, numIdleQEs);
