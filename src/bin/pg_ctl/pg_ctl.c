@@ -50,10 +50,6 @@
 typedef long pgpid_t;
 
 
-/* postgres version ident string */
-#define PM_VERSIONSTR "postgres (Greenplum Database) " PG_VERSION "\n"
-
-
 typedef enum
 {
 	SMART_MODE,
@@ -2188,7 +2184,7 @@ do_help(void)
 	printf(_("  -w                     wait until operation completes\n"));
 	printf(_("  -W                     do not wait until operation completes\n"));
 	printf(_("  -?, --help             show this help, then exit\n"));
-	printf(_("  --gp-version           output Greenplum version information, then exit\n"));
+	printf(_("  --gp-version           output Greengage version information, then exit\n"));
 	printf(_("(The default is to wait for shutdown, but not for start or restart.)\n\n"));
 	printf(_("If the -D option is omitted, the environment variable PGDATA is used.\n"));
 
@@ -2225,7 +2221,7 @@ do_help(void)
 	printf(_("  demand     start service on demand\n"));
 #endif
 
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 

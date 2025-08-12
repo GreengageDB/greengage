@@ -278,7 +278,7 @@ usage(void)
 	printf(_("  -E, --exclude          exclude path names\n"));
 	printf(_("      --exclude-from=FILE\n"
 			 "                         get path names to exclude from FILE\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
@@ -1877,7 +1877,7 @@ BaseBackup(const char *argv0)
 		disconnect_and_exit(1);
 
 	/*
-	 * Greenplum only: create replication slot.  This replication slot is used
+	 * Greengage only: create replication slot.  This replication slot is used
 	 * for primary/mirror and master/standby WAL replication.
 	 */
 	if (replication_slot)

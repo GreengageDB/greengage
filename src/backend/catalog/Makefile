@@ -23,7 +23,8 @@ OBJS += pg_exttable.o pg_extprotocol.o \
        pg_attribute_encoding.o pg_compression.o aovisimap.o \
        pg_appendonly.o \
        oid_dispatch.o aocatalog.o storage_tablespace.o storage_database.o \
-       storage_tablespace_twophase.o storage_tablespace_xact.o
+       storage_tablespace_twophase.o storage_tablespace_xact.o \
+       storage_pending_deletes_redo.o storage_pending_deletes.o
 
 
 BKIFILES = postgres.bki postgres.description postgres.shdescription
@@ -88,7 +89,7 @@ postgres.shdescription: postgres.bki
 schemapg.h: postgres.bki
 	touch $@
 
-# In Greenplum, contents of the pg_proc catalog is in two files, pg_proc.h
+# In Greengage, contents of the pg_proc catalog is in two files, pg_proc.h
 # and pg_proc_gp.h. Combine them into a single file, so that genbki.pl can
 # process it.
 pg_proc_combined.h: $(top_srcdir)/src/include/catalog/pg_proc.h $(top_srcdir)/src/include/catalog/pg_proc_gp.h

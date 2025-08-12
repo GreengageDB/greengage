@@ -32,6 +32,7 @@
 #include "catalog/namespace.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "catalog/storage_tablespace.h"
 #include "catalog/storage_database.h"
 #include "commands/async.h"
@@ -2326,7 +2327,7 @@ StartTransaction(void)
 	/*
 	 * Transactions may be started while recovery is in progress, if
 	 * hot standby is enabled.  This mode is not supported in
-	 * Greenplum yet.
+	 * Greengage yet.
 	 */
 	AssertImply(DistributedTransactionContext != DTX_CONTEXT_LOCAL_ONLY,
 				!s->startedInRecovery);
@@ -5213,7 +5214,7 @@ AbortOutOfAnyTransaction(void)
 	AtAbort_Memory();
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Some QEs might already be in Abort State, they still need
 	 * to reset Extension related global vars, so we invoke them
 	 * here (not AbortTransction).
@@ -6223,6 +6224,8 @@ xact_redo_commit_internal(TransactionId xid, XLogRecPtr lsn,
 
 	DoTablespaceDeletionForRedoXlog(tablespace_oid_to_delete);
 
+	PdlRedoRemoveTree(xid, sub_xids, nsubxacts);
+
 	/*
 	 * We issue an XLogFlush() for the same reason we emit ForceSyncCommit()
 	 * in normal operation. For example, in CREATE DATABASE, we copy all files
@@ -6380,6 +6383,8 @@ xact_redo_distributed_commit(xl_xact_commit *xlrec, TransactionId xid)
 		DropRelationFiles(xlrec->xnodes, xlrec->nrels, true);
 		DropDatabaseDirectories(deldbs, xlrec->ndeldbs, true);
 		DoTablespaceDeletionForRedoXlog(xlrec->tablespace_oid_to_delete_on_commit);
+
+		PdlRedoRemoveTree(xid, sub_xids, xlrec->nsubxacts);
 	}
 
 	/*
@@ -6455,6 +6460,8 @@ xact_redo_abort(xl_xact_abort *xlrec, TransactionId xid)
 	DropRelationFiles(xlrec->xnodes, xlrec->nrels, true);
 	DropDatabaseDirectories(deldbs, xlrec->ndeldbs, true);
 	DoTablespaceDeletionForRedoXlog(xlrec->tablespace_oid_to_delete_on_abort);
+
+	PdlRedoRemoveTree(xid, sub_xids, xlrec->nsubxacts);
 }
 
 static void

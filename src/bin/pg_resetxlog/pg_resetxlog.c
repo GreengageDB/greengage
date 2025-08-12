@@ -535,7 +535,7 @@ AcceptWarning(void)
 	/* initialize response to empty string. */
 	response[0] = 0;
 
-	printf(_("WARNING: Do not use this on Greenplum. %s might cause data loss\n"
+	printf(_("WARNING: Do not use this on Greengage. %s might cause data loss\n"
 			"and render system irrecoverable. Do you wish to proceed? [yes/no] "), progname);
 
 	/* Reading up to 4 letters instead of just 3 to ensure something like
@@ -1503,6 +1503,6 @@ usage(void)
 	printf(_("  --system-identifier=ID\n"
 			 "                   set database system identifier\n"));
 	printf(_("  -?, --help       show this help, then exit\n"));
-	printf(_("  --gp-version    output Greenplum version information, then exit\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("  --gp-version    output Greengage version information, then exit\n"));
+	printf(_("\nReport bugs to <bugs@greengagedb.org>.\n"));
 }

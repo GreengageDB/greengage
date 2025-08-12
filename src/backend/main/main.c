@@ -390,7 +390,7 @@ help(const char *progname)
 	printf(_("  --NAME=VALUE       set run-time parameter\n"));
 	printf(_("  --describe-config  describe configuration parameters, then exit\n"));
 	printf(_("  -?, --help         show this help, then exit\n"));
-	printf(_("  --gp-version       output Greenplum version information, then exit\n"));
+	printf(_("  --gp-version       output Greengage version information, then exit\n"));
 	printf(_("  --catalog-version  output the catalog version, then exit\n"));
 
 	printf(_("\nDeveloper options:\n"));
@@ -425,7 +425,7 @@ help(const char *progname)
 	printf(_("\nPlease read the documentation for the complete list of run-time\n"
 	 "configuration settings and how to set them on the command line or in\n"
 			 "the configuration file.\n\n"
-			 "Report bugs to <bugs@greenplum.org>.\n"));
+			 "Report bugs to <bugs@greengagedb.org>.\n"));
 }
 
 
