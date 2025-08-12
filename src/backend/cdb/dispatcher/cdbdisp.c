@@ -35,7 +35,8 @@
 static int numNonExtendedDispatcherState = 0;
 
 dispatcher_handle_t *open_dispatcher_handles;
-static void cleanup_dispatcher_handle(dispatcher_handle_t *h, bool only_destroy);
+static void cleanup_dispatcher_handle(dispatcher_handle_t *h,
+									  bool only_destroy);
 
 static dispatcher_handle_t *find_dispatcher_handle(CdbDispatcherState *ds);
 static dispatcher_handle_t *allocate_dispatcher_handle(void);
@@ -369,7 +370,7 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	 * Disallow re-entrance. It may occur in case of OOM and recursive
 	 * AbortTransaction() calls.
 	 */
-	Assert (!ds->isGangDestroying || elog_geterrcode() != 0);
+	Assert(!ds->isGangDestroying || elog_geterrcode() != 0);
 	ds->isGangDestroying = true;
 #endif
 

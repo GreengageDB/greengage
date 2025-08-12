@@ -714,7 +714,8 @@ getCdbProcessesForQD(int isPrimary)
 	return list;
 }
 
-static void DisconnectAllGangsImpl(bool resetSession, bool needDisconnect)
+static void
+DisconnectAllGangsImpl(bool resetSession, bool needDisconnect)
 {
 	/* Destroy CurrentGangCreating before GangContext is reset */
 	if (CurrentGangCreating != NULL)
