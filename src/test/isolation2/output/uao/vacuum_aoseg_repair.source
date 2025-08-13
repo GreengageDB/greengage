@@ -1,8 +1,9 @@
 -- @Description Ensures that aoseg statistics are correctly repaired if
 -- there is an inconsistency between master and segments.
 --
-CREATE TABLE vacuum_aoseg_repair_@orientation@ (a INT, b INT) WITH (appendonly=true, orientation=@orientation@);
-CREATE
+-- Use CTAS to create 0th segment file.
+CREATE TABLE vacuum_aoseg_repair_@orientation@ WITH (appendonly=true, orientation=@orientation@) AS SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
+CREATE 10000
 1: BEGIN;
 BEGIN
 2: BEGIN;
@@ -29,7 +30,7 @@ COMMIT
 3: COMMIT;
 COMMIT
 DELETE FROM vacuum_aoseg_repair_@orientation@ WHERE a <= 9000;
-DELETE 18000
+DELETE 27000
 
 -- Check current statistics
 SELECT segno, tupcount FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
@@ -68,20 +69,23 @@ RESET gp_appendonly_vacuum_update_stats;
 RESET
 
 -- Check statistics
--- In both the aoseg table and the cache, we expect to see two segment files with 1000 tuples each.
+-- In both the aoseg table and the cache, we expect to see three segment files with 1000 tuples each.
 -- No segments with 10000 tuples or more should be left unvacuumed.
 -- Segment files with 0 tuples are also acceptable.
 SELECT segno, tupcount FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
  segno | tupcount 
 -------+----------
+ 0     | 0        
  1     | 0        
  2     | 1000     
  3     | 0        
  4     | 1000     
-(4 rows)
+ 5     | 1000     
+(6 rows)
 SELECT segno, total_tupcount FROM gp_toolkit.__gp_get_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass) WHERE total_tupcount > 0;
  segno | total_tupcount 
 -------+----------------
  2     | 1000           
  4     | 1000           
-(2 rows)
+ 5     | 1000           
+(3 rows)
