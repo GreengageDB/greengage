@@ -829,7 +829,7 @@ vacuumStatement_Relation(VacuumStmt *vacstmt, Oid relid,
 		 * We have to synchronize master and segment AO statistics
 		 * in case they have been broken.
 		 */
-		if (gp_appendonly_vacuum_update_stats && Gp_role == GP_ROLE_DISPATCH)
+		if (Gp_role == GP_ROLE_DISPATCH)
 		{
 			if (AORelIsHashEntryInUse(relid))
 			{

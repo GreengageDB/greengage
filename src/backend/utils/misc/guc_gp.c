@@ -142,7 +142,6 @@ bool		gp_appendonly_verify_block_checksums = true;
 bool		gp_appendonly_verify_write_block = false;
 bool		gp_appendonly_compaction = true;
 int			gp_appendonly_compaction_threshold = 0;
-bool		gp_appendonly_vacuum_update_stats = false;
 bool		gp_heap_require_relhasoids_match = true;
 bool		gp_local_distributed_cache_stats = false;
 bool		debug_xlog_record_read = false;
@@ -1091,17 +1090,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_appendonly_compaction,
 		true,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"gp_appendonly_vacuum_update_stats", PGC_SUSET, APPENDONLY_TABLES,
-			gettext_noop("Perform synchronization of append-only segment file statistics on vacuum. Might help repair broken statistics after crash."),
-			NULL,
-			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
-		},
-		&gp_appendonly_vacuum_update_stats,
-		false,
 		NULL, NULL, NULL
 	},
 
