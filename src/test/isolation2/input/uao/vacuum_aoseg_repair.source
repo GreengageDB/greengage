@@ -52,9 +52,7 @@ SELECT segno, tupcount FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@
 SELECT gp_toolkit.__gp_remove_ao_entry_from_cache('vacuum_aoseg_repair_@orientation@'::regclass);
 
 -- This VACUUM should fix it
-SET gp_appendonly_vacuum_update_stats = true;
 VACUUM vacuum_aoseg_repair_@orientation@;
-RESET gp_appendonly_vacuum_update_stats;
 
 -- Check statistics
 -- In both the aoseg table and the cache, we expect to see three segment files with 1000 tuples each.

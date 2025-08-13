@@ -61,12 +61,8 @@ SELECT gp_toolkit.__gp_remove_ao_entry_from_cache('vacuum_aoseg_repair_@orientat
 (1 row)
 
 -- This VACUUM should fix it
-SET gp_appendonly_vacuum_update_stats = true;
-SET
 VACUUM vacuum_aoseg_repair_@orientation@;
 VACUUM
-RESET gp_appendonly_vacuum_update_stats;
-RESET
 
 -- Check statistics
 -- In both the aoseg table and the cache, we expect to see three segment files with 1000 tuples each.
