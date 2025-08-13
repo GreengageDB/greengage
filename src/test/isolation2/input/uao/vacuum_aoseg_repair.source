@@ -7,6 +7,12 @@ CREATE TABLE vacuum_aoseg_repair_@orientation@ (a INT, b INT) WITH (appendonly=t
 3: BEGIN;
 1: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
 -- Don't actually insert anything into segment file 2, just allocate it.
+-- We need this to reproduce a situation that VACUUM couldn't fix before:
+-- after creating three segments and breaking statistics for the 3rd, vacuum will
+-- allocate a new segment for insertion, choosing the first empty one.
+-- If all segments have data, 3rd segment will be chosen (due to broken stats)
+-- and the stats will be updated. So we need 2nd segment to be empty, to make
+-- vacuum choose 2nd segment for insertion and ignore the 3rd segment completely.
 2: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT 1 as a, 1 as b LIMIT 0;
 3: INSERT INTO vacuum_aoseg_repair_@orientation@ SELECT i as a, i as b FROM generate_series(1, 10000) AS i;
 1: COMMIT;
