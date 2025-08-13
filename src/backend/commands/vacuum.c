@@ -838,15 +838,7 @@ vacuumStatement_Relation(VacuumStmt *vacstmt, Oid relid,
 			}
 			else
 			{
-				Snapshot appendOnlyMetaDataSnapshot = RegisterSnapshot(GetLatestSnapshot());
-				if (RelationIsAoRows(onerel))
-					gp_update_aorow_master_stats_internal(onerel, appendOnlyMetaDataSnapshot);
-				else
-				{
-					Assert(RelationIsAoCols(onerel));
-					gp_update_aocol_master_stats_internal(onerel, appendOnlyMetaDataSnapshot);
-				}
-				UnregisterSnapshot(appendOnlyMetaDataSnapshot);
+				FunctionCall1(gp_update_ao_master_stats, ObjectIdGetDatum(onerel));
 
 				relation_close(onerel, lmode);
 
