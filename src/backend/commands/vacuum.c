@@ -838,7 +838,7 @@ vacuumStatement_Relation(VacuumStmt *vacstmt, Oid relid,
 			}
 			else
 			{
-				FunctionCall1(gp_update_ao_master_stats, ObjectIdGetDatum(onerel));
+				DirectFunctionCall1(gp_update_ao_master_stats, ObjectIdGetDatum(relid));
 
 				relation_close(onerel, lmode);
 

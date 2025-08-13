@@ -71,7 +71,7 @@ RESET
 -- In both the aoseg table and the cache, we expect to see two segment files with 1000 tuples each.
 -- No segments with 10000 tuples or more should be left unvacuumed.
 -- Segment files with 0 tuples are also acceptable.
-SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
+SELECT segno, tupcount FROM gp_ao_or_aocs_seg('vacuum_aoseg_repair_@orientation@'::regclass);
  segno | tupcount 
 -------+----------
  1     | 0        
