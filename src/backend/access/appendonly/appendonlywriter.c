@@ -880,33 +880,10 @@ SetSegnoForCompaction(Relation rel,
 					  "relation \"%s\" (%d)",
 					  RelationGetRelationName(rel), RelationGetRelid(rel))));
 
-	/*
-	 * On the first call in a vacuum run, get an updated estimate from segno
-	 * 0. We do this before aquiring the AOSegFileLock.
-	 */
-	if (!compactedSegmentFileList)
-	{
-		int64	   *total_tupcount;
-
-		total_tupcount = GetTotalTupleCountFromSegments(rel, 0, NULL);
-		segzero_tupcount = total_tupcount[0];
-		pfree(total_tupcount);
-	}
-
 	acquire_lightweight_lock();
 
 	aoentry = AORelGetOrCreateHashEntry(RelationGetRelid(rel));
 	Assert(aoentry);
-
-	/*
-	 * On the first call in a vacuum run, set the estimated for segno 0
-	 */
-	if (!compactedSegmentFileList)
-	{
-		AOSegfileStatus *segfilestat = &aoentry->relsegfiles[0];
-
-		segfilestat->total_tupcount = segzero_tupcount;
-	}
 
 	/* First: Always check if some segment is awaiting a drop */
 	usesegno = APPENDONLY_COMPACTION_SEGNO_INVALID;
