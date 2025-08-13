@@ -43,5 +43,6 @@ VACUUM
 SELECT segno, tupcount, state FROM gp_ao_or_aocs_seg('foo');
  segno | tupcount | state 
 -------+----------+-------
+ 0     | 0        | 1     
  1     | 2        | 1     
-(1 row)
+(2 rows)
