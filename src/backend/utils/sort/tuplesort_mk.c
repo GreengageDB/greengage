@@ -2885,8 +2885,11 @@ writetup_heap(Tuplesortstate_mk *state, LogicalTape *lt, MKEntry *e)
 		long sortSpaceUsed = 0;
 		
 		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
-		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld	",
-			tuplen, sortMethod, sortSpaceType, sortSpaceUsed);
+		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld, "
+			"sort nkeys=%d, randomAccess=%d, memAllowed=" INT64_FORMAT ", maxTapes=%d, tapeRange=%d",
+			tuplen, sortMethod, sortSpaceType, sortSpaceUsed,
+			state->nKeys,  state->randomAccess, state->memAllowed, state->maxTapes,
+			state->tapeRange);
 	}
 
 	LogicalTapeWrite(state->tapeset, lt, e->ptr, tuplen);
@@ -2925,8 +2928,11 @@ readtup_heap(Tuplesortstate_mk *state, TuplesortPos_mk *pos, MKEntry *e, Logical
 		long sortSpaceUsed = 0;
 		
 		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
-		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld	",
-			len, sortMethod, sortSpaceType, sortSpaceUsed);
+		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld, "
+			"sort nkeys=%d, randomAccess=%d, memAllowed=" INT64_FORMAT ", maxTapes=%d, tapeRange=%d",
+			len, sortMethod, sortSpaceType, sortSpaceUsed,			
+			state->nKeys,  state->randomAccess, state->memAllowed, state->maxTapes,
+			state->tapeRange);
 	}
 
 	MemSet(e, 0, sizeof(MKEntry));
