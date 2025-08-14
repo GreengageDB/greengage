@@ -2910,7 +2910,6 @@ freetup_heap(MKEntry *e)
 	e->ptr = NULL;
 }
 
-
 static void
 readtup_heap(Tuplesortstate_mk *state, TuplesortPos_mk *pos, MKEntry *e, LogicalTape *lt, uint32 len)
 {
@@ -2919,7 +2918,7 @@ readtup_heap(Tuplesortstate_mk *state, TuplesortPos_mk *pos, MKEntry *e, Logical
 
 	Assert(is_under_sort_or_exec_ctxt(state));
 	
-	if (!is_len_memtuplen(len) && (memtuple_size_from_uint32(len) < sizeof(uint32))) 
+	if (!is_len_memtuplen(len) || (memtuple_size_from_uint32(len) <= sizeof(uint32))) 
 	{
 		const char *sortMethod = "";
 		const char *sortSpaceType = "";
