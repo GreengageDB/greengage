@@ -726,7 +726,7 @@ DisconnectAllGangsImpl(bool resetSession, bool needDisconnect)
 
 	/* cleanup all out bound dispatcher state */
 	if (needDisconnect)
-		CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_destroyDispatcherHandle);
+		CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 
 	/* destroy cdb_component_dbs, disconnect all connections with QEs */
 	cdbcomponent_destroyCdbComponents();

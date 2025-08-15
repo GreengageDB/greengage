@@ -546,12 +546,15 @@ AtAbort_DispatcherState(void)
 
 	/*
 	 * Cleanup all outbound dispatcher states belong to
-	 * current resource owner and its children
+	 * current resource owner and its children.
+	 *
+	 * In case of OOM, skip query cancellation since we'll get rid of the gang
+	 * anyway.
 	 */
 	CdbResourceOwnerWalker(CurrentResourceOwner,
-		ERRCODE_TO_CATEGORY(elog_geterrcode()) != ERRCODE_INSUFFICIENT_RESOURCES ?
-		cdbdisp_cleanupDispatcherHandle :
-		cdbdisp_destroyDispatcherHandle);
+						   (elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
+							   ? cdbdisp_destroyDispatcherHandle
+							   : cdbdisp_cleanupDispatcherHandle);
 
 	Assert(open_dispatcher_handles == NULL);
 
