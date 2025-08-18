@@ -2875,10 +2875,7 @@ copytup_heap(Tuplesortstate_mk *state, MKEntry *e, void *tup)
 static long
 writetup_heap(Tuplesortstate_mk *state, LogicalTape *lt, MKEntry *e)
 {
-	uint32		tuplen = memtuple_get_size(e->ptr);
-	long		ret = tuplen;
-
-	if (tuplen <= sizeof(uint32))
+	if (!memtuple_lead_bit_set(e->ptr) || memtuple_get_size(e->ptr) <= sizeof(uint32))
 	{
 		const char *sortMethod = "";
 		const char *sortSpaceType = "";
@@ -2887,10 +2884,13 @@ writetup_heap(Tuplesortstate_mk *state, LogicalTape *lt, MKEntry *e)
 		tuplesort_get_stats_mk(state, &sortMethod, &sortSpaceType, &sortSpaceUsed);
 		elog(ERROR, "invalid tuple len %u. Sort method: %s, space type: %s, space used: %ld, "
 			"sort nkeys=%d, randomAccess=%d, memAllowed=" INT64_FORMAT ", maxTapes=%d, tapeRange=%d",
-			tuplen, sortMethod, sortSpaceType, sortSpaceUsed,
+			memtuple_get_size(e->ptr), sortMethod, sortSpaceType, sortSpaceUsed,
 			state->nKeys,  state->randomAccess, state->memAllowed, state->maxTapes,
 			state->tapeRange);
 	}
+
+	uint32		tuplen = memtuple_get_size(e->ptr);
+	long		ret = tuplen;
 
 	LogicalTapeWrite(state->tapeset, lt, e->ptr, tuplen);
 
