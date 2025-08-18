@@ -110,7 +110,6 @@ test_tuplesort_mk_readtup_heap_fail_len(void **test_state)
 		assert_string_equal(message, expected_message);
 	}
 	assert_true(error_thrown);
-
 }
 
 static void
@@ -203,7 +202,6 @@ test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 	}
 	assert_true(error_thrown);
 }
-
 
 int
 main(int argc, char *argv[])
