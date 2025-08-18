@@ -48,15 +48,18 @@ test_tuplesort_mk_readtup_heap_fail_len(void **test_state)
 		.tapeRange = 468
 	};
 
-	const char *expected_message = "invalid tuple len 0. Sort method: external sort, space type: Disk, space used: 1376256, sort nkeys=42, randomAccess=0, memAllowed=68719476736, maxTapes=42, tapeRange=468";
+	const char *expected_message = 
+		"invalid tuple len 0. Sort method: external sort, space type: Disk, "
+		"space used: 1376256, sort nkeys=42, randomAccess=0, "
+		"memAllowed=68719476736, maxTapes=42, tapeRange=468";
 	char	   *message = NULL;
 	bool		error_thrown = false;
 
 	/* Check zero length */
 	PG_TRY();
 	{
-		readtup_heap(&state, 0 /* pos */ , NULL /* stup */ , NULL /* tape */ , 0		/* len, too small and no
-					   * flag */ );
+		readtup_heap(&state, 0 /* pos */ , NULL /* stup */ , 
+			NULL /* tape */ , 0		/* len, too small and no flag */ );
 	}
 	PG_CATCH();
 	{
@@ -76,7 +79,10 @@ test_tuplesort_mk_readtup_heap_fail_len(void **test_state)
 	}
 	assert_true(error_thrown);
 
-	expected_message = "invalid tuple len 2147483652. Sort method: external sort, space type: Disk, space used: 1376256, sort nkeys=42, randomAccess=0, memAllowed=68719476736, maxTapes=42, tapeRange=468";
+	expected_message = 
+		"invalid tuple len 2147483652. Sort method: external sort, "
+		"space type: Disk, space used: 1376256, sort nkeys=42, randomAccess=0, "
+		"memAllowed=68719476736, maxTapes=42, tapeRange=468";
 	message = NULL;
 	error_thrown = false;
 	state.sortcontext = CurrentMemoryContext;
@@ -84,8 +90,8 @@ test_tuplesort_mk_readtup_heap_fail_len(void **test_state)
 	/* Check uint32 length */
 	PG_TRY();
 	{
-		readtup_heap(&state, 0 /* pos */ , NULL /* stup */ , NULL /* tape */ , sizeof(uint32) | MEMTUP_LEAD_BIT /* len, too small but
-					   * with flag */ );
+		readtup_heap(&state, 0 /* pos */ , NULL /* stup */ , NULL /* tape */ , 
+			sizeof(uint32) | MEMTUP_LEAD_BIT /* len, too small but with flag */);
 	}
 	PG_CATCH();
 	{
@@ -112,7 +118,7 @@ test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 {
 	gp_debug_linger = 0;
 
-	elog(LOG, "Running test: readtup_heap_fail_len");
+	elog(LOG, "Running test: writetup_heap_fail_len");
 
 	struct LogicalTapeSet lts = {.nFileBlocks = 42 * 1024};
 
@@ -127,7 +133,10 @@ test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 		.tapeRange = 468
 	};
 
-	const char *expected_message = "invalid tuple len 0. Sort method: external sort, space type: Disk, space used: 1376256, sort nkeys=42, randomAccess=0, memAllowed=68719476736, maxTapes=42, tapeRange=468";
+	const char *expected_message = 
+		"invalid tuple len 0. Sort method: external sort, space type: Disk, "
+		"space used: 1376256, sort nkeys=42, randomAccess=0, "
+		"memAllowed=68719476736, maxTapes=42, tapeRange=468";
 	char	   *message = NULL;
 	bool		error_thrown = false;
 
@@ -163,7 +172,10 @@ test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 	assert_true(error_thrown);
 
 	mtup.PRIVATE_mt_len = MEMTUP_LEAD_BIT | sizeof(uint32);
-	expected_message = "invalid tuple len 0. Sort method: external sort, space type: Disk, space used: 1376256, sort nkeys=42, randomAccess=0, memAllowed=68719476736, maxTapes=42, tapeRange=468";
+	expected_message = 
+		"invalid tuple len 0. Sort method: external sort, space type: Disk, "
+		"space used: 1376256, sort nkeys=42, randomAccess=0, "
+		"memAllowed=68719476736, maxTapes=42, tapeRange=468";
 	message = NULL;
 	error_thrown = false;
 	state.sortcontext = CurrentMemoryContext;
