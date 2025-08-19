@@ -764,8 +764,10 @@ static const pgsql_thing_t words_after_create[] = {
 	{"FOREIGN DATA WRAPPER", NULL, NULL},
 	{"FOREIGN TABLE", NULL, NULL},
 	{"FUNCTION", NULL, &Query_for_list_of_functions},
+	{"GLOBAL TEMPORARY", NULL, NULL},
 	{"GROUP", Query_for_list_of_roles},
 	{"LANGUAGE", Query_for_list_of_languages},
+	{"LOCAL TEMPORARY", NULL, NULL},
 	{"INDEX", NULL, &Query_for_list_of_indexes},
 	{"MATERIALIZED VIEW", NULL, NULL},
 	{"OPERATOR", NULL, NULL},	/* Querying for this is probably not such a
@@ -814,6 +816,10 @@ static PGresult *exec_query(const char *query);
 
 static void get_previous_words(int point, char **previous_words, int nwords);
 static bool ends_with_paren(const char *word);
+static bool previous_words_match(char *previous_words[], int n_expected, ...);
+static int extract_column_list(char **previous_words,
+							int nwords, char ***column_list);
+static char *strdup_range(const char *start, const char *end);
 
 #ifdef NOT_USED
 static char *quote_file_name(char *text, int match_type, char *quote_pointer);
@@ -841,6 +847,9 @@ initialize_readline(void)
 }
 
 
+/* Max number of previous words scanned for completion context. */
+enum { LOOKBACK_LIMIT = 20 };
+
 /*
  * The completion function.
  *
@@ -856,7 +865,7 @@ psql_completion(const char *text, int start, int end)
 	char	  **matches = NULL;
 
 	/* This array will contain some scannage of the input line. */
-	char	   *previous_words[6];
+	char	   *previous_words[LOOKBACK_LIMIT];
 
 	/* For compactness, we use these macros to reference previous_words[]. */
 #define prev_wd   (previous_words[0])
@@ -1897,7 +1906,7 @@ psql_completion(const char *text, int start, int end)
 	else if (pg_strcasecmp(prev_wd, "COMMIT") == 0)
 	{
 		static const char *const list_COMMIT[] =
-		{"WORK", "TRANSACTION", "PREPARED", NULL};
+		{"WORK", "TRANSACTION", "PREPARED", "PRESERVE ROWS", "DELETE ROWS", "DROP", NULL};
 
 		COMPLETE_WITH_LIST(list_COMMIT);
 	}
@@ -2271,6 +2280,60 @@ psql_completion(const char *text, int start, int end)
 		{"TABLE", "MATERIALIZED VIEW", NULL};
 
 		COMPLETE_WITH_LIST(list_UNLOGGED);
+	}
+	/* Complete "DISTRIBUTED" with BY( | RANDOMLY | REPLICATED */
+	else if (pg_strcasecmp(prev_wd, "DISTRIBUTED") == 0)
+	{
+		static const char *const list_DISTRIBUTED[] = {"BY(", "RANDOMLY", "REPLICATED"};
+		COMPLETE_WITH_LIST(list_DISTRIBUTED);
+	}
+	/* DISTRIBUTED BY (...). Suggest table column names inside parentheses */
+	else if (pg_strcasecmp(prev3_wd, "DISTRIBUTED") == 0 &&
+			 pg_strcasecmp(prev2_wd, "BY") == 0 &&
+			 !ends_with_paren(prev_wd))
+	{
+		char **cols = NULL;
+		int ncols = extract_column_list(previous_words, LOOKBACK_LIMIT, &cols);
+
+		if (ncols > 0)
+			COMPLETE_WITH_LIST(cols);
+
+		for (int i = 0; i < ncols; ++i) free(cols[i]);
+		free(cols);
+	}
+	/* Complete PARTITION BY with LIST( | RANGE( | SUBPARTITION */
+	else if (pg_strcasecmp(prev2_wd, "PARTITION") == 0 &&
+			 pg_strcasecmp(prev_wd, "BY") == 0)
+	{
+		static const char *const list_PARTITION_BY[] = {"LIST(", "RANGE(", "SUBPARTITION"};
+		COMPLETE_WITH_LIST(list_PARTITION_BY);
+	}
+	/* Complete SUBPARTITION with BY | TEMPLATE */
+	else if (pg_strcasecmp(prev_wd, "SUBPARTITION") == 0)
+	{
+		static const char *const list_SUBPARTITION[] = {"BY", "TEMPLATE"};
+		COMPLETE_WITH_LIST(list_SUBPARTITION);
+	}
+	/* Complete SUBPARTITION BY with LIST( | RANGE( */
+	else if (pg_strcasecmp(prev2_wd, "SUBPARTITION") == 0 &&
+			 pg_strcasecmp(prev_wd, "BY") == 0)
+	{
+		static const char *const list_SUBPARTITION_BY[] = {"LIST(", "RANGE("};
+		COMPLETE_WITH_LIST(list_SUBPARTITION_BY);
+	}
+	/* Complete CREATE TABLE with common clause options */
+	else if (previous_words_match(previous_words, 2, "CREATE", "TABLE"))
+	{
+		static const char *const list_TEMP[] = {
+			"IF NO EXISTS",
+			"INHERITS(",
+			"WITH(",
+			"ON COMMIT",
+			"TABLESPACE",
+			"DISTRIBUTED",
+			"PARTITION BY"
+		};
+		COMPLETE_WITH_LIST(list_TEMP);
 	}
 
 /* CREATE TABLESPACE */
@@ -3574,21 +3637,6 @@ psql_completion(const char *text, int start, int end)
 		completion_charp = "\\";
 		matches = completion_matches(text, complete_from_files);
 	}
-	/* Complete `CREATE TABLE` with `DISTRIBUTED` keyword after table's column list */
-	else if (pg_strcasecmp(prev4_wd, "CREATE") == 0 &&
-			 pg_strcasecmp(prev3_wd, "TABLE") == 0 &&
-			 ends_with_paren(prev_wd))
-	{
-		COMPLETE_WITH_CONST("DISTRIBUTED");
-	}
-	/* Complete `DISTRIBUTED` with `BY(`, `REPLICATED`, or `RANDOMLY` */
-	else if (pg_strcasecmp(prev_wd, "DISTRIBUTED") == 0)
-	{
-		static const char *const distributed_clause_options[] =
-		{"BY(", "REPLICATED", "RANDOMLY", NULL};
-
-		COMPLETE_WITH_LIST_CS(distributed_clause_options);
-	}
 
 	/*
 	 * Finally, we look through the list of "things", such as TABLE, INDEX and
@@ -4273,6 +4321,137 @@ ends_with_paren(const char *word)
     if (!word || (len = strlen(word)) == 0)
         return false;
     return word[len - 1] == ')';
+}
+
+/*
+ * Return true if all keys appear in previous_words[] in SQL order.
+ * previous_words[0] is closest to the cursor, so we scan from the far end.
+ * NULL/empty entries are skipped. Case-insensitive compare via pg_strcasecmp().
+ */
+static bool
+previous_words_match(char *previous_words[], int n_expected, ...)
+{
+	va_list args;
+	int word_index = LOOKBACK_LIMIT - 1;
+
+	va_start(args, n_expected);
+
+	for (int key_index = 0; key_index < n_expected; key_index++)
+	{
+		const char *expected_word = va_arg(args, const char *);
+		bool found = false;
+
+		while (word_index >= 0)
+		{
+			const char *candidate_word = previous_words[word_index--];
+
+			bool matches = (candidate_word &&
+							*candidate_word != '\0' &&
+							pg_strcasecmp(candidate_word, expected_word) == 0);
+
+			if (matches)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			va_end(args);
+			return false;
+		}
+	}
+
+	va_end(args);
+	return true;
+}
+
+/*
+ * Extract column names from the last parenthesized word in previous_words[].
+ * Returns number of columns found; column_list contains malloc'ed strings.
+ */
+static int
+extract_column_list(char **previous_words, int nwords, char ***column_list)
+{
+	*column_list = NULL;
+
+	/* Find the last word containing both '(' and ')' */
+	const char *paren = NULL;
+	for (int i = nwords - 1; i >= 0; --i) {
+		const char *w = previous_words[i];
+		if (!w) continue;
+		const char *lp = strchr(w, '(');
+		const char *rp = strrchr(w, ')');
+		if (lp && rp && rp > lp + 1) { paren = w; break; }
+	}
+	if (!paren) return 0;
+
+	/* Extract substring inside parentheses */
+	const char *lp = strchr(paren, '(');
+	const char *rp = strrchr(paren, ')');
+	const char *inside = lp + 1;
+	size_t inside_len = (size_t)(rp - inside);
+
+	/* Copy inside to temporary buffer for splitting by commas */
+	char *buf = (char *)malloc(inside_len + 1);
+	if (!buf) return 0;
+	memcpy(buf, inside, inside_len);
+	buf[inside_len] = '\0';
+
+	/* Upper bound for number of columns = commas + 1 */
+	int max_items = 1;
+	for (const char *p = buf; *p; ++p) if (*p == ',') ++max_items;
+
+	char **items = (char **)calloc((size_t)max_items, sizeof(char *));
+	if (!items) { free(buf); return 0; }
+
+	/* Split by commas and take first word (trim leading spaces) */
+	int count = 0;
+	char *saveptr = NULL;
+	for (char *tok = strtok_r(buf, ",", &saveptr);
+			tok != NULL;
+			tok = strtok_r(NULL, ",", &saveptr))
+	{
+		/* Trim leading spaces */
+		while (*tok && isspace((unsigned char)*tok)) ++tok;
+
+		/* Take until first whitespace */
+		char *end = tok;
+		while (*end && !isspace((unsigned char)*end)) ++end;
+
+		if (end > tok) {
+			items[count] = strdup_range(tok, end);
+			if (items[count]) ++count;
+		}
+	}
+
+	free(buf);
+
+	if (count == 0) {
+		free(items);
+		return 0;
+	}
+
+	*column_list = items;
+	return count;
+}
+
+/*
+ * Return a malloc'ed copy of substring between start and end pointers.
+ */
+static char *
+strdup_range(const char *start, const char *end)
+	{
+	size_t len = end - start;
+	char *result = (char *) malloc(len + 1);
+
+	if (!result)
+		return NULL;
+
+	memcpy(result, start, len);
+	result[len] = '\0';
+	return result;
 }
 
 #ifdef NOT_USED
