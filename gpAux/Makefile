@@ -346,18 +346,33 @@ endif
 # Packaging targets with changelog options
 #---------------------------------------------------------------------
 
-# Changelog generation pseudo-targets
-last-tag: ; @:		# Pseudo-target for --last-tag option
-all-commits: ; @:	# Pseudo-target for --all-commits option
+# Get current git info
+GIT_VERSION := $(shell git describe --tags --always 2>/dev/null || echo "0.0.1-unknown")
+GIT_TAG := $(shell git tag --points-at HEAD 2>/dev/null | head -n1)
+MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
+DATE_RFC := $(shell date -R)
+
+# Determine if this is a release build (tagged commit)
+IS_RELEASE := $(if $(GIT_TAG),yes,no)
+STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable)
+BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build)
 
 changelog : changelog-deb
 changelog-deb:
-	@echo "Creating CHANGELOG"
-	@../ci/scripts/git2changelog deb \
-	  $(if $(filter last-tag,$(MAKECMDGOALS)),--last-tag) \
-	  $(if $(filter all-commits,$(MAKECMDGOALS)),--all-commits) \
-	  > debian/changelog 2> debian/changelog_errors.log
-	@head debian/changelog
+	@echo "Creating minimal changelog stub"
+	@if [ "$(IS_RELEASE)" = "yes" ]; then \
+		echo "gpdb ($(GIT_TAG)) $(STABILITY); urgency=low" > debian/changelog; \
+	else \
+		echo "gpdb ($(GIT_VERSION)) $(STABILITY); urgency=low" > debian/changelog; \
+	fi
+	@echo "" >> debian/changelog
+	@echo "  * $(BUILD_TYPE)" >> debian/changelog
+	@echo "" >> debian/changelog
+	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> debian/changelog
+	@echo "" >> debian/changelog
+	@head -10 debian/changelog
+
+.PHONY: changelog changelog-deb
 
 # Default packaging target
 pkg : pkg-deb
