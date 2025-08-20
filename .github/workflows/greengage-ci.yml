@@ -120,10 +120,9 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  # ReBuild prod-redy version without debug extensions and pack it to deb
+  # Rebuild prod-redy version without debug extensions and pack it to deb
   package:
     if: github.event_name == 'push'  # For push to main or tags
-    needs: build
     strategy:
       fail-fast: false
       matrix:
