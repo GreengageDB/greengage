@@ -35,8 +35,7 @@
 static int numNonExtendedDispatcherState = 0;
 
 dispatcher_handle_t *open_dispatcher_handles;
-static void cleanup_dispatcher_handle(dispatcher_handle_t *h,
-									  bool only_destroy);
+static void cleanup_dispatcher_handle(dispatcher_handle_t *h);
 
 static dispatcher_handle_t *find_dispatcher_handle(CdbDispatcherState *ds);
 static dispatcher_handle_t *allocate_dispatcher_handle(void);
@@ -365,18 +364,21 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 
 	if (!ds)
 		return;
-#ifdef USE_ASSERT_CHECKING
+
 	/*
-	 * Disallow re-entrance. It may occur in case of OOM and recursive
-	 * AbortTransaction() calls.
+	 * IMPORTANT:
+	 * If we're encountered forceDestroyGang flag, we're not allowed to allocate
+	 * any more memory or use elog(ERROR) down below.
 	 */
-	Assert(!ds->isGangDestroying || elog_geterrcode() != 0);
+
+#ifdef USE_ASSERT_CHECKING
+	Assert(!ds->isGangDestroying || ds->forceDestroyGang);
 	ds->isGangDestroying = true;
 #endif
 
 	if (!ds->isExtendedQuery)
 	{
-		numNonExtendedDispatcherState--;	
+		numNonExtendedDispatcherState--;
 		Assert(numNonExtendedDispatcherState == 0);
 	}
 
@@ -402,9 +404,7 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	 */
 	foreach(lc, ds->allocatedGangs)
 	{
-		Gang *gp = lfirst(lc);
-
-		RecycleGang(gp, ds->forceDestroyGang);
+		RecycleGang(lfirst(lc), ds->forceDestroyGang);
 	}
 
 	ds->allocatedGangs = NIL;
@@ -512,7 +512,7 @@ find_dispatcher_handle(CdbDispatcherState *ds)
 }
 
 static void
-cleanup_dispatcher_handle(dispatcher_handle_t *h, bool only_destroy)
+cleanup_dispatcher_handle(dispatcher_handle_t *h)
 {
 	if (h->dispatcherState == NULL)
 	{
@@ -520,10 +520,7 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h, bool only_destroy)
 		return;
 	}
 
-	if (only_destroy)
-		h->dispatcherState->forceDestroyGang = true;
-	else
-		cdbdisp_cancelDispatch(h->dispatcherState);
+	h->dispatcherState->forceDestroyGang = true;
 
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }
@@ -551,10 +548,7 @@ AtAbort_DispatcherState(void)
 	 * In case of OOM, skip query cancellation since we'll get rid of the gang
 	 * anyway.
 	 */
-	CdbResourceOwnerWalker(CurrentResourceOwner,
-						   (elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
-							   ? cdbdisp_destroyDispatcherHandle
-							   : cdbdisp_cleanupDispatcherHandle);
+	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 
 	Assert(open_dispatcher_handles == NULL);
 
@@ -564,7 +558,7 @@ AtAbort_DispatcherState(void)
 	 */
 	if (currentGxactWriterGangLost())
 	{
-		DestroyAllGangs(true);
+		DisconnectAndDestroyAllGangs(true);
 		CheckForResetSession();
 	}
 }
@@ -584,9 +578,9 @@ AtSubAbort_DispatcherState(void)
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 }
 
-static void
-cleanup_open_dispatcher_handles(const struct ResourceOwnerData *owner,
-								bool only_destroy)
+/* Cancel the queries and ask the gang to stop. */
+void
+cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
 {
 	dispatcher_handle_t *curr;
 	dispatcher_handle_t *next;
@@ -598,22 +592,8 @@ cleanup_open_dispatcher_handles(const struct ResourceOwnerData *owner,
 		next = curr->next;
 
 		if (curr->owner == owner)
-		{
-			cleanup_dispatcher_handle(curr, only_destroy);
-		}
+			cleanup_dispatcher_handle(curr);
 	}
-}
-
-void
-cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
-{
-	cleanup_open_dispatcher_handles(owner, false);
-}
-
-void
-cdbdisp_destroyDispatcherHandle(const struct ResourceOwnerData *owner)
-{
-	cleanup_open_dispatcher_handles(owner, true);
 }
 
 /*

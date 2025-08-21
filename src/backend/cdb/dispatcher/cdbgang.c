@@ -714,43 +714,6 @@ getCdbProcessesForQD(int isPrimary)
 	return list;
 }
 
-static void
-DisconnectAllGangsImpl(bool resetSession, bool needDisconnect)
-{
-	/* Destroy CurrentGangCreating before GangContext is reset */
-	if (CurrentGangCreating != NULL)
-	{
-		RecycleGang(CurrentGangCreating, true);
-		CurrentGangCreating = NULL;
-	}
-
-	/* cleanup all out bound dispatcher state */
-	if (needDisconnect)
-		CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
-
-	/* destroy cdb_component_dbs, disconnect all connections with QEs */
-	cdbcomponent_destroyCdbComponents();
-
-	if (resetSession)
-		resetSessionForPrimaryGangLoss();
-}
-
-/*
- * This function is used for case when we should just free memory (without any
- * additional allocations) by not checking the query result and aborting the
- * gang.
- */
-void
-DestroyAllGangs(bool resetSession)
-{
-	if (Gp_role == GP_ROLE_UTILITY)
-		return;
-
-	ELOG_DISPATCHER_DEBUG("DestroyAllGangs");
-	DisconnectAllGangsImpl(resetSession, false);
-	ELOG_DISPATCHER_DEBUG("DestroyAllGangs done");
-}
-
 /*
  * This function should not be used in the context of named portals
  * as it destroys the CdbComponentsContext, which is accessed later
@@ -763,7 +726,24 @@ DisconnectAndDestroyAllGangs(bool resetSession)
 		return;
 
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs");
-	DisconnectAllGangsImpl(resetSession, true);
+
+	/* Destroy CurrentGangCreating before GangContext is reset */
+	if (CurrentGangCreating != NULL)
+	{
+		RecycleGang(CurrentGangCreating, true);
+		CurrentGangCreating = NULL;
+	}
+
+	/* cleanup all out bound dispatcher state */
+	CdbResourceOwnerWalker(CurrentResourceOwner,
+						   cdbdisp_cleanupDispatcherHandle);
+
+	/* destroy cdb_component_dbs, disconnect all connections with QEs */
+	cdbcomponent_destroyCdbComponents();
+
+	if (resetSession)
+		resetSessionForPrimaryGangLoss();
+
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs done");
 }
 
@@ -1045,29 +1025,23 @@ GangOK(Gang *gp)
 void
 RecycleGang(Gang *gp, bool forceDestroy)
 {
-	int i;
+	int			i;
 
 	if (!gp)
 		return;
-	/*
-	 *
-	 * Callers of RecycleGang should not throw ERRORs by design. This is
-	 * because RecycleGang is not re-entrant: For example, an ERROR could be
-	 * thrown whilst the gang's segdbDesc is already freed. This would cause
-	 * RecycleGang to be called again during abort processing, giving rise to
-	 * potential double freeing of the gang's segdbDesc.
-	 *
-	 * Thus, we hold off interrupts until the gang is fully cleaned here to prevent
-	 * throwing an ERROR here.
-	 *
-	 * details See github issue: https://github.com/GreengageDB/greengage/issues/13393
-	 */
+
 	HOLD_INTERRUPTS();
+
 	/*
 	 * Loop through the segment_database_descriptors array and, for each
 	 * SegmentDatabaseDescriptor: 1) discard the query results (if any), 2)
 	 * disconnect the session, and 3) discard any connection error message.
+	 *
+	 * In case of forceDestroy, just free the segment database descriptors.
+	 * We shouldn't try anything more, since there might not be enough memory
+	 * or resources.
 	 */
+
 #ifdef FAULT_INJECTOR
 	/*
 	 * select * from gp_segment_configuration a, t13393,
@@ -1083,6 +1057,7 @@ RecycleGang(Gang *gp, bool forceDestroy)
 		CHECK_FOR_INTERRUPTS();
 	}
 #endif
+
 	for (i = 0; i < gp->size; i++)
 	{
 		SegmentDatabaseDescriptor *segdbDesc = gp->db_descriptors[i];
@@ -1091,6 +1066,7 @@ RecycleGang(Gang *gp, bool forceDestroy)
 
 		cdbcomponent_recycleIdleQE(segdbDesc, forceDestroy);
 	}
+
 	RESUME_INTERRUPTS();
 }
 

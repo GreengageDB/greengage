@@ -959,7 +959,7 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 			if (SIMPLE_FAULT_INJECTOR("cdb_freelist_append_oom") == FaultInjectorTypeSkip)
 			{
 				ereport(ERROR, (errcode(ERRCODE_GP_MEMPROT_KILL),
-						errmsg("Out of memory was emulated")));
+								errmsg("out of memory was emulated")));
 			}
 #endif
 			lappend_cell(segdbDesc->segment_database_info->freelist,
@@ -980,7 +980,12 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 
 destroy_segdb:
 
-	cdbconn_termSegmentDescriptor(segdbDesc);
+	/*
+	 * Critical section. No memory allocations or elog(ERROR) calls are
+	 * allowed here!
+	 */
+
+	cdbconn_freeSegmentDescriptor(segdbDesc);
 
 	if (isWriter)
 	{

@@ -205,7 +205,6 @@ bool cdbdisp_checkForCancel(CdbDispatcherState * ds);
 int cdbdisp_getWaitSocketFd(CdbDispatcherState *ds);
 
 void cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData * owner);
-void cdbdisp_destroyDispatcherHandle(const struct ResourceOwnerData * owner);
 
 void AtAbort_DispatcherState(void);
 

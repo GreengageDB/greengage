@@ -61,6 +61,9 @@ SegmentDatabaseDescriptor *
 
 cdbconn_createSegmentDescriptor(struct CdbComponentDatabaseInfo  *cdbinfo, int identifier, bool isWriter);
 
+void
+cdbconn_freeSegmentDescriptor(SegmentDatabaseDescriptor *segdbDesc);
+
 /* Free all memory owned by a segment descriptor. */
 void
 cdbconn_termSegmentDescriptor(SegmentDatabaseDescriptor *segdbDesc);
