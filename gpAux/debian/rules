@@ -22,12 +22,11 @@ override_dh_auto_clean:
 	@echo "Skipping clean"
 
 override_dh_auto_build:
-	@echo "Skipping autobuild"
+	@echo Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR)"
+	$(MAKE) dist GPROOT="$(GPROOT)" GPDIR="$(GPDIR)"
 
 override_dh_auto_install:
-	@echo "=== COPY build/ TO debian/gpdb ==="
-	mkdir -p debian/gpdb
-	cp -a build/* debian/gpdb/
+	@echo Files already in place"
 
 override_dh_gencontrol:
 	dh_gencontrol -pgpdb -- -VpythonRequires="$(DEPS)"
