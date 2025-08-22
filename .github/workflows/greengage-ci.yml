@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: true  # Stop on any failure in the matrix
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -106,7 +106,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -126,7 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_os: [ubuntu] #, centos]
+        target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
