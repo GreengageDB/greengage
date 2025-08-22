@@ -24,3 +24,9 @@ Depends: ${shlibs:Depends},
 Conflicts: gpdb-loaders,
 	 python-is-python3
 Description: Greengage MPP database engine
+	Greengage Database (GPDB) is an advanced, fully featured, open
+	source data warehouse, based on PostgreSQL. It provides powerful and rapid analytics on
+	petabyte scale data volumes. Uniquely geared toward big data
+	analytics, Greengage Database is powered by the world’s most advanced
+	cost-based query optimizer delivering high analytical query
+	performance on large data volumes.
