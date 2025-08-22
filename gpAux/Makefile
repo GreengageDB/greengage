@@ -378,12 +378,12 @@ changelog-deb:
 pkg : pkg-deb
 
 # Build Debian package
-pkg-deb : GPROOT ?= $(CURDIR)/debian/gpdb/usr/lib
-pkg-deb : GPDIR ?= gpdb
+pkg-deb : GPROOT=$(CURDIR)/build/usr/lib
+pkg-deb : GPDIR=gpdb
+pkg-deb : dist
 pkg-deb : changelog-deb
-	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR)"
 	@echo "Debian packages built in parent directory."
-	GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" debuild -us -uc -b
+	@debuild -us -uc -b
 
 #---------------------------------------------------------------------
 # clientTools
