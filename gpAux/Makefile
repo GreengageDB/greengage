@@ -383,7 +383,6 @@ pkg : pkg-deb
 
 # Build Debian package
 pkg-deb : GPROOT ?= /usr/lib
-pkg-deb : GPDIR  ?= gpdb
 pkg-deb : debian/gpdb.install debian/changelog
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), CONFIGFLAGS=$(CONFIGFLAGS)"
 	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" debuild --preserve-envvar=GPROOT --preserve-envvar=GPDIR -us -uc -b
