@@ -346,44 +346,49 @@ endif
 # Packaging targets with changelog options
 #---------------------------------------------------------------------
 
-# Get current git info
-GIT_VERSION := $(shell git describe --tags --always 2>/dev/null || echo "0.0.1-unknown")
-GIT_TAG := $(shell git tag --points-at HEAD 2>/dev/null | head -n1)
+../VERSION:
+	../getversion > $@
+	
+version-vars: ../VERSION
+	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
+	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
+	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
+	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
+	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
+
+debian/gpdb.install: version-vars
+	@echo "$(patsubst /%,%,$(GPROOT))/$(GPDIR)/* $(patsubst /%,%,$(GPROOT))/$(GPDIR)/" > $@
+
+# Get other metadata
 MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 DATE_RFC := $(shell date -R)
 
-# Determine if this is a release build (tagged commit)
-IS_RELEASE := $(if $(GIT_TAG),yes,no)
-STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable)
-BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build)
+changelog : debian/changelog
+debian/changelog: version-vars
+	@echo "gpdb ($(PACKAGE_VERSION)) $(STABILITY); urgency=low" > $@
+	@echo "" >> $@
+	@echo "  * $(BUILD_TYPE)" >> $@
+	@echo "" >> $@
+	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> $@
 
-changelog : changelog-deb
-changelog-deb:
-	@echo "Creating minimal changelog stub"
-	@if [ "$(IS_RELEASE)" = "yes" ]; then \
-		echo "gpdb ($(GIT_TAG)) $(STABILITY); urgency=low" > debian/changelog; \
-	else \
-		echo "gpdb ($(GIT_VERSION)) $(STABILITY); urgency=low" > debian/changelog; \
-	fi
-	@echo "" >> debian/changelog
-	@echo "  * $(BUILD_TYPE)" >> debian/changelog
-	@echo "" >> debian/changelog
-	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> debian/changelog
-	@echo "" >> debian/changelog
-	@head -10 debian/changelog
-
-.PHONY: changelog changelog-deb
+version-info: version-vars
+	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
+	@echo "FULL_VERSION: $(FULL_VERSION)"
+	@echo "IS_RELEASE: $(IS_RELEASE)"
+	@echo "STABILITY: $(STABILITY)"
+	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Default packaging target
 pkg : pkg-deb
 
 # Build Debian package
-pkg-deb : GPROOT=$(CURDIR)/build/usr/lib
-pkg-deb : GPDIR=gpdb
-pkg-deb : dist
-pkg-deb : changelog-deb
-	@echo "Debian packages built in parent directory."
-	@debuild -us -uc -b
+pkg-deb : GPROOT ?= /usr/lib
+pkg-deb : GPDIR  ?= gpdb
+pkg-deb : debian/gpdb.install debian/changelog
+	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), CONFIGFLAGS=$(CONFIGFLAGS)"
+	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" debuild --preserve-envvar=GPROOT --preserve-envvar=GPDIR -us -uc -b
+
+.PHONY: pkg pkg-deb changelog version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools
