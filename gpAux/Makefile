@@ -356,7 +356,7 @@ version-vars: ../VERSION
 	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
 
-debian/gpdb.install: version-vars
+debian/install: version-vars
 	@echo "$(patsubst /%,%,$(GPROOT))/$(GPDIR)/* $(patsubst /%,%,$(GPROOT))/$(GPDIR)/" > $@
 
 # Get other metadata
@@ -383,7 +383,7 @@ pkg : pkg-deb
 
 # Build Debian package
 pkg-deb : GPROOT ?= /usr/lib
-pkg-deb : debian/gpdb.install debian/changelog
+pkg-deb : debian/install debian/changelog
 	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), CONFIGFLAGS=$(CONFIGFLAGS)"
 	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" debuild --preserve-envvar=GPROOT --preserve-envvar=GPDIR -us -uc -b
 
