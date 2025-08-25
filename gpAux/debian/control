@@ -16,10 +16,6 @@ Depends: ${shlibs:Depends},
 	 rsync,
 	 zip,
 	 net-tools,
-	 less,
-	 iproute2,
-	 perl,
-	 libaprutil1,
 	 ${pythonRequires}
 Conflicts: gpdb-loaders,
 	 python-is-python3
