@@ -8,6 +8,7 @@ This file defines the interface that can be used to
    interface with the fault prober
 
 """
+from __future__ import absolute_import
 import os
 
 from gppylib.gplog import *

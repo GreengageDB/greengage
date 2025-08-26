@@ -16,6 +16,7 @@
 #
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
+from __future__ import absolute_import
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
@@ -307,7 +308,7 @@ class GpRecoverSegmentProgram:
                     if h.strip() not in uniqueHosts:
                         uniqueHosts.append(h.strip())
                 self.__options.newRecoverHosts = uniqueHosts
-            except Exception, ex:
+            except Exception as ex:
                 raise ProgramArgumentValidationException( \
                     "Invalid value for recover hosts: %s" % ex)
 

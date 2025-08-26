@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import sys
 import signal
 from contextlib import closing
@@ -158,7 +159,7 @@ class GpSegmentRebalanceOperation:
                 sys.argv = original_sys_args
                 self.logger.info("==============================END ANOTHER RECOVER==========================================")
 
-        except Exception, ex:
+        except Exception as ex:
             raise ex
         finally:
             pool.join()

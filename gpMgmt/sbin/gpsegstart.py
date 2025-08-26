@@ -10,6 +10,7 @@ Internal Use Function.
 """
 
 # THIS IMPORT MUST COME FIRST
+from __future__ import absolute_import
 from gppylib.mainUtils import simple_main, addStandardLoggingAndHelpOptions
 
 import os, pickle, base64, time

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
+from __future__ import print_function
 import unittest
 import sys
 import os
@@ -28,7 +30,7 @@ except ImportError:
         sys.stderr.write(str(errorMsg))
         sys.exit(2)
 except Exception as e:
-    print(repr(e))
+    print((repr(e)))
     errorMsg = "gpload was unable to import The PyGreSQL Python module (pg.py) - %s\n" % str(e)
     sys.stderr.write(str(errorMsg))
     errorMsg = "Please check if you have the correct Visual Studio redistributable package installed.\n"
@@ -39,7 +41,7 @@ def get_port_from_conf():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
     if os.path.isfile(file):
         with open(file) as f:
-            for line in f.xreadlines():
+            for line in f:
                 match = re.search('port=\d+',line)
                 if match:
                     match1 = re.search('\d+', match.group())
@@ -433,7 +435,7 @@ def modify_sql_file(num):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file,inplace=1):
             line = line.replace("gpload.py ","gpload ")
-            print (str(re.sub('\n','',line)))
+            print((str(re.sub('\n','',line))))
 
 def copy_data(source='',target=''):
     cmd = 'cp '+ mkpath('data/' + source) + ' ' + mkpath(target)
@@ -451,7 +453,7 @@ def get_table_name():
                   )
     except Exception as e:
         errorMessage = str(e)
-        print ('could not connect to database: ' + errorMessage)
+        print(('could not connect to database: ' + errorMessage))
     queryString = """SELECT sch.table_schema, cls.relname
                      FROM pg_class AS cls, information_schema.tables AS sch
                      WHERE
@@ -473,7 +475,7 @@ def drop_tables():
                   )
     except Exception as e:
         errorMessage = str(e)
-        print ('could not connect to database: ' + errorMessage)
+        print(('could not connect to database: ' + errorMessage))
 
     tableList = get_table_name()
     for i in tableList:

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import os
 import base64
 import pickle
@@ -43,7 +44,7 @@ def cleanup_pg_hba_backup(data_dirs_list):
             logger.info('Removing pg_hba.conf backup file %s' % backup_file)
             if os.path.exists(backup_file):
                 os.remove(backup_file)
-    except Exception, ex:
+    except Exception as ex:
         logger.error('Unable to cleanup backup of pg_hba.conf %s' % ex)
 
 def cleanup_pg_hba_backup_on_segment(gparr):
@@ -126,7 +127,7 @@ def backup_pg_hba(data_dirs_list):
             logger.info('Backing up pg_hba.conf for %s' % data_dir)
             # back it up
             os.system('cp %s/pg_hba.conf %s/%s'% (data_dir, data_dir, PG_HBA_BACKUP))
-    except Exception, ex:
+    except Exception as ex:
         raise Exception('Failed to backup pg_hba.config file %s' % ex)
 
 def update_pg_hba(standby_pg_hba_info, data_dirs_list):

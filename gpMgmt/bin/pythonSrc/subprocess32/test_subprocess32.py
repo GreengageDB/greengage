@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import unittest
 from test import test_support
 import subprocess32
@@ -163,7 +165,7 @@ class ProcessTestCase(BaseTestCase):
         try:
             subprocess.check_call([sys.executable, "-c",
                                    "import sys; sys.exit(47)"])
-        except subprocess.CalledProcessError, c:
+        except subprocess.CalledProcessError as c:
             self.assertEqual(c.returncode, 47)
 
     def test_check_output(self):
@@ -177,7 +179,7 @@ class ProcessTestCase(BaseTestCase):
         try:
             subprocess.check_output(
                     [sys.executable, "-c", "import sys; sys.exit(5)"])
-        except subprocess.CalledProcessError, c:
+        except subprocess.CalledProcessError as c:
             self.assertEqual(c.returncode, 5)
 
     def test_check_output_stderr(self):
@@ -194,7 +196,7 @@ class ProcessTestCase(BaseTestCase):
                     [sys.executable, "-c", "print 'will not be run'"],
                     stdout=sys.stdout)
             self.fail("Expected ValueError when stdout arg supplied.")
-        except ValueError, c:
+        except ValueError as c:
             self.assertIn('stdout', c.args[0])
 
     def test_check_output_timeout(self):
@@ -206,7 +208,7 @@ class ProcessTestCase(BaseTestCase):
                      "sys.stdout.flush()\n"
                      "while True: pass"],
                     timeout=0.5)
-        except subprocess.TimeoutExpired, exception:
+        except subprocess.TimeoutExpired as exception:
             self.assertEqual(exception.output, 'BDFL')
         else:
             self.fail("Expected TimeoutExpired.")
@@ -841,7 +843,7 @@ class ProcessTestCase(BaseTestCase):
                               "-c", "import time; time.sleep(0.1)"])
         try:
             p.wait(timeout=0.01)
-        except subprocess.TimeoutExpired, e:
+        except subprocess.TimeoutExpired as e:
             self.assertIn("0.01", str(e))  # For coverage of __str__.
         else:
             self.fail("subprocess.TimeoutExpired expected but not raised.")
@@ -868,7 +870,7 @@ class ProcessTestCase(BaseTestCase):
                 subprocess.Popen(['nonexisting_i_hope'],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
-            except EnvironmentError, c:
+            except EnvironmentError as c:
                 if c.errno != 2:  # ignore "no such file"
                     raise
 
@@ -1013,7 +1015,7 @@ class POSIXProcessTestCase(BaseTestCase):
     def _get_chdir_exception(self):
         try:
             os.chdir(self._nonexistent_dir)
-        except OSError, e:
+        except OSError as e:
             # This avoids hard coding the errno value or the OS perror()
             # string and instead capture the exception that we want to see
             # below for comparison.
@@ -1030,7 +1032,7 @@ class POSIXProcessTestCase(BaseTestCase):
         try:
             p = subprocess.Popen([sys.executable, "-c", ""],
                                  cwd=self._nonexistent_dir)
-        except OSError, e:
+        except OSError as e:
             # Test that the child process chdir failure actually makes
             # it up to the parent process as the correct exception.
             self.assertEqual(desired_exception.errno, e.errno)
@@ -1044,7 +1046,7 @@ class POSIXProcessTestCase(BaseTestCase):
         try:
             p = subprocess.Popen([sys.executable, "-c", ""],
                                  executable=self._nonexistent_dir)
-        except OSError, e:
+        except OSError as e:
             # Test that the child process exec failure actually makes
             # it up to the parent process as the correct exception.
             self.assertEqual(desired_exception.errno, e.errno)
@@ -1057,7 +1059,7 @@ class POSIXProcessTestCase(BaseTestCase):
         desired_exception = self._get_chdir_exception()
         try:
             p = subprocess.Popen([self._nonexistent_dir, "-c", ""])
-        except OSError, e:
+        except OSError as e:
             # Test that the child process exec failure actually makes
             # it up to the parent process as the correct exception.
             self.assertEqual(desired_exception.errno, e.errno)
@@ -1081,7 +1083,7 @@ class POSIXProcessTestCase(BaseTestCase):
                     [sys.executable, "-c",
                      "import os; print(os.getpgid(os.getpid()))"],
                     start_new_session=True)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.EPERM:
                 raise
         else:
@@ -1117,11 +1119,11 @@ class POSIXProcessTestCase(BaseTestCase):
         try:
             p = subprocess.Popen([sys.executable, "-c", ""],
                                  preexec_fn=raise_it)
-        except RuntimeError, e:
+        except RuntimeError as e:
             self.assertTrue(
                     subprocess._posixsubprocess,
                     "Expected a ValueError from the preexec_fn")
-        except ValueError, e:
+        except ValueError as e:
             self.assertIn("coconut", e.args[0])
         else:
             self.fail("Exception raised by preexec_fn did not make it "
@@ -1213,7 +1215,7 @@ class POSIXProcessTestCase(BaseTestCase):
         os.write(f, "exec '%s' -c 'import sys; sys.exit(47)'\n" %
                     sys.executable)
         os.close(f)
-        os.chmod(fname, 0700)
+        os.chmod(fname, 0o700)
         p = subprocess.Popen(fname)
         p.wait()
         os.remove(fname)
@@ -1255,7 +1257,7 @@ class POSIXProcessTestCase(BaseTestCase):
         os.write(f, "exec '%s' -c 'import sys; sys.exit(47)'\n" %
                     sys.executable)
         os.close(f)
-        os.chmod(fname, 0700)
+        os.chmod(fname, 0o700)
         rc = subprocess.call(fname)
         os.remove(fname)
         self.assertEqual(rc, 47)
@@ -1507,7 +1509,7 @@ class POSIXProcessTestCase(BaseTestCase):
             subprocess.call([highbit_executable_name])
         except UnicodeEncodeError:
             return
-        except RuntimeError, e:
+        except RuntimeError as e:
             # The ProcessTestCasePOSIXPurePython version ends up here.  It
             # can't re-construct the unicode error from the child because it
             # doesn't have all the arguments.  BFD.  One doesn't use
@@ -1874,8 +1876,8 @@ class Win32ProcessTestCase(BaseTestCase):
         returncode = p.poll()
         self.assert_(returncode is not None, "the subprocess did not terminate")
         if count > 1:
-            print >>sys.stderr, ("p.{}{} succeeded after "
-                                 "{} attempts".format(method, args, count))
+            print(("p.{}{} succeeded after "
+                                 "{} attempts".format(method, args, count)), file=sys.stderr)
         _, stderr = p.communicate()
         self.assertStderrEqual(stderr, '')
         self.assertEqual(p.wait(), returncode)
@@ -1926,7 +1928,7 @@ class ProcessTestCasePOSIXPurePython(ProcessTestCase, POSIXProcessTestCase):
 
 
 if not getattr(subprocess, '_posixsubprocess', False):
-    print >>sys.stderr, "_posixsubprocess extension module not found."
+    print("_posixsubprocess extension module not found.", file=sys.stderr)
     class ProcessTestCasePOSIXPurePython(unittest.TestCase): pass
 
 
@@ -2042,7 +2044,7 @@ class ContextManagerTests(BaseTestCase):
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE)
             proc.__exit__(None, None, None)
-        except EnvironmentError, exception:
+        except EnvironmentError as exception:
             # ignore errors that indicate the command was not found
             if exception.errno not in (errno.ENOENT, errno.EACCES):
                 raise

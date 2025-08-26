@@ -63,6 +63,8 @@ Basic usage:
 
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 from _pg import *
 import time
 try:
@@ -111,7 +113,7 @@ def _cast_money(value):
 
 _cast = {'bool': _cast_bool,
     'int2': int, 'int4': int, 'serial': int,
-    'int8': long, 'oid': long, 'oid8': long,
+    'int8': int, 'oid': int, 'oid8': int,
     'float4': float, 'float8': float,
     'numeric': Decimal, 'money': _cast_money}
 
@@ -193,7 +195,7 @@ class pgdbCursor(object):
             val = val.encode( 'utf8' )
         if isinstance(val, str):
             val = "'%s'" % self._cnx.escape_string(val)
-        elif isinstance(val, (int, long, float)):
+        elif isinstance(val, (int, int, float)):
             pass
         elif val is None:
             val = 'NULL'
@@ -285,9 +287,9 @@ class pgdbCursor(object):
                     totrows += rows
                 else:
                     self.rowcount = -1
-        except Error, msg:
+        except Error as msg:
             raise DatabaseError("error '%s' in '%s'" % (msg, sql))
-        except Exception, err:
+        except Exception as err:
             raise OperationalError("internal error in '%s': %s" % (sql, err))
         # then initialize result raw count and description
         if self._src.resulttype == RESULT_DQL:
@@ -328,7 +330,7 @@ class pgdbCursor(object):
             self.arraysize = size
         try:
             result = self._src.fetch(size)
-        except Error, err:
+        except Error as err:
             raise DatabaseError(str(err))
         row_factory = self.row_factory
         typecast = self._type_cache.typecast
@@ -577,6 +579,6 @@ def Binary(value):
 # If run as script, print some information:
 
 if __name__ == '__main__':
-    print 'PyGreSQL version', version
-    print
-    print __doc__
+    print('PyGreSQL version', version)
+    print()
+    print(__doc__)

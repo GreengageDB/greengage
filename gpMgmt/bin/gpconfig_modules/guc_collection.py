@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from gpconfig_modules.compare_segment_guc import MultiValueGuc
 from gpconfig_modules.database_segment_guc import DatabaseSegmentGuc
 

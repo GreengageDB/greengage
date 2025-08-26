@@ -5,6 +5,7 @@
 
 """ Unittesting for dbconn module
 """
+from __future__ import absolute_import
 import unittest
 
 from gppylib.db.dbconn import *

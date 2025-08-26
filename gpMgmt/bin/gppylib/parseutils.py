@@ -11,6 +11,7 @@
   Copyright (c) EMC/Greenplum Inc 2011. All Rights Reserved. 
 """
 
+from __future__ import absolute_import
 import re
 import socket
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded

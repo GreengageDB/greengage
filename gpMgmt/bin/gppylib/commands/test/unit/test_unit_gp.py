@@ -3,6 +3,7 @@
 # Copyright (c) Greenplum Inc 2012. All Rights Reserved. 
 #
 
+from __future__ import absolute_import
 from gppylib.commands.base import CommandResult
 from mock import patch, mock_open
 

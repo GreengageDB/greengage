@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from . import redirect_stderr
 from mock import call, Mock, patch, ANY
 import os

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from __future__ import absolute_import
 from gppylib import gplog
 from gppylib.db.catalog import RemoteQueryCommand
 

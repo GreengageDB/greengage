@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from contextlib import closing
 import os
 import pipes
@@ -757,7 +759,7 @@ class GpMirrorListToBuild:
                 break
             else:
                 if last_seg_up_count != seg_up_count:
-                    print "\n",
+                    print("\n", end=' ')
                     #TODO fix - this message prints negative values
                     self.__logger.info("%d of %d segments have been marked down." %
                                        (initial_seg_up_count - seg_up_count, initial_seg_up_count))
@@ -771,7 +773,7 @@ class GpMirrorListToBuild:
                 time_elapsed += 5
 
         if seg_up_count == 0:
-            print "\n",
+            print("\n", end=' ')
             self.__logger.info("%d of %d segments have been marked down." %
                                (initial_seg_up_count, initial_seg_up_count))
         else:

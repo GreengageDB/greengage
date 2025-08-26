@@ -3,6 +3,7 @@
 # Copyright (c) Greenplum Inc 2014. All Rights Reserved. 
 #
 
+from __future__ import absolute_import
 from gppylib.commands.base import CommandResult
 from gppylib.operations.unix import CleanSharedMem
 from mock import Mock, MagicMock, patch

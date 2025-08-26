@@ -14,6 +14,8 @@
 #   won't be NULL
 # - out_file_path optional argument - filesystem path to save the plan tree.
 
+from __future__ import absolute_import
+from __future__ import print_function
 import gdb
 
 PLANGEN_PLANNER = gdb.parse_and_eval("PLANGEN_PLANNER")

@@ -3,6 +3,7 @@
 """
 test script to provide gplog.feature (behave) test with logging samples.
 """
+from __future__ import absolute_import
 import logging
 
 from gppylib import gplog

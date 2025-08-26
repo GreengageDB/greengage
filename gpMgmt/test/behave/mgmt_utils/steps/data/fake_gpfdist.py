@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import os, sys
 import optparse
 import socket
@@ -124,8 +126,8 @@ gpfdist_modes = {
 
 
 def start_server(port, mode):
-    if not gpfdist_modes.has_key(mode):
-        print 'mode : %s is not support' % (mode)
+    if mode not in gpfdist_modes:
+        print('mode : %s is not support' % (mode))
         sys.exit(1)
     handler = gpfdist_modes[mode]
     http_server = HTTPServer((socket.gethostname(), int(port)), handler)

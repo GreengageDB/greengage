@@ -2,6 +2,7 @@
 #
 # Copyright (c) Greenplum Inc 2010. All Rights Reserved.
 #
+from __future__ import absolute_import
 from gppylib import gplog, pgconf
 from gppylib.commands import gp
 from gppylib.db import catalog, dbconn

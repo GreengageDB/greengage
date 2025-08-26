@@ -6,6 +6,7 @@
 """
 TODO: docs!
 """
+from __future__ import absolute_import
 import os, pickle, base64, time
 import os.path
 import pipes
@@ -20,7 +21,7 @@ from gppylib.gplog import *
 from gppylib.db import dbconn
 from gppylib import gparray
 from gppylib.commands.base import *
-from unix import *
+from .unix import *
 from gppylib import pgconf
 from gppylib.utils import writeLinesToFile, createFromSingleHostFile, shellEscape
 
@@ -826,7 +827,7 @@ class ModifyConfSetting(Command):
         elif optType == 'string':
             cmdStr = "perl -i -p -e \"s/^%s[ ]*=[ ]*'[^']*'/%s='%s'/\" %s" % (optName, optName, optVal, file)
         else:
-            raise Exception, "Invalid optType for ModifyConfSetting"
+            raise Exception("Invalid optType for ModifyConfSetting")
         self.cmdStr = cmdStr
         Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
 
@@ -952,7 +953,7 @@ class ConfigureNewSegment(Command):
             elif primaryMirror == 'mirror' and seg.isSegmentPrimary() == True:
                continue
             hostname = seg.getSegmentHostName()
-            if result.has_key(hostname):
+            if hostname in result:
                 result[hostname] += ','
             else:
                 result[hostname] = ''

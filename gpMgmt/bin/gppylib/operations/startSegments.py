@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os, pickle, base64
 
 from gppylib.utils import checkNotNone

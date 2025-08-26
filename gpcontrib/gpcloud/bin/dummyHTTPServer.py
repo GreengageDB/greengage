@@ -12,6 +12,8 @@ Send a POST request::
     curl -d "foo=bar&bin=baz" http://localhost
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 import SocketServer
 import getopt
@@ -46,8 +48,8 @@ class S(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         # Just bounce the request back
-        print "----- SOMETHING WAS PUT ------"
-        print self.headers
+        print("----- SOMETHING WAS PUT ------")
+        print(self.headers)
         length = int(self.headers['Content-Length'])
         content = self.rfile.read(length)
         self._set_headers(length)
@@ -55,8 +57,8 @@ class S(BaseHTTPRequestHandler):
 
     def do_POST(self):
         # Just bounce the request back
-        print "----- SOMETHING WAS POST ------"
-        print self.headers
+        print("----- SOMETHING WAS POST ------")
+        print(self.headers)
         length = int(self.headers['Content-Length'])
         content = self.rfile.read(length)
         self._set_headers(length)
@@ -64,8 +66,8 @@ class S(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         # Just bounce the request back
-        print "----- SOMETHING WAS DELETED ------"
-        print self.headers
+        print("----- SOMETHING WAS DELETED ------")
+        print(self.headers)
         length = int(self.headers['Content-Length'])
         # content = self.rfile.read(length)
         self._set_headers(length)
@@ -85,7 +87,7 @@ class PARAM_S(BaseHTTPRequestHandler):
                 with open(filename, 'r') as f:
                     content = f.read()
             except Exception:
-                print "Can not open file:%s" % filename
+                print("Can not open file:%s" % filename)
         return content
 
     def do_GET(self):
@@ -97,7 +99,7 @@ class PARAM_S(BaseHTTPRequestHandler):
             else:
                 self._set_headers(0)
         except KeyError:
-            print "Header missing S3_Param_Req"
+            print("Header missing S3_Param_Req")
             self._set_headers(0)
 
 def run(server_class=HTTPServer, handler_class=S, port=8553, https=False):
@@ -117,7 +119,7 @@ def run(server_class=HTTPServer, handler_class=S, port=8553, https=False):
         httpd.socket = ssl.wrap_socket (httpd.socket,
             keyfile=keyfile,
             certfile=certfile, server_side=True)
-    print 'Starting http server...'
+    print('Starting http server...')
     httpd.serve_forever()
 
 if __name__ == "__main__":
@@ -128,11 +130,11 @@ if __name__ == "__main__":
     try:
         opts, args = getopt.getopt(argv[1:],"hsp:f:t:",["--port=","--filename=", "--type="])
     except getopt.GetoptError:
-        print help_msg
+        print(help_msg)
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print help_msg
+            print(help_msg)
             sys.exit(0)
         elif opt == '-s':
             use_ssl = True

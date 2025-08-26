@@ -3,6 +3,7 @@
 # Copyright (c) Greenplum Inc 2012. All Rights Reserved.
 #
 
+from __future__ import absolute_import
 import unittest
 from gppylib.commands.base import Command, WorkerPool, RemoteExecutionContext, GPHOME, LocalExecutionContext
 

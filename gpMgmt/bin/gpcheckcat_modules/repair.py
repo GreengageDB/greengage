@@ -11,6 +11,7 @@ Creates repair for the following gpcheckcat checks
        * distribution_policy
 """
 
+from __future__ import absolute_import
 import os
 import stat
 from gpcheckcat_modules.repair_missing_extraneous import RepairMissingExtraneous

@@ -1,4 +1,5 @@
 # Make sure Python loads the modules of this package via absolute paths.
+from __future__ import absolute_import
 import contextlib
 from io import BytesIO as StringIO
 from os.path import abspath as _abspath

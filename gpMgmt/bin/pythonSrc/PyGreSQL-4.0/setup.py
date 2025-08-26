@@ -36,6 +36,7 @@ using distutils to install Python programs.
 
 """
 
+from __future__ import absolute_import
 version = "4.0"
 
 import sys

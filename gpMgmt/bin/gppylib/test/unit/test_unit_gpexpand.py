@@ -1,7 +1,8 @@
+from __future__ import absolute_import
 import os
 import imp
 
-from gp_unittest import *
+from .gp_unittest import *
 from mock import *
 from gparray import Segment, GpArray
 from gppylib.db.dbconn import DbURL

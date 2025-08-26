@@ -7,11 +7,12 @@
 
 """ Unittesting for gplog module
 """
+from __future__ import absolute_import
 import os
 
 from gppylib.gparray import GpArray, Segment, createSegmentRows, get_gparray_from_config
 from gppylib import gplog
-from gp_unittest import *
+from .gp_unittest import *
 from mock import patch, Mock
 from gppylib.system.configurationInterface import GpConfigurationProvider
 

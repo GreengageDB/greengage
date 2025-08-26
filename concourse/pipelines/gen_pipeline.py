@@ -27,6 +27,7 @@ Python module requirements:
 
 from __future__ import print_function
 
+from __future__ import absolute_import
 import argparse
 import datetime
 import getpass

@@ -4,6 +4,7 @@
 #
 # Greengage DB related utility functions
 
+from __future__ import absolute_import
 import os
 
 def get_gp_prefix(masterDatadir):

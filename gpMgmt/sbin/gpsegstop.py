@@ -10,6 +10,7 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
+from __future__ import absolute_import
 from gppylib.mainUtils import *
 
 import os, sys, time, signal

@@ -1,5 +1,7 @@
 #!/usr/local/bin/python
 
+from __future__ import absolute_import
+from __future__ import print_function
 import sys
 import subprocess
 import re
@@ -27,7 +29,7 @@ CDebugCounter class, see file ../libgpos/include/gpos/common/CDebugCounter.h
 
 try:
 	from gppylib.db import dbconn
-except ImportError, e:
+except ImportError as e:
 	sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh to set PYTHONPATH. '
 			 'Detail: ' + str(e))
 
@@ -71,7 +73,7 @@ def connect(host, port_num, db_name):
 		dburl = dbconn.DbURL(hostname=host, port=port_num, dbname=db_name)
 		conn = dbconn.connect(dburl, encoding="UTF8")
 	except Exception as e:
-		print("Exception during connect: %s" % e)
+		print(("Exception during connect: %s" % e))
 		quit()
 	return conn
 
@@ -81,7 +83,7 @@ def execute_sql(conn, sqlStr):
 		dbconn.execSQL(conn, sqlStr)
 	except Exception as e:
 		print("")
-		print("Error executing query: %s; Reason: %s" % (sqlStr, e))
+		print(("Error executing query: %s; Reason: %s" % (sqlStr, e)))
 		dbconn.execSQL(conn, "abort")
 
 
@@ -251,7 +253,7 @@ def main():
 		if glob_use_sql:
 			commit_db(glob_conn)
 			glob_conn.close()
-			print("Inserted a total of %d rows into table public.debug_counters." % glob_sql_inserted_rows)
+			print(("Inserted a total of %d rows into table public.debug_counters." % glob_sql_inserted_rows))
 
 if __name__ == "__main__":
 	main()

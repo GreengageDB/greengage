@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from os import path
 import os
 import shutil
@@ -14,7 +16,7 @@ import pipes
 from behave import given, when, then
 from test.behave_utils.utils import *
 
-from mgmt_utils import *
+from .mgmt_utils import *
 
 class GpsshExkeysMgmtContext:
     """
@@ -168,7 +170,7 @@ def impl(context):
         # nested tuples. We're interested in the address piece of the first
         # entry in that list.
         addr = addrs[0][4][0]
-        print host, "maps to", addr
+        print(host, "maps to", addr)
 
         ipv6_addrs.append(addr)
 
@@ -200,7 +202,7 @@ def impl(context, works):
             When the user runs command "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes %s \"ssh -o BatchMode=yes -o StrictHostKeyChecking=yes %s hostname\"" eok
             And ssh should return a return code of %d
             ''' % (fromHost, toHost, ret)
-            print "CMD:%s" % cmd
+            print("CMD:%s" % cmd)
             context.execute_steps(cmd)
 
 

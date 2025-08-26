@@ -20,6 +20,7 @@ PEXPECT LICENSE
 
 '''
 
+from __future__ import absolute_import
 from pexpect import ExceptionPexpect, TIMEOUT, EOF, spawn
 import time
 import os

@@ -5,6 +5,8 @@
 """
 Set of Classes for executing unix commands.
 """
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import platform
 import psutil
@@ -664,7 +666,7 @@ class Hostname(Command):
 
     def get_hostname(self):
         if not self.results:
-            raise Exception, 'Command not yet executed'
+            raise Exception('Command not yet executed')
         return self.results.stdout.strip()
 
 
@@ -819,7 +821,7 @@ def isScpEnabled(hostlist):
         try:
             cmd.run(validateAfter=True)
         except Exception as e:
-            print('[Warning] Either scp is not available or does not have execute permission on host:{0}' .format(host))
+            print(('[Warning] Either scp is not available or does not have execute permission on host:{0}' .format(host)))
             return False
 
     return True

@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import print_function
 import fileinput
 import os
 import pipes
@@ -64,7 +66,7 @@ def run_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -78,7 +80,7 @@ def run_async_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         proc = cmd.runNoWait()
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
     context.async_proc = proc
 
@@ -87,8 +89,8 @@ def run_cmd(command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
-        print 'caught exception %s' % e
+    except ExecutionError as e:
+        print('caught exception %s' % e)
 
     result = cmd.get_results()
     return (result.rc, result.stdout, result.stderr)
@@ -111,7 +113,7 @@ def run_gpcommand(context, command, cmd_prefix=''):
         cmd = Command(name='run %s' % command, cmdStr='%s;$GPHOME/bin/%s' % (cmd_prefix, command))
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -700,7 +702,7 @@ def are_segments_running():
     result = True
     for seg in segments:
         if seg.status != 'u':
-            print "segment is not up - %s" % seg
+            print("segment is not up - %s" % seg)
             result = False
     return result
 
@@ -709,7 +711,7 @@ def is_segment_running(role, contentid):
     segments = gparray.getDbList()
     for seg in segments:
         if seg.getSegmentRole() == role and seg.content == contentid and seg.status != 'u':
-            print("segment is not up - %s" % seg)
+            print(("segment is not up - %s" % seg))
             return False
     return True
 
@@ -718,7 +720,7 @@ def modify_sql_file(file, hostport):
         for line in fileinput.FileInput(file, inplace=1):
             if line.find("gpfdist") >= 0:
                 line = re.sub('(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
-            print str(re.sub('\n', '', line))
+            print(str(re.sub('\n', '', line)))
 
 
 def remove_dir(host, directory):
@@ -857,7 +859,7 @@ def wait_for_desired_query_result(dburl, query, desired_result, utility=False):
                 rows = cursor.fetchall()
                 actual_result = rows[0][0]
         except Exception as e:
-            print('could not query (%s:%s) %s' % (dburl.pghost, dburl.pgport, e))
+            print(('could not query (%s:%s) %s' % (dburl.pghost, dburl.pgport, e)))
         time.sleep(1)
 
     if attempt == num_retries:

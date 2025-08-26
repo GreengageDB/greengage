@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from gppylib import gplog
 from gppylib.commands.base import Command
 from gppylib.commands import base

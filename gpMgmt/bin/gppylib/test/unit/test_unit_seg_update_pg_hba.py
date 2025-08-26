@@ -2,6 +2,7 @@
 #
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
+from __future__ import absolute_import
 from mock import call, patch, MagicMock, Mock
 import os
 

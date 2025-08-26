@@ -2,7 +2,9 @@
 # inspired from the PostgreSQL tutorial 
 # adapted to Python 1995 by Pascal ANDRE
 
-print """
+from __future__ import absolute_import
+from __future__ import print_function
+print("""
 __________________________________________________________________
 MODULE SYSCAT.PY : PARSES SOME POSTGRESQL SYSTEM CATALOGS
 
@@ -20,14 +22,14 @@ then start the demo with:      syscat.demo(cnx)
 Some results may be empty, depending on your base status."
 
 __________________________________________________________________
-"""
+""")
 
 from pg import DB
 import sys
 
 # waits for a key
 def wait_key():
-	print "Press <enter>"
+	print("Press <enter>")
 	sys.stdin.read(1)
 
 # lists all simple indices
@@ -123,27 +125,27 @@ def demo(pgcnx):
 	import sys, os
 	save_stdout = sys.stdout
 	sys.stdout = os.popen("more", "w")
-	print "Listing simple indices ..."
-	print list_simple_ind(pgcnx)
-	print "Listing all attributes ..."
-	print list_all_attr(pgcnx)
-	print "Listing all user-defined base types ..."
-	print list_user_base_type(pgcnx)
-	print "Listing all left-unary operators defined ..."
-	print list_left_unary_operator(pgcnx)
-	print "Listing all right-unary operators defined ..."
-	print list_right_unary_operator(pgcnx)
-	print "Listing all binary operators ..."
-	print list_binary_operator(pgcnx)
-	print "Listing C external function linked ..."
-	print list_lang_func(pgcnx, 'C')
-	print "Listing C internal functions ..."
-	print list_lang_func(pgcnx, 'internal')
-	print "Listing SQL functions defined ..."
-	print list_lang_func(pgcnx, 'sql')
-	print "Listing 'aggregate functions' ..."
-	print list_agg_func(pgcnx)
-	print "Listing 'operator classes' ..."
-	print list_op_class(pgcnx)
+	print("Listing simple indices ...")
+	print(list_simple_ind(pgcnx))
+	print("Listing all attributes ...")
+	print(list_all_attr(pgcnx))
+	print("Listing all user-defined base types ...")
+	print(list_user_base_type(pgcnx))
+	print("Listing all left-unary operators defined ...")
+	print(list_left_unary_operator(pgcnx))
+	print("Listing all right-unary operators defined ...")
+	print(list_right_unary_operator(pgcnx))
+	print("Listing all binary operators ...")
+	print(list_binary_operator(pgcnx))
+	print("Listing C external function linked ...")
+	print(list_lang_func(pgcnx, 'C'))
+	print("Listing C internal functions ...")
+	print(list_lang_func(pgcnx, 'internal'))
+	print("Listing SQL functions defined ...")
+	print(list_lang_func(pgcnx, 'sql'))
+	print("Listing 'aggregate functions' ...")
+	print(list_agg_func(pgcnx))
+	print("Listing 'operator classes' ...")
+	print(list_op_class(pgcnx))
 	del sys.stdout
 	sys.stdout = save_stdout

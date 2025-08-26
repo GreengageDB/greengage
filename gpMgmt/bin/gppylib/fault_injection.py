@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import os
 
 GPMGMT_FAULT_POINT = 'GPMGMT_FAULT_POINT'

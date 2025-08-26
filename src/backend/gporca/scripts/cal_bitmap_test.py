@@ -21,6 +21,8 @@
 # See comment "How to add a test" below in the program for how to
 # extend this program.
 
+from __future__ import absolute_import
+from __future__ import print_function
 import argparse
 import time
 import re
@@ -30,7 +32,7 @@ import sys
 
 try:
     from gppylib.db import dbconn
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants
@@ -338,7 +340,7 @@ def connect(host, port_num, db_name):
         dbconn.execSQL(conn, sqlStr)
 
     except Exception as e:
-        print("Exception during connect: %s" % e)
+        print(("Exception during connect: %s" % e))
         quit()
 
     return conn
@@ -371,7 +373,7 @@ def execute_sql(conn, sqlStr):
         dbconn.execSQL(conn, sqlStr)
     except Exception as e:
         print("")
-        print("Error executing query: %s; Reason: %s" % (sqlStr, e))
+        print(("Error executing query: %s; Reason: %s" % (sqlStr, e)))
         dbconn.execSQL(conn, "abort")
 
 
@@ -386,7 +388,7 @@ def select_first_int(conn, sqlStr):
 
     except Exception as e:
         print("")
-        print("Error executing query: %s; Reason: %s" % (sqlStr, e))
+        print(("Error executing query: %s; Reason: %s" % (sqlStr, e)))
         dbconn.execSQL(conn, "abort")
 
 
@@ -729,7 +731,7 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
             for p_id in plan_ids:
                 headerList.append("Std dev %s" % p_id)
         headerList.append("Selectivity pct")
-    print(", ".join(headerList))
+    print((", ".join(headerList)))
 
     # sort the keys of the dictionary by parameter value
     sorted_params = sorted(explainDict.keys())
@@ -776,12 +778,12 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
             resultList.append(str((100.0 * num_rows) / glob_rowcount))
 
         # print a comma-separated list of result values (CSV)
-        print(", ".join(resultList))
+        print((", ".join(resultList)))
 
     # if there are any errors, print them at the end, leaving an empty line between the result and the errors
     if (len(errMessages) > 0):
         print("")
-        print("%d diagnostic message(s):" % len(errMessages))
+        print(("%d diagnostic message(s):" % len(errMessages)))
         for e in errMessages:
             print(e)
 

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from mock import Mock, patch, call
 from gppylib.test.unit.gp_unittest import GpTestCase, run_tests, FakeCursor
 from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode

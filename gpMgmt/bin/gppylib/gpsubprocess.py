@@ -15,6 +15,7 @@ tasks.
 
 
 """
+from __future__ import absolute_import
 import errno
 import fcntl
 import os
@@ -214,7 +215,7 @@ class Popen(subprocess.Popen):
         while True:
             try:
                 return select.select(iwtd, owtd, ewtd, timeout)
-            except select.error, e:
+            except select.error as e:
                 if e[0] == errno.EINTR or e[0] ==  errno.EAGAIN:
                     # if we loop back we have to subtract the amount of time we already waited.
                     if timeout is not None:
@@ -223,7 +224,7 @@ class Popen(subprocess.Popen):
                             return ([],[],[])
                 else: # something bad caused the select.error
                     raise
-            except IOError, e:
+            except IOError as e:
                 if e[0] == errno.EINTR or e[0] ==  errno.EAGAIN:
                     if timeout is not None:
                         timeout = end_time - time.time()

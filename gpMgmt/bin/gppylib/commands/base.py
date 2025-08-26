@@ -16,6 +16,7 @@ for executing this set of commands.
 
 """
 
+from __future__ import absolute_import
 from Queue import Queue, Empty
 from threading import Thread
 
@@ -281,7 +282,7 @@ class Worker(Thread):
                     self.pool.addFinishedWorkItem(self.cmd)
                     self.cmd = None
 
-            except Exception, e:
+            except Exception as e:
                 self.logger.exception(e)
                 if self.cmd:
                     self.logger.debug("[%s] finished cmd with exception: %s" % (self.name, self.cmd))

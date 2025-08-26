@@ -18,6 +18,7 @@ Example:
     at = d.time('authentication_timeout', 'ms', 2500)
 """
 
+from __future__ import absolute_import
 import os
 import os.path
 import re

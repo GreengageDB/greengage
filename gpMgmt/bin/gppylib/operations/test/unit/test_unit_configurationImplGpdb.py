@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from __future__ import absolute_import
 import unittest
 
 from gppylib.gparray import GpArray, Segment

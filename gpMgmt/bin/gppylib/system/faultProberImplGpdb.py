@@ -8,6 +8,7 @@ Note that this does NOT pay attention to the current pause state in the db.  It 
   anyway because gp_fts_probe_pause does not reflect the shared memory variable?
 
 """
+from __future__ import absolute_import
 import os
 import time
 import re

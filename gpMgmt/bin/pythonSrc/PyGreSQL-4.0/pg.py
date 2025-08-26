@@ -18,6 +18,8 @@ For a DB-API 2 compliant interface use the newer pgdb module.
 
 """
 
+from __future__ import absolute_import
+from __future__ import print_function
 from _pg import *
 try:
     frozenset
@@ -147,9 +149,9 @@ class DB(object):
         """Print a debug message."""
         if self.debug:
             if isinstance(self.debug, basestring):
-                print self.debug % s
+                print(self.debug % s)
             elif isinstance(self.debug, file):
-                print >> self.debug, s
+                print(s, file=self.debug)
             elif callable(self.debug):
                 self.debug(s)
 
@@ -706,6 +708,6 @@ class DB(object):
 # if run as script, print some information
 
 if __name__ == '__main__':
-    print 'PyGreSQL version', version
-    print
-    print __doc__
+    print('PyGreSQL version', version)
+    print()
+    print(__doc__)

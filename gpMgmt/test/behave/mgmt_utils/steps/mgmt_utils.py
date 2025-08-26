@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import codecs
 import math
 import fnmatch
@@ -1094,7 +1096,7 @@ def impl(context):
                 break
 
         if not found_match:
-            print context.stored_rows
+            print(context.stored_rows)
             raise Exception("'%s' not found in stored rows" % row)
 
 
@@ -1327,7 +1329,7 @@ def impl(context, path, perm, host):
 
 @then('rely on environment.py to restore path permissions')
 def impl(context):
-    print "go look in environment.py to see how it uses the path and permissions on context to make sure it's cleaned up"
+    print("go look in environment.py to see how it uses the path and permissions on context to make sure it's cleaned up")
 
 
 @when('the user runs pg_controldata against the standby data directory')
@@ -1377,7 +1379,7 @@ def stop_all_primary_or_mirror_segments_on_hosts(context, segment_type, hosts):
     hosts = hosts.split(',')
     if segment_type not in ("primary", "mirror"):
         raise Exception("Expected segment_type to be 'primary' or 'mirror', but found '%s'." % segment_type)
-    print("Stopping {} on {}".format(segment_type, hosts))
+    print(("Stopping {} on {}".format(segment_type, hosts)))
     role = ROLE_PRIMARY if segment_type == 'primary' else ROLE_MIRROR
     stop_segments(context, lambda seg: seg.getSegmentRole() == role and seg.content != -1 and seg.getSegmentHostName() in hosts)
 
@@ -1410,7 +1412,7 @@ def stop_segments(context, where_clause):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
 
     segments = filter(where_clause, gparray.getDbList())
-    print("Stopping segments: {}".format(segments))
+    print(("Stopping segments: {}".format(segments)))
     for seg in segments:
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
@@ -1507,8 +1509,8 @@ def impl(context, message):
             if message in column:
                 return
 
-    print context.stored_rows
-    print message
+    print(context.stored_rows)
+    print(message)
     raise Exception("'%s' not found in stored rows" % message)
 
 
@@ -1975,7 +1977,7 @@ def impl(context, filename, output):
     with open(filename) as fr:
         for line in fr:
             contents = line.strip()
-    print contents
+    print(contents)
     check_stdout_msg(context, output)
 
 @then('verify that the last line of the file "{filename}" in the master data directory {contain} the string "{output}"')
@@ -3068,10 +3070,10 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
             curs = dbconn.execSQL(conn, "select count(*) from gp_segment_configuration where role='m';")
             count = curs.fetchall()[0][0]
             if not with_mirrors and count == 0:
-                print "Skipping creating a new cluster since the cluster is primary only already."
+                print("Skipping creating a new cluster since the cluster is primary only already.")
                 return
             elif with_mirrors and count > 0:
-                print "Skipping creating a new cluster since the cluster has mirrors already."
+                print("Skipping creating a new cluster since the cluster has mirrors already.")
                 return
     except:
         pass
@@ -3393,7 +3395,7 @@ def impl(context, table_name):
     query = """CREATE TABLE %s (a INT)""" % table_name
     try:
         data_result = dbconn.execSQL(conn, query)
-    except Exception, msg:
+    except Exception as msg:
         key_msg = "FATAL:  cluster is expaneded"
         if key_msg not in msg.__str__():
             raise Exception("transaction not abort correctly, errmsg:%s" % msg)

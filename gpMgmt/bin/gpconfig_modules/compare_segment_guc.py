@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from gpconfig_modules.database_segment_guc import DatabaseSegmentGuc
 from gpconfig_modules.file_segment_guc import FileSegmentGuc
 from gpconfig_modules.segment_guc import SegmentGuc
@@ -178,10 +179,10 @@ class MultiValueGuc(SegmentGuc):
         quoted = []
         stream = MultiValueGuc._StringStream(guc_value)
         while stream.peek():
-            char = stream.next()
+            char = next(stream)
 
             if char == '\\':
-                char = stream.next()
+                char = next(stream)
                 if not char:
                     raise MultiValueGuc.ParseError('invalid trailing backslash')
 
@@ -208,14 +209,14 @@ class MultiValueGuc(SegmentGuc):
                             break
 
                         octal = (octal << 3) + int(char)
-                        stream.next() # advance
+                        next(stream) # advance
 
                     # Translate back to a character (truncating to one byte).
                     char = chr(octal & 0xFF)
 
             # Handle escaped single quotes.
             elif char == "'":
-                char = stream.next()
+                char = next(stream)
                 if char != "'":
                     raise MultiValueGuc.ParseError('invalid single quote')
 

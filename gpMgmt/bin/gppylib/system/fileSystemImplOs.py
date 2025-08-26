@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+from __future__ import absolute_import
 import os
 
 from gppylib.gplog import *

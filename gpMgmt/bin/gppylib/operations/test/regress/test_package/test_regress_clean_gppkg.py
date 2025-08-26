@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import os
 
 from gppylib.operations.test.regress.test_package import GppkgTestCase, unittest, skipIfNoStandby, get_host_list, ARCHIVE_PATH, run_command, skipIfSingleNode

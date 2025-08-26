@@ -63,6 +63,7 @@ PEXPECT LICENSE
 
 '''
 
+from __future__ import absolute_import
 try:
     import os
     import sys

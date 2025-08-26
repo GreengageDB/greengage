@@ -7,6 +7,7 @@
 This file defines the interface that can be used to fetch and update system
 configuration information.
 """
+from __future__ import absolute_import
 import os, copy
 from collections import defaultdict
 

@@ -1,4 +1,5 @@
 
+from __future__ import absolute_import
 from gppylib.commands.base import REMOTE, WorkerPool
 from gppylib.commands.pg import PgControlData
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import sys, os, getpass
 import unittest
 from gppylib.userinput import ask_create_password

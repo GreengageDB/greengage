@@ -1,5 +1,6 @@
 #!/usr/local/bin/python
 
+from __future__ import absolute_import
 import argparse
 
 _help = """

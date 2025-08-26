@@ -1,6 +1,8 @@
 """When called as a script, print a comma-separated list of the open
 file descriptors on stdout."""
 
+from __future__ import absolute_import
+from __future__ import print_function
 import errno
 import os
 import fcntl
@@ -14,11 +16,11 @@ def isopen(fd):
     """Return True if the fd is open, and False otherwise"""
     try:
         fcntl.fcntl(fd, fcntl.F_GETFD, 0)
-    except IOError, e:
+    except IOError as e:
         if e.errno == errno.EBADF:
             return False
         raise
     return True
 
 if __name__ == "__main__":
-    print(','.join(str(fd) for fd in range(0, _MAXFD) if isopen(fd)))
+    print((','.join(str(fd) for fd in range(0, _MAXFD) if isopen(fd))))
