@@ -347,8 +347,10 @@ endif
 #---------------------------------------------------------------------
 
 ../VERSION:
+	@echo "Update $@"
 	../getversion > $@
-	
+	@cat $@
+
 version-vars: ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
 	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
