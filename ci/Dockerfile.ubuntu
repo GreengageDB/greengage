@@ -43,7 +43,7 @@ RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
 FROM base as code
 # Use --exclude, when it will be available in stable syntax.
 COPY . gpdb_src
-RUN rm -rf gpdb_src/.git/
+RUN make -C gpdb_src/gpAux ../VERSION ; rm -rf gpdb_src/.git/
 
 FROM base as test
 COPY --from=code /home/gpadmin/gpdb_src gpdb_src
