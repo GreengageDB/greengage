@@ -14,7 +14,6 @@ from gppylib.operations.test.regress.test_package import (
     skipIfNoStandby,
     get_host_list,
     ARCHIVE_PATH,
-    run_command,
 )
 from gppylib.operations.unix import RemoveRemoteFile
 

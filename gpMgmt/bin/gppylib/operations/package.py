@@ -1559,7 +1559,7 @@ class BuildGppkg(Operation):
                     return False
 
                 return True
-        except ScannerError as ex:
+        except ScannerError:
             return False
 
     def _verify_tags(self, yamlfile):

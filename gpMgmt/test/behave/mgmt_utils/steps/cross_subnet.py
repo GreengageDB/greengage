@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import os
 import subprocess
 
-from behave import given, when, then
+from behave import then
 
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray

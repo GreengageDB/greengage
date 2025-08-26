@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import
-import os
-import tarfile
 
 from gppylib.commands.base import ExecutionError
 from gppylib.operations.test.regress.test_package import (

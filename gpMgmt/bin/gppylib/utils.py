@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from __future__ import print_function
-import shutil, filecmp, re
-import os, fcntl, select, getpass, socket
-import stat
+import re
+import os
+import fcntl
 
 try:
     from subprocess32 import *
@@ -593,7 +593,7 @@ def validateHostnameAddress(hostname, address):
     try:
         resolved_hostname, _, resolved_address_list = gethostbyaddr(hostname)
         resolved_hostname_2, _, resolved_address_list_2 = gethostbyaddr(address)
-    except Exception as e:
+    except Exception:
         # This means given hostname or address is not reachable
         logger.warning("Could not resolve hostname:{0}.".format(hostname))
         return False

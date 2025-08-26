@@ -7,7 +7,6 @@ import time
 from behave import given, when, then
 from test.behave_utils import utils
 from test.behave_utils.utils import wait_for_unblocked_transactions
-from gppylib.commands.base import Command
 from gppylib.db import dbconn
 
 

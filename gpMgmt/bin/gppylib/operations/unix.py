@@ -7,7 +7,6 @@ import errno
 
 from gppylib.commands.base import Command, REMOTE, WorkerPool
 from gppylib.operations import Operation
-from gppylib.operations.utils import RemoteOperation
 
 # TODO: Improve RawRemoteOperation
 """

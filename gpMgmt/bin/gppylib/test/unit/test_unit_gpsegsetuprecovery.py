@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from . import redirect_stderr
-from mock import call, Mock, patch, ANY
+from mock import Mock, patch
 import os
 import shutil
 import sys
@@ -13,7 +13,7 @@ import gppylib
 from gppylib import gplog
 from gppylib.gparray import Segment
 from gppylib.recoveryinfo import RecoveryInfo
-from gppylib.commands.base import CommandResult, Command
+from gppylib.commands.base import Command
 
 
 class ValidationForFullRecoveryTestCase(GpTestCase):

@@ -110,7 +110,7 @@ class TestInsert(TestDML):
     def verify(self, conn):
         sql = """
             select c1 from {tablename} order by c1;
-        """.format(tablename=self.tablename, counter=self.counter)
+        """.format(tablename=self.tablename, )
         results = dbconn.execSQL(conn, sql).fetchall()
 
         for i in range(0, self.counter):
@@ -137,7 +137,7 @@ class TestUpdate(TestDML):
     def verify(self, conn):
         sql = """
             select c2 from {tablename} order by c1;
-        """.format(tablename=self.tablename, counter=self.counter)
+        """.format(tablename=self.tablename, )
         results = dbconn.execSQL(conn, sql).fetchall()
 
         for i in range(0, self.datasize):
@@ -164,7 +164,7 @@ class TestDelete(TestDML):
     def verify(self, conn):
         sql = """
             select c1 from {tablename} order by c1;
-        """.format(tablename=self.tablename, counter=self.counter)
+        """.format(tablename=self.tablename, )
         results = dbconn.execSQL(conn, sql).fetchall()
 
         for i in range(self.counter, self.datasize):

@@ -3,7 +3,6 @@ from __future__ import print_function
 import pytest
 
 pytest.register_assert_rewrite("TEST")
-from .TEST_local_base import AnsFile
 from .TEST_local_base import read_diff
 import os
 

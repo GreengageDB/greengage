@@ -13,7 +13,6 @@ from gppylib.mainUtils import *
 from gppylib.utils import checkNotNone
 from gppylib.db import dbconn
 from gppylib import gparray, gplog, recoveryinfo
-from gppylib.commands import unix
 from gppylib.commands import gp
 from gppylib.commands import base
 from gppylib.gparray import GpArray
@@ -23,7 +22,7 @@ from gppylib.operations.utils import ParallelOperation, RemoteOperation
 from gppylib.operations.unix import CleanSharedMem
 from gppylib.system import configurationInterface as configInterface
 from gppylib.commands.gp import is_pid_postmaster, get_pid_from_remotehost
-from gppylib.commands.unix import check_pid_on_remotehost, Scp
+from gppylib.commands.unix import check_pid_on_remotehost
 from gppylib.programs.clsRecoverSegment_triples import RecoveryTriplet
 
 logger = gplog.get_default_logger()
@@ -807,7 +806,7 @@ class GpMirrorListToBuild:
         for operation in operation_list:
             try:
                 operation.get_ret()
-            except Exception as e:
+            except Exception:
                 self.__logger.warning(
                     "Unable to clean up shared memory for stopped segments on host (%s)"
                     % operation.host

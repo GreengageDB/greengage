@@ -9,7 +9,8 @@ from __future__ import print_function
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
-import sys, os
+import sys
+import os
 import re
 import collections
 from contextlib import closing

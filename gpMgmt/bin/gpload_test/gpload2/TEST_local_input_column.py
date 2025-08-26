@@ -1,8 +1,8 @@
 # coding=utf-8
 from __future__ import absolute_import
-from .TEST_local_base import write_config_file, psql_run, mkpath
-from .TEST_local_base import prepare_before_test, drop_tables, runfile
-from .TEST_local_base import runfile, copy_data, run, hostNameAddrs, masterPort
+from .TEST_local_base import write_config_file, mkpath
+from .TEST_local_base import prepare_before_test, runfile
+from .TEST_local_base import copy_data, run
 import pytest
 
 

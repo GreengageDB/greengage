@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import unittest
 from . import redirect_stderr
 from mock import call, Mock, patch, ANY
 import sys

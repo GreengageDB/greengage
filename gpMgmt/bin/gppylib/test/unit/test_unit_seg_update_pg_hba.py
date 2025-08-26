@@ -3,11 +3,10 @@
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 from __future__ import absolute_import
-from mock import call, patch, MagicMock, Mock
-import os
+from mock import patch
 
 import seg_update_pg_hba
-from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
+from gppylib.test.unit.gp_unittest import GpTestCase
 
 
 class UpdatePgHBAConfTests(GpTestCase):

@@ -46,7 +46,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 import cStringIO
 import csv
-from datetime import date, datetime
+from datetime import datetime
 import re
 import sys
 import time

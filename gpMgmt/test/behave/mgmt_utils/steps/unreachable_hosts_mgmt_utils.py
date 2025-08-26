@@ -8,7 +8,6 @@ from behave import given, when, then
 
 from gppylib.gparray import GpArray
 from gppylib.db import dbconn
-from gppylib.commands.base import Command, REMOTE
 
 # These utilities are intended to help various Behave tests handle disconnecting
 # and reconnecting hosts from the current GPDB cluster.  They are not intended to be

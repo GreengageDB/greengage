@@ -1,9 +1,9 @@
 from __future__ import absolute_import
-import os, pickle, base64
+import pickle
+import base64
 
 from gppylib.utils import checkNotNone
 from gppylib.gplog import *
-from gppylib.commands import unix
 from gppylib.commands import gp
 from gppylib.commands import base
 from gppylib.gparray import GpArray

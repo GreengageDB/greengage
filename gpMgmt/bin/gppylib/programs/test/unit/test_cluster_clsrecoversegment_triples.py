@@ -3,7 +3,7 @@
 from __future__ import absolute_import
 import copy
 import io
-from mock import Mock, patch, MagicMock, call
+from mock import Mock, patch, call
 import tempfile
 import itertools
 
@@ -17,7 +17,6 @@ from gppylib.programs.clsRecoverSegment_triples import (
     is_pg_rewind_running,
     extract_recovery_config_info,
 )
-from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from gppylib.test.unit.gp_unittest import GpTestCase, SubTest, FakeCursor
 
 
@@ -1158,7 +1157,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
             if not failover:
                 continue
 
-            if not failed.getSegmentDbId() in segMap:
+            if failed.getSegmentDbId() not in segMap:
                 continue
 
             # these are the only fields we can change in the failed segment

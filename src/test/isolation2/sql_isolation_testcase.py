@@ -27,12 +27,10 @@ except:
     import subprocess
 import re
 import multiprocessing
-import tempfile
 import time
 import sys
 import socket
 from optparse import OptionParser
-import traceback
 import select
 
 
@@ -645,7 +643,7 @@ class SQLIsolationExecutor(object):
                 "Session name should be smaller than 1024 unless it is utility mode number"
             )
 
-        if not (name, mode) in self.processes:
+        if (name, mode) not in self.processes:
             if not dbname:
                 dbname = self.dbname
             self.processes[(name, mode)] = SQLIsolationExecutor.SQLConnection(
@@ -664,7 +662,7 @@ class SQLIsolationExecutor(object):
                 "Session name should be smaller than 1024 unless it is utility mode number"
             )
 
-        if not (name, mode) in self.processes:
+        if (name, mode) not in self.processes:
             raise Exception("Sessions not started cannot be quit")
 
         self.processes[(name, mode)].quit()
@@ -681,7 +679,7 @@ class SQLIsolationExecutor(object):
                 "Session name should be smaller than 1024 unless it is utility mode number"
             )
 
-        if not (name, mode) in self.processes:
+        if (name, mode) not in self.processes:
             raise Exception("Sessions not started cannot be terminated")
 
         self.processes[(name, mode)].terminate()
@@ -1020,7 +1018,7 @@ class SQLIsolationExecutor(object):
                     command += command_part
                     try:
                         self.process_command(command, output_file, shell_executor)
-                    except GlobalShellExecutor.ExecutionError as e:
+                    except GlobalShellExecutor.ExecutionError:
                         # error of the GlobalShellExecutor cannot be recovered
                         raise
                     except Exception as e:

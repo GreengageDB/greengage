@@ -16,7 +16,6 @@ from gppylib.operations.test_utils_helper import (
     RaiseOperation_Unsafe,
     RaiseOperation_Unpicklable,
     RaiseOperation_Safe,
-    MyException,
     ExceptionWithArgs,
 )
 from operations.unix import ListFiles
@@ -64,7 +63,7 @@ class UtilsTestCase(GpTestCase):
     def test_unsafe_exceptions_with_args(self):
         try:
             RemoteOperation(RaiseOperation_Unsafe(), "localhost").run()
-        except TypeError as e:  # Because Exceptions don't retain init args, they are not pickle-able normally
+        except TypeError:  # Because Exceptions don't retain init args, they are not pickle-able normally
             pass
         else:
             self.fail(
@@ -74,7 +73,7 @@ class UtilsTestCase(GpTestCase):
     def test_proper_exceptions_sanity(self):
         try:
             RemoteOperation(RaiseOperation_Safe(), "localhost").run()
-        except ExceptionWithArgs as e:
+        except ExceptionWithArgs:
             pass
         else:
             self.fail(

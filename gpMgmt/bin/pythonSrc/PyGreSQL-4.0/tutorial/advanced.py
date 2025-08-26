@@ -23,7 +23,6 @@ then start the demo with:      advanced.demo(cnx)
 __________________________________________________________________
 """)
 
-from pg import DB
 import sys
 
 

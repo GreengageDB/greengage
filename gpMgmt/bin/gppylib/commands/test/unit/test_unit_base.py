@@ -7,7 +7,6 @@ from __future__ import absolute_import
 import unittest
 from gppylib.commands.base import (
     Command,
-    WorkerPool,
     RemoteExecutionContext,
     GPHOME,
     LocalExecutionContext,

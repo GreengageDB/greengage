@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import sys, os
+import sys
 import gpsegstart
 from mock import Mock, patch
 from gppylib.test.unit.gp_unittest import GpTestCase

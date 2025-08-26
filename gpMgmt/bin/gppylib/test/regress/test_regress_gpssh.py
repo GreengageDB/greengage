@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import
-import os, signal, time, re
+import os
+import signal
+import time
+import re
 import unittest
 import psutil
 

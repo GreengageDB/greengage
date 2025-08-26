@@ -10,7 +10,9 @@ Contains GpVersion class for handling version comparisons.
 
 # ===========================================================
 from __future__ import absolute_import
-import sys, os, re
+import sys
+import os
+import re
 
 # Python version 2.6.2 is expected, must be between 2.5-3.0
 if sys.version_info < (2, 5, 0) or sys.version_info >= (3, 0, 0):

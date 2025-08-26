@@ -9,15 +9,13 @@ configuration information.
 """
 
 from __future__ import absolute_import
-import os, copy
 from collections import defaultdict
 
 from gppylib.gplog import *
 from gppylib.utils import checkNotNone
 from gppylib.system.configurationInterface import *
 from gppylib.system.ComputeCatalogUpdate import ComputeCatalogUpdate
-from gppylib.gparray import GpArray, Segment, InvalidSegmentConfiguration
-from gppylib import gparray
+from gppylib.gparray import GpArray, InvalidSegmentConfiguration
 from gppylib.db import dbconn
 from gppylib.commands.gp import get_local_db_mode
 

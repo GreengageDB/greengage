@@ -1,16 +1,14 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import
-import os
 import unittest
 
-from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.initstandby import (
     get_standby_pg_hba_info,
     update_pg_hba,
     update_pg_hba_conf_on_segments,
 )
-from mock import MagicMock, Mock, mock_open, patch
+from mock import MagicMock, Mock, patch
 
 
 class InitStandbyTestCase(unittest.TestCase):

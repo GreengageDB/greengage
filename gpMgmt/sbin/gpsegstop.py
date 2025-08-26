@@ -13,9 +13,8 @@
 from __future__ import absolute_import
 from gppylib.mainUtils import *
 
-import os, sys, time, signal
+import os
 
-from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRESS_USAGE
 
 from gppylib.gpparseopts import OptParser, OptChecker
 from gppylib import gplog
@@ -27,9 +26,6 @@ from gppylib.commands.gp import (
     DEFAULT_SEGHOST_NUM_WORKERS,
 )
 from gppylib.commands import pg
-from gppylib.db import dbconn
-from gppylib import pgconf
-from gppylib.commands.gp import is_pid_postmaster
 
 description = """
 This utility is NOT SUPPORTED and is for internal-use only.

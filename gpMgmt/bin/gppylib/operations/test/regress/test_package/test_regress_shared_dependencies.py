@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import
-import os
 
 from gppylib.commands.base import ExecutionError
 from gppylib.operations.test.regress.test_package import (
     GppkgTestCase,
-    skipIfNoStandby,
     unittest,
     GppkgSpec,
     RPMSpec,
-    ARCHIVE_PATH,
     RPM_DATABASE,
     run_command,
 )

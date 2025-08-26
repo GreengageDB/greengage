@@ -4,7 +4,6 @@ import codecs
 import math
 import fnmatch
 import glob
-import json
 import os
 import re
 import pipes
@@ -21,24 +20,19 @@ try:
 except:
     from subprocess import check_output, Popen, PIPE
 import commands
-from collections import defaultdict
 
 import psutil
 from behave import given, when, then
-from datetime import datetime, timedelta
+from datetime import datetime
 from os import path
 
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
-from gppylib.commands.gp import SegmentStart, GpStandbyStart, MasterStop
-from gppylib.commands.gp import get_masterdatadir
+from gppylib.commands.gp import SegmentStart, MasterStop
 from gppylib.commands import gp, unix
-from gppylib.commands.unix import CMD_CACHE
 from gppylib.commands.pg import PgBaseBackup
-from gppylib.commands.unix import findCmdInPath, Scp
 from gppylib.operations.startSegments import MIRROR_MODE_MIRRORLESS
 from gppylib.operations.buildMirrorSegments import get_recovery_progress_pattern
 from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
-from gppylib.operations.unix import ListRemoteFilesByPattern, CheckRemoteFile
 from test.behave_utils.gpfdist_utils.gpfdist_mgmt import Gpfdist
 from test.behave_utils.utils import *
 from test.behave_utils.cluster_setup import TestCluster, reset_hosts
@@ -3186,7 +3180,7 @@ def impl(_):
         raise Exception("Timestamp was not found")
 
     for file in os.listdir(repair_dir):
-        if not timestamp in file:
+        if timestamp not in file:
             raise Exception("file found containing inconsistent timestamp")
 
 
@@ -3420,7 +3414,7 @@ def impl(context, gppkg_name):
         )
         cmd.run(validateAfter=True)
 
-        if not gppkg_name in cmd.get_stdout():
+        if gppkg_name not in cmd.get_stdout():
             raise Exception(
                 '"%s" gppkg is not installed on host: %s. \nInstalled packages: %s'
                 % (gppkg_name, hostname, cmd.get_stdout())
@@ -5783,9 +5777,7 @@ def impl(context, command, num):
         )
         if match_count != int(num):
             raise Exception(
-                "Expected %s to occur %s times but Found %d times".format(
-                    expected_pattern, num, match_count
-                )
+                "Expected %s to occur %s times but Found %d times"
             )
 
 

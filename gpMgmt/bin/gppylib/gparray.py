@@ -15,9 +15,7 @@ gparray.py:
 
 # ============================================================================
 from __future__ import absolute_import
-from datetime import date
 import copy
-import traceback
 
 from gppylib.utils import checkNotNone, checkIsInt
 from gppylib import gplog
@@ -392,7 +390,7 @@ class Segment:
     def setSegmentMode(self, mode):
         checkNotNone("mode", mode)
 
-        if not mode in VALID_MODE:
+        if mode not in VALID_MODE:
             raise Exception("Invalid mode '%s'" % mode)
 
         self.mode = mode

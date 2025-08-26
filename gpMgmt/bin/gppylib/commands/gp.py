@@ -8,7 +8,10 @@ TODO: docs!
 """
 
 from __future__ import absolute_import
-import os, pickle, base64, time
+import os
+import pickle
+import base64
+import time
 import os.path
 import pipes
 
@@ -17,15 +20,12 @@ try:
 except:
     import subprocess
 
-import re, socket
 
 from gppylib.gplog import *
 from gppylib.db import dbconn
-from gppylib import gparray
 from gppylib.commands.base import *
 from .unix import *
 from gppylib import pgconf
-from gppylib.utils import writeLinesToFile, createFromSingleHostFile, shellEscape
 
 
 logger = get_default_logger()
@@ -1880,7 +1880,7 @@ def is_pid_postmaster(datadir, pid, remoteHost=None):
         )
         cmd.run()
         if cmd.get_results().rc == COMMAND_NOT_FOUND:
-            if not remoteHost is None:
+            if remoteHost is not None:
                 logger.warning(
                     'command "%s" is not found on host %s. cannot check postmaster status, assuming it is running',
                     commandName,
@@ -1918,8 +1918,8 @@ def is_pid_postmaster(datadir, pid, remoteHost=None):
                 is_postmaster = False
             else:
                 logger.info(res.stdout.strip())
-        except Exception as e:
-            if not remoteHost is None:
+        except Exception:
+            if remoteHost is not None:
                 logger.warning(
                     "failed to get the status of postmaster %s on %s. assuming that postmaster is running"
                     % (datadir, remoteHost)

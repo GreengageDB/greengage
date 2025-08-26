@@ -17,7 +17,6 @@ sys.stdout = NullDevice()
 
 # log initialization must be done only AFTER rerouting stdout
 from gppylib import gplog
-from gppylib.mainUtils import getProgramName
 from gppylib.commands import unix
 
 hostname = unix.getLocalHostname()
@@ -40,7 +39,7 @@ except Exception as e:
         # logger.exception(e)               # logging 'e' could be necessary for traceback
 
         pickled_ret = pickle.dumps(e)  # Pickle exception for stdout transmission
-    except Exception as f:
+    except Exception:
         # logger.exception(f)               # 'f' is not important to us, except for debugging perhaps
 
         # No hope of pickling a precise Exception back to RemoteOperation.

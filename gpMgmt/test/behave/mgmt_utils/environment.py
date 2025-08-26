@@ -11,7 +11,6 @@ from test.behave_utils.utils import (
     create_database,
     run_command,
     check_user_permissions,
-    run_gpcommand,
     execute_sql,
 )
 from steps.mirrors_mgmt_utils import MirrorMgmtContext

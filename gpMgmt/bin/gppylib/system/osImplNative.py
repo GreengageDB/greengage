@@ -12,10 +12,9 @@ This file defines the interface that can be used to
 """
 
 from __future__ import absolute_import
-import os, time
+import time
 
 from gppylib.gplog import *
-from gppylib.utils import checkNotNone
 from gppylib.system.osInterface import GpOsProvider
 
 logger = get_default_logger()

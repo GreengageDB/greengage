@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 import unittest
 
-from pygresql import pg
 
 from gppylib.db import dbconn
 

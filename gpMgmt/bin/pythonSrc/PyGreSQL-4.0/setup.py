@@ -46,7 +46,6 @@ import os
 if not (2, 2) < sys.version_info[:2] < (3, 0):
     raise Exception("PyGreSQL %s requires a Python 2 version newer than 2.2." % version)
 
-import os
 from distutils.core import setup
 from distutils.extension import Extension
 

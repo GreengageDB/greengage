@@ -2,17 +2,12 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
-import unittest
 import sys
 import os
-import string
-import time
 import socket
 import fileinput
-import platform
 import re
 import pytest
-import io
 
 # from gppylib.commands.gp import get_coordinatordatadir
 

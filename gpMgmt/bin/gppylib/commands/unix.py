@@ -792,7 +792,7 @@ class PgPortIsActive(Command):
                     file,
                     findCmdInPath("awk"),
                 )
-            except CommandNotFoundException as err:
+            except CommandNotFoundException:
                 logger.critical("Failed to find active tcp port.")
                 raise
 
@@ -914,7 +914,7 @@ def isScpEnabled(hostlist):
         )
         try:
             cmd.run(validateAfter=True)
-        except Exception as e:
+        except Exception:
             print(
                 (
                     "[Warning] Either scp is not available or does not have execute permission on host:{0}".format(

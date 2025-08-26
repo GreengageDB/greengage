@@ -5,7 +5,6 @@ import fileinput
 import os
 import pipes
 import re
-import signal
 import stat
 import time
 import glob
@@ -15,7 +14,6 @@ try:
     import subprocess32 as subprocess
 except:
     import subprocess
-import difflib
 
 from contextlib import closing
 from datetime import datetime
@@ -202,7 +200,7 @@ def check_return_code(context, ret_code):
 
 
 def check_database_is_running(context):
-    if not "PGPORT" in os.environ:
+    if "PGPORT" not in os.environ:
         raise Exception("PGPORT should be set")
 
     pgport = int(os.environ["PGPORT"])
@@ -1058,7 +1056,7 @@ def wait_for_unblocked_transactions(context, num_retries=150):
                 conn.cursor().execute("CREATE TEMP TABLE temp_test(a int)")
                 conn.cursor().execute("COMMIT")
                 break
-        except Exception as e:
+        except Exception:
             attempt += 1
             pass
         time.sleep(1)

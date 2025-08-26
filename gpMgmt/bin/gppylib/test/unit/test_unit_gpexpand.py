@@ -6,7 +6,6 @@ from .gp_unittest import *
 from mock import *
 from gparray import Segment, GpArray
 from gppylib.db.dbconn import DbURL
-from gppylib.db import catalog
 from gppylib.gplog import *
 from gppylib.system.configurationInterface import GpConfigurationProvider
 from gppylib.system.environment import GpMasterEnvironment

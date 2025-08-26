@@ -5,10 +5,6 @@ from __future__ import print_function
 import unittest
 import sys
 import os
-import string
-import time
-import socket
-import fileinput
 import platform
 import re
 

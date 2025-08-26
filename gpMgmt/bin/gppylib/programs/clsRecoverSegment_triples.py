@@ -6,13 +6,13 @@ from gppylib.db import dbconn
 from gppylib import gplog
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
-from gppylib.parseutils import line_reader, check_values, canonicalize_address
+from gppylib.parseutils import line_reader, check_values
 from gppylib.utils import (
     checkNotNone,
     normalizeAndValidateInputPath,
     validateHostnameAddress,
 )
-from gppylib.gparray import GpArray, Segment
+from gppylib.gparray import GpArray
 from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 

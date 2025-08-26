@@ -15,7 +15,6 @@ Send a POST request::
 from __future__ import absolute_import
 from __future__ import print_function
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-import SocketServer
 import getopt
 import sys
 import os

@@ -38,9 +38,7 @@ try:
 except:
     import subprocess
 import threading
-import Queue
 import pipes  # for shell-quoting, pipes.quote()
-import time
 
 
 class ReplicaCheck(threading.Thread):

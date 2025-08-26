@@ -2,7 +2,9 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
-import sys, string, locale
+import sys
+import string
+import locale
 
 locale.setlocale(locale.LC_ALL, "")
 

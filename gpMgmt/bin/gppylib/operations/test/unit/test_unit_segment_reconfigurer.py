@@ -6,7 +6,6 @@ from gppylib.operations.segment_reconfigurer import SegmentReconfigurer, FTS_PRO
 
 from gppylib.test.unit.gp_unittest import GpTestCase
 from pygresql import pgdb
-import mock
 from mock import Mock, patch, call, MagicMock
 import contextlib
 import pygresql.pg

@@ -11,8 +11,6 @@ from collections import defaultdict
 from gppylib import gplog
 from gppylib.commands import unix
 from gppylib.commands.base import REMOTE, WorkerPool, Command
-from gppylib.mainUtils import ExceptionNoStackTraceNeeded
-from gppylib.operations import Operation
 
 PG_HBA_BACKUP = "pg_hba.conf.bak"
 

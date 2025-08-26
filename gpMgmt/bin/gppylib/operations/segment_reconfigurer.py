@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 import time
 
-from gppylib.commands import base
 from gppylib.db import dbconn
 import pygresql.pg
 
@@ -42,7 +41,7 @@ class SegmentReconfigurer:
                 conn = dbconn.connect(dburl)
                 conn.cursor().execute("CREATE TEMP TABLE temp_test(a int)")
                 conn.cursor().execute("COMMIT")
-            except Exception as e:
+            except Exception:
                 now = time.time()
                 if now < start_time + self.timeout:
                     continue

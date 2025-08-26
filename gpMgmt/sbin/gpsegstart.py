@@ -13,12 +13,11 @@ Internal Use Function.
 from __future__ import absolute_import
 from gppylib.mainUtils import simple_main, addStandardLoggingAndHelpOptions
 
-import os, pickle, base64, time
+import os
 
 from gppylib.gpparseopts import OptParser, OptChecker
 from gppylib import gparray, gplog
 from gppylib.commands import base, gp
-from gppylib.utils import parseKeyColonValueLines
 from gppylib.commands.pg import PgControlData
 
 logger = gplog.get_default_logger()

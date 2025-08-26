@@ -10,7 +10,7 @@ Module for commands that are DCA specific
 from __future__ import absolute_import
 import os
 from gppylib.gplog import get_default_logger
-from .base import Command, LOCAL, REMOTE
+from .base import Command, LOCAL
 
 logger = get_default_logger()
 

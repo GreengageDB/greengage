@@ -10,12 +10,9 @@ Note that this does NOT pay attention to the current pause state in the db.  It 
 """
 
 from __future__ import absolute_import
-import os
-import time
 import re
 
 from gppylib.gplog import *
-from gppylib.utils import checkNotNone
 from gppylib.system.faultProberInterface import GpFaultProber
 from gppylib.db import dbconn, catalog
 

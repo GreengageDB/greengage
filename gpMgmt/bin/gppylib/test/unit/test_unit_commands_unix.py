@@ -9,12 +9,10 @@ from commands.unix import (
     RemoveDirectory,
     RemoveDirectoryContents,
     RemoveGlob,
-    REMOTE,
     Command,
     isScpEnabled,
 )
 from .gp_unittest import *
-from gppylib.commands.base import CommandResult
 
 
 class CommandsUnix(GpTestCase):

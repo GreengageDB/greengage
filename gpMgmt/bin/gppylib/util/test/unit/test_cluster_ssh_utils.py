@@ -3,7 +3,9 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import mock
-import sys, os, pwd
+import sys
+import os
+import pwd
 import unittest
 from StringIO import StringIO
 from mock import patch, call

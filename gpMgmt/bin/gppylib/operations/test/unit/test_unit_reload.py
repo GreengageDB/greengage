@@ -6,7 +6,7 @@ import unittest
 
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.reload import GpReload
-from mock import MagicMock, Mock, mock_open, patch
+from mock import Mock, patch
 
 
 class GpReloadTestCase(unittest.TestCase):

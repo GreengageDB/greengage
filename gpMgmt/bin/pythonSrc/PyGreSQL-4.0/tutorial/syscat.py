@@ -25,7 +25,6 @@ Some results may be empty, depending on your base status."
 __________________________________________________________________
 """)
 
-from pg import DB
 import sys
 
 
@@ -137,7 +136,8 @@ def list_op_class(pgcnx):
 
 # demo function - runs all examples
 def demo(pgcnx):
-    import sys, os
+    import sys
+    import os
 
     save_stdout = sys.stdout
     sys.stdout = os.popen("more", "w")

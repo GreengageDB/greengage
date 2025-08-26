@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import
-import os, sys
 import unittest
 from gppylib import gplog
 from gppylib.commands.base import CommandResult

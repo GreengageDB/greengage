@@ -171,7 +171,7 @@ class GpExpandUtils(GpTestCase):
             INSERT INTO gpexpand.status_detail (dbname, fq_name, rank, status) VALUES
                 ('fake_db', 'public.t1', 2, 'NOT STARTED'),
                 ('fake_db', 'public.t2', 2, 'NOT STARTED');
-        """.format(dbname=ctx.dbname),
+        """.format(),
         )
         ctx.conn.commit()
 

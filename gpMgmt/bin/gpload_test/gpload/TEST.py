@@ -5,8 +5,6 @@ from __future__ import print_function
 import unittest
 import sys
 import os
-import string
-import time
 import datetime
 import socket
 import fileinput
@@ -17,7 +15,6 @@ try:
     import subprocess32 as subprocess
 except:
     import subprocess
-from pygresql import pg
 
 """
 Global Values

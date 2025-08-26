@@ -1,6 +1,4 @@
 from __future__ import absolute_import
-import sys, os
-from mock import Mock, patch
 from gppylib.test.unit.gp_unittest import GpTestCase
 from gppylib.parseutils import (
     is_valid_datadir,

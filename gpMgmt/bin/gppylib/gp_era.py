@@ -8,7 +8,10 @@ Copyright (c) EMC/Greenplum Inc 2011. All Rights Reserved.
 """
 
 from __future__ import absolute_import
-import sys, os, stat, re
+import sys
+import os
+import stat
+import re
 import hashlib
 
 ERA_RE = re.compile(r"era\s*=\s*(\w+)")
@@ -152,7 +155,8 @@ def read_era(datadir, logger):
 # trivial unit test
 #
 if __name__ == "__main__":
-    import copy, shutil
+    import copy
+    import shutil
     import unittest
 
     TESTDIR = "test_gp_era1"

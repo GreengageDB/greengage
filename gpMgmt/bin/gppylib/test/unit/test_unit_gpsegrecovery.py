@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from . import redirect_stderr
-from mock import call, Mock, patch, ANY
+from mock import call, Mock, patch
 import sys
 
 from .gp_unittest import GpTestCase, FakeCursor
@@ -9,7 +9,7 @@ from gpsegrecovery import SegRecovery
 import gppylib
 from gppylib import gplog
 from gppylib.gparray import Segment
-from gppylib.recoveryinfo import RecoveryInfo, RecoveryErrorType
+from gppylib.recoveryinfo import RecoveryInfo
 
 
 class IncrementalRecoveryTestCase(GpTestCase):

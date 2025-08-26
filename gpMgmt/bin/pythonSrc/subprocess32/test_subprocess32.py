@@ -1233,7 +1233,7 @@ class POSIXProcessTestCase(BaseTestCase):
 
         try:
             p = subprocess.Popen([sys.executable, "-c", ""], preexec_fn=raise_it)
-        except RuntimeError as e:
+        except RuntimeError:
             self.assertTrue(
                 subprocess._posixsubprocess, "Expected a ValueError from the preexec_fn"
             )

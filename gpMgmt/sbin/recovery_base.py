@@ -7,7 +7,7 @@ import sys
 
 from gppylib import gplog, recoveryinfo
 from gppylib.commands import unix
-from gppylib.commands.base import Command, WorkerPool, CommandResult, ExecutionError
+from gppylib.commands.base import WorkerPool, CommandResult
 from gppylib.commands.gp import DEFAULT_SEGHOST_NUM_WORKERS
 from gppylib.gpparseopts import OptParser, OptChecker
 

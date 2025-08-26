@@ -8,7 +8,7 @@ except:
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray
 
-from behave import given, when, then
+from behave import given, when
 from test.behave_utils.utils import *
 
 from .mgmt_utils import *

@@ -5,7 +5,6 @@ from __future__ import print_function
 import glob
 import optparse
 import os
-import shutil
 import stat
 import subprocess
 import sys

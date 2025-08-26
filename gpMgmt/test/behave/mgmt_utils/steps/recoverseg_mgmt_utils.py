@@ -5,11 +5,12 @@ import tempfile
 from time import sleep
 
 from contextlib import closing
-from gppylib.commands.base import Command, ExecutionError, REMOTE, WorkerPool
+from gppylib.commands.base import Command, REMOTE
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray, ROLE_PRIMARY, ROLE_MIRROR
 from test.behave_utils.utils import *
-import platform, shutil
+import platform
+import shutil
 from behave import given, when, then
 from gppylib.utils import writeLinesToFile
 from gppylib.parseutils import canonicalize_address
@@ -443,8 +444,7 @@ def recovery_fail_check(context, recovery_type, content_ids, utility):
             print_msg=print_msg,
             content_ids=content_ids,
             recovery_type=recovery_type,
-            logfile_name=logfile_name,
-        )
+            )
     )
 
     if recovery_type == "differential":

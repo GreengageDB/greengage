@@ -1,5 +1,6 @@
 from __future__ import absolute_import
-import os, mmap
+import os
+import mmap
 from test.behave_utils.utils import drop_database_if_exists, drop_table_if_exists
 
 

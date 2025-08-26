@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from optparse import OptionGroup
 import os
 import sys
-import tarfile
 
 try:
     from gppylib import gplog, pgconf
@@ -272,7 +271,7 @@ class GpPkgProgram:
                 cmd.run(validateAfter=True)
                 cmd = Command(name="Check for fakeroot", cmdStr="fakeroot --version")
                 cmd.run(validateAfter=True)
-            except Exception as ex:
+            except Exception:
                 raise ExceptionNoStackTraceNeeded(
                     "fakeroot and dpkg are both required by gppkg"
                 )

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import
-import os
 
 from gppylib.commands.base import ExecutionError
 from gppylib.operations.test.regress.test_package import (
@@ -9,7 +8,6 @@ from gppylib.operations.test.regress.test_package import (
     GppkgSpec,
     RPMSpec,
     unittest,
-    run_command,
 )
 
 

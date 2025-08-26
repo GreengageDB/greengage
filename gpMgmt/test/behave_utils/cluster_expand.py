@@ -8,7 +8,6 @@ except:
     from subprocess import Popen, PIPE
 from .utils import run_gpcommand
 
-from gppylib.commands.base import Command
 from gppylib.db import dbconn
 
 

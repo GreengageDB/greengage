@@ -6,9 +6,7 @@
 #
 
 from __future__ import absolute_import
-import os
 import unittest
-import tempfile
 
 from gppylib.db import dbconn
 from gppylib.db.test import skipIfDatabaseDown

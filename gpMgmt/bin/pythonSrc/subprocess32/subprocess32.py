@@ -410,9 +410,7 @@ mswindows = sys.platform == "win32"
 
 import os
 import exceptions
-import types
 import time
-import traceback
 import gc
 import signal
 
@@ -472,7 +470,6 @@ else:
     _has_poll = hasattr(select, "poll")
     import errno
     import fcntl
-    import pickle
 
     try:
         import _posixsubprocess
@@ -527,16 +524,6 @@ __all__ = [
 ]
 
 if mswindows:
-    from _subprocess import (
-        CREATE_NEW_CONSOLE,
-        CREATE_NEW_PROCESS_GROUP,
-        STD_INPUT_HANDLE,
-        STD_OUTPUT_HANDLE,
-        STD_ERROR_HANDLE,
-        SW_HIDE,
-        STARTF_USESTDHANDLES,
-        STARTF_USESHOWWINDOW,
-    )
 
     __all__.extend([
         "CREATE_NEW_CONSOLE",

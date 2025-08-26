@@ -11,10 +11,9 @@ from gppylib.mainUtils import *
 
 from gppylib.gplog import *
 from gppylib.commands import unix
-import pickle, base64
-from gppylib import gparray
-from gppylib.gpparseopts import OptChecker, OptParser, OptParser
-from gppylib.operations.buildMirrorSegments import gDatabaseDirectories, gDatabaseFiles
+import pickle
+import base64
+from gppylib.gpparseopts import OptChecker, OptParser
 
 logger = get_default_logger()
 

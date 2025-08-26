@@ -2,7 +2,8 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
-import os, sys
+import os
+import sys
 
 PATH, EXECNAME = os.path.split(os.path.abspath(sys.argv[0]))
 MYD = os.path.abspath(os.path.dirname(__file__))
@@ -11,18 +12,16 @@ mkpath = lambda *x: os.path.join(MYD, *x)
 # globals
 SAMPLE_QUERY = "(select count(*) from (select o0.o_orderkey from (heap_orders o0 left outer join heap_orders o1 on o0.o_orderkey = o1.o_orderkey left outer join heap_orders o2 on o2.o_orderkey = o1.o_orderkey left outer join heap_orders o3 on o3.o_orderkey = o2.o_orderkey left outer join heap_orders o4 on o4.o_orderkey = o3.o_orderkey) order by o0.o_orderkey) as foo);"
 
-import shutil, time, re
+import time
 
 try:
     import subprocess32 as subprocess
 except:
     import subprocess
-from optparse import OptionParser, OptionGroup
+from optparse import OptionParser
 
 try:
-    from gppylib import gplog
     from multiprocessing import Process
-    from gppylib.commands import unix
 except Exception as e:
     sys.exit(
         "Cannot import modules. Please check that you have sourced greengage_path.sh. Detail: "

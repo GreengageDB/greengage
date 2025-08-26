@@ -10,14 +10,12 @@ from __future__ import absolute_import
 from __future__ import print_function
 from gppylib.mainUtils import *
 
-from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRESS_USAGE
-import os, sys, getopt, socket, StringIO, signal, copy
+from optparse import OptionGroup
+import sys
 
-from gppylib import gparray, gplog, pgconf, userinput, utils, heapchecksum
-from gppylib.commands.base import Command
+from gppylib import gparray, gplog, userinput, utils, heapchecksum
 from gppylib.util import gp_utils
-from gppylib.commands import base, gp, pg, unix
-from gppylib.db import catalog, dbconn
+from gppylib.commands import base, gp
 from gppylib.gpparseopts import OptParser, OptChecker
 from gppylib.operations.startSegments import *
 from gppylib.operations.buildMirrorSegments import *

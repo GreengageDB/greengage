@@ -17,7 +17,10 @@ and try to avoid placing logic for a specific utility here.
 """
 
 from __future__ import absolute_import
-import errno, os, sys, shutil
+import errno
+import os
+import sys
+import shutil
 
 gProgramName = os.path.split(sys.argv[0])[-1]
 if sys.version_info < (2, 5, 0):
@@ -40,7 +43,7 @@ from gppylib.system import (
     faultProberInterface,
     faultProberImplGpdb,
 )
-from optparse import OptionGroup, OptionParser, SUPPRESS_HELP
+from optparse import OptionGroup
 
 
 def getProgramName():
@@ -418,7 +421,7 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
     except ExceptionNoStackTraceNeeded as e:
         logger.error("%s error: %s" % (gProgramName, e))
         exit_status = 2
-    except UserAbortedException as e:
+    except UserAbortedException:
         logger.info("User abort requested, Exiting...")
         exit_status = 4
     except ExecutionError as e:

@@ -20,11 +20,10 @@ from __future__ import absolute_import
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
-import glob, os, sys, signal, shutil, time
-from gppylib import gparray, gplog, userinput, utils
-from gppylib.util import gp_utils
-from gppylib.commands import gp, pg, unix
-from gppylib.commands.base import Command, WorkerPool
+import sys
+from gppylib import gplog, userinput
+from gppylib.commands import gp, unix
+from gppylib.commands.base import WorkerPool
 from gppylib.db import dbconn
 from gppylib.gpparseopts import OptParser, OptChecker
 from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
@@ -35,8 +34,8 @@ from gppylib.operations.update_pg_hba_on_segments import update_pg_hba_on_segmen
 from gppylib.programs import programIoUtils
 from gppylib.system import configurationInterface as configInterface
 from gppylib.system.environment import GpMasterEnvironment
-from gppylib.parseutils import line_reader, check_values, canonicalize_address
-from gppylib.utils import writeLinesToFile, normalizeAndValidateInputPath, TableLogger
+from gppylib.parseutils import canonicalize_address
+from gppylib.utils import writeLinesToFile, TableLogger
 from gppylib.operations.utils import ParallelOperation
 from gppylib.operations.package import SyncPackages
 from gppylib.heapchecksum import HeapChecksum

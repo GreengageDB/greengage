@@ -11,7 +11,6 @@ import unittest
 
 from gppylib import gplog
 from gppylib.db import dbconn
-from gppylib.db import catalog
 from gppylib.db.test import skipIfDatabaseDown
 
 

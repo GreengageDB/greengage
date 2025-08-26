@@ -34,7 +34,6 @@ import getpass
 import os
 import re
 import subprocess
-import yaml
 
 from jinja2 import Environment, FileSystemLoader
 

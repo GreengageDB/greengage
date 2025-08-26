@@ -8,18 +8,16 @@
 #
 from __future__ import absolute_import
 from gppylib.mainUtils import *
-import os, sys
 
-import pickle, base64
+import pickle
+import base64
 import re
 
-from optparse import Option, OptionGroup, OptionParser, OptionValueError
 
 from gppylib.gpparseopts import OptParser, OptChecker
-from gppylib import gplog, gparray, pgconf
-from gppylib.commands import base, gp, pg, unix
+from gppylib import gplog, gparray
+from gppylib.commands import base, gp
 from gppylib.db import dbconn
-from gppylib.utils import parseKeyColonValueLines
 
 logger = gplog.get_default_logger()
 

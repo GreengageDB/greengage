@@ -10,7 +10,6 @@ import signal
 from multiprocessing import Queue
 from threading import Thread, Lock
 import time
-import string
 from collections import defaultdict
 import os
 import re
@@ -514,7 +513,7 @@ class CheckTables(connection):
 
         try:
             db.query("show gp_detect_data_correctness;")
-        except Exception as e:
+        except Exception:
             logger.warning("Failed to get GUC gp_detect_data_correctness")
         else:
             while not self.qlist.empty():

@@ -5,7 +5,6 @@ from __future__ import print_function
 import sys
 import datetime
 
-import pdb
 # pdb.set_trace()
 
 # Test and declaration generator for linear_interpolation
@@ -169,7 +168,7 @@ def ordered_types():
     for key in keys:
         pos = type_dict[key][3]
         ordered_keys[pos] = key
-    assert not None in ordered_keys
+    assert None not in ordered_keys
     return ordered_keys
 
 

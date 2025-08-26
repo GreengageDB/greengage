@@ -2,17 +2,15 @@
 
 from __future__ import absolute_import
 import os
-import sys
 
 from gppylib.recoveryinfo import RecoveryErrorType
 from gppylib.commands.pg import PgBaseBackup, PgRewind, PgReplicationSlot
 from gppylib.commands.unix import Rsync
 from recovery_base import RecoveryBase, set_recovery_cmd_results
-from gppylib.commands.base import Command, LOCAL
+from gppylib.commands.base import Command
 from gppylib.commands.gp import SegmentStart
 from gppylib.gparray import Segment
 from gppylib.commands.gp import ModifyConfSetting
-from gppylib.db import dbconn
 from gppylib.db.catalog import RemoteQueryCommand
 from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from gppylib.operations.segment_tablespace_locations import (

@@ -22,7 +22,6 @@ then start the demo with:      func.demo(cnx)
 __________________________________________________________________
 """)
 
-from pg import DB
 import sys
 
 

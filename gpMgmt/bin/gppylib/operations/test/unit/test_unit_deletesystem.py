@@ -3,7 +3,7 @@
 from __future__ import absolute_import
 import unittest
 from gppylib.operations.deletesystem import validate_pgport
-from mock import patch, MagicMock, Mock
+from mock import patch
 
 
 class GpDeletesystemTestCase(unittest.TestCase):

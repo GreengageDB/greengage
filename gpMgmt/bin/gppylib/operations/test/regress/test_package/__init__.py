@@ -12,12 +12,11 @@ from gppylib.gparray import GpArray
 from gppylib.gpversion import MAIN_VERSION
 from contextlib import closing
 from gppylib.commands import gp
-from gppylib.commands.unix import Scp
+from gppylib.commands.unix import Scp as Scp
 from gppylib.commands.base import Command, ExecutionError, REMOTE
 from gppylib.operations import Operation
-from gppylib.operations.unix import CheckFile, CheckRemoteFile, RemoveRemoteFile
-from gppylib.operations.package import dereference_symlink, GpScp
-from gppylib.commands.base import Command, REMOTE
+from gppylib.operations.unix import CheckFile, CheckRemoteFile as CheckRemoteFile, RemoveRemoteFile as RemoveRemoteFile
+from gppylib.operations.package import dereference_symlink, GpScp as GpScp
 
 
 def get_os():

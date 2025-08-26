@@ -3,7 +3,6 @@
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 from __future__ import absolute_import
-import os
 import re
 from collections import OrderedDict
 import logging
@@ -13,17 +12,16 @@ import tempfile
 from datetime import datetime
 
 
-from mock import ANY, call, patch, Mock, mock_open
-from gppylib import gplog, recoveryinfo
+from mock import ANY, call, patch, Mock
+from gppylib import gplog
 from gppylib.commands import base, gp
-from gppylib.commands.base import CommandResult, LocalExecutionContext
+from gppylib.commands.base import CommandResult
 
 from gppylib.gparray import Segment, GpArray
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.buildMirrorSegments import (
     GpMirrorToBuild,
     GpMirrorListToBuild,
-    GpStopSegmentDirectoryDirective,
     get_recovery_progress_pattern,
 )
 from gppylib.system import configurationInterface

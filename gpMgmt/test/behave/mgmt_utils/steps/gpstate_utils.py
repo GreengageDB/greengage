@@ -1,11 +1,11 @@
 from __future__ import absolute_import
-from behave import given, when, then
+from behave import given, then
 import os
 import re
 
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray, ROLE_MIRROR
-from test.behave_utils.utils import check_stdout_msg, check_string_not_present_stdout
+from test.behave_utils.utils import check_stdout_msg
 from gppylib.commands.gp import get_masterdatadir
 from gppylib.commands import unix
 

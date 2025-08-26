@@ -5,8 +5,7 @@
 from __future__ import absolute_import
 from gppylib import gplog, pgconf
 from gppylib.commands import gp
-from gppylib.db import catalog, dbconn
-from gppylib.utils import toNonNoneString, checkNotNone
+from gppylib.db import dbconn
 
 logger = gplog.get_default_logger()
 

@@ -2,7 +2,8 @@
 
 from __future__ import absolute_import
 import unittest
-import os, socket
+import os
+import socket
 
 from gppylib.commands.base import Command, ExecutionError
 from gppylib.commands.gp import GpStart

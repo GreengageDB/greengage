@@ -2,7 +2,6 @@ from __future__ import absolute_import
 import os
 from mock import *
 from .gp_unittest import *
-from StringIO import StringIO
 
 try:
     from subprocess32 import Popen, PIPE

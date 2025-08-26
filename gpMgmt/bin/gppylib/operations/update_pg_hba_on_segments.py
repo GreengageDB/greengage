@@ -1,11 +1,10 @@
 from __future__ import absolute_import
 import os
-import re
 import socket
 
 from gppylib import gplog
 from gppylib.commands.base import Command, WorkerPool, REMOTE
-from gppylib.commands import base, gp, unix
+from gppylib.commands import gp, unix
 
 logger = gplog.get_default_logger()
 
@@ -76,7 +75,7 @@ def update_on_segments(update_cmds, batch_size):
         pool.addCommand(uc)
     try:
         pool.join()
-    except Exception as e:
+    except Exception:
         pool.haltWork()
         pool.joinWorkers()
     failure = False
@@ -104,7 +103,7 @@ def update_pg_hba_on_segments(
             continue
         if (
             contents_to_update
-            and not segmentPair.primaryDB.getSegmentContentId() in contents_to_update
+            and segmentPair.primaryDB.getSegmentContentId() not in contents_to_update
         ):
             continue
 

@@ -6,11 +6,8 @@ import unittest
 from gppylib.operations.test.regress.test_package import (
     GppkgTestCase,
     GppkgSpec,
-    BuildGppkg,
     RPMSpec,
-    BuildRPM,
     run_command,
-    run_remote_command,
 )
 
 

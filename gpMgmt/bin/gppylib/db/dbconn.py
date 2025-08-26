@@ -127,7 +127,7 @@ class DbURL:
         else:
             self.pghost = hostname
 
-        if port is 0:
+        if port == 0:
             self.pgport = int(os.environ.get("PGPORT", "5432"))
         else:
             self.pgport = int(port)

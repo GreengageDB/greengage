@@ -3,7 +3,7 @@ import unittest
 from gppylib.commands import pg
 
 from mock import call, Mock, patch
-from test.unit.gp_unittest import GpTestCase, run_tests
+from test.unit.gp_unittest import GpTestCase
 from pygresql.pg import DatabaseError
 
 

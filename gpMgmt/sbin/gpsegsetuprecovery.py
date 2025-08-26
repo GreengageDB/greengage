@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import os
 
 from gppylib import recoveryinfo
-from gppylib.commands.base import Command, WorkerPool, CommandResult, ExecutionError
+from gppylib.commands.base import Command, ExecutionError
 from gppylib.db import dbconn
 from recovery_base import RecoveryBase, set_recovery_cmd_results
 from gppylib.commands.pg import removePostmasterPid

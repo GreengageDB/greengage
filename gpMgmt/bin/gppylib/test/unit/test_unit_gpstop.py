@@ -9,15 +9,13 @@ import unittest
 
 from mock import Mock, call, patch
 
-from gppylib.gparray import Segment, GpArray, SegmentPair
+from gppylib.gparray import Segment, GpArray
 from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
-from gppylib.commands import base
 from gppylib.commands.base import Command, WorkerPool, CommandResult
 from gppylib.commands.gp import GpSegStopCmd
 from gppylib.mainUtils import ProgramArgumentValidationException
 
 try:
-    import subprocess32
 
     mock_subprocess_str = "subprocess32.call"
 except:

@@ -9,7 +9,6 @@ from pygresql import pg
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray
 from test.behave_utils.utils import run_cmd, wait_for_database_dropped
-from gppylib.commands.base import Command, REMOTE
 from gppylib.commands.unix import get_remote_link_path
 from contextlib import closing
 
