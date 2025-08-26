@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-'''
+"""
 Tool to validate replication consistency between primary and mirror.
 
 ============================= DISCLAIMER =============================
@@ -26,12 +26,13 @@ gp_replica_check.py
 gp_replica_check.py -d "mydb1,mydb2,..."
 gp_replica_check.py -r "heap,ao,btree,..."
 gp_replica_check.py -d "mydb1,mydb2,..." -r "hash,bitmap,gist,..."
-'''
+"""
 
 from __future__ import absolute_import
 from __future__ import print_function
 import argparse
 import sys
+
 try:
     import subprocess32 as subprocess
 except:
@@ -40,6 +41,7 @@ import threading
 import Queue
 import pipes  # for shell-quoting, pipes.quote()
 import time
+
 
 class ReplicaCheck(threading.Thread):
     def __init__(self, segrow, datname, relation_types):
@@ -51,27 +53,38 @@ class ReplicaCheck(threading.Thread):
         self.ploc = segrow[4]
         self.mloc = segrow[5]
         self.datname = datname
-        self.relation_types = relation_types;
+        self.relation_types = relation_types
         self.result = False
         self.lock = threading.Lock()
 
     def __str__(self):
-        return '(%s) Host: %s, Port: %s, Database: %s\n\
+        return (
+            "(%s) Host: %s, Port: %s, Database: %s\n\
 Primary Data Directory Location: %s\n\
-Mirror Data Directory Location: %s' % (self.getName(), self.host, self.port, self.datname,
-                                          self.ploc, self.mloc)
+Mirror Data Directory Location: %s"
+            % (self.getName(), self.host, self.port, self.datname, self.ploc, self.mloc)
+        )
 
     def run(self):
-        cmd = '''PGOPTIONS='-c gp_session_role=utility' psql -h %s -p %s -c "select * from gp_replica_check('%s', '%s', '%s')" %s''' % (self.host, self.port,
-                                                                                                                                        self.ploc, self.mloc,
-                                                                                                                                        self.relation_types,
-                                                                                                                                        pipes.quote(self.datname))
-        if self.primary_status.strip() == 'd':
+        cmd = (
+            """PGOPTIONS='-c gp_session_role=utility' psql -h %s -p %s -c "select * from gp_replica_check('%s', '%s', '%s')" %s"""
+            % (
+                self.host,
+                self.port,
+                self.ploc,
+                self.mloc,
+                self.relation_types,
+                pipes.quote(self.datname),
+            )
+        )
+        if self.primary_status.strip() == "d":
             print("Primary segment for content %d is down" % self.content)
         else:
             try:
                 res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-                self.result = True if res.strip().split('\n')[-2].strip() == 't' else False
+                self.result = (
+                    True if res.strip().split("\n")[-2].strip() == "t" else False
+                )
                 with self.lock:
                     print(self)
                     print(res)
@@ -81,7 +94,11 @@ Mirror Data Directory Location: %s' % (self.getName(), self.host, self.port, sel
             except subprocess.CalledProcessError as e:
                 with self.lock:
                     print(self)
-                    print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
+                    print(
+                        "returncode: (%s), cmd: (%s), output: (%s)"
+                        % (e.returncode, e.cmd, e.output)
+                    )
+
 
 def create_restartpoint_on_ckpt_record_replay(set):
     if set:
@@ -93,46 +110,68 @@ def create_restartpoint_on_ckpt_record_replay(set):
         res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
         print(res)
     except subprocess.CalledProcessError as e:
-        print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
+        print(
+            "returncode: (%s), cmd: (%s), output: (%s)"
+            % (e.returncode, e.cmd, e.output)
+        )
         if set:
-            print('''guc setting with gpconfig & then updating with "gpstop -u" failed.
+            print("""guc setting with gpconfig & then updating with "gpstop -u" failed.
 Probably there are some nodes could not be brought up and thus we
 can not run the test. That is probably because previous tests cause
 the instability of the cluster (indicate a bug usually) or because more time
 is needed for the cluster to be ready due to heavy load (consider increasing
 timeout configurations for this case). In any case we just fail and skip
-the test. Please check the server logs to find why.''')
+the test. Please check the server logs to find why.""")
         sys.exit(2)
 
-def install_extension(databases):
-    get_datname_sql = ''' SELECT datname FROM pg_database WHERE datname != 'template0' '''
-    create_ext_sql = ''' CREATE EXTENSION IF NOT EXISTS gp_replica_check '''
 
-    database_list = map(str.strip, databases.split(','))
+def install_extension(databases):
+    get_datname_sql = (
+        """ SELECT datname FROM pg_database WHERE datname != 'template0' """
+    )
+    create_ext_sql = """ CREATE EXTENSION IF NOT EXISTS gp_replica_check """
+
+    database_list = map(str.strip, databases.split(","))
     print("Creating gp_replica_check extension on databases if needed:")
-    datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
+    datnames = subprocess.check_output(
+        'psql postgres -t -A -c "%s"' % get_datname_sql,
+        stderr=subprocess.STDOUT,
+        shell=True,
+    ).split("\n")
     for datname in datnames:
-        if len(datname) >= 1 and (datname.strip() in database_list or 'all' in database_list):
-            print(subprocess.check_output('psql %s -t -c "%s"' % (pipes.quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True))
+        if len(datname) >= 1 and (
+            datname.strip() in database_list or "all" in database_list
+        ):
+            print(
+                subprocess.check_output(
+                    'psql %s -t -c "%s"' % (pipes.quote(datname), create_ext_sql),
+                    stderr=subprocess.STDOUT,
+                    shell=True,
+                )
+            )
+
 
 # Get the primary and mirror servers, for each content ID.
 def get_segments():
-    seglist_sql = '''
+    seglist_sql = """
 SELECT gscp.address, gscp.port, gscp.content, gscp.status, gscp.datadir as p_datadir, gscm.datadir as m_datadir
 FROM gp_segment_configuration gscp,
      gp_segment_configuration gscm
 WHERE gscp.content = gscm.content
       AND gscp.role = 'p'
       AND gscm.role = 'm'
-'''
-    seglist = subprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
+"""
+    seglist = subprocess.check_output(
+        'psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True
+    ).split("\n")
     segmap = {}
     for segrow in seglist:
-        segelements = map(str.strip, segrow.split('|'))
+        segelements = map(str.strip, segrow.split("|"))
         if len(segelements) > 1:
             segmap.setdefault(segelements[2], []).append(segelements)
 
     return segmap
+
 
 # Get list of database from pg_database.
 #
@@ -140,20 +179,23 @@ WHERE gscp.content = gscm.content
 # filtered to contain only database from that list. If it includes 'all',
 # then all databases are returned. (template0 is left out in any case)
 def get_databases(databases):
-    dblist_sql = '''
+    dblist_sql = """
 SELECT datname FROM pg_catalog.pg_database WHERE datname != 'template0'
-'''
+"""
 
-    database_list = map(str.strip, databases.split(','))
+    database_list = map(str.strip, databases.split(","))
 
-    dbrawlist = subprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
+    dbrawlist = subprocess.check_output(
+        'psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True
+    ).split("\n")
     dblist = []
     for dbrow in dbrawlist:
         dbname = dbrow
-        if len(dbname) >= 1 and (dbname in database_list or 'all' in database_list):
+        if len(dbname) >= 1 and (dbname in database_list or "all" in database_list):
             dblist.append(dbname)
 
     return dblist
+
 
 def start_verification(segmap, dblist, relation_types):
     replica_check_list = []
@@ -171,23 +213,43 @@ def start_verification(segmap, dblist, relation_types):
             failed = True
 
     if failed:
-        print("replica check failed for one or more segments. Please check above logs for details.")
+        print(
+            "replica check failed for one or more segments. Please check above logs for details."
+        )
         sys.exit(1)
 
     print("replica check succeeded")
 
+
 def defargs():
-    parser = argparse.ArgumentParser(description='Run replication check on all segments')
-    parser.add_argument('--databases', '-d', type=str, required=False, default='all',
-                        help='Database names to run replication check on')
-    parser.add_argument('--relation-types', '-r', type=str, required=False, default='all',
-                        help='Relation types to run replication check on')
+    parser = argparse.ArgumentParser(
+        description="Run replication check on all segments"
+    )
+    parser.add_argument(
+        "--databases",
+        "-d",
+        type=str,
+        required=False,
+        default="all",
+        help="Database names to run replication check on",
+    )
+    parser.add_argument(
+        "--relation-types",
+        "-r",
+        type=str,
+        required=False,
+        default="all",
+        help="Relation types to run replication check on",
+    )
 
     return parser.parse_args()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     args = defargs()
     install_extension(args.databases)
     create_restartpoint_on_ckpt_record_replay(True)
-    start_verification(get_segments(), get_databases(args.databases), args.relation_types)
+    start_verification(
+        get_segments(), get_databases(args.databases), args.relation_types
+    )
     create_restartpoint_on_ckpt_record_replay(False)

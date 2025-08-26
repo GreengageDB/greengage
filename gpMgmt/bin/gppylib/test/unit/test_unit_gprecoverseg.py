@@ -62,32 +62,45 @@ class GpRecoversegTestCase(GpTestCase):
 
         self.pgconf_dict = gucdict()
         self.pgconf_dict["port"] = setting("port", "123", None, None, None)
-        self.pgconf_dict["max_connection"] = setting("max_connections", "1", None, None, None)
+        self.pgconf_dict["max_connection"] = setting(
+            "max_connections", "1", None, None, None
+        )
 
         self.config_provider_mock = MagicMock(spec=GpConfigurationProvider)
-        self.config_provider_mock.initializeProvider.return_value = self.config_provider_mock
+        self.config_provider_mock.initializeProvider.return_value = (
+            self.config_provider_mock
+        )
 
         self.gpArrayMock = MagicMock(spec=GpArray)
-        self.gpArrayMock.getDbList.side_effect = [[self.primary0], [self.primary0], [self.primary0]]
+        self.gpArrayMock.getDbList.side_effect = [
+            [self.primary0],
+            [self.primary0],
+            [self.primary0],
+        ]
         self.gpArrayMock.segmentPairs = []
         self.gpArrayMock.hasMirrors = True
         self.gpArrayMock.master = self.gparray.master
 
         self.config_provider_mock.loadSystemConfig.return_value = self.gpArrayMock
 
-        self.mirror_to_build = GpMirrorToBuild(self.mirror0, self.primary0, None, False, False)
+        self.mirror_to_build = GpMirrorToBuild(
+            self.mirror0, self.primary0, None, False, False
+        )
         self.apply_patches([
-            patch('os.environ', new=self.os_env),
-            patch('gppylib.db.dbconn.connect', return_value=self.conn),
-            patch('gppylib.db.dbconn.execSQL', return_value=self.cursor),
-            patch('gppylib.db.dbconn.execSQLForSingletonRow', return_value=["foo"]),
-            patch('gppylib.pgconf.readfile', return_value=self.pgconf_dict),
-            patch('gppylib.commands.gp.GpVersion'),
-            patch('gppylib.system.faultProberInterface.getFaultProber'),
-            patch('gppylib.system.configurationInterface.getConfigurationProvider', return_value=self.config_provider_mock),
-            patch('gppylib.commands.base.WorkerPool', return_value=self.pool),
-            patch('gppylib.gparray.GpArray.getSegmentsByHostName', return_value={}),
-            patch('gppylib.gplog.get_default_logger'),
+            patch("os.environ", new=self.os_env),
+            patch("gppylib.db.dbconn.connect", return_value=self.conn),
+            patch("gppylib.db.dbconn.execSQL", return_value=self.cursor),
+            patch("gppylib.db.dbconn.execSQLForSingletonRow", return_value=["foo"]),
+            patch("gppylib.pgconf.readfile", return_value=self.pgconf_dict),
+            patch("gppylib.commands.gp.GpVersion"),
+            patch("gppylib.system.faultProberInterface.getFaultProber"),
+            patch(
+                "gppylib.system.configurationInterface.getConfigurationProvider",
+                return_value=self.config_provider_mock,
+            ),
+            patch("gppylib.commands.base.WorkerPool", return_value=self.pool),
+            patch("gppylib.gparray.GpArray.getSegmentsByHostName", return_value={}),
+            patch("gppylib.gplog.get_default_logger"),
             patch.object(GpMirrorListToBuild, "__init__", return_value=None),
             patch.object(GpMirrorListToBuild, "recover_mirrors"),
             patch.object(GpMirrorListToBuild, "getAdditionalWarnings"),
@@ -100,10 +113,16 @@ class GpRecoversegTestCase(GpTestCase):
         self.return_one = True
 
         self.mock_build_mirrors = self.get_mock_from_apply_patch("recover_mirrors")
-        self.mock_get_mirrors_to_build = self.get_mock_from_apply_patch('getMirrorsToBuild')
+        self.mock_get_mirrors_to_build = self.get_mock_from_apply_patch(
+            "getMirrorsToBuild"
+        )
         self.mock_heap_checksum_init = self.get_mock_from_apply_patch("__init__")
-        self.mock_check_segment_consistency = self.get_mock_from_apply_patch('check_segment_consistency')
-        self.mock_get_segments_checksum_settings = self.get_mock_from_apply_patch('get_segments_checksum_settings')
+        self.mock_check_segment_consistency = self.get_mock_from_apply_patch(
+            "check_segment_consistency"
+        )
+        self.mock_get_segments_checksum_settings = self.get_mock_from_apply_patch(
+            "get_segments_checksum_settings"
+        )
 
         sys.argv = ["gprecoverseg"]  # reset to relatively empty args list
 
@@ -115,8 +134,11 @@ class GpRecoversegTestCase(GpTestCase):
 
         # import HERE so that patches are already in place!
         from gppylib.programs.clsRecoverSegment import GpRecoverSegmentProgram
+
         self.subject = GpRecoverSegmentProgram(options)
-        self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+        self.subject.logger = Mock(
+            spec=["log", "warn", "info", "debug", "error", "warning", "fatal"]
+        )
 
         faultProberInterface.gFaultProber = Mock()
 
@@ -143,13 +165,24 @@ class GpRecoversegTestCase(GpTestCase):
         self.mock_get_mirrors_to_build.side_effect = self._get_test_mirrors
         self.assertTrue(self.gparray.master.isSegmentMaster(True))
 
-        with self.assertRaisesRegexp(Exception, "Heap checksum setting differences reported on segments"):
+        with self.assertRaisesRegexp(
+            Exception, "Heap checksum setting differences reported on segments"
+        ):
             self.subject.run()
 
-        self.mock_get_segments_checksum_settings.assert_called_with([self.primary0, self.mirror0])
-        self.subject.logger.fatal.assert_any_call('Heap checksum setting differences reported on segments')
-        self.subject.logger.fatal.assert_any_call('Failed checksum consistency validation:')
-        self.subject.logger.fatal.assert_any_call('sdw1 checksum set to 0 differs from master checksum set to 1')
+        self.mock_get_segments_checksum_settings.assert_called_with([
+            self.primary0,
+            self.mirror0,
+        ])
+        self.subject.logger.fatal.assert_any_call(
+            "Heap checksum setting differences reported on segments"
+        )
+        self.subject.logger.fatal.assert_any_call(
+            "Failed checksum consistency validation:"
+        )
+        self.subject.logger.fatal.assert_any_call(
+            "sdw1 checksum set to 0 differs from master checksum set to 1"
+        )
 
     @patch.object(HeapChecksum, "__init__", return_value=None)
     def test_when_cannot_determine_checksums_it_raises(self, mock_heap_checksum_init):
@@ -158,11 +191,19 @@ class GpRecoversegTestCase(GpTestCase):
         self.mock_get_mirrors_to_build.side_effect = self._get_test_mirrors
         self.return_one = True
         self.assertTrue(self.gparray.master.isSegmentMaster(True))
-        with self.assertRaisesRegexp(Exception, "No segments responded to ssh query for heap checksum validation."):
+        with self.assertRaisesRegexp(
+            Exception,
+            "No segments responded to ssh query for heap checksum validation.",
+        ):
             self.subject.run()
 
-        self.mock_get_segments_checksum_settings.assert_called_with([self.primary0, self.mirror0])
-        mock_heap_checksum_init.assert_called_with(self.gpArrayMock, logger=self.subject.logger, num_workers=1)
+        self.mock_get_segments_checksum_settings.assert_called_with([
+            self.primary0,
+            self.mirror0,
+        ])
+        mock_heap_checksum_init.assert_called_with(
+            self.gpArrayMock, logger=self.subject.logger, num_workers=1
+        )
 
     @patch("os._exit")
     def test_when_no_segments_to_recover_validation_succeeds(self, _):
@@ -172,8 +213,9 @@ class GpRecoversegTestCase(GpTestCase):
         with self.assertRaises(SystemExit):
             self.subject.run()
 
-        self.subject.logger.info.assert_any_call('No checksum validation necessary when '
-                                                 'there are no segments to recover.')
+        self.subject.logger.info.assert_any_call(
+            "No checksum validation necessary when there are no segments to recover."
+        )
 
     @patch.object(TableLogger, "info")
     @patch.object(GpSegmentRebalanceOperation, "rebalance", return_value=True)
@@ -188,13 +230,18 @@ class GpRecoversegTestCase(GpTestCase):
         options.showProgressInplace = True
         # import HERE so that patches are already in place!
         from gppylib.programs.clsRecoverSegment import GpRecoverSegmentProgram
+
         self.subject = GpRecoverSegmentProgram(options)
-        self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+        self.subject.logger = Mock(
+            spec=["log", "warn", "info", "debug", "error", "warning", "fatal"]
+        )
 
         with self.assertRaises(SystemExit):
-          self.subject.run()
+            self.subject.run()
 
-        self.subject.logger.info.assert_any_call('The rebalance operation has completed successfully.')
+        self.subject.logger.info.assert_any_call(
+            "The rebalance operation has completed successfully."
+        )
 
     @patch.object(TableLogger, "info")
     @patch.object(GpSegmentRebalanceOperation, "rebalance", return_value=False)
@@ -209,15 +256,20 @@ class GpRecoversegTestCase(GpTestCase):
         options.showProgressInplace = True
         # import HERE so that patches are already in place!
         from gppylib.programs.clsRecoverSegment import GpRecoverSegmentProgram
+
         self.subject = GpRecoverSegmentProgram(options)
-        self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+        self.subject.logger = Mock(
+            spec=["log", "warn", "info", "debug", "error", "warning", "fatal"]
+        )
 
         with self.assertRaises(SystemExit) as cm:
-                self.subject.run()
+            self.subject.run()
 
         self.assertEqual(cm.exception.code, 0)
-        self.subject.logger.info.assert_any_call('The rebalance operation has completed with WARNINGS. '
-                                                 'Please review the output in the gprecoverseg log.')
+        self.subject.logger.info.assert_any_call(
+            "The rebalance operation has completed with WARNINGS. "
+            "Please review the output in the gprecoverseg log."
+        )
 
     # @patch('gppylib.programs.clsRecoverSegment.GpRecoverSegmentProgram.trigger_fts_probe')
     @patch.object(TableLogger, "info")
@@ -230,8 +282,11 @@ class GpRecoversegTestCase(GpTestCase):
         options.showProgressInplace = True
         # import HERE so that patches are already in place!
         from gppylib.programs.clsRecoverSegment import GpRecoverSegmentProgram
+
         self.subject = GpRecoverSegmentProgram(options)
-        self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+        self.subject.logger = Mock(
+            spec=["log", "warn", "info", "debug", "error", "warning", "fatal"]
+        )
         self.mock_get_mirrors_to_build.side_effect = self._get_test_mirrors
         self.primary0.heap_checksum = 1
         self.mock_check_segment_consistency.return_value = ([self.primary0], [], 1)
@@ -255,8 +310,11 @@ class GpRecoversegTestCase(GpTestCase):
         options.showProgressInplace = True
         # import HERE so that patches are already in place!
         from gppylib.programs.clsRecoverSegment import GpRecoverSegmentProgram
+
         self.subject = GpRecoverSegmentProgram(options)
-        self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+        self.subject.logger = Mock(
+            spec=["log", "warn", "info", "debug", "error", "warning", "fatal"]
+        )
         self.mock_get_mirrors_to_build.side_effect = self._get_test_mirrors
         self.primary0.heap_checksum = 1
         self.mock_check_segment_consistency.return_value = ([self.primary0], [], 1)
@@ -271,23 +329,24 @@ class GpRecoversegTestCase(GpTestCase):
 
     def test_gprecoverseg_with_mirrorless(self):
         self.gpArrayMock.hasMirrors = False
-        with self.assertRaisesRegexp(ExceptionNoStackTraceNeeded,
-                                    "GPDB Mirroring replication is not configured for this Greengage Database instance."):
+        with self.assertRaisesRegexp(
+            ExceptionNoStackTraceNeeded,
+            "GPDB Mirroring replication is not configured for this Greengage Database instance.",
+        ):
             self.subject.run()
 
     def _create_gparray_with_2_primary_2_mirrors(self):
-        master = Segment.initFromString(
-            "1|-1|p|p|s|u|mdw|mdw|5432|/data/master")
+        master = Segment.initFromString("1|-1|p|p|s|u|mdw|mdw|5432|/data/master")
         self.primary0 = Segment.initFromString(
-            "2|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0")
-        primary1 = Segment.initFromString(
-            "3|1|p|p|s|u|sdw2|sdw2|40001|/data/primary1")
+            "2|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0"
+        )
+        primary1 = Segment.initFromString("3|1|p|p|s|u|sdw2|sdw2|40001|/data/primary1")
         self.mirror0 = Segment.initFromString(
-            "4|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
-        mirror1 = Segment.initFromString(
-            "5|1|m|m|s|u|sdw1|sdw1|50001|/data/mirror1")
+            "4|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0"
+        )
+        mirror1 = Segment.initFromString("5|1|m|m|s|u|sdw1|sdw1|50001|/data/mirror1")
         return GpArray([master, self.primary0, primary1, self.mirror0, mirror1])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_tests()

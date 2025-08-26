@@ -4,7 +4,15 @@ import StringIO
 
 from mock import patch
 
-from commands.unix import RemoveFile, RemoveDirectory, RemoveDirectoryContents, RemoveGlob, REMOTE,Command,isScpEnabled
+from commands.unix import (
+    RemoveFile,
+    RemoveDirectory,
+    RemoveDirectoryContents,
+    RemoveGlob,
+    REMOTE,
+    Command,
+    isScpEnabled,
+)
 from .gp_unittest import *
 from gppylib.commands.base import CommandResult
 
@@ -23,13 +31,12 @@ class CommandsUnix(GpTestCase):
         self.apply_patches([
             patch("uuid.uuid4", return_value="Patched"),
         ])
-        open(self.filepath, 'a').close()
+        open(self.filepath, "a").close()
 
     def tearDown(self):
         RemoveDirectory.local("", self.dir)
         Command.propagate_env_map.clear()
         super(CommandsUnix, self).tearDown()
-
 
     def test_RemoveFile_for_file_succeeds_locally(self):
         RemoveFile.local("testing", self.filepath)
@@ -38,7 +45,7 @@ class CommandsUnix(GpTestCase):
 
     def test_RemoveFile_for_file_succeeds_with_environment(self):
         cmd = RemoveFile("testing", self.filepath)
-        cmd.propagate_env_map['foo'] = 1
+        cmd.propagate_env_map["foo"] = 1
         cmd.run(validateAfter=True)
         self.assertFalse(os.path.exists(self.filepath))
         self.assertTrue(os.path.exists(self.dir))
@@ -47,7 +54,6 @@ class CommandsUnix(GpTestCase):
         RemoveFile.local("testing", "/doesnotexist")
         self.assertTrue(os.path.exists(self.filepath))
         self.assertTrue(os.path.exists(self.dir))
-
 
     def test_RemoveDirectory_succeeds_locally(self):
         RemoveDirectory.local("testing", self.dir)
@@ -121,15 +127,21 @@ class CommandsUnix(GpTestCase):
     #     self.assertFalse(os.path.exists(self.filepath))
     #     self.assertTrue(os.path.exists(self.dir))
 
-    @patch('gppylib.commands.unix.Command.run')
+    @patch("gppylib.commands.unix.Command.run")
     def test_isScpEnabled_when_executable_is_present(self, mock_cmd_run):
         self.assertTrue(isScpEnabled(["localhost"]))
 
-    @patch('sys.stdout', new_callable=StringIO.StringIO)
-    @patch('gppylib.commands.unix.Command.run', side_effect=[None, Exception()])
-    def test_isScpEnabled_when_executable_is_not_present(self, mock_cmd_run, mock_stdout):
+    @patch("sys.stdout", new_callable=StringIO.StringIO)
+    @patch("gppylib.commands.unix.Command.run", side_effect=[None, Exception()])
+    def test_isScpEnabled_when_executable_is_not_present(
+        self, mock_cmd_run, mock_stdout
+    ):
         self.assertFalse(isScpEnabled(["localhost", "invalid_host"]))
-        self.assertIn("[Warning] Either scp is not available or does not have execute permission on host:invalid_host", mock_stdout.getvalue())
+        self.assertIn(
+            "[Warning] Either scp is not available or does not have execute permission on host:invalid_host",
+            mock_stdout.getvalue(),
+        )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run_tests()

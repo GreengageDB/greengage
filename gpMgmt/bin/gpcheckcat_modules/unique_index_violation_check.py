@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+
 class UniqueIndexViolationCheck:
     unique_indexes_query = """
         select table_oid, index_name, table_name, array_agg(attname) as column_names
@@ -38,20 +39,31 @@ class UniqueIndexViolationCheck:
         unique_indexes = db_connection.query(self.unique_indexes_query).getresult()
         violations = []
 
-        for (table_oid, index_name, table_name, column_names) in unique_indexes:
+        for table_oid, index_name, table_name, column_names in unique_indexes:
             column_names = column_names[1:-1]
             sql = self.get_violated_segments_query(table_name, column_names)
             violated_segments = db_connection.query(sql).getresult()
             if violated_segments:
-                violations.append(dict(table_oid=table_oid,
-                                       table_name=table_name,
-                                       index_name=index_name,
-                                       column_names=column_names,
-                                       violated_segments=[row[0] for row in violated_segments]))
+                violations.append(
+                    dict(
+                        table_oid=table_oid,
+                        table_name=table_name,
+                        index_name=index_name,
+                        column_names=column_names,
+                        violated_segments=[row[0] for row in violated_segments],
+                    )
+                )
 
         return violations
 
     def get_violated_segments_query(self, table_name, column_names):
         return self.violated_segments_query % (
-            column_names, table_name, column_names, column_names, column_names, table_name, column_names, column_names
+            column_names,
+            table_name,
+            column_names,
+            column_names,
+            column_names,
+            table_name,
+            column_names,
+            column_names,
         )

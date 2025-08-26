@@ -17,11 +17,13 @@ class TestParseGucMetadata(GpTestCase):
 
         self.subject.main()
 
-        dest_file = os.path.join(self.DEST_DIR, "share/greengage", self.subject.DESTINATION_FILENAME)
-        with open(dest_file, 'r') as f:
+        dest_file = os.path.join(
+            self.DEST_DIR, "share/greengage", self.subject.DESTINATION_FILENAME
+        )
+        with open(dest_file, "r") as f:
             lines = f.readlines()
-        self.assertIn('is_superuser\n', lines)
-        self.assertIn('gp_session_id\n', lines)
+        self.assertIn("is_superuser\n", lines)
+        self.assertIn("gp_session_id\n", lines)
 
     def test_main_when_no_prefix_will_fail(self):
         sys.argv = ["parse_guc_metadata"]
@@ -29,5 +31,5 @@ class TestParseGucMetadata(GpTestCase):
         self.assertRaises(SystemExit, self.subject.main)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_tests()

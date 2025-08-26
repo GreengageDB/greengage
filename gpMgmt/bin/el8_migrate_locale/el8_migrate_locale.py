@@ -14,10 +14,15 @@ import string
 from collections import defaultdict
 import os
 import re
+
 try:
     from pygresql import pg
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
+    sys.exit(
+        "ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: "
+        + str(e)
+    )
+
 
 class connection(object):
     def __init__(self, host, port, dbname, user):
@@ -25,50 +30,58 @@ class connection(object):
         self.port = port
         self.dbname = dbname
         self.user = user
+
     def _get_pg_port(self, port):
         if port is not None:
             return port
         try:
-            port = os.environ.get('PGPORT')
+            port = os.environ.get("PGPORT")
             if not port:
                 port = self.get_port_from_conf()
             return int(port)
         except:
-            sys.exit("No port has been set, please set env PGPORT or MASTER_DATA_DIRECTORY or specify the port in the command line")
+            sys.exit(
+                "No port has been set, please set env PGPORT or MASTER_DATA_DIRECTORY or specify the port in the command line"
+            )
 
     def get_port_from_conf(self):
-        datadir = os.environ.get('MASTER_DATA_DIRECTORY')
+        datadir = os.environ.get("MASTER_DATA_DIRECTORY")
         if datadir:
-            file = datadir +'/postgresql.conf'
+            file = datadir + "/postgresql.conf"
             if os.path.isfile(file):
                 with open(file) as f:
                     for line in f:
-                        match = re.search('port=\d+',line)
+                        match = re.search("port=\d+", line)
                         if match:
-                            match1 = re.search('\d+', match.group())
+                            match1 = re.search("\d+", match.group())
                             if match1:
                                 return match1.group()
 
     def get_default_db_conn(self):
-        db = DB(dbname=self.dbname,
-                host=self.host,
-                port=self._get_pg_port(self.port),
-                user=self.user)
+        db = DB(
+            dbname=self.dbname,
+            host=self.host,
+            port=self._get_pg_port(self.port),
+            user=self.user,
+        )
         return db
 
     def get_db_conn(self, dbname):
-        db = DB(dbname=dbname,
-                host=self.host,
-                port=self._get_pg_port(self.port),
-                user=self.user)
+        db = DB(
+            dbname=dbname,
+            host=self.host,
+            port=self._get_pg_port(self.port),
+            user=self.user,
+        )
         return db
 
     def get_db_list(self):
         db = self.get_default_db_conn()
         sql = "select datname from pg_database where datname not in ('template0');"
-        dbs = [datname for datname, in db.query(sql).getresult()]
+        dbs = [datname for (datname,) in db.query(sql).getresult()]
         db.close
         return dbs
+
 
 class CheckIndexes(connection):
     def get_affected_user_indexes(self, dbname):
@@ -83,7 +96,11 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid >= 16384;
         """
         index = db.query(sql).getresult()
         if index:
-            logger.info("There are {} user indexes in database {} that needs reindex when doing OS upgrade from EL7->EL8.".format(len(index), dbname))
+            logger.info(
+                "There are {} user indexes in database {} that needs reindex when doing OS upgrade from EL7->EL8.".format(
+                    len(index), dbname
+                )
+            )
         db.close()
         return index
 
@@ -97,7 +114,11 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
         """
         index = db.query(sql).getresult()
         if index:
-            logger.info("There are {} catalog indexes that needs reindex when doing OS upgrade from EL7->EL8.".format(len(index)))
+            logger.info(
+                "There are {} catalog indexes that needs reindex when doing OS upgrade from EL7->EL8.".format(
+                    len(index)
+                )
+            )
         db.close()
         return index
 
@@ -117,7 +138,19 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
         if cindex:
             print("\c ", self.dbname, file=f)
         for indexrelid, indexname, tablename, collname, indexdef in cindex:
-            print("-- catalog indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef, file=f)
+            print(
+                "-- catalog indexrelid:",
+                indexrelid,
+                "| index name:",
+                indexname,
+                "| table name:",
+                tablename,
+                "| collname:",
+                collname,
+                "| indexdef: ",
+                indexdef,
+                file=f,
+            )
             print(self.handle_one_index(indexname), file=f)
             print(file=f)
 
@@ -127,14 +160,37 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
             if index:
                 print("\c ", dbname, file=f)
             for indexrelid, indexname, tablename, collname, indexdef in index:
-                print("-- indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef, file=f)
+                print(
+                    "-- indexrelid:",
+                    indexrelid,
+                    "| index name:",
+                    indexname,
+                    "| table name:",
+                    tablename,
+                    "| collname:",
+                    collname,
+                    "| indexdef: ",
+                    indexdef,
+                    file=f,
+                )
                 print(self.handle_one_index(indexname), file=f)
                 print(file=f)
 
         f.close()
 
+
 class CheckTables(connection):
-    def __init__(self, host, port, dbname, user, order_size_ascend, nthread, pre_upgrade, loglevel):
+    def __init__(
+        self,
+        host,
+        port,
+        dbname,
+        user,
+        order_size_ascend,
+        nthread,
+        pre_upgrade,
+        loglevel,
+    ):
         self.host = host
         self.port = port
         self.dbname = dbname
@@ -196,7 +252,7 @@ class CheckTables(connection):
         select prelid as parrelid, prelid::regclass::text as tablename, coll as collation, attname, bool_or(parisdefault) as hasDefaultPartition from par_has_default group by (prelid, coll, attname) ;
         """
 
-        #print more info, like the number of range-partition tables and partition key collation.
+        # print more info, like the number of range-partition tables and partition key collation.
         sqlForDebug = """
         select
             p.parrelid,
@@ -215,7 +271,11 @@ class CheckTables(connection):
         if self.loglevel == logging.DEBUG:
             tabsForDebug = db.query(sqlForDebug)
             result = tabsForDebug.getresult()
-            logger.debug("There are {} range partitioning tables in database {}.".format(len(result), dbname))
+            logger.debug(
+                "There are {} range partitioning tables in database {}.".format(
+                    len(result), dbname
+                )
+            )
             if len(result):
                 print(tabsForDebug)
 
@@ -223,7 +283,11 @@ class CheckTables(connection):
         filterTabs = db.query(sql)
         filterResult = filterTabs.getresult()
         if len(filterResult):
-            logger.warning("There are {} range partitioning tables with partition key in collate types(like varchar, char, text) in database {}, these tables might be affected due to Glibc upgrade and should be checked when doing OS upgrade from EL7 to EL8.".format(len(filterResult), dbname))
+            logger.warning(
+                "There are {} range partitioning tables with partition key in collate types(like varchar, char, text) in database {}, these tables might be affected due to Glibc upgrade and should be checked when doing OS upgrade from EL7 to EL8.".format(
+                    len(filterResult), dbname
+                )
+            )
             if self.loglevel == logging.DEBUG:
                 print(filterTabs)
 
@@ -239,7 +303,11 @@ class CheckTables(connection):
         tables = db.query(sql)
         result = tables.getresult()
         if result:
-            logger.warning("There are {} tables in database {} that the distribution key is using custom operator class, should be checked when doing OS upgrade from EL7 to EL8.".format(len(result), dbname))
+            logger.warning(
+                "There are {} tables in database {} that the distribution key is using custom operator class, should be checked when doing OS upgrade from EL7 to EL8.".format(
+                    len(result), dbname
+                )
+            )
             print(tables)
         db.close()
 
@@ -248,7 +316,7 @@ class CheckTables(connection):
     def escape_identifier(self, str):
         # Does the string need quoting? Simple strings with all-lower case ASCII
         # letters don't.
-        SAFE_RE = re.compile('[a-z][a-z0-9_]*$')
+        SAFE_RE = re.compile("[a-z][a-z0-9_]*$")
 
         if SAFE_RE.match(str):
             return str
@@ -303,13 +371,28 @@ class CheckTables(connection):
             if tables:
                 # if check before os upgrade, it will print the SQL results and doesn't do the GUC check.
                 if self.pre_upgrade:
-                    for parrelid, tablename, coll, attname, has_default_partition in tables:
+                    for (
+                        parrelid,
+                        tablename,
+                        coll,
+                        attname,
+                        has_default_partition,
+                    ) in tables:
                         # get the partition table size info to estimate the time
                         msg, size = self.get_table_size_info(dbname, parrelid)
-                        table_info.append((parrelid, tablename, coll, attname, msg, size))
+                        table_info.append((
+                            parrelid,
+                            tablename,
+                            coll,
+                            attname,
+                            msg,
+                            size,
+                        ))
                         # if no default partition, give a warning, in case of migrate failed
-                        if has_default_partition == 'f':
-                            logger.warning("no default partition for {}".format(tablename))
+                        if has_default_partition == "f":
+                            logger.warning(
+                                "no default partition for {}".format(tablename)
+                            )
                 else:
                     # start multiple threads to check if the rows are still in the correct partitions after os upgrade, if check failed, add these tables to filtertabs
                     for t in tables:
@@ -321,7 +404,12 @@ class CheckTables(connection):
 
             # dump the table info to the specified output file
             if table_info:
-                print("-- order table by size in %s order " % 'ascending' if self.order_size_ascend else '-- order table by size in descending order', file=f)
+                print(
+                    "-- order table by size in %s order " % "ascending"
+                    if self.order_size_ascend
+                    else "-- order table by size in descending order",
+                    file=f,
+                )
                 print("\c ", dbname, file=f)
                 print(file=f)
 
@@ -337,7 +425,17 @@ class CheckTables(connection):
                     coll = result[2]
                     attname = result[3]
                     msg = result[4]
-                    print("-- parrelid:", parrelid, "| coll:", coll, "| attname:", attname, "| msg:", msg, file=f)
+                    print(
+                        "-- parrelid:",
+                        parrelid,
+                        "| coll:",
+                        coll,
+                        "| attname:",
+                        attname,
+                        "| msg:",
+                        msg,
+                        file=f,
+                    )
                     print(self.handle_one_table(name), file=f)
                     print(file=f)
 
@@ -349,16 +447,40 @@ class CheckTables(connection):
     def print_size_summary_info(self):
         print("---------------------------------------------")
         KB = float(1024)
-        MB = float(KB ** 2)
-        GB = float(KB ** 3)
+        MB = float(KB**2)
+        GB = float(KB**3)
         if self.total_root_size < KB:
-            print(("total partition tables size  : {} Bytes".format(int(float(self.total_root_size)))))
+            print(
+                (
+                    "total partition tables size  : {} Bytes".format(
+                        int(float(self.total_root_size))
+                    )
+                )
+            )
         elif KB <= self.total_root_size < MB:
-            print(("total partition tables size  : {} KB".format(int(float(self.total_root_size) / KB))))
+            print(
+                (
+                    "total partition tables size  : {} KB".format(
+                        int(float(self.total_root_size) / KB)
+                    )
+                )
+            )
         elif MB <= self.total_root_size < GB:
-            print(("total partition tables size  : {} MB".format(int(float(self.total_root_size) / MB))))
+            print(
+                (
+                    "total partition tables size  : {} MB".format(
+                        int(float(self.total_root_size) / MB)
+                    )
+                )
+            )
         else:
-            print(("total partition tables size  : {} GB".format(int(float(self.total_root_size) / GB))))
+            print(
+                (
+                    "total partition tables size  : {} GB".format(
+                        int(float(self.total_root_size) / GB)
+                    )
+                )
+            )
 
         print(("total partition tables       : {}".format(self.total_roots)))
         print(("total leaf partitions        : {}".format(self.total_leafs)))
@@ -368,8 +490,9 @@ class CheckTables(connection):
     def concurrent_check(self, dbname):
         threads = []
         for i in range(self.nthread):
-            t = Thread(target=CheckTables.check_partitiontables_by_guc,
-                       args=[self, i, dbname])
+            t = Thread(
+                target=CheckTables.check_partitiontables_by_guc, args=[self, i, dbname]
+            )
             threads.append(t)
         for t in threads:
             t.start()
@@ -415,15 +538,25 @@ class CheckTables(connection):
                 select root_oid::regclass::text as tablename, table_oid::regclass::text as partitioname
                 from cte where nlevel = (select max(nlevel) from cte) and root_oid = {};
                 """
-                partitiontablenames = db.query(get_partitionname_sql.format(parrelid)).getresult()
+                partitiontablenames = db.query(
+                    get_partitionname_sql.format(parrelid)
+                ).getresult()
                 for tablename, partitioname in partitiontablenames:
-                    sql = "insert into {tab} select * from {tab}".format(tab=partitioname)
+                    sql = "insert into {tab} select * from {tab}".format(
+                        tab=partitioname
+                    )
                     try:
-                        logger.info("start checking table {tab} ...".format(tab=partitioname))
+                        logger.info(
+                            "start checking table {tab} ...".format(tab=partitioname)
+                        )
                         db.query(sql)
                         logger.info("check table {tab} OK.".format(tab=partitioname))
                     except Exception as e:
-                        logger.info("check table {tab} error out: {err_msg}".format(tab=partitioname, err_msg=str(e)))
+                        logger.info(
+                            "check table {tab} error out: {err_msg}".format(
+                                tab=partitioname, err_msg=str(e)
+                            )
+                        )
                         has_error = True
 
                 # if check failed, dump the table to the specified out file.
@@ -431,22 +564,34 @@ class CheckTables(connection):
                     # get the partition table size info to estimate the time
                     msg, size = self.get_table_size_info(dbname, parrelid)
                     self.filtertabslock.acquire()
-                    self.filtertabs.append((parrelid, tablename, coll, attname, msg, size))
+                    self.filtertabs.append((
+                        parrelid,
+                        tablename,
+                        coll,
+                        attname,
+                        msg,
+                        size,
+                    ))
                     self.filtertabslock.release()
                     has_error = False
-                    if has_default_partition == 'f':
+                    if has_default_partition == "f":
                         logger.warning("no default partition for {}".format(tablename))
 
                 db.query("set gp_detect_data_correctness = 0;")
 
                 end = time.time()
                 total_time = end - start
-                logger.info("Current progress: have {} remaining, {} seconds passed.".format(self.qlist.qsize(), round(total_time, 2)))
+                logger.info(
+                    "Current progress: have {} remaining, {} seconds passed.".format(
+                        self.qlist.qsize(), round(total_time, 2)
+                    )
+                )
 
         finally:
             if db:
                 db.close()
             logger.info("worker[{}]: finish.".format(idx))
+
 
 class migrate(connection):
     def __init__(self, dbname, port, host, user, script_file):
@@ -465,20 +610,28 @@ class migrate(connection):
                 sql = line.strip()
                 if sql.startswith("\c"):
                     db_name = sql.split("\c")[1].strip()
-                if (sql.startswith("reindex") and sql.endswith(";") and sql.count(";") == 1):
+                if (
+                    sql.startswith("reindex")
+                    and sql.endswith(";")
+                    and sql.count(";") == 1
+                ):
                     self.dbdict[db_name].append(sql)
-                if (sql.startswith("begin;") and sql.endswith("commit;")):
+                if sql.startswith("begin;") and sql.endswith("commit;"):
                     self.dbdict[db_name].append(sql)
 
     def run(self):
         try:
             for db_name, commands in self.dbdict.items():
                 total_counts = len(commands)
-                logger.info("db: {}, total have {} commands to execute".format(db_name, total_counts))
+                logger.info(
+                    "db: {}, total have {} commands to execute".format(
+                        db_name, total_counts
+                    )
+                )
                 for command in commands:
                     self.run_alter_command(db_name, command)
         except KeyboardInterrupt:
-            sys.exit('\nUser Interrupted')
+            sys.exit("\nUser Interrupted")
 
         logger.info("All done")
 
@@ -488,60 +641,124 @@ class migrate(connection):
             logger.info("db: {}, executing command: {}".format(db_name, command))
             db.query(command)
 
-            if (command.startswith("begin")):
-                pieces = [p for p in re.split("( |\\\".*?\\\"|'.*?')", command) if p.strip()]
+            if command.startswith("begin"):
+                pieces = [
+                    p for p in re.split("( |\\\".*?\\\"|'.*?')", command) if p.strip()
+                ]
                 index = pieces.index("truncate")
                 if 0 < index < len(pieces) - 1:
-                    table_name = pieces[index+1]
+                    table_name = pieces[index + 1]
                     analyze_sql = "analyze {};".format(table_name)
-                    logger.info("db: {}, executing analyze command: {}".format(db_name, analyze_sql))
+                    logger.info(
+                        "db: {}, executing analyze command: {}".format(
+                            db_name, analyze_sql
+                        )
+                    )
                     db.query(analyze_sql)
 
             db.close()
         except Exception as e:
             logger.error("{}".format(str(e)))
 
+
 def parseargs():
-    parser = argparse.ArgumentParser(prog='el8_migrate_locale')
-    parser.add_argument('--host', type=str, help='Greengage Database hostname')
-    parser.add_argument('--port', type=int, help='Greengage Database port')
-    parser.add_argument('--dbname', type=str,  default='postgres', help='Greengage Database database name')
-    parser.add_argument('--user', type=str, help='Greengage Database user name')
-    parser.add_argument('--verbose', help="Print more info", action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO)
+    parser = argparse.ArgumentParser(prog="el8_migrate_locale")
+    parser.add_argument("--host", type=str, help="Greengage Database hostname")
+    parser.add_argument("--port", type=int, help="Greengage Database port")
+    parser.add_argument(
+        "--dbname",
+        type=str,
+        default="postgres",
+        help="Greengage Database database name",
+    )
+    parser.add_argument("--user", type=str, help="Greengage Database user name")
+    parser.add_argument(
+        "--verbose",
+        help="Print more info",
+        action="store_const",
+        dest="loglevel",
+        const=logging.DEBUG,
+        default=logging.INFO,
+    )
 
-    subparsers = parser.add_subparsers(help='sub-command help', dest='cmd')
-    parser_precheck_index = subparsers.add_parser('precheck-index', help='list affected index')
-    required = parser_precheck_index.add_argument_group('required arguments')
-    required.add_argument('--out', type=str, help='outfile path for the reindex commands', required=True)
+    subparsers = parser.add_subparsers(help="sub-command help", dest="cmd")
+    parser_precheck_index = subparsers.add_parser(
+        "precheck-index", help="list affected index"
+    )
+    required = parser_precheck_index.add_argument_group("required arguments")
+    required.add_argument(
+        "--out", type=str, help="outfile path for the reindex commands", required=True
+    )
 
-    parser_precheck_table = subparsers.add_parser('precheck-table', help='list affected tables')
-    required = parser_precheck_table.add_argument_group('required arguments')
-    required.add_argument('--out', type=str, help='outfile path for the rebuild partition commands', required=True)
-    parser_precheck_table.add_argument('--pre_upgrade', action='store_true', help='check tables before os upgrade to EL8')
-    parser_precheck_table.add_argument('--order_size_ascend', action='store_true', help='sort the tables by size in ascending order')
+    parser_precheck_table = subparsers.add_parser(
+        "precheck-table", help="list affected tables"
+    )
+    required = parser_precheck_table.add_argument_group("required arguments")
+    required.add_argument(
+        "--out",
+        type=str,
+        help="outfile path for the rebuild partition commands",
+        required=True,
+    )
+    parser_precheck_table.add_argument(
+        "--pre_upgrade",
+        action="store_true",
+        help="check tables before os upgrade to EL8",
+    )
+    parser_precheck_table.add_argument(
+        "--order_size_ascend",
+        action="store_true",
+        help="sort the tables by size in ascending order",
+    )
     parser_precheck_table.set_defaults(order_size_ascend=False)
-    parser_precheck_table.add_argument('--nthread', type=int, default=1, help='the concurrent threads to check partition tables')
+    parser_precheck_table.add_argument(
+        "--nthread",
+        type=int,
+        default=1,
+        help="the concurrent threads to check partition tables",
+    )
 
-    parser_run = subparsers.add_parser('migrate', help='run the reindex and the rebuild partition commands')
-    required = parser_run.add_argument_group('required arguments')
-    required.add_argument('--input', type=str, help='the file contains reindex or rebuild partition commands', required=True)
+    parser_run = subparsers.add_parser(
+        "migrate", help="run the reindex and the rebuild partition commands"
+    )
+    required = parser_run.add_argument_group("required arguments")
+    required.add_argument(
+        "--input",
+        type=str,
+        help="the file contains reindex or rebuild partition commands",
+        required=True,
+    )
 
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     args = parseargs()
     # initialize logger
-    logging.basicConfig(level=args.loglevel, stream=sys.stdout, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=args.loglevel,
+        stream=sys.stdout,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
     logger = logging.getLogger()
 
-    if args.cmd == 'precheck-index':
+    if args.cmd == "precheck-index":
         ci = CheckIndexes(args.host, args.port, args.dbname, args.user)
         ci.dump_index_info(args.out)
-    elif args.cmd == 'precheck-table':
-        ct = CheckTables(args.host, args.port, args.dbname, args.user, args.order_size_ascend, args.nthread, args.pre_upgrade, args.loglevel)
+    elif args.cmd == "precheck-table":
+        ct = CheckTables(
+            args.host,
+            args.port,
+            args.dbname,
+            args.user,
+            args.order_size_ascend,
+            args.nthread,
+            args.pre_upgrade,
+            args.loglevel,
+        )
         ct.dump_tables(args.out)
-    elif args.cmd == 'migrate':
+    elif args.cmd == "migrate":
         cr = migrate(args.dbname, args.port, args.host, args.user, args.input)
         cr.run()
     else:

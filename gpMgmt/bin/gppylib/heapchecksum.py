@@ -1,4 +1,3 @@
-
 from __future__ import absolute_import
 from gppylib.commands.base import REMOTE, WorkerPool
 from gppylib.commands.pg import PgControlData
@@ -22,9 +21,11 @@ class HeapChecksum:
         :return: the heap checksum setting (1 or 0) for the master
         """
         master_gpdb = self.gparray.master
-        cmd = PgControlData(name='run pg_controldata', datadir=master_gpdb.getSegmentDataDirectory())
+        cmd = PgControlData(
+            name="run pg_controldata", datadir=master_gpdb.getSegmentDataDirectory()
+        )
         cmd.run(validateAfter=True)
-        value = cmd.get_value('Data page checksum version')
+        value = cmd.get_value("Data page checksum version")
         return value
 
     def get_standby_value(self):
@@ -33,10 +34,14 @@ class HeapChecksum:
         :return: the heap checksum setting (1 or 0) for the standby master
         """
         standbyMaster_gpdb = self.gparray.standbyMaster
-        cmd = PgControlData(name='run pg_controldata', datadir=standbyMaster_gpdb.getSegmentDataDirectory(),
-                            ctxt=REMOTE, remoteHost=standbyMaster_gpdb.getSegmentHostName())
+        cmd = PgControlData(
+            name="run pg_controldata",
+            datadir=standbyMaster_gpdb.getSegmentDataDirectory(),
+            ctxt=REMOTE,
+            remoteHost=standbyMaster_gpdb.getSegmentHostName(),
+        )
         cmd.run(validateAfter=True)
-        value = cmd.get_value('Data page checksum version')
+        value = cmd.get_value("Data page checksum version")
         return value
 
     def get_segments_checksum_settings(self, gpdb_list=None):
@@ -56,23 +61,36 @@ class HeapChecksum:
             result = pg_control_data.get_results()
             gparray_gpdb = pg_control_data.gparray_gpdb
             if result.rc == 0:
-                self.logger.info("Successfully finished pg_controldata {} for dbid {}:\nstdout: {}\nstderr: {}".format(
-                    gparray_gpdb.getSegmentDataDirectory(), gparray_gpdb.getSegmentDbId(), result.stdout,
-                    result.stderr))
+                self.logger.info(
+                    "Successfully finished pg_controldata {} for dbid {}:\nstdout: {}\nstderr: {}".format(
+                        gparray_gpdb.getSegmentDataDirectory(),
+                        gparray_gpdb.getSegmentDbId(),
+                        result.stdout,
+                        result.stderr,
+                    )
+                )
                 try:
-                    checksum = pg_control_data.get_value('Data page checksum version')
+                    checksum = pg_control_data.get_value("Data page checksum version")
                     gparray_gpdb.heap_checksum = checksum
                     successes.append(gparray_gpdb)
                 except Exception as e:
                     failures.append(gparray_gpdb)
-                    self._logger_warn("cannot access heap checksum from pg_controldata for dbid %s "
-                                      "on host %s; got pgcontrol_data: %s and exception %s" % (
-                                          gparray_gpdb.dbid, gparray_gpdb.getSegmentHostName(),
-                                          pg_control_data, str(e)))
+                    self._logger_warn(
+                        "cannot access heap checksum from pg_controldata for dbid %s "
+                        "on host %s; got pgcontrol_data: %s and exception %s"
+                        % (
+                            gparray_gpdb.dbid,
+                            gparray_gpdb.getSegmentHostName(),
+                            pg_control_data,
+                            str(e),
+                        )
+                    )
             else:
                 failures.append(gparray_gpdb)
-                self._logger_warn("cannot access pg_controldata for dbid %s on host %s" % (
-                    gparray_gpdb.dbid, gparray_gpdb.getSegmentHostName()))
+                self._logger_warn(
+                    "cannot access pg_controldata for dbid %s on host %s"
+                    % (gparray_gpdb.dbid, gparray_gpdb.getSegmentHostName())
+                )
 
         return successes, failures
 
@@ -107,8 +125,12 @@ class HeapChecksum:
         pool = WorkerPool(numWorkers=self.workers)
         try:
             for gpdb in gpdb_list:  # iterate for all segments
-                cmd = PgControlData(name='run pg_controldata', datadir=gpdb.getSegmentDataDirectory(),
-                                    ctxt=REMOTE, remoteHost=gpdb.getSegmentHostName())
+                cmd = PgControlData(
+                    name="run pg_controldata",
+                    datadir=gpdb.getSegmentDataDirectory(),
+                    ctxt=REMOTE,
+                    remoteHost=gpdb.getSegmentHostName(),
+                )
                 cmd.gparray_gpdb = gpdb
                 pool.addCommand(cmd)
             pool.join()

@@ -13,11 +13,11 @@ GUCS_DISALLOWED_IN_FILE_REGEX = r"\"(\w+)\"[^}]+GUC_DISALLOW_IN_FILE"
 
 class ParseGuc:
     """
-    metadata about gucs, like GUC_DISALLOW_IN_FILE, is not available via
-sql. Work around that by parsing the C code that defines this metadata, and store
-relevant information in a file, to be read by gpconfig when called to
-change a GUC.  The Makefile in gpMgmt/bin will use this parser to
- create a file during 'make install', used by gpconfig to validate that a given GUC can be changed
+        metadata about gucs, like GUC_DISALLOW_IN_FILE, is not available via
+    sql. Work around that by parsing the C code that defines this metadata, and store
+    relevant information in a file, to be read by gpconfig when called to
+    change a GUC.  The Makefile in gpMgmt/bin will use this parser to
+     create a file during 'make install', used by gpconfig to validate that a given GUC can be changed
     """
 
     # hardcoded name for file looked up by gpconfig during its runtime
@@ -30,7 +30,9 @@ change a GUC.  The Makefile in gpMgmt/bin will use this parser to
     @staticmethod
     def get_source_c_file_paths():
         mypath = os.path.realpath(__file__)
-        misc_dir = os.path.join(os.path.dirname(mypath), "../../../src/backend/utils/misc")
+        misc_dir = os.path.join(
+            os.path.dirname(mypath), "../../../src/backend/utils/misc"
+        )
         return [os.path.join(misc_dir, "guc.c"), os.path.join(misc_dir, "guc_gp.c")]
 
     def parse_gucs(self, guc_path):
@@ -40,7 +42,7 @@ change a GUC.  The Makefile in gpMgmt/bin will use this parser to
         return self.disallowed_in_file_pattern.finditer(combined)
 
     def write_gucs_to_file(self, filepath):
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             paths = self.get_source_c_file_paths()
             for guc_source in paths:
                 hits = self.parse_gucs(guc_source)
@@ -68,8 +70,9 @@ def _mkdir_p(path, mode):
         else:
             raise
 
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
-if __name__ == '__main__':
+if __name__ == "__main__":
     ParseGuc().main()

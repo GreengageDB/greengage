@@ -33,12 +33,13 @@ def wrap_scenario(scenario):
             result = func(*args, **kwargs)
             after_scenario(scenario)
             return result
+
         return wrapped_func
+
     return inner
 
 
 class CustomFormatter(Formatter):
-
     def _wrap_scenario(self, scenarios):
         for scenario in scenarios:
             if isinstance(scenario, ScenarioOutline):

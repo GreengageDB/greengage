@@ -9,28 +9,26 @@ from __future__ import absolute_import
 import unittest
 
 
-
 from gppylib import gplog
 from gppylib.db import dbconn
 from gppylib.db import catalog
 from gppylib.db.test import skipIfDatabaseDown
 
 
-logger=gplog.get_default_logger()
+logger = gplog.get_default_logger()
 
 
 @skipIfDatabaseDown()
 class catalogTestCase(unittest.TestCase):
-
     def setUp(self):
-        self.dburl=dbconn.DbURL()
+        self.dburl = dbconn.DbURL()
         self.conn = dbconn.connect(self.dburl, unsetSearchPath=False)
-
 
     def tearDown(self):
         self.conn.close()
         pass
 
-#------------------------------- Mainline --------------------------------
-if __name__ == '__main__':
+
+# ------------------------------- Mainline --------------------------------
+if __name__ == "__main__":
     unittest.main()

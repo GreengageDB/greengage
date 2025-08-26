@@ -6,7 +6,8 @@ from gppylib.db import dbconn
 import pygresql.pg
 
 
-FTS_PROBE_QUERY = 'SELECT pg_catalog.gp_request_fts_probe_scan()'
+FTS_PROBE_QUERY = "SELECT pg_catalog.gp_request_fts_probe_scan()"
+
 
 class SegmentReconfigurer:
     def __init__(self, logger, worker_pool, timeout):
@@ -15,13 +16,14 @@ class SegmentReconfigurer:
         self.timeout = timeout
 
     def _trigger_fts_probe(self, dburl):
-        conn = pygresql.pg.connect(dbname=dburl.pgdb,
-                                   host=dburl.pghost,
-                                   port=dburl.pgport,
-                                   opt=None,
-                                   user=dburl.pguser,
-                                   passwd=dburl.pgpass,
-                )
+        conn = pygresql.pg.connect(
+            dbname=dburl.pgdb,
+            host=dburl.pghost,
+            port=dburl.pgport,
+            opt=None,
+            user=dburl.pguser,
+            passwd=dburl.pgpass,
+        )
         conn.query(FTS_PROBE_QUERY)
         conn.close()
 
@@ -38,14 +40,18 @@ class SegmentReconfigurer:
                 # execute a DDL query to start a distributed transaction.
                 # so the primaries'd better be up
                 conn = dbconn.connect(dburl)
-                conn.cursor().execute('CREATE TEMP TABLE temp_test(a int)')
-                conn.cursor().execute('COMMIT')
+                conn.cursor().execute("CREATE TEMP TABLE temp_test(a int)")
+                conn.cursor().execute("COMMIT")
             except Exception as e:
                 now = time.time()
                 if now < start_time + self.timeout:
                     continue
                 else:
-                    raise RuntimeError("Mirror promotion did not complete in {0} seconds.".format(self.timeout))
+                    raise RuntimeError(
+                        "Mirror promotion did not complete in {0} seconds.".format(
+                            self.timeout
+                        )
+                    )
             else:
                 conn.close()
                 break

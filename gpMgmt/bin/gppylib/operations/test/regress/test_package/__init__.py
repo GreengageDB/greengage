@@ -19,19 +19,21 @@ from gppylib.operations.unix import CheckFile, CheckRemoteFile, RemoveRemoteFile
 from gppylib.operations.package import dereference_symlink, GpScp
 from gppylib.commands.base import Command, REMOTE
 
+
 def get_os():
     dist, release, _ = platform.dist()
-    major_release = release.partition('.')[0]
+    major_release = release.partition(".")[0]
 
-    os_string = ''
-    if dist.lower() == 'redhat':
-        os_string += 'rhel'
-    elif dist.lower() == 'suse':
-        os_string += 'suse'
+    os_string = ""
+    if dist.lower() == "redhat":
+        os_string += "rhel"
+    elif dist.lower() == "suse":
+        os_string += "suse"
 
     os_string += major_release
 
     return os_string
+
 
 OS = get_os()
 ARCH = platform.machine()
@@ -40,12 +42,13 @@ ARCH = platform.machine()
 # it's used in the gppylib.operations.package. For more info, see the function definition.
 GPHOME = dereference_symlink(gp.get_gphome())
 
-ARCHIVE_PATH = os.path.join(GPHOME, 'share/packages/archive')
-RPM_DATABASE = os.path.join(GPHOME, 'share/packages/database')
+ARCHIVE_PATH = os.path.join(GPHOME, "share/packages/archive")
+RPM_DATABASE = os.path.join(GPHOME, "share/packages/database")
 GPPKG_EXTENSION = ".gppkg"
 SCRATCH_SPACE = os.path.join(tempfile.gettempdir(), getpass.getuser())
-GPDB_VERSION = '.'.join([str(n) for n in MAIN_VERSION[:2]])
+GPDB_VERSION = ".".join([str(n) for n in MAIN_VERSION[:2]])
 MASTER_PORT = os.getenv("PGPORT")
+
 
 def skipIfNoStandby():
     """
@@ -54,16 +57,18 @@ def skipIfNoStandby():
     """
     standby = get_host_list()[0]
     if standby is None:
-        return unittest.skip('requires standby')
+        return unittest.skip("requires standby")
     return lambda o: o
+
 
 def skipIfSingleNode():
     """
     Skip a test if its a single node install.
     """
     if len(get_host_list()[1]) == 0:
-        return unittest.skip('requires multiple nodes')
+        return unittest.skip("requires multiple nodes")
     return lambda o: o
+
 
 def get_host_list():
     """
@@ -74,7 +79,7 @@ def get_host_list():
              tuple[0] contains standby
              tuple[1] contains segment hosts
     """
-    gparr = GpArray.initFromCatalog(dbconn.DbURL(port = MASTER_PORT), utility = True)
+    gparr = GpArray.initFromCatalog(dbconn.DbURL(port=MASTER_PORT), utility=True)
     segs = gparr.getDbList()
 
     master = None
@@ -89,13 +94,14 @@ def get_host_list():
         elif seg.isSegmentMaster(current_role=True):
             master = seg.getSegmentHostName()
 
-    #Deduplicate the hosts so that we
-    #dont install multiple times on the same host
+    # Deduplicate the hosts so that we
+    # dont install multiple times on the same host
     segment_host_list = list(set(segment_host_list))
     if master in segment_host_list:
         segment_host_list.remove(master)
 
     return (standby_host, segment_host_list)
+
 
 def run_command(cmd_str):
     """
@@ -105,13 +111,14 @@ def run_command(cmd_str):
     @return: stdout/stderr output as a string
     """
     cmd = Command("Local Command", cmd_str)
-    cmd.run(validateAfter = True)
+    cmd.run(validateAfter=True)
     results = cmd.get_results()
 
     if results.rc != 0:
         return results.stderr.strip()
     else:
         return results.stdout.strip()
+
 
 def run_remote_command(cmd_str, host):
     """
@@ -120,11 +127,8 @@ def run_remote_command(cmd_str, host):
     @param cmd_str: The command string to be executed
     @return: stdout/stderr output as a string
     """
-    cmd = Command(name = "Remote Command",
-                  cmdStr = cmd_str,
-                  ctxt = REMOTE,
-                  remoteHost = host)
-    cmd.run(validateAfter = True)
+    cmd = Command(name="Remote Command", cmdStr=cmd_str, ctxt=REMOTE, remoteHost=host)
+    cmd.run(validateAfter=True)
 
     results = cmd.get_results()
 
@@ -133,9 +137,11 @@ def run_remote_command(cmd_str, host):
     else:
         return results.stdout.strip()
 
+
 class GppkgSpec:
     """Represents the gppkg spec file"""
-    def __init__(self, name, version, gpdbversion = GPDB_VERSION, os = OS, arch = ARCH):
+
+    def __init__(self, name, version, gpdbversion=GPDB_VERSION, os=OS, arch=ARCH):
         """
         All the parameters require arguments of type string.
         """
@@ -147,26 +153,40 @@ class GppkgSpec:
 
     def get_package_name(self):
         """Returns the package name of the form <name>-<version>"""
-        return self.name + '-' + self.version
+        return self.name + "-" + self.version
 
     def get_filename(self):
         """Returns the complete filename of the gppkg"""
-        return self.get_package_name() + '-' + self.os + '-' + self.arch + GPPKG_EXTENSION
+        return (
+            self.get_package_name() + "-" + self.os + "-" + self.arch + GPPKG_EXTENSION
+        )
 
     def __str__(self):
         """Returns the GppkgSpec in the form of a string"""
-        gppkg_spec_file = '''
-PkgName: ''' + self.name + '''
-Version: ''' + self.version + '''
-GPDBVersion: ''' + self.gpdbversion + '''
+        gppkg_spec_file = (
+            """
+PkgName: """
+            + self.name
+            + """
+Version: """
+            + self.version
+            + """
+GPDBVersion: """
+            + self.gpdbversion
+            + """
 Description: Temporary Test Package
-OS: ''' + self.os + '''
-Architecture: ''' + self.arch
+OS: """
+            + self.os
+            + """
+Architecture: """
+            + self.arch
+        )
 
         return gppkg_spec_file
 
+
 class BuildGppkg(Operation):
-    def __init__(self, gppkg_spec, main_rpm_spec, dependent_rpm_specs = []):
+    def __init__(self, gppkg_spec, main_rpm_spec, dependent_rpm_specs=[]):
         """
         @param gppkg_spec: The spec file required to build the Gppkg
         @type gppkg_spec: GppkgSpec
@@ -180,12 +200,11 @@ class BuildGppkg(Operation):
         self.dependent_rpm_specs = dependent_rpm_specs
 
     def execute(self):
-
         if not os.path.exists(SCRATCH_SPACE):
             os.mkdir(SCRATCH_SPACE)
 
         gppkg_spec_file = str(self.gppkg_spec)
-        #create gppkg_dir
+        # create gppkg_dir
         gppkg_dir = os.path.join(SCRATCH_SPACE, "package")
         if not os.path.exists(gppkg_dir):
             os.mkdir(gppkg_dir)
@@ -203,7 +222,7 @@ class BuildGppkg(Operation):
                     rpm_file = BuildRPM(spec).run()
                     shutil.move(rpm_file, deps_dir)
 
-            #create gppkg
+            # create gppkg
             with open(os.path.join(gppkg_dir, "gppkg_spec.yml"), "w") as f:
                 f.write(gppkg_spec_file)
 
@@ -214,9 +233,11 @@ class BuildGppkg(Operation):
 
         return self.gppkg_spec.get_filename()
 
+
 class RPMSpec:
     """Represents an RPM spec file used for creating an RPM"""
-    def __init__(self, name, version, release, depends = []):
+
+    def __init__(self, name, version, release, depends=[]):
         """
         @param depends: List of dependecies for the rpm
         @type depends: List of strings
@@ -228,37 +249,51 @@ class RPMSpec:
 
     def get_package_name(self):
         """Returns the package name of the form <name>-<version>-<release>"""
-        return self.name + '-' + self.version + '-' + self.release
+        return self.name + "-" + self.version + "-" + self.release
 
     def get_filename(self):
         """Returns the complete filename of the rpm"""
-        return self.get_package_name() + '.' + ARCH + ".rpm"
+        return self.get_package_name() + "." + ARCH + ".rpm"
 
     def __str__(self):
         """Returns the rpm spec file as a string"""
-        rpm_spec_file = '''
+        rpm_spec_file = (
+            """
 
 %define _topdir %(pwd)
 %define __os_install_post %{nil}
 
 Summary:        Temporary test package
 License:        GPLv2
-Name:           ''' + self.name + '''
-Version:        ''' + self.version + '''
-Release:        ''' + self.release + '''
+Name:           """
+            + self.name
+            + """
+Version:        """
+            + self.version
+            + """
+Release:        """
+            + self.release
+            + """
 Group:          Development/Tools
 Prefix:         /temp
 AutoReq:        no
 AutoProv:       no
-BuildArch:      ''' + ARCH + '''
-Provides:       ''' + self.name + ''' = '''+ self.version +''', /bin/sh
-BuildRoot:      %{_topdir}/BUILD '''
+BuildArch:      """
+            + ARCH
+            + """
+Provides:       """
+            + self.name
+            + """ = """
+            + self.version
+            + """, /bin/sh
+BuildRoot:      %{_topdir}/BUILD """
+        )
 
         if self.depends != []:
-            rpm_spec_file += '''
-Requires:       ''' + ','.join(self.depends)
+            rpm_spec_file += """
+Requires:       """ + ",".join(self.depends)
 
-        rpm_spec_file += '''
+        rpm_spec_file += """
 %description
 Temporary test package for gppkg.
 
@@ -272,8 +307,9 @@ touch %{buildroot}/temp/temp_file
 
 %files
 /temp
-'''
+"""
         return rpm_spec_file
+
 
 class BuildRPM(Operation):
     def __init__(self, spec):
@@ -297,12 +333,16 @@ class BuildRPM(Operation):
 
                 os.system("cd " + SCRATCH_SPACE + "; rpmbuild --quiet -bb " + f.name)
 
-            shutil.copy(os.path.join(SCRATCH_SPACE, "RPMS", ARCH, self.spec.get_filename()), os.getcwd())
+            shutil.copy(
+                os.path.join(SCRATCH_SPACE, "RPMS", ARCH, self.spec.get_filename()),
+                os.getcwd(),
+            )
         finally:
             shutil.rmtree(build_dir)
             shutil.rmtree(rpms_dir)
 
         return self.spec.get_filename()
+
 
 class GppkgTestCase(unittest.TestCase):
     """
@@ -315,6 +355,7 @@ class GppkgTestCase(unittest.TestCase):
     Default GppkgSpec will have no dependencies, have version 1.0 and will
     be called alpha
     """
+
     def setUp(self):
         self.cleanup()
         self.A_spec = RPMSpec("A", "1", "1")
@@ -336,12 +377,14 @@ class GppkgTestCase(unittest.TestCase):
     def cleanup(self):
         """Cleans up gppkgs that are installed"""
         results = run_command("gppkg -q --all")
-        gppkgs = results.split('\n')[self.start_output:self.end_output]   #The first line is 'Starting gppkg with args', which we want to ignore.
+        gppkgs = results.split("\n")[
+            self.start_output : self.end_output
+        ]  # The first line is 'Starting gppkg with args', which we want to ignore.
 
         for gppkg in gppkgs:
             run_command("gppkg --remove " + gppkg)
 
-    def build(self, gppkg_spec, rpm_spec, dep_rpm_specs = []):
+    def build(self, gppkg_spec, rpm_spec, dep_rpm_specs=[]):
         """
         Builds a gppkg and checks if the build was successful.
         if the build was successful, returns the gppkg filename
@@ -393,9 +436,11 @@ class GppkgTestCase(unittest.TestCase):
         """
         cmd = "gppkg -q %s" % gppkg_filename
         results = run_command(cmd)
-        test_str = ''.join(gppkg_filename.split('-')[:1]) + " is installed"
+        test_str = "".join(gppkg_filename.split("-")[:1]) + " is installed"
         is_installed = test_str in results
-        return is_installed and CheckFile(os.path.join(ARCHIVE_PATH, gppkg_filename)).run()
+        return (
+            is_installed and CheckFile(os.path.join(ARCHIVE_PATH, gppkg_filename)).run()
+        )
 
     def remove(self, gppkg_filename):
         """
@@ -405,7 +450,9 @@ class GppkgTestCase(unittest.TestCase):
         @param gppkg_filename: The name of the gppkg file to be uninstalled
         @type gppkg_filename: str
         """
-        gppkg_package_name = gppkg_filename.split('-')[0] + '-' + gppkg_filename.split('-')[1]
+        gppkg_package_name = (
+            gppkg_filename.split("-")[0] + "-" + gppkg_filename.split("-")[1]
+        )
         run_command("gppkg --remove %s" % gppkg_package_name)
         self.assertFalse(self.check_install(gppkg_filename))
 
@@ -435,11 +482,11 @@ class GppkgTestCase(unittest.TestCase):
         @rtype: str
         """
         result_without_timestamp = []
-        results = result.split('\n')[self.start_output:self.end_output]
+        results = result.split("\n")[self.start_output : self.end_output]
 
         for res in results:
-            res = res.split(':-')[1].strip()
-            res = ' '.join(res.split())
+            res = res.split(":-")[1].strip()
+            res = " ".join(res.split())
             result_without_timestamp.append(res)
 
         return result_without_timestamp
@@ -451,7 +498,9 @@ class GppkgTestCase(unittest.TestCase):
         @param rpm_package_name: Name of the rpm package of the form <name>-<version>-<release>
         @type rpm_package_name: str
         """
-        results = run_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE))
+        results = run_command(
+            "rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE)
+        )
         self.assertEqual(results, rpm_package_name)
 
     def check_rpm_uninstall(self, rpm_package_name):
@@ -461,7 +510,9 @@ class GppkgTestCase(unittest.TestCase):
         @param rpm_package_name: Name of rpm package of the form <name>-<version>-<release>
         @type rpm_package_name: str
         """
-        with self.assertRaisesRegexp(ExecutionError, "%s is not installed" % rpm_package_name):
+        with self.assertRaisesRegexp(
+            ExecutionError, "%s is not installed" % rpm_package_name
+        ):
             run_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE))
 
     def check_remote_rpm_install(self, rpm_package_name, host):
@@ -473,7 +524,9 @@ class GppkgTestCase(unittest.TestCase):
         @param host: Remote host
         @type host: str
         """
-        results = run_remote_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE), host)
+        results = run_remote_command(
+            "rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE), host
+        )
         self.assertEqual(results, rpm_package_name)
 
     def check_remote_rpm_uninstall(self, rpm_package_name, host):
@@ -485,10 +538,16 @@ class GppkgTestCase(unittest.TestCase):
         @param host: Remote host
         @type host: str
         """
-        with self.assertRaisesRegexp(ExecutionError, "%s is not installed" % rpm_package_name):
-            results = run_remote_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE), host)
+        with self.assertRaisesRegexp(
+            ExecutionError, "%s is not installed" % rpm_package_name
+        ):
+            results = run_remote_command(
+                "rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE), host
+            )
 
-    def install_rpm(self, rpm_filename, rpm_database = RPM_DATABASE, installation_prefix = GPHOME):
+    def install_rpm(
+        self, rpm_filename, rpm_database=RPM_DATABASE, installation_prefix=GPHOME
+    ):
         """
         Installs a given rpm and checks if the installation was successful.
 
@@ -499,11 +558,14 @@ class GppkgTestCase(unittest.TestCase):
         @param installation_prefix: The installation path for the rpm
         @param type installation_prefix: str
         """
-        run_command("rpm -i %s --dbpath %s --prefix=%s" % (rpm_filename, rpm_database, installation_prefix))
-        rpm_package_name = rpm_filename[:rpm_filename.index('.')]
+        run_command(
+            "rpm -i %s --dbpath %s --prefix=%s"
+            % (rpm_filename, rpm_database, installation_prefix)
+        )
+        rpm_package_name = rpm_filename[: rpm_filename.index(".")]
         self.check_rpm_install(rpm_package_name)
 
-    def uninstall_rpm(self, rpm_filename, rpm_database = RPM_DATABASE):
+    def uninstall_rpm(self, rpm_filename, rpm_database=RPM_DATABASE):
         """
         UnInstalls a given rpm and checks if the unsintallation was successful
 
@@ -512,11 +574,13 @@ class GppkgTestCase(unittest.TestCase):
         @param rpm_database: The rpm database against which rpms will be uninstalled
         @type rpm_database: str
         """
-        rpm_package_name = rpm_filename[:rpm_filename.index('.')]
+        rpm_package_name = rpm_filename[: rpm_filename.index(".")]
         run_command("rpm -e %s --dbpath %s" % (rpm_package_name, rpm_database))
         self.check_rpm_uninstall(rpm_package_name)
 
-    def install_rpm_remotely(self, rpm_filename, host, rpm_database = RPM_DATABASE, installation_prefix = GPHOME):
+    def install_rpm_remotely(
+        self, rpm_filename, host, rpm_database=RPM_DATABASE, installation_prefix=GPHOME
+    ):
         """
         Installs an rpm on a remote host and checks if the installation was successful
 
@@ -529,11 +593,15 @@ class GppkgTestCase(unittest.TestCase):
         @param installation_prefix: The installation path for the rpm
         @type installation_prefix: str
         """
-        run_remote_command("rpm -i %s --dbpath %s --prefix=%s" % (rpm_filename, rpm_database, installation_prefix), host)
-        rpm_package_name = rpm_filename[:rpm_filename.index('.')]
+        run_remote_command(
+            "rpm -i %s --dbpath %s --prefix=%s"
+            % (rpm_filename, rpm_database, installation_prefix),
+            host,
+        )
+        rpm_package_name = rpm_filename[: rpm_filename.index(".")]
         self.check_remote_rpm_install(rpm_package_name, host)
 
-    def uninstall_rpm_remotely(self, rpm_filename, host, rpm_database = RPM_DATABASE):
+    def uninstall_rpm_remotely(self, rpm_filename, host, rpm_database=RPM_DATABASE):
         """
         Uninstalls an rpm on a remote host and checks if uninstallation was successful
 
@@ -544,6 +612,8 @@ class GppkgTestCase(unittest.TestCase):
         @param rpm_database: The rpm database against which rpms will be uninstalled
         @type rpm_database: str
         """
-        rpm_package_name = rpm_filename[:rpm_filename.index('.')]
-        run_remote_command("rpm -e %s --dbpath %s" % (rpm_package_name, rpm_database), host)
+        rpm_package_name = rpm_filename[: rpm_filename.index(".")]
+        run_remote_command(
+            "rpm -e %s --dbpath %s" % (rpm_package_name, rpm_database), host
+        )
         self.check_remote_rpm_uninstall(rpm_package_name, host)

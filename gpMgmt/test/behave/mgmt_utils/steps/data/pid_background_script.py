@@ -1,4 +1,4 @@
- #!/usr/bin/env python
+#!/usr/bin/env python
 
 from __future__ import absolute_import
 import time
@@ -17,4 +17,4 @@ with open(sys.argv[1], "w") as f:
     os.fsync(f.fileno())
 
 while True:
-   time.sleep(1)
+    time.sleep(1)

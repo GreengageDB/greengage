@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 #
-# Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
+# Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 """
 Set of Classes for executing unix commands.
 """
+
 from __future__ import absolute_import
 from __future__ import print_function
 import os
@@ -35,11 +36,22 @@ platform_list = [LINUX, DARWIN, FREEBSD, OPENBSD]
 
 curr_platform = platform.uname()[0].lower()
 
-GPHOME = os.environ.get('GPHOME', None)
+GPHOME = os.environ.get("GPHOME", None)
 
 # ---------------command path--------------------
-CMDPATH = ['/usr/kerberos/bin', '/usr/sfw/bin', '/opt/sfw/bin', '/usr/local/bin', '/bin',
-           '/usr/bin', '/sbin', '/usr/sbin', '/usr/ucb', '/sw/bin', '/opt/Navisphere/bin']
+CMDPATH = [
+    "/usr/kerberos/bin",
+    "/usr/sfw/bin",
+    "/opt/sfw/bin",
+    "/usr/local/bin",
+    "/bin",
+    "/usr/bin",
+    "/sbin",
+    "/usr/sbin",
+    "/usr/ucb",
+    "/sw/bin",
+    "/opt/Navisphere/bin",
+]
 
 if GPHOME:
     CMDPATH.append(GPHOME)
@@ -54,7 +66,10 @@ class CommandNotFoundException(Exception):
         self.paths = paths
 
     def __str__(self):
-        return "Could not locate command: '%s' in this set of paths: %s" % (self.cmd, repr(self.paths))
+        return "Could not locate command: '%s' in this set of paths: %s" % (
+            self.cmd,
+            repr(self.paths),
+        )
 
 
 def findCmdInPath(cmd):
@@ -67,7 +82,7 @@ def findCmdInPath(cmd):
                 CMD_CACHE[cmd] = f
                 return f
 
-        logger.critical('Command %s not found' % cmd)
+        logger.critical("Command %s not found" % cmd)
         search_path = CMDPATH[:]
         raise CommandNotFoundException(cmd, search_path)
     else:
@@ -76,7 +91,7 @@ def findCmdInPath(cmd):
 
 # For now we'll leave some generic functions outside of the Platform framework
 def getLocalHostname():
-    return socket.gethostname().split('.')[0]
+    return socket.gethostname().split(".")[0]
 
 
 def getUserName():
@@ -88,12 +103,17 @@ def getHomePath():
 
 
 def check_pid_on_remotehost(pid, host):
-    """ Check For the existence of a unix pid on remote host. """
+    """Check For the existence of a unix pid on remote host."""
 
     if pid == 0:
         return False
 
-    cmd = Command(name='check pid on remote host', cmdStr='kill -0 %d' % pid, ctxt=REMOTE, remoteHost=host)
+    cmd = Command(
+        name="check pid on remote host",
+        cmdStr="kill -0 %d" % pid,
+        ctxt=REMOTE,
+        remoteHost=host,
+    )
     cmd.run()
     if cmd.get_results().rc == 0:
         return True
@@ -102,7 +122,7 @@ def check_pid_on_remotehost(pid, host):
 
 
 def check_pid(pid):
-    """ Check For the existence of a unix pid. """
+    """Check For the existence of a unix pid."""
 
     if pid == 0:
         return False
@@ -119,17 +139,27 @@ def check_pid(pid):
 Given the data directory, pid list and host,
 kill -9 all the processes from the pid list.
 """
+
+
 def kill_9_segment_processes(datadir, pids, host):
-    logger.info('Terminating processes for segment {0}'.format(datadir))
+    logger.info("Terminating processes for segment {0}".format(datadir))
 
     for pid in pids:
         if check_pid_on_remotehost(pid, host):
-
-            cmd = Command("kill -9 process", ("kill -9 {0}".format(pid)), ctxt=REMOTE, remoteHost=host)
+            cmd = Command(
+                "kill -9 process",
+                ("kill -9 {0}".format(pid)),
+                ctxt=REMOTE,
+                remoteHost=host,
+            )
             cmd.run()
 
             if cmd.get_results().rc != 0:
-                logger.error('Failed to kill process {0} for segment {1}: {2}'.format(pid, datadir, cmd.get_results().stderr))
+                logger.error(
+                    "Failed to kill process {0} for segment {1}: {2}".format(
+                        pid, datadir, cmd.get_results().stderr
+                    )
+                )
 
 
 def logandkill(pid, sig):
@@ -138,14 +168,15 @@ def logandkill(pid, sig):
         signal.SIGTERM: "Sending SIGTERM to %d (smart shutdown)",
         signal.SIGINT: "Sending SIGINT to %d (fast shutdown)",
         signal.SIGQUIT: "Sending SIGQUIT to %d (immediate shutdown)",
-        signal.SIGABRT: "Sending SIGABRT to %d"
+        signal.SIGABRT: "Sending SIGABRT to %d",
     }
     logger.info(msgs[sig] % pid)
     os.kill(pid, sig)
 
 
 def kill_sequence(pid):
-    if not check_pid(pid): return
+    if not check_pid(pid):
+        return
 
     # first send SIGCONT in case the process is stopped
     logandkill(pid, signal.SIGCONT)
@@ -183,17 +214,17 @@ def kill_sequence(pid):
 
 def get_remote_link_path(path, host):
     """
-      Function to get symlink target path for a given path on given host.
-      :param  path: path for which symlink has to be found
-      :param  host: host on which the given path is available
-      :return: returns symlink target path
+    Function to get symlink target path for a given path on given host.
+    :param  path: path for which symlink has to be found
+    :param  host: host on which the given path is available
+    :return: returns symlink target path
     """
 
     cmdStr = """python -c 'import os; print(os.readlink("%s"))'""" % path
-    cmd = Command('get remote link path', cmdStr=cmdStr, ctxt=REMOTE,
-                       remoteHost=host)
+    cmd = Command("get remote link path", cmdStr=cmdStr, ctxt=REMOTE, remoteHost=host)
     cmd.run(validateAfter=True)
     return cmd.get_stdout()
+
 
 # ---------------Platform Framework--------------------
 
@@ -206,21 +237,21 @@ def get_remote_link_path(path, host):
 """
 
 
-class GenericPlatform():
+class GenericPlatform:
     def getName(self):
         "unsupported"
 
     def get_machine_arch_cmd(self):
-        return 'uname -i'
+        return "uname -i"
 
     def getDiskFreeCmd(self):
-        return findCmdInPath('df') + " -k"
+        return findCmdInPath("df") + " -k"
 
     def getTarCmd(self):
-        return findCmdInPath('tar')
+        return findCmdInPath("tar")
 
     def getIfconfigCmd(self):
-        return findCmdInPath('ifconfig')
+        return findCmdInPath("ifconfig")
 
 
 class LinuxPlatform(GenericPlatform):
@@ -231,12 +262,12 @@ class LinuxPlatform(GenericPlatform):
         return "linux"
 
     def getDiskFreeCmd(self):
-        # -P is for POSIX formatting.  Prevents error 
+        # -P is for POSIX formatting.  Prevents error
         # on lines that would wrap
-        return findCmdInPath('df') + " -Pk"
+        return findCmdInPath("df") + " -Pk"
 
     def getPing6(self):
-        return findCmdInPath('ping6')
+        return findCmdInPath("ping6")
 
 
 class DarwinPlatform(GenericPlatform):
@@ -247,10 +278,10 @@ class DarwinPlatform(GenericPlatform):
         return "darwin"
 
     def get_machine_arch_cmd(self):
-        return 'uname -m'
+        return "uname -m"
 
     def getPing6(self):
-        return findCmdInPath('ping6')
+        return findCmdInPath("ping6")
 
 
 class FreeBsdPlatform(GenericPlatform):
@@ -261,7 +292,8 @@ class FreeBsdPlatform(GenericPlatform):
         return "freebsd"
 
     def get_machine_arch_cmd(self):
-        return 'uname -m'
+        return "uname -m"
+
 
 class OpenBSDPlatform(GenericPlatform):
     def __init__(self):
@@ -271,10 +303,10 @@ class OpenBSDPlatform(GenericPlatform):
         return "openbsd"
 
     def get_machine_arch_cmd(self):
-        return 'uname -m'
+        return "uname -m"
 
     def getPing6(self):
-        return findCmdInPath('ping6')
+        return findCmdInPath("ping6")
 
 
 # ---------------ping--------------------
@@ -282,12 +314,16 @@ class Ping(Command):
     def __init__(self, name, hostToPing, ctxt=LOCAL, remoteHost=None, obj=None):
         self.hostToPing = hostToPing
         self.obj = obj
-        self.pingToUse = findCmdInPath('ping')
+        self.pingToUse = findCmdInPath("ping")
         cmdStr = "%s -c 1 %s" % (self.pingToUse, self.hostToPing)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     def run(self, validateAfter=False):
-        if curr_platform == LINUX or curr_platform == DARWIN or curr_platform == OPENBSD:
+        if (
+            curr_platform == LINUX
+            or curr_platform == DARWIN
+            or curr_platform == OPENBSD
+        ):
             # Get the family of the address we need to ping.  If it's AF_INET6
             # we must use ping6 to ping it.
 
@@ -297,7 +333,9 @@ class Ping(Command):
                     self.pingToUse = SYSTEM.getPing6()
                     self.cmdStr = "%s -c 1 %s" % (self.pingToUse, self.hostToPing)
             except Exception as e:
-                self.results = CommandResult(1, '', 'Failed to get ip address: ' + str(e), False, True)
+                self.results = CommandResult(
+                    1, "", "Failed to get ip address: " + str(e), False, True
+                )
                 if validateAfter:
                     self.validate()
                 else:
@@ -348,14 +386,14 @@ class DiskFree(Command):
         return dfCmd.get_disk_free_output()
 
     def get_disk_free_output(self):
-        '''expected output of the form:
-           Filesystem   512-blocks      Used Available Capacity  Mounted on
-           /dev/disk0s2  194699744 158681544  35506200    82%    /
+        """expected output of the form:
+        Filesystem   512-blocks      Used Available Capacity  Mounted on
+        /dev/disk0s2  194699744 158681544  35506200    82%    /
 
-           Returns data in list format:
-           ['/dev/disk0s2', '194699744', '158681544', '35506200', '82%', '/']
-        '''
-        rawIn = self.results.stdout.split('\n')[1]
+        Returns data in list format:
+        ['/dev/disk0s2', '194699744', '158681544', '35506200', '82%', '/']
+        """
+        rawIn = self.results.stdout.split("\n")[1]
         return rawIn.split()
 
     def get_bytes_free(self):
@@ -368,7 +406,7 @@ class DiskFree(Command):
 class MakeDirectory(Command):
     def __init__(self, name, directory, ctxt=LOCAL, remoteHost=None):
         self.directory = directory
-        cmdStr = "%s -p %s" % (findCmdInPath('mkdir'), directory)
+        cmdStr = "%s -p %s" % (findCmdInPath("mkdir"), directory)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -388,15 +426,16 @@ class RemoveDirectory(Command):
     remove a directory recursively, including the directory itself.
     Uses rsync for efficiency.
     """
+
     def __init__(self, name, directory, ctxt=LOCAL, remoteHost=None):
         unique_dir = "/tmp/emptyForRemove%s" % uuid.uuid4()
-        cmd_str = "if [ -d {target_dir} ]; then " \
-                  "mkdir -p {unique_dir}  &&  " \
-                  "{cmd} -a --delete {unique_dir}/ {target_dir}/  &&  " \
-                  "rmdir {target_dir} {unique_dir} ; fi".format(
-                    unique_dir=unique_dir,
-                    cmd=findCmdInPath('rsync'),
-                    target_dir=directory
+        cmd_str = (
+            "if [ -d {target_dir} ]; then "
+            "mkdir -p {unique_dir}  &&  "
+            "{cmd} -a --delete {unique_dir}/ {target_dir}/  &&  "
+            "rmdir {target_dir} {unique_dir} ; fi".format(
+                unique_dir=unique_dir, cmd=findCmdInPath("rsync"), target_dir=directory
+            )
         )
         Command.__init__(self, name, cmd_str, ctxt, remoteHost)
 
@@ -414,7 +453,7 @@ class RemoveDirectory(Command):
 # -------------rm -rf ------------------
 class RemoveFile(Command):
     def __init__(self, name, filepath, ctxt=LOCAL, remoteHost=None):
-        cmdStr = "%s -f %s" % (findCmdInPath('rm'), filepath)
+        cmdStr = "%s -f %s" % (findCmdInPath("rm"), filepath)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -433,21 +472,24 @@ class RemoveDirectoryContents(Command):
     remove contents of a directory recursively, excluding the parent directory.
     Uses rsync for efficiency.
     """
+
     def __init__(self, name, directory, ctxt=LOCAL, remoteHost=None):
         unique_dir = "/tmp/emptyForRemove%s" % uuid.uuid4()
-        cmd_str = "if [ -d {target_dir} ]; then " \
-                  "mkdir -p {unique_dir}  &&  " \
-                  "{cmd} -a --no-perms --delete {unique_dir}/ {target_dir}/  &&  " \
-                  "rmdir {unique_dir} ; fi".format(
-                    unique_dir=unique_dir,
-                    cmd=findCmdInPath('rsync'),
-                    target_dir=directory
+        cmd_str = (
+            "if [ -d {target_dir} ]; then "
+            "mkdir -p {unique_dir}  &&  "
+            "{cmd} -a --no-perms --delete {unique_dir}/ {target_dir}/  &&  "
+            "rmdir {unique_dir} ; fi".format(
+                unique_dir=unique_dir, cmd=findCmdInPath("rsync"), target_dir=directory
+            )
         )
         Command.__init__(self, name, cmd_str, ctxt, remoteHost)
 
     @staticmethod
     def remote(name, remote_host, directory):
-        rm_cmd = RemoveDirectoryContents(name, directory, ctxt=REMOTE, remoteHost=remote_host)
+        rm_cmd = RemoveDirectoryContents(
+            name, directory, ctxt=REMOTE, remoteHost=remote_host
+        )
         rm_cmd.run(validateAfter=True)
 
     @staticmethod
@@ -462,7 +504,7 @@ class RemoveGlob(Command):
     """
 
     def __init__(self, name, glob, ctxt=LOCAL, remoteHost=None):
-        cmd_str = "%s -rf %s" % (findCmdInPath('rm'), glob)
+        cmd_str = "%s -rf %s" % (findCmdInPath("rm"), glob)
         Command.__init__(self, name, cmd_str, ctxt, remoteHost)
 
     @staticmethod
@@ -474,8 +516,6 @@ class RemoveGlob(Command):
     def local(name, directory):
         rm_cmd = RemoveGlob(name, directory)
         rm_cmd.run(validateAfter=True)
-
-
 
 
 class FileDirExists(Command):
@@ -491,78 +531,98 @@ class FileDirExists(Command):
         return cmd.filedir_exists()
 
     def filedir_exists(self):
-        return (not self.results.rc)
+        return not self.results.rc
 
 
 # -------------scp------------------
 
+
 # MPP-13617
 def canonicalize(addr):
-    if ':' not in addr: return addr
-    if '[' in addr: return addr
-    return '[' + addr + ']'
+    if ":" not in addr:
+        return addr
+    if "[" in addr:
+        return addr
+    return "[" + addr + "]"
 
 
 class Rsync(Command):
-    def __init__(self, name, srcFile, dstFile, srcHost=None, dstHost=None, recursive=False,
-                 verbose=True, archive_mode=True, checksum=False, delete=False, progress=False,
-                 stats=False, dry_run=False, bwlimit=None, exclude_list=[], ctxt=LOCAL,
-                 remoteHost=None, compress=False, progress_file=None):
-
+    def __init__(
+        self,
+        name,
+        srcFile,
+        dstFile,
+        srcHost=None,
+        dstHost=None,
+        recursive=False,
+        verbose=True,
+        archive_mode=True,
+        checksum=False,
+        delete=False,
+        progress=False,
+        stats=False,
+        dry_run=False,
+        bwlimit=None,
+        exclude_list=[],
+        ctxt=LOCAL,
+        remoteHost=None,
+        compress=False,
+        progress_file=None,
+    ):
         """
-            rsync options:
-                srcFile: source datadir/file
-                        If source is a directory, make sure you add a '/' at the end of its path. When using "/" at the
-                        end of source, rsync will copy the content of the last directory. When not using "/" at the end
-                        of source, rsync will copy the last directory and the content of the directory.
-                dstFile: destination datadir or file that needs to be synced
-                srcHost: source host
-                exclude_list: to exclude specified files and directories to copied or synced with target
-                delete: delete the files on target which do not exist on source
-                checksum: to skip files being synced based on checksum, not modification time and size
-                bwlimit: to control the I/O bandwidth
-                stats: give some file-transfer stats
-                dry_run: perform a trial run with no changes made
-                compress: compress file data during the transfer
-                progress: to show the progress of rsync execution, like % transferred
+        rsync options:
+            srcFile: source datadir/file
+                    If source is a directory, make sure you add a '/' at the end of its path. When using "/" at the
+                    end of source, rsync will copy the content of the last directory. When not using "/" at the end
+                    of source, rsync will copy the last directory and the content of the directory.
+            dstFile: destination datadir or file that needs to be synced
+            srcHost: source host
+            exclude_list: to exclude specified files and directories to copied or synced with target
+            delete: delete the files on target which do not exist on source
+            checksum: to skip files being synced based on checksum, not modification time and size
+            bwlimit: to control the I/O bandwidth
+            stats: give some file-transfer stats
+            dry_run: perform a trial run with no changes made
+            compress: compress file data during the transfer
+            progress: to show the progress of rsync execution, like % transferred
         """
 
-        cmd_tokens = [findCmdInPath('rsync')]
+        cmd_tokens = [findCmdInPath("rsync")]
 
         if recursive:
-            cmd_tokens.append('-r')
+            cmd_tokens.append("-r")
 
         if verbose:
-            cmd_tokens.append('-v')
+            cmd_tokens.append("-v")
 
         if archive_mode:
-            cmd_tokens.append('-a')
+            cmd_tokens.append("-a")
 
         # To skip the files based on checksum, not modification time and size
         if checksum:
-            cmd_tokens.append('-c')
+            cmd_tokens.append("-c")
 
         # Shows the progress of the whole transfer,
         # Note : It is only supported with rsync 3.1.0 or above
         if progress:
-            cmd_tokens.append('--info=progress2,name0')
+            cmd_tokens.append("--info=progress2,name0")
 
         # To show file transfer stats
         if stats:
-            cmd_tokens.append('--stats')
+            cmd_tokens.append("--stats")
 
         if bwlimit is not None:
-            cmd_tokens.append('--bwlimit')
+            cmd_tokens.append("--bwlimit")
             cmd_tokens.append(bwlimit)
 
         if dry_run:
-            cmd_tokens.append('--dry-run')
+            cmd_tokens.append("--dry-run")
 
         if delete:
-            cmd_tokens.append('--delete')
+            cmd_tokens.append("--delete")
 
         if compress:
-            cmd_tokens.append('--compress')
+            cmd_tokens.append("--compress")
 
         if srcHost:
             cmd_tokens.append(canonicalize(srcHost) + ":" + srcFile)
@@ -582,9 +642,12 @@ class Rsync(Command):
         # of each line and redirects it to progress_file
         if progress_file:
             cmd_tokens.append(
-                '2>&1 | tr "\\r" "\\n" |sed -E "/[0-9]+%/ s/$/ :{0}/" > {1}'.format(name, pipes.quote(progress_file)))
+                '2>&1 | tr "\\r" "\\n" |sed -E "/[0-9]+%/ s/$/ :{0}/" > {1}'.format(
+                    name, pipes.quote(progress_file)
+                )
+            )
 
-        cmdStr = ' '.join(cmd_tokens)
+        cmdStr = " ".join(cmd_tokens)
         cmdStr = "set -o pipefail; {}".format(cmdStr)
         self.command_tokens = cmd_tokens
 
@@ -593,10 +656,10 @@ class Rsync(Command):
     # Overriding validate() of Command class to handle few specific return codes of rsync which can be ignored
     def validate(self, expected_rc=0):
         """
-            During differential recovery, pg_wal is synced using rsync. During pg_wal sync, some of the xlogtemp files
-            are present on source when rsync builds the list of files to be transferred but are vanished before
-            transferring. In this scenario rsync gives warning "some files vanished before they could be transferred
-            (code 24)". This return code can be ignored in case of rsync command.
+        During differential recovery, pg_wal is synced using rsync. During pg_wal sync, some of the xlogtemp files
+        are present on source when rsync builds the list of files to be transferred but are vanished before
+        transferring. In this scenario rsync gives warning "some files vanished before they could be transferred
+        (code 24)". This return code can be ignored in case of rsync command.
         """
         if self.results.rc != 24 and self.results.rc != expected_rc:
             self.logger.debug(self.results)
@@ -604,9 +667,18 @@ class Rsync(Command):
 
 
 class Scp(Command):
-    def __init__(self, name, srcFile, dstFile, srcHost=None, dstHost=None, recursive=False, ctxt=LOCAL,
-                 remoteHost=None):
-        cmdStr = findCmdInPath('scp') + " "
+    def __init__(
+        self,
+        name,
+        srcFile,
+        dstFile,
+        srcHost=None,
+        dstHost=None,
+        recursive=False,
+        ctxt=LOCAL,
+        remoteHost=None,
+    ):
+        cmdStr = findCmdInPath("scp") + " "
 
         if recursive:
             cmdStr = cmdStr + "-r "
@@ -620,6 +692,7 @@ class Scp(Command):
         cmdStr = cmdStr + dstFile
 
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
+
 
 # -------------create tar------------------
 class CreateTar(Command):
@@ -640,12 +713,13 @@ class ExtractTar(Command):
         cmdStr = "%s -C %s -xf %s" % (tarCmd, dstDirectory, srcTarFile)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
+
 # --------------kill ----------------------
 class Kill(Command):
     def __init__(self, name, pid, signal, ctxt=LOCAL, remoteHost=None):
         self.pid = pid
         self.signal = signal
-        cmdStr = "%s -s %s %s" % (findCmdInPath('kill'), signal, pid)
+        cmdStr = "%s -s %s %s" % (findCmdInPath("kill"), signal, pid)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -658,15 +732,16 @@ class Kill(Command):
         cmd = Kill(name, pid, signal, ctxt=REMOTE, remoteHost=remote_host)
         cmd.run(validateAfter=True)
 
+
 # --------------hostname ----------------------
 class Hostname(Command):
     def __init__(self, name, ctxt=LOCAL, remoteHost=None):
         self.remotehost = remoteHost
-        Command.__init__(self, name, findCmdInPath('hostname'), ctxt, remoteHost)
+        Command.__init__(self, name, findCmdInPath("hostname"), ctxt, remoteHost)
 
     def get_hostname(self):
         if not self.results:
-            raise Exception('Command not yet executed')
+            raise Exception("Command not yet executed")
         return self.results.stdout.strip()
 
 
@@ -676,23 +751,26 @@ class InterfaceAddrs(Command):
 
     def __init__(self, name, ctxt=LOCAL, remoteHost=None):
         ifconfig = SYSTEM.getIfconfigCmd()
-        grep = findCmdInPath('grep')
-        awk = findCmdInPath('awk')
-        cut = findCmdInPath('cut')
-        cmdStr = 'echo "START_CMD_OUTPUT";%s|%s "inet "|%s -v "127.0.0"|%s \'{print \$2}\'|%s -d: -f2' % (ifconfig, grep, grep, awk, cut)
+        grep = findCmdInPath("grep")
+        awk = findCmdInPath("awk")
+        cut = findCmdInPath("cut")
+        cmdStr = (
+            'echo "START_CMD_OUTPUT";%s|%s "inet "|%s -v "127.0.0"|%s \'{print \$2}\'|%s -d: -f2'
+            % (ifconfig, grep, grep, awk, cut)
+        )
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
     def local(name):
         cmd = InterfaceAddrs(name)
         cmd.run(validateAfter=True)
-        return cmd.get_results().stdout.split('START_CMD_OUTPUT\n')[1].split()
+        return cmd.get_results().stdout.split("START_CMD_OUTPUT\n")[1].split()
 
     @staticmethod
     def remote(name, remoteHost):
         cmd = InterfaceAddrs(name, ctxt=REMOTE, remoteHost=remoteHost)
         cmd.run(validateAfter=True)
-        return cmd.get_results().stdout.split('START_CMD_OUTPUT\n')[1].split()
+        return cmd.get_results().stdout.split("START_CMD_OUTPUT\n")[1].split()
 
 
 # --------------tcp port is active -----------------------
@@ -700,15 +778,22 @@ class PgPortIsActive(Command):
     def __init__(self, name, port, file, ctxt=LOCAL, remoteHost=None):
         self.port = port
         try:
-            cmdStr = "%s -an 2>/dev/null | %s %s | %s '{print $NF}'" % \
-                     (findCmdInPath('netstat'), findCmdInPath('grep'), file, findCmdInPath('awk'))
+            cmdStr = "%s -an 2>/dev/null | %s %s | %s '{print $NF}'" % (
+                findCmdInPath("netstat"),
+                findCmdInPath("grep"),
+                file,
+                findCmdInPath("awk"),
+            )
         except CommandNotFoundException:
             try:
-                cmdStr = "%s -an 2>/dev/null | %s %s | %s '{print $5}'" % \
-                         (findCmdInPath('ss'), findCmdInPath('grep'), file, findCmdInPath('awk'))
+                cmdStr = "%s -an 2>/dev/null | %s %s | %s '{print $5}'" % (
+                    findCmdInPath("ss"),
+                    findCmdInPath("grep"),
+                    file,
+                    findCmdInPath("awk"),
+                )
             except CommandNotFoundException as err:
-                logger.critical(
-                    "Failed to find active tcp port.")
+                logger.critical("Failed to find active tcp port.")
                 raise
 
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
@@ -720,7 +805,7 @@ class PgPortIsActive(Command):
             return False
 
         for r in rows:
-            val = r.split('.')
+            val = r.split(".")
             tcp_port = int(val[len(val) - 1])
             if tcp_port == self.port:
                 return True
@@ -743,7 +828,7 @@ class PgPortIsActive(Command):
 # --------------chmod ----------------------
 class Chmod(Command):
     def __init__(self, name, dir, perm, ctxt=LOCAL, remoteHost=None):
-        cmdStr = '%s %s %s' % (findCmdInPath('chmod'), perm, dir)
+        cmdStr = "%s %s %s" % (findCmdInPath("chmod"), perm, dir)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -760,7 +845,7 @@ class Chmod(Command):
 # --------------echo ----------------------
 class Echo(Command):
     def __init__(self, name, echoString, ctxt=LOCAL, remoteHost=None):
-        cmdStr = '%s "%s"' % (findCmdInPath('echo'), echoString)
+        cmdStr = '%s "%s"' % (findCmdInPath("echo"), echoString)
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -772,7 +857,7 @@ class Echo(Command):
 # --------------get user id ----------------------
 class UserId(Command):
     def __init__(self, name, ctxt=LOCAL, remoteHost=None):
-        cmdStr = "%s -un" % findCmdInPath('id')
+        cmdStr = "%s -un" % findCmdInPath("id")
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
     @staticmethod
@@ -784,7 +869,7 @@ class UserId(Command):
 
 # --------------get list of descendant processes -------------------
 def getDescendentProcesses(pid):
-    ''' return all process pids which are descendant from the given processid '''
+    """return all process pids which are descendant from the given processid"""
 
     children_pids = []
 
@@ -804,9 +889,13 @@ elif curr_platform == DARWIN:
 elif curr_platform == FREEBSD:
     SYSTEM = FreeBsdPlatform()
 elif curr_platform == OPENBSD:
-    SYSTEM = OpenBSDPlatform();
+    SYSTEM = OpenBSDPlatform()
 else:
-    raise Exception("Platform %s is not supported.  Supported platforms are: %s", SYSTEM, str(platform_list))
+    raise Exception(
+        "Platform %s is not supported.  Supported platforms are: %s",
+        SYSTEM,
+        str(platform_list),
+    )
 
 
 # --------------check SCP is available and has execute permission on host-------------------
@@ -817,15 +906,25 @@ def isScpEnabled(hostlist):
     :return: true if scp is enabled on all hosts else false
     """
     for host in hostlist:
-        cmd = Command("locate executable file of scp", cmdStr="which scp", ctxt=REMOTE, remoteHost=host)
+        cmd = Command(
+            "locate executable file of scp",
+            cmdStr="which scp",
+            ctxt=REMOTE,
+            remoteHost=host,
+        )
         try:
             cmd.run(validateAfter=True)
         except Exception as e:
-            print(('[Warning] Either scp is not available or does not have execute permission on host:{0}' .format(host)))
+            print(
+                (
+                    "[Warning] Either scp is not available or does not have execute permission on host:{0}".format(
+                        host
+                    )
+                )
+            )
             return False
 
     return True
-
 
 
 def validate_rsync_version(min_ver):
@@ -841,8 +940,9 @@ def validate_rsync_version(min_ver):
         return False
     return True
 
+
 def get_rsync_version():
-    """ get the rsync current version """
+    """get the rsync current version"""
     cmdStr = findCmdInPath("rsync") + " --version"
     cmd = Command("get rsync version", cmdStr=cmdStr)
     cmd.run(validateAfter=True)

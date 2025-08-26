@@ -8,7 +8,8 @@ class GucCollection:
     provide an enhanced dict of gucs, with responsibilities to assemble sets of info per segment.
 
     """
-    MASTER_KEY = '-1'
+
+    MASTER_KEY = "-1"
 
     def __init__(self):
         self.gucs = {}
@@ -63,8 +64,10 @@ class GucCollection:
 
         if self.are_segments_consistent():
             last_seg_key = sorted(self.gucs.keys(), reverse=True)[0]
-            report = [self.gucs[self.MASTER_KEY].report_success_format(),
-                      self.gucs[last_seg_key].report_success_format()]
+            report = [
+                self.gucs[self.MASTER_KEY].report_success_format(),
+                self.gucs[last_seg_key].report_success_format(),
+            ]
             return "\n".join(report)
         else:
             sorted_gucs = sorted(self.gucs.values(), key=lambda x: x.context)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
+# Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 from __future__ import absolute_import
 import logging
@@ -29,5 +29,6 @@ class GplogTestCase(GpTestCase):
         gplog.get_unittest_logger()
         gplog.log_to_file_only("should not crash")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run_tests()

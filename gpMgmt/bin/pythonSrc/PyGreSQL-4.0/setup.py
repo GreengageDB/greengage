@@ -37,18 +37,19 @@ using distutils to install Python programs.
 """
 
 from __future__ import absolute_import
+
 version = "4.0"
 
 import sys
 import os
 
 if not (2, 2) < sys.version_info[:2] < (3, 0):
-    raise Exception("PyGreSQL %s requires a Python 2 version"
-        " newer than 2.2." % version)
+    raise Exception("PyGreSQL %s requires a Python 2 version newer than 2.2." % version)
 
 import os
 from distutils.core import setup
 from distutils.extension import Extension
+
 
 def pg_config(s):
     """Retrieve information about installed version of PostgreSQL."""
@@ -64,7 +65,8 @@ def pg_config(s):
         raise Exception("pg_config tool is not available.")
     if not d:
         raise Exception("Could not get %s information." % s)
-    return os.getenv('DESTDIR','')+d
+    return os.getenv("DESTDIR", "") + d
+
 
 def mk_include():
     """Create a temporary local include directory.
@@ -73,74 +75,83 @@ def mk_include():
     where all features which are not necessary for PyGreSQL are disabled.
 
     """
-    os.mkdir('include')
+    os.mkdir("include")
     for f in os.listdir(pg_include_dir_server):
-        if not f.endswith('.h'):
+        if not f.endswith(".h"):
             continue
         d = open(os.path.join(pg_include_dir_server, f)).read()
-        if f == 'pg_config.h':
-            d += '\n'.join(('',
-                '#undef ENABLE_NLS',
-                '#undef USE_REPL_SNPRINTF',
-                '#undef USE_SSL',
-                '#undef USE_ZLIB',
-                '#undef HAVE_STDINT_H',
-                '#undef HAVE_SYS_TIME_H',
-                '#undef HAVE_UNISTD_H',
-                '#define _CRT_SECURE_NO_WARNINGS 1',
-                '#define _USE_32BIT_TIME_T 1',
-                ''))
-        open(os.path.join('include', f), 'w').write(d)
+        if f == "pg_config.h":
+            d += "\n".join((
+                "",
+                "#undef ENABLE_NLS",
+                "#undef USE_REPL_SNPRINTF",
+                "#undef USE_SSL",
+                "#undef USE_ZLIB",
+                "#undef HAVE_STDINT_H",
+                "#undef HAVE_SYS_TIME_H",
+                "#undef HAVE_UNISTD_H",
+                "#define _CRT_SECURE_NO_WARNINGS 1",
+                "#define _USE_32BIT_TIME_T 1",
+                "",
+            ))
+        open(os.path.join("include", f), "w").write(d)
+
 
 def rm_include():
     """Remove the temporary local include directory."""
-    if os.path.exists('include'):
-        for f in os.listdir('include'):
-            os.remove(os.path.join('include', f))
-        os.rmdir('include')
+    if os.path.exists("include"):
+        for f in os.listdir("include"):
+            os.remove(os.path.join("include", f))
+        os.rmdir("include")
 
-pg_include_dir = pg_config('includedir')
-pg_include_dir_server = pg_config('includedir-server')
+
+pg_include_dir = pg_config("includedir")
+pg_include_dir_server = pg_config("includedir-server")
 
 rm_include()
 mk_include()
 
-include_dirs = ['include', pg_include_dir,  pg_include_dir_server]
+include_dirs = ["include", pg_include_dir, pg_include_dir_server]
 
-pg_libdir = pg_config('libdir')
+pg_libdir = pg_config("libdir")
 library_dirs = [pg_libdir]
 
-libraries = ['pq']
-extra_compile_args = ['-O2']
+libraries = ["pq"]
+extra_compile_args = ["-O2"]
 
 if sys.platform == "win32":
-    include_dirs.append(os.path.join(pg_include_dir_server, 'port/win32'))
-elif sys.platform == 'darwin' and sys.maxsize > 2**32:
-    extra_compile_args.extend(['-arch', os.uname()[4]])
+    include_dirs.append(os.path.join(pg_include_dir_server, "port/win32"))
+elif sys.platform == "darwin" and sys.maxsize > 2**32:
+    extra_compile_args.extend(["-arch", os.uname()[4]])
 
 setup(
     name="PyGreSQL",
     version=version,
     description="Python PostgreSQL Interfaces",
-    long_description = ("PyGreSQL is an open-source Python module"
+    long_description=(
+        "PyGreSQL is an open-source Python module"
         " that interfaces to a PostgreSQL database."
         " It embeds the PostgreSQL query library to allow easy use"
-        " of the powerful PostgreSQL features from a Python script."),
+        " of the powerful PostgreSQL features from a Python script."
+    ),
     keywords="postgresql database api dbapi",
     author="D'Arcy J. M. Cain",
     author_email="darcy@PyGreSQL.org",
     url="http://www.pygresql.org",
-    download_url = "ftp://ftp.pygresql.org/pub/distrib/",
-    platforms = ["any"],
+    download_url="ftp://ftp.pygresql.org/pub/distrib/",
+    platforms=["any"],
     license="Python",
-    py_modules=['pg', 'pgdb'],
-    ext_modules=[Extension(
-        '_pg', ['pgmodule.c'],
-        include_dirs = include_dirs,
-        library_dirs = library_dirs,
-        libraries = libraries,
-        extra_compile_args = extra_compile_args
-    )],
+    py_modules=["pg", "pgdb"],
+    ext_modules=[
+        Extension(
+            "_pg",
+            ["pgmodule.c"],
+            include_dirs=include_dirs,
+            library_dirs=library_dirs,
+            libraries=libraries,
+            extra_compile_args=extra_compile_args,
+        )
+    ],
     classifiers=[
         "Development Status :: 6 - Mature",
         "Intended Audience :: Developers",
@@ -150,8 +161,8 @@ setup(
         "Programming Language :: Python",
         "Topic :: Database",
         "Topic :: Database :: Front-Ends",
-        "Topic :: Software Development :: Libraries :: Python Modules"
-    ]
+        "Topic :: Software Development :: Libraries :: Python Modules",
+    ],
 )
 
 rm_include()

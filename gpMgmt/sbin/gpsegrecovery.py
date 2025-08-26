@@ -15,7 +15,9 @@ from gppylib.commands.gp import ModifyConfSetting
 from gppylib.db import dbconn
 from gppylib.db.catalog import RemoteQueryCommand
 from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
-from gppylib.operations.segment_tablespace_locations import get_segment_tablespace_oid_locations
+from gppylib.operations.segment_tablespace_locations import (
+    get_segment_tablespace_oid_locations,
+)
 from gppylib.commands.unix import get_remote_link_path
 
 
@@ -23,33 +25,41 @@ class FullRecovery(Command):
     def __init__(self, name, recovery_info, forceoverwrite, logger, era):
         self.name = name
         self.recovery_info = recovery_info
-        self.replicationSlotName = 'internal_wal_replication_slot'
+        self.replicationSlotName = "internal_wal_replication_slot"
         self.forceoverwrite = forceoverwrite
         self.era = era
         # FIXME test for this cmdstr. also what should this cmdstr be ?
-        cmdStr = ''
-        #cmdstr = 'TODO? : {} {}'.format(str(recovery_info), self.verbose)
+        cmdStr = ""
+        # cmdstr = 'TODO? : {} {}'.format(str(recovery_info), self.verbose)
         Command.__init__(self, self.name, cmdStr)
-        #FIXME this logger has to come after the init and is duplicated in all the 4 classes
+        # FIXME this logger has to come after the init and is duplicated in all the 4 classes
         self.logger = logger
         self.error_type = RecoveryErrorType.DEFAULT_ERROR
 
     @set_recovery_cmd_results
     def run(self):
         self.error_type = RecoveryErrorType.BASEBACKUP_ERROR
-        cmd = PgBaseBackup(self.recovery_info.target_datadir,
-                           self.recovery_info.source_hostname,
-                           str(self.recovery_info.source_port),
-                           replication_slot_name=self.replicationSlotName,
-                           forceoverwrite=self.forceoverwrite,
-                           target_gp_dbid=self.recovery_info.target_segment_dbid,
-                           progress_file=self.recovery_info.progress_file)
+        cmd = PgBaseBackup(
+            self.recovery_info.target_datadir,
+            self.recovery_info.source_hostname,
+            str(self.recovery_info.source_port),
+            replication_slot_name=self.replicationSlotName,
+            forceoverwrite=self.forceoverwrite,
+            target_gp_dbid=self.recovery_info.target_segment_dbid,
+            progress_file=self.recovery_info.progress_file,
+        )
 
-        self.logger.info("Running pg_basebackup with progress output temporarily in %s" % self.recovery_info.progress_file)
+        self.logger.info(
+            "Running pg_basebackup with progress output temporarily in %s"
+            % self.recovery_info.progress_file
+        )
         cmd.run(validateAfter=True)
         self.error_type = RecoveryErrorType.DEFAULT_ERROR
-        self.logger.info("Successfully ran pg_basebackup for dbid: {}".format(
-            self.recovery_info.target_segment_dbid))
+        self.logger.info(
+            "Successfully ran pg_basebackup for dbid: {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
 
         # Updating port number on conf after recovery
         self.error_type = RecoveryErrorType.UPDATE_ERROR
@@ -64,20 +74,31 @@ class IncrementalRecovery(Command):
         self.name = name
         self.recovery_info = recovery_info
         self.era = era
-        cmdStr = ''
+        cmdStr = ""
         Command.__init__(self, self.name, cmdStr)
         self.logger = logger
         self.error_type = RecoveryErrorType.DEFAULT_ERROR
 
     @set_recovery_cmd_results
     def run(self):
-        self.logger.info("Running pg_rewind with progress output temporarily in %s" % self.recovery_info.progress_file)
+        self.logger.info(
+            "Running pg_rewind with progress output temporarily in %s"
+            % self.recovery_info.progress_file
+        )
         self.error_type = RecoveryErrorType.REWIND_ERROR
-        cmd = PgRewind('rewind dbid: {}'.format(self.recovery_info.target_segment_dbid),
-                       self.recovery_info.target_datadir, self.recovery_info.source_hostname,
-                       self.recovery_info.source_port, self.recovery_info.progress_file)
+        cmd = PgRewind(
+            "rewind dbid: {}".format(self.recovery_info.target_segment_dbid),
+            self.recovery_info.target_datadir,
+            self.recovery_info.source_hostname,
+            self.recovery_info.source_port,
+            self.recovery_info.progress_file,
+        )
         cmd.run(validateAfter=True)
-        self.logger.info("Successfully ran pg_rewind for dbid: {}".format(self.recovery_info.target_segment_dbid))
+        self.logger.info(
+            "Successfully ran pg_rewind for dbid: {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
 
         # Updating port number on conf after recovery
         self.error_type = RecoveryErrorType.UPDATE_ERROR
@@ -94,19 +115,27 @@ class DifferentialRecovery(Command):
         self.era = era
         self.logger = logger
         self.error_type = RecoveryErrorType.DEFAULT_ERROR
-        self.replication_slot_name = 'internal_wal_replication_slot'
-        self.replication_slot = PgReplicationSlot(self.recovery_info.source_hostname, self.recovery_info.source_port,
-                                                  self.replication_slot_name)
+        self.replication_slot_name = "internal_wal_replication_slot"
+        self.replication_slot = PgReplicationSlot(
+            self.recovery_info.source_hostname,
+            self.recovery_info.source_port,
+            self.replication_slot_name,
+        )
 
     @set_recovery_cmd_results
     def run(self):
-
-        self.logger.info("Running differential recovery with progress output temporarily in {}".format(
-            self.recovery_info.progress_file))
+        self.logger.info(
+            "Running differential recovery with progress output temporarily in {}".format(
+                self.recovery_info.progress_file
+            )
+        )
         self.error_type = RecoveryErrorType.DIFFERENTIAL_ERROR
 
         """ Drop replication slot 'internal_wal_replication_slot' """
-        if self.replication_slot.slot_exists() and not self.replication_slot.drop_slot():
+        if (
+            self.replication_slot.slot_exists()
+            and not self.replication_slot.drop_slot()
+        ):
             raise Exception("Failed to drop replication slot")
 
         """ start backup with label differential_backup """
@@ -125,7 +154,9 @@ class DifferentialRecovery(Command):
         finally:
             # Backup is completed, now run pg_stop_backup which will also remove backup_label file from
             # primary data_dir
-            if is_seg_in_backup_mode(self.recovery_info.source_hostname, self.recovery_info.source_port):
+            if is_seg_in_backup_mode(
+                self.recovery_info.source_hostname, self.recovery_info.source_port
+            ):
                 self.pg_stop_backup()
 
         """ Write the recovery.conf and internal.auto.conf files """
@@ -135,7 +166,10 @@ class DifferentialRecovery(Command):
         self.sync_xlog_and_control_file()
 
         self.logger.info(
-            "Successfully ran differential recovery for dbid {}".format(self.recovery_info.target_segment_dbid))
+            "Successfully ran differential recovery for dbid {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
 
         """ Updating port number on conf after recovery """
         self.error_type = RecoveryErrorType.UPDATE_ERROR
@@ -145,7 +179,9 @@ class DifferentialRecovery(Command):
         start_segment(self.recovery_info, self.logger, self.era)
 
     def sync_pg_data(self):
-        self.logger.debug('Syncing pg_data of dbid {}'.format(self.recovery_info.target_segment_dbid))
+        self.logger.debug(
+            "Syncing pg_data of dbid {}".format(self.recovery_info.target_segment_dbid)
+        )
 
         """
             rsync_exclude_list:
@@ -193,7 +229,7 @@ class DifferentialRecovery(Command):
             "pg_tblspc/*",  # excluding as the tablespace is handled in sync_tablespaces()
             "backups/*",
             "/db_dumps",  # as we exclude during pg_basebackup
-            "gpperfmon/data", # as we exclude during pg_basebackup
+            "gpperfmon/data",  # as we exclude during pg_basebackup
             "gpperfmon/logs",  # as we exclude during pg_basebackup
             "/promote",  # as we exclude during pg_basebackup
         ]
@@ -211,111 +247,191 @@ class DifferentialRecovery(Command):
         # os.path.join(dir, "") will append a '/' at the end of dir. When using "/" at the end of source,
         # rsync will copy the content of the last directory. When not using "/" at the end of source, rsync
         # will copy the last directory and the content of the directory.
-        cmd = Rsync(name='Syncing pg_data of dbid {}'.format(self.recovery_info.target_segment_dbid),
-                    srcFile=os.path.join(self.recovery_info.source_datadir, ""),
-                    dstFile=self.recovery_info.target_datadir,
-                    srcHost=self.recovery_info.source_hostname, exclude_list=rsync_exclude_list,
-                    delete=True, checksum=True, progress=True, progress_file=self.recovery_info.progress_file)
+        cmd = Rsync(
+            name="Syncing pg_data of dbid {}".format(
+                self.recovery_info.target_segment_dbid
+            ),
+            srcFile=os.path.join(self.recovery_info.source_datadir, ""),
+            dstFile=self.recovery_info.target_datadir,
+            srcHost=self.recovery_info.source_hostname,
+            exclude_list=rsync_exclude_list,
+            delete=True,
+            checksum=True,
+            progress=True,
+            progress_file=self.recovery_info.progress_file,
+        )
         cmd.run(validateAfter=True)
 
     def pg_start_backup(self):
         sql = "SELECT pg_start_backup('differential_backup');"
         try:
-            RemoteQueryCommand("Start backup", sql, self.recovery_info.source_hostname,
-                               self.recovery_info.source_port).run()
-        except Exception as e:
-            raise Exception("Failed to query pg_start_backup() for segment with host {} and port {} : {}".format(
+            RemoteQueryCommand(
+                "Start backup",
+                sql,
                 self.recovery_info.source_hostname,
-                self.recovery_info.source_port, str(e)))
-        self.logger.debug("Successfully ran pg_start_backup for segment on host {}, port {}".
-                          format(self.recovery_info.source_hostname, self.recovery_info.source_port))
+                self.recovery_info.source_port,
+            ).run()
+        except Exception as e:
+            raise Exception(
+                "Failed to query pg_start_backup() for segment with host {} and port {} : {}".format(
+                    self.recovery_info.source_hostname,
+                    self.recovery_info.source_port,
+                    str(e),
+                )
+            )
+        self.logger.debug(
+            "Successfully ran pg_start_backup for segment on host {}, port {}".format(
+                self.recovery_info.source_hostname, self.recovery_info.source_port
+            )
+        )
 
     def pg_stop_backup(self):
         sql = "SELECT pg_stop_backup();"
         try:
-            RemoteQueryCommand("Stop backup", sql, self.recovery_info.source_hostname,
-                               self.recovery_info.source_port).run()
+            RemoteQueryCommand(
+                "Stop backup",
+                sql,
+                self.recovery_info.source_hostname,
+                self.recovery_info.source_port,
+            ).run()
         except Exception as e:
-            raise Exception("Failed to query pg_stop_backup() for segment with host {} and port {} : {}".
-                            format(self.recovery_info.source_hostname, self.recovery_info.source_port, str(e)))
+            raise Exception(
+                "Failed to query pg_stop_backup() for segment with host {} and port {} : {}".format(
+                    self.recovery_info.source_hostname,
+                    self.recovery_info.source_port,
+                    str(e),
+                )
+            )
 
-        self.logger.debug("Successfully ran pg_stop_backup for segment on host {}, port {}".
-                          format(self.recovery_info.source_hostname, self.recovery_info.source_port))
+        self.logger.debug(
+            "Successfully ran pg_stop_backup for segment on host {}, port {}".format(
+                self.recovery_info.source_hostname, self.recovery_info.source_port
+            )
+        )
 
     def write_conf_files(self):
         self.logger.debug(
             "Writing recovery.conf and internal.auto.conf files for dbid {}".format(
-                self.recovery_info.target_segment_dbid))
-        cmd = PgBaseBackup(self.recovery_info.target_datadir,
-                           self.recovery_info.source_hostname,
-                           str(self.recovery_info.source_port),
-                           writeconffilesonly=True,
-                           replication_slot_name=self.replication_slot_name,
-                           target_gp_dbid=self.recovery_info.target_segment_dbid,
-                           recovery_mode=False)
+                self.recovery_info.target_segment_dbid
+            )
+        )
+        cmd = PgBaseBackup(
+            self.recovery_info.target_datadir,
+            self.recovery_info.source_hostname,
+            str(self.recovery_info.source_port),
+            writeconffilesonly=True,
+            replication_slot_name=self.replication_slot_name,
+            target_gp_dbid=self.recovery_info.target_segment_dbid,
+            recovery_mode=False,
+        )
         self.logger.debug("Running pg_basebackup to only write configuration files")
         cmd.run(validateAfter=True)
 
     def sync_xlog_and_control_file(self):
-        self.logger.debug("Syncing pg_xlog directory of dbid {}".format(self.recovery_info.target_segment_dbid))
+        self.logger.debug(
+            "Syncing pg_xlog directory of dbid {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
         # os.path.join(dir, "") will append a '/' at the end of dir. When using "/" at the end of source,
         # rsync will copy the content of the last directory. When not using "/" at the end of source, rsync
         # will copy the last directory and the content of the directory.
-        cmd = Rsync(name="Syncing pg_xlog files of dbid {}".format(self.recovery_info.target_segment_dbid), srcFile=os.path.join(self.recovery_info.source_datadir, "pg_xlog", ""),
-                    dstFile=os.path.join(self.recovery_info.target_datadir, "pg_xlog", ""), progress=True, checksum=True,
-                    srcHost=self.recovery_info.source_hostname,
-                    progress_file=self.recovery_info.progress_file)
+        cmd = Rsync(
+            name="Syncing pg_xlog files of dbid {}".format(
+                self.recovery_info.target_segment_dbid
+            ),
+            srcFile=os.path.join(self.recovery_info.source_datadir, "pg_xlog", ""),
+            dstFile=os.path.join(self.recovery_info.target_datadir, "pg_xlog", ""),
+            progress=True,
+            checksum=True,
+            srcHost=self.recovery_info.source_hostname,
+            progress_file=self.recovery_info.progress_file,
+        )
         cmd.run(validateAfter=True)
 
-        self.logger.debug("Syncing pg_control file of dbid {}".format(self.recovery_info.target_segment_dbid))
-        cmd = Rsync(name="Sync pg_control file",
-                    srcFile=os.path.join(self.recovery_info.source_datadir, "global", "pg_control"),
-                    dstFile=os.path.join(self.recovery_info.target_datadir, "global", "pg_control"), progress=True,
-                    checksum=True,
-                    srcHost=self.recovery_info.source_hostname, progress_file=self.recovery_info.progress_file)
+        self.logger.debug(
+            "Syncing pg_control file of dbid {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
+        cmd = Rsync(
+            name="Sync pg_control file",
+            srcFile=os.path.join(
+                self.recovery_info.source_datadir, "global", "pg_control"
+            ),
+            dstFile=os.path.join(
+                self.recovery_info.target_datadir, "global", "pg_control"
+            ),
+            progress=True,
+            checksum=True,
+            srcHost=self.recovery_info.source_hostname,
+            progress_file=self.recovery_info.progress_file,
+        )
         cmd.run(validateAfter=True)
 
     def sync_tablespaces(self):
         self.logger.debug(
             "Syncing tablespaces of dbid {} which are outside of data_dir".format(
-                self.recovery_info.target_segment_dbid))
+                self.recovery_info.target_segment_dbid
+            )
+        )
 
         # get the oid and tablespace locations
-        tablespaces = get_segment_tablespace_oid_locations(self.recovery_info.source_hostname,
-                                                       self.recovery_info.source_port)
+        tablespaces = get_segment_tablespace_oid_locations(
+            self.recovery_info.source_hostname, self.recovery_info.source_port
+        )
 
         # clear all tablespace symlink for target.
-        for file in os.listdir(os.path.join(self.recovery_info.target_datadir,"pg_tblspc")):
-            file_path = os.path.join(self.recovery_info.target_datadir,"pg_tblspc",file)
+        for file in os.listdir(
+            os.path.join(self.recovery_info.target_datadir, "pg_tblspc")
+        ):
+            file_path = os.path.join(
+                self.recovery_info.target_datadir, "pg_tblspc", file
+            )
             try:
                 if os.path.isfile(file_path) or os.path.islink(file_path):
                     os.unlink(file_path)
             except Exception as e:
-                raise Exception("Failed to remove link {} for dbid {} : {}".
-                                format(file_path,self.recovery_info.target_segment_dbid, str(e)))
+                raise Exception(
+                    "Failed to remove link {} for dbid {} : {}".format(
+                        file_path, self.recovery_info.target_segment_dbid, str(e)
+                    )
+                )
 
         for oid, tablespace_location in tablespaces:
             # tablespace_location is the link path who's symlink is created at $DATADIR/pg_tblspc/{oid}
             # tablespace_location is the base path in which datafiles are stored in respective dbid directory.
-            targetOidPath = os.path.join(self.recovery_info.target_datadir, "pg_tblspc", str(oid))
-            targetPath = os.path.join(tablespace_location, str(self.recovery_info.target_segment_dbid))
+            targetOidPath = os.path.join(
+                self.recovery_info.target_datadir, "pg_tblspc", str(oid)
+            )
+            targetPath = os.path.join(
+                tablespace_location, str(self.recovery_info.target_segment_dbid)
+            )
 
-            #if tablespace is not inside the datadir do rsync for copy, if it is inside datadirectory
-            #files would have been copied while doing rsync for data dir.
+            # if tablespace is not inside the datadir do rsync for copy, if it is inside datadirectory
+            # files would have been copied while doing rsync for data dir.
             if not tablespace_location.startswith(self.recovery_info.source_datadir):
-                srcOidPath = os.path.join(self.recovery_info.source_datadir, "pg_tblspc", str(oid))
-                srcPath = get_remote_link_path(srcOidPath,self.recovery_info.source_hostname)
+                srcOidPath = os.path.join(
+                    self.recovery_info.source_datadir, "pg_tblspc", str(oid)
+                )
+                srcPath = get_remote_link_path(
+                    srcOidPath, self.recovery_info.source_hostname
+                )
 
                 # os.path.join(dir, "") will append a '/' at the end of dir. When using "/" at the end of source,
                 # rsync will copy the content of the last directory. When not using "/" at the end of source, rsync
                 # will copy the last directory and the content of the directory.
-                cmd = Rsync(name="Syncing tablespace of dbid {0} for oid {1}" .format(self.recovery_info.target_segment_dbid, str(oid)),
-                            srcFile=os.path.join(srcPath, ""),
-                            dstFile=targetPath,
-                            srcHost=self.recovery_info.source_hostname,
-                            progress=True,
-                            checksum=True,
-                            progress_file=self.recovery_info.progress_file)
+                cmd = Rsync(
+                    name="Syncing tablespace of dbid {0} for oid {1}".format(
+                        self.recovery_info.target_segment_dbid, str(oid)
+                    ),
+                    srcFile=os.path.join(srcPath, ""),
+                    dstFile=targetPath,
+                    srcHost=self.recovery_info.source_hostname,
+                    progress=True,
+                    checksum=True,
+                    progress_file=self.recovery_info.progress_file,
+                )
                 cmd.run(validateAfter=True)
 
             # create tablespace symlink for target data directory.
@@ -323,59 +439,87 @@ class DifferentialRecovery(Command):
 
 
 def start_segment(recovery_info, logger, era):
-    seg = Segment(None, None, None, None, None, None, None, None,
-                  recovery_info.target_port, recovery_info.target_datadir)
+    seg = Segment(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        recovery_info.target_port,
+        recovery_info.target_datadir,
+    )
     cmd = SegmentStart(
-        name="Starting new segment with dbid %s:" % (str(recovery_info.target_segment_dbid))
-        , gpdb=seg
-        , numContentsInCluster=0
-        , era=era
-        , mirrormode="mirror"
-        , utilityMode=False)
+        name="Starting new segment with dbid %s:"
+        % (str(recovery_info.target_segment_dbid)),
+        gpdb=seg,
+        numContentsInCluster=0,
+        era=era,
+        mirrormode="mirror",
+        utilityMode=False,
+    )
     logger.info(str(cmd))
     cmd.run(validateAfter=True)
 
 
 def update_port_in_conf(recovery_info, logger):
     logger.info("Updating %s/postgresql.conf" % recovery_info.target_datadir)
-    modifyConfCmd = ModifyConfSetting('Updating %s/postgresql.conf' % recovery_info.target_datadir,
-                                      "{}/{}".format(recovery_info.target_datadir, 'postgresql.conf'),
-                                      'port', recovery_info.target_port, optType='number')
+    modifyConfCmd = ModifyConfSetting(
+        "Updating %s/postgresql.conf" % recovery_info.target_datadir,
+        "{}/{}".format(recovery_info.target_datadir, "postgresql.conf"),
+        "port",
+        recovery_info.target_port,
+        optType="number",
+    )
     modifyConfCmd.run(validateAfter=True)
 
 
-#FIXME we may not need this class
+# FIXME we may not need this class
 class SegRecovery(object):
     def __init__(self):
         pass
 
     def main(self):
         recovery_base = RecoveryBase(__file__)
-        recovery_base.main(self.get_recovery_cmds(recovery_base.seg_recovery_info_list, recovery_base.options.forceoverwrite,
-                                                  recovery_base.logger, recovery_base.options.era))
+        recovery_base.main(
+            self.get_recovery_cmds(
+                recovery_base.seg_recovery_info_list,
+                recovery_base.options.forceoverwrite,
+                recovery_base.logger,
+                recovery_base.options.era,
+            )
+        )
 
     def get_recovery_cmds(self, seg_recovery_info_list, forceoverwrite, logger, era):
         cmd_list = []
         for seg_recovery_info in seg_recovery_info_list:
             if seg_recovery_info.is_full_recovery:
-                cmd = FullRecovery(name='Run pg_basebackup',
-                                   recovery_info=seg_recovery_info,
-                                   forceoverwrite=forceoverwrite,
-                                   logger=logger,
-                                   era=era)
+                cmd = FullRecovery(
+                    name="Run pg_basebackup",
+                    recovery_info=seg_recovery_info,
+                    forceoverwrite=forceoverwrite,
+                    logger=logger,
+                    era=era,
+                )
             elif seg_recovery_info.is_differential_recovery:
-                cmd = DifferentialRecovery(name='Run rsync',
-                                           recovery_info=seg_recovery_info,
-                                           logger=logger,
-                                           era=era)
+                cmd = DifferentialRecovery(
+                    name="Run rsync",
+                    recovery_info=seg_recovery_info,
+                    logger=logger,
+                    era=era,
+                )
             else:
-                cmd = IncrementalRecovery(name='Run pg_rewind',
-                                          recovery_info=seg_recovery_info,
-                                          logger=logger,
-                                          era=era)
+                cmd = IncrementalRecovery(
+                    name="Run pg_rewind",
+                    recovery_info=seg_recovery_info,
+                    logger=logger,
+                    era=era,
+                )
             cmd_list.append(cmd)
         return cmd_list
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     SegRecovery().main()

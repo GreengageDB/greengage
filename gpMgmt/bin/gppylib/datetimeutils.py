@@ -51,9 +51,10 @@ from datetime import date, datetime, timedelta
 import re
 
 
-#--------------------------------- common ---------------------------------
+# --------------------------------- common ---------------------------------
 
-class DatetimeValueError (ValueError):
+
+class DatetimeValueError(ValueError):
     """
     Error on conversion from string to date, datetime, or timedelta.
 
@@ -63,34 +64,42 @@ class DatetimeValueError (ValueError):
         endpos
         badness
     """
+
     def __init__(self, description, string, pos=None, endpos=None):
         # Save enough info in the exception object so that a caller's
         # exception handler can create a differently formatted message
         # in case they don't like the format we provide.
         global _spacepat
         if endpos is None:
-            endpos = len(string or '')
+            endpos = len(string or "")
         if pos and string:
             # avoid copying all of string[pos:endpos], in case it is big
             p = _spacepat.match(string, pos, endpos).end()
-            if endpos > p+30:
-                badness = string[p:p+27].rstrip(' \t') + '...'
+            if endpos > p + 30:
+                badness = string[p : p + 27].rstrip(" \t") + "..."
             else:
-                badness = string[p:endpos].rstrip(' \t')
+                badness = string[p:endpos].rstrip(" \t")
         else:
             badness = string
-        self.description, self.pos, self.endpos, self.badness = description, pos, endpos, badness
+        self.description, self.pos, self.endpos, self.badness = (
+            description,
+            pos,
+            endpos,
+            badness,
+        )
         if badness:
             description = '"%s" ... %s' % (badness, description)
         ValueError.__init__(self, description)
 
 
+# -------------------------------- datetime --------------------------------
 
-#-------------------------------- datetime --------------------------------
+datetime_syntax_msg = (
+    'Specify date and time as "YYYY-MM-DD[ HH:MM[:SS[.S]]" '
+    'or "YYYYMMDD[ HHMM[SS[.S]]]".  If both date and time '
+    'are given, a space or letter "T" must separate them.'
+)
 
-datetime_syntax_msg = ('Specify date and time as "YYYY-MM-DD[ HH:MM[:SS[.S]]" '
-                       'or "YYYYMMDD[ HHMM[SS[.S]]]".  If both date and time '
-                       'are given, a space or letter "T" must separate them.')
 
 def str_to_datetime(string, pos=0, endpos=None):
     """
@@ -155,11 +164,11 @@ def str_to_datetime(string, pos=0, endpos=None):
         raise DatetimeValueError(datetime_syntax_msg, string, pos, endpos)
     elif nextpos < endpos and not string[nextpos:endpos].isspace():
         # got valid date or datetime, but there is something more after it
-        if hasattr(value, 'hour'):
+        if hasattr(value, "hour"):
             msg = 'date and time are followed by unrecognized "%s"'
         else:
             msg = 'date is followed by unrecognized "%s"'
-        msg %= string[nextpos:min(nextpos+10,endpos)].strip()
+        msg %= string[nextpos : min(nextpos + 10, endpos)].strip()
         raise DatetimeValueError(msg, string, pos, endpos)
     return value
 
@@ -234,13 +243,13 @@ def scan_datetime(string, pos=0, endpos=None):
         if m:
             # delimited format
             if len(d) != 2 and len(d) != 1:
-                raise ValueError('day should have 1 or 2 digits')
+                raise ValueError("day should have 1 or 2 digits")
             year, month, day = int(yyyy), int(m), int(d)
             timepat = _colontimepat
         else:
             # numeric format
             if len(dd) > 2:
-                raise ValueError('date should have 8 digits (YYYYMMDD)')
+                raise ValueError("date should have 8 digits (YYYYMMDD)")
             year, month, day = int(yyyy), int(mm), int(dd)
             timepat = _numerictimepat
 
@@ -253,25 +262,27 @@ def scan_datetime(string, pos=0, endpos=None):
             # delimited format
             hh, mm, ss, frac = timematch.groups()
             if len(hh) > 2:
-                raise ValueError('hour should have 1 or 2 digits')
+                raise ValueError("hour should have 1 or 2 digits")
             if len(mm) != 2:
-                raise ValueError('minute should have 2 digits')
+                raise ValueError("minute should have 2 digits")
             if ss is not None and len(ss) != 2:
-                raise ValueError('second should have 2 digits')
+                raise ValueError("second should have 2 digits")
         else:
             # numeric format
             hhmmss, frac = timematch.groups()
             if len(hhmmss) == 6:
                 hh, mm, ss = hhmmss[:2], hhmmss[2:4], hhmmss[4:]
             elif frac:
-                raise ValueError('time should have 6 digits before decimal point (HHMMSS.sss)')
+                raise ValueError(
+                    "time should have 6 digits before decimal point (HHMMSS.sss)"
+                )
             elif len(hhmmss) == 4:
                 hh, mm, ss = hhmmss[:2], hhmmss[2:], None
             else:
-                raise ValueError('time should have 4 or 6 digits (HHMM or HHMMSS)')
+                raise ValueError("time should have 4 or 6 digits (HHMM or HHMMSS)")
 
         if frac:
-            microsecond = int((frac + '000000')[1:7])
+            microsecond = int((frac + "000000")[1:7])
             dt = datetime(year, month, day, int(hh), int(mm), int(ss), microsecond)
         elif ss:
             dt = datetime(year, month, day, int(hh), int(mm), int(ss))
@@ -283,10 +294,15 @@ def scan_datetime(string, pos=0, endpos=None):
         raise DatetimeValueError(str(e), string, pos, nextpos)
 
 
-#------------------------------- timedelta -------------------------------
+# ------------------------------- timedelta -------------------------------
 
-signed_duration_syntax_msg = 'Specify duration as [hours][:minutes[:seconds[.fraction]]]'
-unsigned_duration_syntax_msg = 'Specify duration as [+|-][hours][:minutes[:seconds[.fraction]]]'
+signed_duration_syntax_msg = (
+    "Specify duration as [hours][:minutes[:seconds[.fraction]]]"
+)
+unsigned_duration_syntax_msg = (
+    "Specify duration as [+|-][hours][:minutes[:seconds[.fraction]]]"
+)
+
 
 def str_to_duration(string, pos=0, endpos=None, signed=True):
     """
@@ -348,8 +364,10 @@ def str_to_duration(string, pos=0, endpos=None, signed=True):
             raise DatetimeValueError(unsigned_duration_syntax_msg, string, pos, endpos)
     elif nextpos < endpos and not string[nextpos:endpos].isspace():
         # got valid duration, but there is something more after it
-        msg = ('duration is followed by unrecognized "%s"'
-               % string[nextpos:min(nextpos+10,endpos)].strip())
+        msg = (
+            'duration is followed by unrecognized "%s"'
+            % string[nextpos : min(nextpos + 10, endpos)].strip()
+        )
         raise DatetimeValueError(msg, string, pos, endpos)
     return value
 
@@ -411,18 +429,18 @@ def scan_duration(string, pos=0, endpos=None, signed=True):
             if s:
                 seconds = int(s)
                 if f and len(f) > 1:
-                    microseconds = int((f + '000000')[1:7])
+                    microseconds = int((f + "000000")[1:7])
         if hours > 0 and minutes > 59:
-            raise ValueError('minutes should be in 0..59')
+            raise ValueError("minutes should be in 0..59")
         minutes += hours * 60
         if minutes > 0 and seconds > 59:
-            raise ValueError('seconds should be in 0..59')
+            raise ValueError("seconds should be in 0..59")
         seconds += minutes * 60
         td = timedelta(seconds=seconds, microseconds=microseconds)
         if sign:
             if not signed:
-                raise ValueError('duration should be unsigned')
-            if sign == '-':
+                raise ValueError("duration should be unsigned")
+            if sign == "-":
                 td = -td
         return td, match.end()
     except OverflowError as e:
@@ -433,32 +451,39 @@ def scan_duration(string, pos=0, endpos=None, signed=True):
         raise DatetimeValueError(str(e), string, pos, match.end())
 
 
+# -------------------------------- private --------------------------------
 
-#-------------------------------- private --------------------------------
-
-_datepat = (r'\s*'                           # skip any leading whitespace
-            r'(\d\d\d\d)'                    # yyyy                     \1
-            r'(?:'                           # followed by either
-            r'(?:-(\d\d?)-(\d*))|'           # -m[m]-d[d] or            \2 \3
-            r'(?:(\d\d)(\d\d+))'             # mmdd                     \4 \5
-            r')')                            # note dd absorbs excess digits
-_colontimepat = (r'(?:\s+|[Tt])'             # whitespace or 'T'
-                 r'(\d+)'                    # [h]h                     \1
-                 r':(\d+)'                   # :mm                      \2
-                 r'(?::(\d*)(\.\d*)?)?')     # [:ss[.frac]]             \3 \4
-                                             # hh, mm, ss absorb excess digits
-_numerictimepat = (r'(?:\s+|[Tt])'           # whitespace or 'T'
-                   r'(\d+)'                  # hhmmss                   \1
-                   r'(\.\d*)?')              # [.frac]                  \2
-                                             # hhmmss absorbs excess digits
-_durationpat = (r'\s*'                       # skip any leading whitespace
-                r'([+-])?'                   # [+|-]                    \1
-                r'(\d*)'                     # [hours]                  \2
-                r'(?:'                       # [
-                r':(\d+)'                    # :minutes                 \3
-                r'(?::(\d+)(\.\d*)?)?'       # [:seconds[.frac]]        \4 \5
-                r')?')                       # ]
-_spacepat = r'\s*'                           # whitespace
+_datepat = (
+    r"\s*"  # skip any leading whitespace
+    r"(\d\d\d\d)"  # yyyy                     \1
+    r"(?:"  # followed by either
+    r"(?:-(\d\d?)-(\d*))|"  # -m[m]-d[d] or            \2 \3
+    r"(?:(\d\d)(\d\d+))"  # mmdd                     \4 \5
+    r")"
+)  # note dd absorbs excess digits
+_colontimepat = (
+    r"(?:\s+|[Tt])"  # whitespace or 'T'
+    r"(\d+)"  # [h]h                     \1
+    r":(\d+)"  # :mm                      \2
+    r"(?::(\d*)(\.\d*)?)?"
+)  # [:ss[.frac]]             \3 \4
+# hh, mm, ss absorb excess digits
+_numerictimepat = (
+    r"(?:\s+|[Tt])"  # whitespace or 'T'
+    r"(\d+)"  # hhmmss                   \1
+    r"(\.\d*)?"
+)  # [.frac]                  \2
+# hhmmss absorbs excess digits
+_durationpat = (
+    r"\s*"  # skip any leading whitespace
+    r"([+-])?"  # [+|-]                    \1
+    r"(\d*)"  # [hours]                  \2
+    r"(?:"  # [
+    r":(\d+)"  # :minutes                 \3
+    r"(?::(\d+)(\.\d*)?)?"  # [:seconds[.frac]]        \4 \5
+    r")?"
+)  # ]
+_spacepat = r"\s*"  # whitespace
 
 _datepat = re.compile(_datepat)
 _colontimepat = re.compile(_colontimepat)
@@ -466,13 +491,15 @@ _numerictimepat = re.compile(_numerictimepat)
 _durationpat = re.compile(_durationpat)
 _spacepat = re.compile(_spacepat)
 
+
 # If invoked as a script, execute the examples in each function's docstring
 # and verify the expected output.  Produces no output if verification is
 # successful, unless -v is specified.  Use -v option for verbose test output.
 def _test():
     import doctest
+
     doctest.testmod()
+
 
 if __name__ == "__main__":
     _test()
-

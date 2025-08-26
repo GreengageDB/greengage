@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+
 from __future__ import absolute_import
 import os
 
@@ -21,11 +22,12 @@ from tempfile import NamedTemporaryFile
 
 logger = get_default_logger()
 
+
 #
 # An implementation of GpFileSystemProvider that passes operations through to the underlying
 #  operating system
 #
-class GpFileSystemProviderUsingOs(GpFileSystemProvider) :
+class GpFileSystemProviderUsingOs(GpFileSystemProvider):
     def __init__(self):
         pass
 
@@ -42,5 +44,5 @@ class GpFileSystemProviderUsingOs(GpFileSystemProvider) :
     #
     # returns self
     #
-    def createNamedTemporaryFile( self ) :
-        return NamedTemporaryFile('w', delete=True)
+    def createNamedTemporaryFile(self):
+        return NamedTemporaryFile("w", delete=True)

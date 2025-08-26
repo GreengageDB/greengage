@@ -22,18 +22,18 @@ Converts a minirepro taken with GPDB5 or earlier for use with GPDB 6 and later
 
 
 def process_minirepro(input_filepath, output_filepath):
-	with open(input_filepath, 'r') as infile, open(output_filepath, 'w+') as outfile:
-		line = infile.readline()
-		while line:
-			if 'allow_system_table_mods=on' in line:
-				raise Exception('Minirepro already in GPDB6 format')
-			# allow_system_table_mods GUC was changed to a boolean
-			if 'set allow_system_table_mods="DML";' in line:
-				line = 'set allow_system_table_mods=on;\n'
-			outfile.write(line)
-			if 'INSERT INTO pg_statistic' in line:
-				convert_insert_statement(infile, outfile)
-			line = infile.readline()
+    with open(input_filepath, "r") as infile, open(output_filepath, "w+") as outfile:
+        line = infile.readline()
+        while line:
+            if "allow_system_table_mods=on" in line:
+                raise Exception("Minirepro already in GPDB6 format")
+            # allow_system_table_mods GUC was changed to a boolean
+            if 'set allow_system_table_mods="DML";' in line:
+                line = "set allow_system_table_mods=on;\n"
+            outfile.write(line)
+            if "INSERT INTO pg_statistic" in line:
+                convert_insert_statement(infile, outfile)
+            line = infile.readline()
 
 
 # This expects and converts an insert statement from the old,
@@ -64,44 +64,45 @@ def process_minirepro(input_filepath, output_filepath):
 # The following map describes the additional lines that must be added to the
 # existing insert statement. These lines are added at the line_number key,
 # and assume 0 indexing
-line_map = {2: "\tFalse::boolean,\n",
-			9: "\t0::smallint,\n",
-			13: "\t0::oid,\n",
-			17: "\tNULL::real[],\n",
-			21: "\tNULL::anyarray);\n",
-			}
+line_map = {
+    2: "\tFalse::boolean,\n",
+    9: "\t0::smallint,\n",
+    13: "\t0::oid,\n",
+    17: "\tNULL::real[],\n",
+    21: "\tNULL::anyarray);\n",
+}
 
 
 def convert_insert_statement(infile, outfile):
-	for line_number in range(0, 22):
-		line_to_insert = line_map.get(line_number)
-		if line_to_insert:
-			outfile.write(line_to_insert)
-		line = infile.readline()
-		# Remove the parenthesis and semicolon from the last line,
-		# since we're adding another line to the end
-		if line_number == 20:
-			line = line.replace(");", ",")
-		outfile.write(line)
+    for line_number in range(0, 22):
+        line_to_insert = line_map.get(line_number)
+        if line_to_insert:
+            outfile.write(line_to_insert)
+        line = infile.readline()
+        # Remove the parenthesis and semicolon from the last line,
+        # since we're adding another line to the end
+        if line_number == 20:
+            line = line.replace(");", ",")
+        outfile.write(line)
 
 
 def parseargs():
-	parser = argparse.ArgumentParser(description=_help, version='1.0')
+    parser = argparse.ArgumentParser(description=_help, version="1.0")
 
-	parser.add_argument("filepath", help="Path to minirepro file")
+    parser.add_argument("filepath", help="Path to minirepro file")
 
-	args = parser.parse_args()
-	return args
+    args = parser.parse_args()
+    return args
 
 
 def main():
-	args = parseargs()
+    args = parseargs()
 
-	input_filepath = args.filepath
-	output_filepath = input_filepath + "_6X"
+    input_filepath = args.filepath
+    output_filepath = input_filepath + "_6X"
 
-	process_minirepro(input_filepath, output_filepath)
+    process_minirepro(input_filepath, output_filepath)
 
 
 if __name__ == "__main__":
-	main()
+    main()

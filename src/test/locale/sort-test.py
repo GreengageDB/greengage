@@ -3,18 +3,19 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import sys, string, locale
+
 locale.setlocale(locale.LC_ALL, "")
 
 if len(sys.argv) != 2:
-   sys.stderr.write("Usage: sort.py filename\n")
-   sys.exit(1)
+    sys.stderr.write("Usage: sort.py filename\n")
+    sys.exit(1)
 
-infile = open(sys.argv[1], 'r')
+infile = open(sys.argv[1], "r")
 list = infile.readlines()
 infile.close()
 
 for i in range(0, len(list)):
-   list[i] = list[i][:-1] # chop!
+    list[i] = list[i][:-1]  # chop!
 
 list.sort(locale.strcoll)
-print(string.join(list, '\n'))
+print(string.join(list, "\n"))

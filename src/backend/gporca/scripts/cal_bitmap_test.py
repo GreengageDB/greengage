@@ -33,7 +33,10 @@ import sys
 try:
     from gppylib.db import dbconn
 except ImportError as e:
-    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
+    sys.exit(
+        "ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: "
+        + str(e)
+    )
 
 # constants
 # -----------------------------------------------------------------------------
@@ -138,18 +141,20 @@ _with_appendonly = """
 WITH (appendonly=true)
 """
 
-_create_other_tables = ["""
+_create_other_tables = [
+    """
 CREATE TABLE cal_temp_ids(f_id int, f_rand double precision) DISTRIBUTED BY (f_id);
 """,
-                        """
+    """
 CREATE TABLE cal_dim(dim_id int,
                      dim_id2 int,
                      txt text)
 DISTRIBUTED BY (dim_id);
 """,
-                        """
+    """
 CREATE TABLE cal_bfv_dim (id integer, col2 integer) DISTRIBUTED BY (id);
-"""]
+""",
+]
 
 # insert into temp table. Parameters:
 # - integer stop value (suggested value is 10,000,000)
@@ -178,52 +183,56 @@ _insert_into_other_tables = """
 INSERT INTO cal_dim SELECT x, x, repeat('d', 100) FROM (SELECT * FROM generate_series(%d,%d)) T(x);
 """
 
-_create_index_arr = ["""
+_create_index_arr = [
+    """
 CREATE INDEX cal_txtest_i_bitmap_10    ON cal_txtest USING bitmap(bitmap10);
 """,
-                     """
+    """
 CREATE INDEX cal_txtest_i_bitmap_100   ON cal_txtest USING bitmap(bitmap100);
 """,
-                     """
+    """
 CREATE INDEX cal_txtest_i_bitmap_1000  ON cal_txtest USING bitmap(bitmap1000);
 """,
-                     """
+    """
 CREATE INDEX cal_txtest_i_bitmap_10000 ON cal_txtest USING bitmap(bitmap10000);
 """,
-                     ]
+]
 
-_create_bfv_index_arr = ["""
+_create_bfv_index_arr = [
+    """
 CREATE INDEX idx_cal_bfvtest_bitmap ON cal_bfvtest USING bitmap(id);
 """,
-                         ]
+]
 
-_create_ndv_index_arr = ["""
+_create_ndv_index_arr = [
+    """
 CREATE INDEX cal_ndvtest_bitmap ON cal_ndvtest USING bitmap(val);
 """,
-                         ]
+]
 
-_create_btree_indexes_arr = ["""
+_create_btree_indexes_arr = [
+    """
 CREATE INDEX cal_txtest_i_btree_unique ON cal_txtest USING btree(btreeunique);
 """,
-                             """
+    """
 CREATE INDEX cal_txtest_i_btree_10     ON cal_txtest USING btree(btree10);
 """,
-                             """
+    """
 CREATE INDEX cal_txtest_i_btree_100    ON cal_txtest USING btree(btree100);
 """,
-                             """
+    """
 CREATE INDEX cal_txtest_i_btree_1000   ON cal_txtest USING btree(btree1000);
 """,
-                             """
+    """
 CREATE INDEX cal_txtest_i_btree_10000  ON cal_txtest USING btree(btree10000);
 """,
-                             """
+    """
 CREATE INDEX idx_cal_bfvtest_btree ON cal_bfvtest USING btree(id);
 """,
-                             """
+    """
 CREATE INDEX cal_ndvtest_btree ON cal_ndvtest USING btree(val);
 """,
-                             ]
+]
 
 _analyze_table = """
 ANALYZE cal_txtest;
@@ -267,52 +276,86 @@ WHERE starelid = '%s'::regclass AND staattnum = %i;
 # columns to fix, in the format (table name, column name, attnum, ndv, num rows)
 # use -1 as the NDV for unique columns and use -1 for the variable number of rows in the fact table
 _stats_cols_to_fix = [
-    ('cal_txtest', 'id',           1,    -1,    -1),
-    ('cal_txtest', 'btreeunique',  2,    -1,    -1),
-    ('cal_txtest', 'btree10',      3,    10,    -1),
-    ('cal_txtest', 'btree100',     4,   100,    -1),
-    ('cal_txtest', 'btree1000',    5,  1000,    -1),
-    ('cal_txtest', 'btree10000',   6, 10000,    -1),
-    ('cal_txtest', 'bitmap10',     7,    10,    -1),
-    ('cal_txtest', 'bitmap100',    8,   100,    -1),
-    ('cal_txtest', 'bitmap1000',   9,  1000,    -1),
-    ('cal_txtest', 'bitmap10000', 10, 10000,    -1),
-    ('cal_dim',    'dim_id',       1,    -1, glob_dim_table_rows),
-    ('cal_dim',    'dim_id2',      2,    -1, glob_dim_table_rows)
+    ("cal_txtest", "id", 1, -1, -1),
+    ("cal_txtest", "btreeunique", 2, -1, -1),
+    ("cal_txtest", "btree10", 3, 10, -1),
+    ("cal_txtest", "btree100", 4, 100, -1),
+    ("cal_txtest", "btree1000", 5, 1000, -1),
+    ("cal_txtest", "btree10000", 6, 10000, -1),
+    ("cal_txtest", "bitmap10", 7, 10, -1),
+    ("cal_txtest", "bitmap100", 8, 100, -1),
+    ("cal_txtest", "bitmap1000", 9, 1000, -1),
+    ("cal_txtest", "bitmap10000", 10, 10000, -1),
+    ("cal_dim", "dim_id", 1, -1, glob_dim_table_rows),
+    ("cal_dim", "dim_id2", 2, -1, glob_dim_table_rows),
 ]
 
 # deal with command line arguments
 # -----------------------------------------------------------------------------
 
-def parseargs():
-    parser = argparse.ArgumentParser(description=_help, version='1.0')
 
-    parser.add_argument("tests", metavar="TEST", choices=[[], "all", "none", "bitmap_scan_tests", "btree_ao_scan_tests",
-                                                          "bitmap_ndv_scan_tests", "index_join_tests", "bfv_join_tests",
-                                                          "index_only_scan_tests"],
-                        nargs="*",
-                        help="Run these tests (all, none, bitmap_scan_tests, btree_ao_scan_tests, bitmap_ndv_scan_tests, "
-                              "index_join_tests, bfv_join_tests, index_only_scan_tests), default is none")
-    parser.add_argument("--create", action="store_true",
-                        help="Create the tables to use in the test")
-    parser.add_argument("--execute", type=int, default="0",
-                        help="Number of times to execute queries, 0 (the default) means explain only")
-    parser.add_argument("--drop", action="store_true",
-                        help="Drop the tables used in the test when finished")
-    parser.add_argument("--verbose", action="store_true",
-                        help="Print more verbose output")
-    parser.add_argument("--logFile", default="",
-                        help="Log diagnostic output to a file")
-    parser.add_argument("--host", default="",
-                        help="Host to connect to (default is localhost or $PGHOST, if set).")
-    parser.add_argument("--port", type=int, default="0",
-                        help="Port on the host to connect to (default is 0 or $PGPORT, if set)")
-    parser.add_argument("--dbName", default="",
-                        help="Database name to connect to")
-    parser.add_argument("--appendOnly", action="store_true",
-                        help="Create an append-only table. Default is a heap table")
-    parser.add_argument("--numRows", type=int, default="10000000",
-                        help="Number of rows to INSERT INTO the table (default is 10 million)")
+def parseargs():
+    parser = argparse.ArgumentParser(description=_help, version="1.0")
+
+    parser.add_argument(
+        "tests",
+        metavar="TEST",
+        choices=[
+            [],
+            "all",
+            "none",
+            "bitmap_scan_tests",
+            "btree_ao_scan_tests",
+            "bitmap_ndv_scan_tests",
+            "index_join_tests",
+            "bfv_join_tests",
+            "index_only_scan_tests",
+        ],
+        nargs="*",
+        help="Run these tests (all, none, bitmap_scan_tests, btree_ao_scan_tests, bitmap_ndv_scan_tests, "
+        "index_join_tests, bfv_join_tests, index_only_scan_tests), default is none",
+    )
+    parser.add_argument(
+        "--create", action="store_true", help="Create the tables to use in the test"
+    )
+    parser.add_argument(
+        "--execute",
+        type=int,
+        default="0",
+        help="Number of times to execute queries, 0 (the default) means explain only",
+    )
+    parser.add_argument(
+        "--drop",
+        action="store_true",
+        help="Drop the tables used in the test when finished",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Print more verbose output"
+    )
+    parser.add_argument("--logFile", default="", help="Log diagnostic output to a file")
+    parser.add_argument(
+        "--host",
+        default="",
+        help="Host to connect to (default is localhost or $PGHOST, if set).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default="0",
+        help="Port on the host to connect to (default is 0 or $PGPORT, if set)",
+    )
+    parser.add_argument("--dbName", default="", help="Database name to connect to")
+    parser.add_argument(
+        "--appendOnly",
+        action="store_true",
+        help="Create an append-only table. Default is a heap table",
+    )
+    parser.add_argument(
+        "--numRows",
+        type=int,
+        default="10000000",
+        help="Number of rows to INSERT INTO the table (default is 10 million)",
+    )
 
     parser.set_defaults(verbose=False, filters=[], slice=(None, None))
 
@@ -331,12 +374,13 @@ def log_output(str):
 # SQL related methods
 # -----------------------------------------------------------------------------
 
+
 def connect(host, port_num, db_name):
     try:
         dburl = dbconn.DbURL(hostname=host, port=port_num, dbname=db_name)
         conn = dbconn.connect(dburl, encoding="UTF8")
 
-        sqlStr = "set search_path to \"$user\", public"
+        sqlStr = 'set search_path to "$user", public'
         dbconn.execSQL(conn, sqlStr)
 
     except Exception as e:
@@ -418,6 +462,7 @@ def timed_execute_sql(conn, sqlStr):
 
 # run an SQL statement n times, unless it takes longer than a timeout
 
+
 def timed_execute_n_times(conn, sqlStr, exec_n_times):
     sum_exec_times = 0.0
     sum_square_exec_times = 0.0
@@ -430,12 +475,18 @@ def timed_execute_n_times(conn, sqlStr, exec_n_times):
         sum_exec_times += exec_time
         sum_square_exec_times += exec_time * exec_time
         if num_rows >= 0 and local_num_rows != num_rows:
-            log_output("Inconsistent number of rows returned: %d and %d" % (num_rows, local_num_rows))
+            log_output(
+                "Inconsistent number of rows returned: %d and %d"
+                % (num_rows, local_num_rows)
+            )
         num_rows = local_num_rows
         if exec_time > glob_exe_timeout:
             # we exceeded the timeout, don't keep executing this long query
             act_num_exes = e
-            log_output("Query %s exceeded the timeout of %d seconds" % (sqlStr, glob_exe_timeout))
+            log_output(
+                "Query %s exceeded the timeout of %d seconds"
+                % (sqlStr, glob_exe_timeout)
+            )
 
     # compute mean and standard deviation of the execution times
     mean = sum_exec_times / act_num_exes
@@ -450,6 +501,7 @@ def timed_execute_n_times(conn, sqlStr, exec_n_times):
 # Explain a query and find a table scan or index scan in an explain output
 # return the scan type and the corresponding cost.
 # Use this for scan-related tests.
+
 
 def explain_index_scan(conn, sqlStr):
     cost = -1.0
@@ -473,8 +525,11 @@ def explain_index_scan(conn, sqlStr):
 
         for row in rows:
             log_output(row[0])
-            if (re.search(TABLE_NAME_PATTERN, row[0]) or re.search(NDV_TABLE_NAME_PATTERN, row[0]) or
-                re.search(WIDE_TABLE_NAME_PATTERN, row[0])):
+            if (
+                re.search(TABLE_NAME_PATTERN, row[0])
+                or re.search(NDV_TABLE_NAME_PATTERN, row[0])
+                or re.search(WIDE_TABLE_NAME_PATTERN, row[0])
+            ):
                 if re.search(bitmap_scan_pattern, row[0]):
                     scan_type = BITMAP_SCAN
                     cost = cost_from_explain_line(row[0])
@@ -492,7 +547,9 @@ def explain_index_scan(conn, sqlStr):
                     scan_type = FALLBACK_PLAN
 
     except Exception as e:
-        log_output("\n*** ERROR explaining query:\n%s;\nReason: %s" % ("explain " + sqlStr, e))
+        log_output(
+            "\n*** ERROR explaining query:\n%s;\nReason: %s" % ("explain " + sqlStr, e)
+        )
 
     return (scan_type, cost)
 
@@ -500,6 +557,7 @@ def explain_index_scan(conn, sqlStr):
 # Explain a query and find a join in an explain output
 # return the scan type and the corresponding cost.
 # Use this for scan-related tests.
+
 
 def explain_join_scan(conn, sqlStr):
     cost = -1.0
@@ -533,7 +591,9 @@ def explain_join_scan(conn, sqlStr):
                 cost = cost_from_explain_line(row[0])
 
             # mark the scan type used underneath the join
-            if re.search(TABLE_NAME_PATTERN, row[0]) or re.search(BFV_TABLE_NAME_PATTERN, row[0]):
+            if re.search(TABLE_NAME_PATTERN, row[0]) or re.search(
+                BFV_TABLE_NAME_PATTERN, row[0]
+            ):
                 if re.search(bitmap_scan_pattern, row[0]):
                     scan_type = BITMAP_SCAN
                 elif re.search(index_scan_pattern, row[0]):
@@ -547,12 +607,15 @@ def explain_join_scan(conn, sqlStr):
                     scan_type = FALLBACK_PLAN
 
     except Exception as e:
-        log_output("\n*** ERROR explaining query:\n%s;\nReason: %s" % ("explain " + sqlStr, e))
+        log_output(
+            "\n*** ERROR explaining query:\n%s;\nReason: %s" % ("explain " + sqlStr, e)
+        )
 
     return (scan_type, cost)
 
 
 # extract the cost c from the cost=x..c in an explain line
+
 
 def cost_from_explain_line(line):
     return float(re.sub(r".*\.\.([0-9.]+) .*", r"\1", line))
@@ -565,8 +628,19 @@ def cost_from_explain_line(line):
 
 # iterate over one parameterized query, using a range of parameter values, explaining and (optionally) executing the query
 
-def find_crossover(conn, lowParamValue, highParamLimit, setup, parameterizeMethod, explain_method, reset_method,
-                   plan_ids, force_methods, execute_n_times):
+
+def find_crossover(
+    conn,
+    lowParamValue,
+    highParamLimit,
+    setup,
+    parameterizeMethod,
+    explain_method,
+    reset_method,
+    plan_ids,
+    force_methods,
+    execute_n_times,
+):
     # expects the following:
     # - conn:               A connection
     # - lowParamValue:      The lowest (integer) value to try for the parameter
@@ -605,12 +679,13 @@ def find_crossover(conn, lowParamValue, highParamLimit, setup, parameterizeMetho
         incParamValue = 1
     elif highParamLimit <= lowParamValue:
         errMessages.append(
-            "Low parameter value %d must be less than high parameter limit %d" % (lowParamValue, highParamLimit))
+            "Low parameter value %d must be less than high parameter limit %d"
+            % (lowParamValue, highParamLimit)
+        )
         return (explainDict, execDict, errMessages)
 
     # first part, run through the parameter values and determine the plan and cost chosen by the optimizer
     for paramValue in range(lowParamValue, highParamLimit, incParamValue):
-
         # do any setup required
         setupString = setup(paramValue)
         execute_sql(conn, setupString)
@@ -618,12 +693,23 @@ def find_crossover(conn, lowParamValue, highParamLimit, setup, parameterizeMetho
         sqlString = parameterizeMethod(paramValue)
         (plan, cost) = explain_method(conn, sqlString)
         explainDict[paramValue] = (plan, cost)
-        log_output("For param value %d the optimizer chose %s with a cost of %f" % (paramValue, plan, cost))
+        log_output(
+            "For param value %d the optimizer chose %s with a cost of %f"
+            % (paramValue, plan, cost)
+        )
 
         # execute the query, if requested
         if execute_n_times > 0:
-            timed_execute_and_check_timeout(conn, sqlString, execute_n_times, paramValue, OPTIMIZER_DEFAULT_PLAN,
-                                            execDict, timedOutDict, errMessages)
+            timed_execute_and_check_timeout(
+                conn,
+                sqlString,
+                execute_n_times,
+                paramValue,
+                OPTIMIZER_DEFAULT_PLAN,
+                execDict,
+                timedOutDict,
+                errMessages,
+            )
 
     # second part, force different plans and record the costs
     for plan_num in range(0, len(plan_ids)):
@@ -639,27 +725,43 @@ def find_crossover(conn, lowParamValue, highParamLimit, setup, parameterizeMetho
             sqlString = parameterizeMethod(paramValue)
             (plan, cost) = explain_method(conn, sqlString)
             if plan_id != plan:
-                errMessages.append("For parameter value %d we tried to force a %s plan but got a %s plan." % (
-                paramValue, plan_id, plan))
-                log_output("For parameter value %d we tried to force a %s plan but got a %s plan." % (
-                paramValue, plan_id, plan))
+                errMessages.append(
+                    "For parameter value %d we tried to force a %s plan but got a %s plan."
+                    % (paramValue, plan_id, plan)
+                )
+                log_output(
+                    "For parameter value %d we tried to force a %s plan but got a %s plan."
+                    % (paramValue, plan_id, plan)
+                )
             # update the result dictionary
             resultList = list(explainDict[paramValue])
             defaultPlanCost = resultList[1]
             # sanity check, the forced plan shouldn't have a cost that is lower than the default plan cost
             if defaultPlanCost > cost * 1.1:
                 errMessages.append(
-                    "For parameter value %d and forced %s plan we got a cost of %f that is lower than the default cost of %f for the default %s plan." % (
-                    paramValue, plan_id, cost, defaultPlanCost, resultList[0]))
+                    "For parameter value %d and forced %s plan we got a cost of %f that is lower than the default cost of %f for the default %s plan."
+                    % (paramValue, plan_id, cost, defaultPlanCost, resultList[0])
+                )
             resultList.append(cost)
             explainDict[paramValue] = tuple(resultList)
-            log_output("For param value %d we forced %s with a cost of %f" % (paramValue, plan, cost))
+            log_output(
+                "For param value %d we forced %s with a cost of %f"
+                % (paramValue, plan, cost)
+            )
 
             # execute the forced plan
             if execute_n_times > 0:
                 # execute the query <execute_n_times> times and record the mean and stddev of the time in execDict
-                timed_execute_and_check_timeout(conn, sqlString, execute_n_times, paramValue, plan_id, execDict,
-                                                timedOutDict, errMessages)
+                timed_execute_and_check_timeout(
+                    conn,
+                    sqlString,
+                    execute_n_times,
+                    paramValue,
+                    plan_id,
+                    execDict,
+                    timedOutDict,
+                    errMessages,
+                )
 
     # cleanup at exit
     reset_method(conn)
@@ -670,15 +772,18 @@ def find_crossover(conn, lowParamValue, highParamLimit, setup, parameterizeMetho
 # Check for plans other than the optimizer-chosen plan that are significantly
 # better. Return the plan id and how many percent better that plan is or return ("", 0).
 
+
 def checkForOptimizerErrors(paramValue, chosenPlan, plan_ids, execDict):
     # check whether a plan other that the optimizer's choice was better
     if chosenPlan in plan_ids:
         # take the best of the execution times (optimizer choice and the same plan forced)
         # and use the larger of the standard deviations
-        defaultExeTime = 1E6
+        defaultExeTime = 1e6
         defaultStdDev = 0.0
         if (paramValue, OPTIMIZER_DEFAULT_PLAN) in execDict:
-            defaultExeTime, defaultStdDev, numRows = execDict[(paramValue, OPTIMIZER_DEFAULT_PLAN)]
+            defaultExeTime, defaultStdDev, numRows = execDict[
+                (paramValue, OPTIMIZER_DEFAULT_PLAN)
+            ]
 
         if (paramValue, chosenPlan) in execDict:
             forcedExeTime, forcedStdDev, numRows = execDict[(paramValue, chosenPlan)]
@@ -692,8 +797,13 @@ def checkForOptimizerErrors(paramValue, chosenPlan, plan_ids, execDict):
 
                 # The execution times tend to be fairly unreliable. Try to avoid false positives by
                 # requiring a significantly better alternative, measured in standard deviations.
-                if altExeTime + glob_sigma_diff * max(defaultStdDev, altStdDev) < defaultExeTime:
-                    optimizerError = 100.0 * (defaultExeTime - altExeTime) / defaultExeTime
+                if (
+                    altExeTime + glob_sigma_diff * max(defaultStdDev, altStdDev)
+                    < defaultExeTime
+                ):
+                    optimizerError = (
+                        100.0 * (defaultExeTime - altExeTime) / defaultExeTime
+                    )
                     # yes, plan pl is significantly better than the optimizer default choice
                     return (pl, round(optimizerError, 1))
     elif chosenPlan == FALLBACK_PLAN:
@@ -705,7 +815,10 @@ def checkForOptimizerErrors(paramValue, chosenPlan, plan_ids, execDict):
 
 # print the results of one test run
 
-def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execute_n_times):
+
+def print_results(
+    testTitle, explainDict, execDict, errMessages, plan_ids, execute_n_times
+):
     # print out the title of the test
     print("")
     print(testTitle)
@@ -746,7 +859,9 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
         # add the execution-related values, if applicable
         if exeTimes:
             # calculate the optimizer error
-            bestPlan, optimizerError = checkForOptimizerErrors(p_val, vals[0], plan_ids, execDict)
+            bestPlan, optimizerError = checkForOptimizerErrors(
+                p_val, vals[0], plan_ids, execDict
+            )
             resultList.append(bestPlan)
             resultList.append(str(optimizerError))
 
@@ -764,7 +879,10 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
                     resultList.append(str(mean))
                     stddevList.append(str(stddev))
                     if num_rows >= 0 and local_num_rows != num_rows:
-                        errMessages.append("Inconsistent number of rows for parameter value %d: %d and %d" % (p_val, num_rows, local_num_rows))
+                        errMessages.append(
+                            "Inconsistent number of rows for parameter value %d: %d and %d"
+                            % (p_val, num_rows, local_num_rows)
+                        )
                     num_rows = local_num_rows
                 else:
                     # we didn't execute this query, add blank values
@@ -781,7 +899,7 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
         print((", ".join(resultList)))
 
     # if there are any errors, print them at the end, leaving an empty line between the result and the errors
-    if (len(errMessages) > 0):
+    if len(errMessages) > 0:
         print("")
         print(("%d diagnostic message(s):" % len(errMessages)))
         for e in errMessages:
@@ -791,8 +909,17 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
 # execute a query n times, with a guard against long-running queries,
 # and record the result in execDict and any errors in errMessages
 
-def timed_execute_and_check_timeout(conn, sqlString, execute_n_times, paramValue, plan_id, execDict, timedOutDict,
-                                    errMessages):
+
+def timed_execute_and_check_timeout(
+    conn,
+    sqlString,
+    execute_n_times,
+    paramValue,
+    plan_id,
+    execDict,
+    timedOutDict,
+    errMessages,
+):
     # timedOutDict contains a record of queries that have previously timed out:
     # plan_id -> (lowest param value for timeout, highest value for timeout, direction)
     # right now we ignore low/high values and direction (whether the execution increases or decreases with
@@ -801,11 +928,16 @@ def timed_execute_and_check_timeout(conn, sqlString, execute_n_times, paramValue
         # this plan has timed out with at least one parameter value, decide what to do
         paramValLow, paramValHigh, direction = timedOutDict[plan_id]
         # for now, just return, once we time out for a plan we give up
-        log_output("Not executing the %s plan for paramValue %d, due to previous timeout" % (plan_id, paramValue))
+        log_output(
+            "Not executing the %s plan for paramValue %d, due to previous timeout"
+            % (plan_id, paramValue)
+        )
         return
 
     # execute the query
-    mean, stddev, num_execs, num_rows = timed_execute_n_times(conn, sqlString, execute_n_times)
+    mean, stddev, num_execs, num_rows = timed_execute_n_times(
+        conn, sqlString, execute_n_times
+    )
 
     # record the execution stats
     execDict[(paramValue, plan_id)] = (mean, stddev, num_rows)
@@ -815,8 +947,9 @@ def timed_execute_and_check_timeout(conn, sqlString, execute_n_times, paramValue
         # record the timeout, without worrying about low/high values or directions for now
         timedOutDict[plan_id] = (paramValue, paramValue, "unknown_direction")
         errMessages.append(
-            "The %s plan for parameter value %d took more than the allowed timeout, it was executed only %d time(s)" %
-            (plan_id, paramValue, num_execs))
+            "The %s plan for parameter value %d took more than the allowed timeout, it was executed only %d time(s)"
+            % (plan_id, paramValue, num_execs)
+        )
 
 
 # Definition of various test suites
@@ -846,51 +979,65 @@ def timed_execute_and_check_timeout(conn, sqlString, execute_n_times, paramValue
 
 # GUC set statements
 
-_reset_index_scan_forces = ["""
+_reset_index_scan_forces = [
+    """
 SELECT enable_xform('CXformImplementBitmapTableGet');
 """,
-                            """
+    """
 SELECT enable_xform('CXformGet2TableScan');
 """,
-                            """
+    """
 SELECT enable_xform('CXformIndexGet2IndexScan');
-""" ]
+""",
+]
 
-_force_sequential_scan = ["""
+_force_sequential_scan = [
+    """
 SELECT disable_xform('CXformImplementBitmapTableGet');
-"""]
+"""
+]
 
-_force_index_scan = ["""
+_force_index_scan = [
+    """
 SELECT disable_xform('CXformGet2TableScan');
-"""]
+"""
+]
 
-_force_index_only_scan = ["SELECT disable_xform('CXformGet2TableScan');",
-                          "SELECT disable_xform('CXformIndexGet2IndexScan');"]
+_force_index_only_scan = [
+    "SELECT disable_xform('CXformGet2TableScan');",
+    "SELECT disable_xform('CXformIndexGet2IndexScan');",
+]
 
 
-_reset_index_join_forces = ["""
+_reset_index_join_forces = [
+    """
 SELECT enable_xform('CXformPushGbBelowJoin');
 """,
-                            """
+    """
 RESET optimizer_enable_indexjoin;
 """,
-                            """
+    """
 RESET optimizer_enable_hashjoin;
-"""]
+""",
+]
 
-_force_hash_join = ["""
+_force_hash_join = [
+    """
 SELECT disable_xform('CXformPushGbBelowJoin');
 """,
-                    """
+    """
 SET optimizer_enable_indexjoin to off;
-"""]
+""",
+]
 
-_force_index_nlj = ["""
+_force_index_nlj = [
+    """
 SELECT disable_xform('CXformPushGbBelowJoin');
 """,
-                    """
+    """
 SET optimizer_enable_hashjoin to off;
-"""]
+""",
+]
 
 # setup statements
 
@@ -1076,15 +1223,15 @@ def parameterize_btree_index_10000_multi_wide(paramValue):
 
 def parameterize_btree_unique_in_narrow(paramValue):
     inlist = "0"
-    for p in range(1, paramValue+1):
-        inlist += ", " + str(5*p)
+    for p in range(1, paramValue + 1):
+        inlist += ", " + str(5 * p)
     return _btree_select_unique_in % ("", inlist)
 
 
 def parameterize_btree_unique_in_wide(paramValue):
     inlist = "0"
-    for p in range(1, paramValue+1):
-        inlist += ", " + str(5*p)
+    for p in range(1, paramValue + 1):
+        inlist += ", " + str(5 * p)
     return _btree_select_unique_in % (", max(txt)", inlist)
 
 
@@ -1164,61 +1311,138 @@ def force_index_join(conn):
 # Helper methods for running tests
 # -----------------------------------------------------------------------------
 
-def run_one_bitmap_scan_test(conn, testTitle, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                             execute_n_times):
+
+def run_one_bitmap_scan_test(
+    conn,
+    testTitle,
+    paramValueLow,
+    paramValueHigh,
+    setup,
+    parameterizeMethod,
+    execute_n_times,
+):
     log_output("Running bitmap scan test " + testTitle)
     plan_ids = [BITMAP_SCAN, TABLE_SCAN]
     force_methods = [force_bitmap_scan, force_table_scan]
-    explainDict, execDict, errors = find_crossover(conn, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                                                   explain_bitmap_index, reset_index_test, plan_ids, force_methods,
-                                                   execute_n_times)
+    explainDict, execDict, errors = find_crossover(
+        conn,
+        paramValueLow,
+        paramValueHigh,
+        setup,
+        parameterizeMethod,
+        explain_bitmap_index,
+        reset_index_test,
+        plan_ids,
+        force_methods,
+        execute_n_times,
+    )
     print_results(testTitle, explainDict, execDict, errors, plan_ids, execute_n_times)
 
 
-def run_one_bitmap_join_test(conn, testTitle, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                             execute_n_times):
+def run_one_bitmap_join_test(
+    conn,
+    testTitle,
+    paramValueLow,
+    paramValueHigh,
+    setup,
+    parameterizeMethod,
+    execute_n_times,
+):
     log_output("Running bitmap join test " + testTitle)
     plan_ids = [BITMAP_SCAN, TABLE_SCAN]
     force_methods = [force_index_join, force_hash_join]
-    explainDict, execDict, errors = find_crossover(conn, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                                                   explain_join_scan, reset_index_join, plan_ids, force_methods,
-                                                   execute_n_times)
+    explainDict, execDict, errors = find_crossover(
+        conn,
+        paramValueLow,
+        paramValueHigh,
+        setup,
+        parameterizeMethod,
+        explain_join_scan,
+        reset_index_join,
+        plan_ids,
+        force_methods,
+        execute_n_times,
+    )
     print_results(testTitle, explainDict, execDict, errors, plan_ids, execute_n_times)
 
-def run_one_index_join_test(conn, testTitle, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                             execute_n_times):
+
+def run_one_index_join_test(
+    conn,
+    testTitle,
+    paramValueLow,
+    paramValueHigh,
+    setup,
+    parameterizeMethod,
+    execute_n_times,
+):
     log_output("Running index join test " + testTitle)
     plan_ids = [INDEX_SCAN, TABLE_SCAN]
     force_methods = [force_index_join, force_hash_join]
-    explainDict, execDict, errors = find_crossover(conn, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                                                   explain_join_scan, reset_index_join, plan_ids, force_methods,
-                                                   execute_n_times)
+    explainDict, execDict, errors = find_crossover(
+        conn,
+        paramValueLow,
+        paramValueHigh,
+        setup,
+        parameterizeMethod,
+        explain_join_scan,
+        reset_index_join,
+        plan_ids,
+        force_methods,
+        execute_n_times,
+    )
     print_results(testTitle, explainDict, execDict, errors, plan_ids, execute_n_times)
 
-def run_one_index_scan_test(conn, testTitle, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                             execute_n_times):
+
+def run_one_index_scan_test(
+    conn,
+    testTitle,
+    paramValueLow,
+    paramValueHigh,
+    setup,
+    parameterizeMethod,
+    execute_n_times,
+):
     log_output("Running index scan test " + testTitle)
     plan_ids = [INDEX_SCAN, INDEX_ONLY_SCAN]
     force_methods = [force_index_scan, force_index_only_scan]
-    explainDict, execDict, errors = find_crossover(conn, paramValueLow, paramValueHigh, setup, parameterizeMethod,
-                                                   explain_index_scan, reset_index_test, plan_ids, force_methods,
-                                                   execute_n_times)
+    explainDict, execDict, errors = find_crossover(
+        conn,
+        paramValueLow,
+        paramValueHigh,
+        setup,
+        parameterizeMethod,
+        explain_index_scan,
+        reset_index_test,
+        plan_ids,
+        force_methods,
+        execute_n_times,
+    )
     print_results(testTitle, explainDict, execDict, errors, plan_ids, execute_n_times)
 
 
 # Main driver for the tests
 # -----------------------------------------------------------------------------
 
+
 def run_index_only_scan_tests(conn, execute_n_times):
     def setup_wide_table(paramValue):
-        execute_sql_arr(conn, [
-            "DROP TABLE IF EXISTS cal_widetest;",
-            "CREATE TABLE cal_widetest(a int, {})".format(','.join('col' + str(i) + " text" for i in range(1, max(2, paramValue)))),
-            "CREATE INDEX cal_widetest_index ON cal_widetest(a);",
-            "TRUNCATE cal_widetest;",
-            "INSERT INTO cal_widetest SELECT i%50, {} FROM generate_series(1,100000)i;".format(','.join("repeat('a', 1024)" for i in range(1, max(2, paramValue)))),
-            "VACUUM ANALYZE cal_widetest;"
-        ])
+        execute_sql_arr(
+            conn,
+            [
+                "DROP TABLE IF EXISTS cal_widetest;",
+                "CREATE TABLE cal_widetest(a int, {})".format(
+                    ",".join(
+                        "col" + str(i) + " text" for i in range(1, max(2, paramValue))
+                    )
+                ),
+                "CREATE INDEX cal_widetest_index ON cal_widetest(a);",
+                "TRUNCATE cal_widetest;",
+                "INSERT INTO cal_widetest SELECT i%50, {} FROM generate_series(1,100000)i;".format(
+                    ",".join("repeat('a', 1024)" for i in range(1, max(2, paramValue)))
+                ),
+                "VACUUM ANALYZE cal_widetest;",
+            ],
+        )
         return "select 1;"
 
     def parameterized_method(paramValue):
@@ -1228,208 +1452,259 @@ def run_index_only_scan_tests(conn, execute_n_times):
             WHERE a<25;
             """
 
-    run_one_index_scan_test(conn,
-                            "Index Scan Test; Wide table; Narrow index",
-                            1,
-                            6,
-                            setup_wide_table,
-                            parameterized_method,
-                            execute_n_times)
+    run_one_index_scan_test(
+        conn,
+        "Index Scan Test; Wide table; Narrow index",
+        1,
+        6,
+        setup_wide_table,
+        parameterized_method,
+        execute_n_times,
+    )
 
 
 def run_bitmap_index_scan_tests(conn, execute_n_times):
-
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; NDV=10; selectivity_pct=10*parameter_value; count(*)",
-                             0,
-                             10,
-                             noSetupRequired,
-                             parameterize_bitmap_index_10_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; NDV=10; selectivity_pct=10*parameter_value; count(*)",
+        0,
+        10,
+        noSetupRequired,
+        parameterize_bitmap_index_10_narrow,
+        execute_n_times,
+    )
 
     # all full table scan, no crossover
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; NDV=10; selectivity_pct=10*parameter_value; max(txt)",
-                             0,
-                             6,
-                             noSetupRequired,
-                             parameterize_bitmap_index_10_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; NDV=10; selectivity_pct=10*parameter_value; max(txt)",
+        0,
+        6,
+        noSetupRequired,
+        parameterize_bitmap_index_10_wide,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
-                             0,
-                             600 if glob_appendonly else 20,
-                             noSetupRequired,
-                             parameterize_bitmap_index_10000_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
+        0,
+        600 if glob_appendonly else 20,
+        noSetupRequired,
+        parameterize_bitmap_index_10000_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
-                             0,
-                             300 if glob_appendonly else 20,
-                             noSetupRequired,
-                             parameterize_bitmap_index_10000_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
+        0,
+        300 if glob_appendonly else 20,
+        noSetupRequired,
+        parameterize_bitmap_index_10000_wide,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
-                             0,
-                             600 if glob_appendonly else 20,
-                             noSetupRequired,
-                             parameterize_bitmap_index_10000_multi_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
+        0,
+        600 if glob_appendonly else 20,
+        noSetupRequired,
+        parameterize_bitmap_index_10000_multi_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
-                             0,
-                             300 if glob_appendonly else 20,
-                             noSetupRequired,
-                             parameterize_bitmap_index_10000_multi_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
+        0,
+        300 if glob_appendonly else 20,
+        noSetupRequired,
+        parameterize_bitmap_index_10000_multi_wide,
+        execute_n_times,
+    )
 
 
 def run_bitmap_ndv_scan_tests(conn, execute_n_times):
-    run_one_bitmap_scan_test(conn,
-                             "Bitmap Scan Test; ndv test; rows=1000000; parameter = insert statement modulo; count(*)",
-                             1,
-                             # modulo ex. would replace x in the following: SELECT i % x FROM generate_series(1,10000)i;
-                             10000,  # max here is 10000 (num of rows)
-                             parameterize_insert_ndv,
-                             parameterize_bitmap_index_ndv,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Bitmap Scan Test; ndv test; rows=1000000; parameter = insert statement modulo; count(*)",
+        1,
+        # modulo ex. would replace x in the following: SELECT i % x FROM generate_series(1,10000)i;
+        10000,  # max here is 10000 (num of rows)
+        parameterize_insert_ndv,
+        parameterize_bitmap_index_ndv,
+        execute_n_times,
+    )
 
 
 def run_btree_ao_index_scan_tests(conn, execute_n_times):
     # use the unique btree index (no bitmap equivalent), 0 to 10,000 rows
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; unique; selectivity_pct=100*parameter_value/%d; count(*)" % glob_rowcount,
-                             0,
-                             glob_rowcount/10, # 10% is the max allowed selectivity for a btree scan on an AO table
-                             noSetupRequired,
-                             parameterize_btree_index_unique_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; unique; selectivity_pct=100*parameter_value/%d; count(*)"
+        % glob_rowcount,
+        0,
+        glob_rowcount
+        / 10,  # 10% is the max allowed selectivity for a btree scan on an AO table
+        noSetupRequired,
+        parameterize_btree_index_unique_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; unique; selectivity_pct=100*parameter_value/%d; max(txt)" % glob_rowcount,
-                             0,
-                             glob_rowcount/20,
-                             noSetupRequired,
-                             parameterize_btree_index_unique_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; unique; selectivity_pct=100*parameter_value/%d; max(txt)"
+        % glob_rowcount,
+        0,
+        glob_rowcount / 20,
+        noSetupRequired,
+        parameterize_btree_index_unique_wide,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; NDV=100; selectivity_pct=parameter_value; count(*)",
-                             0,
-                             5,
-                             noSetupRequired,
-                             parameterize_btree_index_100_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; NDV=100; selectivity_pct=parameter_value; count(*)",
+        0,
+        5,
+        noSetupRequired,
+        parameterize_btree_index_100_narrow,
+        execute_n_times,
+    )
 
     # all full table scan, no crossover
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; NDV=100; selectivity_pct=parameter_value; max(txt)",
-                             0,
-                             5,
-                             noSetupRequired,
-                             parameterize_btree_index_100_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; NDV=100; selectivity_pct=parameter_value; max(txt)",
+        0,
+        5,
+        noSetupRequired,
+        parameterize_btree_index_100_wide,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
-                             0,
-                             500,
-                             noSetupRequired,
-                             parameterize_btree_index_10000_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
+        0,
+        500,
+        noSetupRequired,
+        parameterize_btree_index_10000_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
-                             0,
-                             1000,
-                             noSetupRequired,
-                             parameterize_btree_index_10000_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
+        0,
+        1000,
+        noSetupRequired,
+        parameterize_btree_index_10000_wide,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
-                             0,
-                             1000,
-                             noSetupRequired,
-                             parameterize_btree_index_10000_multi_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
+        0,
+        1000,
+        noSetupRequired,
+        parameterize_btree_index_10000_multi_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
-                             0,
-                             1000,
-                             noSetupRequired,
-                             parameterize_btree_index_10000_multi_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; multi-range; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
+        0,
+        1000,
+        noSetupRequired,
+        parameterize_btree_index_10000_multi_wide,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; in-list; selectivity_pct=100*parameter_value/%d; count(*)" % glob_rowcount,
-                             0,
-                             5000, # length of IN list
-                             noSetupRequired,
-                             parameterize_btree_unique_in_narrow,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; in-list; selectivity_pct=100*parameter_value/%d; count(*)"
+        % glob_rowcount,
+        0,
+        5000,  # length of IN list
+        noSetupRequired,
+        parameterize_btree_unique_in_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_scan_test(conn,
-                             "Btree Scan Test; in-list; selectivity_pct=100*parameter_value/%d; max(txt)" % glob_rowcount,
-                             0,
-                             3000, # length of IN list
-                             noSetupRequired,
-                             parameterize_btree_unique_in_wide,
-                             execute_n_times)
+    run_one_bitmap_scan_test(
+        conn,
+        "Btree Scan Test; in-list; selectivity_pct=100*parameter_value/%d; max(txt)"
+        % glob_rowcount,
+        0,
+        3000,  # length of IN list
+        noSetupRequired,
+        parameterize_btree_unique_in_wide,
+        execute_n_times,
+    )
 
 
 def run_index_join_tests(conn, execute_n_times):
-    run_one_bitmap_join_test(conn,
-                             "Bitmap Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
-                             0,
-                             400,
-                             noSetupRequired,
-                             parameterize_bitmap_join_narrow,
-                             execute_n_times)
+    run_one_bitmap_join_test(
+        conn,
+        "Bitmap Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
+        0,
+        400,
+        noSetupRequired,
+        parameterize_bitmap_join_narrow,
+        execute_n_times,
+    )
 
-    run_one_bitmap_join_test(conn,
-                             "Bitmap Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
-                             0,
-                             300,
-                             noSetupRequired,
-                             parameterize_bitmap_join_wide,
-                             execute_n_times)
+    run_one_bitmap_join_test(
+        conn,
+        "Bitmap Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
+        0,
+        300,
+        noSetupRequired,
+        parameterize_bitmap_join_wide,
+        execute_n_times,
+    )
 
-    run_one_index_join_test(conn,
-                             "Btree Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
-                             0,
-                             500,
-                             noSetupRequired,
-                             parameterize_btree_join_narrow,
-                             execute_n_times)
+    run_one_index_join_test(
+        conn,
+        "Btree Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; count(*)",
+        0,
+        500,
+        noSetupRequired,
+        parameterize_btree_join_narrow,
+        execute_n_times,
+    )
 
-    run_one_index_join_test(conn,
-                             "Btree Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
-                             0,
-                             400,
-                             noSetupRequired,
-                             parameterize_btree_join_wide,
-                             execute_n_times)
+    run_one_index_join_test(
+        conn,
+        "Btree Join Test; NDV=10000; selectivity_pct=0.01*parameter_value; max(txt)",
+        0,
+        400,
+        noSetupRequired,
+        parameterize_btree_join_wide,
+        execute_n_times,
+    )
 
 
 def run_bfv_join_tests(conn, execute_n_times):
-    run_one_bitmap_join_test(conn,
-                             "Bitmap Join BFV Test; Large Data; parameter = num rows inserted",
-                             10000,  # num of rows inserted
-                             900000,
-                             parameterize_insert_join_bfv,
-                             parameterize_bitmap_join_bfv,
-                             execute_n_times)
+    run_one_bitmap_join_test(
+        conn,
+        "Bitmap Join BFV Test; Large Data; parameter = num rows inserted",
+        10000,  # num of rows inserted
+        900000,
+        parameterize_insert_join_bfv,
+        parameterize_bitmap_join_bfv,
+        execute_n_times,
+    )
 
 
 # common parts of all test suites, create tables, run tests, drop objects
 # -----------------------------------------------------------------------------
+
 
 # create the table(s), as regular or AO table, and insert num_rows into the main table
 def createDB(conn, use_ao, num_rows):
@@ -1465,6 +1740,7 @@ def createDB(conn, use_ao, num_rows):
 def dropDB(conn):
     execute_sql(conn, _drop_tables)
 
+
 # smooth statistics for a single integer column uniformly distributed between 1 and row_count, with a given row count and NDV
 #
 # For NDVs of 100 or less, list all of them
@@ -1491,19 +1767,32 @@ def smoothStatisticsForOneCol(conn, table_name, attnum, row_count, ndv):
 
     if ndv <= 100:
         # produce "ndv" MCVs, each with the same frequency
-        for i in range(1,num_values+1):
-            stanumbers.append(str(float(1)/ndv))
+        for i in range(1, num_values + 1):
+            stanumbers.append(str(float(1) / ndv))
             stavalues.append(str(i))
         stanumbers_txt = "'{ " + ", ".join(stanumbers) + " }'::float[]"
     else:
         # produce a uniformly distributed histogram with 100 buckets (101 boundaries)
         stakind = 2
         stavalues.append(str(1))
-        for j in range(1,num_values+1):
-            stavalues.append(str((j*ndv)/num_values))
+        for j in range(1, num_values + 1):
+            stavalues.append(str((j * ndv) / num_values))
 
     stavalues_txt = "'{ " + ", ".join(stavalues) + " }'::int[]"
-    execute_sql(conn, _update_pg_stats % (stadistinct, stakind, stanumbers_txt, stavalues_txt, corr, table_name, attnum))
+    execute_sql(
+        conn,
+        _update_pg_stats
+        % (
+            stadistinct,
+            stakind,
+            stanumbers_txt,
+            stavalues_txt,
+            corr,
+            table_name,
+            attnum,
+        ),
+    )
+
 
 # ensure that we have perfect histogram statistics on the relevant columns
 def smoothStatistics(conn, num_fact_table_rows):
@@ -1523,6 +1812,7 @@ def smoothStatistics(conn, num_fact_table_rows):
             execute_sql(conn, _update_pg_class % (table_rows, table_name))
     commit_db(conn)
 
+
 def inspectExistingTables(conn):
     global glob_rowcount
     global glob_appendonly
@@ -1535,7 +1825,9 @@ def inspectExistingTables(conn):
         glob_rowcount = row[0]
         log_output("Row count of existing fact table is %d" % glob_rowcount)
 
-    sqlStr = "SELECT lower(unnest(reloptions)) from pg_class where relname = 'cal_txtest'"
+    sqlStr = (
+        "SELECT lower(unnest(reloptions)) from pg_class where relname = 'cal_txtest'"
+    )
     curs = dbconn.execSQL(conn, sqlStr)
 
     rows = curs.fetchall()
@@ -1559,7 +1851,10 @@ def main():
         glob_log_file = open(args.logFile, "wt", 1)
     if args.verbose:
         glob_verbose = True
-    log_output("Connecting to host %s on port %d, database %s" % (args.host, args.port, args.dbName))
+    log_output(
+        "Connecting to host %s on port %d, database %s"
+        % (args.host, args.port, args.dbName)
+    )
     conn = connect(args.host, args.port, args.dbName)
     select_version(conn)
     if args.create:

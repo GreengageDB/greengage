@@ -8,6 +8,7 @@ This file defines the interface that can be used to
    interface with the fault prober
 
 """
+
 from __future__ import absolute_import
 import os
 
@@ -16,13 +17,15 @@ from gppylib.utils import checkNotNone
 
 logger = get_default_logger()
 
+
 class GpFaultProber:
     def __init__(self):
         pass
+
     #
     # returns self
     #
-    def initializeProber( self, masterPort ) :
+    def initializeProber(self, masterPort):
         return self
 
     def pauseFaultProber(self):
@@ -33,18 +36,22 @@ class GpFaultProber:
 
     def isFaultProberPaused(self):
         pass
-    
+
     def getFaultProberInterval(self):
         pass
+
 
 #
 # Management of registered fault prober.  Right now it
 #   is a singleton.  Perhaps switch later to a factory.
 #
 gFaultProber = None
+
+
 def registerFaultProber(prober):
     global gFaultProber
     gFaultProber = checkNotNone("New global fault prober interface", prober)
+
 
 def getFaultProber():
     global gFaultProber

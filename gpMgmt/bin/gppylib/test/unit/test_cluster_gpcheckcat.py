@@ -9,11 +9,16 @@ from gppylib.db import dbconn
 
 class GpCheckCatColumnsTestCase(unittest.TestCase):
     def test_TableMainColumn_tablenames_exist(self):
-        gpcheckcat_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpcheckcat")
-        subject = imp.load_source('gpcheckcat', gpcheckcat_file)
+        gpcheckcat_file = os.path.abspath(
+            os.path.dirname(__file__) + "/../../../gpcheckcat"
+        )
+        subject = imp.load_source("gpcheckcat", gpcheckcat_file)
 
-        dburl = dbconn.DbURL(hostname=os.getenv('HOSTNAME', 'localhost'), port=os.getenv('PGPORT', 5432),
-                             dbname=os.getenv('PGDATABASE', 'postgres'))
+        dburl = dbconn.DbURL(
+            hostname=os.getenv("HOSTNAME", "localhost"),
+            port=os.getenv("PGPORT", 5432),
+            dbname=os.getenv("PGDATABASE", "postgres"),
+        )
         conn = dbconn.connect(dburl)
         table_query = "select count(*) from pg_class where relname='{table_name}'"
 
@@ -24,5 +29,5 @@ class GpCheckCatColumnsTestCase(unittest.TestCase):
             self.assertTrue(cursor.rowcount == 1, "%s not found in catalog dir" % key)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -22,14 +22,24 @@ import errno, os, sys, shutil
 gProgramName = os.path.split(sys.argv[0])[-1]
 if sys.version_info < (2, 5, 0):
     sys.exit(
-        '''Error: %s is supported on Python versions 2.5 or greater
-        Please upgrade python installed on this machine.''' % gProgramName)
+        """Error: %s is supported on Python versions 2.5 or greater
+        Please upgrade python installed on this machine."""
+        % gProgramName
+    )
 
 from gppylib import gplog
 from gppylib.commands import gp, unix
 from gppylib.commands.base import ExecutionError, Command
-from gppylib.system import configurationInterface, configurationImplGpdb, fileSystemInterface, \
-    fileSystemImplOs, osInterface, osImplNative, faultProberInterface, faultProberImplGpdb
+from gppylib.system import (
+    configurationInterface,
+    configurationImplGpdb,
+    fileSystemInterface,
+    fileSystemImplOs,
+    osInterface,
+    osImplNative,
+    faultProberInterface,
+    faultProberImplGpdb,
+)
 from optparse import OptionGroup, OptionParser, SUPPRESS_HELP
 
 
@@ -41,10 +51,12 @@ def getProgramName():
     global gProgramName
     return gProgramName
 
+
 class PIDLockHeld(Exception):
     def __init__(self, message, path):
         self.message = message
         self.path = path
+
 
 class PIDLockFile:
     """
@@ -64,7 +76,7 @@ class PIDLockFile:
     def acquire(self):
         try:
             os.makedirs(self.path)
-            with open(self.PIDfile, mode='w') as p:
+            with open(self.PIDfile, mode="w") as p:
                 p.write(str(self.PID))
         except EnvironmentError as e:
             if e.errno == errno.EEXIST:
@@ -88,7 +100,7 @@ class PIDLockFile:
                 # Eventhough we remove the directory, it is not guaranteed that the directory is removed
                 # at the disk level. So it is necessary to make this call to sync the changes at the disk level.
                 # Refer https://stackoverflow.com/questions/7127075/what-exactly-is-file-flush-doing for more context.
-                cmd = Command("run sync command", unix.findCmdInPath('sync'))
+                cmd = Command("run sync command", unix.findCmdInPath("sync"))
                 cmd.run()
 
         except EnvironmentError as e:
@@ -143,8 +155,12 @@ class SimpleMainLock:
     """
 
     def __init__(self, mainOptions):
-        self.pidlockpath = mainOptions.get('pidlockpath', None)  # the directory we're using for locking
-        self.parentpidvar = mainOptions.get('parentpidvar', None)  # environment variable holding parent pid
+        self.pidlockpath = mainOptions.get(
+            "pidlockpath", None
+        )  # the directory we're using for locking
+        self.parentpidvar = mainOptions.get(
+            "parentpidvar", None
+        )  # environment variable holding parent pid
         self.parentpid = None  # parent pid which already has the lock
         self.ppath = None  # complete path to the lock file
         self.pidlockfile = None  # PIDLockFile object
@@ -162,7 +178,7 @@ class SimpleMainLock:
         """
         Attempts to acquire the lock this process needs to proceed.
 
-        Returns None on successful acquisition of the lock or 
+        Returns None on successful acquisition of the lock or
           the pid of the other process which already has the lock.
         """
         # nothing to do if utiliity requires no locking
@@ -176,7 +192,6 @@ class SimpleMainLock:
             shutil.rmtree(self.ppath)
 
         if self.pidfilepid is not None:
-
             # we found a lock file
             # allow the process to proceed if the locker was our parent
             if self.pidfilepid == self.parentpid:
@@ -218,6 +233,7 @@ class SimpleMainLock:
 # exceptions we handle specially by the simple_main framework.
 #
 
+
 class ProgramArgumentValidationException(Exception):
     """
     Throw this out to main to have the message possibly
@@ -244,6 +260,7 @@ class ExceptionNoStackTraceNeeded(Exception):
     Our code throws this exception when we encounter a condition
     we know can arise which demands immediate termination.
     """
+
     pass
 
 
@@ -252,31 +269,31 @@ class UserAbortedException(Exception):
     UserAbortedException should be thrown when a user decides to stop the
     program (at a y/n prompt, for example).
     """
+
     pass
 
 
 def simple_main(createOptionParserFn, createCommandFn, mainOptions=None):
     """
-     createOptionParserFn : a function that takes no arguments and returns an OptParser
-     createCommandFn : a function that takes two arguments (the options and the args (those that are not processed into
-                       options) and returns an object that has "run" and "cleanup" functions.  Its "run" function must
-                       run and return an exit code.  "cleanup" will be called to clean up before the program exits;
-                       this can be used to clean up, for example, to clean up a worker pool
+    createOptionParserFn : a function that takes no arguments and returns an OptParser
+    createCommandFn : a function that takes two arguments (the options and the args (those that are not processed into
+                      options) and returns an object that has "run" and "cleanup" functions.  Its "run" function must
+                      run and return an exit code.  "cleanup" will be called to clean up before the program exits;
+                      this can be used to clean up, for example, to clean up a worker pool
 
-     mainOptions can include: forceQuietOutput (map to bool),
-                              programNameOverride (map to string)
-                              suppressStartupLogMessage (map to bool)
-                              useHelperToolLogging (map to bool)
-                              setNonuserOnToolLogger (map to bool, defaults to false)
-                              pidlockpath (string)
-                              parentpidvar (string)
+    mainOptions can include: forceQuietOutput (map to bool),
+                             programNameOverride (map to string)
+                             suppressStartupLogMessage (map to bool)
+                             useHelperToolLogging (map to bool)
+                             setNonuserOnToolLogger (map to bool, defaults to false)
+                             pidlockpath (string)
+                             parentpidvar (string)
 
     """
     simple_main_internal(createOptionParserFn, createCommandFn, mainOptions)
 
 
 def simple_main_internal(createOptionParserFn, createCommandFn, mainOptions):
-
     """
     if -d <master_data_dir> option is provided in that case doing parsing after creating
     lock file would not be a good idea therefore handling -d option before lock.
@@ -285,7 +302,9 @@ def simple_main_internal(createOptionParserFn, createCommandFn, mainOptions):
     (parserOptions, parserArgs) = parser.parse_args()
 
     if parserOptions.ensure_value("masterDataDirectory", None) is not None:
-        parserOptions.master_data_directory = os.path.abspath(parserOptions.masterDataDirectory)
+        parserOptions.master_data_directory = os.path.abspath(
+            parserOptions.masterDataDirectory
+        )
         gp.set_masterdatadir(parserOptions.master_data_directory)
 
     """
@@ -295,18 +314,26 @@ def simple_main_internal(createOptionParserFn, createCommandFn, mainOptions):
     we're done.
     """
     sml = None
-    if mainOptions is not None and 'pidlockpath' in mainOptions:
+    if mainOptions is not None and "pidlockpath" in mainOptions:
         sml = SimpleMainLock(mainOptions)
         otherpid = sml.acquire()
         if otherpid is not None:
             logger = gplog.get_default_logger()
-            logger.error("Lockfile %s indicates that an instance of %s is already running with PID %s" % (sml.ppath, getProgramName(), otherpid))
-            logger.error("If this is not the case, remove the lockfile directory at %s" % (sml.ppath))
+            logger.error(
+                "Lockfile %s indicates that an instance of %s is already running with PID %s"
+                % (sml.ppath, getProgramName(), otherpid)
+            )
+            logger.error(
+                "If this is not the case, remove the lockfile directory at %s"
+                % (sml.ppath)
+            )
             return
 
     # at this point we have whatever lock we require
     try:
-        simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainOptions)
+        simple_main_locked(
+            parser, parserOptions, parserArgs, createCommandFn, mainOptions
+        )
     finally:
         if sml is not None:
             sml.release()
@@ -319,10 +346,15 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
     logger = gplog.get_default_logger()
 
     configurationInterface.registerConfigurationProvider(
-        configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog())
-    fileSystemInterface.registerFileSystemProvider(fileSystemImplOs.GpFileSystemProviderUsingOs())
+        configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog()
+    )
+    fileSystemInterface.registerFileSystemProvider(
+        fileSystemImplOs.GpFileSystemProviderUsingOs()
+    )
     osInterface.registerOsProvider(osImplNative.GpOsProviderUsingNative())
-    faultProberInterface.registerFaultProber(faultProberImplGpdb.GpFaultProberImplGpdb())
+    faultProberInterface.registerFaultProber(
+        faultProberImplGpdb.GpFaultProberImplGpdb()
+    )
 
     commandObject = None
 
@@ -331,10 +363,18 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
     if mainOptions is not None and mainOptions.get("programNameOverride"):
         global gProgramName
         gProgramName = mainOptions.get("programNameOverride")
-    suppressStartupLogMessage = mainOptions is not None and mainOptions.get("suppressStartupLogMessage")
+    suppressStartupLogMessage = mainOptions is not None and mainOptions.get(
+        "suppressStartupLogMessage"
+    )
 
-    useHelperToolLogging = mainOptions is not None and mainOptions.get("useHelperToolLogging")
-    nonuser = True if mainOptions is not None and mainOptions.get("setNonuserOnToolLogger") else False
+    useHelperToolLogging = mainOptions is not None and mainOptions.get(
+        "useHelperToolLogging"
+    )
+    nonuser = (
+        True
+        if mainOptions is not None and mainOptions.get("setNonuserOnToolLogger")
+        else False
+    )
     exit_status = 1
 
     try:
@@ -345,8 +385,13 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
         if useHelperToolLogging:
             gplog.setup_helper_tool_logging(execname, hostname, username)
         else:
-            gplog.setup_tool_logging(execname, hostname, username,
-                                     logdir=parserOptions.ensure_value("logfileDirectory", None), nonuser=nonuser)
+            gplog.setup_tool_logging(
+                execname,
+                hostname,
+                username,
+                logdir=parserOptions.ensure_value("logfileDirectory", None),
+                nonuser=nonuser,
+            )
 
         if forceQuiet:
             gplog.quiet_stdout_logging()
@@ -357,7 +402,9 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
                 gplog.quiet_stdout_logging()
 
         if not suppressStartupLogMessage:
-            logger.info("Starting %s with args: %s" % (gProgramName, ' '.join(sys.argv[1:])))
+            logger.info(
+                "Starting %s with args: %s" % (gProgramName, " ".join(sys.argv[1:]))
+            )
 
         commandObject = createCommandFn(parserOptions, parserArgs)
         exitCode = commandObject.run()
@@ -375,10 +422,17 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
         logger.info("User abort requested, Exiting...")
         exit_status = 4
     except ExecutionError as e:
-        logger.fatal("Error occurred: %s\n Command was: '%s'\n"
-                     "rc=%d, stdout='%s', stderr='%s'" % \
-                     (e.summary, e.cmd.cmdStr, e.cmd.results.rc, e.cmd.results.stdout,
-                      e.cmd.results.stderr))
+        logger.fatal(
+            "Error occurred: %s\n Command was: '%s'\n"
+            "rc=%d, stdout='%s', stderr='%s'"
+            % (
+                e.summary,
+                e.cmd.cmdStr,
+                e.cmd.results.rc,
+                e.cmd.results.stdout,
+                e.cmd.results.stderr,
+            )
+        )
         exit_status = 2
     except Exception as e:
         if parserOptions is None:
@@ -397,33 +451,47 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
     sys.exit(exit_status)
 
 
-def addStandardLoggingAndHelpOptions(parser, includeNonInteractiveOption, includeUsageOption=False):
+def addStandardLoggingAndHelpOptions(
+    parser, includeNonInteractiveOption, includeUsageOption=False
+):
     """
     Add the standard options for help and logging
     to the specified parser object. Returns the logging OptionGroup so that
     callers may modify as needed.
     """
-    parser.set_usage('%prog [--help] [options] ')
-    parser.remove_option('-h')
+    parser.set_usage("%prog [--help] [options] ")
+    parser.remove_option("-h")
 
     addTo = parser
-    addTo.add_option('-h', '-?', '--help', action='help',
-                     help='show this help message and exit')
+    addTo.add_option(
+        "-h", "-?", "--help", action="help", help="show this help message and exit"
+    )
     if includeUsageOption:
-        parser.add_option('--usage', action="briefhelp")
+        parser.add_option("--usage", action="briefhelp")
 
     addTo = OptionGroup(parser, "Logging Options")
     parser.add_option_group(addTo)
-    addTo.add_option('-v', '--verbose', action='store_true',
-                     help='debug output.')
-    addTo.add_option('-q', '--quiet', action='store_true',
-                     help='suppress status messages')
-    addTo.add_option("-l", None, dest="logfileDirectory", metavar="<directory>", type="string",
-                     help="Logfile directory")
+    addTo.add_option("-v", "--verbose", action="store_true", help="debug output.")
+    addTo.add_option(
+        "-q", "--quiet", action="store_true", help="suppress status messages"
+    )
+    addTo.add_option(
+        "-l",
+        None,
+        dest="logfileDirectory",
+        metavar="<directory>",
+        type="string",
+        help="Logfile directory",
+    )
 
     if includeNonInteractiveOption:
-        addTo.add_option('-a', dest="interactive", action='store_false', default=True,
-                         help="quiet mode, do not require user input for confirmations")
+        addTo.add_option(
+            "-a",
+            dest="interactive",
+            action="store_false",
+            default=True,
+            help="quiet mode, do not require user input for confirmations",
+        )
     return addTo
 
 
@@ -435,14 +503,18 @@ def addMasterDirectoryOptionForSingleClusterProgram(addTo):
     For programs that operate on multiple clusters at once, this function/option
     is not appropriate.
     """
-    addTo.add_option('-d', '--master_data_directory', type='string',
-                     dest="masterDataDirectory",
-                     metavar="<master data directory>",
-                     help="Optional. The master host data directory. If not specified, the value set" \
-                          "for $MASTER_DATA_DIRECTORY will be used.")
+    addTo.add_option(
+        "-d",
+        "--master_data_directory",
+        type="string",
+        dest="masterDataDirectory",
+        metavar="<master data directory>",
+        help="Optional. The master host data directory. If not specified, the value set"
+        "for $MASTER_DATA_DIRECTORY will be used.",
+    )
 
 
-def parseStatusLine(line, isStart = False, isStop = False):
+def parseStatusLine(line, isStart=False, isStop=False):
     """
     Function to parse status line of the result out, for gpstart and gpstop.
     Currently the parsing for both the utilities is implemented at two different places
@@ -457,17 +529,17 @@ def parseStatusLine(line, isStart = False, isStop = False):
     else:
         raise Exception("parseStatusLine: Invalid input")
 
-    fields = line.split('--')
+    fields = line.split("--")
     index = 1
     started_tag_index = index + 1
     while not fields[started_tag_index].startswith(tag):
         started_tag_index += 1
 
     dir = "--".join(fields[index:started_tag_index])
-    dir = dir.split(':')[1]
+    dir = dir.split(":")[1]
 
     index = started_tag_index
-    started = fields[index].split(':')[1]
+    started = fields[index].split(":")[1]
     index += 1
 
     if isStart:
@@ -480,7 +552,7 @@ def parseStatusLine(line, isStart = False, isStop = False):
 
     # The funny join and splits are because Reason could have colons or -- in the text itself
     reasonStr = "--".join(fields[index:])
-    reasonArr = reasonStr.split(':')
+    reasonArr = reasonStr.split(":")
     reasonArr = reasonArr[1:]
     reasonStr = ":".join(reasonArr)
     return reasonCode, reasonStr, started, dir

@@ -30,6 +30,7 @@ from __future__ import print_function
 import argparse
 import os
 import sys
+
 try:
     import subprocess32 as subprocess
 except:
@@ -43,38 +44,47 @@ from gppylib.db import dbconn
 PRINT_LOCK = threading.Lock()
 THREAD_LOCK = threading.Lock()
 
+
 def runcommands(commands, thread_name, command_finish, exit_on_error=True):
     output = []
 
     for command in commands:
         try:
-            output.append('%s: Running command... %s' % (datetime.datetime.now(), command))
+            output.append(
+                "%s: Running command... %s" % (datetime.datetime.now(), command)
+            )
             with THREAD_LOCK:
-                output = output + subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True).split('\n')
+                output = output + subprocess.check_output(
+                    command, stderr=subprocess.STDOUT, shell=True
+                ).split("\n")
         except subprocess.CalledProcessError as e:
             output.append(str(e))
             output.append(e.output)
             if exit_on_error:
                 with PRINT_LOCK:
                     for line in output:
-                        print('%s:  %s' % (thread_name, line))
-                    print('')
+                        print("%s:  %s" % (thread_name, line))
+                    print("")
 
                 sys.exit(e.returncode)
 
-    output.append('%s: %s' % (datetime.datetime.now(), command_finish))
+    output.append("%s: %s" % (datetime.datetime.now(), command_finish))
     with PRINT_LOCK:
         for line in output:
-            print('%s:  %s' % (thread_name, line))
-        print('')
+            print("%s:  %s" % (thread_name, line))
+        print("")
+
 
 def displaySegmentConfiguration():
     commands = []
-    commands.append("psql postgres -c \"select * from gp_segment_configuration order by content, dbid\"")
+    commands.append(
+        'psql postgres -c "select * from gp_segment_configuration order by content, dbid"'
+    )
     runcommands(commands, "", "")
 
-class InitMirrors():
-    ''' Initialize the WAL replication mirror segment '''
+
+class InitMirrors:
+    """Initialize the WAL replication mirror segment"""
 
     def __init__(self, cluster_config, hostname, init=True):
         self.clusterconfig = cluster_config
@@ -98,34 +108,52 @@ class InitMirrors():
         mirror_contentid = segconfig.content
 
         if self.init:
-            commands.append("echo 'host  replication  %s  samenet  trust' >> %s/pg_hba.conf" % (user, primary_dir))
+            commands.append(
+                "echo 'host  replication  %s  samenet  trust' >> %s/pg_hba.conf"
+                % (user, primary_dir)
+            )
             commands.append("pg_ctl -D %s reload" % primary_dir)
 
         # 1. create base backup
-        commands.append("rm -rf %s" % mirror_dir);
-        commands.append("pg_basebackup -x -R -c fast -E ./pg_log -E ./db_dumps -E ./gpperfmon/data -E ./gpperfmon/logs -D %s -h %s -p %d" % (mirror_dir, self.hostname, primary_port))
+        commands.append("rm -rf %s" % mirror_dir)
+        commands.append(
+            "pg_basebackup -x -R -c fast -E ./pg_log -E ./db_dumps -E ./gpperfmon/data -E ./gpperfmon/logs -D %s -h %s -p %d"
+            % (mirror_dir, self.hostname, primary_port)
+        )
         commands.append("mkdir %s/pg_log;" % (mirror_dir))
 
         if self.init:
             # 2. update catalog
-            catalog_update_query = "select pg_catalog.gp_add_segment_mirror(%d::int2, '%s', '%s', %d, '%s')" % (mirror_contentid, self.hostname, self.hostname, mirror_port, mirror_dir)
-            commands.append("PGOPTIONS=\"-c gp_session_role=utility\" psql postgres -c \"%s\"" % catalog_update_query)
+            catalog_update_query = (
+                "select pg_catalog.gp_add_segment_mirror(%d::int2, '%s', '%s', %d, '%s')"
+                % (
+                    mirror_contentid,
+                    self.hostname,
+                    self.hostname,
+                    mirror_port,
+                    mirror_dir,
+                )
+            )
+            commands.append(
+                'PGOPTIONS="-c gp_session_role=utility" psql postgres -c "%s"'
+                % catalog_update_query
+            )
 
-        thread_name = 'Mirror content %d' % mirror_contentid
-        command_finish = 'Initialized mirror at %s' % mirror_dir
+        thread_name = "Mirror content %d" % mirror_contentid
+        command_finish = "Initialized mirror at %s" % mirror_dir
         runcommands(commands, thread_name, command_finish)
 
     def run(self):
         # Assume db user is current user
-        user = subprocess.check_output(["whoami"]).rstrip('\n')
+        user = subprocess.check_output(["whoami"]).rstrip("\n")
 
         initThreads = []
         for segconfig in self.segconfigs:
-            assert(segconfig.content != GpSegmentConfiguration.MASTER_CONTENT_ID)
+            assert segconfig.content != GpSegmentConfiguration.MASTER_CONTENT_ID
             if self.init:
-                assert(segconfig.role == GpSegmentConfiguration.ROLE_PRIMARY)
+                assert segconfig.role == GpSegmentConfiguration.ROLE_PRIMARY
             else:
-                assert(segconfig.role == GpSegmentConfiguration.ROLE_MIRROR)
+                assert segconfig.role == GpSegmentConfiguration.ROLE_MIRROR
             thread = threading.Thread(target=self.initThread, args=(segconfig, user))
             thread.start()
             initThreads.append(thread)
@@ -133,8 +161,9 @@ class InitMirrors():
         for thread in initThreads:
             thread.join()
 
-class StartInstances():
-    ''' Start a greengage segment '''
+
+class StartInstances:
+    """Start a greengage segment"""
 
     def __init__(self, cluster_config, host, operation, wait=False):
         self.clusterconfig = cluster_config
@@ -145,7 +174,7 @@ class StartInstances():
 
     def startThread(self, segconfig):
         commands = []
-        waitstring = ''
+        waitstring = ""
         dbid = segconfig.dbid
         contentid = segconfig.content
         segment_port = segconfig.port
@@ -155,8 +184,11 @@ class StartInstances():
         if contentid != GpSegmentConfiguration.MASTER_CONTENT_ID:
             dbid = 0
 
-        opts = ("-p %d --gp_dbid=%d --silent-mode=true -i --gp_contentid=%d" %
-                (segment_port, dbid, contentid))
+        opts = "-p %d --gp_dbid=%d --silent-mode=true -i --gp_contentid=%d" % (
+            segment_port,
+            dbid,
+            contentid,
+        )
 
         # Arguments for the master.
         #
@@ -174,47 +206,66 @@ class StartInstances():
         if self.wait:
             waitstring = "-w -t 180"
 
-        commands.append("pg_ctl -D %s %s -o '%s' start" % (segment_dir, waitstring, opts))
+        commands.append(
+            "pg_ctl -D %s %s -o '%s' start" % (segment_dir, waitstring, opts)
+        )
         commands.append("pg_ctl -D %s status" % segment_dir)
 
         if contentid == GpSegmentConfiguration.MASTER_CONTENT_ID:
-            segment_label = 'master'
+            segment_label = "master"
         elif segconfig.preferred_role == GpSegmentConfiguration.ROLE_PRIMARY:
-            segment_label = 'primary'
+            segment_label = "primary"
         else:
-            segment_label = 'mirror'
+            segment_label = "mirror"
 
-        thread_name = 'Segment %s content %d' % (segment_label, contentid)
-        command_finish = 'Started %s segment with content %d and port %d at %s' % (segment_label, contentid, segment_port, segment_dir)
+        thread_name = "Segment %s content %d" % (segment_label, contentid)
+        command_finish = "Started %s segment with content %d and port %d at %s" % (
+            segment_label,
+            contentid,
+            segment_port,
+            segment_dir,
+        )
         runcommands(commands, thread_name, command_finish)
 
     @staticmethod
     def getRole(contentid):
         if contentid == GpSegmentConfiguration.MASTER_CONTENT_ID:
-            return 'master'
+            return "master"
         else:
-            return 'mirrorless'
+            return "mirrorless"
 
     def run(self):
         startThreads = []
         for segconfig in self.segconfigs:
             # Do not start mirrors that are marked down if we are
             # doing "clusterstart" operation.
-            if (segconfig.content == GpSegmentConfiguration.MASTER_CONTENT_ID or
-                segconfig.status == GpSegmentConfiguration.STATUS_UP or
-                self.operation != "clusterstart"):
+            if (
+                segconfig.content == GpSegmentConfiguration.MASTER_CONTENT_ID
+                or segconfig.status == GpSegmentConfiguration.STATUS_UP
+                or self.operation != "clusterstart"
+            ):
                 thread = threading.Thread(target=self.startThread, args=(segconfig,))
                 thread.start()
                 startThreads.append(thread)
             else:
-                print(("WARNING: not starting segment (content=%d, dbid=%d, role=%c status=%c) as it is not up" %
-                       (segconfig.content, segconfig.dbid, segconfig.role, segconfig.status)))
+                print(
+                    (
+                        "WARNING: not starting segment (content=%d, dbid=%d, role=%c status=%c) as it is not up"
+                        % (
+                            segconfig.content,
+                            segconfig.dbid,
+                            segconfig.role,
+                            segconfig.status,
+                        )
+                    )
+                )
 
         for thread in startThreads:
             thread.join()
 
-class StopInstances():
-    ''' Stop all segments'''
+
+class StopInstances:
+    """Stop all segments"""
 
     def __init__(self, cluster_config):
         self.clusterconfig = cluster_config
@@ -226,16 +277,16 @@ class StopInstances():
         segment_dir = segconfig.datadir
 
         if segment_contentid == GpSegmentConfiguration.MASTER_CONTENT_ID:
-            segment_type = 'master'
+            segment_type = "master"
         elif segconfig.preferred_role == GpSegmentConfiguration.ROLE_PRIMARY:
-            segment_type = 'primary'
+            segment_type = "primary"
         else:
-            segment_type = 'mirror'
+            segment_type = "mirror"
 
         commands.append("pg_ctl -D %s stop" % segment_dir)
 
-        thread_name = 'Segment %s content %d' % (segment_type, segment_contentid)
-        command_finish = 'Stopped %s segment at %s' % (segment_type, segment_dir)
+        thread_name = "Segment %s content %d" % (segment_type, segment_contentid)
+        command_finish = "Stopped %s segment at %s" % (segment_type, segment_dir)
         runcommands(commands, thread_name, command_finish)
 
     def run(self):
@@ -248,8 +299,9 @@ class StopInstances():
         for thread in stopThreads:
             thread.join()
 
-class DestroyMirrors():
-    ''' Destroy the WAL replication mirror segment '''
+
+class DestroyMirrors:
+    """Destroy the WAL replication mirror segment"""
 
     def __init__(self, cluster_config):
         self.clusterconfig = cluster_config
@@ -262,8 +314,8 @@ class DestroyMirrors():
 
         commands.append("pg_ctl -D %s stop" % mirror_dir)
         commands.append("rm -rf %s" % mirror_dir)
-        thread_name = 'Mirror content %d' % mirror_contentid
-        command_finish = 'Destroyed mirror at %s' % mirror_dir
+        thread_name = "Mirror content %d" % mirror_contentid
+        command_finish = "Destroyed mirror at %s" % mirror_dir
         runcommands(commands, thread_name, command_finish, False)
 
         # Let FTS recognize that mirrors are gone.  As a result,
@@ -275,21 +327,28 @@ class DestroyMirrors():
         # FIXME: enhance gp_remove_segment_mirror() to do this, so
         # that utility remains simplified.  Remove this stopgap
         # thereafter.
-        ForceFTSProbeScan(self.clusterconfig,
-                          GpSegmentConfiguration.STATUS_DOWN,
-                          GpSegmentConfiguration.NOT_IN_SYNC)
+        ForceFTSProbeScan(
+            self.clusterconfig,
+            GpSegmentConfiguration.STATUS_DOWN,
+            GpSegmentConfiguration.NOT_IN_SYNC,
+        )
 
         commands = []
-        catalog_update_query = "select pg_catalog.gp_remove_segment_mirror(%d::int2)" % (mirror_contentid)
-        commands.append("PGOPTIONS=\"-c gp_session_role=utility\" psql postgres -c \"%s\"" % catalog_update_query)
+        catalog_update_query = (
+            "select pg_catalog.gp_remove_segment_mirror(%d::int2)" % (mirror_contentid)
+        )
+        commands.append(
+            'PGOPTIONS="-c gp_session_role=utility" psql postgres -c "%s"'
+            % catalog_update_query
+        )
 
-        command_finish = 'Removed mirror %s from catalog' % mirror_dir
+        command_finish = "Removed mirror %s from catalog" % mirror_dir
         runcommands(commands, thread_name, command_finish, False)
 
     def run(self):
         destroyThreads = []
         for segconfig in self.segconfigs:
-            assert(segconfig.role == GpSegmentConfiguration.ROLE_MIRROR)
+            assert segconfig.role == GpSegmentConfiguration.ROLE_MIRROR
             thread = threading.Thread(target=self.destroyThread, args=(segconfig,))
             thread.start()
             destroyThreads.append(thread)
@@ -297,16 +356,19 @@ class DestroyMirrors():
         for thread in destroyThreads:
             thread.join()
 
-class GpSegmentConfiguration():
-    ROLE_PRIMARY = 'p'
-    ROLE_MIRROR = 'm'
-    STATUS_DOWN = 'd'
-    STATUS_UP = 'u'
-    NOT_IN_SYNC = 'n'
-    IN_SYNC = 's'
+
+class GpSegmentConfiguration:
+    ROLE_PRIMARY = "p"
+    ROLE_MIRROR = "m"
+    STATUS_DOWN = "d"
+    STATUS_UP = "u"
+    NOT_IN_SYNC = "n"
+    IN_SYNC = "s"
     MASTER_CONTENT_ID = -1
 
-    def __init__(self, dbid, content, port, datadir, role, preferred_role, status, mode):
+    def __init__(
+        self, dbid, content, port, datadir, role, preferred_role, status, mode
+    ):
         self.dbid = dbid
         self.content = content
         self.port = port
@@ -316,10 +378,20 @@ class GpSegmentConfiguration():
         self.status = status
         self.mode = mode
 
-class ClusterConfiguration():
-    ''' Cluster configuration '''
 
-    def __init__(self, hostname, port, dbname, role = "all", status = "all", include_master = True, content = "all"):
+class ClusterConfiguration:
+    """Cluster configuration"""
+
+    def __init__(
+        self,
+        hostname,
+        port,
+        dbname,
+        role="all",
+        status="all",
+        include_master=True,
+        content="all",
+    ):
         self.hostname = hostname
         self.port = port
         self.dbname = dbname
@@ -331,48 +403,54 @@ class ClusterConfiguration():
         self.refresh()
 
     def get_num_contents(self):
-        return self.num_contents;
+        return self.num_contents
 
     def get_seg_configs(self):
-        return self.seg_configs;
+        return self.seg_configs
 
     def get_pair_port(self, input_config):
         for seg_config in self._all_seg_configs:
-            if (seg_config.content == input_config.content
-                and seg_config.role != input_config.role):
+            if (
+                seg_config.content == input_config.content
+                and seg_config.role != input_config.role
+            ):
                 return seg_config.port
 
-        assert(input_config.role == GpSegmentConfiguration.ROLE_PRIMARY)
-        ''' if not found then assume its mirror and hence return port at which mirror must be created '''
+        assert input_config.role == GpSegmentConfiguration.ROLE_PRIMARY
+        """ if not found then assume its mirror and hence return port at which mirror must be created """
         return input_config.port + 1000
 
     def get_pair_dir(self, input_config):
         for seg_config in self._all_seg_configs:
-            if (seg_config.content == input_config.content
-                and seg_config.role != input_config.role):
+            if (
+                seg_config.content == input_config.content
+                and seg_config.role != input_config.role
+            ):
                 return seg_config.datadir
 
-        assert(input_config.role == GpSegmentConfiguration.ROLE_PRIMARY)
-        ''' if not found then assume its mirror and hence return location at which mirror must be created '''
-        return input_config.datadir.replace('dbfast', 'dbfast_mirror')
+        assert input_config.role == GpSegmentConfiguration.ROLE_PRIMARY
+        """ if not found then assume its mirror and hence return location at which mirror must be created """
+        return input_config.datadir.replace("dbfast", "dbfast_mirror")
 
     def get_gp_segment_ids(self):
         ids = []
         for seg_config in self.seg_configs:
             ids.append(str(seg_config.content))
-        return ','.join(ids)
+        return ",".join(ids)
 
     def refresh(self):
-        query = ("SELECT dbid, content, port, datadir, role, preferred_role, status, mode "
-                "FROM gp_segment_configuration s WHERE 1 = 1")
+        query = (
+            "SELECT dbid, content, port, datadir, role, preferred_role, status, mode "
+            "FROM gp_segment_configuration s WHERE 1 = 1"
+        )
 
-        print('%s: fetching cluster configuration' % (datetime.datetime.now()))
+        print("%s: fetching cluster configuration" % (datetime.datetime.now()))
         dburl = dbconn.DbURL(self.hostname, self.port, self.dbname)
-        print('%s: fetched cluster configuration' % (datetime.datetime.now()))
+        print("%s: fetched cluster configuration" % (datetime.datetime.now()))
 
         try:
             with dbconn.connect(dburl, utility=True, unsetSearchPath=False) as conn:
-               resultsets  = dbconn.execSQL(conn, query).fetchall()
+                resultsets = dbconn.execSQL(conn, query).fetchall()
         except Exception as e:
             print(e)
             sys.exit(1)
@@ -382,93 +460,151 @@ class ClusterConfiguration():
         self.seg_configs = []
         self.num_contents = 0
         for result in resultsets:
-            seg_config = GpSegmentConfiguration(result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7])
+            seg_config = GpSegmentConfiguration(
+                result[0],
+                result[1],
+                result[2],
+                result[3],
+                result[4],
+                result[5],
+                result[6],
+                result[7],
+            )
             self._all_seg_configs.append(seg_config)
 
             append = True
-            if (self.status != "all"
-                and self.status != seg_config.status):
+            if self.status != "all" and self.status != seg_config.status:
                 append = False
-            if (self.role != "all"
-                and self.role != seg_config.role):
+            if self.role != "all" and self.role != seg_config.role:
                 append = False
-            if (self.content != "all"
-                and self.content != seg_config.content):
+            if self.content != "all" and self.content != seg_config.content:
                 append = False
 
-            if (not self.include_master
-                and seg_config.content == GpSegmentConfiguration.MASTER_CONTENT_ID):
+            if (
+                not self.include_master
+                and seg_config.content == GpSegmentConfiguration.MASTER_CONTENT_ID
+            ):
                 append = False
 
             if append:
                 self.seg_configs.append(seg_config)
 
             # Count distinct content IDs, not including the master.
-            if (seg_config.content != GpSegmentConfiguration.MASTER_CONTENT_ID):
+            if seg_config.content != GpSegmentConfiguration.MASTER_CONTENT_ID:
                 contentIDs.add(seg_config.content)
 
         self.num_contents = len(contentIDs)
-        print('found %d distinct content IDs' % (self.num_contents))
+        print("found %d distinct content IDs" % (self.num_contents))
 
     def check_status_and_mode(self, expected_status, expected_mode):
-        ''' Check if all the instance reached the expected_state and expected_mode '''
+        """Check if all the instance reached the expected_state and expected_mode"""
 
         for seg_config in self.seg_configs:
-            if (seg_config.status != expected_status
-                or seg_config.mode != expected_mode):
+            if seg_config.status != expected_status or seg_config.mode != expected_mode:
                 return False
 
         return True
 
-class ColdMasterClusterConfiguration(ClusterConfiguration):
 
+class ColdMasterClusterConfiguration(ClusterConfiguration):
     # this constructor is only used for ColdStartMaster
     def __init__(self, port, master_directory):
         self.seg_configs = []
 
-        master_seg_config = GpSegmentConfiguration(1, GpSegmentConfiguration.MASTER_CONTENT_ID,
-                                                   port, master_directory,
-                                                   GpSegmentConfiguration.ROLE_PRIMARY,
-                                                   GpSegmentConfiguration.ROLE_PRIMARY,
-                                                   GpSegmentConfiguration.STATUS_DOWN,
-                                                   GpSegmentConfiguration.NOT_IN_SYNC)
+        master_seg_config = GpSegmentConfiguration(
+            1,
+            GpSegmentConfiguration.MASTER_CONTENT_ID,
+            port,
+            master_directory,
+            GpSegmentConfiguration.ROLE_PRIMARY,
+            GpSegmentConfiguration.ROLE_PRIMARY,
+            GpSegmentConfiguration.STATUS_DOWN,
+            GpSegmentConfiguration.NOT_IN_SYNC,
+        )
         self.seg_configs.append(master_seg_config)
 
         self.num_contents = 0
 
+
 def defargs():
-    parser = argparse.ArgumentParser(description='Initialize, start, stop, or destroy WAL replication mirror segments')
-    parser.add_argument('--host', type=str, required=False, default=os.getenv('PGHOST', 'localhost'),
-                        help='Master host to get segment config information from')
-    parser.add_argument('--port', type=str, required=False, default=os.getenv('PGPORT', '15432'),
-                        help='Master port to get segment config information from')
-    parser.add_argument('--master-directory', type=str, required=False, default=os.getenv('MASTER_DATA_DIRECTORY'),
-                        help='Master port to get segment config information from')
-    parser.add_argument('--database', type=str, required=False, default='postgres',
-                        help='Database name to get segment config information from')
-    parser.add_argument('--content', type=int, required=False,
-                        help='Content ID of the mirror to be rebuilt')
-    parser.add_argument('operation', type=str, choices=['clusterstart', 'clusterstop', 'init', 'start', 'stop', 'destroy', 'recover', 'recoverfull', 'rebuild'])
+    parser = argparse.ArgumentParser(
+        description="Initialize, start, stop, or destroy WAL replication mirror segments"
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        required=False,
+        default=os.getenv("PGHOST", "localhost"),
+        help="Master host to get segment config information from",
+    )
+    parser.add_argument(
+        "--port",
+        type=str,
+        required=False,
+        default=os.getenv("PGPORT", "15432"),
+        help="Master port to get segment config information from",
+    )
+    parser.add_argument(
+        "--master-directory",
+        type=str,
+        required=False,
+        default=os.getenv("MASTER_DATA_DIRECTORY"),
+        help="Master port to get segment config information from",
+    )
+    parser.add_argument(
+        "--database",
+        type=str,
+        required=False,
+        default="postgres",
+        help="Database name to get segment config information from",
+    )
+    parser.add_argument(
+        "--content",
+        type=int,
+        required=False,
+        help="Content ID of the mirror to be rebuilt",
+    )
+    parser.add_argument(
+        "operation",
+        type=str,
+        choices=[
+            "clusterstart",
+            "clusterstop",
+            "init",
+            "start",
+            "stop",
+            "destroy",
+            "recover",
+            "recoverfull",
+            "rebuild",
+        ],
+    )
 
     return parser.parse_args()
 
+
 def GetNumberOfSegments(input_segments):
     if len(input_segments) > 0:
-        return len(input_segments.split(','))
+        return len(input_segments.split(","))
     return 0
 
-def WaitForRecover(cluster_configuration, max_retries = 200):
-    '''Wait for the gp_stat_replication to reach given sync_error'''
 
-    cmd_all_sync = ("psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
-                    " FROM gp_stat_replication"
-                    " WHERE gp_segment_id in (%s) and coalesce(sync_state, 'NULL') = 'sync'\"" %
-                    cluster_configuration.get_gp_segment_ids())
+def WaitForRecover(cluster_configuration, max_retries=200):
+    """Wait for the gp_stat_replication to reach given sync_error"""
 
-    cmd_find_error = ("psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
-                      " FROM gp_stat_replication"
-                      " WHERE gp_segment_id in (%s) and sync_error != 'none'\"" %
-                      cluster_configuration.get_gp_segment_ids())
+    cmd_all_sync = (
+        "psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
+        " FROM gp_stat_replication"
+        " WHERE gp_segment_id in (%s) and coalesce(sync_state, 'NULL') = 'sync'\""
+        % cluster_configuration.get_gp_segment_ids()
+    )
+
+    cmd_find_error = (
+        "psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
+        " FROM gp_stat_replication"
+        " WHERE gp_segment_id in (%s) and sync_error != 'none'\""
+        % cluster_configuration.get_gp_segment_ids()
+    )
 
     number_of_segments = len(cluster_configuration.seg_configs)
 
@@ -477,11 +613,15 @@ def WaitForRecover(cluster_configuration, max_retries = 200):
     print("number of contents: %s " % number_of_segments)
 
     retry_count = 1
-    while (retry_count < max_retries):
-        result_all_sync = subprocess.check_output(cmd_all_sync, stderr=subprocess.STDOUT, shell=True).strip()
+    while retry_count < max_retries:
+        result_all_sync = subprocess.check_output(
+            cmd_all_sync, stderr=subprocess.STDOUT, shell=True
+        ).strip()
         number_of_all_sync = GetNumberOfSegments(result_all_sync)
 
-        result_find_error = subprocess.check_output(cmd_find_error, stderr=subprocess.STDOUT, shell=True).strip()
+        result_find_error = subprocess.check_output(
+            cmd_find_error, stderr=subprocess.STDOUT, shell=True
+        ).strip()
         number_of_find_error = GetNumberOfSegments(result_find_error)
 
         if number_of_all_sync + number_of_find_error == number_of_segments:
@@ -490,116 +630,198 @@ def WaitForRecover(cluster_configuration, max_retries = 200):
             retry_count += 1
 
     print("WARNING: Incremental recovery took longer than expected!")
-    cmd_find_recovering = ("psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
-                           " FROM gp_stat_replication"
-                           " WHERE gp_segment_id in (%s) and sync_error = 'none'\"" %
-                           cluster_configuration.get_gp_segment_ids())
-    result_find_recovering = subprocess.check_output(cmd_find_recovering, stderr=subprocess.STDOUT, shell=True).strip()
+    cmd_find_recovering = (
+        "psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
+        " FROM gp_stat_replication"
+        " WHERE gp_segment_id in (%s) and sync_error = 'none'\""
+        % cluster_configuration.get_gp_segment_ids()
+    )
+    result_find_recovering = subprocess.check_output(
+        cmd_find_recovering, stderr=subprocess.STDOUT, shell=True
+    ).strip()
     return result_find_recovering
 
-def ForceFTSProbeScan(cluster_configuration, expected_status = None, expected_mode = None, max_probes=2000):
-    '''Force FTS probe scan to reflect primary and mirror status in catalog.'''
+
+def ForceFTSProbeScan(
+    cluster_configuration, expected_status=None, expected_mode=None, max_probes=2000
+):
+    """Force FTS probe scan to reflect primary and mirror status in catalog."""
 
     commands = []
-    commands.append("psql postgres -c \"SELECT gp_request_fts_probe_scan()\"")
+    commands.append('psql postgres -c "SELECT gp_request_fts_probe_scan()"')
 
     probe_count = 1
     # if the expected_mirror_status is not None, we wait until the mirror status is updated
-    while(True):
+    while True:
         runcommands(commands, "Force FTS probe scan", "FTS probe refreshed catalog")
 
-        if (expected_status is None or expected_mode is None):
+        if expected_status is None or expected_mode is None:
             return
 
         cluster_configuration.refresh()
 
-        if (cluster_configuration.check_status_and_mode(expected_status, expected_mode)):
+        if cluster_configuration.check_status_and_mode(expected_status, expected_mode):
             return
 
         if probe_count >= max_probes:
-            print(("ERROR: Server did not trasition to expected_mirror_status %s within %d probe attempts"
-                  % (expected_status, probe_count)))
+            print(
+                (
+                    "ERROR: Server did not trasition to expected_mirror_status %s within %d probe attempts"
+                    % (expected_status, probe_count)
+                )
+            )
             sys.exit(1)
 
         probe_count += 1
 
         time.sleep(0.1)
 
+
 if __name__ == "__main__":
     # Get parsed args
     args = defargs()
 
     # Execute the chosen operation
-    if args.operation == 'init':
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_PRIMARY, include_master=False)
+    if args.operation == "init":
+        cluster_config = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            role=GpSegmentConfiguration.ROLE_PRIMARY,
+            include_master=False,
+        )
         InitMirrors(cluster_config, args.host).run()
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR, include_master=False)
-        ForceFTSProbeScan(cluster_config, GpSegmentConfiguration.STATUS_DOWN, GpSegmentConfiguration.NOT_IN_SYNC)
-    elif args.operation == 'clusterstart':
+        cluster_config = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            role=GpSegmentConfiguration.ROLE_MIRROR,
+            include_master=False,
+        )
+        ForceFTSProbeScan(
+            cluster_config,
+            GpSegmentConfiguration.STATUS_DOWN,
+            GpSegmentConfiguration.NOT_IN_SYNC,
+        )
+    elif args.operation == "clusterstart":
         # If we are starting the cluster, we need to start the master before we get the segment info
-        cold_master_cluster_config = ColdMasterClusterConfiguration(int(args.port), args.master_directory)
-        StartInstances(cold_master_cluster_config, args.host, args.operation, wait=True).run()
+        cold_master_cluster_config = ColdMasterClusterConfiguration(
+            int(args.port), args.master_directory
+        )
+        StartInstances(
+            cold_master_cluster_config, args.host, args.operation, wait=True
+        ).run()
         cluster_config = ClusterConfiguration(args.host, args.port, args.database)
         StopInstances(cold_master_cluster_config).run()
         StartInstances(cluster_config, args.host, args.operation).run()
         ForceFTSProbeScan(cluster_config)
-    elif args.operation == 'start':
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR,
-                                              status=GpSegmentConfiguration.STATUS_DOWN)
+    elif args.operation == "start":
+        cluster_config = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            role=GpSegmentConfiguration.ROLE_MIRROR,
+            status=GpSegmentConfiguration.STATUS_DOWN,
+        )
         StartInstances(cluster_config, args.host, args.operation).run()
-        ForceFTSProbeScan(cluster_config, GpSegmentConfiguration.STATUS_UP, GpSegmentConfiguration.IN_SYNC)
-    elif args.operation == 'recover':
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR,
-                                              status=GpSegmentConfiguration.STATUS_DOWN)
+        ForceFTSProbeScan(
+            cluster_config,
+            GpSegmentConfiguration.STATUS_UP,
+            GpSegmentConfiguration.IN_SYNC,
+        )
+    elif args.operation == "recover":
+        cluster_config = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            role=GpSegmentConfiguration.ROLE_MIRROR,
+            status=GpSegmentConfiguration.STATUS_DOWN,
+        )
         if len(cluster_config.seg_configs) > 0:
             StartInstances(cluster_config, args.host, args.operation).run()
             failed_gp_segment_ids = WaitForRecover(cluster_config)
             if len(failed_gp_segment_ids) > 0:
-                print(("ERROR: incremental recovery failed for some segments (%s)" % failed_gp_segment_ids))
+                print(
+                    (
+                        "ERROR: incremental recovery failed for some segments (%s)"
+                        % failed_gp_segment_ids
+                    )
+                )
                 cluster_config.refresh()
                 StopInstances(cluster_config).run()
                 ForceFTSProbeScan(cluster_config)
                 sys.exit(1)
-            ForceFTSProbeScan(cluster_config, GpSegmentConfiguration.STATUS_UP, GpSegmentConfiguration.IN_SYNC)
-    elif args.operation == 'recoverfull':
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR,
-                                              status=GpSegmentConfiguration.STATUS_DOWN)
+            ForceFTSProbeScan(
+                cluster_config,
+                GpSegmentConfiguration.STATUS_UP,
+                GpSegmentConfiguration.IN_SYNC,
+            )
+    elif args.operation == "recoverfull":
+        cluster_config = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            role=GpSegmentConfiguration.ROLE_MIRROR,
+            status=GpSegmentConfiguration.STATUS_DOWN,
+        )
         if len(cluster_config.seg_configs) > 0:
             InitMirrors(cluster_config, args.host, False).run()
             StartInstances(cluster_config, args.host, args.operation).run()
-        ForceFTSProbeScan(cluster_config, GpSegmentConfiguration.STATUS_UP, GpSegmentConfiguration.IN_SYNC)
-    elif args.operation == 'stop':
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR,
-                                              status=GpSegmentConfiguration.STATUS_UP)
+        ForceFTSProbeScan(
+            cluster_config,
+            GpSegmentConfiguration.STATUS_UP,
+            GpSegmentConfiguration.IN_SYNC,
+        )
+    elif args.operation == "stop":
+        cluster_config = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            role=GpSegmentConfiguration.ROLE_MIRROR,
+            status=GpSegmentConfiguration.STATUS_UP,
+        )
         StopInstances(cluster_config).run()
-        ForceFTSProbeScan(cluster_config, GpSegmentConfiguration.STATUS_DOWN, GpSegmentConfiguration.NOT_IN_SYNC)
-    elif args.operation == 'destroy':
-        cluster_config = ClusterConfiguration(args.host, args.port, args.database,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR)
+        ForceFTSProbeScan(
+            cluster_config,
+            GpSegmentConfiguration.STATUS_DOWN,
+            GpSegmentConfiguration.NOT_IN_SYNC,
+        )
+    elif args.operation == "destroy":
+        cluster_config = ClusterConfiguration(
+            args.host, args.port, args.database, role=GpSegmentConfiguration.ROLE_MIRROR
+        )
         DestroyMirrors(cluster_config).run()
-    elif args.operation == 'clusterstop':
+    elif args.operation == "clusterstop":
         cluster_config = ClusterConfiguration(args.host, args.port, args.database)
         StopInstances(cluster_config).run()
-    elif args.operation == 'rebuild':
+    elif args.operation == "rebuild":
         if args.content is None:
             print("ERROR: missing argument 'content' for rebuild operation")
             sys.exit(1)
-        cluster_config_mirror = ClusterConfiguration(args.host, args.port, args.database, content=args.content,
-                                              role=GpSegmentConfiguration.ROLE_MIRROR)
+        cluster_config_mirror = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            content=args.content,
+            role=GpSegmentConfiguration.ROLE_MIRROR,
+        )
         StopInstances(cluster_config_mirror).run()
         DestroyMirrors(cluster_config_mirror).run()
-        cluster_config_primary = ClusterConfiguration(args.host, args.port, args.database, content=args.content,
-                                                      role=GpSegmentConfiguration.ROLE_PRIMARY)
+        cluster_config_primary = ClusterConfiguration(
+            args.host,
+            args.port,
+            args.database,
+            content=args.content,
+            role=GpSegmentConfiguration.ROLE_PRIMARY,
+        )
         InitMirrors(cluster_config_primary, args.host, True).run()
         cluster_config_mirror.refresh()
         StartInstances(cluster_config_mirror, args.host, args.operation).run()
-        ForceFTSProbeScan(cluster_config_primary, GpSegmentConfiguration.STATUS_UP, GpSegmentConfiguration.IN_SYNC)
+        ForceFTSProbeScan(
+            cluster_config_primary,
+            GpSegmentConfiguration.STATUS_UP,
+            GpSegmentConfiguration.IN_SYNC,
+        )
 
-    if args.operation != 'clusterstop':
+    if args.operation != "clusterstop":
         displaySegmentConfiguration()

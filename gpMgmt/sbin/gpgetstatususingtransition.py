@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) Greenplum Inc 2010. All Rights Reserved. 
+# Copyright (c) Greenplum Inc 2010. All Rights Reserved.
 #
 #
 # THIS IMPORT MUST COME FIRST
@@ -35,44 +35,53 @@ PQPING_MIRROR_READY = 64
 # that in <postmaster/postmaster.h>.
 POSTMASTER_MIRROR_VERSION_DETAIL_MSG = "- VERSION:"
 
+
 def _get_segment_status(segment):
-    cmd = base.Command('pg_isready for segment',
-                       "PGOPTIONS=\"-c gp_session_role=utility\" pg_isready -q -h %s -p %d -d %s" % (segment.hostname, segment.port, gp.PGDATABASE_FOR_COMMON_USE))
+    cmd = base.Command(
+        "pg_isready for segment",
+        'PGOPTIONS="-c gp_session_role=utility" pg_isready -q -h %s -p %d -d %s'
+        % (segment.hostname, segment.port, gp.PGDATABASE_FOR_COMMON_USE),
+    )
     cmd.run()
 
     rc = cmd.get_return_code()
 
     if rc == PQPING_OK:
         if segment.role == gparray.ROLE_PRIMARY:
-            return 'Up'
+            return "Up"
         elif segment.role == gparray.ROLE_MIRROR:
-            return 'Acting as Primary'
+            return "Acting as Primary"
     elif rc == PQPING_REJECT:
-        return 'Rejecting Connections'
+        return "Rejecting Connections"
     elif rc == PQPING_NO_RESPONSE:
-        return 'Down'
+        return "Down"
     elif rc == PQPING_MIRROR_READY:
         if segment.role == gparray.ROLE_PRIMARY:
-            return 'Acting as Mirror'
+            return "Acting as Mirror"
         elif segment.role == gparray.ROLE_MIRROR:
-            return 'Up'
+            return "Up"
 
     return None
 
+
 # Used by _get_segment_version() to find the version string for a mirror.
-_version_regex = re.compile(r'%s (.*)' % POSTMASTER_MIRROR_VERSION_DETAIL_MSG)
+_version_regex = re.compile(r"%s (.*)" % POSTMASTER_MIRROR_VERSION_DETAIL_MSG)
+
 
 def _get_segment_version(seg):
     try:
         if seg.role == gparray.ROLE_PRIMARY:
-            dburl = dbconn.DbURL(hostname=seg.hostname, port=seg.port, dbname="template1")
+            dburl = dbconn.DbURL(
+                hostname=seg.hostname, port=seg.port, dbname="template1"
+            )
             conn = dbconn.connect(dburl, utility=True)
             return dbconn.execSQLForSingleton(conn, "select version()")
 
         if seg.role == gparray.ROLE_MIRROR:
-            cmd = base.Command("Try connecting to mirror",
-                               "psql -h %s -p %s template1 -c 'select 1'"
-                               %(seg.hostname, seg.port))
+            cmd = base.Command(
+                "Try connecting to mirror",
+                "psql -h %s -p %s template1 -c 'select 1'" % (seg.hostname, seg.port),
+            )
             cmd.run(validateAfter=False)
             if cmd.results.rc == 0:
                 raise RuntimeError("Connection to mirror succeeded unexpectedly")
@@ -83,7 +92,9 @@ def _get_segment_version(seg):
                 if match:
                     return match.group(1)
 
-            raise RuntimeError("Unexpected error from mirror connection: %s" % cmd.results.stderr)
+            raise RuntimeError(
+                "Unexpected error from mirror connection: %s" % cmd.results.stderr
+            )
 
         logger.error("Invalid role '%s' for dbid %d", seg.role, seg.dbid)
         return None
@@ -91,6 +102,7 @@ def _get_segment_version(seg):
     except Exception as ex:
         logger.error("Could not get segment version for dbid %d", seg.dbid, exc_info=ex)
         return None
+
 
 #
 # todo: the file containing this should be renamed since it gets more status than just from transition
@@ -120,46 +132,58 @@ class GpSegStatusProgram:
 
         """
 
-        lockFileExists = pidRunningStatus['lockFileExists']
-        netstatPortActive = pidRunningStatus['netstatPortActive']
-        pidValue = pidRunningStatus['pidValue']
+        lockFileExists = pidRunningStatus["lockFileExists"]
+        netstatPortActive = pidRunningStatus["netstatPortActive"]
+        pidValue = pidRunningStatus["pidValue"]
 
         lockFileName = gp.get_lockfile_name(seg.getSegmentPort())
 
         error = None
         if not lockFileExists and not netstatPortActive:
-            error = "No socket connection or lock file (%s) found for port %s" % (lockFileName, seg.getSegmentPort())
+            error = "No socket connection or lock file (%s) found for port %s" % (
+                lockFileName,
+                seg.getSegmentPort(),
+            )
         elif not lockFileExists and netstatPortActive:
-            error = "No lock file %s but process running on port %s" % (lockFileName, seg.getSegmentPort())
+            error = "No lock file %s but process running on port %s" % (
+                lockFileName,
+                seg.getSegmentPort(),
+            )
         elif lockFileExists and not netstatPortActive:
-            error = "Have lock file %s but no process running on port %s" % (lockFileName, seg.getSegmentPort())
+            error = "Have lock file %s but no process running on port %s" % (
+                lockFileName,
+                seg.getSegmentPort(),
+            )
         else:
             if pidValue == 0:
-                error = "Have lock file and process is active, but did not get a pid value" # this could be an assert?
+                error = "Have lock file and process is active, but did not get a pid value"  # this could be an assert?
 
         res = {}
-        res['pid'] = pidValue
-        res['error'] = error
+        res["pid"] = pidValue
+        res["error"] = error
         return res
-
 
     def getPidRunningStatus(self, seg):
         """
         Get an object containing various information about the postmaster pid's status
         """
-        (postmasterPidFileExists, tempFileExists, lockFileExists, netstatPortActive, pidValue) = \
-                    gp.chk_local_db_running(seg.getSegmentDataDirectory(), seg.getSegmentPort())
+        (
+            postmasterPidFileExists,
+            tempFileExists,
+            lockFileExists,
+            netstatPortActive,
+            pidValue,
+        ) = gp.chk_local_db_running(seg.getSegmentDataDirectory(), seg.getSegmentPort())
 
         return {
-            'postmasterPidFileExists' : postmasterPidFileExists,
-            'tempFileExists' : tempFileExists,
-            'lockFileExists' : lockFileExists,
-            'netstatPortActive' : netstatPortActive,
-            'pidValue' : pidValue
+            "postmasterPidFileExists": postmasterPidFileExists,
+            "tempFileExists": tempFileExists,
+            "lockFileExists": lockFileExists,
+            "netstatPortActive": netstatPortActive,
+            "pidValue": pidValue,
         }
 
     def run(self):
-
         if self.__options.statusQueryRequests is None:
             raise ProgramArgumentValidationException("-s argument not specified")
         if self.__options.dirList is None:
@@ -181,23 +205,23 @@ class GpSegStatusProgram:
                 elif statusRequest == gp.SEGMENT_STATUS__GET_MIRROR_STATUS:
                     data = _get_segment_status(seg)
                     if data is not None:
-                        data = {'databaseStatus': data}
+                        data = {"databaseStatus": data}
 
                 elif statusRequest == gp.SEGMENT_STATUS__GET_PID:
                     data = self.getPidStatus(seg, pidRunningStatus)
-                
+
                 elif statusRequest == gp.SEGMENT_STATUS__HAS_POSTMASTER_PID_FILE:
-                    data = pidRunningStatus['postmasterPidFileExists']
-                
+                    data = pidRunningStatus["postmasterPidFileExists"]
+
                 elif statusRequest == gp.SEGMENT_STATUS__HAS_LOCKFILE:
-                    data = pidRunningStatus['lockFileExists']
-                    
+                    data = pidRunningStatus["lockFileExists"]
+
                 else:
-                    raise Exception("Invalid status request %s" % statusRequest )
-                    
+                    raise Exception("Invalid status request %s" % statusRequest)
+
                 outputThisSeg[statusRequest] = data
 
-        status = '\nSTATUS_RESULTS:' + base64.urlsafe_b64encode(pickle.dumps(output))
+        status = "\nSTATUS_RESULTS:" + base64.urlsafe_b64encode(pickle.dumps(output))
         logger.info(status)
 
     def cleanup(self):
@@ -206,35 +230,50 @@ class GpSegStatusProgram:
 
     @staticmethod
     def createParser():
-        parser = OptParser(option_class=OptChecker,
-                           description="Gets status from segments on a single host "
-                                            "using a transition message.  Internal-use only.",
-                           version='%prog version $Revision: #1 $')
+        parser = OptParser(
+            option_class=OptChecker,
+            description="Gets status from segments on a single host "
+            "using a transition message.  Internal-use only.",
+            version="%prog version $Revision: #1 $",
+        )
         parser.setHelp([])
 
         addStandardLoggingAndHelpOptions(parser, True)
 
         addTo = parser
-        addTo.add_option("-s", None, type="string",
-                         dest="statusQueryRequests",
-                         metavar="<statusQueryRequests>",
-                         help="Status Query Message")
-        addTo.add_option("-D", "--dblist", type="string", action="append",
-                         dest="dirList",
-                         metavar="<dirList>",
-                         help="Directory List")
+        addTo.add_option(
+            "-s",
+            None,
+            type="string",
+            dest="statusQueryRequests",
+            metavar="<statusQueryRequests>",
+            help="Status Query Message",
+        )
+        addTo.add_option(
+            "-D",
+            "--dblist",
+            type="string",
+            action="append",
+            dest="dirList",
+            metavar="<dirList>",
+            help="Directory List",
+        )
 
         parser.set_defaults()
         return parser
 
     @staticmethod
     def createProgram(options, args):
-        if len(args) > 0 :
-            raise ProgramArgumentValidationException(\
-                            "too many arguments: only options may be specified", True)
+        if len(args) > 0:
+            raise ProgramArgumentValidationException(
+                "too many arguments: only options may be specified", True
+            )
         return GpSegStatusProgram(options)
 
-#-------------------------------------------------------------------------
-if __name__ == '__main__':
-    mainOptions = { 'setNonuserOnToolLogger':True}
-    simple_main( GpSegStatusProgram.createParser, GpSegStatusProgram.createProgram, mainOptions)
+
+# -------------------------------------------------------------------------
+if __name__ == "__main__":
+    mainOptions = {"setNonuserOnToolLogger": True}
+    simple_main(
+        GpSegStatusProgram.createParser, GpSegStatusProgram.createProgram, mainOptions
+    )

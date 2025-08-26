@@ -6,6 +6,7 @@ from gppylib import gplog
 
 logger = gplog.get_default_logger()
 
+
 # get tablespace locations
 def get_tablespace_locations(all_hosts, mirror_data_directory):
     """
@@ -32,7 +33,7 @@ def get_tablespace_locations(all_hosts, mirror_data_directory):
                 FROM {oid_subq}
                     JOIN gp_segment_configuration AS c
                     ON t.gp_segment_id = c.content
-                """ .format(oid_subq=oid_subq)
+                """.format(oid_subq=oid_subq)
         else:
             tablespace_location_sql = """
                 SELECT c.hostname,c.content, t.tblspc_loc||'/'||c.dbid tblspc_loc
@@ -40,7 +41,9 @@ def get_tablespace_locations(all_hosts, mirror_data_directory):
                     JOIN gp_segment_configuration AS c
                     ON t.gp_segment_id = c.content
                     AND c.role='m' AND c.datadir ='{mirror_data_directory}'
-                """ .format(oid_subq=oid_subq, mirror_data_directory=mirror_data_directory)
+                """.format(
+                oid_subq=oid_subq, mirror_data_directory=mirror_data_directory
+            )
         res = dbconn.execSQL(conn, tablespace_location_sql)
         for r in res:
             tablespace_locations.append(r)
@@ -49,23 +52,33 @@ def get_tablespace_locations(all_hosts, mirror_data_directory):
 
 def get_segment_tablespace_oid_locations(primary_hostname, primary_port):
     """
-        to get user defined tablespace locations for a specific primary segment. This function is called by
-        gprecoverseg --differential to get the tablespace locations by connecting to primary while mirror is down.
-        Above function get_tablespace_locations() can't be used as it takes mirror (failed segment) data_dir
-        as parameter and it is called before mirrors are moved to new location by gpmovemirrors.
-        :param primary_hostname: string type primary hostname
-        :param primary_port: int type primary segment port
-        :return: list of tablespace oids and locations
-        """
-    sql = "SELECT distinct(oid),tblspc_loc FROM ( SELECT oid FROM pg_tablespace WHERE spcname NOT IN " \
-          "('pg_default', 'pg_global')) AS q,LATERAL gp_tablespace_location(q.oid);"
+    to get user defined tablespace locations for a specific primary segment. This function is called by
+    gprecoverseg --differential to get the tablespace locations by connecting to primary while mirror is down.
+    Above function get_tablespace_locations() can't be used as it takes mirror (failed segment) data_dir
+    as parameter and it is called before mirrors are moved to new location by gpmovemirrors.
+    :param primary_hostname: string type primary hostname
+    :param primary_port: int type primary segment port
+    :return: list of tablespace oids and locations
+    """
+    sql = (
+        "SELECT distinct(oid),tblspc_loc FROM ( SELECT oid FROM pg_tablespace WHERE spcname NOT IN "
+        "('pg_default', 'pg_global')) AS q,LATERAL gp_tablespace_location(q.oid);"
+    )
     try:
-        query = RemoteQueryCommand("Get segment tablespace locations", sql, primary_hostname, primary_port)
+        query = RemoteQueryCommand(
+            "Get segment tablespace locations", sql, primary_hostname, primary_port
+        )
         query.run()
     except Exception as e:
-        raise Exception("Failed to get segment tablespace locations for segment with host {} and port {} : {}".format(
-            primary_hostname, primary_port, str(e)))
+        raise Exception(
+            "Failed to get segment tablespace locations for segment with host {} and port {} : {}".format(
+                primary_hostname, primary_port, str(e)
+            )
+        )
 
-    logger.debug("Successfully got tablespace locations for segment with host {}, port {}".
-                 format(primary_hostname, primary_port))
+    logger.debug(
+        "Successfully got tablespace locations for segment with host {}, port {}".format(
+            primary_hostname, primary_port
+        )
+    )
     return query.get_results()

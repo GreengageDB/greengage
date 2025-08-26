@@ -45,11 +45,19 @@ class CommandTest(GpTestCase):
         self.assertEqual(self.subject.get_stderr(), "my stderr")
 
     def test_create_command_with_default_gphome(self):
-        self.subject = Command("my name", "my command string", ctxt=REMOTE, remoteHost="someHost")
+        self.subject = Command(
+            "my name", "my command string", ctxt=REMOTE, remoteHost="someHost"
+        )
         self.assertEquals(GPHOME, self.subject.exec_context.gphome)
 
     def test_create_command_with_custom_gphome(self):
-        self.subject = Command("my name", "my command string", ctxt=REMOTE, remoteHost="someHost", gphome="/new/gphome")
+        self.subject = Command(
+            "my name",
+            "my command string",
+            ctxt=REMOTE,
+            remoteHost="someHost",
+            gphome="/new/gphome",
+        )
         self.assertIn("/new/gphome", self.subject.exec_context.gphome)
 
     def test_running_command_remembers_pid(self):
@@ -58,5 +66,6 @@ class CommandTest(GpTestCase):
         self.subject.run()
         self.assertTrue(self.subject.pid > 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run_tests()

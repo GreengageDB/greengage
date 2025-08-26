@@ -1,8 +1,7 @@
-
 class SpecialFuncs(object):
     @classmethod
     def make_body(cls, func):
-        key = 'make_body_' + func.funcname
+        key = "make_body_" + func.funcname
         if key in cls.__dict__:
             return cls.__dict__[key].__get__(None, SpecialFuncs)(func)
 
@@ -61,31 +60,33 @@ class SpecialFuncs(object):
         return s1 + s2;
         """
 
-class ByValStructs(object):
 
+class ByValStructs(object):
     """These are structs over 32 bit and possibly passed by-value.
-       As our mock framework doesn't accept 64 bit integer in some platform,
-       we have to treat them specially.
+    As our mock framework doesn't accept 64 bit integer in some platform,
+    we have to treat them specially.
     """
+
     type_names = set([
-            'ArrayTuple',
-            'CdbPathLocus',
-            'Complex',
-            'DbDirNode',
-            'DirectDispatchCalculationInfo',
-            'instr_time',
-            'Interval',
-            'ItemPointerData',
-            'NameData',
-            'mpp_fd_set',
-            'PGSemaphoreData',
-            'PossibleValueSet',
-            'PrimaryMirrorModeTransitionArguments',
-            'RelFileNode',
-            'struct timeval',
-            'VariableStatData',
-            'XLogRecPtr'
-            ])
+        "ArrayTuple",
+        "CdbPathLocus",
+        "Complex",
+        "DbDirNode",
+        "DirectDispatchCalculationInfo",
+        "instr_time",
+        "Interval",
+        "ItemPointerData",
+        "NameData",
+        "mpp_fd_set",
+        "PGSemaphoreData",
+        "PossibleValueSet",
+        "PrimaryMirrorModeTransitionArguments",
+        "RelFileNode",
+        "struct timeval",
+        "VariableStatData",
+        "XLogRecPtr",
+    ])
+
     @classmethod
     def has(cls, argtype):
         return argtype in cls.type_names

@@ -7,10 +7,10 @@
 from __future__ import absolute_import
 import os
 
+
 def get_gp_prefix(masterDatadir):
     base = os.path.basename(masterDatadir)
-    idx = base.rfind('-1')
+    idx = base.rfind("-1")
     if idx == -1:
         return None
     return base[0:idx]
-

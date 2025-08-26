@@ -29,31 +29,37 @@ import argparse
 import os
 
 # types of diffs in plans, by increasing severity
-NO_CHANGES   = 0
+NO_CHANGES = 0
 COST_CHANGES = 1
 ROWS_CHANGES = 2
 PLAN_CHANGES = 3
-planDiffText = { NO_CHANGES: "", COST_CHANGES: "cost change found", ROWS_CHANGES: "row change found", PLAN_CHANGES: "plan change found" }
+planDiffText = {
+    NO_CHANGES: "",
+    COST_CHANGES: "cost change found",
+    ROWS_CHANGES: "row change found",
+    PLAN_CHANGES: "plan change found",
+}
+
 
 # the state of multiple test suite queries executed in a log file
 class FileState:
     def __init__(self):
         self.reset_curr_query_state()
         self.first_file_name_match = True
-        
+
         # an ordered list of query ids, including secondary queries
         # for queries that are split into multiple selects
         self.query_id_list = []
-        
+
         # explain/planning time for each query
         self.query_explain_time_map = {}
-        
+
         # the explain plan for each query (as a list of strings)
         self.query_explain_plan_map = {}
-        
+
         # execution time for each query
         self.query_exe_time_map = {}
-        
+
         # comments for each query
         self.query_comment_map = {}
 
@@ -102,13 +108,13 @@ class FileState:
 
     # process a single line of a log file
     def processLogFileLine(self, line_lf):
-        line             = line_lf.rstrip('\r\n')
-        fileNameMatch    = re.match(r'Filename: ',         line)
-        explainMatch     = re.match(r'[ ]*QUERY PLAN[ ]*', line)
-        executionMatch   = re.match(r'EXECUTION:',         line)
-        timeMatch        = re.match(r'Time: ',             line)
-        optimizerMatch   = re.match(r' Optimizer[ a-z]*: ',line)
-        eofMatch         = re.match(r'EOF-MARKER$',        line)
+        line = line_lf.rstrip("\r\n")
+        fileNameMatch = re.match(r"Filename: ", line)
+        explainMatch = re.match(r"[ ]*QUERY PLAN[ ]*", line)
+        executionMatch = re.match(r"EXECUTION:", line)
+        timeMatch = re.match(r"Time: ", line)
+        optimizerMatch = re.match(r" Optimizer[ a-z]*: ", line)
+        eofMatch = re.match(r"EOF-MARKER$", line)
 
         if executionMatch:
             self.exe_phase = True
@@ -118,7 +124,7 @@ class FileState:
             self.explain_phase = True
             self.plan_phase = True
         elif timeMatch:
-            time = re.sub(r'Time: ([0-9]+).*', r'\1', line)
+            time = re.sub(r"Time: ([0-9]+).*", r"\1", line)
             if self.exe_phase:
                 if self.exe_time1 < 0:
                     self.exe_time1 = time
@@ -139,7 +145,9 @@ class FileState:
         elif optimizerMatch:
             # Since this script can be used on older explain logs, match both
             # original and new ORCA names
-            if (not re.search(' PQO ', line) and not re.search(' Pivotal Optimizer ', line)):
+            if not re.search(" PQO ", line) and not re.search(
+                " Pivotal Optimizer ", line
+            ):
                 if self.planning_time1 < 0:
                     self.comment1 = self.comment1 + "Fallback "
                 else:
@@ -148,7 +156,7 @@ class FileState:
         if self.plan_phase:
             # this is a line of an explain plan, remember it
             self.curr_plan.append(line_lf)
-            
+
         if (fileNameMatch and not self.first_file_name_match) or eofMatch:
             # end of a query
             self.recordQuery(0)
@@ -159,13 +167,13 @@ class FileState:
             # beginning of a new query
             self.reset_curr_query_state()
             self.first_file_name_match = False
-            self.curr_query_id = re.sub(r'Filename: 1([0-9]+).*', r'\1', line)
+            self.curr_query_id = re.sub(r"Filename: 1([0-9]+).*", r"\1", line)
 
     # process an entire log file
     def processLogFile(self, logFileLines):
         for line in logFileLines:
             self.processLogFileLine(line)
-        self.processLogFileLine('EOF-MARKER')
+        self.processLogFileLine("EOF-MARKER")
 
     def comparePlans(self, base, queryId):
         myPlan = self.query_explain_plan_map[queryId]
@@ -184,18 +192,22 @@ class FileState:
             myLine = myPlan[l]
             baseLine = basePlan[l]
             if myLine != baseLine:
-                myLineNoCost = re.sub(r'cost=[0-9.]*', 'cost=xxx', myLine)
-                baseLineNoCost = re.sub(r'cost=[0-9.]*', 'cost=xxx', baseLine)
+                myLineNoCost = re.sub(r"cost=[0-9.]*", "cost=xxx", myLine)
+                baseLineNoCost = re.sub(r"cost=[0-9.]*", "cost=xxx", baseLine)
                 if myLineNoCost == baseLineNoCost:
                     cost_change_found = True
                 else:
-                    myLineNoRows = re.sub(r'rows=[0-9]*', 'rows=xxx', myLineNoCost)
-                    baseLineNoRows = re.sub(r'rows=[0-9]*', 'rows=xxx', baseLineNoCost)
+                    myLineNoRows = re.sub(r"rows=[0-9]*", "rows=xxx", myLineNoCost)
+                    baseLineNoRows = re.sub(r"rows=[0-9]*", "rows=xxx", baseLineNoCost)
                     if myLineNoRows == baseLineNoRows:
                         rows_change_found = True
                     else:
-                        myOptimizer = re.sub(r'Optimizer[ a-z]*:.*', 'Optimizer:xxx', myLine)
-                        baseOptimizer = re.sub(r'Optimizer[ a-z]*:.*', 'Optimizer:xxx', baseLine)
+                        myOptimizer = re.sub(
+                            r"Optimizer[ a-z]*:.*", "Optimizer:xxx", myLine
+                        )
+                        baseOptimizer = re.sub(
+                            r"Optimizer[ a-z]*:.*", "Optimizer:xxx", baseLine
+                        )
                         if myOptimizer != baseOptimizer:
                             # lines are different even with masked-out rows and cost
                             plan_change_found = True
@@ -210,60 +222,96 @@ class FileState:
 
     # print header for CSV file
     def printHeader(self, numFiles):
-        if (numFiles == 1):
-            print('Query id, planning time, execution time, comment')
+        if numFiles == 1:
+            print("Query id, planning time, execution time, comment")
         else:
-            print('Query id, base planning time, planning time, base execution time, execution time, plan changes, base comment, comment')
+            print(
+                "Query id, base planning time, planning time, base execution time, execution time, plan changes, base comment, comment"
+            )
 
     # print result for all recorded queries in CSV format for a single log file
     def printme(self):
         for q in self.query_id_list:
-            print("%s, %s, %s, %s" % (q, self.query_explain_time_map[q], self.query_exe_time_map[q], self.query_comment_map[q]))
+            print(
+                "%s, %s, %s, %s"
+                % (
+                    q,
+                    self.query_explain_time_map[q],
+                    self.query_exe_time_map[q],
+                    self.query_comment_map[q],
+                )
+            )
 
     # print a CSV file with a comparison between a base file and a test file
     def printComparison(self, base, diffDir, diffThreshold, diffLevel):
         for q in self.query_id_list:
             planDiffs = self.comparePlans(base, q)
-            print("%s, %s, %s, %s, %s, %s, %s, %s" % (q, base.query_explain_time_map[q], self.query_explain_time_map[q], base.query_exe_time_map[q], self.query_exe_time_map[q], planDiffText[planDiffs], base.query_comment_map[q], self.query_comment_map[q]))
+            print(
+                "%s, %s, %s, %s, %s, %s, %s, %s"
+                % (
+                    q,
+                    base.query_explain_time_map[q],
+                    self.query_explain_time_map[q],
+                    base.query_exe_time_map[q],
+                    self.query_exe_time_map[q],
+                    planDiffText[planDiffs],
+                    base.query_comment_map[q],
+                    self.query_comment_map[q],
+                )
+            )
             if int(diffLevel) <= int(planDiffs):
                 baseTime = float(base.query_exe_time_map[q])
                 testTime = float(self.query_exe_time_map[q])
-                if testTime > baseTime * (1+float(diffThreshold)/100.0) or testTime < 0:
+                if (
+                    testTime > baseTime * (1 + float(diffThreshold) / 100.0)
+                    or testTime < 0
+                ):
                     baseFileName = diffDir + "/base/" + q + ".plan"
                     testFileName = diffDir + "/test/" + q + ".plan"
-                    with open(baseFileName, 'w') as fb:
+                    with open(baseFileName, "w") as fb:
                         for line in base.query_explain_plan_map[q]:
                             fb.write(line)
                         fb.write("Execution time: %s\n" % base.query_exe_time_map[q])
-                    with open(testFileName, 'w') as ft:
+                    with open(testFileName, "w") as ft:
                         for line in self.query_explain_plan_map[q]:
                             ft.write(line)
                         ft.write("Execution time: %s\n" % self.query_exe_time_map[q])
-            
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Summarize the test suite execute and explain log')
-    parser.add_argument('log_file', nargs = '?', help='log file with explain/execute output')
-    parser.add_argument('--baseLog',
-                        help='specify a log file from a base version to compare to')
-    parser.add_argument('--diffDir',
-                        help='request diff files to be created and specify a directory to place diffs into')
-    parser.add_argument('--diffThreshold',
-                        help='specify a numerical threshold to record plan diffs with a performance regression of more than n percent')
-    parser.add_argument('--diffLevel',
-                        help='specify which diff files to generate: 1 = all diffs, 2 = ignore cost diffs, 3 = plan diffs only')
+    parser = argparse.ArgumentParser(
+        description="Summarize the test suite execute and explain log"
+    )
+    parser.add_argument(
+        "log_file", nargs="?", help="log file with explain/execute output"
+    )
+    parser.add_argument(
+        "--baseLog", help="specify a log file from a base version to compare to"
+    )
+    parser.add_argument(
+        "--diffDir",
+        help="request diff files to be created and specify a directory to place diffs into",
+    )
+    parser.add_argument(
+        "--diffThreshold",
+        help="specify a numerical threshold to record plan diffs with a performance regression of more than n percent",
+    )
+    parser.add_argument(
+        "--diffLevel",
+        help="specify which diff files to generate: 1 = all diffs, 2 = ignore cost diffs, 3 = plan diffs only",
+    )
 
     args = parser.parse_args()
 
     inputfile = args.log_file
     basefile = args.baseLog
-    makeDiffs = (args.diffDir is not None)
+    makeDiffs = args.diffDir is not None
     diffDir = ""
     diffThreshold = -100
     diffLevel = 4
     if makeDiffs:
         # remove trailing slash, if it exists
-        diffDir = re.sub(r'(.*)/$','\1', args.diffDir)
+        diffDir = re.sub(r"(.*)/$", "\1", args.diffDir)
         try:
             os.mkdir(diffDir)
             os.mkdir(diffDir + "/base")
@@ -279,8 +327,10 @@ def main():
         if args.diffLevel is not None:
             diffLevel = args.diffLevel
     else:
-        if (args.diffThreshold is not None or args.diffLevel is not None):
-            print("Please specify the --diffDir option with a directory name to request diff files\n")
+        if args.diffThreshold is not None or args.diffLevel is not None:
+            print(
+                "Please specify the --diffDir option with a directory name to request diff files\n"
+            )
             exit(1)
 
     if inputfile is None:
@@ -303,5 +353,6 @@ def main():
         testState.printHeader(2)
         testState.printComparison(baseState, diffDir, diffThreshold, diffLevel)
 
-if __name__== "__main__":
+
+if __name__ == "__main__":
     main()

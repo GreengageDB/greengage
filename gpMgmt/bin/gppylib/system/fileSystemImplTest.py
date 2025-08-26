@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+
 from __future__ import absolute_import
 import os
 
@@ -20,18 +21,18 @@ from gppylib.system.fileSystemInterface import GpFileSystemProvider
 
 logger = get_default_logger()
 
+
 #
 # List of future improvements:
 #
 #
 class GpTempFileForTesting(GpFileSystemProvider):
-
     def __init__(self, path):
         checkNotNone("path", path)
 
         self.__isClosed = False
         self.name = path
-        self.__underlyingFile = NamedTemporaryFile('w', delete=True)
+        self.__underlyingFile = NamedTemporaryFile("w", delete=True)
 
     def flush(self):
         if self.__isClosed:
@@ -43,7 +44,7 @@ class GpTempFileForTesting(GpFileSystemProvider):
         if self.__isClosed:
             raise Exception("File has been closed")
 
-        checkNotNone("file", self.__underlyingFile) # already closed?
+        checkNotNone("file", self.__underlyingFile)  # already closed?
 
         self.__underlyingFile.write(data)
 
@@ -64,7 +65,7 @@ class GpTempFileForTesting(GpFileSystemProvider):
     # For testing,
     #
     def getDataForTesting(self):
-        f = open(self.__underlyingFile.name, 'r')
+        f = open(self.__underlyingFile.name, "r")
         result = f.read()
         f.close()
         return result
@@ -74,9 +75,7 @@ class GpTempFileForTesting(GpFileSystemProvider):
 # An implementation of GpFileSystemProvider that passes operations through to the underlying
 #  operating system
 #
-class GpFileSystemProviderForTest :
-
-
+class GpFileSystemProviderForTest:
     def __init__(self):
         self.__temporaryFiles = []
         pass
@@ -92,15 +91,14 @@ class GpFileSystemProviderForTest :
     #
     # returns self
     #
-    def createNamedTemporaryFile( self ) :
+    def createNamedTemporaryFile(self):
         path = "/tmp/temporaryNamedFile%s" % len(self.__temporaryFiles)
-        result = GpTempFileForTesting( path)
-        self.__temporaryFiles.append( result )
+        result = GpTempFileForTesting(path)
+        self.__temporaryFiles.append(result)
         return result
 
-
     #
-    def getTemporaryFileDataForTesting(self, tempFileIndex ):
+    def getTemporaryFileDataForTesting(self, tempFileIndex):
         return self.__temporaryFiles[tempFileIndex].getDataForTesting()
 
     def hasTemporaryFileDataForTesting(self, tempFileIndex):

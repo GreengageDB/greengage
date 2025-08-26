@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
+# Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 """
 Greengage logging facilities.
@@ -25,6 +25,7 @@ Typical usage:
   ...
 
 """
+
 from __future__ import absolute_import
 import datetime
 import logging
@@ -49,7 +50,7 @@ def get_default_logger():
     global _LOGGER, _SOUT_HANDLER
 
     if _LOGGER is None:
-        _LOGGER = logging.getLogger('default')
+        _LOGGER = logging.getLogger("default")
         f = _get_default_formatter()
         _SOUT_HANDLER = EncodingStreamHandler(sys.stdout)
         _SOUT_HANDLER.setFormatter(f)
@@ -58,8 +59,10 @@ def get_default_logger():
 
     return _LOGGER
 
+
 def get_logger_dir():
     return os.path.dirname(_FILENAME)
+
 
 def get_unittest_logger():
     """
@@ -76,14 +79,14 @@ def get_unittest_logger():
     """
     global _LOGGER
     if _LOGGER is None:
-        _LOGGER = logging.getLogger('default')
+        _LOGGER = logging.getLogger("default")
         filename = "unittest.log"
         _set_file_logging(filename)
     return _LOGGER
 
 
 def setup_helper_tool_logging(appName, hostname, userName):
-    """ 
+    """
     Returns a singleton logger for use by helper tools:
       - Logs output to stdout
       - Does not log output to a file
@@ -131,16 +134,16 @@ def enable_verbose_logging():
 
 
 def quiet_stdout_logging():
-    """ 
-    Reduce log level for stdout logging 
+    """
+    Reduce log level for stdout logging
     """
     global _SOUT_HANDLER
     _SOUT_HANDLER.setLevel(logging.WARN)
 
 
 def very_quiet_stdout_logging():
-    """ 
-    Reduce log level to critical for stdout logging 
+    """
+    Reduce log level to critical for stdout logging
     """
     global _SOUT_HANDLER
     _SOUT_HANDLER.setLevel(logging.CRITICAL)
@@ -157,7 +160,7 @@ def logging_is_quiet():
     """
     Returns true if the logging level has been set to quiet.
     """
-    # Todo: Currently this checks the default LOGGER, the 
+    # Todo: Currently this checks the default LOGGER, the
     # quiet_stdout_logging() function only sets it on the stdout
     # logging handler.   So typical usage will never return true.
     return _LOGGER.getEffectiveLevel() == logging.WARN
@@ -236,14 +239,15 @@ _APP_NAME_FOR_DEFAULT_FORMAT = os.path.split(sys.argv[0])[-1]
 def _set_file_logging(filename):
     """
     Establishes a file output HANDLER for the default formatter.
-    
+
     NOTE: internal use only
     """
     global _LOGGER, _SOUT_HANDLER, _FILENAME, _FILE_HANDLER
     _FILENAME = filename
-    _FILE_HANDLER = EncodingFileHandler(filename, 'a')
+    _FILE_HANDLER = EncodingFileHandler(filename, "a")
     _FILE_HANDLER.setFormatter(_get_default_formatter())
     _LOGGER.addHandler(_FILE_HANDLER)
+
 
 def _get_default_formatter():
     """
@@ -256,9 +260,15 @@ def _get_default_formatter():
     global _APP_NAME_FOR_DEFAULT_FORMAT
 
     if _DEFAULT_FORMATTER is None:
-        format_str = "%(asctime)s:%(programname)s:%(name)s-[%(levelname)-s]:-%(message)s"
-        app_name = _APP_NAME_FOR_DEFAULT_FORMAT.replace("%", "")  # to make sure we don't produce a format string
-        format_str = format_str.replace("%(programname)s", "%06d %s" % (os.getpid(), app_name))
+        format_str = (
+            "%(asctime)s:%(programname)s:%(name)s-[%(levelname)-s]:-%(message)s"
+        )
+        app_name = _APP_NAME_FOR_DEFAULT_FORMAT.replace(
+            "%", ""
+        )  # to make sure we don't produce a format string
+        format_str = format_str.replace(
+            "%(programname)s", "%06d %s" % (os.getpid(), app_name)
+        )
         _DEFAULT_FORMATTER = logging.Formatter(format_str, "%Y%m%d:%H:%M:%S")
     return _DEFAULT_FORMATTER
 
@@ -269,7 +279,7 @@ def _get_literal_formatter():
 
     The literal formatter formats the input string exactly as it was received.
     It is only used by the log_literal() function.
-    
+
     NOTE: internal use only
     """
     global _LITERAL_FORMATTER
@@ -309,14 +319,14 @@ class EncodingFileHandler(logging.FileHandler):
     passing it along to the FileHandler.  This will prevent encode/decode
     errors later on."""
 
-    def __init__(self, filename, mode='a', encoding=None, delay=0):
+    def __init__(self, filename, mode="a", encoding=None, delay=0):
         logging.FileHandler.__init__(self, filename, mode, encoding, delay)
 
     def emit(self, record):
         if not isinstance(record.msg, str) and not isinstance(record.msg, unicode):
             record.msg = str(record.msg)
         if not isinstance(record.msg, unicode):
-            record.msg = unicode(record.msg, 'utf-8')
+            record.msg = unicode(record.msg, "utf-8")
         logging.FileHandler.emit(self, record)
 
 
@@ -332,5 +342,5 @@ class EncodingStreamHandler(logging.StreamHandler):
         if not isinstance(record.msg, str) and not isinstance(record.msg, unicode):
             record.msg = str(record.msg)
         if not isinstance(record.msg, unicode):
-            record.msg = unicode(record.msg, 'utf-8')
+            record.msg = unicode(record.msg, "utf-8")
         logging.StreamHandler.emit(self, record)

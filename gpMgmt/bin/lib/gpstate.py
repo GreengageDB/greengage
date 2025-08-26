@@ -13,10 +13,15 @@ from __future__ import absolute_import
 from gppylib.mainUtils import *
 from gppylib.programs.clsSystemState import *
 
-#-------------------------------------------------------------------------
-if __name__ == '__main__':
+# -------------------------------------------------------------------------
+if __name__ == "__main__":
     options = {}
-    options["programNameOverride"] = "gpstate" # for now since we are invoked from the real gpstate
-    options["suppressStartupLogMessage"] = False # since we are called from another program it's funny to print what we were called with
-    simple_main( GpSystemStateProgram.createParser, GpSystemStateProgram.createProgram, options)
-
+    options["programNameOverride"] = (
+        "gpstate"  # for now since we are invoked from the real gpstate
+    )
+    options["suppressStartupLogMessage"] = (
+        False  # since we are called from another program it's funny to print what we were called with
+    )
+    simple_main(
+        GpSystemStateProgram.createParser, GpSystemStateProgram.createProgram, options
+    )

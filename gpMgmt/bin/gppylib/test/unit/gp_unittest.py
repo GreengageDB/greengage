@@ -5,15 +5,18 @@ import unittest
 
 from mock import MagicMock, Mock
 
+
 class Contains(str):
     """
     This class is used as a way to assert for partial match in unittests
     """
+
     def __eq__(self, other):
         return self in other
 
+
 class GpTestCase(unittest.TestCase):
-    def __init__(self, methodName='runTest'):
+    def __init__(self, methodName="runTest"):
         super(GpTestCase, self).__init__(methodName)
         self.patches = []
         self.mock_objs = []
@@ -22,15 +25,15 @@ class GpTestCase(unittest.TestCase):
 
     def apply_patches(self, patches):
         if self.patches:
-            raise Exception('Test class is already patched!')
+            raise Exception("Test class is already patched!")
         self.patches = patches
         self.mock_objs = [p.start() for p in self.patches]
         self.__class__.apply_patches_counter += 1
 
     def get_mock_from_apply_patch(self, mock_name):
-        """ Return None if there is no existing object
-            mock name prints out the last "namespace"
-            for example "os.path.exists", mock_name will be "exists"
+        """Return None if there is no existing object
+        mock name prints out the last "namespace"
+        for example "os.path.exists", mock_name will be "exists"
         """
         for mock_obj in self.mock_objs:
             if isinstance(mock_obj, Mock) or isinstance(mock_obj, MagicMock):
@@ -52,15 +55,21 @@ class GpTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.apply_patches_counter > 0 and cls.apply_patches_counter != cls.tear_down_counter:
-            raise Exception("Unequal call for apply patches: %s, teardown: %s. "
-                            "You probably need to add a super(<child class>, "
-                            "self).tearDown() in your tearDown()" % (cls.apply_patches_counter,
-                                                                     cls.tear_down_counter))
+        if (
+            cls.apply_patches_counter > 0
+            and cls.apply_patches_counter != cls.tear_down_counter
+        ):
+            raise Exception(
+                "Unequal call for apply patches: %s, teardown: %s. "
+                "You probably need to add a super(<child class>, "
+                "self).tearDown() in your tearDown()"
+                % (cls.apply_patches_counter, cls.tear_down_counter)
+            )
 
 
 def add_setup(setup=None, teardown=None):
     """decorate test functions to add additional setup/teardown contexts"""
+
     def decorate_function(test):
         def wrapper(self):
             if setup:
@@ -68,13 +77,16 @@ def add_setup(setup=None, teardown=None):
             test(self)
             if teardown:
                 teardown(self)
+
         return wrapper
+
     return decorate_function
 
 
 # hide unittest dependencies here
 def run_tests():
     unittest.main(verbosity=2, buffer=True)
+
 
 skip = unittest.skip
 

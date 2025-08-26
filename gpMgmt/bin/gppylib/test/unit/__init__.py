@@ -16,7 +16,7 @@ def setup_fake_gparray():
     primary1 = Segment.initFromString("3|1|p|p|s|u|sdw2|sdw2|40001|/data/primary1")
     mirror0 = Segment.initFromString("4|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
     mirror1 = Segment.initFromString("5|1|m|m|s|u|sdw1|sdw1|50001|/data/mirror1")
-    return GpArray([master,primary0,primary1,mirror0,mirror1])
+    return GpArray([master, primary0, primary1, mirror0, mirror1])
 
 
 # python2 unittest does not have an in built redirect_stderr function

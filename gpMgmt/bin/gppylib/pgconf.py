@@ -25,9 +25,10 @@ import re
 
 # Max recursion level for postgresql.conf include directives.
 # The max value is 10 in the postgres code, so it's the same here.
-MAX_RECURSION_LEVEL=10
+MAX_RECURSION_LEVEL = 10
 
-def readfile(filename='postgresql.conf', defaultpath=None):
+
+def readfile(filename="postgresql.conf", defaultpath=None):
     """
     Read postgresql.conf file and put the settings into a dictionary.
     Returns the dictionary: a newly created pgconf.gucdict object.
@@ -65,34 +66,43 @@ class gucdict(dict):
     value from the dictionary, converted to internal form.
     """
 
-    def populate(self, lines, filename='', recurLevel=0):
-        '''
+    def populate(self, lines, filename="", recurLevel=0):
+        """
         Given a postgresql.conf input file (or a list of strings, or some
         iterable object yielding lines), look for lines of the form
                 name[=][value][#comment]
         For each one found, construct a pgconf.setting object and put it
         into our dictionary.
-        '''
+        """
         if recurLevel == MAX_RECURSION_LEVEL:
-            raise Exception('could not open configuration file "%s": maximum nesting depth exceeded' % filename)
-        
+            raise Exception(
+                'could not open configuration file "%s": maximum nesting depth exceeded'
+                % filename
+            )
+
         linenumber = 0
         for line in lines:
             linenumber += 1
             m = _setpat.match(line)
             if m:
                 name, value, pos = m.group(1), m.group(3), m.start(3)
-                if name == 'include':
+                if name == "include":
                     try:
                         # Remove the ' from the filename and then convert to abspath if needed.
                         incfilename = value.strip("'")
-                        if not incfilename.startswith('/') and filename != '':
-                            incfilename = '%s/%s' % (filename[0:filename.rfind('/')], incfilename)
+                        if not incfilename.startswith("/") and filename != "":
+                            incfilename = "%s/%s" % (
+                                filename[0 : filename.rfind("/")],
+                                incfilename,
+                            )
                         fp = open(incfilename)
-                        self.populate(fp, incfilename, recurLevel+1)
+                        self.populate(fp, incfilename, recurLevel + 1)
                         fp.close()
                     except IOError:
-                        raise Exception('File %s included from %s:%d does not exist' % (incfilename, filename, linenumber))
+                        raise Exception(
+                            "File %s included from %s:%d does not exist"
+                            % (incfilename, filename, linenumber)
+                        )
                 else:
                     self[name.lower()] = setting(name, value, filename, linenumber, pos)
 
@@ -146,7 +156,7 @@ class gucdict(dict):
         else:
             return default
 
-    def time(self, name, unit='s', default=None):
+    def time(self, name, unit="s", default=None):
         """
         Return time setting, or default if absent.
         Specify desired unit as 'ms', 's', or 'min'.
@@ -167,12 +177,13 @@ class setting(object):
     is raised if the conversion fails, i.e. the value does not conform to the
     expected syntax.
     """
-    def __init__(self, name, value, filename='', linenumber=0, pos=0):
+
+    def __init__(self, name, value, filename="", linenumber=0, pos=0):
         self.name = name
         self.value = value
         self.filename = filename
         self.linenumber = linenumber
-        self.pos = pos       # starting offset of value within the input line
+        self.pos = pos  # starting offset of value within the input line
 
     def __repr__(self):
         return repr(self.value)
@@ -197,18 +208,13 @@ class setting(object):
         if s:
             s = s.lower()
             n = len(s)
-            if (s == '1' or
-                s == 'on' or
-                s == 'true'[:n] or
-                s == 'yes'[:n]):
+            if s == "1" or s == "on" or s == "true"[:n] or s == "yes"[:n]:
                 return True
-            if (s == '0' or
-                s == 'off'[:n] or
-                s == 'false'[:n] or
-                s == 'no'[:n]):
+            if s == "0" or s == "off"[:n] or s == "false"[:n] or s == "no"[:n]:
                 return False
-        raise self.ConfigurationError('Boolean value should be one of: 1, 0, '
-                                      'on, off, true, false, yes, no.')
+        raise self.ConfigurationError(
+            "Boolean value should be one of: 1, 0, on, off, true, false, yes, no."
+        )
 
     def int(self):
         """
@@ -217,7 +223,7 @@ class setting(object):
         try:
             return int(self.value, 0)
         except ValueError:
-            raise self.ConfigurationError('Value should be integer.')
+            raise self.ConfigurationError("Value should be integer.")
 
     def float(self):
         """
@@ -226,7 +232,7 @@ class setting(object):
         try:
             return float(self.value)
         except ValueError:
-            raise self.ConfigurationError('Value should be floating point.')
+            raise self.ConfigurationError("Value should be floating point.")
 
     def kB(self):
         """
@@ -235,71 +241,80 @@ class setting(object):
         """
         try:
             m = 1
-            t = re.split('(kB|MB|GB)', self.value)
+            t = re.split("(kB|MB|GB)", self.value)
             if len(t) > 1:
-                i = ['kB', 'MB', 'GB'].index(t[1])
-                m = (1, 1024, 1024*1024)[i]
+                i = ["kB", "MB", "GB"].index(t[1])
+                m = (1, 1024, 1024 * 1024)[i]
             try:
                 return int(t[0], 0) * m
             except ValueError:
                 pass
             return int(float(t[0]) * m)
         except (ValueError, IndexError):
-            raise self.ConfigurationError('Value should be integer or float '
-                                          'with optional suffix kB, MB, or GB '
-                                          '(kB is default).')
+            raise self.ConfigurationError(
+                "Value should be integer or float "
+                "with optional suffix kB, MB, or GB "
+                "(kB is default)."
+            )
 
-    def time(self, unit='s'):
+    def time(self, unit="s"):
         """
         Interpret the value as a time.  Returns an int or long.
         Specify desired unit as 'ms', 's', or 'min'.
         """
-        u = ['ms', 's', 'min'].index(unit)
-        u = (1, 1000, 60*1000)[u]
+        u = ["ms", "s", "min"].index(unit)
+        u = (1, 1000, 60 * 1000)[u]
         try:
             m = u
-            t = re.split('(ms|s|min|h|d)', self.value)
+            t = re.split("(ms|s|min|h|d)", self.value)
             if len(t) > 1:
-                i = ['ms', 's', 'min', 'h', 'd'].index(t[1])
-                m = (1, 1000, 60*1000, 3600*1000, 24*3600*1000)[i]
+                i = ["ms", "s", "min", "h", "d"].index(t[1])
+                m = (1, 1000, 60 * 1000, 3600 * 1000, 24 * 3600 * 1000)[i]
             return int(t[0], 0) * m / u
         except (ValueError, IndexError):
-            raise self.ConfigurationError('Value should be integer with '
-                                          'optional suffix ms, s, min, h, or d '
-                                          '(%s is default).' % unit)
+            raise self.ConfigurationError(
+                "Value should be integer with "
+                "optional suffix ms, s, min, h, or d "
+                "(%s is default)." % unit
+            )
 
     def ConfigurationError(self, msg):
-        msg = '(%s = %s)  %s' % (self.name, self.value, msg)
+        msg = "(%s = %s)  %s" % (self.name, self.value, msg)
         return ConfigurationError(msg, self.filename, self.linenumber)
 
 
-
 class ConfigurationError(EnvironmentError):
-    def __init__(self, msg, filename='', linenumber=0):
+    def __init__(self, msg, filename="", linenumber=0):
         self.msg = msg
         self.filename = filename
         self.linenumber = linenumber
         if linenumber:
-            msg = '%s line %d: %s' % (filename, linenumber, msg)
+            msg = "%s line %d: %s" % (filename, linenumber, msg)
         elif filename:
-            msg = '%s: %s' % (filename, msg)
+            msg = "%s: %s" % (filename, msg)
         EnvironmentError.__init__(self, msg)
+
     def __str__(self):
         return self.message
 
 
-#-------------------------------- private --------------------------------
+# -------------------------------- private --------------------------------
 
-_setpat = re.compile(r"\s*(\w+)\s*(=\s*)?"           # name [=]
-                     '('
-                     r"[eE]?('((\\.)?[^\\']*)*')+|"  # single-quoted string or
-                     r"[^\s#']*"                     # token ending at whitespace or comment
-                     ')')
-_escapepat = re.compile(r"''|"                   # pair of single quotes, or
-                        r"\\("                   # backslash followed by
-                        r"[0-7][0-7]?[0-7]?|"    # nnn (1 to 3 octal digits) or
-                        r"x[0-9A-Fa-f][0-9A-Fa-f]?|" # xHH (1 or 2 hex digits) or
-                        r".)")                   # one char
+_setpat = re.compile(
+    r"\s*(\w+)\s*(=\s*)?"  # name [=]
+    "("
+    r"[eE]?('((\\.)?[^\\']*)*')+|"  # single-quoted string or
+    r"[^\s#']*"  # token ending at whitespace or comment
+    ")"
+)
+_escapepat = re.compile(
+    r"''|"  # pair of single quotes, or
+    r"\\("  # backslash followed by
+    r"[0-7][0-7]?[0-7]?|"  # nnn (1 to 3 octal digits) or
+    r"x[0-9A-Fa-f][0-9A-Fa-f]?|"  # xHH (1 or 2 hex digits) or
+    r".)"
+)  # one char
+
 
 def _escapefun(matchobj):
     """Callback to interpret an escape sequence"""
@@ -308,9 +323,8 @@ def _escapefun(matchobj):
     i = "bfnrt".find(c)
     if i >= 0:
         c = "\b\f\n\r\t"[i]
-    elif c == 'x':
+    elif c == "x":
         c = chr(int(s[2:], 16))
-    elif c in '01234567':
+    elif c in "01234567":
         c = chr(int(s[1:], 8))
     return c
-

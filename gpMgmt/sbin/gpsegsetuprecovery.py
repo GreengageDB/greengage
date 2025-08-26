@@ -8,9 +8,9 @@ from gppylib.db import dbconn
 from recovery_base import RecoveryBase, set_recovery_cmd_results
 from gppylib.commands.pg import removePostmasterPid
 
-#FIXME remove this class
-class ValidationException(Exception):
 
+# FIXME remove this class
+class ValidationException(Exception):
     def __init__(self, msg):
         self.__msg = msg
         Exception.__init__(self, msg)
@@ -23,14 +23,16 @@ class SetupForIncrementalRecovery(Command):
     def __init__(self, name, recovery_info, logger):
         self.name = name
         self.recovery_info = recovery_info
-        cmdStr = ''
+        cmdStr = ""
         Command.__init__(self, self.name, cmdStr)
         self.logger = logger
         self.error_type = recoveryinfo.RecoveryErrorType.VALIDATION_ERROR
 
     def remove_postmaster_pid(self):
-        cmd = Command(name='remove the postmaster.pid file',
-                      cmdStr='rm -f %s/postmaster.pid' % self.recovery_info.target_datadir)
+        cmd = Command(
+            name="remove the postmaster.pid file",
+            cmdStr="rm -f %s/postmaster.pid" % self.recovery_info.target_datadir,
+        )
         cmd.run()
         return_code = cmd.get_return_code()
         if return_code != 0:
@@ -38,13 +40,18 @@ class SetupForIncrementalRecovery(Command):
 
     @set_recovery_cmd_results
     def run(self):
-
         # Do CHECKPOINT on source to force TimeLineID to be updated in pg_control.
         # pg_rewind wants that to make incremental recovery successful finally.
-        self.logger.debug('Do CHECKPOINT on {} (port: {}) before running pg_rewind.'
-                          .format(self.recovery_info.source_hostname, self.recovery_info.source_port))
-        dburl = dbconn.DbURL(hostname=self.recovery_info.source_hostname,
-                             port=self.recovery_info.source_port, dbname='template1')
+        self.logger.debug(
+            "Do CHECKPOINT on {} (port: {}) before running pg_rewind.".format(
+                self.recovery_info.source_hostname, self.recovery_info.source_port
+            )
+        )
+        dburl = dbconn.DbURL(
+            hostname=self.recovery_info.source_hostname,
+            port=self.recovery_info.source_port,
+            dbname="template1",
+        )
         conn = dbconn.connect(dburl, utility=True)
         dbconn.execSQL(conn, "CHECKPOINT")
         conn.close()
@@ -62,19 +69,25 @@ class ValidationForFullRecovery(Command):
         self.name = name
         self.recovery_info = recovery_info
         self.forceoverwrite = forceoverwrite
-        cmdStr = ''
+        cmdStr = ""
         Command.__init__(self, self.name, cmdStr)
         self.logger = logger
         self.error_type = recoveryinfo.RecoveryErrorType.VALIDATION_ERROR
 
     @set_recovery_cmd_results
     def run(self):
-        self.logger.info("Validate data directories for segment with dbid {}".
-                         format(self.recovery_info.target_segment_dbid))
+        self.logger.info(
+            "Validate data directories for segment with dbid {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
         if not self.forceoverwrite:
             self.validate_failover_data_directory()
-        self.logger.info("Validation successful for segment with dbid: {}".format(
-            self.recovery_info.target_segment_dbid))
+        self.logger.info(
+            "Validation successful for segment with dbid: {}".format(
+                self.recovery_info.target_segment_dbid
+            )
+        )
 
     def validate_failover_data_directory(self):
         """
@@ -88,9 +101,11 @@ class ValidationForFullRecovery(Command):
             return
 
         if len(os.listdir(self.recovery_info.target_datadir)) != 0:
-            raise ValidationException("for segment with port {}: Segment directory '{}' exists but is not empty!"
-                                      .format(self.recovery_info.target_port,
-                                              self.recovery_info.target_datadir))
+            raise ValidationException(
+                "for segment with port {}: Segment directory '{}' exists but is not empty!".format(
+                    self.recovery_info.target_port, self.recovery_info.target_datadir
+                )
+            )
 
     def make_or_update_data_directory(self):
         if os.path.exists(self.recovery_info.target_datadir):
@@ -103,7 +118,7 @@ class SetupForDifferentialRecovery(Command):
     def __init__(self, name, recovery_info, logger):
         self.name = name
         self.recovery_info = recovery_info
-        cmdStr = ''
+        cmdStr = ""
         Command.__init__(self, self.name, cmdStr)
         self.logger = logger
         self.error_type = recoveryinfo.RecoveryErrorType.VALIDATION_ERROR
@@ -118,35 +133,47 @@ class SetupForDifferentialRecovery(Command):
         removePostmasterPid(self.recovery_info.target_datadir)
 
 
-#FIXME we may not need this class
+# FIXME we may not need this class
 class SegSetupRecovery(object):
     def __init__(self):
         pass
 
     def main(self):
         recovery_base = RecoveryBase(__file__)
-        recovery_base.main(self.get_setup_cmds(recovery_base.seg_recovery_info_list, recovery_base.options.forceoverwrite,
-                                               recovery_base.logger))
+        recovery_base.main(
+            self.get_setup_cmds(
+                recovery_base.seg_recovery_info_list,
+                recovery_base.options.forceoverwrite,
+                recovery_base.logger,
+            )
+        )
 
     def get_setup_cmds(self, seg_recovery_info_list, forceoverwrite, logger):
         cmd_list = []
         for seg_recovery_info in seg_recovery_info_list:
             if seg_recovery_info.is_full_recovery:
-                cmd = ValidationForFullRecovery(name='Validate target segment dir for pg_basebackup',
-                                                recovery_info=seg_recovery_info,
-                                                forceoverwrite=forceoverwrite,
-                                                logger=logger)
+                cmd = ValidationForFullRecovery(
+                    name="Validate target segment dir for pg_basebackup",
+                    recovery_info=seg_recovery_info,
+                    forceoverwrite=forceoverwrite,
+                    logger=logger,
+                )
             elif seg_recovery_info.is_differential_recovery:
-                cmd = SetupForDifferentialRecovery(name='Setup for differential recovery',
-                                                   recovery_info=seg_recovery_info,
-                                                   logger=logger)
+                cmd = SetupForDifferentialRecovery(
+                    name="Setup for differential recovery",
+                    recovery_info=seg_recovery_info,
+                    logger=logger,
+                )
             else:
-                cmd = SetupForIncrementalRecovery(name='Setup for pg_rewind', recovery_info=seg_recovery_info,
-                                                  logger=logger)
+                cmd = SetupForIncrementalRecovery(
+                    name="Setup for pg_rewind",
+                    recovery_info=seg_recovery_info,
+                    logger=logger,
+                )
             cmd_list.append(cmd)
 
         return cmd_list
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     SegSetupRecovery().main()

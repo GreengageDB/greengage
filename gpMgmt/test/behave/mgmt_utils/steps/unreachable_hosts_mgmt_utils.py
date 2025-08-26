@@ -14,26 +14,39 @@ from gppylib.commands.base import Command, REMOTE
 # and reconnecting hosts from the current GPDB cluster.  They are not intended to be
 # tied to any particular hardware implementation, and that's mostly the case.
 
-@given('segment hosts "{disconnected}" are disconnected from the cluster and from the spare segment hosts "{spare}"')
-@when('segment hosts "{disconnected}" are disconnected from the cluster and from the spare segment hosts "{spare}"')
-@then('segment hosts "{disconnected}" are disconnected from the cluster and from the spare segment hosts "{spare}"')
+
+@given(
+    'segment hosts "{disconnected}" are disconnected from the cluster and from the spare segment hosts "{spare}"'
+)
+@when(
+    'segment hosts "{disconnected}" are disconnected from the cluster and from the spare segment hosts "{spare}"'
+)
+@then(
+    'segment hosts "{disconnected}" are disconnected from the cluster and from the spare segment hosts "{spare}"'
+)
 def impl(context, disconnected, spare):
-    disconnected_hosts = disconnected.split(',')
+    disconnected_hosts = disconnected.split(",")
     spare_hosts = []
     if spare != "none":
-        spare_hosts = spare.split(',')
+        spare_hosts = spare.split(",")
 
     add_or_remove_blackhole_route(disconnected_hosts, spare_hosts, disconnect=True)
 
 
-@given('segment hosts "{reconnected}" are reconnected to the cluster and to the spare segment hosts "{spare}"')
-@when('segment hosts "{reconnected}" are reconnected to the cluster and to the spare segment hosts "{spare}"')
-@then('segment hosts "{reconnected}" are reconnected to the cluster and to the spare segment hosts "{spare}"')
+@given(
+    'segment hosts "{reconnected}" are reconnected to the cluster and to the spare segment hosts "{spare}"'
+)
+@when(
+    'segment hosts "{reconnected}" are reconnected to the cluster and to the spare segment hosts "{spare}"'
+)
+@then(
+    'segment hosts "{reconnected}" are reconnected to the cluster and to the spare segment hosts "{spare}"'
+)
 def impl(context, reconnected, spare):
-    reconnected_hosts = reconnected.split(',')
+    reconnected_hosts = reconnected.split(",")
     spare_hosts = []
     if spare != "none":
-        spare_hosts = spare.split(',')
+        spare_hosts = spare.split(",")
 
     add_or_remove_blackhole_route(reconnected_hosts, spare_hosts)
 
@@ -90,36 +103,41 @@ def _blackhole_route_helper(disconnect_host, hosts, disconnect=False):
         cmd = "sudo ip route {} {}".format(subcmd, disconnect_addr)
         subprocess.check_output(["ssh", host, cmd])
 
+
 @given('all postgres processes are killed on "{disconnected}" hosts')
 @then('all postgres processes are killed on "{disconnected}" hosts')
 def impl(context, disconnected):
     if disconnected == "current":
         disconnected = socket.gethostname()
-    disconnected_hosts = disconnected.split(',')
+    disconnected_hosts = disconnected.split(",")
 
     # clean up disconnected
-    cmds = ["pkill -9 postgres",
-            "rm /tmp/.s.PGSQL.*",
-            "rm -fr /data/gpdata/primary/*",
-            "rm -fr /data/gpdata/mirror/*"]
+    cmds = [
+        "pkill -9 postgres",
+        "rm /tmp/.s.PGSQL.*",
+        "rm -fr /data/gpdata/primary/*",
+        "rm -fr /data/gpdata/mirror/*",
+    ]
     for host in disconnected_hosts:
         for cmd in cmds:
             subprocess.check_output(["ssh", host, cmd])
 
 
-@given('An entry to {action} {env} env var is added on all hosts of cluster')
-@when('An entry to {action} {env} env var is added on all hosts of cluster')
+@given("An entry to {action} {env} env var is added on all hosts of cluster")
+@when("An entry to {action} {env} env var is added on all hosts of cluster")
 def impl(context, action, env):
     if action == "send":
         cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/ssh_config".format("SendEnv", env)
     else:
-        cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/sshd_config".format("AcceptEnv", env)
+        cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/sshd_config".format(
+            "AcceptEnv", env
+        )
 
     # if it is a centos6 machine, use service command to restart sshd
     os, version, _ = platform.linux_distribution()
-    major_version = version.split('.')[0].strip()
-    if 'centos' in os.lower() and '6' == major_version:
-            cmds = [cmdstr, "sudo service sshd restart"]
+    major_version = version.split(".")[0].strip()
+    if "centos" in os.lower() and "6" == major_version:
+        cmds = [cmdstr, "sudo service sshd restart"]
     else:
         cmds = [cmdstr, "sudo systemctl restart sshd.service"]
 
@@ -141,57 +159,58 @@ def impl(context, test_case):
     # For one_host_down: down host is sdw1 and spare host is sdw5
     # For two_hosts_down: down hosts are sdw1,sdw3 and spare hosts are sdw5,sdw6
     if test_case == "one_host_down":
-        down = 'sdw1'
-        spare = 'sdw5'
+        down = "sdw1"
+        spare = "sdw5"
         hostname_filter = "hostname in ('sdw5')"
-        expected_config = '''sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
+        expected_config = """sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
 sdw5|20001|/data/gpdata/primary/gpseg1 sdw1|20001|/data/gpdata/primary/gpseg1
 sdw5|20002|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6
-sdw5|20003|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7'''
+sdw5|20003|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7"""
     elif test_case == "one_host_down-1":
-        down = 'sdw1'
-        spare = 'sdw5'
+        down = "sdw1"
+        spare = "sdw5"
         hostname_filter = "hostname in ('sdw5')"
-        expected_config = '''sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
+        expected_config = """sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
 sdw5|20001|/data/gpdata/primary/gpseg1 sdw1|20001|/data/gpdata/primary/gpseg1
 sdw5|21000|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6
-sdw5|21001|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7'''
+sdw5|21001|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7"""
     elif test_case == "one_host_down-2":
-        down = 'sdw1'
-        spare = 'sdw5'
+        down = "sdw1"
+        spare = "sdw5"
         hostname_filter = "hostname in ('sdw5')"
-        expected_config = '''sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
+        expected_config = """sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
 sdw1|20001|/data/gpdata/primary/gpseg1 sdw1|20001|/data/gpdata/primary/gpseg1
 sdw1|21001|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7
-sdw5|21000|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6'''
+sdw5|21000|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6"""
     elif test_case == "one_host_down-3":
-        down = 'sdw1'
-        spare = 'sdw5'
+        down = "sdw1"
+        spare = "sdw5"
         hostname_filter = "hostname in ('sdw5')"
-        expected_config = '''sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
+        expected_config = """sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
 sdw5|20001|/data/gpdata/primary/gpseg1 sdw1|20001|/data/gpdata/primary/gpseg1
 sdw1|21001|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7
-sdw1|21000|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6'''
+sdw1|21000|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6"""
     elif test_case == "two_hosts_down":
-        down = 'sdw1,sdw3'
-        spare = 'sdw5,sdw6'
+        down = "sdw1,sdw3"
+        spare = "sdw5,sdw6"
         hostname_filter = "hostname in ('sdw5', 'sdw6')"
-        expected_config = '''sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
+        expected_config = """sdw5|20000|/data/gpdata/primary/gpseg0 sdw1|20000|/data/gpdata/primary/gpseg0
 sdw5|20001|/data/gpdata/primary/gpseg1 sdw1|20001|/data/gpdata/primary/gpseg1
 sdw5|20002|/data/gpdata/mirror/gpseg6 sdw1|21000|/data/gpdata/mirror/gpseg6
 sdw5|20003|/data/gpdata/mirror/gpseg7 sdw1|21001|/data/gpdata/mirror/gpseg7
 sdw6|20002|/data/gpdata/primary/gpseg4 sdw3|20000|/data/gpdata/primary/gpseg4
 sdw6|20003|/data/gpdata/primary/gpseg5 sdw3|20001|/data/gpdata/primary/gpseg5
 sdw6|20000|/data/gpdata/mirror/gpseg2 sdw3|21000|/data/gpdata/mirror/gpseg2
-sdw6|20001|/data/gpdata/mirror/gpseg3 sdw3|21001|/data/gpdata/mirror/gpseg3'''
+sdw6|20001|/data/gpdata/mirror/gpseg3 sdw3|21001|/data/gpdata/mirror/gpseg3"""
     else:
-        raise Exception('Invalid test case')
+        raise Exception("Invalid test case")
 
     with tempfile.NamedTemporaryFile() as config_file:
-        config_file.write(expected_config.encode('utf-8'))
+        config_file.write(expected_config.encode("utf-8"))
         config_file.flush()
 
-        context.execute_steps(u"""
+        context.execute_steps(
+            """
             Given segment hosts "{down}" are reconnected to the cluster and to the spare segment hosts "none"
             And all postgres processes are killed on "{down}" hosts
             And user stops all mirror processes on "{spare}"
@@ -200,5 +219,10 @@ sdw6|20001|/data/gpdata/mirror/gpseg3 sdw3|21001|/data/gpdata/mirror/gpseg3'''
             And the user runs "gprecoverseg -a -i {config_file_path}"
             Then gprecoverseg should return a return code of 0
             And all the segments are running
-            And the cluster is rebalanced""".format(down=down, spare=spare, hostname_filter=hostname_filter,
-                                                    config_file_path=config_file.name))
+            And the cluster is rebalanced""".format(
+                down=down,
+                spare=spare,
+                hostname_filter=hostname_filter,
+                config_file_path=config_file.name,
+            )
+        )

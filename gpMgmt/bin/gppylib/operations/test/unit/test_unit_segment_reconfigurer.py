@@ -17,15 +17,15 @@ class MyDbUrl:
 
 
 class SegmentReconfiguerTestCase(GpTestCase):
-    db = 'database'
-    host = 'mdw'
+    db = "database"
+    host = "mdw"
     port = 15432
-    user = 'postgres'
-    passwd = 'passwd'
+    user = "postgres"
+    passwd = "passwd"
     timeout = 600
 
     def setUp(self):
-        self.conn = Mock(name='conn')
+        self.conn = Mock(name="conn")
         self.logger = Mock()
         self.worker_pool = Mock()
         self.db_url = db_url = MyDbUrl()
@@ -37,10 +37,10 @@ class SegmentReconfiguerTestCase(GpTestCase):
 
         self.connect = MagicMock()
         cm = contextlib.nested(
-                patch('gppylib.db.dbconn.connect', new=self.connect),
-                patch('gppylib.db.dbconn.DbURL', return_value=self.db_url),
-                patch('pygresql.pg.connect'),
-                )
+            patch("gppylib.db.dbconn.connect", new=self.connect),
+            patch("gppylib.db.dbconn.DbURL", return_value=self.db_url),
+            patch("pygresql.pg.connect"),
+        )
         cm.__enter__()
         self.cm = cm
 
@@ -48,27 +48,41 @@ class SegmentReconfiguerTestCase(GpTestCase):
         self.cm.__exit__(None, None, None)
 
     def test_it_triggers_fts_probe(self):
-        reconfigurer = SegmentReconfigurer(logger=self.logger,
-                worker_pool=self.worker_pool, timeout=self.timeout)
+        reconfigurer = SegmentReconfigurer(
+            logger=self.logger, worker_pool=self.worker_pool, timeout=self.timeout
+        )
         reconfigurer.reconfigure()
         pygresql.pg.connect.assert_has_calls([
-            call(dbname=self.db, host=self.host, port=self.port, opt=None, user=self.user, passwd=self.passwd),
+            call(
+                dbname=self.db,
+                host=self.host,
+                port=self.port,
+                opt=None,
+                user=self.user,
+                passwd=self.passwd,
+            ),
             call().query(FTS_PROBE_QUERY),
             call().close(),
-            ]
-            )
+        ])
 
     def test_it_retries_the_connection(self):
-        self.connect.configure_mock(side_effect=[pgdb.DatabaseError, pgdb.DatabaseError, self.conn])
+        self.connect.configure_mock(
+            side_effect=[pgdb.DatabaseError, pgdb.DatabaseError, self.conn]
+        )
 
-        reconfigurer = SegmentReconfigurer(logger=self.logger,
-                worker_pool=self.worker_pool, timeout=self.timeout)
+        reconfigurer = SegmentReconfigurer(
+            logger=self.logger, worker_pool=self.worker_pool, timeout=self.timeout
+        )
         reconfigurer.reconfigure()
 
-        self.connect.assert_has_calls([call(self.db_url), call(self.db_url), call(self.db_url), ])
+        self.connect.assert_has_calls([
+            call(self.db_url),
+            call(self.db_url),
+            call(self.db_url),
+        ])
         self.conn.close.assert_any_call()
 
-    @patch('time.time')
+    @patch("time.time")
     def test_it_gives_up_after_600_seconds(self, now_mock):
         start_datetime = datetime.datetime(2018, 5, 9, 16, 0, 0)
         start_time = time.mktime(start_datetime.timetuple())
@@ -82,14 +96,22 @@ class SegmentReconfiguerTestCase(GpTestCase):
                 now_mock.configure_mock(return_value=new_time)
                 yield pgdb.DatabaseError
 
-
         self.connect.configure_mock(side_effect=fail_for_five_minutes())
 
-        reconfigurer = SegmentReconfigurer(logger=self.logger,
-                worker_pool=self.worker_pool, timeout=self.timeout)
+        reconfigurer = SegmentReconfigurer(
+            logger=self.logger, worker_pool=self.worker_pool, timeout=self.timeout
+        )
         with self.assertRaises(RuntimeError) as context:
             reconfigurer.reconfigure()
-            self.assertEqual("Mirror promotion did not complete in {0} seconds.".format(self.timeout), context.exception.message)
+            self.assertEqual(
+                "Mirror promotion did not complete in {0} seconds.".format(
+                    self.timeout
+                ),
+                context.exception.message,
+            )
 
-        self.connect.assert_has_calls([call(self.db_url), call(self.db_url), ])
+        self.connect.assert_has_calls([
+            call(self.db_url),
+            call(self.db_url),
+        ])
         self.conn.close.assert_has_calls([])

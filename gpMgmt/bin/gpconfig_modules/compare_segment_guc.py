@@ -9,9 +9,10 @@ class MultiValueGuc(SegmentGuc):
     encapsulate various GUC locations within a given segment.
     A segment can include 2 databases: the primary and a mirror.
     The database value is singular, since we strongly expect the values to be the same, given mirroring.
-    However, the file values of primary and mirror can be different. 
+    However, the file values of primary and mirror can be different.
     So we model this MultiValueGuc object to accept 2 file values, and one database value.
     """
+
     def __init__(self, guc1, guc2):
         """
         accept 2 gucs in any order. gucs can be any combination of:
@@ -73,24 +74,40 @@ class MultiValueGuc(SegmentGuc):
         file_val = self.primary_file_seg_guc.get_value()
         if file_val is not None:
             if self.db_seg_guc:
-                result = "%s value: %s | file: %s" % (self.get_label(), self.db_seg_guc.value, file_val)
+                result = "%s value: %s | file: %s" % (
+                    self.get_label(),
+                    self.db_seg_guc.value,
+                    file_val,
+                )
             else:
                 result = "%s value: %s" % (self.get_label(), file_val)
         else:
             if self.db_seg_guc:
-                result = "%s value: %s | not set in file" % (self.get_label(), self.db_seg_guc.value)
+                result = "%s value: %s | not set in file" % (
+                    self.get_label(),
+                    self.db_seg_guc.value,
+                )
             else:
-                result = "No value is set on %s" % ("master" if self.get_label() == "Master " else "segments")
+                result = "No value is set on %s" % (
+                    "master" if self.get_label() == "Master " else "segments"
+                )
         return result
 
     def report_fail_format(self):
-        sort_seg_guc_objs = [obj for obj in [self.primary_file_seg_guc, self.mirror_file_seg_guc] if obj]
+        sort_seg_guc_objs = [
+            obj for obj in [self.primary_file_seg_guc, self.mirror_file_seg_guc] if obj
+        ]
         sort_seg_guc_objs.sort(key=lambda x: x.dbid)
 
         if self.db_seg_guc:
-            report = [self._report_fail_format_with_database_and_file_gucs(seg_guc_obj) for seg_guc_obj in sort_seg_guc_objs]
+            report = [
+                self._report_fail_format_with_database_and_file_gucs(seg_guc_obj)
+                for seg_guc_obj in sort_seg_guc_objs
+            ]
         else:
-            report = [seg_guc_obj.report_fail_format()[0] for seg_guc_obj in sort_seg_guc_objs]
+            report = [
+                seg_guc_obj.report_fail_format()[0] for seg_guc_obj in sort_seg_guc_objs
+            ]
         return report
 
     def _report_fail_format_with_database_and_file_gucs(self, segment_guc_obj):
@@ -104,10 +121,12 @@ class MultiValueGuc(SegmentGuc):
             segment_guc_obj.dbid,
             self.db_seg_guc.name,
             self.db_seg_guc.value,
-            file_tag)
+            file_tag,
+        )
 
     class ParseError(Exception):
         """Used by _unquote()."""
+
         pass
 
     class _StringStream(object):
@@ -115,6 +134,7 @@ class MultiValueGuc(SegmentGuc):
         A helper class for _unquote() that implements next() and peek()
         operations for a byte string, to turn it into a "stream".
         """
+
         def __init__(self, s):
             self._str = s
             self._len = len(s)
@@ -127,7 +147,7 @@ class MultiValueGuc(SegmentGuc):
             stream is reached.
             """
             if self._i >= self._len:
-                return ''
+                return ""
 
             return self._str[self._i]
 
@@ -138,7 +158,7 @@ class MultiValueGuc(SegmentGuc):
             stream is reached.
             """
             if self._i >= self._len:
-                return ''
+                return ""
 
             char = self._str[self._i]
             self._i += 1
@@ -147,7 +167,7 @@ class MultiValueGuc(SegmentGuc):
     @staticmethod
     def _isoctal(char):
         """Returns true if the passed string is an octal digit."""
-        return char in ('0', '1', '2', '3', '4', '5', '6', '7')
+        return char in ("0", "1", "2", "3", "4", "5", "6", "7")
 
     @staticmethod
     def _unquote(guc_value):
@@ -164,7 +184,7 @@ class MultiValueGuc(SegmentGuc):
           returned unchanged (and unvalidated).
         """
         if not guc_value:
-            raise MultiValueGuc.ParseError('parameter value is empty')
+            raise MultiValueGuc.ParseError("parameter value is empty")
 
         # Don't unquote values that aren't quoted.
         if not guc_value.startswith("'"):
@@ -172,7 +192,7 @@ class MultiValueGuc(SegmentGuc):
 
         # Make sure we have an ending quote, then strip them.
         if len(guc_value) == 1 or not guc_value.endswith("'"):
-            raise MultiValueGuc.ParseError('missing final single quote')
+            raise MultiValueGuc.ParseError("missing final single quote")
 
         guc_value = guc_value[1:-1]
 
@@ -181,22 +201,22 @@ class MultiValueGuc(SegmentGuc):
         while stream.peek():
             char = next(stream)
 
-            if char == '\\':
+            if char == "\\":
                 char = next(stream)
                 if not char:
-                    raise MultiValueGuc.ParseError('invalid trailing backslash')
+                    raise MultiValueGuc.ParseError("invalid trailing backslash")
 
                 # Handle standard backslash escapes.
-                if char == 'b':
-                    char = '\b'
-                elif char == 'f':
-                    char = '\f'
-                elif char == 'n':
-                    char = '\n'
-                elif char == 'r':
-                    char = '\r'
-                elif char == 't':
-                    char = '\t'
+                if char == "b":
+                    char = "\b"
+                elif char == "f":
+                    char = "\f"
+                elif char == "n":
+                    char = "\n"
+                elif char == "r":
+                    char = "\r"
+                elif char == "t":
+                    char = "\t"
 
                 # Handle octal escapes (e.g. \023).
                 elif MultiValueGuc._isoctal(char):
@@ -209,7 +229,7 @@ class MultiValueGuc(SegmentGuc):
                             break
 
                         octal = (octal << 3) + int(char)
-                        next(stream) # advance
+                        next(stream)  # advance
 
                     # Translate back to a character (truncating to one byte).
                     char = chr(octal & 0xFF)
@@ -218,11 +238,11 @@ class MultiValueGuc(SegmentGuc):
             elif char == "'":
                 char = next(stream)
                 if char != "'":
-                    raise MultiValueGuc.ParseError('invalid single quote')
+                    raise MultiValueGuc.ParseError("invalid single quote")
 
             quoted.append(char)
 
-        return ''.join(quoted)
+        return "".join(quoted)
 
     @staticmethod
     def compare_db_and_file_values(db_guc, file_guc):
@@ -248,11 +268,18 @@ class MultiValueGuc(SegmentGuc):
         result = True
 
         if self.mirror_file_seg_guc and self.db_seg_guc:
-            result = self.compare_db_and_file_values(self.db_seg_guc.value, self.mirror_file_seg_guc.value)
+            result = self.compare_db_and_file_values(
+                self.db_seg_guc.value, self.mirror_file_seg_guc.value
+            )
         if not result:
             return result
 
-        return self.compare_db_and_file_values(self.db_seg_guc.value, self.primary_file_seg_guc.value) and result
+        return (
+            self.compare_db_and_file_values(
+                self.db_seg_guc.value, self.primary_file_seg_guc.value
+            )
+            and result
+        )
 
     def get_value(self):
         file_value = ""
@@ -275,5 +302,8 @@ class MultiValueGuc(SegmentGuc):
 
     def compare_primary_and_mirror_files(self):
         if self.primary_file_seg_guc and self.mirror_file_seg_guc:
-            return self.primary_file_seg_guc.get_value() == self.mirror_file_seg_guc.get_value()
+            return (
+                self.primary_file_seg_guc.get_value()
+                == self.mirror_file_seg_guc.get_value()
+            )
         return True

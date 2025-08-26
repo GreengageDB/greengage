@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+
 from __future__ import absolute_import
 import os
 
@@ -18,11 +19,12 @@ from gppylib.utils import checkNotNone
 
 logger = get_default_logger()
 
+
 #
 # An implementation of GpOsProvider will provide functionality to do native/os commands
 #  (like sleeping)
 #
-class GpOsProvider :
+class GpOsProvider:
     def __init__(self):
         pass
 
@@ -32,7 +34,7 @@ class GpOsProvider :
     #
     # Sleep for the given number of seconds (as though calling python's sleep)
     #
-    def sleep( self, sleepTime ) :
+    def sleep(self, sleepTime):
         raise Exception("not implemented")
 
 
@@ -40,9 +42,11 @@ class GpOsProvider :
 # Management of registered configuration provider.  Right now it
 #   is a singleton, so initializeDatabase calls _could_ mess up
 #   the singleton for other parts of code.  Perhaps switch later
-#   to a factory 
+#   to a factory
 #
 gProvider = None
+
+
 def registerOsProvider(provider):
     global gProvider
     checkNotNone("New global osProvider", provider)
@@ -51,6 +55,7 @@ def registerOsProvider(provider):
         gProvider.destroy()
 
     gProvider = provider
+
 
 def getOsProvider():
     global gProvider

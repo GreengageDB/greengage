@@ -7,8 +7,13 @@ import unittest
 
 import mock
 
-from gppylib.commands.base import Command, ExecutionError, WorkerPool, \
-                                  join_and_indicate_progress
+from gppylib.commands.base import (
+    Command,
+    ExecutionError,
+    WorkerPool,
+    join_and_indicate_progress,
+)
+
 
 class WorkerPoolTest(unittest.TestCase):
     def setUp(self):
@@ -24,7 +29,7 @@ class WorkerPoolTest(unittest.TestCase):
     def test_pool_must_have_some_workers(self):
         with self.assertRaises(Exception):
             WorkerPool(numWorkers=0)
-        
+
     def test_pool_runs_added_command(self):
         cmd = mock.Mock(spec=Command)
 
@@ -36,7 +41,7 @@ class WorkerPoolTest(unittest.TestCase):
     def test_completed_commands_are_retrievable(self):
         cmd = mock.Mock(spec=Command)
 
-        self.pool.addCommand(cmd) # should quickly be completed
+        self.pool.addCommand(cmd)  # should quickly be completed
         self.pool.join()
 
         self.assertEqual(self.pool.getCompletedItems(), [cmd])
@@ -46,8 +51,10 @@ class WorkerPoolTest(unittest.TestCase):
 
         # cmd.run() will block until this Event is set.
         event = threading.Event()
+
         def wait_for_event():
             event.wait()
+
         cmd.run.side_effect = wait_for_event
 
         self.assertTrue(self.pool.isDone())
@@ -118,8 +125,10 @@ class WorkerPoolTest(unittest.TestCase):
 
         # cmd.run() will block until this Event is set.
         event = threading.Event()
+
         def wait_for_event():
             event.wait()
+
         cmd.run.side_effect = wait_for_event
 
         try:
@@ -139,7 +148,7 @@ class WorkerPoolTest(unittest.TestCase):
             # Make sure that we unblock the thread even on a test failure.
             event.set()
 
-        done = self.pool.join(2) # should be immediate, but there's still a race
+        done = self.pool.join(2)  # should be immediate, but there's still a race
         self.assertTrue(done)
 
     def test_completed_returns_number_of_completed_commands(self):
@@ -211,8 +220,10 @@ class WorkerPoolTest(unittest.TestCase):
 
         # cmd.run() will block until this Event is set.
         event = threading.Event()
+
         def wait_for_event():
             event.wait()
+
         cmd2.run.side_effect = wait_for_event
 
         try:
@@ -244,26 +255,29 @@ class WorkerPoolTest(unittest.TestCase):
         stdout = StringIO.StringIO()
         join_and_indicate_progress(self.pool, stdout)
 
-        self.assertEqual(stdout.getvalue(), '')
+        self.assertEqual(stdout.getvalue(), "")
 
     def test_join_and_indicate_progress_prints_dots_until_pool_is_done(self):
         cmd = mock.Mock(spec=Command)
 
         # cmd.run() will block until this Event is set.
         event = threading.Event()
+
         def wait_for_event():
             event.wait()
+
         cmd.run.side_effect = wait_for_event
 
         # Open up a pipe and wrap each end in a file-like object.
         read_end, write_end = os.pipe()
-        read_end = os.fdopen(read_end, 'r')
-        write_end = os.fdopen(write_end, 'w')
+        read_end = os.fdopen(read_end, "r")
+        write_end = os.fdopen(write_end, "w")
 
         # Create a thread to perform join_and_indicate_progress().
         def tmain():
             join_and_indicate_progress(self.pool, write_end, interval=0.001)
             write_end.close()
+
         join_thread = threading.Thread(target=tmain)
 
         try:
@@ -275,7 +289,7 @@ class WorkerPoolTest(unittest.TestCase):
             # a few dots...
             for _ in range(3):
                 byte = read_end.read(1)
-                self.assertEqual(byte, '.')
+                self.assertEqual(byte, ".")
 
             # ...then stop the command.
             event.set()
@@ -284,7 +298,7 @@ class WorkerPoolTest(unittest.TestCase):
             # newline. (tmain() closes the write end of the pipe so that this
             # read() will complete.)
             remaining = read_end.read()
-            self.assertRegexpMatches(remaining, r'^[.]*\n$')
+            self.assertRegexpMatches(remaining, r"^[.]*\n$")
 
         finally:
             # Make sure that we unblock and join all threads, even on a test
@@ -296,8 +310,10 @@ class WorkerPoolTest(unittest.TestCase):
         duration = 0.005
 
         cmd = mock.Mock(spec=Command)
+
         def wait_for_duration():
             time.sleep(duration)
+
         cmd.run.side_effect = wait_for_duration
         self.pool.addCommand(cmd)
 
@@ -306,5 +322,5 @@ class WorkerPoolTest(unittest.TestCase):
 
         for i, call in enumerate(stdout.mock_calls):
             # Every written dot should be followed by a flush().
-            if call == mock.call.write('.'):
+            if call == mock.call.write("."):
                 self.assertEqual(stdout.mock_calls[i + 1], mock.call.flush())

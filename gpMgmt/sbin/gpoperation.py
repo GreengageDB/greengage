@@ -6,7 +6,7 @@ import pickle
 import traceback
 
 
-class NullDevice():
+class NullDevice:
     def write(self, s):
         pass
 
@@ -47,8 +47,8 @@ except Exception as e:
         # So, provide meaningful trace as text and provide a non-zero return code
         # to signal to RemoteOperation that its Command invocation of gpoperation.py has failed.
         pretty_trace = str(e) + "\n"
-        pretty_trace += 'Traceback (most recent call last):\n'
-        pretty_trace += ''.join(traceback.format_list(tb_list))
+        pretty_trace += "Traceback (most recent call last):\n"
+        pretty_trace += "".join(traceback.format_list(tb_list))
         logger.critical(pretty_trace)
         print(pretty_trace, file=sys.stderr)
         sys.exit(2)  # signal that gpoperation.py has hit unexpected error

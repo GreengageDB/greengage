@@ -67,31 +67,35 @@ from __future__ import absolute_import
 from __future__ import print_function
 from _pg import *
 import time
+
 try:
     frozenset
-except NameError: # Python < 2.4
+except NameError:  # Python < 2.4
     from sets import ImmutableSet as frozenset
 from datetime import datetime, timedelta
-try: # use Decimal if available
+
+try:  # use Decimal if available
     from decimal import Decimal
+
     set_decimal(Decimal)
-except ImportError: # otherwise (Python < 2.4)
-    Decimal = float # use float instead of Decimal
+except ImportError:  # otherwise (Python < 2.4)
+    Decimal = float  # use float instead of Decimal
 
 
 ### Module Constants
 
 # compliant with DB SIG 2.0
-apilevel = '2.0'
+apilevel = "2.0"
 
 # module may be shared, but not connections
 threadsafety = 1
 
 # this module use extended python format codes
-paramstyle = 'pyformat'
+paramstyle = "pyformat"
 
 
 ### Internal Types Handling
+
 
 def decimal_type(decimal_type=None):
     """Get or set global type to be used for decimal values."""
@@ -103,19 +107,26 @@ def decimal_type(decimal_type=None):
 
 
 def _cast_bool(value):
-    return value[:1] in ['t', 'T']
+    return value[:1] in ["t", "T"]
 
 
 def _cast_money(value):
-    return Decimal(''.join(filter(
-        lambda v: v in '0123456789.-', value)))
+    return Decimal("".join(filter(lambda v: v in "0123456789.-", value)))
 
 
-_cast = {'bool': _cast_bool,
-    'int2': int, 'int4': int, 'serial': int,
-    'int8': int, 'oid': int, 'oid8': int,
-    'float4': float, 'float8': float,
-    'numeric': Decimal, 'money': _cast_money}
+_cast = {
+    "bool": _cast_bool,
+    "int2": int,
+    "int4": int,
+    "serial": int,
+    "int8": int,
+    "oid": int,
+    "oid8": int,
+    "float4": float,
+    "float8": float,
+    "numeric": Decimal,
+    "money": _cast_money,
+}
 
 
 class pgdbTypeCache(dict):
@@ -137,6 +148,7 @@ class pgdbTypeCache(dict):
             return value
         else:
             return cast(value)
+
     typecast = staticmethod(typecast)
 
     def getdescr(self, oid):
@@ -144,14 +156,11 @@ class pgdbTypeCache(dict):
         try:
             return self[oid]
         except KeyError:
-            self._src.execute(
-                "SELECT typname, typlen "
-                "FROM pg_type WHERE oid=%s" % oid)
+            self._src.execute("SELECT typname, typlen FROM pg_type WHERE oid=%s" % oid)
             res = self._src.fetch(1)[0]
             # The column name is omitted from the return value.
             # It will have to be prepended by the caller.
-            res = (res[0], None, int(res[1]),
-                None, None, None)
+            res = (res[0], None, int(res[1]), None, None, None)
             self[oid] = res
             return res
 
@@ -168,6 +177,7 @@ class _quotedict(dict):
 
 
 ### Cursor Object
+
 
 class pgdbCursor(object):
     """Cursor Object."""
@@ -192,22 +202,21 @@ class pgdbCursor(object):
         if isinstance(val, datetime):
             val = str(val)
         elif isinstance(val, unicode):
-            val = val.encode( 'utf8' )
+            val = val.encode("utf8")
         if isinstance(val, str):
             val = "'%s'" % self._cnx.escape_string(val)
         elif isinstance(val, (int, int, float)):
             pass
         elif val is None:
-            val = 'NULL'
+            val = "NULL"
         elif isinstance(val, (list, tuple)):
-            val = '(%s)' % ','.join(map(lambda v: str(self._quote(v)), val))
+            val = "(%s)" % ",".join(map(lambda v: str(self._quote(v)), val))
         elif Decimal is not float and isinstance(val, Decimal):
             pass
-        elif hasattr(val, '__pg_repr__'):
+        elif hasattr(val, "__pg_repr__"):
             val = val.__pg_repr__()
         else:
-            raise InterfaceError(
-                'do not know how to handle type %s' % type(val))
+            raise InterfaceError("do not know how to handle type %s" % type(val))
         return val
 
     def _quoteparams(self, string, params):
@@ -239,6 +248,7 @@ class pgdbCursor(object):
 
         """
         return row
+
     row_factory = staticmethod(row_factory)
 
     def close(self):
@@ -253,8 +263,7 @@ class pgdbCursor(object):
         # The parameters may also be specified as list of
         # tuples to e.g. insert multiple rows in a single
         # operation, but this kind of usage is deprecated:
-        if (params and isinstance(params, list)
-                and isinstance(params[0], tuple)):
+        if params and isinstance(params, list) and isinstance(params[0], tuple):
             self.executemany(operation, params)
         else:
             # not a list of tuples
@@ -283,7 +292,7 @@ class pgdbCursor(object):
                 else:
                     sql = operation
                 rows = self._src.execute(sql)
-                if rows: # true if not DML
+                if rows:  # true if not DML
                     totrows += rows
                 else:
                     self.rowcount = -1
@@ -335,8 +344,10 @@ class pgdbCursor(object):
         row_factory = self.row_factory
         typecast = self._type_cache.typecast
         coltypes = [desc[1] for desc in self.description]
-        return [row_factory([typecast(*args)
-            for args in zip(coltypes, row)]) for row in result]
+        return [
+            row_factory([typecast(*args) for args in zip(coltypes, row)])
+            for row in result
+        ]
 
     def next(self):
         """Return the next row (support for the iteration protocol)."""
@@ -348,20 +359,24 @@ class pgdbCursor(object):
     def nextset():
         """Not supported."""
         raise NotSupportedError("nextset() is not supported")
+
     nextset = staticmethod(nextset)
 
     def setinputsizes(sizes):
         """Not supported."""
         pass
+
     setinputsizes = staticmethod(setinputsizes)
 
     def setoutputsize(size, column=0):
         """Not supported."""
         pass
+
     setoutputsize = staticmethod(setoutputsize)
 
 
 ### Connection Objects
+
 
 class pgdbCnx(object):
     """Connection Object."""
@@ -380,8 +395,8 @@ class pgdbCnx(object):
 
     def __init__(self, cnx):
         """Create a database connection object."""
-        self._cnx = cnx # connection
-        self._tnx = False # transaction state
+        self._cnx = cnx  # connection
+        self._tnx = False  # transaction state
         self._type_cache = pgdbTypeCache(cnx)
         try:
             self._cnx.source()
@@ -435,9 +450,8 @@ class pgdbCnx(object):
 
 _connect_ = connect
 
-def connect(dsn=None,
-        user=None, password=None,
-        host=None, database=None):
+
+def connect(dsn=None, user=None, password=None, host=None, database=None):
     """Connects to a database."""
     # first get params from DSN
     dbport = -1
@@ -481,12 +495,12 @@ def connect(dsn=None,
         dbuser = None
 
     # open the connection
-    cnx = _connect_(dbbase, dbhost, dbport, dbopt,
-        dbtty, dbuser, dbpasswd)
+    cnx = _connect_(dbbase, dbhost, dbport, dbopt, dbtty, dbuser, dbpasswd)
     return pgdbCnx(cnx)
 
 
 ### Types Handling
+
 
 class pgdbType(frozenset):
     """Type class for a couple of PostgreSQL data types.
@@ -496,12 +510,15 @@ class pgdbType(frozenset):
 
     """
 
-    if frozenset.__module__ == '__builtin__':
+    if frozenset.__module__ == "__builtin__":
+
         def __new__(cls, values):
             if isinstance(values, basestring):
                 values = values.split()
             return super(pgdbType, cls).__new__(cls, values)
-    else: # Python < 2.4
+
+    else:  # Python < 2.4
+
         def __init__(self, values):
             if isinstance(values, basestring):
                 values = values.split()
@@ -522,54 +539,63 @@ class pgdbType(frozenset):
 
 # Mandatory type objects defined by DB-API 2 specs:
 
-STRING = pgdbType('char bpchar name text varchar')
-BINARY = pgdbType('bytea')
-NUMBER = pgdbType('int2 int4 serial int8 float4 float8 numeric money')
-DATETIME = pgdbType('date time timetz timestamp timestamptz datetime abstime'
-    ' interval tinterval timespan reltime')
-ROWID = pgdbType('oid oid8')
+STRING = pgdbType("char bpchar name text varchar")
+BINARY = pgdbType("bytea")
+NUMBER = pgdbType("int2 int4 serial int8 float4 float8 numeric money")
+DATETIME = pgdbType(
+    "date time timetz timestamp timestamptz datetime abstime"
+    " interval tinterval timespan reltime"
+)
+ROWID = pgdbType("oid oid8")
 
 
 # Additional type objects (more specific):
 
-BOOL = pgdbType('bool')
-SMALLINT = pgdbType('int2')
-INTEGER = pgdbType('int2 int4 int8 serial')
-LONG = pgdbType('int8')
-FLOAT = pgdbType('float4 float8')
-NUMERIC = pgdbType('numeric')
-MONEY = pgdbType('money')
-DATE = pgdbType('date')
-TIME = pgdbType('time timetz')
-TIMESTAMP = pgdbType('timestamp timestamptz datetime abstime')
-INTERVAL = pgdbType('interval tinterval timespan reltime')
+BOOL = pgdbType("bool")
+SMALLINT = pgdbType("int2")
+INTEGER = pgdbType("int2 int4 int8 serial")
+LONG = pgdbType("int8")
+FLOAT = pgdbType("float4 float8")
+NUMERIC = pgdbType("numeric")
+MONEY = pgdbType("money")
+DATE = pgdbType("date")
+TIME = pgdbType("time timetz")
+TIMESTAMP = pgdbType("timestamp timestamptz datetime abstime")
+INTERVAL = pgdbType("interval tinterval timespan reltime")
 
 
 # Mandatory type helpers defined by DB-API 2 specs:
+
 
 def Date(year, month, day):
     """Construct an object holding a date value."""
     return datetime(year, month, day)
 
+
 def Time(hour, minute, second):
     """Construct an object holding a time value."""
     return timedelta(hour, minute, second)
+
 
 def Timestamp(year, month, day, hour, minute, second):
     """construct an object holding a time stamp value."""
     return datetime(year, month, day, hour, minute, second)
 
+
 def DateFromTicks(ticks):
     """Construct an object holding a date value from the given ticks value."""
     return Date(*time.localtime(ticks)[:3])
+
 
 def TimeFromTicks(ticks):
     """construct an object holding a time value from the given ticks value."""
     return Time(*time.localtime(ticks)[3:6])
 
+
 def TimestampFromTicks(ticks):
     """construct an object holding a time stamp from the given ticks value."""
     return Timestamp(*time.localtime(ticks)[:6])
+
 
 def Binary(value):
     """construct an object capable of holding a binary (long) string value."""
@@ -578,7 +604,7 @@ def Binary(value):
 
 # If run as script, print some information:
 
-if __name__ == '__main__':
-    print('PyGreSQL version', version)
+if __name__ == "__main__":
+    print("PyGreSQL version", version)
     print()
     print(__doc__)

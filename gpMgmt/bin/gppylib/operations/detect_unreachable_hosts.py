@@ -14,7 +14,9 @@ def get_unreachable_segment_hosts(hosts, num_workers):
     pool = base.WorkerPool(numWorkers=num_workers)
     try:
         for host in set(hosts):
-            cmd = Command(name='check %s is up' % host, cmdStr="ssh %s 'echo %s'" % (host, host))
+            cmd = Command(
+                name="check %s is up" % host, cmdStr="ssh %s 'echo %s'" % (host, host)
+            )
             pool.addCommand(cmd)
         pool.join()
     finally:
@@ -27,17 +29,20 @@ def get_unreachable_segment_hosts(hosts, num_workers):
     for item in pool.getCompletedItems():
         result = item.get_results()
         if result.rc == 0:
-            host = result.stdout.strip().split('\n')[-1]
+            host = result.stdout.strip().split("\n")[-1]
             reachable_hosts.add(host)
 
     unreachable_hosts = list(set(hosts).difference(reachable_hosts))
     unreachable_hosts.sort()
     if len(unreachable_hosts) > 0:
-        logger.warning("One or more hosts are not reachable via SSH.  Any segments on those hosts will be marked down")
+        logger.warning(
+            "One or more hosts are not reachable via SSH.  Any segments on those hosts will be marked down"
+        )
         for host in sorted(unreachable_hosts):
             logger.warning("Host %s is unreachable" % host)
 
     return unreachable_hosts
+
 
 def mark_segments_down_for_unreachable_hosts(segmentPairs, unreachable_hosts):
     # We only mark the segment down in gparray for use by later checks, as
@@ -47,5 +52,8 @@ def mark_segments_down_for_unreachable_hosts(segmentPairs, unreachable_hosts):
         for seg in [segmentPair.primaryDB, segmentPair.mirrorDB]:
             host = seg.getSegmentHostName()
             if host in unreachable_hosts:
-                logger.warning("Marking segment %d down because %s is unreachable" % (seg.dbid, host))
+                logger.warning(
+                    "Marking segment %d down because %s is unreachable"
+                    % (seg.dbid, host)
+                )
                 seg.setSegmentStatus(STATUS_DOWN)

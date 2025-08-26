@@ -5,6 +5,7 @@ from gppylib.gplog import *
 from gppylib.gpcatalog import *
 import re
 
+
 class ForeignKeyCheck:
     """
     PURPOSE: detect differences between foreign key and reference key values among catalogs
@@ -18,29 +19,31 @@ class ForeignKeyCheck:
         self.shared_option = shared_option
         self.autoCast = autoCast
         self.query_filters = dict()
-        self.query_filters['pg_appendonly.relid'] = "(relstorage='a' or relstorage='c')"
+        self.query_filters["pg_appendonly.relid"] = "(relstorage='a' or relstorage='c')"
         # Views having empty target list are permitted.  Such views
         # have no entry in pg_attribute.  This filter excludes
         # zero-column views from foreign key check between
         # pg_class and pg_attribute.  The NULL check flags cases as
         # error where pg_class entry is missing but pg_attribute entry
         # exists.
-        self.query_filters['pg_attribute.attrelid'] = "(relnatts > 0 or relnatts is NULL)"
+        self.query_filters["pg_attribute.attrelid"] = (
+            "(relnatts > 0 or relnatts is NULL)"
+        )
         self.query_filters["pg_index.indexrelid"] = "(relkind='i')"
 
     def isZeroColumnView(self, oid):
         if ForeignKeyCheck.ZeroColumnViewOids is None:
             ForeignKeyCheck.ZeroColumnViewOids = []
             curs = self.db_connection.query(
-                "select oid from pg_class where relnatts = 0 and relkind = 'v'")
+                "select oid from pg_class where relnatts = 0 and relkind = 'v'"
+            )
             for row in curs.getresult():
-                ForeignKeyCheck.ZeroColumnViewOids.append(row[0]);
+                ForeignKeyCheck.ZeroColumnViewOids.append(row[0])
         return oid in ForeignKeyCheck.ZeroColumnViewOids
 
     def runCheck(self, tables):
         foreign_key_issues = dict()
         for cat in sorted(tables):
-
             issues = self.checkTableForeignKey(cat)
             if issues:
                 foreign_key_issues[cat.getTableName()] = issues
@@ -64,9 +67,14 @@ class ForeignKeyCheck:
             return
 
         # skip these master-only tables
-        skipped_masteronly = ['gp_relation_node', 'pg_description',
-                              'pg_shdescription', 'pg_stat_last_operation',
-                              'pg_stat_last_shoperation', 'pg_statistic']
+        skipped_masteronly = [
+            "gp_relation_node",
+            "pg_description",
+            "pg_shdescription",
+            "pg_stat_last_operation",
+            "pg_stat_last_shoperation",
+            "pg_statistic",
+        ]
 
         if catname in skipped_masteronly:
             return
@@ -86,17 +94,22 @@ class ForeignKeyCheck:
         # build array of catalog primary keys (with aliases) and
         # primary key alias list
         for pk in pkeylist:
-            cat1_pkeys_column_rename.append('cat1.' + pk + ' as %s_%s' % (catname, pk))
-            pkey_aliases.append('%s_%s' % (catname, pk))
+            cat1_pkeys_column_rename.append("cat1." + pk + " as %s_%s" % (catname, pk))
+            pkey_aliases.append("%s_%s" % (catname, pk))
 
-        self.logger.info('Building %d queries to check FK constraint on table %s' % (len(fkeylist), catname))
+        self.logger.info(
+            "Building %d queries to check FK constraint on table %s"
+            % (len(fkeylist), catname)
+        )
         issue_list = list()
         for fkeydef in fkeylist:
-            castedFkey = [c + self.autoCast.get(coltypes[c], '') for c in fkeydef.getColumns()]
-            fkeystr = ', '.join(castedFkey)
-            pkeystr = ', '.join(fkeydef.getPKey())
+            castedFkey = [
+                c + self.autoCast.get(coltypes[c], "") for c in fkeydef.getColumns()
+            ]
+            fkeystr = ", ".join(castedFkey)
+            pkeystr = ", ".join(fkeydef.getPKey())
             pkcatname = fkeydef.getPkeyTableName()
-            catname_filter = '%s.%s' % (catname, fkeydef.getColumns()[0])
+            catname_filter = "%s.%s" % (catname, fkeydef.getColumns()[0])
 
             #
             # The goal of this check is to validate foreign keys, which are associations between two tables.
@@ -115,14 +128,32 @@ class ForeignKeyCheck:
             # are foreign keys--using a very specific filtering condition, since the full join would otherwise contain
             # unwanted entries from pg_class.
             #
-            can_use_full_join = catname_filter in self.query_filters and pkcatname == 'pg_class'
+            can_use_full_join = (
+                catname_filter in self.query_filters and pkcatname == "pg_class"
+            )
             if can_use_full_join:
-                qry = self.get_fk_query_full_join(catname, pkcatname, fkeystr, pkeystr,
-                                                  pkey_aliases, cat1pkeys=cat1_pkeys_column_rename, filter=self.query_filters[catname_filter])
+                qry = self.get_fk_query_full_join(
+                    catname,
+                    pkcatname,
+                    fkeystr,
+                    pkeystr,
+                    pkey_aliases,
+                    cat1pkeys=cat1_pkeys_column_rename,
+                    filter=self.query_filters[catname_filter],
+                )
             else:
-                qry = self.get_fk_query_left_join(catname, pkcatname, fkeystr, pkeystr, pkey_aliases, cat1_pkeys_column_rename)
+                qry = self.get_fk_query_left_join(
+                    catname,
+                    pkcatname,
+                    fkeystr,
+                    pkeystr,
+                    pkey_aliases,
+                    cat1_pkeys_column_rename,
+                )
 
-            issue_list += self._validate_relation(catname, fkeystr, pkcatname, pkeystr, qry)
+            issue_list += self._validate_relation(
+                catname, fkeystr, pkcatname, pkeystr, qry
+            )
 
         return issue_list
 
@@ -138,37 +169,49 @@ class ForeignKeyCheck:
             # pg_attribute.  The row[1] corresponds to
             # pg_rewrite_ev_class field in the foreign key check
             # query.  It is the OID of the rule's entry in pg_class.
-            if catname == 'pg_rewrite' and nrows > 0:
+            if catname == "pg_rewrite" and nrows > 0:
                 for row in curs.getresult():
                     if self.isZeroColumnView(row[1]):
                         self.logger.info("Found zero column view: OID %s" % row[1])
                         nrows = nrows - 1
 
             if nrows == 0:
-                self.logger.info('[OK] Foreign key check for %s(%s) referencing %s(%s)' %
-                                 (catname, fkeystr, pkcatname, pkeystr))
+                self.logger.info(
+                    "[OK] Foreign key check for %s(%s) referencing %s(%s)"
+                    % (catname, fkeystr, pkcatname, pkeystr)
+                )
             else:
-                self.logger.info('[FAIL] Foreign key check for %s(%s) referencing %s(%s)' %
-                                 (catname, fkeystr, pkcatname, pkeystr))
-                self.logger.error('  %s has %d issue(s): entry has NULL reference of %s(%s)' %
-                                  (catname, nrows, pkcatname, pkeystr))
+                self.logger.info(
+                    "[FAIL] Foreign key check for %s(%s) referencing %s(%s)"
+                    % (catname, fkeystr, pkcatname, pkeystr)
+                )
+                self.logger.error(
+                    "  %s has %d issue(s): entry has NULL reference of %s(%s)"
+                    % (catname, nrows, pkcatname, pkeystr)
+                )
 
                 fields = curs.listfields()
                 log_literal(self.logger, logging.ERROR, "    " + " | ".join(fields))
                 for row in curs.getresult():
-                    log_literal(self.logger, logging.ERROR, "    " + " | ".join(map(str, row)))
+                    log_literal(
+                        self.logger, logging.ERROR, "    " + " | ".join(map(str, row))
+                    )
                 results = curs.getresult()
                 issue_list.append((pkcatname, fields, results))
 
         except Exception as e:
-            err_msg = '[ERROR] executing: Foreign key check for catalog table {0}. Query : \n {1}\n'.format(catname, qry)
+            err_msg = "[ERROR] executing: Foreign key check for catalog table {0}. Query : \n {1}\n".format(
+                catname, qry
+            )
             err_msg += str(e)
             raise Exception(err_msg)
 
         return issue_list
 
     # -------------------------------------------------------------------------------
-    def get_fk_query_left_join(self, catname, pkcatname, fkeystr, pkeystr, pkeys, cat1pkeys):
+    def get_fk_query_left_join(
+        self, catname, pkcatname, fkeystr, pkeystr, pkeys, cat1pkeys
+    ):
         qry = """
               SELECT {primary_key_alias}, missing_catalog, present_key, {cat2_dot_pk},
                      array_agg(gp_segment_id order by gp_segment_id) as segids
@@ -197,17 +240,20 @@ class ForeignKeyCheck:
                     ORDER BY {primary_key_alias}, gp_segment_id
               ) allresults
               GROUP BY {primary_key_alias}, {cat2_dot_pk}, missing_catalog, present_key
-              """.format(FK1=fkeystr,
-                         PK2=pkeystr,
-                         CATALOG1=catname,
-                         CATALOG2=pkcatname,
-                         cat1_dot_pk=', '.join(cat1pkeys),
-                         cat2_dot_pk='%s_%s' % (pkcatname, pkeystr),
-                         primary_key_alias=', '.join(pkeys))
+              """.format(
+            FK1=fkeystr,
+            PK2=pkeystr,
+            CATALOG1=catname,
+            CATALOG2=pkcatname,
+            cat1_dot_pk=", ".join(cat1pkeys),
+            cat2_dot_pk="%s_%s" % (pkcatname, pkeystr),
+            primary_key_alias=", ".join(pkeys),
+        )
         return qry
 
-
-    def get_fk_query_full_join(self, catname, pkcatname, fkeystr, pkeystr, pkeys, cat1pkeys, filter):
+    def get_fk_query_full_join(
+        self, catname, pkcatname, fkeystr, pkeystr, pkeys, cat1pkeys, filter
+    ):
         qry = """
               SELECT {primary_key_alias}, missing_catalog, present_key, {cat2_dot_pk},
                      array_agg(gp_segment_id order by gp_segment_id) as segids
@@ -236,12 +282,14 @@ class ForeignKeyCheck:
                     ORDER BY {primary_key_alias}, gp_segment_id
               ) allresults
               GROUP BY {primary_key_alias}, {cat2_dot_pk}, missing_catalog, present_key
-              """.format(FK1=fkeystr,
-                         PK2=pkeystr,
-                         CATALOG1=catname,
-                         CATALOG2=pkcatname,
-                         cat1_dot_pk=', '.join(cat1pkeys),
-                         cat2_dot_pk='%s_%s' % (pkcatname, pkeystr),
-                         primary_key_alias=', '.join(pkeys),
-                         filter=filter)
+              """.format(
+            FK1=fkeystr,
+            PK2=pkeystr,
+            CATALOG1=catname,
+            CATALOG2=pkcatname,
+            cat1_dot_pk=", ".join(cat1pkeys),
+            cat2_dot_pk="%s_%s" % (pkcatname, pkeystr),
+            primary_key_alias=", ".join(pkeys),
+            filter=filter,
+        )
         return qry

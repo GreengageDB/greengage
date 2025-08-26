@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+
 from __future__ import absolute_import
 import os
 
@@ -18,7 +19,8 @@ from gppylib.utils import checkNotNone
 
 logger = get_default_logger()
 
-class GpConfigurationProvider :
+
+class GpConfigurationProvider:
     """
     An implementation of GpConfigurationProvider will provide functionality
     to fetch and update gpdb system configuration information (as stored in the database)
@@ -27,7 +29,7 @@ class GpConfigurationProvider :
     def __init__(self):
         pass
 
-    def initializeProvider( self, masterPort ) :
+    def initializeProvider(self, masterPort):
         """
         Initialize the provider to get information from the given master db, if it chooses to
             get its data from the database
@@ -37,15 +39,21 @@ class GpConfigurationProvider :
 
         return self
 
-    def loadSystemConfig( self, useUtilityMode ) :
+    def loadSystemConfig(self, useUtilityMode):
         """
         Load all segment information from the configuration source.
-        
+
         Returns a new GpArray object
         """
         pass
 
-    def updateSystemConfig( self, systemConfiguration, textForConfigTable, dbIdToForceMirrorRemoveAdd, useUtilityMode ) :
+    def updateSystemConfig(
+        self,
+        systemConfiguration,
+        textForConfigTable,
+        dbIdToForceMirrorRemoveAdd,
+        useUtilityMode,
+    ):
         """
 
         Update the configuration for the given segments in the underlying configuration store
@@ -56,6 +64,7 @@ class GpConfigurationProvider :
         """
         pass
 
+
 """
 Management of registered configuration provider.  Right now it
    is a singleton, so initializeDatabase calls _could_ mess up
@@ -63,9 +72,12 @@ Management of registered configuration provider.  Right now it
    to a factory
 """
 gConfigurationProvider = None
+
+
 def registerConfigurationProvider(provider):
     global gConfigurationProvider
     gConfigurationProvider = checkNotNone("New global configuration provider", provider)
+
 
 def getConfigurationProvider():
     global gConfigurationProvider

@@ -10,8 +10,8 @@ from gppylib.commands.gp import *
 from gppylib.gparray import GpArray
 from gppylib.gplog import get_default_logger
 
-class GpResGroup(object):
 
+class GpResGroup(object):
     def __init__(self):
         self.logger = get_default_logger()
 
@@ -30,10 +30,9 @@ class GpResGroup(object):
         failed = []
         for i in items:
             if not i.was_successful():
-                failed.append("[%s:%s]"%(i.remoteHost, i.get_stderr().rstrip()))
+                failed.append("[%s:%s]" % (i.remoteHost, i.get_stderr().rstrip()))
         pool.haltWork()
         pool.joinWorkers()
         if failed:
             msg = ",".join(failed)
         return msg
-

@@ -25,16 +25,23 @@ def replay_lag(primary_db):
     """
     port = primary_db.getSegmentPort()
     host = primary_db.getSegmentHostName()
-    logger.debug('Get replay lag on mirror of primary segment with host:{}, port:{}'.format(host, port))
+    logger.debug(
+        "Get replay lag on mirror of primary segment with host:{}, port:{}".format(
+            host, port
+        )
+    )
     sql = "select pg_xlog_location_diff(flush_location, replay_location) from pg_stat_replication;"
 
     try:
         dburl = dbconn.DbURL(hostname=host, port=port)
-        with closing(dbconn.connect(dburl, utility=True, encoding='UTF8')) as conn:
+        with closing(dbconn.connect(dburl, utility=True, encoding="UTF8")) as conn:
             replay_lag = dbconn.execSQLForSingleton(conn, sql)
     except Exception as ex:
-        raise Exception("Failed to query pg_stat_replication for host:{}, port:{}, error: {}".
-                        format(host, port, str(ex)))
+        raise Exception(
+            "Failed to query pg_stat_replication for host:{}, port:{}, error: {}".format(
+                host, port, str(ex)
+            )
+        )
     return replay_lag
 
 
@@ -72,21 +79,36 @@ class GpSegmentRebalanceOperation:
             if segmentPair.balanced():
                 continue
 
-            if segmentPair.up() and segmentPair.reachable() and segmentPair.synchronized():
+            if (
+                segmentPair.up()
+                and segmentPair.reachable()
+                and segmentPair.synchronized()
+            ):
                 if self.replay_lag is not None:
-                    self.logger.info("Allowed replay lag during rebalance is {} GB".format(self.replay_lag))
+                    self.logger.info(
+                        "Allowed replay lag during rebalance is {} GB".format(
+                            self.replay_lag
+                        )
+                    )
                     replay_lag_in_bytes = replay_lag(segmentPair.primaryDB)
-                    if float(replay_lag_in_bytes) >= (self.replay_lag * 1024 * 1024 * 1024):
-                        raise Exception("{} bytes of xlog is still to be replayed on mirror with dbid {}, let "
-                                        "mirror catchup on replay then trigger rebalance. Use --replay-lag to "
-                                        "configure the allowed replay lag limit."
-                                        .format(replay_lag_in_bytes, segmentPair.primaryDB.getSegmentDbId()))
+                    if float(replay_lag_in_bytes) >= (
+                        self.replay_lag * 1024 * 1024 * 1024
+                    ):
+                        raise Exception(
+                            "{} bytes of xlog is still to be replayed on mirror with dbid {}, let "
+                            "mirror catchup on replay then trigger rebalance. Use --replay-lag to "
+                            "configure the allowed replay lag limit.".format(
+                                replay_lag_in_bytes,
+                                segmentPair.primaryDB.getSegmentDbId(),
+                            )
+                        )
                 unbalanced_primary_segs.append(segmentPair.primaryDB)
             else:
                 self.logger.warning(
                     "Not rebalancing primary segment dbid %d with its mirror dbid %d because one is either down, "
-                    "unreachable, or not synchronized" \
-                    % (segmentPair.primaryDB.dbid, segmentPair.mirrorDB.dbid))
+                    "unreachable, or not synchronized"
+                    % (segmentPair.primaryDB.dbid, segmentPair.mirrorDB.dbid)
+                )
 
         if not len(unbalanced_primary_segs):
             self.logger.info("No segments to rebalance")
@@ -101,15 +123,17 @@ class GpSegmentRebalanceOperation:
 
             self.logger.info("Stopping unbalanced primary segments...")
             for hostname in unbalanced_primary_segs.keys():
-                cmd = GpSegStopCmd("stop unbalanced primary segs",
-                                   self.gpEnv.getGpHome(),
-                                   self.gpEnv.getGpVersion(),
-                                   'fast',
-                                   unbalanced_primary_segs[hostname],
-                                   ctxt=base.REMOTE,
-                                   remoteHost=hostname,
-                                   timeout=600,
-                                   segment_batch_size=self.segment_batch_size)
+                cmd = GpSegStopCmd(
+                    "stop unbalanced primary segs",
+                    self.gpEnv.getGpHome(),
+                    self.gpEnv.getGpVersion(),
+                    "fast",
+                    unbalanced_primary_segs[hostname],
+                    ctxt=base.REMOTE,
+                    remoteHost=hostname,
+                    timeout=600,
+                    segment_batch_size=self.segment_batch_size,
+                )
                 pool.addCommand(cmd)
 
             base.join_and_indicate_progress(pool)
@@ -120,27 +144,42 @@ class GpSegmentRebalanceOperation:
                 if not res.get_results().wasSuccessful():
                     failed_count += 1
 
-            allSegmentsStopped = (failed_count == 0)
+            allSegmentsStopped = failed_count == 0
 
             if not allSegmentsStopped:
                 self.logger.warn("%d segments failed to stop.  A full rebalance of the")
-                self.logger.warn("system is not possible at this time.  Please check the")
-                self.logger.warn("log files, correct the problem, and run gprecoverseg -r")
+                self.logger.warn(
+                    "system is not possible at this time.  Please check the"
+                )
+                self.logger.warn(
+                    "log files, correct the problem, and run gprecoverseg -r"
+                )
                 self.logger.warn("again.")
                 self.logger.info("gprecoverseg will continue with a partial rebalance.")
 
             pool.empty_completed_items()
-            segment_reconfigurer = SegmentReconfigurer(logger=self.logger,
-                    worker_pool=pool, timeout=MIRROR_PROMOTION_TIMEOUT)
+            segment_reconfigurer = SegmentReconfigurer(
+                logger=self.logger, worker_pool=pool, timeout=MIRROR_PROMOTION_TIMEOUT
+            )
             segment_reconfigurer.reconfigure()
 
             # Final step is to issue a recoverseg operation to resync segments
             self.logger.info("Starting segment synchronization")
             original_sys_args = sys.argv[:]
-            self.logger.info("=============================START ANOTHER RECOVER=========================================")
+            self.logger.info(
+                "=============================START ANOTHER RECOVER========================================="
+            )
             # import here because GpRecoverSegmentProgram and GpSegmentRebalanceOperation have a circular dependency
             from gppylib.programs.clsRecoverSegment import GpRecoverSegmentProgram
-            cmd_args = ['gprecoverseg', '-a', '-B', str(self.batch_size), '-b', str(self.segment_batch_size)]
+
+            cmd_args = [
+                "gprecoverseg",
+                "-a",
+                "-B",
+                str(self.batch_size),
+                "-b",
+                str(self.segment_batch_size),
+            ]
             sys.argv = cmd_args[:]
             local_parser = GpRecoverSegmentProgram.createParser()
             local_options, args = local_parser.parse_args()
@@ -149,15 +188,21 @@ class GpSegmentRebalanceOperation:
                 recover_cmd.run()
             except SystemExit as e:
                 if e.code != 0:
-                    self.logger.error("Failed to start the synchronization step of the segment rebalance.")
-                    self.logger.error("Check the gprecoverseg log file, correct any problems, and re-run")
-                    self.logger.error(' '.join(cmd_args))
+                    self.logger.error(
+                        "Failed to start the synchronization step of the segment rebalance."
+                    )
+                    self.logger.error(
+                        "Check the gprecoverseg log file, correct any problems, and re-run"
+                    )
+                    self.logger.error(" ".join(cmd_args))
                     raise Exception("Error synchronizing.\nError: %s" % str(e))
             finally:
                 if recover_cmd:
                     recover_cmd.cleanup()
                 sys.argv = original_sys_args
-                self.logger.info("==============================END ANOTHER RECOVER==========================================")
+                self.logger.info(
+                    "==============================END ANOTHER RECOVER=========================================="
+                )
 
         except Exception as ex:
             raise ex
@@ -167,5 +212,4 @@ class GpSegmentRebalanceOperation:
             pool.joinWorkers()
             signal.signal(signal.SIGINT, signal.default_int_handler)
 
-        return allSegmentsStopped # if all segments stopped, then a full rebalance was done
-
+        return allSegmentsStopped  # if all segments stopped, then a full rebalance was done

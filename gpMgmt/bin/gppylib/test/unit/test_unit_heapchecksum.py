@@ -11,7 +11,9 @@ class GpHeapChecksumTestCase(GpTestCase):
     def setUp(self):
         self.gparray = self.createGpArrayWith2Primary2Mirrors()
         self.subject = HeapChecksum(self.gparray)
-        self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
+        self.subject.logger = Mock(
+            spec=["log", "warn", "info", "debug", "error", "warning", "fatal"]
+        )
 
         self.COMMAND_RESULT = """
 pg_control version number:            8330500
@@ -48,58 +50,75 @@ Data page checksum version:           1
 """
 
         self.apply_patches([
-            patch('gppylib.heapchecksum.WorkerPool'),
-            patch('gppylib.heapchecksum.PgControlData.run'),
-            patch('gppylib.heapchecksum.PgControlData.get_value'),
+            patch("gppylib.heapchecksum.WorkerPool"),
+            patch("gppylib.heapchecksum.PgControlData.run"),
+            patch("gppylib.heapchecksum.PgControlData.get_value"),
         ])
-        self.mock_workerpool = self.get_mock_from_apply_patch('WorkerPool')
-        self.mock_pg_control_data_get_value = self.get_mock_from_apply_patch('get_value')
-        self.mock_pg_control_data_get_value.return_value = '1'  # master checksum value
+        self.mock_workerpool = self.get_mock_from_apply_patch("WorkerPool")
+        self.mock_pg_control_data_get_value = self.get_mock_from_apply_patch(
+            "get_value"
+        )
+        self.mock_pg_control_data_get_value.return_value = "1"  # master checksum value
 
-        self.data_dirs = ['/master', '/seg0', '/seg1', '/seg2']
+        self.data_dirs = ["/master", "/seg0", "/seg1", "/seg2"]
         # rc,stdout,stderr,completed,halt
-        self.results = [CommandResult(0, self.COMMAND_RESULT, '', False, True),
-                        CommandResult(0, self.COMMAND_RESULT, '', False, True),
-                        CommandResult(0, self.COMMAND_RESULT, '', False, True),
-                        CommandResult(0, self.COMMAND_RESULT, '', False, True)]
+        self.results = [
+            CommandResult(0, self.COMMAND_RESULT, "", False, True),
+            CommandResult(0, self.COMMAND_RESULT, "", False, True),
+            CommandResult(0, self.COMMAND_RESULT, "", False, True),
+            CommandResult(0, self.COMMAND_RESULT, "", False, True),
+        ]
         self.assertEquals(len(self.data_dirs), len(self.results))
 
     def tearDown(self):
         super(GpHeapChecksumTestCase, self).tearDown()
 
     def createGpArrayWith2Primary2Mirrors(self):
-        master = Segment.initFromString(
-            "1|-1|p|p|s|u|mdw|mdw|5432|/data/master")
+        master = Segment.initFromString("1|-1|p|p|s|u|mdw|mdw|5432|/data/master")
         self.primary0 = Segment.initFromString(
-            "2|0|p|p|s|u|aspen|sdw1|40000|/Users/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1")
-        primary1 = Segment.initFromString(
-            "3|1|p|p|s|u|sdw2|sdw2|40001|/data/primary1")
-        mirror0 = Segment.initFromString(
-            "4|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
-        mirror1 = Segment.initFromString(
-            "5|1|m|m|s|u|sdw1|sdw1|50001|/data/mirror1")
+            "2|0|p|p|s|u|aspen|sdw1|40000|/Users/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1"
+        )
+        primary1 = Segment.initFromString("3|1|p|p|s|u|sdw2|sdw2|40001|/data/primary1")
+        mirror0 = Segment.initFromString("4|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0")
+        mirror1 = Segment.initFromString("5|1|m|m|s|u|sdw1|sdw1|50001|/data/mirror1")
         standby_master = Segment.initFromString(
-            "6|-1|m|m|s|u|mdw_standby|mdw_standby|25432|/data/standby_master")
-        return GpArray([master, self.primary0, primary1, mirror0, mirror1, standby_master])
+            "6|-1|m|m|s|u|mdw_standby|mdw_standby|25432|/data/standby_master"
+        )
+        return GpArray([
+            master,
+            self.primary0,
+            primary1,
+            mirror0,
+            mirror1,
+            standby_master,
+        ])
 
     def test_consistent_heap_checksum_returns_true(self):
-        get_values = ['1', '1', '1', '1']
+        get_values = ["1", "1", "1", "1"]
         self.setup_worker_pool(get_values)
 
         successes, failures = self.subject.get_segments_checksum_settings()
-        consistent, inconsistent, master_checksum = self.subject.check_segment_consistency(successes)
-        self.assertEquals(self.subject.are_segments_consistent(consistent, inconsistent), True)
+        consistent, inconsistent, master_checksum = (
+            self.subject.check_segment_consistency(successes)
+        )
+        self.assertEquals(
+            self.subject.are_segments_consistent(consistent, inconsistent), True
+        )
 
     def test_inconsistent_heap_checksum_returns_false(self):
-        get_values = ['0', '1', '1', '1']
+        get_values = ["0", "1", "1", "1"]
         self.setup_worker_pool(get_values)
 
         successes, failures = self.subject.get_segments_checksum_settings()
-        consistent, inconsistent, master_checksum = self.subject.check_segment_consistency(successes)
-        self.assertEquals(self.subject.are_segments_consistent(consistent, inconsistent), False)
+        consistent, inconsistent, master_checksum = (
+            self.subject.check_segment_consistency(successes)
+        )
+        self.assertEquals(
+            self.subject.are_segments_consistent(consistent, inconsistent), False
+        )
 
     def test_pg_control_data_raises(self):
-        get_values = ['1', '1', '1', Exception("hi")]
+        get_values = ["1", "1", "1", Exception("hi")]
         mocks = [Mock() for _ in range(len(self.results))]
 
         for i, mock in enumerate(mocks):
@@ -109,11 +128,20 @@ Data page checksum version:           1
         self.mock_workerpool.return_value.getCompletedItems.return_value = mocks
 
         successes, failures = self.subject.get_segments_checksum_settings()
-        consistent, inconsistent, master_checksum = self.subject.check_segment_consistency(successes)
-        self.assertEquals(self.subject.are_segments_consistent(consistent, inconsistent), True)
+        consistent, inconsistent, master_checksum = (
+            self.subject.check_segment_consistency(successes)
+        )
+        self.assertEquals(
+            self.subject.are_segments_consistent(consistent, inconsistent), True
+        )
 
     def test_pg_control_data_raises_every_segment(self):
-        get_values = [Exception("hi"), Exception("hi"), Exception("hi"), Exception("hi")]
+        get_values = [
+            Exception("hi"),
+            Exception("hi"),
+            Exception("hi"),
+            Exception("hi"),
+        ]
         mocks = [Mock() for _ in range(len(self.results))]
 
         for i, mock in enumerate(mocks):
@@ -123,8 +151,12 @@ Data page checksum version:           1
         self.mock_workerpool.return_value.getCompletedItems.return_value = mocks
 
         successes, failures = self.subject.get_segments_checksum_settings()
-        consistent, inconsistent, master_checksum = self.subject.check_segment_consistency(successes)
-        self.assertEquals(self.subject.are_segments_consistent(consistent, inconsistent), False)
+        consistent, inconsistent, master_checksum = (
+            self.subject.check_segment_consistency(successes)
+        )
+        self.assertEquals(
+            self.subject.are_segments_consistent(consistent, inconsistent), False
+        )
 
     def test_are_segments_consistent_zero_consistent_zero_inconsistent(self):
         self.assertFalse(self.subject.are_segments_consistent([], []))
@@ -139,29 +171,31 @@ Data page checksum version:           1
         self.assertFalse(self.subject.are_segments_consistent([1], [1]))
 
     def test_get_segments_checksum_settings_accepts_array(self):
-        get_values = ['1']
-        self.results = [CommandResult(0, self.COMMAND_RESULT, '', False, True)]
+        get_values = ["1"]
+        self.results = [CommandResult(0, self.COMMAND_RESULT, "", False, True)]
         self.setup_worker_pool(get_values)
 
-        successes, failures = self.subject.get_segments_checksum_settings([self.primary0])
+        successes, failures = self.subject.get_segments_checksum_settings([
+            self.primary0
+        ])
 
         self.assertEquals(len(successes), 1)
         self.assertEquals(len(failures), 0)
 
-    @patch('gppylib.heapchecksum.PgControlData')
+    @patch("gppylib.heapchecksum.PgControlData")
     def test_standby_master_context_is_remote(self, mock_pg_control_data):
         #  the standby can either be remote or local, depending on the user setup.
         self.subject.get_standby_value()
         self.assertEquals(len(mock_pg_control_data.call_args_list), 1)
         call_args_dict = mock_pg_control_data.call_args_list[0][1]
         try:
-            self.assertEquals(call_args_dict['ctxt'], REMOTE)
-            self.assertEquals(call_args_dict['remoteHost'], 'mdw_standby')
+            self.assertEquals(call_args_dict["ctxt"], REMOTE)
+            self.assertEquals(call_args_dict["remoteHost"], "mdw_standby")
         except KeyError as e:
             raise Exception("Argument is missing from the call argument %s " % str(e))
 
     def test_get_segments_checksum_settings_uses_gparray(self):
-        get_values = ['1', '1', '1', '1']
+        get_values = ["1", "1", "1", "1"]
         self.setup_worker_pool(get_values)
 
         successes, failures = self.subject.get_segments_checksum_settings()

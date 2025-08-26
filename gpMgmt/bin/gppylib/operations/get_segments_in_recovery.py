@@ -21,7 +21,9 @@ def is_seg_in_backup_mode(hostname, port):
     """
     logger.debug(
         "Checking if backup is already in progress for the source server with host {} and port {}".format(
-            hostname, port))
+            hostname, port
+        )
+    )
 
     sql = "SELECT pg_is_in_backup()"
     try:
@@ -30,7 +32,10 @@ def is_seg_in_backup_mode(hostname, port):
         res = query_cmd.get_results()
 
     except Exception as e:
-        raise Exception("Failed to query pg_is_in_backup() for segment with hostname {}, port {}, error: {}".format(
-            hostname, str(port), str(e)))
+        raise Exception(
+            "Failed to query pg_is_in_backup() for segment with hostname {}, port {}, error: {}".format(
+                hostname, str(port), str(e)
+            )
+        )
 
     return res[0][0]

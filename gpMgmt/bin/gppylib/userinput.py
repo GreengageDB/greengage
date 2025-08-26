@@ -1,96 +1,104 @@
 #!/usr/bin/env python
 #
-# Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
+# Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 
 from __future__ import absolute_import
 from __future__ import print_function
 import getpass
-from  gppylib import gplog
+from gppylib import gplog
 
-logger=gplog.get_default_logger()
+logger = gplog.get_default_logger()
 
 
 #################
-def validate_yesno( input,default ):
-    if input == '':
-        return True if default.upper() == 'Y' else False
-    elif input.upper().rstrip() in ('Y', 'YES'):
+def validate_yesno(input, default):
+    if input == "":
+        return True if default.upper() == "Y" else False
+    elif input.upper().rstrip() in ("Y", "YES"):
         return True
-    elif input.upper().rstrip() in ('N', 'NO'):
+    elif input.upper().rstrip() in ("N", "NO"):
         return False
     else:
         return None
-        
-def ask_yesno(bg_info,msg,default):
-    help=" Yy|Nn (default=%s)" % default
-    return ask_input(bg_info,msg,help,default,validate_yesno)
+
+
+def ask_yesno(bg_info, msg, default):
+    help = " Yy|Nn (default=%s)" % default
+    return ask_input(bg_info, msg, help, default, validate_yesno)
+
 
 #################
-def validate_list(input,default):
-    if input == '':
+def validate_list(input, default):
+    if input == "":
         return default
-    return input.split(',')
-    
+    return input.split(",")
 
-def ask_list(bg_info,msg,default):
-    help=default
-    return ask_input(bg_info,msg,help,default,validate_list)    
- 
+
+def ask_list(bg_info, msg, default):
+    help = default
+    return ask_input(bg_info, msg, help, default, validate_list)
+
+
 #################
-def validate_int(input,default,min,max):
-    if input == '':
-        return default    
-    numval=int(input)
-    
+def validate_int(input, default, min, max):
+    if input == "":
+        return default
+    numval = int(input)
+
     if numval < min or numval > max:
-        return None    
+        return None
     return numval
 
-def ask_int(bg_info,msg,help,default,min,max):    
-    help=" (default=%d)" % default
-    return ask_input(bg_info,msg,help,default,validate_int,min,max)
 
-#################     
-def validate_string(input,default,listVals):
-    if input == '':
-        return default    
-    
+def ask_int(bg_info, msg, help, default, min, max):
+    help = " (default=%d)" % default
+    return ask_input(bg_info, msg, help, default, validate_int, min, max)
+
+
+#################
+def validate_string(input, default, listVals):
+    if input == "":
+        return default
+
     for val in listVals:
         if input.lower().strip() == val:
             return input
-            
+
     return None
 
-def ask_string(bg_info,msg,default,listVals):
-    possvals='|'.join(listVals)    
-    help="\n %s (default=%s)" % (possvals,default)
-    return ask_input(bg_info,msg,help,default,validate_string,listVals)
 
-#################  
-   
+def ask_string(bg_info, msg, default, listVals):
+    possvals = "|".join(listVals)
+    help = "\n %s (default=%s)" % (possvals, default)
+    return ask_input(bg_info, msg, help, default, validate_string, listVals)
 
-def ask_input(bg_info,msg,help,default,validator, *validator_opts):
-    if bg_info is not None:             
+
+#################
+
+
+def ask_input(bg_info, msg, help, default, validator, *validator_opts):
+    if bg_info is not None:
         print("%s\n" % bg_info)
-    
+
     val = None
     while True:
-        val = raw_input("%s%s:\n> " % (msg,help))
-        
-        retval = validator(val,default, *validator_opts)
-        
-        
+        val = raw_input("%s%s:\n> " % (msg, help))
+
+        retval = validator(val, default, *validator_opts)
+
         if retval is not None:
-            return retval        
+            return retval
         else:
             print("Invalid input: '%s'\n" % val)
-            
 
-def ask_create_password(    max_attempts = 5, min_length = 4,
-                            custom_attempt1_str = 'Please enter a password: ',
-                            custom_attempt2_str = 'Confirm password: '):
 
+def ask_create_password(
+    max_attempts=5,
+    min_length=4,
+    custom_attempt1_str="Please enter a password: ",
+    custom_attempt2_str="Confirm password: ",
+):
     attempts = 0
 
     while attempts < max_attempts:
@@ -111,4 +119,3 @@ def ask_create_password(    max_attempts = 5, min_length = 4,
 
     print("Failed to enter a valid password after the maximum number of attempts\n")
     return None
-

@@ -8,29 +8,32 @@ from pygresql import pg
 
 from gppylib.db import dbconn
 from gppylib.gparray import GpArray
-from test.behave_utils.utils import run_cmd,wait_for_database_dropped
+from test.behave_utils.utils import run_cmd, wait_for_database_dropped
 from gppylib.commands.base import Command, REMOTE
 from gppylib.commands.unix import get_remote_link_path
 from contextlib import closing
+
 
 class Tablespace:
     def __init__(self, name, with_desc=False):
         self.name = name
         self.path = tempfile.mkdtemp()
-        self.dbname = 'tablespace_db_%s' % name
+        self.dbname = "tablespace_db_%s" % name
         self.table_counter = 0
         self.initial_data = None
 
         gparray = GpArray.initFromCatalog(dbconn.DbURL())
         for host in gparray.getHostList():
-            run_cmd('ssh %s mkdir -p %s' % (pipes.quote(host), pipes.quote(self.path)))
+            run_cmd("ssh %s mkdir -p %s" % (pipes.quote(host), pipes.quote(self.path)))
 
         with dbconn.connect(dbconn.DbURL(), unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             db.query("CREATE TABLESPACE %s LOCATION '%s'" % (self.name, self.path))
             db.query("CREATE DATABASE %s TABLESPACE %s" % (self.dbname, self.name))
 
-        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+        with dbconn.connect(
+            dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False
+        ) as conn:
             db = pg.DB(conn)
             db.query("CREATE TABLE tbl (i int) DISTRIBUTED RANDOMLY")
             db.query("INSERT INTO tbl VALUES (GENERATE_SERIES(0, 25))")
@@ -38,12 +41,18 @@ class Tablespace:
             self.initial_data = db.query("SELECT gp_segment_id, i FROM tbl").getresult()
 
         if with_desc:
-            with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+            with dbconn.connect(
+                dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False
+            ) as conn:
                 db = pg.DB(conn)
-                db.query("COMMENT on TABLESPACE %s IS 'This is a tablespace'" % (self.name))
+                db.query(
+                    "COMMENT on TABLESPACE %s IS 'This is a tablespace'" % (self.name)
+                )
 
     def cleanup(self):
-        with dbconn.connect(dbconn.DbURL(dbname="postgres"), unsetSearchPath=False) as conn:
+        with dbconn.connect(
+            dbconn.DbURL(dbname="postgres"), unsetSearchPath=False
+        ) as conn:
             db = pg.DB(conn)
             db.query("DROP DATABASE IF EXISTS %s" % self.dbname)
             wait_for_database_dropped(self.dbname)
@@ -58,7 +67,7 @@ class Tablespace:
 
         gparray = GpArray.initFromCatalog(dbconn.DbURL())
         for host in gparray.getHostList():
-            run_cmd('ssh %s rm -rf %s' % (pipes.quote(host), pipes.quote(self.path)))
+            run_cmd("ssh %s rm -rf %s" % (pipes.quote(host), pipes.quote(self.path)))
 
     def verify(self, hostname=None, port=0):
         """
@@ -73,12 +82,19 @@ class Tablespace:
 
             # verify that we can still write to the tablespace
             self.table_counter += 1
-            db.query("CREATE TABLE tbl_%s (i int) DISTRIBUTED RANDOMLY" % self.table_counter)
-            db.query("INSERT INTO tbl_%s VALUES (GENERATE_SERIES(0, 25))" % self.table_counter)
+            db.query(
+                "CREATE TABLE tbl_%s (i int) DISTRIBUTED RANDOMLY" % self.table_counter
+            )
+            db.query(
+                "INSERT INTO tbl_%s VALUES (GENERATE_SERIES(0, 25))"
+                % self.table_counter
+            )
 
         if sorted(data) != sorted(self.initial_data):
-            raise Exception("Tablespace data is not identically distributed. Expected:\n%r\n but found:\n%r" % (
-                sorted(self.initial_data), sorted(data)))
+            raise Exception(
+                "Tablespace data is not identically distributed. Expected:\n%r\n but found:\n%r"
+                % (sorted(self.initial_data), sorted(data))
+            )
 
     def verify_symlink(self, hostname=None, port=0):
         url = dbconn.DbURL(hostname=hostname, port=port, dbname=self.dbname)
@@ -87,7 +103,10 @@ class Tablespace:
 
         # fetching oid of available user created tablespaces
         with closing(dbconn.connect(url, unsetSearchPath=False)) as conn:
-            tblspc_oids = dbconn.execSQL(conn, "SELECT oid FROM pg_tablespace WHERE spcname NOT IN ('pg_default', 'pg_global')").fetchall()
+            tblspc_oids = dbconn.execSQL(
+                conn,
+                "SELECT oid FROM pg_tablespace WHERE spcname NOT IN ('pg_default', 'pg_global')",
+            ).fetchall()
 
         if not tblspc_oids:
             return None  # no table space is present
@@ -96,13 +115,22 @@ class Tablespace:
         tblspc = []
         for seg in all_segments:
             for tblspc_oid in tblspc_oids:
-                symlink_path = os.path.join(seg.getSegmentTableSpaceDirectory(), str(tblspc_oid[0]))
-                target_path = get_remote_link_path(symlink_path, seg.getSegmentHostName())
+                symlink_path = os.path.join(
+                    seg.getSegmentTableSpaceDirectory(), str(tblspc_oid[0])
+                )
+                target_path = get_remote_link_path(
+                    symlink_path, seg.getSegmentHostName()
+                )
                 segDbId = seg.getSegmentDbId()
-                #checking for duplicate and wrong symlink target
-                if target_path in tblspc or os.path.basename(target_path) != str(segDbId):
-                    raise Exception("tablespac has invalid/duplicate symlink for oid {0} in segment dbid {1}".\
-                        format(str(tblspc_oid[0]),str(segDbId)))
+                # checking for duplicate and wrong symlink target
+                if target_path in tblspc or os.path.basename(target_path) != str(
+                    segDbId
+                ):
+                    raise Exception(
+                        "tablespac has invalid/duplicate symlink for oid {0} in segment dbid {1}".format(
+                            str(tblspc_oid[0]), str(segDbId)
+                        )
+                    )
 
                 tblspc.append(target_path)
 
@@ -116,25 +144,36 @@ class Tablespace:
         with dbconn.connect(url, unsetSearchPath=False) as conn:
             db = pg.DB(conn)
             data = db.query("SELECT gp_segment_id, i FROM tbl").getresult()
-            tbl_numsegments = dbconn.execSQLForSingleton(conn,
-                                                         "SELECT numsegments FROM gp_distribution_policy "
-                                                         "WHERE localoid = 'tbl'::regclass::oid")
-            num_segments = dbconn.execSQLForSingleton(conn,
-                                                     "SELECT COUNT(DISTINCT(content)) - 1 FROM gp_segment_configuration")
+            tbl_numsegments = dbconn.execSQLForSingleton(
+                conn,
+                "SELECT numsegments FROM gp_distribution_policy "
+                "WHERE localoid = 'tbl'::regclass::oid",
+            )
+            num_segments = dbconn.execSQLForSingleton(
+                conn,
+                "SELECT COUNT(DISTINCT(content)) - 1 FROM gp_segment_configuration",
+            )
 
         if tbl_numsegments != num_segments:
-            raise Exception("After gpexpand the numsegments for tablespace table 'tbl' %d does not match "
-                            "the number of segments in the cluster %d." % (tbl_numsegments, num_segments))
+            raise Exception(
+                "After gpexpand the numsegments for tablespace table 'tbl' %d does not match "
+                "the number of segments in the cluster %d."
+                % (tbl_numsegments, num_segments)
+            )
 
         initial_data = [i for _, i in self.initial_data]
         data_without_segid = [i for _, i in data]
         if sorted(data_without_segid) != sorted(initial_data):
-            raise Exception("Tablespace data is not identically distributed after running gp_expand. "
-                            "Expected pre-gpexpand data:\n%\n but found post-gpexpand data:\n%r" % (
-                                sorted(self.initial_data), sorted(data)))
+            raise Exception(
+                "Tablespace data is not identically distributed after running gp_expand. "
+                "Expected pre-gpexpand data:\n%\n but found post-gpexpand data:\n%r"
+                % (sorted(self.initial_data), sorted(data))
+            )
 
     def insert_more_data(self):
-        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+        with dbconn.connect(
+            dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False
+        ) as conn:
             db = pg.DB(conn)
             db.query("CREATE TABLE tbl_1 (i int) DISTRIBUTED RANDOMLY")
             db.query("INSERT INTO tbl_1 VALUES (GENERATE_SERIES(0, 100000000))")
@@ -213,55 +252,62 @@ DROP FUNCTION checkpoint_and_wait_for_replication_replay(int);
     """)
 
 
-@given('a tablespace is created with data')
+@given("a tablespace is created with data")
 def impl(context):
     _create_tablespace_with_data(context, "outerspace")
 
 
-@given('another tablespace is created with data')
+@given("another tablespace is created with data")
 def impl(context):
     _create_tablespace_with_data(context, "myspace")
 
-@given('a tablespace is created with data and description')
+
+@given("a tablespace is created with data and description")
 def impl(context):
     _create_tablespace_with_data(context, "outerspace", with_desc=True)
 
+
 def _create_tablespace_with_data(context, name, with_desc=False):
-    if 'tablespaces' not in context:
+    if "tablespaces" not in context:
         context.tablespaces = {}
     context.tablespaces[name] = Tablespace(name, with_desc=with_desc)
 
 
-@then('the tablespace is valid')
+@then("the tablespace is valid")
 def impl(context):
     context.tablespaces["outerspace"].verify()
 
-@then('the tablespace has valid symlink')
+
+@then("the tablespace has valid symlink")
 def impl(context):
     context.tablespaces["outerspace"].verify_symlink()
 
-@then('the tablespace is valid on the standby master')
+
+@then("the tablespace is valid on the standby master")
 def impl(context):
-    context.tablespaces["outerspace"].verify(context.standby_hostname, context.standby_port)
+    context.tablespaces["outerspace"].verify(
+        context.standby_hostname, context.standby_port
+    )
 
 
-@then('the other tablespace is valid')
+@then("the other tablespace is valid")
 def impl(context):
     context.tablespaces["myspace"].verify()
 
 
-@then('the tablespace is valid after gpexpand')
+@then("the tablespace is valid after gpexpand")
 def impl(context):
     for _, tbs in context.tablespaces.items():
         tbs.verify_for_gpexpand()
 
-@then('all tablespaces are dropped')
+
+@then("all tablespaces are dropped")
 def impl(context):
     for tablespace in context.tablespaces.values():
         tablespace.cleanup()
     context.tablespaces = {}
 
-@given('insert additional data into the tablespace')
+
+@given("insert additional data into the tablespace")
 def impl(context):
     context.tablespaces["outerspace"].insert_more_data()
-

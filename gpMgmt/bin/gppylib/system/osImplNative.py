@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+
 from __future__ import absolute_import
 import os, time
 
@@ -19,11 +20,12 @@ from gppylib.system.osInterface import GpOsProvider
 
 logger = get_default_logger()
 
+
 #
 # An implementation of GpOsProvider that passes operations through to the underlying
 #  system
 #
-class GpOsProviderUsingNative(GpOsProvider) :
+class GpOsProviderUsingNative(GpOsProvider):
     def __init__(self):
         pass
 

@@ -4,17 +4,19 @@ from __future__ import absolute_import
 from __future__ import print_function
 import re, sys
 
+
 def statusString(msg):
     if success:
         return "PASS"
     else:
         return "FAIL"
 
+
 for line in sys.stdin.readlines():
     line = line.strip()
-    if re.search('passed.*failed.*skipped', line):
+    if re.search("passed.*failed.*skipped", line):
         kvps = {}
-        fields = line.split(',')
+        fields = line.split(",")
         print("")
         category = None
         number = None
@@ -34,8 +36,11 @@ for line in sys.stdin.readlines():
                 continue
             total += number
 
-            if status == 'failed' or status == 'undefined':
+            if status == "failed" or status == "undefined":
                 if number > 0:
                     success = False
-        
-        print("BEHAVE_RESULTS=%s STATUS=%s MSG='%s'" % (category, statusString(success), line))
+
+        print(
+            "BEHAVE_RESULTS=%s STATUS=%s MSG='%s'"
+            % (category, statusString(success), line)
+        )

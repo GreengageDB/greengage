@@ -3,10 +3,10 @@ from datetime import datetime
 import time
 import sys
 
-sys.path.insert(1, sys.path[0] + '/lib')
+sys.path.insert(1, sys.path[0] + "/lib")
 from pexpect import pxssh, TIMEOUT
 
-CRNL = '\r\n'
+CRNL = "\r\n"
 DEBUG_VERBOSE_PRINTING = False
 # experimentally derived that a sequence of tries with delays of
 #  1, 5, 25, 125 secs worked to surmount a 1-second delay (via `tc` test)
@@ -16,7 +16,9 @@ RETRY_EXPONENT = 5
 class PxsshWrapper(pxssh.pxssh):
     def __init__(self, delaybeforesend, sync_retries, options):
         self.sync_retries = sync_retries
-        super(PxsshWrapper, self).__init__(delaybeforesend=delaybeforesend, options=options)
+        super(PxsshWrapper, self).__init__(
+            delaybeforesend=delaybeforesend, options=options
+        )
 
     def sync_original_prompt(self, sync_multiplier=1.0):
         """
@@ -39,11 +41,15 @@ class PxsshWrapper(pxssh.pxssh):
         success = False
         while (not success) and retry_attempt <= num_retries:
             # each retry will get an exponentially longer timeout interval
-            sync_multiplier_for_this_retry = sync_multiplier * (RETRY_EXPONENT ** retry_attempt)
+            sync_multiplier_for_this_retry = sync_multiplier * (
+                RETRY_EXPONENT**retry_attempt
+            )
             start = time.time()
 
             if DEBUG_VERBOSE_PRINTING:
-                sys.stderr.write("\nUsing sync multiplier: %f\n" % sync_multiplier_for_this_retry)
+                sys.stderr.write(
+                    "\nUsing sync multiplier: %f\n" % sync_multiplier_for_this_retry
+                )
 
             self.sendline()
             if DEBUG_VERBOSE_PRINTING:
@@ -69,9 +75,15 @@ class PxsshWrapper(pxssh.pxssh):
 
         if DEBUG_VERBOSE_PRINTING:
             if not success:
-                sys.stderr.write('\nAfter %d retries, prompts failed to be consistent.\n' % num_retries)
+                sys.stderr.write(
+                    "\nAfter %d retries, prompts failed to be consistent.\n"
+                    % num_retries
+                )
             elif retry_attempt > 0:
-                sys.stderr.write('\nConsistent prompts after extending timeout, with %i retries.\n' % retry_attempt)
+                sys.stderr.write(
+                    "\nConsistent prompts after extending timeout, with %i retries.\n"
+                    % retry_attempt
+                )
             sys.stderr.flush()
 
         return success
@@ -79,7 +91,7 @@ class PxsshWrapper(pxssh.pxssh):
     def clear_response_channel(self):
         """remove any readily-available characters. stop as soon as even a little wait time is discovered"""
         if DEBUG_VERBOSE_PRINTING:
-            sys.stderr.write('\nflushing:\n')
+            sys.stderr.write("\nflushing:\n")
         prompt = "dummy non empty"
         while prompt:
             try:
@@ -89,11 +101,11 @@ class PxsshWrapper(pxssh.pxssh):
             except TIMEOUT:
                 break
         if DEBUG_VERBOSE_PRINTING:
-            sys.stderr.write('\n')
+            sys.stderr.write("\n")
 
     def wait_for_any_response(self, max_wait_secs=5):
         if DEBUG_VERBOSE_PRINTING:
-            sys.stderr.write('\nstart looking for a character at %s\n' % datetime.now())
+            sys.stderr.write("\nstart looking for a character at %s\n" % datetime.now())
         duration = 0
         while duration < max_wait_secs:
             start = time.time()
@@ -104,7 +116,9 @@ class PxsshWrapper(pxssh.pxssh):
             except TIMEOUT:
                 duration += time.time() - start
         if DEBUG_VERBOSE_PRINTING:
-            sys.stderr.write('\nFinished wait_for_any_response() at %s\n' % datetime.now())
+            sys.stderr.write(
+                "\nFinished wait_for_any_response() at %s\n" % datetime.now()
+            )
 
     def is_prompt_bad(self, prompt_output):
         return len(prompt_output) == 0 or prompt_output == CRNL
@@ -112,9 +126,9 @@ class PxsshWrapper(pxssh.pxssh):
     def are_prompts_similar(self, prompt_one, prompt_two):
         if self.is_prompt_bad(prompt_one) or self.is_prompt_bad(prompt_two):
             if DEBUG_VERBOSE_PRINTING:
-                sys.stderr.write('\n[A prompt was bad: ]')
-                sys.stderr.write('\n[first prompt: {0!r}]'.format(prompt_one))
-                sys.stderr.write('\n[second prompt: {0!r}]'.format(prompt_two))
+                sys.stderr.write("\n[A prompt was bad: ]")
+                sys.stderr.write("\n[first prompt: {0!r}]".format(prompt_one))
+                sys.stderr.write("\n[second prompt: {0!r}]".format(prompt_two))
             return False
 
         if len(prompt_one) == 0:
@@ -126,8 +140,11 @@ class PxsshWrapper(pxssh.pxssh):
             return True
         else:
             if DEBUG_VERBOSE_PRINTING:
-                sys.stderr.write('\n[! distance too far: \n{0!r}\n{1!r}]\n'.format(prompt_one, prompt_two))
-                sys.stderr.write('\n[val=%f, ld=%i]\n' % (lev_ratio, lev_dist))
+                sys.stderr.write(
+                    "\n[! distance too far: \n{0!r}\n{1!r}]\n".format(
+                        prompt_one, prompt_two
+                    )
+                )
+                sys.stderr.write("\n[val=%f, ld=%i]\n" % (lev_ratio, lev_dist))
 
         return False
-

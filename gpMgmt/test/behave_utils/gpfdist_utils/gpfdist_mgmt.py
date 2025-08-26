@@ -1,21 +1,34 @@
 from __future__ import absolute_import
+
 try:
     import time
     import os
     import platform
     from gppylib.commands.base import Command, LOCAL, REMOTE, WorkerPool
 except ImportError as import_exception:
-    sys.exit('Cannot import modules.  Please check that you have sourced' \
-             ' greengage_path.sh.  Detail: %s' % str(import_exception))
+    sys.exit(
+        "Cannot import modules.  Please check that you have sourced"
+        " greengage_path.sh.  Detail: %s" % str(import_exception)
+    )
 import socket
+
 
 class Gpfdist:
     """
     Gpfdist class to management create and cleanup of gpfdist instance
     """
-    def __init__(self, name, directory, port, pid_file,
-                 ctxt=LOCAL, remoteHost=None, remote_source_file=os.path.join(os.environ.get('GPHOME'),'greengage_path.sh')):
-        """  
+
+    def __init__(
+        self,
+        name,
+        directory,
+        port,
+        pid_file,
+        ctxt=LOCAL,
+        remoteHost=None,
+        remote_source_file=os.path.join(os.environ.get("GPHOME"), "greengage_path.sh"),
+    ):
+        """
         name: name of the command
         dir: directory for gpfdist to use as its root directory
         port: port for gpfdist to listen on
@@ -29,23 +42,31 @@ class Gpfdist:
         self.pid_file = pid_file
         self.ctxt = ctxt
         self.host = remoteHost
-        self.ps_command = 'ps'
+        self.ps_command = "ps"
         self.source_file = remote_source_file
 
     def startGpfdist(self):
-        if self.host in ('127.0.0.1',socket.gethostbyname(socket.gethostname()),socket.gethostname(),'localhost'):
-            cmdStr = 'nohup gpfdist -d %s -p %s > /dev/null 2> /dev/null < ' \
-                    '/dev/null & echo \\$! > %s' % (self.dir, self.port,
-                                                    self.pid_file)
+        if self.host in (
+            "127.0.0.1",
+            socket.gethostbyname(socket.gethostname()),
+            socket.gethostname(),
+            "localhost",
+        ):
+            cmdStr = (
+                "nohup gpfdist -d %s -p %s > /dev/null 2> /dev/null < "
+                "/dev/null & echo \\$! > %s" % (self.dir, self.port, self.pid_file)
+            )
         else:
-            cmdStr = 'gpssh -h %s -e "source %s; nohup gpfdist -d %s -p %s > /dev/null 2> /dev/null < ' \
-                    '/dev/null & echo \\$! > %s"' % (self.host, self.source_file, self.dir, self.port,
-                                                    self.pid_file)             
+            cmdStr = (
+                'gpssh -h %s -e "source %s; nohup gpfdist -d %s -p %s > /dev/null 2> /dev/null < '
+                '/dev/null & echo \\$! > %s"'
+                % (self.host, self.source_file, self.dir, self.port, self.pid_file)
+            )
 
         cmd = Command(self.name, cmdStr, self.ctxt, self.host)
         cmd.run()
         return self.check_gpfdist_process()
-    
+
     def check_gpfdist_process(self, wait=60, port=None, raise_assert=True):
         """
         Check for the gpfdist process
@@ -55,22 +76,34 @@ class Gpfdist:
             port = self.port
         count = 0
         # handle escape of string's quotation for localhost and remote host
-        if self.host in ('127.0.0.1',socket.gethostbyname(socket.gethostname()),socket.gethostname(),'localhost'):
-            cmdStr = "%s -ef | grep \'gpfdist -d %s -p %s\' | grep -v grep"%(self.ps_command, self.dir, port)
+        if self.host in (
+            "127.0.0.1",
+            socket.gethostbyname(socket.gethostname()),
+            socket.gethostname(),
+            "localhost",
+        ):
+            cmdStr = "%s -ef | grep 'gpfdist -d %s -p %s' | grep -v grep" % (
+                self.ps_command,
+                self.dir,
+                port,
+            )
         else:
-            cmdStr = 'gpssh -h %s -e "%s -ef | grep \'gpfdist -d %s -p %s\' |grep -v grep"'%(self.host, self.ps_command, self.dir, port)
+            cmdStr = (
+                "gpssh -h %s -e \"%s -ef | grep 'gpfdist -d %s -p %s' |grep -v grep\""
+                % (self.host, self.ps_command, self.dir, port)
+            )
         cmd = Command(self.name, cmdStr, self.ctxt, self.host)
         # run the command for 5 time
         while count < wait:
-            cmd.run()      
-            results = cmd.get_results()      
+            cmd.run()
+            results = cmd.get_results()
             if results.rc == 0:
-                return True                
+                return True
             count = count + 1
             time.sleep(1)
         if raise_assert:
             raise GPFDISTError("Could not start gpfdist process")
-        else :
+        else:
             return False
 
     def is_gpfdist_connected(self, port=None):
@@ -85,8 +118,8 @@ class Gpfdist:
         url = "http://%s:%s" % (socket.gethostbyname(self.host), port)
 
         shell.run("curl %s 2>&1" % (url), oFile="gpfdist.process", mode="w")
-        content = ''.join(open("gpfdist.process").readlines())
-        if content.find("couldn't")>=0:
+        content = "".join(open("gpfdist.process").readlines())
+        if content.find("couldn't") >= 0:
             return False
         return True
 
@@ -98,18 +131,22 @@ class Gpfdist:
         if port is None:
             port = self.port
         # deal with the escape issue separately for localhost and remote one
-        if self.host in ('127.0.0.1',socket.gethostbyname(socket.gethostname()),socket.gethostname(),'localhost'):
-            cmdStr = "netstat -an |grep %s"%port
+        if self.host in (
+            "127.0.0.1",
+            socket.gethostbyname(socket.gethostname()),
+            socket.gethostname(),
+            "localhost",
+        ):
+            cmdStr = "netstat -an |grep %s" % port
         else:
-            cmdStr = 'gpssh -h %s -e "netstat -an |grep %s"'%(self.host, port)
+            cmdStr = 'gpssh -h %s -e "netstat -an |grep %s"' % (self.host, port)
         cmd = Command(self.name, cmdStr, self.ctxt, self.host)
         cmd.run()
         results = cmd.get_results()
-        return (not results.rc)
-       
+        return not results.rc
 
     def cleanupGpfdist(self, wait=10, port=None):
-        """  
+        """
         Command for terminating a running gpfdist instance and removing its pid file
         """
         # We have to kill and then wait for the process to fully exit so we
@@ -118,16 +155,26 @@ class Gpfdist:
         if port is None:
             port = self.port
         # deal with the escape issue separately for localhost and remote one
-        if self.host in ('127.0.0.1',socket.gethostbyname(socket.gethostname()),socket.gethostname(),'localhost'):
-            cmdStr = '%s -ef | grep "gpfdist -d %s -p %s" | grep -v grep | awk \'{print $2}\' | xargs kill 2>&1 > /dev/null'%(self.ps_command, self.dir, port)
+        if self.host in (
+            "127.0.0.1",
+            socket.gethostbyname(socket.gethostname()),
+            socket.gethostname(),
+            "localhost",
+        ):
+            cmdStr = (
+                "%s -ef | grep \"gpfdist -d %s -p %s\" | grep -v grep | awk '{print $2}' | xargs kill 2>&1 > /dev/null"
+                % (self.ps_command, self.dir, port)
+            )
         else:
-            cmdStr = 'gpssh -h %s -e "%s -ef | grep \'gpfdist -d %s -p %s\' | grep -v grep | awk \'{print $2}\' | xargs kill 2>&1 > /dev/null"'%(self.host, self.ps_command, self.dir, port)
+            cmdStr = (
+                "gpssh -h %s -e \"%s -ef | grep 'gpfdist -d %s -p %s' | grep -v grep | awk '{print $2}' | xargs kill 2>&1 > /dev/null\""
+                % (self.host, self.ps_command, self.dir, port)
+            )
         cmd = Command(self.name, cmdStr, self.ctxt, self.host)
         cmd.run()
         is_released = False
         count = 0
-        while (not is_released and count < wait):
+        while not is_released and count < wait:
             is_released = self.is_port_released()
             count = count + 1
             time.sleep(1)
-

@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from gppylib.utils import escapeDoubleQuoteInSQLString
 
-class LeakedSchemaDropper:
 
+class LeakedSchemaDropper:
     # This query does a union of all the leaked temp schemas on the master as well as all the segments.
     # The first part of the query uses gp_dist_random which gets the leaked schemas from only the segments
     # The second part of the query gets the leaked temp schemas from just the master
@@ -46,5 +46,7 @@ class LeakedSchemaDropper:
         leaked_schemas = self.__get_leaked_schemas(db_connection)
         for leaked_schema in leaked_schemas:
             escaped_schema_name = escapeDoubleQuoteInSQLString(leaked_schema)
-            db_connection.query('DROP SCHEMA IF EXISTS %s CASCADE;' % (escaped_schema_name))
+            db_connection.query(
+                "DROP SCHEMA IF EXISTS %s CASCADE;" % (escaped_schema_name)
+            )
         return leaked_schemas

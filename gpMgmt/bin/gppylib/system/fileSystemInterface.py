@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+
 from __future__ import absolute_import
 import os
 
@@ -18,11 +19,12 @@ from gppylib.utils import checkNotNone
 
 logger = get_default_logger()
 
+
 #
 # An implementation of GpFileSystemProvider will provide functionality
 #   to do filesystem operations (like iterating directories or writing temp files)
 #
-class GpFileSystemProvider :
+class GpFileSystemProvider:
     def __init__(self):
         pass
 
@@ -35,7 +37,7 @@ class GpFileSystemProvider :
     #
     # Create a temporary file for output.  This temporary file will be automatically deleted on cleanup
     #
-    def createNamedTemporaryFile( self ) :
+    def createNamedTemporaryFile(self):
         raise Exception("not implemented")
 
 
@@ -43,9 +45,11 @@ class GpFileSystemProvider :
 # Management of registered configuration provider.  Right now it
 #   is a singleton, so initializeDatabase calls _could_ mess up
 #   the singleton for other parts of code.  Perhaps switch later
-#   to a factory 
+#   to a factory
 #
 gProvider = None
+
+
 def registerFileSystemProvider(provider):
     global gProvider
     checkNotNone("New global fileSystemProvider", provider)
@@ -54,6 +58,7 @@ def registerFileSystemProvider(provider):
         gProvider.destroy()
 
     gProvider = provider
+
 
 def getFileSystemProvider():
     global gProvider
