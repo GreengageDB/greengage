@@ -719,7 +719,7 @@ distclean :
 	@if [ -d Release -a -f Release/GNUmakefile ]; then cd Release; $(MAKE) distclean; fi
 	@if [ -d $(GPPGDIR) -a -f $(GPPGDIR)/GNUmakefile ]; then cd $(GPPGDIR); $(MAKE) distclean; fi
 	@if [ -d $(GPMGMT)/bin ]; then cd $(GPMGMT)/bin; $(MAKE) distclean; fi
-	@rm -f VERSION
+	@if [ -d .git ] ; then rm -f VERSION; fi
 	@rm -f env.sh
 
 distprep : $(ISCONFIG)
