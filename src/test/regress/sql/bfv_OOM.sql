@@ -1,5 +1,5 @@
 -- start_ignore
-create extension if not exists gp_inject_fault;
+CREATE EXTENSION gp_inject_fault;
 -- end_ignore
 
 -- start_matchsubs

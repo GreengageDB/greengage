@@ -592,7 +592,9 @@ cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
 		next = curr->next;
 
 		if (curr->owner == owner)
+		{
 			cleanup_dispatcher_handle(curr);
+		}
 	}
 }
 
