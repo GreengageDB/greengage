@@ -3427,8 +3427,11 @@ AbortTransaction(void)
 	 * If memprot decides to kill process, make sure we destroy all processes
 	 * so that all mem/resource will be freed
 	 */
-	if (elog_geterrcode() == ERRCODE_GP_MEMPROT_KILL)
+	if (in_oom_error())
+	{
 		DisconnectAndDestroyAllGangs(true);
+		reset_oom_flag();
+	}
 
 	/* Release resource group slot at the end of a transaction */
 	if (ShouldUnassignResGroup())

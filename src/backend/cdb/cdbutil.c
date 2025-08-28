@@ -980,12 +980,15 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 
 destroy_segdb:
 
-	/*
-	 * Critical section. No memory allocations or elog(ERROR) calls are
-	 * allowed here!
-	 */
-
-	cdbconn_freeSegmentDescriptor(segdbDesc);
+	if (in_oom_error())
+	{
+		/* We'll destroy the gang anyway. Avoid allocations. */
+		cdbconn_freeSegmentDescriptor(segdbDesc);
+	}
+	else
+	{
+		cdbconn_termSegmentDescriptor(segdbDesc);
+	}
 
 	if (isWriter)
 	{

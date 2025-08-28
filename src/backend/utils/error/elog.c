@@ -174,6 +174,8 @@ static bool openlog_done = false;
 static char *syslog_ident = NULL;
 static int	syslog_facility = LOG_LOCAL0;
 
+static volatile bool in_oom = false;
+
 static void write_syslog(int level, const char *line);
 #endif
 
@@ -263,6 +265,18 @@ in_error_recursion_trouble(void)
 {
 	/* Pull the plug if recurse more than once */
 	return (recursion_depth > 2);
+}
+
+bool
+in_oom_error(void)
+{
+	return in_oom;
+}
+
+void
+reset_oom_flag(void)
+{
+	in_oom = false;
 }
 
 /*
@@ -625,6 +639,9 @@ errfinish(int dummy __attribute__((unused)),...)
 		QueryCancelHoldoffCount = 0;
 
 		CritSectionCount = 0;	/* should be unnecessary, but... */
+
+		if (edata->sqlerrcode == ERRCODE_GP_MEMPROT_KILL)
+			in_oom = true;
 
 		/*
 		 * Note that we leave CurrentMemoryContext set to ErrorContext. The

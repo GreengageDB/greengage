@@ -520,7 +520,7 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h)
 		return;
 	}
 
-	h->dispatcherState->forceDestroyGang = true;
+	h->dispatcherState->forceDestroyGang = in_oom_error();
 
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }
