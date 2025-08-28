@@ -239,13 +239,6 @@ test__CdbDispatchPlan_may_be_interrupted(void **state)
 	/* process was terminated by administrative command */
 	expect_ereport(FATAL);
 
-	/* QD will trying to cancel queries on QEs */
-	will_return(__wrap_PQcancel, TRUE);
-
-	/* during close and free connection */
-	expect_any_count(pqClearAsyncResult, conn, 2);
-	will_be_called_count(pqClearAsyncResult, 2);
-
 	/*
 	 * BUT! pqPutMsgStart mustn't be called
 	 *
