@@ -365,12 +365,6 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	if (!ds)
 		return;
 
-	/*
-	 * IMPORTANT:
-	 * If we're encountered forceDestroyGang flag, we're not allowed to allocate
-	 * any more memory or use elog(ERROR) down below.
-	 */
-
 #ifdef USE_ASSERT_CHECKING
 	Assert(!ds->isGangDestroying || ds->forceDestroyGang);
 	ds->isGangDestroying = true;

@@ -1029,19 +1029,25 @@ RecycleGang(Gang *gp, bool forceDestroy)
 
 	if (!gp)
 		return;
-
+	/*
+	 *
+	 * Callers of RecycleGang should not throw ERRORs by design. This is
+	 * because RecycleGang is not re-entrant: For example, an ERROR could be
+	 * thrown whilst the gang's segdbDesc is already freed. This would cause
+	 * RecycleGang to be called again during abort processing, giving rise to
+	 * potential double freeing of the gang's segdbDesc.
+	 *
+	 * Thus, we hold off interrupts until the gang is fully cleaned here to prevent
+	 * throwing an ERROR here.
+	 *
+	 * details See github issue: https://github.com/GreengageDB/greengage/issues/13393
+	 */
 	HOLD_INTERRUPTS();
-
 	/*
 	 * Loop through the segment_database_descriptors array and, for each
 	 * SegmentDatabaseDescriptor: 1) discard the query results (if any), 2)
 	 * disconnect the session, and 3) discard any connection error message.
-	 *
-	 * In case of forceDestroy, just free the segment database descriptors.
-	 * We shouldn't try anything more, since there might not be enough memory
-	 * or resources.
 	 */
-
 #ifdef FAULT_INJECTOR
 	/*
 	 * select * from gp_segment_configuration a, t13393,
@@ -1057,7 +1063,6 @@ RecycleGang(Gang *gp, bool forceDestroy)
 		CHECK_FOR_INTERRUPTS();
 	}
 #endif
-
 	for (i = 0; i < gp->size; i++)
 	{
 		SegmentDatabaseDescriptor *segdbDesc = gp->db_descriptors[i];
@@ -1066,7 +1071,6 @@ RecycleGang(Gang *gp, bool forceDestroy)
 
 		cdbcomponent_recycleIdleQE(segdbDesc, forceDestroy);
 	}
-
 	RESUME_INTERRUPTS();
 }
 
