@@ -894,7 +894,7 @@ cleanupQE(SegmentDatabaseDescriptor *segdbDesc)
 		return false;
 
 	/* Note, we cancel all "still running" queries */
-	if (!cdbconn_discardResults(segdbDesc, -1))
+	if (!cdbconn_discardResults(segdbDesc, 20))
 	{
 		elog(LOG, "cleaning up seg%d while it is still busy", segdbDesc->segindex);
 		return false;
