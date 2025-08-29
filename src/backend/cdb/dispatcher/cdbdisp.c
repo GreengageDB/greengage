@@ -539,7 +539,7 @@ AtAbort_DispatcherState(void)
 
 	/*
 	 * Cleanup all outbound dispatcher states belong to
-	 * current resource owner and its children.
+	 * current resource owner and its children
 	 */
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 
