@@ -637,7 +637,6 @@ main(int argc, char *argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
-
 	MemoryContextInit();
 
 	DataDir = ".";
