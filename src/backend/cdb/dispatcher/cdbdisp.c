@@ -540,9 +540,6 @@ AtAbort_DispatcherState(void)
 	/*
 	 * Cleanup all outbound dispatcher states belong to
 	 * current resource owner and its children.
-	 *
-	 * In case of OOM, skip query cancellation since we'll get rid of the gang
-	 * anyway.
 	 */
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 
@@ -574,7 +571,6 @@ AtSubAbort_DispatcherState(void)
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
 }
 
-/* Cancel the queries and ask the gang to stop. */
 void
 cdbdisp_cleanupDispatcherHandle(const struct ResourceOwnerData *owner)
 {
