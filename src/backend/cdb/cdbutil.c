@@ -982,7 +982,7 @@ destroy_segdb:
 
 	if (in_oom_error_trouble())
 	{
-		/* We'll destroy the gang anyway. Avoid allocations. */
+		/* We'll reset the session anyway. Avoid allocations. */
 		cdbconn_freeSegmentDescriptor(segdbDesc);
 	}
 	else

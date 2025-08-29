@@ -516,7 +516,15 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h)
 		return;
 	}
 
-	h->dispatcherState->forceDestroyGang = in_oom_error_trouble();
+	if (in_oom_error_trouble())
+	{
+		/* We'll reset the session anyway. */
+		h->dispatcherState->forceDestroyGang = true;
+	}
+	else
+	{
+		cdbdisp_cancelDispatch(h->dispatcherState);
+	}
 
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }
