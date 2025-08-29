@@ -16,7 +16,11 @@
 #define get_compare_function_for_ordering_op mock_get_compare_function_for_ordering_op
 #define ScanKeyEntryInitialize mock_ScanKeyEntryInitialize
 
-void run_sort_test(int nattrs, int nkeys);
+void run_sort_test_fixed(int nattrs, int nkeys);
+void run_sort_test_varlena(int nattrs, int nkeys);
+text *make_test_string(int idx);
+int random_sequence(int key);
+Datum test_textcmp(PG_FUNCTION_ARGS);
 
 void
 mock_ScanKeyEntryInitialize(ScanKey entry,
@@ -31,7 +35,7 @@ mock_ScanKeyEntryInitialize(ScanKey entry,
 #undef USE_ASSERT_CHECKING
 #include "../tuplesort_mk.c"
 
-#define NTEST_TUPLES 10
+#define NTEST_TUPLES 100000
 
 struct LogicalTapeSet
 {
@@ -55,6 +59,16 @@ mock_get_compare_function_for_ordering_op(Oid opno, Oid *cmpfunc, bool *reverse)
 	return true;
 }
 
+Datum
+test_textcmp(PG_FUNCTION_ARGS)
+{
+	text*		a = DatumGetTextP(PG_GETARG_DATUM(0));
+	text*		b = DatumGetTextP(PG_GETARG_DATUM(1));
+
+	PG_RETURN_INT32(strcmp(text_to_cstring(a), text_to_cstring(b)));
+}
+
+static PGFunction test_compare_fn = btint4cmp;
 
 void
 mock_ScanKeyEntryInitialize(ScanKey entry,
@@ -82,7 +96,7 @@ mock_ScanKeyEntryInitialize(ScanKey entry,
 
 	finfo->fn_nargs = 2; // Binary comparison in this test
 	finfo->fn_strict = false;
-	finfo->fn_addr = btint4cmp; //TODO use valid compare function
+	finfo->fn_addr = test_compare_fn; //TODO use valid compare function
 	finfo->fn_retset = false;
 }
 
@@ -261,7 +275,7 @@ test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 	assert_true(error_thrown);
 }
 
-void run_sort_test(int nattrs, int nkeys)
+void run_sort_test_fixed(int nattrs, int nkeys)
 {
 	int i;
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "test_shm_mq worker");
@@ -315,6 +329,8 @@ void run_sort_test(int nattrs, int nkeys)
 		nullsFirstFlags[i] = false;
 	}
 
+	test_compare_fn = btint4cmp;
+
     // Tuplesortstate_mk *sortstate = tuplesort_begin_heap_mk(&ss, tupdesc, nkeys, attNums,
     //                                 sortOperators,
     //                                 sortCollations,
@@ -358,8 +374,10 @@ void run_sort_test(int nattrs, int nkeys)
     /* Insert tuples in reverse order */
     for (i = NTEST_TUPLES; i > 0; i--)
     {
-		values[0] = Int32GetDatum(NTEST_TUPLES - i);
-		values[1] = Int32GetDatum(i);
+		for (int j = 0; j < nattrs; j++)
+		{
+			values[j] = Int32GetDatum(NTEST_TUPLES - i);
+		}
 
 		slot->PRIVATE_tts_heaptuple = heap_form_tuple(tupdesc, values, isnull);
 
@@ -372,8 +390,8 @@ void run_sort_test(int nattrs, int nkeys)
     // int prev = -1;
     for (i = 0; ; i++)
     {
-        Datum values[2];
-        bool isnull[2];
+        Datum *values = (Datum *)palloc0(sizeof(Datum) * nattrs);
+        bool *isnull = (bool *)palloc0(sizeof(bool) * nattrs);
 
 		tuplesort_gettupleslot_mk(sortstate,
 								  true,
@@ -385,18 +403,193 @@ void run_sort_test(int nattrs, int nkeys)
 		HeapTuple tuple = ExecFetchSlotHeapTuple(slot);
 		heap_deform_tuple(tuple, tupdesc, values, isnull);
 
-		int v0 = DatumGetInt32(values[0]);
-		int v1 = DatumGetInt32(values[1]);
+		// int v0 = DatumGetInt32(values[0]);
+		// int v1 = DatumGetInt32(values[1]);
 		
-		printf("(%d,%d)", v0, v1);
+		// printf("(%d,%d)", v0, v1);
+		pfree(values);
+		pfree(isnull);
     }
-	printf("\n");
+	// printf("\n");
 
     tuplesort_end_mk(sortstate);
 	MemoryContextSwitchTo(old_cxt);
     MemoryContextDelete(mcxt);
 }
 
+static const char *test_str_templates[] = {
+	"hello world ",
+	"lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat ",
+};
+
+#define MAX_TEST_STRING_LEN 1024
+
+// From https://www.researchgate.net/publication/2683298_A_Collection_of_Selected_Pseudorandom_Number_Generators_With_Linear_Structures
+
+static int random_seed = 1013;
+
+int random_sequence(int key)
+{
+    return (3141592621u*key + 2718281829u) % 1000000007u;
+}
+
+text *
+make_test_string(int idx)
+{
+	char buffer[MAX_TEST_STRING_LEN];
+	const char *template = test_str_templates[idx % sizeof(test_str_templates)/sizeof(test_str_templates[0])];
+
+	random_seed = random_sequence(random_seed);
+
+	size_t total_len = random_seed % MAX_TEST_STRING_LEN;
+	sprintf(buffer, "%d. ", idx);
+	int len = strlen(buffer);
+	while (len < total_len) 
+	{
+		strncat(buffer, template, total_len - len);
+		len = strlen(buffer);
+	}
+
+	text *ret_text = cstring_to_text(buffer);
+	return ret_text;
+}
+
+void run_sort_test_varlena(int nattrs, int nkeys)
+{
+	int i;
+
+	CurrentResourceOwner = ResourceOwnerCreate(NULL, "test_shm_mq worker");
+
+    MemoryContext mcxt = AllocSetContextCreate(CurrentMemoryContext,
+                                               "mk_test",
+                                               ALLOCSET_DEFAULT_SIZES);
+
+
+	MemoryContext old_cxt = MemoryContextSwitchTo(mcxt);
+
+	FormData_pg_attribute *attributes = (FormData_pg_attribute *)palloc0(sizeof(FormData_pg_attribute) * nattrs);
+	Form_pg_attribute *attrs = (Form_pg_attribute *)palloc0(sizeof(Form_pg_attribute) * nattrs);
+	for (i = 0; i < nattrs; i++) 
+	{
+		attributes[i].attrelid = InvalidOid;
+		sprintf(attributes[i].attname.data, "att%d", i);
+		attributes[i].atttypid = InvalidOid;
+		attributes[i].attstattarget = -1;
+		attributes[i].attndims = 0;
+		attributes[i].atttypmod = -1;
+		attributes[i].attcollation = InvalidOid;
+		attributes[i].attlen = -1;    // varlena
+		attributes[i].attbyval = false; // for varlena
+		attributes[i].attstorage = 'e'; // allow TOAST
+		attributes[i].attalign = 'c';  // Char alignment
+		attributes[i].attcacheoff = -1;
+
+		attrs[i] = &attributes[i];
+	}
+	
+	TupleDesc tupdesc = (TupleDesc)palloc0(sizeof(struct tupleDesc));
+	tupdesc->attrs = attrs;
+	tupdesc->natts = nattrs;
+	tupdesc->constr = NULL;
+	tupdesc->tdhasoid = false;
+	tupdesc->tdrefcount = -1;
+	tupdesc->tdtypeid = -1;
+	tupdesc->tdtypmod = -1;
+
+    ScanState ss;
+
+    AttrNumber *attNums = (AttrNumber *)palloc0(sizeof(AttrNumber) * nkeys);
+	Oid *sortOperators = (Oid *)palloc0(sizeof(Oid) * nkeys);
+	Oid *sortCollations = (Oid *)palloc0(sizeof(Oid) * nkeys);
+	bool *nullsFirstFlags = (bool *)palloc0(sizeof(bool) * nkeys);
+	for (int i = 0; i < nkeys; i++)
+	{
+		attNums[i] = i + 1;
+		sortOperators[i] = TextEqualOperator;
+		sortCollations[i] = InvalidOid;
+		nullsFirstFlags[i] = false;
+	}
+
+	test_compare_fn = test_textcmp;
+
+	Tuplesortstate_mk *sortstate = tuplesort_begin_heap_file_readerwriter_mk(
+		&ss,
+		"test_sort_mk",
+		true,
+		tupdesc,
+		nkeys,
+		attNums,
+		sortOperators,
+		sortCollations,
+		nullsFirstFlags,
+		work_mem,
+		true
+	);
+
+	Datum		*values = (Datum *)palloc0(sizeof(Datum) * nattrs);
+	bool		*isnull = (bool *)palloc0(sizeof(bool) * nattrs);
+
+	for (i = 0; i < nattrs; i++)
+	{
+		values[i] = Int32GetDatum(0);
+		isnull[i] = false;
+	}
+
+	TupleTableSlot *slot = MakeTupleTableSlot();
+	ExecSetSlotDescriptor(slot, tupdesc);
+
+	slot->tts_tupleDescriptor = tupdesc;
+	slot->PRIVATE_tts_heaptuple = NULL;
+	slot->PRIVATE_tts_isnull = isnull;
+	slot->PRIVATE_tts_values = values;
+
+    /* Insert tuples in reverse order */
+    for (i = NTEST_TUPLES; i > 0; i--)
+    {
+		for (int j = 0; j < nattrs; j++)
+		{			
+			text *attr_text = make_test_string(i+j);
+			values[j] = PointerGetDatum(attr_text);
+			isnull[j] = (i+j) % 3 == 0;
+		}
+
+		slot->PRIVATE_tts_heaptuple = heap_form_tuple(tupdesc, values, isnull);
+
+		tuplesort_puttupleslot_mk(sortstate, slot);
+    }
+
+    tuplesort_performsort_mk(sortstate);
+
+    /* Read back and verify ascending order */
+    // int prev = -1;
+    for (i = 0; ; i++)
+    {
+		tuplesort_gettupleslot_mk(sortstate,
+								  true,
+								  slot);
+
+		if (TupIsNull(slot))
+			break;
+
+		HeapTuple tuple = ExecFetchSlotHeapTuple(slot);
+		heap_deform_tuple(tuple, tupdesc, values, isnull);
+
+// Redefine the following to get debug print		
+#if 0 
+		text *t0 = (text *)DatumGetPointer(values[0]);
+		text *t1 = (text *)DatumGetPointer(values[1]);
+		
+		printf("(%s,%s)\n", text_to_cstring(t0), text_to_cstring(t1)); 
+#endif		
+    }
+	// printf("\n");
+
+    tuplesort_end_mk(sortstate);
+	MemoryContextSwitchTo(old_cxt);
+    MemoryContextDelete(mcxt);	
+}
+
+#define MAX_ATTRS 30
 /*
  * Test: basic ascending sort of integers.
  */
@@ -408,84 +601,42 @@ test_basic_int_sort(void **stateptr)
 
 	mkdir("base", S_IRWXU);
 
-	for (nattrs = 2; nattrs <= 30; nattrs++)
+	for (nattrs = 2; nattrs <= MAX_ATTRS; nattrs++)
 		for (nkeys = 1; nkeys <= nattrs; nkeys++)
 		{
-			printf("nkeys: %d, nattrs: %d\n", nkeys, nattrs);
-			run_sort_test(nattrs, nkeys);
+			// printf("nkeys: %d, nattrs: %d\n", nkeys, nattrs);
+			run_sort_test_fixed(nattrs, nkeys);
 		}
 }
 
-#if 0
-/*
- * Test: fuzz with random data lengths.
- */
+
 static void
-test_fuzz_random(void **stateptr)
+test_sort_varlena(void **stateptr)
 {
-    MemoryContext mcxt = AllocSetContextCreate(CurrentMemoryContext,
-                                               "mk_test_fuzz",
-                                               ALLOCSET_DEFAULT_SIZES);
-    Tuplesortstate_mk *sortstate = mk_test_sort_state(mcxt, NULL, 32, true);
-    int i;
+	int nkeys = 2;
+	int nattrs = 2;
 
-    for (i = 0; i < NTEST_TUPLES; i++)
-    {
-        Datum values[2];
-        bool isnull[2];
-
-        values[0] = Int32GetDatum(random() % 10000);
-        if (random() % 10 == 0)
-        {
-            values[1] = (Datum) 0;
-            isnull[1] = true;
-        }
-        else
-        {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "val%ld", random() % 10000);
-            values[1] = CStringGetTextDatum(buf);
-            isnull[1] = false;
-        }
-        isnull[0] = false;
-
-        tuplesort_putdatum_mk(sortstate, values[0], isnull[0]);
-    }
-
-    tuplesort_performsort_mk(sortstate);
-
-    /* Verify monotonicity: previous <= current */
-    Datum prev = Int32GetDatum(-1);
-    for (i = 0; i < NTEST_TUPLES; i++)
-    {
-        Datum values[2];
-        bool isnull[2];
-        bool shouldFree = false;
-
-        assert_true(tuplesort_getdatum_mk(sortstate, true, values, isnull));
-        assert_true(DatumGetInt32(values[0]) >= DatumGetInt32(prev));
-        prev = values[0];
-
-        if (shouldFree)
-            pfree(DatumGetPointer(values[1]));
-    }
-
-    tuplesort_end_mk(sortstate);
-    MemoryContextDelete(mcxt);
+	for (nattrs = 2; nattrs <= MAX_ATTRS; nattrs++)
+		for (nkeys = 1; nkeys <= nattrs; nkeys++)
+		{
+			run_sort_test_varlena(nattrs, nkeys);
+		}
 }
-#endif
+
+
+const		UnitTest tests[] = {
+	unit_test(test_tuplesort_mk_readtup_heap_fail_len),
+	unit_test(test_tuplesort_mk_writetup_heap_fail_len),
+	// unit_test(test_basic_int_sort),
+	unit_test(test_sort_varlena),
+	// unit_test(test_fuzz_random)
+};
 
 int
 main(int argc, char *argv[])
 {
 	cmockery_parse_arguments(argc, argv);
 
-	const		UnitTest tests[] = {
-		unit_test(test_tuplesort_mk_readtup_heap_fail_len),
-		unit_test(test_tuplesort_mk_writetup_heap_fail_len),
-		unit_test(test_basic_int_sort)
-		// unit_test(test_fuzz_random)
-	};
 
 	MemoryContextInit();
 
