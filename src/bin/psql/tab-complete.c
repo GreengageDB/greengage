@@ -816,10 +816,10 @@ static PGresult *exec_query(const char *query);
 
 static void get_previous_words(int point, char **previous_words, int nwords);
 static bool ends_with_paren(const char *word);
-static bool previous_words_match(char *previous_words[], int n_expected, ...);
-static int extract_column_list(char **previous_words,
+static bool previous_words_match2(char *words[], const char *key1,
+								const char *key2);
+static int extract_column_list(char* const *previous_words,
 							int nwords, char ***column_list);
-static char *strdup_range(const char *start, const char *end);
 
 #ifdef NOT_USED
 static char *quote_file_name(char *text, int match_type, char *quote_pointer);
@@ -2284,7 +2284,8 @@ psql_completion(const char *text, int start, int end)
 	/* Complete "DISTRIBUTED" with BY( | RANDOMLY | REPLICATED */
 	else if (pg_strcasecmp(prev_wd, "DISTRIBUTED") == 0)
 	{
-		static const char *const list_DISTRIBUTED[] = {"BY(", "RANDOMLY", "REPLICATED"};
+		static const char *const list_DISTRIBUTED[] =
+		{"BY(", "RANDOMLY", "REPLICATED"};
 		COMPLETE_WITH_LIST(list_DISTRIBUTED);
 	}
 	/* DISTRIBUTED BY (...). Suggest table column names inside parentheses */
@@ -2296,16 +2297,21 @@ psql_completion(const char *text, int start, int end)
 		int ncols = extract_column_list(previous_words, LOOKBACK_LIMIT, &cols);
 
 		if (ncols > 0)
-			COMPLETE_WITH_LIST(cols);
+		{
+			COMPLETE_WITH_LIST((const char * const *)cols);
+		}
 
-		for (int i = 0; i < ncols; ++i) free(cols[i]);
+		for (int i = 0; i < ncols; i++)
+		{
+			free(cols[i]);
+		}
 		free(cols);
 	}
-	/* Complete PARTITION BY with LIST( | RANGE( | SUBPARTITION */
+	/* Complete PARTITION BY with LIST( | RANGE( */
 	else if (pg_strcasecmp(prev2_wd, "PARTITION") == 0 &&
 			 pg_strcasecmp(prev_wd, "BY") == 0)
 	{
-		static const char *const list_PARTITION_BY[] = {"LIST(", "RANGE(", "SUBPARTITION"};
+		static const char *const list_PARTITION_BY[] = {"LIST(", "RANGE("};
 		COMPLETE_WITH_LIST(list_PARTITION_BY);
 	}
 	/* Complete SUBPARTITION with BY | TEMPLATE */
@@ -2321,10 +2327,16 @@ psql_completion(const char *text, int start, int end)
 		static const char *const list_SUBPARTITION_BY[] = {"LIST(", "RANGE("};
 		COMPLETE_WITH_LIST(list_SUBPARTITION_BY);
 	}
-	/* Complete CREATE TABLE with common clause options */
-	else if (previous_words_match(previous_words, 2, "CREATE", "TABLE"))
+	/* Complete PARTITION BY with SUBPARTITION */
+	else if (previous_words_match2(previous_words, "PARTITION", "BY"))
 	{
-		static const char *const list_TEMP[] = {
+		COMPLETE_WITH_CONST("SUBPARTITION");
+	}
+	/* Complete CREATE TABLE with common clause options */
+	else if (previous_words_match2(previous_words, "CREATE", "TABLE"))
+	{
+		static const char *const list_CREATE_TABLE[] =
+		{
 			"IF NO EXISTS",
 			"INHERITS(",
 			"WITH(",
@@ -2333,7 +2345,7 @@ psql_completion(const char *text, int start, int end)
 			"DISTRIBUTED",
 			"PARTITION BY"
 		};
-		COMPLETE_WITH_LIST(list_TEMP);
+		COMPLETE_WITH_LIST(list_CREATE_TABLE);
 	}
 
 /* CREATE TABLESPACE */
@@ -4319,52 +4331,39 @@ ends_with_paren(const char *word)
 {
     size_t len;
     if (!word || (len = strlen(word)) == 0)
+	{
         return false;
+	}
     return word[len - 1] == ')';
 }
 
 /*
- * Return true if all keys appear in previous_words[] in SQL order.
- * previous_words[0] is closest to the cursor, so we scan from the far end.
- * NULL/empty entries are skipped. Case-insensitive compare via pg_strcasecmp().
+ * Return true if key1 then key2 appear in previous_words[] in SQL order.
+ * previous_words[0] is closest to the cursor; we scan from the far end.
  */
-static bool
-previous_words_match(char *previous_words[], int n_expected, ...)
+static bool previous_words_match2(char *words[], const char *key1,
+								const char *key2)
 {
-	va_list args;
-	int word_index = LOOKBACK_LIMIT - 1;
+	int i = LOOKBACK_LIMIT - 1;
 
-	va_start(args, n_expected);
-
-	for (int key_index = 0; key_index < n_expected; key_index++)
+	while (i >= 0 && (!words[i] || pg_strcasecmp(words[i], key1) != 0))
 	{
-		const char *expected_word = va_arg(args, const char *);
-		bool found = false;
-
-		while (word_index >= 0)
-		{
-			const char *candidate_word = previous_words[word_index--];
-
-			bool matches = (candidate_word &&
-							*candidate_word != '\0' &&
-							pg_strcasecmp(candidate_word, expected_word) == 0);
-
-			if (matches)
-			{
-				found = true;
-				break;
-			}
-		}
-
-		if (!found)
-		{
-			va_end(args);
-			return false;
-		}
+		i--;
 	}
 
-	va_end(args);
-	return true;
+	if (i < 0)
+	{
+		return false;
+	}
+
+	i--;
+
+	while (i >= 0 && (!words[i] || pg_strcasecmp(words[i], key2) != 0))
+	{
+		i--;
+	}
+
+	return i >= 0;
 }
 
 /*
@@ -4372,20 +4371,35 @@ previous_words_match(char *previous_words[], int n_expected, ...)
  * Returns number of columns found; column_list contains malloc'ed strings.
  */
 static int
-extract_column_list(char **previous_words, int nwords, char ***column_list)
+extract_column_list(char* const *previous_words, int nwords, char ***column_list)
 {
 	*column_list = NULL;
 
 	/* Find the last word containing both '(' and ')' */
 	const char *paren = NULL;
-	for (int i = nwords - 1; i >= 0; --i) {
+	for (int i = nwords - 1; i >= 0; i--)
+	{
 		const char *w = previous_words[i];
-		if (!w) continue;
+
+		if (!w)
+		{
+			continue;
+		}
+
 		const char *lp = strchr(w, '(');
 		const char *rp = strrchr(w, ')');
-		if (lp && rp && rp > lp + 1) { paren = w; break; }
+
+		if (lp && rp && rp > lp + 1)
+		{
+			paren = w;
+			break;
+		}
 	}
-	if (!paren) return 0;
+
+	if (!paren)
+	{
+		return 0;
+	}
 
 	/* Extract substring inside parentheses */
 	const char *lp = strchr(paren, '(');
@@ -4394,17 +4408,31 @@ extract_column_list(char **previous_words, int nwords, char ***column_list)
 	size_t inside_len = (size_t)(rp - inside);
 
 	/* Copy inside to temporary buffer for splitting by commas */
-	char *buf = (char *)malloc(inside_len + 1);
-	if (!buf) return 0;
-	memcpy(buf, inside, inside_len);
+	char *buf = (char*)malloc(inside_len + 1);
+	if (!buf)
+	{
+		return 0;
+	}
+	strncpy(buf, inside, inside_len);
 	buf[inside_len] = '\0';
 
 	/* Upper bound for number of columns = commas + 1 */
 	int max_items = 1;
-	for (const char *p = buf; *p; ++p) if (*p == ',') ++max_items;
+	for (const char *p = buf; *p; p++)
+	{
+		if (*p == ',')
+		{
+			max_items++;
+		}
+	}
 
 	char **items = (char **)calloc((size_t)max_items, sizeof(char *));
-	if (!items) { free(buf); return 0; }
+
+	if (!items)
+	{
+		free(buf);
+		return 0;
+	}
 
 	/* Split by commas and take first word (trim leading spaces) */
 	int count = 0;
@@ -4414,44 +4442,42 @@ extract_column_list(char **previous_words, int nwords, char ***column_list)
 			tok = strtok_r(NULL, ",", &saveptr))
 	{
 		/* Trim leading spaces */
-		while (*tok && isspace((unsigned char)*tok)) ++tok;
+		while (*tok && isspace((unsigned char)*tok))
+		{
+			tok++;
+		}
 
 		/* Take until first whitespace */
 		char *end = tok;
-		while (*end && !isspace((unsigned char)*end)) ++end;
+		while (*end && !isspace((unsigned char)*end))
+		{
+			end++;
+		}
 
-		if (end > tok) {
-			items[count] = strdup_range(tok, end);
-			if (items[count]) ++count;
+		if (end > tok)
+		{
+			size_t len = (size_t)(end - tok);
+			items[count] = (char*)malloc(len + 1);
+
+			if (items[count])
+			{
+				strncpy(items[count], tok, len);
+				items[count][len] = '\0';
+				count++;
+			}
 		}
 	}
 
 	free(buf);
 
-	if (count == 0) {
+	if (count == 0)
+	{
 		free(items);
 		return 0;
 	}
 
 	*column_list = items;
 	return count;
-}
-
-/*
- * Return a malloc'ed copy of substring between start and end pointers.
- */
-static char *
-strdup_range(const char *start, const char *end)
-	{
-	size_t len = end - start;
-	char *result = (char *) malloc(len + 1);
-
-	if (!result)
-		return NULL;
-
-	memcpy(result, start, len);
-	result[len] = '\0';
-	return result;
 }
 
 #ifdef NOT_USED
