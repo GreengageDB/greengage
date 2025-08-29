@@ -736,6 +736,7 @@ DisconnectAndDestroyAllGangs(bool resetSession)
 
 	/* cleanup all out bound dispatcher state */
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
+
 	/* destroy cdb_component_dbs, disconnect all connections with QEs */
 	cdbcomponent_destroyCdbComponents();
 
