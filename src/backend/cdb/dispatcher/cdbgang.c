@@ -727,12 +727,12 @@ DisconnectAndDestroyAllGangs(bool resetSession)
 
 	ELOG_DISPATCHER_DEBUG("DisconnectAndDestroyAllGangs");
 
-    /* Destroy CurrentGangCreating before GangContext is reset */
-    if (CurrentGangCreating != NULL)
-    {
-        RecycleGang(CurrentGangCreating, true);
-        CurrentGangCreating = NULL;
-    }
+	/* Destroy CurrentGangCreating before GangContext is reset */
+	if (CurrentGangCreating != NULL)
+	{
+		RecycleGang(CurrentGangCreating, true);
+		CurrentGangCreating = NULL;
+	}
 
 	/* cleanup all out bound dispatcher state */
 	CdbResourceOwnerWalker(CurrentResourceOwner, cdbdisp_cleanupDispatcherHandle);
