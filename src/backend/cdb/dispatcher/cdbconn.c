@@ -355,53 +355,47 @@ bool
 cdbconn_discardResults(SegmentDatabaseDescriptor *segdbDesc,
 					   int retryCount)
 {
-	PGresult   *res;
-	PGnotify   *notify;
-	PGconn	   *conn = segdbDesc->conn;
+	PGresult   *pRes = NULL;
+	ExecStatusType stat;
+	int			i = 0;
+	bool retval = true;
 
-	(void) retryCount;
-
-	/* Free some memory and replace current result with a fatal error dummy. */
-	pqSaveErrorResult(conn);
-
-	/* Make sure PQgetResult() calls are not blocking. */
-	PQconsumeInput(conn);
-
-	/*
-	 * Discard anything that is unread. Since our result contains a fatal
-	 * error, we'll just consume the entire message without actually parsing
-	 * it.
-	 */
-	while (!PQisBusy(conn) && (res = PQgetResult(conn)) != NULL)
+	/* PQstatus() is smart enough to handle NULL */
+	while (NULL != (pRes = PQgetResult(segdbDesc->conn)))
 	{
-		switch (PQresultStatus(res))
+		stat = PQresultStatus(pRes);
+		PQclear(pRes);
+
+		elog(LOG, "(%s) Leftover result at freeGang time: %s %s", segdbDesc->whoami,
+			 PQresStatus(stat),
+			 PQerrorMessage(segdbDesc->conn));
+
+		if (stat == PGRES_FATAL_ERROR || stat == PGRES_BAD_RESPONSE)
 		{
-			case PGRES_COPY_IN:
-			case PGRES_COPY_OUT:
-			case PGRES_COPY_BOTH:
-				PQendcopy(conn);
-				/* fallthrough */
-			default:
-				PQclear(res);
+			retval = true;
+			break;
 		}
 
-		pqSaveErrorResult(conn);
+		if (i++ > retryCount)
+		{
+			retval = false;
+			break;
+		}
 	}
 
-	/* Free notices. */
-	while ((notify = PQnotifies(conn)) != NULL)
-		PQfreemem(notify);
-
-	/* The result is not needed anymore. */
-	pqClearAsyncResult(conn);
-
-	if (PQisBusy(conn) && PQstatus(conn) != CONNECTION_BAD)
+	/*
+	 * Clear of all the notify messages as well.
+	 */
+	PGnotify   *notify = segdbDesc->conn->notifyHead;
+	while (notify != NULL)
 	{
-		/* Some work is still remaining until we can die. */
-		return false;
+		PGnotify   *prev = notify;
+		notify = notify->next;
+		PQfreemem(prev);
 	}
+	segdbDesc->conn->notifyHead = segdbDesc->conn->notifyTail = NULL;
 
-	return true;
+	return retval;
 }
 
 /* Return if it's a bad connection */

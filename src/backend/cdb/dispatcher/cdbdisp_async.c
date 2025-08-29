@@ -867,20 +867,6 @@ handlePollSuccess(CdbDispatchCmdAsync *pParms,
 							  i + 1, pParms->dispatchCount, segdbDesc->whoami);
 
 		/*
-		 * Was dispatchCancel() the callee? We don't need to read the results
-		 * then.
-		 */
-		if (pParms->waitMode == DISPATCH_WAIT_CANCEL)
-		{
-			dispatchResult->stillRunning =
-				!cdbconn_discardResults(dispatchResult->segdbDesc, -1);
-
-			forwardQENotices();
-
-			continue;
-		}
-
-		/*
 		 * Receive and process results from this QE.
 		 */
 		finished = processResults(dispatchResult);
