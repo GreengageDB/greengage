@@ -345,11 +345,11 @@ cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc)
 }
 
 /*
- * Discard result from segdbDesc connection without extra allocations.
+ * Read result from connection and discard it.
  *
- * retryCount is deprecated and isn't used anymore.
+ * Retry at most N times.
  *
- * Returns false if there are still leftovers.
+ * Return false if there'er still leftovers.
  */
 bool
 cdbconn_discardResults(SegmentDatabaseDescriptor *segdbDesc,
