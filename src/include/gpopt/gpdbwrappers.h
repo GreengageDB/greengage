@@ -660,6 +660,10 @@ void GPDBMemoryContextDelete(MemoryContext context);
 
 List *GetRelChildIndexes(Oid reloid);
 
+PartitionDesc GPDBRelationGetPartitionDesc(Relation rel);
+
+PartitionKey GPDBRelationGetPartitionKey(Relation rel);
+
 void GPDBLockRelationOid(Oid reloid, int lockmode);
 
 }  //namespace gpdb

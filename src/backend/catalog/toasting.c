@@ -4,7 +4,7 @@
  *	  This file contains routines to support creation of toast tables
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -264,7 +264,8 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 										   InvalidOid,
 										   rel->rd_rel->relowner,
 										   RelationIsAoRows(rel) ?
-										   HEAP_TABLE_AM_OID :rel->rd_rel->relam,
+										   HEAP_TABLE_AM_OID :
+										   table_relation_toast_am(rel),
 										   tupdesc,
 										   NIL,
 										   RELKIND_TOASTVALUE,

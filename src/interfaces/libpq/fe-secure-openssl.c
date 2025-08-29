@@ -4,7 +4,7 @@
  *	  OpenSSL support
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1199,24 +1199,12 @@ initialize_SSL(PGconn *conn)
 		SSL_set_verify(conn->ssl, SSL_VERIFY_PEER, verify_cb);
 
 	/*
-	 * Set compression option if the OpenSSL version used supports it (from
-	 * 1.0.0 on).
+	 * Set compression option if necessary.
 	 */
-#ifdef SSL_OP_NO_COMPRESSION
 	if (conn->sslcompression && conn->sslcompression[0] == '0')
 		SSL_set_options(conn->ssl, SSL_OP_NO_COMPRESSION);
-
-	/*
-	 * Mainline OpenSSL introduced SSL_clear_options() before
-	 * SSL_OP_NO_COMPRESSION, so this following #ifdef should not be
-	 * necessary, but some old NetBSD version have a locally modified libssl
-	 * that has SSL_OP_NO_COMPRESSION but not SSL_clear_options().
-	 */
-#ifdef HAVE_SSL_CLEAR_OPTIONS
 	else
 		SSL_clear_options(conn->ssl, SSL_OP_NO_COMPRESSION);
-#endif
-#endif
 
 	return 0;
 }

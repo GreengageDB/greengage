@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/plannodes.h
@@ -113,6 +113,8 @@ typedef struct PlannedStmt
 	 * targets; needed for trigger firing.
 	 */
 	List	   *rootResultRelations;
+
+	List	   *appendRelations;	/* list of AppendRelInfo nodes */
 
 	List	   *subplans;		/* Plan trees for SubPlan expressions; note
 								 * that some could be NULL */
@@ -423,6 +425,7 @@ struct PartitionPruneInfo;		/* forward reference to struct below */
 typedef struct Append
 {
 	Plan		plan;
+	Bitmapset  *apprelids;		/* RTIs of appendrel(s) formed by this node */
 	List	   *appendplans;
 
 	/*
@@ -450,6 +453,7 @@ typedef struct Append
 typedef struct MergeAppend
 {
 	Plan		plan;
+	Bitmapset  *apprelids;		/* RTIs of appendrel(s) formed by this node */
 	List	   *mergeplans;
 	/* these fields are just like the sort-key info in struct Sort: */
 	int			numCols;		/* number of sort-key columns */

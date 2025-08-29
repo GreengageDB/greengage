@@ -98,7 +98,7 @@ ExecInitDynamicBitmapIndexScan(DynamicBitmapIndexScan *node, EState *estate, int
 static void
 BitmapIndexScan_ReMapColumns(DynamicBitmapIndexScan *dbiScan, Oid oldOid, Oid newOid)
 {
-	AttrNumber *attMap;
+	AttrMap	   *attMap;
 
 	Assert(OidIsValid(newOid));
 
@@ -118,7 +118,7 @@ BitmapIndexScan_ReMapColumns(DynamicBitmapIndexScan *dbiScan, Oid oldOid, Oid ne
 		/* A bitmap index scan has no target list or quals */
 		// FIXME: no quals remapping?
 
-		pfree(attMap);
+		free_attrmap(attMap);
 	}
 }
 

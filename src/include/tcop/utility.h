@@ -4,7 +4,7 @@
  *	  prototypes for utility.c.
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/tcop/utility.h
@@ -25,6 +25,16 @@ typedef enum
 	PROCESS_UTILITY_SUBCOMMAND	/* a portion of a query */
 } ProcessUtilityContext;
 
+/* Info needed when recursing from ALTER TABLE */
+typedef struct AlterTableUtilityContext
+{
+	PlannedStmt *pstmt;			/* PlannedStmt for outer ALTER TABLE command */
+	const char *queryString;	/* its query string */
+	Oid			relid;			/* OID of ALTER's target table */
+	ParamListInfo params;		/* any parameters available to ALTER TABLE */
+	QueryEnvironment *queryEnv; /* execution environment for ALTER TABLE */
+} AlterTableUtilityContext;
+
 /* Hook for plugins to get control in ProcessUtility() */
 typedef void (*ProcessUtility_hook_type) (PlannedStmt *pstmt,
 										  const char *queryString, ProcessUtilityContext context,
@@ -41,6 +51,9 @@ extern void standard_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 									ProcessUtilityContext context, ParamListInfo params,
 									QueryEnvironment *queryEnv,
 									DestReceiver *dest, char *completionTag);
+
+extern void ProcessUtilityForAlterTable(Node *stmt,
+										AlterTableUtilityContext *context);
 
 extern bool UtilityReturnsTuples(Node *parsetree);
 

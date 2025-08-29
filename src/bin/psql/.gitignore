@@ -1,9 +1,13 @@
 /psqlscanslash.c
 /sql_help.h
 /sql_help.c
+<<<<<<< HEAD
 /dumputils.c
 /keywords.c
 /kwlookup.c
 /lex.backup
 
+=======
+>>>>>>> 1281a5c907b41e992a66deb13c3aa61888a62268
 /psql
+/tmp_check/

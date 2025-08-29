@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1362,10 +1362,8 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 				}
 				/* I must go before this waiter.  Check special case. */
 				if ((lockMethodTable->conflictTab[lockmode] & aheadRequests) == 0 &&
-					LockCheckConflicts(lockMethodTable,
-									   lockmode,
-									   lock,
-									   proclock) == STATUS_OK)
+					!LockCheckConflicts(lockMethodTable, lockmode, lock,
+										proclock))
 				{
 					/* Skip the wait and just grant myself the lock. */
 					GrantLock(lock, proclock, lockmode);
@@ -1861,10 +1859,8 @@ ProcLockWakeup(LockMethod lockMethodTable, LOCK *lock)
 		 * (b) doesn't conflict with already-held locks.
 		 */
 		if ((lockMethodTable->conflictTab[lockmode] & aheadRequests) == 0 &&
-			LockCheckConflicts(lockMethodTable,
-							   lockmode,
-							   lock,
-							   proc->waitProcLock) == STATUS_OK)
+			!LockCheckConflicts(lockMethodTable, lockmode, lock,
+								proc->waitProcLock))
 		{
 			/* OK to waken */
 			GrantLock(lock, proc->waitProcLock, lockmode);

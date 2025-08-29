@@ -4,7 +4,7 @@
  *
  * See src/backend/access/brin/README for details.
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -30,6 +30,7 @@
 #include "catalog/index.h"
 #include "catalog/gp_fastsequence.h"
 #include "catalog/pg_am.h"
+#include "commands/vacuum.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
@@ -109,6 +110,9 @@ brinhandler(PG_FUNCTION_ARGS)
 	amroutine->ampredlocks = false;
 	amroutine->amcanparallel = false;
 	amroutine->amcaninclude = false;
+	amroutine->amusemaintenanceworkmem = false;
+	amroutine->amparallelvacuumoptions =
+		VACUUM_OPTION_PARALLEL_CLEANUP;
 	amroutine->amkeytype = InvalidOid;
 
 	amroutine->ambuild = brinbuild;

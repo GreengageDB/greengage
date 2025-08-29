@@ -409,12 +409,14 @@ CTranslatorRelcacheToDXL::RetrieveRel(CMemoryPool *mp, CMDAccessor *md_accessor,
 	{
 		// FIXME_GPDB_12_MERGE_FIXME: misestimate (most likely underestimate) the number of leaf partitions
 		// ORCA doesn't really care, except to determine whether to sort before inserting
-		num_leaf_partitions = rel->rd_partdesc->nparts;
+		num_leaf_partitions =
+			gpdb::GPDBRelationGetPartitionDesc(rel.get())->nparts;
 		partition_oids = GPOS_NEW(mp) IMdIdArray(mp);
 
-		for (int i = 0; i < rel->rd_partdesc->nparts; ++i)
+		for (int i = 0;
+			 i < gpdb::GPDBRelationGetPartitionDesc(rel.get())->nparts; ++i)
 		{
-			Oid oid = rel->rd_partdesc->oids[i];
+			Oid oid = gpdb::GPDBRelationGetPartitionDesc(rel.get())->oids[i];
 			partition_oids->Append(GPOS_NEW(mp)
 									   CMDIdGPDB(IMDId::EmdidRel, oid));
 			if (gpdb::RelIsPartitioned(oid))
@@ -2403,7 +2405,7 @@ CTranslatorRelcacheToDXL::RetrievePartKeysAndTypes(CMemoryPool *mp,
 	*part_keys = GPOS_NEW(mp) ULongPtrArray(mp);
 	*part_types = GPOS_NEW(mp) CharPtrArray(mp);
 
-	PartitionKeyData *partkey = rel->rd_partkey;
+	PartitionKeyData *partkey = gpdb::GPDBRelationGetPartitionKey(rel);
 
 	if (1 < partkey->partnatts)
 	{
@@ -2894,13 +2896,13 @@ CTranslatorRelcacheToDXL::RetrieveStorageTypeForPartitionedTable(Relation rel)
 {
 	IMDRelation::Erelstoragetype rel_storage_type =
 		IMDRelation::ErelstorageSentinel;
-	if (rel->rd_partdesc->nparts == 0)
+	if (gpdb::GPDBRelationGetPartitionDesc(rel)->nparts == 0)
 	{
 		return IMDRelation::ErelstorageHeap;
 	}
-	for (int i = 0; i < rel->rd_partdesc->nparts; ++i)
+	for (int i = 0; i < gpdb::GPDBRelationGetPartitionDesc(rel)->nparts; ++i)
 	{
-		Oid oid = rel->rd_partdesc->oids[i];
+		Oid oid = gpdb::GPDBRelationGetPartitionDesc(rel)->oids[i];
 		gpdb::RelationWrapper child_rel = gpdb::GetRelation(oid);
 		IMDRelation::Erelstoragetype child_storage =
 			RetrieveRelStorageType(child_rel.get());

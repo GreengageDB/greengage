@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -363,6 +363,14 @@ ConstructTupleDescriptor(Relation heapRelation,
 			collationObjectId[i] : InvalidOid;
 
 		/*
+		 * Set the attribute name as specified by caller.
+		 */
+		if (colnames_item == NULL)	/* shouldn't happen */
+			elog(ERROR, "too few entries in colnames list");
+		namestrcpy(&to->attname, (const char *) lfirst(colnames_item));
+		colnames_item = lnext(indexColNames, colnames_item);
+
+		/*
 		 * For simple index columns, we copy some pg_attribute fields from the
 		 * parent relation.  For expressions we have to look at the expression
 		 * result.
@@ -379,7 +387,6 @@ ConstructTupleDescriptor(Relation heapRelation,
 			from = TupleDescAttr(heapTupDesc,
 								 AttrNumberGetAttrOffset(atnum));
 
-			namecpy(&to->attname, &from->attname);
 			to->atttypid = from->atttypid;
 			to->attlen = from->attlen;
 			to->attndims = from->attndims;
@@ -439,14 +446,6 @@ ConstructTupleDescriptor(Relation heapRelation,
 		 * later.
 		 */
 		to->attrelid = InvalidOid;
-
-		/*
-		 * Set the attribute name as specified by caller.
-		 */
-		if (colnames_item == NULL)	/* shouldn't happen */
-			elog(ERROR, "too few entries in colnames list");
-		namestrcpy(&to->attname, (const char *) lfirst(colnames_item));
-		colnames_item = lnext(indexColNames, colnames_item);
 
 		/*
 		 * Check the opclass and index AM to see if either provides a keytype
@@ -2464,13 +2463,13 @@ BuildDummyIndexInfo(Relation index)
  * Note: passing collations and opfamilies separately is a kludge.  Adding
  * them to IndexInfo may result in better coding here and elsewhere.
  *
- * Use convert_tuples_by_name_map(index2, index1) to build the attmap.
+ * Use build_attrmap_by_name(index2, index1) to build the attmap.
  */
 bool
 CompareIndexInfo(IndexInfo *info1, IndexInfo *info2,
 				 Oid *collations1, Oid *collations2,
 				 Oid *opfamilies1, Oid *opfamilies2,
-				 AttrNumber *attmap, int maplen)
+				 AttrMap *attmap)
 {
 	int			i;
 
@@ -2497,12 +2496,12 @@ CompareIndexInfo(IndexInfo *info1, IndexInfo *info2,
 	 */
 	for (i = 0; i < info1->ii_NumIndexAttrs; i++)
 	{
-		if (maplen < info2->ii_IndexAttrNumbers[i])
+		if (attmap->maplen < info2->ii_IndexAttrNumbers[i])
 			elog(ERROR, "incorrect attribute map");
 
 		/* ignore expressions at this stage */
 		if ((info1->ii_IndexAttrNumbers[i] != InvalidAttrNumber) &&
-			(attmap[info2->ii_IndexAttrNumbers[i] - 1] !=
+			(attmap->attnums[info2->ii_IndexAttrNumbers[i] - 1] !=
 			 info1->ii_IndexAttrNumbers[i]))
 			return false;
 
@@ -2528,7 +2527,7 @@ CompareIndexInfo(IndexInfo *info1, IndexInfo *info2,
 		Node	   *mapped;
 
 		mapped = map_variable_attnos((Node *) info2->ii_Expressions,
-									 1, 0, attmap, maplen,
+									 1, 0, attmap,
 									 InvalidOid, &found_whole_row);
 		if (found_whole_row)
 		{
@@ -2552,7 +2551,7 @@ CompareIndexInfo(IndexInfo *info1, IndexInfo *info2,
 		Node	   *mapped;
 
 		mapped = map_variable_attnos((Node *) info2->ii_Predicate,
-									 1, 0, attmap, maplen,
+									 1, 0, attmap,
 									 InvalidOid, &found_whole_row);
 		if (found_whole_row)
 		{

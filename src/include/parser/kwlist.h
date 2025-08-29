@@ -7,7 +7,7 @@
  * by the PG_KEYWORD macro, which is not defined in this file; it can
  * be defined by the caller for special purposes.
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -171,6 +171,7 @@ PG_KEYWORD("execute", EXECUTE, UNRESERVED_KEYWORD)
 PG_KEYWORD("exists", EXISTS, COL_NAME_KEYWORD)
 PG_KEYWORD("expand", EXPAND, UNRESERVED_KEYWORD) /* GPDB */
 PG_KEYWORD("explain", EXPLAIN, UNRESERVED_KEYWORD)
+PG_KEYWORD("expression", EXPRESSION, UNRESERVED_KEYWORD)
 PG_KEYWORD("extension", EXTENSION, UNRESERVED_KEYWORD)
 PG_KEYWORD("external", EXTERNAL, UNRESERVED_KEYWORD)
 PG_KEYWORD("extract", EXTRACT, COL_NAME_KEYWORD)
@@ -475,6 +476,7 @@ PG_KEYWORD("truncate", TRUNCATE, UNRESERVED_KEYWORD)
 PG_KEYWORD("trusted", TRUSTED, UNRESERVED_KEYWORD)
 PG_KEYWORD("type", TYPE_P, UNRESERVED_KEYWORD)
 PG_KEYWORD("types", TYPES_P, UNRESERVED_KEYWORD)
+PG_KEYWORD("uescape", UESCAPE, UNRESERVED_KEYWORD)
 PG_KEYWORD("unbounded", UNBOUNDED, RESERVED_KEYWORD)			/* Unreserved in standard */
 PG_KEYWORD("uncommitted", UNCOMMITTED, UNRESERVED_KEYWORD)
 PG_KEYWORD("unencrypted", UNENCRYPTED, UNRESERVED_KEYWORD)

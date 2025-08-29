@@ -2109,6 +2109,9 @@ readNodeBinary(void)
 			case T_RestrictInfo:
 				return_value = _readRestrictInfo();
 				break;
+			case T_AppendRelInfo:
+				return_value = _readAppendRelInfo();
+				break;
 			case T_ExtensibleNode:
 				return_value = _readExtensibleNode();
 				break;

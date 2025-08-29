@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -2314,7 +2314,7 @@ ExecGetReturningSlot(EState *estate, ResultRelInfo *relInfo)
  */
 typedef struct AttrMapContext
 {
-	const AttrNumber *newattno; /* The mapping table to remap the varattno */
+	const AttrMap *newattno;	/* The mapping table to remap the varattno */
 	Index		varno;			/* Which rte's varattno to re-map */
 } AttrMapContext;
 
@@ -2338,8 +2338,8 @@ change_varattnos_varno_walker(Node *node, const AttrMapContext *attrMapCxt)
 			 * referenced though stringToNode() doesn't create such a node
 			 * currently.
 			 */
-			Assert(attrMapCxt->newattno[var->varattno - 1] > 0);
-			var->varattno = var->varoattno = attrMapCxt->newattno[var->varattno - 1];
+			Assert(attrMapCxt->newattno->attnums[var->varattno - 1] > 0);
+			var->varattno = var->varattnosyn = attrMapCxt->newattno->attnums[var->varattno - 1];
 		}
 		return false;
 	}
@@ -2357,7 +2357,7 @@ change_varattnos_varno_walker(Node *node, const AttrMapContext *attrMapCxt)
  * Note that the passed node tree is modified in-place!
  */
 void
-change_varattnos_of_a_varno(Node *node, const AttrNumber *newattno, Index varno)
+change_varattnos_of_a_varno(Node *node, const AttrMap *newattno, Index varno)
 {
 	AttrMapContext attrMapCxt;
 

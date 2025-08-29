@@ -14707,9 +14707,9 @@ EXPLAIN SELECT * FROM table_with_leaf_partition_containing_dropped_column WHERE 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1296.76 rows=29984 width=12)
    ->  Append  (cost=0.00..896.97 rows=9995 width=12)
-         ->  Seq Scan on prttab_leaf_containing_dropped_col_part1 table_with_leaf_partition_containing_dropped_column  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on prttab_leaf_containing_dropped_col_part1 table_with_leaf_partition_containing_dropped_column_1  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
-         ->  Seq Scan on prttab_leaf_containing_dropped_col_part2 table_with_leaf_partition_containing_dropped_column_1  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on prttab_leaf_containing_dropped_col_part2 table_with_leaf_partition_containing_dropped_column_2  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -14771,9 +14771,9 @@ EXPLAIN SELECT * FROM table_with_leaf_containing_dropped_column_between_index_co
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1296.76 rows=29984 width=12)
    ->  Append  (cost=0.00..896.97 rows=9995 width=12)
-         ->  Seq Scan on leaf_containing_dropped_col_index_part1 table_with_leaf_containing_dropped_column_between_index_columns  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on leaf_containing_dropped_col_index_part1 table_with_leaf_containing_dropped_column_between_index_colum_1  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
-         ->  Seq Scan on leaf_containing_dropped_col_index_part2 table_with_leaf_containing_dropped_column_between_index_colum_1  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on leaf_containing_dropped_col_index_part2 table_with_leaf_containing_dropped_column_between_index_colum_2  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -14835,9 +14835,9 @@ EXPLAIN SELECT * FROM table_with_root_containing_dropped_columns WHERE a>42 and 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1296.76 rows=29984 width=12)
    ->  Append  (cost=0.00..896.97 rows=9995 width=12)
-         ->  Seq Scan on leaf_with_root_containing_dropped_columns_part1 table_with_root_containing_dropped_columns  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on leaf_with_root_containing_dropped_columns_part1 table_with_root_containing_dropped_columns_1  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
-         ->  Seq Scan on leaf_with_root_containing_dropped_columns_part2 table_with_root_containing_dropped_columns_1  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on leaf_with_root_containing_dropped_columns_part2 table_with_root_containing_dropped_columns_2  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -14900,9 +14900,9 @@ EXPLAIN SELECT * FROM table_with_both_containing_dropped_column WHERE a>42 and z
 ------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1296.76 rows=29984 width=12)
    ->  Append  (cost=0.00..896.97 rows=9995 width=12)
-         ->  Seq Scan on leaf_with_dropped_cols_index_part1 table_with_both_containing_dropped_column  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on leaf_with_dropped_cols_index_part1 table_with_both_containing_dropped_column_1  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
-         ->  Seq Scan on leaf_with_dropped_cols_index_part2 table_with_both_containing_dropped_column_1  (cost=0.00..423.50 rows=4997 width=12)
+         ->  Seq Scan on leaf_with_dropped_cols_index_part2 table_with_both_containing_dropped_column_2  (cost=0.00..423.50 rows=4997 width=12)
                Filter: ((a > 42) AND (z < 42))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -14990,17 +14990,17 @@ EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2
                                        Hash Cond: (ds_main.c = non_part2.e)
                                        ->  Append
                                              Partition Selectors: $0
-                                             ->  Seq Scan on ds_main_1_prt_2 ds_main
+                                             ->  Seq Scan on ds_main_1_prt_2 ds_main_1
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_3 ds_main_1
+                                             ->  Seq Scan on ds_main_1_prt_3 ds_main_2
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_4 ds_main_2
+                                             ->  Seq Scan on ds_main_1_prt_4 ds_main_3
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_5 ds_main_3
+                                             ->  Seq Scan on ds_main_1_prt_5 ds_main_4
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_6 ds_main_4
+                                             ->  Seq Scan on ds_main_1_prt_6 ds_main_5
                                                    Filter: (a IS NOT NULL)
-                                             ->  Seq Scan on ds_main_1_prt_deflt ds_main_5
+                                             ->  Seq Scan on ds_main_1_prt_deflt ds_main_6
                                                    Filter: (a IS NOT NULL)
                                        ->  Hash
                                              ->  Partition Selector (selector id: $0)

@@ -2,7 +2,7 @@
  *	common.h
  *		Common support routines for bin/scripts/
  *
- *	Copyright (c) 2003-2019, PostgreSQL Global Development Group
+ *	Copyright (c) 2003-2020, PostgreSQL Global Development Group
  *
  *	src/bin/scripts/common.h
  */
@@ -10,7 +10,6 @@
 #define COMMON_H
 
 #include "common/username.h"
-#include "fe_utils/cancel.h"
 #include "getopt_long.h"		/* pgrminclude ignore */
 #include "libpq-fe.h"
 #include "pqexpbuffer.h"		/* pgrminclude ignore */
@@ -21,8 +20,6 @@ enum trivalue
 	TRI_NO,
 	TRI_YES
 };
-
-extern bool CancelRequested;
 
 typedef void (*help_handler) (const char *progname);
 

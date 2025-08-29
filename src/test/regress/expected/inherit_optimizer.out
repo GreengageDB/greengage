@@ -1390,9 +1390,9 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
    ->  Hash Join
          Hash Cond: (patest0.id = int4_tbl.f1)
          ->  Append
-               ->  Index Scan using patest0i on patest0
-               ->  Index Scan using patest1i on patest1 patest0_1
-               ->  Index Scan using patest2i on patest2 patest0_2
+               ->  Index Scan using patest0i on patest0 patest0_1
+               ->  Index Scan using patest1i on patest1 patest0_2
+               ->  Index Scan using patest2i on patest2 patest0_3
          ->  Hash
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: int4_tbl.f1
@@ -1421,9 +1421,9 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
    ->  Hash Join
          Hash Cond: (patest0.id = int4_tbl.f1)
          ->  Append
-               ->  Index Scan using patest0i on patest0
-               ->  Index Scan using patest1i on patest1 patest0_1
-               ->  Seq Scan on patest2 patest0_2
+               ->  Index Scan using patest0i on patest0 patest0_1
+               ->  Index Scan using patest1i on patest1 patest0_2
+               ->  Seq Scan on patest2 patest0_3
          ->  Hash
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: int4_tbl.f1
@@ -1482,14 +1482,14 @@ explain (verbose, costs off) select * from matest0 order by 1-id;
          ->  Result
                Output: matest0.id, matest0.name, (1 - matest0.id)
                ->  Append
-                     ->  Seq Scan on public.matest0
-                           Output: matest0.id, matest0.name
-                     ->  Seq Scan on public.matest1 matest0_1
+                     ->  Seq Scan on public.matest0 matest0_1
                            Output: matest0_1.id, matest0_1.name
-                     ->  Seq Scan on public.matest2 matest0_2
+                     ->  Seq Scan on public.matest1 matest0_2
                            Output: matest0_2.id, matest0_2.name
-                     ->  Seq Scan on public.matest3 matest0_3
+                     ->  Seq Scan on public.matest2 matest0_3
                            Output: matest0_3.id, matest0_3.name
+                     ->  Seq Scan on public.matest3 matest0_4
+                           Output: matest0_4.id, matest0_4.name
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan = 'off'
 (19 rows)
@@ -1515,14 +1515,14 @@ explain (verbose, costs off) select min(1-id) from matest0;
          ->  Partial Aggregate
                Output: PARTIAL min((1 - matest0.id))
                ->  Append
-                     ->  Seq Scan on public.matest0
-                           Output: matest0.id
-                     ->  Seq Scan on public.matest1 matest0_1
+                     ->  Seq Scan on public.matest0 matest0_1
                            Output: matest0_1.id
-                     ->  Seq Scan on public.matest2 matest0_2
+                     ->  Seq Scan on public.matest1 matest0_2
                            Output: matest0_2.id
-                     ->  Seq Scan on public.matest3 matest0_3
+                     ->  Seq Scan on public.matest2 matest0_3
                            Output: matest0_3.id
+                     ->  Seq Scan on public.matest3 matest0_4
+                           Output: matest0_4.id
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan = 'off'
 (17 rows)
@@ -1548,17 +1548,17 @@ explain (verbose, costs off) select * from matest0 order by 1-id;
    Merge Key: ((1 - matest0.id))
    ->  Merge Append
          Sort Key: ((1 - matest0.id))
-         ->  Index Scan using matest0i on public.matest0
-               Output: matest0.id, matest0.name, (1 - matest0.id)
-         ->  Index Scan using matest1i on public.matest1 matest0_1
+         ->  Index Scan using matest0i on public.matest0 matest0_1
                Output: matest0_1.id, matest0_1.name, (1 - matest0_1.id)
+         ->  Index Scan using matest1i on public.matest1 matest0_2
+               Output: matest0_2.id, matest0_2.name, (1 - matest0_2.id)
          ->  Sort
-               Output: matest0_2.id, matest0_2.name, ((1 - matest0_2.id))
-               Sort Key: ((1 - matest0_2.id))
-               ->  Seq Scan on public.matest2 matest0_2
-                     Output: matest0_2.id, matest0_2.name, (1 - matest0_2.id)
-         ->  Index Scan using matest3i on public.matest3 matest0_3
-               Output: matest0_3.id, matest0_3.name, (1 - matest0_3.id)
+               Output: matest0_3.id, matest0_3.name, ((1 - matest0_3.id))
+               Sort Key: ((1 - matest0_3.id))
+               ->  Seq Scan on public.matest2 matest0_3
+                     Output: matest0_3.id, matest0_3.name, (1 - matest0_3.id)
+         ->  Index Scan using matest3i on public.matest3 matest0_4
+               Output: matest0_4.id, matest0_4.name, (1 - matest0_4.id)
  Optimizer: Postgres query optimizer
  Settings: enable_bitmapscan = 'off', enable_parallel_append = 'off', enable_seqscan = 'off'
 (18 rows)
@@ -1589,21 +1589,21 @@ explain (verbose, costs off) select min(1-id) from matest0;
                        Output: ((1 - matest0.id))
                        ->  Merge Append
                              Sort Key: ((1 - matest0.id))
-                             ->  Index Scan using matest0i on public.matest0
-                                   Output: matest0.id, (1 - matest0.id)
-                                   Index Cond: ((1 - matest0.id) IS NOT NULL)
-                             ->  Index Scan using matest1i on public.matest1 matest0_1
+                             ->  Index Scan using matest0i on public.matest0 matest0_1
                                    Output: matest0_1.id, (1 - matest0_1.id)
                                    Index Cond: ((1 - matest0_1.id) IS NOT NULL)
+                             ->  Index Scan using matest1i on public.matest1 matest0_2
+                                   Output: matest0_2.id, (1 - matest0_2.id)
+                                   Index Cond: ((1 - matest0_2.id) IS NOT NULL)
                              ->  Sort
-                                   Output: matest0_2.id, ((1 - matest0_2.id))
-                                   Sort Key: ((1 - matest0_2.id))
-                                   ->  Index Only Scan using matest2_pkey on public.matest2 matest0_2
-                                         Output: matest0_2.id, (1 - matest0_2.id)
-                                         Filter: ((1 - matest0_2.id) IS NOT NULL)
-                             ->  Index Scan using matest3i on public.matest3 matest0_3
-                                   Output: matest0_3.id, (1 - matest0_3.id)
-                                   Index Cond: ((1 - matest0_3.id) IS NOT NULL)
+                                   Output: matest0_3.id, ((1 - matest0_3.id))
+                                   Sort Key: ((1 - matest0_3.id))
+                                   ->  Index Only Scan using matest2_pkey on public.matest2 matest0_3
+                                         Output: matest0_3.id, (1 - matest0_3.id)
+                                         Filter: ((1 - matest0_3.id) IS NOT NULL)
+                             ->  Index Scan using matest3i on public.matest3 matest0_4
+                                   Output: matest0_4.id, (1 - matest0_4.id)
+                                   Index Cond: ((1 - matest0_4.id) IS NOT NULL)
  Optimizer: Postgres query optimizer
  Settings: enable_bitmapscan = 'off', enable_parallel_append = 'off', enable_seqscan = 'off'
 (29 rows)
@@ -1645,16 +1645,16 @@ order by t1.b limit 10;
                Merge Key: t1.b
                ->  Merge Append
                      Sort Key: t1.b
-                     ->  Index Scan using matest0i on matest0 t1
-                     ->  Index Scan using matest1i on matest1 t1_1
+                     ->  Index Scan using matest0i on matest0 t1_1
+                     ->  Index Scan using matest1i on matest1 t1_2
          ->  Materialize
                ->  Gather Motion 3:1  (slice2; segments: 3)
                      Merge Key: t2.b
                      ->  Merge Append
                            Sort Key: t2.b
-                           ->  Index Scan using matest0i on matest0 t2
+                           ->  Index Scan using matest0i on matest0 t2_1
                                  Filter: (c = d)
-                           ->  Index Scan using matest1i on matest1 t2_1
+                           ->  Index Scan using matest1i on matest1 t2_2
                                  Filter: (c = d)
  Optimizer: Postgres query optimizer
 (19 rows)
@@ -1971,15 +1971,15 @@ explain (costs off) select * from range_list_parted;
 --------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on part_1_10_ab range_list_parted
-         ->  Seq Scan on part_1_10_cd range_list_parted_1
-         ->  Seq Scan on part_10_20_ab range_list_parted_2
-         ->  Seq Scan on part_10_20_cd range_list_parted_3
-         ->  Seq Scan on part_21_30_ab range_list_parted_4
-         ->  Seq Scan on part_21_30_cd range_list_parted_5
-         ->  Seq Scan on part_40_inf_ab range_list_parted_6
-         ->  Seq Scan on part_40_inf_cd range_list_parted_7
-         ->  Seq Scan on part_40_inf_null range_list_parted_8
+         ->  Seq Scan on part_1_10_ab range_list_parted_1
+         ->  Seq Scan on part_1_10_cd range_list_parted_2
+         ->  Seq Scan on part_10_20_ab range_list_parted_3
+         ->  Seq Scan on part_10_20_cd range_list_parted_4
+         ->  Seq Scan on part_21_30_ab range_list_parted_5
+         ->  Seq Scan on part_21_30_cd range_list_parted_6
+         ->  Seq Scan on part_40_inf_ab range_list_parted_7
+         ->  Seq Scan on part_40_inf_cd range_list_parted_8
+         ->  Seq Scan on part_40_inf_null range_list_parted_9
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -1988,9 +1988,9 @@ explain (costs off) select * from range_list_parted where a = 5;
 ----------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on part_1_10_ab range_list_parted
+         ->  Seq Scan on part_1_10_ab range_list_parted_1
                Filter: (a = 5)
-         ->  Seq Scan on part_1_10_cd range_list_parted_1
+         ->  Seq Scan on part_1_10_cd range_list_parted_2
                Filter: (a = 5)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -2000,13 +2000,13 @@ explain (costs off) select * from range_list_parted where b = 'ab';
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on part_1_10_ab range_list_parted
+         ->  Seq Scan on part_1_10_ab range_list_parted_1
                Filter: (b = 'ab'::bpchar)
-         ->  Seq Scan on part_10_20_ab range_list_parted_1
+         ->  Seq Scan on part_10_20_ab range_list_parted_2
                Filter: (b = 'ab'::bpchar)
-         ->  Seq Scan on part_21_30_ab range_list_parted_2
+         ->  Seq Scan on part_21_30_ab range_list_parted_3
                Filter: (b = 'ab'::bpchar)
-         ->  Seq Scan on part_40_inf_ab range_list_parted_3
+         ->  Seq Scan on part_40_inf_ab range_list_parted_4
                Filter: (b = 'ab'::bpchar)
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -2016,11 +2016,11 @@ explain (costs off) select * from range_list_parted where a between 3 and 23 and
 -----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on part_1_10_ab range_list_parted
+         ->  Seq Scan on part_1_10_ab range_list_parted_1
                Filter: ((a >= 3) AND (a <= 23) AND (b = 'ab'::bpchar))
-         ->  Seq Scan on part_10_20_ab range_list_parted_1
+         ->  Seq Scan on part_10_20_ab range_list_parted_2
                Filter: ((a >= 3) AND (a <= 23) AND (b = 'ab'::bpchar))
-         ->  Seq Scan on part_21_30_ab range_list_parted_2
+         ->  Seq Scan on part_21_30_ab range_list_parted_3
                Filter: ((a >= 3) AND (a <= 23) AND (b = 'ab'::bpchar))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -2049,23 +2049,23 @@ explain (costs off) select * from range_list_parted where a is not null and a < 
 --------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on part_1_10_ab range_list_parted
+         ->  Seq Scan on part_1_10_ab range_list_parted_1
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_1_10_cd range_list_parted_1
+         ->  Seq Scan on part_1_10_cd range_list_parted_2
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_10_20_ab range_list_parted_2
+         ->  Seq Scan on part_10_20_ab range_list_parted_3
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_10_20_cd range_list_parted_3
+         ->  Seq Scan on part_10_20_cd range_list_parted_4
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_21_30_ab range_list_parted_4
+         ->  Seq Scan on part_21_30_ab range_list_parted_5
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_21_30_cd range_list_parted_5
+         ->  Seq Scan on part_21_30_cd range_list_parted_6
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_40_inf_ab range_list_parted_6
+         ->  Seq Scan on part_40_inf_ab range_list_parted_7
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_40_inf_cd range_list_parted_7
+         ->  Seq Scan on part_40_inf_cd range_list_parted_8
                Filter: ((a IS NOT NULL) AND (a < 67))
-         ->  Seq Scan on part_40_inf_null range_list_parted_8
+         ->  Seq Scan on part_40_inf_null range_list_parted_9
                Filter: ((a IS NOT NULL) AND (a < 67))
  Optimizer: Postgres query optimizer
 (21 rows)
@@ -2075,11 +2075,11 @@ explain (costs off) select * from range_list_parted where a >= 30;
 --------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on part_40_inf_ab range_list_parted
+         ->  Seq Scan on part_40_inf_ab range_list_parted_1
                Filter: (a >= 30)
-         ->  Seq Scan on part_40_inf_cd range_list_parted_1
+         ->  Seq Scan on part_40_inf_cd range_list_parted_2
                Filter: (a >= 30)
-         ->  Seq Scan on part_40_inf_null range_list_parted_2
+         ->  Seq Scan on part_40_inf_null range_list_parted_3
                Filter: (a >= 30)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -2101,9 +2101,9 @@ explain (costs off) select * from mcrparted where a = 0;	-- scans mcrparted0, mc
 ---------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mcrparted0 mcrparted
+         ->  Seq Scan on mcrparted0 mcrparted_1
                Filter: (a = 0)
-         ->  Seq Scan on mcrparted_def mcrparted_1
+         ->  Seq Scan on mcrparted_def mcrparted_2
                Filter: (a = 0)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -2113,9 +2113,9 @@ explain (costs off) select * from mcrparted where a = 10 and abs(b) < 5;	-- scan
 ---------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mcrparted1 mcrparted
+         ->  Seq Scan on mcrparted1 mcrparted_1
                Filter: ((a = 10) AND (abs(b) < 5))
-         ->  Seq Scan on mcrparted_def mcrparted_1
+         ->  Seq Scan on mcrparted_def mcrparted_2
                Filter: ((a = 10) AND (abs(b) < 5))
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -2125,11 +2125,11 @@ explain (costs off) select * from mcrparted where a = 10 and abs(b) = 5;	-- scan
 ---------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mcrparted1 mcrparted
+         ->  Seq Scan on mcrparted1 mcrparted_1
                Filter: ((a = 10) AND (abs(b) = 5))
-         ->  Seq Scan on mcrparted2 mcrparted_1
+         ->  Seq Scan on mcrparted2 mcrparted_2
                Filter: ((a = 10) AND (abs(b) = 5))
-         ->  Seq Scan on mcrparted_def mcrparted_2
+         ->  Seq Scan on mcrparted_def mcrparted_3
                Filter: ((a = 10) AND (abs(b) = 5))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -2139,19 +2139,19 @@ explain (costs off) select * from mcrparted where abs(b) = 5;	-- scans all parti
 ---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mcrparted0 mcrparted
+         ->  Seq Scan on mcrparted0 mcrparted_1
                Filter: (abs(b) = 5)
-         ->  Seq Scan on mcrparted1 mcrparted_1
+         ->  Seq Scan on mcrparted1 mcrparted_2
                Filter: (abs(b) = 5)
-         ->  Seq Scan on mcrparted2 mcrparted_2
+         ->  Seq Scan on mcrparted2 mcrparted_3
                Filter: (abs(b) = 5)
-         ->  Seq Scan on mcrparted3 mcrparted_3
+         ->  Seq Scan on mcrparted3 mcrparted_4
                Filter: (abs(b) = 5)
-         ->  Seq Scan on mcrparted4 mcrparted_4
+         ->  Seq Scan on mcrparted4 mcrparted_5
                Filter: (abs(b) = 5)
-         ->  Seq Scan on mcrparted5 mcrparted_5
+         ->  Seq Scan on mcrparted5 mcrparted_6
                Filter: (abs(b) = 5)
-         ->  Seq Scan on mcrparted_def mcrparted_6
+         ->  Seq Scan on mcrparted_def mcrparted_7
                Filter: (abs(b) = 5)
  Optimizer: Postgres query optimizer
 (17 rows)
@@ -2161,19 +2161,19 @@ explain (costs off) select * from mcrparted where a > -1;	-- scans all partition
 ---------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
-         ->  Seq Scan on mcrparted0 mcrparted
+         ->  Seq Scan on mcrparted0 mcrparted_1
                Filter: (a > '-1'::integer)
-         ->  Seq Scan on mcrparted1 mcrparted_1
+         ->  Seq Scan on mcrparted1 mcrparted_2
                Filter: (a > '-1'::integer)
-         ->  Seq Scan on mcrparted2 mcrparted_2
+         ->  Seq Scan on mcrparted2 mcrparted_3
                Filter: (a > '-1'::integer)
-         ->  Seq Scan on mcrparted3 mcrparted_3
+         ->  Seq Scan on mcrparted3 mcrparted_4
                Filter: (a > '-1'::integer)
-         ->  Seq Scan on mcrparted4 mcrparted_4
+         ->  Seq Scan on mcrparted4 mcrparted_5
                Filter: (a > '-1'::integer)
-         ->  Seq Scan on mcrparted5 mcrparted_5
+         ->  Seq Scan on mcrparted5 mcrparted_6
                Filter: (a > '-1'::integer)
-         ->  Seq Scan on mcrparted_def mcrparted_6
+         ->  Seq Scan on mcrparted_def mcrparted_7
                Filter: (a > '-1'::integer)
  Optimizer: Postgres query optimizer
 (17 rows)
@@ -2192,13 +2192,13 @@ explain (costs off) select * from mcrparted where a = 20 and c > 20; -- scans mc
 ---------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
-         ->  Seq Scan on mcrparted3 mcrparted
+         ->  Seq Scan on mcrparted3 mcrparted_1
                Filter: ((c > 20) AND (a = 20))
-         ->  Seq Scan on mcrparted4 mcrparted_1
+         ->  Seq Scan on mcrparted4 mcrparted_2
                Filter: ((c > 20) AND (a = 20))
-         ->  Seq Scan on mcrparted5 mcrparted_2
+         ->  Seq Scan on mcrparted5 mcrparted_3
                Filter: ((c > 20) AND (a = 20))
-         ->  Seq Scan on mcrparted_def mcrparted_3
+         ->  Seq Scan on mcrparted_def mcrparted_4
                Filter: ((c > 20) AND (a = 20))
  Optimizer: Postgres query optimizer
 (11 rows)
@@ -2239,13 +2239,13 @@ explain (costs off) select * from mcrparted order by a, abs(b), c;
    Merge Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
    ->  Merge Append
          Sort Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
-         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted
-         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
-         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
-         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
-         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_4
-         ->  Index Scan using mcrparted5_a_abs_c_idx on mcrparted5 mcrparted_5
-         ->  Index Scan using mcrparted_def_a_abs_c_idx on mcrparted_def mcrparted_6
+         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted_1
+         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
+         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
+         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
+         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_5
+         ->  Index Scan using mcrparted5_a_abs_c_idx on mcrparted5 mcrparted_6
+         ->  Index Scan using mcrparted_def_a_abs_c_idx on mcrparted_def mcrparted_7
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -2258,12 +2258,12 @@ explain (costs off) select * from mcrparted order by a, abs(b), c;
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
    ->  Append
-         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted
-         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
-         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
-         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
-         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_4
-         ->  Index Scan using mcrparted5_a_abs_c_idx on mcrparted5 mcrparted_5
+         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted_1
+         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
+         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
+         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
+         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_5
+         ->  Index Scan using mcrparted5_a_abs_c_idx on mcrparted5 mcrparted_6
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -2272,14 +2272,14 @@ explain (costs off) select * from mcrparted order by a desc, abs(b) desc, c desc
                                        QUERY PLAN                                       
 ----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: mcrparted_5.a, (abs(mcrparted_5.b)), mcrparted_5.c
+   Merge Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
    ->  Append
-         ->  Index Scan Backward using mcrparted5_a_abs_c_idx on mcrparted5 mcrparted_5
-         ->  Index Scan Backward using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_4
-         ->  Index Scan Backward using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
-         ->  Index Scan Backward using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
-         ->  Index Scan Backward using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
-         ->  Index Scan Backward using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted
+         ->  Index Scan Backward using mcrparted5_a_abs_c_idx on mcrparted5 mcrparted_6
+         ->  Index Scan Backward using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_5
+         ->  Index Scan Backward using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
+         ->  Index Scan Backward using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
+         ->  Index Scan Backward using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
+         ->  Index Scan Backward using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted_1
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -2295,15 +2295,15 @@ explain (costs off) select * from mcrparted order by a, abs(b), c;
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
    ->  Append
-         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted
-         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
-         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
-         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
-         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_4
+         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted_1
+         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
+         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
+         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
+         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_5
          ->  Merge Append
-               Sort Key: mcrparted_5.a, (abs(mcrparted_5.b)), mcrparted_5.c
-               ->  Index Scan using mcrparted5a_a_abs_c_idx on mcrparted5a mcrparted_5
-               ->  Index Scan using mcrparted5_def_a_abs_c_idx on mcrparted5_def mcrparted_6
+               Sort Key: mcrparted_7.a, (abs(mcrparted_7.b)), mcrparted_7.c
+               ->  Index Scan using mcrparted5a_a_abs_c_idx on mcrparted5a mcrparted_7
+               ->  Index Scan using mcrparted5_def_a_abs_c_idx on mcrparted5_def mcrparted_8
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -2317,12 +2317,12 @@ explain (costs off) select a, abs(b) from mcrparted order by a, abs(b), c;
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
    ->  Append
-         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted
-         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
-         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
-         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
-         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_4
-         ->  Index Scan using mcrparted5a_a_abs_c_idx on mcrparted5a mcrparted_5
+         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted_1
+         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
+         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
+         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
+         ->  Index Scan using mcrparted4_a_abs_c_idx on mcrparted4 mcrparted_5
+         ->  Index Scan using mcrparted5a_a_abs_c_idx on mcrparted5a mcrparted_6
  Optimizer: Postgres query optimizer
 (10 rows)
 
@@ -2334,13 +2334,13 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c;
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
    ->  Append
-         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted
+         ->  Index Scan using mcrparted0_a_abs_c_idx on mcrparted0 mcrparted_1
                Index Cond: (a < 20)
-         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
+         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
                Index Cond: (a < 20)
-         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
+         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
                Index Cond: (a < 20)
-         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
+         ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
                Index Cond: (a < 20)
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2395,14 +2395,14 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c l
          ->  Limit
                ->  Append
                      ->  Sort
-                           Sort Key: mcrparted.a, (abs(mcrparted.b)), mcrparted.c
-                           ->  Seq Scan on mcrparted0 mcrparted
+                           Sort Key: mcrparted_1.a, (abs(mcrparted_1.b)), mcrparted_1.c
+                           ->  Seq Scan on mcrparted0 mcrparted_1
                                  Filter: (a < 20)
-                     ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
+                     ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
                            Index Cond: (a < 20)
-                     ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
+                     ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_3
                            Index Cond: (a < 20)
-                     ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_3
+                     ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
                            Index Cond: (a < 20)
  Optimizer: Postgres query optimizer
 (16 rows)
@@ -2416,9 +2416,9 @@ explain (costs off) select * from mcrparted where a = 10 order by a, abs(b), c;
  Gather Motion 1:1  (slice1; segments: 1)
    Merge Key: (abs(mcrparted.b)), mcrparted.c
    ->  Append
-         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted
+         ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_1
                Index Cond: (a = 10)
-         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_1
+         ->  Index Scan using mcrparted2_a_abs_c_idx on mcrparted2 mcrparted_2
                Index Cond: (a = 10)
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -2456,9 +2456,9 @@ explain (costs off) select * from bool_rp where b = true order by b,a;
  Gather Motion 1:1  (slice1; segments: 1)
    Merge Key: bool_rp.b, bool_rp.a
    ->  Append
-         ->  Index Only Scan using bool_rp_true_1k_b_a_idx on bool_rp_true_1k bool_rp
+         ->  Index Only Scan using bool_rp_true_1k_b_a_idx on bool_rp_true_1k bool_rp_1
                Index Cond: (b = true)
-         ->  Index Only Scan using bool_rp_true_2k_b_a_idx on bool_rp_true_2k bool_rp_1
+         ->  Index Only Scan using bool_rp_true_2k_b_a_idx on bool_rp_true_2k bool_rp_2
                Index Cond: (b = true)
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -2469,9 +2469,9 @@ explain (costs off) select * from bool_rp where b = false order by b,a;
  Gather Motion 1:1  (slice1; segments: 1)
    Merge Key: bool_rp.b, bool_rp.a
    ->  Append
-         ->  Index Only Scan using bool_rp_false_1k_b_a_idx on bool_rp_false_1k bool_rp
+         ->  Index Only Scan using bool_rp_false_1k_b_a_idx on bool_rp_false_1k bool_rp_1
                Index Cond: (b = false)
-         ->  Index Only Scan using bool_rp_false_2k_b_a_idx on bool_rp_false_2k bool_rp_1
+         ->  Index Only Scan using bool_rp_false_2k_b_a_idx on bool_rp_false_2k bool_rp_2
                Index Cond: (b = false)
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -2487,9 +2487,9 @@ explain (costs off) select * from bool_rp where b = true order by a;
    ->  Sort
          Sort Key: bool_rp.a
          ->  Append
-               ->  Index Only Scan using bool_rp_true_1k_b_a_idx on bool_rp_true_1k bool_rp
+               ->  Index Only Scan using bool_rp_true_1k_b_a_idx on bool_rp_true_1k bool_rp_1
                      Index Cond: (b = true)
-               ->  Index Only Scan using bool_rp_true_2k_b_a_idx on bool_rp_true_2k bool_rp_1
+               ->  Index Only Scan using bool_rp_true_2k_b_a_idx on bool_rp_true_2k bool_rp_2
                      Index Cond: (b = true)
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -2502,9 +2502,9 @@ explain (costs off) select * from bool_rp where b = false order by a;
    ->  Sort
          Sort Key: bool_rp.a
          ->  Append
-               ->  Index Only Scan using bool_rp_false_1k_b_a_idx on bool_rp_false_1k bool_rp
+               ->  Index Only Scan using bool_rp_false_1k_b_a_idx on bool_rp_false_1k bool_rp_1
                      Index Cond: (b = false)
-               ->  Index Only Scan using bool_rp_false_2k_b_a_idx on bool_rp_false_2k bool_rp_1
+               ->  Index Only Scan using bool_rp_false_2k_b_a_idx on bool_rp_false_2k bool_rp_2
                      Index Cond: (b = false)
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -2524,8 +2524,8 @@ explain (costs off) select * from range_parted order by a,b,c;
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: range_parted.a, range_parted.b, range_parted.c
    ->  Append
-         ->  Index Only Scan using range_parted1_a_b_c_idx on range_parted1 range_parted
-         ->  Index Only Scan using range_parted2_a_b_c_idx on range_parted2 range_parted_1
+         ->  Index Only Scan using range_parted1_a_b_c_idx on range_parted1 range_parted_1
+         ->  Index Only Scan using range_parted2_a_b_c_idx on range_parted2 range_parted_2
  Optimizer: Postgres query optimizer
 (6 rows)
 
@@ -2533,10 +2533,10 @@ explain (costs off) select * from range_parted order by a desc,b desc,c desc;
                                              QUERY PLAN                                             
 ----------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: range_parted_1.a, range_parted_1.b, range_parted_1.c
+   Merge Key: range_parted.a, range_parted.b, range_parted.c
    ->  Append
-         ->  Index Only Scan Backward using range_parted2_a_b_c_idx on range_parted2 range_parted_1
-         ->  Index Only Scan Backward using range_parted1_a_b_c_idx on range_parted1 range_parted
+         ->  Index Only Scan Backward using range_parted2_a_b_c_idx on range_parted2 range_parted_2
+         ->  Index Only Scan Backward using range_parted1_a_b_c_idx on range_parted1 range_parted_1
  Optimizer: Postgres query optimizer
 (6 rows)
 

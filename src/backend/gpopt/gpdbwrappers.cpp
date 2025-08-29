@@ -2576,4 +2576,24 @@ gpdb::GPDBLockRelationOid(Oid reloid, LOCKMODE lockmode)
 	GP_WRAP_END;
 }
 
+PartitionDesc
+gpdb::GPDBRelationGetPartitionDesc(Relation rel)
+{
+	GP_WRAP_START;
+	{
+		return RelationGetPartitionDesc(rel);
+	}
+	GP_WRAP_END;
+}
+
+PartitionKey
+gpdb::GPDBRelationGetPartitionKey(Relation rel)
+{
+	GP_WRAP_START;
+	{
+		return RelationGetPartitionKey(rel);
+	}
+	GP_WRAP_END;
+}
+
 // EOF

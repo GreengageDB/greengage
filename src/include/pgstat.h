@@ -3,7 +3,7 @@
  *
  *	Definitions for the PostgreSQL statistics collector daemon.
  *
- *	Copyright (c) 2001-2019, PostgreSQL Global Development Group
+ *	Copyright (c) 2001-2020, PostgreSQL Global Development Group
  *
  *	src/include/pgstat.h
  * ----------
@@ -991,6 +991,7 @@ typedef enum
 	WAIT_EVENT_LOGICAL_REWRITE_SYNC,
 	WAIT_EVENT_LOGICAL_REWRITE_TRUNCATE,
 	WAIT_EVENT_LOGICAL_REWRITE_WRITE,
+	WAIT_EVENT_PROC_SIGNAL_BARRIER,
 	WAIT_EVENT_RELATION_MAP_READ,
 	WAIT_EVENT_RELATION_MAP_SYNC,
 	WAIT_EVENT_RELATION_MAP_WRITE,
@@ -1038,6 +1039,7 @@ typedef enum ProgressCommandType
 {
 	PROGRESS_COMMAND_INVALID,
 	PROGRESS_COMMAND_VACUUM,
+	PROGRESS_COMMAND_ANALYZE,
 	PROGRESS_COMMAND_CLUSTER,
 	PROGRESS_COMMAND_CREATE_INDEX
 } ProgressCommandType;

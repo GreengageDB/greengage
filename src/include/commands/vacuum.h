@@ -4,7 +4,7 @@
  *	  header file for postgres vacuum cleaner and statistics analyzer
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/vacuum.h
@@ -24,6 +24,45 @@
 #include "storage/lock.h"
 #include "utils/relcache.h"
 #include "utils/snapshot.h"
+
+/*
+ * Flags for amparallelvacuumoptions to control the participation of bulkdelete
+ * and vacuumcleanup in parallel vacuum.
+ */
+
+/*
+ * Both bulkdelete and vacuumcleanup are disabled by default.  This will be
+ * used by IndexAM's that don't want to or cannot participate in parallel
+ * vacuum.  For example, if an index AM doesn't have a way to communicate the
+ * index statistics allocated by the first ambulkdelete call to the subsequent
+ * ones until amvacuumcleanup, the index AM cannot participate in parallel
+ * vacuum.
+ */
+#define VACUUM_OPTION_NO_PARALLEL			0
+
+/*
+ * bulkdelete can be performed in parallel.  This option can be used by
+ * IndexAm's that need to scan the index to delete the tuples.
+ */
+#define VACUUM_OPTION_PARALLEL_BULKDEL		(1 << 0)
+
+/*
+ * vacuumcleanup can be performed in parallel if bulkdelete is not performed
+ * yet.  This will be used by IndexAM's that can scan the index if the
+ * bulkdelete is not performed.
+ */
+#define VACUUM_OPTION_PARALLEL_COND_CLEANUP	(1 << 1)
+
+/*
+ * vacuumcleanup can be performed in parallel even if bulkdelete has already
+ * processed the index.  This will be used by IndexAM's that scan the index
+ * during the cleanup phase of index irrespective of whether the index is
+ * already scanned or not during bulkdelete phase.
+ */
+#define VACUUM_OPTION_PARALLEL_CLEANUP		(1 << 2)
+
+/* value for checking vacuum flags */
+#define VACUUM_OPTION_MAX_VALID_VALUE		((1 << 3) - 1)
 
 /*----------
  * ANALYZE builds one of these structs for each attribute (column) that is

@@ -33,7 +33,7 @@
  * specific parts are in the libpqwalreceiver module. It's loaded
  * dynamically to avoid linking the server with libpq.
  *
- * Portions Copyright (c) 2010-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2020, PostgreSQL Global Development Group
  *
  *
  * IDENTIFICATION
@@ -43,7 +43,6 @@
  */
 #include "postgres.h"
 
-#include <signal.h>
 #include <unistd.h>
 
 #include "access/htup_details.h"
@@ -58,6 +57,7 @@
 #include "libpq/pqsignal.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "postmaster/interrupt.h"
 #include "replication/walreceiver.h"
 #include "replication/walsender.h"
 #include "storage/ipc.h"
@@ -75,6 +75,7 @@
 
 
 /* GUC variables */
+bool		wal_receiver_create_temp_slot;
 int			wal_receiver_status_interval;
 int			wal_receiver_timeout;
 bool		hot_standby_feedback;
@@ -129,7 +130,6 @@ static void ProcessWalSndrMessage(XLogRecPtr walEnd, TimestampTz sendTime);
 /* Signal handlers */
 static void WalRcvSigHupHandler(SIGNAL_ARGS);
 static void WalRcvShutdownHandler(SIGNAL_ARGS);
-static void WalRcvQuickDieHandler(SIGNAL_ARGS);
 
 
 /*
@@ -151,7 +151,8 @@ ProcessWalRcvInterrupts(void)
 	/*
 	 * Although walreceiver interrupt handling doesn't use the same scheme as
 	 * regular backends, call CHECK_FOR_INTERRUPTS() to make sure we receive
-	 * any incoming signals on Win32.
+	 * any incoming signals on Win32, and also to make sure we process any
+	 * barrier events.
 	 */
 	CHECK_FOR_INTERRUPTS();
 
@@ -171,6 +172,7 @@ WalReceiverMain(void)
 	char		conninfo[MAXCONNINFO];
 	char	   *tmp_conninfo;
 	char		slotname[NAMEDATALEN];
+	bool		is_temp_slot;
 	XLogRecPtr	startpoint;
 	TimeLineID	startpointTLI;
 	TimeLineID	primaryTLI;
@@ -236,6 +238,7 @@ WalReceiverMain(void)
 	walrcv->ready_to_display = false;
 	strlcpy(conninfo, (char *) walrcv->conninfo, MAXCONNINFO);
 	strlcpy(slotname, (char *) walrcv->slotname, NAMEDATALEN);
+	is_temp_slot = walrcv->is_temp_slot;
 	startpoint = walrcv->receiveStart;
 	startpointTLI = walrcv->receiveStartTLI;
 
@@ -255,7 +258,7 @@ WalReceiverMain(void)
 	pqsignal(SIGHUP, WalRcvSigHupHandler);	/* set flag to read config file */
 	pqsignal(SIGINT, SIG_IGN);
 	pqsignal(SIGTERM, WalRcvShutdownHandler);	/* request shutdown */
-	pqsignal(SIGQUIT, WalRcvQuickDieHandler);	/* hard crash time */
+	pqsignal(SIGQUIT, SignalHandlerForCrashExit);
 	pqsignal(SIGALRM, SIG_IGN);
 	pqsignal(SIGPIPE, SIG_IGN);
 	pqsignal(SIGUSR1, procsignal_sigusr1_handler);
@@ -350,6 +353,45 @@ WalReceiverMain(void)
 		 * can.
 		 */
 		WalRcvFetchTimeLineHistoryFiles(startpointTLI, primaryTLI);
+
+		/*
+		 * Create temporary replication slot if no slot name is configured or
+		 * the slot from the previous run was temporary, unless
+		 * wal_receiver_create_temp_slot is disabled.  We also need to handle
+		 * the case where the previous run used a temporary slot but
+		 * wal_receiver_create_temp_slot was changed in the meantime.  In that
+		 * case, we delete the old slot name in shared memory.  (This would
+		 * all be a bit easier if we just didn't copy the slot name into
+		 * shared memory, since we won't need it again later, but then we
+		 * can't see the slot name in the stats views.)
+		 */
+		if (slotname[0] == '\0' || is_temp_slot)
+		{
+			bool		changed = false;
+
+			if (wal_receiver_create_temp_slot)
+			{
+				snprintf(slotname, sizeof(slotname),
+						 "pg_walreceiver_%lld",
+						 (long long int) walrcv_get_backend_pid(wrconn));
+
+				walrcv_create_slot(wrconn, slotname, true, 0, NULL);
+				changed = true;
+			}
+			else if (slotname[0] != '\0')
+			{
+				slotname[0] = '\0';
+				changed = true;
+			}
+
+			if (changed)
+			{
+				SpinLockAcquire(&walrcv->mutex);
+				strlcpy(walrcv->slotname, slotname, NAMEDATALEN);
+				walrcv->is_temp_slot = wal_receiver_create_temp_slot;
+				SpinLockRelease(&walrcv->mutex);
+			}
+		}
 
 		/*
 		 * Start streaming.
@@ -582,17 +624,17 @@ WalReceiverMain(void)
 			char		xlogfname[MAXFNAMELEN];
 
 			XLogWalRcvFlush(false);
+			XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
 			if (close(recvFile) != 0)
 				ereport(PANIC,
 						(errcode_for_file_access(),
 						 errmsg("could not close log segment %s: %m",
-								XLogFileNameP(recvFileTLI, recvSegNo))));
+								xlogfname)));
 
 			/*
 			 * Create .done file forcibly to prevent the streamed segment from
 			 * being archived later.
 			 */
-			XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
 			if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
 				XLogArchiveForceDone(xlogfname);
 			else
@@ -787,32 +829,6 @@ WalRcvShutdownHandler(SIGNAL_ARGS)
 }
 
 /*
- * WalRcvQuickDieHandler() occurs when signalled SIGQUIT by the postmaster.
- *
- * Some backend has bought the farm, so we need to stop what we're doing and
- * exit.
- */
-static void
-WalRcvQuickDieHandler(SIGNAL_ARGS)
-{
-	/*
-	 * We DO NOT want to run proc_exit() or atexit() callbacks -- we're here
-	 * because shared memory may be corrupted, so we don't want to try to
-	 * clean up our transaction.  Just nail the windows shut and get out of
-	 * town.  The callbacks wouldn't be safe to run from a signal handler,
-	 * anyway.
-	 *
-	 * Note we use _exit(2) not _exit(0).  This is to force the postmaster
-	 * into a system reset cycle if someone sends a manual SIGQUIT to a random
-	 * backend.  This is necessary precisely because we don't clean up our
-	 * shared memory state.  (The "dead man switch" mechanism in pmsignal.c
-	 * should ensure the postmaster sees this as a crash, too, but no harm in
-	 * being doubly sure.)
-	 */
-	_exit(2);
-}
-
-/*
  * Accept the message from XLOG stream, and process it.
  */
 static void
@@ -906,6 +922,8 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr)
 
 				XLogWalRcvFlush(false);
 
+				XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
+
 				/*
 				 * XLOG segment files will be re-read by recovery in startup
 				 * process soon, so we don't advise the OS to release cache
@@ -915,13 +933,12 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr)
 					ereport(PANIC,
 							(errcode_for_file_access(),
 							 errmsg("could not close log segment %s: %m",
-									XLogFileNameP(recvFileTLI, recvSegNo))));
+									xlogfname)));
 
 				/*
 				 * Create .done file forcibly to prevent the streamed segment
 				 * from being archived later.
 				 */
-				XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
 				if (XLogArchiveMode != ARCHIVE_MODE_ALWAYS)
 					XLogArchiveForceDone(xlogfname);
 				else
@@ -949,11 +966,18 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr)
 		if (recvOff != startoff)
 		{
 			if (lseek(recvFile, (off_t) startoff, SEEK_SET) < 0)
+			{
+				char		xlogfname[MAXFNAMELEN];
+				int			save_errno = errno;
+
+				XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
+				errno = save_errno;
 				ereport(PANIC,
 						(errcode_for_file_access(),
 						 errmsg("could not seek in log segment %s to offset %u: %m",
-								XLogFileNameP(recvFileTLI, recvSegNo),
-								startoff)));
+								xlogfname, startoff)));
+			}
+
 			recvOff = startoff;
 		}
 
@@ -963,15 +987,21 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr)
 		byteswritten = write(recvFile, buf, segbytes);
 		if (byteswritten <= 0)
 		{
+			char		xlogfname[MAXFNAMELEN];
+			int			save_errno;
+
 			/* if write didn't set errno, assume no disk space */
 			if (errno == 0)
 				errno = ENOSPC;
+
+			save_errno = errno;
+			XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
+			errno = save_errno;
 			ereport(PANIC,
 					(errcode_for_file_access(),
 					 errmsg("could not write to log segment %s "
 							"at offset %u, length %lu: %m",
-							XLogFileNameP(recvFileTLI, recvSegNo),
-							recvOff, (unsigned long) segbytes)));
+							xlogfname, recvOff, (unsigned long) segbytes)));
 		}
 
 		/* Update state for write */
@@ -983,14 +1013,23 @@ XLogWalRcvWrite(char *buf, Size nbytes, XLogRecPtr recptr)
 
 		LogstreamResult.Write = recptr;
 
-		elogif(debug_walrepl_rcv, LOG,
-			   "walrcv write -- Wrote %d bytes in file %s, offset %d."
-			   "Latest write location is %X/%X.",
-			   byteswritten,
-			   XLogFileNameP(recvFileTLI, recvSegNo),
-			   startoff,
-			   (uint32) (LogstreamResult.Write >> 32),
-			   (uint32) LogstreamResult.Write);
+		if (debug_walrepl_rcv)
+		{
+			char		xlogfname[MAXFNAMELEN];
+			int			save_errno = errno;
+
+			XLogFileName(xlogfname, recvFileTLI, recvSegNo, wal_segment_size);
+			errno = save_errno;
+
+			elog(LOG,
+				 "walrcv write -- Wrote %d bytes in file %s, offset %d."
+				 "Latest write location is %X/%X.",
+				 byteswritten,
+				 xlogfname,
+				 startoff,
+				 (uint32) (LogstreamResult.Write >> 32),
+				 (uint32) LogstreamResult.Write);
+		}
 	}
 }
 

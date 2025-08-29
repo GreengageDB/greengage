@@ -1835,6 +1835,9 @@ _outNode(StringInfo str, void *obj)
 			case T_RestrictInfo:
 				_outRestrictInfo(str, obj);
 				break;
+			case T_AppendRelInfo:
+				_outAppendRelInfo(str, obj);
+				break;
 
 			default:
 				elog(ERROR, "could not serialize unrecognized node type: %d",

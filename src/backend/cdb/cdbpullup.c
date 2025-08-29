@@ -265,7 +265,7 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 		 *
 		 * 1. Ignore RelabelType nodes on top of both sides, like
 		 *    tlist_member_ignore_relabel() does.
-		 * 2. Ignore varnoold/varoattno fields in Var nodes, like
+		 * 2. Ignore varnosyn/varattnosyn fields in Var nodes, like
 		 *    tlist_member_match_var() does.
 		 * 3. Also Accept "naked" targetlists, without TargetEntry nodes
 		 *
@@ -404,10 +404,10 @@ cdbpullup_isExprCoveredByTargetlist(Expr *expr, List *targetlist)
  * vartypmod for the new Var node.  If 'oldexpr' is a Var node, all fields are
  * copied except for varno, varattno and varlevelsup.
  *
- * The parameter modifyOld determines if varnoold and varoattno are modified or
+ * The parameter modifyOld determines if varnosyn and varattnosyn are modified or
  * not. Rule of thumb is to use modifyOld = false if called before setrefs.
  *
- * Copying an existing Var node preserves its varnoold and varoattno fields,
+ * Copying an existing Var node preserves its varnosyn and varattnosyn fields,
  * which are used by EXPLAIN to display the table and column name.
  * Also these fields are tested by equal(), so they may need to be set
  * correctly for successful lookups by list_member(), tlist_member(),
@@ -427,8 +427,8 @@ cdbpullup_make_expr(Index varno, AttrNumber varattno, Expr *oldexpr, bool modify
 		var->varattno = varattno;
 		if (modifyOld)
 		{
-			var->varoattno = varattno;
-			var->varnoold = varno;
+			var->varattnosyn = varattno;
+			var->varnosyn = varno;
 		}
 		var->varlevelsup = 0;
 		return (Expr *) var;
@@ -452,8 +452,8 @@ cdbpullup_make_expr(Index varno, AttrNumber varattno, Expr *oldexpr, bool modify
 					  exprTypmod((Node *) oldexpr),
 					  exprCollation((Node *) oldexpr),
 					  0);
-		var->varnoold = varno;	/* assuming it wasn't ever a plain Var */
-		var->varoattno = varattno;
+		var->varnosyn = varno;	/* assuming it wasn't ever a plain Var */
+		var->varattnosyn = varattno;
 		return (Expr *) var;
 	}
 }								/* cdbpullup_make_var */

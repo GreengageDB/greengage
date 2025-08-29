@@ -49,6 +49,7 @@
 		"data_directory",
 		"data_directory_mode",
 		"data_sync_retry",
+		"wal_receiver_create_temp_slot",
 		"db_user_namespace",
 		"deadlock_timeout",
 		"debug_abort_after_distributed_prepared",

@@ -2117,8 +2117,8 @@ show_motion_keys(PlanState *planstate, List *hashExpr, int nkeys, AttrNumber *ke
 		return;
 
 	/* Set up deparse context */
-	context = set_deparse_context_planstate(es->deparse_cxt,
-											(Node *) planstate,
+	context = set_deparse_context_plan(es->deparse_cxt,
+											planstate->plan,
 											ancestors);
 
     /* Merge Receive ordering key */

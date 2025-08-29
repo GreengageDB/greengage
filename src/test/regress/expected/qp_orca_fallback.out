@@ -253,8 +253,8 @@ explain select * from ext_part;
 -------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..57799.50 rows=3096300 width=4)
    ->  Append  (cost=0.00..16515.50 rows=1032100 width=4)
-         ->  Seq Scan on p1 ext_part  (cost=0.00..355.00 rows=32100 width=4)
-         ->  Foreign Scan on p2_ext ext_part_1  (cost=0.00..11000.00 rows=1000000 width=4)
+         ->  Seq Scan on p1 ext_part_1  (cost=0.00..355.00 rows=32100 width=4)
+         ->  Foreign Scan on p2_ext ext_part_2  (cost=0.00..11000.00 rows=1000000 width=4)
  Optimizer: Postgres query optimizer
 (5 rows)
 

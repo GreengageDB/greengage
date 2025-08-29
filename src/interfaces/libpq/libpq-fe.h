@@ -5,7 +5,7 @@
  *	  externs for functions used by frontend postgres applications.
  *
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/interfaces/libpq/libpq-fe.h
@@ -334,7 +334,6 @@ extern char *PQpass(const PGconn *conn);
 extern char *PQhost(const PGconn *conn);
 extern char *PQhostaddr(const PGconn *conn);
 extern char *PQport(const PGconn *conn);
-extern char *PQsslpassword(const PGconn *conn);
 extern char *PQtty(const PGconn *conn);
 extern char *PQoptions(const PGconn *conn);
 extern ConnStatusType PQstatus(const PGconn *conn);

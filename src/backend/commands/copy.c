@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1040,6 +1040,7 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 	if (stmt->relation)
 	{
 		LOCKMODE	lockmode = is_from ? RowExclusiveLock : AccessShareLock;
+		ParseNamespaceItem *nsitem;
 		RangeTblEntry *rte;
 		TupleDesc	tupDesc;
 		List	   *attnums;
@@ -1061,14 +1062,15 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
 		relid = RelationGetRelid(rel);
 
-		rte = addRangeTableEntryForRelation(pstate, rel, lockmode,
-											NULL, false, false);
+		nsitem = addRangeTableEntryForRelation(pstate, rel, lockmode,
+											   NULL, false, false);
+		rte = nsitem->p_rte;
 		rte->requiredPerms = (is_from ? ACL_INSERT : ACL_SELECT);
 
 		if (stmt->whereClause)
 		{
-			/* add rte to column namespace  */
-			addRTEtoQuery(pstate, rte, false, true, true);
+			/* add nsitem to query namespace */
+			addNSItemToQuery(pstate, nsitem, false, true, true);
 
 			/* Transform the raw expression tree */
 			whereClause = transformExpr(pstate, stmt->whereClause, EXPR_KIND_COPY_WHERE);

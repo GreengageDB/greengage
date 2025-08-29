@@ -1,8 +1,17 @@
 root = true
 
-[*.{c,cpp,h,y}]
+[*.{c,cpp,h,l,y,pl,pm}]
 indent_style = tab
-indent_size = 4
+indent_size = tab
+tab_width = 4
+
+[*.{sgml,xml}]
+indent_style = space
+indent_size = 1
+
+[*.xsl]
+indent_style = space
+indent_size = 2
 
 [{GNUmakefile,Makefile}*]
 indent_style = tab
@@ -19,4 +28,3 @@ indent_size = 4
 [*.{dxl,mdp}]
 indent_style = space
 indent_size = 2
-

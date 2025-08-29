@@ -448,6 +448,9 @@ CdbDispatchUtilityStatement(struct Node *stmt,
 							List *oid_assignments,
 							CdbPgResults *cdb_pgresults)
 {
+	if (!gp_dispatch_utility_statement)
+		return;
+
 	DispatchCommandQueryParms *pQueryParms;
 	bool needTwoPhase = flags & DF_NEED_TWO_PHASE;
 

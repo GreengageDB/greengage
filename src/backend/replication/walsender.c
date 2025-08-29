@@ -40,7 +40,7 @@
  *
  * Note - Currently only 1 walsender is supported for GPDB
  *
- * Portions Copyright (c) 2010-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2020, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/replication/walsender.c
@@ -69,6 +69,7 @@
 #include "miscadmin.h"
 #include "nodes/replnodes.h"
 #include "pgstat.h"
+#include "postmaster/interrupt.h"
 #include "replication/basebackup.h"
 #include "replication/decode.h"
 #include "replication/logical.h"
@@ -2540,10 +2541,17 @@ WalSndSegmentOpen(XLogSegNo nextSegNo, WALSegmentContext *segcxt,
 	 * too old WAL segment that has already been removed or recycled.
 	 */
 	if (errno == ENOENT)
+	{
+		char		xlogfname[MAXFNAMELEN];
+		int			save_errno = errno;
+
+		XLogFileName(xlogfname, *tli_p, nextSegNo, wal_segment_size);
+		errno = save_errno;
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("requested WAL segment %s has already been removed",
-						XLogFileNameP(*tli_p, nextSegNo))));
+						xlogfname)));
+	}
 	else
 		ereport(ERROR,
 				(errcode_for_file_access(),
@@ -2911,7 +2919,14 @@ XLogSendLogical(void)
 {
 	XLogRecord *record;
 	char	   *errm;
-	XLogRecPtr	flushPtr;
+
+	/*
+	 * We'll use the current flush point to determine whether we've caught up.
+	 * This variable is static in order to cache it across calls.  Caching is
+	 * helpful because GetFlushRecPtr() needs to acquire a heavily-contended
+	 * spinlock.
+	 */
+	static XLogRecPtr flushPtr = InvalidXLogRecPtr;
 
 	/*
 	 * Don't know whether we've caught up yet. We'll set WalSndCaughtUp to
@@ -2928,11 +2943,6 @@ XLogSendLogical(void)
 	if (errm != NULL)
 		elog(ERROR, "%s", errm);
 
-	/*
-	 * We'll use the current flush point to determine whether we've caught up.
-	 */
-	flushPtr = GetFlushRecPtr();
-
 	if (record != NULL)
 	{
 		/*
@@ -2945,7 +2955,16 @@ XLogSendLogical(void)
 		sentPtr = logical_decoding_ctx->reader->EndRecPtr;
 	}
 
-	/* Set flag if we're caught up. */
+	/*
+	 * If first time through in this session, initialize flushPtr.  Otherwise,
+	 * we only need to update flushPtr if EndRecPtr is past it.
+	 */
+	if (flushPtr == InvalidXLogRecPtr)
+		flushPtr = GetFlushRecPtr();
+	else if (logical_decoding_ctx->reader->EndRecPtr >= flushPtr)
+		flushPtr = GetFlushRecPtr();
+
+	/* If EndRecPtr is still past our flushPtr, it means we caught up. */
 	if (logical_decoding_ctx->reader->EndRecPtr >= flushPtr)
 		WalSndCaughtUp = true;
 
@@ -3114,8 +3133,7 @@ void
 WalSndSignals(void)
 {
 	/* Set up signal handlers */
-	pqsignal(SIGHUP, PostgresSigHupHandler);	/* set flag to read config
-												 * file */
+	pqsignal(SIGHUP, SignalHandlerForConfigReload);
 	pqsignal(SIGINT, StatementCancelHandler);	/* query cancel */
 	pqsignal(SIGTERM, die);		/* request shutdown */
 	pqsignal(SIGQUIT, quickdie);	/* hard crash time */
@@ -3513,8 +3531,7 @@ pg_stat_get_wal_senders(PG_FUNCTION_ARGS)
 	if (!(rsinfo->allowedModes & SFRM_Materialize))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
+				 errmsg("materialize mode required, but it is not allowed in this context")));
 
 	/* Build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)

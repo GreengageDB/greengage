@@ -780,4 +780,6 @@ extern const char * lookup_autostats_mode_by_value(GpAutoStatsModeValue val);
  */
 #define CDB_NOTIFY_ENDPOINT_ACK "ack_notify"
 
+extern bool gp_dispatch_utility_statement;
+
 #endif   /* CDBVARS_H */

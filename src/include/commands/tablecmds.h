@@ -4,7 +4,7 @@
  *	  prototypes for tablecmds.c.
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/tablecmds.h
@@ -29,6 +29,8 @@
 #include "storage/lock.h"
 #include "utils/relcache.h"
 
+struct AlterTableUtilityContext;	/* avoid including tcop/utility.h here */
+
 /* Convenient macro for checking AO AMs */
 #define IsAccessMethodAO(am_oid) \
 	(am_oid == AO_ROW_TABLE_AM_OID || am_oid == AO_COLUMN_TABLE_AM_OID)
@@ -45,7 +47,8 @@ extern void RemoveRelations(DropStmt *drop);
 
 extern Oid	AlterTableLookupRelation(AlterTableStmt *stmt, LOCKMODE lockmode);
 
-extern void AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt);
+extern void AlterTable(AlterTableStmt *stmt, LOCKMODE lockmode,
+					   struct AlterTableUtilityContext *context);
 
 extern LOCKMODE AlterTableGetLockLevel(List *cmds);
 

@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -352,6 +352,7 @@ _outPlannedStmt(StringInfo str, const PlannedStmt *node)
 	WRITE_NODE_FIELD(rtable);
 	WRITE_NODE_FIELD(resultRelations);
 	WRITE_NODE_FIELD(rootResultRelations);
+	WRITE_NODE_FIELD(appendRelations);
 	WRITE_NODE_FIELD(subplans);
 	WRITE_BITMAPSET_FIELD(rewindPlanIDs);
 	WRITE_NODE_FIELD(rowMarks);
@@ -599,6 +600,7 @@ _outAppend(StringInfo str, const Append *node)
 
 	_outPlanInfo(str, (const Plan *) node);
 
+	WRITE_BITMAPSET_FIELD(apprelids);
 	WRITE_NODE_FIELD(appendplans);
 	WRITE_INT_FIELD(first_partial_plan);
 	WRITE_NODE_FIELD(part_prune_info);
@@ -620,6 +622,7 @@ _outMergeAppend(StringInfo str, const MergeAppend *node)
 
 	_outPlanInfo(str, (const Plan *) node);
 
+	WRITE_BITMAPSET_FIELD(apprelids);
 	WRITE_NODE_FIELD(mergeplans);
 	WRITE_INT_FIELD(numCols);
 	WRITE_ATTRNUMBER_ARRAY(sortColIdx, node->numCols);
@@ -1478,8 +1481,8 @@ _outVar(StringInfo str, const Var *node)
 	WRITE_INT_FIELD(vartypmod);
 	WRITE_OID_FIELD(varcollid);
 	WRITE_UINT_FIELD(varlevelsup);
-	WRITE_UINT_FIELD(varnoold);
-	WRITE_INT_FIELD(varoattno);
+	WRITE_UINT_FIELD(varnosyn);
+	WRITE_INT_FIELD(varattnosyn);
 	WRITE_LOCATION_FIELD(location);
 }
 
@@ -2688,6 +2691,7 @@ _outPlannerGlobal(StringInfo str, const PlannerGlobal *node)
 	WRITE_NODE_FIELD(finalrowmarks);
 	WRITE_NODE_FIELD(resultRelations);
 	WRITE_NODE_FIELD(rootResultRelations);
+	WRITE_NODE_FIELD(appendRelations);
 	WRITE_NODE_FIELD(relationOids);
 	WRITE_NODE_FIELD(invalItems);
 	WRITE_NODE_FIELD(paramExecTypes);
@@ -3040,6 +3044,7 @@ _outSpecialJoinInfo(StringInfo str, const SpecialJoinInfo *node)
 	WRITE_NODE_FIELD(semi_operators);
 	WRITE_NODE_FIELD(semi_rhs_exprs);
 }
+#endif /* COMPILING_BINARY_FUNCS */
 
 static void
 _outAppendRelInfo(StringInfo str, const AppendRelInfo *node)
@@ -3056,6 +3061,7 @@ _outAppendRelInfo(StringInfo str, const AppendRelInfo *node)
 	WRITE_OID_FIELD(parent_reloid);
 }
 
+#ifndef COMPILING_BINARY_FUNCS
 static void
 _outPlaceHolderInfo(StringInfo str, const PlaceHolderInfo *node)
 {
@@ -3412,6 +3418,9 @@ _outAlterTableCmd(StringInfo str, const AlterTableCmd *node)
 
 	WRITE_INT_FIELD(backendId);
 	WRITE_NODE_FIELD(policy);
+	WRITE_NODE_FIELD(prepStmts);
+	WRITE_NODE_FIELD(execStmts);
+	WRITE_BOOL_FIELD(isNULL);
 }
 
 static void
@@ -3472,6 +3481,7 @@ _outAlteredTableInfo(StringInfo str, const AlteredTableInfo *node)
 
 	WRITE_NODE_FIELD(constraints);
 	WRITE_NODE_FIELD(newvals);
+	WRITE_NODE_FIELD(afterStmts);
 	WRITE_BOOL_FIELD(verify_new_notnull);
 	WRITE_INT_FIELD(rewrite);
 	WRITE_OID_FIELD(newAccessMethod);
@@ -4514,7 +4524,10 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 			break;
 		case RTE_JOIN:
 			WRITE_ENUM_FIELD(jointype, JoinType);
+			WRITE_INT_FIELD(joinmergedcols);
 			WRITE_NODE_FIELD(joinaliasvars);
+			WRITE_NODE_FIELD(joinleftcols);
+			WRITE_NODE_FIELD(joinrightcols);
 			break;
 		case RTE_FUNCTION:
 			WRITE_NODE_FIELD(functions);

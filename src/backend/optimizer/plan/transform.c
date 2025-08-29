@@ -310,13 +310,13 @@ make_sirvf_subquery(FuncExpr *fe)
 		funcclass == TYPEFUNC_RECORD)
 	{
 		Query	   *sub_sq = sq;
-		RangeTblEntry *rte;
+		ParseNamespaceItem *nsitem;
 		RangeTblRef *rtref;
 		int			attno;
 		Var		   *var;
 
 		// FIXME: does this need to be lateral?
-		rte = addRangeTableEntryForSubquery(NULL,
+		nsitem = addRangeTableEntryForSubquery(NULL,
 											sub_sq,
 											makeAlias("sirvf_sq", NIL),
 											false, /* isLateral? */
@@ -327,7 +327,7 @@ make_sirvf_subquery(FuncExpr *fe)
 		sq = makeNode(Query);
 		sq->commandType = CMD_SELECT;
 		sq->querySource = QSRC_PLANNER;
-		sq->rtable = list_make1(rte);
+		sq->rtable = list_make1(nsitem->p_rte);
 		sq->jointree = makeFromExpr(list_make1(rtref), NULL);
 		/*
 		 * XXX: I'm not sure if we need so set this in this middle subquery.

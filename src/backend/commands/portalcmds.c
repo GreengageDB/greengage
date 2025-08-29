@@ -11,7 +11,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -51,14 +51,15 @@ extern int gp_max_parallel_cursors;
  *		Execute SQL DECLARE CURSOR command.
  */
 void
-PerformCursorOpen(DeclareCursorStmt *cstmt, ParamListInfo params,
-				  const char *queryString, bool isTopLevel)
+PerformCursorOpen(ParseState *pstate, DeclareCursorStmt *cstmt, ParamListInfo params,
+				  bool isTopLevel)
 {
 	Query	   *query = castNode(Query, cstmt->query);
 	List	   *rewritten;
 	PlannedStmt *plan;
 	Portal		portal;
 	MemoryContext oldContext;
+	char	   *queryString;
 
 	/*
 	 * Disallow empty-string cursor name (conflicts with protocol-level
@@ -131,7 +132,7 @@ PerformCursorOpen(DeclareCursorStmt *cstmt, ParamListInfo params,
 	Assert(!(cstmt->options & CURSOR_OPT_SCROLL && cstmt->options & CURSOR_OPT_NO_SCROLL));
 
 	/*
-	 * Create a portal and copy the plan and queryString into its memory.
+	 * Create a portal and copy the plan and query string into its memory.
 	 */
 	portal = CreatePortal(cstmt->portalname, false, false);
 
@@ -139,7 +140,7 @@ PerformCursorOpen(DeclareCursorStmt *cstmt, ParamListInfo params,
 
 	plan = copyObject(plan);
 
-	queryString = pstrdup(queryString);
+	queryString = pstrdup(pstate->p_sourcetext);
 
 	PortalDefineQuery(portal,
 					  NULL,

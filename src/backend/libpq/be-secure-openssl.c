@@ -4,7 +4,7 @@
  *	  functions for OpenSSL support in the backend.
  *
  *
- * Portions Copyright (c) 1996-2019, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -223,9 +223,7 @@ be_tls_init(bool isServerStart)
 	}
 
 	/* disallow SSL session tickets */
-#ifdef SSL_OP_NO_TICKET			/* added in OpenSSL 0.9.8f */
 	SSL_CTX_set_options(context, SSL_OP_NO_TICKET);
-#endif
 
 	/* disallow SSL session caching, too */
 	SSL_CTX_set_session_cache_mode(context, SSL_SESS_CACHE_OFF);
@@ -1015,8 +1013,11 @@ initialize_dh(SSL_CTX *context, bool isServerStart)
 				(errcode(ERRCODE_CONFIG_FILE_ERROR),
 				 (errmsg("DH: could not set DH parameters: %s",
 						 SSLerrmessage(ERR_get_error())))));
+		DH_free(dh);
 		return false;
 	}
+
+	DH_free(dh);
 	return true;
 }
 

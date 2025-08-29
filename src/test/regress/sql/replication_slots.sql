@@ -4,7 +4,7 @@
 select pg_create_physical_replication_slot('some_replication_slot');
 
 -- And I should see that my replication slot exists
-select pg_get_replication_slots();
+select * from pg_get_replication_slots() where not active;
 
 -- Cleanup:
 select pg_drop_replication_slot('some_replication_slot');
