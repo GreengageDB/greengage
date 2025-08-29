@@ -398,7 +398,9 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 	 */
 	foreach(lc, ds->allocatedGangs)
 	{
-		RecycleGang(lfirst(lc), ds->forceDestroyGang);
+		Gang *gp = lfirst(lc);
+
+		RecycleGang(gp, ds->forceDestroyGang);
 	}
 
 	ds->allocatedGangs = NIL;
@@ -514,7 +516,7 @@ cleanup_dispatcher_handle(dispatcher_handle_t *h)
 		return;
 	}
 
-	h->dispatcherState->forceDestroyGang = in_oom_error();
+	h->dispatcherState->forceDestroyGang = in_oom_error_trouble();
 
 	cdbdisp_destroyDispatcherState(h->dispatcherState);
 }

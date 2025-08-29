@@ -599,7 +599,7 @@ extern void DebugFileOpen(void);
 extern char *unpack_sql_state(int sql_state);
 extern bool in_error_recursion_trouble(void);
 
-bool in_oom_error(void);
+bool in_oom_error_trouble(void);
 void reset_oom_flag(void);
 
 #ifdef HAVE_SYSLOG

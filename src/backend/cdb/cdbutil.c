@@ -980,7 +980,7 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 
 destroy_segdb:
 
-	if (in_oom_error())
+	if (in_oom_error_trouble())
 	{
 		/* We'll destroy the gang anyway. Avoid allocations. */
 		cdbconn_freeSegmentDescriptor(segdbDesc);

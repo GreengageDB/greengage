@@ -174,7 +174,15 @@ static bool openlog_done = false;
 static char *syslog_ident = NULL;
 static int	syslog_facility = LOG_LOCAL0;
 
-static volatile bool in_oom = false;
+/* 
+ * GPDB:
+ * Workaround for dispatcher cleanup routines to know whether we should take a
+ * shortcut and avoid allocations.
+ *
+ * Set when ERRCODE_GP_MEMPROT_KILL is encountered, reset at the end of
+ * AbortTransaction().
+ */
+static bool in_oom_error = false;
 
 static void write_syslog(int level, const char *line);
 #endif
@@ -267,16 +275,20 @@ in_error_recursion_trouble(void)
 	return (recursion_depth > 2);
 }
 
+/* 
+ * GPDB:
+ * Are we currently handling an OOM error? See in_oom_error comments.
+ */
 bool
-in_oom_error(void)
+in_oom_error_trouble(void)
 {
-	return in_oom;
+	return in_oom_error;
 }
 
 void
 reset_oom_flag(void)
 {
-	in_oom = false;
+	in_oom_error = false;
 }
 
 /*
@@ -641,7 +653,7 @@ errfinish(int dummy __attribute__((unused)),...)
 		CritSectionCount = 0;	/* should be unnecessary, but... */
 
 		if (edata->sqlerrcode == ERRCODE_GP_MEMPROT_KILL)
-			in_oom = true;
+			in_oom_error = true;
 
 		/*
 		 * Note that we leave CurrentMemoryContext set to ErrorContext. The

@@ -3427,7 +3427,7 @@ AbortTransaction(void)
 	 * If memprot decides to kill process, make sure we destroy all processes
 	 * so that all mem/resource will be freed
 	 */
-	if (in_oom_error())
+	if (in_oom_error_trouble())
 	{
 		DisconnectAndDestroyAllGangs(true);
 		reset_oom_flag();
