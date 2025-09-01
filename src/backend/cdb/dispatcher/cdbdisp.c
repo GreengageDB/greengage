@@ -364,7 +364,6 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 
 	if (!ds)
 		return;
-
 #ifdef USE_ASSERT_CHECKING
 	Assert(!ds->isGangDestroying || ds->forceDestroyGang);
 	ds->isGangDestroying = true;
