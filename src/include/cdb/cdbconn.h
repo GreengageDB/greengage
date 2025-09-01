@@ -86,7 +86,7 @@ cdbconn_doConnectComplete(SegmentDatabaseDescriptor *segdbDesc);
  * Return false if there'er still leftovers.
  */
 bool cdbconn_discardResults(SegmentDatabaseDescriptor *segdbDesc,
-							int retryCount);
+		int retryCount);
 
 /* Return if it's a bad connection */
 bool cdbconn_isBadConnection(SegmentDatabaseDescriptor *segdbDesc);
