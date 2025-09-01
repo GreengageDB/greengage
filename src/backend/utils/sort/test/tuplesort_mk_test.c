@@ -16,6 +16,9 @@
 #define get_compare_function_for_ordering_op mock_get_compare_function_for_ordering_op
 #define ScanKeyEntryInitialize mock_ScanKeyEntryInitialize
 
+#define MAX_ATTRS 30
+#define MAX_TEST_STRING_LEN 1024
+
 void run_sort_test_fixed(int nattrs, int nkeys);
 void run_sort_test_varlena(int nattrs, int nkeys);
 text *make_test_string(int idx);
@@ -422,8 +425,6 @@ static const char *test_str_templates[] = {
 	"lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat ",
 };
 
-#define MAX_TEST_STRING_LEN 1024
-
 // From https://www.researchgate.net/publication/2683298_A_Collection_of_Selected_Pseudorandom_Number_Generators_With_Linear_Structures
 
 static int random_seed = 1013;
@@ -589,7 +590,6 @@ void run_sort_test_varlena(int nattrs, int nkeys)
     MemoryContextDelete(mcxt);	
 }
 
-#define MAX_ATTRS 30
 /*
  * Test: basic ascending sort of integers.
  */
@@ -627,9 +627,8 @@ test_sort_varlena(void **stateptr)
 const		UnitTest tests[] = {
 	unit_test(test_tuplesort_mk_readtup_heap_fail_len),
 	unit_test(test_tuplesort_mk_writetup_heap_fail_len),
-	// unit_test(test_basic_int_sort),
-	unit_test(test_sort_varlena),
-	// unit_test(test_fuzz_random)
+	unit_test(test_basic_int_sort),
+	unit_test(test_sort_varlena)
 };
 
 int
@@ -644,6 +643,14 @@ main(int argc, char *argv[])
 	PGPROC proc;
 	MyProc = &proc;
 
+	struct stat st = {0};
+	if (stat("base", &st) == -1) {
+		mkdir("base", 0700);
+	}
+
+	if (stat("base/pgsql_tmp", &st) == -1) {
+		mkdir("base/pgsql_tmp", 0700);
+	}
 
 	// Workfile manager uses locks
 	PGShmemHeader *shim = NULL;
