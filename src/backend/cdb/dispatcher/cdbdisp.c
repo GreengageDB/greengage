@@ -372,7 +372,7 @@ cdbdisp_destroyDispatcherState(CdbDispatcherState *ds)
 
 	if (!ds->isExtendedQuery)
 	{
-		numNonExtendedDispatcherState--;
+		numNonExtendedDispatcherState--;	
 		Assert(numNonExtendedDispatcherState == 0);
 	}
 
