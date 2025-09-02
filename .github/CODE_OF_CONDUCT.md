@@ -33,7 +33,7 @@ The Greengage DB project exists thanks to the voluntary contributions of its mem
 
 ## Appropriate Conduct
 
-No personal characteristics, including race, nationality, age, gender, religious beliefs, sexual orientation, etc., can serve as grounds for refusing to work for the benefit of the Greengage DB project or belittling your contribution to it. This code of conduct considers any attacks on a person unacceptable. These are the basic principles of communication in the community.
+No personal characteristics can serve as grounds for refusing to work for the benefit of the Greengage DB project or belittling your contribution to it. This code of conduct considers any attacks on a person unacceptable. These are the basic principles of communication in the community.
 
 Unacceptable behavior is any threat to use violence, damage social or professional reputation, expressed to an individual or a group of people. Threats to damage the Greengage DB project or its reputation or the implementation of such threats are also a violation of this code of conduct. Harassment of any kind and violation of the basic principles of communication are not tolerated in the Greengage DB community.
 
