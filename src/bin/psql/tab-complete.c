@@ -848,7 +848,7 @@ initialize_readline(void)
 
 
 /* Max number of previous words scanned for completion context. */
-enum { LOOKBACK_LIMIT = 20 };
+enum { LOOKBACK_LIMIT = 30 };
 
 /*
  * The completion function.
@@ -2297,14 +2297,10 @@ psql_completion(const char *text, int start, int end)
 		int ncols = extract_column_list(previous_words, LOOKBACK_LIMIT, &cols);
 
 		if (ncols > 0)
-		{
 			COMPLETE_WITH_LIST((const char * const *)cols);
-		}
 
 		for (int i = 0; i < ncols; i++)
-		{
 			free(cols[i]);
-		}
 		free(cols);
 	}
 	/* Complete PARTITION BY with LIST( | RANGE( */
@@ -4331,9 +4327,7 @@ ends_with_paren(const char *word)
 {
     size_t len;
     if (!word || (len = strlen(word)) == 0)
-	{
         return false;
-	}
     return word[len - 1] == ')';
 }
 
@@ -4347,21 +4341,15 @@ static bool previous_words_match2(char *words[], const char *key1,
 	int i = LOOKBACK_LIMIT - 1;
 
 	while (i >= 0 && (!words[i] || pg_strcasecmp(words[i], key1) != 0))
-	{
 		i--;
-	}
 
 	if (i < 0)
-	{
 		return false;
-	}
 
 	i--;
 
 	while (i >= 0 && (!words[i] || pg_strcasecmp(words[i], key2) != 0))
-	{
 		i--;
-	}
 
 	return i >= 0;
 }
@@ -4382,9 +4370,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 		const char *w = previous_words[i];
 
 		if (!w)
-		{
 			continue;
-		}
 
 		const char *lp = strchr(w, '(');
 		const char *rp = strrchr(w, ')');
@@ -4397,9 +4383,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 	}
 
 	if (!paren)
-	{
 		return 0;
-	}
 
 	/* Extract substring inside parentheses */
 	const char *lp = strchr(paren, '(');
@@ -4410,20 +4394,15 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 	/* Copy inside to temporary buffer for splitting by commas */
 	char *buf = (char*)malloc(inside_len + 1);
 	if (!buf)
-	{
 		return 0;
-	}
-	strncpy(buf, inside, inside_len);
-	buf[inside_len] = '\0';
+	strlcpy(buf, inside, inside_len + 1);
 
 	/* Upper bound for number of columns = commas + 1 */
 	int max_items = 1;
 	for (const char *p = buf; *p; p++)
 	{
 		if (*p == ',')
-		{
 			max_items++;
-		}
 	}
 
 	char **items = (char **)calloc((size_t)max_items, sizeof(char *));
@@ -4443,16 +4422,12 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 	{
 		/* Trim leading spaces */
 		while (*tok && isspace((unsigned char)*tok))
-		{
 			tok++;
-		}
 
 		/* Take until first whitespace */
 		char *end = tok;
 		while (*end && !isspace((unsigned char)*end))
-		{
 			end++;
-		}
 
 		if (end > tok)
 		{
@@ -4461,8 +4436,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 
 			if (items[count])
 			{
-				strncpy(items[count], tok, len);
-				items[count][len] = '\0';
+				strlcpy(items[count], tok, len + 1);
 				count++;
 			}
 		}
