@@ -37,7 +37,7 @@ No personal characteristics, including race, nationality, age, gender, religious
 
 Unacceptable behavior is any threat to use violence, damage social or professional reputation, expressed to an individual or a group of people. Threats to damage the Greengage DB project or its reputation or the implementation of such threats are also a violation of this code of conduct. Harassment of any kind and violation of the basic principles of communication are not tolerated in the Greengage DB community.
 
-In the event of receiving a warning about inappropriate behavior, it is necessary to immediately stop it. Subsequent violations of the Code of Conduct may serve as grounds for taking restrictive measures against the violator, up to and including exclusion from the community.
+In the event of receiving a warning about inappropriate behavior, it is necessary to immediately stop it. Subsequent violations of the Code of Conduct will serve as grounds for taking restrictive measures against the violator, up to and including exclusion from the community.
 
 ## Reporting
 
