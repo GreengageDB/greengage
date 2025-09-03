@@ -342,13 +342,6 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 
 	test_compare_fn = btint4cmp;
 
-    // Tuplesortstate_mk *sortstate = tuplesort_begin_heap_mk(&ss, tupdesc, nkeys, attNums,
-    //                                 sortOperators,
-    //                                 sortCollations,
-    //                                 nullsFirstFlags,
-    //                                 work_mem,
-    //                                 false /* randomAccess */);
-
 	Tuplesortstate_mk *sortstate = tuplesort_begin_heap_file_readerwriter_mk(
 		&ss,
 		"test_sort_mk",
@@ -398,7 +391,6 @@ void run_sort_test_fixed(int nattrs, int nkeys)
     tuplesort_performsort_mk(sortstate);
 
     /* Read back and verify ascending order */
-    // int prev = -1;
     for (i = 0; ; i++)
     {
         Datum *values = (Datum *)palloc0(sizeof(Datum) * nattrs);
