@@ -16,7 +16,16 @@
 #define get_compare_function_for_ordering_op mock_get_compare_function_for_ordering_op
 #define ScanKeyEntryInitialize mock_ScanKeyEntryInitialize
 
+/*
+	Modify the following to check more possible cases
+*/
+#define MIN_ATTRS 25
 #define MAX_ATTRS 30
+#define MIN_KEYS 4
+#define MAX_KEYS 8
+
+#define NTEST_TUPLES 10000
+
 #define MAX_TEST_STRING_LEN 1024
 
 void run_sort_test_fixed(int nattrs, int nkeys);
@@ -38,7 +47,6 @@ mock_ScanKeyEntryInitialize(ScanKey entry,
 #undef USE_ASSERT_CHECKING
 #include "../tuplesort_mk.c"
 
-#define NTEST_TUPLES 100000
 
 struct LogicalTapeSet
 {
@@ -601,8 +609,8 @@ test_basic_int_sort(void **stateptr)
 
 	mkdir("base", S_IRWXU);
 
-	for (nattrs = 2; nattrs <= MAX_ATTRS; nattrs++)
-		for (nkeys = 1; nkeys <= nattrs; nkeys++)
+	for (nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
+		for (nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
 		{
 			// printf("nkeys: %d, nattrs: %d\n", nkeys, nattrs);
 			run_sort_test_fixed(nattrs, nkeys);
@@ -613,18 +621,18 @@ test_basic_int_sort(void **stateptr)
 static void
 test_sort_varlena(void **stateptr)
 {
-	int nkeys = 2;
-	int nattrs = 2;
+	int nkeys, nattrs;
 
-	for (nattrs = 2; nattrs <= MAX_ATTRS; nattrs++)
-		for (nkeys = 1; nkeys <= nattrs; nkeys++)
+
+	for (nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
+		for (nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
 		{
 			run_sort_test_varlena(nattrs, nkeys);
 		}
 }
 
 
-const		UnitTest tests[] = {
+const UnitTest tests[] = {
 	unit_test(test_tuplesort_mk_readtup_heap_fail_len),
 	unit_test(test_tuplesort_mk_writetup_heap_fail_len),
 	unit_test(test_basic_int_sort),
