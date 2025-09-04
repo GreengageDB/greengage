@@ -4326,7 +4326,7 @@ static bool
 ends_with_paren(const char *word)
 {
     size_t len;
-    if (!word || (len = strlen(word)) == 0)
+    if (word == NULL || (len = strlen(word)) == 0)
         return false;
     return word[len - 1] == ')';
 }
@@ -4340,7 +4340,7 @@ static bool previous_words_match2(char *words[], const char *key1,
 {
 	int i = LOOKBACK_LIMIT - 1;
 
-	while (i >= 0 && (!words[i] || pg_strcasecmp(words[i], key1) != 0))
+	while (i >= 0 && (words[i] == NULL || pg_strcasecmp(words[i], key1) != 0))
 		i--;
 
 	if (i < 0)
@@ -4348,7 +4348,7 @@ static bool previous_words_match2(char *words[], const char *key1,
 
 	i--;
 
-	while (i >= 0 && (!words[i] || pg_strcasecmp(words[i], key2) != 0))
+	while (i >= 0 && (words[i] == NULL || pg_strcasecmp(words[i], key2) != 0))
 		i--;
 
 	return i >= 0;
@@ -4369,7 +4369,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 	{
 		const char *w = previous_words[i];
 
-		if (!w)
+		if (w == NULL)
 			continue;
 
 		const char *lp = strchr(w, '(');
@@ -4382,7 +4382,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 		}
 	}
 
-	if (!paren)
+	if (paren == NULL)
 		return 0;
 
 	/* Extract substring inside parentheses */
@@ -4392,22 +4392,18 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 	size_t inside_len = (size_t)(rp - inside);
 
 	/* Copy inside to temporary buffer for splitting by commas */
-	char *buf = (char*)malloc(inside_len + 1);
-	if (!buf)
-		return 0;
+	char *buf = (char*)pg_malloc(inside_len + 1);
 	strlcpy(buf, inside, inside_len + 1);
 
 	/* Upper bound for number of columns = commas + 1 */
 	int max_items = 1;
 	for (const char *p = buf; *p; p++)
-	{
 		if (*p == ',')
 			max_items++;
-	}
 
 	char **items = (char **)calloc((size_t)max_items, sizeof(char *));
 
-	if (!items)
+	if (items == NULL)
 	{
 		free(buf);
 		return 0;
@@ -4432,13 +4428,9 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 		if (end > tok)
 		{
 			size_t len = (size_t)(end - tok);
-			items[count] = (char*)malloc(len + 1);
-
-			if (items[count])
-			{
-				strlcpy(items[count], tok, len + 1);
-				count++;
-			}
+			items[count] = (char*)pg_malloc(len + 1);
+			strlcpy(items[count], tok, len + 1);
+			count++;
 		}
 	}
 
