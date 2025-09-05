@@ -652,8 +652,11 @@ errfinish(int dummy __attribute__((unused)),...)
 
 		CritSectionCount = 0;	/* should be unnecessary, but... */
 
-		if (edata->sqlerrcode == ERRCODE_GP_MEMPROT_KILL)
+		if (edata->sqlerrcode == ERRCODE_GP_MEMPROT_KILL ||
+			edata->sqlerrcode == ERRCODE_OUT_OF_MEMORY)
+		{
 			in_oom_error = true;
+		}
 
 		/*
 		 * Note that we leave CurrentMemoryContext set to ErrorContext. The
