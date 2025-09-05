@@ -980,15 +980,7 @@ cdbcomponent_recycleIdleQE(SegmentDatabaseDescriptor *segdbDesc, bool forceDestr
 
 destroy_segdb:
 
-	if (in_oom_error_trouble())
-	{
-		/* We'll reset the session anyway. Avoid allocations. */
-		cdbconn_freeSegmentDescriptor(segdbDesc);
-	}
-	else
-	{
-		cdbconn_termSegmentDescriptor(segdbDesc);
-	}
+	cdbconn_termSegmentDescriptor(segdbDesc);
 
 	if (isWriter)
 	{
