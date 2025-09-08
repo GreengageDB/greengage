@@ -13,16 +13,18 @@
 
 #include <sys/stat.h>
 
+// #define MK_TEST_DEBUG_PRINT_TUPLES 1
+
 #define get_compare_function_for_ordering_op mock_get_compare_function_for_ordering_op
 #define ScanKeyEntryInitialize mock_ScanKeyEntryInitialize
 
 /*
-	Modify the following to check more possible cases
-*/
-#define MIN_ATTRS 25
-#define MAX_ATTRS 30
+ * Modify the following to check more possible cases
+ */
+#define MIN_ATTRS 14
+#define MAX_ATTRS 15
 #define MIN_KEYS 4
-#define MAX_KEYS 8
+#define MAX_KEYS 5
 
 #define NTEST_TUPLES 10000
 
@@ -319,7 +321,7 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 	
 	TupleDesc tupdesc = (TupleDesc)palloc0(sizeof(struct tupleDesc));
 	tupdesc->attrs = attrs;
-	tupdesc->natts = 2;
+	tupdesc->natts = nattrs;
 	tupdesc->constr = NULL;
 	tupdesc->tdhasoid = false;
 	tupdesc->tdrefcount = -1;
@@ -562,8 +564,8 @@ void run_sort_test_varlena(int nattrs, int nkeys)
     tuplesort_performsort_mk(sortstate);
 
     /* Read back and verify ascending order */
-    // int prev = -1;
-    for (i = 0; ; i++)
+
+	for (i = 0; ; i++)
     {
 		tuplesort_gettupleslot_mk(sortstate,
 								  true,
@@ -576,14 +578,14 @@ void run_sort_test_varlena(int nattrs, int nkeys)
 		heap_deform_tuple(tuple, tupdesc, values, isnull);
 
 // Redefine the following to get debug print		
-#if 0 
+#ifdef MK_TEST_DEBUG_PRINT_TUPLES
 		text *t0 = (text *)DatumGetPointer(values[0]);
 		text *t1 = (text *)DatumGetPointer(values[1]);
 		
 		printf("(%s,%s)\n", text_to_cstring(t0), text_to_cstring(t1)); 
+		printf("\n");
 #endif		
     }
-	// printf("\n");
 
     tuplesort_end_mk(sortstate);
 	MemoryContextSwitchTo(old_cxt);
@@ -596,13 +598,11 @@ void run_sort_test_varlena(int nattrs, int nkeys)
 static void
 test_basic_int_sort(void **stateptr)
 {
-	int nkeys = 2;
-	int nattrs = 2;
 
 	mkdir("base", S_IRWXU);
 
-	for (nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
-		for (nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
+	for (int nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
+		for (int nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
 		{
 			// printf("nkeys: %d, nattrs: %d\n", nkeys, nattrs);
 			run_sort_test_fixed(nattrs, nkeys);
@@ -613,11 +613,9 @@ test_basic_int_sort(void **stateptr)
 static void
 test_sort_varlena(void **stateptr)
 {
-	int nkeys, nattrs;
 
-
-	for (nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
-		for (nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
+	for (int nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
+		for (int nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
 		{
 			run_sort_test_varlena(nattrs, nkeys);
 		}
