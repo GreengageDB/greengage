@@ -27,4 +27,4 @@ override_dh_auto_install:
 		$(MAKE) dist DESTDIR=$(CURDIR)/debian/tmp GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" PARALLEL_MAKE_OPTS=-j$(shell nproc)
 
 override_dh_gencontrol:
-	dh_gencontrol -pgpdb -- -VpythonRequires="$(DEPS)"
+	dh_gencontrol -pggdb -- -VpythonRequires="$(DEPS)"
