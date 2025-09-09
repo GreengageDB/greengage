@@ -30,13 +30,13 @@
 
 #define MAX_TEST_STRING_LEN 1024
 
-void run_sort_test_fixed(int nattrs, int nkeys);
-void run_sort_test_varlena(int nattrs, int nkeys);
-text *make_test_string(int idx);
-int random_sequence(int key);
-Datum test_textcmp(PG_FUNCTION_ARGS);
+static void run_sort_test_fixed(int nattrs, int nkeys);
+static void run_sort_test_varlena(int nattrs, int nkeys);
+static text *make_test_string(int idx);
+static int random_sequence(int key);
+static Datum test_textcmp(PG_FUNCTION_ARGS);
 
-void
+static void
 mock_ScanKeyEntryInitialize(ScanKey entry,
 					   int flags,
 					   AttrNumber attributeNumber,
@@ -72,7 +72,7 @@ mock_get_compare_function_for_ordering_op(Oid opno, Oid *cmpfunc, bool *reverse)
 	return true;
 }
 
-Datum
+static Datum
 test_textcmp(PG_FUNCTION_ARGS)
 {
 	text*		a = DatumGetTextP(PG_GETARG_DATUM(0));
@@ -83,7 +83,7 @@ test_textcmp(PG_FUNCTION_ARGS)
 
 static PGFunction test_compare_fn = btint4cmp;
 
-void
+static void
 mock_ScanKeyEntryInitialize(ScanKey entry,
 					   int flags,
 					   AttrNumber attributeNumber,
@@ -288,9 +288,8 @@ test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 	assert_true(error_thrown);
 }
 
-void run_sort_test_fixed(int nattrs, int nkeys)
+static void run_sort_test_fixed(int nattrs, int nkeys)
 {
-	int i;
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "test_shm_mq worker");
 
     MemoryContext mcxt = AllocSetContextCreate(CurrentMemoryContext,
@@ -302,7 +301,7 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 
 	FormData_pg_attribute *attributes = (FormData_pg_attribute *)palloc0(sizeof(FormData_pg_attribute) * nattrs);
 	Form_pg_attribute *attrs = (Form_pg_attribute *)palloc0(sizeof(Form_pg_attribute) * nattrs);
-	for (i = 0; i < nattrs; i++) 
+	for (int i = 0; i < nattrs; i++) 
 	{
 		attributes[i].attrelid = InvalidOid;
 		sprintf(attributes[i].attname.data, "att%d", i);
@@ -361,7 +360,7 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 	Datum		*values = (Datum *)palloc0(sizeof(Datum) * nattrs);
 	bool		*isnull = (bool *)palloc0(sizeof(bool) * nattrs);
 
-	for (i = 0; i < nattrs; i++)
+	for (int i = 0; i < nattrs; i++)
 	{
 		values[i] = Int32GetDatum(0);
 		isnull[i] = false;
@@ -376,7 +375,7 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 	slot->PRIVATE_tts_values = values;
 
     /* Insert tuples in reverse order */
-    for (i = NTEST_TUPLES; i > 0; i--)
+    for (int i = NTEST_TUPLES; i > 0; i--)
     {
 		for (int j = 0; j < nattrs; j++)
 		{
@@ -391,7 +390,7 @@ void run_sort_test_fixed(int nattrs, int nkeys)
     tuplesort_performsort_mk(sortstate);
 
     /* Read back and verify ascending order */
-    for (i = 0; ; i++)
+    for (int i = 0; ; i++)
     {
         Datum *values = (Datum *)palloc0(sizeof(Datum) * nattrs);
         bool *isnull = (bool *)palloc0(sizeof(bool) * nattrs);
@@ -424,12 +423,12 @@ static const char *test_str_templates[] = {
 
 static int random_seed = 1013;
 
-int random_sequence(int key)
+static int random_sequence(int key)
 {
     return (3141592621u*key + 2718281829u) % 1000000007u;
 }
 
-text *
+static text *
 make_test_string(int idx)
 {
 	char buffer[MAX_TEST_STRING_LEN];
@@ -450,10 +449,8 @@ make_test_string(int idx)
 	return ret_text;
 }
 
-void run_sort_test_varlena(int nattrs, int nkeys)
+static void run_sort_test_varlena(int nattrs, int nkeys)
 {
-	int i;
-
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "test_shm_mq worker");
 
     MemoryContext mcxt = AllocSetContextCreate(CurrentMemoryContext,
@@ -465,7 +462,7 @@ void run_sort_test_varlena(int nattrs, int nkeys)
 
 	FormData_pg_attribute *attributes = (FormData_pg_attribute *)palloc0(sizeof(FormData_pg_attribute) * nattrs);
 	Form_pg_attribute *attrs = (Form_pg_attribute *)palloc0(sizeof(Form_pg_attribute) * nattrs);
-	for (i = 0; i < nattrs; i++) 
+	for (int i = 0; i < nattrs; i++) 
 	{
 		attributes[i].attrelid = InvalidOid;
 		sprintf(attributes[i].attname.data, "att%d", i);
@@ -525,7 +522,7 @@ void run_sort_test_varlena(int nattrs, int nkeys)
 	Datum		*values = (Datum *)palloc0(sizeof(Datum) * nattrs);
 	bool		*isnull = (bool *)palloc0(sizeof(bool) * nattrs);
 
-	for (i = 0; i < nattrs; i++)
+	for (int i = 0; i < nattrs; i++)
 	{
 		values[i] = Int32GetDatum(0);
 		isnull[i] = false;
@@ -540,7 +537,7 @@ void run_sort_test_varlena(int nattrs, int nkeys)
 	slot->PRIVATE_tts_values = values;
 
     /* Insert tuples in reverse order */
-    for (i = NTEST_TUPLES; i > 0; i--)
+    for (int i = NTEST_TUPLES; i > 0; i--)
     {
 		for (int j = 0; j < nattrs; j++)
 		{			
@@ -558,7 +555,7 @@ void run_sort_test_varlena(int nattrs, int nkeys)
 
     /* Read back and verify ascending order */
 
-	for (i = 0; ; i++)
+	for (int i = 0; ; i++)
     {
 		tuplesort_gettupleslot_mk(sortstate,
 								  true,
