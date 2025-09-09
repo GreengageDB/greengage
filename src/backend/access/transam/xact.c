@@ -3423,10 +3423,7 @@ AbortTransaction(void)
 		cdbcomponent_cleanupIdleQEs(false);
 	}
 
-	/*
-	 * If memprot decides to kill process, make sure we destroy all processes
-	 * so that all mem/resource will be freed
-	 */
+	/* It's an OOM error. Get rid of all gangs and their resources. */
 	if (in_oom_error_trouble())
 	{
 		DisconnectAndDestroyAllGangs(true);

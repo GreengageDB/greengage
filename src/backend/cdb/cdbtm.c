@@ -1086,7 +1086,12 @@ rollbackDtxTransaction(void)
 		return;
 	}
 
-	doNotifyingAbort();
+	/* We don't have enough memory for dispatch. */
+	if (!in_oom_error_trouble())
+	{
+		doNotifyingAbort();
+	}
+
 	clearAndResetGxact();
 
 	return;
