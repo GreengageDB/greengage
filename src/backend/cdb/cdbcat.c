@@ -151,146 +151,119 @@ createForeignTablePartitionedPolicy(ForeignTable *ft)
 {
 	Assert(ft->exec_location == FTEXECLOCATION_ALL_SEGMENTS);
 
-	ForeignServer *server = GetForeignServer(ft->serverid);
-	List	   *policykeys = NIL;
-	List	   *policyopclasses = NIL;
+	/*
+	 * Go over all table attributes and find out if there are any attributes
+	 * marked as distribution keys. The order of the distribution keys is
+	 * important, as it affects the final hash that is used to locate the
+	 * proper segment. User can affect the order by setting
+	 * 'insert_dist_by_key_weight' option to a column (the value set by the
+	 * user is always not negative). If weight is not set by the user, we use
+	 * the order of appearance in pg_attribute.
+	 *
+	 * So, the final order of the distribution keys is: 1. all attributes that
+	 * have explicit weight, sorted by their weight ascendingly; 2. then all
+	 * other attributes in the order they were set during the table creation.
+	 *
+	 * In order to facilitate the required order, we firstly store
+	 * distribution keys in an ordered list 'ft_distr_keys', where sorting is
+	 * done in the descending order by internal weight, which is set to
+	 * 'PG_INT32_MAX - weight' for the user-defined weight, and to '-1 *
+	 * attnum' for other columns. And the final list of distribution policy
+	 * key is restored basing on this list.
+	 */
 
-	/* TODO: verify about exec_location of FWD itself */
-	if (server->exec_location == FTEXECLOCATION_ALL_SEGMENTS)
+	typedef struct
 	{
-		/*
-		 * Go over all table attributes and find out if there are any
-		 * attributes marked as distribution keys. The order of the
-		 * distribution keys is important, as it affects the final hash that
-		 * is used to locate the proper segment. User can affect the order by
-		 * setting 'insert_dist_by_key_weight' option to a column (the value
-		 * set by the user is always not negative). If weight is not set by the
-		 * user, we use the order of appearance in pg_attribute.
-		 *
-		 * So, the final order of the distribution keys is: 1. all
-		 * attributes that have explicit weight, sorted by
-		 * their weight ascendingly; 2. then all other attributes in the order
-		 * they were set during the table creation.
-		 *
-		 * In order to facilitate the required order, we firstly store
-		 * distribution keys in an ordered list 'ft_distr_keys', where sorting
-		 * is done in the descending order by internal weight, which is set
-		 * to 'PG_INT32_MAX - weight' for the user-defined weight, and
-		 * to '-1 *  attnum' for other columns. And the final list of
-		 * distribution policy key is restored basing on this list.
-		 */
+		int32		weight;
+		Form_pg_attribute attr;
+	}			FTDistributionKey;
 
-		typedef struct
+	Relation	rel = heap_open(ft->relid, AccessShareLock);
+	List	   *ft_distr_keys = NIL;
+	int			i;
+
+	for (i = 1; i <= rel->rd_att->natts; i++)
+	{
+		Form_pg_attribute attr = rel->rd_att->attrs[i - 1];
+
+		/* Skip dropped attributes. */
+		if (attr->attisdropped)
+			continue;
+
+		/* Find out if the column should be used for distribution. */
+		int32		distr_weight = -i;
+		List	   *options = GetForeignColumnOptions(ft->relid, attr->attnum);
+		bool		is_distr_column = SeparateOutDistByKey(&options);
+		int32		weight = SeparateOutDistByKeyWeight(&options);
+
+		if (weight >= 0)
+			distr_weight = PG_INT32_MAX - weight;
+
+		/* Insert according to the weight into the ordered list. */
+		if (is_distr_column)
 		{
-			int32		weight;
-			Form_pg_attribute attr;
-		}			FTDistributionKey;
+			FTDistributionKey *ftkey = (FTDistributionKey *)
+			palloc(sizeof(*ftkey));
 
-		Relation	rel = heap_open(ft->relid, AccessShareLock);
-		List	   *ft_distr_keys = NIL;
-		ListCell   *lc;
-		int			i;
+			ftkey->weight = distr_weight;
+			ftkey->attr = attr;
 
-		for (i = 1; i <= rel->rd_att->natts; i++)
-		{
-			Form_pg_attribute attr = rel->rd_att->attrs[i - 1];
-
-			/* Skip dropped attributes. */
-			if (attr->attisdropped)
-				continue;
-
-			/* Find out if the column should be used for distribution. */
-			bool		is_distr_column = false;
-			int32		distr_weight = -i;
-			List	   *options = GetForeignColumnOptions(ft->relid,
-														  attr->attnum);
-
-			foreach(lc, options)
+			/* Does the element belong at the front? */
+			if ((ft_distr_keys == NIL) ||
+				(ftkey->weight >
+				 ((FTDistributionKey *) linitial(ft_distr_keys))->weight))
+				ft_distr_keys = lcons(ftkey, ft_distr_keys);
+			else
 			{
-				DefElem    *def = (DefElem *) lfirst(lc);
+				/* No, so find the entry it belongs after. */
+				ListCell   *prev = list_head(ft_distr_keys);
 
-				if ((strcmp(def->defname, "insert_dist_by_key") == 0) &&
-					defGetBoolean(def))
-					is_distr_column = true;
-
-				if (strcmp(def->defname, "insert_dist_by_key_weight") == 0)
+				for (;;)
 				{
-					int32		weight = pg_atoi(defGetString(def),
-												 sizeof(int32), 0);
+					ListCell   *curr = lnext(prev);
 
-					if (weight < 0)
+					if (ftkey->weight ==
+						((FTDistributionKey *) lfirst(prev))->weight)
 						ereport(ERROR,
 								(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
-								 errmsg("Negative values are not allowed for "
-							  "'insert_dist_by_key_weight' column option")));
-
-					distr_weight = PG_INT32_MAX - weight;
-				}
-			}
-
-			/* Insert according to the weight into the ordered list. */
-			if (is_distr_column)
-			{
-				FTDistributionKey *ftkey =
-				(FTDistributionKey *) palloc(sizeof(*ftkey));
-
-				ftkey->weight = distr_weight;
-				ftkey->attr = attr;
-
-				/* Does the element belong at the front? */
-				if ((ft_distr_keys == NIL) ||
-					(ftkey->weight >
-					 ((FTDistributionKey *) linitial(ft_distr_keys))->weight))
-					ft_distr_keys = lcons(ftkey, ft_distr_keys);
-				else
-				{
-					/* No, so find the entry it belongs after. */
-					ListCell   *prev = list_head(ft_distr_keys);
-
-					for (;;)
-					{
-						ListCell   *curr = lnext(prev);
-
-						if (ftkey->weight ==
-							((FTDistributionKey *) lfirst(prev))->weight)
-							ereport(ERROR,
-								 (errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
 							   errmsg("Duplicate values are not allowed for "
-							  "'insert_dist_by_key_weight' column option")));
+									  "column distribution key weight")));
 
-						if (curr == NULL ||
-							ftkey->weight >
-							((FTDistributionKey *) lfirst(curr))->weight)
-							break;
+					if (curr == NULL ||
+						ftkey->weight >
+						((FTDistributionKey *) lfirst(curr))->weight)
+						break;
 
-						prev = curr;
-					}
-					/* Insert datum into list after 'prev' */
-					lappend_cell(ft_distr_keys, prev, ftkey);
+					prev = curr;
 				}
+				/* Insert datum into list after 'prev' */
+				lappend_cell(ft_distr_keys, prev, ftkey);
 			}
 		}
-
-		/*
-		 * After we have iterated over all attributes, create the final
-		 * distribution keys list.
-		 */
-		foreach(lc, ft_distr_keys)
-		{
-			FTDistributionKey *ftkey = (FTDistributionKey *) lfirst(lc);
-			Form_pg_attribute attr = ftkey->attr;
-			int16		attnum = attr->attnum;
-			Oid			type_oid = attr->atttypid;
-			Oid			keyopclass = cdb_get_opclass_for_column_def(NIL,
-																	type_oid);
-
-			policykeys = lappend_int(policykeys, attnum);
-			policyopclasses = lappend_oid(policyopclasses, keyopclass);
-		}
-		list_free_deep(ft_distr_keys);
-
-		heap_close(rel, NoLock);
 	}
+
+	/*
+	 * After we have iterated over all attributes, create the final
+	 * distribution keys list.
+	 */
+	List	   *policykeys = NIL;
+	List	   *policyopclasses = NIL;
+	ListCell   *lc;
+
+	foreach(lc, ft_distr_keys)
+	{
+		FTDistributionKey *ftkey = (FTDistributionKey *) lfirst(lc);
+		Form_pg_attribute attr = ftkey->attr;
+		int16		attnum = attr->attnum;
+		Oid			type_oid = attr->atttypid;
+		Oid			keyopclass = cdb_get_opclass_for_column_def(NIL, type_oid);
+
+		policykeys = lappend_int(policykeys, attnum);
+		policyopclasses = lappend_oid(policyopclasses, keyopclass);
+	}
+	list_free_deep(ft_distr_keys);
+
+	heap_close(rel, NoLock);
 
 	if (policykeys != NIL)
 		return createHashPartitionedPolicy(policykeys,
