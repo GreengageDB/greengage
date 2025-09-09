@@ -367,8 +367,6 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 		isnull[i] = false;
 	}
 
-	// HeapTuple tuple = heap_form_tuple(&tupdesc, values, isnull);
-
 	TupleTableSlot *slot = MakeTupleTableSlot();
 	ExecSetSlotDescriptor(slot, tupdesc);
 
@@ -408,14 +406,9 @@ void run_sort_test_fixed(int nattrs, int nkeys)
 		HeapTuple tuple = ExecFetchSlotHeapTuple(slot);
 		heap_deform_tuple(tuple, tupdesc, values, isnull);
 
-		// int v0 = DatumGetInt32(values[0]);
-		// int v1 = DatumGetInt32(values[1]);
-		
-		// printf("(%d,%d)", v0, v1);
 		pfree(values);
 		pfree(isnull);
     }
-	// printf("\n");
 
     tuplesort_end_mk(sortstate);
 	MemoryContextSwitchTo(old_cxt);
@@ -604,7 +597,6 @@ test_basic_int_sort(void **stateptr)
 	for (int nattrs = MIN_ATTRS; nattrs <= MAX_ATTRS; nattrs++)
 		for (int nkeys = MIN_KEYS; nkeys <= Min(nattrs, MAX_KEYS); nkeys++)
 		{
-			// printf("nkeys: %d, nattrs: %d\n", nkeys, nattrs);
 			run_sort_test_fixed(nattrs, nkeys);
 		}
 }
