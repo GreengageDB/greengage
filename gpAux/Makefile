@@ -367,7 +367,8 @@ DATE_RFC := $(shell date -R)
 
 changelog : debian/changelog
 debian/changelog: version-vars
-	@echo "gpdb ($(PACKAGE_VERSION)) $(STABILITY); urgency=low" > $@
+	PACKAGE_NAME=$$(grep '^Package:' debian/control | head -1 | awk '{print $$2}'); \
+	echo "$$PACKAGE_NAME ($(PACKAGE_VERSION)) $(STABILITY); urgency=low" > $@
 	@echo "" >> $@
 	@echo "  * $(BUILD_TYPE)" >> $@
 	@echo "" >> $@
