@@ -346,50 +346,57 @@ endif
 # Packaging targets with changelog options
 #---------------------------------------------------------------------
 
-../VERSION:
+# Metadata vars
+PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
+MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
+DATE_RFC := $(shell date -R)
+
+../VERSION :
 	@echo "Update $@"
 	../getversion > $@
 	@cat $@
 
-version-vars: ../VERSION
+version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
 	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
 
-debian/install: version-vars
-	@echo "$(patsubst /%,%,$(GPROOT))/$(GPDIR)/* $(patsubst /%,%,$(GPROOT))/$(GPDIR)/" > $@
-
-# Get other metadata
-MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
-DATE_RFC := $(shell date -R)
-
-changelog : debian/changelog
-debian/changelog: version-vars
-	PACKAGE_NAME=$$(grep '^Package:' debian/control | head -1 | awk '{print $$2}'); \
-	echo "$$PACKAGE_NAME ($(PACKAGE_VERSION)) $(STABILITY); urgency=low" > $@
-	@echo "" >> $@
-	@echo "  * $(BUILD_TYPE)" >> $@
-	@echo "" >> $@
-	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> $@
-
-version-info: version-vars
+version-info : version-vars
 	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
 	@echo "FULL_VERSION: $(FULL_VERSION)"
 	@echo "IS_RELEASE: $(IS_RELEASE)"
 	@echo "STABILITY: $(STABILITY)"
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
+# Generate package control files
+changelog : debian/changelog
+debian/changelog : version-vars
+	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(STABILITY); urgency=low" > $@
+	@echo "" >> $@
+	@echo "  * $(BUILD_TYPE)" >> $@
+	@echo "" >> $@
+	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> $@
+
+debian/docs :
+	@echo "../COPYRIGHT" > $@
+	@echo "../LICENSE" >> $@
+	@echo "../NOTICE" >> $@
+	@echo "../README.md" >> $@
+
+debian/install:
+	@echo "$(PACKAGE_NAME)/* /" > $@
+
 # Default packaging target
 pkg : pkg-deb
 
 # Build Debian package
-pkg-deb : GPROOT = /opt/greengage
-pkg-deb : GPDIR  = ggdb
-pkg-deb : debian/install debian/changelog
-	@echo "Building with GPROOT=$(GPROOT), GPDIR=$(GPDIR), CONFIGFLAGS=$(CONFIGFLAGS)"
-	@GPROOT="$(GPROOT)" GPDIR="$(GPDIR)" debuild --preserve-envvar=GPROOT --preserve-envvar=GPDIR -us -uc -b
+pkg-deb : GGROOT = /opt/greengagedb
+pkg-deb : GPDIR  = $(PACKAGE_NAME)
+pkg-deb : debian/changelog debian/docs debian/install
+	@echo "Building with GGROOT=$(GGROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
+	@GGROOT="$(GGROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
 
 .PHONY: pkg pkg-deb changelog version-vars version-info
 
