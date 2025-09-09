@@ -25,6 +25,7 @@
 #include "postmaster/postmaster.h"
 #include "tcop/tcopprot.h"
 #include "utils/int8.h"
+#include "utils/session_state.h"
 #include "utils/sharedsnapshot.h"
 #include "tcop/pquery.h"
 
@@ -812,6 +813,7 @@ GpResetSessionIfNeeded(void)
 		gp_session_id = newSessionId;
 		gp_command_count = 0;
 		MyProc->queryCommandId = 0;
+		MySessionState->latestCursorCommandId = 0;
 		pgstat_report_sessionid(newSessionId);
 
 		/* Update the slotid for our singleton reader. */
