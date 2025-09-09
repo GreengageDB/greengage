@@ -273,15 +273,20 @@ static char *to_nlower(const char *str, size_t max) {
 }
 
 static bool str_contains(const char *chars, const char *str) {
-  for (const char *i = str; *i; i++) {
-    for (const char *j = chars; *j; j++) {
-      if (*i == *j) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+    char *chars_copy;
+    char *token;
+    /* Make a copy of chars since strtok modifies the string */
+    chars_copy = pstrdup(chars);
+    
+    token = strtok(chars_copy, ",");
+    while (token != NULL) {
+        if (strstr(str, token) != NULL) {
+            return true;
+        }
+        token = strtok(NULL, ",");
+    }    
+    pfree(chars_copy);
+    return false;
 }
 
 static void check_str_counters(const char *str, int *lower, int *upper,

@@ -151,3 +151,16 @@ CREATE USER aa;
 ERROR:  username does not contain the configured credcheck.username_min_digit characters (1)
 DROP USER aa;
 ERROR:  role "aa" does not exist
+SET credcheck.username_contain TO 'ba,c';
+DROP USER IF EXISTS "b$auser1";
+NOTICE:  role "b$auser1" does not exist, skipping
+CREATE USER "b$auser1" WITH PASSWORD 'dummy';
+ERROR:  username does not contain the configured credcheck.username_contain characters: ba,c
+DROP USER IF EXISTS "ba$user1";
+NOTICE:  role "ba$user1" does not exist, skipping
+CREATE USER "ba$user1" WITH PASSWORD 'dummy';
+DROP USER IF EXISTS "ba$user1";
+DROP USER IF EXISTS "c$user1";
+NOTICE:  role "c$user1" does not exist, skipping
+CREATE USER "c$user1" WITH PASSWORD 'dummy';
+DROP USER IF EXISTS "c$user1";

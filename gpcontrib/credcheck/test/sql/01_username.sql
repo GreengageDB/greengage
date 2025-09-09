@@ -116,3 +116,13 @@ DROP USER "a$user1";
 CREATE USER aa;
 DROP USER aa;
 
+SET credcheck.username_contain TO 'ba,c';
+DROP USER IF EXISTS "b$auser1";
+CREATE USER "b$auser1" WITH PASSWORD 'dummy';
+DROP USER IF EXISTS "ba$user1";
+CREATE USER "ba$user1" WITH PASSWORD 'dummy';
+DROP USER IF EXISTS "ba$user1";
+DROP USER IF EXISTS "c$user1";
+CREATE USER "c$user1" WITH PASSWORD 'dummy';
+DROP USER IF EXISTS "c$user1";
+
