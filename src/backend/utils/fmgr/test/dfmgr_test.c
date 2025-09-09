@@ -68,6 +68,20 @@ errdetail_internal_impl(const char* fmt, ...)
 	return 0;
 }
 
+bool __wrap_in_oom_error_trouble(void);
+void __wrap_reset_oom_flag(void);
+
+bool
+__wrap_in_oom_error_trouble(void)
+{
+	return false;
+}
+
+void
+__wrap_reset_oom_flag(void)
+{
+}
+
 #include "../dfmgr.c"
 
 #define EXPECT_EREPORT(LOG_LEVEL)     \

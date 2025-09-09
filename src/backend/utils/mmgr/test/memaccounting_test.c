@@ -50,6 +50,20 @@ int fwrite_mock(const char *data, Size size, Size count, FILE *file);
 
 void write_stderr_mock(const char *fmt,...);
 
+bool __wrap_in_oom_error_trouble(void);
+void __wrap_reset_oom_flag(void);
+
+bool
+__wrap_in_oom_error_trouble(void)
+{
+	return false;
+}
+
+void
+__wrap_reset_oom_flag(void)
+{
+}
+
 #include "../memaccounting.c"
 
 #include "utils/memaccounting_private.h"
