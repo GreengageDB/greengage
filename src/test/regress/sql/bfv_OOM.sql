@@ -9,12 +9,14 @@ CREATE EXTENSION gp_inject_fault;
 
 CREATE TEMP TABLE t1();
 
-SELECT gp_inject_fault('cdb_freelist_append_oom', 'skip', dbid)
+-- Emulate an OOM error and throw FATAL on any palloc() call.
+SELECT gp_inject_fault('cdb_freelist_append_oom', 'skip', dbid),
+       gp_inject_fault('fatal_on_palloc', 'skip', dbid)
   FROM gp_segment_configuration
   WHERE role = 'p' AND content = -1;
 
--- Emulate an OOM inside cdbdisp_destroyDispatcherState(). We should gracefully
--- recover instead of trying entering recursion or getting SIGSEGV.
+-- We should gracefully recover instead of entering recursion, getting SIGSEGV,
+-- or trying to allocate any more memory.
 DO $$
   DECLARE
     rec1 RECORD;

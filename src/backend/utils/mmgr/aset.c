@@ -89,6 +89,7 @@
 #include <inttypes.h>
 #include "postgres.h"
 
+#include "utils/faultinjector.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
 #include "utils/memaccounting.h"
@@ -1163,6 +1164,15 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 	int			fidx;
 	Size		chunk_size;
 	Size		blksize;
+
+#ifdef FAULT_INJECTOR
+	if (in_oom_error_trouble() &&
+		CurrentMemoryContext != ErrorContext &&
+		SIMPLE_FAULT_INJECTOR("fatal_on_palloc") == FaultInjectorTypeSkip)
+	{
+		elog(FATAL, "Game Over");
+	}
+#endif
 
 	AssertArg(AllocSetIsValid(set));
 #ifdef USE_ASSERT_CHECKING
