@@ -1,6 +1,13 @@
-# Greengage CI Workflow
+# ⚠️ Important Notice
 
-This repository contains the main CI pipeline for the Greengage project, orchestrating the build, test, and upload stages for containerized environments. The pipeline is designed to be flexible, with parameterized inputs for version and target operating systems, allowing it to adapt to different branches and configurations.
+Whenever the list of **NAMES of required jobs** in the workflow (including any **reusable workflows**) is **added, removed, or renamed**, you must contact a repository administrator to update the **Branch Protection Rules** accordingly.  
+Without this, new, deleted, or renamed jobs will not be recognized as required when checking Pull Requests.
+
+---
+
+## Greengage CI Workflow
+
+This directory contains the CI pipelines for the Greengage project, orchestrating the build, test, and upload stages for containerized environments. The pipeline is designed to be flexible, with parameterized inputs for version and target operating systems, allowing it to adapt to different branches and configurations.
 
 ## Overview
 
