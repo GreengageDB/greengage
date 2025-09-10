@@ -1086,7 +1086,7 @@ rollbackDtxTransaction(void)
 		return;
 	}
 
-	/* We don't have enough memory for dispatch. */
+	/* Do we have enough memory for the dispatch? */
 	if (!in_oom_error_trouble())
 	{
 		doNotifyingAbort();
