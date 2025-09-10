@@ -12,19 +12,19 @@
 #undef PG_RE_THROW
 #define PG_RE_THROW() siglongjmp(*PG_exception_stack, 1)
 
+#define errfinish errfinish_impl
+static int
+errfinish_impl(int dummy __attribute__((unused)),...)
+{
+	PG_RE_THROW();
+}
+
 bool __wrap_in_oom_error_trouble(void);
 
 bool
 __wrap_in_oom_error_trouble(void)
 {
 	return false;
-}
-
-#define errfinish errfinish_impl
-static int
-errfinish_impl(int dummy __attribute__((unused)),...)
-{
-	PG_RE_THROW();
 }
 
 #include "../postgres.c"
