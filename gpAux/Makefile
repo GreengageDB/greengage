@@ -379,12 +379,6 @@ debian/changelog : version-vars
 	@echo "" >> $@
 	@echo " -- $(MAINTAINER)  $(DATE_RFC)" >> $@
 
-debian/docs :
-	@echo "../COPYRIGHT" > $@
-	@echo "../LICENSE" >> $@
-	@echo "../NOTICE" >> $@
-	@echo "../README.md" >> $@
-
 debian/install:
 	@echo "$(PACKAGE_NAME)/* /" > $@
 
@@ -394,7 +388,7 @@ pkg : pkg-deb
 # Build Debian package
 pkg-deb : GGROOT = /opt/greengagedb
 pkg-deb : GPDIR  = $(PACKAGE_NAME)
-pkg-deb : debian/changelog debian/docs debian/install
+pkg-deb : debian/changelog debian/install
 	@echo "Building with GGROOT=$(GGROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
 	@GGROOT="$(GGROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
 
