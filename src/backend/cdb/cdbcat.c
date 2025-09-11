@@ -24,7 +24,6 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_exttable.h"
 #include "catalog/pg_opclass.h"
-#include "commands/defrem.h"
 #include "cdb/cdbcat.h"
 #include "cdb/cdbhash.h"
 #include "cdb/cdbrelsize.h"
