@@ -43,11 +43,12 @@ RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
 FROM base as code
 # Use --exclude, when it will be available in stable syntax.
 COPY . gpdb_src
-RUN make -C gpdb_src/gpAux ../VERSION ; rm -rf gpdb_src/.git/
+RUN rm -rf gpdb_src/.git/
 
 FROM base as test
 COPY --from=code /home/gpadmin/gpdb_src gpdb_src
 COPY --from=build /home/gpadmin/bin_gpdb /home/gpadmin/bin_gpdb
+COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 
 # Install entab used by pgindent utility.
 # This should be done using gpdb sources.
