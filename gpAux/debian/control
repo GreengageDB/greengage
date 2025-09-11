@@ -8,11 +8,13 @@ Build-Depends: debhelper (>= 13),
 Package: greengage
 Architecture: any
 Depends: ${shlibs:Depends},
+	 iproute2,
 	 iputils-ping,
 	 less,
 	 openssh-client,
 	 openssh-server,
 	 openssl,
+	 python2,
 	 rsync,
 	 zip,
 	 net-tools,
