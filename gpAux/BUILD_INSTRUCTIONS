@@ -29,8 +29,6 @@ To build a Debian package, you will also need the following tools:
   devscripts  Debian/Ubuntu package for Debian packaging scripts
   debhelper   Debian/Ubuntu package for Debian package helper scripts
   dh-python   Debian/Ubuntu package for Python-specific Debian packaging
-  ninja-build  Debian/Ubuntu package for Ninja build system
-  python-pip  Debian/Ubuntu package for Python package installer
 
 To build the Greengage Database, run GNU make with the following options:
 
