@@ -33,7 +33,6 @@ operating systems:
   - Regression tests
   - Orca tests
   - Resource group tests
-
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to `main` (retags to `latest`) and tags (uses tag
   like `6.28.2`) after build.
