@@ -2273,6 +2273,15 @@ psql_completion(const char *text, int start, int end)
 
 		COMPLETE_WITH_LIST(list_TEMP);
 	}
+	/* Complete "CREATE GLOBAL|LOCAL TEMPORARY" with TABLE */
+	else if (pg_strcasecmp(prev3_wd, "CREATE") == 0 &&
+			 pg_strcasecmp(prev_wd, "TEMPORARY") == 0)
+	{
+		static const char *const list_TEMPORARY[] =
+		{"TABLE", "MATERIALIZED VIEW", NULL};
+
+		COMPLETE_WITH_LIST(list_TEMPORARY);
+	}
 	/* Complete "CREATE UNLOGGED" with TABLE */
 	else if (pg_strcasecmp(prev2_wd, "CREATE") == 0 &&
 			 pg_strcasecmp(prev_wd, "UNLOGGED") == 0)
