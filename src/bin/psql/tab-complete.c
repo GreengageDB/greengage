@@ -2329,7 +2329,8 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_CONST("SUBPARTITION");
 	}
 	/* Complete CREATE TABLE with common clause options */
-	else if (previous_words_match2(previous_words, "CREATE", "TABLE"))
+	else if (previous_words_match2(previous_words, "CREATE", "TABLE") &&
+			 pg_strcasecmp(prev_wd, "TABLE") != 0)
 	{
 		static const char *const list_CREATE_TABLE[] =
 		{
