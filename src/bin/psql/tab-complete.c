@@ -2286,7 +2286,7 @@ psql_completion(const char *text, int start, int end)
 	else if (pg_strcasecmp(prev_wd, "DISTRIBUTED") == 0)
 	{
 		static const char *const list_DISTRIBUTED[] =
-		{"BY(", "RANDOMLY", "REPLICATED"};
+		{"BY(", "RANDOMLY", "REPLICATED", NULL};
 		COMPLETE_WITH_LIST(list_DISTRIBUTED);
 	}
 	/* DISTRIBUTED BY (...). Suggest table column names inside parentheses */
@@ -2308,20 +2308,20 @@ psql_completion(const char *text, int start, int end)
 	else if (pg_strcasecmp(prev2_wd, "PARTITION") == 0 &&
 			 pg_strcasecmp(prev_wd, "BY") == 0)
 	{
-		static const char *const list_PARTITION_BY[] = {"LIST(", "RANGE("};
+		static const char *const list_PARTITION_BY[] = {"LIST(", "RANGE(", NULL};
 		COMPLETE_WITH_LIST(list_PARTITION_BY);
 	}
 	/* Complete SUBPARTITION with BY | TEMPLATE */
 	else if (pg_strcasecmp(prev_wd, "SUBPARTITION") == 0)
 	{
-		static const char *const list_SUBPARTITION[] = {"BY", "TEMPLATE"};
+		static const char *const list_SUBPARTITION[] = {"BY", "TEMPLATE", NULL};
 		COMPLETE_WITH_LIST(list_SUBPARTITION);
 	}
 	/* Complete SUBPARTITION BY with LIST( | RANGE( */
 	else if (pg_strcasecmp(prev2_wd, "SUBPARTITION") == 0 &&
 			 pg_strcasecmp(prev_wd, "BY") == 0)
 	{
-		static const char *const list_SUBPARTITION_BY[] = {"LIST(", "RANGE("};
+		static const char *const list_SUBPARTITION_BY[] = {"LIST(", "RANGE(", NULL};
 		COMPLETE_WITH_LIST(list_SUBPARTITION_BY);
 	}
 	/* Complete PARTITION BY with SUBPARTITION */
@@ -4427,7 +4427,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 		if (*p == ',')
 			max_items++;
 
-	char **items = (char **)calloc((size_t)max_items, sizeof(char *));
+	char **items = (char **)calloc((size_t)max_items + 1, sizeof(char *));
 
 	if (items == NULL)
 	{
@@ -4459,6 +4459,7 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 			count++;
 		}
 	}
+	items[count] = NULL;
 
 	free(buf);
 
