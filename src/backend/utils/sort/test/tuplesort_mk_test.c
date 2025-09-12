@@ -75,10 +75,18 @@ mock_get_compare_function_for_ordering_op(Oid opno, Oid *cmpfunc, bool *reverse)
 static Datum
 test_textcmp(PG_FUNCTION_ARGS)
 {
-	text*		a = DatumGetTextP(PG_GETARG_DATUM(0));
-	text*		b = DatumGetTextP(PG_GETARG_DATUM(1));
+	text*		a = PG_GETARG_TEXT_PP(0);
+	text*		b = PG_GETARG_TEXT_PP(1);
 
-	PG_RETURN_INT32(strcmp(text_to_cstring(a), text_to_cstring(b)));
+	char *pa = text_to_cstring(a);
+	char *pb = text_to_cstring(b);
+
+	int ret = strcmp(pa, pb);
+
+	pfree(pa);
+	pfree(pb);
+
+	PG_RETURN_INT32(ret);
 }
 
 static PGFunction test_compare_fn = btint4cmp;
@@ -113,6 +121,9 @@ mock_ScanKeyEntryInitialize(ScanKey entry,
 	finfo->fn_retset = false;
 }
 
+/*
+ * Check that readtup_heap reports an error if len is zero
+ */
 static void
 test_tuplesort_mk_readtup_heap_fail_len(void **test_state)
 {
@@ -197,6 +208,9 @@ test_tuplesort_mk_readtup_heap_fail_len(void **test_state)
 	assert_true(error_thrown);
 }
 
+/*
+ * Check that writetup_heap reports an error if len is zero
+*/
 static void
 test_tuplesort_mk_writetup_heap_fail_len(void **test_state)
 {
@@ -389,7 +403,7 @@ static void run_sort_test_fixed(int nattrs, int nkeys)
 
     tuplesort_performsort_mk(sortstate);
 
-    /* Read back and verify ascending order */
+    /* Read back tuples */
     for (int i = 0; ; i++)
     {
         Datum *values = (Datum *)palloc0(sizeof(Datum) * nattrs);
@@ -553,7 +567,7 @@ static void run_sort_test_varlena(int nattrs, int nkeys)
 
     tuplesort_performsort_mk(sortstate);
 
-    /* Read back and verify ascending order */
+    /* Read back */
 
 	for (int i = 0; ; i++)
     {
@@ -583,7 +597,9 @@ static void run_sort_test_varlena(int nattrs, int nkeys)
 }
 
 /*
- * Test: basic ascending sort of integers.
+ * Test: basic ascending sort of fixed length tuples of ints. 
+ * This test uses different numbers of attributes and keys, so different
+ * positions of tuple in the block is checked.
  */
 static void
 test_basic_int_sort(void **stateptr)
@@ -599,6 +615,11 @@ test_basic_int_sort(void **stateptr)
 }
 
 
+/*
+ * Test: basic ascending sort of variable length tuples of varlena. 
+ * This test uses different numbers of attributes and keys, so different
+ * positions of tuple in the block is checked.
+ */
 static void
 test_sort_varlena(void **stateptr)
 {
