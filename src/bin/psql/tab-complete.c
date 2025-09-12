@@ -2331,20 +2331,63 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* Complete CREATE TABLE with common clause options */
 	else if (previous_words_match2(previous_words, "CREATE", "TABLE") &&
-			 pg_strcasecmp(prev_wd, "TABLE") != 0 &&
-			 !has_unclosed_paren(previous_words, LOOKBACK_LIMIT))
+			 pg_strcasecmp(prev_wd, "TABLE") != 0)
 	{
-		static const char *const list_CREATE_TABLE[] =
+		if (has_unclosed_paren(previous_words, LOOKBACK_LIMIT))
 		{
-			"IF NO EXISTS",
-			"INHERITS(",
-			"WITH(",
-			"ON COMMIT",
-			"TABLESPACE",
-			"DISTRIBUTED",
-			"PARTITION BY"
-		};
-		COMPLETE_WITH_LIST(list_CREATE_TABLE);
+			// Inside parentheses – complete with column data types
+			static const char *const list_COLUMN_TYPE[] =
+			{
+				// Numeric Types
+				"SMALLINT",
+				"INTEGER",
+				"BIGINT",
+				"DECIMAL",
+				"NUMERIC",
+				"REAL",
+				"DOUBLE PRECISION",
+				"SMALLSERIAL",
+				"SERIAL",
+				"BIGSERIAL",
+				// Monetary Types
+				"MONEY",
+				// Character Types
+				"CHARACTER",
+				"VARYING(",
+				"VARCHAR",
+				"CHAR(",
+				"BPCHAR(",
+				"BPCHAR",
+				"TEXT",
+				// Binary Data Types
+				"BYTEA",
+				// Date/Time Types
+				"TIMESTAMP",
+				"DATE",
+				"TIME",
+				"INTERVAL",
+				// Boolean Type
+				"BOOLEAN",
+				NULL
+			};
+			COMPLETE_WITH_LIST(list_COLUMN_TYPE);
+		}
+		else
+		{
+			// Outside parentheses – complete with CREATE TABLE statements
+			static const char *const list_CREATE_TABLE[] =
+			{
+				"IF NO EXISTS",
+				"INHERITS(",
+				"WITH(",
+				"ON COMMIT",
+				"TABLESPACE",
+				"DISTRIBUTED",
+				"PARTITION BY",
+				NULL
+			};
+			COMPLETE_WITH_LIST(list_CREATE_TABLE);
+		}
 	}
 
 /* CREATE TABLESPACE */
