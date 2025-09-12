@@ -816,6 +816,7 @@ static PGresult *exec_query(const char *query);
 
 static void get_previous_words(int point, char **previous_words, int nwords);
 static bool ends_with_paren(const char *word);
+static bool has_unclosed_paren(char* const *previous_words, int nwords);
 static bool previous_words_match2(char *words[], const char *key1,
 								const char *key2);
 static int extract_column_list(char* const *previous_words,
@@ -2330,7 +2331,8 @@ psql_completion(const char *text, int start, int end)
 	}
 	/* Complete CREATE TABLE with common clause options */
 	else if (previous_words_match2(previous_words, "CREATE", "TABLE") &&
-			 pg_strcasecmp(prev_wd, "TABLE") != 0)
+			 pg_strcasecmp(prev_wd, "TABLE") != 0 &&
+			 !has_unclosed_paren(previous_words, LOOKBACK_LIMIT))
 	{
 		static const char *const list_CREATE_TABLE[] =
 		{
@@ -4330,6 +4332,29 @@ ends_with_paren(const char *word)
     if (word == NULL || (len = strlen(word)) == 0)
         return false;
     return word[len - 1] == ')';
+}
+
+/*
+ * Return true if previous_words[] contains a bare "(" token.
+ * Scans left-to-right, skips NULL and empty entries, and stops at the
+ * first exact match. This is a lightweight heuristic for tab-completion:
+ * it does not track nesting or matching ")"; it only detects that an
+ * opening parenthesis token has appeared in the recent token stream.
+ */
+static bool
+has_unclosed_paren(char* const *previous_words, int nwords)
+{
+	for (int i = 0; i < nwords; i++)
+	{
+		const char *w = previous_words[i];
+
+		if (w == NULL || *w == '\0')
+			continue;
+
+		if (w[0] == '(' && w[1] == '\0')
+			return true;
+	}
+	return false;
 }
 
 /*
