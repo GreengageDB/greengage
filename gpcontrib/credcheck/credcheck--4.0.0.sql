@@ -100,7 +100,6 @@ REVOKE ALL ON FUNCTION pg_banned_role_reset() FROM PUBLIC;
 REVOKE ALL ON FUNCTION pg_banned_role_reset(name) FROM PUBLIC;
 
 -- Add event trigger for valid until warning
-DROP FUNCTION warning_valid_until();
 CREATE OR REPLACE FUNCTION warning_valid_until()
   RETURNS event_trigger AS
 $$
