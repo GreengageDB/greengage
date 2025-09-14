@@ -247,6 +247,7 @@ createForeignTablePartitionedPolicy(ForeignTable *ft)
 	 */
 	List	   *policykeys = NIL;
 	List	   *policyopclasses = NIL;
+	bool	   all_types_hashable = true;
 	ListCell   *lc;
 
 	foreach(lc, ft_distr_keys)
@@ -255,7 +256,28 @@ createForeignTablePartitionedPolicy(ForeignTable *ft)
 		Form_pg_attribute attr = ftkey->attr;
 		int16		attnum = attr->attnum;
 		Oid			type_oid = attr->atttypid;
-		Oid			keyopclass = cdb_get_opclass_for_column_def(NIL, type_oid);
+		Oid			keyopclass = InvalidOid;
+
+		if (gp_use_legacy_hashops)
+			keyopclass = get_legacy_cdbhash_opclass_for_base_type(type_oid);
+
+		if (!keyopclass)
+			keyopclass = cdb_default_distribution_opclass_for_type(type_oid);
+
+		/*
+		 * Provide a warning to the user that the column can't be used for the
+		 * table distribution. We do not break the loop here in order to show
+		 * all warnings to the user at once.
+		 */
+		if (!OidIsValid(keyopclass))
+		{
+			elog(WARNING,
+				 "Columns with geometric or user-defined data types are not "
+				 "eligible as Greengage distribution key columns (type '%s')",
+				 format_type_be(type_oid));
+
+			all_types_hashable = false;
+		}
 
 		policykeys = lappend_int(policykeys, attnum);
 		policyopclasses = lappend_oid(policyopclasses, keyopclass);
@@ -264,7 +286,7 @@ createForeignTablePartitionedPolicy(ForeignTable *ft)
 
 	heap_close(rel, NoLock);
 
-	if (policykeys != NIL)
+	if (policykeys != NIL && all_types_hashable)
 		return createHashPartitionedPolicy(policykeys,
 										   policyopclasses,
 										   getgpsegmentCount());
