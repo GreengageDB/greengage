@@ -361,6 +361,7 @@ AORelRemoveHashEntry(Oid relid)
 	void	   *aoentry;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH);
+	Assert(LWLockHeldExclusiveByMe(AOSegFileLock));
 
 	aoentry = hash_search(AppendOnlyHash,
 						  (void *) &key,
@@ -396,6 +397,7 @@ AORelRemoveHashEntryForDB(Oid dbid, Oid relid)
 	void	   *aoentry;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH);
+	Assert(LWLockHeldExclusiveByMe(AOSegFileLock));
 
 	aoentry = hash_search(AppendOnlyHash,
 						  (void *) &key,
@@ -428,6 +430,7 @@ AORelLookupHashEntry(Oid relid)
 	AORelHashEntryData *aoentry;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH);
+	Assert(LWLockHeldExclusiveByMe(AOSegFileLock));
 
 	key.dbid = MyDatabaseId;
 	key.relid = relid;
@@ -519,6 +522,7 @@ AppendOnlyRelHashNew(Oid relid, bool *exists)
 	Oid dbid = MyDatabaseId;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH);
+	Assert(LWLockHeldExclusiveByMe(AOSegFileLock));
 
 	/*
 	 * We do not want to exceed the max number of allowed entries since we
