@@ -1859,8 +1859,10 @@ UpdateMasterAosegTotals(Relation parentrel, int segno, int64 tupcount, int64 mod
 	 * same trick for the aoseg table since MVCC protects us there in case we
 	 * abort.
 	 */
+	acquire_lightweight_lock();
 	aoHashEntry = AORelGetHashEntry(RelationGetRelid(parentrel));
 	aoHashEntry->relsegfiles[segno].tupsadded += tupcount;
+	release_lightweight_lock();
 
 	UnregisterSnapshot(appendOnlyMetaDataSnapshot);
 }
