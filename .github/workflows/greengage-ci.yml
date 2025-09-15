@@ -139,6 +139,5 @@ jobs:
       target_os: ${{ matrix.target_os }}
       test_lima:   ''           # Lima Template (e.g., ubuntu-22.04) for deploy test. Skip if empty
       test_docker: ubuntu:22.04 # Docker Image  (e.g., ubuntu:22.04, ubuntu:noble) for deploy test. Skip if empty
-      rebuild_builder: false    # Force rebuild builder even if it already exists
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
