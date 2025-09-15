@@ -41,4 +41,5 @@ apt-get install -y \
   python2 \
   python2-dev \
   rsync \
+  sudo \
   zlib1g-dev
