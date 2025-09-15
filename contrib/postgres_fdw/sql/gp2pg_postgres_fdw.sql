@@ -793,6 +793,50 @@ EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
 DROP FOREIGN TABLE ftest_distr_hashed;
 
 --
+-- Check plan (without Redistribute motion), with weights set to min and max allowed values
+--
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '0'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2147483647'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- Plan should NOT contain Redistribute motion
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
+-- Check weight set to a value more than allowed
+--
+CREATE FOREIGN TABLE ftest_distr_hashed(
+	c1 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '0'),
+	c2 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2'),
+	c3 int OPTIONS (insert_dist_by_key 'true', insert_dist_by_key_weight '2147483648'),
+	c4 int OPTIONS (insert_dist_by_key 'true'),
+	c5 int OPTIONS (insert_dist_by_key 'true'),
+	c6 int OPTIONS (insert_dist_by_key 'true'),
+	c7 int,
+	c8 int,
+	c9 int,
+	c10 int
+) SERVER pgserver
+OPTIONS(schema_name 'S 1', table_name 'test_distr', mpp_execute 'all segments');
+
+-- We should get an error
+EXPLAIN (COSTS OFF) INSERT INTO ftest_distr_hashed SELECT * FROM test_internal;
+
+DROP FOREIGN TABLE ftest_distr_hashed;
+
+--
 -- Check NG cases (with Redistribute motion or with error)
 --
 
