@@ -5,6 +5,9 @@
 
 #include "../appendonlywriter.c"
 
+#include "utils/memutils.h"
+#include "storage/pg_shmem.h"
+
 static void
 test__AppendOnlyRelHashNew_replace_unused_entry(void **state)
 {
@@ -72,7 +75,9 @@ test__AppendOnlyRelHashNew_replace_unused_entry(void **state)
 	/*
 	 * TEST
 	 */
+	acquire_lightweight_lock();
 	AORelHashEntry actual = AppendOnlyRelHashNew(0, &exists);
+	release_lightweight_lock();
 
 	/*
 	 * make sure we get our entry back
@@ -110,7 +115,9 @@ test__AppendOnlyRelHashNew_existing_entry(void **state)
 	/*
 	 * TEST
 	 */
+	acquire_lightweight_lock();
 	AppendOnlyRelHashNew(0, &exists);
+	release_lightweight_lock();
 
 	/*
 	 * We got existing entry
@@ -167,7 +174,9 @@ test__AppendOnlyRelHashNew_give_up(void **state)
 	/*
 	 * TEST
 	 */
+	acquire_lightweight_lock();
 	AORelHashEntry actual = AppendOnlyRelHashNew(0, &exists);
+	release_lightweight_lock();
 
 	/*
 	 * give up, no entry created, and no existing one found
@@ -191,6 +200,17 @@ main(int argc, char *argv[])
 		unit_test(test__AppendOnlyRelHashNew_existing_entry),
 		unit_test(test__AppendOnlyRelHashNew_give_up),
 	};
+
+	MemoryContextInit();
+
+	DataDir = ".";
+	MaxBackends = 5;
+
+	PGShmemHeader *shim = NULL;
+
+	InitShmemAccess(PGSharedMemoryCreate(300000, 6000, &shim));
+	InitShmemAllocation();
+	CreateLWLocks();
 
 	return run_tests(tests);
 }
