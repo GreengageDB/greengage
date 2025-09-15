@@ -26,9 +26,19 @@ override_dh_auto_build:
 	@echo "Skipping autobuild"
 
 override_dh_auto_install:
+	@if [ ! -f /.dockerenv ] && ! grep -q '/docker/' /proc/1/cgroup 2>/dev/null; then \
+		if [ "$$SKIP_DOCKER_CHECK" = "1" ]; then \
+			echo "WARNING: Build running OUTSIDE Docker. Continuing anyway (SKIP_DOCKER_CHECK=1)"; \
+		else \
+			echo "FATAL: Build running OUTSIDE Docker container"; \
+			echo "This will CLEAR real directory GGROOT=$(GGROOT)/$(GPDIR)!"; \
+			echo "Use Docker for safe build. Aborting to avoid data loss. (Set SKIP_DOCKER_CHECK=1 to ignore)"; \
+			exit 1; \
+		fi; \
+	fi
 	@echo "=== Building and installing with GGROOT=$(GGROOT), GPDIR=$(GPDIR) PACKAGE_NAME=$(PACKAGE_NAME) ==="
 	env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS \
-		$(MAKE) dist GPROOT="$(CURDIR)/debian/tmp/$(PACKAGE_NAME)/$(GGROOT)" GPDIR="$(GPDIR)" PARALLEL_MAKE_OPTS=-j$(shell nproc)
+		sudo $(MAKE) dist DESTDIR="$(CURDIR)/debian/tmp/$(PACKAGE_NAME)" GPROOT=$(GGROOT) GPDIR="$(GPDIR)" PARALLEL_MAKE_OPTS=-j$(shell nproc)
 
 override_dh_gencontrol:
 	@echo "=== GENCONTROL GGROOT=$(GGROOT), GPDIR=$(GPDIR) ==="
