@@ -6337,7 +6337,13 @@ ATAocsWriteNewColumns(AlteredTableInfo *tab)
 		 * relation so we are guaranteed to not drop the hash
 		 * entry from under any concurrent operation.
 		 */
+#ifdef USE_ASSERT_CHECKING
+		LWLockAcquire(AOSegFileLock, LW_EXCLUSIVE);
+#endif
 		AORelRemoveHashEntry(RelationGetRelid(rel));
+#ifdef USE_ASSERT_CHECKING
+		LWLockRelease(AOSegFileLock);
+#endif
 	}
 
 	FreeExecutorState(estate);
