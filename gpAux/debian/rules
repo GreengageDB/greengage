@@ -2,22 +2,23 @@
 # Run command: `make -C ./gpdb_src/gpAux pkg-deb`
 
 DH_VERBOSE = 1
-export DH_OPTIONS=-v
-export DEB_BUILD_OPTIONS=nocheck
-LSB_SI=$(shell lsb_release -si)
-LSB_SR=$(shell lsb_release -sr)
+export DH_OPTIONS = -v
+export DEB_BUILD_OPTIONS = nocheck
+
+LSB_SI := $(shell lsb_release -si)
+LSB_SR := $(shell lsb_release -sr)
 
 ifeq ($(LSB_SI),Ubuntu)
-    ifeq ($(LSB_SR),22.04)
-        DEPS=python2.7
-    endif
+  ifeq ($(LSB_SR),22.04)
+    DEPS = python2.7
+  endif
 endif
 
 %:
 	dh $@
 
 override_dh_auto_clean:
-	echo "Skipping clean"
+	@echo "Skipping clean"
 
 override_dh_auto_configure:
 	@echo "Skipping configure"
@@ -26,20 +27,14 @@ override_dh_auto_build:
 	@echo "Skipping autobuild"
 
 override_dh_auto_install:
-	@if [ ! -f /.dockerenv ] && ! grep -q '/docker/' /proc/1/cgroup 2>/dev/null; then \
-		if [ "$$SKIP_DOCKER_CHECK" = "1" ]; then \
-			echo "WARNING: Build running OUTSIDE Docker. Continuing anyway (SKIP_DOCKER_CHECK=1)"; \
-		else \
-			echo "FATAL: Build running OUTSIDE Docker container"; \
-			echo "This will CLEAR real directory GGROOT=$(GGROOT)/$(GPDIR)!"; \
-			echo "Use Docker for safe build. Aborting to avoid data loss. (Set SKIP_DOCKER_CHECK=1 to ignore)"; \
-			exit 1; \
-		fi; \
-	fi
-	@echo "=== Building and installing with GGROOT=$(GGROOT), GPDIR=$(GPDIR) PACKAGE_NAME=$(PACKAGE_NAME) ==="
+	@echo "=== Building and installing with GGROOT=$(GGROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
 	env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS \
-		sudo $(MAKE) dist DESTDIR="$(CURDIR)/debian/tmp/$(PACKAGE_NAME)" GPROOT=$(GGROOT) GPDIR="$(GPDIR)" PARALLEL_MAKE_OPTS=-j$(shell nproc)
+	$(MAKE) dist \
+		DESTDIR=$(CURDIR)/debian/tmp/$(PACKAGE_NAME) \
+		GPROOT=$(GGROOT) \
+		GPDIR=$(GPDIR) \
+		PARALLEL_MAKE_OPTS=-j$(shell nproc)
 
 override_dh_gencontrol:
-	@echo "=== GENCONTROL GGROOT=$(GGROOT), GPDIR=$(GPDIR) ==="
+	@echo "=== GENCONTROL GGROOT=$(GGROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
 	dh_gencontrol -p$(PACKAGE_NAME) -- -VpythonRequires="$(DEPS)"
