@@ -146,6 +146,21 @@ extern bool GpPolicyEqualByName(const TupleDesc ltd, const GpPolicy *lpol,
 extern GpPolicy *GpPolicyFetch(Oid tbloid);
 
 /*
+ * GpPolicyFetchExtended
+ *
+ * Looks up the distribution policy of given relation from
+ * gp_distribution_policy table (or by implicit rules for external tables)
+ * Returns an GpPolicy object, allocated in the current memory context,
+ * containing the information.
+ * for_insert parameter controls special case for foreign tables.
+ *
+ * The caller is responsible for passing in a valid relation oid.  This
+ * function does not check, and assigns a policy of type POLICYTYPE_ENTRY
+ * for any oid not found in gp_distribution_policy.
+ */
+extern GpPolicy *GpPolicyFetchExtended(Oid tbloid, bool for_insert);
+
+/*
  * GpPolicyStore: sets the GpPolicy for a table.
  */
 extern void GpPolicyStore(Oid tbloid, const GpPolicy *policy);
