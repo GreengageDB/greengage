@@ -3,8 +3,7 @@ Maintainer: Greengage <greengage@greengagedb.org>
 Section: database
 Build-Depends: debhelper (>= 13),
 	 dh-python,
-	 lsb-release,
-	 sudo
+	 lsb-release
 
 Package: greengage
 Architecture: any
