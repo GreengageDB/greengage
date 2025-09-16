@@ -396,8 +396,8 @@ pkg-deb : debian/changelog debian/install
 	@find $(CURDIR)/../ -maxdepth 1 -type f \( -name "*.deb" \
 											-o -name "*.ddeb" \
 											-o -name "*.build" \
-											-o -name "*.buildinfo" \) \
-											-o -name "*.changes" \
+											-o -name "*.buildinfo" \
+											-o -name "*.changes" \) \
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
 .PHONY: pkg pkg-deb changelog version-vars version-info
