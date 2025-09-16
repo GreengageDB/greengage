@@ -350,6 +350,7 @@ endif
 PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print $$2}')
 MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 DATE_RFC := $(shell date -R)
+ARTIFACTS_DIR := $(CURDIR)/../Package
 
 ../VERSION :
 	@echo "Update $@"
@@ -391,6 +392,13 @@ pkg-deb : GPDIR  = $(PACKAGE_NAME)
 pkg-deb : debian/changelog debian/install
 	@echo "Building with GGROOT=$(GGROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
 	@GGROOT="$(GGROOT)" GPDIR="$(GPDIR)" PACKAGE_NAME="$(PACKAGE_NAME)" debuild --preserve-env -us -uc -b
+	@mkdir -p $(ARTIFACTS_DIR)
+	@find $(CURDIR)/../ -maxdepth 1 -type f \( -name "*.deb" \
+											-o -name "*.ddeb" \
+											-o -name "*.build" \
+											-o -name "*.buildinfo" \) \
+											-o -name "*.changes" \
+											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
 .PHONY: pkg pkg-deb changelog version-vars version-info
 
