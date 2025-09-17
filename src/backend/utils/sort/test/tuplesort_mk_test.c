@@ -83,8 +83,8 @@ test_textcmp(PG_FUNCTION_ARGS)
 
 	int ret = strcmp(pa, pb);
 
-	pfree(pa);
-	pfree(pb);
+	PG_FREE_IF_COPY(pa, 0);
+	PG_FREE_IF_COPY(pb, 1);
 
 	PG_RETURN_INT32(ret);
 }
