@@ -1170,7 +1170,7 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 		CurrentMemoryContext != ErrorContext &&
 		SIMPLE_FAULT_INJECTOR("fatal_on_palloc") == FaultInjectorTypeSkip)
 	{
-		elog(FATAL, "Game Over");
+		elog(FATAL, "memory allocated while handling an OOM error");
 	}
 #endif
 
