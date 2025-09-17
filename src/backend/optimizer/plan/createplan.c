@@ -7241,7 +7241,7 @@ append_initplan_for_function_scan(PlannerInfo *root, Path *best_path, Plan *plan
 	subroot = (PlannerInfo *) palloc(sizeof(PlannerInfo));
 	memcpy(subroot, root, sizeof(PlannerInfo));
 	subroot->query_level++;
-	subroot->parent_root = root;
+	subroot->parent_root = NULL;
 	/* reset subplan-related stuff */
 	subroot->plan_params = NIL;
 	subroot->init_plans = NIL;
@@ -7265,6 +7265,8 @@ append_initplan_for_function_scan(PlannerInfo *root, Path *best_path, Plan *plan
 	 * result rows in tuplestore instead of a scalar param
 	 */
 	prm = SS_make_initplan_from_plan(subroot, (Plan *)initplan, InvalidOid, -1, InvalidOid, true);
+
+	subroot->parent_root = root;
 
 	fsplan->param = prm;
 	fsplan->resultInTupleStore = true;
