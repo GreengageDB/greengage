@@ -3425,14 +3425,13 @@ AbortTransaction(void)
 
 	/* It's an OOM error. Get rid of all gangs and their resources. */
 	if (in_oom_error_trouble())
-	{
 		DisconnectAndDestroyAllGangs(true);
-		reset_oom_flag();
-	}
 
 	/* Release resource group slot at the end of a transaction */
 	if (ShouldUnassignResGroup())
 		UnassignResGroup();
+
+	reset_oom_flag();
 }
 
 /*
