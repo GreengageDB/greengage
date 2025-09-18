@@ -179,8 +179,7 @@ static int	syslog_facility = LOG_LOCAL0;
  * Workaround for dispatcher cleanup routines to know whether we should take a
  * shortcut and avoid allocations.
  *
- * Set when ERRCODE_GP_MEMPROT_KILL is encountered, reset at the end of
- * AbortTransaction().
+ * Set when OOM error is encountered, reset at the end of AbortTransaction().
  */
 static bool in_oom_error = false;
 
