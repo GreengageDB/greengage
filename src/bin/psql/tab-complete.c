@@ -2388,6 +2388,13 @@ psql_completion(const char *text, int start, int end)
 					"INTERVAL",
 					// Boolean Type
 					"BOOLEAN",
+					// Keywords
+					"PRIMARY KEY",
+					"NOT NULL",
+					"CONSTRAINT",
+					"CHECK",
+					"REFERENCES",
+					"WITHOUT TIME ZONE",
 					NULL
 				};
 				COMPLETE_WITH_LIST(list_COLUMN_TYPE);
