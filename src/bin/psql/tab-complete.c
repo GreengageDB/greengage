@@ -2358,6 +2358,9 @@ psql_completion(const char *text, int start, int end)
 				"SMALLSERIAL",
 				"SERIAL",
 				"BIGSERIAL",
+				"INT2",
+				"INT4",
+				"INT8",
 				// Monetary Types
 				"MONEY",
 				// Character Types
