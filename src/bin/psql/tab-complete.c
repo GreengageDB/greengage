@@ -817,6 +817,8 @@ static PGresult *exec_query(const char *query);
 static void get_previous_words(int point, char **previous_words, int nwords);
 static bool ends_with_paren(const char *word);
 static bool has_unclosed_paren(char* const *previous_words, int nwords);
+static int
+count_open_paren_tokens(char* const *previous_words, int nwords);
 static bool previous_words_match2(char *words[], const char *key1,
 								const char *key2);
 static int extract_column_list(char* const *previous_words,
@@ -2344,45 +2346,52 @@ psql_completion(const char *text, int start, int end)
 	{
 		if (has_unclosed_paren(previous_words, LOOKBACK_LIMIT))
 		{
-			// Inside parentheses – complete with column data types
-			static const char *const list_COLUMN_TYPE[] =
+			// A single opening parenthesis indicates that we are in
+			// the table column-definition context. Column types
+			// should be completed here.
+			if (count_open_paren_tokens(previous_words, LOOKBACK_LIMIT) == 1)
 			{
-				// Numeric Types
-				"SMALLINT",
-				"INTEGER",
-				"BIGINT",
-				"DECIMAL",
-				"NUMERIC",
-				"REAL",
-				"DOUBLE PRECISION",
-				"SMALLSERIAL",
-				"SERIAL",
-				"BIGSERIAL",
-				"INT2",
-				"INT4",
-				"INT8",
-				// Monetary Types
-				"MONEY",
-				// Character Types
-				"CHARACTER",
-				"VARYING(",
-				"VARCHAR",
-				"CHAR(",
-				"BPCHAR(",
-				"BPCHAR",
-				"TEXT",
-				// Binary Data Types
-				"BYTEA",
-				// Date/Time Types
-				"TIMESTAMP",
-				"DATE",
-				"TIME",
-				"INTERVAL",
-				// Boolean Type
-				"BOOLEAN",
-				NULL
-			};
-			COMPLETE_WITH_LIST(list_COLUMN_TYPE);
+				// Inside parentheses – complete with column data types
+				static const char *const list_COLUMN_TYPE[] =
+				{
+					// Numeric Types
+					"SMALLINT",
+					"INTEGER",
+					"BIGINT",
+					"DECIMAL",
+					"NUMERIC",
+					"REAL",
+					"DOUBLE PRECISION",
+					"SMALLSERIAL",
+					"SERIAL",
+					"BIGSERIAL",
+					// Experimental numeric Types
+					"INT2",
+					"INT4",
+					"INT8",
+					// Monetary Types
+					"MONEY",
+					// Character Types
+					"CHARACTER",
+					"VARYING(",
+					"VARCHAR",
+					"CHAR(",
+					"BPCHAR(",
+					"BPCHAR",
+					"TEXT",
+					// Binary Data Types
+					"BYTEA",
+					// Date/Time Types
+					"TIMESTAMP",
+					"DATE",
+					"TIME",
+					"INTERVAL",
+					// Boolean Type
+					"BOOLEAN",
+					NULL
+				};
+				COMPLETE_WITH_LIST(list_COLUMN_TYPE);
+			}
 		}
 		else
 		{
@@ -4410,6 +4419,33 @@ has_unclosed_paren(char* const *previous_words, int nwords)
 			return true;
 	}
 	return false;
+}
+
+/*
+ * Count the number of tokens in previous_words[] that begin with
+ * an opening parenthesis "(".
+ *
+ * This is a lightweight heuristic for tab-completion:
+ * - It does not check for balanced or nested parentheses.
+ * - Any token whose first character is '(' (e.g. "(", "(foo") is counted.
+ * - NULL and empty strings are skipped.
+ */
+static int
+count_open_paren_tokens(char* const *previous_words, int nwords)
+{
+	int count = 0;
+
+	for (int i = 0; i < nwords; i++)
+	{
+		const char *w = previous_words[i];
+
+		if (w == NULL || *w == '\0')
+			continue;
+
+		if (w[0] == '(')
+			count++;
+	}
+	return count;
 }
 
 /*
