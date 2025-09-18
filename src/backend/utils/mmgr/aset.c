@@ -1170,7 +1170,8 @@ AllocSetAllocImpl(MemoryContext context, Size size, bool isHeader)
 		CurrentMemoryContext != ErrorContext &&
 		SIMPLE_FAULT_INJECTOR("fatal_on_palloc_oom") == FaultInjectorTypeSkip)
 	{
-		elog(FATAL, "memory allocated while handling an OOM error");
+		ereport(FATAL, (errmsg("memory allocated while handling an OOM error"),
+						errprintstack(true)));
 	}
 #endif
 
@@ -1627,6 +1628,16 @@ AllocSetRealloc(MemoryContext context, void *pointer, Size size)
 	AllocChunk	chunk = AllocPointerGetChunk(pointer);
 	Size		oldsize = chunk->size;
 
+#ifdef FAULT_INJECTOR
+	if (in_oom_error_trouble() &&
+		CurrentMemoryContext != ErrorContext &&
+		SIMPLE_FAULT_INJECTOR("fatal_on_palloc_oom") == FaultInjectorTypeSkip)
+	{
+		ereport(FATAL,
+				(errmsg("memory reallocated while handling an OOM error"),
+				 errprintstack(true)));
+	}
+#endif
 #ifdef USE_ASSERT_CHECKING
 	if (IsUnderPostmaster  && context != ErrorContext && mainthread() != 0 && !pthread_equal(main_tid, pthread_self()))
 	{
