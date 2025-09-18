@@ -5163,6 +5163,8 @@ PostgresMain(int argc, char *argv[],
 					(errcode(ERRCODE_PROTOCOL_VIOLATION),
 					 errmsg("terminating connection because protocol sync was lost")));
 
+		reset_oom_flag();
+
 		/* Now we can allow interrupts again */
 		RESUME_INTERRUPTS();
 	}
