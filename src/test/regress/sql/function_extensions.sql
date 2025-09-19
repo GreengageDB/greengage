@@ -428,13 +428,14 @@ drop table test_ao3;
 -- start_ignore
 drop table if exists test_table_cte;
 drop table if exists test_table;
+drop function if exists test_function(param_text_in text, param_int_in int4);
 -- end_ignore
 
 create table test_table_cte(a text, b text);
 insert into test_table_cte values('-', '-');
 create table test_table(a int, b text);
 
-create or replace function test_function(param_text_in text, param_int_in int4) returns
+create function test_function(param_text_in text, param_int_in int4) returns
 table (param_text_out text, param_int_out int4) as
 $function$
 begin
