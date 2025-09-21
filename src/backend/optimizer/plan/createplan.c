@@ -7273,8 +7273,6 @@ append_initplan_for_function_scan(PlannerInfo *root, Path *best_path, Plan *plan
 	 */
 	prm = SS_make_initplan_from_plan(subroot, (Plan *)initplan, InvalidOid, -1, InvalidOid, true);
 
-	subroot->parent_root = root;
-
 	fsplan->param = prm;
 	fsplan->resultInTupleStore = true;
 
