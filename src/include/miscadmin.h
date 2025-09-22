@@ -28,7 +28,7 @@
 #include "pgtime.h"				/* for pg_time_t */
 
 
-#define PG_BACKEND_VERSIONSTR "postgres (Greengage Database) " PG_VERSION "\n"
+#define PG_BACKEND_VERSIONSTR "postgres (Greenplum Database) " PG_VERSION "\n"
 
 #define InvalidPid				(-1)
 

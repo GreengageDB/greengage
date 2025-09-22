@@ -1,9 +1,29 @@
 FROM ubuntu:22.04 as base
 
+ARG UBUNTU_MAIN_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_UPDATES_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_BACKPORTS_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_SECURITY_MIRROR=http://security.ubuntu.com/ubuntu
+
+ARG sigar=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar_1.6.5-3304%2Bgite8961a6_all.deb
+ARG sigar_headers=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/sigar-headers_1.6.5-3304%2Bgite8961a6_all.deb
+ARG adb_python3=https://downloads.adsw.io/ADB/6.27.1_arenadata56/ubuntu/22.04/community/x86_64/packages/adb6-python_3.9.18-3304_all.deb
+
+ARG adb_python3_bin=/opt/adb6-python3.9/bin/python3
+
 COPY README.ubuntu.bash ./
 RUN set -eux; \
+    sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy |${UBUNTU_MAIN_MIRROR}/ jammy |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy-updates |${UBUNTU_UPDATES_MIRROR}/ jammy-updates |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy-backports |${UBUNTU_BACKPORTS_MIRROR}/ jammy-backports |g" \
+      -e "s|http://security.ubuntu.com/ubuntu/ jammy-security |${UBUNTU_SECURITY_MIRROR}/ jammy-security |g" \
+      /etc/apt/sources.list; \
     ./README.ubuntu.bash; \
     rm README.ubuntu.bash; \
+    wget $sigar $sigar_headers $adb_python3; \
+    apt install -y ./*.deb; \
+    rm ./*.deb; \
     ln -s python2 /usr/bin/python; \
 # Install pg_bsd_indent used by pgindent utility
     wget https://ftp.postgresql.org/pub/dev/pg_bsd_indent-1.3.tar.gz -O - | tar -xzf -; \
@@ -18,10 +38,13 @@ RUN set -eux; \
 # Packages for tests
     DEBIAN_FRONTEND=noninteractive \
         apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip \
-            openjdk-11-jdk protobuf-compiler python3-dev; \
+            openjdk-11-jdk protobuf-compiler; \
 # Install allure-behave for behave tests
     pip2 install allure-behave==2.4.0; \
-    pip2 cache purge;
+    pip2 cache purge; \
+# ADCC extension dependencies
+    $adb_python3_bin -m pip install protobuf==3.20.0; \
+    $adb_python3_bin -m pip cache purge
 
 WORKDIR /home/gpadmin
 ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
@@ -35,7 +58,7 @@ RUN mkdir /home/gpadmin/bin_gpdb
 ENV TARGET_OS=ubuntu
 ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
 # Use python3.9 to compile into GPDB's plpython3u
-ENV PYTHON3=python3
+ENV PYTHON3=$adb_python3_bin
 
 # Compile with running mocking tests
 RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
