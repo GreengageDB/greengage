@@ -40,7 +40,7 @@ RUN set -eux; \
         apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip \
             openjdk-11-jdk protobuf-compiler; \
 # Install allure-behave for behave tests
-    pip2 install behave==1.2.6 allure-behave==2.4.0; \
+    pip2 install allure-behave==2.4.0; \
     pip2 cache purge; \
 # ADCC extension dependencies
     $adb_python3_bin -m pip install protobuf==3.20.0; \
