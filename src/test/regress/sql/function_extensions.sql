@@ -426,30 +426,21 @@ drop table test_ao3;
 -- end_matchsubs
 
 -- start_ignore
-drop table if exists test_table_cte;
 drop table if exists test_table;
-drop function if exists test_function(param_text_in text, param_int_in int4);
+drop function if exists test_function(param_in text);
 -- end_ignore
 
-create table test_table_cte(a text, b text);
-insert into test_table_cte values('-', '-');
-create table test_table(a int, b text);
+create table test_table(a text);
 
-create function test_function(param_text_in text, param_int_in int4) returns
-table (param_text_out text, param_int_out int4) as
+create function test_function(param_in text) returns
+table (param_out text) as
 $function$
-with
--- though cte1 is not used, we need it here to reproduce the SIGSEGV,
--- without it the query below failed with 'invalid Datum pointer' error.
-cte1 as (select hostname from gp_segment_configuration),
-cte2 as (select a from test_table_cte where b = param_text_in)
-select param_text_in::text, param_int_in::int4 from cte2;
+select param_in;
 $function$
 language sql execute on initplan;
 
 create table tnew as
-select * from test_table l join test_function(l.b, 1) r on l.a = r.param_int_out;
+select * from test_table l join test_function(l.a) r on l.a = r.param_out;
 
-drop function test_function(param_text_in text, param_int_in int4);
-drop table test_table_cte;
+drop function test_function(param_in text);
 drop table test_table;
