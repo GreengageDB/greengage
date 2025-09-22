@@ -3968,8 +3968,8 @@ _complete_from_query(int is_schema_query, const char *text, int state)
 			}
 
 			/*
-			 * Add in matching schema names, but only if there is more than
-			 * one potential match among schema names.
+			 * Add in matching schema names whenever there is at least one
+			 * matching schema name (including the single-schema case).
 			 */
 			appendPQExpBuffer(&query_buffer, "\nUNION\n"
 						   "SELECT pg_catalog.quote_ident(n.nspname) || '.' "
@@ -3980,7 +3980,7 @@ _complete_from_query(int is_schema_query, const char *text, int state)
 							  " AND (SELECT pg_catalog.count(*)"
 							  " FROM pg_catalog.pg_namespace"
 			" WHERE substring(pg_catalog.quote_ident(nspname) || '.',1,%d) ="
-							  " substring('%s',1,pg_catalog.length(pg_catalog.quote_ident(nspname))+1)) > 1",
+							  " substring('%s',1,pg_catalog.length(pg_catalog.quote_ident(nspname))+1)) >= 1",
 							  char_length, e_text);
 
 			/*
