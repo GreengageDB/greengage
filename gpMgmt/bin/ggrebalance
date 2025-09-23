@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+
+from gppylib.mainUtils import getProgramName
+
+from psycopg2 import DatabaseError
+try:
+    from gppylib.commands.unix import *
+    from gppylib.commands.gp import *
+    from gppylib.gpparseopts import OptParser, OptChecker
+    from gppylib.gplog import *
+    from gppylib.gparray import GpArray
+    from gppylib.db import dbconn
+    from gppylib.userinput import *
+    from gppylib.system.environment import GpCoordinatorEnvironment
+    from gppylib.system import configurationInterface, configurationImplGpdb
+    from gprebalance_modules.shrink import GGShrink, DBNAME
+except ImportError as e:
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
+
+
+_description = ("""
+ TBD. Curretnly only minimum shrink implementation is implemented.
+""")
+
+_help = ["""
+TBD
+"""]
+
+_usage = """
+ TBD
+"""
+
+EXECNAME = os.path.split(__file__)[-1]
+MAX_BATCH_SIZE = 128
+MAX_PARALLEL_WORKERS = 96
+
+
+def parseargs():
+    parser = OptParser(option_class=OptChecker,
+                       description=' '.join(_description.split()),
+                       version='%prog version $Revision$')
+    parser.setHelp(_help)
+    parser.set_usage('%prog ' + _usage)
+    parser.remove_option('-h')
+
+    parser.add_option('-x', '--target-segment-count', type='int', dest='target_segment_count', metavar='<target_segment_count>',
+                      help='Target segments number of the whole cluster')
+    parser.add_option('-B', '--batch-size', type='int', default=4, dest='batch_size', metavar='<batch_size>',
+                      help='Max worker number in WorkerPool instance. Valid values are 1-%d.' % MAX_BATCH_SIZE)
+    parser.add_option('-n', '--parallel', type="int", default=4, dest="parallel", metavar='<parallel>',
+                      help='Max number of workers at a time. Valid values are 1-%d.' % MAX_PARALLEL_WORKERS)
+    parser.add_option('-c', '--clean', action='store_true', dest="clean_required",
+                      help='remove the rebalance schema.')
+    parser.add_option('-h', '-?', '--help', action='help',
+                      help='show this help message and exit.')
+
+    parser.set_defaults(verbose=False)
+
+    # Parse the command line arguments
+    options, args = parser.parse_args()
+    return options, args, parser
+
+
+def validate_options(options, args, parser):
+    if len(args) > 0:
+        logger.error(f'Unknown argument {args[0]}')
+        parser.exit(1)
+
+    try:
+        options.coordinator_data_directory = get_coordinatordatadir()
+        options.gphome = get_gphome()
+    except GpError as msg:
+        logger.error(msg)
+        parser.exit(1)
+
+    if not os.path.exists(options.coordinator_data_directory):
+        logger.error('Coordinator data directory %s does not exist.' %
+                     options.coordinator_data_directory)
+        parser.exit(1)
+
+    if options.batch_size < 1 or options.batch_size > MAX_BATCH_SIZE:
+        logger.error(
+            'Invalid argument.  batch-size value must be >= 1 and <= %d' % MAX_BATCH_SIZE)
+        parser.exit(1)
+
+    if options.parallel < 1 or options.parallel > MAX_PARALLEL_WORKERS:
+        logger.error(
+            'Invalid argument.  parallel value must be >= 1 and <= %d' % MAX_PARALLEL_WORKERS)
+        parser.exit(1)
+
+    return options, args
+
+
+def check_running_gputils(dburl: dbconn.DbURL, coordinator_data_directory: str):
+    """
+    Checks if there are any running instances of
+    gprebalance/gpbackup/gpexpand/gpshrink/gpresize
+    """
+    for util in ('ggrebalance', 'gprebalance', 'gpexpand', 'gpshrink', 'gpresize'):
+        try:
+            with open(f'{coordinator_data_directory}/{util}.pid', 'r') as fp:
+                pid = int(fp.readline().strip())
+                if check_pid(pid):
+                    logger.error(f'{util} is already running.')
+                    sys.exit(1)
+        except IOError:
+            pass
+
+    with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+        cursor = dbconn.query(conn, '''SELECT datid
+                    FROM pg_stat_activity
+                    WHERE application_name LIKE 'gpbackup%' OR
+                    application_name LIKE 'gprestore%' ''')
+        if cursor.rowcount > 0:
+            logger.error(
+                '''gpbackup/gprestore utility is already running.''')
+            sys.exit(1)
+
+    if is_gprecoverseg_running():
+        logger.error(
+            '''gprecoverseg is already running.''')
+        sys.exit(1)
+
+
+def create_pid_file(coordinator_data_directory: str):
+    """
+    Creates ggrebalance pid file
+    """
+    with open(coordinator_data_directory + '/ggrebalance.pid', 'w') as fp:
+        fp.write(str(os.getpid()))
+
+
+def remove_pid_file(coordinator_data_directory: str):
+    """
+    Removes gprebalance pid file
+    """
+    try:
+        os.unlink(coordinator_data_directory + '/ggrebalance.pid')
+    except IOError:
+        pass
+
+gg_shrink = None
+
+def sig_handler(sig, arg):
+    if gg_shrink is not None:
+        gg_shrink.shutdown()
+    else:
+        sys.exit(1)
+
+def main(options, args, parser):
+    try:
+        signal.signal(signal.SIGTERM, sig_handler)
+        signal.signal(signal.SIGHUP, sig_handler)
+        signal.signal(signal.SIGINT, sig_handler)
+
+        logger = get_default_logger()
+        setup_tool_logging(EXECNAME, getLocalHostname(), getUserName())
+
+        options, args = validate_options(options, args, parser)
+
+        if options.verbose:
+            enable_verbose_logging()
+
+        gpenv = GpCoordinatorEnvironment(
+            options.coordinator_data_directory, True)
+
+        # can we remove it?
+        configurationInterface.registerConfigurationProvider(
+            configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog())
+
+        configurationInterface.getConfigurationProvider(
+        ).initializeProvider(gpenv.getCoordinatorPort())
+
+        dburl = dbconn.DbURL(dbname=DBNAME, port=gpenv.getCoordinatorPort())
+
+        check_running_gputils(dburl, options.coordinator_data_directory)
+
+        create_pid_file(options.coordinator_data_directory)
+
+        gparray_dump_filename = options.coordinator_data_directory + '/gparraydump'
+
+        if os.path.exists(gparray_dump_filename):
+            logger.info('Init gparray from file %s' % gparray_dump_filename)
+            gparray = GpArray.initFromFile(gparray_dump_filename)
+        else:
+            logger.info('Init gparray from catalog')
+            try:
+                gparray = GpArray.initFromCatalog(dburl, utility=True)
+            except DatabaseError as ex:
+                logger.error("Failed to connect to database.  Make sure the"
+                             " Greengage instance you wish to expand is running"
+                             " and that your environment is correct, then rerun"
+                             " gprebalance" + ' '.join(sys.argv[1:]))
+                sys.exit(1)
+            except ConnectionError as ex:
+                logger.error(f"{str(ex)}")
+                sys.exit(1)
+
+        if options.target_segment_count != None and gparray.get_segment_count() <= options.target_segment_count:
+            logger.error('Target segment count (%s) >= current segment count (%s).\n'
+                         'Currently only shrink is supported (target segment count < current segment count).'
+                          % (options.target_segment_count, gparray.get_segment_count()))
+            sys.exit(1)
+        else:
+            global gg_shrink
+            gg_shrink = GGShrink(logger, dburl, options, gpenv, gparray, gparray_dump_filename)
+            gg_shrink.run()
+       
+        sys.exit(0)
+    except Exception as e:
+        if options and options.verbose:
+            logger.exception('ggrebalance failed. exiting...')
+        else:
+            logger.error(f'ggrebalance failed: {e} \n\nExiting...')
+        sys.exit(1)
+    finally:
+        remove_pid_file(get_coordinatordatadir())
+
+if __name__ == '__main__':
+    options, args, parser = parseargs()
+    main(options, args, parser)
