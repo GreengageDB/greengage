@@ -3842,6 +3842,10 @@ complete_from_query(const char *text, int state)
 static char *
 complete_from_schema_query(const char *text, int state)
 {
+#ifdef HAVE_RL_COMPLETION_APPEND_CHARACTER
+	rl_completion_append_character = '\0';
+#endif
+
 	return _complete_from_query(1, text, state);
 }
 
