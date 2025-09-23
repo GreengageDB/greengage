@@ -52,9 +52,6 @@ select gp_inject_fault('backend_abort_handling', 'skip', dbid) from gp_segment_c
 1&:create table fts_reset_t(a int);  <waiting ...>
 
 -- We now wait till our seg0 will start reaping it's childs and resetting
--- start_ignore
-select gp_wait_until_triggered_fault('backend_abort_handling', 1, dbid) from gp_segment_configuration where role = 'p' and content = 0;
--- end_ignore
 
 -- This should fail due to the seg0 in reset mode
 2&:create table fts_reset_t2(a int);  <waiting ...>
