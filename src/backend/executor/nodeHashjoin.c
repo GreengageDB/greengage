@@ -1231,11 +1231,38 @@ ExecReScanHashJoin(HashJoinState *node)
 			 */
 			node->hj_OuterNotEmpty = false;
 
+			/*
+			 * Outer batch files have to be cleared before restarting the hash join,
+			 * because they will be written again when batch 0 is processed.
+			 *
+			 * TODO: it might be possible to optimize by saving batch 0 outer file too,
+			 * in which case we might avoid rescanning the outer plan again.
+			 */
+			if (node->hj_HashTable->outerBatchFile)
+			{
+				for (int i = 0; i < node->hj_HashTable->nbatch; i++)
+				{
+					if (node->hj_HashTable->outerBatchFile[i])
+						BufFileClose(node->hj_HashTable->outerBatchFile[i]);
+					node->hj_HashTable->outerBatchFile[i] = NULL;
+				}
+			}
+
 			/* ExecHashJoin can skip the BUILD_HASHTABLE step */
 			node->hj_JoinState = HJ_NEED_NEW_OUTER;
 
 			if (node->hj_HashTable->nbatch > 1)
 			{
+				/*
+				 * If we rescan in the middle of a batch, inner batch file for the current
+				 * batch is actually deleted, its contents only present in the hash table.
+				 * We must spill it to disk to not lose it.
+				 */
+				if (node->reuse_hashtable &&
+					node->hj_HashTable->innerBatchFile[node->hj_HashTable->curbatch] == NULL)
+				{
+					SpillCurrentBatch(node);
+				}
 				/* Force reloading batch 0 upon next ExecHashJoin */
 				node->hj_HashTable->curbatch = -1;
 			}
