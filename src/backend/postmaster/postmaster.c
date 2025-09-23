@@ -3740,9 +3740,9 @@ CleanupBackend(int pid,
 	{
 
 #ifdef FAULT_INJECTOR
-	if (pmState == PM_RUN)
-	{
-		/*
+		if (pmState == PM_RUN)
+		{
+			/*
 			* Code below is for test purposes only. If a fault is set, it
 			* will formally be completed without doing anything.
 			*
@@ -3758,8 +3758,8 @@ CleanupBackend(int pid,
 			* they will soon be terminated anyway. Thus, the fault injector
 			* is accessed only when the Postmaster state is PM_RUN.
 			*/
-		SIMPLE_FAULT_INJECTOR("backend_abort_handling");
-	}
+			SIMPLE_FAULT_INJECTOR("backend_abort_handling");
+		}
 #endif
 		HandleChildCrash(pid, exitstatus, _("server process"));
 		return;
