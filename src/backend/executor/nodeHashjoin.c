@@ -1197,6 +1197,8 @@ ExecHashJoinGetSavedTuple(HashJoinState *hjstate,
 void
 ExecReScanHashJoin(HashJoinState *node)
 {
+	HashJoinTable hashtable = node->hj_HashTable;  
+
 	/*
 	 * In a multi-batch join, we currently have to do rescans the hard way,
 	 * primarily because batch temp files may have already been released. But
@@ -1204,12 +1206,12 @@ ExecReScanHashJoin(HashJoinState *node)
 	 * inner subnode, then we can just re-use the existing hash table without
 	 * rebuilding it.
 	 */
-	if (node->hj_HashTable != NULL)
+	if (hashtable != NULL)
 	{
-		node->hj_HashTable->first_pass = false;
+		hashtable->first_pass = false;
 
 		if (node->js.ps.righttree->chgParam == NULL &&
-			!node->hj_HashTable->eagerlyReleased)
+			!hashtable->eagerlyReleased)
 		{
 			/*
 			 * Okay to reuse the hash table; needn't rescan inner, either.
@@ -1218,7 +1220,7 @@ ExecReScanHashJoin(HashJoinState *node)
 			 * inner-tuple match flags contained in the table.
 			 */
 			if (HJ_FILL_INNER(node))
-				ExecHashTableResetMatchFlags(node->hj_HashTable);
+				ExecHashTableResetMatchFlags(hashtable);
 
 			/*
 			 * Also, we need to reset our state about the emptiness of the
@@ -1238,20 +1240,20 @@ ExecReScanHashJoin(HashJoinState *node)
 			 * TODO: it might be possible to optimize by saving batch 0 outer file too,
 			 * in which case we might avoid rescanning the outer plan again.
 			 */
-			if (node->hj_HashTable->outerBatchFile)
+			if (hashtable->outerBatchFile)
 			{
-				for (int i = 0; i < node->hj_HashTable->nbatch; i++)
+				for (int i = 0; i < hashtable->nbatch; i++)
 				{
-					if (node->hj_HashTable->outerBatchFile[i])
-						BufFileClose(node->hj_HashTable->outerBatchFile[i]);
-					node->hj_HashTable->outerBatchFile[i] = NULL;
+					if (hashtable->outerBatchFile[i])
+						BufFileClose(hashtable->outerBatchFile[i]);
+					hashtable->outerBatchFile[i] = NULL;
 				}
 			}
 
 			/* ExecHashJoin can skip the BUILD_HASHTABLE step */
 			node->hj_JoinState = HJ_NEED_NEW_OUTER;
 
-			if (node->hj_HashTable->nbatch > 1)
+			if (hashtable->nbatch > 1)
 			{
 				/*
 				 * If we rescan in the middle of a batch, inner batch file for the current
@@ -1259,29 +1261,29 @@ ExecReScanHashJoin(HashJoinState *node)
 				 * We must spill it to disk to not lose it.
 				 */
 				if (node->reuse_hashtable &&
-					node->hj_HashTable->innerBatchFile[node->hj_HashTable->curbatch] == NULL)
+					hashtable->innerBatchFile[hashtable->curbatch] == NULL)
 				{
 					SpillCurrentBatch(node);
 				}
 				/* Force reloading batch 0 upon next ExecHashJoin */
-				node->hj_HashTable->curbatch = -1;
+				hashtable->curbatch = -1;
 			}
 			else
 			{
 				/* MPP-1600: reset the batch number */
-				node->hj_HashTable->curbatch = 0;
+				hashtable->curbatch = 0;
 			}
 		}
 		else
 		{
 			/* must destroy and rebuild hash table */
-			if (!node->hj_HashTable->eagerlyReleased)
+			if (!hashtable->eagerlyReleased)
 			{
 				HashState  *hashState = (HashState *) innerPlanState(node);
 
-				ExecHashTableDestroy(hashState, node->hj_HashTable);
+				ExecHashTableDestroy(hashState, hashtable);
 			}
-			pfree(node->hj_HashTable);
+			pfree(hashtable);
 			node->hj_HashTable = NULL;
 			node->hj_JoinState = HJ_BUILD_HASHTABLE;
 
