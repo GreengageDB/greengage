@@ -11,4 +11,3 @@ select max(oid)::bigint > (power(2,31) + 1)::bigint from pg_resgroup;
 select count(*) > 0 from pg_resgroup_get_status(NULL);
 
 drop resource group rg_large_oid;
-SELECT 1; -- BRAKING BAD

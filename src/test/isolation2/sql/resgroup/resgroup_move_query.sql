@@ -228,4 +228,3 @@ DROP ROLE role_move_query;
 DROP RESOURCE GROUP rg_move_query;
 DROP ROLE role_move_query_small;
 DROP RESOURCE GROUP rg_move_query_small;
-SELECT 1; -- BRAKING BAD

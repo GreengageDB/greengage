@@ -12,4 +12,3 @@ SELECT count(num_executed)>0 FROM resgroup_function_test WHERE num_executed IS N
 
 -- Check that the contents of the cpu_usage field are valid JSON
 ANALYZE resgroup_function_test;
-SELECT 1; -- BRAKING BAD

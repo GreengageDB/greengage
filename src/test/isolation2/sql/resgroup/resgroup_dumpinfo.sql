@@ -100,4 +100,3 @@ DROP ROLE role_dumpinfo_test;
 DROP ROLE role_permission;
 DROP RESOURCE GROUP rg_dumpinfo_test;
 DROP LANGUAGE plpython3u CASCADE;
-SELECT 1; -- BRAKING BAD

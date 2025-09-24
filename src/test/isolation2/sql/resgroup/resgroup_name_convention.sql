@@ -218,4 +218,3 @@ CREATE RESOURCE GROUP CREATE WITH (cpu_max_percent=10);
 -- min length is 1 character
 CREATE RESOURCE GROUP "" WITH (cpu_max_percent=10);
 
-SELECT 1; -- BRAKING BAD

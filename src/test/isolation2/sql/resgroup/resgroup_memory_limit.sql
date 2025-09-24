@@ -65,4 +65,3 @@ DROP FUNCTION func_memory_test(text);
 DROP TABLE t_memory_limit;
 DROP ROLE IF EXISTS role_memory_test;
 DROP RESOURCE GROUP rg_memory_test;
-SELECT 1; -- BRAKING BAD

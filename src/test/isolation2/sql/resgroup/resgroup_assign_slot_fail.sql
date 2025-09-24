@@ -25,4 +25,3 @@ SELECT gp_inject_fault('resgroup_assigned_on_coordinator', 'error', 1);
 --clean up
 DROP ROLE role_test;
 DROP RESOURCE GROUP rg_test;
-SELECT 1; -- BRAKING BAD

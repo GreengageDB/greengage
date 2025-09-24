@@ -142,4 +142,3 @@ DROP ROLE role_concurrency_test;
 DROP RESOURCE GROUP rg_concurrency_test;
 
 DROP VIEW rg_concurrency_view;
-SELECT 1; -- BRAKING BAD

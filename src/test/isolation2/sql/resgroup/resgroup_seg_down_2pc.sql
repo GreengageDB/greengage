@@ -54,4 +54,3 @@ select pg_reload_conf();
 1:select pg_reload_conf();
 1q:
 
-SELECT 1; -- BRAKING BAD

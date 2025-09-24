@@ -436,4 +436,3 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 2:DROP ROLE role2_cpu_test;
 2:DROP RESOURCE GROUP rg1_cpu_test;
 2:DROP RESOURCE GROUP rg2_cpu_test;
-SELECT 1; -- BRAKING BAD

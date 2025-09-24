@@ -60,4 +60,3 @@ from gp_toolkit.gp_resgroup_status where groupname = 'rg_wait_time_test';
 -- clean up
 drop role role_wait_time_test;
 drop resource group rg_wait_time_test;
-SELECT 1; -- BRAKING BAD

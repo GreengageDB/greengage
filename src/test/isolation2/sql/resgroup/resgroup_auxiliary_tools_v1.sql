@@ -276,4 +276,3 @@ $$ LANGUAGE plpython3u;
     return True
 
 $$ LANGUAGE plpython3u;
-SELECT 1; -- BRAKING BAD

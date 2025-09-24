@@ -8,4 +8,3 @@ SHOW gp_resource_manager;
 -- reset settings
 ALTER RESOURCE GROUP admin_group SET concurrency 10;
 ALTER RESOURCE GROUP default_group SET concurrency 20;
-SELECT 1; -- BRAKING BAD
