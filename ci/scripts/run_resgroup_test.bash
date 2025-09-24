@@ -1,24 +1,18 @@
 #!/bin/bash
 set -eu
+LOGS=${LOGS:-$PWD/logs}
 TEST_OS=${TEST_OS:-ubuntu}
 OPTIMIZER=${OPTIMIZER:-off}
 STATEMENT_MEM=${STATEMENT_MEM:-125MB}
 
-echo ">>> DEBUG Free on host <<<"
-free -h
-
-# shellcheck disable=SC2086
 docker run -i --user root:root \
-  -v ./logs:/logs \
-  -e TEST_OS=$TEST_OS \
+  -v "$LOGS":/logs \
+  -e TEST_OS="$TEST_OS" \
   --sysctl 'kernel.sem=500 1024000 200 4096' \
   --privileged \
-  $IMAGE /bin/bash << EOF
+  "$IMAGE" /bin/bash << EOF
 set -ex
 set -o pipefail
-
-echo ">>> DEBUG Free in Docker <<<"
-free -h
 
 cd /home/gpadmin/
 ssh-keygen -A
@@ -31,13 +25,6 @@ chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}
 mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 chown -R gpadmin:gpadmin /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
-
-echo ">>> DEBUG: cgroup files <<<"
-cat /proc/1/mounts | grep cgroup || true
-cat /sys/fs/cgroup/memory/memory.usage_in_bytes 2>/dev/null || true
-cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || true
-cat /sys/fs/cgroup/memory.current 2>/dev/null || true
-cat /sys/fs/cgroup/memory.max 2>/dev/null || true
 
 EXIT_CODE=0
 sudo -u gpadmin -- bash -c "
@@ -59,7 +46,8 @@ for param in "\${params[@]}"; do
   find \$path -name \$name -type \$type -exec tar -rf "/logs/\$name.tar" "{}" \;
 done
 chmod -R a+rwX /logs
-ls -lah /logs
 
+echo \${EXIT_CODE:-1} > /logs/.exitcode
 exit \$EXIT_CODE
 EOF
+echo 0 > "$LOGS"
