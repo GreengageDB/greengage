@@ -30,3 +30,4 @@ ALTER RESOURCE GROUP rg1_cpuset_test SET cpuset '0';
 
 -- Cleanup in a new connection as the default one is disconnected by gpstop
 10: DROP RESOURCE GROUP rg1_cpuset_test;
+SELECT 1; -- BRAKING BAD

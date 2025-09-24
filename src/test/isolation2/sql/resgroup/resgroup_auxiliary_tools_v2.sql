@@ -386,3 +386,4 @@ $$ LANGUAGE plpython3u;
 
     return os.stat(cgroup_path).st_size == 0
 $$ LANGUAGE plpython3u;
+SELECT 1; -- BRAKING BAD

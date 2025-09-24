@@ -280,3 +280,4 @@ DROP TABLE foo_concurrency_test;
 DROP TABLE bar_concurrency_test;
 DROP ROLE role_concurrency_test;
 DROP RESOURCE GROUP rg_concurrency_test;
+SELECT 1; -- BRAKING BAD

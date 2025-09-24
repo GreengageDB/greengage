@@ -168,3 +168,4 @@ DROP FUNCTION create_allcores_group(TEXT);
 DROP VIEW cancel_all;
 DROP VIEW busy;
 DROP TABLE bigtable;
+SELECT 1; -- BRAKING BAD

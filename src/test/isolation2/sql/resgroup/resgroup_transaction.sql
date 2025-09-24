@@ -134,3 +134,4 @@ DROP FUNCTION rg_drop_func();
 
 -- cleanup
 DROP VIEW rg_test_monitor;
+SELECT 1; -- BRAKING BAD

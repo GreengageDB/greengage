@@ -48,3 +48,4 @@ SELECT gp_inject_fault('unassign_resgroup_start_entrydb', 'reset', 1);
 -- Clean up
 DROP ROLE role_test;
 DROP RESOURCE GROUP rg_test;
+SELECT 1; -- BRAKING BAD

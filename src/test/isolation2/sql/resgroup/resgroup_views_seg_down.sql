@@ -156,3 +156,4 @@ SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
 !\retcode gpconfig -r gp_fts_probe_retries --masteronly;
 !\retcode gpstop -u;
 
+SELECT 1; -- BRAKING BAD

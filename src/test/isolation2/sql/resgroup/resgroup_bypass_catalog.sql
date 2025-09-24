@@ -48,3 +48,4 @@ DROP ROLE role_test_catalog;
 DROP RESOURCE GROUP rg_test_catalog;
 DROP FUNCTION rg_test_udf;
 -- end_ignore
+SELECT 1; -- BRAKING BAD

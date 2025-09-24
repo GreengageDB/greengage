@@ -139,3 +139,4 @@ DROP TABLE t_bypass;
 DROP ROLE role_bypass;
 DROP RESOURCE GROUP rg_bypass;
 -- end_ignore
+SELECT 1; -- BRAKING BAD

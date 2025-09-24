@@ -301,3 +301,4 @@ DROP RESOURCE GROUP rg_test_group;
 !\retcode gpconfig -c gp_resource_group_cpu_limit -v 0.9;
 !\retcode gpstop -ari;
 -- end_ignore
+SELECT 1; -- BRAKING BAD

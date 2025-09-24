@@ -230,3 +230,4 @@ DROP ROLE role_concurrency_test;
 DROP RESOURCE GROUP rg_concurrency_test;
 -- end_ignore
 
+SELECT 1; -- BRAKING BAD
