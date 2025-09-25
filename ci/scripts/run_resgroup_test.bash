@@ -39,7 +39,7 @@ params=(
   "./ d gpAdminLogs"
   "gpdb_src/src/test/ d results"
   "gpdb_src/src/test/ f regression.diffs"
-  "gpdb_src/gpAux/gpdemo/datadirs/ d pg_log"
+  "gpdb_src/gpAux/gpdemo/datadirs/ d log"
 )
 for param in "\${params[@]}"; do
   read -r path type name <<< "\$param"
