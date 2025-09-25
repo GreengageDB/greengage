@@ -1,6 +1,3 @@
----
-
-version: "3"
 services:
   cdw:
     image: "${IMAGE}"
@@ -10,6 +7,7 @@ services:
       - "$PWD/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa"
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
       - "$PWD/allure-results:/tmp/allure-results"
+      - "$PWD/logs_cdw:/logs"
     privileged: true
     sysctls:
       kernel.sem: 500 1024000 200 4096
@@ -23,6 +21,7 @@ services:
     volumes:
       - "$PWD/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa"
       - "$PWD/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub"
+      - "$PWD/logs_sdw1:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
     init: true
@@ -38,6 +37,8 @@ services:
     sysctls:
       kernel.sem: 500 1024000 200 4096
     init: true
+    ulimits:
+      nofile: 65535
     entrypoint: >
       sleep infinity
   sdw3:
