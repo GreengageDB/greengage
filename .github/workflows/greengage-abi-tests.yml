@@ -1,10 +1,5 @@
 name: Greengage ABI Tests
 
-# Concurrency control to cancel previous runs on new push to same PR/branch
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true  # Automatically cancel any previous runs for the same group
-
 on:
   workflow_dispatch:
   pull_request:
@@ -17,7 +12,7 @@ on:
 
   push:
     branches:
-      - 7.x
+      - main
     paths:
       - 'concourse/scripts/**'
       - 'src/**'
@@ -25,12 +20,9 @@ on:
       - '.github/scripts/**'
       - '.abi-check/**'
 
-env:
-  # workaround required for checkout@v3, https://github.com/actions/checkout/issues/1590
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 jobs:
   abi-dump-setup:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       BASELINE_REF: ${{ steps.vars.outputs.BASELINE_REF }}
       BASELINE_VERSION: ${{ steps.vars.outputs.BASELINE_VERSION }}
@@ -43,10 +35,9 @@ jobs:
 
       - name: Get Greengage version variables
         id: vars
-        env:
-          REMOTE_REPO: 'https://github.com/GreengageDB/greengage.git'
         run: |
-          git ls-remote --tags --refs --sort='v:refname' $REMOTE_REPO '7.*' | tail -n 1  > baseline_version_ref
+          remote_repo='https://github.com/GreengageDB/greengage.git'
+          git ls-remote --tags --refs --sort='v:refname' $remote_repo '7.*' | grep -v '-' | tail -n 1  > baseline_version_ref
           baseline_ref=$(cat baseline_version_ref | awk '{print $1}')
           baseline_version=$(cat baseline_version_ref | awk '{print $2}')
           echo "BASELINE_REF=${baseline_ref}" | tee -a $GITHUB_OUTPUT
@@ -62,14 +53,15 @@ jobs:
 
       - name: Upload symbol/type checking exception list
         if: steps.check_exception_lists.outputs.EXCEPTION_LISTS_COUNT != '0'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: exception_lists
           path: '.abi-check/${{ steps.vars.outputs.BASELINE_VERSION }}/'
 
   abi-dump:
     needs: abi-dump-setup
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container: gcr.io/data-gpdb-public-images/gpdb7-rocky8-build
     strategy:
       matrix:
         name:
@@ -84,6 +76,15 @@ jobs:
             ref: ${{ github.sha }}
 
     steps:
+      ## FIXME: abi-dumper requires 'Universal Ctags' but the package manager only provides
+      ## 'Exuberant Ctags'.
+      - name: Install universal-ctags.
+        run: |
+          wget 'https://github.com/universal-ctags/ctags-nightly-build/releases/download/2023.07.05%2Bafdae39c0c2e508d113cbc570f4635b96159840c/uctags-2023.07.05-linux-x86_64.tar.xz'
+          tar -xf uctags-2023.07.05-linux-x86_64.tar.xz
+          cp uctags-2023.07.05-linux-x86_64/bin/* /usr/bin/
+          which ctags
+
       - name: Download Greengage source code
         uses: actions/checkout@v3
         with:
@@ -93,35 +94,32 @@ jobs:
           fetch-depth: 0 # Specify '0' to fetch all history for all branches and tags.
           path: gpdb_src
 
-      - name: Install dependencies and abi-dumper
+      - name: Install abi-dumper
         run: |
-          sudo gpdb_src/README.Ubuntu.bash
-          sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl abi-dumper
-          sudo ln -fs python2 /usr/bin/python
+          yum install -y epel-release
+          yum install -y abi-dumper
 
       - name: Build Greengage
         run: |
           ## TODO: Since abi-dumper requires debug info and it's hard to inject CFLAGS via the script for
           ## releasing Greengage, we have to manually configure it here. Probably we can improve it in future.
-          set -e
           pushd gpdb_src
           CC='gcc -m64' \
-          CFLAGS='-Og -g3 -gdwarf-4 -Wno-maybe-uninitialized' LDFLAGS='-Wl,--enable-new-dtags -Wl,--export-dynamic' \
-          ./configure --disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy \
+          CFLAGS='-Og -g3 -Wno-maybe-uninitialized' LDFLAGS='-Wl,--enable-new-dtags -Wl,--export-dynamic' \
+          ./configure --with-quicklz --disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy \
                       --enable-orca --with-libxml --with-pythonsrc-ext --with-uuid=e2fs --with-pgport=5432 --enable-tap-tests \
                       --enable-debug-extensions --with-perl --with-python --with-openssl --with-pam --with-ldap --with-includes="" \
                       --with-libraries="" --disable-rpath \
                       --prefix=/usr/local/greengage-db-devel \
                       --mandir=/usr/local/greengage-db-devel/man
-          make -j"$(nproc)"
-          sudo make install
+          make -j`nproc` && make install
 
       - name: Dump ABI
         run: |
           abi-dumper -lver ${{ matrix.ref }} -skip-cxx -public-headers /usr/local/greengage-db-devel/include/${{ needs.abi-dump-setup.outputs.ABI_HEADERS }} -o postgres-${{ matrix.ref }}.abi /usr/local/greengage-db-devel/bin/postgres
 
       - name: Upload ABI files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.name }}
           path: '*${{ matrix.ref }}.abi'
@@ -130,29 +128,32 @@ jobs:
     needs:
       - abi-dump-setup
       - abi-dump
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container: gcr.io/data-gpdb-public-images/gpdb7-rocky8-build
     steps:
       - name: Download baseline
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: build-baseline
           path: build-baseline/
       - name: Download latest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: build-latest
           path: build-latest/
 
       - name: Download exception lists
         if: needs.abi-dump-setup.outputs.EXCEPTION_LISTS_COUNT != '0'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: exception_lists
           path: exception_lists/
 
       - name: Install abi-compliance-checker and report viewer (lynx)
         run: |
-          sudo apt install -y abi-compliance-checker lynx
+          yum install -y epel-release
+          yum install -y abi-compliance-checker
+          yum install -y --enablerepo=powertools lynx
 
       - name: Compare ABI
         run: |
@@ -175,11 +176,11 @@ jobs:
       - name: Print out ABI report
         if: always()
         run: |
-          lynx -dump "$(find compat_reports/ | grep html)"
+          lynx -dump $(find compat_reports/ | grep html)
 
       - name: Upload ABI Comparison
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: compat-report-${{ github.sha }}
           path: compat_reports/
