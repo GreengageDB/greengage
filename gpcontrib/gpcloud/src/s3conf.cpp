@@ -1,7 +1,3 @@
-#include "s3conf.h"
-#include "s3macros.h"
-#include "s3params.h"
-
 #include <arpa/inet.h>
 
 #ifndef S3_STANDALONE
@@ -19,6 +15,10 @@ extern int getgpsegmentCount(void);
 extern char *DataDir;
 }
 #endif
+
+#include "s3conf.h"
+#include "s3macros.h"
+#include "s3params.h"
 
 // configurable parameters
 int32_t s3ext_segid = -1;
