@@ -1,9 +1,6 @@
 # Main CI pipeline orchestrating build, test, and upload stages
 name: Greengage CI
 
-env:
-  version: 7
-
 on:
   push:
     branches: ['7.x']  # Trigger on push to main (after merged PR)
