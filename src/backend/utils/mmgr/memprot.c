@@ -378,7 +378,7 @@ static void gp_failed_to_alloc(MemoryAllocationStatus ec, int en, int sz)
 	}
 	else if (ec == MemoryFailure_SystemMemoryExhausted)
 	{
-		ereport(ERROR, (errcode(ERRCODE_GP_MEMPROT_KILL),
+		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
 				errmsg("Out of memory"),
 				errdetail("System memory limit reached, failed to allocate %d bytes from system", sz)
 		));
@@ -392,7 +392,7 @@ static void gp_failed_to_alloc(MemoryAllocationStatus ec, int en, int sz)
 	else
 	{
 		/* SemOp error.  */
-		ereport(ERROR, (errcode(ERRCODE_GP_MEMPROT_KILL),
+		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
 				errmsg("Failed to allocate memory under virtual memory protection"),
 				errdetail("Error %d, errno %d, %s", ec, en, strerror(en))
 		));
