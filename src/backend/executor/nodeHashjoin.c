@@ -1234,11 +1234,13 @@ ExecReScanHashJoin(HashJoinState *node)
 			node->hj_OuterNotEmpty = false;
 
 			/*
-			 * Outer batch files have to be cleared before restarting the hash join,
-			 * because they will be written again when batch 0 is processed.
+			 * Outer batch files have to be cleared before restarting the hash
+			 * join, because they will be written again when batch 0 is
+			 * processed.
 			 *
-			 * TODO: it might be possible to optimize by saving batch 0 outer file too,
-			 * in which case we might avoid rescanning the outer plan again.
+			 * TODO: it might be possible to optimize by saving batch 0 outer
+			 * file too, in which case we might avoid rescanning the outer
+			 * plan again.
 			 */
 			if (hashtable->outerBatchFile)
 			{
@@ -1256,9 +1258,10 @@ ExecReScanHashJoin(HashJoinState *node)
 			if (hashtable->nbatch > 1)
 			{
 				/*
-				 * If we rescan in the middle of a batch, inner batch file for the current
-				 * batch is actually deleted, its contents only present in the hash table.
-				 * We must spill it to disk to not lose it.
+				 * If we rescan in the middle of a batch, inner batch file for
+				 * the current batch is actually deleted, its contents only
+				 * present in the hash table. We must spill it to disk to not
+				 * lose it.
 				 */
 				if (node->reuse_hashtable &&
 					hashtable->innerBatchFile[hashtable->curbatch] == NULL)
