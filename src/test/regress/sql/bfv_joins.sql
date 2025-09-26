@@ -591,12 +591,12 @@ select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b
 set gp_workfile_compression=on;
 select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
 reset gp_workfile_compression;
+reset statement_mem;
 
 reset optimizer;
 reset enable_nestloop;
 reset enable_bitmapscan;
 reset enable_seqscan;
-reset statement_mem;
 drop table l_table;
 drop table r_table1;
 drop table r_table2;

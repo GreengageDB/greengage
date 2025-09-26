@@ -4177,12 +4177,12 @@ select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b
    1 |   1
 (2 rows)
 
+reset statement_mem;
 reset gp_workfile_compression;
 reset optimizer;
 reset enable_nestloop;
 reset enable_bitmapscan;
 reset enable_seqscan;
-reset statement_mem;
 drop table l_table;
 drop table r_table1;
 drop table r_table2;
