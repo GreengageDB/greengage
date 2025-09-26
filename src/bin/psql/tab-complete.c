@@ -817,10 +817,9 @@ static PGresult *exec_query(const char *query);
 static void get_previous_words(int point, char **previous_words, int nwords);
 static bool ends_with_paren(const char *word);
 static bool has_unclosed_paren(char* const *previous_words, int nwords);
-static int
-count_open_paren_tokens(char* const *previous_words, int nwords);
-static bool previous_words_match2(char *words[], const char *key1,
-								const char *key2);
+static int count_open_paren_tokens(char* const *previous_words, int nwords);
+static bool previous_words_matchn(char *words[], const char * const *keys,
+								  int nkeys, bool must_be_adjacent);
 static int extract_column_list(char* const *previous_words,
 							int nwords, char ***column_list);
 
@@ -2293,6 +2292,25 @@ psql_completion(const char *text, int start, int end)
 
 		COMPLETE_WITH_LIST(list_UNLOGGED);
 	}
+	/* Complete "WITH(" with list of properties */
+	else if (previous_words_matchn(previous_words,
+			(const char *[]){"WITH", "("}, 2, true))
+	{
+		static const char *const list_WITH[] =
+		{
+			"APPENDONLY =",
+			"AUTOVACUUM_ENABLED =",
+			"CHECKSUM =",
+			"COMPRESSLEVEL =",
+			"COMPRESSTYPE =",
+			"ORIENTATION =",
+			"TABLENAME =",
+			"TRUE",
+			"FALSE",
+			NULL
+		};
+		COMPLETE_WITH_LIST(list_WITH);
+	}
 	/* Complete "DISTRIBUTED" with BY( | RANDOMLY | REPLICATED */
 	else if (pg_strcasecmp(prev_wd, "DISTRIBUTED") == 0)
 	{
@@ -2301,9 +2319,8 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_LIST(list_DISTRIBUTED);
 	}
 	/* DISTRIBUTED BY (...). Suggest table column names inside parentheses */
-	else if (pg_strcasecmp(prev3_wd, "DISTRIBUTED") == 0 &&
-			 pg_strcasecmp(prev2_wd, "BY") == 0 &&
-			 !ends_with_paren(prev_wd))
+	else if (previous_words_matchn(previous_words,
+			(const char *[]){"DISTRIBUTED", "BY", "("}, 3, true))
 	{
 		char **cols = NULL;
 		int ncols = extract_column_list(previous_words, LOOKBACK_LIMIT, &cols);
@@ -2336,12 +2353,12 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_LIST(list_SUBPARTITION_BY);
 	}
 	/* Complete PARTITION BY with SUBPARTITION */
-	else if (previous_words_match2(previous_words, "PARTITION", "BY"))
+	else if (previous_words_matchn(previous_words, (const char *[]){"PARTITION", "BY"}, 2, true))
 	{
 		COMPLETE_WITH_CONST("SUBPARTITION");
 	}
 	/* Complete CREATE TABLE with common clause options */
-	else if (previous_words_match2(previous_words, "CREATE", "TABLE") &&
+	else if (previous_words_matchn(previous_words, (const char *[]){"CREATE", "TABLE"}, 2, false) &&
 			 pg_strcasecmp(prev_wd, "TABLE") != 0)
 	{
 		if (has_unclosed_paren(previous_words, LOOKBACK_LIMIT))
@@ -4460,26 +4477,53 @@ count_open_paren_tokens(char* const *previous_words, int nwords)
 }
 
 /*
- * Return true if key1 then key2 appear in previous_words[] in SQL order.
- * previous_words[0] is closest to the cursor; we scan from the far end.
+ * Return true if all keys[] appear in previous_words[] in SQL order.
+ * If must_be_adjacent is true, they must be consecutive; otherwise
+ * gaps and NULLs are allowed. Case-insensitive.
  */
-static bool previous_words_match2(char *words[], const char *key1,
-								const char *key2)
+static bool previous_words_matchn(char *words[], const char * const *keys,
+								  int nkeys, bool must_be_adjacent)
 {
+	if (nkeys <= 0 || keys == NULL)
+		return false;
+
 	int i = LOOKBACK_LIMIT - 1;
 
-	while (i >= 0 && (words[i] == NULL || pg_strcasecmp(words[i], key1) != 0))
+	/* Find key1 scanning from the far end */
+	while (i >= 0 && (words[i] == NULL || pg_strcasecmp(words[i], keys[0]) != 0))
 		i--;
 
 	if (i < 0)
 		return false;
 
-	i--;
+	/* For each next key, enforce adjacency or allow gaps accordingly */
+	for (int k = 1; k < nkeys; k++)
+	{
+		if (must_be_adjacent)
+		{
+			/* The neighboring word doesn't exist */
+			if (i - 1 < 0)
+				return false;
+			
+			// The neighboring word is empty or differs from the next key
+			if (words[i - 1] == NULL || pg_strcasecmp(words[i - 1], keys[k]) != 0)
+				return false;
+			
+			i--;
+		}
+		else
+		{
+			i--;
+			while (i >= 0 && (words[i] == NULL ||
+				   pg_strcasecmp(words[i], keys[k]) != 0))
+				i--;
+			
+			if (i < 0)
+				return false;
+		}
+	}
 
-	while (i >= 0 && (words[i] == NULL || pg_strcasecmp(words[i], key2) != 0))
-		i--;
-
-	return i >= 0;
+	return true;
 }
 
 /*
