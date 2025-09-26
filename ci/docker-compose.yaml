@@ -38,8 +38,6 @@ services:
     sysctls:
       kernel.sem: 500 1024000 200 4096
     init: true
-    ulimits:
-      nofile: 65535
     entrypoint: >
       sleep infinity
   sdw3:
