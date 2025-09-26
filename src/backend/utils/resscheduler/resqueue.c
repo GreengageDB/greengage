@@ -432,7 +432,7 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		LWLockRelease(partitionLock);
 		if (addStatus == RES_INCREMENT_ADD_OOSM)
 			ereport(ERROR,
-					(errcode(ERRCODE_OUT_OF_MEMORY),
+					(errcode(ERRCODE_GP_MEMPROT_KILL),
 						errmsg("out of shared memory adding portal increments"),
 						errhint("You may need to increase max_resource_portals_per_transaction.")));
 		else
