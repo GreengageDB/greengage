@@ -1,3 +1,9 @@
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+
+select oid, xmin, xmax, datname from pg_database;
+
+select * from heap_page_items(get_raw_page('pg_database', 0));
+
 CREATE TABLE toasttest(descr text, cnt int DEFAULT 0, f1 text, f2 text);
 
 INSERT INTO toasttest(descr, f1, f2) VALUES('two-compressed', repeat('1234567890',1000), repeat('1234567890',1000));
