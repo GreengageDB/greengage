@@ -1,3 +1,9 @@
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+
+select oid, xmin, xmax, datname from pg_database;
+
+select * from heap_page_items(get_raw_page('pg_database', 0));
+
 CREATE TABLE toasttest(descr text, cnt int DEFAULT 0, f1 text, f2 text);
 
 INSERT INTO toasttest(descr, f1, f2) VALUES('two-compressed', repeat('1234567890',1000), repeat('1234567890',1000));
@@ -23,6 +29,12 @@ SELECT substring(toasttest::text, 1, 200) FROM toasttest;
 -- check we didn't screw with main/toast tuple visibility
 VACUUM FREEZE toasttest;
 SELECT substring(toasttest::text, 1, 200) FROM toasttest;
+
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+
+select oid, xmin, xmax, datname from pg_database;
+
+select * from heap_page_items(get_raw_page('pg_database', 0));
 
 -- now create a trigger that forces all Datums to be indirect ones
 CREATE FUNCTION update_using_indirect()
@@ -55,6 +67,12 @@ INSERT INTO toasttest(descr, f1, f2) VALUES('one-toasted,one-null, via indirect'
 SELECT substring(toasttest::text, 1, 200) FROM toasttest;
 -- check we didn't screw with main/toast tuple visibility
 VACUUM FREEZE toasttest;
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+
+select oid, xmin, xmax, datname from pg_database;
+
+select * from heap_page_items(get_raw_page('pg_database', 0));
+
 SELECT substring(toasttest::text, 1, 200) FROM toasttest;
 
 DROP TABLE toasttest;

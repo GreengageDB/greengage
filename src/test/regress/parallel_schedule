@@ -135,7 +135,20 @@ test: event_trigger
 # ----------
 # Another group of parallel tests
 # ----------
-test: select_views portals_p2 cluster dependency guc bitmapops tsearch tsdicts foreign_data window xmlmap functional_deps advisory_lock json jsonb json_encoding indirect_toast equivclass
+test: select_views
+test: portals_p2
+test: cluster
+test: dependency
+test: guc
+test: bitmapops
+test: tsearch
+test: tsdicts
+test: foreign_data
+test: window xmlmap
+test: functional_deps
+test: advisory_lock
+test: json jsonb json_encoding 
+test: indirect_toast equivclass
 
 # Output of the 'combocid' test contains ctid and cmin values, which will
 # differ depending on how many segments are used. Hence disabled in GPDB.
