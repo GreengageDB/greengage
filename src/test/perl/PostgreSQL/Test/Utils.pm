@@ -68,6 +68,7 @@ our @EXPORT = qw(
   check_mode_recursive
   chmod_recursive
   check_pg_config
+  scan_server_header
   system_or_bail
   system_log
   run_log
@@ -553,6 +554,39 @@ sub chmod_recursive
 	return;
 }
 
+# Returns an array that stores all the matches of the given regular expression
+# within the PostgreSQL installation's C<header_path>.  This can be used to
+# retrieve specific value patterns from the installation's header files.
+sub scan_server_header
+{
+	my ($header_path, $regexp) = @_;
+
+	my ($stdout, $stderr);
+	my $result = IPC::Run::run [ 'pg_config', '--includedir-server' ], '>',
+	  \$stdout, '2>', \$stderr
+	  or die "could not execute pg_config";
+	chomp($stdout);
+	$stdout =~ s/\r$//;
+
+	open my $header_h, '<', "$stdout/$header_path" or die "$!";
+
+	my @match = undef;
+	while (<$header_h>)
+	{
+		my $line = $_;
+
+		if (@match = $line =~ /^$regexp/)
+		{
+			last;
+		}
+	}
+
+	close $header_h;
+	die "could not find match in header $header_path\n"
+	  unless @match;
+	return @match;
+}
+
 # Check presence of a given regexp within pg_config.h for the installation
 # where tests are running, returning a match status result depending on
 # that.
@@ -746,5 +780,11 @@ sub command_checks_all
 
 	return;
 }
+
+# There's no runtime requirement for the following package declaration, but it
+# convinces the RPM Package Manager that this file provides the Perl package
+# in question.  Perl v5.10.1 segfaults if a declaration of the to-be-aliased
+# package precedes the aliasing itself, hence the abnormal placement.
+package PostgreSQL::Test::Utils;
 
 1;

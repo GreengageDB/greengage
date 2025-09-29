@@ -169,6 +169,7 @@ static TupleTableSlot *ExecProcNodeGPDB(PlanState *node);
 /* Greengage specific helper function */
 static void prefetch_subplans(PlanState *ps);
 static List *find_all_mat_nodes(PlanState *ps);
+static bool ExecShutdownNode_walker(PlanState *node, void *context);
 
 
 /* ------------------------------------------------------------------------
@@ -1316,6 +1317,12 @@ planstate_walk_kids(PlanState *planstate,
 bool
 ExecShutdownNode(PlanState *node)
 {
+	return ExecShutdownNode_walker(node, NULL);
+}
+
+static bool
+ExecShutdownNode_walker(PlanState *node, void *context)
+{
 	if (node == NULL)
 		return false;
 
@@ -1334,7 +1341,7 @@ ExecShutdownNode(PlanState *node)
 	if (node->instrument && node->instrument->running)
 		InstrStartNode(node->instrument);
 
-	planstate_tree_walker(node, ExecShutdownNode, NULL);
+	planstate_tree_walker(node, ExecShutdownNode_walker, context);
 
 	switch (nodeTag(node))
 	{

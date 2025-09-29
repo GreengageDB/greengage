@@ -466,9 +466,13 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 		 * also some special processing if the relation was a replicated table.
 		 * In upstream Postgres, the rowcount is saved before ExecutorFinish().
 		 */
-		if (into->distributedBy &&
-			((DistributedBy *)(into->distributedBy))->ptype == POLICYTYPE_REPLICATED)
-			queryDesc->es_processed /= ((DistributedBy *)(into->distributedBy))->numsegments;
+		if (into->distributedBy)
+		{
+			Assert(IsA(into->distributedBy, GpPolicy));
+
+			if (((GpPolicy *)(into->distributedBy))->ptype == POLICYTYPE_REPLICATED)
+				queryDesc->es_processed /= ((GpPolicy *)(into->distributedBy))->numsegments;
+		}
 
 		/* get object address that intorel_startup saved for us */
 		address = ((DR_intorel *) dest)->reladdr;
@@ -556,6 +560,7 @@ intorel_startup_dummy(DestReceiver *self, int operation, TupleDesc typeinfo)
 {
 	Relation rel = ((DR_intorel *)self)->rel;
 	/* See intorel_initplan() for explanation */
+	Assert(rel != NULL);
 	if (rel->rd_tableam)
 		table_dml_init(rel);
 }

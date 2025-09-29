@@ -4,6 +4,9 @@
 -- start_matchsubs
 -- m/\(cost=.*\)/
 -- s/\(cost=.*\)//
+
+-- m/ERROR:  Passing parameters across motion is not supported. \([a-z]+\.c:\d+\)/
+-- s/\d+/XXX/g
 -- end_matchsubs
 create schema rpt;
 set search_path to rpt;
@@ -425,6 +428,18 @@ explain (costs off) select a from t_replicate_volatile union all select * from n
 explain (costs off) create table rpt_ctas as select random() from generate_series(1, 10) distributed replicated;
 explain (costs off) create table rpt_ctas as select a from generate_series(1, 10) a group by a having sum(a) > random() distributed replicated;
 
+-- insert into table with serial column
+create table t_replicate_dst(id serial, i integer) distributed replicated;
+create table t_replicate_src(i integer) distributed replicated;
+insert into t_replicate_src select i from generate_series(1, 5) i;
+explain (costs off, verbose) insert into t_replicate_dst (i) select i from t_replicate_src;
+SET optimizer to off;
+-- query below produced assertion error at ORCA
+explain (costs off, verbose) with s as (select i from t_replicate_src group by i having random() > 0) insert into t_replicate_dst (i) select i from s;
+RESET optimizer;
+insert into t_replicate_dst (i) select i from t_replicate_src;
+select distinct id from gp_dist_random('t_replicate_dst') order by id;
+
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();
 explain (costs off) update t_replicate_volatile set a = 1 from t_replicate_volatile x where x.a + random() = t_replicate_volatile.b;
@@ -612,10 +627,43 @@ with cte as (
 )
 select count(distinct(rand)) from cte join d on cte.a = d.a;
 
+-- prohibit adding motion on late stage when subplan has external parameters
+explain (costs off, verbose) select (select b + random() o) from d;
+
 drop table t1;
 drop table t2;
 drop table r;
 drop table d;
+
+--
+-- Check sub-selects with distributed replicated tables and volatile functions
+--
+-- start_ignore
+drop table if exists t, t1, t2;
+-- end_ignore
+create table t (i int) distributed replicated;
+create table t1 (a int) distributed by (a);
+create table t2 (a int, b float) distributed replicated;
+create or replace function f(i int) returns int language sql security definer as $$ select i; $$;
+insert into t select generate_series(0,10);
+insert into t1 select generate_series(0,10);
+insert into t2 select generate_series(0,10);
+-- ensure we make gather motion when volatile functions in subplan
+explain (costs off, verbose) select (select f(i) from t);
+select count(*) from (select f(i) from t)i;
+explain (costs off, verbose) select (select f(i) from t group by f(i));
+select count(*) from (select f(i) from t group by f(i))i;
+explain (costs off, verbose) select (select i from t group by i having f(i) > 0);
+select count(*) from (select i from t group by i having f(i) > 0) i;
+-- ensure we make broadcast motion when volatile function in deleting motion flow
+explain (costs off, verbose) insert into t2 (a, b) select i, random() from t;
+-- ensure we make broadcast motion when volatile function in correlated subplan qual
+explain (costs off, verbose) select * from t1 where a in (select f(i) from t where i=a and f(i) > 0);
+select count(*) from t1 where a in (select f(i) from t where i=a and f(i) > 0);
+-- ensure we do not break broadcast motion
+explain (costs off, verbose) select * from t1 where 1 <= ALL (select i from t group by i having random() > 0);
+drop table if exists t, t1, t2;
+drop function if exists f(i int);
 
 -- start_ignore
 drop schema rpt cascade;

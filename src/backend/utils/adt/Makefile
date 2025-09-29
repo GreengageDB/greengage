@@ -121,6 +121,8 @@ jsonpath_scan.c: FLEX_NO_BACKUP=yes
 # jsonpath_scan is compiled as part of jsonpath_gram
 jsonpath_gram.o: jsonpath_scan.c
 
+jsonpath_gram.o: CFLAGS += -Wno-unused-but-set-variable
+
 # jsonpath_gram.c and jsonpath_scan.c are in the distribution tarball,
 # so they are not cleaned here.
 clean distclean maintainer-clean:

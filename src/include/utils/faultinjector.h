@@ -50,6 +50,9 @@ typedef enum FaultInjectorState_e {
 	FaultInjectorStateMax
 } FaultInjectorState_e;
 
+/* for DtxProtocolCommand type */
+#include "postgres.h"
+#include "cdb/cdbtm.h"
 
 /*
  *
@@ -73,7 +76,7 @@ typedef struct FaultInjectorEntry_s {
 	char					databaseName[NAMEDATALEN];
 	
 	char					tableName[NAMEDATALEN];
-	
+	int			nestingLevel;
 	volatile	int			startOccurrence;
 	volatile	int			endOccurrence;
 	volatile	 int	numTimesTriggered;
@@ -99,19 +102,47 @@ extern FaultInjectorType_e FaultInjector_InjectFaultIfSet_out_of_line(
 							   const char*				 faultName,
 							   DDLStatement_e			 ddlStatement,
 							   const char*				 databaseName,
-							   const char*				 tableName);
+							   const char*				 tableName,
+							   int						 nestingLevel);
 
+/* 
+ * Use macro FaultInjector_InjectFaultIfSet_SQL instead of direct call
+ * of this function
+ */
+FaultInjectorType_e FaultInjector_InjectFaultIfSet_out_of_line_SQL(
+	const char*		faultName,
+	const char*		statement,
+	int 			nestingLevel);
+
+/* 
+ * Use macro FaultInjector_InjectFaultIfSet_DTX instead of direct call
+ * of this function
+ */
+FaultInjectorType_e FaultInjector_InjectFaultIfSet_out_of_line_DTX(
+	const char* 		faultName,
+	DtxProtocolCommand	dtxProtocolCommand,
+	int					nestingLevel);
 #define FaultInjector_InjectFaultIfSet(faultName, ddlStatement, databaseName, tableName) \
 	(((*numActiveFaults_ptr) > 0) ? \
-	 FaultInjector_InjectFaultIfSet_out_of_line(faultName, ddlStatement, databaseName, tableName) : \
+	 FaultInjector_InjectFaultIfSet_out_of_line(faultName, ddlStatement, databaseName, tableName, 0) : \
 	 FaultInjectorTypeNotSpecified)
 
+#define FaultInjector_InjectFaultIfSet_DTX(faultName, ddlStatement, nestingLevel) \
+	(((*numActiveFaults_ptr) > 0) ? \
+	 FaultInjector_InjectFaultIfSet_out_of_line_DTX(faultName, ddlStatement,nestingLevel) : \
+	 FaultInjectorTypeNotSpecified)
+  
+#define FaultInjector_InjectFaultIfSet_SQL(faultName, ddlStatement, nestingLevel) \
+	(((*numActiveFaults_ptr) > 0) ? \
+	 FaultInjector_InjectFaultIfSet_out_of_line_SQL(faultName, ddlStatement,nestingLevel) : \
+	 FaultInjectorTypeNotSpecified)
 extern int *numActiveFaults_ptr;
 
 
 extern char *InjectFault(
 	char *faultName, char *type, char *ddlStatement, char *databaseName,
-	char *tableName, int startOccurrence, int endOccurrence, int extraArg, int gpSessionid);
+	char *tableName, int startOccurrence, int endOccurrence, int extraArg,
+	int gpSessionid, int nestingLevel);
 
 extern void HandleFaultMessage(const char* msg);
 

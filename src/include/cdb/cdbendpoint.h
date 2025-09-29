@@ -52,6 +52,8 @@ enum EndPointExecPosition
 #define ENDPOINT_READY_ACK_MSG			"ENDPOINT_READY"
 #define ENDPOINT_FINISHED_ACK_MSG		"ENDPOINT_FINISHED"
 
+#define ENDPOINT_TOKEN_ARR_LEN			16
+
 /*
  * Endpoint attach status, used by parallel retrieve cursor.
  */
@@ -157,5 +159,8 @@ extern bool AuthEndpoint(Oid userID, const char *tokenStr);
 extern TupleDesc GetRetrieveStmtTupleDesc(const RetrieveStmt *stmt);
 extern void ExecRetrieveStmt(const RetrieveStmt *stmt, DestReceiver *dest);
 extern void generate_endpoint_name(char *name, const char *cursorName);
+
+/* utility functions in "cdbendpointutilities.c" */
+extern void endpoint_token_str2arr(const char *tokenStr, int8 *token);
 
 #endif   /* CDBENDPOINT_H */

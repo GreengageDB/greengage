@@ -638,8 +638,6 @@ VarBlockReaderInit(
 	VarBlockHeader *header;
 	VarBlockByteLen itemLenSum;
 	VarBlockByteOffset offsetToOffsetArray;
-	int			divisor;
-	int			calculatedItemCount;
 
 	Assert(varBlockReader != NULL);
 	Assert(buffer != NULL);
@@ -659,15 +657,11 @@ VarBlockReaderInit(
 	 */
 	offsetToOffsetArray = VARBLOCK_HEADER_LEN +
 		((itemLenSum + 1) / 2) * 2;
-	if (VarBlockGet_offsetsAreSmall(header))
-	{
-		divisor = 2;
-	}
-	else
-	{
-		divisor = VARBLOCK_BYTE_OFFSET_24_LEN;
-	}
-	calculatedItemCount = (bufferLen - offsetToOffsetArray) / divisor;
+#ifdef USE_ASSERT_CHECKING
+	int divisor =
+		(VarBlockGet_offsetsAreSmall(header)) ? 2 : VARBLOCK_BYTE_OFFSET_24_LEN;
+	int calculatedItemCount = (bufferLen - offsetToOffsetArray) / divisor;
+#endif
 	Assert(calculatedItemCount == VarBlockGet_itemCount(header));
 
 	varBlockReader->offsetToOffsetArray = offsetToOffsetArray;

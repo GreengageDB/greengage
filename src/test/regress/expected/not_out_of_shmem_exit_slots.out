@@ -17,261 +17,461 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- 1
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810156, state=Retry Commit Prepared
+DETAIL:  gid=21476, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 142)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 529)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 2
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810165, state=Retry Commit Prepared
+DETAIL:  gid=21478, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 143)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 530)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 3
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	               'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810177, state=Retry Commit Prepared
+DETAIL:  gid=21480, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 144)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 531)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 4
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810180, state=Retry Commit Prepared
+DETAIL:  gid=21482, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 145)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 532)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 5
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810194, state=Retry Commit Prepared
+DETAIL:  gid=21484, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 146)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 533)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 6
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+                       'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810207, state=Retry Commit Prepared
+DETAIL:  gid=21486, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 147)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 534)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 7
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+                       'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810215, state=Retry Commit Prepared
+DETAIL:  gid=21488, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 148)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 535)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 8
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	               'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810228, state=Retry Commit Prepared
+DETAIL:  gid=21490, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 149)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 536)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 9
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+                       'commit_prepared','','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810237, state=Retry Commit Prepared
+DETAIL:  gid=21492, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 150)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 537)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 10
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810244, state=Retry Commit Prepared
+DETAIL:  gid=21494, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 151)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 538)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 11
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810251, state=Retry Commit Prepared
+DETAIL:  gid=21496, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 152)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 539)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 12
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810257, state=Retry Commit Prepared
+DETAIL:  gid=21498, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 153)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 540)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 13
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810264, state=Retry Commit Prepared
+DETAIL:  gid=21500, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 154)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 541)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 14
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810270, state=Retry Commit Prepared
+DETAIL:  gid=21502, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 155)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 542)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 15
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810273, state=Retry Commit Prepared
+DETAIL:  gid=21504, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 156)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 543)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 16
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810276, state=Retry Commit Prepared
+DETAIL:  gid=21506, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 157)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 544)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 17
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810281, state=Retry Commit Prepared
+DETAIL:  gid=21508, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 158)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 545)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 18
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810287, state=Retry Commit Prepared
+DETAIL:  gid=21510, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 159)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 546)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 19
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810293, state=Retry Commit Prepared
+DETAIL:  gid=21512, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 160)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 548)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 -- 20
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 DROP TABLE foo_stg;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
-DETAIL:  gid=66810299, state=Retry Commit Prepared
+DETAIL:  gid=21514, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
-WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 161)
+WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 549)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+

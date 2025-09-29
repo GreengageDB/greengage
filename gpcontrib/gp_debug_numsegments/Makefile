@@ -8,6 +8,9 @@ PG_CPPFLAGS = -I$(libpq_srcdir)
 
 REGRESS = default_numsegments reset_numsegments
 
+# Avoid building LLVM Bitcode for gp_debug_numsegments module.
+with_llvm = no
+
 ifdef USE_PGXS
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)

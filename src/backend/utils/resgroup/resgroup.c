@@ -385,11 +385,12 @@ error_out:
 void
 AllocResGroupEntry(Oid groupId, const ResGroupCaps *caps)
 {
-	ResGroupData	*group;
-
 	LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 
-	group = createGroup(groupId, caps);
+#ifdef USE_ASSERT_CHECKING
+	ResGroupData	*group =
+#endif
+		createGroup(groupId, caps);
 	Assert(group != NULL);
 
 	LWLockRelease(ResGroupLock);
@@ -486,13 +487,14 @@ InitResGroups(void)
 	while (HeapTupleIsValid(tuple = systable_getnext(sscan)))
 	{
 		Oid			groupId = ((Form_pg_resgroup) GETSTRUCT(tuple))->oid;
-		ResGroupData	*group;
-
-		Bitmapset *bmsCurrent;
+		Bitmapset  *bmsCurrent;
 
 		GetResGroupCapabilities(relResGroupCapability, groupId, &caps);
 
-		group = createGroup(groupId, &caps);
+#ifdef USE_ASSERT_CHECKING
+		ResGroupData	*group =
+#endif
+			createGroup(groupId, &caps);
 		Assert(group != NULL);
 
 		cgroupOpsRoutine->createcgroup(groupId);

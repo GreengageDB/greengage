@@ -193,27 +193,6 @@ cmake -GNinja -D CMAKE_BUILD_TYPE=Debug -H. -Bbuild.debug
 cmake -GNinja -D CMAKE_BUILD_TYPE=RelWithDebInfo -H. -Bbuild.release
 ```
 
-## Explicitly Specifying Xerces For Build
-
-If you want to build with a custom version of Xerces, is recommended to use the
-`--prefix` option to the Xerces-C configure script to install Xerces in a
-location other than the default under `/usr/local/`, because you may have other
-software that depends on the platform's version of Xerces-C. Installing in a
-non-default prefix allows you to have GP-Xerces installed side-by-side with
-unpatched Xerces without incompatibilities.
-
-You can point cmake at your custom Xerces installation using the
-`XERCES_INCLUDE_DIR` and `XERCES_LIBRARY` options like so:
-
-However, to use the current build scripts in GPDB, Xerces will need to be
-placed on the /usr path.
-
-```
-cmake -GNinja -D XERCES_INCLUDE_DIR=/opt/gp_xerces/include -D XERCES_LIBRARY=/opt/gp_xerces/lib/libxerces-c.so ..
-```
-
-Again, on Mac OS X, the library name will end with `.dylib` instead of `.so`.
-
 ## How to debug the build
 
 Show all command lines while building (for debugging purpose)

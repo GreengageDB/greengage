@@ -494,6 +494,10 @@ start_postmaster(void)
 	fflush(stdout);
 	fflush(stderr);
 
+#ifdef EXEC_BACKEND
+	pg_disable_aslr();
+#endif
+
 	pm_pid = fork();
 	if (pm_pid < 0)
 	{
@@ -602,11 +606,11 @@ start_postmaster(void)
 		else
 			close(fd);
 
-		cmd = psprintf("CMD /C \"\"%s\" %s%s < \"%s\" >> \"%s\" 2>&1\"",
+		cmd = psprintf("CMD /D /C \"\"%s\" %s%s < \"%s\" >> \"%s\" 2>&1\"",
 					   exec_path, pgdata_opt, post_opts, DEVNULL, log_file);
 	}
 	else
-		cmd = psprintf("CMD /C \"\"%s\" %s%s < \"%s\" 2>&1\"",
+		cmd = psprintf("CMD /D /C \"\"%s\" %s%s < \"%s\" 2>&1\"",
 					   exec_path, pgdata_opt, post_opts, DEVNULL);
 
 	if (!CreateRestrictedProcess(cmd, &pi, false))
@@ -707,7 +711,7 @@ wait_for_postmaster_start(pgpid_t pm_pid, bool do_checkpoint)
 			 * Allow 2 seconds slop for possible cross-process clock skew.
 			 */
 			pmpid = atol(optlines[LOCK_FILE_LINE_PID - 1]);
-			pmstart = atol(optlines[LOCK_FILE_LINE_START_TIME - 1]);
+			pmstart = atoll(optlines[LOCK_FILE_LINE_START_TIME - 1]);
 			if (pmstart >= start_time - 2 &&
 #ifndef WIN32
 				pmpid == pm_pid

@@ -2279,7 +2279,7 @@ rel_need_to_separate_outer_query_restrictinfos(PlannerInfo *root, RelOptInfo *re
 			return false;
 
 		case RTE_VALUES:
-			return false;
+			return true;
 
 		case RTE_TABLEFUNCTION:
 			/* no correlated subqueries are allowed in a tablefunctions. So not sure

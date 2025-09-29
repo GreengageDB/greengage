@@ -483,6 +483,7 @@ typedef struct _statsExtInfo
 {
 	DumpableObject dobj;
 	const char *rolname;
+	TableInfo  *stattable;		/* link to table the stats are for */
 } StatsExtInfo;
 
 typedef struct _ruleInfo

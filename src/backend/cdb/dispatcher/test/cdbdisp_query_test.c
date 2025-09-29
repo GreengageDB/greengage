@@ -14,6 +14,7 @@
 #define PG_RE_THROW() siglongjmp(*PG_exception_stack, 1)
 
 
+void		__wrap_SetConfigOption(const char *name, const char *value, GucContext context, GucSource source);
 int			__wrap_errmsg(const char *fmt,...);
 int			__wrap_errcode(int sqlerrcode);
 bool		__wrap_errstart(int elevel, const char *filename, int lineno,
@@ -27,6 +28,18 @@ char	   *__wrap_qdSerializeDtxContextInfo(int *size, bool wantSnapshot, bool inC
 void		__wrap_VirtualXactLockTableInsert(VirtualTransactionId vxid);
 void		__wrap_AcceptInvalidationMessages(void);
 static void terminate_process();
+
+
+void
+__wrap_SetConfigOption(const char *name, const char *value,
+				GucContext context, GucSource source)
+{
+	check_expected(name);
+	check_expected(value);
+	check_expected(context);
+	check_expected(source);
+	mock();
+}
 
 
 int
@@ -271,6 +284,13 @@ test__CdbDispatchPlan_may_be_interrupted(void **state)
 	expect_any_count(pqClearAsyncResult, conn, 2);
 	will_be_called_count(pqClearAsyncResult, 2);
 
+	expect_any(__wrap_SetConfigOption, name);
+	expect_any(__wrap_SetConfigOption, value);
+	expect_any(__wrap_SetConfigOption, context);
+	expect_any(__wrap_SetConfigOption, source);
+	will_be_called(__wrap_SetConfigOption);
+	SetSessionAuthorization(1000, true);
+
 	/*
 	 * BUT! pqPutMsgStart mustn't be called
 	 *
@@ -334,8 +354,6 @@ main(int argc, char *argv[])
 
 	/* to avoid mocking cdbtm.c functions */
 	MyTmGxactLocal = (TMGXACTLOCAL *) MemoryContextAllocZero(TopMemoryContext, sizeof(TMGXACTLOCAL));
-
-	SetSessionUserId(1000, true);
 
 	return run_tests(tests);
 }

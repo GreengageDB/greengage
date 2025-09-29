@@ -6319,7 +6319,7 @@ ORDER BY s_name;
         </dxl:LogicalJoin>
       </dxl:LogicalLimit>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="4053120">
+    <dxl:Plan Id="0" SpaceSize="2932080">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="24685091.846062" Rows="49.989277" Width="65"/>

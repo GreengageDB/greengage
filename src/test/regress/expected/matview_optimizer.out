@@ -1,6 +1,8 @@
 -- start_matchsubs
 -- m/\(cost=.*\)/
 -- s/\(cost=.*\)//
+-- m/ERROR:  could not find suitable unique index on materialized view \(.*\)/
+-- s/ERROR:  could not find suitable unique index on materialized view \(.*\)/ERROR:  could not find suitable unique index on materialized view/
 -- end_matchsubs
 -- create a table to use as a basis for views and materialized views in various combinations
 CREATE TABLE mvtest_t (id int NOT NULL PRIMARY KEY, type text NOT NULL, amt numeric NOT NULL);
@@ -618,6 +620,27 @@ REFRESH MATERIALIZED VIEW mvtest_mv_foo;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_foo;
 DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
+-- Concurrent refresh requires a unique index on the materialized
+-- view. Test what happens if it's dropped during the refresh.
+CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
+  RETURNS bool AS $$
+BEGIN
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;
+CREATE MATERIALIZED VIEW drop_idx_matview AS
+  SELECT 1 as i WHERE mvtest_drop_the_index() DISTRIBUTED BY (i);
+CREATE OR REPLACE FUNCTION mvtest_drop_the_index()
+  RETURNS bool AS $$
+BEGIN
+  EXECUTE 'DROP INDEX IF EXISTS mvtest_drop_idx';
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql;
+CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
+\! PGOPTIONS='-c gp_role=utility' psql -X regression -c "REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;"
+ERROR:  could not find suitable unique index on materialized view
+DROP MATERIALIZED VIEW drop_idx_matview; -- clean up
 -- make sure that create WITH NO DATA works via SPI
 BEGIN;
 CREATE FUNCTION mvtest_func()

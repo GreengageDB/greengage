@@ -2792,6 +2792,50 @@ sub wait_for_slot_catchup
 
 =pod
 
+=item $node->wait_for_subscription_sync(publisher, subname, dbname)
+
+Wait for all tables in pg_subscription_rel to complete the initial
+synchronization (i.e to be either in 'syncdone' or 'ready' state).
+
+If the publisher node is given, additionally, check if the subscriber has
+caught up to what has been committed on the primary. This is useful to
+ensure that the initial data synchronization has been completed after
+creating a new subscription.
+
+If there is no active replication connection from this peer, wait until
+poll_query_until timeout.
+
+This is not a test. It die()s on failure.
+
+=cut
+
+sub wait_for_subscription_sync
+{
+	my ($self, $publisher, $subname, $dbname) = @_;
+	my $name = $self->name;
+
+	$dbname = defined($dbname) ? $dbname : 'postgres';
+
+	# Wait for all tables to finish initial sync.
+	print "Waiting for all subscriptions in \"$name\" to synchronize data\n";
+	my $query =
+	    qq[SELECT count(1) = 0 FROM pg_subscription_rel WHERE srsubstate NOT IN ('r', 's');];
+	$self->poll_query_until($dbname, $query)
+	  or croak "timed out waiting for subscriber to synchronize data";
+
+	# Then, wait for the replication to catchup if required.
+	if (defined($publisher))
+	{
+		croak 'subscription name must be specified' unless defined($subname);
+		$publisher->wait_for_catchup($subname);
+	}
+
+	print "done\n";
+	return;
+}
+
+=pod
+
 =item $node->wait_for_log(regexp, offset)
 
 Waits for the contents of the server log file, starting at the given offset, to
@@ -3070,5 +3114,11 @@ use parent -norequire, qw(PostgreSQL::Test::Cluster::V_11);
 # https://www.postgresql.org/docs/10/release-10.html
 
 ########################################################################
+
+# There's no runtime requirement for the following package declaration, but it
+# convinces the RPM Package Manager that this file provides the Perl package
+# in question.  Perl v5.10.1 segfaults if a declaration of the to-be-aliased
+# package precedes the aliasing itself, hence the abnormal placement.
+package PostgreSQL::Test::Cluster;
 
 1;

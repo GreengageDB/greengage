@@ -92,6 +92,9 @@ REGRESS = orafce\
 REGRESS_OPTS = --schedule=parallel_schedule --encoding=utf8
 REGRESS_OPTS += --init-file=init_file
 
+# Avoid building LLVM Bitcode for orafce module.
+with_llvm = no
+
 # override CFLAGS += -Wextra -Wimplicit-fallthrough=0
 
 ifdef NO_PGXS

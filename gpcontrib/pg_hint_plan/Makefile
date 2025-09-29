@@ -28,6 +28,9 @@ EXTRA_CLEAN = sql/ut-fdw.sql expected/ut-fdw.out RPMS
 
 PG_CPPFLAGS += -I$(top_srcdir)/src/pl/plpgsql/src/
 
+# Avoid building LLVM Bitcode for pg_hint_plan module.
+with_llvm = no
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

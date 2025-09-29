@@ -220,3 +220,25 @@ ALTER TABLE tbl ALTER c1 TYPE bigint;
 ALTER TABLE tbl ALTER c3 TYPE bigint;
 \d tbl
 DROP TABLE tbl;
+
+/*
+ * 10. Test coverage for names stored as cstrings in indexes
+ */
+CREATE TABLE nametbl (c1 int, c2 name, c3 float);
+CREATE INDEX nametbl_c1_c2_idx ON nametbl (c2, c1) INCLUDE (c3);
+INSERT INTO nametbl VALUES(1, 'two', 3.0);
+VACUUM nametbl;
+SET enable_seqscan = 0;
+-- ORCA may sometimes use a Index Scan instead of an Index Only Scan.
+SET optimizer_enable_indexscan = 0;
+
+-- Ensure we get an index only scan plan
+EXPLAIN (COSTS OFF) SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
+
+-- Validate the results look sane
+SELECT c2, c1, c3 FROM nametbl WHERE c2 = 'two' AND c1 = 1;
+
+RESET optimizer_enable_indexscan;
+RESET enable_seqscan;
+
+DROP TABLE nametbl;

@@ -31,6 +31,10 @@ sub run_test
 
 	RewindTest::run_pg_rewind($test_mode, do_not_start_primary => 1);
 
+	# Append new file to the old one to preserve primary_conninfo
+	my $new_file_data = slurp_file("$master_pgdata/postgresql.conf");
+	append_to_file("$tmp_folder/master-postgresql-full.conf.tmp", $new_file_data);
+
 	copy(
 		"$tmp_folder/master-postgresql-full.conf.tmp",
 		"$master_pgdata/postgresql.conf");

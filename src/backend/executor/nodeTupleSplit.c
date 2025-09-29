@@ -186,11 +186,9 @@ ExecTupleSplit(PlanState *pstate)
 	TupleSplitState *node = castNode(TupleSplitState, pstate);
 	TupleTableSlot  *result;
 	ExprContext     *econtext;
-	TupleSplit      *plan;
 	bool             filter_out = false;
 
 	econtext = node->ss.ps.ps_ExprContext;
-	plan = (TupleSplit *)node->ss.ps.plan;
 
 	do {
 		/* if all DQAs of the last slot were processed, get a new slot */

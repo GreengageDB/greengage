@@ -166,6 +166,9 @@ s/nodename nor servname provided, or not known/Name or service not known/
 m/ERROR:  could not devise a query plan for the given query \(.*\)/
 s/ERROR:  could not devise a query plan for the given query \(.*\)/ERROR:  could not devise a query plan for the given query/
 
+m/ERROR:  could not pull up equivalence class using projected target list \(.*\)/
+s/ERROR:  could not pull up equivalence class using projected target list \(.*\)/ERROR:  could not pull up equivalence class using projected target list/
+
 m/^DETAIL:.*gid=.*/
 s/gid=\d+/gid DUMMY/
 

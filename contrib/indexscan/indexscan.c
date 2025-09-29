@@ -88,7 +88,6 @@ hstatus_text(HeapTupleHeader tuple, bool visible)
 static void
 readindextuple(readindexinfo *info, Relation irel, Relation hrel, Datum *values, bool *nulls)
 {
-	BlockNumber blkno;
 	Page		page;
 	OffsetNumber offnum;
 	IndexTuple	itup;
@@ -97,7 +96,6 @@ readindextuple(readindexinfo *info, Relation irel, Relation hrel, Datum *values,
 	AttrNumber	attno;
 	TupleDesc	tupdesc = RelationGetDescr(irel);
 
-	blkno = info->blkno;
 	page = info->page;
 	offnum = info->offnum;
 	itup = (IndexTuple) PageGetItem(page, PageGetItemId(page, offnum));

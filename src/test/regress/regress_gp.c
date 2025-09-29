@@ -57,6 +57,7 @@
 #include "utils/vmem_tracker.h"
 #include "utils/resource_manager.h"
 #include "utils/timestamp.h"
+#include "utils/metrics_utils.h"
 
 /* table_functions test */
 extern Datum multiset_example(PG_FUNCTION_ARGS);
@@ -629,7 +630,6 @@ noop_project(PG_FUNCTION_ARGS)
 {
 	AnyTable			scan;
 	FuncCallContext	   *fctx;
-	ReturnSetInfo	   *rsi;
 	HeapTuple			tuple;
 
 	scan = PG_GETARG_ANYTABLE(0);
@@ -638,7 +638,6 @@ noop_project(PG_FUNCTION_ARGS)
 		fctx = SRF_FIRSTCALL_INIT();
 	}
 	fctx = SRF_PERCALL_SETUP();
-	rsi = (ReturnSetInfo *) fcinfo->resultinfo;
 	tuple = AnyTable_GetNextTuple(scan);
 	if (!tuple)
 		SRF_RETURN_DONE(fctx);
@@ -1918,13 +1917,12 @@ Datum
 test_consume_xids(PG_FUNCTION_ARGS)
 {
 	int32		nxids = PG_GETARG_INT32(0);
-	TransactionId topxid;
 	FullTransactionId fullxid;
 	TransactionId xid;
 	TransactionId targetxid;
 
 	/* make sure we have a top-XID first */
-	topxid = GetCurrentTransactionId();
+	(void) GetCurrentTransactionId();
 
 	xid = ReadNewTransactionId();
 
@@ -2235,4 +2233,101 @@ gp_keepalives_check(PG_FUNCTION_ARGS)
 	}
 
 	SRF_RETURN_DONE(funcctx);
+}
+
+static query_info_collect_hook_type gp_mock_query_info_collect_next_hook = NULL;
+
+static void
+gp_mock_query_info_collect(QueryMetricsStatus status, void *args)
+{
+	const char *metric;
+
+	switch (status)
+	{
+		case METRICS_PLAN_NODE_INITIALIZE:
+			metric = "PLAN_NODE_INITIALIZE";
+			break;
+		case METRICS_PLAN_NODE_EXECUTING:
+			metric = "PLAN_NODE_EXECUTING";
+			break;
+		case METRICS_PLAN_NODE_FINISHED:
+			metric = "PLAN_NODE_FINISHED";
+			break;
+		case METRICS_QUERY_SUBMIT:
+			metric = "QUERY_SUBMIT";
+			break;
+		case METRICS_QUERY_START:
+			metric = "QUERY_START";
+			break;
+		case METRICS_QUERY_DONE:
+			metric = "QUERY_DONE";
+			break;
+		case METRICS_QUERY_ERROR:
+			metric = "QUERY_ERROR";
+			break;
+		case METRICS_QUERY_CANCELING:
+			metric = "QUERY_CANCELING";
+			break;
+		case METRICS_QUERY_CANCELED:
+			metric = "QUERY_CANCELED";
+			break;
+		case METRICS_INNER_QUERY_DONE:
+			metric = "INNER_QUERY_DONE";
+			break;
+		default:
+			elog(ERROR, "Encountered invalid query metric: %d", status);
+	}
+
+	elog(NOTICE, "seg%d slice%d, %s, QueryCancelCleanup = %d",
+		 GpIdentity.segindex, currentSliceId, metric, QueryCancelCleanup);
+
+	if (gp_mock_query_info_collect_next_hook)
+	{
+		gp_mock_query_info_collect_next_hook(status, args);
+	}
+}
+
+PG_FUNCTION_INFO_V1(gp_install_mock_query_info_collect_hook);
+Datum
+gp_install_mock_query_info_collect_hook(PG_FUNCTION_ARGS)
+{
+	(void) fcinfo;
+
+	if (query_info_collect_hook != gp_mock_query_info_collect)
+	{
+		gp_mock_query_info_collect_next_hook = query_info_collect_hook;
+		query_info_collect_hook = gp_mock_query_info_collect;
+
+		PG_RETURN_BOOL(true);
+	}
+
+	PG_RETURN_BOOL(false);
+}
+
+PG_FUNCTION_INFO_V1(gp_uninstall_mock_query_info_collect_hook);
+Datum
+gp_uninstall_mock_query_info_collect_hook(PG_FUNCTION_ARGS)
+{
+	(void) fcinfo;
+
+	if (query_info_collect_hook == gp_mock_query_info_collect)
+	{
+		query_info_collect_hook = gp_mock_query_info_collect_next_hook;
+
+		PG_RETURN_BOOL(true);
+	}
+
+	PG_RETURN_BOOL(false);
+}
+
+PG_FUNCTION_INFO_V1(gp_raise_sigint);
+Datum
+gp_raise_sigint(PG_FUNCTION_ARGS)
+{
+	(void) fcinfo;
+
+	raise(SIGINT);
+	CHECK_FOR_INTERRUPTS();
+
+	pg_unreachable();
 }

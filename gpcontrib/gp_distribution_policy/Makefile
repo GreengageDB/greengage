@@ -8,6 +8,9 @@ PG_CPPFLAGS = -I$(libpq_srcdir)
 
 REGRESS = gp_distribution_policy
 
+# Avoid building LLVM Bitcode for gp_distribution_policy module.
+with_llvm = no
+
 ifdef USE_PGXS
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)

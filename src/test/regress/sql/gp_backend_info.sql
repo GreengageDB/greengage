@@ -36,6 +36,7 @@ SELECT COUNT(DISTINCT pid) = :num_primaries +1 FROM gp_backend_info();
 --
 
 CREATE TEMPORARY TABLE temp2();
+CREATE TEMPORARY TABLE temp3 AS SELECT 0 AS a FROM generate_series(1, 500);
 SELECT * FROM temp JOIN (SELECT * FROM temp2) temp2 ON (temp = temp2);
 
 --start_ignore
@@ -65,7 +66,7 @@ GROUP BY content;
 -- Start up a singleton reader.
 --
 
-SELECT * FROM temp JOIN (SELECT oid FROM pg_class) temp2 on (temp = temp2);
+SELECT * FROM temp3 JOIN (SELECT oid FROM pg_class) temp2 on (temp3.a = temp2.oid);
 
 --start_ignore
 -- Debugging helper (see above).

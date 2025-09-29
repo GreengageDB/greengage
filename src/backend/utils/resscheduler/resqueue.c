@@ -622,7 +622,6 @@ ResLockRelease(LOCKTAG *locktag, uint32 resPortalId)
 	LOCALLOCK  *locallock;
 	uint32		hashcode;
 	LWLockId	partitionLock;
-	ResourceOwner owner;
 
 	ResPortalIncrement *incrementSet;
 	ResPortalTag portalTag;
@@ -658,9 +657,6 @@ ResLockRelease(LOCKTAG *locktag, uint32 resPortalId)
 		resLockAcquireOrReleaseInterrupted = true;
 	}
 	resLockReleaseStatus = RQR_STARTED;
-
-	/* Provide a resource owner. */
-	owner = CurrentResourceOwner;
 
 	/*
 	 * Find the LOCALLOCK entry for this lock and lockmode
@@ -2083,7 +2079,6 @@ pg_resqueue_status(PG_FUNCTION_ARGS)
 static void
 BuildQueueStatusContext(QueueStatusContext *fctx)
 {
-	int			num_calls = 0;
 	int			numRecords;
 	int			i;
 	HASH_SEQ_STATUS status;
@@ -2107,7 +2102,10 @@ BuildQueueStatusContext(QueueStatusContext *fctx)
 
 	/* Initialize for a sequential scan of the resource queue hash. */
 	hash_seq_init(&status, ResQueueHash);
-	num_calls = hash_get_num_entries(ResQueueHash);
+#ifdef USE_ASSERT_CHECKING
+	int num_calls =
+#endif
+		hash_get_num_entries(ResQueueHash);
 	Assert(num_calls == ResScheduler->num_queues);
 
 	numRecords = 0;

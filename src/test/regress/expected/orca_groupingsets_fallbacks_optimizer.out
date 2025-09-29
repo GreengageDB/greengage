@@ -76,8 +76,6 @@ create temp table gstest2 (a int primary key, b int, c int, d int, v int);
 insert into gstest2 values (1, 1, 1, 1, 1);
 insert into gstest2 values (2, 2, 2, 2, 1);
 select d from gstest2 group by grouping sets ((a,b), (a));
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
  d 
 ---
  2
@@ -85,16 +83,6 @@ DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect nor
  1
  1
 (4 rows)
-
--- Orca falls back due to HAVING clause with outer references
-select v.c, (select count(*) from gstest1 group by () having v.c) from (values (false),(true)) v(c);
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: {TARGETENTRY :expr {VAR :varno 1 :varattno 2 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1} :resno 1 :resname count :ressortgroupref 0 :resorigtbl 0 :resorigcol 0 :resjunk false}
- c | count 
----+-------
- f |      
- t |     4
-(2 rows)
 
 -- Orca falls back due to grouping function with multiple arguments
 select a, b, grouping(a,b), sum(v), count(*), max(v) from gstest1 group by rollup (a,b);

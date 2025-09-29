@@ -34,6 +34,8 @@ io_limit_scanner.c: FLEXFLAGS = -CF -p -p
 io_limit_scanner.c: FLEX_NO_BACKUP=yes
 io_limit_scanner.c: FLEX_FIX_WARNING=yes
 
+io_limit_gram.o: CFLAGS += -Wno-unused-but-set-variable
+
 io_limit_gram.o io_limit_scanner.o cgroup-ops-linux-v2.o: io_limit_gram.h
 else
 OBJS += cgroup-ops-dummy.o

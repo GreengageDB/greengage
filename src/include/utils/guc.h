@@ -239,6 +239,7 @@ typedef enum
 #define GUC_UNIT_TIME		   0xF0000	/* mask for time-related units */
 
 #define GUC_EXPLAIN			  0x100000	/* include in explain */
+#define GUC_ALLOW_IN_PARALLEL 0x1000000	/* allow setting in parallel mode */
 
 #define GUC_UNIT				(GUC_UNIT_MEMORY | GUC_UNIT_TIME)
 
@@ -329,7 +330,6 @@ extern bool gp_enable_statement_trigger;
 
 extern bool gp_ignore_error_table;
 
-extern bool	Debug_dtm_action_primary;
 extern bool Debug_shareinput_xslice;
 
 extern bool gp_log_optimization_time;
@@ -377,36 +377,6 @@ extern bool execute_pruned_plan;
 extern int gp_max_partition_level;
 extern bool gp_enable_relsize_collection;
 
-/* Debug DTM Action */
-typedef enum
-{
-	DEBUG_DTM_ACTION_NONE = 0,
-	DEBUG_DTM_ACTION_DELAY = 1,
-	DEBUG_DTM_ACTION_FAIL_BEGIN_COMMAND = 2,
-	DEBUG_DTM_ACTION_FAIL_END_COMMAND = 3,
-	DEBUG_DTM_ACTION_PANIC_BEGIN_COMMAND = 4,
-
-	DEBUG_DTM_ACTION_LAST = 4
-}	DebugDtmAction;
-
-/* Debug DTM Action */
-typedef enum
-{
-	DEBUG_DTM_ACTION_TARGET_NONE = 0,
-	DEBUG_DTM_ACTION_TARGET_PROTOCOL = 1,
-	DEBUG_DTM_ACTION_TARGET_SQL = 2,
-
-	DEBUG_DTM_ACTION_TARGET_LAST = 2
-}	DebugDtmActionTarget;
-
-extern char *Debug_dtm_action_sql_command_tag;
-extern char *Debug_dtm_action_str;
-extern char *Debug_dtm_action_target_str;
-extern int Debug_dtm_action;
-extern int Debug_dtm_action_target;
-extern int Debug_dtm_action_protocol;
-extern int Debug_dtm_action_segment;
-extern int Debug_dtm_action_nestinglevel;
 
 
 /* Enable check for compatibility of encoding and locale in createdb */

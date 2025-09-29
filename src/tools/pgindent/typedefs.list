@@ -1970,6 +1970,7 @@ ReadExtraTocPtrType
 ReadFunc
 ReassignOwnedStmt
 RecheckForeignScan_function
+RecordCacheArrayEntry
 RecordCacheEntry
 RecordCompareData
 RecordIOData
@@ -2385,6 +2386,7 @@ TSQueryParserState
 TSQuerySign
 TSReadPointer
 TSTemplateInfo
+TSTokenTypeItem
 TSTokenTypeStorage
 TSVector
 TSVectorBuildState
@@ -2871,6 +2873,7 @@ filemap_t
 finalize_primnode_context
 find_dependent_phvs_context
 find_expr_references_context
+fireRIRonSubLink_context
 fix_join_expr_context
 fix_scan_expr_context
 fix_upper_expr_context
@@ -3018,6 +3021,7 @@ mblen_converter
 mbverifier
 md5_ctxt
 metastring
+missing_cache_key
 mix_data_t
 mixedStruct
 mode_t
@@ -3076,6 +3080,9 @@ pg_locale_t
 pg_mb_radix_tree
 pg_on_exit_callback
 pg_re_flags
+pg_regex_t
+pg_regmatch_t
+pg_regoff_t
 pg_saslprep_rc
 pg_sha224_ctx
 pg_sha256_ctx
@@ -3267,6 +3274,7 @@ string
 substitute_actual_parameters_context
 substitute_actual_srf_parameters_context
 substitute_phv_relids_context
+subxids_array_status
 svtype
 symbol
 tablespaceinfo

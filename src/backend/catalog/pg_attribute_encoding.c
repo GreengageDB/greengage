@@ -48,7 +48,9 @@ transform_lastrownums(int64 *lastrownums)
 {
 	Datum 		ret = (Datum) 0;
 	ArrayBuildState *astate = NULL;
+#ifdef USE_ASSERT_CHECKING
 	int 		len = 0;
+#endif
 
 	if (!lastrownums)
 		return ret;
@@ -64,7 +66,9 @@ transform_lastrownums(int64 *lastrownums)
 		if (i != 0 && lastrownums[i] == 0)
 			continue;
 
+#ifdef USE_ASSERT_CHECKING
 		len = i + 1;
+#endif
 
 		astate = accumArrayResult(astate, Int64GetDatum(lastrownums[i]),
 									false, INT8OID,

@@ -1082,6 +1082,46 @@ WITH RECURSIVE cte(level, id) as (
 	SELECT level+1, c FROM (SELECT * FROM cte OFFSET 0) foo, bar)
 SELECT * FROM cte LIMIT 10;
 ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:1989)
+-- allow this, because we historically have
+WITH RECURSIVE x(n) AS (
+  WITH x1 AS (SELECT 1 AS n)
+    SELECT 0
+    UNION
+    SELECT * FROM x1)
+	SELECT * FROM x;
+ n 
+---
+ 0
+ 1
+(2 rows)
+
+-- but this should be rejected
+WITH RECURSIVE x(n) AS (
+  WITH x1 AS (SELECT 1 FROM x)
+    SELECT 0
+    UNION
+    SELECT * FROM x1)
+	SELECT * FROM x;
+ERROR:  recursive reference to query "x" must not appear within a subquery
+LINE 2:   WITH x1 AS (SELECT 1 FROM x)
+                                    ^
+-- and this too
+WITH RECURSIVE x(n) AS (
+  (WITH x1 AS (SELECT 1 FROM x) SELECT * FROM x1)
+  UNION
+  SELECT 0)
+	SELECT * FROM x;
+ERROR:  recursive reference to query "x" must not appear within its non-recursive term
+LINE 2:   (WITH x1 AS (SELECT 1 FROM x) SELECT * FROM x1)
+                                     ^
+-- and this
+WITH RECURSIVE x(n) AS (
+  SELECT 0 UNION SELECT 1
+  ORDER BY (SELECT n FROM x))
+	SELECT * FROM x;
+ERROR:  ORDER BY in a recursive query is not implemented
+LINE 3:   ORDER BY (SELECT n FROM x))
+                   ^
 CREATE TEMPORARY TABLE y (a INTEGER) DISTRIBUTED RANDOMLY;
 INSERT INTO y SELECT generate_series(1, 10);
 -- LEFT JOIN
@@ -2552,6 +2592,51 @@ JOIN cte b USING (i);
  i 
 ---
  1
+(1 row)
+
+DROP TABLE with_test;
+-- Test shared modifying CTE behavior in utility mode
+CREATE TABLE with_test (i int, j int) DISTRIBUTED RANDOMLY;
+-- check when slice is not allocated (topslice is allocated only on QD)
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'EXPLAIN (SLICETABLE, COSTS OFF) WITH cte AS (INSERT INTO with_test VALUES (1, 2) RETURNING *) SELECT i FROM cte a JOIN cte b USING (i);'
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Hash Join
+   Hash Cond: (share0_ref2.i = b.i)
+   ->  Shared Scan (share slice:id -1:0)
+   ->  Hash
+         ->  Subquery Scan on b
+               ->  Shared Scan (share slice:id -1:0)
+                     ->  Insert on with_test
+                           ->  Result
+ Optimizer: Postgres-based planner
+(9 rows)
+
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'WITH cte AS (INSERT INTO with_test VALUES (1, 2) RETURNING *) SELECT i FROM cte a JOIN cte b USING (i);'
+ i 
+---
+ 1
+(1 row)
+
+-- check when slice is allocated inside InitPlan
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'EXPLAIN (SLICETABLE, COSTS OFF) WITH cte AS (INSERT INTO with_test VALUES (3, 4) RETURNING *) SELECT i FROM cte WHERE 4 = (SELECT j FROM cte);'
+                   QUERY PLAN                    
+-------------------------------------------------
+ Result
+   One-Time Filter: (4 = $1)
+   InitPlan 1 (returns $1)
+     ->  Subquery Scan on cte
+           ->  Shared Scan (share slice:id -1:0)
+                 ->  Insert on with_test
+                       ->  Result
+   ->  Shared Scan (share slice:id -1:0)
+ Optimizer: Postgres-based planner
+(9 rows)
+
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'WITH cte AS (INSERT INTO with_test VALUES (3, 4) RETURNING *) SELECT i FROM cte WHERE 4 = (SELECT j FROM cte);'
+ i 
+---
+ 3
 (1 row)
 
 DROP TABLE with_test;

@@ -108,6 +108,8 @@ test: fsync_ao
 # Disable auto-vacuum for below tests
 test: disable_autovacuum
 
+test: invalid_database
+
 # Tests on Append-Optimized tables (row-oriented).
 test: concurrent_index_creation_should_not_deadlock
 test: uao/alter_while_vacuum_row uao/alter_while_vacuum2_row
@@ -373,3 +375,6 @@ test: brin_heap
 
 # Intensive tests for BRIN
 test: uao/brin_chain_row uao/brin_chain_column
+
+test: lock_status
+test: dependency

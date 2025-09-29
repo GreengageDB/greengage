@@ -104,6 +104,7 @@ void
 proc_exit(int code)
 {
 	pqsignal(SIGALRM, SIG_IGN);
+
 	/* not safe if forked by system(), etc. */
 	if (MyProcPid != (int) getpid())
 		elog(PANIC, "proc_exit() called in child process");
@@ -189,6 +190,7 @@ proc_exit_prepare(int code)
 	InterruptPending = false;
 	ProcDiePending = false;
 	QueryCancelPending = false;
+	QueryCancelCleanup = false;
 	InterruptHoldoffCount = 1;
 	CritSectionCount = 0;
 

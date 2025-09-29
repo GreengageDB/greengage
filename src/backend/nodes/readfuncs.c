@@ -3585,6 +3585,7 @@ _readSubPlan(void)
 	READ_NODE_FIELD(extParam);
 	READ_FLOAT_FIELD(startup_cost);
 	READ_FLOAT_FIELD(per_call_cost);
+	READ_INT_FIELD(subLinkId);
 
 	READ_DONE();
 }

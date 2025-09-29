@@ -256,6 +256,9 @@ extern void DeconstructFkConstraintRow(HeapTuple tuple, int *numfks,
 									   AttrNumber *conkey, AttrNumber *confkey,
 									   Oid *pf_eq_oprs, Oid *pp_eq_oprs, Oid *ff_eq_oprs);
 
+extern void get_constraint_relation_oids(Oid constraint_oid, Oid *conrelid, Oid *confrelid);
+extern List *get_constraint_relation_columns(Oid constraint_oid);
+
 extern bool check_functional_grouping(Oid relid,
 									  Index varno, Index varlevelsup,
 									  List *grouping_columns,

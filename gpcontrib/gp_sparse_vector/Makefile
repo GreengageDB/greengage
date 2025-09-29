@@ -5,6 +5,9 @@ endif
 
 override CFLAGS+=-std=gnu99
 
+# Avoid building LLVM Bitcode for gp_sparse_vector module.
+with_llvm = no
+
 MODULE_big = gp_svec
 EXTENSION = gp_sparse_vector
 DATA = gp_sparse_vector--1.0.1.sql gp_sparse_vector--1.0.0--1.0.1.sql

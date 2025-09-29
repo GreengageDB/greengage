@@ -110,6 +110,19 @@ sub run_test
 		$test_primary_datadir);
 	@paths = sort @paths;
 	@list_of_expected_files = sort @list_of_expected_files;
+
+	# File::Find converts backslashes to slashes in the newer Perl
+	# versions. To support all Perl versions, do the same conversion
+	# for Windows before comparing the paths.
+	if ($windows_os)
+	{
+		for my $filename (@paths)
+		{
+			$filename =~ s{\\}{/}g;
+		}
+		$test_primary_datadir =~ s{\\}{/}g;
+	}
+
 	is_deeply(
 		\@paths,
 		\@list_of_expected_files,

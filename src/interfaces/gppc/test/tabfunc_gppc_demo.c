@@ -139,14 +139,12 @@ GppcDatum describe_spi(GPPC_FUNCTION_ARGS);
 
 GppcDatum describe_spi(GPPC_FUNCTION_ARGS)
 {
-        GppcTupleDesc   tdesc, odesc;
+        GppcTupleDesc   odesc;
         GppcSPIResult   result;
         bool                    isnull, iserror;
         char               *query;
         char               *colname = NULL;
         GppcDatum               d_colname;
-
-        tdesc = GPPC_TF_INPUT_DESC(0, &iserror);
 
         if (GppcSPIConnect() < 0)
                 GppcReport(GPPC_ERROR, "unable to connect to SPI");
@@ -182,7 +180,7 @@ GppcDatum project_spi(GPPC_FUNCTION_ARGS)
 {
         GppcFuncCallContext     fctx;
         GppcAnyTable            scan;
-        GppcTupleDesc           odesc, idesc;
+        GppcTupleDesc           odesc;
         GppcHeapTuple           tuple;
         char                            colname[255];
         GppcDatum                       values[1];
@@ -202,7 +200,6 @@ GppcDatum project_spi(GPPC_FUNCTION_ARGS)
 
         /* Get the next value from the input scan */
         odesc = GPPC_SRF_RESULT_DESC();
-        idesc = GppcAnyTableGetTupleDesc(scan);
         tuple = GppcAnyTableGetNextTuple(scan);
 
         if (tuple == NULL)

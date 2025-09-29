@@ -1019,9 +1019,10 @@ fmgr_sql_validator(PG_FUNCTION_ARGS)
 			}
 
 			check_sql_fn_statements(querytree_list);
-			(void) check_sql_fn_retval(funcoid, proc->prorettype,
-									   querytree_list,
-									   NULL, NULL);
+			(void) check_sql_fn_retval_ext(funcoid, proc->prorettype,
+										   proc->prokind,
+										   querytree_list,
+										   NULL, NULL);
 		}
 
 		error_context_stack = sqlerrcontext.previous;
@@ -1064,7 +1065,6 @@ function_parse_error_transpose(const char *prosrc)
 {
 	int			origerrposition;
 	int			newerrposition;
-	const char *queryText;
 
 	/*
 	 * Nothing to do unless we are dealing with a syntax error that has a
@@ -1082,11 +1082,22 @@ function_parse_error_transpose(const char *prosrc)
 	}
 
 	/* We can get the original query text from the active portal (hack...) */
-	/* Assert(ActivePortal && PortalGetStatus(ActivePortal) == PORTAL_ACTIVE); */
-	queryText = ActivePortal->sourceText;
+	if (ActivePortal && ActivePortal->status == PORTAL_ACTIVE)
+	{
+		const char *queryText = ActivePortal->sourceText;
 
-	/* Try to locate the prosrc in the original text */
-	newerrposition = match_prosrc_to_query(prosrc, queryText, origerrposition);
+		/* Try to locate the prosrc in the original text */
+		newerrposition = match_prosrc_to_query(prosrc, queryText,
+											   origerrposition);
+	}
+	else
+	{
+		/*
+		 * Quietly give up if no ActivePortal.  This is an unusual situation
+		 * but it can happen in, e.g., logical replication workers.
+		 */
+		newerrposition = -1;
+	}
 
 	if (newerrposition > 0)
 	{

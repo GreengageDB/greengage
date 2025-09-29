@@ -896,13 +896,9 @@ array_int4_add(PG_FUNCTION_ARGS)
 				ndatabytes,
 				nbytes;
 	int		   *dims1,
-			   *lbs1,
-				ndims1,
-				ndatabytes1;
+				ndims1;
 	int		   *dims2,
-			   *lbs2,
-				ndims2,
-				ndatabytes2;
+				ndims2;
 	bool		bigenuf1,
 				bigenuf2;
 	int			i,
@@ -966,15 +962,10 @@ array_int4_add(PG_FUNCTION_ARGS)
 						   ndims1, ndims2)));
 
 	/* get argument array details */
-	lbs1 = ARR_LBOUND(v1);
-	lbs2 = ARR_LBOUND(v2);
 	dims1 = ARR_DIMS(v1);
 	dims2 = ARR_DIMS(v2);
 	dat1 = ARR_DATA_PTR(v1);
 	dat2 = ARR_DATA_PTR(v2);
-
-	ndatabytes1 = ARR_SIZE(v1) - ARR_DATA_OFFSET(v1);
-	ndatabytes2 = ARR_SIZE(v2) - ARR_DATA_OFFSET(v2);
 
 	/*
 	 * resulting array is made up of the elements (possibly arrays
@@ -1021,7 +1012,8 @@ array_int4_add(PG_FUNCTION_ARGS)
 	
 	if ( bigenuf1 && bigenuf2 ) /* Conformable arrays. */
 	{
-		Assert(ndatabytes == ndatabytes1 && ndatabytes == ndatabytes2);
+		Assert(ndatabytes == ARR_SIZE(v1) - ARR_DATA_OFFSET(v1) &&
+			   ndatabytes == ARR_SIZE(v2) - ARR_DATA_OFFSET(v2));
 		memcpy(ARR_DATA_PTR(result), dat1, ndatabytes);
 		for ( i = 0; i < nelem; i++ )
 			idata[i] += ((int*)dat2)[i];
@@ -1029,14 +1021,14 @@ array_int4_add(PG_FUNCTION_ARGS)
 	}
 	else if ( bigenuf1 )
 	{
-		Assert(ndatabytes == ndatabytes1);
+		Assert(ndatabytes == ARR_SIZE(v1) - ARR_DATA_OFFSET(v1));
 		memcpy(ARR_DATA_PTR(result), dat1, ndatabytes);
 		/* Add in argument 2 */
 		accumToArray(ndims, dims, idata, dims2, (int*)dat2);
 	}
 	else if ( bigenuf2 )
 	{
-		Assert(ndatabytes == ndatabytes2);
+		Assert(ndatabytes == ARR_SIZE(v2) - ARR_DATA_OFFSET(v2));
 		memcpy(ARR_DATA_PTR(result), dat2, ndatabytes);
 		/* Add in argument 1 */
 		accumToArray(ndims, dims, idata, dims1, (int*)dat1);
@@ -1514,7 +1506,6 @@ array_position_common(FunctionCallInfo fcinfo)
 		PG_RETURN_NULL();
 
 	array = PG_GETARG_ARRAYTYPE_P(0);
-	element_type = ARR_ELEMTYPE(array);
 
 	/*
 	 * We refuse to search for elements in multi-dimensional arrays, since we
@@ -1524,6 +1515,10 @@ array_position_common(FunctionCallInfo fcinfo)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("searching for elements in multidimensional arrays is not supported")));
+
+	/* Searching in an empty array is well-defined, though: it always fails */
+	if (ARR_NDIM(array) < 1)
+		PG_RETURN_NULL();
 
 	if (PG_ARGISNULL(1))
 	{
@@ -1539,6 +1534,7 @@ array_position_common(FunctionCallInfo fcinfo)
 		null_search = false;
 	}
 
+	element_type = ARR_ELEMTYPE(array);
 	position = (ARR_LBOUND(array))[0] - 1;
 
 	/* figure out where to start */
@@ -1664,9 +1660,6 @@ array_positions(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 
 	array = PG_GETARG_ARRAYTYPE_P(0);
-	element_type = ARR_ELEMTYPE(array);
-
-	position = (ARR_LBOUND(array))[0] - 1;
 
 	/*
 	 * We refuse to search for elements in multi-dimensional arrays, since we
@@ -1678,6 +1671,10 @@ array_positions(PG_FUNCTION_ARGS)
 				 errmsg("searching for elements in multidimensional arrays is not supported")));
 
 	astate = initArrayResult(INT4OID, CurrentMemoryContext, false);
+
+	/* Searching in an empty array is well-defined, though: it always fails */
+	if (ARR_NDIM(array) < 1)
+		PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
 
 	if (PG_ARGISNULL(1))
 	{
@@ -1692,6 +1689,9 @@ array_positions(PG_FUNCTION_ARGS)
 		searched_element = PG_GETARG_DATUM(1);
 		null_search = false;
 	}
+
+	element_type = ARR_ELEMTYPE(array);
+	position = (ARR_LBOUND(array))[0] - 1;
 
 	/*
 	 * We arrange to look up type info for array_create_iterator only once per

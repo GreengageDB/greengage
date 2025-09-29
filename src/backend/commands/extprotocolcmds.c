@@ -50,7 +50,6 @@ DefineExtProtocol(List *name, List *parameters, bool trusted)
 	List	   *writefuncName = NIL;
 	List	   *validatorfuncName = NIL;
 	ListCell   *pl;
-	Oid			protOid;
 
 	if (!superuser())
 		ereport(ERROR,
@@ -88,11 +87,11 @@ DefineExtProtocol(List *name, List *parameters, bool trusted)
 	/*
 	 * Most of the argument-checking is done inside of ExtProtocolCreate
 	 */
-	protOid = ExtProtocolCreate(protName,			/* protocol name */
-								readfuncName,		/* read function name */
-								writefuncName,		/* write function name */
-								validatorfuncName, 	/* validator function name */
-								trusted);
+	ExtProtocolCreate(protName,			 /* protocol name */
+					  readfuncName,		 /* read function name */
+					  writefuncName,	 /* write function name */
+					  validatorfuncName, /* validator function name */
+					  trusted);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{

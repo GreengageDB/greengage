@@ -3433,18 +3433,15 @@ static
 int check_output_to_file(request_t *r, int wrote)
 {
 	session_t *session = r->session;
-	char *buf;
 	int *buftop;
 	char error_msg[128];
 
 	if (r->zstd)
 	{
-		buf = r->in.wbuf;
 		buftop = &r->in.wbuftop;
 	}
 	else
 	{
-		buf = r->in.dbuf;
 		buftop = &r->in.dbuftop;
 	}
 

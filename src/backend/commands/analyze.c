@@ -1740,6 +1740,10 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 	ListCell   *lc;
 	bool		has_child;
 
+	/* Initialize output parameters to zero now, in case we exit early */
+	*totalrows = 0;
+	*totaldeadrows = 0;
+
 	/*
 	 * Find all members of inheritance set.  We only need AccessShareLock on
 	 * the children.
@@ -1889,8 +1893,6 @@ acquire_inherited_sample_rows(Relation onerel, int elevel,
 	pgstat_progress_update_param(PROGRESS_ANALYZE_CHILD_TABLES_TOTAL,
 								 nrels);
 	numrows = 0;
-	*totalrows = 0;
-	*totaldeadrows = 0;
 	for (i = 0; i < nrels; i++)
 	{
 		Relation	childrel = rels[i];
@@ -1979,7 +1981,6 @@ acquire_hll_by_query(Relation onerel, int nattrs, VacAttrStats **attrstats, int 
 {
 	StringInfoData str, columnStr;
 	int			i;
-	int			ret;
 	Datum	   *vals;
 	MemoryContext oldcxt;
 	const char *schemaName = get_namespace_name(RelationGetNamespace(onerel));
@@ -2012,7 +2013,10 @@ acquire_hll_by_query(Relation onerel, int nattrs, VacAttrStats **attrstats, int 
 	 * Do the query. We pass readonly==false, to force SPI to take a new
 	 * snapshot. That ensures that we see all changes by our own transaction.
 	 */
-	ret = SPI_execute(str.data, false, 0);
+#ifdef USE_ASSERT_CHECKING
+	int ret =
+#endif
+		SPI_execute(str.data, false, 0);
 	Assert(ret > 0);
 
 	/*

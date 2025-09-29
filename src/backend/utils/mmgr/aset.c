@@ -180,6 +180,10 @@ typedef struct AllocSetContext
 
 	Size		currentAllocated;
 	Size		peakAllocated;
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	HTAB *chunkTable;
+#endif
 } AllocSetContext;
 
 typedef AllocSetContext *AllocSet;
@@ -266,6 +270,20 @@ typedef struct AllocChunkData
 #define ALLOCCHUNK_RAWSIZE  (SIZEOF_SIZE_T + SIZEOF_VOID_P)
 #endif							/* MEMORY_CONTEXT_CHECKING */
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	/*
+	 * extra information about callee, file, and line number of each
+	 * allocation
+	 */
+	MemoryContextChunkInfo info;
+
+#define ALLOCCHUNK_RAWSIZE_EXTRA ALLOCCHUNK_RAWSIZE
+#undef ALLOCCHUNK_RAWSIZE
+
+#define ALLOCCHUNK_RAWSIZE \
+	(ALLOCCHUNK_RAWSIZE_EXTRA + MEMORYCONTEXTCHUNKINFO_RAWSIZE)
+#endif
+
 	/* ensure proper alignment by adding padding if needed */
 #if (ALLOCCHUNK_RAWSIZE % MAXIMUM_ALIGNOF) != 0
 	char		padding[MAXIMUM_ALIGNOF - ALLOCCHUNK_RAWSIZE % MAXIMUM_ALIGNOF];
@@ -275,6 +293,7 @@ typedef struct AllocChunkData
 	void	   *aset;
 	/* there must not be any padding to reach a MAXALIGN boundary here! */
 
+	/* FIXME: these are obsolete */
 #ifdef CDB_PALLOC_TAGS
 	const char  *alloc_tag;
 	int 		alloc_n;
@@ -668,6 +687,10 @@ AllocSetContextCreateInternal(MemoryContext parent,
 	set->localAllocated = 0;
 	set->currentAllocated = 0;
 	set->peakAllocated = 0;
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	set->chunkTable = NULL;
+#endif
 
 	((MemoryContext) set)->mem_allocated = firstBlockSize;
 
@@ -1571,6 +1594,10 @@ AllocSetIsEmpty(MemoryContext context)
 	return false;
 }
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "aset_memory_debug.c"
+#endif
+
 /*
  * AllocSetStats
  *		Compute stats about memory consumption of an allocset.
@@ -1632,6 +1659,10 @@ AllocSetStats(MemoryContext context,
 		totals->totalspace += totalspace;
 		totals->freespace += freespace;
 	}
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	AllocSetUpdateAllocatedChunkStats(set);
+#endif
 }
 
 static void

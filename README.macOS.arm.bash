@@ -19,19 +19,7 @@ else
                 exit 1
           fi
 fi
-
-#Install xerces-c  library
-if [ ! -d ~/workspace/gp-xerces ] ; then
-	echo "INFO: xerces is not installed, Installing...."
-	git clone https://github.com/GreengageDB/gp-xerces.git -v ~/workspace/gp-xerces
-	mkdir ~/workspace/gp-xerces/build
-	cd ~/workspace/gp-xerces/build
-	~/workspace/gp-xerces/configure --prefix=/usr/local
-	make
-	sudo make install
-        cd -
-fi
-#brew install xerces-c #gporca
+brew install xerces-c #gporca
 brew install bash-completion
 brew install cmake # gporca
 brew install libyaml

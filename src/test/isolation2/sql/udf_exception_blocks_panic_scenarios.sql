@@ -1,34 +1,10 @@
 -- Tests exception handling of GPDB PL/PgSQL UDF
 -- It exercises:
---  1. PROTOCOL or SQL type of dtm_action_target
+--  1. Several transaction control SQL statement
 --  2. Various levels of sub-transactions
---  3. dtm_action_protocol(PROTOCOL): subtransaction_begin, subtransaction_rollback or subtransaction_release
---  4. dtm_action: fail_begin_command, fail_end_command or panic_begin_comand
---
--- debug_dtm_action: Using this can specify what action to be
--- triggered/simulated and at what point like error / panic / delay
--- and at start or end command after receiving by the segment.
-
--- debug_dtm_action_segment: Using this can specify segment number to
--- trigger the specified dtm_action.
-
--- debug_dtm_action_target: Allows to set target for specified
--- dtm_action should it be DTM protocol command or SQL command from
--- coordinator to segment.
-
--- debug_dtm_action_protocol: Allows to specify sub-type of DTM
--- protocol for which to perform specified dtm_action (like prepare,
--- abort_no_prepared, commit_prepared, abort_prepared,
--- subtransaction_begin, subtransaction_release,
--- subtransaction_rollback, etc...
---
--- debug_dtm_action_sql_command_tag: If debug_dtm_action_target is sql
--- then this parameter can be used to set the type of sql that should
--- trigger the exeception. Ex: 'MPPEXEC UPDATE'
-
--- debug_dtm_action_nestinglevel: This allows to optional specify at
--- which specific depth level in transaction to take the specified
--- dtm_action. This apples only to target with protocol and not SQL.
+--  3. dtx protocol command: subtransaction_begin, subtransaction_rollback or subtransaction_release
+--  4. Errors are tested at beginning and end of command, panic only on
+--- beginning
 --
 --
 -- start_matchsubs
@@ -96,81 +72,82 @@ END; /* in func */
 $$
 LANGUAGE plpgsql;
 SELECT role, preferred_role, content, mode, status FROM gp_segment_configuration;
-SET debug_dtm_action_segment=0;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=subtransaction_begin;
-SET debug_dtm_action=panic_begin_command;
-SET debug_dtm_action_nestinglevel=0;
+--
+--
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'panic', 'subtransaction_begin', '', '', 1, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE content = '0' AND role = 'p';
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
 0U: select 1;
 0Uq:
 select * from employees;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = '0' AND role = 'p';
 --
 --
-SET debug_dtm_action_segment=0;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=subtransaction_release;
-SET debug_dtm_action=panic_begin_command;
-SET debug_dtm_action_nestinglevel=0;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'panic',
+                       'subtransaction_release', '', '', 1, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE content = '0' AND role = 'p';
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
 0U: select 1;
 0Uq:
 select * from employees;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content = '0' AND role = 'p';
 --
 --
-SET debug_dtm_action_segment=0;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=subtransaction_release;
-SET debug_dtm_action=panic_begin_command;
-SET debug_dtm_action_nestinglevel=4;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'panic',
+	               'subtransaction_release', '', '', 1, -1, 0, dbid, -1, 4)
+       FROM gp_segment_configuration WHERE role = 'p' AND content = '0';
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
 0U: select 1;
 0Uq:
 select * from employees;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+       FROM gp_segment_configuration where role = 'p' AND content = '0';
 --
 --
-SET debug_dtm_action_segment=0;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=subtransaction_rollback;
-SET debug_dtm_action=panic_begin_command;
-SET debug_dtm_action_nestinglevel=3;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'panic',
+                       'subtransaction_rollback', '', '', 1, -1, 0, dbid, -1, 3)
+  FROM gp_segment_configuration where role = 'p' and content = '0';
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
 0U: select 1;
 0Uq:
 select * from employees;
+select gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = '0';
 --
 --
-SET debug_dtm_action_segment=0;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=subtransaction_rollback;
-SET debug_dtm_action=panic_begin_command;
-SET debug_dtm_action_nestinglevel=0;
+select gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'panic',
+                       'subtransaction_rollback', '', '', 1, -1, 0, dbid)
+  from gp_segment_configuration where role = 'p' and content = '0';
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
 0U: select 1;
 0Uq:
 select * from employees;
+select gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = '0';
 --
 --
-SET debug_dtm_action_segment=0;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=subtransaction_begin;
-SET debug_dtm_action=panic_begin_command;
-SET debug_dtm_action_nestinglevel=3;
+select gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'panic',
+                       'subtransaction_begin', '', '', 1, -1, 0, dbid, -1, 3)
+  from gp_segment_configuration where role = 'p' and content = '0';
 DROP TABLE IF EXISTS employees;
 select test_protocol_allseg(1, 2,'f');
 -- make sure segment recovery is complete after panic.
 0U: select 1;
 0Uq:
 select * from employees;
+select gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = '0';
 
 SELECT gp_inject_fault('fts_probe', 'reset', 1);

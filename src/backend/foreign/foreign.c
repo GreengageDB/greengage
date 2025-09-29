@@ -29,11 +29,13 @@
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
+#include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
+#include "cdb/cdbpathtoplan.h"
 
 extern Datum pg_options_to_table(PG_FUNCTION_ARGS);
 extern Datum postgresql_fdw_validator(PG_FUNCTION_ARGS);
@@ -453,6 +455,15 @@ GetFdwRoutine(Oid fdwhandler)
 {
 	Datum		datum;
 	FdwRoutine *routine;
+
+	/* Check if the access to foreign tables is restricted */
+	if (unlikely((restrict_nonsystem_relation_kind & RESTRICT_RELKIND_FOREIGN_TABLE) != 0))
+	{
+		/* there must not be built-in FDW handler  */
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("access to non-system foreign table is restricted")));
+	}
 
 	datum = OidFunctionCall0(fdwhandler);
 	routine = (FdwRoutine *) DatumGetPointer(datum);
@@ -1031,6 +1042,8 @@ BuildForeignScan(Oid relid, Index scanrelid, List *qual, List *targetlist, Query
 												NULL /*outer_plan*/);
 
 	fscan->fs_server = rel->serverid;
+
+	fscan->scan.plan.flow = cdbpathtoplan_create_flow(root, path->path.locus);
 
 	// Set fsSystemCol if any system attributes are projected
 	fscan->fsSystemCol = false;

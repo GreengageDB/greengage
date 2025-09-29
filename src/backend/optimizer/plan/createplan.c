@@ -46,6 +46,7 @@
 #include "parser/parse_clause.h"
 #include "parser/parsetree.h"
 #include "partitioning/partprune.h"
+#include "tcop/tcopprot.h"
 #include "utils/lsyscache.h"
 #include "utils/uri.h"
 
@@ -1992,7 +1993,7 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path, int flags)
 	 * Convert our subpath to a Plan and determine whether we need a Result
 	 * node.
 	 *
-	 * In most cases where we don't need to project, creation_projection_path
+	 * In most cases where we don't need to project, create_projection_path
 	 * will have set dummypp, but not always.  First, some createplan.c
 	 * routines change the tlists of their nodes.  (An example is that
 	 * create_merge_append_plan might add resjunk sort columns to a
@@ -2270,6 +2271,16 @@ create_agg_plan(PlannerInfo *root, AggPath *best_path)
 	List	   *tlist;
 	List	   *quals;
 
+	if (CdbPathLocus_IsReplicated(best_path->path.locus) &&
+		contain_volatile_functions((Node *) best_path->qual))
+	{
+		/*
+		 * Replicated locus is not supported yet in context of volatile
+		 * functions handling.
+		*/
+		elog(ERROR, "could not devise a plan");
+	}
+
 	/*
 	 * Agg can project, so no need to be terribly picky about child tlist, but
 	 * we do need grouping columns to be available
@@ -2404,6 +2415,16 @@ create_groupingsets_plan(PlannerInfo *root, GroupingSetsPath *best_path)
 	/* Shouldn't get here without grouping sets */
 	Assert(root->parse->groupingSets);
 	Assert(rollups != NIL);
+
+	if (CdbPathLocus_IsReplicated(best_path->path.locus) &&
+		contain_volatile_functions((Node *) best_path->qual))
+	{
+		/*
+		 * Replicated locus is not supported yet in context of volatile
+		 * functions handling.
+		 */
+		elog(ERROR, "could not devise a plan");
+	}
 
 	/*
 	 * Agg can project, so no need to be terribly picky about child tlist, but
@@ -2934,6 +2955,20 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 							best_path->rowMarks,
 							best_path->onconflict,
 							best_path->epqParam);
+
+	/*
+	 * Currently, we prohibit applying volatile functions
+	 * to the result of modifying CTE with locus Replicated.
+	 *
+	 * Assumption: we only create subroots for subqueries and CTEs,
+	 * and only CTEs can have ModifyTable. We are creating a
+	 * ModifyTable, therefore if we are a subroot we are inside a
+	 * modifying CTE.
+	 */
+	if (root && root->parent_root &&
+		CdbPathLocus_IsReplicated(best_path->path.locus) &&
+		contain_volatile_functions((Node *) plan->returningLists))
+		elog(ERROR, "could not devise a plan");
 
 	copy_generic_path_info(&plan->plan, &best_path->path);
 
@@ -4410,7 +4445,14 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 		if (!cteplaninfo->shared_plan)
 		{
 			RelOptInfo *sub_final_rel;
-			GangType	saved_gangType = root->curSlice->gangType;
+			GangType	saved_gangType = GANGTYPE_UNALLOCATED;
+			/*
+			 * Since topSlice is only initialized on the QD,
+			 * root->curSlice may be NULL in other roles. Check it first.
+			 */
+			AssertImply(Gp_role == GP_ROLE_DISPATCH, root->curSlice != NULL);
+			if (Gp_role == GP_ROLE_DISPATCH && root->curSlice != NULL)
+				saved_gangType = root->curSlice->gangType;
 
 			sub_final_rel = fetch_upper_rel(best_path->parent->subroot, UPPERREL_FINAL, NULL);
 			subplan = create_plan(best_path->parent->subroot, sub_final_rel->cheapest_total_path, root->curSlice);
@@ -4423,9 +4465,12 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 			 * ShareInputScan as writing slice creator, in order to prevent
 			 * the situation, when consumer gets to the writer gang and producer
 			 * gets to the reader gang (it depends of tree traverse order
-			 * inside the apply_shareinput_dag_to_tree function)
+			 * inside the apply_shareinput_dag_to_tree function). This only
+			 * applies on QD, where slice and gangType are assigned.
 			 */
-			if (root->curSlice->gangType != saved_gangType &&
+			if (Gp_role == GP_ROLE_DISPATCH &&
+				root->curSlice != NULL &&
+				root->curSlice->gangType != saved_gangType &&
 				root->curSlice->gangType == GANGTYPE_PRIMARY_WRITER)
 				cteplaninfo->rootSliceIsWriter = true;
 		}
@@ -7889,7 +7934,19 @@ make_modifytable(PlannerInfo *root,
 
 			Assert(rte->rtekind == RTE_RELATION);
 			if (rte->relkind == RELKIND_FOREIGN_TABLE)
+			{
+				/* Check if the access to foreign tables is restricted */
+				if (unlikely((restrict_nonsystem_relation_kind & RESTRICT_RELKIND_FOREIGN_TABLE) != 0))
+				{
+					/* there must not be built-in foreign tables */
+					Assert(rte->relid >= FirstNormalObjectId);
+					ereport(ERROR,
+							(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							 errmsg("access to non-system foreign table is restricted")));
+				}
+
 				fdwroutine = GetFdwRoutineByRelId(rte->relid);
+			}
 			else
 				fdwroutine = NULL;
 		}

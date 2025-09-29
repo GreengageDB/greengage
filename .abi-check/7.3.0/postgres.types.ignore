@@ -1,0 +1,3 @@
+struct RunningTransactionsData
+struct FaultInjectorEntry_s
+DDLStatement_e

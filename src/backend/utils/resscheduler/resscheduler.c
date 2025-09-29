@@ -227,14 +227,12 @@ InitResQueues(void)
 		bool				overcommit;
 		float4				ignorelimit;
 		Cost				thresholds[NUM_RES_LIMIT_TYPES];
-		char				*queuename;
 
 		numQueues++;
 
 		queueform = (Form_pg_resqueue) GETSTRUCT(tuple);
 
 		queueid = queueform->oid;
-		queuename = NameStr(queueform->rsqname);
 		thresholds[RES_COUNT_LIMIT] = queueform->rsqcountlimit;
 		thresholds[RES_COST_LIMIT] = queueform->rsqcostlimit;
 
@@ -758,7 +756,6 @@ ResLockUtilityPortal(Portal portal, float4 ignoreCostLimit)
 	bool shouldReleaseLock = false;
 	LOCKTAG		tag;
 	Oid			queueid;
-	int32		lockResult = 0;
 	ResPortalIncrement	incData;
 
 	queueid = portal->queueId;
@@ -789,7 +786,7 @@ ResLockUtilityPortal(Portal portal, float4 ignoreCostLimit)
 
 		PG_TRY();
 		{
-			lockResult = ResLockAcquire(&tag, &incData);
+			(void) ResLockAcquire(&tag, &incData);
 		}
 		PG_CATCH();
 		{

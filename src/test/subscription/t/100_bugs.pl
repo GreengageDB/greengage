@@ -154,13 +154,8 @@ $node_subscriber->safe_psql('postgres',
 	"CREATE SUBSCRIPTION tap_sub CONNECTION '$publisher_connstr' PUBLICATION tap_pub"
 );
 
-$node_publisher->wait_for_catchup('tap_sub');
-
-# Also wait for initial table sync to finish
-my $synced_query =
-  "SELECT count(1) = 0 FROM pg_subscription_rel WHERE srsubstate NOT IN ('s', 'r');";
-$node_subscriber->poll_query_until('postgres', $synced_query)
-  or die "Timed out while waiting for subscriber to synchronize data";
+# Wait for initial table sync to finish
+$node_subscriber->wait_for_subscription_sync($node_publisher, 'tap_sub');
 
 is( $node_subscriber->safe_psql(
 		'postgres', "SELECT * FROM tab_replidentity_index"),
@@ -184,5 +179,70 @@ is( $node_subscriber->safe_psql(
 
 $node_publisher->stop('fast');
 $node_subscriber->stop('fast');
+
+# The bug was that when the REPLICA IDENTITY FULL is used with dropped or
+# generated columns, we fail to apply updates and deletes
+my $node_publisher_d_cols = get_new_node('node_publisher_d_cols');
+$node_publisher_d_cols->init(allows_streaming => 'logical');
+$node_publisher_d_cols->start;
+
+my $node_subscriber_d_cols = get_new_node('node_subscriber_d_cols');
+$node_subscriber_d_cols->init(allows_streaming => 'logical');
+$node_subscriber_d_cols->start;
+
+$node_publisher_d_cols->safe_psql(
+	'postgres', qq(
+	CREATE TABLE dropped_cols (a int, b_drop int, c int);
+	ALTER TABLE dropped_cols REPLICA IDENTITY FULL;
+	CREATE TABLE generated_cols (a int, b_gen int GENERATED ALWAYS AS (5 * a) STORED, c int);
+	ALTER TABLE generated_cols REPLICA IDENTITY FULL;
+	CREATE PUBLICATION pub_dropped_cols FOR TABLE dropped_cols, generated_cols;
+	-- some initial data
+	INSERT INTO dropped_cols VALUES (1, 1, 1);
+	INSERT INTO generated_cols (a, c) VALUES (1, 1);
+));
+
+$node_subscriber_d_cols->safe_psql(
+	'postgres', qq(
+	 CREATE TABLE dropped_cols (a int, b_drop int, c int);
+	 CREATE TABLE generated_cols (a int, b_gen int GENERATED ALWAYS AS (5 * a) STORED, c int);
+));
+
+my $publisher_connstr_d_cols =
+  $node_publisher_d_cols->connstr . ' dbname=postgres';
+$node_subscriber_d_cols->safe_psql('postgres',
+	"CREATE SUBSCRIPTION sub_dropped_cols CONNECTION '$publisher_connstr_d_cols application_name=sub_dropped_cols' PUBLICATION pub_dropped_cols"
+);
+$node_subscriber_d_cols->wait_for_subscription_sync($node_publisher_d_cols,
+	'sub_dropped_cols');
+
+$node_publisher_d_cols->safe_psql(
+	'postgres', qq(
+		ALTER TABLE dropped_cols DROP COLUMN b_drop;
+));
+$node_subscriber_d_cols->safe_psql(
+	'postgres', qq(
+		ALTER TABLE dropped_cols DROP COLUMN b_drop;
+));
+
+$node_publisher_d_cols->safe_psql(
+	'postgres', qq(
+		UPDATE dropped_cols SET a = 100;
+		UPDATE generated_cols SET a = 100;
+));
+$node_publisher_d_cols->wait_for_catchup('sub_dropped_cols');
+
+is( $node_subscriber_d_cols->safe_psql(
+		'postgres', "SELECT count(*) FROM dropped_cols WHERE a = 100"),
+	qq(1),
+	'replication with RI FULL and dropped columns');
+
+is( $node_subscriber_d_cols->safe_psql(
+		'postgres', "SELECT count(*) FROM generated_cols WHERE a = 100"),
+	qq(1),
+	'replication with RI FULL and generated columns');
+
+$node_publisher_d_cols->stop('fast');
+$node_subscriber_d_cols->stop('fast');
 
 done_testing();

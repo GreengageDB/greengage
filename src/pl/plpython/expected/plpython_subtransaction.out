@@ -482,7 +482,7 @@ select gp_inject_fault_infinite('begin_internal_sub_transaction', 'error', 1);
 (1 row)
 
 SELECT test_func();
-ERROR:  function "test_func" error fetching next item from iterator
+ERROR:  error fetching next item from iterator
 DETAIL:  spiexceptions.FaultInject: fault triggered, fault name:'begin_internal_sub_transaction' fault type:'error'
 CONTEXT:  Traceback (most recent call last):
 PL/Python function "test_func"

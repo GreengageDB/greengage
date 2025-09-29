@@ -580,6 +580,61 @@ CTranslatorDXLToPlStmt::TranslateJoinPruneParamids(
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::CreateForeignScan
+//
+//	@doc:
+//		Creates a ForeignScan while also checking its locus to ensure it
+//		matches expected distribution policy
+//
+//---------------------------------------------------------------------------
+ForeignScan *
+CTranslatorDXLToPlStmt::CreateForeignScan(Oid rel_oid, Index scanrelid,
+										  List *qual, List *targetlist,
+										  Query *query, RangeTblEntry *rte,
+										  const IMDRelation *md_rel)
+{
+	ForeignScan *fscan = gpdb::CreateForeignScan(rel_oid, scanrelid, qual,
+												 targetlist, query, rte);
+	IMDRelation::Ereldistrpolicy rel_distr_policy_expected;
+	switch (fscan->scan.plan.flow->locustype)
+	{
+		case CdbLocusType_Entry:
+			rel_distr_policy_expected =
+				IMDRelation::Ereldistrpolicy::EreldistrCoordinatorOnly;
+			break;
+		case CdbLocusType_General:
+			rel_distr_policy_expected =
+				IMDRelation::Ereldistrpolicy::EreldistrUniversal;
+			break;
+		case CdbLocusType_Replicated:
+			rel_distr_policy_expected =
+				IMDRelation::Ereldistrpolicy::EreldistrReplicated;
+			break;
+		case CdbLocusType_Hashed:
+			rel_distr_policy_expected =
+				IMDRelation::Ereldistrpolicy::EreldistrHash;
+			break;
+		case CdbLocusType_Strewn:
+			rel_distr_policy_expected =
+				IMDRelation::Ereldistrpolicy::EreldistrRandom;
+			break;
+		default:  // Shouldn't happen
+			GPOS_ASSERT(!"Unrecognized locus type");
+	}
+
+	if (md_rel->GetRelDistribution() != rel_distr_policy_expected)
+	{
+		GPOS_RAISE(
+			gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+			GPOS_WSZ_LIT(
+				"FDWs with custom execution locations (for example adb_fdw)"));
+	}
+
+	return fscan;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLTblScan
 //
 //	@doc:
@@ -637,9 +692,9 @@ CTranslatorDXLToPlStmt::TranslateDXLTblScan(
 
 		// The postgres_fdw wrapper does not support row level security. So
 		// passing only the query_quals while creating the foreign scan node.
-		ForeignScan *foreign_scan =
-			gpdb::CreateForeignScan(oidRel, index, query_quals, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+		ForeignScan *foreign_scan = CreateForeignScan(
+			oidRel, index, query_quals, targetlist,
+			m_dxl_to_plstmt_context->m_orig_query, rte, md_rel);
 		foreign_scan->scan.scanrelid = index;
 		plan = &(foreign_scan->scan.plan);
 		plan_return = (Plan *) foreign_scan;
@@ -4550,9 +4605,11 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 											   RelationGetDescr(childRel),
 											   index, qual, targetlist);
 
-	ForeignScan *foreign_scan_first_part =
-		gpdb::CreateForeignScan(oid_first_child, index, qual, targetlist,
-								m_dxl_to_plstmt_context->m_orig_query, rte);
+	const IMDRelation *md_rel_first_part =
+		m_md_accessor->RetrieveRel((*parts)[0]);
+	ForeignScan *foreign_scan_first_part = CreateForeignScan(
+		oid_first_child, index, qual, targetlist,
+		m_dxl_to_plstmt_context->m_orig_query, rte, md_rel_first_part);
 
 	// Set the plan fields to the first partition. We still want the plan type to be
 	// a dynamic foreign scan
@@ -4582,9 +4639,10 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 		gpdb::GPDBLockRelationOid(
 			rte->relid, dyn_foreign_scan_dxlop->GetDXLTableDescr()->LockMode());
 
-		ForeignScan *foreign_scan =
-			gpdb::CreateForeignScan(rte->relid, index, qual, targetlist,
-									m_dxl_to_plstmt_context->m_orig_query, rte);
+		const IMDRelation *md_rel = m_md_accessor->RetrieveRel((*parts)[ul]);
+		ForeignScan *foreign_scan = CreateForeignScan(
+			rte->relid, index, qual, targetlist,
+			m_dxl_to_plstmt_context->m_orig_query, rte, md_rel);
 
 		dyn_foreign_scan->fdw_private_list = gpdb::LAppend(
 			dyn_foreign_scan->fdw_private_list, foreign_scan->fdw_private);

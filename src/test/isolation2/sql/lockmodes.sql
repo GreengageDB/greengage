@@ -334,12 +334,18 @@ create table t_lockmods_ao1 (c int) with (appendonly=true) distributed randomly;
 1: BEGIN;
 1: DELETE FROM t_lockmods_part_tbl_dml;
 -- on QD, there's a lock on the root and the target partition
+--
+-- ORCA doesn't acquire AccessShareLock, since it maintains partition cache for
+-- this query.
 1: select * from show_locks_lockmodes;
 1: ROLLBACK;
 
 1: BEGIN;
 1: INSERT INTO t_lockmods_part_tbl_dml SELECT i, 1, i FROM generate_series(1,10)i;
 -- without GDD, it will lock all leaf partitions on QD
+--
+-- ORCA obtains AccessShareLock. cache has been invalidated after a call to
+-- pg_lock_status() due to its implementation.
 1: select * from show_locks_lockmodes;
 1: ROLLBACK;
 

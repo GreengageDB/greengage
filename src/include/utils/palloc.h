@@ -33,6 +33,9 @@
 /*
  * Optional #defines for debugging...
  *
+ * Important: CDB_PALLOC_CALLER_ID is obsolete. EXTRA_DYNAMIC_MEMORY_DEBUG can
+ * be used instead.
+ *
  * If CDB_PALLOC_CALLER_ID is defined, MemoryContext error and warning
  * messages (such as "out of memory" and "invalid memory alloc request
  * size") will include the caller's source file name and line number.
@@ -52,6 +55,15 @@
 /*
 #define CDB_PALLOC_CALLER_ID
 */
+
+/*
+ * To enable collection of additional allocation data (function, file, and line 
+ * where the allocation occurred), add -DEXTRA_DYNAMIC_MEMORY_DEBUG to CFLAGS 
+ * during ./configure.
+ * Use MemoryContextStats(TopMemoryContext) to print the top allocations for 
+ * each MemoryContext into the logs, following the summary counters for each
+ * context.
+ */
 
 /*
  * GPDB_93_MERGE_FIXME: This mechanism got broken. If this is resurrected and
@@ -138,6 +150,28 @@ extern void *palloc0(Size size);
 extern void *palloc_extended(Size size, int flags);
 extern void *repalloc(void *pointer, Size size);
 extern void pfree(void *pointer);
+
+/*
+ * Variants with easier notation and more type safety
+ */
+
+/*
+ * Allocate space for one object of type "type"
+ */
+#define palloc_object(type) ((type *) palloc(sizeof(type)))
+#define palloc0_object(type) ((type *) palloc0(sizeof(type)))
+
+/*
+ * Allocate space for "count" objects of type "type"
+ */
+#define palloc_array(type, count) ((type *) palloc(sizeof(type) * (count)))
+#define palloc0_array(type, count) ((type *) palloc0(sizeof(type) * (count)))
+
+/*
+ * Change size of allocation pointed to by "pointer" to have space for "count"
+ * objects of type "type"
+ */
+#define repalloc_array(pointer, type, count) ((type *) repalloc(pointer, sizeof(type) * (count)))
 
 /*
  * The result of palloc() is always word-aligned, so we can skip testing
@@ -235,5 +269,12 @@ extern void MemoryContextStats(MemoryContext context);
 		MemoryContextStats(TopMemoryContext);\
 	}\
 }
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug.h"
+#ifdef FRONTEND
+#include "utils/palloc_memory_debug_undef.h"
+#endif
+#endif
 
 #endif							/* PALLOC_H */

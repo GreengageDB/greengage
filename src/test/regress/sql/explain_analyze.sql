@@ -11,6 +11,8 @@
 -- s/Planning Time: [0-9.]+ ms/Planning Time: #.### ms/
 -- m/Execution Time: [0-9.]+ ms/
 -- s/Execution Time: [0-9.]+ ms/Execution Time: #.### ms/
+-- m/Executor memory: \d+\w? bytes \(seg\d+\)/
+-- s/Executor memory: \d+\w? bytes \(seg\d+\)/Executor memory: ### bytes (seg#)/
 -- m/Executor memory: \d+\w? bytes/
 -- s/Executor memory: \d+\w? bytes/Executor memory: ### bytes/
 -- m/Memory used:\s+\d+\w?B/
@@ -76,3 +78,27 @@ explain (analyze, timing off, costs off)
 
 drop table slice_test;
 drop table slice_test2;
+
+-- The statistics for modifying CTEs used to be reported as "never executed",
+-- when all plan nodes were executed and some stat information was expected.
+-- Test QD recieving the stats from all slices and showing it in explain output.
+--start_ignore
+DROP TABLE IF EXISTS with_dml;
+--end_ignore
+CREATE TABLE with_dml (i int, j int) DISTRIBUTED BY (i);
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF)
+WITH cte AS (
+    INSERT INTO with_dml SELECT i, i * 100 FROM generate_series(1,5) i
+    RETURNING i
+) SELECT * FROM cte;
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF)
+WITH cte AS (
+    UPDATE with_dml SET j = j + 1
+    RETURNING i
+) SELECT * FROM cte;
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF)
+WITH cte AS (
+    DELETE FROM with_dml WHERE i > 0
+    RETURNING i
+) SELECT * FROM cte;
+DROP TABLE with_dml;

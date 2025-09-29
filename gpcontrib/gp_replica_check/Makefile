@@ -3,6 +3,9 @@ DATA = gp_replica_check--0.0.1.sql
 MODULES = gp_replica_check
 SCRIPTS = gp_replica_check.py
 
+# Avoid building LLVM Bitcode for gp_replica_check module.
+with_llvm = no
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

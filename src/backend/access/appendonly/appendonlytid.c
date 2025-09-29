@@ -23,9 +23,9 @@ AOTupleIdToString(AOTupleId *aoTupleId)
 {
 	int			segmentFileNum = AOTupleIdGet_segmentFileNum(aoTupleId);
 	int64		rowNum = AOTupleIdGet_rowNum(aoTupleId);
-	int			snprintfResult;
-
-	snprintfResult =
+#ifdef USE_ASSERT_CHECKING
+	int			snprintfResult =
+#endif
 		snprintf(AOTupleIdBuffer, MAX_AO_TUPLE_ID_BUFFER, "(%d," INT64_FORMAT ")",
 				 segmentFileNum, rowNum);
 

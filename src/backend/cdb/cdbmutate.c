@@ -151,9 +151,6 @@ Plan *
 make_explicit_motion(PlannerInfo *root, Plan *lefttree, AttrNumber segidColIdx)
 {
 	Motion	   *motion;
-	plan_tree_base_prefix base;
-
-	base.node = (Node *) root;
 
 	Assert(segidColIdx > 0 && segidColIdx <= list_length(lefttree->targetlist));
 
@@ -544,7 +541,6 @@ static RangeTblEntry *
 create_shareinput_producer_rte(ApplyShareInputContext *ctxt, int share_id,
 							   int refno)
 {
-	int			attno = 1;
 	ListCell   *lc;
 	Plan	   *subplan;
 	char		buf[100];
@@ -584,7 +580,6 @@ create_shareinput_producer_rte(ApplyShareInputContext *ctxt, int share_id,
 		coltypes = lappend_oid(coltypes, vartype);
 		coltypmods = lappend_int(coltypmods, vartypmod);
 		colcollations = lappend_oid(colcollations, varcollid);
-		attno++;
 	}
 
 	/*

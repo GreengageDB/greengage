@@ -1250,6 +1250,42 @@ NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table minmaxtest1
 drop cascades to table minmaxtest2
 drop cascades to table minmaxtest3
+-- DISTINCT can also trigger wrong answers with hash aggregation (bug #18465)
+-- Note: GPDB does not support the min/max optimization for correlated subplans
+-- in the postgres planner
+begin;
+set local enable_sort = off;
+explain (costs off)
+  select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
+  from int4_tbl t0;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on int4_tbl t0
+         SubPlan 1
+           ->  GroupAggregate
+                 Group Key: min(t1.f1)
+                 ->  Aggregate
+                       ->  Result
+                             Filter: (t1.f1 = t0.f1)
+                             ->  Materialize
+                                   ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                         ->  Seq Scan on int4_tbl t1
+ Optimizer: GPORCA
+(12 rows)
+
+select f1, (select distinct min(t1.f1) from int4_tbl t1 where t1.f1 = t0.f1)
+from int4_tbl t0;
+     f1      |     min     
+-------------+-------------
+      123456 |      123456
+     -123456 |     -123456
+           0 |           0
+  2147483647 |  2147483647
+ -2147483647 | -2147483647
+(5 rows)
+
+rollback;
 -- check for correct detection of nested-aggregate errors
 select max(min(unique1)) from tenk1;
 ERROR:  aggregate function calls cannot be nested
@@ -1259,6 +1295,12 @@ select (select max(min(unique1)) from int8_tbl) from tenk1;
 ERROR:  aggregate function calls cannot be nested
 LINE 1: select (select max(min(unique1)) from int8_tbl) from tenk1;
                            ^
+select avg((select avg(a1.col1 order by (select avg(a2.col2) from tenk1 a3))
+            from tenk1 a1(col1)))
+from tenk1 a2(col2);
+ERROR:  aggregate function calls cannot be nested
+LINE 1: select avg((select avg(a1.col1 order by (select avg(a2.col2)...
+                                                        ^
 --
 -- Test removal of redundant GROUP BY columns
 --

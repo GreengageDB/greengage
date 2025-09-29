@@ -724,10 +724,6 @@ workfile_create_and_set_cleanup(void)
 static bool
 workfile_made_in_temp_tablespace(void)
 {
-	const char *bufFilePath;
-	BufFile *bufFile;
-	bool		success = true;
-
 	unit_test_reset();
 
 	/*
@@ -742,24 +738,7 @@ workfile_made_in_temp_tablespace(void)
 	 * which parses the temp_tablespaces value and BufFileCreateTempInSet
 	 * uses that value as the location for workfile created
 	 */
-	bufFile = BufFileCreateTempInSet("workfile_test", false, work_set);
-
-	if (bufFile == NULL)
-		success = false;
-
-	bufFilePath = BufFileGetFilename(bufFile);
-
-	char *expectedPathPrefix = "pg_tblspc/";
-
-	/*
-	 * Expect workfile to be created in the temp tablespace specified above,
-	 * which will have the prefix, "pg_tblspc". By default,
-	 * workfiles are created in data directory having prefix, "base"
-	 */
-	if(0 != strncmp(bufFilePath, expectedPathPrefix, strlen(expectedPathPrefix)))
-		success = false;
-
-	BufFileClose(bufFile);
+	BufFileClose(BufFileCreateTempInSet("workfile_test", false, work_set));
 
 	unit_test_result(!work_set->active);
 

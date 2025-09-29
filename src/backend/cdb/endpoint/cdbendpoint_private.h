@@ -17,7 +17,6 @@
 #define CDBENDPOINTINTERNAL_H
 
 #define MAX_ENDPOINT_SIZE				1024
-#define ENDPOINT_TOKEN_ARR_LEN			16
 #define ENDPOINT_TOKEN_STR_LEN			(ENDPOINT_TOKEN_ARR_LEN<<1)
 #define InvalidEndpointSessionId		(-1)	/* follows invalid
 												 * gp_session_id */
@@ -49,7 +48,6 @@ extern int	get_session_id_from_token(Oid userID, const int8 *token);
 /* utility functions in "cdbendpointutilities.c" */
 extern bool endpoint_token_hex_equals(const int8 *token1, const int8 *token2);
 extern bool endpoint_name_equals(const char *name1, const char *name2);
-extern void endpoint_token_str2arr(const char *tokenStr, int8 *token);
 extern void endpoint_token_arr2str(const int8 *token, char *tokenStr);
 extern char *state_enum_to_string(EndpointState state);
 

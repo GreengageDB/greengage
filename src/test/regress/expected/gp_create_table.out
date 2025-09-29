@@ -108,26 +108,48 @@ drop table if exists foo;
 NOTICE:  table "foo" does not exist, skipping
 drop table if exists bar;
 NOTICE:  table "bar" does not exist, skipping
+drop table if exists bar_p;
+NOTICE:  table "bar_p" does not exist, skipping
 create table foo (a varchar(15), b int) distributed by (b);
+prepare foo_p as select * from foo;
 create table bar as select * from foo distributed by (b);
+create table bar_p as execute foo_p distributed by (b);
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
  distkey | distclass 
 ---------+-----------
  2       | 10054
 (1 row)
 
+select distkey, distclass from gp_distribution_policy where localoid='bar_p'::regclass;
+ distkey | distclass 
+---------+-----------
+ 2       | 10054
+(1 row)
+
+deallocate foo_p;
 drop table if exists foo;
 drop table if exists bar;
+drop table if exists bar_p;
 create table foo (a int, b varchar(15)) distributed by (b);
+prepare foo_p as select * from foo;
 create table bar as select * from foo distributed by (b);
+create table bar_p as execute foo_p distributed by (b);
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
  distkey | distclass 
 ---------+-----------
  2       | 10072
 (1 row)
 
+select distkey, distclass from gp_distribution_policy where localoid='bar_p'::regclass;
+ distkey | distclass 
+---------+-----------
+ 2       | 10072
+(1 row)
+
+deallocate foo_p;
 drop table if exists foo;
 drop table if exists bar;
+drop table if exists bar_p;
 CREATE TABLE foo (
 col_with_default numeric DEFAULT 0,
 col_with_default_drop_default character varying(30) DEFAULT 'test1',

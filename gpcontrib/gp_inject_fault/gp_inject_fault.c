@@ -102,6 +102,7 @@ gp_inject_fault(PG_FUNCTION_ARGS)
 	 * others mean the fault could only be triggered by the specific session.
 	 */
 	int		gpSessionid = PG_GETARG_INT32(9);
+	int		nestingLevel = PG_GETARG_INT32(10);
 	char	*hostname;
 	int		port;
 	char	*response;
@@ -110,8 +111,9 @@ gp_inject_fault(PG_FUNCTION_ARGS)
 	if (GpIdentity.dbid == dbid)
 	{
 		response = InjectFault(
-			faultName, type, ddlStatement, databaseName,
-			tableName, startOccurrence, endOccurrence, extraArg, gpSessionid);
+			faultName, type, ddlStatement, databaseName, tableName,
+			startOccurrence, endOccurrence, extraArg, gpSessionid,
+			nestingLevel);
 		if (!response)
 			elog(ERROR, "failed to inject fault locally (dbid %d)", dbid);
 		if (strncmp(response, "Success:",  strlen("Success:")) != 0)
@@ -142,8 +144,8 @@ gp_inject_fault(PG_FUNCTION_ARGS)
 			databaseName = "#";
 		if (!tableName || tableName[0] == '\0')
 			tableName = "#";
-		snprintf(msg, 1024, "faultname=%s type=%s ddl=%s db=%s table=%s "
-				 "start=%d end=%d extra=%d sid=%d ",
+		snprintf(msg, 1024, "faultname=%s type=%s ddl='%s' db=%s table=%s "
+				 "start=%d end=%d extra=%d sid=%d nestinglevel=%d",
 				 faultName, type,
 				 ddlStatement,
 				 databaseName,
@@ -151,7 +153,8 @@ gp_inject_fault(PG_FUNCTION_ARGS)
 				 startOccurrence,
 				 endOccurrence,
 				 extraArg,
-				 gpSessionid);
+				 gpSessionid,
+				 nestingLevel);
 		res = PQexec(conn, msg);
 		if (PQresultStatus(res) != PGRES_TUPLES_OK)
 			elog(ERROR, "failed to inject fault: %s", PQerrorMessage(conn));

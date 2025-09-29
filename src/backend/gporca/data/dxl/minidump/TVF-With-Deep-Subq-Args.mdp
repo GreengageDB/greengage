@@ -306,17 +306,11 @@ SELECT generate_series((
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="51" Alias="ColRef_0024">
-                  <dxl:Coalesce TypeMdid="0.20.1.0">
-                    <dxl:Ident ColId="76" ColName="ColRef_0076" TypeMdid="0.20.1.0"/>
-                    <dxl:ConstValue TypeMdid="0.20.1.0" Value="0"/>
-                  </dxl:Coalesce>
+                  <dxl:Ident ColId="76" ColName="ColRef_0076" TypeMdid="0.20.1.0"/>
                 </dxl:ProjElem>
                 <dxl:ProjElem ColId="52" Alias="ColRef_0025">
                   <dxl:OpExpr OperatorName="/" OperatorMdid="0.691.1.0">
-                    <dxl:Coalesce TypeMdid="0.20.1.0">
-                      <dxl:Ident ColId="77" ColName="ColRef_0077" TypeMdid="0.20.1.0"/>
-                      <dxl:ConstValue TypeMdid="0.20.1.0" Value="0"/>
-                    </dxl:Coalesce>
+                    <dxl:Ident ColId="77" ColName="ColRef_0077" TypeMdid="0.20.1.0"/>
                     <dxl:ConstValue TypeMdid="0.23.1.0" Value="2"/>
                   </dxl:OpExpr>
                 </dxl:ProjElem>
@@ -515,17 +509,11 @@ SELECT generate_series((
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="51" Alias="ColRef_0024">
-                  <dxl:Coalesce TypeMdid="0.20.1.0">
-                    <dxl:Ident ColId="76" ColName="ColRef_0076" TypeMdid="0.20.1.0"/>
-                    <dxl:ConstValue TypeMdid="0.20.1.0" Value="0"/>
-                  </dxl:Coalesce>
+                  <dxl:Ident ColId="76" ColName="ColRef_0076" TypeMdid="0.20.1.0"/>
                 </dxl:ProjElem>
                 <dxl:ProjElem ColId="52" Alias="ColRef_0025">
                   <dxl:OpExpr OperatorName="/" OperatorMdid="0.691.1.0">
-                    <dxl:Coalesce TypeMdid="0.20.1.0">
-                      <dxl:Ident ColId="77" ColName="ColRef_0077" TypeMdid="0.20.1.0"/>
-                      <dxl:ConstValue TypeMdid="0.20.1.0" Value="0"/>
-                    </dxl:Coalesce>
+                    <dxl:Ident ColId="77" ColName="ColRef_0077" TypeMdid="0.20.1.0"/>
                     <dxl:ConstValue TypeMdid="0.23.1.0" Value="2"/>
                   </dxl:OpExpr>
                 </dxl:ProjElem>

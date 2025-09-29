@@ -109,7 +109,9 @@ CREATE STATISTICS [ IF NOT EXISTS ] <replaceable class="parameter">statistics_na
     <listitem>
      <para>
       The name (optionally schema-qualified) of the table containing the
-      column(s) the statistics are computed on.
+      column(s) the statistics are computed on;  see <xref
+      linkend="sql-analyze"/> for an explanation of the handling of
+      inheritance and partitions.
      </para>
     </listitem>
    </varlistentry>
@@ -124,6 +126,12 @@ CREATE STATISTICS [ IF NOT EXISTS ] <replaceable class="parameter">statistics_na
    You must be the owner of a table to create a statistics object
    reading it.  Once created, however, the ownership of the statistics
    object is independent of the underlying table(s).
+  </para>
+
+  <para>
+   Extended statistics are not currently used by the planner for selectivity
+   estimations made for table joins.  This limitation will likely be removed
+   in a future version of <productname>PostgreSQL</productname>.
   </para>
  </refsect1>
 

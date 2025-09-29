@@ -302,6 +302,8 @@ cdbdisp_dispatchSetCommandInternal(const char *strCommand, bool cancelOnError, b
 		 "CdbDispatchSetCommand for command = '%s'",
 		 strCommand);
 
+	SIMPLE_FAULT_INJECTOR("dispatch_set_command");
+
 	/*
 	 * Dispatch a command with DF_SYNC_SET flag if we are performing a config
 	 * reload. This will allow us to distinguish between user-invoked SET and QD

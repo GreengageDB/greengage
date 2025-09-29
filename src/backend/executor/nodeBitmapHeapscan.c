@@ -247,6 +247,11 @@ BitmapHeapNext(BitmapHeapScanState *node)
 
 			BitmapAdjustPrefetchIterator(node, tbmres);
 
+			if (tbmres->ntuples >= 0)
+				node->exact_pages++;
+			else
+				node->lossy_pages++;
+
 			/*
 			 * We can skip fetching the heap page if we don't need any fields
 			 * from the heap, and the bitmap entries don't need rechecking,
@@ -277,11 +282,6 @@ BitmapHeapNext(BitmapHeapScanState *node)
 				/* AM doesn't think this block is valid, skip */
 				continue;
 			}
-
-			if (tbmres->ntuples >= 0)
-				node->exact_pages++;
-			else
-				node->lossy_pages++;
 
 			/* Adjust the prefetch target */
 			BitmapAdjustPrefetchTarget(node);

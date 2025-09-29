@@ -65,6 +65,9 @@ test: fk-deadlock2
 #test: fk-partitioned-2
 #test: eval-plan-qual
 test: eval-plan-qual-trigger
+test: inplace-inval
+test: intra-grant-inplace
+test: intra-grant-inplace-db
 test: lock-update-delete
 test: lock-update-traversal
 test: inherit-temp
@@ -135,6 +138,7 @@ test: plpgsql-toast
 test: truncate-conflict
 #test: serializable-parallel
 #test: serializable-parallel-2
+#test: serializable-parallel-3
 
 #test: prepared-transactions
 

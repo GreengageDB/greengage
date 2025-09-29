@@ -106,6 +106,11 @@
 -- which is the table column that we will have bitmap created on.
 -- Basically, we want to see if "SELECT b FROM pg_bitmapindex.pg_bm_xxx"
 -- returns the same result in seqscan and indexscan.
+
+-- Note: this can cause AO files to differ between primary and mirror,
+-- causing gp_replica_check to fail. This is expected and doesn't result
+-- in actual replication errors since the AO files are equivalent, but not
+-- exactly the same. The table can be dropped if this becomes an issue.
 CREATE OR REPLACE FUNCTION insert_bm_lov_res() RETURNS void AS $$
 DECLARE
   lov_table text; /* in func */

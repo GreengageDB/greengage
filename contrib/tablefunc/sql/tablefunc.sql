@@ -204,3 +204,258 @@ INSERT INTO connectby_int VALUES(111,11);
 INSERT INTO connectby_int VALUES(1,111);
 -- this should not fail due to recursion detection
 SELECT * FROM connectby('connectby_int', 'keyid', 'parent_keyid', '11', 0, '-') AS t(keyid int, parent_keyid int, level int, branch text);
+
+-- test for CTAS and DML operations
+-- from crosstab(text,text)
+CREATE TABLE ct1(
+    row_name varchar(32),
+    extra_col varchar(32),
+    attr varchar(32),
+    value varchar(32)
+)
+DISTRIBUTED BY (row_name);
+\copy ct1 from 'data/ctas.data'
+
+CREATE TABLE ct2
+(
+    row_name varchar(32),
+    extra    varchar(32),
+    cat1     varchar(32),
+    cat2     varchar(32),
+    cat3     varchar(32),
+    cat4     varchar(32)
+) DISTRIBUTED BY (row_name);
+
+INSERT INTO ct2
+SELECT ct.*
+FROM crosstab(
+  'select row_name, extra_col, attr, value
+  from ct1
+  order by 1',
+  'select ''att'' || seq from generate_series(1, 4) seq order by 1')
+AS ct(row_name varchar, extra varchar, att1 varchar, att2 varchar, att3 varchar, att4 varchar);
+
+SELECT * FROM ct2;
+
+CREATE TABLE ct2_2 AS SELECT ct.*
+FROM crosstab(
+  'select row_name, extra_col, attr, value
+  from ct1
+  order by 1',
+  'select ''att'' || seq from generate_series(1, 4) seq order by 1')
+AS ct(row_name varchar, extra varchar, att1 varchar, att2 varchar, att3 varchar, att4 varchar);
+
+SELECT * FROM ct2_2;
+
+-- from crosstab(text)
+CREATE TABLE ct3 (
+    row_name varchar(32),
+    cat1     varchar(32),
+    cat2     varchar(32),
+    cat3     varchar(32)
+) DISTRIBUTED BY (row_name);
+
+INSERT INTO ct3
+SELECT *
+FROM crosstab(
+  'select row_name, attr, value
+   from ct1
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2')
+AS ct(row_name varchar, att1 varchar, att2 varchar, att3 varchar);
+
+SELECT * FROM ct3;
+
+CREATE TABLE ct3_2 AS SELECT *
+FROM crosstab(
+  'select row_name, attr, value
+   from ct1
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2')
+AS ct(row_name varchar, att1 varchar, att2 varchar, att3 varchar);
+
+SELECT * FROM ct3_2;
+
+-- from crosstab2(text)
+CREATE TABLE ct4(
+    row_name text,
+    extra_col text,
+    attr text,
+    value text
+)
+DISTRIBUTED BY (row_name);
+\copy ct4 from 'data/ctas.data'
+
+CREATE TABLE ct5 (
+    row_name   text,
+    category_1 text,
+    category_2 text
+) DISTRIBUTED BY (row_name);
+
+INSERT INTO ct5
+SELECT *
+FROM crosstab2(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2');
+
+SELECT * FROM ct5;
+
+CREATE TABLE ct5_2 AS SELECT *
+FROM crosstab2(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2') AS ct ;
+
+SELECT * FROM ct5_2;
+
+-- from crosstab3(text)
+CREATE TABLE ct6 (
+    row_name   text,
+    category_1 text,
+    category_2 text,
+    category_3 text
+) DISTRIBUTED BY (row_name);
+
+INSERT INTO ct6
+SELECT *
+FROM crosstab3(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2');
+SELECT * FROM ct6;
+
+CREATE TABLE ct6_2 AS SELECT *
+FROM crosstab3(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2') AS ct ;
+
+SELECT * FROM ct6_2;
+
+-- from crosstab4(text)
+CREATE TABLE ct7 (
+    row_name   text,
+    category_1 text,
+    category_2 text,
+    category_3 text,
+    category_4 text
+) DISTRIBUTED BY (row_name);
+
+INSERT INTO ct7
+SELECT *
+FROM crosstab4(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2');
+
+SELECT * FROM ct7;
+
+CREATE TABLE ct7_2 AS SELECT *
+FROM crosstab4(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2') AS ct ;
+
+SELECT * FROM ct7_2;
+
+-- from connectby() without branch, with orderby
+CREATE TABLE connby(
+  keyid text,
+  parent_keyid text,
+  level int,
+  pos int
+) DISTRIBUTED BY (keyid);
+
+INSERT INTO connby
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int, pos int) ORDER BY t.pos;
+
+SELECT * FROM connby;
+
+CREATE TABLE connby_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int, pos int) ORDER BY t.pos;
+
+SELECT * FROM connby_2;
+
+-- from connectby() without branch, without orderby
+CREATE TABLE connby2(
+  keyid text,
+  parent_keyid text,
+  level int
+) DISTRIBUTED BY (keyid);
+
+INSERT INTO connby2
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int);
+
+SELECT * FROM connby2;
+
+CREATE TABLE connby2_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int);
+
+SELECT * FROM connby2_2;
+
+-- from connectby() with branch, with orderby
+CREATE TABLE connby3(
+  keyid text,
+  parent_keyid text,
+  level int,
+  branch text,
+  pos int
+) DISTRIBUTED BY (keyid);
+
+INSERT INTO connby3
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text, pos int) ORDER BY t.pos;
+
+SELECT * FROM connby3;
+
+CREATE TABLE connby3_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text, pos int) ORDER BY t.pos;
+
+SELECT * FROM connby3_2;
+
+-- from connectby() with branch, without orderby
+CREATE TABLE connby4(
+  keyid text,
+  parent_keyid text,
+  level int,
+  branch text
+) DISTRIBUTED BY (keyid);
+
+INSERT INTO connby4
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text);
+
+SELECT * FROM connby4;
+
+CREATE TABLE connby4_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text);
+
+SELECT * FROM connby4_2;
+
+-- from normal_dist
+CREATE TABLE t_normal(normal_rand float8);
+
+INSERT INTO t_normal SELECT * FROM normal_rand(5, 250, 0);
+
+SELECT * FROM t_normal;
+
+CREATE TABLE t_normal_2 AS SELECT * FROM normal_rand(5, 250, 0);
+
+SELECT * FROM t_normal_2;

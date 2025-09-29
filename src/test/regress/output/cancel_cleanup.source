@@ -1,0 +1,71 @@
+-- Create a table with a unique constraint which enables us to trigger an error
+-- directly on the segment.
+CREATE TABLE t1(i INT UNIQUE);
+INSERT INTO t1 SELECT 1;
+-- Install the hook only on the seg1.
+SELECT install_hook() FROM t1;
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, QUERY_DONE, QueryCancelCleanup = 0
+ install_hook 
+--------------
+ t
+(1 row)
+
+-- Send SIGINT to seg1 outside a transaction.
+SELECT send_sigint_to_segment_backend(1);
+NOTICE:  seg1 slice1, QUERY_SUBMIT, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, QUERY_START, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_INITIALIZE, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_FINISHED, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, INNER_QUERY_DONE, QueryCancelCleanup = 0
+ send_sigint_to_segment_backend 
+--------------------------------
+ seg1
+(1 row)
+
+-- QueryCancelCleanup should not be set. We should see QUERY_ERROR instead of
+-- QUERY_CANCELED.
+INSERT INTO t1 SELECT 1;
+NOTICE:  seg1 slice0, QUERY_SUBMIT, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, QUERY_START, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, PLAN_NODE_INITIALIZE, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice0, QUERY_ERROR, QueryCancelCleanup = 0
+ERROR:  duplicate key value violates unique constraint "t1_i_key"
+DETAIL:  Key (i)=(1) already exists.
+-- Cancel the query normally. seg1 should set QueryCancelCleanup = 1 upon 
+-- raising the signal.
+SELECT raise_sigint() FROM t1;
+NOTICE:  seg1 slice1, QUERY_SUBMIT, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, QUERY_START, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_INITIALIZE, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, QUERY_CANCELING, QueryCancelCleanup = 1
+NOTICE:  seg1 slice1, QUERY_CANCELED, QueryCancelCleanup = 1
+ERROR:  canceling MPP operation
+SELECT uninstall_hook() FROM t1;
+NOTICE:  seg1 slice1, QUERY_SUBMIT, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, QUERY_START, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_INITIALIZE, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+NOTICE:  seg1 slice1, PLAN_NODE_EXECUTING, QueryCancelCleanup = 0
+ uninstall_hook 
+----------------
+ t
+(1 row)
+

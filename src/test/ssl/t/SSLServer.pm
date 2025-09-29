@@ -40,6 +40,49 @@ our @EXPORT = qw(
   switch_server_cert
 );
 
+# Force SSL tests nodes to begin in TCP mode. They won't work in Unix Socket
+# mode and this way they will find a port to run on in a more robust way.
+# Use an INIT block, it will run after the INIT block in PostgresNode.pm,
+# as they run in order of definition (see perlmod).
+
+INIT { $PostgresNode::use_tcp = 1; $PostgresNode::test_pghost = '127.0.0.1'; }
+
+# Define a couple of helper functions to test connecting to the server.
+
+# The first argument is a base connection string to use for connection.
+# The second argument is a complementary connection string.
+sub test_connect_ok
+{
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+	my ($common_connstr, $connstr, $test_name) = @_;
+
+	my $cmd = [
+		'psql', '-X', '-A', '-t', '-c',
+		"SELECT \$\$connected with $connstr\$\$",
+		'-d', "$common_connstr $connstr"
+	];
+
+	command_ok($cmd, $test_name);
+	return;
+}
+
+sub test_connect_fails
+{
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+	my ($common_connstr, $connstr, $expected_stderr, $test_name) = @_;
+
+	my $cmd = [
+		'psql', '-X', '-A', '-t', '-c',
+		"SELECT \$\$connected with $connstr\$\$",
+		'-d', "$common_connstr $connstr"
+	];
+
+	command_fails_like($cmd, $expected_stderr, $test_name);
+	return;
+}
+
 # Copy a set of files, taking into account wildcards
 sub copy_files
 {

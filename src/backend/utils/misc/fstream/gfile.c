@@ -1103,7 +1103,9 @@ int gfile_open(gfile_t* fd, const char* fpath, int flags, int* response_code, co
 	{
 		int syncFlag = 0;
 		int openFlags;
+#ifdef FRONTEND
 		mode_t openMode;
+#endif
 
 #ifndef WIN32
 		/*
@@ -1127,12 +1129,16 @@ int gfile_open(gfile_t* fd, const char* fpath, int flags, int* response_code, co
 		if (flags != GFILE_OPEN_FOR_READ)
 		{
 			openFlags = O_WRONLY | O_CREAT | O_BINARY | O_APPEND | syncFlag;
+#ifdef FRONTEND
 			openMode = S_IRUSR | S_IWUSR;
+#endif
 		}
 		else
 		{
 			openFlags = O_RDONLY | O_BINARY;
+#ifdef FRONTEND
 			openMode = 0;
+#endif
 		}
 
 		do

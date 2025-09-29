@@ -102,7 +102,7 @@ static RelationTypeData relation_types[MAX_INCLUDE_RELATION_TYPES+1] = {
 static void init_relation_types(char *include_relation_types);
 static RelationTypeData get_relation_type_data(Oid relam, int relkind);
 static void mask_block(char *pagedata, BlockNumber blkno, Oid relam, int relkind);
-static bool compare_files(char* primaryfilepath, char* mirrorfilepath, RelfilenodeEntry *rentry);
+static bool compare_files(char* primaryfilepath, char* mirrorfilepath, RelfilenodeEntry *rentry, BlockNumber segmentno);
 static bool sync_wait(void);
 static HTAB* get_relfilenode_map();
 static RelfilenodeEntry* get_relfilenode_entry(char *relfilenode, HTAB *relfilenode_map);
@@ -311,11 +311,12 @@ sync_wait(void)
 }
 
 static bool
-compare_files(char *primaryfilepath, char *mirrorfilepath, RelfilenodeEntry *rentry)
+compare_files(char *primaryfilepath, char *mirrorfilepath, RelfilenodeEntry *rentry, BlockNumber segmentno)
 {
 	File		primaryFile = -1;
 	File		mirrorFile = -1;
 	BlockNumber blockno;
+	BlockNumber blocknoForCheckSum;
 	int			attempts = 0;
 	bool		any_retries = false;
 	bool		primaryFileExists;
@@ -477,12 +478,13 @@ retry:
 			 * mask_block(). It might throw a hard ERROR on a bogus block,
 			 * so we better catch that here so we can retry.
 			 */
-			if (!PageIsVerified(primaryFileBuf, blockno))
+			blocknoForCheckSum = blockno + segmentno * RELSEG_SIZE;
+			if (!PageIsVerified(primaryFileBuf, blocknoForCheckSum))
 			{
 				elog(NOTICE, "invalid page header or checksum in file \"%s\", block %u", primaryfilepath, blockno);
 				goto retry;
 			}
-			if (!PageIsVerified(mirrorFileBuf, blockno))
+			if (!PageIsVerified(mirrorFileBuf, blocknoForCheckSum))
 			{
 				elog(NOTICE, "invalid page header or checksum in file \"%s\", block %u", mirrorfilepath, blockno);
 				goto retry;
@@ -585,6 +587,7 @@ get_relfilenode_map()
 		rentry->relfilenode = rnode;
 		rentry->relam = classtuple->relam;
 		rentry->relkind = classtuple->relkind;
+		rentry->segments = NIL;
 		strlcpy(rentry->relname, NameStr(classtuple->relname), sizeof(rentry->relname));
 	}
 	table_endscan(scan);
@@ -658,6 +661,7 @@ gp_replica_check(PG_FUNCTION_ARGS)
 		char *d_name_copy;
 		char *relfilenode;
 		bool match;
+		BlockNumber segmentno = 0;
 
 		if (should_skip(dent->d_name))
 			continue;
@@ -685,13 +689,16 @@ gp_replica_check(PG_FUNCTION_ARGS)
 
 		d_name_copy = strtok(NULL, ".");
 		if (d_name_copy != NULL)
-			rentry->segments = lappend_int(rentry->segments, atoi(d_name_copy));
+		{
+			segmentno = atoi(d_name_copy);
+			rentry->segments = lappend_int(rentry->segments, segmentno);	
+		}
 
 		snprintf(primaryfilename, MAXPGPATH, "%s/%s", primarydirpath, dent->d_name);
 		snprintf(mirrorfilename, MAXPGPATH, "%s/%s", mirrordirpath, dent->d_name);
 
 		/* do the file comparison */
-		match = compare_files(primaryfilename, mirrorfilename, rentry);
+		match = compare_files(primaryfilename, mirrorfilename, rentry, segmentno);
 		dir_equal = dir_equal && match;
 	}
 	FreeDir(primarydir);

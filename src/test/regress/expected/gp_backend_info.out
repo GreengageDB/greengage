@@ -78,6 +78,8 @@ SELECT COUNT(DISTINCT pid) = :num_primaries +1 FROM gp_backend_info();
 --
 CREATE TEMPORARY TABLE temp2();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+CREATE TEMPORARY TABLE temp3 AS SELECT 0 AS a FROM generate_series(1, 500);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greengage Database data distribution key for this table.
 SELECT * FROM temp JOIN (SELECT * FROM temp2) temp2 ON (temp = temp2);
 --
 (0 rows)
@@ -160,9 +162,9 @@ GROUP BY content;
 --
 -- Start up a singleton reader.
 --
-SELECT * FROM temp JOIN (SELECT oid FROM pg_class) temp2 on (temp = temp2);
- oid 
------
+SELECT * FROM temp3 JOIN (SELECT oid FROM pg_class) temp2 on (temp3.a = temp2.oid);
+ a | oid 
+---+-----
 (0 rows)
 
 --start_ignore

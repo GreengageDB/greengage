@@ -332,7 +332,6 @@ _bitmap_xlog_updateword(XLogRecPtr lsn, XLogReaderState *record)
 
 	Buffer			bitmapBuffer;
 	Page			bitmapPage;
-	BMBitmapOpaque	bitmapOpaque;
 	BMBitmap 		bitmap;
 
 	xlrec = (xl_bm_updateword *) XLogRecGetData(record);
@@ -345,11 +344,10 @@ _bitmap_xlog_updateword(XLogRecPtr lsn, XLogReaderState *record)
 	if (XLogReadBufferForRedo(record, 0, &bitmapBuffer) == BLK_NEEDS_REDO)
 	{
 		bitmapPage = BufferGetPage(bitmapBuffer);
-		bitmapOpaque =
-			(BMBitmapOpaque)PageGetSpecialPointer(bitmapPage);
 		bitmap = (BMBitmap) PageGetContentsMaxAligned(bitmapPage);
 
-		Assert(bitmapOpaque->bm_hrl_words_used > xlrec->bm_word_no);
+		Assert(((BMBitmapOpaque) PageGetSpecialPointer(bitmapPage))
+				   ->bm_hrl_words_used > xlrec->bm_word_no);
 
 		bitmap->cwords[xlrec->bm_word_no] = xlrec->bm_cword;
 		bitmap->hwords[xlrec->bm_word_no/BM_HRL_WORD_SIZE] = xlrec->bm_hword;

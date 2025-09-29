@@ -30,6 +30,382 @@
 using namespace gpdxl;
 using namespace gpmd;
 
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CQueryMutators::GroupingListContainsPrimaryKey
+//
+//	@doc:
+//		Checks if list grouping_list contains all columns from conkeys of
+//		Primary Key in relation conrelid. grouping_list is treated as an integer list of
+//		ressortgroupref values.
+//		Important note: grouping_list should not have duplicate values.
+//---------------------------------------------------------------------------
+BOOL
+CQueryMutators::GroupingListContainsPrimaryKey(Query *query,
+											   List *grouping_list,
+											   List *conkeys, Oid conrelid)
+{
+	ListCell *lgc;
+	ULONG found_col_cnt = 0;
+
+	// Check if conkeys set is a subset of grouping columns set.
+	ForEach(lgc, grouping_list)
+	{
+		int idx = lfirst_int(lgc);
+
+		TargetEntry *tle = gpdb::GetSortGroupRefTle(idx, query->targetList);
+		GPOS_ASSERT(NULL != tle);
+
+		Node *expr = (Node *) tle->expr;
+
+		if (!IsA(expr, Var))
+		{
+			continue;
+		}
+
+		Var *var = (Var *) expr;
+
+		RangeTblEntry *rte =
+			(RangeTblEntry *) gpdb::ListNth(query->rtable, var->varno - 1);
+
+		if (0 == var->varlevelsup && rte->relid == conrelid &&
+			gpdb::ListMemberInt(conkeys, var->varattno))
+		{
+			found_col_cnt++;
+		}
+	}
+
+	// check that all conkeys were found
+	return (gpdb::ListLength(conkeys) == found_col_cnt);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CQueryMutators::AddMissingGroupingSetsMutator
+//
+//	@doc:
+//		Traverses the groupingSets, adds new ressortgroupref (defined by m_gc
+//		field in context) to all GroupingSet content where m_gc has functional
+//		dependency.
+//---------------------------------------------------------------------------
+Node *
+CQueryMutators::AddMissingGroupingSetsMutator(
+	Node *node, SContextFixGroupDependentTargets *context)
+{
+	if (NULL == node)
+	{
+		return NULL;
+	}
+
+	if (IsA(node, GroupingSet))
+	{
+		// GroupingSets are not mutated by default in expression_tree_mutator,
+		// so we need to handle this kind of node regardless if we modify it or not.
+		GroupingSet *gs = (GroupingSet *) node;
+		GroupingSet *new_gs = NULL;
+		if (GROUPING_SET_SIMPLE == gs->kind)
+		{
+			new_gs = (GroupingSet *) gpdb::CopyObject(node);
+			if (GroupingListContainsPrimaryKey(
+					context->m_query, new_gs->content, context->m_conkeys,
+					context->m_conrelid))
+			{
+				new_gs->content = gpdb::LAppendInt(
+					new_gs->content, context->m_gc->tleSortGroupRef);
+			}
+			return (Node *) new_gs;
+		}
+		// do a flat copy
+		new_gs = MakeNode(GroupingSet);
+		memcpy(new_gs, gs, sizeof(GroupingSet));
+		new_gs->content = (List *) gpdb::MutateExpressionTree(
+			(Node *) gs->content,
+			(MutatorWalkerFn) AddMissingGroupingSetsMutator, context);
+		return (Node *) new_gs;
+	}
+
+	if (IsA(node, List))
+	{
+		// In case grouping is done by mixing GROUPING SETS with usual GROUP BY
+		// columns, grouping by columns will be represented by GROUPING_SET_SIMPLE
+		// nodes with single element in the content on the top level of
+		// groupingSets. And we need to check them all together, as the primary
+		// key can consist of several columns.
+		// For this case we do not add the ressortgroupref to any existing content,
+		// but create a new node on the top level of groupingSets.
+		List *original_list = (List *) node;
+		List *new_list = NIL;
+		List *temp_content = NIL;
+		BOOL parent_is_grouping_set = context->m_parent_is_grouping_set;
+		ListCell *l;
+
+		context->m_parent_is_grouping_set = true;
+
+		ForEach(l, original_list)
+		{
+			Node *n = (Node *) lfirst(l);
+			new_list = gpdb::LAppend(new_list,
+									 AddMissingGroupingSetsMutator(n, context));
+
+			if (IsA(n, GroupingSet))
+			{
+				GroupingSet *gs = (GroupingSet *) n;
+				if (!parent_is_grouping_set && GROUPING_SET_SIMPLE == gs->kind)
+				{
+					temp_content = gpdb::ListConcat(
+						temp_content,
+						(List *) gpdb::CopyObject((Node *) gs->content));
+				}
+			}
+		}
+
+		if (GroupingListContainsPrimaryKey(context->m_query, temp_content,
+										   context->m_conkeys,
+										   context->m_conrelid))
+		{
+			GroupingSet *new_gs = MakeNode(GroupingSet);
+			new_gs->kind = GROUPING_SET_SIMPLE;
+			new_gs->content =
+				gpdb::LAppendInt(NIL, context->m_gc->tleSortGroupRef);
+			new_list = gpdb::LAppend(new_list, new_gs);
+		}
+
+		gpdb::ListFree(temp_content);
+
+		return (Node *) new_list;
+	}
+
+	return gpdb::MutateExpressionTree(
+		node, (MutatorWalkerFn) AddMissingGroupingSetsMutator, context);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CQueryMutators::GetVarsWithoutTleWalker
+//
+//	@doc:
+//		Goes over the expression tree, finds all vars that do not have relevant
+//		targetlist entries, and adds resjunk targetlist entries for such vars
+//		to a m_tlist_addition in the context, that later will be added to the
+//		original target list.
+//---------------------------------------------------------------------------
+BOOL
+CQueryMutators::GetVarsWithoutTleWalker(
+	Node *node, SContextFixGroupDependentTargets *context)
+{
+	if (NULL == node)
+	{
+		return false;
+	}
+
+	if (IsA(node, Aggref))
+	{
+		// do not examine what is inside Aggref
+		return false;
+	}
+
+	// find all vars that do not have relevant targetlist entries, and add
+	// resjunk targetlist entries for such vars to m_tlist_addition
+	if (IsA(node, Var))
+	{
+		Var *var = (Var *) node;
+		if (var->varlevelsup == context->m_current_query_level)
+		{
+			BOOL found = false;
+
+			var = (Var *) gpdb::CopyObject(node);
+			var->varlevelsup = 0;
+
+			ListCell *lc_tle;
+			ForEach(lc_tle, context->m_query->targetList)
+			{
+				TargetEntry *target_entry = (TargetEntry *) lfirst(lc_tle);
+
+				if (IsA(target_entry->expr, Var) &&
+					gpdb::Equals(target_entry->expr, var))
+				{
+					found = true;
+					gpdb::GPDBFree(var);
+					break;
+				}
+			}
+			if (!found)
+			{
+				ULONG ressno =
+					gpdb::ListLength(context->m_query->targetList) + 1;
+				TargetEntry *newTargetEntry =
+					gpdb::MakeTargetEntry((Expr *) var, ressno, NULL, true);
+
+				context->m_tlist_addition =
+					gpdb::LAppend(context->m_tlist_addition, newTargetEntry);
+			}
+		}
+
+		return false;
+	}
+
+	if (IsA(node, SubLink))
+	{
+		SubLink *sublink = (SubLink *) node;
+
+		context->m_current_query_level++;
+		GetVarsWithoutTleWalker((Node *) sublink->subselect, context);
+		context->m_current_query_level--;
+
+		return false;
+	}
+
+	// recurse into query structure
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		GetVarsWithoutTleWalker((Node *) query->targetList, context);
+
+		ListCell *lc;
+		ForEach(lc, query->rtable)
+		{
+			RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
+
+			GPOS_ASSERT(rte != NULL);
+
+			if (RTE_SUBQUERY == rte->rtekind)
+			{
+				Query *subquery = rte->subquery;
+				context->m_current_query_level++;
+				GetVarsWithoutTleWalker((Node *) subquery, context);
+				context->m_current_query_level--;
+			}
+		}
+	}
+
+	return gpdb::WalkExpressionTree(
+		node, (ExprWalkerFn) GetVarsWithoutTleWalker, (void *) context);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CQueryMutators::FixGroupDependentTargets
+//
+//	@doc:
+//		Updates the query structure in case there are target list entries
+//		with functional dependency on columns in groupClause.
+//---------------------------------------------------------------------------
+void
+CQueryMutators::FixGroupDependentTargets(Query *query)
+{
+	// If there is a functional dependency proved for a relation on a set of
+	// grouping columns, then it is valid to have a column in the target list
+	// even if it is not listed explicitly in the groupClause. To make ORCA
+	// correctly process such cases, we add all such target list entries into
+	// groupClause's grouping sets, where the functional dependency exists.
+	// If there is such functional dependency existing, the OID of
+	// Primary Key constraint resides in the constraintDeps list. As the
+	// constraintDeps list contains only Primary Key OIDs, we skip checks of
+	// constraint type in all code below.
+	// Refer to function check_functional_grouping for more details.
+	if (0 == gpdb::ListLength(query->constraintDeps))
+	{
+		return;
+	}
+	// 1. Extract such columns from targetlist expressions, and if they do
+	// not have a relevant target entry, add resjunk target list entries for
+	// them.
+	// 2. Update all grouping sets that contain Primary Key
+
+	// Step 1.
+	// If there is an expression with a functionally dependent var, at this
+	// point it may not have a relevant target list entry (as it was not
+	// explicitly listed in groupClause).
+	// For all such vars we add resjunk target list entries into targetList.
+	SContextFixGroupDependentTargets ctx_fix_dependent_targets(query);
+	GetVarsWithoutTleWalker((Node *) query->targetList,
+							&ctx_fix_dependent_targets);
+	query->targetList = gpdb::ListConcat(
+		query->targetList, ctx_fix_dependent_targets.m_tlist_addition);
+
+	// Step 2.
+	// Update groupClause - add all functionally dependent entries explicitly.
+	ListCell *lc_constraint;
+	ForEach(lc_constraint, query->constraintDeps)
+	{
+		Oid constraint_oid = lfirst_oid(lc_constraint);
+		Oid conrelid = 0;
+		Oid confrelid =
+			0;	// not used, but function get_constraint_relation_oids requires it..
+		gpdb::GetConstraintRelationOids(constraint_oid, &conrelid, &confrelid);
+
+		ctx_fix_dependent_targets.m_conrelid = conrelid;
+		ctx_fix_dependent_targets.m_conkeys =
+			gpdb::GetConstraintRelationColumns(constraint_oid);
+
+		ListCell *lc_tle;
+		ForEach(lc_tle, query->targetList)
+		{
+			TargetEntry *target_entry = (TargetEntry *) lfirst(lc_tle);
+			Node *expr = (Node *) target_entry->expr;
+
+			if (!IsA(expr, Var))
+			{
+				continue;
+			}
+
+			Var *var = (Var *) expr;
+
+			if (var->varlevelsup != 0)
+			{
+				continue;
+			}
+
+			RangeTblEntry *rte =
+				(RangeTblEntry *) gpdb::ListNth(query->rtable, var->varno - 1);
+			GPOS_ASSERT(NULL != rte);
+
+			// Skip relations that are not constrained by primary key, that is
+			// currently being checked, and skip target list entries that are
+			// already used for grouping.
+			if (conrelid != rte->relid || CTranslatorUtils::IsGroupingColumn(
+											  target_entry, query->groupClause))
+			{
+				continue;
+			}
+
+			// add new SortGroupClause to groupClause
+			SortGroupClause *gc;
+			Oid sortop;
+			Oid eqop;
+			BOOL hashable;
+
+			gpdb::GetSortGroupOperators(exprType(expr), true, true, false,
+										&sortop, &eqop, NULL, &hashable);
+
+			gc = MakeNode(SortGroupClause);
+			gc->tleSortGroupRef =
+				gpdb::AssignSortGroupRef(target_entry, query->targetList);
+			gc->eqop = eqop;
+			gc->sortop = sortop;
+			gc->nulls_first = false;
+			gc->hashable = hashable;
+
+			ctx_fix_dependent_targets.m_gc = gc;
+			ctx_fix_dependent_targets.m_parent_is_grouping_set = false;
+
+			List *old_grouping_sets = query->groupingSets;
+
+			query->groupClause = gpdb::LAppend(query->groupClause, gc);
+
+			query->groupingSets = (List *) AddMissingGroupingSetsMutator(
+				(Node *) query->groupingSets, &ctx_fix_dependent_targets);
+
+			gpdb::ListFreeDeep(old_grouping_sets);
+		}
+		gpdb::ListFree(ctx_fix_dependent_targets.m_conkeys);
+	}
+	// remove constraintDeps
+	gpdb::ListFree(query->constraintDeps);
+	query->constraintDeps = NIL;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CQueryMutators::NeedsProjListNormalization
@@ -157,6 +533,8 @@ CQueryMutators::NormalizeGroupByProjList(CMemoryPool *mp,
 										 const Query *query)
 {
 	Query *query_copy = (Query *) gpdb::CopyObject(const_cast<Query *>(query));
+
+	FixGroupDependentTargets(query_copy);
 
 	if (!NeedsProjListNormalization(query_copy))
 	{

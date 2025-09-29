@@ -10,6 +10,9 @@
 
 #include "pg_upgrade.h"
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug_undef.h"
+#endif
 
 #define PG_OPTIONS_UTILITY_MODE_VERSION(major_version) \
 	( (GET_MAJOR_VERSION(major_version)) < 1200 ?      \

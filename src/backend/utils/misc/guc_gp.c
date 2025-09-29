@@ -111,7 +111,6 @@ List	   *gp_guc_list_for_no_plan;
 List       *gp_guc_restore_list = NIL;
 bool        gp_guc_need_restore = false;
 
-char	   *Debug_dtm_action_sql_command_tag;
 
 bool		Debug_shareinput_xslice = false;
 bool		Debug_print_full_dtm = false;
@@ -177,26 +176,9 @@ bool		debug_basebackup = false;
 
 int rep_lag_avoidance_threshold = 0;
 
-#define DEBUG_DTM_ACTION_PRIMARY_DEFAULT true
-bool		Debug_dtm_action_primary = DEBUG_DTM_ACTION_PRIMARY_DEFAULT;
 
 bool		gp_log_optimization_time = false;
 
-int			Debug_dtm_action = DEBUG_DTM_ACTION_NONE;
-
-#define DEBUG_DTM_ACTION_TARGET_DEFAULT DEBUG_DTM_ACTION_TARGET_NONE
-
-int			Debug_dtm_action_target = DEBUG_DTM_ACTION_TARGET_DEFAULT;
-
-#define DEBUG_DTM_ACTION_PROTOCOL_DEFAULT DTX_PROTOCOL_COMMAND_COMMIT_PREPARED
-
-int			Debug_dtm_action_protocol = DEBUG_DTM_ACTION_PROTOCOL_DEFAULT;
-
-#define DEBUG_DTM_ACTION_SEGMENT_DEFAULT -2
-#define DEBUG_DTM_ACTION_NESTINGLEVEL_DEFAULT 0
-
-int			Debug_dtm_action_segment = DEBUG_DTM_ACTION_SEGMENT_DEFAULT;
-int			Debug_dtm_action_nestinglevel = DEBUG_DTM_ACTION_NESTINGLEVEL_DEFAULT;
 
 int			gp_connection_send_timeout;
 
@@ -420,6 +402,7 @@ static char *gp_server_version_string;
 /* Query Metrics */
 bool		gp_enable_query_metrics = false;
 int			gp_instrument_shmem_size = 5120;
+int			gp_max_scan_on_shmem = 300;
 
 /* Security */
 bool		gp_reject_internal_tcp_conn = true;
@@ -461,23 +444,6 @@ static const struct config_enum_entry gp_log_format_options[] = {
 	{NULL, 0}
 };
 
-static const struct config_enum_entry debug_dtm_action_protocol_options[] = {
-	{"none", DTX_PROTOCOL_COMMAND_NONE},
-	{"abort_no_prepared", DTX_PROTOCOL_COMMAND_ABORT_NO_PREPARED},
-	{"prepare", DTX_PROTOCOL_COMMAND_PREPARE},
-	{"abort_some_prepared", DTX_PROTOCOL_COMMAND_ABORT_SOME_PREPARED},
-	{"commit_onephase", DTX_PROTOCOL_COMMAND_COMMIT_ONEPHASE},
-	{"commit_prepared", DTX_PROTOCOL_COMMAND_COMMIT_PREPARED},
-	{"abort_prepared", DTX_PROTOCOL_COMMAND_ABORT_PREPARED},
-	{"retry_commit_prepared", DTX_PROTOCOL_COMMAND_RETRY_COMMIT_PREPARED},
-	{"retry_abort_prepared", DTX_PROTOCOL_COMMAND_RETRY_ABORT_PREPARED},
-	{"recovery_commit_prepared", DTX_PROTOCOL_COMMAND_RECOVERY_COMMIT_PREPARED},
-	{"recovery_abort_prepared", DTX_PROTOCOL_COMMAND_RECOVERY_ABORT_PREPARED},
-	{"subtransaction_begin", DTX_PROTOCOL_COMMAND_SUBTRANSACTION_BEGIN_INTERNAL},
-	{"subtransaction_release", DTX_PROTOCOL_COMMAND_SUBTRANSACTION_RELEASE_INTERNAL},
-	{"subtransaction_rollback", DTX_PROTOCOL_COMMAND_SUBTRANSACTION_ROLLBACK_INTERNAL},
-	{NULL, 0}
-};
 
 static const struct config_enum_entry optimizer_log_failure_options[] = {
 	{"all", OPTIMIZER_ALL_FAIL},
@@ -506,21 +472,6 @@ static const struct config_enum_entry explain_memory_verbosity_options[] = {
 	{NULL, 0}
 };
 
-static const struct config_enum_entry debug_dtm_action_options[] = {
-	{"none", DEBUG_DTM_ACTION_NONE},
-	{"delay", DEBUG_DTM_ACTION_DELAY},
-	{"fail_begin_command", DEBUG_DTM_ACTION_FAIL_BEGIN_COMMAND},
-	{"fail_end_command", DEBUG_DTM_ACTION_FAIL_END_COMMAND},
-	{"panic_begin_command", DEBUG_DTM_ACTION_PANIC_BEGIN_COMMAND},
-	{NULL, 0}
-};
-
-static const struct config_enum_entry debug_dtm_action_target_options[] = {
-	{"none", DEBUG_DTM_ACTION_TARGET_NONE},
-	{"protocol", DEBUG_DTM_ACTION_TARGET_PROTOCOL},
-	{"sql", DEBUG_DTM_ACTION_TARGET_SQL},
-	{NULL, 0}
-};
 
 static const struct config_enum_entry gp_autostats_modes[] = {
 	{"none", GP_AUTOSTATS_NONE},
@@ -1495,15 +1446,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 
-	{
-		{"debug_dtm_action_primary", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Specify if the primary or mirror segment is the target of the debug DTM action."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action_primary,
-		DEBUG_DTM_ACTION_PRIMARY_DEFAULT, NULL, NULL, NULL
-	},
 
 	{
 		{"debug_shareinput_xslice", PGC_SUSET, LOGGING_WHAT,
@@ -1696,7 +1638,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_log_stack_trace_lines,
-		true,
+		false,
 		NULL, NULL, NULL
 	},
 
@@ -3164,27 +3106,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 
-	{
-		{"debug_dtm_action_segment", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the debug DTM action segment."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action_segment,
-		DEBUG_DTM_ACTION_SEGMENT_DEFAULT, -2, 1000,
-		NULL, NULL, NULL
-	},
 
-	{
-		{"debug_dtm_action_nestinglevel", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the debug DTM action transaction nesting level."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action_nestinglevel,
-		DEBUG_DTM_ACTION_NESTINGLEVEL_DEFAULT, 0, 1000,
-		NULL, NULL, NULL
-	},
 
 	{
 		{"planner_work_mem", PGC_USERSET, RESOURCES_MEM,
@@ -3914,6 +3836,16 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"gp_max_scan_on_shmem", PGC_POSTMASTER, UNGROUPED,
+			gettext_noop("Sets the limit of shmem slots used by scan nodes for each backend."),
+			NULL,
+		},
+		&gp_max_scan_on_shmem,
+		300, 0, 3072,
+		NULL, NULL, NULL
+	},
+
+	{
 		{"gp_vmem_protect_limit", PGC_POSTMASTER, RESOURCES_MEM,
 			gettext_noop("Virtual memory limit (in MB) of Greengage memory protection."),
 			NULL,
@@ -4626,16 +4558,6 @@ struct config_string ConfigureNamesString_gp[] =
 		NULL, NULL, NULL
 	},
 
-	{
-		{"debug_dtm_action_sql_command_tag", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the debug DTM action sql command tag."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action_sql_command_tag,
-		"",
-		NULL, NULL, NULL
-	},
 
 	{
 		{"gp_resqueue_priority_default_value", PGC_POSTMASTER, RESOURCES_MGM,
@@ -4808,16 +4730,6 @@ struct config_enum ConfigureNamesEnum_gp[] =
 		NULL, NULL, NULL
 	},
 
-	{
-		{"debug_dtm_action_protocol", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the debug DTM action protocol."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action_protocol,
-		DTX_PROTOCOL_COMMAND_NONE, debug_dtm_action_protocol_options,
-		NULL, NULL, NULL
-	},
 
 	{
 		{"optimizer_log_failure", PGC_USERSET, LOGGING_WHEN,
@@ -4861,27 +4773,7 @@ struct config_enum ConfigureNamesEnum_gp[] =
 		NULL, NULL, NULL
 	},
 
-	{
-		{"debug_dtm_action", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the debug DTM action."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action,
-		DEBUG_DTM_ACTION_NONE, debug_dtm_action_options,
-		NULL, NULL, NULL
-	},
 
-	{
-		{"debug_dtm_action_target", PGC_SUSET, DEVELOPER_OPTIONS,
-			gettext_noop("Sets the debug DTM action target."),
-			NULL,
-			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
-		},
-		&Debug_dtm_action_target,
-		DEBUG_DTM_ACTION_TARGET_NONE, debug_dtm_action_target_options,
-		NULL, NULL, NULL
-	},
 
 	{
 		{"gp_autostats_mode", PGC_USERSET, DEVELOPER_OPTIONS,

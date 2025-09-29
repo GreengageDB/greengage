@@ -167,8 +167,9 @@ $node_primary->safe_psql('postgres',
 
 sub wait_until_file_exists
 {
-	my ($filepath, $filedesc) = @_;
-	my $query = "SELECT size IS NOT NULL FROM pg_stat_file('$filepath')";
+	my ($filepath, $filedesc, $missing_ok) = @_;
+	$missing_ok = "false" if (!defined($missing_ok));
+	my $query = "SELECT size IS NOT NULL FROM pg_stat_file('$filepath', $missing_ok)";
 	# we aren't querying primary because we stop the primary node for some of the
 	# scenarios
 	$node_standby->poll_query_until('postgres', $query)
@@ -244,7 +245,7 @@ sub check_history_files
 	# the second standby created below will be able to restore this file,
 	# creating a RECOVERYHISTORY.
 	my $primary_archive = $node_primary->archive_dir;
-	wait_until_file_exists("$primary_archive/00000002.history", "history file to be archived");
+	wait_until_file_exists("$primary_archive/00000002.history", "history file to be archived", "true");
 
 	my $node_standby2 = PostgreSQL::Test::Cluster->new('standby2');
 	$node_standby2->init_from_backup($node_primary, $backup_name,

@@ -63,12 +63,10 @@ main(int argc, char **argv)
 	 * The following GUCs will cause the segment to error out while trying to
 	 * commit the prepared transaction.
 	 */
-
-	PQexec(conn, "SET debug_dtm_action_target = \"protocol\"");
-	PQexec(conn, "SET debug_dtm_action_protocol = \"commit_prepared\"");
-	PQexec(conn, "SET debug_dtm_action_segment = 0");
-	PQexec(conn, "SET debug_dtm_action = \"fail_begin_command\"");
-
+	PQexec(conn, "SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start',"
+		"'error','commit_prepared','','',1,1,0,dbid) "
+		"FROM gp_segment_configuration WHERE mode='s' AND "
+		" role='p' AND content=0;");
 	paramValues[0] = "1";
 	paramValues[1] = "2";
 

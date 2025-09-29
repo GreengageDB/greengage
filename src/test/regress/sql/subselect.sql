@@ -1069,3 +1069,42 @@ drop table tl1;
 drop table tl2;
 drop table tl3;
 drop table tl4;
+
+--Test case for subquery, which returns more than one rows
+-- start_ignore
+drop table if exists table1, table2;
+-- end_ignore
+
+create table table1 as
+    select * from (values (1, 0), (1, 0)) v(a, b) distributed by (a);
+
+create table table2 as
+    select * from (values (0, 10), (0, 10)) v(a, b) distributed by (a);
+
+explain (costs off)
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+
+select * from table1 where 10 in
+    (select b from table2 where table2.a = 0 or table1.b = table2.b);
+
+drop table table1, table2;
+
+--Fix Values Scan with parameters in subselect
+-- start_ignore
+drop table if exists table1, table2;
+-- end_ignore
+create table table1 (i int, j int) distributed replicated;
+insert into table1 select i, i from generate_series(1, 3) i;
+
+create table table2 (i int, j int) distributed by (i);
+insert into table2 values (1, 1);
+
+explain (costs off)
+select * from table1 where table1.j >
+    (select i from table2, (values (1), (2), (3)) k (a) where a > table1.i limit 1);
+
+select * from table1 where table1.j >
+    (select i from table2, (values (1), (2), (3)) k (a) where a > table1.i limit 1);
+
+drop table table1, table2;

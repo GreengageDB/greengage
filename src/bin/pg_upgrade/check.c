@@ -1264,7 +1264,6 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 		check_ok();
 }
 
-
 /*
  * check_for_jsonb_9_4_usage()
  *

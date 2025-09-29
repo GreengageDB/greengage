@@ -58,7 +58,6 @@ restore_aosegment_table(PGconn *conn, RelInfo *rel)
 {
 	PQExpBuffer query;
 	int			i;
-	int			segno;
 	char	   *segrelname;
 	char	   *vmaprelname;
 	char	   *blkdirrelname;
@@ -136,8 +135,6 @@ restore_aosegment_table(PGconn *conn, RelInfo *rel)
 							  seg->modcount,
 							  seg->version,
 							  seg->state);
-
-			segno = seg->segno;
 		}
 		/* Column oriented AO table */
 		else
@@ -165,8 +162,6 @@ restore_aosegment_table(PGconn *conn, RelInfo *rel)
 							  seg->version,
 							  seg->state);
 			PQfreemem(vpinfo_escaped);
-
-			segno = seg->segno;
 		}
 
 		executeLargeCommandOrDie(conn, query->data);

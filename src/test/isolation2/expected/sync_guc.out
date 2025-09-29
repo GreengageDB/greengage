@@ -153,3 +153,41 @@ RESET
 (4 rows)
 4q: ... <quitting>
 
+-- TEST 4: make sure GUC sync failure doesn't leave broken temp tables
+-- start_matchsubs
+-- m/^ERROR:  failed to synchronize GUC settings across segments \(postgres\.c:\d+\)/
+-- s/^ERROR:  failed to synchronize GUC settings across segments \(postgres\.c:\d+\)/ERROR:  failed to synchronize GUC settings across segments/
+-- end_matchsubs
+1: create temp table sync_temp_table(a int) distributed by (a);
+CREATE TABLE
+-- Cause panic on segment from another session
+2: select gp_inject_fault('create_function_fail', 'panic', dbid) from gp_segment_configuration where content=0 and role='p';
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: create function my_function() returns void as $$ begin end; $$ language plpgsql;
+ERROR:  fault triggered, fault name:'create_function_fail' fault type:'panic'  (seg0 192.168.0.101:6002 pid=347506)
+2q: ... <quitting>
+-- Attempting to change GUC
+!\retcode gpconfig -c log_min_messages -v 'warning' -m 'notice';
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+-- Query to execute GUC sync (GUC sync fails)
+1: select 1;
+ERROR:  failed to synchronize GUC settings across segments
+DETAIL:  Query aborted due to GUC synchronization failure
+HINT:  Check segment logs for more details
+-- Should fail with "relation does not exist"
+1: select * from sync_temp_table;
+ERROR:  relation "sync_temp_table" does not exist
+LINE 1: select * from sync_temp_table;
+                      ^
+
+!\retcode gpconfig -r log_min_messages;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+1q: ... <quitting>

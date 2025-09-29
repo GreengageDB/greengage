@@ -22,7 +22,6 @@
 static void
 allocate_a_lot(GppcMemoryContext context)
 {
-	void   *ptr;
 	int		i;
 	GppcMemoryContext oldcontext;
 
@@ -34,7 +33,7 @@ allocate_a_lot(GppcMemoryContext context)
 		 * 900M bytes, completely depending on the default setting,
 		 * but it's fairly reasonable, I believe...
 		 */
-		ptr = (int *) GppcAlloc(900 * 1000 * 1000);
+		(void) GppcAlloc(900 * 1000 * 1000);
 
 		GppcMemoryContextReset(context);
 	}

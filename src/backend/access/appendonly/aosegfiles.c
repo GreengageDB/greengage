@@ -1015,6 +1015,124 @@ GetSegFilesTotals(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot)
 	return result;
 }
 
+/*
+ * GetSegFilesTotalsCluster
+ *
+ * Fill the total FileSegTotals information for a specific AO table
+ * from the pg_aoseg tables on the entire cluster.
+ */
+void
+GetSegFilesTotalsCluster(Relation parentrel, FileSegTotals * totals)
+{
+	StringInfoData sqlstmt;
+	Relation	aosegrel;
+	volatile bool connected = false;
+	Oid			segrelid = InvalidOid;
+
+	Assert(Gp_role == GP_ROLE_DISPATCH);
+	Assert(RelationIsAoRows(parentrel));
+
+	GetAppendOnlyEntryAuxOids(parentrel, &segrelid, NULL, NULL);
+
+	Assert(OidIsValid(segrelid));
+
+	Assert(totals);
+
+	aosegrel = heap_open(segrelid, AccessShareLock);
+	initStringInfo(&sqlstmt);
+	appendStringInfo(&sqlstmt,
+					 "select count(1)::int4, "
+					 "sum(eof)::int8, sum(tupcount)::int8, "
+					 "sum(varblockcount)::int8, sum(eofuncompressed)::int8 "
+					 "from gp_dist_random('%s.%s')",
+					 get_namespace_name(RelationGetNamespace(aosegrel)),
+					 RelationGetRelationName(aosegrel));
+
+	heap_close(aosegrel, AccessShareLock);
+
+	/*
+	 * Temporarily disable Orca because it's slow to start up, and it wouldn't
+	 * come up with any better plan for the simple queries that we run. Plus
+	 * this function may be called during Orca's work, and that will result in
+	 * nested Orca planning, which is not supported.
+	 */
+	bool		save_optimizer_guc_value = optimizer;
+
+	optimizer = false;
+
+	PG_TRY();
+	{
+		if (SPI_OK_CONNECT != SPI_connect())
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unable to obtain AO relation information"),
+					 errdetail("SPI_connect failed in %s.", __func__)));
+
+		connected = true;
+
+		if ((SPI_execute(sqlstmt.data, false, 0) <= 0) ||
+			(SPI_tuptable == NULL))
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unable to obtain AO relation information"),
+					 errdetail("SPI_execute failed in %s.", __func__)));
+		else
+		{
+			TupleDesc	tupdesc = SPI_tuptable->tupdesc;
+			SPITupleTable *tuptable = SPI_tuptable;
+			HeapTuple	tuple = tuptable->vals[0];
+			bool		isnull;
+
+			/* we expect only 1 tuple */
+			Assert(SPI_processed == 1);
+
+			Datum		datum_totalfilesegs =
+				SPI_getbinval(tuple, tupdesc, 1, &isnull);
+			Assert(!isnull);
+			totals->totalfilesegs = DatumGetInt32(datum_totalfilesegs);
+
+			Datum		datum_totalbytes =
+				SPI_getbinval(tuple, tupdesc, 2, &isnull);
+			totals->totalbytes = DatumGetInt64(datum_totalbytes);
+
+			Datum		datum_totaltuples =
+				SPI_getbinval(tuple, tupdesc, 3, &isnull);
+			totals->totaltuples = DatumGetInt64(datum_totaltuples);
+
+			Datum		datum_totalvarblocks =
+				SPI_getbinval(tuple, tupdesc, 4, &isnull);
+			totals->totalvarblocks = DatumGetInt64(datum_totalvarblocks);
+
+			Datum		datum_totalbytesuncompressed =
+				SPI_getbinval(tuple, tupdesc, 5, &isnull);
+			totals->totalbytesuncompressed =
+				DatumGetInt64(datum_totalbytesuncompressed);
+		}
+
+		connected = false;
+		SPI_finish();
+	}
+
+	/* Clean up in case of error. */
+	PG_CATCH();
+	{
+		if (connected)
+			SPI_finish();
+
+		pfree(sqlstmt.data);
+
+		optimizer = save_optimizer_guc_value;
+
+		/* Carry on with error handling. */
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	pfree(sqlstmt.data);
+
+	optimizer = save_optimizer_guc_value;
+}
+
 PG_FUNCTION_INFO_V1(gp_aoseg_history);
 
 extern Datum gp_aoseg_history(PG_FUNCTION_ARGS);
@@ -1574,7 +1692,6 @@ aorow_compression_ratio_internal(Relation parentrel)
 	StringInfoData sqlstmt;
 	Relation	aosegrel;
 	volatile bool		connected = false;
-	int			proc;	/* 32 bit, only holds number of segments */
 	int			ret;
 	float8		compress_ratio = -1;	/* the default, meaning "not
 										 * available" */
@@ -1611,7 +1728,6 @@ aorow_compression_ratio_internal(Relation parentrel)
 
 		/* Do the query. */
 		ret = SPI_execute(sqlstmt.data, false, 0);
-		proc = (int) SPI_processed;
 
 		if (ret > 0 && SPI_tuptable != NULL)
 		{
@@ -1622,7 +1738,7 @@ aorow_compression_ratio_internal(Relation parentrel)
 			int64		eof_uncomp;
 
 			/* we expect only 1 tuple */
-			Assert(proc == 1);
+			Assert(SPI_processed == 1);
 
 			/*
 			 * Get totals from QE's and calculate the compression ratio. In

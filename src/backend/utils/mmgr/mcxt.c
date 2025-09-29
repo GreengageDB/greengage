@@ -45,6 +45,10 @@
 #error "If CDB_PALLOC_TAGS is defined, CDB_PALLOC_CALLER_ID must be defined too"
 #endif
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug_undef.h"
+#endif
+
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
  *****************************************************************************/
@@ -714,6 +718,10 @@ MemoryContextStatsDetail(MemoryContext context, int max_children,
 								 grand_totals.totalspace - grand_totals.freespace)));
 }
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "mcxt_memory_debug.c"
+#endif
+
 /*
  * MemoryContextStatsInternal
  *		One recursion level for MemoryContextStats
@@ -738,6 +746,12 @@ MemoryContextStatsInternal(MemoryContext context, int level,
 							print ? MemoryContextStatsPrint : NULL,
 							(void *) &level,
 							totals, print_to_stderr);
+
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+	if (print)
+		MemoryContextDumpChunkStats(context, level, max_children,
+									print_to_stderr);
+#endif
 
 	/*
 	 * Examine children.  If there are more than max_children of them, we do

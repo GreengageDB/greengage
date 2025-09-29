@@ -4,6 +4,8 @@
 -- start_matchsubs
 -- m/\(cost=.*\)/
 -- s/\(cost=.*\)//
+-- m/ERROR:  Passing parameters across motion is not supported. \([a-z]+\.c:\d+\)/
+-- s/\d+/XXX/g
 -- end_matchsubs
 create schema rpt;
 set search_path to rpt;
@@ -953,6 +955,61 @@ ___________
  Optimizer: Pivotal Optimizer (GPORCA)
 GP_IGNORE:(9 rows)
 
+-- insert into table with serial column
+create table t_replicate_dst(id serial, i integer) distributed replicated;
+create table t_replicate_src(i integer) distributed replicated;
+insert into t_replicate_src select i from generate_series(1, 5) i;
+explain (costs off, verbose) insert into t_replicate_dst (i) select i from t_replicate_src;
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Insert on rpt.t_replicate_dst
+   ->  Result
+         Output: (int4(nextval('t_replicate_dst_id_seq'::regclass))), t_replicate_src.i
+         ->  Broadcast Motion 1:3  (slice1; segments: 1)
+               Output: t_replicate_src.i, (int4(nextval('t_replicate_dst_id_seq'::regclass)))
+               ->  Seq Scan on rpt.t_replicate_src
+                     Output: t_replicate_src.i, int4(nextval('t_replicate_dst_id_seq'::regclass))
+ Optimizer: GPORCA
+ Settings: enable_seqscan = 'off'
+(9 rows)
+
+SET optimizer to off;
+-- query below produced assertion error at ORCA
+explain (costs off, verbose) with s as (select i from t_replicate_src group by i having random() > 0) insert into t_replicate_dst (i) select i from s;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Insert on rpt.t_replicate_dst
+   ->  Broadcast Motion 1:3  (slice1; segments: 1)
+         Output: ((nextval('t_replicate_dst_id_seq'::regclass))::integer), "*SELECT*".i
+         ->  Subquery Scan on "*SELECT*"
+               Output: nextval('t_replicate_dst_id_seq'::regclass), "*SELECT*".i
+               ->  Result
+                     Output: t_replicate_src.i
+                     ->  GroupAggregate
+                           Output: t_replicate_src.i
+                           Group Key: t_replicate_src.i
+                           Filter: (random() > '0'::double precision)
+                           ->  Sort
+                                 Output: t_replicate_src.i
+                                 Sort Key: t_replicate_src.i
+                                 ->  Seq Scan on rpt.t_replicate_src
+                                       Output: t_replicate_src.i
+ Optimizer: Postgres-based planner
+ Settings: enable_seqscan = 'off'
+(18 rows)
+
+RESET optimizer;
+insert into t_replicate_dst (i) select i from t_replicate_src;
+select distinct id from gp_dist_random('t_replicate_dst') order by id;
+ id 
+----
+  1
+  2
+  3
+  4
+  5
+(5 rows)
+
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();
 ERROR:  could not devise a plan (cdbpath.c:2578)
@@ -1615,10 +1672,173 @@ select count(distinct(rand)) from cte join d on cte.a = d.a;
      1
 (1 row)
 
+-- prohibit adding motion on late stage when subplan has external parameters
+explain (costs off, verbose) select (select b + random() o) from d;
+ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:2056)
 drop table t1;
 drop table t2;
 drop table r;
 drop table d;
+--
+-- Check sub-selects with distributed replicated tables and volatile functions
+--
+create table t (i int) distributed replicated;
+create table t1 (a int) distributed by (a);
+create table t2 (a int, b float) distributed replicated;
+create or replace function f(i int) returns int language sql security definer as $$ select i; $$;
+insert into t select generate_series(0,10);
+insert into t1 select generate_series(0,10);
+insert into t2 select generate_series(0,10);
+-- ensure we make gather motion when volatile functions in subplan
+explain (costs off, verbose) select (select f(i) from t);
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Result
+   Output: $0
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Gather Motion 1:1  (slice2; segments: 1)
+           Output: (f(t.i))
+           ->  Seq Scan on rpt.t
+                 Output: f(t.i)
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(9 rows)
+
+select count(*) from (select f(i) from t)i;
+ count 
+-------
+    11
+(1 row)
+
+explain (costs off, verbose) select (select f(i) from t group by f(i));
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Result
+   Output: $0
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Gather Motion 1:1  (slice2; segments: 1)
+           Output: (f(t.i))
+           ->  GroupAggregate
+                 Output: (f(t.i))
+                 Group Key: (f(t.i))
+                 ->  Sort
+                       Output: (f(t.i))
+                       Sort Key: (f(t.i))
+                       ->  Seq Scan on rpt.t
+                             Output: f(t.i)
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(15 rows)
+
+select count(*) from (select f(i) from t group by f(i))i;
+ count 
+-------
+    11
+(1 row)
+
+explain (costs off, verbose) select (select i from t group by i having f(i) > 0);
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Result
+   Output: $0
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Gather Motion 1:1  (slice2; segments: 1)
+           Output: t.i
+           ->  GroupAggregate
+                 Output: t.i
+                 Group Key: t.i
+                 Filter: (f(t.i) > 0)
+                 ->  Sort
+                       Output: t.i
+                       Sort Key: t.i
+                       ->  Seq Scan on rpt.t
+                             Output: t.i
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(16 rows)
+
+select count(*) from (select i from t group by i having f(i) > 0) i;
+ count 
+-------
+    10
+(1 row)
+
+-- ensure we make broadcast motion when volatile function in deleting motion flow
+explain (costs off, verbose) insert into t2 (a, b) select i, random() from t;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Insert on rpt.t2
+   ->  Result
+         Output: t.i, (random())
+         ->  Broadcast Motion 1:3  (slice1; segments: 1)
+               Output: t.i, (random())
+               ->  Seq Scan on rpt.t
+                     Output: t.i, random()
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(9 rows)
+
+-- ensure we make broadcast motion when volatile function in correlated subplan qual
+explain (costs off, verbose) select * from t1 where a in (select f(i) from t where i=a and f(i) > 0);
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a
+   ->  Hash Semi Join
+         Output: t1.a
+         Hash Cond: ((t1.a = t.i) AND (t1.a = (f(t.i))))
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+               Filter: (NOT (t1.a IS NULL))
+         ->  Hash
+               Output: (f(t.i)), t.i
+               ->  Result
+                     Output: f(t.i), t.i
+                     ->  Redistribute Motion 1:3  (slice2; segments: 1)
+                           Output: t.i
+                           Hash Key: t.i
+                           ->  Seq Scan on rpt.t
+                                 Output: t.i
+                                 Filter: (f(t.i) > 0)
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(20 rows)
+
+select count(*) from t1 where a in (select f(i) from t where i=a and f(i) > 0);
+ count 
+-------
+    10
+(1 row)
+
+-- ensure we do not break broadcast motion
+explain (costs off, verbose) select * from t1 where 1 <= ALL (select i from t group by i having random() > 0);
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a
+   ->  Nested Loop Left Anti Semi (Not-In) Join
+         Output: t1.a
+         Join Filter: true
+         ->  Seq Scan on rpt.t1
+               Output: t1.a
+         ->  Materialize
+               ->  Result
+                     Filter: (random() > '0'::double precision)
+                     ->  GroupAggregate
+                           Output: t.i
+                           Group Key: t.i
+                           ->  Sort
+                                 Output: t.i
+                                 Sort Key: t.i
+                                 ->  Seq Scan on rpt.t
+                                       Output: t.i
+                                       Filter: ((1 > t.i) IS DISTINCT FROM false)
+ Optimizer: GPORCA
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
+(21 rows)
+
+drop table if exists t, t1, t2;
+drop function if exists f(i int);
 -- start_ignore
 drop schema rpt cascade;
 NOTICE:  drop cascades to 7 other objects

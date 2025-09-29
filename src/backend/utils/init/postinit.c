@@ -23,6 +23,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/parallel.h"
 #include "access/session.h"
 #include "access/sysattr.h"
 #include "access/tableam.h"
@@ -875,7 +876,23 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		else
 		{
 			InitializeSessionUserId(username, useroid);
-			am_superuser = superuser();
+
+			/*
+			 * In a parallel worker, set am_superuser based on the
+			 * authenticated user ID, not the current role.  This is pretty
+			 * dubious but it matches our historical behavior.  Note that this
+			 * value of am_superuser is used only for connection-privilege
+			 * checks here and in CheckMyDatabase (we won't reach
+			 * process_startup_options in a background worker).
+			 *
+			 * In other cases, there's been no opportunity for the current
+			 * role to diverge from the authenticated user ID yet, so we can
+			 * just rely on superuser() and avoid an extra catalog lookup.
+			 */
+			if (InitializingParallelWorker)
+				am_superuser = superuser_arg(GetAuthenticatedUserId());
+			else
+				am_superuser = superuser();
 		}
 	}
 	else if (am_mirror)
@@ -1122,6 +1139,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	if (!bootstrap)
 	{
 		HeapTuple	tuple;
+		Form_pg_database datform;
 
 		tuple = GetDatabaseTuple(dbname);
 		if (!HeapTupleIsValid(tuple) ||
@@ -1131,6 +1149,15 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 					(errcode(ERRCODE_UNDEFINED_DATABASE),
 					 errmsg("database \"%s\" does not exist", dbname),
 					 errdetail("It seems to have just been dropped or renamed.")));
+
+		datform = (Form_pg_database) GETSTRUCT(tuple);
+		if (database_is_invalid_form(datform))
+		{
+			ereport(FATAL,
+					errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					errmsg("cannot connect to invalid database \"%s\"", dbname),
+					errhint("Use DROP DATABASE to drop invalid databases."));
+		}
 	}
 
 	/*

@@ -3,8 +3,12 @@ Fault Injection Framework
 
 Fault is defined as a point of interest in the source code with an
 associated action to be taken when that point is hit during execution.
-Fault points are defined in the instrumented code using
-SIMPLE_FAULT_INJECTOR() macro.  A fault point is identifed by a name.
+Fault points are defined in the instrumented code. Simplest way is to use
+SIMPLE_FAULT_INJECTOR() macro. There are more complex ways, which allows
+to pass some state variables to fault injection point, and inject fault
+only if certain conditions are met. See section **Fault Injection Macros** below.
+
+A fault point is identified by a name.
 This module provides an interface to inject a predefined fault point
 into a running Greengage cluster by associating an action with the
 fault point.  Action can be error, panic, sleep, skip, infinite_loop,
@@ -60,7 +64,8 @@ several more parameters.  For example:
           '' /* DDL */, '' /* database name */,
           'my_table' /* table name */,
           1 /* start occurrence */, 10 /* end occurrence */,
-          0 /* */, dbid) from
+          0 /* extra arg */, dbid,
+		  -1 /*gp session id*/, 0 /*nesting level*/) from
    gp_segment_configuration where content=1 and role='p';
 
 The above command sets heap_insert fault such that the inserting
@@ -69,6 +74,11 @@ fault point, only if the relation being inserted to has the name
 'my_table'.  Moreover, after the fault has been hit 10 times, it will
 stop triggering.  The 11th transaction to insert into my_table will
 continue the insert as if no fault was injected.
+
+Interpretation of the extraArg argument depends on fault type. 
+
+There are few versions of this function with lesser number of
+parameters. See gp_inject_fault--1.0.sql.
 
 Fault actions
 -------------
@@ -86,7 +96,8 @@ panic
    elog(PANIC)
 
 sleep
-   sleep for specified amount of time
+   sleep for amount of time, specified as extraArg parameter, in
+   seconds.
 
 infinite_loop
    loop until query cancel or terminate signal is received
@@ -107,10 +118,16 @@ skip
    }
 
 reset
-   remove a previously injected fault
+   remove a previously injected fault. It is neccessary to reset fault
+   before injection of other fault with same name and different
+   parameters.
 
 segv
    crash the backend process due to SIGSEGV
+
+exit_no_callbacks
+   terminate backend using C _exit() function with return code from
+   extraArg argument.
 
 interrupt
    simulate cancel interrupt arrival, such that the next
@@ -133,6 +150,88 @@ status
       longer be taken because the fault point has been reached maximum
       number of times during execution.
 
+Fault injection parameters
+--------------------------
+
+Following parameters can be used for fault injection function:
+
+*  faultname text - mandatory. Name of fault injection point as defined
+   in the code.
+*  type text - mandatory. See previous section
+*  ddl text - SQL operator name or DTX protocol command which should be
+   processed otherwise fault wouldn't be injected. Pass empty string, if
+   you don't want limit injection by particular operator. See
+   `faultinjector_lists.h` for list of allowed operators. This
+   parameter makes sense only if injection point in the code was defined
+   by macro which accepts `ddlStatement` parameter and some meaningful
+   value is passed to it.
+*  database text - database name which should be processed. Makes sense
+   only if you know that database name was passed to injection point in
+   the code
+*  tablename text - table name which should be processed. Same
+   conditions as in previous case stands.
+*  start_occurrence int4 - number of times injection point is hit when
+   first fault is injected.
+*  end_occurrence int4 - number of times injection point is hit when
+   last fault is injected. Use -1 if you don't want to limit number of
+   hits.
+*  extra_arg int4 - use of this argument depends on fault type. For type
+   'sleep' it is number of seconds to sleep,
+*  db_id int4 - db id (from dbid column of gp_segment_configuration table)
+   mandatory. See above for examples of SQL queries.
+*  gp_session_id int4 - value of global variable gp_session_id (see 
+   src/include/cdb/cdbvars.h) If you don't want to limit faults
+   to particular session, use -1 (value of C constant InvalidGpSessionId).
+*  nestinglevel int4 level of transaction nesting. Makes sense only if
+   its value is passed to the injection point in the code. Use 0 if you
+   don't want limit level, or just use SQL function without this
+   parameter.
+
+Fault Injection Macros
+----------------------
+
+In the C code fault injection point is marked by adding one of macros,
+defined in the faultinjector.h. All macros end up with call of single
+function FaultInjector_InjectFaultIfSet_out_of_line, but this function
+is always wrapped with some macro to avoid function call overhead if no
+fault was injected into particular segment.
+
+```
+FaultInjector_InjectFaultIfSet(const char *faultName,
+    DDLStatement_e  ddlstatement,
+    const char* databaseName,
+	const char* tableName)
+```
+
+Allows to pass database name and tablename. ddlStatement should be
+passed as element of enumeration DDLStatement_e
+
+```
+FaultInjector_InjectFaultIfSet_SQL(
+     const char faultName,
+	 const char SQLStatement,
+	 int nestingLevel)
+```
+
+Allows to specify SQL statement as commandTag string which can be
+derived from parsetree node via CreateCommandTag() function (see
+src/include/tcop/utility.h). For MPPEXEC statements command tags are
+created by explicit code at the beginning of exec_mpp_query() function.
+
+```
+FaultInjector_InjectFaultIfSet_DTX(
+      const char * faultName,
+	  DtxProtocolCommand dtxProtocol,
+	  int nestingLevel)
+```
+Allows to pass DTX protocol command as value of enumeration
+DtxProtocolCommand and subtransaction nesting level.
+
+```
+SIMPLE_FAULT_INJECTOR(const char *faultName)
+```
+Already discussed in the introduction section.
+
 NOTES
 -----
 
@@ -144,5 +243,5 @@ many backends, such as in parallel regress tests.
 associates actions with them.
 
 * We let some background process ignore all but a few faults. If one wants
-to test fault injection in background processese, add the exception in
+to test fault injection in background processes, add the exception in
 checkBgProcessSkipFault().

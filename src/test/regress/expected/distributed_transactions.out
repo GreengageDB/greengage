@@ -64,15 +64,23 @@ INSERT INTO distxact1_2 VALUES (25);
 INSERT INTO distxact1_2 VALUES (26);
 INSERT INTO distxact1_2 VALUES (27);
 INSERT INTO distxact1_2 VALUES (28);
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "protocol";
-SET debug_dtm_action_protocol = "prepare";
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'error', 
+						'prepare', '', '', 1, 1, 0, dbid)
+ FROM gp_segment_configuration WHERE content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 COMMIT;
-ERROR:  Raise ERROR for debug_dtm_action = 2, debug_dtm_action_protocol = Distributed Prepare  (seg1 127.0.0.1:40001 pid=25677)
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
-RESET debug_dtm_action_protocol;
+ERROR:  fault triggered, fault name:'exec_mpp_dtx_protocol_command_start' fault type:'error'  (seg1 127.0.1.1:7003 pid=248156)
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  from gp_segment_configuration where content=1 and role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 SELECT * FROM distxact1_2;
  a 
 ---
@@ -91,10 +99,14 @@ INSERT INTO distxact1_3 VALUES (35);
 INSERT INTO distxact1_3 VALUES (36);
 INSERT INTO distxact1_3 VALUES (37);
 INSERT INTO distxact1_3 VALUES (38);
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "protocol";
-SET debug_dtm_action_protocol = "commit_prepared";
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'error',
+       'commit_prepared', '', '', 1, 1, 0, dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 COMMIT;
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
 DETAIL:  gid=66802167, state=Retry Commit Prepared
@@ -112,10 +124,13 @@ SELECT * FROM distxact1_3;
  37
 (8 rows)
 
-RESET debug_dtm_action_segment;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
-RESET debug_dtm_action_protocol;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 --
 -- VARIANT of we want to have an error between the point where all segments are prepared and our decision 
 -- to write the Distributed Commit record.  Cause problem during abort-prepared broadcast.  
@@ -129,11 +144,15 @@ INSERT INTO distxact1_4 VALUES (45);
 INSERT INTO distxact1_4 VALUES (46);
 INSERT INTO distxact1_4 VALUES (47);
 INSERT INTO distxact1_4 VALUES (48);
-SET debug_dtm_action_segment=1;
 SET debug_abort_after_distributed_prepared = true;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "protocol";
-SET debug_dtm_action_protocol = "abort_prepared";
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'error',
+       'abort_prepared', '', '', 1, 1, 0, dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 COMMIT;
 WARNING:  the distributed transaction broadcast failed to one or more segments
 DETAIL:  gid=66802193, state=Notifying Abort Prepared
@@ -143,11 +162,14 @@ SELECT * FROM distxact1_4;
 ---
 (0 rows)
 
-RESET debug_dtm_action_segment;
 RESET debug_abort_after_distributed_prepared;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
-RESET debug_dtm_action_protocol;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 --
 -- Fail general commands
 --
@@ -155,18 +177,25 @@ RESET debug_dtm_action_protocol;
 -- Invoke a failure during a CREATE TABLE command.  
 --
 --SET debug_print_full_dtm=true;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "sql";
-SET debug_dtm_action_sql_command_tag = "MPPEXEC UTILITY";
+SELECT gp_inject_fault('dtm_exec_mpp_query_start', 'error', 'MPPEXEC UTILITY',
+        '', '', 1, 1, 0, dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 CREATE TABLE distxact2_1 (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  Raise ERROR for debug_dtm_action = 2, commandTag = MPPEXEC UTILITY  (seg1 127.0.1.1:25433 pid=1127)
-RESET debug_dtm_action_segment;
-RESET debug_dtm_action_sql_command_tag;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
+ERROR:  fault triggered, fault name:'dtm_exec_mpp_query_start' fault type:'error'  (seg1 127.0.1.1:7003 pid=248179)
+SELECT gp_inject_fault('dtm_exec_mpp_query_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 SELECT * FROM distxact2_1;
 ERROR:  relation "distxact2_1" does not exist
 LINE 1: SELECT * FROM distxact2_1;
@@ -180,18 +209,25 @@ DROP TABLE distxact2_1;
 -- Invoke a failure during a CREATE TABLE command.  
 -- Action_Target = 2 is SQL.
 --
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_end_command";
-SET debug_dtm_action_target = "sql";
-SET debug_dtm_action_sql_command_tag = "MPPEXEC UTILITY";
+SELECT gp_inject_fault('dtm_exec_mpp_query_end', 'error', 'MPPEXEC UTILITY',
+	'', '', 1, 1, 0, dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 CREATE TABLE distxact2_2 (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-ERROR:  Raise ERROR for debug_dtm_action = 3, commandTag = MPPEXEC UTILITY  (seg1 127.0.1.1:25433 pid=1127)
-RESET debug_dtm_action_segment;
-RESET debug_dtm_action_sql_command_tag;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
+ERROR:  fault triggered, fault name:'dtm_exec_mpp_query_end' fault type:'error'  (seg1 127.0.1.1:7003 pid=248179)
+SELECT gp_inject_fault('dtm_exec_mpp_query_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 SELECT * FROM distxact2_2;
 ERROR:  relation "distxact2_2" does not exist
 LINE 1: SELECT * FROM distxact2_2;
@@ -208,21 +244,28 @@ DROP TABLE distxact2_2;
 -- Invoke a failure during a SAVEPOINT command.  
 --
 --SET debug_print_full_dtm=true;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "sql";
-SET debug_dtm_action_sql_command_tag = "SAVEPOINT";
+SELECT gp_inject_fault('dtm_exec_simple_query_start', 'error', 'SAVEPOINT',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 BEGIN;
 CREATE TABLE distxact3_1 (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SAVEPOINT s;
-ERROR:  Raise ERROR for debug_dtm_action = 2, commandTag = SAVEPOINT  (seg1 127.0.1.1:25433 pid=1127)
+ERROR:  fault triggered, fault name:'dtm_exec_simple_query_start' fault type:'error'  (seg1 127.0.1.1:7003 pid=248179)
 ROLLBACK;
-RESET debug_dtm_action_segment;
-RESET debug_dtm_action_sql_command_tag;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
+SELECT gp_inject_fault('dtm_exec_simple_query_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 SELECT * FROM distxact3_1;
 ERROR:  relation "distxact3_1" does not exist
 LINE 1: SELECT * FROM distxact3_1;
@@ -236,10 +279,14 @@ DROP TABLE distxact3_1;
 -- Invoke a failure during a RELEASE SAVEPOINT command.  
 --
 --SET debug_print_full_dtm=true;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "sql";
-SET debug_dtm_action_sql_command_tag = "RELEASE";
+SELECT gp_inject_fault('dtm_exec_simple_query_start', 'error', 'RELEASE',
+	'', '', 1, 1, 0, dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 BEGIN;
 CREATE TABLE distxact3_2 (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
@@ -254,12 +301,15 @@ INSERT INTO distxact3_2 VALUES (26);
 INSERT INTO distxact3_2 VALUES (27);
 INSERT INTO distxact3_2 VALUES (28);
 RELEASE SAVEPOINT s;
-ERROR:  Raise ERROR for debug_dtm_action = 2, commandTag = RELEASE  (seg1 127.0.1.1:25433 pid=1127)
+ERROR:  fault triggered, fault name:'dtm_exec_simple_query_start' fault type:'error'  (seg1 127.0.1.1:7003 pid=248179)
 ROLLBACK;
-RESET debug_dtm_action_segment;
-RESET debug_dtm_action_sql_command_tag;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
+SELECT gp_inject_fault('dtm_exec_simple_query_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 SELECT * FROM distxact3_2;
 ERROR:  relation "distxact3_2" does not exist
 LINE 1: SELECT * FROM distxact3_2;
@@ -273,10 +323,14 @@ DROP TABLE distxact3_2;
 -- Invoke a failure during a ROLLBACK TO SAVEPOINT command.  
 --
 --SET debug_print_full_dtm=true;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action = "fail_begin_command";
-SET debug_dtm_action_target = "sql";
-SET debug_dtm_action_sql_command_tag = "ROLLBACK";
+SELECT gp_inject_fault('dtm_exec_simple_query_start', 'error', 'ROLLBACK',
+    '', '', 1, 1, 0, dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 BEGIN;
 CREATE TABLE distxact3_3 (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
@@ -291,12 +345,15 @@ INSERT INTO distxact3_3 VALUES (36);
 INSERT INTO distxact3_3 VALUES (37);
 INSERT INTO distxact3_3 VALUES (38);
 ROLLBACK TO SAVEPOINT s;
-ERROR:  Raise ERROR for debug_dtm_action = 2, commandTag = ROLLBACK  (seg1 127.0.1.1:25433 pid=1127)
+ERROR:  fault triggered, fault name:'dtm_exec_simple_query_start' fault type:'error'  (seg1 127.0.1.1:7003 pid=248179)
 ROLLBACK;
-RESET debug_dtm_action_segment;
-RESET debug_dtm_action_sql_command_tag;
-RESET debug_dtm_action;
-RESET debug_dtm_action_target;
+SELECT gp_inject_fault('dtm_exec_simple_query_start', 'reset', dbid)
+  FROM gp_segment_configuration WHERE content=1 AND role='p' ;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 SELECT * FROM distxact3_3;
 ERROR:  relation "distxact3_3" does not exist
 LINE 1: SELECT * FROM distxact3_3;
@@ -361,12 +418,23 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 DROP TABLE
 -- Test two phase commit for extended query
 \! ./twophase_pqexecparams dbname=regression
+NOTICE:  table "test1" does not exist, skipping
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  the distributed transaction 'Commit Prepared' broadcast failed to one or more segments. Retrying ... try 1
 DETAIL:  gid=66802449, state=Retry Commit Prepared
 NOTICE:  Releasing segworker group to retry broadcast.
 result: INSERT 0 2
+-- Clean up fault, inserted within twophase_pgexecpartams
+-- We do it from calling script to be sure that fault is resetted regardless
+-- of program return status
+select gp_inject_fault('exec_mpp_dtx_protocol_command_start', 'reset', dbid)
+  from gp_segment_configuration WHERE content='0' and role='p';
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
 --
 -- Subtransactions with partition table DDLs.
 --
@@ -812,6 +880,8 @@ commit;
 --
 BEGIN;
 CREATE TEMPORARY TABLE foo (i integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DO $$
 declare
   i int;

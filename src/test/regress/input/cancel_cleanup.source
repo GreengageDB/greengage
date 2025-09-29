@@ -1,0 +1,62 @@
+-- start_ignore
+CREATE EXTENSION plpython3u;
+CREATE EXTENSION gp_inject_fault;
+
+CREATE OR REPLACE FUNCTION install_hook()
+  RETURNS SETOF BOOL
+  AS '@abs_builddir@/regress@DLSUFFIX@',
+     'gp_install_mock_query_info_collect_hook'
+  LANGUAGE C STRICT;
+
+CREATE OR REPLACE FUNCTION uninstall_hook()
+  RETURNS SETOF BOOL
+  AS '@abs_builddir@/regress@DLSUFFIX@',
+     'gp_uninstall_mock_query_info_collect_hook'
+  LANGUAGE C STRICT;
+
+CREATE OR REPLACE FUNCTION raise_sigint()
+  RETURNS SETOF BOOL
+  AS '@abs_builddir@/regress@DLSUFFIX@',
+     'gp_raise_sigint'
+  LANGUAGE C STRICT;
+
+CREATE OR REPLACE FUNCTION send_sigint_to_segment_backend(content_id INT)
+  RETURNS SETOF TEXT AS $$
+    import os, signal, plpy
+
+    row = plpy.execute(f"SELECT PID FROM gp_stat_activity WHERE backend_type = 'client backend' AND gp_segment_id = {content_id}", 1)
+    pid = row[0]['pid']
+    assert pid != None
+    os.kill(pid, signal.SIGINT)
+
+    return [f"seg{content_id}"]
+  $$ LANGUAGE plpython3u STRICT SECURITY DEFINER EXECUTE ON COORDINATOR;
+-- end_ignore
+
+-- Create a table with a unique constraint which enables us to trigger an error
+-- directly on the segment.
+CREATE TABLE t1(i INT UNIQUE);
+INSERT INTO t1 SELECT 1;
+
+-- Install the hook only on the seg1.
+SELECT install_hook() FROM t1;
+
+-- Send SIGINT to seg1 outside a transaction.
+SELECT send_sigint_to_segment_backend(1);
+
+-- QueryCancelCleanup should not be set. We should see QUERY_ERROR instead of
+-- QUERY_CANCELED.
+INSERT INTO t1 SELECT 1;
+
+-- Cancel the query normally. seg1 should set QueryCancelCleanup = 1 upon 
+-- raising the signal.
+SELECT raise_sigint() FROM t1;
+
+SELECT uninstall_hook() FROM t1;
+
+-- start_ignore
+DROP FUNCTION install_hook();
+DROP FUNCTION uninstall_hook();
+DROP FUNCTION raise_sigint();
+DROP FUNCTION send_sigint_to_segment_backend(int);
+-- end_ignore

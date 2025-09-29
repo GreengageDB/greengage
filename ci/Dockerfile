@@ -18,7 +18,7 @@ RUN dnf makecache && \
     dnf -y install libicu perl-ExtUtils-Embed perl-Env perl-JSON && \
     dnf -y install perl-IPC-Run perl-Test-Base libxslt-devel openldap-devel && \
     dnf -y install python3.11-psycopg2 python3.11-pyyaml python3.11-lxml python3.11-pip && \
-    dnf -y install llvm-devel-17.0.6 clang-17.0.6 && \
+    dnf -y install llvm-devel clang && \
     dnf -y install protobuf-compiler && \
     dnf clean all && \
     #we install pytest from pypi since the version from the repository does not contain an executable file

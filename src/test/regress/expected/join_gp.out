@@ -3504,3 +3504,21 @@ SELECT 1 FROM inverse WHERE NOT (cidr <<= ANY(SELECT * FROM inverse));
 ----------
 (0 rows)
 
+-- Check that USING with different types is properly planned by ORCA
+create table tbl1 (b varchar(15)) distributed by(b);
+create table tbl2 (b varchar(255)) distributed by(b);
+explain (costs off)
+select * from tbl1 join tbl2 using (b);
+                      QUERY PLAN                      
+------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: ((tbl1.b)::text = (tbl2.b)::text)
+         ->  Seq Scan on tbl1
+         ->  Hash
+               ->  Seq Scan on tbl2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+drop table tbl1;
+drop table tbl2;

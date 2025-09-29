@@ -38,9 +38,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 	char		bufin[MAX_STRING];
 	FILE	   *output;
 	char	   *p;
-	bool		got_tli = false;
-	bool		got_log_id = false;
-	bool		got_log_seg = false;
 	bool		got_xid = false;
 	bool		got_gxid = false;
 	bool		got_oid = false;
@@ -57,7 +54,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 	bool		got_walseg = false;
 	bool		got_ident = false;
 	bool		got_index = false;
-	bool		got_toast = false;
 	bool		got_large_object = false;
 	bool		got_date_is_int = false;
 	bool		got_data_checksum_version = false;
@@ -71,9 +67,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 	char	   *language = NULL;
 	char	   *lc_all = NULL;
 	char	   *lc_messages = NULL;
-	uint32		tli = 0;
-	uint32		logid = 0;
-	uint32		segno = 0;
 	char	   *resetwal_bin;
 
 
@@ -231,8 +224,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 				pg_fatal("%d: controldata retrieval problem\n", __LINE__);
 
 			p++;				/* remove ':' char */
-			tli = str2uint(p);
-			got_tli = true;
 		}
 		else if ((p = strstr(bufin, "First log file ID after reset:")) != NULL)
 		{
@@ -242,8 +233,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 				pg_fatal("%d: controldata retrieval problem\n", __LINE__);
 
 			p++;				/* remove ':' char */
-			logid = str2uint(p);
-			got_log_id = true;
 		}
 		else if ((p = strstr(bufin, "First log file segment after reset:")) != NULL)
 		{
@@ -253,8 +242,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 				pg_fatal("%d: controldata retrieval problem\n", __LINE__);
 
 			p++;				/* remove ':' char */
-			segno = str2uint(p);
-			got_log_seg = true;
 		}
 		else if ((p = strstr(bufin, "Next log file segment:")) != NULL)
 		{
@@ -264,8 +251,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 				pg_log(PG_FATAL, "%d: controldata retrieval problem\n", __LINE__);
 
 			p++;				/* removing ':' char */
-			segno = str2uint(p);
-			got_log_seg = true;
 		}
 		/*---*/
 		else if ((p = strstr(bufin, "Latest checkpoint's TimeLineID:")) != NULL)
@@ -276,8 +261,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 				pg_fatal("%d: controldata retrieval problem\n", __LINE__);
 
 			p++;				/* removing ':' char */
-			tli = str2uint(p);
-			got_tli = true;
 		}
 		else if ((p = strstr(bufin, "Latest checkpoint's NextXID:")) != NULL)
 		{
@@ -490,7 +473,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 
 			p++;				/* remove ':' char */
 			cluster->controldata.toast = str2uint(p);
-			got_toast = true;
 		}
 		else if ((p = strstr(bufin, "Size of a large-object chunk:")) != NULL)
 		{
@@ -570,7 +552,7 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 		!got_mxoff || (!live_check && !got_nextxlogfile) ||
 		!got_float8_pass_by_value || !got_align || !got_blocksz ||
 		!got_largesz || !got_walsz || !got_walseg || !got_ident ||
-		!got_index || /* !got_toast || */
+		!got_index ||
 		(!got_large_object &&
 		 cluster->controldata.ctrl_ver >= LARGE_OBJECT_SIZE_PG_CONTROL_VER) ||
 		!got_date_is_int || !got_data_checksum_version)
@@ -630,11 +612,6 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 
 		if (!got_index)
 			pg_log(PG_REPORT, "  maximum number of indexed columns\n");
-
-#if 0	/* not mandatory in GPDB, see comment in check_control_data() */
-		if (!got_toast)
-			pg_log(PG_REPORT, "  maximum TOAST chunk size\n");
-#endif
 
 		if (!got_large_object &&
 			cluster->controldata.ctrl_ver >= LARGE_OBJECT_SIZE_PG_CONTROL_VER)

@@ -296,7 +296,9 @@ add_segment_config_entry(GpSegConfigEntry *i)
 static void
 remove_segment_config(int16 dbid)
 {
+#ifdef USE_ASSERT_CHECKING
 	int			numDel = 0;
+#endif
 	ScanKeyData scankey;
 	SysScanDesc sscan;
 	HeapTuple	tuple;
@@ -314,7 +316,9 @@ remove_segment_config(int16 dbid)
 	while ((tuple = systable_getnext(sscan)) != NULL)
 	{
 		CatalogTupleDelete(rel, &tuple->t_self);
+#ifdef USE_ASSERT_CHECKING
 		numDel++;
+#endif
 	}
 	systable_endscan(sscan);
 

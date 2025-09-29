@@ -2374,7 +2374,7 @@ insert into dqa_unique select i%3, i%5, i%7, i%9 from generate_series(1, 10) i;
 analyze dqa_unique;
 explain(verbose on, costs off) select count(distinct a), count(distinct d), c from dqa_unique group by a, b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multiple Distinct Qualified Aggregates are disabled in the optimizer
                                            QUERY PLAN                                           
 ------------------------------------------------------------------------------------------------
  Finalize HashAggregate
@@ -2406,7 +2406,7 @@ DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect nor
 
 select count(distinct a), count(distinct d), c from dqa_unique group by a, b;
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect normalization of query
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Multiple Distinct Qualified Aggregates are disabled in the optimizer
  count | count | c 
 -------+-------+---
      1 |     1 | 5

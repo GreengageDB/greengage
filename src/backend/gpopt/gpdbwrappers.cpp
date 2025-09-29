@@ -35,13 +35,19 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 extern "C" {
 #include "catalog/pg_collation.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
 #include "foreign/fdwapi.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/subselect.h"
+#include "optimizer/tlist.h"
 #include "parser/parse_agg.h"
+#include "parser/parse_clause.h"
+#include "parser/parse_oper.h"
 #include "storage/lmgr.h"
+#include "utils/memutils.h"
+#include "utils/snapmgr.h"
 }
 #pragma GCC diagnostic pop
 
@@ -2699,6 +2705,74 @@ gpdb::IsTypeRange(Oid typid)
 	}
 	GP_WRAP_END;
 	return false;
+}
+
+TargetEntry *
+gpdb::GetSortGroupRefTle(Index sortref, List *targetlist)
+{
+	GP_WRAP_START;
+	{
+		return get_sortgroupref_tle(sortref, targetlist);
+	}
+	GP_WRAP_END;
+	return NULL;
+}
+
+bool
+gpdb::ListMemberInt(List *list, int datum)
+{
+	GP_WRAP_START;
+	{
+		return list_member_int(list, datum);
+	}
+	GP_WRAP_END;
+	return false;
+}
+
+void
+gpdb::GetSortGroupOperators(Oid argtype, bool need_lt, bool need_eq,
+							bool need_gt, Oid *lt_opr, Oid *eq_opr, Oid *gt_opr,
+							bool *hashable)
+{
+	GP_WRAP_START;
+	{
+		get_sort_group_operators(argtype, need_lt, need_eq, need_gt, lt_opr,
+								 eq_opr, gt_opr, hashable);
+	}
+	GP_WRAP_END;
+}
+
+Index
+gpdb::AssignSortGroupRef(TargetEntry *tle, List *tlist)
+{
+	GP_WRAP_START;
+	{
+		return assignSortGroupRef(tle, tlist);
+	}
+	GP_WRAP_END;
+	return 0;
+}
+
+void
+gpdb::GetConstraintRelationOids(Oid constraint_oid, Oid *conrelid,
+								Oid *confrelid)
+{
+	GP_WRAP_START;
+	{
+		get_constraint_relation_oids(constraint_oid, conrelid, confrelid);
+	}
+	GP_WRAP_END;
+}
+
+List *
+gpdb::GetConstraintRelationColumns(Oid constraint_oid)
+{
+	GP_WRAP_START;
+	{
+		return get_constraint_relation_columns(constraint_oid);
+	}
+	GP_WRAP_END;
+	return NIL;
 }
 
 char *

@@ -1003,16 +1003,12 @@ DatumStreamBlockWrite_CheckDenseInvariant(
 
 	int32		currentDeltaBitMapPosition = 0;
 	int32		currentDeltaBitMapCount = 0;
-	int32		currentDeltaBitMapOffCount = 0;
 	int32		currentDeltaBitMapOnCount = 0;
 
 	if (dsw->delta_has_compression)
 	{
 		currentDeltaBitMapPosition = DatumStreamBitMapWrite_Count(&dsw->delta_bitmap) - 1;
 		currentDeltaBitMapCount = DatumStreamBitMapWrite_Count(&dsw->delta_bitmap);
-		currentDeltaBitMapOffCount =
-			currentDeltaBitMapCount
-			- DatumStreamBitMapWrite_OnCount(&dsw->delta_bitmap);
 		currentDeltaBitMapOnCount = DatumStreamBitMapWrite_OnCount(&dsw->delta_bitmap);
 	}
 
@@ -4876,11 +4872,10 @@ DatumStreamBlock_IntegrityCheckDenseDelta(
 	totalDeltasSize = 0;
 	for (i = 0; i < deltaExtension->deltas_count; i++)
 	{
-		int32		deltasCount;
 		int			byteLen;
 		bool		sign;
 
-		deltasCount = DatumStreamInt32CompressReserved3_Decode(p, &byteLen, &sign);
+		(void) DatumStreamInt32CompressReserved3_Decode(p, &byteLen, &sign);
 		/* UNDONE: Range check repeatCount */
 
 		totalDeltasSize += byteLen;

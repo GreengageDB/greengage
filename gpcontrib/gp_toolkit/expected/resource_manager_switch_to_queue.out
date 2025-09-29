@@ -5,13 +5,13 @@
 \! echo $?
 0
 -- start_ignore
-\! gpstop -rai
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Starting gpstop with args: -rai
+\! gpstop -arf
+20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Starting gpstop with args: -arf
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Gathering information and validating the environment...
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.16117.g367b82d8d9 build dev'
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='immediate'
+20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/zxj/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
 20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/zxj/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1

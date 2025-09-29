@@ -17,163 +17,196 @@
 CREATE TABLE foo(a int, b int);
 -- 1
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 2
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 3
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	               'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 
 -- 4
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 5
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 6
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+                       'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 7
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+                       'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 8
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	               'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 9
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+                       'commit_prepared','','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 10
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error','commit_prepared',
+	'','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 11
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 12
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 13
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 14
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 
 -- 15
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 
 -- 16
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 
 -- 17
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 18
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
 
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- 19
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 
 -- 20
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
-SET debug_dtm_action_segment=1;
-SET debug_dtm_action_target=protocol;
-SET debug_dtm_action_protocol=commit_prepared;
-SET debug_dtm_action=fail_begin_command;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','error',
+	'commit_prepared', '','',1,1,0,dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 DROP TABLE foo_stg;
+SELECT gp_inject_fault('exec_mpp_dtx_protocol_command_start','reset',dbid)
+  FROM gp_segment_configuration WHERE mode='s' and content=1 and role='p' ;
 -- start_ignore
 -- After error, temp schemas may still exist at segments
 -- Let's remove all such temporary schemas for inactive connections

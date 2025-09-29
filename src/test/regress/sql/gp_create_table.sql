@@ -74,18 +74,29 @@ select distkey, distclass from gp_distribution_policy where localoid = 'distpol3
 -- MPP-7268: CTAS produces incorrect distribution.
 drop table if exists foo;
 drop table if exists bar;
+drop table if exists bar_p;
 create table foo (a varchar(15), b int) distributed by (b);
+prepare foo_p as select * from foo;
 create table bar as select * from foo distributed by (b);
+create table bar_p as execute foo_p distributed by (b);
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
+select distkey, distclass from gp_distribution_policy where localoid='bar_p'::regclass;
+deallocate foo_p;
 
 drop table if exists foo;
 drop table if exists bar;
+drop table if exists bar_p;
 create table foo (a int, b varchar(15)) distributed by (b);
+prepare foo_p as select * from foo;
 create table bar as select * from foo distributed by (b);
+create table bar_p as execute foo_p distributed by (b);
 select distkey, distclass from gp_distribution_policy where localoid='bar'::regclass;
+select distkey, distclass from gp_distribution_policy where localoid='bar_p'::regclass;
+deallocate foo_p;
 
 drop table if exists foo;
 drop table if exists bar;
+drop table if exists bar_p;
 
 CREATE TABLE foo (
 col_with_default numeric DEFAULT 0,

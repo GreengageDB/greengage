@@ -2241,7 +2241,6 @@ logfile_rotate(bool time_based_rotation, bool size_based_rotation,
                char **last_log_file_name)
 {
 	char	   *filename;
-	char	   *csvfilename = NULL;
 	pg_time_t	fntime;
 	FILE	   *fh = *fh_p;
 
@@ -2255,8 +2254,6 @@ logfile_rotate(bool time_based_rotation, bool size_based_rotation,
 	else
 		fntime = time(NULL);
 	filename = logfile_getname(fntime, suffix, log_directory, log_filename);
-	if (Log_destination & LOG_DESTINATION_CSVLOG)
-		csvfilename = logfile_getname(fntime, ".csv", log_directory, log_filename);
 
 	/*
 	 * Decide whether to overwrite or append.  We can overwrite if (a)

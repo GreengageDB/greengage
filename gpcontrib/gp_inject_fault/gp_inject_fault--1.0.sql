@@ -14,11 +14,28 @@ CREATE FUNCTION @extschema@.gp_inject_fault(
   end_occurrence int4,
   extra_arg int4,
   db_id int4,
-  gp_session_id int4)
+  gp_session_id int4,
+  nestinglevel int4)
 RETURNS text
 AS 'MODULE_PATHNAME'
 LANGUAGE C VOLATILE STRICT NO SQL;
 
+-- simpler version without nesting level
+
+CREATE FUNCTION @extschema@.gp_inject_fault(
+  faultname text,
+  type text,
+  ddl text,
+  database text,
+  tablename text,
+  start_occurrence int4,
+  end_occurrence int4,
+  extra_arg int4,
+  db_id int4,
+  gp_session_id int4)
+RETURNS text
+AS $$ select @extschema@.gp_inject_fault($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0) $$
+LANGUAGE SQL;
 -- Simpler version, without specific session id.
 CREATE FUNCTION @extschema@.gp_inject_fault(
   faultname text,
@@ -31,7 +48,7 @@ CREATE FUNCTION @extschema@.gp_inject_fault(
   extra_arg int4,
   db_id int4)
 RETURNS text
-AS $$ select @extschema@.gp_inject_fault($1, $2, $3, $4, $5, $6, $7, $8, $9, -1) $$
+AS $$ select @extschema@.gp_inject_fault($1, $2, $3, $4, $5, $6, $7, $8, $9, -1, 0) $$
 LANGUAGE SQL;
 
 -- Simpler version, trigger only one time, occurrence start at 1 and
@@ -41,7 +58,7 @@ CREATE FUNCTION @extschema@.gp_inject_fault(
   type text,
   db_id int4)
 RETURNS text
-AS $$ select @extschema@.gp_inject_fault($1, $2, '', '', '', 1, 1, 0, $3, -1) $$
+AS $$ select @extschema@.gp_inject_fault($1, $2, '', '', '', 1, 1, 0, $3, -1, 0) $$
 LANGUAGE SQL;
 
 -- Simpler version, trigger only one time, occurrence start at 1 and
@@ -52,7 +69,7 @@ CREATE FUNCTION @extschema@.gp_inject_fault(
   db_id int4,
   gp_session_id int4)
 RETURNS text
-AS $$ select @extschema@.gp_inject_fault($1, $2, '', '', '', 1, 1, 0, $3, $4) $$
+AS $$ select @extschema@.gp_inject_fault($1, $2, '', '', '', 1, 1, 0, $3, $4, 0) $$
 LANGUAGE SQL;
 
 -- Simpler version, always trigger until fault is reset.
@@ -61,7 +78,7 @@ CREATE FUNCTION @extschema@.gp_inject_fault_infinite(
   type text,
   db_id int4)
 RETURNS text
-AS $$ select @extschema@.gp_inject_fault($1, $2, '', '', '', 1, -1, 0, $3, -1) $$
+AS $$ select @extschema@.gp_inject_fault($1, $2, '', '', '', 1, -1, 0, $3, -1, 0) $$
 LANGUAGE SQL;
 
 -- Simpler version to avoid confusion for wait_until_triggered fault.
@@ -72,7 +89,7 @@ CREATE FUNCTION @extschema@.gp_wait_until_triggered_fault(
   numtimestriggered int4,
   db_id int4)
 RETURNS text
-AS $$ select @extschema@.gp_inject_fault($1, 'wait_until_triggered', '', '', '', 1, 1, $2, $3, -1) $$
+AS $$ select @extschema@.gp_inject_fault($1, 'wait_until_triggered', '', '', '', 1, 1, $2, $3, -1, 0) $$
 LANGUAGE SQL;
 
 CREATE OR REPLACE FUNCTION @extschema@.insert_noop_xlog_record()

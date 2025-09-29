@@ -1513,6 +1513,16 @@ gp_percentile_cont_transition(FunctionCallInfo fcinfo,
 {
 	int64        first_row;
 	int64        second_row;
+	/*
+	 * Note: 'proargtypes' for this function in pg_proc.dat has 4 arguments.
+	 * There are actually 5 arguments coming in here - the result of the
+	 * previous call and 4 main arguments.
+	 */
+	if (PG_NARGS() != 5)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("wrong number of arguments to gp_percentile_cont_transition()"),
+				 errhint("expected 5, got %d", PG_NARGS())));
 
 	/* Return state for NULL inputs of val*/
 	if (PG_ARGISNULL(1) && !PG_ARGISNULL(0))
@@ -1559,6 +1569,10 @@ gp_percentile_cont_transition(FunctionCallInfo fcinfo,
 	else if(*cnt <= second_row && second_row < *cnt + peer_count)
 	{
 		return_state = lerpfunc(prev_state, val, proportion);
+	}
+	else if (PG_ARGISNULL(0))
+	{
+		fcinfo->isnull = true;
 	}
 	*cnt = *cnt + peer_count;
 
@@ -1616,6 +1630,16 @@ Datum
 gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 {
 	int64        rownum;
+	/*
+	 * Note: 'proargtypes' for this function in pg_proc.dat has 4 arguments.
+	 * There are actually 5 arguments coming in here - the result of the
+	 * previous call and 4 main arguments.
+	 */
+	if (PG_NARGS() != 5)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("wrong number of arguments to gp_percentile_disc_transition()"),
+				 errhint("expected 5, got %d", PG_NARGS())));
 
 	/* Return state for NULL inputs of val*/
 	if (PG_ARGISNULL(1) && !PG_ARGISNULL(0))
@@ -1655,6 +1679,10 @@ gp_percentile_disc_transition(PG_FUNCTION_ARGS)
 	if(*cnt <= rownum && rownum < *cnt + peer_count)
 	{
 		return_state = val;
+	}
+	else if (PG_ARGISNULL(0))
+	{
+		fcinfo->isnull = true;
 	}
 
 	*cnt = *cnt + peer_count;

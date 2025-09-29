@@ -36,6 +36,10 @@ volatile sig_atomic_t IdleInTransactionSessionTimeoutPending = false;
 volatile sig_atomic_t InterruptPending = false;
 volatile sig_atomic_t LogMemoryContextPending = false;
 volatile sig_atomic_t ProcDiePending = false;
+/*
+ * GPDB: true if the query was cancelled and cleanup shall be done, suppressing
+ * the error.
+ */
 volatile sig_atomic_t QueryCancelCleanup = false;
 volatile sig_atomic_t QueryCancelPending = false;
 volatile sig_atomic_t QueryFinishPending = false;

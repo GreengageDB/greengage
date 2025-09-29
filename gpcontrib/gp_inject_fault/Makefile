@@ -4,6 +4,9 @@ OBJS = gp_inject_fault.o
 EXTENSION = gp_inject_fault
 DATA = gp_inject_fault--1.0.sql
 
+# Avoid building LLVM Bitcode for gp_inject_fault module.
+with_llvm = no
+
 REGRESS = inject_fault_test
 
 PG_CPPFLAGS = -I$(libpq_srcdir)

@@ -149,6 +149,9 @@ extern FileSegTotals *GetAOCSSSegFilesTotalsWithProj(Relation parentrel,
 													 AttrNumber *proj_atts,
 													 AttrNumber num_proj_atts);
 
+extern void GetAOCSSegFilesTotalsCluster(Relation parentrel,
+							 FileSegTotals * totals);
+
 extern void InsertInitialAOCSFileSegInfo(Relation prel, int32 segno, int32 nvp, Oid segrelid);
 extern void UpdateAOCSFileSegInfo(struct AOCSInsertDescData *desc);
 extern void

@@ -1,3 +1,4 @@
+CREATE SCHEMA has$dollar;
 -- test some errors
 CREATE EXTENSION test_ext1;
 ERROR:  required extension "test_ext2" is not installed
@@ -6,35 +7,35 @@ CREATE EXTENSION test_ext1 SCHEMA test_ext1;
 ERROR:  schema "test_ext1" does not exist
 CREATE EXTENSION test_ext1 SCHEMA test_ext;
 ERROR:  schema "test_ext" does not exist
-CREATE SCHEMA test_ext;
-CREATE EXTENSION test_ext1 SCHEMA test_ext;
+CREATE EXTENSION test_ext1 SCHEMA has$dollar;
 ERROR:  extension "test_ext1" must be installed in schema "test_ext1"
 -- finally success
-CREATE EXTENSION test_ext1 SCHEMA test_ext CASCADE;
+CREATE EXTENSION test_ext1 SCHEMA has$dollar CASCADE;
 NOTICE:  installing required extension "test_ext2"
 NOTICE:  installing required extension "test_ext3"
 NOTICE:  installing required extension "test_ext5"
 NOTICE:  installing required extension "test_ext4"
 SELECT extname, nspname, extversion, extrelocatable FROM pg_extension e, pg_namespace n WHERE extname LIKE 'test_ext%' AND e.extnamespace = n.oid ORDER BY 1;
-  extname  |  nspname  | extversion | extrelocatable 
------------+-----------+------------+----------------
- test_ext1 | test_ext1 | 1.0        | f
- test_ext2 | test_ext  | 1.0        | t
- test_ext3 | test_ext  | 1.0        | t
- test_ext4 | test_ext  | 1.0        | t
- test_ext5 | test_ext  | 1.0        | t
+  extname  |  nspname   | extversion | extrelocatable 
+-----------+------------+------------+----------------
+ test_ext1 | test_ext1  | 1.0        | f
+ test_ext2 | has$dollar | 1.0        | t
+ test_ext3 | has$dollar | 1.0        | t
+ test_ext4 | has$dollar | 1.0        | t
+ test_ext5 | has$dollar | 1.0        | t
 (5 rows)
 
 CREATE EXTENSION test_ext_cyclic1 CASCADE;
 NOTICE:  installing required extension "test_ext_cyclic2"
 ERROR:  cyclic dependency detected between extensions "test_ext_cyclic1" and "test_ext_cyclic2"
-DROP SCHEMA test_ext CASCADE;
+DROP SCHEMA has$dollar CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to extension test_ext3
 drop cascades to extension test_ext5
 drop cascades to extension test_ext2
 drop cascades to extension test_ext4
 drop cascades to extension test_ext1
+CREATE SCHEMA has$dollar;
 CREATE EXTENSION test_ext6;
 DROP EXTENSION test_ext6;
 CREATE EXTENSION test_ext6;
@@ -129,6 +130,7 @@ drop extension test_ext8;
 SET client_min_messages TO 'warning';
 -- First enforce presence of temporary schema.
 CREATE TEMP TABLE test_ext4_tab ();
+WARNING:  creating a table with no columns.
 CREATE OR REPLACE FUNCTION create_extension_with_temp_schema()
   RETURNS VOID AS $$
   DECLARE
@@ -249,6 +251,7 @@ ERROR:  collation ext_cine_coll is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP COLLATION ext_cine_coll;
 CREATE MATERIALIZED VIEW ext_cine_mv AS SELECT 11 AS f1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  materialized view ext_cine_mv is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
@@ -270,11 +273,14 @@ ERROR:  sequence ext_cine_seq is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP SEQUENCE ext_cine_seq;
 CREATE TABLE ext_cine_tab1 (x int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  table ext_cine_tab1 is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
 DROP TABLE ext_cine_tab1;
 CREATE TABLE ext_cine_tab2 AS SELECT 42 AS y;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE EXTENSION test_ext_cine;  -- fail
 ERROR:  table ext_cine_tab2 is not a member of extension "test_ext_cine"
 DETAIL:  An extension may only use CREATE ... IF NOT EXISTS to skip object creation if the conflicting object is one that it already owns.
@@ -498,3 +504,10 @@ drop table ext8_table1;
 drop table ext8_temp_table1;
 -- Cleanup
 drop extension test_ext8;
+--
+-- Test @extschema@ syntax.
+--
+CREATE SCHEMA "has space";
+CREATE EXTENSION test_ext_extschema SCHEMA has$dollar;
+ERROR:  invalid character in extension "test_ext_extschema" schema: must not contain any of ""$'\"
+CREATE EXTENSION test_ext_extschema SCHEMA "has space";

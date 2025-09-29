@@ -18,4 +18,19 @@ $node->issues_sql_like(
 	qr/statement: CLUSTER.*statement: CLUSTER/s,
 	'cluster all databases');
 
+$node->safe_psql(
+	'postgres', q(
+	CREATE DATABASE regression_invalid;
+	SET allow_system_table_mods = on;
+	UPDATE pg_database SET datconnlimit = -2 WHERE datname = 'regression_invalid';
+	RESET allow_system_table_mods;
+));
+$node->command_ok([ 'clusterdb', '-a' ],
+  'invalid database not targeted by clusterdb -a');
+
+# Doesn't quite belong here, but don't want to waste time by creating an
+# invalid database in 010_clusterdb.pl as well.
+$node->command_fails([ 'clusterdb', '-d', 'regression_invalid'],
+  'clusterdb cannot target invalid database');
+
 done_testing();

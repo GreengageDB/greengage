@@ -38,7 +38,9 @@
 void
 resetTimers(struct itimers *otimers)
 {
+#ifdef USE_ASSERT_CHECKING
 	int			err;
+#endif
 	struct itimerval xtimer;	/* Zero timer for disabling */
 	struct itimerval *p_rtimer = NULL;	/* ITIMER_REAL */
 	struct itimerval *p_vtimer = NULL;	/* ITIMER_VIRTUAL */
@@ -63,13 +65,23 @@ resetTimers(struct itimers *otimers)
 	timerclear(&xtimer.it_interval);
 	timerclear(&xtimer.it_value);
 
-	err = setitimer(ITIMER_REAL, &xtimer, p_rtimer);
+#ifdef USE_ASSERT_CHECKING
+	err =
+#endif
+		setitimer(ITIMER_REAL, &xtimer, p_rtimer);
 	Assert(err == 0);
 
-	err = setitimer(ITIMER_VIRTUAL, &xtimer, p_vtimer);
+#ifdef USE_ASSERT_CHECKING
+	err =
+#endif
+		setitimer(ITIMER_VIRTUAL, &xtimer, p_vtimer);
 	Assert(err == 0);
 
-	err = setitimer(ITIMER_REAL, &xtimer, p_ptimer);
+#ifdef USE_ASSERT_CHECKING
+	err =
+#endif
+		setitimer(ITIMER_REAL, &xtimer, p_ptimer);
+
 	Assert(err == 0);
 
 	/*
@@ -94,8 +106,6 @@ resetTimers(struct itimers *otimers)
 void
 restoreTimers(struct itimers *timers)
 {
-	int			err;
-
 	if (timers == NULL)
 	{
 		/* Coding error! */
@@ -107,17 +117,26 @@ restoreTimers(struct itimers *timers)
 	 */
 	if (timerisset(&timers->rtimer.it_interval) || timerisset(&timers->rtimer.it_value))
 	{
-		err = setitimer(ITIMER_REAL, &timers->rtimer, NULL);
+#ifdef USE_ASSERT_CHECKING
+		int err =
+#endif
+			setitimer(ITIMER_REAL, &timers->rtimer, NULL);
 		Assert(err == 0);
 	}
 	if (timerisset(&timers->vtimer.it_interval) || timerisset(&timers->vtimer.it_value))
 	{
-		err = setitimer(ITIMER_VIRTUAL, &timers->vtimer, NULL);
+#ifdef USE_ASSERT_CHECKING
+		int err =
+#endif
+			setitimer(ITIMER_VIRTUAL, &timers->vtimer, NULL);
 		Assert(err == 0);
 	}
 	if (timerisset(&timers->ptimer.it_interval) || timerisset(&timers->ptimer.it_value))
 	{
-		err = setitimer(ITIMER_PROF, &timers->ptimer, NULL);
+#ifdef USE_ASSERT_CHECKING
+		int err =
+#endif
+			setitimer(ITIMER_PROF, &timers->ptimer, NULL);
 		Assert(err == 0);
 	}
 }

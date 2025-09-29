@@ -5,7 +5,7 @@
 \! echo $?
 
 -- start_ignore
-\! gpstop -rai
+\! gpstop -arf
 -- end_ignore
 
 \! echo $?

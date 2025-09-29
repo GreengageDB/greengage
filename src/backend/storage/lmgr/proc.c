@@ -462,12 +462,13 @@ InitProcess(void)
 	MyProc->roleId = InvalidOid;
 	MyProc->tempNamespaceId = InvalidOid;
 	MyProc->isBackgroundWorker = IsBackgroundWorker;
-	MyPgXact->delayChkpt = 0;
+	MyPgXact->delayChkpt = false;
+	MyProc->delayChkptEnd = false;
 	MyPgXact->vacuumFlags = 0;
 	/* NB -- autovac launcher intentionally does not set IS_AUTOVACUUM */
 	if (IsAutoVacuumWorkerProcess())
 		MyPgXact->vacuumFlags |= PROC_IS_AUTOVACUUM;
-	MyProc->lwWaiting = false;
+	MyProc->lwWaiting = LW_WS_NOT_WAITING;
 	MyProc->lwWaitMode = 0;
 	MyProc->waitLock = NULL;
 	MyProc->waitProcLock = NULL;
@@ -713,9 +714,10 @@ InitAuxiliaryProcess(void)
     MyProc->mppIsWriter = false;
 	MyProc->tempNamespaceId = InvalidOid;
 	MyProc->isBackgroundWorker = IsBackgroundWorker;
-	MyPgXact->delayChkpt = 0;
+	MyPgXact->delayChkpt = false;
+	MyProc->delayChkptEnd = false;
 	MyPgXact->vacuumFlags = 0;
-	MyProc->lwWaiting = false;
+	MyProc->lwWaiting = LW_WS_NOT_WAITING;
 	MyProc->lwWaitMode = 0;
 	MyProc->waitLock = NULL;
 	MyProc->waitProcLock = NULL;
@@ -985,6 +987,7 @@ ProcKill(int code, Datum arg)
 	Assert(MyProc != NULL);
 
 	SIMPLE_FAULT_INJECTOR("proc_kill");
+
 	/* not safe if forked by system(), etc. */
 	if (MyProc->pid != (int) getpid())
 		elog(PANIC, "ProcKill() called in child process");
@@ -1285,11 +1288,11 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 	uint32		hashcode = locallock->hashcode;
 	LWLock	   *partitionLock = LockHashPartitionLock(hashcode);
 	PROC_QUEUE *waitQueue = &(lock->waitProcs);
+	SHM_QUEUE  *waitQueuePos;
 	LOCKMASK	myHeldLocks = MyProc->heldLocks;
 	bool		early_deadlock = false;
 	bool		allow_autovacuum_cancel = true;
 	int			myWaitStatus;
-	PGPROC	   *proc;
 	PGPROC	   *leader = MyProc->lockGroupLeader;
 	int			i;
 
@@ -1331,13 +1334,16 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 	 * we are only considering the part of the wait queue before my insertion
 	 * point.
 	 */
-	if (myHeldLocks != 0)
+	if (myHeldLocks != 0 && waitQueue->size > 0)
 	{
 		LOCKMASK	aheadRequests = 0;
+		SHM_QUEUE  *proc_node;
 
-		proc = (PGPROC *) waitQueue->links.next;
+		proc_node = waitQueue->links.next;
 		for (i = 0; i < waitQueue->size; i++)
 		{
+			PGPROC	   *proc = (PGPROC *) proc_node;
+
 			/*
 			 * If we're part of the same locking group as this waiter, its
 			 * locks neither conflict with ours nor contribute to
@@ -1345,7 +1351,7 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 			 */
 			if (leader != NULL && leader == proc->lockGroupLeader)
 			{
-				proc = (PGPROC *) proc->links.next;
+				proc_node = proc->links.next;
 				continue;
 			}
 			/* Must he wait for me? */
@@ -1382,24 +1388,25 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 			}
 			/* Nope, so advance to next waiter */
 			aheadRequests |= LOCKBIT_ON(proc->waitLockMode);
-			proc = (PGPROC *) proc->links.next;
+			proc_node = proc->links.next;
 		}
 
 		/*
-		 * If we fall out of loop normally, proc points to waitQueue head, so
-		 * we will insert at tail of queue as desired.
+		 * If we iterated through the whole queue, cur points to the waitQueue
+		 * head, so we will insert at tail of queue as desired.
 		 */
+		waitQueuePos = proc_node;
 	}
 	else
 	{
 		/* I hold no locks, so I can't push in front of anyone. */
-		proc = (PGPROC *) &(waitQueue->links);
+		waitQueuePos = &waitQueue->links;
 	}
 
 	/*
-	 * Insert self into queue, ahead of the given proc (or at tail of queue).
+	 * Insert self into queue, at the position determined above.
 	 */
-	SHMQueueInsertBefore(&(proc->links), &(MyProc->links));
+	SHMQueueInsertBefore(waitQueuePos, &MyProc->links);
 	waitQueue->size++;
 
 	lock->waitMask |= LOCKBIT_ON(lockmode);

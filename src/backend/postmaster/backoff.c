@@ -812,7 +812,9 @@ BackoffSweeper()
 		 * can utilize at most a single CPU at a time.
 		 */
 		bool		found = true;
+#ifdef USE_ASSERT_CHECKING
 		int			numIterations = 0;
+#endif
 		double		CPUAvailable = numProcsPerSegment();
 		double		maxCPU = Min(1.0, numProcsPerSegment());	/* Maximum CPU that a
 																 * backend can get */
@@ -914,7 +916,9 @@ BackoffSweeper()
 					}
 				}
 			}
+#ifdef USE_ASSERT_CHECKING
 			numIterations++;
+#endif
 			AssertImply(found, (numIterations <= floor(numProcsPerSegment())));
 			Assert(numIterations <= ceil(numProcsPerSegment()));
 		}

@@ -341,18 +341,6 @@ incompatible_module_error(const char *libname,
 	const char *mod_magic_product = get_magic_product(module_magic_data);
 
 	/*
-	 * The default header version for module_magic_data is assumed to be 0
-	 * as it may not be recent enough to have the headerversion field
-	 */
-	int lib_internal_version = 0;
-
-	/* module_magic_data is recent enough to provide its own header version */
-	if (module_magic_data->len > offsetof(Pg_magic_struct, product))
-	{
-		lib_internal_version = module_magic_data->product;
-	}
-
-	/*
 	 * If the version doesn't match, just report that, because the rest of the
 	 * block might not even have the fields we expect.
 	 */

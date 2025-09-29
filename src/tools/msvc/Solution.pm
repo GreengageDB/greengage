@@ -148,6 +148,8 @@ sub GenerateFiles
 	my $self = shift;
 	my $buildclient = shift;
 	my $bits = $self->{platform} eq 'Win32' ? 32 : 64;
+	my $openssl_api_compat;
+	my $ac_define_openssl_api_compat_found = 0;
 
 	# Parse configure.in to get version numbers
 	open(my $c, '<', "configure.in")
@@ -169,10 +171,15 @@ sub GenerateFiles
 			$self->{numver} = sprintf("%d%04d", $1, $2 ? $2 : 0);
 			$self->{majorver} = sprintf("%d", $1);
 		}
+		elsif (/\bAC_DEFINE\(OPENSSL_API_COMPAT, \[([0-9xL]+)\]/)
+		{
+			$ac_define_openssl_api_compat_found = 1;
+			$openssl_api_compat = $1;
+		}
 	}
 	close($c);
 	confess "Unable to parse configure.in for all variables!"
-	  if ($self->{strver} eq '' || $self->{numver} eq '');
+	  if ($self->{strver} eq '' || $self->{numver} eq '' || $ac_define_openssl_api_compat_found == 0);
 
 	if (IsNewer("src/include/pg_config_os.h", "src/include/port/win32.h"))
 	{
@@ -258,15 +265,23 @@ sub GenerateFiles
 		if ($self->{options}->{openssl})
 		{
 			print $o "#define USE_OPENSSL 1\n";
+			print $o "#define OPENSSL_API_COMPAT $openssl_api_compat\n";
 
 			my ($digit1, $digit2, $digit3) = $self->GetOpenSSLVersion();
 
-			# More symbols are needed with OpenSSL 1.1.0 and above.
+			# Symbols needed with OpenSSL 1.1.1 and above.
+			if (   ($digit1 >= '3' && $digit2 >= '0' && $digit3 >= '0')
+				|| ($digit1 >= '1' && $digit2 >= '1' && $digit3 >= '1'))
+			{
+				print $o "#define HAVE_X509_GET_SIGNATURE_INFO 1\n";
+				print $o "#define HAVE_SSL_CTX_SET_NUM_TICKETS 1\n";
+			}
+
+			# Symbols needed with OpenSSL 1.1.0 and above.
 			if (   ($digit1 >= '3' && $digit2 >= '0' && $digit3 >= '0')
 				|| ($digit1 >= '1' && $digit2 >= '1' && $digit3 >= '0'))
 			{
 				print $o "#define HAVE_ASN1_STRING_GET0_DATA 1\n";
-				print $o "#define HAVE_BIO_GET_DATA 1\n";
 				print $o "#define HAVE_BIO_METH_NEW 1\n";
 				print $o "#define HAVE_OPENSSL_INIT_SSL 1\n";
 			}

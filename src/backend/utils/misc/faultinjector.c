@@ -281,12 +281,85 @@ checkBgProcessSkipFault(const char* faultName)
 	return false;
 }
 
+struct dtx2ddl
+{
+	DtxProtocolCommand cmd;
+	DDLStatement_e val;
+};
+
+static const struct dtx2ddl dtxcmdmap[] = 
+{
+	{DTX_PROTOCOL_COMMAND_NONE, DDLNotSpecified},
+	{DTX_PROTOCOL_COMMAND_ABORT_NO_PREPARED, AbortNoPrepared},
+	{DTX_PROTOCOL_COMMAND_PREPARE, Prepare},
+	{DTX_PROTOCOL_COMMAND_ABORT_SOME_PREPARED, AbortSomePrepared},
+	{DTX_PROTOCOL_COMMAND_COMMIT_ONEPHASE, CommitOnePhase},
+	{DTX_PROTOCOL_COMMAND_COMMIT_PREPARED, CommitPrepared},
+	{DTX_PROTOCOL_COMMAND_ABORT_PREPARED, AbortPrepared},
+	{DTX_PROTOCOL_COMMAND_RETRY_COMMIT_PREPARED, RetryCommitPrepared},
+	{DTX_PROTOCOL_COMMAND_RETRY_ABORT_PREPARED, RetryAbortPrepared},
+	{DTX_PROTOCOL_COMMAND_RECOVERY_COMMIT_PREPARED, RecoveryCommitPrepared},
+	{DTX_PROTOCOL_COMMAND_RECOVERY_ABORT_PREPARED, RecoveryAbortPrepared},
+	{DTX_PROTOCOL_COMMAND_SUBTRANSACTION_BEGIN_INTERNAL, SubtransactionBegin},
+	{DTX_PROTOCOL_COMMAND_SUBTRANSACTION_RELEASE_INTERNAL, SubtransactionRelease},
+	{DTX_PROTOCOL_COMMAND_SUBTRANSACTION_ROLLBACK_INTERNAL, SubtransactionRollback},
+	{0, DDLMax}
+};
+
+
+/* 
+ * Version of fault injection function which receives DTXProtocolCommand
+ * and translates it into DDLStatement_e enumeration value.
+ */
+FaultInjectorType_e
+FaultInjector_InjectFaultIfSet_out_of_line_DTX(const char *faultName,
+											   DtxProtocolCommand dtxProtocolCommand,
+											   int nestingLevel)
+{
+	const struct dtx2ddl *cmd;
+	DDLStatement_e stmt = DDLNotSpecified;
+
+	for (cmd = dtxcmdmap; cmd->val < DDLMax; cmd++)
+	{
+		if (cmd->cmd == dtxProtocolCommand)
+		{
+			stmt = cmd->val;
+			break;
+		}
+	}
+	return FaultInjector_InjectFaultIfSet_out_of_line(faultName, stmt, "", "",
+													  nestingLevel);
+}
+
+/* 
+ * Version of fault injection function which receives string statement tag
+ * instead of DDLStatement_e enumeration value.
+ * statement is descriptive string returned by createCommandTag() 
+ * function for usial SQL statements, and value of local commandTag
+ * variable for exec_mpp_query function.
+ */
+FaultInjectorType_e
+FaultInjector_InjectFaultIfSet_out_of_line_SQL(
+											   const char *faultName,
+											   const char *statement,
+											   int nestingLevel)
+{
+	DDLStatement_e ddlStatement = FaultInjectorDDLStringToEnum(statement);
+
+	if (ddlStatement == DDLMax)
+		return FaultInjectorTypeNotSpecified;
+
+	return FaultInjector_InjectFaultIfSet_out_of_line(faultName, ddlStatement,
+													  "", "", nestingLevel);
+}
+
 FaultInjectorType_e
 FaultInjector_InjectFaultIfSet_out_of_line(
 							   const char*				 faultName,
 							   DDLStatement_e			 ddlStatement,
 							   const char*				 databaseName,
-							   const char*				 tableName)
+							   const char*				 tableName,
+							   int 						 nestingLevel)
 {
 
 	FaultInjectorEntry_s   *entryShared, localEntry,
@@ -357,6 +430,10 @@ FaultInjector_InjectFaultIfSet_out_of_line(
 	
 		if (strlen(entryShared->tableName) > 0 && strcmp(entryShared->tableName, tableNameLocal) != 0)
 			/* fault injection is not set for the specified table name */
+			break;
+		
+		if (entryShared->nestingLevel != 0 && entryShared->nestingLevel != nestingLevel)
+			/* fault injection is set for another nesting level */
 			break;
 
 		if (entryShared->faultInjectorState == FaultInjectorStateCompleted ||
@@ -737,7 +814,7 @@ FaultInjector_NewHashEntry(
 	entryLocal->numTimesTriggered = 0;
 	strcpy(entryLocal->databaseName, entry->databaseName);
 	strcpy(entryLocal->tableName, entry->tableName);
-		
+	entryLocal->nestingLevel = entry->nestingLevel;	
 	entryLocal->faultInjectorState = FaultInjectorStateWaiting;
 
 	faultInjectorShmem->numActiveFaults++;
@@ -976,12 +1053,13 @@ HandleFaultMessage(const char* msg)
 	int end;
 	int extra;
 	int sid;
+	int nestingLevel;
 	char *result;
 	int len;
 
-	if (sscanf(msg, "faultname=%s type=%s ddl=%s db=%s table=%s "
-			   "start=%d end=%d extra=%d sid=%d",
-			   name, type, ddl, db, table, &start, &end, &extra, &sid) != 9)
+	if (sscanf(msg, "faultname=%s type=%s ddl='%[^']' db=%s table=%s "
+			   "start=%d end=%d extra=%d sid=%d nestinglevel=%d",
+			   name, type, ddl, db, table, &start, &end, &extra, &sid, &nestingLevel) != 10)
 		elog(ERROR, "invalid fault message: %s", msg);
 	/* The value '#' means not specified. */
 	if (ddl[0] == '#')
@@ -991,7 +1069,8 @@ HandleFaultMessage(const char* msg)
 	if (table[0] == '#')
 		table[0] = '\0';
 
-	result = InjectFault(name, type, ddl, db, table, start, end, extra, sid);
+	result = InjectFault(name, type, ddl, db, table, start, end, extra, sid,
+	                     nestingLevel);
 	len = strlen(result);
 
 	StringInfoData buf;
@@ -1020,7 +1099,8 @@ HandleFaultMessage(const char* msg)
 
 char *
 InjectFault(char *faultName, char *type, char *ddlStatement, char *databaseName,
-			char *tableName, int startOccurrence, int endOccurrence, int extraArg, int gpSessionid)
+			char *tableName, int startOccurrence, int endOccurrence,
+			int extraArg, int gpSessionid, int nestingLevel)
 {
 	StringInfo buf = makeStringInfo();
 	FaultInjectorEntry_s faultEntry;
@@ -1036,6 +1116,7 @@ InjectFault(char *faultName, char *type, char *ddlStatement, char *databaseName,
 	faultEntry.endOccurrence = endOccurrence;
 	faultEntry.gpSessionid = gpSessionid;
 	faultEntry.numTimesTriggered = 0;
+	faultEntry.nestingLevel = nestingLevel;
 
 	/*
 	 * Validations:

@@ -150,6 +150,9 @@ extern void MarkFileSegInfoAwaitingDrop(Relation parentrel, int segno);
 extern void IncrementFileSegInfoModCount(Relation parentrel, int segno);
 extern FileSegTotals *GetSegFilesTotals(Relation parentrel, Snapshot appendOnlyMetaDataSnapshot);
 
+extern void GetSegFilesTotalsCluster(Relation parentrel,
+						 FileSegTotals * totals);
+
 extern void FreeAllSegFileInfo(FileSegInfo **allSegInfo,
 				   int totalSegFiles);
 

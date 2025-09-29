@@ -81,7 +81,7 @@ gistRedoPageUpdateRecord(XLogReaderState *record)
 		char	   *begin;
 		char	   *data;
 		Size		datalen;
-		int			ninserted = 0;
+		int			ninserted PG_USED_FOR_ASSERTS_ONLY = 0;
 
 		data = begin = XLogRecGetBlockData(record, 0, &datalen);
 
@@ -107,7 +107,9 @@ gistRedoPageUpdateRecord(XLogReaderState *record)
 			/* should be nothing left after consuming 1 tuple */
 			Assert(data - begin == datalen);
 			/* update insertion count for assert check below */
+#ifdef USE_ASSERT_CHECKING
 			ninserted++;
+#endif
 		}
 		else if (xldata->ntodelete > 0)
 		{
@@ -140,7 +142,9 @@ gistRedoPageUpdateRecord(XLogReaderState *record)
 					elog(ERROR, "failed to add item to GiST index page, size %d bytes",
 						 (int) sz);
 				off++;
+#ifdef USE_ASSERT_CHECKING
 				ninserted++;
+#endif
 			}
 		}
 

@@ -72,3 +72,4 @@ lib*.pc
 /CMakeLists.txt
 /compile_commands.json
 /tmp_install/
+/portlock/

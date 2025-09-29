@@ -22,7 +22,7 @@ on:
 
 jobs:
   abi-dump-setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       BASELINE_REF: ${{ steps.vars.outputs.BASELINE_REF }}
       BASELINE_VERSION: ${{ steps.vars.outputs.BASELINE_VERSION }}
@@ -53,15 +53,14 @@ jobs:
 
       - name: Upload symbol/type checking exception list
         if: steps.check_exception_lists.outputs.EXCEPTION_LISTS_COUNT != '0'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: exception_lists
           path: '.abi-check/${{ steps.vars.outputs.BASELINE_VERSION }}/'
 
   abi-dump:
     needs: abi-dump-setup
-    runs-on: ubuntu-latest
-    container: gcr.io/data-gpdb-public-images/gpdb7-rocky8-build
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         name:
@@ -76,50 +75,45 @@ jobs:
             ref: ${{ github.sha }}
 
     steps:
-      ## FIXME: abi-dumper requires 'Universal Ctags' but the package manager only provides
-      ## 'Exuberant Ctags'.
-      - name: Install universal-ctags.
-        run: |
-          wget 'https://github.com/universal-ctags/ctags-nightly-build/releases/download/2023.07.05%2Bafdae39c0c2e508d113cbc570f4635b96159840c/uctags-2023.07.05-linux-x86_64.tar.xz'
-          tar -xf uctags-2023.07.05-linux-x86_64.tar.xz
-          cp uctags-2023.07.05-linux-x86_64/bin/* /usr/bin/
-          which ctags
-
       - name: Download Greengage source code
         uses: actions/checkout@v3
         with:
           repository: ${{ matrix.repo }}
           ref: ${{ matrix.ref }}
           submodules: recursive
-          fetch-depth: 0 # Specify '0' to fetch all history for all branches and tags.
+          fetch-depth: 1
           path: gpdb_src
 
-      - name: Install abi-dumper
+      - name: Install dependencies and abi-dumper
         run: |
-          yum install -y epel-release
-          yum install -y abi-dumper
+          sudo gpdb_src/README.Ubuntu.bash
+          sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl universal-ctags abi-dumper
+          sudo ln -fs python2 /usr/bin/python
 
       - name: Build Greengage
         run: |
-          ## TODO: Since abi-dumper requires debug info and it's hard to inject CFLAGS via the script for
-          ## releasing Greengage, we have to manually configure it here. Probably we can improve it in future.
           pushd gpdb_src
           CC='gcc -m64' \
-          CFLAGS='-Og -g3 -Wno-maybe-uninitialized' LDFLAGS='-Wl,--enable-new-dtags -Wl,--export-dynamic' \
-          ./configure --with-quicklz --disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy \
-                      --enable-orca --with-libxml --with-pythonsrc-ext --with-uuid=e2fs --with-pgport=5432 --enable-tap-tests \
-                      --enable-debug-extensions --with-perl --with-python --with-openssl --with-pam --with-ldap --with-includes="" \
-                      --with-libraries="" --disable-rpath \
+          CXXFLAGS='-O0' \
+          CFLAGS='-gdwarf-4 -Og -g3 -Wno-maybe-uninitialized' \
+          LDFLAGS='-Wl,--enable-new-dtags -Wl,--export-dynamic' \
+          ./configure --with-gssapi --enable-orafce --enable-ic-proxy --enable-orca --with-libxml \
+                      --with-uuid=e2fs --with-pgport=5432 --enable-tap-tests --enable-debug-extensions \
+                      --with-perl --with-python --with-openssl --with-pam --with-ldap --disable-rpath \
+                      --with-includes="" --with-libraries="" \
                       --prefix=/usr/local/greengage-db-devel \
                       --mandir=/usr/local/greengage-db-devel/man
-          make -j`nproc` && make install
+          sudo make -j`nproc` install
 
       - name: Dump ABI
         run: |
-          abi-dumper -lver ${{ matrix.ref }} -skip-cxx -public-headers /usr/local/greengage-db-devel/include/${{ needs.abi-dump-setup.outputs.ABI_HEADERS }} -o postgres-${{ matrix.ref }}.abi /usr/local/greengage-db-devel/bin/postgres
+          abi-dumper -lver ${{ matrix.ref }} -skip-cxx \
+                     -public-headers /usr/local/greengage-db-devel/include/${{ needs.abi-dump-setup.outputs.ABI_HEADERS }} \
+                     -o postgres-${{ matrix.ref }}.abi \
+                     /usr/local/greengage-db-devel/bin/postgres
 
       - name: Upload ABI files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: '*${{ matrix.ref }}.abi'
@@ -128,32 +122,29 @@ jobs:
     needs:
       - abi-dump-setup
       - abi-dump
-    runs-on: ubuntu-latest
-    container: gcr.io/data-gpdb-public-images/gpdb7-rocky8-build
+    runs-on: ubuntu-22.04
     steps:
       - name: Download baseline
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-baseline
           path: build-baseline/
       - name: Download latest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-latest
           path: build-latest/
 
       - name: Download exception lists
         if: needs.abi-dump-setup.outputs.EXCEPTION_LISTS_COUNT != '0'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: exception_lists
           path: exception_lists/
 
       - name: Install abi-compliance-checker and report viewer (lynx)
         run: |
-          yum install -y epel-release
-          yum install -y abi-compliance-checker
-          yum install -y --enablerepo=powertools lynx
+          sudo apt install -y abi-compliance-checker lynx
 
       - name: Compare ABI
         run: |
@@ -180,7 +171,7 @@ jobs:
 
       - name: Upload ABI Comparison
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: compat-report-${{ github.sha }}
           path: compat_reports/

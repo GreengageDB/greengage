@@ -183,7 +183,6 @@ test_XLogWalRcvProcessMsg(unsigned char type, char *buf, Size len,
 	XLogRecPtr	dataStart;
 	XLogRecPtr	walEnd;
 	TimestampTz sendTime;
-	bool		replyRequested;
 	StringInfoData incoming_message;
 	initStringInfo(&incoming_message);
 
@@ -226,7 +225,6 @@ test_XLogWalRcvProcessMsg(unsigned char type, char *buf, Size len,
 				/* read the fields */
 				walEnd = pq_getmsgint64(&incoming_message);
 				sendTime = pq_getmsgint64(&incoming_message);
-				replyRequested = pq_getmsgbyte(&incoming_message);
 
 				elog(INFO, "keep alive: %X/%X at %s",
 					 (uint32) (walEnd >> 32), (uint32) walEnd,

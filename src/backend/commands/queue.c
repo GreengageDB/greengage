@@ -587,20 +587,16 @@ AlterResqueueCapabilityEntry(Oid queueid,
 		ListCell		*lc2;
 		List			*pentry		 = lfirst(lc);
 		int				 resTypeInt;
-		Node			*pVal;
-		int				 ii;
 		ScanKeyData	 key[1];
 		SysScanDesc	 scan;
 
 		Assert (2 == list_length(pentry));
 
 		lc2 = list_head(pentry);
-		
+
 		resTypeInt = intVal(lfirst(lc2));
 
 		lc2 = lnext(lc2);
-		
-		pVal = lfirst(lc2);
 
 		/* CaQL UNDONE: no test coverage */
 		ScanKeyInit(&key[0],
@@ -613,8 +609,6 @@ AlterResqueueCapabilityEntry(Oid queueid,
 								  /* XXX XXX XXX XXX : snapshotnow ? */
 								  true, NULL, 1, key);
 
-		ii = 0;
-
 		while (HeapTupleIsValid(tuple = systable_getnext(scan)))
 		{
 			if (HeapTupleIsValid(tuple))
@@ -624,7 +618,6 @@ AlterResqueueCapabilityEntry(Oid queueid,
 				{
 					/* no "off" setting -- just remove entry */
 					simple_heap_delete(rel, &tuple->t_self);
-					ii++;
 				}
 			}
 		}

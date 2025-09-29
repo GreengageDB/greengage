@@ -4,6 +4,9 @@ DATA       = gp_internal_tools--1.0.0.sql
 
 PG_CPPFLAGS = -I$(libpq_srcdir)
 
+# Avoid building LLVM Bitcode for gp_internal_tools module.
+with_llvm = no
+
 ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)

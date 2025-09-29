@@ -1,6 +1,7 @@
 -- start_matchsubs
 -- m/\(cost=.*\)/
 -- s/\(cost=.*\)//
+-- m/ERROR:  Passing parameters across motion is not supported. \([a-z]+\.c:\d+\)/
 -- end_matchsubs
 create schema bfv_catalog;
 set search_path=bfv_catalog;

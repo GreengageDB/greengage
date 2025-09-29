@@ -3,15 +3,6 @@ set -exo pipefail
 
 GPDB_SRC_PATH=${GPDB_SRC_PATH:=gpdb_src}
 
-function build_xerces
-{
-    OUTPUT_DIR="gpdb_src/gpAux/ext/${BLD_ARCH}"
-    mkdir -p xerces_patch/concourse
-    cp -r gpdb_src/src/backend/gporca/concourse/xerces-c xerces_patch/concourse
-    /usr/bin/python3 xerces_patch/concourse/xerces-c/build_xerces.py --output_dir=${OUTPUT_DIR}
-    rm -rf build
-}
-
 function test_orca
 {
     if [ -n "${SKIP_UNITTESTS}" ]; then
@@ -27,7 +18,6 @@ function test_orca
 function _main
 {
   mkdir gpdb_src/gpAux/ext
-  build_xerces
   test_orca
 }
 

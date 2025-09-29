@@ -4,6 +4,9 @@ OBJS = gp_exttable_fdw.o extaccess.o option.o
 SHLIB_LINK_INTERNAL = $(libpq)
 #SHLIB_LINK += -lcurl
 
+# Avoid building LLVM Bitcode for gp_exttable_fdw module.
+with_llvm = no
+
 EXTENSION = gp_exttable_fdw
 DATA = gp_exttable_fdw--1.0.sql
 

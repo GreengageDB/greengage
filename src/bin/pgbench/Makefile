@@ -23,6 +23,8 @@ all: pgbench
 pgbench: $(OBJS) | submake-libpq submake-libpgport submake-libpgfeutils
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@$(X)
 
+exprparse.o: CFLAGS += -Wno-unused-but-set-variable
+
 # exprscan is compiled as part of exprparse
 exprparse.o: exprscan.c
 

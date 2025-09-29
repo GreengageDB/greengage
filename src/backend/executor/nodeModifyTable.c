@@ -28,6 +28,14 @@
  *		rowtype, but we might still find that different plans are appropriate
  *		for different child relations.
  *
+ *		The relation to modify can be an ordinary table, a view having an
+ *		INSTEAD OF trigger, or a foreign table.  Earlier processing already
+ *		pointed ModifyTable to the underlying relations of any automatically
+ *		updatable view not using an INSTEAD OF trigger, so code here can
+ *		assume it won't have one as a modification target.  This node does
+ *		process ri_WithCheckOptions, which may have expressions from those
+ *		automatically updatable views.
+ *
  *		If the query specifies RETURNING, then the ModifyTable returns a
  *		RETURNING tuple after completing each row insert, update, or delete.
  *		It must be called again to continue the operation.  Without RETURNING,
@@ -814,8 +822,8 @@ ExecInsert(ModifyTableState *mtstate,
  *		index modifications are needed.
  *
  *		When deleting from a table, tupleid identifies the tuple to
- *		delete and oldtuple is NULL.  When deleting from a view,
- *		oldtuple is passed to the INSTEAD OF triggers and identifies
+ *		delete and oldtuple is NULL.  When deleting through a view
+ *		INSTEAD OF trigger, oldtuple is passed to the triggers and identifies
  *		what to delete, and tupleid is invalid.  When deleting from a
  *		foreign table, tupleid is invalid; the FDW has to figure out
  *		which row to delete using data from the planSlot.  oldtuple is
@@ -1183,7 +1191,7 @@ ldelete:;
 							 mtstate->mt_transition_capture);
 
 		/*
-		 * We've already captured the NEW TABLE row, so make sure any AR
+		 * We've already captured the OLD TABLE row, so make sure any AR
 		 * DELETE trigger fired below doesn't capture it again.
 		 */
 		ar_delete_trig_tcs = NULL;
@@ -1261,15 +1269,17 @@ ldelete:;
  *		which corrupts your database..
  *
  *		When updating a table, tupleid identifies the tuple to
- *		update and oldtuple is NULL.  When updating a view, oldtuple
- *		is passed to the INSTEAD OF triggers and identifies what to
+ *		update and oldtuple is NULL.  When updating through a view INSTEAD OF
+ *		trigger, oldtuple is passed to the triggers and identifies what to
  *		update, and tupleid is invalid.  When updating a foreign table,
  *		tupleid is invalid; the FDW has to figure out which row to
  *		update using data from the planSlot.  oldtuple is passed to
  *		foreign table triggers; it is NULL when the foreign table has
  *		no relevant triggers.
  *
- *		Returns RETURNING result if any, otherwise NULL.
+ *		Returns RETURNING result if any, otherwise NULL.  On exit, if tupleid
+ *		had identified the tuple to update, it will identify the tuple
+ *		actually updated after EvalPlanQual.
  * ----------------------------------------------------------------
  */
 static TupleTableSlot *
@@ -1370,9 +1380,19 @@ ExecUpdate(ModifyTableState *mtstate,
 	}
 	else
 	{
+		ItemPointerData lockedtid PG_USED_FOR_ASSERTS_ONLY;
 		LockTupleMode lockmode;
 		bool		partition_constraint_failed;
 		bool		update_indexes;
+
+		/*
+		 * If we generate a new candidate tuple after EvalPlanQual testing, we
+		 * must loop back here to try again.  (We don't need to redo triggers,
+		 * however.  If there are any BEFORE triggers then trigger.c will have
+		 * done table_tuple_lock to lock the correct tuple, so there's no need
+		 * to do them again.)
+		 */
+lreplace:
 
 		/*
 		 * Constraints and GENERATED expressions might reference the tableoid
@@ -1386,17 +1406,6 @@ ExecUpdate(ModifyTableState *mtstate,
 		if (resultRelationDesc->rd_att->constr &&
 			resultRelationDesc->rd_att->constr->has_generated_stored)
 			ExecComputeStoredGenerated(estate, slot);
-
-		/*
-		 * Check any RLS UPDATE WITH CHECK policies
-		 *
-		 * If we generate a new candidate tuple after EvalPlanQual testing, we
-		 * must loop back here and recheck any RLS policies and constraints.
-		 * (We don't need to redo triggers, however.  If there are any BEFORE
-		 * triggers then trigger.c will have done table_tuple_lock to lock the
-		 * correct tuple, so there's no need to do them again.)
-		 */
-lreplace:;
 
 		/* ensure slot is independent, consider e.g. EPQ */
 		ExecMaterializeSlot(slot);
@@ -1412,6 +1421,7 @@ lreplace:;
 			resultRelInfo->ri_PartitionCheck &&
 			!ExecPartitionCheck(resultRelInfo, slot, estate, false);
 
+		/* Check any RLS UPDATE WITH CHECK policies */
 		if (!partition_constraint_failed &&
 			resultRelInfo->ri_WithCheckOptions != NIL)
 		{
@@ -1564,6 +1574,26 @@ lreplace:;
 			ExecConstraints(resultRelInfo, slot, estate);
 
 		/*
+		 * We lack the infrastructure to follow rules in README.tuplock
+		 * section "Locking to write inplace-updated tables".  Specifically,
+		 * we lack infrastructure to lock tupleid before this file's
+		 * ExecProcNode() call fetches the tuple's old columns.  Just take a
+		 * lock that silences check_lock_if_inplace_updateable_rel().  This
+		 * doesn't actually protect inplace updates like those rules intend,
+		 * so we may lose an inplace update that overlaps a superuser running
+		 * "UPDATE pg_class" or "UPDATE pg_database".
+		 */
+#ifdef USE_ASSERT_CHECKING
+		if (IsInplaceUpdateRelation(resultRelationDesc))
+		{
+			lockedtid = *tupleid;
+			LockTuple(resultRelationDesc, &lockedtid, InplaceUpdateTupleLock);
+		}
+		else
+			ItemPointerSetInvalid(&lockedtid);
+#endif
+
+		/*
 		 * replace the heap tuple
 		 *
 		 * Note: if es_crosscheck_snapshot isn't InvalidSnapshot, we check
@@ -1578,6 +1608,11 @@ lreplace:;
 									estate->es_crosscheck_snapshot,
 									true /* wait for commit */ ,
 									&tmfd, &lockmode, &update_indexes);
+
+#ifdef USE_ASSERT_CHECKING
+		if (ItemPointerIsValid(&lockedtid))
+			UnlockTuple(resultRelationDesc, &lockedtid, InplaceUpdateTupleLock);
+#endif
 
 		switch (result)
 		{
@@ -2602,8 +2637,8 @@ ExecModifyTable(PlanState *pstate)
 				 * to set t_tableOid.  Quite separately from this, the FDW may
 				 * fetch its own junk attrs to identify the row.
 				 *
-				 * Other relevant relkinds, currently limited to views, always
-				 * have a wholerow attribute.
+				 * Other relevant relkinds, currently limited to views having
+				 * INSTEAD OF triggers, always have a wholerow attribute.
 				 */
 				else if (AttributeNumberIsValid(junkfilter->jf_junkAttNo))
 				{

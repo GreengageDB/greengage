@@ -818,9 +818,9 @@ typedef struct SubLink
  * The values are assigned to the global PARAM_EXEC params indexed by parParam
  * (the parParam and args lists must have the same ordering).  setParam is a
  * list of the PARAM_EXEC params that are computed by the sub-select, if it
- * is an initplan; they are listed in order by sub-select output column
- * position.  (parParam and setParam are integer Lists, not Bitmapsets,
- * because their ordering is significant.)
+ * is an initplan or MULTIEXPR plan; they are listed in order by sub-select
+ * output column position.  (parParam and setParam are integer Lists, not
+ * Bitmapsets, because their ordering is significant.)
  *
  * Also, the planner computes startup and per-call costs for use of the
  * SubPlan.  Note that these include the cost of the subquery proper,
@@ -860,14 +860,16 @@ typedef struct SubPlan
 
 	/* Information for passing params into and out of the subselect: */
 	/* setParam and parParam are lists of integers (param IDs) */
-	List	   *setParam;		/* initplan subqueries have to set these
-								 * Params for parent plan */
+	List	   *setParam;		/* initplan and MULTIEXPR subqueries have to
+								 * set these Params for parent plan */
 	List	   *parParam;		/* indices of input Params from parent plan */
 	List	   *args;			/* exprs to pass as parParam values */
 	List	   *extParam;		/* indices of input Params from ancestor plan */
 	/* Estimated execution costs: */
 	Cost		startup_cost;	/* one-time setup cost */
 	Cost		per_call_cost;	/* cost for each subplan evaluation */
+	/* Copied from original SubLink, but placed at end for ABI stability */
+	int			subLinkId;		/* ID (1..n); 0 if not MULTIEXPR */
 } SubPlan;
 
 /*

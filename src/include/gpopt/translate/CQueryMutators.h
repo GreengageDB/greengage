@@ -19,6 +19,7 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/gpdbwrappers.h"
 #include "gpopt/translate/CMappingVarColId.h"
 #include "gpopt/translate/CTranslatorScalarToDXL.h"
 #include "gpopt/translate/CTranslatorUtils.h"
@@ -135,6 +136,53 @@ class CQueryMutators
 		// dtor
 		~SContextTLWalker() = default;
 	};
+
+	// context for walker and mutator to add missing grouping columns to the
+	// groupClause that have functional dependency on the groupClause
+	typedef struct SContextFixGroupDependentTargets
+	{
+		// query that is being processed
+		Query *m_query;
+		// primary key relation id
+		Oid m_conrelid;
+		// list of columns that define primary key in relation with m_conrelid
+		List *m_conkeys;
+		// the current query level
+		ULONG m_current_query_level;
+		// new SortGroupClause to be added into groupClause
+		SortGroupClause *m_gc;
+		// utility field for mutator, indicating that currently processed list
+		// of GroupingSets is a content of some other GroupingSet
+		BOOL m_parent_is_grouping_set;
+		// list to store new target list entries with vars from expressions in
+		// the target list, that do not have yet their own target list entries
+		List *m_tlist_addition;
+
+		// ctor
+		SContextFixGroupDependentTargets(Query *query)
+			: m_query(query),
+			  m_conrelid(0),
+			  m_conkeys(NIL),
+			  m_current_query_level(0),
+			  m_gc(NULL),
+			  m_parent_is_grouping_set(false),
+			  m_tlist_addition(NIL)
+		{
+		}
+	} CContextFixGroupDependentTargets;
+
+private:
+	static BOOL GroupingListContainsPrimaryKey(Query *query,
+											   List *grouping_list,
+											   List *conkeys, Oid conrelid);
+
+	static BOOL GetVarsWithoutTleWalker(
+		Node *node, SContextFixGroupDependentTargets *context);
+
+	static Node *AddMissingGroupingSetsMutator(
+		Node *node, SContextFixGroupDependentTargets *context);
+
+	static void FixGroupDependentTargets(Query *query);
 
 public:
 	// fall back during since the target list refers to a attribute which algebrizer at this point cannot resolve

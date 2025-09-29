@@ -162,6 +162,11 @@ private:
 
 	static BOOL SetSecurityQualsVarnoWalker(Node *node, Index *index);
 
+	static ForeignScan *CreateForeignScan(Oid rel_oid, Index scanrelid,
+										  List *qual, List *targetlist,
+										  Query *query, RangeTblEntry *rte,
+										  const IMDRelation *md_rel);
+
 public:
 	// ctor
 	CTranslatorDXLToPlStmt(CMemoryPool *mp, CMDAccessor *md_accessor,

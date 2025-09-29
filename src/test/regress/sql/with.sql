@@ -482,6 +482,35 @@ WITH RECURSIVE cte(level, id) as (
 	SELECT level+1, c FROM (SELECT * FROM cte OFFSET 0) foo, bar)
 SELECT * FROM cte LIMIT 10;
 
+-- allow this, because we historically have
+WITH RECURSIVE x(n) AS (
+  WITH x1 AS (SELECT 1 AS n)
+    SELECT 0
+    UNION
+    SELECT * FROM x1)
+	SELECT * FROM x;
+
+-- but this should be rejected
+WITH RECURSIVE x(n) AS (
+  WITH x1 AS (SELECT 1 FROM x)
+    SELECT 0
+    UNION
+    SELECT * FROM x1)
+	SELECT * FROM x;
+
+-- and this too
+WITH RECURSIVE x(n) AS (
+  (WITH x1 AS (SELECT 1 FROM x) SELECT * FROM x1)
+  UNION
+  SELECT 0)
+	SELECT * FROM x;
+
+-- and this
+WITH RECURSIVE x(n) AS (
+  SELECT 0 UNION SELECT 1
+  ORDER BY (SELECT n FROM x))
+	SELECT * FROM x;
+
 CREATE TEMPORARY TABLE y (a INTEGER) DISTRIBUTED RANDOMLY;
 INSERT INTO y SELECT generate_series(1, 10);
 
@@ -1226,6 +1255,18 @@ WITH cte AS (
 SELECT i FROM cte a
 JOIN cte b USING (i);
 
+DROP TABLE with_test;
+
+-- Test shared modifying CTE behavior in utility mode
+CREATE TABLE with_test (i int, j int) DISTRIBUTED RANDOMLY;
+
+-- check when slice is not allocated (topslice is allocated only on QD)
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'EXPLAIN (SLICETABLE, COSTS OFF) WITH cte AS (INSERT INTO with_test VALUES (1, 2) RETURNING *) SELECT i FROM cte a JOIN cte b USING (i);'
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'WITH cte AS (INSERT INTO with_test VALUES (1, 2) RETURNING *) SELECT i FROM cte a JOIN cte b USING (i);'
+
+-- check when slice is allocated inside InitPlan
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'EXPLAIN (SLICETABLE, COSTS OFF) WITH cte AS (INSERT INTO with_test VALUES (3, 4) RETURNING *) SELECT i FROM cte WHERE 4 = (SELECT j FROM cte);'
+\! PGOPTIONS='-c gp_session_role=utility' psql -p 7002 -d regression -c 'WITH cte AS (INSERT INTO with_test VALUES (3, 4) RETURNING *) SELECT i FROM cte WHERE 4 = (SELECT j FROM cte);'
 DROP TABLE with_test;
 
 -- Test cross slice Shared Scan with consumer in slice 0.

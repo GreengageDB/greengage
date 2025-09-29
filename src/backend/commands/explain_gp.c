@@ -1534,9 +1534,9 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 		}
 		else
 		{
-			ExplainPropertyInteger("Executor Memory", "kB", kb(ns->execmemused.vsum), es);
+			ExplainPropertyInteger("Executor Memory", "kB", (int64) kb(ns->execmemused.vsum), es);
 			ExplainPropertyInteger("Executor Memory Segments", NULL, ns->execmemused.vcnt, es);
-			ExplainPropertyInteger("Executor Max Memory", "kB", kb(ns->execmemused.vmax), es);
+			ExplainPropertyInteger("Executor Max Memory", "kB", (int64) kb(ns->execmemused.vmax), es);
 			ExplainPropertyInteger("Executor Max Memory Segment", NULL, ns->execmemused.imax, es);
 		}
 	}
@@ -1591,9 +1591,9 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 		else
 		{
 			ExplainOpenGroup("work_mem", "work_mem", true, es);
-			ExplainPropertyInteger("Used", "kB", kb(ns->workmemused.vsum), es);
+			ExplainPropertyInteger("Used", "kB", (int64) kb(ns->workmemused.vsum), es);
 			ExplainPropertyInteger("Segments", NULL, ns->workmemused.vcnt, es);
-			ExplainPropertyInteger("Max Memory", "kB", kb(ns->workmemused.vmax), es);
+			ExplainPropertyInteger("Max Memory", "kB", (int64) kb(ns->workmemused.vmax), es);
 			ExplainPropertyInteger("Max Memory Segment", NULL, ns->workmemused.imax, es);
 
 			/*
@@ -1605,12 +1605,12 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 
 			if (ns->workmemwanted.vcnt > 0)
 			{
-				ExplainPropertyInteger("Max Memory Wanted", "kB", kb(ns->workmemwanted.vmax), es);
+				ExplainPropertyInteger("Max Memory Wanted", "kB", (int64) kb(ns->workmemwanted.vmax), es);
 
 				if (ns->ninst > 1)
 				{
 					ExplainPropertyInteger("Max Memory Wanted Segment", NULL, ns->workmemwanted.imax, es);
-					ExplainPropertyInteger("Avg Memory Wanted", "kB", kb(cdbexplain_agg_avg(&ns->workmemwanted)), es);
+					ExplainPropertyInteger("Avg Memory Wanted", "kB", (int64) kb(cdbexplain_agg_avg(&ns->workmemwanted)), es);
 					ExplainPropertyInteger("Segments Affected", NULL, ns->ninst, es);
 				}
 			}
@@ -1857,7 +1857,7 @@ cdbexplain_showExecStatsEnd(struct PlannedStmt *stmt,
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 			appendStringInfo(es->str, "Memory used:  %ldkB\n", (long) kb(stmt->query_mem));
 		else
-			ExplainPropertyInteger("Memory used", "kB", kb(stmt->query_mem), es);
+			ExplainPropertyInteger("Memory used", "kB", (int64) kb(stmt->query_mem), es);
 
 		if (showstatctx->workmemwanted_max > 0)
 		{
@@ -1897,7 +1897,6 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
 	ExecSlice  *slice;
 	int			sliceIndex;
 	int			flag;
-	double		total_memory_across_slices = 0;
 
 	char		avgbuf[50];
 	char		maxbuf[50];
@@ -2059,7 +2058,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
             }
             else
             {
-                ExplainPropertyInteger("Executor Memory", "kB", ss->peakmemused.vmax, es);
+                ExplainPropertyInteger("Executor Memory", "kB", (int64) kb(ss->peakmemused.vmax), es);
             }
         }
         else if (ss->peakmemused.vcnt > 1)
@@ -2078,9 +2077,9 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
             else
             {
                 ExplainOpenGroup("Executor Memory", "Executor Memory", true, es);
-                ExplainPropertyInteger("Average", "kB", cdbexplain_agg_avg(&ss->peakmemused), es);
+                ExplainPropertyInteger("Average", "kB", (int64) kb(cdbexplain_agg_avg(&ss->peakmemused)), es);
                 ExplainPropertyInteger("Workers", NULL, ss->peakmemused.vcnt, es);
-                ExplainPropertyInteger("Maximum Memory Used", "kB", ss->peakmemused.vmax, es);
+                ExplainPropertyInteger("Maximum Memory Used", "kB", (int64) kb(ss->peakmemused.vmax), es);
                 ExplainCloseGroup("Executor Memory", "Executor Memory", true, es);
             }
         }
@@ -2115,7 +2114,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
                 }
                 else
                 {
-                    ExplainPropertyInteger("Virtual Memory", "kB", ss->vmem_reserved.vmax, es);
+                    ExplainPropertyInteger("Virtual Memory", "kB", (int64) kb(ss->vmem_reserved.vmax), es);
                 }
             }
             else if (ss->vmem_reserved.vcnt > 1)
@@ -2134,9 +2133,9 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
                 else
                 {
                     ExplainOpenGroup("Virtual Memory", "Virtual Memory", true, es);
-                    ExplainPropertyInteger("Average", "kB", cdbexplain_agg_avg(&ss->vmem_reserved), es);
+                    ExplainPropertyInteger("Average", "kB", (int64) kb(cdbexplain_agg_avg(&ss->vmem_reserved)), es);
                     ExplainPropertyInteger("Workers", NULL, ss->vmem_reserved.vcnt, es);
-                    ExplainPropertyInteger("Maximum Memory Used", "kB", ss->vmem_reserved.vmax, es);
+                    ExplainPropertyInteger("Maximum Memory Used", "kB", (int64) kb(ss->vmem_reserved.vmax), es);
                     ExplainCloseGroup("Virtual Memory", "Virtual Memory", true, es);
                 }
 
@@ -2160,7 +2159,7 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
             }
             else
             {
-                ExplainPropertyInteger("Work Maximum Memory", "kB", ss->workmemused_max, es);
+                ExplainPropertyInteger("Work Maximum Memory", "kB", (int64) kb(ss->workmemused_max), es);
             }
         }
 
@@ -2172,18 +2171,6 @@ gpexplain_formatSlicesOutput(struct CdbExplain_ShowStatCtx *showstatctx,
 
     if (showstatctx->nslice > 0)
         ExplainCloseGroup("Slice statistics", "Slice statistics", false, es);
-
-    if (total_memory_across_slices > 0)
-    {
-        if (es->format == EXPLAIN_FORMAT_TEXT)
-        {
-            appendStringInfo(es->str, "Total memory used across slices: %.0fK bytes \n", total_memory_across_slices);
-        }
-        else
-        {
-            ExplainPropertyInteger("Total memory used across slices", "bytes", total_memory_across_slices, es);
-        }
-    }
 }
 
 /*

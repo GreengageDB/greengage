@@ -1495,6 +1495,7 @@ _bitmap_write_bitmapwords_on_page(Page bitmapPage, BMTIDBuffer *buf, int startWo
 		if (xlrec_perpage)
 		{
 			xlrec_perpage->bmp_last_tid = bitmapPageOpaque->bm_last_tid_location;
+			xlrec_perpage->bm_next_blkno = bitmapPageOpaque->bm_bitmap_next;
 			xlrec_perpage->bmp_start_hword_no = 0;
 			xlrec_perpage->bmp_num_hwords = 0;
 			xlrec_perpage->bmp_start_cword_no = cwords;
@@ -1596,7 +1597,10 @@ _bitmap_write_bitmapwords_on_page(Page bitmapPage, BMTIDBuffer *buf, int startWo
 	bitmapPageOpaque->bm_last_tid_location =
 		buf->last_tids[startWordNo + words_written-1];
 	if (xlrec_perpage)
+	{
 		xlrec_perpage->bmp_last_tid = bitmapPageOpaque->bm_last_tid_location;
+		xlrec_perpage->bm_next_blkno = bitmapPageOpaque->bm_bitmap_next;
+	}
 
 	return words_written;
 }

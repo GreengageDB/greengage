@@ -1,0 +1,311 @@
+-- start_ignore
+DROP TABLESPACE ts_test;
+ERROR:  tablespace "ts_test" does not exist
+DROP ROLE user_test;
+ERROR:  role "user_test" does not exist
+-- end_ignore
+-- Test with different table types
+\! rm -rf @testtablespace@ && mkdir @testtablespace@ && mkdir @testtablespace@/seg0_tablespace;
+CREATE TABLESPACE ts_test LOCATION '@testtablespace@'
+WITH (content0='@testtablespace@/seg0_tablespace');
+CREATE TEMP VIEW _show_files_current AS
+SELECT regexp_replace(table_name, '\d+', 'tbloid') AS table_name,
+       table_schema, content, relamname, relispartition
+FROM gp_toolkit.gp_db_files_current
+WHERE table_tablespace = 'ts_test' AND table_name <> '';
+-- empty tablespace
+SELECT * FROM _show_files_current;
+ table_name | table_schema | content | relamname | relispartition 
+------------+--------------+---------+-----------+----------------
+(0 rows)
+
+-- heap
+CREATE TABLE heap(id int) TABLESPACE ts_test DISTRIBUTED BY(id);
+INSERT INTO heap SELECT generate_series(1, 100);
+SELECT * FROM _show_files_current;
+ table_name | table_schema | content | relamname | relispartition 
+------------+--------------+---------+-----------+----------------
+ heap       | public       |       0 | heap      | f
+ heap       | public       |       1 | heap      | f
+ heap       | public       |       2 | heap      | f
+(3 rows)
+
+DROP TABLE heap;
+-- heap with custom schema
+CREATE SCHEMA test_schema;
+CREATE TABLE test_schema.heap(id int) TABLESPACE ts_test DISTRIBUTED BY(id);
+INSERT INTO test_schema.heap SELECT generate_series(1, 100);
+SELECT * FROM _show_files_current;
+ table_name | table_schema | content | relamname | relispartition 
+------------+--------------+---------+-----------+----------------
+ heap       | test_schema  |       0 | heap      | f
+ heap       | test_schema  |       1 | heap      | f
+ heap       | test_schema  |       2 | heap      | f
+(3 rows)
+
+DROP TABLE test_schema.heap;
+-- with toast
+CREATE TABLE heap_toast(id int, data text) TABLESPACE ts_test DISTRIBUTED BY(id);
+INSERT INTO heap_toast SELECT i, i::text FROM generate_series(1, 100) AS i;
+SELECT * FROM _show_files_current;
+      table_name       | table_schema | content | relamname | relispartition 
+-----------------------+--------------+---------+-----------+----------------
+ heap_toast            | public       |       0 | heap      | f
+ heap_toast            | public       |       1 | heap      | f
+ heap_toast            | public       |       2 | heap      | f
+ pg_toast_tbloid       | pg_toast     |       0 | heap      | f
+ pg_toast_tbloid       | pg_toast     |       1 | heap      | f
+ pg_toast_tbloid       | pg_toast     |       2 | heap      | f
+ pg_toast_tbloid_index | pg_toast     |       0 | btree     | f
+ pg_toast_tbloid_index | pg_toast     |       1 | btree     | f
+ pg_toast_tbloid_index | pg_toast     |       2 | btree     | f
+(9 rows)
+
+DROP TABLE heap_toast;
+-- ao
+CREATE TABLE ao (id int) WITH (APPENDONLY = true) TABLESPACE ts_test DISTRIBUTED BY(id);
+INSERT INTO ao SELECT generate_series(1, 100);
+SELECT * FROM _show_files_current;
+        table_name         | table_schema | content | relamname | relispartition 
+---------------------------+--------------+---------+-----------+----------------
+ ao                        | public       |       0 | ao_row    | f
+ ao                        | public       |       0 | ao_row    | f
+ ao                        | public       |       1 | ao_row    | f
+ ao                        | public       |       1 | ao_row    | f
+ ao                        | public       |       2 | ao_row    | f
+ ao                        | public       |       2 | ao_row    | f
+ pg_aoseg_tbloid           | pg_aoseg     |       0 | heap      | f
+ pg_aoseg_tbloid           | pg_aoseg     |       1 | heap      | f
+ pg_aoseg_tbloid           | pg_aoseg     |       2 | heap      | f
+ pg_aovisimap_tbloid       | pg_aoseg     |       0 | heap      | f
+ pg_aovisimap_tbloid       | pg_aoseg     |       1 | heap      | f
+ pg_aovisimap_tbloid       | pg_aoseg     |       2 | heap      | f
+ pg_aovisimap_tbloid_index | pg_aoseg     |       0 | btree     | f
+ pg_aovisimap_tbloid_index | pg_aoseg     |       1 | btree     | f
+ pg_aovisimap_tbloid_index | pg_aoseg     |       2 | btree     | f
+(15 rows)
+
+DROP TABLE ao;
+-- co
+CREATE TABLE co (id int) WITH (APPENDONLY = true, ORIENTATION = column) TABLESPACE ts_test DISTRIBUTED BY(id);
+INSERT INTO co SELECT generate_series(1, 100);
+SELECT * FROM _show_files_current;
+        table_name         | table_schema | content | relamname | relispartition 
+---------------------------+--------------+---------+-----------+----------------
+ co                        | public       |       0 | ao_column | f
+ co                        | public       |       0 | ao_column | f
+ co                        | public       |       1 | ao_column | f
+ co                        | public       |       1 | ao_column | f
+ co                        | public       |       2 | ao_column | f
+ co                        | public       |       2 | ao_column | f
+ pg_aocsseg_tbloid         | pg_aoseg     |       0 | heap      | f
+ pg_aocsseg_tbloid         | pg_aoseg     |       1 | heap      | f
+ pg_aocsseg_tbloid         | pg_aoseg     |       2 | heap      | f
+ pg_aovisimap_tbloid       | pg_aoseg     |       0 | heap      | f
+ pg_aovisimap_tbloid       | pg_aoseg     |       1 | heap      | f
+ pg_aovisimap_tbloid       | pg_aoseg     |       2 | heap      | f
+ pg_aovisimap_tbloid_index | pg_aoseg     |       0 | btree     | f
+ pg_aovisimap_tbloid_index | pg_aoseg     |       1 | btree     | f
+ pg_aovisimap_tbloid_index | pg_aoseg     |       2 | btree     | f
+(15 rows)
+
+DROP TABLE co;
+-- temp
+CREATE TEMP TABLE tmp(id int) TABLESPACE ts_test DISTRIBUTED BY(id);
+INSERT INTO tmp SELECT generate_series(1, 100);
+SELECT * FROM _show_files_current;
+ table_name | table_schema | content | relamname | relispartition 
+------------+--------------+---------+-----------+----------------
+(0 rows)
+
+DROP TABLE tmp;
+-- materialized view
+CREATE MATERIALIZED VIEW mat_view TABLESPACE ts_test AS
+(SELECT generate_series(1, 100) AS id) DISTRIBUTED BY(id);
+SELECT * FROM _show_files_current;
+ table_name | table_schema | content | relamname | relispartition 
+------------+--------------+---------+-----------+----------------
+ mat_view   | public       |       0 | heap      | f
+ mat_view   | public       |       1 | heap      | f
+ mat_view   | public       |       2 | heap      | f
+(3 rows)
+
+DROP MATERIALIZED VIEW mat_view;
+-- partitioned table
+CREATE TABLE ptable (id int, a int, b int)
+TABLESPACE ts_test
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (a)
+    SUBPARTITION BY RANGE (b)
+        SUBPARTITION TEMPLATE (START (1) END (3) EVERY (1))
+    (START (1) END (3) EVERY (1));
+INSERT INTO ptable
+    SELECT i+1, mod(i/4,2)+1, mod(i/2,2)+1
+    FROM generate_series(0,100) AS i;
+SELECT * FROM _show_files_current;
+         table_name          | table_schema | content | relamname | relispartition 
+-----------------------------+--------------+---------+-----------+----------------
+ ptable_tbloid_prt_1_2_prt_1 | public       |       0 | heap      | t
+ ptable_tbloid_prt_1_2_prt_1 | public       |       1 | heap      | t
+ ptable_tbloid_prt_1_2_prt_1 | public       |       2 | heap      | t
+ ptable_tbloid_prt_1_2_prt_2 | public       |       0 | heap      | t
+ ptable_tbloid_prt_1_2_prt_2 | public       |       1 | heap      | t
+ ptable_tbloid_prt_1_2_prt_2 | public       |       2 | heap      | t
+ ptable_tbloid_prt_2_2_prt_1 | public       |       0 | heap      | t
+ ptable_tbloid_prt_2_2_prt_1 | public       |       1 | heap      | t
+ ptable_tbloid_prt_2_2_prt_1 | public       |       2 | heap      | t
+ ptable_tbloid_prt_2_2_prt_2 | public       |       0 | heap      | t
+ ptable_tbloid_prt_2_2_prt_2 | public       |       1 | heap      | t
+ ptable_tbloid_prt_2_2_prt_2 | public       |       2 | heap      | t
+(12 rows)
+
+DROP TABLE ptable;
+-- Test paths
+-- clean tablespace dir before unmapped files test
+DROP TABLESPACE ts_test;
+\! rm -rf @testtablespace@ && mkdir @testtablespace@
+CREATE TABLESPACE ts_test LOCATION '@testtablespace@';
+CREATE TABLE t(id int) TABLESPACE ts_test DISTRIBUTED BY (id);
+INSERT INTO t SELECT generate_series(1,100);
+CREATE TABLE t_default(id int) DISTRIBUTED BY (id);
+INSERT INTO t_default SELECT generate_series(1,100);
+-- tablespace location
+SELECT
+  f.table_name,
+  f.table_schema,
+  f.content,
+  f.table_tablespace,
+  replace(
+    replace(f.tablespace_location, gpconf.datadir, '<SEGMENT_BASE_DIR>'),
+    '@testtablespace@', '<TEST_TABLESPACE_LOCATION_DIR>'
+  ) AS tablespace_location
+FROM gp_toolkit.gp_db_files_current AS f
+JOIN gp_segment_configuration AS gpconf
+  ON gpconf.content = f.content
+ AND gpconf.preferred_role = (f.segment_preferred_role)::char(1)
+WHERE f.table_name IN ('t_default', 'gp_segment_configuration', 't');
+        table_name        | table_schema | content | table_tablespace |      tablespace_location       
+--------------------------+--------------+---------+------------------+--------------------------------
+ gp_segment_configuration | pg_catalog   |       0 | pg_global        | <SEGMENT_BASE_DIR>/global
+ gp_segment_configuration | pg_catalog   |       1 | pg_global        | <SEGMENT_BASE_DIR>/global
+ gp_segment_configuration | pg_catalog   |       2 | pg_global        | <SEGMENT_BASE_DIR>/global
+ t                        | public       |       0 | ts_test          | <TEST_TABLESPACE_LOCATION_DIR>
+ t                        | public       |       1 | ts_test          | <TEST_TABLESPACE_LOCATION_DIR>
+ t                        | public       |       2 | ts_test          | <TEST_TABLESPACE_LOCATION_DIR>
+ t_default                | public       |       0 | pg_default       | <SEGMENT_BASE_DIR>/base
+ t_default                | public       |       1 | pg_default       | <SEGMENT_BASE_DIR>/base
+ t_default                | public       |       2 | pg_default       | <SEGMENT_BASE_DIR>/base
+(9 rows)
+
+-- Check that returned files are exist
+CREATE view expected_files AS SELECT table_name, content, file
+FROM gp_toolkit.gp_db_files_current
+WHERE table_name IN ('t_default', 'gp_segment_configuration', 't');
+CREATE EXTERNAL WEB TABLE file_list (line text)
+EXECUTE 'find -L $GP_SEG_DATADIR -type f'
+FORMAT 'TEXT';
+WITH fl AS (SELECT * FROM file_list)
+SELECT
+    e.table_name,
+    e.content,
+    CASE
+        WHEN fl.line IS NOT NULL THEN 'file exists'
+        ELSE ('file does not exist: ' || e.file)
+    END AS conclusion
+FROM expected_files AS e
+LEFT JOIN fl ON e.file = fl.line;
+        table_name        | content | conclusion  
+--------------------------+---------+-------------
+ gp_segment_configuration |       0 | file exists
+ gp_segment_configuration |       1 | file exists
+ gp_segment_configuration |       2 | file exists
+ t                        |       0 | file exists
+ t                        |       1 | file exists
+ t                        |       2 | file exists
+ t_default                |       0 | file exists
+ t_default                |       1 | file exists
+ t_default                |       2 | file exists
+(9 rows)
+
+DROP VIEW expected_files;
+DROP EXTERNAL WEB TABLE file_list;
+-- unmapped files (produce unmapped files and check that they are listed)
+\cd @testtablespace@
+select dbid from gp_segment_configuration where content = 0 and role = 'p' \gset
+\cd :dbid
+select get_tablespace_version_directory_name() as version_dir \gset
+\cd :version_dir
+select oid from pg_database where datname = current_database() \gset
+\cd :oid
+\! touch 4000000000 4000000000.42
+\cd @testtablespace@
+select dbid from gp_segment_configuration where content =  1 and role = 'p' \gset
+\cd :dbid
+select get_tablespace_version_directory_name() as version_dir \gset
+\cd :version_dir
+select oid from pg_database where datname = current_database() \gset
+\cd :oid
+\! touch 4000000001 4000000001.42
+SELECT content, regexp_replace(file, '^.*/', 'XXX/') AS short_path
+FROM gp_toolkit.gp_db_files_current_unmapped
+WHERE table_tablespace = 'ts_test';
+ content |    short_path     
+---------+-------------------
+       0 | XXX/4000000000
+       0 | XXX/4000000000.42
+       1 | XXX/4000000001
+       1 | XXX/4000000001.42
+(4 rows)
+
+DROP TABLE t, t_default;
+\! rm -rf @testtablespace@
+DROP TABLESPACE ts_test;
+-- Test provolatile and rows properties
+SELECT proname, provolatile, prorows
+    FROM pg_proc
+    WHERE oid IN (
+        'gp_toolkit.__gp_get_relfilenodes(oid)'::regprocedure,
+        'gp_toolkit.__gp_tablespace_location(oid)'::regprocedure,
+        'gp_toolkit.gp_get_relfilenodes(oid)'::regprocedure
+    );
+         proname          | provolatile | prorows 
+--------------------------+-------------+---------
+ __gp_get_relfilenodes    | v           |    1000
+ __gp_tablespace_location | s           |       0
+ gp_get_relfilenodes      | v           |   3e+07
+(3 rows)
+
+-- Test access (should be revoked for all except superuser)
+CREATE ROLE user_test RESOURCE QUEUE pg_default;
+GRANT CREATE, USAGE ON SCHEMA public TO user_test;
+ALTER USER user_test SET search_path TO public;
+SET ROLE user_test;
+SELECT gp_toolkit.__gp_get_relfilenodes(oid)
+FROM pg_tablespace WHERE spcname = 'pg_global';
+ERROR:  permission denied for function __gp_get_relfilenodes
+SELECT gp_toolkit.__gp_tablespace_location(oid)
+FROM pg_tablespace WHERE spcname = 'pg_global';
+ERROR:  permission denied for function __gp_tablespace_location
+SELECT gp_toolkit.gp_get_relfilenodes(oid)
+FROM pg_tablespace WHERE spcname = 'pg_global';
+ERROR:  function with EXECUTE ON restrictions cannot be used in the SELECT list of a query with FROM
+table gp_toolkit.gp_db_segment_files;
+ERROR:  permission denied for view gp_db_segment_files
+table gp_toolkit.gp_db_files_current;
+ERROR:  permission denied for view gp_db_files_current
+table gp_toolkit.gp_db_files_current_unmapped;
+ERROR:  permission denied for view gp_db_files_current_unmapped
+RESET ROLE;
+REVOKE CREATE, USAGE ON SCHEMA public FROM user_test;
+DROP ROLE user_test;
+-- Test support for squelching in SRF
+-- The SRF should close the directory even if iteration stops early
+-- (e.g., when a LIMIT is reached). If it does not, a warning will be emitted.
+SELECT (r).segindex, (r).tablespace_oid
+FROM (SELECT gp_toolkit.__gp_get_relfilenodes(1664) AS r) AS s
+LIMIT 1;
+ segindex | tablespace_oid 
+----------+----------------
+       -1 |           1664
+(1 row)
+

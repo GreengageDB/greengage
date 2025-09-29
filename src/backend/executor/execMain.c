@@ -608,8 +608,6 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		 */
 		if (Gp_role == GP_ROLE_EXECUTE && estate->es_sliceTable != NULL)
 		{
-			MotionState *motionstate = NULL;
-
 			/*
 			 * Note that, at this point on a QE, the estate is setup (based on the
 			 * slice table transmitted from the QD via MPPEXEC) so that fields
@@ -619,11 +617,14 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * If responsible for a non-root slice, arrange to enter the plan at the
 			 * slice's sending Motion node rather than at the top.
 			 */
+#ifdef USE_ASSERT_CHECKING
 			if (LocallyExecutingSliceIndex(estate) != RootSliceIndex(estate))
 			{
-				motionstate = getMotionState(queryDesc->planstate, LocallyExecutingSliceIndex(estate));
+				MotionState *motionstate = getMotionState(
+					queryDesc->planstate, LocallyExecutingSliceIndex(estate));
 				Assert(motionstate != NULL && IsA(motionstate, MotionState));
 			}
+#endif
 
 			if (Debug_print_slice_table)
 				elog_node_display(DEBUG3, "slice table", estate->es_sliceTable, true);

@@ -26,4 +26,8 @@
 
 #include "common/fe_memutils.h"
 
+#ifdef EXTRA_DYNAMIC_MEMORY_DEBUG
+#include "utils/palloc_memory_debug_undef.h"
+#endif
+
 #endif							/* POSTGRES_FE_H */

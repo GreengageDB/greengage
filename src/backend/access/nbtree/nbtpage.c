@@ -1198,8 +1198,25 @@ _bt_lock_branch_parent(Relation rel, BlockNumber child, BTStack stack,
 	stack->bts_btentry = child;
 	pbuf = _bt_getstackbuf(rel, stack);
 	if (pbuf == InvalidBuffer)
-		elog(ERROR, "failed to re-find parent key in index \"%s\" for deletion target page %u",
-			 RelationGetRelationName(rel), child);
+	{
+		/*
+		 * Failed to "re-find" a pivot tuple whose downlink matched our child
+		 * block number on the parent level -- the index must be corrupt.
+		 * Don't even try to delete the leafbuf subtree.  Just report the
+		 * issue and press on with vacuuming the index.
+		 *
+		 * Note: _bt_getstackbuf() recovers from concurrent page splits that
+		 * take place on the parent level.  Its approach is a near-exhaustive
+		 * linear search.  This also gives it a surprisingly good chance of
+		 * recovering in the event of a buggy or inconsistent opclass.  But we
+		 * don't rely on that here.
+		 */
+		ereport(LOG,
+				(errcode(ERRCODE_INDEX_CORRUPTED),
+				 errmsg_internal("failed to re-find parent key in index \"%s\" for deletion target page %u",
+								 RelationGetRelationName(rel), child)));
+		return false;
+	}
 	parent = stack->bts_blkno;
 	poffset = stack->bts_offset;
 
@@ -1669,9 +1686,19 @@ _bt_mark_page_halfdead(Relation rel, Buffer leafbuf, BTStack stack)
 	itemid = PageGetItemId(page, nextoffset);
 	itup = (IndexTuple) PageGetItem(page, itemid);
 	if (BTreeInnerTupleGetDownLink(itup) != rightsib)
-		elog(ERROR, "right sibling %u of block %u is not next child %u of block %u in index \"%s\"",
-			 rightsib, target, BTreeInnerTupleGetDownLink(itup),
-			 BufferGetBlockNumber(topparent), RelationGetRelationName(rel));
+	{
+		ereport(LOG,
+				(errcode(ERRCODE_INDEX_CORRUPTED),
+				 errmsg_internal("right sibling %u of block %u is not next child %u of block %u in index \"%s\"",
+								 rightsib, target,
+								 BTreeInnerTupleGetDownLink(itup),
+								 BufferGetBlockNumber(topparent),
+								 RelationGetRelationName(rel))));
+
+		_bt_relbuf(rel, topparent);
+
+		return false;
+	}
 
 	/*
 	 * Any insert which would have gone on the leaf block will now go to its
@@ -1895,13 +1922,6 @@ _bt_unlink_halfdead_page(Relation rel, Buffer leafbuf, BlockNumber scanblkno,
 			leftsib = opaque->btpo_next;
 			_bt_relbuf(rel, lbuf);
 
-			/*
-			 * It'd be good to check for interrupts here, but it's not easy to
-			 * do so because a lock is always held. This block isn't
-			 * frequently reached, so hopefully the consequences of not
-			 * checking interrupts aren't too bad.
-			 */
-
 			if (leftsib == P_NONE)
 			{
 				elog(LOG, "no left sibling (concurrent deletion?) of block %u in \"%s\"",
@@ -1920,6 +1940,9 @@ _bt_unlink_halfdead_page(Relation rel, Buffer leafbuf, BlockNumber scanblkno,
 				}
 				return false;
 			}
+
+			CHECK_FOR_INTERRUPTS();
+
 			lbuf = _bt_getbuf(rel, leftsib, BT_WRITE);
 			page = BufferGetPage(lbuf);
 			opaque = (BTPageOpaque) PageGetSpecialPointer(page);
@@ -1980,11 +2003,40 @@ _bt_unlink_halfdead_page(Relation rel, Buffer leafbuf, BlockNumber scanblkno,
 	rbuf = _bt_getbuf(rel, rightsib, BT_WRITE);
 	page = BufferGetPage(rbuf);
 	opaque = (BTPageOpaque) PageGetSpecialPointer(page);
+
+	/*
+	 * Validate target's right sibling page.  Its left link must point back to
+	 * the target page.
+	 */
 	if (opaque->btpo_prev != target)
-		elog(ERROR, "right sibling's left-link doesn't match: "
-			 "block %u links to %u instead of expected %u in index \"%s\"",
-			 rightsib, opaque->btpo_prev, target,
-			 RelationGetRelationName(rel));
+	{
+		/*
+		 * This is known to fail in the field; sibling link corruption is
+		 * relatively common.  Press on with vacuuming rather than just
+		 * throwing an ERROR (same approach used for left-sibling's-right-link
+		 * validation check a moment ago).
+		 */
+		ereport(LOG,
+				(errcode(ERRCODE_INDEX_CORRUPTED),
+				 errmsg_internal("right sibling's left-link doesn't match: "
+								 "right sibling %u of target %u with leafblkno %u "
+								 "and scanblkno %u spuriously links to non-target %u "
+								 "on level %u of index \"%s\"",
+								 rightsib, target, leafblkno,
+								 scanblkno, opaque->btpo_prev,
+								 targetlevel, RelationGetRelationName(rel))));
+
+		/* Must release all pins and locks on failure exit */
+		if (BufferIsValid(lbuf))
+			_bt_relbuf(rel, lbuf);
+		_bt_relbuf(rel, rbuf);
+		_bt_relbuf(rel, buf);
+		if (target != leafblkno)
+			_bt_relbuf(rel, leafbuf);
+
+		return false;
+	}
+
 	rightsib_is_rightmost = P_RIGHTMOST(opaque);
 	*rightsib_empty = (P_FIRSTDATAKEY(opaque) > PageGetMaxOffsetNumber(page));
 

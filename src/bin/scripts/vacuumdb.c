@@ -397,7 +397,6 @@ vacuum_one_database(const ConnParams *cparams,
 	bool		failed = false;
 	bool		parallel = concurrentCons > 1;
 	bool		tables_listed = false;
-	bool		has_where = false;
 	const char *stage_commands[] = {
 		"SET default_statistics_target=1; SET vacuum_cost_delay=0;",
 		"SET default_statistics_target=10; RESET vacuum_cost_delay;",
@@ -528,10 +527,21 @@ vacuum_one_database(const ConnParams *cparams,
 					  " LEFT JOIN pg_catalog.pg_class t"
 					  " ON c.reltoastrelid OPERATOR(pg_catalog.=) t.oid\n");
 
-	/* Used to match the tables listed by the user */
+	/*
+	 * Used to match the tables listed by the user, completing the JOIN
+	 * clause.
+	 */
 	if (tables_listed)
 		appendPQExpBuffer(&catalog_query, " JOIN listed_tables"
 						  " ON listed_tables.table_oid OPERATOR(pg_catalog.=) c.oid\n");
+
+	/*
+	 * Exclude temporary tables, beginning the WHERE clause.
+	 */
+	appendPQExpBufferStr(&catalog_query,
+						 " WHERE c.relpersistence OPERATOR(pg_catalog.!=) "
+						 CppAsString2(RELPERSISTENCE_TEMP) "\n");
+
 
 	/*
 	 * If no tables were listed, filter for the relevant relation types.  If
@@ -541,10 +551,9 @@ vacuum_one_database(const ConnParams *cparams,
 	 */
 	if (!tables_listed)
 	{
-		appendPQExpBuffer(&catalog_query, " WHERE c.relkind OPERATOR(pg_catalog.=) ANY (array["
+		appendPQExpBuffer(&catalog_query, " AND c.relkind OPERATOR(pg_catalog.=) ANY (array["
 						  CppAsString2(RELKIND_RELATION) ", "
 						  CppAsString2(RELKIND_MATVIEW) "])\n");
-		has_where = true;
 	}
 
 	/*
@@ -557,25 +566,23 @@ vacuum_one_database(const ConnParams *cparams,
 	if (vacopts->min_xid_age != 0)
 	{
 		appendPQExpBuffer(&catalog_query,
-						  " %s GREATEST(pg_catalog.age(c.relfrozenxid),"
+						  " AND GREATEST(pg_catalog.age(c.relfrozenxid),"
 						  " pg_catalog.age(t.relfrozenxid)) "
 						  " OPERATOR(pg_catalog.>=) '%d'::pg_catalog.int4\n"
 						  " AND c.relfrozenxid OPERATOR(pg_catalog.!=)"
 						  " '0'::pg_catalog.xid\n",
-						  has_where ? "AND" : "WHERE", vacopts->min_xid_age);
-		has_where = true;
+						  vacopts->min_xid_age);
 	}
 
 	if (vacopts->min_mxid_age != 0)
 	{
 		appendPQExpBuffer(&catalog_query,
-						  " %s GREATEST(pg_catalog.mxid_age(c.relminmxid),"
+						  " AND GREATEST(pg_catalog.mxid_age(c.relminmxid),"
 						  " pg_catalog.mxid_age(t.relminmxid)) OPERATOR(pg_catalog.>=)"
 						  " '%d'::pg_catalog.int4\n"
 						  " AND c.relminmxid OPERATOR(pg_catalog.!=)"
 						  " '0'::pg_catalog.xid\n",
-						  has_where ? "AND" : "WHERE", vacopts->min_mxid_age);
-		has_where = true;
+						  vacopts->min_mxid_age);
 	}
 
 	/*
@@ -648,15 +655,39 @@ vacuum_one_database(const ConnParams *cparams,
 			conn = connectDatabase(cparams, progname, echo, false, true);
 
 			/*
-			 * Fail and exit immediately if trying to use a socket in an
-			 * unsupported range.  POSIX requires open(2) to use the lowest
-			 * unused file descriptor and the hint given relies on that.
+			 * POSIX defines FD_SETSIZE as the highest file descriptor
+			 * acceptable to FD_SET() and allied macros.  Windows defines it
+			 * as a ceiling on the count of file descriptors in the set, not a
+			 * ceiling on the value of each file descriptor; see
+			 * https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-select
+			 * and
+			 * https://learn.microsoft.com/en-us/windows/win32/api/winsock/ns-winsock-fd_set.
+			 * We can't ignore that, because Windows starts file descriptors
+			 * at a higher value, delays reuse, and skips values.  With less
+			 * than ten concurrent file descriptors, opened and closed
+			 * rapidly, one can reach file descriptor 1024.
+			 *
+			 * Doing a hard exit here is a bit grotty, but it doesn't seem
+			 * worth complicating the API to make it less grotty.
 			 */
-			if (PQsocket(conn) >= FD_SETSIZE)
+#ifdef WIN32
+			if (i >= FD_SETSIZE)
 			{
-				pg_log_fatal("too many jobs for this platform -- try %d", i);
+				pg_log_fatal("too many jobs for this platform: %d", i);
 				exit(1);
 			}
+#else
+			{
+				int			fd = PQsocket(conn);
+
+				if (fd >= FD_SETSIZE)
+				{
+					pg_log_fatal("socket file descriptor out of range for select(): %d",
+								 fd);
+					exit(1);
+				}
+			}
+#endif
 
 			init_slot(slots + i, conn);
 		}
@@ -825,7 +856,7 @@ vacuum_all_databases(ConnParams *cparams,
 
 	conn = connectMaintenanceDatabase(cparams, progname, echo);
 	result = executeQuery(conn,
-						  "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;",
+						  "SELECT datname FROM pg_database WHERE datallowconn AND datconnlimit <> -2 ORDER BY 1;",
 						  progname, echo);
 	PQfinish(conn);
 

@@ -30,6 +30,7 @@
 #endif
 
 
+#if !defined EXTRA_DYNAMIC_MEMORY_DEBUG || defined FRONTEND
 /*
  * psprintf
  *
@@ -74,6 +75,7 @@ psprintf(const char *fmt,...)
 		len = newlen;
 	}
 }
+#endif
 
 /*
  * pvsnprintf

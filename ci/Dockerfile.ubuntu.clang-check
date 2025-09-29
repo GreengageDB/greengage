@@ -1,0 +1,39 @@
+FROM ubuntu:22.04
+
+ARG UBUNTU_MAIN_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_UPDATES_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_BACKPORTS_MIRROR=http://archive.ubuntu.com/ubuntu
+ARG UBUNTU_SECURITY_MIRROR=http://security.ubuntu.com/ubuntu
+
+ARG GPDB_SRC="/home/gpadmin/gpdb_src/"
+
+COPY ./README.Ubuntu.bash $GPDB_SRC
+# Set frontend to avoid kerberos prompt.
+RUN sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy |${UBUNTU_MAIN_MIRROR}/ jammy |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy-updates |${UBUNTU_UPDATES_MIRROR}/ jammy-updates |g" \
+      -e "s|http://archive.ubuntu.com/ubuntu/ jammy-backports |${UBUNTU_BACKPORTS_MIRROR}/ jammy-backports |g" \
+      -e "s|http://security.ubuntu.com/ubuntu/ jammy-security |${UBUNTU_SECURITY_MIRROR}/ jammy-security |g" \
+      /etc/apt/sources.list; \
+    DEBIAN_FRONTEND=noninteractive $GPDB_SRC/README.Ubuntu.bash
+RUN apt install -y libxslt1-dev
+
+COPY ./ $GPDB_SRC
+WORKDIR $GPDB_SRC
+
+# Speed up bitcode and Orca build and ignore deprecations.
+ARG CFLAGS="-O0 -Wno-deprecated-declarations"
+
+# Ensure we use as many C-code related ./configure flags here as possible for
+# the broadest compilation coverage.
+RUN CC="clang" CXX="clang++" \
+    CFLAGS="$CFLAGS" CXXFLAGS="$CFLAGS" CPPFLAGS="$CFLAGS" \
+    BITCODE_CFLAGS="$CFLAGS" BITCODE_CXXFLAGS="$CFLAGS" \
+    ./configure --enable-orafce --enable-debug --enable-profiling \
+                --with-uuid=e2fs --with-python --enable-orca \
+                --enable-depend --enable-cassert --enable-gpcloud \
+                --enable-ic-proxy --with-llvm --with-perl --with-gssapi \
+                --with-ldap --with-pam --with-openssl --with-libxml \
+                --with-libxslt --enable-debug-extensions
+
+RUN make -s -j"$(nproc)"

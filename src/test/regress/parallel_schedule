@@ -29,7 +29,7 @@ test: strings numerology point lseg line box path polygon circle date time timet
 # geometry depends on point, lseg, box, path, polygon and circle
 # horology depends on interval, timetz, timestamp, timestamptz
 # ----------
-test: geometry horology regex oidjoins type_sanity opr_sanity misc_sanity comments expressions
+test: geometry horology regex oidjoins type_sanity opr_sanity misc_sanity comments expressions database
 
 # ----------
 # These four each depend on the previous one
@@ -50,11 +50,11 @@ test: copy copyselect copydml insert insert_conflict
 # ----------
 # More groups of parallel tests
 # ----------
-test: create_misc create_operator create_procedure
+test: create_misc create_operator create_procedure create_schema
 # These depend on create_misc and create_operator
 test: create_index create_index_spgist create_view index_including index_including_gist
 # Depends on things setup for create_index
-test: gp_gin_index
+test: gp_gin_index appendonly_with_gin_index
 
 # ----------
 # Another group of parallel tests

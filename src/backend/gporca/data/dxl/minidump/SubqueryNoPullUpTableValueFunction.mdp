@@ -154,10 +154,7 @@ SELECT 0 IS DISTINCT FROM (SELECT COUNT(*) FROM (SELECT UNNEST(ARRAY[1,2,3,4])) 
           <dxl:ProjElem ColId="4" Alias="?column?">
             <dxl:IsDistinctFrom OperatorMdid="0.15.1.0">
               <dxl:ConstValue TypeMdid="0.23.1.0" Value="0"/>
-              <dxl:Coalesce TypeMdid="0.20.1.0">
-                <dxl:Ident ColId="5" ColName="ColRef_0005" TypeMdid="0.20.1.0"/>
-                <dxl:ConstValue TypeMdid="0.20.1.0" Value="0"/>
-              </dxl:Coalesce>
+              <dxl:Ident ColId="5" ColName="ColRef_0005" TypeMdid="0.20.1.0"/>
             </dxl:IsDistinctFrom>
           </dxl:ProjElem>
         </dxl:ProjList>
@@ -231,7 +228,7 @@ SELECT 0 IS DISTINCT FROM (SELECT COUNT(*) FROM (SELECT UNNEST(ARRAY[1,2,3,4])) 
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="2" Alias="unnest">
-                      <dxl:FuncExpr FuncId="0.3240.1.0" FuncRetSet="true" TypeMdid="0.23.1.0">
+                      <dxl:FuncExpr FuncId="0.3240.1.0" FuncRetSet="true" TypeMdid="0.23.1.0" FuncVariadic="false">
                         <dxl:Array ArrayType="0.1007.1.0" ElementType="0.23.1.0" MultiDimensional="false">
                           <dxl:ConstValue TypeMdid="0.23.1.0" Value="1"/>
                           <dxl:ConstValue TypeMdid="0.23.1.0" Value="2"/>

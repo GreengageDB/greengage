@@ -153,6 +153,25 @@ SELECT * FROM q5_prep_nodata;
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
 (0 rows)
 
+-- ensure EXPLAIN ANALYZE CTAS from prepared statement creates table
+PREPARE p AS SELECT 1 i;
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+CREATE TEMPORARY TABLE t AS EXECUTE p;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=1 loops=1)
+   Hash Key: 1
+   ->  Result (actual rows=1 loops=1)
+ Optimizer: Postgres-based planner
+(4 rows)
+
+SELECT * FROM t;
+ i 
+---
+ 1
+(1 row)
+
+DEALLOCATE p;
 -- unknown or unspecified parameter types: should succeed
 PREPARE q6 AS
     SELECT * FROM tenk1 WHERE unique1 = $1 AND stringu1 = $2;
@@ -192,6 +211,17 @@ ERROR:  prepared statement is not a SELECT
 PREPARE prepared_delete AS DELETE FROM simple_table WHERE a = 1 RETURNING *;
 CREATE TEMPORARY TABLE t2 AS EXECUTE prepared_delete;
 ERROR:  prepared statement is not a SELECT
+-- make sure the plan is correct after CTAS
+DROP TABLE t;
+PREPARE p AS SELECT * FROM generate_series(1, 10) i;
+CREATE TEMPORARY TABLE t AS EXECUTE p;
+EXPLAIN (COSTS OFF) EXECUTE p;
+             QUERY PLAN             
+------------------------------------
+ Function Scan on generate_series i
+ Optimizer: Postgres-based planner
+(2 rows)
+
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;
 SELECT name, statement, parameter_types FROM pg_prepared_statements

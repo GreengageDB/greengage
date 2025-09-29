@@ -425,3 +425,383 @@ SELECT * FROM connectby('connectby_int', 'keyid', 'parent_keyid', '11', 0, '-') 
      1 |          111 |     2 | 11-111-1
 (4 rows)
 
+-- test for CTAS and DML operations
+-- from crosstab(text,text)
+CREATE TABLE ct1(
+    row_name varchar(32),
+    extra_col varchar(32),
+    attr varchar(32),
+    value varchar(32)
+)
+DISTRIBUTED BY (row_name);
+\copy ct1 from 'data/ctas.data'
+CREATE TABLE ct2
+(
+    row_name varchar(32),
+    extra    varchar(32),
+    cat1     varchar(32),
+    cat2     varchar(32),
+    cat3     varchar(32),
+    cat4     varchar(32)
+) DISTRIBUTED BY (row_name);
+INSERT INTO ct2
+SELECT ct.*
+FROM crosstab(
+  'select row_name, extra_col, attr, value
+  from ct1
+  order by 1',
+  'select ''att'' || seq from generate_series(1, 4) seq order by 1')
+AS ct(row_name varchar, extra varchar, att1 varchar, att2 varchar, att3 varchar, att4 varchar);
+SELECT * FROM ct2;
+ row_name | extra  | cat1 | cat2 | cat3 | cat4 
+----------+--------+------+------+------+------
+ row1     | extra1 | val1 | val2 |      | val4
+ row2     | extra2 | val5 | val6 | val7 | val8
+(2 rows)
+
+CREATE TABLE ct2_2 AS SELECT ct.*
+FROM crosstab(
+  'select row_name, extra_col, attr, value
+  from ct1
+  order by 1',
+  'select ''att'' || seq from generate_series(1, 4) seq order by 1')
+AS ct(row_name varchar, extra varchar, att1 varchar, att2 varchar, att3 varchar, att4 varchar);
+SELECT * FROM ct2_2;
+ row_name | extra  | att1 | att2 | att3 | att4 
+----------+--------+------+------+------+------
+ row1     | extra1 | val1 | val2 |      | val4
+ row2     | extra2 | val5 | val6 | val7 | val8
+(2 rows)
+
+-- from crosstab(text)
+CREATE TABLE ct3 (
+    row_name varchar(32),
+    cat1     varchar(32),
+    cat2     varchar(32),
+    cat3     varchar(32)
+) DISTRIBUTED BY (row_name);
+INSERT INTO ct3
+SELECT *
+FROM crosstab(
+  'select row_name, attr, value
+   from ct1
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2')
+AS ct(row_name varchar, att1 varchar, att2 varchar, att3 varchar);
+SELECT * FROM ct3;
+ row_name | cat1 | cat2 | cat3 
+----------+------+------+------
+ row2     | val6 | val7 | 
+ row1     | val2 |      | 
+(2 rows)
+
+CREATE TABLE ct3_2 AS SELECT *
+FROM crosstab(
+  'select row_name, attr, value
+   from ct1
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2')
+AS ct(row_name varchar, att1 varchar, att2 varchar, att3 varchar);
+SELECT * FROM ct3_2;
+ row_name | att1 | att2 | att3 
+----------+------+------+------
+ row2     | val6 | val7 | 
+ row1     | val2 |      | 
+(2 rows)
+
+-- from crosstab2(text)
+CREATE TABLE ct4(
+    row_name text,
+    extra_col text,
+    attr text,
+    value text
+)
+DISTRIBUTED BY (row_name);
+\copy ct4 from 'data/ctas.data'
+CREATE TABLE ct5 (
+    row_name   text,
+    category_1 text,
+    category_2 text
+) DISTRIBUTED BY (row_name);
+INSERT INTO ct5
+SELECT *
+FROM crosstab2(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2');
+SELECT * FROM ct5;
+ row_name | category_1 | category_2 
+----------+------------+------------
+ row2     | val6       | val7
+ row1     | val2       | 
+(2 rows)
+
+CREATE TABLE ct5_2 AS SELECT *
+FROM crosstab2(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2') AS ct ;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'row_name' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM ct5_2;
+ row_name | category_1 | category_2 
+----------+------------+------------
+ row1     | val2       | 
+ row2     | val6       | val7
+(2 rows)
+
+-- from crosstab3(text)
+CREATE TABLE ct6 (
+    row_name   text,
+    category_1 text,
+    category_2 text,
+    category_3 text
+) DISTRIBUTED BY (row_name);
+INSERT INTO ct6
+SELECT *
+FROM crosstab3(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2');
+SELECT * FROM ct6;
+ row_name | category_1 | category_2 | category_3 
+----------+------------+------------+------------
+ row1     | val2       |            | 
+ row2     | val6       | val7       | 
+(2 rows)
+
+CREATE TABLE ct6_2 AS SELECT *
+FROM crosstab3(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2') AS ct ;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'row_name' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM ct6_2;
+ row_name | category_1 | category_2 | category_3 
+----------+------------+------------+------------
+ row2     | val6       | val7       | 
+ row1     | val2       |            | 
+(2 rows)
+
+-- from crosstab4(text)
+CREATE TABLE ct7 (
+    row_name   text,
+    category_1 text,
+    category_2 text,
+    category_3 text,
+    category_4 text
+) DISTRIBUTED BY (row_name);
+INSERT INTO ct7
+SELECT *
+FROM crosstab4(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2');
+SELECT * FROM ct7;
+ row_name | category_1 | category_2 | category_3 | category_4 
+----------+------------+------------+------------+------------
+ row2     | val6       | val7       |            | 
+ row1     | val2       |            |            | 
+(2 rows)
+
+CREATE TABLE ct7_2 AS SELECT *
+FROM crosstab4(
+  'select row_name, attr, value
+   from ct4
+   where attr = ''att2'' or attr = ''att3''
+   order by 1,2') AS ct ;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'row_name' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM ct7_2;
+ row_name | category_1 | category_2 | category_3 | category_4 
+----------+------------+------------+------------+------------
+ row2     | val6       | val7       |            | 
+ row1     | val2       |            |            | 
+(2 rows)
+
+-- from connectby() without branch, with orderby
+CREATE TABLE connby(
+  keyid text,
+  parent_keyid text,
+  level int,
+  pos int
+) DISTRIBUTED BY (keyid);
+INSERT INTO connby
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int, pos int) ORDER BY t.pos;
+SELECT * FROM connby;
+ keyid | parent_keyid | level | pos 
+-------+--------------+-------+-----
+ row2  |              |     0 |   1
+ row4  | row2         |     1 |   4
+ row6  | row4         |     2 |   5
+ row5  | row2         |     1 |   2
+ row9  | row5         |     2 |   3
+ row8  | row6         |     3 |   6
+(6 rows)
+
+CREATE TABLE connby_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int, pos int) ORDER BY t.pos;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'keyid' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM connby_2;
+ keyid | parent_keyid | level | pos 
+-------+--------------+-------+-----
+ row2  |              |     0 |   1
+ row4  | row2         |     1 |   4
+ row6  | row4         |     2 |   5
+ row5  | row2         |     1 |   2
+ row9  | row5         |     2 |   3
+ row8  | row6         |     3 |   6
+(6 rows)
+
+-- from connectby() without branch, without orderby
+CREATE TABLE connby2(
+  keyid text,
+  parent_keyid text,
+  level int
+) DISTRIBUTED BY (keyid);
+INSERT INTO connby2
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int);
+SELECT * FROM connby2;
+ keyid | parent_keyid | level 
+-------+--------------+-------
+ row8  | row6         |     3
+ row5  | row2         |     1
+ row9  | row5         |     2
+ row2  |              |     0
+ row4  | row2         |     1
+ row6  | row4         |     2
+(6 rows)
+
+CREATE TABLE connby2_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0
+) AS t(keyid text, parent_keyid text, level int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'keyid' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM connby2_2;
+ keyid | parent_keyid | level 
+-------+--------------+-------
+ row2  |              |     0
+ row4  | row2         |     1
+ row6  | row4         |     2
+ row5  | row2         |     1
+ row9  | row5         |     2
+ row8  | row6         |     3
+(6 rows)
+
+-- from connectby() with branch, with orderby
+CREATE TABLE connby3(
+  keyid text,
+  parent_keyid text,
+  level int,
+  branch text,
+  pos int
+) DISTRIBUTED BY (keyid);
+INSERT INTO connby3
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text, pos int) ORDER BY t.pos;
+SELECT * FROM connby3;
+ keyid | parent_keyid | level |       branch        | pos 
+-------+--------------+-------+---------------------+-----
+ row5  | row2         |     1 | row2~row5           |   2
+ row9  | row5         |     2 | row2~row5~row9      |   3
+ row8  | row6         |     3 | row2~row4~row6~row8 |   6
+ row2  |              |     0 | row2                |   1
+ row4  | row2         |     1 | row2~row4           |   4
+ row6  | row4         |     2 | row2~row4~row6      |   5
+(6 rows)
+
+CREATE TABLE connby3_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'pos', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text, pos int) ORDER BY t.pos;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'keyid' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM connby3_2;
+ keyid | parent_keyid | level |       branch        | pos 
+-------+--------------+-------+---------------------+-----
+ row5  | row2         |     1 | row2~row5           |   2
+ row9  | row5         |     2 | row2~row5~row9      |   3
+ row8  | row6         |     3 | row2~row4~row6~row8 |   6
+ row2  |              |     0 | row2                |   1
+ row4  | row2         |     1 | row2~row4           |   4
+ row6  | row4         |     2 | row2~row4~row6      |   5
+(6 rows)
+
+-- from connectby() with branch, without orderby
+CREATE TABLE connby4(
+  keyid text,
+  parent_keyid text,
+  level int,
+  branch text
+) DISTRIBUTED BY (keyid);
+INSERT INTO connby4
+SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text);
+SELECT * FROM connby4;
+ keyid | parent_keyid | level |       branch        
+-------+--------------+-------+---------------------
+ row8  | row6         |     3 | row2~row4~row6~row8
+ row5  | row2         |     1 | row2~row5
+ row9  | row5         |     2 | row2~row5~row9
+ row2  |              |     0 | row2
+ row4  | row2         |     1 | row2~row4
+ row6  | row4         |     2 | row2~row4~row6
+(6 rows)
+
+CREATE TABLE connby4_2 AS SELECT * FROM connectby(
+  'connectby_text', 'keyid', 'parent_keyid', 'row2', 0, '~'
+) AS t(keyid text, parent_keyid text, level int, branch text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'keyid' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM connby4_2;
+ keyid | parent_keyid | level |       branch        
+-------+--------------+-------+---------------------
+ row5  | row2         |     1 | row2~row5
+ row9  | row5         |     2 | row2~row5~row9
+ row8  | row6         |     3 | row2~row4~row6~row8
+ row2  |              |     0 | row2
+ row4  | row2         |     1 | row2~row4
+ row6  | row4         |     2 | row2~row4~row6
+(6 rows)
+
+-- from normal_dist
+CREATE TABLE t_normal(normal_rand float8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'normal_rand' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+INSERT INTO t_normal SELECT * FROM normal_rand(5, 250, 0);
+SELECT * FROM t_normal;
+ normal_rand 
+-------------
+         250
+         250
+         250
+         250
+         250
+(5 rows)
+
+CREATE TABLE t_normal_2 AS SELECT * FROM normal_rand(5, 250, 0);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'normal_rand' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT * FROM t_normal_2;
+ normal_rand 
+-------------
+         250
+         250
+         250
+         250
+         250
+(5 rows)
+

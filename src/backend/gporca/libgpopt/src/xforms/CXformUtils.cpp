@@ -2354,6 +2354,10 @@ CXformUtils::FProcessGPDBAntiSemiHashJoin(
 		{
 			CExpression *pexprEquality = nullptr;
 			CExpression *pexprFalse = nullptr;
+
+			// LASJ with Not-In in GPDB returns nothing, if a NULL was
+			// produced by the inner-outer tuple match. So, we should
+			// check NOT NULL for the inner and outer sides only for LASJ.
 			if (FExtractEquality(
 					pexprPred, &pexprEquality,
 					&pexprFalse) &&	 // extracted equality expression
@@ -2365,12 +2369,17 @@ CXformUtils::FProcessGPDBAntiSemiHashJoin(
 				CPhysicalJoin::FHashJoinCompatible(
 					pexprEquality, pexprOuter,
 					pexprInner) &&	// equality is hash-join compatible
-				!CUtils::FUsesNullableCol(
-					mp, pexprEquality,
-					pexprInner) &&	// equality uses an inner NOT NULL column
-				!CUtils::FUsesNullableCol(
-					mp, pexprEquality,
-					pexprOuter))  // equality uses an outer NOT NULL column
+				((COperator::EopLogicalLeftAntiSemiJoin ==
+					  pexpr->Pop()->Eopid() &&
+				  !CUtils::FUsesNullableCol(
+					  mp, pexprEquality,
+					  pexprInner) &&  // equality uses an inner NOT NULL column
+				  !CUtils::FUsesNullableCol(
+					  mp, pexprEquality,
+					  pexprOuter)  // equality uses an outer NOT NULL column
+				  ) ||
+				 (COperator::EopLogicalLeftAntiSemiJoinNotIn ==
+				  pexpr->Pop()->Eopid())))
 			{
 				pexprEquality->AddRef();
 				pdrgpexprNew->Append(pexprEquality);
