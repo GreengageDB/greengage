@@ -71,6 +71,8 @@ extern char *filename_completion_function();
 /* word break characters */
 #define WORD_BREAKS		"\t\n@$><=;|&{() "
 
+#define PW_ANY "*"
+
 /*
  * This struct is used to define "schema queries", which are custom-built
  * to obtain possibly-schema-qualified names of database objects.  There is
@@ -229,6 +231,18 @@ do { \
 	} \
 	matches = completion_matches(text, complete_from_query); \
 } while (0)
+
+
+#define COMPLETE_WITH_EXTRACTED_COLUMNS(words, lookback_limit)                  \
+    do {                                                                        \
+        char **__cols = NULL;                                                   \
+        int   __ncols = extract_column_list((words), (lookback_limit), &__cols);\
+        if (__ncols > 0)                                                        \
+            COMPLETE_WITH_LIST((const char * const *) __cols);                  \
+        for (int __i = 0; __i < __ncols; __i++)                                 \
+            free(__cols[__i]);                                                  \
+        free(__cols);                                                           \
+    } while (0)
 
 /*
  * Assembly instructions for schema queries
@@ -783,6 +797,7 @@ static const pgsql_thing_t words_after_create[] = {
 	{"TABLE", NULL, &Query_for_list_of_tables},
 	{"TABLESPACE", Query_for_list_of_tablespaces},
 	{"TEMP", NULL, NULL, THING_NO_DROP},		/* for CREATE TEMP TABLE ... */
+	{"TEMPORARY", NULL, NULL, THING_NO_DROP},
 	{"TEMPLATE", Query_for_list_of_ts_templates, NULL, THING_NO_SHOW},
 	{"TEXT SEARCH", NULL, NULL},
 	{"TRIGGER", "SELECT pg_catalog.quote_ident(tgname) FROM pg_catalog.pg_trigger WHERE substring(pg_catalog.quote_ident(tgname),1,%d)='%s'"},
@@ -816,12 +831,16 @@ static PGresult *exec_query(const char *query);
 
 static void get_previous_words(int point, char **previous_words, int nwords);
 static bool ends_with_paren(const char *word);
-static bool has_unclosed_paren(char* const *previous_words, int nwords);
-static int count_open_paren_tokens(char* const *previous_words, int nwords);
+
+#define prev_words_match(words, adjacent, ...) \
+	previous_words_matchn_va((words), (adjacent), __VA_ARGS__, (const char *) NULL)
+static bool previous_words_matchn_va(char *words[], bool must_be_adjacent, ...);
 static bool previous_words_matchn(char *words[], const char * const *keys,
-								  int nkeys, bool must_be_adjacent);
+								int nkeys, bool must_be_adjacent);
+
 static int extract_column_list(char* const *previous_words,
 							int nwords, char ***column_list);
+static void strip_parenthesized(char *s);
 
 #ifdef NOT_USED
 static char *quote_file_name(char *text, int match_type, char *quote_pointer);
@@ -849,8 +868,12 @@ initialize_readline(void)
 }
 
 
-/* Max number of previous words scanned for completion context. */
-enum { LOOKBACK_LIMIT = 30 };
+/* Limits for completion context scanning and vararg key buffer. */
+enum
+{
+	LOOKBACK_LIMIT = 30,   /* max number of previous tokens to scan */
+	KEYS_BUF_MAX   = 32    /* max number of keys in vararg list */
+};
 
 /*
  * The completion function.
@@ -1908,7 +1931,8 @@ psql_completion(const char *text, int start, int end)
 	else if (pg_strcasecmp(prev_wd, "COMMIT") == 0)
 	{
 		static const char *const list_COMMIT[] =
-		{"WORK", "TRANSACTION", "PREPARED", "PRESERVE ROWS", "DELETE ROWS", "DROP", NULL};
+		{"WORK", "TRANSACTION", "PREPARED", "PRESERVE ROWS", "DELETE ROWS",
+			"DROP", NULL};
 
 		COMPLETE_WITH_LIST(list_COMMIT);
 	}
@@ -2293,22 +2317,13 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_LIST(list_UNLOGGED);
 	}
 	/* Complete "WITH(" with list of properties */
-	else if (previous_words_matchn(previous_words,
-			(const char *[]){"WITH", "("}, 2, true))
+	else if (prev_words_match(previous_words, false, "CREATE", "TABLE") &&
+			 prev_words_match(previous_words, true, "WITH", "("))
 	{
 		static const char *const list_WITH[] =
-		{
-			"APPENDONLY =",
-			"AUTOVACUUM_ENABLED =",
-			"CHECKSUM =",
-			"COMPRESSLEVEL =",
-			"COMPRESSTYPE =",
-			"ORIENTATION =",
-			"TABLENAME =",
-			"TRUE",
-			"FALSE",
-			NULL
-		};
+		{"APPENDONLY =", "AUTOVACUUM_ENABLED =", "CHECKSUM =", "COMPRESSLEVEL =",
+			"COMPRESSTYPE =", "OIDS =", "ORIENTATION =", "TABLENAME =", "TRUE",
+			"FALSE", "COLUMN", NULL};
 		COMPLETE_WITH_LIST(list_WITH);
 	}
 	/* Complete "DISTRIBUTED" with BY( | RANDOMLY | REPLICATED */
@@ -2319,118 +2334,109 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_LIST(list_DISTRIBUTED);
 	}
 	/* DISTRIBUTED BY (...). Suggest table column names inside parentheses */
-	else if (previous_words_matchn(previous_words,
-			(const char *[]){"DISTRIBUTED", "BY", "("}, 3, true))
+	else if (prev_words_match(previous_words, true, "DISTRIBUTED", "BY", "("))
 	{
-		char **cols = NULL;
-		int ncols = extract_column_list(previous_words, LOOKBACK_LIMIT, &cols);
-
-		if (ncols > 0)
-			COMPLETE_WITH_LIST((const char * const *)cols);
-
-		for (int i = 0; i < ncols; i++)
-			free(cols[i]);
-		free(cols);
+		COMPLETE_WITH_EXTRACTED_COLUMNS(previous_words, LOOKBACK_LIMIT);
 	}
-	/* Complete PARTITION BY with LIST( | RANGE( */
-	else if (pg_strcasecmp(prev2_wd, "PARTITION") == 0 &&
-			 pg_strcasecmp(prev_wd, "BY") == 0)
+	/* Complete PARTITION|SUBPARTITION BY with LIST( | RANGE( */
+	else if ((pg_strcasecmp(prev2_wd, "PARTITION") == 0 ||
+			  pg_strcasecmp(prev2_wd, "SUBPARTITION") == 0 ) &&
+			  pg_strcasecmp(prev_wd, "BY") == 0)
 	{
 		static const char *const list_PARTITION_BY[] = {"LIST(", "RANGE(", NULL};
 		COMPLETE_WITH_LIST(list_PARTITION_BY);
 	}
-	/* Complete SUBPARTITION with BY | TEMPLATE */
-	else if (pg_strcasecmp(prev_wd, "SUBPARTITION") == 0)
+	/* PARTITION|SUBPARTITION BY LIST(...)|RANGE(...) */
+	/* Suggest table column names inside parentheses  */
+	else if (prev_words_match(previous_words, true, "PARTITION", "BY", PW_ANY, "(") ||
+			 prev_words_match(previous_words, true, "SUBPARTITION", "BY", PW_ANY, "("))
 	{
-		static const char *const list_SUBPARTITION[] = {"BY", "TEMPLATE", NULL};
-		COMPLETE_WITH_LIST(list_SUBPARTITION);
+		COMPLETE_WITH_EXTRACTED_COLUMNS(previous_words, LOOKBACK_LIMIT);
 	}
-	/* Complete SUBPARTITION BY with LIST( | RANGE( */
-	else if (pg_strcasecmp(prev2_wd, "SUBPARTITION") == 0 &&
-			 pg_strcasecmp(prev_wd, "BY") == 0)
+	/* Complete PARTITION|SUBPARTITION clauses with appropriate continuations */
+	else if (prev_words_match(previous_words, true, "PARTITION", "BY") ||
+			 prev_words_match(previous_words, true, "SUBPARTITION", "BY"))
 	{
-		static const char *const list_SUBPARTITION_BY[] = {"LIST(", "RANGE(", NULL};
-		COMPLETE_WITH_LIST(list_SUBPARTITION_BY);
-	}
-	/* Complete PARTITION BY with SUBPARTITION */
-	else if (previous_words_matchn(previous_words, (const char *[]){"PARTITION", "BY"}, 2, true))
-	{
-		COMPLETE_WITH_CONST("SUBPARTITION");
+		/* Complete with keywords only when not inside parentheses */
+		if (!prev_words_match(previous_words, true, "START", "(") &&
+			!prev_words_match(previous_words, true, "END", "(") &&
+			!prev_words_match(previous_words, true, "EVERY", "(") &&
+			!prev_words_match(previous_words, true, "VALUES", "("))
+		{
+			static const char *const list_PARTITION_SUBPARTITION[] =
+			{"PARTITION", "SUBPARTITION", "BY", "TEMPLATE", "START(", "END(",
+				"EVERY(", "VALUES (", "INCLUSIVE", "EXCLUSIVE", "DEFAULT", NULL};
+			COMPLETE_WITH_LIST(list_PARTITION_SUBPARTITION);
+		}
 	}
 	/* Complete CREATE TABLE with common clause options */
-	else if (previous_words_matchn(previous_words, (const char *[]){"CREATE", "TABLE"}, 2, false) &&
+	else if (prev_words_match(previous_words, false, "CREATE", "TABLE") &&
 			 pg_strcasecmp(prev_wd, "TABLE") != 0)
 	{
-		if (has_unclosed_paren(previous_words, LOOKBACK_LIMIT))
+		/* Special case for `IF NOT EXISTS` */
+		if (pg_strcasecmp(prev_wd, "IF") == 0)
 		{
-			// A single opening parenthesis indicates that we are in
-			// the table column-definition context. Column types
-			// should be completed here.
-			if (count_open_paren_tokens(previous_words, LOOKBACK_LIMIT) == 1)
-			{
-				// Inside parentheses – complete with column data types
-				static const char *const list_COLUMN_TYPE[] =
-				{
-					// Numeric Types
-					"SMALLINT",
-					"INTEGER",
-					"BIGINT",
-					"DECIMAL",
-					"NUMERIC",
-					"REAL",
-					"DOUBLE PRECISION",
-					"SMALLSERIAL",
-					"SERIAL",
-					"BIGSERIAL",
-					// Experimental numeric Types
-					"INT2",
-					"INT4",
-					"INT8",
-					// Monetary Types
-					"MONEY",
-					// Character Types
-					"CHARACTER",
-					"VARYING(",
-					"VARCHAR",
-					"CHAR(",
-					"BPCHAR(",
-					"BPCHAR",
-					"TEXT",
-					// Binary Data Types
-					"BYTEA",
-					// Date/Time Types
-					"TIMESTAMP",
-					"DATE",
-					"TIME",
-					"INTERVAL",
-					// Boolean Type
-					"BOOLEAN",
-					// Keywords
-					"PRIMARY KEY",
-					"NOT NULL",
-					"CONSTRAINT",
-					"CHECK",
-					"REFERENCES",
-					"WITHOUT TIME ZONE",
-					NULL
-				};
-				COMPLETE_WITH_LIST(list_COLUMN_TYPE);
-			}
+			COMPLETE_WITH_CONST("NOT EXISTS");
 		}
-		else
+		/* Inside table column definition parentheses, complete with data types */
+		else if (prev_words_match(previous_words, true, "TABLE", PW_ANY, "(") ||
+				 prev_words_match(previous_words, true,
+					"TABLE", "IF", "NOT", "EXISTS", PW_ANY, "("))
 		{
-			// Outside parentheses – complete with CREATE TABLE statements
-			static const char *const list_CREATE_TABLE[] =
+			static const char *const list_COLUMN_TYPE[] =
 			{
-				"IF NO EXISTS",
-				"INHERITS(",
-				"WITH(",
-				"ON COMMIT",
-				"TABLESPACE",
-				"DISTRIBUTED",
-				"PARTITION BY",
+				/* Numeric Types */
+				"SMALLINT",
+				"INTEGER",
+				"BIGINT",
+				"DECIMAL",
+				"NUMERIC",
+				"REAL",
+				"DOUBLE PRECISION",
+				"SMALLSERIAL",
+				"SERIAL",
+				"BIGSERIAL",
+				/* Experimental numeric Types */
+				"INT2",
+				"INT4",
+				"INT8",
+				/* Monetary Types */
+				"MONEY",
+				/* Character Types */
+				"CHARACTER",
+				"VARYING(",
+				"VARCHAR",
+				"CHAR(",
+				"BPCHAR(",
+				"BPCHAR",
+				"TEXT",
+				/* Binary Data Types */
+				"BYTEA",
+				/* Date/Time Types */
+				"TIMESTAMP",
+				"DATE",
+				"TIME",
+				"INTERVAL",
+				/* Boolean Type */
+				"BOOLEAN",
+				/* Keywords */
+				"PRIMARY KEY",
+				"NOT NULL",
+				"CONSTRAINT",
+				"CHECK",
+				"REFERENCES",
+				"WITHOUT TIME ZONE",
+				"DEFAULT(",
 				NULL
 			};
+			COMPLETE_WITH_LIST(list_COLUMN_TYPE);
+		}
+		/* Otherwise, complete with CREATE TABLE command keywords */
+		else
+		{
+			static const char *const list_CREATE_TABLE[] =
+			{"INHERITS(", "WITH(", "ON COMMIT", "TABLESPACE", "DISTRIBUTED",
+				"PARTITION BY", NULL};
 			COMPLETE_WITH_LIST(list_CREATE_TABLE);
 		}
 	}
@@ -4427,53 +4433,34 @@ ends_with_paren(const char *word)
 }
 
 /*
- * Return true if previous_words[] contains a bare "(" token.
- * Scans left-to-right, skips NULL and empty entries, and stops at the
- * first exact match. This is a lightweight heuristic for tab-completion:
- * it does not track nesting or matching ")"; it only detects that an
- * opening parenthesis token has appeared in the recent token stream.
+ * Vararg wrapper around previous_words_matchn().
+ * Collects NULL-terminated key list into a fixed buffer
+ * and delegates to previous_words_matchn().
  */
 static bool
-has_unclosed_paren(char* const *previous_words, int nwords)
+previous_words_matchn_va(char *words[], bool must_be_adjacent, ...)
 {
-	for (int i = 0; i < nwords; i++)
+	const char *keys_buf[KEYS_BUF_MAX] = { NULL };
+	int         nkeys = 0;
+	va_list     ap;
+	const char *k;
+
+	va_start(ap, must_be_adjacent);
+	while ((k = va_arg(ap, const char *)) != NULL)
 	{
-		const char *w = previous_words[i];
-
-		if (w == NULL || *w == '\0')
-			continue;
-
-		if (w[0] == '(' && w[1] == '\0')
-			return true;
+		if (nkeys >= lengthof(keys_buf))
+		{
+			va_end(ap);
+			return false; /* prevent buffer overflow */
+		}
+		keys_buf[nkeys++] = k;
 	}
-	return false;
-}
+	va_end(ap);
 
-/*
- * Count the number of tokens in previous_words[] that begin with
- * an opening parenthesis "(".
- *
- * This is a lightweight heuristic for tab-completion:
- * - It does not check for balanced or nested parentheses.
- * - Any token whose first character is '(' (e.g. "(", "(foo") is counted.
- * - NULL and empty strings are skipped.
- */
-static int
-count_open_paren_tokens(char* const *previous_words, int nwords)
-{
-	int count = 0;
+	if (nkeys == 0)
+		return false;
 
-	for (int i = 0; i < nwords; i++)
-	{
-		const char *w = previous_words[i];
-
-		if (w == NULL || *w == '\0')
-			continue;
-
-		if (w[0] == '(')
-			count++;
-	}
-	return count;
+	return previous_words_matchn(words, keys_buf, nkeys, must_be_adjacent);
 }
 
 /*
@@ -4505,7 +4492,18 @@ static bool previous_words_matchn(char *words[], const char * const *keys,
 			if (i - 1 < 0)
 				return false;
 			
-			// The neighboring word is empty or differs from the next key
+
+			/* Allow wildcard key that matches any non-NULL token */
+			if (pg_strcasecmp(keys[k], PW_ANY) == 0)
+			{
+				if (words[i - 1] == NULL)
+					return false;
+				i--;
+				continue;
+			}
+
+
+			/* The neighboring word is empty or differs from the next key */
 			if (words[i - 1] == NULL || pg_strcasecmp(words[i - 1], keys[k]) != 0)
 				return false;
 			
@@ -4581,6 +4579,8 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 		return 0;
 	}
 
+	strip_parenthesized(buf);
+
 	/* Split by commas and take first word (trim leading spaces) */
 	int count = 0;
 	char *saveptr = NULL;
@@ -4617,6 +4617,48 @@ extract_column_list(char* const *previous_words, int nwords, char ***column_list
 
 	*column_list = items;
 	return count;
+}
+
+/*
+ * Strip all substrings enclosed in parentheses from `s` (non-nested), in place.
+ */
+static void
+strip_parenthesized(char *s)
+{
+	size_t	n, w = 0;
+	char   *tmp;
+	int		in_paren = 0;
+
+	if (s == NULL)
+		return;
+
+	n = strlen(s);
+	tmp = (char *) pg_malloc0(n + 1);	/* zeroed temporary buffer */
+
+	for (size_t i = 0; i < n; i++)
+	{
+		char c = s[i];
+
+		if (c == '(')
+		{
+			in_paren = 1;	/* enter parenthesized region */
+			continue;		/* skip '(' */
+		}
+		if (c == ')')
+		{
+			in_paren = 0;	/* leave parenthesized region */
+			continue;		/* skip ')' */
+		}
+
+		if (!in_paren)
+			tmp[w++] = c;	/* copy only outside parentheses */
+	}
+
+	/* copy result back; strlcpy guarantees NUL-termination */
+	strlcpy(s, tmp, n + 1);
+
+	/* free temporary buffer */
+	free(tmp);
 }
 
 #ifdef NOT_USED
