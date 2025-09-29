@@ -585,11 +585,11 @@ analyze l_table;
 analyze r_table1;
 
 set statement_mem="1MB";
-explain analyze select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
-select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
+explain analyze select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
 
 set gp_workfile_compression=on;
-select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
 reset gp_workfile_compression;
 reset statement_mem;
 

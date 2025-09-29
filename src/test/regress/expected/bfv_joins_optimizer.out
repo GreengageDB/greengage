@@ -4127,7 +4127,7 @@ insert into r_table1 select i%100, i from generate_series(1, 10000) i;
 analyze l_table;
 analyze r_table1;
 set statement_mem="1MB";
-explain analyze select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
+explain analyze select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
                                                                       QUERY PLAN                                                                      
 ------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)  (cost=30000000473.00..30000001205.61 rows=16 width=8) (actual time=73.649..73.651 rows=2 loops=1)
@@ -4153,7 +4153,7 @@ explain analyze select * from r_table2 where ra2 in ( select ra1 from l_table jo
  Execution time: 74.293 ms
 (21 rows)
 
-select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
  ra2 | rb2 
 -----+-----
   11 |  11
@@ -4161,7 +4161,7 @@ select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b
 (2 rows)
 
 set gp_workfile_compression=on;
-select * from r_table2 where ra2 in ( select ra1 from l_table join r_table1 on b = rb1);
+select * from r_table2 where ra2 in (select ra1 from l_table join r_table1 on b = rb1);
  ra2 | rb2 
 -----+-----
   11 |  11
