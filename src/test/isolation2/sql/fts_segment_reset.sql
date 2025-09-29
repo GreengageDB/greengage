@@ -35,11 +35,17 @@ from gp_segment_configuration where role = 'p' and content = 0;
 
 -- Now bring down primary of seg0. There're a lot of ways to do that, in order
 -- to better emulate a real-world scnarios we're injecting a PANIC to do that.
-1:select gp_inject_fault('start_prepare', 'panic', dbid)
+1:select gp_inject_fault('start_prepare', 'panic', dbid) 
 from gp_segment_configuration where role = 'p' AND content = 0;
 1&:create table fts_reset_t(a int);
 
--- We now wait till our seg0 will start reaping it's childs and resetting
+-- We now wait till our seg0 will start reaping it's childs and resetting.
+-- We can ignore the results of this command, because it can throw 3 things:
+-- error because we couldn't send command because seg0 already restarting;
+-- error because reaper killed backend on seg0 because it started reaping
+-- backends (previous panic fault injection)
+-- no error, because we managed to overrun reaper and sendeed results
+-- of wait_until_triggered back
 -- start_ignore
 select gp_wait_until_triggered_fault('backend_abort_handling', 1, dbid)
 from gp_segment_configuration where role = 'p' and content = 0;

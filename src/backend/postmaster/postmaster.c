@@ -3746,17 +3746,9 @@ CleanupBackend(int pid,
 			 * Code below is for test purposes only. If a fault is set, it
 			 * will formally be completed without doing anything.
 			 *
-			 * Important note: it is NOT allowed to access the fault injector
-			 * from Postmaster process or from any SIGQUIT handler of child
-			 * processes when the system is resetting after the crash of some
-			 * backend. Reason: during reset Postmaster kills child processes,
-			 * and it might kill some process when the process has acquired
-			 * the spin lock of the fault injector, but hasn't released it
-			 * yet. So, subsequent call of the fault injector api from
-			 * Postmaster or any SIGQUIT handler will lead to deadlock. Only
-			 * 'doomed' processes can still call the fault injector api, as
-			 * they will soon be terminated anyway. Thus, the fault injector
-			 * is accessed only when the Postmaster state is PM_RUN.
+			 * Additional note: This check of pmState == PM_RUN is just extra
+			 * safety measurments. If we try to access this code not from
+			 * PM_RUN the behaviour can be unpredictable.
 			 */
 			SIMPLE_FAULT_INJECTOR("backend_abort_handling");
 		}
