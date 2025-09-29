@@ -1237,10 +1237,6 @@ ExecReScanHashJoin(HashJoinState *node)
 			 * Outer batch files have to be cleared before restarting the hash
 			 * join, because they will be written again when batch 0 is
 			 * processed.
-			 *
-			 * TODO: it might be possible to optimize by saving batch 0 outer
-			 * file too, in which case we might avoid rescanning the outer
-			 * plan again.
 			 */
 			if (hashtable->outerBatchFile)
 			{
