@@ -1247,8 +1247,10 @@ ExecReScanHashJoin(HashJoinState *node)
 				for (int i = 0; i < hashtable->nbatch; i++)
 				{
 					if (hashtable->outerBatchFile[i])
+					{
 						BufFileClose(hashtable->outerBatchFile[i]);
-					hashtable->outerBatchFile[i] = NULL;
+						hashtable->outerBatchFile[i] = NULL;
+					}
 				}
 			}
 
