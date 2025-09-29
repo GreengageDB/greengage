@@ -385,7 +385,7 @@ static void gp_failed_to_alloc(MemoryAllocationStatus ec, int en, int sz)
 	}
 	else if (ec == MemoryFailure_ResourceGroupMemoryExhausted)
 	{
-		ereport(ERROR, (errcode(ERRCODE_GP_MEMPROT_KILL),
+		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
 				errmsg("Out of memory"),
 				errdetail("Resource group memory limit reached")));
 	}
