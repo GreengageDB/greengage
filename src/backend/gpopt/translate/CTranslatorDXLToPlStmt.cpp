@@ -620,6 +620,7 @@ CTranslatorDXLToPlStmt::CreateForeignScan(Oid rel_oid, Index scanrelid,
 			break;
 		default:  // Shouldn't happen
 			GPOS_ASSERT(!"Unrecognized locus type");
+			__builtin_unreachable();
 	}
 
 	if (md_rel->GetRelDistribution() != rel_distr_policy_expected)
