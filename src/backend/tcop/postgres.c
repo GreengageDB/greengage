@@ -1348,7 +1348,10 @@ exec_mpp_query(const char *query_string,
 		{
 			renice_current_process(PostmasterPriority + gp_segworker_relative_priority);
 		}
+
+#ifdef FAULT_INJECTOR
 		FaultInjector_InjectFaultIfSet_SQL("dtm_exec_mpp_query_start", commandTag, 0);
+#endif
 		/*
 		 * If we are in an aborted transaction, reject all commands except
 		 * COMMIT/ABORT.  It is important that this test occur before we try
@@ -1455,7 +1458,9 @@ exec_mpp_query(const char *query_string,
 		 */
 		finish_xact_command();
 
+#ifdef FAULT_INJECTOR
 		FaultInjector_InjectFaultIfSet_SQL("dtm_exec_mpp_query_end", commandTag, 0);
+#endif
 
 		/*
 		 * Tell client that we're done with this query.  Note we emit exactly
@@ -1518,9 +1523,12 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 		 dtxProtocolCommand, loggingStr, gid);
 
 	set_ps_display(commandTag, false);
+
+#ifdef FAULT_INJECTOR
 	FaultInjector_InjectFaultIfSet_DTX("exec_mpp_dtx_protocol_command_start",
 									   dtxProtocolCommand,
 									   contextInfo->nestingLevel);
+#endif
 
 	BeginCommand(commandTag, dest);
 
@@ -1529,9 +1537,11 @@ exec_mpp_dtx_protocol_command(DtxProtocolCommand dtxProtocolCommand,
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),"exec_mpp_dtx_protocol_command calling EndCommand for dtxProtocolCommand = %d (%s) gid = %s",
 		 dtxProtocolCommand, loggingStr, gid);
 
+#ifdef FAULT_INJECTOR
 	FaultInjector_InjectFaultIfSet_DTX("exec_mpp_dtx_protocol_command_end",
 									   dtxProtocolCommand, 
 									   contextInfo->nestingLevel);
+#endif
 
 	/*
 	 * GPDB: There is a corner case that we need to delay connection
@@ -1726,7 +1736,10 @@ exec_simple_query(const char *query_string)
 		set_ps_display(commandTag, false);
 
 		BeginCommand(commandTag, dest);
+
+#ifdef FAULT_INJECTOR
 		FaultInjector_InjectFaultIfSet_SQL("dtm_exec_simple_query_start", commandTag, 0);
+#endif
 
 		/*
 		 * GPDB: If we are connected in utility mode, disallow PREPARE
@@ -1918,7 +1931,10 @@ exec_simple_query(const char *query_string)
 			 */
 			CommandCounterIncrement();
 		}
+
+#ifdef FAULT_INJECTOR
 		FaultInjector_InjectFaultIfSet_SQL("dtm_exec_simple_query_end", commandTag, 0);
+#endif
 
 		/*
 		 * Tell client that we're done with this query.  Note we emit exactly
