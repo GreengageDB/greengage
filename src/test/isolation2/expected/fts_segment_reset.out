@@ -56,7 +56,7 @@ select gp_inject_fault('backend_abort_handling', 'skip', dbid) from gp_segment_c
 -- error because we couldn't send command because seg0 already restarting;
 -- error because reaper killed backend on seg0 because it started reaping
 -- backends (previous panic fault injection)
--- no error, because we managed to overrun reaper and sendeed results 
+-- no error, because we managed to overrun reaper and sendeed results
 -- of wait_until_triggered back
 
 -- This should fail due to the seg0 in reset mode
