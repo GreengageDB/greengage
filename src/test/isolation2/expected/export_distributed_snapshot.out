@@ -13,14 +13,9 @@ DROP FUNCTION IF EXISTS corrupt_snapshot_file(text, text);
 DROP FUNCTION
 DROP FUNCTION IF EXISTS snapshot_file_ds_fields_exist(text);
 DROP FUNCTION
-DROP LANGUAGE IF EXISTS plpython3u cascade;
-DROP LANGUAGE
 DROP TABLE IF EXISTS export_distributed_snapshot_test1;
 DROP TABLE
 -- end_ignore
-
-CREATE LANGUAGE plpython3u;
-CREATE LANGUAGE
 
 -- Corrupt field entry for given snapshot file
 CREATE OR REPLACE FUNCTION  corrupt_snapshot_file(token text, field text) RETURNS integer as $$ import os content = bytearray() query = "select (select datadir from gp_segment_configuration where role='p' and content=-1) || '/pg_snapshots/' as path" rv = plpy.execute(query) abs_path = rv[0]['path'] snapshot_file = abs_path + token if not os.path.isfile(snapshot_file): plpy.info('skipping non-existent file %s' % (snapshot_file)) else: plpy.info('corrupting file %s for field %s' % (snapshot_file, field)) with open(snapshot_file , "rb+") as f: for line in f: l = line.decode() id = l.split(":")[0] if field == id: corrupt = l[:-2] + '*' + l[len(l)-1:] content.extend(corrupt.encode()) else: content.extend(line) f.seek(0) f.truncate f.write(content) f.close() return 0 $$ LANGUAGE plpython3u;
