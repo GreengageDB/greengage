@@ -2,7 +2,6 @@ DROP ROLE IF EXISTS role_dumpinfo_test;
 DROP ROLE IF EXISTS role_permission;
 -- start_ignore
 DROP RESOURCE GROUP rg_dumpinfo_test;
-CREATE LANGUAGE plpython3u;
 -- end_ignore
 
 CREATE FUNCTION dump_test_check() RETURNS bool
