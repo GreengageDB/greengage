@@ -605,6 +605,18 @@ ANALYZE ext_stats_tbl;
 
 explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 
+-- test that empty table gets hashed instead of a bigger table
+create table big_table(s smallint) distributed replicated;
+create table empty_table(i int) distributed replicated;
+insert into big_table select generate_series(1, 10000);
+analyze big_table;
+analyze empty_table;
+
+explain select * from big_table, empty_table where s = i;
+
+drop table big_table;
+drop table empty_table;
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

@@ -113,7 +113,7 @@
     <dxl:Plan Id="0" SpaceSize="25">
       <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="0.000543" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="0.000643" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:GroupingColumns>
           <dxl:GroupingColumn ColId="1"/>
@@ -126,7 +126,7 @@
         <dxl:Filter/>
         <dxl:Sort SortDiscardDuplicates="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="0.000536" Rows="1.000000" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="0.000636" Rows="1.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="1" Alias="?column?">
@@ -141,7 +141,7 @@
           <dxl:LimitOffset/>
           <dxl:HashJoin JoinType="LeftAntiSemiJoin">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="0.000491" Rows="1.000000" Width="4"/>
+              <dxl:Cost StartupCost="0" TotalCost="0.000591" Rows="1.000000" Width="4"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="1" Alias="?column?">
