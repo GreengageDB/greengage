@@ -124,7 +124,6 @@ jobs:
 
   # Rebuild prod-redy version without debug extensions and pack it to deb
   package:
-    # if: github.event_name == 'push'  # For push to main or tags
     needs: build  # For push (main or tags)
     strategy:
       fail-fast: false
