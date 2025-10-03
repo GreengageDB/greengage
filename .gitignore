@@ -53,7 +53,7 @@ GTAGS
 lib*dll.def
 lib*.pc
 compile_commands.json
-**/debian/
+**/debian/*
 !**/debian/co*
 !**/debian/lint*
 !**/debian/rules
