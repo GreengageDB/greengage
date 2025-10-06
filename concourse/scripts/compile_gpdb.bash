@@ -54,9 +54,9 @@ function link_python() {
 function build_gpdb() {
 	pushd ${GPDB_SRC_PATH}/gpAux
 	if [ -n "$1" ]; then
-		make "$1" GPROOT=/usr/local PARALLEL_MAKE_OPTS=-j"$(nproc)" -s devel
+		make "$1" GPROOT=/usr/local PARALLEL_MAKE_OPTS=-j"$(nproc)" -s dist
 	else
-		make GPROOT=/usr/local PARALLEL_MAKE_OPTS=-j"$(nproc)" -s devel
+		make GPROOT=/usr/local PARALLEL_MAKE_OPTS=-j"$(nproc)" -s dist
 	fi
 	popd
 
