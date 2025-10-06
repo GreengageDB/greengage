@@ -24,7 +24,6 @@ RUN set -eux; \
     pip2 cache purge;
 
 WORKDIR /home/gpadmin
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 FROM base as build
 
