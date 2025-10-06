@@ -37,7 +37,7 @@ ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
 ENV PYTHON3=python3
 
 # Compile with running mocking tests
-RUN CONFIGURE_FLAGS='--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend' bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base as code
 # Use --exclude, when it will be available in stable syntax.
