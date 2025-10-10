@@ -774,11 +774,6 @@ CTranslatorExprToDXLUtils::SetDirectDispatchInfo(
 			CPropConstraint *ppc = pexprFilter->DerivePropertyConstraint();
 			CDXLDirectDispatchInfo *dxl_direct_dispatch_info = nullptr;
 
-			if (CPredicateUtils::FContainsVolatileFunction(pexprFilter))
-			{
-				continue;
-			}
-
 			if (nullptr != ppc->Pcnstr())
 			{
 				GPOS_ASSERT(nullptr != ppc->Pcnstr());
