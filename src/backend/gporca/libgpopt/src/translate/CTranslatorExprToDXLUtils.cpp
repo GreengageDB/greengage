@@ -717,6 +717,11 @@ CTranslatorExprToDXLUtils::SetDirectDispatchInfo(
 	GPOS_ASSERT(nullptr != pexpr);
 	GPOS_ASSERT(nullptr != pdrgpdsBaseTables);
 
+	if (CPredicateUtils::FContainsVolatileFunction(pexpr))
+	{
+		return;
+	}
+
 	Edxlopid edxlopid = dxlnode->GetOperator()->GetDXLOperator();
 	if (EdxlopPhysicalCTAS == edxlopid || EdxlopPhysicalDML == edxlopid)
 	{
@@ -768,6 +773,11 @@ CTranslatorExprToDXLUtils::SetDirectDispatchInfo(
 			CExpression *pexprFilter = (*pexprFilterArray)[i];
 			CPropConstraint *ppc = pexprFilter->DerivePropertyConstraint();
 			CDXLDirectDispatchInfo *dxl_direct_dispatch_info = nullptr;
+
+			if (CPredicateUtils::FContainsVolatileFunction(pexprFilter))
+			{
+				continue;
+			}
 
 			if (nullptr != ppc->Pcnstr())
 			{
