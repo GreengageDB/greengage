@@ -88,8 +88,7 @@ typedef struct
  * tracked by Vmtracker.
  */
 #ifndef FRONTEND
-#include "postgres.h"
-#include "utils/memutils.h"
+#include "utils/palloc.h"
 
 #define pqPalloc(sz) MemoryContextAlloc(TopMemoryContext, sz)
 #define pqPstrdup(x) MemoryContextStrdup(TopMemoryContext, x)
