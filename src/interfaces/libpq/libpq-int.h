@@ -84,14 +84,23 @@ typedef struct
 #endif   /* USE_SSL */
 
 /*
- * Avoid allocating PGresults via malloc() in server side so their memory can be
- * tracked by Vmtracker.
+ * Definitions meant to lessen the malloc() usage for CDB routines in
+ * server-sided code for struct PGresult allocations.
  */
 #ifndef FRONTEND
 #include "utils/palloc.h"
 
-#define pqPalloc(sz) MemoryContextAlloc(TopMemoryContext, sz)
-#define pqPstrdup(x) MemoryContextStrdup(TopMemoryContext, x)
+/*
+ * TopTransactionContext's lifetime lasts until the end of the current query,
+ * which does the job well for backends. Auxiliary processes do not set
+ * transaction contexts, so we have to use TopMemoryContext to achieve a
+ * lifetime equivalent to malloc().
+ */
+#define PQ_PALLOC_CONTEXT \
+	((TopTransactionContext != NULL) ? TopTransactionContext : TopMemoryContext)
+
+#define pqPalloc(sz) MemoryContextAlloc(PQ_PALLOC_CONTEXT, sz)
+#define pqPstrdup(x) MemoryContextStrdup(PQ_PALLOC_CONTEXT, x)
 #define pqRepalloc(x, sz) repalloc(x, sz)
 #define pqPfree(x) pfree(x)
 #else
