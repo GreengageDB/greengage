@@ -88,7 +88,8 @@ typedef struct
  * server-sided code for struct PGresult allocations.
  */
 #ifndef FRONTEND
-#include "utils/palloc.h"
+#include "postgres.h"
+#include "utils/memutils.h"
 
 /*
  * TopTransactionContext's lifetime lasts until the end of the current query,
