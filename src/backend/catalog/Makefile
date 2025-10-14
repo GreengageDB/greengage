@@ -28,6 +28,7 @@ OBJS += pg_extprotocol.o \
        pg_appendonly.o \
        oid_dispatch.o aocatalog.o storage_tablespace.o storage_database.o \
        storage_tablespace_twophase.o storage_tablespace_xact.o \
+       storage_pending_deletes_redo.o storage_pending_deletes.o \
        gp_partition_template.o
 
 

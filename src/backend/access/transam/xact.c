@@ -35,6 +35,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_enum.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "catalog/storage_tablespace.h"
 #include "catalog/storage_database.h"
 #include "commands/async.h"
@@ -7268,6 +7269,8 @@ xact_redo_commit(xl_xact_parsed_commit *parsed,
 
 	DoTablespaceDeletionForRedoXlog(tablespace_oid_to_delete);
 
+	PdlRedoRemoveTree(xid, parsed->subxacts, parsed->nsubxacts);
+
 	/*
 	 * We issue an XLogFlush() for the same reason we emit ForceSyncCommit()
 	 * in normal operation. For example, in CREATE DATABASE, we copy all files
@@ -7394,6 +7397,8 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 	}
 
 	DoTablespaceDeletionForRedoXlog(parsed->tablespace_oid_to_delete_on_abort);
+
+	PdlRedoRemoveTree(xid, parsed->subxacts, parsed->nsubxacts);
 }
 
 static void

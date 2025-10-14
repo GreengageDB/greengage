@@ -89,6 +89,7 @@
 #include "access/xlogreader.h"
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
+#include "catalog/storage_pending_deletes_redo.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "pg_trace.h"
@@ -2779,3 +2780,39 @@ PrepareRedoRemove(TransactionId xid, bool giveWarning)
 
 	return;
 }
+
+void
+RemovePendingDeletesForPreparedTransactions()
+{
+	int			i;
+
+	LWLockAcquire(TwoPhaseStateLock, LW_EXCLUSIVE);
+	for (i = 0; i < TwoPhaseState->numPrepXacts; i++)
+	{
+		char	   *buf;
+		GlobalTransaction gxact = TwoPhaseState->prepXacts[i];
+		char	   *bufptr;
+		TwoPhaseFileHeader *hdr;
+		TransactionId *subxids;
+
+		buf = ProcessTwoPhaseBuffer(gxact->xid,
+									gxact->prepare_start_lsn,
+									gxact->ondisk, false, false);
+
+		if (buf == NULL)
+		{
+			continue;
+		}
+
+		hdr = (TwoPhaseFileHeader *) buf;
+		Assert(TransactionIdEquals(hdr->xid, gxact->xid));
+		bufptr = buf + MAXALIGN(sizeof(TwoPhaseFileHeader));
+		bufptr += MAXALIGN(hdr->gidlen);
+		subxids = (TransactionId *) bufptr;
+
+		PdlRedoRemoveTree(hdr->xid, subxids, hdr->nsubxacts);
+
+		pfree(buf);
+	}
+	LWLockRelease(TwoPhaseStateLock);
+}  /* end RemovePendingDeletesForPreparedTransactions */
