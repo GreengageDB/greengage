@@ -141,6 +141,7 @@ _copyPlannedStmt(const PlannedStmt *from)
 		COPY_SCALAR_FIELD(slices[i].segindex);
 		COPY_SCALAR_FIELD(slices[i].directDispatch.isDirectDispatch);
 		COPY_NODE_FIELD(slices[i].directDispatch.contentIds);
+		COPY_SCALAR_FIELD(slices[i].directDispatch.haveProcessedAnyCalculations);
 	}
 
 	COPY_NODE_FIELD(intoPolicy);
