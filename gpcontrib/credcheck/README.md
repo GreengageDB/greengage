@@ -250,6 +250,8 @@ ERROR:  require a VALID UNTIL option with a date older than 30 days
 postgres=# ALTER USER abcd$ VALID UNTIL '2025-12-21';
 ERROR:  require a VALID UNTIL option with a date not beyond 180 days
 ```
+When a user change its password and a VALID UNTIL clause is not set, credcheck
+will set the valid until date to `now() + credcheck.password_valid_until`
 
 If you have enabled the use of cracklib to check the easiness of a password
 you could have this kind of messages:
@@ -464,7 +466,7 @@ ALTER USER user1 SET credcheck_internal.force_change_password = true;
 
 ### [Warning before password expire](#warning-before-password-expire)
 
-To send a warning to the user N days before his password expires you can set the numpber of days
+To send a warning to the user N days before his password expires you can set the number of days
 before using the `credcheck.password_valid_warning` setting.
 
 The message will be: `WARNING: your password will expire in 7 days, please renew your password!`
@@ -473,7 +475,6 @@ To enable this feature in all database, the credcheck extention must be created 
 as postgres supersuser execute the followind DDL in each database.
 ```
 -- Add event trigger for valid until warning
-DROP FUNCTION warning_valid_until();
 CREATE OR REPLACE FUNCTION warning_valid_until()
   RETURNS event_trigger AS
 $$

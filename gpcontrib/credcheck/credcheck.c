@@ -33,6 +33,7 @@
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
 #include "commands/user.h"
+#include "common/int.h"
 #if PG_VERSION_NUM >= 140000
 #include "common/hmac.h"
 #endif
@@ -49,6 +50,7 @@
 #include "storage/shmem.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/datetime.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
@@ -1518,6 +1520,37 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				save_password = check_password_reuse(stmt->role->rolename, password);
 			}
 #endif
+			/*
+			 * when the user change his password, automatically set the valid until
+			 * date to now() + password_valid_until days if password_valid_until is set.
+			 */
+			if (!dvalidUntil && password_valid_until > 0)
+			{
+				Timestamp dt_now = GetCurrentTimestamp();
+				struct pg_tm tt, *tm = &tt;
+				fsec_t          fsec;
+				int             julian;
+				char validuntil[11];
+
+				if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+							 errmsg("timestamp out of range")));
+
+				/*
+				 * Add credcheck.password_valid_until days by converting to and from Julian.
+				 */
+				julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+				if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
+					julian < 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+							 errmsg("timestamp out of range")));
+				j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+				sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+				dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), 1);
+			}
+
 			/* when a valid until date is set check that it is > to password_valid_until */
 			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
 			{
