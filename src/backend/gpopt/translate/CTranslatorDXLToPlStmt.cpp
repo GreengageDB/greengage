@@ -264,6 +264,7 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 
 				slice->directDispatch.isDirectDispatch = true;
 				slice->directDispatch.contentIds = direct_dispatch_segids;
+				slice->directDispatch.haveProcessedAnyCalculations = true;
 			}
 		}
 	}
@@ -281,6 +282,7 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 		{
 			topslice->directDispatch.isDirectDispatch = true;
 			topslice->directDispatch.contentIds = direct_dispatch_segids;
+			topslice->directDispatch.haveProcessedAnyCalculations = true;
 		}
 	}
 
