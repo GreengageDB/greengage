@@ -75,7 +75,11 @@ static PlannedStmt *pgws_planner_hook(Query *parse,
 #if PG_VERSION_NUM >= 130000
 									  const char *query_string,
 #endif
-									  int cursorOptions, ParamListInfo boundParams);
+									  int cursorOptions, ParamListInfo boundParams
+#if PG_VERSION_NUM >= 190000
+									  , ExplainState *es
+#endif
+									  );
 static void pgws_ExecutorStart(QueryDesc *queryDesc, int eflags);
 static void pgws_ExecutorRun(QueryDesc *queryDesc,
 							 ScanDirection direction,
@@ -937,7 +941,11 @@ pgws_planner_hook(Query *parse,
 				  const char *query_string,
 #endif
 				  int cursorOptions,
-				  ParamListInfo boundParams)
+				  ParamListInfo boundParams
+#if PG_VERSION_NUM >= 190000
+				  , ExplainState *es
+#endif
+				  )
 {
 	PlannedStmt *result;
 	int			i = MyProc - ProcGlobal->allProcs;
@@ -958,13 +966,21 @@ pgws_planner_hook(Query *parse,
 #if PG_VERSION_NUM >= 130000
 									   query_string,
 #endif
-									   cursorOptions, boundParams);
+									   cursorOptions, boundParams
+#if PG_VERSION_NUM >= 190000
+									   , es
+#endif
+									   );
 		else
 			result = standard_planner(parse,
 #if PG_VERSION_NUM >= 130000
 									  query_string,
 #endif
-									  cursorOptions, boundParams);
+									  cursorOptions, boundParams
+#if PG_VERSION_NUM >= 190000
+									  , es
+#endif
+									  );
 		nesting_level--;
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
