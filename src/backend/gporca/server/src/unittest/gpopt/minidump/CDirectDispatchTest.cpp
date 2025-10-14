@@ -43,6 +43,7 @@ const CHAR *rgszDirectDispatchFileNames[] = {
 	"../data/dxl/minidump/InsertDirectedDispatchNullValue.mdp",
 	"../data/dxl/minidump/DirectDispatch-RandDistTable.mdp",
 	"../data/dxl/minidump/DirectDispatch-RandDistTable-Disjunction.mdp",
+	"../data/dxl/minidump/DirectDispatch-Volatile.mdp",
 };
 
 //---------------------------------------------------------------------------
