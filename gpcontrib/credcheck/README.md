@@ -91,9 +91,11 @@ Please find the below list of general checks, which we can enforce on credential
 | password_contain          | password | password should contain these characters            | a,b,c         | &check; ade                 | &#10008; xfg                 |
 | password_not_contain      | password | password should not contain these characters        | x,y,z         | &check; abc                 | &#10008; axf                 |
 | password_ignore_case      | password | ignore case while performing above checks           | on            | &check; Abc                 | &#10008; aXf                 |
-| password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days   | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
+| password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days or set it automatically to now() + password_valid_until days in the ALTER ROLE statement when the password is changed  | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
 | password_valid_max        | password | force use of VALID UNTIL clause in CREATE ROLE statement with a maximum number of days   | 365             | &check; CREATE ROLE abcd VALID UNTIL (now()+'6 months'::interval)::date | &#10008;  CREATE ROLE abcd VALID UNTIL (now()+'2 years'::interval)::date; |
 | password_valid_warn       | password | emit a warning N days before the password is about to expire | 0 (disabled) |  |  |
+| password_valid_warning | password | throw a warning N days before the password expires | 0 (disabled) |  |  |
+| password_change_first_login | password | force the user to change his password at first login | false (disabled) |  |  |
 
 There is also the `credcheck.whitelist` GUC that can be used to set a comma separated list of username to exclude from the password policy check. For example:
 ```

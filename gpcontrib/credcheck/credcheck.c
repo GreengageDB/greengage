@@ -839,7 +839,9 @@ password_guc()
 
 	DefineCustomIntVariable("credcheck.password_valid_until",
 				gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
-					" with a minimum number of days"),
+					" with a minimum number of days or set it automatically to "
+					" now() + password_valid_until days in the ALTER ROLE statement"
+					" when the password is changed"),
 				NULL, &password_valid_until, 0, 0, INT_MAX,
 				PGC_SUSET, 0, NULL, NULL, NULL);
 
