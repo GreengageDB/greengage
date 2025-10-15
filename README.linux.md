@@ -150,7 +150,16 @@
     su - $USER # Apply settings
     ```
 
-5. Make sure that you download yaml and psutil as submodules. To do this, use `git clone --recurse-submodules` when downloading the source code. If you want to update the submodules, run:
+5. Install psutils and yaml for python2:
+    ```bash
+    python2 -m pip install psutil pyyaml
+    ```
+
+6. Make sure that you update submodules. To do this, either use 
+    ```bash
+    git clone --recurse-submodules https://github.com/GreengageDB/greengage
+    ``` 
+when downloading the source code, or update the submodules:
     ```bash
     git submodule update --init --recursive --force
     ```
