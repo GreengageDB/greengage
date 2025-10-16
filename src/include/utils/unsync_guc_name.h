@@ -564,4 +564,5 @@
 		"xid_warn_limit",
 		"xmlbinary",
 		"xmloption",
+		"gp_track_pending_delete",
 		"max_slot_wal_keep_size",

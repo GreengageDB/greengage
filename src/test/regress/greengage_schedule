@@ -367,4 +367,6 @@ test: gp_query_id
 
 test: cancel_cleanup
 
+test: gp_orphaned_files
+
 # end of tests

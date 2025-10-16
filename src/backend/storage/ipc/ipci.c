@@ -43,6 +43,7 @@
 #include "storage/bufmgr.h"
 #include "storage/dsm.h"
 #include "storage/ipc.h"
+#include "catalog/storage_pending_deletes.h"
 #include "storage/pg_shmem.h"
 #include "storage/pmsignal.h"
 #include "storage/predicate.h"
@@ -233,6 +234,9 @@ CreateSharedMemoryAndSemaphores(int port)
 		/* size of parallel cursor count */
 		size = add_size(size, ParallelCursorCountSize());
 
+		/* size of pending deletes */
+		size = add_size(size, PdlShmemSize());
+
 		elog(DEBUG3, "invoking IpcMemoryCreate(size=%zu)", size);
 
 		/*
@@ -407,6 +411,8 @@ CreateSharedMemoryAndSemaphores(int port)
 	
 	if (Gp_role == GP_ROLE_DISPATCH)
 		ParallelCursorCountInit();
+
+	PdlShmemInit();
 
 	/*
 	 * Now give loadable modules a chance to set up their shmem allocations

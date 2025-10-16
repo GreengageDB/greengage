@@ -66,4 +66,7 @@ extern void PrepareRedoAdd(char *buf, XLogRecPtr start_lsn,
 						   XLogRecPtr end_lsn, RepOriginId origin_id);
 extern void PrepareRedoRemove(TransactionId xid, bool giveWarning);
 extern void restoreTwoPhaseData(void);
+
+extern void RemovePendingDeletesForPreparedTransactions(void);
+
 #endif							/* TWOPHASE_H */
