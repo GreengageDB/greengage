@@ -12,7 +12,7 @@ Feature: gpactivatestandby
         And the user runs gpactivatestandby with options " "
         Then gpactivatestandby should return a return code of 0
         And verify the standby coordinator is now acting as coordinator
-        And verify that table "foobar" in "postgres" has "2190" rows
+        And verify that table "foobar" in "postgres" has "1094" rows
         And verify that gpstart on original coordinator fails due to lower Timeline ID
         And clean up and revert back to original coordinator
 
@@ -31,7 +31,7 @@ Feature: gpactivatestandby
         And the user runs gpactivatestandby with options "-f"
         Then gpactivatestandby should return a return code of 0
         And verify the standby coordinator is now acting as coordinator
-        And verify that table "foobar" in "postgres" has "2190" rows
+        And verify that table "foobar" in "postgres" has "1094" rows
         And verify that gpstart on original coordinator fails due to lower Timeline ID
         And clean up and revert back to original coordinator
         And the user runs "gpconfig -r recovery_end_command"

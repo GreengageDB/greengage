@@ -3475,6 +3475,20 @@ def impl(context, table, dbname):
     context.pre_redistribution_row_count = _get_row_count_per_segment(table, dbname)
     context.pre_redistribution_dist_policy = _get_dist_policy_per_partition(table, dbname)
 
+@then('distribution information from table "{table}" with data in "{dbname}" is equal to segment count = {seg_cnt}, row count = {row_cnt}')
+def impl(context, table, dbname, seg_cnt, row_cnt):
+    with closing(dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)) as conn:
+        query = "SELECT count(1) FROM (SELECT gp_segment_id FROM %s GROUP BY gp_segment_id) t" % table
+        cursor = dbconn.query(conn, query)
+        table_segments = cursor.fetchone()[0]
+        query = "SELECT count(1) FROM %s" % table
+        cursor = dbconn.query(conn, query)
+        table_rows = cursor.fetchone()[0]
+        if int(table_segments) != int(seg_cnt):
+            raise Exception("Expected table %s in db %s to be distributed on %s segments, but it is distributed on %s segments" % (table, dbname, seg_cnt, table_segments))
+        if int(table_rows) != int(row_cnt):
+            raise Exception("Expected table %s in db %s to have %s rows, but got %s rows" % (table, dbname, row_cnt, table_rows))
+
 @then('distribution information from table "{table}" with data in "{dbname}" is verified against saved data')
 def impl(context, table, dbname):
     pre_distribution_row_count = context.pre_redistribution_row_count
@@ -4403,3 +4417,15 @@ def step_impl(context):
 @given(u'the cluster is running in IC proxy mode with new proxy address {address}')
 def step_impl(context, address):
     set_ic_proxy_and_address(context, address)
+
+@given('set fault inject "{fault}"')
+@then('set fault inject "{fault}"')
+@when('set fault inject "{fault}"')
+def impl(context, fault):
+    os.environ['GPMGMT_FAULT_POINT'] = fault
+
+@given('unset fault inject')
+@then('unset fault inject')
+@when('unset fault inject')
+def impl(context):
+    os.environ['GPMGMT_FAULT_POINT'] = ""

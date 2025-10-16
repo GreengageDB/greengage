@@ -472,9 +472,7 @@ def create_partition(context, tablename, storage_type, dbname, compression_type=
 
 # same data size as populate partition, but different values
 def populate_partition(tablename, start_date, dbname, data_offset, rowcount=1094, host=None, port=0, user=None):
-    insert_sql_str = "insert into %s select i+%d, 'backup', i + date '%s' from generate_series(0,%d) as i" % (
-    tablename, data_offset, start_date, rowcount)
-    insert_sql_str += "; insert into %s select i+%d, 'restore', i + date '%s' from generate_series(0,%d) as i" % (
+    insert_sql_str = "insert into %s select i+%d, 'backup', i + date '%s' from generate_series(1,%d) as i" % (
     tablename, data_offset, start_date, rowcount)
 
     with closing(dbconn.connect(dbconn.DbURL(hostname=host, port=port, username=user, dbname=dbname), unsetSearchPath=False)) as conn:

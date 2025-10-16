@@ -25,3 +25,9 @@ AS '$libdir/gp_toolkit','gp_get_rebalance_numsegments'
 LANGUAGE C STRICT;
 
 REVOKE ALL ON FUNCTION gp_toolkit.gp_get_rebalance_numsegments() FROM public;
+
+CREATE FUNCTION gp_toolkit.gp_rebalance_numsegments_is_set() RETURNS int
+AS '$libdir/gp_toolkit','gp_rebalance_numsegments_is_set'
+LANGUAGE C STRICT;
+
+REVOKE ALL ON FUNCTION gp_toolkit.gp_rebalance_numsegments_is_set() FROM public;

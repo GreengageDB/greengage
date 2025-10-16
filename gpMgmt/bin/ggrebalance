@@ -179,25 +179,22 @@ def main(options, args, parser):
 
         gparray_dump_filename = options.coordinator_data_directory + '/gparraydump'
 
-        if os.path.exists(gparray_dump_filename):
-            logger.info('Init gparray from file %s' % gparray_dump_filename)
-            gparray = GpArray.initFromFile(gparray_dump_filename)
-        else:
-            logger.info('Init gparray from catalog')
-            try:
-                gparray = GpArray.initFromCatalog(dburl, utility=True)
-            except DatabaseError as ex:
-                logger.error("Failed to connect to database.  Make sure the"
-                             " Greengage instance you wish to expand is running"
-                             " and that your environment is correct, then rerun"
-                             " gprebalance" + ' '.join(sys.argv[1:]))
-                sys.exit(1)
-            except ConnectionError as ex:
-                logger.error(f"{str(ex)}")
-                sys.exit(1)
+        logger.info('Init gparray from catalog')
+        try:
+            gparray = GpArray.initFromCatalog(dburl, utility=True)
+        except DatabaseError as ex:
+            logger.error("Failed to connect to database.  Make sure the"
+                         " Greengage instance you wish to expand is running"
+                         " and that your environment is correct, then rerun"
+                         " gprebalance" + ' '.join(sys.argv[1:]))
+            sys.exit(1)
+        except ConnectionError as ex:
+            logger.error(f"{str(ex)}")
+            sys.exit(1)
 
-        if options.target_segment_count != None and gparray.get_segment_count() <= options.target_segment_count:
-            logger.error('Target segment count (%s) >= current segment count (%s).\n'
+        # the equality case is considered by shrink internally
+        if options.target_segment_count != None and gparray.get_segment_count() < options.target_segment_count:
+            logger.error('Target segment count (%s) > current segment count (%s).\n'
                          'Currently only shrink is supported (target segment count < current segment count).'
                           % (options.target_segment_count, gparray.get_segment_count()))
             sys.exit(1)
