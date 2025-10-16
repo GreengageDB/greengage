@@ -1,3 +1,25 @@
+2025-10-16 - Version 4.0.0
+
+This major release adds new features and fixes bugs reported by users since
+last release.
+
+  - When a user change its password and a VALID UNTIL clause is not set,
+    credcheck will automatically set to now() + credcheck.password_valid_until
+  - Extended the functionality of 'username_contain' and 'username_not_contain'
+    gucs to allow users to use substrings instead of single characters only.
+    Thanks to Palak Chaturvedi for the patch.
+  - Add feature to send a warning to the user N days before his password expires.
+    The number of days before can be set using the `credcheck.password_valid_warning`
+    setting. Disabled by default. This is done using an event trigger up on login.
+    The point is that the trigger must be set manually in all databases.
+  - Add force password change at first logging. This feature allow to force the
+    users to change their password after the account creation. This behavior is
+    active when credcheck.password_change_first_login is enabled.
+    It is also possible force any user to change his password at any time using:
+    	ALTER USER user1 SET credcheck_internal.force_change_password = true;
+  - Fix license text to the corresponding PostgreSQL license.
+  - Fix test/expected/06_reuse_interval_1.out. Thanks to Christoph Berg for the patch.
+
 2024-12-31 - Version 3.0.0
 
 This release adds a new feature to exclude a list of users from being banned
