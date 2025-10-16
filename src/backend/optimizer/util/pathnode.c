@@ -4057,6 +4057,36 @@ create_hashjoin_path(PlannerInfo *root,
 		return NULL;
 
 	/*
+	 * We check if our path will be rescanned due to parametrization
+	 * from outer path after this node.
+	 * For all information see the comments in create_nestloop_path().
+	 */
+	if (!outer_path->rescannable && !bms_is_empty(required_outer))
+	{
+		MaterialPath *matouter = create_material_path(root, outer_path->parent, outer_path);
+
+		matouter->cdb_shield_child_from_rescans = true;
+
+		outer_path = (Path *) matouter;
+	}
+
+	if (!inner_path->rescannable && !bms_is_empty(required_outer))
+	{
+
+		MaterialPath *matinner = create_material_path(root, inner_path->parent, inner_path);
+
+		matinner->cdb_shield_child_from_rescans = true;
+
+		if (inner_path->motionHazard && outer_path->motionHazard)
+		{
+			matinner->cdb_strict = true;
+			matinner->path.motionHazard = false;
+		}
+
+		inner_path = (Path *) matinner;
+	}
+
+	/*
 	 * CDB: If gp_enable_hashjoin_size_heuristic is set, disallow inner
 	 * joins where the inner rel is the larger of the two inputs.
 	 *

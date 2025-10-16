@@ -4298,6 +4298,60 @@ INSERT INTO ext_stats_tbl VALUES('tC', true);
 ANALYZE ext_stats_tbl;
 explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
+-- This test is introduced to verify that outer side of HashJoin path
+-- is rescannable, if this HashJoin is parametrized by the inner side of
+-- another join.
+create table ot (oid oid);
+insert into ot values (10::oid), (10::oid);
+create external web table w (oid int) execute 'echo 1' on all format 'text';
+create or replace function foo(i oid)
+returns table (oid int)
+language sql
+execute on all segments
+strict
+rows 30000
+cost 100000
+as $$
+    select 1;
+$$;
+set enable_nestloop = 'on';
+set enable_mergejoin = 'off';
+set enable_hashjoin = 'on';
+set from_collapse_limit = '1';
+set join_collapse_limit = '1';
+set random_page_cost = '1';
+select 1
+from ot,
+     foo(ot.oid) as f
+join w on w.oid = f.oid;
+ ?column? 
+----------
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+        1
+(18 rows)
+
+reset enable_nestloop;
+reset enable_mergejoin;
+reset enable_hashjoin;
+reset from_collapse_limit;
+reset join_collapse_limit;
+reset random_page_cost;
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';
