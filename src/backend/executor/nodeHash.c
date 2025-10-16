@@ -590,6 +590,9 @@ ExecHashTableCreate(HashState *state, HashJoinState *hjstate,
 											 "hbbfcxt",
 											 ALLOCSET_DEFAULT_SIZES);
 
+	/* Preserve skew table in hashCxt if need to reuse */
+	hashtable->preserve_skew_table = hjstate->reuse_hashtable;
+
 	/* Allocate data that will live for the life of the hashjoin */
 
 	oldcxt = MemoryContextSwitchTo(hashtable->hashCxt);
@@ -2866,6 +2869,9 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 		int			nbuckets;
 		FmgrInfo   *hashfunctions;
 		int			i;
+		MemoryContext skewCxt = hashtable->preserve_skew_table ?
+			hashtable->hashCxt :
+			hashtable->batchCxt;
 
 		if (mcvsToUse > sslot.nvalues)
 			mcvsToUse = sslot.nvalues;
@@ -2912,10 +2918,10 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 		 * automatically removed once the first batch is done.
 		 */
 		hashtable->skewBucket = (HashSkewBucket **)
-			MemoryContextAllocZero(hashtable->batchCxt,
+			MemoryContextAllocZero(skewCxt,
 								   nbuckets * sizeof(HashSkewBucket *));
 		hashtable->skewBucketNums = (int *)
-			MemoryContextAllocZero(hashtable->batchCxt,
+			MemoryContextAllocZero(skewCxt,
 								   mcvsToUse * sizeof(int));
 
 		hashtable->spaceUsed += nbuckets * sizeof(HashSkewBucket *)
@@ -2965,7 +2971,7 @@ ExecHashBuildSkewHash(HashJoinTable hashtable, Hash *node, int mcvsToUse)
 
 			/* Okay, create a new skew bucket for this hashvalue. */
 			hashtable->skewBucket[bucket] = (HashSkewBucket *)
-				MemoryContextAlloc(hashtable->batchCxt,
+				MemoryContextAlloc(skewCxt,
 								   sizeof(HashSkewBucket));
 			hashtable->skewBucket[bucket]->hashvalue = hashvalue;
 			hashtable->skewBucket[bucket]->tuples = NULL;
@@ -3047,10 +3053,13 @@ ExecHashSkewTableInsert(HashState *hashState,
 	MinimalTuple tuple = ExecFetchSlotMinimalTuple(slot, &shouldFree);
 	HashJoinTuple hashTuple;
 	int			hashTupleSize;
+	MemoryContext skewCxt = hashtable->preserve_skew_table ?
+		hashtable->hashCxt :
+		hashtable->batchCxt;
 
 	/* Create the HashJoinTuple */
 	hashTupleSize = HJTUPLE_OVERHEAD + tuple->t_len;
-	hashTuple = (HashJoinTuple) MemoryContextAlloc(hashtable->batchCxt,
+	hashTuple = (HashJoinTuple) MemoryContextAlloc(skewCxt,
 												   hashTupleSize);
 	hashTuple->hashvalue = hashvalue;
 	memcpy(HJTUPLE_MINTUPLE(hashTuple), tuple, tuple->t_len);

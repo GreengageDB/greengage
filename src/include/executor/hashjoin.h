@@ -419,6 +419,9 @@ typedef struct HashJoinTableData
 	 */
 	uint64		workset_abi_reserved;
 	uint64		workset_compression_buf_total;
+	
+	/* set true to store skew table in hashCxt, false to store in batchCxt */
+	bool preserve_skew_table;
 }			HashJoinTableData;
 
 #endif							/* HASHJOIN_H */
