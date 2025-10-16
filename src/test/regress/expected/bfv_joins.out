@@ -4286,13 +4286,13 @@ ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join co
 create table ot (oid oid);
 insert into ot values (10::oid), (10::oid);
 create external web table w (oid int) execute 'echo 1' on all format 'text';
-create or replace function foo(i oid) 
-returns table (oid int) 
-language sql 
-execute on all segments 
-strict 
-rows 30000 
-cost 100000 
+create or replace function foo(i oid)
+returns table (oid int)
+language sql
+execute on all segments
+strict
+rows 30000
+cost 100000
 as $$
     select 1;
 $$;
