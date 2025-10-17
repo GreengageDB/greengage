@@ -81,6 +81,8 @@ typedef struct ForeignTable
 
 extern char SeparateOutMppExecute(List **options);
 extern int32 SeparateOutNumSegments(List **options);
+extern bool SeparateOutDistByKey(List **options);
+extern int32 SeparateOutDistByKeyWeight(List **options);
 extern ForeignServer *GetForeignServer(Oid serverid);
 extern ForeignServer *GetForeignServerExtended(Oid serverid,
 											   bits16 flags);
