@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     container: pgxn/pgxn-tools
     steps:
+      - name: Install GSSAPI development headers
+        - run: |
+          sudo apt-get update
+          sudo apt-get install libkrb5-dev
       - run: pg-start ${{ matrix.pg }}
       - uses: actions/checkout@v2
       - run: pg-build-test
