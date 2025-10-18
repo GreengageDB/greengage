@@ -15,20 +15,47 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  test:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       matrix:
-        pg: [17, 16, 15, 14, 13]
-    name: 🐘 PostgreSQL ${{ matrix.pg }}
-    runs-on: ubuntu-latest
-    container: pgxn/pgxn-tools
+        pgversion:
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+
+    env:
+      PGVERSION: ${{ matrix.pgversion }}
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Install GSSAPI development headers
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: install pg
       run: |
-        sudo apt-get -y update
-        sudo apt-get -y install libkrb5-dev
-    - name: Start PostgreSQL
-      run: pg-start ${{ matrix.pg }}
-    - name: Run tests
-      run: pg-build-test
+        sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -v $PGVERSION -p -i
+        sudo -u postgres createuser -s "$USER"
+
+    - name: build
+      run: |
+        make PROFILE="-Werror"
+        sudo -E make install
+
+    - name: test
+      run: |
+        sudo pg_conftool $PGVERSION main set shared_preload_libraries credcheck
+        sudo service postgresql restart
+        make installcheck
+
+    - name: show regression diffs
+      if: ${{ failure() }}
+      run: |
+        cat regression.diffs
