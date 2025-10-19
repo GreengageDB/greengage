@@ -1,3 +1,28 @@
+2025-10-19 - Version 4.1.0
+
+This release fixes broken compilation with PostgreSQL below v17 and others
+bugs reported by users since last release.
+
+  - Remove useless creation of the credcheck schema. Thanks to georg-h for
+    the report
+  - Fix unapplied patch to force valid until date.
+  - No more error are thrown when no VALID UNTIL clause are used in the
+    CREATE/ALTER ROLE statements. It is set automatically when configuration
+    directive password_valid_until is set to a value greater than 0. Thanks
+    to Kennycwc for the feature request.
+  - Prevent first login feature to be appplied to white listed username.
+  - Update documentation about event trigger change
+  - Completely remove the on login even trigger DDL code from the
+    extension SQL files. To enable this feature the trigger must
+    be created manually.
+  - Change the pg_banned_role view to display the rolename instead of the
+    role oid. Thanks to Alexei Takaseev for the patch.
+  - Update documentation about PG versions requirement and the on login event
+    trigger feature.
+  - Add CI tests to autommatically test credcheck with PostgreSQL > 13
+  - Fix support to PostgreSQL before v17.
+
+
 2025-10-16 - Version 4.0.0
 
 This major release adds new features and fixes bugs reported by users since
