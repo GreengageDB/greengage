@@ -6,8 +6,6 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION credcheck" to load this file. \quit
 
-CREATE SCHEMA credcheck;
-
 ----
 -- Remove all entries from password history.
 -- Returns the number of entries removed.
