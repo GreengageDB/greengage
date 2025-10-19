@@ -663,13 +663,17 @@ explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 -- This test is introduced to verify that outer side of HashJoin path
 -- is rescannable, if this HashJoin is parametrized by the inner side of
 -- another join.
-create table ot (oid oid);
-insert into ot values (10::oid), (10::oid);
+--start_ignore
+drop table if exists ot cascade;
+drop foreign table if exists w cascade;
+--end_ignore
+create table ot (i int);
+insert into ot values (1), (1);
 
-create external web table w (oid int) execute 'echo 1' on all format 'text';
+create external web table w (i int) execute 'echo 1' on all format 'text';
 
-create or replace function foo(i oid)
-returns table (oid int)
+create or replace function foo(i int)
+returns table (i int)
 language sql
 execute on all segments
 strict
@@ -686,10 +690,10 @@ set from_collapse_limit = '1';
 set join_collapse_limit = '1';
 set random_page_cost = '1';
 
-select 1
+explain (verbose, costs off) select 1
 from ot,
-     foo(ot.oid) as f
-join w on w.oid = f.oid;
+     foo(ot.i) as f
+join w on w.i = f.i;
 
 reset enable_nestloop;
 reset enable_mergejoin;
