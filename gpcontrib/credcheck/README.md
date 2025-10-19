@@ -502,7 +502,7 @@ CREATE EVENT TRIGGER valid_until_warning
   EXECUTE FUNCTION warning_valid_until();
 ALTER EVENT TRIGGER valid_until_warning ENABLE ALWAYS;
 ```
-If you dont want to forget to apply these commands in new database, you can execute the DDLs into the `template0` database. Any new database will include the DDLs.
+If you dont want to forget to apply these commands in new database, you can execute the DDLs into the `template0` database. Any new database will include the DDLs. The DDL are provided in the separated file `event_trigger.sql`.
 
 ### [Limitations](#limitations)
 

@@ -19,6 +19,16 @@ REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
 TESTS = 01_username 02_password 03_rename 04_alter_pwd \
 	05_reuse_history 06_reuse_interval 07_valid_until
 
+all:
+	cp -f credcheck--latest.sql $(EXTENSION)--$(EXTVERSION).sql
+	touch updates/credcheck--3.0.0--4.0.0.sql
+
+	@if [ $(MAJORVERSION) -gt 16 ] ; then \
+	   echo "Enabling event trigger on login"; \
+	   cat event_trigger.sql >> $(EXTENSION)--$(EXTVERSION).sql; \
+	   cat event_trigger.sql > updates/credcheck--3.0.0--4.0.0.sql; \
+	 fi
+
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 
 PG_CONFIG = pg_config
