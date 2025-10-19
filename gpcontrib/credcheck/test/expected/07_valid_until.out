@@ -27,9 +27,15 @@ SET credcheck.password_reuse_interval = 0;
 -- VALID UNTIL clause checks
 SET credcheck.password_valid_until TO 4;
 SET credcheck.password_valid_max TO 0;
--- fail, the VALID UNTIL clause must be present
+-- the VALID UNTIL clause must be present, if not it will be added automaticaly
 CREATE USER aaa PASSWORD 'DummY';
-ERROR:  require a VALID UNTIL option
+select count(*) from pg_shadow where usename = 'aaa' AND valuntil = (now()+'5 days'::interval)::date;
+ count 
+-------
+     1
+(1 row)
+
+DROP USER aaa;
 -- Success, the VALID UNTIL clause is present and respect the delay
 CREATE USER aaa PASSWORD 'DummY' VALID UNTIL '2050-01-01 00:00:00';
 -- fail, the VALID UNTIL clause does not respect the delay
@@ -47,7 +53,7 @@ SET credcheck.password_valid_until to 60;
 SET credcheck.password_reuse_interval to 15;
 SET credcheck.password_reuse_history to 4;
 CREATE role credcheck_test with login password 'password'; 
-ERROR:  require a VALID UNTIL option
+ERROR:  require a VALID UNTIL option with a date beyond 180 days
 -- History must be empty
 SELECT count(*), '0' AS "expected" FROM pg_password_history ;
  count | expected 

@@ -1444,18 +1444,14 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	 * change password prompts, allow it. The \password command will be
 	 * rejected anyway because it uses encrypted password.
 	 */
-	if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
-		&& strcmp(debug_query_string, "show password_encryption") != 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-					errmsg(gettext_noop("you must change your password first."))));
-
-	/* Execute the utility command before */
-	if (prev_ProcessUtility)
-		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
-	else
-		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
-
+	if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
+	{
+		if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
+			&& strcmp(debug_query_string, "show password_encryption") != 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+						errmsg(gettext_noop("you must change your password first."))));
+	}
 	statement_has_password = false;
 
 	switch (nodeTag(parsetree))
@@ -1533,7 +1529,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				struct pg_tm tt, *tm = &tt;
 				fsec_t          fsec;
 				int             julian;
-				char validuntil[11];
+				char           *validuntil;
 
 				if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
 					ereport(ERROR,
@@ -1550,8 +1546,10 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 							 errmsg("timestamp out of range")));
 				j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+				validuntil = malloc(sizeof(char)*11);
 				sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
-				dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), 1);
+				dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), -1);
+				((AlterRoleStmt *)parsetree)->options = lappend(((AlterRoleStmt *)parsetree)->options, dvalidUntil);
 			}
 
 			/* when a valid until date is set check that it is > to password_valid_until */
@@ -1627,6 +1625,39 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				save_password = check_password_reuse(stmt->role, password);
 			}
 #endif
+			/*
+			 * At user creation automatically set the valid until date to now() + password_valid_until
+			 * days if password_valid_until is set.
+			 */
+			if (!dvalidUntil && password_valid_until > 0)
+			{
+				Timestamp dt_now = GetCurrentTimestamp();
+				struct pg_tm tt, *tm = &tt;
+				fsec_t          fsec;
+				int             julian;
+				char            *validuntil;
+
+				if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+							 errmsg("timestamp out of range")));
+
+				/*
+				 * Add credcheck.password_valid_until days by converting to and from Julian.
+				 */
+				julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+				if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
+					julian < 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+							 errmsg("timestamp out of range")));
+				j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+				validuntil = malloc(sizeof(char)*11);
+				sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+				dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), 1);
+				((CreateRoleStmt *)parsetree)->options = lappend(((CreateRoleStmt *)parsetree)->options, dvalidUntil);
+			}
+
 			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
 			{
 				valid_until = check_valid_until(strVal(dvalidUntil->arg));
@@ -1686,6 +1717,14 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		default:
 			break;
 	}
+
+	/* Execute the utility command now */
+	if (prev_ProcessUtility)
+		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+	else
+		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+
+
 }
 
 #if PG_VERSION_NUM >= 120000
@@ -2623,10 +2662,13 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	 */
 	if (debug_query_string != NULL && strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
 	{
-		if (queryDesc->operation != CMD_UTILITY && force_change_password)
+		if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
+		{
+			if (queryDesc->operation != CMD_UTILITY && force_change_password)
 					ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("you must change your password first."))));
+		}
 	}
 
         /* Continue the normal behavior */
