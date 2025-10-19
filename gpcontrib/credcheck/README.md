@@ -474,8 +474,7 @@ PostgreSQL v17 and above as it uses on login event trigger that is not available
 
 The message will be: `WARNING: your password will expire in 7 days, please renew your password!`
 
-To enable this feature in all database, the credcheck extention must be created inside each database or
-as postgres supersuser execute the followind DDL in each database.
+To enable this feature you must execute the following DDL in all databases as postgres supersuser. To create it automatically on new databases, apply this DDL to the template0 database.
 ```
 -- Add event trigger for valid until warning
 CREATE OR REPLACE FUNCTION warning_valid_until()
@@ -503,7 +502,7 @@ CREATE EVENT TRIGGER valid_until_warning
   EXECUTE FUNCTION warning_valid_until();
 ALTER EVENT TRIGGER valid_until_warning ENABLE ALWAYS;
 ```
-If you dont want to forget to apply these commands in new database, you can execute the DDLs into the `template0` database. Any new database will include the DDLs. The DDL are provided in the separated file `event_trigger.sql`.
+This DDL is also provided in the separated file `event_trigger.sql`.
 
 ### [Limitations](#limitations)
 
