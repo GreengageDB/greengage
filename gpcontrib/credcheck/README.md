@@ -469,7 +469,8 @@ ALTER USER user1 SET credcheck_internal.force_change_password = true;
 ### [Warning before password expire](#warning-before-password-expire)
 
 To send a warning to the user N days before his password expires you can set the number of days
-before using the `credcheck.password_valid_warning` setting.
+before using the `credcheck.password_valid_warning` setting. This feature is only available with
+PostgreSQL v17 and above as it uses on login event trigger that is not available before.
 
 The message will be: `WARNING: your password will expire in 7 days, please renew your password!`
 
