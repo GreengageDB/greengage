@@ -3482,14 +3482,13 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 	bool have_stats = false;
 
 	TuplesortInstrumentation *sinstrument;
-	for (int n = 0; n < sortstate->shared_info->num_workers; n++)
-	{
+	for (int n = 0; n < sortstate->shared_info->num_workers; n++) {
 		sinstrument = &sortstate->shared_info->sinstrument[n];
 		if (sinstrument->sortMethod == SORT_TYPE_STILL_IN_PROGRESS)
-			continue;		/* ignore any unfilled slots */
+			continue;	/* ignore any unfilled slots */
 		if (!have_stats) {
 			sortMethod = tuplesort_method_name(sinstrument->sortMethod);
-			spaceType  = tuplesort_space_type_name(sinstrument->spaceType);
+			spaceType = tuplesort_space_type_name(sinstrument->spaceType);
 			have_stats = true;
 		}
 		peakSpaceUsed = Max(peakSpaceUsed, sinstrument->spaceUsed);
@@ -3497,7 +3496,7 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 	}
 
 	if (!have_stats)
-		return; /* no completed stats; don't print anything */
+		return;		/* no completed stats; don't print anything */
 
 	avgSpaceUsed = sortstate->shared_info->num_workers > 0 ?
 		totalSpaceUsed / sortstate->shared_info->num_workers : 0;
