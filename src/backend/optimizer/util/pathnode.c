@@ -84,7 +84,8 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
 							List *is_split_updates);
 static inline void
 create_material_if_parametrized(PlannerInfo *root, Path **p_outer_path,
-								Path **p_inner_path, Relids required_outer);
+								Path **p_inner_path, Relids required_outer,
+								NodeTag tag);
 
 /*****************************************************************************
  *		MISC. PATH UTILITIES
@@ -2083,7 +2084,8 @@ static inline void
 create_material_if_parametrized(PlannerInfo *root,
 								Path **p_outer_path,
 								Path **p_inner_path,
-								Relids required_outer) 
+								Relids required_outer,
+								NodeTag tag)
 {
 	Path *outer_path = *p_outer_path;
 	Path *inner_path = *p_inner_path;
@@ -2098,12 +2100,21 @@ create_material_if_parametrized(PlannerInfo *root,
 
 		matouter->cdb_shield_child_from_rescans = true;
 
-		*p_outer_path = (Path *) matouter;
+		outer_path = (Path *) matouter;
 	}
 
-	if (!inner_path->rescannable && !bms_is_empty(required_outer))
+	/*
+	 * We need to try to materialize inner path only in case of
+	 * Nested loop join. This is because all other types of join
+	 * already support rescan of inner part in some form.
+	 */
+	if ((tag == T_NestLoop) && !inner_path->rescannable &&
+		!bms_is_empty(required_outer))
 	{
-
+		/*
+		 * NLs potentially rescan the inner; if our inner path
+		 * isn't rescannable we have to add a materialize node
+		 */
 		MaterialPath *matinner = create_material_path(root, inner_path->parent, inner_path);
 
 		matinner->cdb_shield_child_from_rescans = true;
@@ -2120,8 +2131,11 @@ create_material_if_parametrized(PlannerInfo *root,
 			matinner->path.motionHazard = false;
 		}
 
-		*p_inner_path = (Path *) matinner;
+		inner_path = (Path *) matinner;
 	}
+
+	*p_outer_path = outer_path;
+	*p_inner_path = inner_path;
 }
 
 /*
@@ -3733,8 +3747,8 @@ create_nestloop_path(PlannerInfo *root,
 	if (!outer_path->pathkeys)
 		pathkeys = NIL;
 
-	create_material_if_parametrized(root, &outer_path, 
-									&inner_path, required_outer);
+	create_material_if_parametrized(root, &outer_path,
+									&inner_path, required_outer, T_NestLoop);
 
 	/*
 	 * If the inner path is parameterized by the outer, we must drop any
@@ -3942,6 +3956,9 @@ create_mergejoin_path(PlannerInfo *root,
 	if (CdbPathLocus_IsNull(join_locus))
 		return NULL;
 
+	create_material_if_parametrized(root, &outer_path,
+									&inner_path, required_outer, T_MergeJoin);
+
 	/*
 	 * Sort is not needed if subpath is already well enough ordered and a
 	 * disordering motion node (with pathkeys == NIL) hasn't been added.
@@ -4069,8 +4086,8 @@ create_hashjoin_path(PlannerInfo *root,
 	if (CdbPathLocus_IsNull(join_locus))
 		return NULL;
 
-	create_material_if_parametrized(root, &outer_path, 
-									&inner_path, required_outer);
+	create_material_if_parametrized(root, &outer_path,
+									&inner_path, required_outer, T_HashJoin);
 	/*
 	 * CDB: If gp_enable_hashjoin_size_heuristic is set, disallow inner
 	 * joins where the inner rel is the larger of the two inputs.
