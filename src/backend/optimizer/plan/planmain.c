@@ -326,7 +326,7 @@ PlannerConfig *DefaultPlannerConfig(void)
 	c1->gp_enable_multiphase_agg = gp_enable_multiphase_agg;
 	c1->gp_enable_direct_dispatch = gp_enable_direct_dispatch;
 
-	c1->gp_cte_sharing = gp_cte_sharing;
+	c1->gp_cte_sharing = true;
 
 	c1->honor_order_by = true;
 

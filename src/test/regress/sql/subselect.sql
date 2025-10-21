@@ -971,6 +971,23 @@ explain (verbose, costs off)
 with x as (select * from subselect_tbl)
 select * from x for update;
 
+-- Ensure CTE can't be shared inside InitPlan, even when MATERIALIZED is specified
+explain (verbose, costs off)
+with x as (select oid from pg_class)
+select (select count(*) from x), (select count(*) from x);
+
+explain (verbose, costs off)
+with x as materialized (select oid from pg_class)
+select (select count(*) from x), (select count(*) from x);
+
+explain (verbose, costs off)
+with x as (select * from subselect_tbl)
+select (select count(*) from x), (select count(*) from x);
+
+explain (verbose, costs off)
+with x as materialized (select * from subselect_tbl)
+select (select count(*) from x), (select count(*) from x);
+
 set gp_cte_sharing to off;
 
 -- Ensure that both planners produce valid plans for the query with the nested

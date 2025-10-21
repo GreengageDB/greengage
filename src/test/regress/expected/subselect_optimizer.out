@@ -2034,6 +2034,125 @@ select * from x for update;
  Settings: gp_cte_sharing=on, optimizer=on
 (6 rows)
 
+-- Ensure CTE can't be shared inside InitPlan, even when MATERIALIZED is specified
+explain (verbose, costs off)
+with x as (select oid from pg_class)
+select (select count(*) from x), (select count(*) from x);
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Result
+   Output: $0, $1
+   InitPlan 1 (returns $0)
+     ->  Aggregate
+           Output: count(*)
+           ->  Seq Scan on pg_catalog.pg_class
+                 Output: pg_class.oid
+   InitPlan 2 (returns $1)
+     ->  Aggregate
+           Output: count(*)
+           ->  Seq Scan on pg_catalog.pg_class pg_class_1
+                 Output: pg_class_1.oid
+ Optimizer: Postgres-based planner
+ Settings: gp_cte_sharing = 'on'
+(14 rows)
+
+explain (verbose, costs off)
+with x as materialized (select oid from pg_class)
+select (select count(*) from x), (select count(*) from x);
+WARNING:  MATERIALIZED ignored for CTE "x" since it must be inlined
+WARNING:  MATERIALIZED ignored for CTE "x" since it must be inlined
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Result
+   Output: $0, $1
+   InitPlan 1 (returns $0)
+     ->  Aggregate
+           Output: count(*)
+           ->  Seq Scan on pg_catalog.pg_class
+                 Output: pg_class.oid
+   InitPlan 2 (returns $1)
+     ->  Aggregate
+           Output: count(*)
+           ->  Seq Scan on pg_catalog.pg_class pg_class_1
+                 Output: pg_class_1.oid
+ Optimizer: Postgres-based planner
+ Settings: gp_cte_sharing = 'on'
+(14 rows)
+
+explain (verbose, costs off)
+with x as (select * from subselect_tbl)
+select (select count(*) from x), (select count(*) from x);
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Sequence
+   Output: (count()), (count())
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1.f1, share0_ref1.f2, share0_ref1.f3
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: subselect_tbl.f1, subselect_tbl.f2, subselect_tbl.f3
+               ->  Seq Scan on public.subselect_tbl
+                     Output: subselect_tbl.f1, subselect_tbl.f2, subselect_tbl.f3
+   ->  Nested Loop Left Join
+         Output: (count()), (count())
+         Join Filter: true
+         ->  Nested Loop Left Join
+               Output: (count())
+               Join Filter: true
+               ->  Result
+                     Output: true
+               ->  Materialize
+                     Output: (count())
+                     ->  Aggregate
+                           Output: count()
+                           ->  Shared Scan (share slice:id 0:0)
+                                 Output: share0_ref3.f1, share0_ref3.f2, share0_ref3.f3
+         ->  Materialize
+               Output: (count())
+               ->  Aggregate
+                     Output: count()
+                     ->  Shared Scan (share slice:id 0:0)
+                           Output: share0_ref2.f1, share0_ref2.f2, share0_ref2.f3
+ Optimizer: GPORCA
+ Settings: gp_cte_sharing = 'on'
+(30 rows)
+
+explain (verbose, costs off)
+with x as materialized (select * from subselect_tbl)
+select (select count(*) from x), (select count(*) from x);
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Sequence
+   Output: (count()), (count())
+   ->  Shared Scan (share slice:id 0:0)
+         Output: share0_ref1.f1, share0_ref1.f2, share0_ref1.f3
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Output: subselect_tbl.f1, subselect_tbl.f2, subselect_tbl.f3
+               ->  Seq Scan on public.subselect_tbl
+                     Output: subselect_tbl.f1, subselect_tbl.f2, subselect_tbl.f3
+   ->  Nested Loop Left Join
+         Output: (count()), (count())
+         Join Filter: true
+         ->  Nested Loop Left Join
+               Output: (count())
+               Join Filter: true
+               ->  Result
+                     Output: true
+               ->  Materialize
+                     Output: (count())
+                     ->  Aggregate
+                           Output: count()
+                           ->  Shared Scan (share slice:id 0:0)
+                                 Output: share0_ref3.f1, share0_ref3.f2, share0_ref3.f3
+         ->  Materialize
+               Output: (count())
+               ->  Aggregate
+                     Output: count()
+                     ->  Shared Scan (share slice:id 0:0)
+                           Output: share0_ref2.f1, share0_ref2.f2, share0_ref2.f3
+ Optimizer: GPORCA
+ Settings: gp_cte_sharing = 'on'
+(30 rows)
+
 set gp_cte_sharing to off;
 -- Ensure that both planners produce valid plans for the query with the nested
 -- SubLink, which contains attributes referenced in query's GROUP BY clause.

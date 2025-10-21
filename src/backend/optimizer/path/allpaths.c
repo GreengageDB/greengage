@@ -2864,6 +2864,8 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	RelOptInfo *sub_final_rel;
 	Relids		required_outer;
 	bool		is_shared;
+	bool		can_be_shared = true;
+	bool		can_be_inlined = true;
 	Query           *subquery = NULL;
 	bool            contain_volatile_function = false;
 
@@ -2924,6 +2926,38 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	cteplaninfo = list_nth(cteroot->list_cteplaninfo, planinfo_id);
 
 	/*
+	 * There are several checks that might force inlining, for example
+	 * Shared Scans executing inside Init Plans is currently not supported
+	 */
+	if (!root->config->gp_cte_sharing)
+		can_be_shared = false;
+
+	/*
+	 * Inlining the non-plain SELECT CTEs (like INSERT/UPDATE/DELETE) leads to
+	 * redundant or duplicated operations whenever the CTE is referenced
+	 * multiple times within the query. Therefore, the best option is to
+	 * materialize such CTEs by utilizing the existing SharedInputScan node.
+	 * This idea is similar to vanilla PostgreSQL approach.
+	 */
+	if (subquery->commandType != CMD_SELECT)
+		can_be_inlined = false;
+	
+
+	/*
+	 * Inlining volatile functions isn't safe for the same reason, since they
+	 * can contain modifying operations.
+	 */
+	if (contain_volatile_function)
+		can_be_inlined = false;
+
+	/*
+	 * since shareinputscan with outer refs is not supported by GPDB, if
+	 * contain outer self references, the cte need to be inlined.
+	 */
+	else if (contain_outer_selfref(cte->ctequery))
+		can_be_shared = false;
+
+	/*
 	 * If there is exactly one reference to this CTE in the query, or plan
 	 * sharing is disabled, create a new subplan for this CTE. It will
 	 * become simple subquery scan.
@@ -2945,36 +2979,43 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 * Also, we might want to think extracting "common"
 	 * qual expressions between multiple references, but
 	 * so far we don't support it.
+	 *
+	 * This is only a preference, there are several edge cases that
+	 * can force either sharing or inlining (see below).
 	 */
 
 	switch (cte->ctematerialized)
 	{
 		case CTEMaterializeNever:
+			/*
+			 * We can ignore this silently if CTE can't be materialized,
+			 * the same way Postgres does it. This normally happens for
+			 * volatile functions and modifying operations.
+			 */
 			is_shared = false;
 			break;
 		case CTEMaterializeAlways:
 			is_shared = true;
+
+			/*
+			 * We can still ignore this, but better issue a warning since
+			 * not all cases of materialized CTEs are supported in GPDB.
+			 */
+			if (!can_be_shared)
+				elog(WARNING,
+					 "MATERIALIZED ignored for CTE \"%s\" since it must be inlined",
+					 cte->ctename);
 			break;
 		default:
-			/* if plan sharing is enabled and contains volatile functions in the CTE query, also generate a shared scan plan */
-			is_shared =  root->config->gp_cte_sharing && (cte->cterefcount > 1 || contain_volatile_function);
-
+			/* if plan sharing is enabled, also generate a shared scan plan */
+			is_shared = gp_cte_sharing && cte->cterefcount > 1;
 	}
 
-	/*
-	 * Inlining the non-plain SELECT CTEs (like INSERT/UPDATE/DELETE) leads to
-	 * redundant or duplicated operations whenever the CTE is referenced
-	 * multiple times within the query. Therefore, the best option is to
-	 * materialize such CTEs by utilizing the existing SharedInputScan node.
-	 * This idea is similar to vanilla PostgreSQL approach.
-	 */
-	if (subquery->commandType != CMD_SELECT)
+	if (!can_be_inlined && !can_be_shared)
+		elog(ERROR, "failed to build a CTE, cannot inline or use sharing");
+	else if (!can_be_inlined)
 		is_shared = true;
-	/*
-	 * since shareinputscan with outer refs is not supported by GPDB, if
-	 * contain outer self references, the cte need to be inlined.
-	 */
-	else if (is_shared && contain_outer_selfref(cte->ctequery))
+	else if (!can_be_shared)
 		is_shared = false;
 
 	if (!is_shared)

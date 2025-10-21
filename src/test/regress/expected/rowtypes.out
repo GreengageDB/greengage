@@ -1235,6 +1235,7 @@ with cte(c) as materialized (select row(1, 2)),
 select * from cte2 as t
 where (select * from (select c as c1) s
        where (select (c1).f1 > 0)) is not null;
+WARNING:  MATERIALIZED ignored for CTE "cte" since it must be inlined
                 QUERY PLAN                
 ------------------------------------------
  Subquery Scan on t
@@ -1257,6 +1258,7 @@ with cte(c) as materialized (select row(1, 2)),
 select * from cte2 as t
 where (select * from (select c as c1) s
        where (select (c1).f1 > 0)) is not null;
+WARNING:  MATERIALIZED ignored for CTE "cte" since it must be inlined
    c   
 -------
  (1,2)
@@ -1319,6 +1321,7 @@ explain (verbose, costs off)
 with cte(c) as materialized (select row(1, 2)),
      cte2(c) as (select * from cte)
 select (c).f1 from cte2 as t;
+WARNING:  MATERIALIZED ignored for CTE "cte" since it must be inlined
             QUERY PLAN             
 -----------------------------------
  Subquery Scan on t

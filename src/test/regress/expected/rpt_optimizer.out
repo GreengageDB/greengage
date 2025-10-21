@@ -984,19 +984,21 @@ explain (costs off, verbose) with s as (select i from t_replicate_src group by i
          ->  Subquery Scan on "*SELECT*"
                Output: nextval('t_replicate_dst_id_seq'::regclass), "*SELECT*".i
                ->  Result
-                     Output: t_replicate_src.i
-                     ->  GroupAggregate
-                           Output: t_replicate_src.i
-                           Group Key: t_replicate_src.i
-                           Filter: (random() > '0'::double precision)
-                           ->  Sort
+                     Output: share0_ref1.i
+                     ->  Shared Scan (share slice:id 1:0)
+                           Output: share0_ref1.i
+                           ->  GroupAggregate
                                  Output: t_replicate_src.i
-                                 Sort Key: t_replicate_src.i
-                                 ->  Seq Scan on rpt.t_replicate_src
+                                 Group Key: t_replicate_src.i
+                                 Filter: (random() > '0'::double precision)
+                                 ->  Sort
                                        Output: t_replicate_src.i
+                                       Sort Key: t_replicate_src.i
+                                       ->  Seq Scan on rpt.t_replicate_src
+                                             Output: t_replicate_src.i
  Optimizer: Postgres-based planner
- Settings: enable_seqscan = 'off'
-(18 rows)
+ Settings: enable_seqscan = 'off', optimizer = 'off'
+(20 rows)
 
 RESET optimizer;
 insert into t_replicate_dst (i) select i from t_replicate_src;
@@ -1431,60 +1433,64 @@ explain (costs off, verbose) with cte as (
     select a, a * random() from t2
 )
 select * from cte join t1 using(a);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: t2.a, (((t2.a)::double precision * random()))
+   Output: share0_ref1.a, share0_ref1."?column?"
    ->  Hash Join
-         Output: t2.a, (((t2.a)::double precision * random()))
-         Hash Cond: (t1.a = t2.a)
+         Output: share0_ref1.a, share0_ref1."?column?"
+         Hash Cond: (t1.a = share0_ref1.a)
          ->  Seq Scan on rpt.t1
                Output: t1.a
          ->  Hash
-               Output: t2.a, (((t2.a)::double precision * random()))
+               Output: share0_ref1.a, share0_ref1."?column?"
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
-                     Output: t2.a, (((t2.a)::double precision * random()))
-                     Hash Key: t2.a
+                     Output: share0_ref1.a, share0_ref1."?column?"
+                     Hash Key: share0_ref1.a
                      ->  Result
-                           Output: t2.a, (((t2.a)::double precision * random()))
-                           ->  Seq Scan on rpt.t2
-                                 Output: t2.a, ((t2.a)::double precision * random())
+                           Output: share0_ref1.a, share0_ref1."?column?"
+                           ->  Shared Scan (share slice:id 2:0)
+                                 Output: share0_ref1.a, share0_ref1."?column?"
+                                 ->  Seq Scan on rpt.t2
+                                       Output: t2.a, ((t2.a)::double precision * random())
  Optimizer: Postgres-based planner
  Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
-(18 rows)
+(20 rows)
 
 explain (costs off, verbose) with cte as (
     select a, count(*) from t2 group by a having count(*) > random()
 )
 select * from cte join t1 using(a);
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: t2.a, (count(*))
+   Output: share0_ref1.a, share0_ref1.count
    ->  Hash Join
-         Output: t2.a, (count(*))
-         Hash Cond: (t1.a = t2.a)
+         Output: share0_ref1.a, share0_ref1.count
+         Hash Cond: (t1.a = share0_ref1.a)
          ->  Seq Scan on rpt.t1
                Output: t1.a
          ->  Hash
-               Output: t2.a, (count(*))
+               Output: share0_ref1.a, share0_ref1.count
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
-                     Output: t2.a, (count(*))
-                     Hash Key: t2.a
+                     Output: share0_ref1.a, share0_ref1.count
+                     Hash Key: share0_ref1.a
                      ->  Result
-                           Output: t2.a, (count(*))
-                           ->  GroupAggregate
-                                 Output: t2.a, count(*)
-                                 Group Key: t2.a
-                                 Filter: ((count(*))::double precision > random())
-                                 ->  Sort
-                                       Output: t2.a
-                                       Sort Key: t2.a
-                                       ->  Seq Scan on rpt.t2
+                           Output: share0_ref1.a, share0_ref1.count
+                           ->  Shared Scan (share slice:id 2:0)
+                                 Output: share0_ref1.a, share0_ref1.count
+                                 ->  GroupAggregate
+                                       Output: t2.a, count(*)
+                                       Group Key: t2.a
+                                       Filter: ((count(*))::double precision > random())
+                                       ->  Sort
                                              Output: t2.a
+                                             Sort Key: t2.a
+                                             ->  Seq Scan on rpt.t2
+                                                   Output: t2.a
  Optimizer: Postgres-based planner
  Settings: enable_bitmapscan = 'off', enable_seqscan = 'off'
-(25 rows)
+(27 rows)
 
 reset gp_cte_sharing;
 -- ensure that the volatile function is executed on one segment

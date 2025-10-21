@@ -872,55 +872,59 @@ explain (costs off, verbose) with cte as (
     select a, a * random() from generate_series(1, 5) a
 )
 select * from cte join t_hashdist using(a);
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: a.a, (((a.a)::double precision * random())), t_hashdist.b, t_hashdist.c
+   Output: share0_ref1.a, share0_ref1."?column?", t_hashdist.b, t_hashdist.c
    ->  Hash Join
-         Output: a.a, (((a.a)::double precision * random())), t_hashdist.b, t_hashdist.c
-         Hash Cond: (t_hashdist.a = a.a)
+         Output: share0_ref1.a, share0_ref1."?column?", t_hashdist.b, t_hashdist.c
+         Hash Cond: (t_hashdist.a = share0_ref1.a)
          ->  Seq Scan on public.t_hashdist
                Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
          ->  Hash
-               Output: a.a, (((a.a)::double precision * random()))
+               Output: share0_ref1.a, share0_ref1."?column?"
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
-                     Output: a.a, (((a.a)::double precision * random()))
-                     Hash Key: a.a
-                     ->  Function Scan on pg_catalog.generate_series a
-                           Output: a.a, ((a.a)::double precision * random())
-                           Function Call: generate_series(1, 5)
+                     Output: share0_ref1.a, share0_ref1."?column?"
+                     Hash Key: share0_ref1.a
+                     ->  Shared Scan (share slice:id 2:0)
+                           Output: share0_ref1.a, share0_ref1."?column?"
+                           ->  Function Scan on pg_catalog.generate_series a
+                                 Output: a.a, ((a.a)::double precision * random())
+                                 Function Call: generate_series(1, 5)
  Optimizer: Postgres-based planner
  Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
-(17 rows)
+(19 rows)
 
 explain (costs off, verbose) with cte as (
     select a, count(*) from generate_series(1, 5) a group by a having count(*) > random()
 )
 select * from cte join t_hashdist using(a);
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: a.a, (count(*)), t_hashdist.b, t_hashdist.c
+   Output: share0_ref1.a, share0_ref1.count, t_hashdist.b, t_hashdist.c
    ->  Hash Join
-         Output: a.a, (count(*)), t_hashdist.b, t_hashdist.c
-         Hash Cond: (t_hashdist.a = a.a)
+         Output: share0_ref1.a, share0_ref1.count, t_hashdist.b, t_hashdist.c
+         Hash Cond: (t_hashdist.a = share0_ref1.a)
          ->  Seq Scan on public.t_hashdist
                Output: t_hashdist.a, t_hashdist.b, t_hashdist.c
          ->  Hash
-               Output: a.a, (count(*))
+               Output: share0_ref1.a, share0_ref1.count
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
-                     Output: a.a, (count(*))
-                     Hash Key: a.a
-                     ->  HashAggregate
-                           Output: a.a, count(*)
-                           Group Key: a.a
-                           Filter: ((count(*))::double precision > random())
-                           ->  Function Scan on pg_catalog.generate_series a
-                                 Output: a.a
-                                 Function Call: generate_series(1, 5)
+                     Output: share0_ref1.a, share0_ref1.count
+                     Hash Key: share0_ref1.a
+                     ->  Shared Scan (share slice:id 2:0)
+                           Output: share0_ref1.a, share0_ref1.count
+                           ->  HashAggregate
+                                 Output: a.a, count(*)
+                                 Group Key: a.a
+                                 Filter: ((count(*))::double precision > random())
+                                 ->  Function Scan on pg_catalog.generate_series a
+                                       Output: a.a
+                                       Function Call: generate_series(1, 5)
  Optimizer: Postgres-based planner
  Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
-(21 rows)
+(23 rows)
 
 reset gp_cte_sharing;
 -- ensure that the volatile function is executed on one segment
