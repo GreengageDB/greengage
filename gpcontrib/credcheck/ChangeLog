@@ -1,3 +1,12 @@
+2025-10-22 - Version 4.2.0
+
+This is a quick maintenance release to fix a PG crash when parallel workers
+are in used with credcheck > 3.0.
+
+  - Prevent credcheck code to be executed in parallel workers. Thanks to
+    glushakov Anton for the report.
+
+
 2025-10-19 - Version 4.1.0
 
 This release fixes broken compilation with PostgreSQL below v17 and others
