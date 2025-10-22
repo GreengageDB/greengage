@@ -36,6 +36,9 @@
 #include "cdb/cdbmutate.h"
 #include "optimizer/tlist.h"
 
+#include "catalog/pg_proc.h"
+#include "utils/lsyscache.h"
+
 /*
  * A PlanProfile holds state for recursive prescan_walker().
  */
@@ -473,6 +476,15 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 
 				if (rtfunc->funcexpr && ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
 				{
+					FuncExpr	*funcexpr = (FuncExpr *)rtfunc->funcexpr;
+					char	exec_location = exec_location = func_exec_location(funcexpr->funcid);
+
+					if (exec_location == PROEXECLOCATION_MASTER || exec_location == PROEXECLOCATION_INITPLAN)
+						ereport(ERROR,
+								(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+								 errmsg("cannot parallelize that query yet"),
+								 errdetail("In a subquery FROM clause, a function invocation cannot contain a correlated reference.")));
+
 					funcScanCanBeMaterialized = false;
 					break;
 				}
