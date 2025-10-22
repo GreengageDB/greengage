@@ -3462,6 +3462,8 @@ show_tablesample(TableSampleClause *tsc, PlanState *planstate,
 
 /*
  * If it's EXPLAIN ANALYZE, show tuplesort stats for a sort node
+ *
+ * FIXME: should print stats for several sortMethods when QEs use different ones
  */
 static void
 show_sort_info(SortState *sortstate, ExplainState *es)
