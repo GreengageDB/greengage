@@ -4301,7 +4301,6 @@ set enable_mergejoin = 'off';
 set enable_hashjoin = 'on';
 set from_collapse_limit = '1';
 set join_collapse_limit = '1';
-set random_page_cost = '1';
 explain (verbose, costs off) select 1
 from ot,
      foo(ot.i) as f
@@ -4331,7 +4330,7 @@ join w on w.i = f.i;
                                  Output: f.i
                                  Function Call: foo(ot.i)
  Optimizer: Postgres-based planner
- Settings: enable_nestloop = 'on', from_collapse_limit = '1', join_collapse_limit = '1', random_page_cost = '1'
+ Settings: enable_nestloop = 'on', from_collapse_limit = '1', join_collapse_limit = '1'
 (24 rows)
 
 reset enable_nestloop;
@@ -4339,7 +4338,6 @@ reset enable_mergejoin;
 reset enable_hashjoin;
 reset from_collapse_limit;
 reset join_collapse_limit;
-reset random_page_cost;
 -- This test is introduced to verify that outer side of MergeJoin path
 -- is rescannable, if this MergeJoin is parametrized by the inner side of
 -- another join.
@@ -4372,9 +4370,6 @@ set join_collapse_limit=1;
 set from_collapse_limit=1;
 set enable_mergejoin=on;
 set enable_hashjoin=off;
-set optimizer=off;
-set jit=on;
-set jit_above_cost=0;
 explain (verbose, costs off) select *
 from t1 out
 where out.b in (select t1.a
@@ -4419,16 +4414,13 @@ where out.b in (select t1.a
                                        ->  Seq Scan on bfv_joins.t2
                                              Output: t2.a
  Optimizer: Postgres-based planner
- Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', from_collapse_limit = '1', jit = 'on', jit_above_cost = '0', join_collapse_limit = '1', optimizer = 'off'
+ Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', from_collapse_limit = '1', join_collapse_limit = '1'
 (36 rows)
 
 reset join_collapse_limit;
 reset from_collapse_limit;
 reset enable_mergejoin;
 reset enable_hashjoin;
-reset optimizer;
-reset jit;
-reset jit_above_cost;
 reset allow_system_table_mods;
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;

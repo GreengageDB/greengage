@@ -4319,7 +4319,6 @@ set enable_mergejoin = 'off';
 set enable_hashjoin = 'on';
 set from_collapse_limit = '1';
 set join_collapse_limit = '1';
-set random_page_cost = '1';
 explain (verbose, costs off) select 1
 from ot,
      foo(ot.i) as f
@@ -4349,7 +4348,7 @@ join w on w.i = f.i;
                                  Output: f.i
                                  Function Call: foo(ot.i)
  Optimizer: Postgres-based planner
- Settings: enable_nestloop = 'on', from_collapse_limit = '1', join_collapse_limit = '1', random_page_cost = '1'
+ Settings: enable_nestloop = 'on', from_collapse_limit = '1', join_collapse_limit = '1'
 (24 rows)
 
 reset enable_nestloop;
@@ -4357,7 +4356,6 @@ reset enable_mergejoin;
 reset enable_hashjoin;
 reset from_collapse_limit;
 reset join_collapse_limit;
-reset random_page_cost;
 -- This test is introduced to verify that outer side of MergeJoin path
 -- is rescannable, if this MergeJoin is parametrized by the inner side of
 -- another join.
@@ -4390,9 +4388,6 @@ set join_collapse_limit=1;
 set from_collapse_limit=1;
 set enable_mergejoin=on;
 set enable_hashjoin=off;
-set optimizer=off;
-set jit=on;
-set jit_above_cost=0;
 explain (verbose, costs off) select *
 from t1 out
 where out.b in (select t1.a
@@ -4400,53 +4395,44 @@ where out.b in (select t1.a
                                              from t2
                                              where t2.a = out.b
                                              order by a) t2_d on t1.a=t2_d.a);
-                                                                              QUERY PLAN                                                                               
------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Nested Loop Semi Join
+                                                    QUERY PLAN                                                    
+------------------------------------------------------------------------------------------------------------------
+ Result
    Output: "out".a, "out".b
+   Filter: (SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Output: "out".a, "out".b
          ->  Seq Scan on bfv_joins.t1 "out"
                Output: "out".a, "out".b
-   ->  Materialize
-         Output: a.i
-         ->  Merge Left Join
-               Output: a.i
-               Merge Cond: (a.i = t2.a)
-               Filter: ("out".b = a.i)
-               ->  Materialize
-                     Output: a.i
-                     ->  Gather Motion 3:1  (slice2; segments: 3)
-                           Output: a.i
-                           Merge Key: a.i
-                           ->  Sort
-                                 Output: a.i
-                                 Sort Key: a.i
-                                 ->  Seq Scan on bfv_joins.a
-                                       Output: a.i
-               ->  Sort
-                     Output: t2.a
-                     Sort Key: t2.a
-                     ->  Result
-                           Output: t2.a
-                           Filter: (t2.a = "out".b)
-                           ->  Materialize
-                                 Output: t2.a
-                                 ->  Gather Motion 3:1  (slice3; segments: 3)
-                                       Output: t2.a
-                                       ->  Seq Scan on bfv_joins.t2
-                                             Output: t2.a
- Optimizer: Postgres-based planner
- Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', from_collapse_limit = '1', jit = 'on', jit_above_cost = '0', join_collapse_limit = '1', optimizer = 'off'
-(36 rows)
+   SubPlan 1
+     ->  Nested Loop Left Join
+           Output: a.i
+           Join Filter: (a.i = t2.a)
+           ->  Materialize
+                 Output: a.i
+                 ->  Gather Motion 3:1  (slice3; segments: 3)
+                       Output: a.i
+                       ->  Seq Scan on bfv_joins.a
+                             Output: a.i
+           ->  Materialize
+                 Output: t2.a
+                 ->  Result
+                       Output: t2.a
+                       Filter: (t2.a = "out".b)
+                       ->  Materialize
+                             Output: t2.a
+                             ->  Gather Motion 3:1  (slice2; segments: 3)
+                                   Output: t2.a
+                                   ->  Seq Scan on bfv_joins.t2
+                                         Output: t2.a
+ Optimizer: GPORCA
+ Settings: enable_hashjoin = 'off', enable_mergejoin = 'on', from_collapse_limit = '1', join_collapse_limit = '1'
+(30 rows)
 
 reset join_collapse_limit;
 reset from_collapse_limit;
 reset enable_mergejoin;
 reset enable_hashjoin;
-reset optimizer;
-reset jit;
-reset jit_above_cost;
 reset allow_system_table_mods;
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;

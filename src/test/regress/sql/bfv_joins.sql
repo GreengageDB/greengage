@@ -689,7 +689,6 @@ set enable_mergejoin = 'off';
 set enable_hashjoin = 'on';
 set from_collapse_limit = '1';
 set join_collapse_limit = '1';
-set random_page_cost = '1';
 
 explain (verbose, costs off) select 1
 from ot,
@@ -701,7 +700,6 @@ reset enable_mergejoin;
 reset enable_hashjoin;
 reset from_collapse_limit;
 reset join_collapse_limit;
-reset random_page_cost;
 
 -- This test is introduced to verify that outer side of MergeJoin path
 -- is rescannable, if this MergeJoin is parametrized by the inner side of
@@ -738,9 +736,6 @@ set from_collapse_limit=1;
 
 set enable_mergejoin=on;
 set enable_hashjoin=off;
-set optimizer=off;
-set jit=on;
-set jit_above_cost=0;
 
 explain (verbose, costs off) select *
 from t1 out
@@ -754,9 +749,6 @@ reset join_collapse_limit;
 reset from_collapse_limit;
 reset enable_mergejoin;
 reset enable_hashjoin;
-reset optimizer;
-reset jit;
-reset jit_above_cost;
 reset allow_system_table_mods;
 
 -- Clean up. None of the objects we create are very interesting to keep around.
