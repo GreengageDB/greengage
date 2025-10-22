@@ -27,6 +27,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/parallel.h"
 
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
@@ -58,6 +59,8 @@
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
+
+#define NOT_IN_PARALLEL_WORKER (ParallelWorkerNumber < 0)
 
 /* Default passord encryption */
 #define Password_encryption = PASSWORD_TYPE_SCRAM_SHA_256;
@@ -1435,287 +1438,290 @@ _PG_fini(void)
 static void
 cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
-	Node *parsetree = pstmt->utilityStmt;
+	if (NOT_IN_PARALLEL_WORKER)
+	{
+		Node *parsetree = pstmt->utilityStmt;
 
 		/* at first login we don't allow anything else than password change */
-	/*
-	 * When first login we don't allow anything else than password change.
-	 * Command \password issue a "show password_encryption" query after
-	 * change password prompts, allow it. The \password command will be
-	 * rejected anyway because it uses encrypted password.
-	 */
-	if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
-	{
-		if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
-			&& strcmp(debug_query_string, "show password_encryption") != 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-						errmsg(gettext_noop("you must change your password first."))));
-	}
-	statement_has_password = false;
-
-	switch (nodeTag(parsetree))
-	{
-		/* Intercept ALTER USER .. RENAME statements */
-		case T_RenameStmt:
+		/*
+		 * When first login we don't allow anything else than password change.
+		 * Command \password issue a "show password_encryption" query after
+		 * change password prompts, allow it. The \password command will be
+		 * rejected anyway because it uses encrypted password.
+		 */
+		if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
 		{
-			RenameStmt *stmt = (RenameStmt *)parsetree;
-
-			/* We only take care of user renaming */
-			if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
-			{
-				if (is_in_whitelist(stmt->newname, username_whitelist) || is_in_whitelist(stmt->subname, username_whitelist))
-					break;
-			
-				/* check the validity of the username */
-				username_check(stmt->newname, NULL);
-
-#if PG_VERSION_NUM >= 120000
-				/* rename the user in the history table */
-				rename_user_in_history(stmt->subname, stmt->newname);
-#endif
-			}
-			break;
-		}
-
-		case T_AlterRoleStmt:
-		{
-			AlterRoleStmt *stmt = (AlterRoleStmt *)parsetree;
-			ListCell      *option;
-			char          *password;
-			bool           save_password = false;
-			DefElem    *dvalidUntil = NULL;
-			DefElem    *dpassword = NULL;
-
-			if (is_in_whitelist(stmt->role->rolename, username_whitelist))
-				break;
-
-			/* Extract options from the statement node tree */
-			foreach(option, stmt->options)
-			{
-				DefElem    *defel = (DefElem *) lfirst(option);
-
-				if (strcmp(defel->defname, "password") == 0)
-				{
-					dpassword = defel;
-				}
-				else if (strcmp(defel->defname, "validUntil") == 0)
-				{
-					dvalidUntil = defel;
-				}
-			}
-
-			if (dpassword == NULL && force_change_password)
-					ereport(ERROR,
+			if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
+				&& strcmp(debug_query_string, "show password_encryption") != 0)
+				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("you must change your password first."))));
-
-#if PG_VERSION_NUM >= 120000
-			/* check the password set */
-			if (dpassword && dpassword->arg)
-			{
-				statement_has_password = true;
-				password = strVal(dpassword->arg);
-				save_password = check_password_reuse(stmt->role->rolename, password);
-			}
-#endif
-			/*
-			 * when the user change his password, automatically set the valid until
-			 * date to now() + password_valid_until days if password_valid_until is set.
-			 */
-			if (!dvalidUntil && password_valid_until > 0)
-			{
-				Timestamp dt_now = GetCurrentTimestamp();
-				struct pg_tm tt, *tm = &tt;
-				fsec_t          fsec;
-				int             julian;
-				char           *validuntil;
-
-				if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
-					ereport(ERROR,
-							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-							 errmsg("timestamp out of range")));
-
-				/*
-				 * Add credcheck.password_valid_until days by converting to and from Julian.
-				 */
-				julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
-				if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
-					julian < 0)
-					ereport(ERROR,
-							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-							 errmsg("timestamp out of range")));
-				j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
-				validuntil = malloc(sizeof(char)*11);
-				sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
-				dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), -1);
-				((AlterRoleStmt *)parsetree)->options = lappend(((AlterRoleStmt *)parsetree)->options, dvalidUntil);
-			}
-
-			/* when a valid until date is set check that it is > to password_valid_until */
-			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
-			{
-				int valid_until = check_valid_until(strVal(dvalidUntil->arg));
-				if (valid_until < password_valid_until)
-					ereport(ERROR,
-						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
-			}
-			/* check that the valid until date is not under the limit of days */
-			if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
-			{
-				int valid_max = check_valid_until(strVal(dvalidUntil->arg));
-				if (valid_max > password_valid_max)
-					ereport(ERROR,
-						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
-			}
-
-#if PG_VERSION_NUM >= 120000
-			/* The password can be saved into the history */
-			if (save_password)
-				save_password_in_history(stmt->role->rolename, password);
-#endif
-			if (force_change_password)
-			{
-				reset_force_change_password(0, get_role_oid(stmt->role->rolename, true));
-				force_change_password = false;
-			}
-
-			break;
 		}
+		statement_has_password = false;
 
-		case T_CreateRoleStmt:
+		switch (nodeTag(parsetree))
 		{
-			CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
-			ListCell       *option;
-			int             valid_until = 0;
-			int             valid_max = 0;
-			bool            has_valid_until = false; 
-			bool            save_password = false;
-			char           *password;
-			DefElem    *dpassword = NULL;
-			DefElem    *dvalidUntil = NULL;
+			/* Intercept ALTER USER .. RENAME statements */
+			case T_RenameStmt:
+			{
+				RenameStmt *stmt = (RenameStmt *)parsetree;
 
-			if (is_in_whitelist(stmt->role, username_whitelist))
+				/* We only take care of user renaming */
+				if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
+				{
+					if (is_in_whitelist(stmt->newname, username_whitelist) || is_in_whitelist(stmt->subname, username_whitelist))
+						break;
+				
+					/* check the validity of the username */
+					username_check(stmt->newname, NULL);
+
+#if PG_VERSION_NUM >= 120000
+					/* rename the user in the history table */
+					rename_user_in_history(stmt->subname, stmt->newname);
+#endif
+				}
 				break;
-
-			/* check the validity of the username */
-			username_check(stmt->role, NULL);
-
-			/* Extract options from the statement node tree */
-			foreach(option, stmt->options)
-			{
-				DefElem    *defel = (DefElem *) lfirst(option);
-
-				if (strcmp(defel->defname, "password") == 0)
-				{
-					dpassword = defel;
-				}
-				else if (strcmp(defel->defname, "validUntil") == 0)
-				{
-					dvalidUntil = defel;
-				}
 			}
+
+			case T_AlterRoleStmt:
+			{
+				AlterRoleStmt *stmt = (AlterRoleStmt *)parsetree;
+				ListCell      *option;
+				char          *password;
+				bool           save_password = false;
+				DefElem    *dvalidUntil = NULL;
+				DefElem    *dpassword = NULL;
+
+				if (is_in_whitelist(stmt->role->rolename, username_whitelist))
+					break;
+
+				/* Extract options from the statement node tree */
+				foreach(option, stmt->options)
+				{
+					DefElem    *defel = (DefElem *) lfirst(option);
+
+					if (strcmp(defel->defname, "password") == 0)
+					{
+						dpassword = defel;
+					}
+					else if (strcmp(defel->defname, "validUntil") == 0)
+					{
+						dvalidUntil = defel;
+					}
+				}
+
+				if (dpassword == NULL && force_change_password)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("you must change your password first."))));
+
 #if PG_VERSION_NUM >= 120000
-			if (dpassword && dpassword->arg)
-			{
-				statement_has_password = true;
-				password = strVal(dpassword->arg);
-				save_password = check_password_reuse(stmt->role, password);
-			}
+				/* check the password set */
+				if (dpassword && dpassword->arg)
+				{
+					statement_has_password = true;
+					password = strVal(dpassword->arg);
+					save_password = check_password_reuse(stmt->role->rolename, password);
+				}
 #endif
-			/*
-			 * At user creation automatically set the valid until date to now() + password_valid_until
-			 * days if password_valid_until is set.
-			 */
-			if (!dvalidUntil && password_valid_until > 0)
-			{
-				Timestamp dt_now = GetCurrentTimestamp();
-				struct pg_tm tt, *tm = &tt;
-				fsec_t          fsec;
-				int             julian;
-				char            *validuntil;
-
-				if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
-					ereport(ERROR,
-							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-							 errmsg("timestamp out of range")));
-
 				/*
-				 * Add credcheck.password_valid_until days by converting to and from Julian.
+				 * when the user change his password, automatically set the valid until
+				 * date to now() + password_valid_until days if password_valid_until is set.
 				 */
-				julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
-				if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
-					julian < 0)
+				if (!dvalidUntil && password_valid_until > 0)
+				{
+					Timestamp dt_now = GetCurrentTimestamp();
+					struct pg_tm tt, *tm = &tt;
+					fsec_t          fsec;
+					int             julian;
+					char           *validuntil;
+
+					if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+
+					/*
+					 * Add credcheck.password_valid_until days by converting to and from Julian.
+					 */
+					julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+					if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
+						julian < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+					j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+					validuntil = malloc(sizeof(char)*11);
+					sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+					dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), -1);
+					((AlterRoleStmt *)parsetree)->options = lappend(((AlterRoleStmt *)parsetree)->options, dvalidUntil);
+				}
+
+				/* when a valid until date is set check that it is > to password_valid_until */
+				if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
+				{
+					int valid_until = check_valid_until(strVal(dvalidUntil->arg));
+					if (valid_until < password_valid_until)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
+				}
+				/* check that the valid until date is not under the limit of days */
+				if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
+				{
+					int valid_max = check_valid_until(strVal(dvalidUntil->arg));
+					if (valid_max > password_valid_max)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
+				}
+
+#if PG_VERSION_NUM >= 120000
+				/* The password can be saved into the history */
+				if (save_password)
+					save_password_in_history(stmt->role->rolename, password);
+#endif
+				if (force_change_password)
+				{
+					reset_force_change_password(0, get_role_oid(stmt->role->rolename, true));
+					force_change_password = false;
+				}
+
+				break;
+			}
+
+			case T_CreateRoleStmt:
+			{
+				CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
+				ListCell       *option;
+				int             valid_until = 0;
+				int             valid_max = 0;
+				bool            has_valid_until = false; 
+				bool            save_password = false;
+				char           *password;
+				DefElem    *dpassword = NULL;
+				DefElem    *dvalidUntil = NULL;
+
+				if (is_in_whitelist(stmt->role, username_whitelist))
+					break;
+
+				/* check the validity of the username */
+				username_check(stmt->role, NULL);
+
+				/* Extract options from the statement node tree */
+				foreach(option, stmt->options)
+				{
+					DefElem    *defel = (DefElem *) lfirst(option);
+
+					if (strcmp(defel->defname, "password") == 0)
+					{
+						dpassword = defel;
+					}
+					else if (strcmp(defel->defname, "validUntil") == 0)
+					{
+						dvalidUntil = defel;
+					}
+				}
+#if PG_VERSION_NUM >= 120000
+				if (dpassword && dpassword->arg)
+				{
+					statement_has_password = true;
+					password = strVal(dpassword->arg);
+					save_password = check_password_reuse(stmt->role, password);
+				}
+#endif
+				/*
+				 * At user creation automatically set the valid until date to now() + password_valid_until
+				 * days if password_valid_until is set.
+				 */
+				if (!dvalidUntil && password_valid_until > 0)
+				{
+					Timestamp dt_now = GetCurrentTimestamp();
+					struct pg_tm tt, *tm = &tt;
+					fsec_t          fsec;
+					int             julian;
+					char            *validuntil;
+
+					if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+
+					/*
+					 * Add credcheck.password_valid_until days by converting to and from Julian.
+					 */
+					julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+					if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
+						julian < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+					j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+					validuntil = malloc(sizeof(char)*11);
+					sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+					dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), 1);
+					((CreateRoleStmt *)parsetree)->options = lappend(((CreateRoleStmt *)parsetree)->options, dvalidUntil);
+				}
+
+				if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
+				{
+					valid_until = check_valid_until(strVal(dvalidUntil->arg));
+					has_valid_until = true;
+				}
+				if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
+				{
+					valid_max = check_valid_until(strVal(dvalidUntil->arg));
+					has_valid_until = true;
+				}
+
+				/* check that a VALID UNTIL option is present */
+				if ( !has_valid_until && (password_valid_until > 0 || password_valid_max > 0) )
 					ereport(ERROR,
-							(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
-							 errmsg("timestamp out of range")));
-				j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
-				validuntil = malloc(sizeof(char)*11);
-				sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
-				dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), 1);
-				((CreateRoleStmt *)parsetree)->options = lappend(((CreateRoleStmt *)parsetree)->options, dvalidUntil);
-			}
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option"))));
 
-			if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
-			{
-				valid_until = check_valid_until(strVal(dvalidUntil->arg));
-				has_valid_until = true;
-			}
-			if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
-			{
-				valid_max = check_valid_until(strVal(dvalidUntil->arg));
-				has_valid_until = true;
-			}
+				/* check that a minimum number of days for password validity is defined */
+				if (password_valid_until > 0 && valid_until < password_valid_until)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
 
-			/* check that a VALID UNTIL option is present */
-			if ( !has_valid_until && (password_valid_until > 0 || password_valid_max > 0) )
-				ereport(ERROR,
-					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-						errmsg(gettext_noop("require a VALID UNTIL option"))));
+				/* check that a maximum number of days for password validity is defined */
+				if (password_valid_max > 0 && valid_max < password_valid_max)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
 
-			/* check that a minimum number of days for password validity is defined */
-			if (password_valid_until > 0 && valid_until < password_valid_until)
-				ereport(ERROR,
-					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-						errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
-
-			/* check that a maximum number of days for password validity is defined */
-			if (password_valid_max > 0 && valid_max < password_valid_max)
-				ereport(ERROR,
-					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-						errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
-
-			/* set force change password option if password_change_first_login is set */
-			if (password_change_first_login)
-				set_force_change_password(0, get_role_oid(stmt->role, true), "true");
+				/* set force change password option if password_change_first_login is set */
+				if (password_change_first_login)
+					set_force_change_password(0, get_role_oid(stmt->role, true), "true");
 
 #if PG_VERSION_NUM >= 120000
-			/* The password can be saved into the history */
-			if (save_password)
-				save_password_in_history(stmt->role, password);
+				/* The password can be saved into the history */
+				if (save_password)
+					save_password_in_history(stmt->role, password);
 #endif
-			break;
-		}
+				break;
+			}
 
 #if PG_VERSION_NUM >= 120000
-		case T_DropRoleStmt:
-		{
-			DropRoleStmt *stmt = (DropRoleStmt *)parsetree;
-			ListCell   *item;
-
-			foreach(item, stmt->roles)
+			case T_DropRoleStmt:
 			{
-				RoleSpec   *rolspec = lfirst(item);
+				DropRoleStmt *stmt = (DropRoleStmt *)parsetree;
+				ListCell   *item;
 
-				remove_user_from_history(rolspec->rolename);
+				foreach(item, stmt->roles)
+				{
+					RoleSpec   *rolspec = lfirst(item);
+
+					remove_user_from_history(rolspec->rolename);
+				}
+				break;
 			}
-			break;
-		}
 #endif
-		default:
-			break;
+			default:
+				break;
+		}
 	}
 
 	/* Execute the utility command now */
@@ -1723,7 +1729,6 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
 	else
 		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
-
 
 }
 
@@ -2653,21 +2658,24 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
         elog(DEBUG1, "cc_ExecutorStart()");
 
-	/*
-	 * When first login we don't allow anything else than password change.
-	 * This rule is also checked in the ProcessUtility hook because we need
-	 * to allow the ALTER ROLE command to change the password. We must allow
-	 * SELECT CURRENT_USER which is sent by the \passwd command before
-	 * password change.
-	 */
-	if (debug_query_string != NULL && strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
+	if (NOT_IN_PARALLEL_WORKER)
 	{
-		if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
+		/*
+		 * When first login we don't allow anything else than password change.
+		 * This rule is also checked in the ProcessUtility hook because we need
+		 * to allow the ALTER ROLE command to change the password. We must allow
+		 * SELECT CURRENT_USER which is sent by the \passwd command before
+		 * password change.
+		 */
+		if (debug_query_string != NULL && strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
 		{
-			if (queryDesc->operation != CMD_UTILITY && force_change_password)
-					ereport(ERROR,
-						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("you must change your password first."))));
+			if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
+			{
+				if (queryDesc->operation != CMD_UTILITY && force_change_password)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("you must change your password first."))));
+			}
 		}
 	}
 
@@ -2677,7 +2685,7 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
         else
                 standard_ExecutorStart(queryDesc, eflags);
 
-        elog(DEBUG1, "End of cc_ExecutorStart()");
+	elog(DEBUG1, "End of cc_ExecutorStart()");
 }
 
 static void
