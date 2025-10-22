@@ -666,13 +666,14 @@ explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 --start_ignore
 drop table if exists ot cascade;
 drop foreign table if exists w cascade;
+drop function if exists foo(i int);
 --end_ignore
 create table ot (i int);
 insert into ot values (1), (1);
 
 create external web table w (i int) execute 'echo 1' on all format 'text';
 
-create or replace function foo(i int)
+create function foo(i int)
 returns table (i int)
 language sql
 execute on all segments

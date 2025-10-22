@@ -4286,7 +4286,7 @@ ERROR:  FULL JOIN is only supported with merge-joinable or hash-joinable join co
 create table ot (i int);
 insert into ot values (1), (1);
 create external web table w (i int) execute 'echo 1' on all format 'text';
-create or replace function foo(i int)
+create function foo(i int)
 returns table (i int)
 language sql
 execute on all segments
