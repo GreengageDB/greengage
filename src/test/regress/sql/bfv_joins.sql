@@ -595,6 +595,61 @@ drop table l_table;
 drop table r_table1;
 drop table r_table2;
 
+-- Test case for hash join rescan with multiple batches
+create table outer_table (o int) distributed replicated;
+create table inner_table (i1 int, i2 int) distributed replicated;
+create table loops_table (x int) distributed replicated;
+-- Outer table must have skew (values < 20 are much more common)
+insert into outer_table select i%1000 from generate_series(1, 100000) i;
+insert into outer_table select i%20 from generate_series(1, 10000) i;
+insert into inner_table select i%10000, i%10000 from generate_series(1, 50000) i;
+analyze outer_table;
+analyze inner_table;
+
+-- The order of values is important, since only the first one is
+-- processed before any rescans.
+--
+-- Values < 20 are placed into the skew table, values >= 20 into
+-- the main hashtable. The specific values >= 20 are chosen to be
+-- in different batches (according to their hashes).
+--
+-- Analyze is called after the first value to trick planner into
+-- using Nested loop, by pretending we only have 1 row here.
+insert into loops_table values (11);
+analyze loops_table;
+insert into loops_table select generate_series(101, 105);
+insert into loops_table values (14), (15);
+
+-- Ensure statistics are what we expect to see
+select reltuples from pg_class where relname = 'loops_table';
+select count(*) from
+  (select unnest(most_common_vals::text::int[])
+   from pg_stats where tablename='outer_table') t(v)
+where v in (11, 14, 15);
+
+set statement_mem to "1MB";
+set optimizer to off;
+set enable_nestloop to on;
+
+-- We want to have Hash Join inside Nested Loop here
+-- This is needed so that Hash Join is rescanned multiple times.
+explain analyze select * from loops_table where x in (select i2 from outer_table join inner_table on o = i1);
+
+set gp_workfile_compression=off;
+select * from loops_table where x in (select i2 from outer_table join inner_table on o = i1);
+
+set gp_workfile_compression=on;
+select * from loops_table where x in (select i2 from outer_table join inner_table on o = i1);
+
+reset gp_workfile_compression;
+reset statement_mem;
+reset optimizer;
+reset enable_nestloop;
+
+drop table outer_table;
+drop table inner_table;
+drop table loops_table;
+
 -- Should throw an error during planning: FULL JOIN is only supported with merge-joinable or hash-joinable join conditions
 -- Falls back on GPORCA, but shouldn't cause GPORCA to crash
 CREATE TABLE ext_stats_tbl(c0 name, c2 boolean);
