@@ -12412,7 +12412,6 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- For some time this test passed fine on wrong plan because
 -- there were only one row in table.
 insert into tcorr1 values (1,88);
-analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -12423,15 +12422,15 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Nested Loop Semi Join  (cost=10000000001.08..10000000003.78 rows=3 width=8)
+ Nested Loop Semi Join  (cost=10000000001.08..10000000003.20 rows=3 width=8)
    Join Filter: ("out".b = COALESCE((count(*)), '99'::bigint))
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.04 rows=2 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
          ->  Seq Scan on tcorr1 "out"  (cost=0.00..1.01 rows=1 width=8)
-   ->  Materialize  (cost=1.08..2.19 rows=3 width=8)
-         ->  Hash Left Join  (cost=1.08..2.17 rows=3 width=8)
+   ->  Materialize  (cost=1.08..2.17 rows=3 width=8)
+         ->  Hash Left Join  (cost=1.08..2.15 rows=3 width=8)
                Hash Cond: (tcorr1.a = tcorr2.a)
-               ->  Materialize  (cost=0.00..1.05 rows=2 width=4)
-                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.04 rows=2 width=4)
+               ->  Materialize  (cost=0.00..1.03 rows=1 width=4)
+                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
                            ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
                ->  Hash  (cost=1.07..1.07 rows=1 width=12)
                      ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
@@ -12445,7 +12444,6 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
 (19 rows)
 
 delete from tcorr1 where b = 88;
-analyze tcorr1;
 -- expect 1 row
 select *
 from tcorr1 out
@@ -12542,7 +12540,6 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- For some time this test passed fine on wrong plan because
 -- there were only one row in table.
 insert into tcorr1 values (1,88);
-analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -12553,15 +12550,15 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Nested Loop Semi Join  (cost=10000000001.08..10000000003.78 rows=3 width=8)
+ Nested Loop Semi Join  (cost=10000000001.08..10000000003.20 rows=3 width=8)
    Join Filter: ("out".b = COALESCE((count(*)), '99'::bigint))
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.04 rows=2 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
          ->  Seq Scan on tcorr1 "out"  (cost=0.00..1.01 rows=1 width=8)
-   ->  Materialize  (cost=1.08..2.19 rows=3 width=8)
-         ->  Hash Left Join  (cost=1.08..2.17 rows=3 width=8)
+   ->  Materialize  (cost=1.08..2.17 rows=3 width=8)
+         ->  Hash Left Join  (cost=1.08..2.15 rows=3 width=8)
                Hash Cond: (tcorr1.a = tcorr2.a)
-               ->  Materialize  (cost=0.00..1.05 rows=2 width=4)
-                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.04 rows=2 width=4)
+               ->  Materialize  (cost=0.00..1.03 rows=1 width=4)
+                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
                            ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
                ->  Hash  (cost=1.07..1.07 rows=1 width=12)
                      ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
@@ -12575,7 +12572,6 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
 (19 rows)
 
 delete from tcorr1 where b = 88;
-analyze tcorr1;
 -- expect 1 row
 select *
 from tcorr1 out

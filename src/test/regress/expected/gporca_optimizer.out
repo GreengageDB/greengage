@@ -12493,7 +12493,6 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- For some time this test passed fine on wrong plan because
 -- there were only one row in table.
 insert into tcorr1 values (1,88);
-analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -12504,29 +12503,29 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
                                                      QUERY PLAN                                                     
 --------------------------------------------------------------------------------------------------------------------
- Result  (cost=0.00..1808629677.01 rows=2 width=8)
+ Result  (cost=0.00..1356692223.82 rows=1 width=8)
    Filter: (SubPlan 1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
          ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
-     ->  Nested Loop Left Join  (cost=0.00..1765377.92 rows=4 width=8)
+     ->  Nested Loop Left Join  (cost=0.00..1324032.75 rows=3 width=8)
            Join Filter: (tcorr1.a = tcorr2.a)
-           ->  Materialize  (cost=0.00..431.00 rows=2 width=4)
-                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=2 width=4)
+           ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
+                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                        ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=4)
-           ->  Materialize  (cost=0.00..431.00 rows=1 width=12)
-                 ->  HashAggregate  (cost=0.00..431.00 rows=1 width=12)
-                       Group Key: tcorr2.a
+           ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=12)
+                 Group Key: tcorr2.a
+                 ->  Sort  (cost=0.00..431.00 rows=1 width=4)
+                       Sort Key: tcorr2.a
                        ->  Result  (cost=0.00..431.00 rows=1 width=4)
                              Filter: (tcorr2.b = "out".b)
                              ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                                    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                                          ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=8)
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(20 rows)
 
 delete from tcorr1 where b = 88;
-analyze tcorr1;
 -- expect 1 row
 select *
 from tcorr1 out
@@ -12624,7 +12623,6 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- For some time this test passed fine on wrong plan because
 -- there were only one row in table.
 insert into tcorr1 values (1,88);
-analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -12635,29 +12633,29 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
                                                      QUERY PLAN                                                     
 --------------------------------------------------------------------------------------------------------------------
- Result  (cost=0.00..1808629677.01 rows=2 width=8)
+ Result  (cost=0.00..1356692223.82 rows=1 width=8)
    Filter: (SubPlan 1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
          ->  Seq Scan on tcorr1 "out"  (cost=0.00..431.00 rows=1 width=8)
    SubPlan 1
-     ->  Nested Loop Left Join  (cost=0.00..1765377.92 rows=4 width=8)
+     ->  Nested Loop Left Join  (cost=0.00..1324032.75 rows=3 width=8)
            Join Filter: (tcorr1.a = tcorr2.a)
-           ->  Materialize  (cost=0.00..431.00 rows=2 width=4)
-                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=2 width=4)
+           ->  Materialize  (cost=0.00..431.00 rows=1 width=4)
+                 ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
                        ->  Seq Scan on tcorr1  (cost=0.00..431.00 rows=1 width=4)
-           ->  Materialize  (cost=0.00..431.00 rows=1 width=12)
-                 ->  HashAggregate  (cost=0.00..431.00 rows=1 width=12)
-                       Group Key: tcorr2.a
+           ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=12)
+                 Group Key: tcorr2.a
+                 ->  Sort  (cost=0.00..431.00 rows=1 width=4)
+                       Sort Key: tcorr2.a
                        ->  Result  (cost=0.00..431.00 rows=1 width=4)
                              Filter: (tcorr2.b = "out".b)
                              ->  Materialize  (cost=0.00..431.00 rows=1 width=8)
                                    ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
                                          ->  Seq Scan on tcorr2  (cost=0.00..431.00 rows=1 width=8)
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+(20 rows)
 
 delete from tcorr1 where b = 88;
-analyze tcorr1;
 -- expect 1 row
 select *
 from tcorr1 out

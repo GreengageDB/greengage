@@ -2688,7 +2688,6 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- For some time this test passed fine on wrong plan because
 -- there were only one row in table.
 insert into tcorr1 values (1,88);
-analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -2698,7 +2697,6 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              where tcorr2.b = out.b
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
 delete from tcorr1 where b = 88;
-analyze tcorr1;
 
 -- expect 1 row
 select *
@@ -2746,7 +2744,6 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- For some time this test passed fine on wrong plan because
 -- there were only one row in table.
 insert into tcorr1 values (1,88);
-analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -2756,7 +2753,6 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              where tcorr2.b = out.b
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
 delete from tcorr1 where b = 88;
-analyze tcorr1;
 
 -- expect 1 row
 select *
