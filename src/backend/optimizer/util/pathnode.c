@@ -5409,7 +5409,7 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
 
 		Assert(rte->rtekind == RTE_RELATION);
 
-		targetPolicy = GpPolicyFetch(rte->relid);
+		targetPolicy = GpPolicyFetchExtended(rte->relid, operation == CMD_INSERT);
 		targetPolicyType = targetPolicy->ptype;
 
 		numsegments = Max(targetPolicy->numsegments, numsegments);
