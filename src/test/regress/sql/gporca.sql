@@ -2652,7 +2652,7 @@ drop table if exists tcorr1, tcorr2;
 create table tcorr1(a int, b int);
 create table tcorr2(a int, b int);
 
-insert into tcorr1 values (1,99) (1,99);
+insert into tcorr1 values (1,99), (1,99);
 insert into tcorr2 values (1,1);
 analyze tcorr1;
 analyze tcorr2;
