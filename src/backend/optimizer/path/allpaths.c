@@ -2927,9 +2927,14 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 
 	/*
 	 * There are several checks that might force inlining, for example
-	 * Shared Scans executing inside Init Plans is currently not supported
+	 * Shared Scans executing inside Init Plans is currently not supported.
+	 * 
+	 * FIXME: Reference count condition is here to avoid breaking current
+	 * behavior. However, this is not quite valid because cterefcount might
+	 * not be exact. This is done to allow single-reference CTEs inside
+	 * InitPlans, since they don't present any issues.
 	 */
-	if (!root->config->gp_cte_sharing)
+	if (!root->config->gp_cte_sharing && cte->cterefcount > 1)
 		can_be_shared = false;
 
 	/*

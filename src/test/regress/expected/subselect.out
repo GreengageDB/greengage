@@ -1919,16 +1919,17 @@ select * from (with y as (select * from x) select * from y) ss;
 explain (verbose, costs off)
 with x as materialized (select * from int4_tbl)
 select * from (with y as (select * from x) select * from y) ss;
-WARNING:  MATERIALIZED ignored for CTE "x" since it must be inlined
-                     QUERY PLAN                     
-----------------------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: int4_tbl.f1
-   ->  Seq Scan on public.int4_tbl
-         Output: int4_tbl.f1
- Optimizer: Postgres-based planner
- Settings: gp_cte_sharing = 'on', optimizer = 'off'
-(6 rows)
+   Output: share0_ref1.f1
+   ->  Shared Scan (share slice:id 1:0)
+         Output: share0_ref1.f1
+         ->  Seq Scan on public.int4_tbl
+               Output: int4_tbl.f1
+ Optimizer: Postgres query optimizer
+ Settings: gp_cte_sharing=on, optimizer=off
+(8 rows)
 
 -- Ensure that we inline the currect CTE when there are
 -- multiple CTEs with the same name
@@ -2062,14 +2063,14 @@ WARNING:  MATERIALIZED ignored for CTE "x" since it must be inlined
 -- Should fail
 explain (verbose, costs off)
 with x as (select random() i)
-select (select count(*) from x);
-ERROR:  failed to build a CTE, cannot inline or use sharing (allpaths.c:3015)
+select (select count(*) from x), (select count(*) from x);
+ERROR:  failed to build a CTE, cannot inline or use sharing (allpaths.c:3020)
 -- Should fail
 explain (verbose, costs off)
 with x as materialized (select random() i)
-select (select count(*) from x);
+select (select count(*) from x), (select count(*) from x);
 WARNING:  MATERIALIZED ignored for CTE "x" since it must be inlined
-ERROR:  failed to build a CTE, cannot inline or use sharing (allpaths.c:3015)
+ERROR:  failed to build a CTE, cannot inline or use sharing (allpaths.c:3020)
 set gp_cte_sharing to off;
 -- Ensure that both planners produce valid plans for the query with the nested
 -- SubLink, which contains attributes referenced in query's GROUP BY clause.

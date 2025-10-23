@@ -991,12 +991,12 @@ select (select count(*) from x), (select count(*) from x);
 -- Should fail
 explain (verbose, costs off)
 with x as (select random() i)
-select (select count(*) from x);
+select (select count(*) from x), (select count(*) from x);
 
 -- Should fail
 explain (verbose, costs off)
 with x as materialized (select random() i)
-select (select count(*) from x);
+select (select count(*) from x), (select count(*) from x);
 
 set gp_cte_sharing to off;
 
