@@ -2652,7 +2652,7 @@ drop table if exists tcorr1, tcorr2;
 create table tcorr1(a int, b int);
 create table tcorr2(a int, b int);
 
-insert into tcorr1 values (1,99), (1,99);
+insert into tcorr1 values (1,99);
 insert into tcorr2 values (1,1);
 analyze tcorr1;
 analyze tcorr2;
@@ -2683,6 +2683,12 @@ where out.b in (select max(tcorr2.b + out.b - 1)
                 from tcorr2
                 where tcorr2.a=out.a);
 
+-- We insert one additional row in this case for testing that materialization
+-- of outer side of parametrized from above join works as intended.
+-- For some time this test passed fine on wrong plan because
+-- there were only one row in table.
+insert into tcorr1 values (1,88);
+analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -2691,6 +2697,9 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              from tcorr2
                                              where tcorr2.b = out.b
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
+delete from tcorr1 where b = 88;
+analyze tcorr1;
+
 -- expect 1 row
 select *
 from tcorr1 out
@@ -2732,6 +2741,12 @@ where out.b in (select max(tcorr2.b + out.b - 1)
                 from tcorr2
                 where tcorr2.a=out.a);
 
+-- We insert one additional row in this case for testing that materialization
+-- of outer side of parametrized from above join works as intended.
+-- For some time this test passed fine on wrong plan because
+-- there were only one row in table.
+insert into tcorr1 values (1,88);
+analyze tcorr1;
 explain
 select *
 from tcorr1 out
@@ -2740,6 +2755,9 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                              from tcorr2
                                              where tcorr2.b = out.b
                                              group by a) tcorr2_d on tcorr1.a=tcorr2_d.a);
+delete from tcorr1 where b = 88;
+analyze tcorr1;
+
 -- expect 1 row
 select *
 from tcorr1 out
