@@ -3882,7 +3882,7 @@
     <dxl:Plan Id="0" SpaceSize="57782">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2343319.893955" Rows="10325183.250315" Width="697"/>
+          <dxl:Cost StartupCost="0" TotalCost="2022947.728609" Rows="10325183.250315" Width="697"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="p_partkey">
@@ -4001,7 +4001,7 @@
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="2311006.923218" Rows="10325183.250315" Width="697"/>
+            <dxl:Cost StartupCost="0" TotalCost="1990634.757871" Rows="10325183.250315" Width="697"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="p_partkey">
@@ -4126,7 +4126,7 @@
           </dxl:HashCondList>
           <dxl:RedistributeMotion InputSegments="0,1" OutputSegments="0,1">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="2280383.390993" Rows="10325183.250323" Width="500"/>
+              <dxl:Cost StartupCost="0" TotalCost="1961019.897822" Rows="10325183.250323" Width="500"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="p_partkey">
@@ -4229,7 +4229,7 @@
             </dxl:HashExprList>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="2272303.935100" Rows="10325183.250323" Width="500"/>
+                <dxl:Cost StartupCost="0" TotalCost="1952940.441929" Rows="10325183.250323" Width="500"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="p_partkey">
@@ -4333,7 +4333,7 @@
               </dxl:HashCondList>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="2199327.729896" Rows="24060859.229183" Width="357"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1881589.509326" Rows="24060859.229183" Width="357"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="30" Alias="l_orderkey">

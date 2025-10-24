@@ -502,7 +502,7 @@ this query isn't eligible for DPE.
     <dxl:Plan Id="0" SpaceSize="7">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000737" Rows="1.000000" Width="24"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000837" Rows="1.000000" Width="24"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -522,7 +522,7 @@ this query isn't eligible for DPE.
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000647" Rows="1.000000" Width="24"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000747" Rows="1.000000" Width="24"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">

@@ -401,7 +401,7 @@
     <dxl:Plan Id="0" SpaceSize="13">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.003505" Rows="1.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.003605" Rows="1.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="c">
@@ -425,7 +425,7 @@
         <dxl:OneTimeFilter/>
         <dxl:HashJoin JoinType="Right">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.003143" Rows="11.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.003243" Rows="11.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="c">

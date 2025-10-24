@@ -2186,26 +2186,26 @@ where
     where
       tl2.b = tl1.c
   );
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: tl1.a, tl1.b, tl1.c, tl1.d
-   ->  Hash Join
+   ->  Result
          Output: tl1.a, tl1.b, tl1.c, tl1.d
-         Hash Cond: ((tl1.b = (max(tl2.a))) AND (tl1.c = tl2.b))
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Output: tl1.a, tl1.b, tl1.c, tl1.d
-               Hash Key: tl1.c
-               ->  Seq Scan on public.tl1
-                     Output: tl1.a, tl1.b, tl1.c, tl1.d
-         ->  Hash
-               Output: (max(tl2.a)), tl2.b
-               ->  GroupAggregate
-                     Output: max(tl2.a), tl2.b
-                     Group Key: tl2.b
-                     ->  Sort
+         Filter: (tl1.b = (max(tl2.a)))
+         ->  HashAggregate
+               Output: max(tl2.a), tl1.a, tl1.b, tl1.c, tl1.d, tl1.ctid, tl1.gp_segment_id
+               Group Key: tl1.a, tl1.b, tl1.c, tl1.d, tl1.ctid, tl1.gp_segment_id
+               ->  Hash Join
+                     Output: tl1.a, tl1.b, tl1.c, tl1.d, tl1.ctid, tl1.gp_segment_id, tl2.a
+                     Hash Cond: (tl1.c = tl2.b)
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: tl1.a, tl1.b, tl1.c, tl1.d, tl1.ctid, tl1.gp_segment_id
+                           Hash Key: tl1.c
+                           ->  Seq Scan on public.tl1
+                                 Output: tl1.a, tl1.b, tl1.c, tl1.d, tl1.ctid, tl1.gp_segment_id
+                     ->  Hash
                            Output: tl2.a, tl2.b
-                           Sort Key: tl2.b
                            ->  Redistribute Motion 3:3  (slice3; segments: 3)
                                  Output: tl2.a, tl2.b
                                  Hash Key: tl2.b

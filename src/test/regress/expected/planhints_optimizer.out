@@ -57,22 +57,22 @@ EXPLAIN (costs off) SELECT t1.a, t2.a, t3.a FROM my_table AS t1 JOIN your_table 
     SeqScan(t3)
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a, t3.a FROM my_table AS t1 JOIN your_table AS t2 ON t1.a=t2.a JOIN our_table AS t3 ON t3.a=t2.a WHERE t1.a<42;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (t1.a = t2.a)
-         ->  Hash Join
-               Hash Cond: (t1.a = t3.a)
-               ->  Seq Scan on my_table t1
-                     Filter: (a < 42)
-               ->  Hash
-                     ->  Dynamic Seq Scan on our_table t3
-                           Number of partitions to scan: 4 (out of 4)
-                           Filter: (a < 42)
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on your_table t2
+               Filter: (a < 42)
          ->  Hash
-               ->  Seq Scan on your_table t2
-                     Filter: (a < 42)
+               ->  Hash Join
+                     Hash Cond: (t1.a = t3.a)
+                     ->  Seq Scan on my_table t1
+                           Filter: (a < 42)
+                     ->  Hash
+                           ->  Dynamic Seq Scan on our_table t3
+                                 Number of partitions to scan: 4 (out of 4)
+                                 Filter: (a < 42)
  Optimizer: GPORCA
 (15 rows)
 
@@ -561,23 +561,23 @@ EXPLAIN (costs off) SELECT t1.a, t2.a, t3.a FROM my_table AS t1 JOIN your_table 
     NoIndexOnlyScan(t3)
  */
 EXPLAIN (costs off) SELECT t1.a, t2.a, t3.a FROM my_table AS t1 JOIN your_table AS t2 ON t1.a=t2.a JOIN our_table AS t3 ON t3.a=t2.a WHERE t1.a<42;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (t1.a = t2.a)
-         ->  Nested Loop
-               Join Filter: true
-               ->  Dynamic Index Scan on our_awesome_index on our_table t3
-                     Index Cond: (a < 42)
-                     Number of partitions to scan: 4 (out of 4)
-               ->  Index Scan using my_awesome_index on my_table t1
-                     Index Cond: ((a = t3.a) AND (a < 42))
+         ->  Index Scan using my_awesome_index on my_table t1
+               Index Cond: (a < 42)
          ->  Hash
-               ->  Bitmap Heap Scan on your_table t2
-                     Recheck Cond: (a < 42)
-                     ->  Bitmap Index Scan on your_bitmap_index
+               ->  Nested Loop
+                     Join Filter: true
+                     ->  Dynamic Index Scan on our_awesome_index on our_table t3
                            Index Cond: (a < 42)
+                           Number of partitions to scan: 4 (out of 4)
+                     ->  Bitmap Heap Scan on your_table t2
+                           Recheck Cond: ((a = t3.a) AND (a < 42))
+                           ->  Bitmap Index Scan on your_bitmap_index
+                                 Index Cond: ((a = t3.a) AND (a < 42))
  Optimizer: GPORCA
 (16 rows)
 
@@ -1034,22 +1034,22 @@ CREATE VIEW everybody_view AS SELECT t1.a AS a1, t2.a AS a2, t3.a AS a3 FROM my_
     SeqScan(t3)
  */
 EXPLAIN (costs off) SELECT * FROM everybody_view;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (t1.a = t2.a)
-         ->  Hash Join
-               Hash Cond: (t1.a = t3.a)
-               ->  Seq Scan on my_table t1
-                     Filter: (a < 42)
-               ->  Hash
-                     ->  Dynamic Seq Scan on our_table t3
-                           Number of partitions to scan: 4 (out of 4)
-                           Filter: (a < 42)
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on your_table t2
+               Filter: (a < 42)
          ->  Hash
-               ->  Seq Scan on your_table t2
-                     Filter: (a < 42)
+               ->  Hash Join
+                     Hash Cond: (t1.a = t3.a)
+                     ->  Seq Scan on my_table t1
+                           Filter: (a < 42)
+                     ->  Hash
+                           ->  Dynamic Seq Scan on our_table t3
+                                 Number of partitions to scan: 4 (out of 4)
+                                 Filter: (a < 42)
  Optimizer: GPORCA
 (15 rows)
 
@@ -1228,22 +1228,22 @@ EXPLAIN (costs off) WITH cte AS
     SELECT t1.a AS a1, t2.a AS a2, t3.a AS a3 FROM my_table AS t1 JOIN your_table AS t2 ON t1.a=t2.a JOIN our_table AS t3 ON t3.a=t2.a
 )
 SELECT a1, a2, a3 FROM cte WHERE a1<42;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (t1.a = t2.a)
-         ->  Hash Join
-               Hash Cond: (t1.a = t3.a)
-               ->  Seq Scan on my_table t1
-                     Filter: (a < 42)
-               ->  Hash
-                     ->  Dynamic Seq Scan on our_table t3
-                           Number of partitions to scan: 4 (out of 4)
-                           Filter: (a < 42)
+         Hash Cond: (t2.a = t1.a)
+         ->  Seq Scan on your_table t2
+               Filter: (a < 42)
          ->  Hash
-               ->  Seq Scan on your_table t2
-                     Filter: (a < 42)
+               ->  Hash Join
+                     Hash Cond: (t1.a = t3.a)
+                     ->  Seq Scan on my_table t1
+                           Filter: (a < 42)
+                     ->  Hash
+                           ->  Dynamic Seq Scan on our_table t3
+                                 Number of partitions to scan: 4 (out of 4)
+                                 Filter: (a < 42)
  Optimizer: GPORCA
 (15 rows)
 
