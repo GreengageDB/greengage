@@ -967,6 +967,25 @@ QUERY PLAN
 ]
 (1 row)
 reset gp_enable_explain_allstat;
+-- Test "never executed" sort stat output
+CREATE TABLE never_executed_sort_test(a int) DISTRIBUTED BY (a);
+SELECT explain_filter('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) 
+SELECT * FROM never_executed_sort_test ORDER BY 1 LIMIT 0;');
+explain_filter
+Limit (actual rows=N loops=N)
+  ->  Gather Motion N:N  (sliceN; segments: N) (never executed)
+        Merge Key: a
+        ->  Limit (actual rows=N loops=N)
+              ->  Sort (never executed)
+                    Sort Key: a
+                    ->  Seq Scan on never_executed_sort_test (never executed)
+Optimizer: Postgres-based planner
+(8 rows)
+SELECT explain_filter_to_json('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, FORMAT JSON) 
+SELECT * FROM never_executed_sort_test ORDER BY 1 LIMIT 0;');
+explain_filter_to_json
+[{"Plan": {"Plans": [{"Plans": [{"Plans": [{"Plans": [{"Alias": "never_executed_sort_test", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Actual Rows": 0, "Actual Loops": 0, "Relation Name": "never_executed_sort_test", "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Sort Key": ["a"], "Gang Type": "primary reader", "Node Type": "Sort", "Actual Rows": 0, "Actual Loops": 0, "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Limit", "Actual Rows": 0, "Actual Loops": 0, "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Merge Key": ["a"], "Node Type": "Gather Motion", "Receivers": 0, "Actual Rows": 0, "Actual Loops": 0, "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Actual Rows": 0, "Actual Loops": 0, "Parallel Aware": false}, "Triggers": [], "Optimizer": "Postgres-based planner"}]
+(1 row)
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
@@ -978,3 +997,4 @@ DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
 DROP TABLE stat_io_timing;
 DROP TABLE allstat_test;
+DROP TABLE never_executed_sort_test;

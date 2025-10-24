@@ -905,6 +905,25 @@ QUERY PLAN
 ]
 (1 row)
 reset gp_enable_explain_allstat;
+-- Test "never executed" sort stat output
+CREATE TABLE never_executed_sort_test(a int) DISTRIBUTED BY (a);
+SELECT explain_filter('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) 
+SELECT * FROM never_executed_sort_test ORDER BY 1 LIMIT 0;');
+explain_filter
+Result (actual rows=N loops=N)
+  ->  Sort (actual rows=N loops=N)
+        Sort Key: (NULL::integer)
+        Sort Method:  quicksort  Memory: NkB
+        Executor Memory: NkB  Segments: N  Max: NkB (segment N)
+        ->  Result (actual rows=N loops=N)
+              One-Time Filter: false
+Optimizer: GPORCA
+(8 rows)
+SELECT explain_filter_to_json('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, FORMAT JSON) 
+SELECT * FROM never_executed_sort_test ORDER BY 1 LIMIT 0;');
+explain_filter_to_json
+[{"Plan": {"Plans": [{"Plans": [{"Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Result", "Actual Rows": 0, "Actual Loops": 0, "Parallel Aware": false, "One-Time Filter": "false", "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Sort Key": ["(NULL::integer)"], "Gang Type": "unallocated", "Node Type": "Sort", "Actual Rows": 0, "Sort Method": "quicksort", "Actual Loops": 0, "Parallel Aware": false, "Executor Memory": 0, "Sort Space Type": "Memory", "Sort Space Used": 0, "Executor Max Memory": 0, "Parent Relationship": "Outer", "Executor Memory Segments": 0, "Executor Max Memory Segment": 0}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Result", "Actual Rows": 0, "Actual Loops": 0, "Parallel Aware": false}, "Triggers": [], "Optimizer": "GPORCA"}]
+(1 row)
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
@@ -916,3 +935,4 @@ DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
 DROP TABLE stat_io_timing;
 DROP TABLE allstat_test;
+DROP TABLE never_executed_sort_test;

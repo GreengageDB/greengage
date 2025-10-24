@@ -261,6 +261,15 @@ set gp_enable_explain_allstat=true;
 explain (analyze, format json) select * from allstat_test;
 reset gp_enable_explain_allstat;
 
+-- Test "never executed" sort stat output
+CREATE TABLE never_executed_sort_test(a int) DISTRIBUTED BY (a);
+
+SELECT explain_filter('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) 
+SELECT * FROM never_executed_sort_test ORDER BY 1 LIMIT 0;');
+
+SELECT explain_filter_to_json('EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, FORMAT JSON) 
+SELECT * FROM never_executed_sort_test ORDER BY 1 LIMIT 0;');
+
 -- Cleanup
 DROP TABLE boxes;
 DROP TABLE apples;
@@ -272,3 +281,4 @@ DROP TABLE test_hashagg_spill;
 DROP TABLE test_hashagg_groupingsets;
 DROP TABLE stat_io_timing;
 DROP TABLE allstat_test;
+DROP TABLE never_executed_sort_test;
