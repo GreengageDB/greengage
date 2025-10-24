@@ -3462,11 +3462,13 @@ show_tablesample(TableSampleClause *tsc, PlanState *planstate,
 
 /*
  * If it's EXPLAIN ANALYZE, show tuplesort stats for a sort node
+ *
+ * FIXME: should print stats for several sortMethods when QEs use different ones
  */
 static void
 show_sort_info(SortState *sortstate, ExplainState *es)
 {
-	if (!es->analyze)
+	if (!es->analyze || sortstate->shared_info == NULL)
 		return;
 
 	/*
@@ -3479,27 +3481,32 @@ show_sort_info(SortState *sortstate, ExplainState *es)
 	int64 avgSpaceUsed = 0;
 	const char *sortMethod = NULL;
 	const char *spaceType = NULL;
+	bool have_stats = false;
 
-	if (sortstate->shared_info != NULL)
+	TuplesortInstrumentation *sinstrument;
+
+	for (int n = 0; n < sortstate->shared_info->num_workers; n++)
 	{
-		int n;
-		TuplesortInstrumentation *sinstrument;
-		for (n = 0; n < sortstate->shared_info->num_workers; n++)
-		{
-			sinstrument = &sortstate->shared_info->sinstrument[n];
-			if (sinstrument->sortMethod == SORT_TYPE_STILL_IN_PROGRESS)
-				continue;		/* ignore any unfilled slots */
-			if (!sortMethod)
-				sortMethod = tuplesort_method_name(sinstrument->sortMethod);
-			if (!spaceType)
-				spaceType = tuplesort_space_type_name(sinstrument->spaceType);
-			peakSpaceUsed = Max(peakSpaceUsed, sinstrument->spaceUsed);
-			totalSpaceUsed += sinstrument->spaceUsed;
-		}
+		sinstrument = &sortstate->shared_info->sinstrument[n];
 
-		avgSpaceUsed = sortstate->shared_info->num_workers > 0 ?
-			totalSpaceUsed / sortstate->shared_info->num_workers : 0;
+		if (sinstrument->sortMethod == SORT_TYPE_STILL_IN_PROGRESS)
+			continue;	/* ignore any unfilled slots */
+
+		if (!have_stats)
+		{
+			sortMethod = tuplesort_method_name(sinstrument->sortMethod);
+			spaceType = tuplesort_space_type_name(sinstrument->spaceType);
+			have_stats = true;
+		}
+		peakSpaceUsed = Max(peakSpaceUsed, sinstrument->spaceUsed);
+		totalSpaceUsed += sinstrument->spaceUsed;
 	}
+
+	if (!have_stats)
+		return;		/* no completed stats; don't print anything */
+
+	avgSpaceUsed = sortstate->shared_info->num_workers > 0 ?
+		totalSpaceUsed / sortstate->shared_info->num_workers : 0;
 
 	{
 		if (es->format == EXPLAIN_FORMAT_TEXT)
