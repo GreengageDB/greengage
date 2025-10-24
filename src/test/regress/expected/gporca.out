@@ -12410,7 +12410,7 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- We insert one additional row in this case for testing that materialization
 -- of outer side of parametrized from above join works as intended.
 -- For some time this test passed fine on wrong plan because
--- there were only one row in table.
+-- there was only one row in outer table.
 insert into tcorr1 values (1,88);
 explain
 select *
@@ -12443,7 +12443,6 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  Optimizer: Postgres query optimizer
 (19 rows)
 
-delete from tcorr1 where b = 88;
 -- expect 1 row
 select *
 from tcorr1 out
@@ -12457,6 +12456,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  1 | 99
 (1 row)
 
+delete from tcorr1 where b = 88;
 -- expect 1 row
 select *
 from tcorr1 out
@@ -12538,7 +12538,7 @@ where out.b in (select max(tcorr2.b + out.b - 1)
 -- We insert one additional row in this case for testing that materialization
 -- of outer side of parametrized from above join works as intended.
 -- For some time this test passed fine on wrong plan because
--- there were only one row in table.
+-- there was only one row in outer table.
 insert into tcorr1 values (1,88);
 explain
 select *
@@ -12571,7 +12571,6 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  Optimizer: Postgres query optimizer
 (19 rows)
 
-delete from tcorr1 where b = 88;
 -- expect 1 row
 select *
 from tcorr1 out
@@ -12585,6 +12584,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  1 | 99
 (1 row)
 
+delete from tcorr1 where b = 88;
 -- expect 1 row
 select *
 from tcorr1 out
