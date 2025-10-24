@@ -453,7 +453,7 @@ class SegmentIsShutDown(Command):
     def is_shutdown(self):
         for key, value in self.results.split_stdout():
             if key == 'Database cluster state':
-                return value.strip() == 'shut down'
+                return value.strip() == 'shut down' or value.strip() == 'shut down in recovery'
         return False
 
     @staticmethod

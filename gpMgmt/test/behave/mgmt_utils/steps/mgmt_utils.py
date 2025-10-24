@@ -2295,6 +2295,8 @@ def impl(context):
     ''')
 
 @given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@then('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@when('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
 def impl(context, tabletype, tablename, dbname, numrows):
     populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, rowcount=int(numrows))
 
@@ -4151,6 +4153,29 @@ def impl(context):
             if unix.check_pid_on_remotehost(pid, host):
                 raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
 
+
+@given('segment information for content {content} is saved in context')
+@when('segment information for content {content} is saved in context')
+@then('segment information for content {content} is saved in context')
+def impl(context, content):
+    segment_information = []
+    segs = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+    for seg in segs:
+        if int(content) == int(seg.getSegmentContentId()):
+            segment_information.append(seg)
+
+    context.segment_information = segment_information
+
+
+@given('verify no segment running for saved segment information')
+@when('verify no segment running for saved segment information')
+@then('verify no segment running for saved segment information')
+def impl(context):
+    for seg in context.segment_information:
+        segment_check = gp.SegmentIsShutDown('', seg.getSegmentDataDirectory(), REMOTE, seg.getSegmentHostName())
+        segment_check.run()
+        if not segment_check.is_shutdown():
+            raise Exception(f'Segment is up (dbid {seg.getSegmentDbId()})')
 
 @then('the database segments are in execute mode')
 def impl(context):
