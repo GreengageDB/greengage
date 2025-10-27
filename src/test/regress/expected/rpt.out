@@ -1027,7 +1027,7 @@ ERROR:  could not devise a plan (cdbpath.c:2578)
 explain (costs off) update t_replicate_volatile set a = random();
 ERROR:  could not devise a plan. (cdbpath.c:2441)
 -- limit
-explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
+explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
  Insert on t_replicate_volatile
@@ -1038,7 +1038,7 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
  Optimizer: Postgres query optimizer
 (6 rows)
 
-explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit random()) x;
+explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit 1) x;
                            QUERY PLAN                           
 ----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1047,10 +1047,9 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
                ->  Result
                      ->  Limit
                            ->  Seq Scan on t_replicate_volatile
-         ->  Materialize
-               ->  Seq Scan on t_hashdist
+         ->  Seq Scan on t_hashdist
  Optimizer: Postgres query optimizer
-(9 rows)
+(8 rows)
 
 -- ORCA
 -- verify that JOIN derives the inner child distribution if the outer is tainted replicated (in this

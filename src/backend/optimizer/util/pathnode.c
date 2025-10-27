@@ -5585,10 +5585,7 @@ create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 	 * If the limit path's locus is general or segmentgeneral
 	 * we have to make it singleQE.
 	 */
-	if (contain_volatile_functions(pathnode->limitOffset) || contain_volatile_functions(pathnode->limitCount))
-		return turn_volatile_seggen_to_singleqe(root, (Path *) pathnode, NULL);
-	else
-		return (Path *)pathnode;
+	return turn_volatile_seggen_to_singleqe(root, (Path *) pathnode, NULL);
 }
 
 /*

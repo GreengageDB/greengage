@@ -449,8 +449,8 @@ explain (costs off) delete from t_replicate_volatile using t_replicate_volatile 
 explain (costs off) update t_replicate_volatile set a = random();
 
 -- limit
-explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
-explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit random()) x;
+explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;
+explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit 1) x;
 
 -- ORCA
 -- verify that JOIN derives the inner child distribution if the outer is tainted replicated (in this

@@ -313,7 +313,7 @@ explain (costs off) select * from t_hashdist cross join (select random() as k, s
 explain (costs off) select * from t_hashdist cross join (select a, count(1) as s from generate_series(1, 10) a group by a having count(1) > random() order by a) x ;
 
 -- limit
-explain (costs off) select * from t_hashdist cross join (select * from generate_series(1, 10) limit random()) x;
+explain (costs off) select * from t_hashdist cross join (select * from generate_series(1, 10) limit 1) x;
 
 -- CTAS on general locus into replicated table
 create temp SEQUENCE test_seq;
