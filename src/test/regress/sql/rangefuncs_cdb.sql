@@ -181,6 +181,27 @@ select z.fooid, z.f2
 from foor(sin(pi()/2)::int) z(fooid int, f2 int)
 ORDER BY 1,2;
 
+-- function execute on master in subselect, with correlation
+alter function foor(int) execute on master;
+select * from foo2
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int)
+             where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
+-- function execute on initplan in subselect, with correlation
+alter function foor(int) execute on initplan;
+select * from foo2
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int)
+             where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
+-- function execute on all segments in subselect, with correlation
+alter function foor(int) execute on all segments;
+select * from foo2
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int)
+             where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
 DROP FUNCTION foor(int);
 
 --
@@ -239,6 +260,24 @@ ORDER BY 1,2;
 -- nested functions
 select z.fooid, z.f2 from fooro(sin(pi()/2)::int) z ORDER BY 1,2;
 
+-- function execute on master in subselect, with correlation
+alter function fooro(int) execute on master;
+select * from foo2
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
+-- function execute on initplan in subselect, with correlation
+alter function fooro(int) execute on initplan;
+select * from foo2
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
+-- function execute on all segments in subselect, with correlation
+alter function fooro(int) execute on all segments;
+select * from foo2
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
 DROP FUNCTION fooro(int);
 
 --
@@ -296,6 +335,24 @@ ORDER BY 1,2;
 
 -- nested functions
 select z.fooid, z.f2 from foot(sin(pi()/2)::int) z ORDER BY 1,2;
+
+-- function execute on master in subselect, with correlation
+alter function foot(int) execute on master;
+select * from foo2
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
+-- function execute on initplan in subselect, with correlation
+alter function foot(int) execute on initplan;
+select * from foo2
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+
+-- function execute on all segments in subselect, with correlation
+alter function foot(int) execute on all segments;
+select * from foo2
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
 
 DROP FUNCTION foot(int);
 

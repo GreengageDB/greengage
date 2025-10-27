@@ -287,6 +287,27 @@ ORDER BY 1,2;
      1 | 33
 (2 rows)
 
+-- function execute on master in subselect, with correlation
+alter function foor(int) execute on master;
+select * from foo2
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int)
+             where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON MASTER function in a subquery with arguments from outer query
+-- function execute on initplan in subselect, with correlation
+alter function foor(int) execute on initplan;
+select * from foo2
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int)
+             where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON INITPLAN function in a subquery with arguments from outer query
+-- function execute on all segments in subselect, with correlation
+alter function foor(int) execute on all segments;
+select * from foo2
+where f2 in (select f2 from foor(foo2.fooid) z(fooid int, f2 int)
+             where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON ALL SEGMENTS function in a subquery with arguments from outer query
 DROP FUNCTION foor(int);
 --
 -- RETURNS SETOF record, with OUT parameters
@@ -395,6 +416,24 @@ select z.fooid, z.f2 from fooro(sin(pi()/2)::int) z ORDER BY 1,2;
      1 | 33
 (2 rows)
 
+-- function execute on master in subselect, with correlation
+alter function fooro(int) execute on master;
+select * from foo2
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON MASTER function in a subquery with arguments from outer query
+-- function execute on initplan in subselect, with correlation
+alter function fooro(int) execute on initplan;
+select * from foo2
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON INITPLAN function in a subquery with arguments from outer query
+-- function execute on all segments in subselect, with correlation
+alter function fooro(int) execute on all segments;
+select * from foo2
+where f2 in (select f2 from fooro(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON ALL SEGMENTS function in a subquery with arguments from outer query
 DROP FUNCTION fooro(int);
 --
 -- RETURNS TABLE
@@ -503,6 +542,24 @@ select z.fooid, z.f2 from foot(sin(pi()/2)::int) z ORDER BY 1,2;
      1 | 33
 (2 rows)
 
+-- function execute on master in subselect, with correlation
+alter function foot(int) execute on master;
+select * from foo2
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON MASTER function in a subquery with arguments from outer query
+-- function execute on initplan in subselect, with correlation
+alter function foot(int) execute on initplan;
+select * from foo2
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON INITPLAN function in a subquery with arguments from outer query
+-- function execute on all segments in subselect, with correlation
+alter function foot(int) execute on all segments;
+select * from foo2
+where f2 in (select f2 from foot(foo2.fooid) z where z.fooid = foo2.fooid)
+ORDER BY 1,2;
+ERROR:  cannot execute EXECUTE ON ALL SEGMENTS function in a subquery with arguments from outer query
 DROP FUNCTION foot(int);
 -- sql, proretset = f, prorettype = b
 CREATE FUNCTION getfoo(int) RETURNS int AS 'SELECT $1;' LANGUAGE SQL CONTAINS SQL;
