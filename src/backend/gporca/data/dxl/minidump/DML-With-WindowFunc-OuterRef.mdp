@@ -345,7 +345,7 @@
     <dxl:Plan Id="0" SpaceSize="137">
       <dxl:PhysicalCTAS Name="fake ctas rel" IsTemporary="true" StorageType="Heap" DistributionPolicy="Random" InsertColumns="0" VarTypeModList="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.010975" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.011075" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
@@ -359,7 +359,7 @@
         </dxl:ProjList>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000558" Rows="1.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000658" Rows="1.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="i">
@@ -373,7 +373,7 @@
           <dxl:OneTimeFilter/>
           <dxl:RandomMotion InputSegments="0,1,2" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000556" Rows="1.000000" Width="4"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000656" Rows="1.000000" Width="4"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="i">
@@ -384,7 +384,7 @@
             <dxl:SortingColumnList/>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000552" Rows="1.000000" Width="4"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000652" Rows="1.000000" Width="4"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="i">

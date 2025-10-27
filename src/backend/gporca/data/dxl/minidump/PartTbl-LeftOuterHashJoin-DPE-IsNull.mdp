@@ -332,7 +332,7 @@ select * from t2 left outer join t1 on t1.b = t2.d where t1.b is null;
     <dxl:Plan Id="0" SpaceSize="6">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000687" Rows="2.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000787" Rows="2.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="c">
@@ -352,7 +352,7 @@ select * from t2 left outer join t1 on t1.b = t2.d where t1.b is null;
         <dxl:SortingColumnList/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000567" Rows="2.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000667" Rows="2.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="c">
@@ -376,7 +376,7 @@ select * from t2 left outer join t1 on t1.b = t2.d where t1.b is null;
           <dxl:OneTimeFilter/>
           <dxl:HashJoin JoinType="Left">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000546" Rows="2.000000" Width="16"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000646" Rows="2.000000" Width="16"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="c">

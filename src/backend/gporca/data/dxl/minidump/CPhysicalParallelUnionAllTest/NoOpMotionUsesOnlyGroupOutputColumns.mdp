@@ -271,7 +271,7 @@ EXPLAIN SELECT b, a FROM foo UNION ALL SELECT b, a FROM foo INTERSECT ALL SELECT
     <dxl:Plan Id="0" SpaceSize="0">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.001486" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.001786" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="1" Alias="b">
@@ -285,7 +285,7 @@ EXPLAIN SELECT b, a FROM foo UNION ALL SELECT b, a FROM foo INTERSECT ALL SELECT
         <dxl:SortingColumnList/>
         <dxl:Append IsTarget="false" IsZapped="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.001457" Rows="1.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.001757" Rows="1.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="1" Alias="b">
@@ -345,7 +345,7 @@ EXPLAIN SELECT b, a FROM foo UNION ALL SELECT b, a FROM foo INTERSECT ALL SELECT
           </dxl:RedistributeMotion>
           <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.001457" Rows="1.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.001757" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="10" Alias="b">
@@ -364,7 +364,7 @@ EXPLAIN SELECT b, a FROM foo UNION ALL SELECT b, a FROM foo INTERSECT ALL SELECT
             </dxl:HashExprList>
             <dxl:HashJoin JoinType="In">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.001457" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.001757" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="10" Alias="b">

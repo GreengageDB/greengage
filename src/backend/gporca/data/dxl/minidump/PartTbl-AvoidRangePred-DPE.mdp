@@ -1680,7 +1680,7 @@ FROM abuela JOIN bar ON a = c AND b BETWEEN d - 1 AND d + 4
     <dxl:Plan Id="0" SpaceSize="202">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.013245" Rows="3.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.016345" Rows="3.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="1" Alias="b">
@@ -1691,7 +1691,7 @@ FROM abuela JOIN bar ON a = c AND b BETWEEN d - 1 AND d + 4
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.013200" Rows="3.000000" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.016300" Rows="3.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="1" Alias="b">
@@ -1780,7 +1780,7 @@ FROM abuela JOIN bar ON a = c AND b BETWEEN d - 1 AND d + 4
           </dxl:DynamicTableScan>
           <dxl:PartitionSelector RelationMdid="6.247422.1.0" SelectorId="31" ScanId="1" Partitions="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.003395" Rows="12.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.003495" Rows="12.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="9" Alias="c">
@@ -1817,7 +1817,7 @@ FROM abuela JOIN bar ON a = c AND b BETWEEN d - 1 AND d + 4
             </dxl:PartFilterExpr>
             <dxl:HashJoin JoinType="Inner">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.003395" Rows="12.000000" Width="12"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.003495" Rows="12.000000" Width="12"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="9" Alias="c">

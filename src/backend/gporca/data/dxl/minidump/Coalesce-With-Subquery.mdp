@@ -790,7 +790,7 @@
     <dxl:Plan Id="0" SpaceSize="4186">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="38915.798285" Rows="4.000000" Width="269"/>
+          <dxl:Cost StartupCost="0" TotalCost="38915.802285" Rows="4.000000" Width="269"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="datname">
@@ -858,7 +858,7 @@
         <dxl:OneTimeFilter/>
         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="6920.082238" Rows="8.000000" Width="205"/>
+            <dxl:Cost StartupCost="0" TotalCost="6920.083038" Rows="8.000000" Width="205"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="datname">
@@ -892,7 +892,7 @@
           </dxl:JoinFilter>
           <dxl:Sort SortDiscardDuplicates="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.011733" Rows="4.000000" Width="141"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.011833" Rows="4.000000" Width="141"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="datname">
@@ -925,7 +925,7 @@
             <dxl:LimitOffset/>
             <dxl:HashJoin JoinType="Left">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.005337" Rows="4.000000" Width="141"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.005437" Rows="4.000000" Width="141"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="datname">
@@ -1040,7 +1040,7 @@
           </dxl:Sort>
           <dxl:Assert ErrorCode="P0003">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="437.001650" Rows="1.000000" Width="64"/>
+              <dxl:Cost StartupCost="0" TotalCost="437.001750" Rows="1.000000" Width="64"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="44" Alias="rolname">
@@ -1059,7 +1059,7 @@
             </dxl:AssertConstraintList>
             <dxl:Window PartitionColumns="">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="437.001586" Rows="1.000000" Width="72"/>
+                <dxl:Cost StartupCost="0" TotalCost="437.001686" Rows="1.000000" Width="72"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="107" Alias="row_number">
@@ -1072,7 +1072,7 @@
               <dxl:Filter/>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="437.001586" Rows="1.000000" Width="64"/>
+                  <dxl:Cost StartupCost="0" TotalCost="437.001686" Rows="1.000000" Width="64"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="44" Alias="rolname">
@@ -1162,7 +1162,7 @@
                           <dxl:ConstValue TypeMdid="0.19.1.0" Value="dGVtcGxhdGUwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&#10;AAAAAAAAAAAAAAAAAAAAAAAAAA=="/>
                         </dxl:Comparison>
                       </dxl:IndexCondList>
-	<dxl:Partitions/>
+                      <dxl:Partitions/>
                       <dxl:IndexDescriptor Mdid="0.2671.1.0" IndexName="pg_database_datname_index"/>
                       <dxl:TableDescriptor Mdid="6.1262.1.1" TableName="pg_database">
                         <dxl:Columns>

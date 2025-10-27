@@ -505,7 +505,7 @@ select * from bar where c not in (select distinct a from foo);
     <dxl:Plan Id="0" SpaceSize="2613306696">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="4310.001330" Rows="4.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="4310.001530" Rows="4.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="c">
@@ -519,7 +519,7 @@ select * from bar where c not in (select distinct a from foo);
         <dxl:SortingColumnList/>
         <dxl:Append IsTarget="false" IsZapped="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="4310.001211" Rows="4.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="4310.001411" Rows="4.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="c">
@@ -630,7 +630,7 @@ select * from bar where c not in (select distinct a from foo);
           </dxl:NestedLoopJoin>
           <dxl:HashJoin JoinType="In">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000443" Rows="1.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000543" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="18" Alias="c">
@@ -779,7 +779,7 @@ select * from bar where c not in (select distinct a from foo);
           </dxl:NestedLoopJoin>
           <dxl:RandomMotion InputSegments="-1" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000617" Rows="1.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000717" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="54" Alias="c">
@@ -793,7 +793,7 @@ select * from bar where c not in (select distinct a from foo);
             <dxl:SortingColumnList/>
             <dxl:HashJoin JoinType="LeftAntiSemiJoinNotIn">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000596" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000696" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="54" Alias="c">

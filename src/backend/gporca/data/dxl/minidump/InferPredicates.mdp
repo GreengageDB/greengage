@@ -420,7 +420,7 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
     <dxl:Plan Id="0" SpaceSize="8">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.000594" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.000694" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="21" Alias="?column?">
@@ -431,7 +431,7 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
         <dxl:SortingColumnList/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.000565" Rows="1.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.000665" Rows="1.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="21" Alias="?column?">
@@ -445,7 +445,7 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
           <dxl:OneTimeFilter/>
           <dxl:Window PartitionColumns="2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.000562" Rows="1.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.000662" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="20" Alias="row_number">
@@ -458,7 +458,7 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
             <dxl:Filter/>
             <dxl:Sort SortDiscardDuplicates="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="862.000562" Rows="1.000000" Width="4"/>
+                <dxl:Cost StartupCost="0" TotalCost="862.000662" Rows="1.000000" Width="4"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="2" Alias="c">
@@ -473,7 +473,7 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
               <dxl:LimitOffset/>
               <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="862.000517" Rows="1.000000" Width="4"/>
+                  <dxl:Cost StartupCost="0" TotalCost="862.000617" Rows="1.000000" Width="4"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="2" Alias="c">
@@ -489,7 +489,7 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
                 </dxl:HashExprList>
                 <dxl:HashJoin JoinType="Inner">
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="862.000512" Rows="1.000000" Width="4"/>
+                    <dxl:Cost StartupCost="0" TotalCost="862.000612" Rows="1.000000" Width="4"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="2" Alias="c">

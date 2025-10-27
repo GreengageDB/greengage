@@ -702,7 +702,7 @@
     <dxl:Plan Id="0" SpaceSize="20">
       <dxl:DMLUpdate Columns="18,1" ActionCol="19" CtidCol="2" SegmentIdCol="8" IsSplitUpdate="false">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="864.385336" Rows="100.000001" Width="1"/>
+          <dxl:Cost StartupCost="0" TotalCost="864.388669" Rows="100.000001" Width="1"/>
         </dxl:Properties>
         <dxl:DirectDispatchInfo/>
         <dxl:ProjList>
@@ -728,7 +728,7 @@
         </dxl:TableDescriptor>
         <dxl:RoutedDistributeMotion SegmentIdCol="8" InputSegments="0,1,2" OutputSegments="0,1,2">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.041586" Rows="100.000001" Width="18"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.044919" Rows="100.000001" Width="18"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="18" Alias="i">
@@ -748,7 +748,7 @@
           <dxl:SortingColumnList/>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.039708" Rows="100.000001" Width="18"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.043041" Rows="100.000001" Width="18"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="18" Alias="i">

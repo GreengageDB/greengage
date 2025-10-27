@@ -447,7 +447,7 @@
     <dxl:Plan Id="0" SpaceSize="1674">
       <dxl:PhysicalCTAS Name="fake ctas rel" IsTemporary="true" StorageType="Heap" DistributionPolicy="Random" InsertColumns="20" VarTypeModList="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1324033.378384" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="1324033.480784" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:DistrOpclasses/>
         <dxl:Columns>
@@ -461,7 +461,7 @@
         </dxl:ProjList>
         <dxl:RandomMotion InputSegments="0,1,2" OutputSegments="0,1,2">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1324033.362759" Rows="1.000000" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="1324033.465159" Rows="1.000000" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -475,7 +475,7 @@
           <dxl:SortingColumnList/>
           <dxl:Result>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1324033.362746" Rows="1.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="1324033.465146" Rows="1.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -489,7 +489,7 @@
             <dxl:OneTimeFilter/>
             <dxl:RandomMotion InputSegments="0" OutputSegments="0,1,2" DuplicateSensitive="true">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1324033.362742" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="1324033.465142" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -500,7 +500,7 @@
               <dxl:SortingColumnList/>
               <dxl:Sequence>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1324033.362722" Rows="1.000000" Width="8"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1324033.465122" Rows="1.000000" Width="8"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -553,7 +553,7 @@
                 </dxl:CTEProducer>
                 <dxl:Result>
                   <dxl:Properties>
-                    <dxl:Cost StartupCost="0" TotalCost="1324033.362596" Rows="1.000000" Width="8"/>
+                    <dxl:Cost StartupCost="0" TotalCost="1324033.464996" Rows="1.000000" Width="8"/>
                   </dxl:Properties>
                   <dxl:ProjList>
                     <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -573,7 +573,7 @@
                   <dxl:OneTimeFilter/>
                   <dxl:Aggregate AggregationStrategy="Plain" StreamSafe="false">
                     <dxl:Properties>
-                      <dxl:Cost StartupCost="0" TotalCost="1324033.362588" Rows="1.000000" Width="16"/>
+                      <dxl:Cost StartupCost="0" TotalCost="1324033.464988" Rows="1.000000" Width="16"/>
                     </dxl:Properties>
                     <dxl:GroupingColumns/>
                     <dxl:ProjList>
@@ -630,7 +630,7 @@
                     <dxl:Filter/>
                     <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false" OuterRefAsParam="false">
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="1324033.362502" Rows="3.000000" Width="32"/>
+                        <dxl:Cost StartupCost="0" TotalCost="1324033.464902" Rows="3.000000" Width="32"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="9" Alias="val">
@@ -652,7 +652,7 @@
                       </dxl:JoinFilter>
                       <dxl:HashJoin JoinType="Full">
                         <dxl:Properties>
-                          <dxl:Cost StartupCost="0" TotalCost="431.000865" Rows="3.000000" Width="24"/>
+                          <dxl:Cost StartupCost="0" TotalCost="431.000965" Rows="3.000000" Width="24"/>
                         </dxl:Properties>
                         <dxl:ProjList>
                           <dxl:ProjElem ColId="9" Alias="val">

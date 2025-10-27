@@ -449,7 +449,7 @@ SQL:
     <dxl:Plan Id="0" SpaceSize="8288">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.076760" Rows="111.000000" Width="20"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.082310" Rows="111.000000" Width="20"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -466,7 +466,7 @@ SQL:
         <dxl:SortingColumnList/>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.066792" Rows="111.000000" Width="20"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.072342" Rows="111.000000" Width="20"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -563,7 +563,7 @@ SQL:
           </dxl:CTEProducer>
           <dxl:HashJoin JoinType="Inner">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="862.060544" Rows="110.999992" Width="20"/>
+              <dxl:Cost StartupCost="0" TotalCost="862.066094" Rows="110.999992" Width="20"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
