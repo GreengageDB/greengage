@@ -29,12 +29,10 @@ class TestDML(threading.Thread):
         self.prepare()
 
     def run(self):
-        conn = dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False)
-
-        self.loop(conn)
-        self.verify(conn)
-
-        conn.commit()
+        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+            self.loop(conn)
+            self.verify()
+            conn.commit()
 
     def prepare(self):
         sql = '''
@@ -46,12 +44,12 @@ class TestDML(threading.Thread):
             ) DISTRIBUTED BY (c1);
         '''.format(tablename=self.tablename)
 
-        conn = dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False)
-        dbconn.execSQL(conn, sql)
+        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+            dbconn.execSQL(conn, sql)
 
-        self.prepare_extra(conn)
+            self.prepare_extra(conn)
 
-        conn.commit()
+            conn.commit()
 
     def prepare_extra(self, conn):
         pass

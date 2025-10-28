@@ -70,13 +70,18 @@ c_sources = ['pgmodule.c']
 
 def pg_config(s):
     """Retrieve information about installed version of PostgreSQL."""
-    f = os.popen('pg_config --%s' % s)
+    if os.path.exists("../../../../src/bin/pg_config/pg_config"):
+        f = os.popen("../../../../src/bin/pg_config/pg_config --%s" % s)
+    else:
+        """If a VPATH build, it might not be there.  Look other places"""
+        """It should be the one in the path, because the makefile includes greengage_path.sh """
+        f = os.popen("pg_config --%s" % s)
     d = f.readline().strip()
     if f.close() is not None:
         raise Exception("pg_config tool is not available.")
     if not d:
         raise Exception("Could not get %s information." % s)
-    return d
+    return os.getenv('DESTDIR','')+d
 
 
 def pg_version():

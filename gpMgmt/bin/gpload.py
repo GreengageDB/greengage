@@ -705,23 +705,13 @@ def quote_unident(val):
     return val
 
 
-def notice_processor(self):
-    if windowsPlatform == True:
-       # We don't have a pygresql with our notice fix, so skip for windows.
-       # This means we will not get any warnings on windows (MPP10989).
-       return
 
-    theNotices = self.db.notices()
+def notice_processor(notice):
     r = re.compile("^NOTICE:  found (\d+) data formatting errors.*")
-    messageNumber = 0
-    m = None
-    while messageNumber < len(theNotices) and m is None:
-       aNotice = theNotices[messageNumber]
-       m = r.match(aNotice)
-       messageNumber = messageNumber + 1
-       if m:
-           global NUM_WARN_ROWS
-           NUM_WARN_ROWS = int(m.group(1))
+    m = r.match(notice.message)
+    if m:
+        global NUM_WARN_ROWS
+        NUM_WARN_ROWS = int(m.group(1))
 
 def handle_kill(signum, frame):
     # already dying?
@@ -1829,6 +1819,7 @@ class gpload:
                            , user=self.options.U
                            , passwd=self.options.password
                            )
+            self.db.set_notice_receiver(notice_processor)
             self.log(self.DEBUG, "Successfully connected to database")
 
             if withGpVersion == True:
@@ -2698,7 +2689,6 @@ class gpload:
 
 
     def count_errors(self):
-        notice_processor(self)
         if self.log_errors and not self.options.D:
             # make sure we only get errors for our own instance
             if not self.reuse_tables:

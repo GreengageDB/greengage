@@ -31,10 +31,14 @@ if master_data_dir is None:
 
 
 def execute_sql(dbname, sql):
-    result = None
-
     with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
-        result = dbconn.execSQL(conn, sql)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+def query_sql(dbname, sql):
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        cursor = dbconn.execSQL(conn, sql)
+        result = cursor.fetchall()
         conn.commit()
 
     return result
@@ -272,7 +276,8 @@ def create_database_if_not_exists(context, dbname, host=None, port=0, user=None)
     if not check_db_exists(dbname, host, port, user):
         create_database(context, dbname, host, port, user)
     context.dbname = dbname
-    context.conn = dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)
+    if not hasattr(context, 'conn'):
+        context.conn = dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)
 
 def create_database(context, dbname=None, host=None, port=0, user=None):
     LOOPS = 10
