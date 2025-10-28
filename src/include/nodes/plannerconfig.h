@@ -26,6 +26,8 @@ typedef struct PlannerConfig
 	bool        force_singleQE; /* True for forcing gather the base rel to singleQE, if it needs a motion */
 
 	bool        may_rescan; /* true means the subquery may be rescanned. */
+
+	bool		isUnderInitPlan; /* True for plan rooted at a subquery which is planned as an initplan */
 } PlannerConfig;
 
 extern PlannerConfig *DefaultPlannerConfig(void);

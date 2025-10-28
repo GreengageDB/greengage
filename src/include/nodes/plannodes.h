@@ -1205,6 +1205,12 @@ typedef struct ShareInputScan
 	 * there is a modifying operation without a motion above.
 	 */
 	bool		rootSliceIsWriter;
+
+	/*
+	 * The producer is inside InitPlan, disable notifications and postpone
+	 * cleanup until the end of command (if cross-slice).
+	 */
+	bool		isUnderInitPlan;
 } ShareInputScan;
 
 /* ----------------

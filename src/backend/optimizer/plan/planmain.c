@@ -336,6 +336,8 @@ PlannerConfig *DefaultPlannerConfig(void)
 
 	c1->may_rescan = false;
 
+	c1->isUnderInitPlan = false;
+
 	return c1;
 }
 

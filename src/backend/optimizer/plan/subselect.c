@@ -377,12 +377,14 @@ make_subplan(PlannerInfo *root, Query *orig_subquery,
 		 * so we shouldn't apply cte sharing scan inside them
 		 * and then back to normal scan.
 		 */
+		config->isUnderInitPlan = config->isUnderInitPlan ||
+				subLinkType == ROWCOMPARE_SUBLINK ||
+				subLinkType == ARRAY_SUBLINK ||
+				subLinkType == EXPR_SUBLINK ||
+				subLinkType == MULTIEXPR_SUBLINK ||
+				subLinkType == EXISTS_SUBLINK;
 		config->gp_cte_sharing = config->gp_cte_sharing ?
-				!(subLinkType == ROWCOMPARE_SUBLINK ||
-				 subLinkType == ARRAY_SUBLINK ||
-				 subLinkType == EXPR_SUBLINK ||
-				 subLinkType == MULTIEXPR_SUBLINK ||
-				 subLinkType == EXISTS_SUBLINK) : config->gp_cte_sharing;
+				!config->isUnderInitPlan : config->gp_cte_sharing;
 	}
 	/*
 	 * Strictly speaking, the order of rows in a subquery doesn't matter.

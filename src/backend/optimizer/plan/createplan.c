@@ -4411,6 +4411,9 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 	Assert(list_length(cteroot->list_cteplaninfo) > planinfo_id);
 	cteplaninfo = list_nth(cteroot->list_cteplaninfo, planinfo_id);
 
+	if (root->config->isUnderInitPlan)
+		cteplaninfo->isUnderInitPlan = true;
+
 	/* Sort clauses into best execution order */
 	scan_clauses = order_qual_clauses(root, scan_clauses);
 
@@ -4479,6 +4482,8 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 
 		if (cteplaninfo->rootSliceIsWriter)
 			((ShareInputScan *) subplan)->rootSliceIsWriter = true;
+		if (cteplaninfo->isUnderInitPlan)
+			((ShareInputScan *) subplan)->isUnderInitPlan = true;
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,

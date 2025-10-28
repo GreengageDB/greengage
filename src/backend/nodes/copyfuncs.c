@@ -1223,6 +1223,7 @@ _copyShareInputScan(const ShareInputScan *from)
 	COPY_SCALAR_FIELD(this_slice_id);
 	COPY_SCALAR_FIELD(nconsumers);
 	COPY_SCALAR_FIELD(rootSliceIsWriter);
+	COPY_SCALAR_FIELD(isUnderInitPlan);
 
 	return newnode;
 }

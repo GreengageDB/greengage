@@ -501,6 +501,8 @@ typedef struct CtePlanInfo
 	 * after consumer's plan is cut.
 	 */
 	bool rootSliceIsWriter;
+
+	bool isUnderInitPlan;
 } CtePlanInfo;
 
 /*
