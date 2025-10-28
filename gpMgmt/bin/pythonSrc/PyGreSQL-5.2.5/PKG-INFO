@@ -1,0 +1,42 @@
+Metadata-Version: 2.1
+Name: PyGreSQL
+Version: 5.2.5
+Summary: Python PostgreSQL Interfaces
+Home-page: http://www.pygresql.org
+Author: D'Arcy J. M. Cain
+Author-email: darcy@PyGreSQL.org
+License: PostgreSQL
+Download-URL: http://www.pygresql.org/download/
+Project-URL: Documentation, https://pygresql.org/contents/
+Project-URL: Issue Tracker, https://github.com/PyGreSQL/PyGreSQL/issues/
+Project-URL: Mailing List, https://mail.vex.net/mailman/listinfo/pygresql
+Project-URL: Source Code, https://github.com/PyGreSQL/PyGreSQL
+Keywords: pygresql postgresql database api dbapi
+Platform: any
+Classifier: Development Status :: 6 - Mature
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: PostgreSQL License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: C
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: SQL
+Classifier: Topic :: Database
+Classifier: Topic :: Database :: Front-Ends
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Description-Content-Type: text/plain
+License-File: LICENSE.txt
+
+PyGreSQL is an open-source Python module that interfaces to a
+PostgreSQL database. It wraps the lower level C API library libpq
+to allow easy use of the powerful PostgreSQL features from Python.
+
