@@ -313,7 +313,9 @@ init_tuplestore_state(ShareInputScanState *node)
 			Assert(sisc->cross_slice);
 
 			estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
-			shareinput_reader_waitready(node->ref);
+
+			if (!sisc->isUnderInitPlan)
+				shareinput_reader_waitready(node->ref);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 			ts = tuplestore_open_shared(get_shareinput_fileset(), rwfile_prefix);
@@ -568,7 +570,8 @@ ExecEndShareInputScan(ShareInputScanState *node)
 			{
 				if (!local_state->ready)
 					init_tuplestore_state(node);
-				shareinput_writer_waitdone(node->ref, sisc->nconsumers);
+				if (!sisc->isUnderInitPlan)
+					shareinput_writer_waitdone(node->ref, sisc->nconsumers);
 			}
 			else
 			{
