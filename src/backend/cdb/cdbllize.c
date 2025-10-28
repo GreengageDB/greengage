@@ -508,9 +508,9 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 * unnest(array[typoutput, typsend]) from pg_type) then 'upg_catalog.'
 		 * else 'pg_catalog.' end) FROM pg_proc p;
 		 **/
-		Assert(scanPlan->flow);
-		if (scanPlan->flow->locustype == CdbLocusType_Entry &&
-			ctx->currentPlanFlow->locustype == CdbLocusType_Entry)
+		Assert(scanPlan->flow && ctx->currentPlanFlow);
+		if (CdbPathLocus_IsEntry(*scanPlan->flow) &&
+			CdbPathLocus_IsEntry(*ctx->currentPlanFlow))
 			return (Node *) node;
 
 		/**
