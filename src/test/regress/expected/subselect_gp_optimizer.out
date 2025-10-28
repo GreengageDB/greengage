@@ -3991,7 +3991,7 @@ create function s(s int) returns setof int language plpgsql execute on all segme
 create function m(m int) returns setof int language plpgsql execute on master as $$ begin return next m;end;$$;
 create function i(i int) returns setof int language plpgsql execute on initplan as $$ begin return next i;end;$$;
 explain (verbose, costs off)
-select (select dbid from gp_segment_configuration limit 1 offset t) from t;
+select (select status from gp_segment_configuration limit 1 offset t) from t;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
@@ -4002,22 +4002,22 @@ select (select dbid from gp_segment_configuration limit 1 offset t) from t;
                Output: t.t
          SubPlan 1  (slice2; segments: 3)
            ->  Limit
-                 Output: gp_segment_configuration.dbid
+                 Output: gp_segment_configuration.status
                  ->  Materialize
-                       Output: gp_segment_configuration.dbid
+                       Output: gp_segment_configuration.status
                        ->  Broadcast Motion 1:3  (slice1)
-                             Output: gp_segment_configuration.dbid
+                             Output: gp_segment_configuration.status
                              ->  Seq Scan on pg_catalog.gp_segment_configuration
-                                   Output: gp_segment_configuration.dbid
+                                   Output: gp_segment_configuration.status
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
 
-select (select dbid from gp_segment_configuration limit 1 offset t) from t;
- dbid 
-------
-    5
-    1
-    2
+select (select status from gp_segment_configuration limit 1 offset t) from t;
+ status 
+--------
+ u
+ u
+ u
 (3 rows)
 
 explain (verbose, costs off)

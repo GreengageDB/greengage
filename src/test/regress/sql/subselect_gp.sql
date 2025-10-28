@@ -1503,8 +1503,8 @@ create function m(m int) returns setof int language plpgsql execute on master as
 create function i(i int) returns setof int language plpgsql execute on initplan as $$ begin return next i;end;$$;
 
 explain (verbose, costs off)
-select (select dbid from gp_segment_configuration limit 1 offset t) from t;
-select (select dbid from gp_segment_configuration limit 1 offset t) from t;
+select (select status from gp_segment_configuration limit 1 offset t) from t;
+select (select status from gp_segment_configuration limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select a from a(1) limit 1 offset t) from t;

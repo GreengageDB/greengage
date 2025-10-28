@@ -429,7 +429,7 @@ ParallelizeCorrelatedSubPlanUpdateFlowMutator(Node *node)
 static Node *
 ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerContext *ctx)
 {
-	bool		funcScanShouldBeMaterialized = false;
+	bool		materializeFunctionScan = false;
 
 	if (node == NULL)
 		return NULL;
@@ -461,12 +461,12 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 * locus Entry can be materialized and broadcased if their paramenters
 		 * are not depending on outer query results
 		 */
-		if (((Plan *) node)->flow->locustype == CdbLocusType_Entry &&
+		if (CdbPathLocus_IsEntry(*((Plan *) node)->flow) &&
 			ctx->movement == MOVEMENT_BROADCAST)
 		{
 			FunctionScan *fscan = (FunctionScan *) node;
 
-			funcScanShouldBeMaterialized = true;
+			materializeFunctionScan = true;
 
 			foreach(lc, fscan->functions)
 			{
@@ -493,7 +493,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (IsA(node, SeqScan)
 		||IsA(node, ShareInputScan)
 		||IsA(node, ExternalScan)
-		||(IsA(node, FunctionScan) && funcScanShouldBeMaterialized)
+		||(IsA(node, FunctionScan) && materializeFunctionScan)
 		||(IsA(node, SubqueryScan) && IsA(((SubqueryScan *) node)->subplan, ModifyTable))
 		||IsA(node,ModifyTable))
 	{
