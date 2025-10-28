@@ -146,6 +146,7 @@ typedef struct ResourceOwnerData
 ResourceOwner CurrentResourceOwner = NULL;
 ResourceOwner CurTransactionResourceOwner = NULL;
 ResourceOwner TopTransactionResourceOwner = NULL;
+ResourceOwner TopCommandResourceOwner = NULL;
 ResourceOwner AuxProcessResourceOwner = NULL;
 
 /*
@@ -595,7 +596,7 @@ ResourceOwnerReleaseInternal(ResourceOwner owner,
 			LOCALLOCK **locks;
 			int			nlocks;
 
-			Assert(owner->parent != NULL);
+			Assert(owner->parent != NULL || owner == TopCommandResourceOwner);
 
 			/*
 			 * Pass the list of locks owned by this resource owner to the lock

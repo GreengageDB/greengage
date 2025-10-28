@@ -70,6 +70,7 @@ MemoryContext CacheMemoryContext = NULL;
 MemoryContext MessageContext = NULL;
 MemoryContext TopTransactionContext = NULL;
 MemoryContext CurTransactionContext = NULL;
+MemoryContext TopCommandContext = NULL;
 MemoryContext DispatcherContext = NULL;
 MemoryContext InterconnectContext = NULL;
 MemoryContext OptimizerMemoryContext = NULL;

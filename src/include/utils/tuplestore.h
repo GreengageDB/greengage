@@ -95,6 +95,10 @@ extern void tuplestore_report(Tuplestorestate *state);
 
 extern void tuplestore_end(Tuplestorestate *state);
 
+extern void tuplestore_end_delayed(Tuplestorestate *state);
+
+extern void tuplestore_cleanup_pending(void);
+
 extern void tuplestore_set_instrument(Tuplestorestate *state,
 									  struct Instrumentation *instrument);
 

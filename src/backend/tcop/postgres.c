@@ -5492,6 +5492,9 @@ PostgresMain(int argc, char *argv[],
 					Oid ouid;
 					Oid cuid;
 
+					static int last_cnt = -1;
+					static int last_sid = -1;
+
 					if (Gp_role != GP_ROLE_EXECUTE)
 						ereport(ERROR,
 								(errcode(ERRCODE_PROTOCOL_VIOLATION),
@@ -5513,6 +5516,37 @@ PostgresMain(int argc, char *argv[],
 					 */
 					MyProc->queryCommandId = pq_getmsgint(&input_message, 4);
 					gp_command_count = MyProc->queryCommandId;
+
+					/*
+					 * Clear the last command's resources if it had any.
+					 */
+					if (TopCommandResourceOwner == NULL)
+					{
+						Assert(TopCommandContext == NULL);
+						TopCommandResourceOwner = ResourceOwnerCreate(NULL, "TopCommand");
+						TopCommandContext =
+							AllocSetContextCreate(TopMemoryContext,
+												  "TopCommandContext",
+												  ALLOCSET_DEFAULT_SIZES);
+					}
+					else if (gp_command_count != last_cnt || gp_session_id != last_sid)
+					{
+						tuplestore_cleanup_pending();
+
+						ResourceOwnerRelease(TopCommandResourceOwner,
+											 RESOURCE_RELEASE_BEFORE_LOCKS,
+											 false, false);
+						ResourceOwnerRelease(TopCommandResourceOwner,
+											 RESOURCE_RELEASE_LOCKS,
+											 false, false);
+						ResourceOwnerRelease(TopCommandResourceOwner,
+											 RESOURCE_RELEASE_AFTER_LOCKS,
+											 false, false);
+						MemoryContextReset(TopCommandContext);
+
+						last_cnt = gp_command_count;
+						last_sid = gp_session_id;
+					}
 
 					elog(DEBUG1, "Message type %c received by from libpq, len = %d", firstchar, input_message.len); /* TODO: Remove this */
 

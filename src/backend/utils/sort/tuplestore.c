@@ -295,6 +295,8 @@ static void *copytup_heap(Tuplestorestate *state, void *tup);
 static void writetup_heap(Tuplestorestate *state, void *tup);
 static void *readtup_heap(Tuplestorestate *state, unsigned int len);
 
+static List *tuplestores_pending_delete = NIL;
+
 
 char *
 tuplestore_get_buffilename(Tuplestorestate *state)
@@ -536,25 +538,20 @@ tuplestore_report(Tuplestorestate *state)
 }
 
 /*
- * tuplestore_end
+ * tuplestore_close
  *
- *	Release resources and clean up.
+ *	Only close the tuplestore while keeping files intact (for other processes)
  */
-void
-tuplestore_end(Tuplestorestate *state)
+static void
+tuplestore_close(Tuplestorestate *state)
 {
+	MemoryContext oldcxt = MemoryContextSwitchTo(state->context);
 	int			i;
-
-	tuplestore_report(state);
 
 	if (state->myfile)
 		BufFileClose(state->myfile);
-	if (state->share_status == TSHARE_WRITER)
-		BufFileDeleteShared(state->fileset, state->shared_filename);
 	if (state->work_set)
 		workfile_mgr_close_set(state->work_set);
-	if (state->shared_filename)
-		pfree(state->shared_filename);
 	if (state->memtuples)
 	{
 		for (i = state->memtupdeleted; i < state->memtupcount; i++)
@@ -562,7 +559,79 @@ tuplestore_end(Tuplestorestate *state)
 		pfree(state->memtuples);
 	}
 	pfree(state->readptrs);
+
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/*
+ * tuplestore_cleanup
+ *
+ *	Delete files used by the tuplestore (after tuplestore_close has already been called)
+ */
+static void
+tuplestore_cleanup(Tuplestorestate *state)
+{
+	MemoryContext oldcxt = MemoryContextSwitchTo(state->context);
+
+	if (state->share_status == TSHARE_WRITER)
+		BufFileDeleteShared(state->fileset, state->shared_filename);
+	if (state->shared_filename)
+		pfree(state->shared_filename);
 	pfree(state);
+
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/*
+ * tuplestore_end
+ *
+ *	Release resources and clean up.
+ */
+void
+tuplestore_end(Tuplestorestate *state)
+{
+	tuplestore_report(state);
+	tuplestore_close(state);
+	tuplestore_cleanup(state);
+}
+
+/*
+ * tuplestore_end_delayed
+ *
+ *	Release some resources and plan full clean up for later.
+ *	Reader slices can always clean up immediately.
+ */
+void
+tuplestore_end_delayed(Tuplestorestate *state)
+{
+	tuplestore_report(state);
+	tuplestore_close(state);
+
+	if (state->share_status == TSHARE_WRITER)
+	{
+		MemoryContext oldcxt = MemoryContextSwitchTo(TopCommandContext);
+		tuplestores_pending_delete = lappend(tuplestores_pending_delete, state);
+		MemoryContextSwitchTo(oldcxt);
+	}
+	else
+		tuplestore_cleanup(state);
+}
+
+void
+tuplestore_cleanup_pending(void)
+{
+	MemoryContext oldcxt = MemoryContextSwitchTo(TopCommandContext);
+	ListCell 	 *cell;
+	foreach(cell, tuplestores_pending_delete)
+	{
+		Tuplestorestate *state = (Tuplestorestate*) lfirst(cell);
+		tuplestore_cleanup(state);
+	}
+
+	list_free(tuplestores_pending_delete);
+	tuplestores_pending_delete = NIL;
+
+	MemoryContextSwitchTo(oldcxt);
 }
 
 /*

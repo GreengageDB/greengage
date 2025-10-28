@@ -37,6 +37,7 @@ typedef struct ResourceOwnerData *ResourceOwner;
 extern PGDLLIMPORT ResourceOwner CurrentResourceOwner;
 extern PGDLLIMPORT ResourceOwner CurTransactionResourceOwner;
 extern PGDLLIMPORT ResourceOwner TopTransactionResourceOwner;
+extern PGDLLIMPORT ResourceOwner TopCommandResourceOwner;
 extern PGDLLIMPORT ResourceOwner AuxProcessResourceOwner;
 
 /*
