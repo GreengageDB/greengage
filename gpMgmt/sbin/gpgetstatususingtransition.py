@@ -65,8 +65,8 @@ def _get_segment_version(seg):
     try:
         if seg.role == gparray.ROLE_PRIMARY:
             dburl = dbconn.DbURL(hostname=seg.hostname, port=seg.port, dbname="template1")
-            conn = dbconn.connect(dburl, utility=True)
-            return dbconn.execSQLForSingleton(conn, "select version()")
+            with dbconn.connect(dburl, utility=True) as conn:
+                return dbconn.execSQLForSingleton(conn, "select version()")
 
         if seg.role == gparray.ROLE_MIRROR:
             cmd = base.Command("Try connecting to mirror",

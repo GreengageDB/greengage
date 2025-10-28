@@ -321,12 +321,12 @@ def check_and_start_standby():
         logger.error('Cannot use -n option when standby master has not yet been configured')
         raise GpInitStandbyException('Standby master not configured')
  
-    conn = dbconn.connect(dburl, utility=True)
-    sql = "SELECT * FROM pg_stat_replication"
-    cur = dbconn.execSQL(conn, sql)
-    if cur.rowcount >= 1:
-        logger.info("Standy master is already up and running.")
-        return
+    with dbconn.connect(dburl, utility=True) as conn:
+        sql = "SELECT * FROM pg_stat_replication"
+        cur = dbconn.execSQL(conn, sql)
+        if cur.rowcount >= 1:
+            logger.info("Standy master is already up and running.")
+            return
 
     standby = array.standbyMaster
     gp.start_standbymaster(standby.hostname,

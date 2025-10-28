@@ -29,10 +29,14 @@ master_data_dir = None
 
 
 def execute_sql(dbname, sql):
-    result = None
-
     with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
-        result = dbconn.execSQL(conn, sql)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+def query_sql(dbname, sql):
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        cursor = dbconn.execSQL(conn, sql)
+        result = cursor.fetchall()
         conn.commit()
 
     return result

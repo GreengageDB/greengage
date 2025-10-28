@@ -150,8 +150,8 @@ class GpArrayTestCase(GpTestCase):
                                   mirror_list, mirror_portbase, dir_prefix)
         offset = len(hostlist) * len(primary_list) # need to continue numbering where the last createSegmentRows left off
         for row in rows:
-            gparray.addExpansionSeg(row.content+offset, 'p' if convert_bool(row.isprimary) else 'm', row.dbid+offset,
-                                    'p' if convert_bool(row.isprimary) else 'm', row.host, row.address, row.port, row.fulldir)
+            gparray.addExpansionSeg(row.content+offset, 'p' if row.isprimary else 'm', row.dbid+offset,
+                                    'p' if row.isprimary else 'm', row.host, row.address, row.port, row.fulldir)
         self._validate_get_segment_list(gparray, hostlist, expansion_hosts, primary_list)
 
 
@@ -197,9 +197,9 @@ class GpArrayTestCase(GpTestCase):
         
         for row in rows:
             newrow = Segment(content = row.content,
-                          preferred_role = 'p' if convert_bool(row.isprimary) else 'm',
+                          preferred_role = 'p' if row.isprimary else 'm',
                           dbid = row.dbid,
-                          role = 'p' if convert_bool(row.isprimary) else 'm',
+                          role = 'p' if row.isprimary else 'm',
                           mode = 's',
                           status = 'u',
                           hostname = row.host,
@@ -377,11 +377,6 @@ class GpArrayTestCase(GpTestCase):
             "6|-1|m|m|s|u|sdw3|sdw3|6432|/data/standby")
         return GpArray([self.coordinator, self.standby, self.primary0, self.primary1, self.mirror0, self.mirror1])
 
-def convert_bool(val):
-    if val == 't':
-        return True
-    else:
-        return False
 
 #------------------------------- Mainline --------------------------------
 if __name__ == '__main__':

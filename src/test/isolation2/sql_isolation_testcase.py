@@ -432,6 +432,11 @@ class SQLIsolationExecutor(object):
                         time.sleep(0.1)
                     else:
                         raise
+
+            def notice_callback(msg):
+                pass
+            if con:
+                con.set_notice_receiver(notice_callback)
             return con
 
         def get_hostname_port(self, contentid, role):
@@ -473,7 +478,10 @@ class SQLIsolationExecutor(object):
                 for col in row:
                     if col is None:
                         col = ""
-                    widths[colno] = max(widths[colno], len(str(col)))
+                    width = len(str(col))
+                    if type(col) is bool:
+                        width = 1
+                    widths[colno] = max(widths[colno], width)
                     colno = colno + 1
 
             # Start printing. Header first.
@@ -503,6 +511,14 @@ class SQLIsolationExecutor(object):
                         result += "|"
                     if col is None:
                         col = ""
+                    if type(col) is bool:
+                        col = 't' if col else 'f'
+                    if type(col) is list:
+                        for i, elem in enumerate(col):
+                            if type(elem) is bool:
+                                col[i] = elem = 't' if elem else 'f'
+                        col = "{" + ",".join([str(elem) for elem in col]) + "}"
+
                     result += " " + str(col).ljust(widths[colno]) + " "
                     colno = colno + 1
                 result += "\n"
@@ -524,7 +540,7 @@ class SQLIsolationExecutor(object):
                 if r and type(r) == str:
                     echo_content = command[:-1].partition(" ")[0].upper()
                     return "%s %s" % (echo_content, r)
-                elif r:
+                elif r is not None:
                     return self.printout_result(r)
                 else:
                     echo_content = command[:-1].partition(" ")[0].upper()

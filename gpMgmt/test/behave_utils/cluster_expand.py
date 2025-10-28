@@ -76,8 +76,8 @@ class Gpexpand:
     def get_redistribute_status(self):
         sql = 'select status from gpexpand.status order by updated desc limit 1'
         dburl = dbconn.DbURL(dbname=self.database)
-        conn = dbconn.connect(dburl, encoding='UTF8', unsetSearchPath=False)
-        status = dbconn.execSQLForSingleton(conn, sql)
+        with dbconn.connect(dburl, encoding='UTF8', unsetSearchPath=False) as conn:
+            status = dbconn.execSQLForSingleton(conn, sql)
         if status == 'EXPANSION COMPLETE':
             rc = 0
         else:

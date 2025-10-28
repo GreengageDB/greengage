@@ -483,7 +483,9 @@ class DifferentialRecoveryClsTestCase(GpTestCase):
            return_value='/data/mytblspace1/2')
     @patch('os.listdir')
     @patch('os.symlink')
-    def test_sync_tablespaces_outside_data_dir(self, mock1,mock2,mock3,mock4):
+    @patch('gppylib.db.dbconn.GgdbCursor',
+           side_effect=lambda conn: conn.cursor())
+    def test_sync_tablespaces_outside_data_dir(self, mock1,mock2,mock3,mock4,mock5):
         self.diff_recovery_cmd.sync_tablespaces()
         self.assertEqual(2, self.mock_rsync_init.call_count)
         self.assertEqual(2, self.mock_rsync_run.call_count)
@@ -495,7 +497,9 @@ class DifferentialRecoveryClsTestCase(GpTestCase):
            return_value=[['1234','/data/primary0']])
     @patch('os.listdir')
     @patch('os.symlink')
-    def test_sync_tablespaces_within_data_dir(self, mock, mock2,mock3):
+    @patch('gppylib.db.dbconn.GgdbCursor',
+           side_effect=lambda conn: conn.cursor())
+    def test_sync_tablespaces_within_data_dir(self, mock, mock2,mock3,mock4):
         self.diff_recovery_cmd.sync_tablespaces()
         self.assertEqual(0, self.mock_rsync_init.call_count)
         self.assertEqual(0, self.mock_rsync_run.call_count)
@@ -508,7 +512,9 @@ class DifferentialRecoveryClsTestCase(GpTestCase):
            return_value='/data/mytblspace1/2')
     @patch('os.listdir')
     @patch('os.symlink')
-    def test_sync_tablespaces_mix_data_dir(self, mock1, mock2, mock3,mock4):
+    @patch('gppylib.db.dbconn.GgdbCursor',
+           side_effect=lambda conn: conn.cursor())
+    def test_sync_tablespaces_mix_data_dir(self, mock1, mock2, mock3, mock4, mock5):
         self.diff_recovery_cmd.sync_tablespaces()
         self.assertEqual(1, self.mock_rsync_init.call_count)
         self.assertEqual(1, self.mock_rsync_run.call_count)

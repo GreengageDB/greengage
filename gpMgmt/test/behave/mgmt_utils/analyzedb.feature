@@ -1,4 +1,4 @@
-@analyzedb
+@analyzedb @keep_connection
 Feature: Incrementally analyze the database
 
     Scenario: Invalid arguments entered

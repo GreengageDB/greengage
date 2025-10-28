@@ -163,6 +163,9 @@ def after_scenario(context, scenario):
     if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         restore_bashrc()
 
+    if "keep_connection" not in context.feature.tags and hasattr(context, 'conn'):
+        context.conn.close()
+
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
     tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpinitstandby',
                     'gpconfig', 'gpstop', 'gpinitsystem', 'cross_subnet',

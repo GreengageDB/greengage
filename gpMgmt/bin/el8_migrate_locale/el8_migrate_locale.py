@@ -306,7 +306,7 @@ class CheckTables(connection):
                         msg, size = self.get_table_size_info(dbname, parrelid)
                         table_info.append((parrelid, tablename, coll, attname, msg, size))
                         # if no default partition, give a warning, in case of migrate failed
-                        if has_default_partition == 'f':
+                        if not has_default_partition:
                             logger.warning("no default partition for {}".format(tablename))
                 else:
                     # start multiple threads to check if the rows are still in the correct partitions after os upgrade, if check failed, add these tables to filtertabs
@@ -432,7 +432,7 @@ class CheckTables(connection):
                     self.filtertabs.append((parrelid, tablename, coll, attname, msg, size))
                     self.filtertabslock.release()
                     has_error = False
-                    if has_default_partition == 'f':
+                    if not has_default_partition:
                         logger.warning("no default partition for {}".format(tablename))
 
                 db.query("set gp_detect_data_correctness = 0;")

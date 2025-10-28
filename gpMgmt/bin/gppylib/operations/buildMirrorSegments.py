@@ -313,7 +313,8 @@ class GpMirrorListToBuild:
         self.__logger.info('Triggering FTS probe')
         with dbconn.connect(dbconn.DbURL(port=port)) as conn:
             res = dbconn.execSQL(conn, "SELECT gp_request_fts_probe_scan()")
-        return res.fetchall()
+            return res.fetchall()
+
     def _update_config(self, recovery_info_by_host, gpArray):
         # should use mainUtils.getProgramName but I can't make it work!
         programName = os.path.split(sys.argv[0])[-1]
