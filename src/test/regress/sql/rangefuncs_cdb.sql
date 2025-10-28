@@ -1,7 +1,3 @@
--- start_matchsubs
--- m/ \(pathnode\.c:\d+\)/
--- s/ \(pathnode\.c:\d+\)//
--- end_matchsubs
 SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
 -- start_ignore
 create schema rangefuncs_cdb;
