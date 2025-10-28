@@ -175,9 +175,11 @@ def validate_schema_exists(pg_port, dbname, schema):
 
 def execute_sql(query, master_port, dbname):
     dburl = dbconn.DbURL(port=master_port, dbname=dbname)
-    conn = dbconn.connect(dburl)
-    cursor = dbconn.execSQL(conn, query)
-    return cursor.fetchall()
+
+    with dbconn.connect(dburl) as conn:
+        cursor = dbconn.execSQL(conn, query)
+        result = cursor.fetchall()
+        return result
 
 def get_lines_from_file(fname):
     content = []
@@ -235,8 +237,8 @@ def get_partition_state_tuples(pg_port, dbname, catalog_schema, partition_info):
                     logger.info("Table %s.%s (%s) no longer exists and will not be analyzed", schemaname, partition_name, tupletable)
                 else:
                     logger.error(str(e))
-                # If there's an exception, the transaction is closed so we need to reconnect
-                conn = dbconn.connect(dburl)
+                # If there's an exception, the transaction is aborted so we need to rollback it
+                conn.rollback()
             else:
                 num_sqls += 1
                 if num_sqls == 1000: # The choice of batch size was chosen arbitrarily
@@ -697,7 +699,7 @@ class AnalyzeDb(Operation):
         qresult = run_sql(self.conn, GET_REQUESTED_LAST_OP_INFO_SQL % oid_str)
         ret = []
         for r in qresult:
-            tup = (r[0], r[1], str(r[2]), r[3], r[4], r[5])
+            tup = (r[0], r[1], str(r[2]), r[3], r[4], str(r[5]))
             ret.append(tup)
         return ret
 

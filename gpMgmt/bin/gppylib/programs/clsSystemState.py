@@ -1426,20 +1426,20 @@ class GpSystemStateProgram:
         logger.info("-------------------------------------------------------------" )
 
         dbUrl = dbconn.DbURL(port=gpEnv.getMasterPort(), dbname='template1')
-        conn = dbconn.connect(dbUrl, utility=True)
-        sql = "SELECT state, sync_state, sent_location, flush_location, replay_location FROM pg_stat_replication"
-        cur = dbconn.execSQL(conn, sql)
-        if cur.rowcount == 1:
-            row = cur.fetchall()[0]
-            logger.info("-WAL Sender State: %s" % row[0])
-            logger.info("-Sync state: %s" % row[1])
-            logger.info("-Sent Location: %s" % row[2])
-            logger.info("-Flush Location: %s" % row[3])
-            logger.info("-Replay Location: %s" % row[4])
-        elif cur.rowcount > 1:
-            logger.warning("pg_stat_replication shows more than 1 row.")
-        else:
-            logger.info("No entries found.")
+        with dbconn.connect(dbUrl, utility=True) as conn:
+            sql = "SELECT state, sync_state, sent_location, flush_location, replay_location FROM pg_stat_replication"
+            cur = dbconn.execSQL(conn, sql)
+            if cur.rowcount == 1:
+                row = cur.fetchall()[0]
+                logger.info("-WAL Sender State: %s" % row[0])
+                logger.info("-Sync state: %s" % row[1])
+                logger.info("-Sent Location: %s" % row[2])
+                logger.info("-Flush Location: %s" % row[3])
+                logger.info("-Replay Location: %s" % row[4])
+            elif cur.rowcount > 1:
+                logger.warning("pg_stat_replication shows more than 1 row.")
+            else:
+                logger.info("No entries found.")
 
         logger.info("-------------------------------------------------------------" )
 

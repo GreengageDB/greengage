@@ -173,37 +173,30 @@ def connect(dburl, utility=False, verbose=False,
     dbhost   = dburl.pghost
     dbport   = int(dburl.pgport)
     dbopt    = options
-    dbtty    = "1"
     dbuser   = dburl.pguser
     dbpasswd = dburl.pgpass
     timeout  = dburl.timeout
-    cnx      = None
-
-    # All quotation and escaping here are to handle database name containing
-    # special characters like ' and \ and white spaces.
-
-    # Need to escape backslashes and single quote in db name
-    # Also single quoted the connection string for dbname
-    dbbase = dbbase.replace('\\', '\\\\')
-    dbbase = dbbase.replace('\'', '\\\'')
+    conn_info = "Connecting to dbname='%s'" % dbbase
+    args = {}
 
     # MPP-14121, use specified connection timeout
     # Single quote the connection string for dbbase name
     if timeout is not None:
-        cstr    = "dbname='%s' connect_timeout=%s" % (dbbase, timeout)
+        args["connect_timeout"] = timeout
         retries = dburl.retries
+        conn_info += " connect_timeout=%d" % timeout
     else:
-        cstr    = "dbname='%s'" % dbbase
         retries = 1
 
     # This flag helps to avoid logging the connection string in some special
     # situations as requested
     if (logConn == True):
-        (logger.info if timeout is not None else logger.debug)("Connecting to %s" % cstr)
+        (logger.info if timeout is not None else logger.debug)(conn_info)
 
+    conn = None
     for i in range(retries):
         try:
-            cnx  = pgdb._connect_(cstr, dbhost, dbport, dbopt, dbtty, dbuser, dbpasswd)
+            conn = pgdb.connect(host="%s:%d" % (dbhost, dbport), database=dbbase, user=dbuser, password=dbpasswd, options=dbopt, **args)
             break
 
         except pgdb.InternalError, e:
@@ -212,30 +205,21 @@ def connect(dburl, utility=False, verbose=False,
                 continue
             raise
 
-    if cnx is None:
+    if conn is None:
         raise ConnectionError('Failed to connect to %s' % dbbase)
 
     # NOTE: the code to set ALWAYS_SECURE_SEARCH_PATH_SQL below assumes it is not part of an existing transaction
-    conn = pgdb.pgdbCnx(cnx)
-
     #by default, libpq will print WARNINGS to stdout
     if not verbose:
-        cursor=conn.cursor()
-        cursor.execute("SET CLIENT_MIN_MESSAGES='ERROR'")
-        conn.commit()
-        cursor.close()
+        execSQLCloseConnectionOnError(conn, "SET CLIENT_MIN_MESSAGES='ERROR'")
 
     # set client encoding if needed
     if encoding:
-        cursor=conn.cursor()
-        cursor.execute("SET CLIENT_ENCODING='%s'" % encoding)
-        conn.commit()
-        cursor.close()
+        execSQLCloseConnectionOnError(conn, "SET CLIENT_ENCODING='%s'" % encoding)
 
     # unset search path due to CVE-2018-1058
     if unsetSearchPath:
-        ALWAYS_SECURE_SEARCH_PATH_SQL = "SELECT pg_catalog.set_config('search_path', '', false)"
-        execSQL(conn, ALWAYS_SECURE_SEARCH_PATH_SQL).close()
+        execSQLCloseConnectionOnError(conn, "SELECT pg_catalog.set_config('search_path', '', false)")
 
     def __enter__(self):
         return self
@@ -244,6 +228,10 @@ def connect(dburl, utility=False, verbose=False,
     conn.__class__.__enter__, conn.__class__.__exit__ = __enter__, __exit__
     return conn
 
+class GgdbCursor(pgdb.Cursor):
+    # Do not process rows for compatibility with PyGreSQL 4
+    def row_factory(self, row):
+        return row
 
 def execSQL(conn,sql):
     """
@@ -251,7 +239,7 @@ def execSQL(conn,sql):
     Do *NOT* violate that API here without considering
     the existing callers of this function.
     """
-    cursor=conn.cursor()
+    cursor = GgdbCursor(conn)
     cursor.execute(sql)
     return cursor
 
@@ -300,3 +288,12 @@ def executeUpdateOrInsert(conn, sql, expectedRowUpdatesOrInserts):
         raise Exception("SQL affected %s rows but %s were expected:\n%s" % \
                         (cursor.rowcount, expectedRowUpdatesOrInserts, sql))
     return cursor
+
+def execSQLCloseConnectionOnError(conn, sql):
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+            conn.commit()
+    except Exception as e:
+        conn.close()
+        raise e
