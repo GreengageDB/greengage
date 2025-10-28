@@ -587,7 +587,8 @@ class GpStopSmartModeTestCase(unittest.TestCase):
 
         subprocess_call.side_effect = _call
 
-    def test_stop_master_smart_issues_pg_ctl_stop(self, subprocess_call, dbconn_connect):
+    @patch('gppylib.db.dbconn.GgdbCursor', side_effect=lambda conn: conn.cursor())
+    def test_stop_master_smart_issues_pg_ctl_stop(self, cursor, subprocess_call, dbconn_connect):
         self._setup_subprocess(subprocess_call)
 
         self.gpstop.master_datadir = 'datadir'
@@ -601,7 +602,8 @@ class GpStopSmartModeTestCase(unittest.TestCase):
         with self.assertRaises(Exception):
             self.gpstop._stop_master_smart()
 
-    def test_stop_master_smart_calls_pg_ctl_status_until_server_stops(self, subprocess_call, dbconn_connect):
+    @patch('gppylib.db.dbconn.GgdbCursor', side_effect=lambda conn: conn.cursor())
+    def test_stop_master_smart_calls_pg_ctl_status_until_server_stops(self, cursor, subprocess_call, dbconn_connect):
         self._setup_subprocess(subprocess_call)
         self.gpstop.conn = dbconn_connect
 

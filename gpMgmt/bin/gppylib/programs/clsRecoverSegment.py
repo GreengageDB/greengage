@@ -230,7 +230,7 @@ class GpRecoverSegmentProgram:
         # template0 does not accept any connections so we exclude it
         with dbconn.connect(dbconn.DbURL()) as conn:
             res = dbconn.execSQL(conn, "SELECT datname FROM PG_DATABASE WHERE datname != 'template0'")
-        return res.fetchall()
+            return res.fetchall()
 
     def run(self):
         if self.__options.parallelDegree < 1 or self.__options.parallelDegree > gp.MAX_MASTER_NUM_WORKERS:

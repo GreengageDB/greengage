@@ -1213,11 +1213,11 @@ def impl(context, options):
         query = """select distinct content, hostname from gp_segment_configuration order by content limit 2;"""
         cursor = dbconn.execSQL(conn, query)
 
-    try:
-        _, master_hostname = cursor.fetchone()
-        _, segment_hostname = cursor.fetchone()
-    except:
-        raise Exception("Did not get two rows from query: %s" % query)
+        try:
+            _, master_hostname = cursor.fetchone()
+            _, segment_hostname = cursor.fetchone()
+        except:
+            raise Exception("Did not get two rows from query: %s" % query)
 
     # if we have two hosts, assume we're testing on a multinode cluster
     init_standby(context, master_hostname, options, segment_hostname)
@@ -3038,7 +3038,6 @@ def impl(context, command, target):
 @then('verify that a role "{role_name}" exists in database "{dbname}"')
 def impl(context, role_name, dbname):
     query = "select rolname from pg_roles where rolname = '%s'" % role_name
-    conn = dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)
     try:
         result = getRows(dbname, query)[0][0]
         if result != role_name:
@@ -3482,12 +3481,12 @@ def impl(context, num_of_segments):
             if content > -1 and status == 'u':
                 end_data_segments += 1
 
-    if int(num_of_segments) == int(end_data_segments - context.start_data_segments):
-        return
+        if int(num_of_segments) == int(end_data_segments - context.start_data_segments):
+            return
 
-    raise Exception("Incorrect amount of segments.\nprevious: %s\ncurrent:"
-            "%s\ndump of gp_segment_configuration: %s" %
-            (context.start_data_segments, end_data_segments, rows))
+        raise Exception("Incorrect amount of segments.\nprevious: %s\ncurrent:"
+                "%s\ndump of gp_segment_configuration: %s" %
+                (context.start_data_segments, end_data_segments, rows))
 
 @when('verify that {table_name} catalog table is present on new segments')
 @then('verify that {table_name} catalog table is present on new segments')
@@ -3626,11 +3625,11 @@ def step_impl(context, options):
             query = """select datadir, port from pg_catalog.gp_segment_configuration where role='m' and content <> -1;"""
             cursor = dbconn.execSQL(conn, query)
 
-        for i in range(cursor.rowcount):
-            datadir, port = cursor.fetchone()
-            if datadir not in context.stdout_message or \
-                str(port) not in context.stdout_message:
-                    raise Exception("gpstate -m output missing expected mirror info, datadir %s port %d" %(datadir, port))
+            for i in range(cursor.rowcount):
+                datadir, port = cursor.fetchone()
+                if datadir not in context.stdout_message or \
+                    str(port) not in context.stdout_message:
+                        raise Exception("gpstate -m output missing expected mirror info, datadir %s port %d" %(datadir, port))
     else:
         raise Exception("no verification for gpstate option given")
 
@@ -3740,12 +3739,11 @@ def impl(context):
 @then('verify the dml results again in a new transaction')
 def impl(context):
     dbname = 'gptest'
-    conn = dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)
-
-    for dml, job in context.dml_jobs:
-        code, message = job.reverify(conn)
-        if not code:
-            raise Exception(message)
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        for dml, job in context.dml_jobs:
+            code, message = job.reverify(conn)
+            if not code:
+                raise Exception(message)
 
 
 
@@ -4062,8 +4060,8 @@ def impl(context):
     gp_segment_configuration_backup = 'gpexpand.gp_segment_configuration'
 
     query = "select hostname, datadir from gp_segment_configuration where content = -1 order by dbid"
-    conn = dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False)
-    res = dbconn.execSQL(conn, query).fetchall()
+    with dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False) as conn:
+        res = dbconn.execSQL(conn, query).fetchall()
     master = res[0]
     standby = res[1]
 

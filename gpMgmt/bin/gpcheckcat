@@ -27,6 +27,7 @@ import logging
 import re
 import sys
 import time
+from contextlib import closing
 
 try:
     from gppylib import gplog
@@ -202,16 +203,16 @@ def usage(exitarg=None):
 ###############################
 
 def getversion():
-    db = connect()
-    curs = db.query('''
-    select regexp_replace(current_setting('gp_server_version'),
-       E'([1-9]+.[0-9]+|main).*',
-       E'\\\\1') as ver;''')
+    with connect() as db:
+        curs = db.query('''
+        select regexp_replace(current_setting('gp_server_version'),
+           E'([1-9]+.[0-9]+|main).*',
+           E'\\\\1') as ver;''')
 
-    row = curs.getresult()[0]
-    version = row[0]
+        row = curs.getresult()[0]
+        version = row[0]
 
-    logger.debug('got version %s' % version)
+        logger.debug('got version %s' % version)
     return version
 
 
@@ -220,11 +221,11 @@ def getalldbs():
     """
     get all connectable databases
     """
-    db = connect()
-    curs = db.query('''
-    select datname from pg_database where datallowconn order by datname ''')
-    row = curs.getresult()
-    return row
+    with connect() as db:
+        curs = db.query('''
+        select datname from pg_database where datallowconn order by datname ''')
+        row = curs.getresult()
+        return row
 
 
 ###############################
@@ -347,8 +348,24 @@ def connect(user=None, password=None, host=None, port=None,
                      (database, str(ex).strip()))
         exit(1)
 
+    class DbWrapper:
+        def __init__(self, db):
+            self.db = db
+
+        def query(self, query):
+            return self.db.query(query)
+
+        def close(self):
+            self.db.close()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.db.close()
+
     logger.debug('connected with %s:%s %s' % (host, port, database))
-    return db
+    return DbWrapper(db)
 
 
 #############
@@ -460,23 +477,22 @@ def formatErr(c, col, row):
 #############
 def getGPConfiguration():
     cfg = {}
-    db = connect()
-    # note that in 4.0, sql commands cannot be run against the segment mirrors directly
-    # so we filter out non-primary segment databases in the query
-    qry = '''
-          SELECT content, preferred_role = 'p' as definedprimary,
-                 dbid, role = 'p' as isprimary, hostname, address, port,
-                 datadir
-            FROM gp_segment_configuration
-           WHERE (role = 'p' or content < 0 )
-          '''
-    curs = db.query(qry)
-    for row in curs.dictresult():
-        if row['content'] == -1 and row['isprimary'] != 't':
-            continue  # skip standby master
-        cfg[row['dbid']] = row
-    db.close()
-    return cfg
+    with connect() as db:
+        # note that in 4.0, sql commands cannot be run against the segment mirrors directly
+        # so we filter out non-primary segment databases in the query
+        qry = '''
+              SELECT content, preferred_role = 'p' as definedprimary,
+                     dbid, role = 'p' as isprimary, hostname, address, port,
+                     datadir
+                FROM gp_segment_configuration
+               WHERE (role = 'p' or content < 0 )
+              '''
+        curs = db.query(qry)
+        for row in curs.dictresult():
+            if row['content'] == -1 and not row['isprimary']:
+                continue  # skip standby master
+            cfg[row['dbid']] = row
+        return cfg
 
 def checkDistribPolicy():
     logger.info('-----------------------------------')
@@ -3647,9 +3663,9 @@ def getClassOidForRelfilenode(relfilenode):
     qry = "SELECT oid FROM pg_class WHERE relfilenode = %d;" % (relfilenode)
     try:
         dburl = dbconn.DbURL(hostname=GV.opt['-h'], port=GV.opt['-p'], dbname=GV.dbname)
-        conn = dbconn.connect(dburl)
-        oid = dbconn.execSQLForSingletonRow(conn, qry)[0]
-        return oid
+        with dbconn.connect(dburl) as conn:
+            oid = dbconn.execSQLForSingletonRow(conn, qry)[0]
+            return oid
     except Exception, e:
         setError(ERROR_NOREPAIR)
         myprint('  Execution error: ' + str(e))
@@ -3669,10 +3685,10 @@ def getResourceTypeOid(oid):
           """ % (oid, oid)
 
     try:
-        db = connect()
-        curs = db.query(qry)
-        if len(curs.dictresult()) == 0: return 0
-        return curs.dictresult().pop()['oid']
+        with connect() as db:
+            curs = db.query(qry)
+            if len(curs.dictresult()) == 0: return 0
+            return curs.dictresult().pop()['oid']
     except Exception, e:
         setError(ERROR_NOREPAIR)
         myprint('  Execution error: ' + str(e))
@@ -3737,7 +3753,7 @@ def processMissingDuplicateEntryResult(catname, colname, allValues, type):
             # Note that if it was present in exactly half of the segments,
             # we will report it as both missing and extra.
 
-            ids = [int(i) for i in segids[1:-1].split(',')]
+            ids = [int(i) for i in segids]
 
             if len(ids) <= (GV.max_content + 2) / 2:
                 issue = CatMissingIssue(catname, pkeys, segids, 'extra')
@@ -3746,10 +3762,8 @@ def processMissingDuplicateEntryResult(catname, colname, allValues, type):
             if len(ids) >= (GV.max_content + 2) / 2:
                 allids = [int(i) for i in range(-1, GV.max_content+1)]
                 diffids = set(allids) - set(ids)
-                # convert the difference set back into a string that looks
-                # like a PostgreSQL array.
-                segids = ",".join(str(x) for x in diffids)
-                segids = "{%s}" % (segids)
+
+                segids = diffids
                 issue = CatMissingIssue(catname, pkeys, segids, 'missing')
                 gpObj.addMissingIssue(issue)
 
@@ -3912,8 +3926,8 @@ def processACLResult(catname, colname, allValues):
             oid = getOidFromPK(catname, pkeys)
             pkeys = {'oid': oid}
 
-        macl = row[-2][1:-1].split(',') if row[-2] != None else []
-        sacl = row[-1][1:-1].split(',') if row[-1] != None else []
+        macl = row[-2] if row[-2] is not None else []
+        sacl = row[-1] if row[-1] is not None else []
         macl_only = list(set(macl).difference(sacl))
         sacl_only = list(set(sacl).difference(macl))
 
@@ -3933,10 +3947,10 @@ class CatInconsistentIssue:
     def report(self):
 
         def format_segids(segids):
-            if segids == '{NULL}':
+            if segids == [None]:
                 idstr = 'all other segments'
             else:
-                ids = [int(i) for i in segids[1:-1].split(',')]
+                ids = [int(i) for i in segids]
                 idstr = ''
                 for i in ids:
                     idstr += '%s (%s:%d) ' % \
@@ -3963,7 +3977,7 @@ class CatForeignKeyIssue:
 
     def report(self):
 
-        ids = [int(i) for i in self.segids[1:-1].split(',')]
+        ids = [int(i) for i in self.segids]
         idstr = ''
         if len(ids) == len(GV.report_cfg):
             idstr = 'all segments'
@@ -3989,7 +4003,7 @@ class CatMissingIssue:
 
     def report(self):
 
-        ids = [int(i) for i in self.segids[1:-1].split(',')]
+        ids = [int(i) for i in self.segids]
         idstr = ''
         if len(ids) == len(GV.report_cfg):
             idstr = 'all segments'
@@ -4255,16 +4269,16 @@ class GPObject:
                             table_list = db.query(oid_query % issue.pkeys[key]).getresult()
                             if table_list:
                                 if issue.type == 'missing':
-                                    GV.missing_attr_tables.append( (table_list[0][0], issue.segids) )
+                                    GV.missing_attr_tables.append( (table_list[0][0], tuple(issue.segids)) )
                                 else:
-                                    GV.extra_attr_tables.append( (table_list[0][0], issue.segids) )
+                                    GV.extra_attr_tables.append( (table_list[0][0], tuple(issue.segids)) )
                         elif key == 'oid':
                             table_list = db.query(type_query % issue.pkeys[key]).getresult()
                             if table_list:
                                 if issue.type == 'missing':
-                                    GV.missing_attr_tables.append( (table_list[0][0], issue.segids) )
+                                    GV.missing_attr_tables.append( (table_list[0][0], tuple(issue.segids)) )
                                 else:
-                                    GV.extra_attr_tables.append( (table_list[0][0], issue.segids) )
+                                    GV.extra_attr_tables.append( (table_list[0][0], tuple(issue.segids)) )
 
 
     def __cmp__(self, other):
@@ -4523,7 +4537,7 @@ def checkcatReport():
                         for part_table in db.query(partition_leaves_sql).getresult():
                             GV.missing_attr_tables.append( (part_table[0], segids) )
                 for table, segids in sorted(GV.missing_attr_tables):
-                    for id in segids[1:-1].split(','):
+                    for id in segids:
                         myprint("        Table %s.%s.%s" % (GV.dbname, table, id))
                 myprint('')
 
@@ -4537,7 +4551,7 @@ def checkcatReport():
                         for part_table in db.query(partition_leaves_sql).getresult():
                             GV.extra_attr_tables.append( (part_table[0], segids) )
                 for table, segids in sorted(GV.extra_attr_tables):
-                    for id in segids[1:-1].split(','):
+                    for id in segids:
                         myprint("        Table %s.%s.%s" % (GV.dbname, table, id))
                 myprint('')
             myprint('')

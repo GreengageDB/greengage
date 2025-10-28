@@ -58,14 +58,17 @@ class SegmentReconfiguerTestCase(GpTestCase):
             )
 
     def test_it_retries_the_connection(self):
-        self.connect.configure_mock(side_effect=[pgdb.DatabaseError, pgdb.DatabaseError, self.conn])
+        ctx = MagicMock()
+        ctx.__enter__.return_value = self.conn
+        ctx.__exit__.return_value = False
+
+        self.connect.configure_mock(side_effect=[pgdb.DatabaseError, pgdb.DatabaseError, ctx])
 
         reconfigurer = SegmentReconfigurer(logger=self.logger,
                 worker_pool=self.worker_pool, timeout=self.timeout)
         reconfigurer.reconfigure()
 
         self.connect.assert_has_calls([call(self.db_url), call(self.db_url), call(self.db_url), ])
-        self.conn.close.assert_any_call()
 
     @patch('time.time')
     def test_it_gives_up_after_600_seconds(self, now_mock):
