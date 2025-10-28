@@ -1489,3 +1489,17 @@ select * from bar where 2 = (select cte.i from cte);
 
 drop table foo;
 drop table bar;
+
+-- Test materialized CTEs inside InitPlans
+set optimizer to off;
+create table t(i int) distributed by (i);
+insert into t select generate_series(1, 5);
+
+explain (costs off) with cte as materialized (select i from t)
+select (select count(*) from cte) as a, (select count(*) from cte) as b, i from cte;
+
+with cte as materialized (select i from t)
+select (select count(*) from cte) as a, (select count(*) from cte) as b, i from cte;
+
+reset optimizer;
+drop table t;
