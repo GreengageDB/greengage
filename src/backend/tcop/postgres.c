@@ -993,8 +993,13 @@ pg_rewrite_query(Query *query)
 	return querytree_list;
 }
 
+typedef struct MotionContext
+{
+	plan_tree_base_prefix base;
+} MotionContext;
+
 static bool
-contains_motions(Node *node)
+contains_motions(Node *node, void *context)
 {
 	if (node == NULL)
 		return false;
@@ -1002,7 +1007,7 @@ contains_motions(Node *node)
 	if (IsA(node, Motion))
 		return true;
 
-	return plan_tree_walker(node, contains_motions, NULL, true);
+	return plan_tree_walker(node, contains_motions, context, true);
 }
 
 /*
@@ -1083,10 +1088,15 @@ pg_plan_query(Query *querytree, int cursorOptions, ParamListInfo boundParams)
 
 	TRACE_POSTGRESQL_QUERY_PLAN_DONE();
 
-	if (Gp_role != GP_ROLE_DISPATCH && contains_motions((Node *)plan->planTree))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("function cannot execute on a QE slice because it contains motions")));
+	if (Gp_role != GP_ROLE_DISPATCH)
+	{
+		MotionContext context = {.base.node = (Node*)plan};
+
+		if (contains_motions((Node *)plan->planTree, &context))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("function cannot execute on a QE slice because it contains motions")));
+	}
 
 	return plan;
 }
