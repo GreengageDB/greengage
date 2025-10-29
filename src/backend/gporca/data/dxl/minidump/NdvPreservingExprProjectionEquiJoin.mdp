@@ -1111,7 +1111,7 @@ explain select * from foo where a = (select distinct a+1 from bar limit 1);
     <dxl:Plan Id="0" SpaceSize="280">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="862.012678" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="862.012778" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -1122,7 +1122,7 @@ explain select * from foo where a = (select distinct a+1 from bar limit 1);
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="862.012664" Rows="1.000000" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="862.012764" Rows="1.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">

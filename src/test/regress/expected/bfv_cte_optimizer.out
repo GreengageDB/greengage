@@ -743,12 +743,12 @@ reset allow_system_table_mods;
 explain select * from a_table join cte_view on a_table.a = (select a from cte_view) where cte_view.a = 2024;
                                                                     QUERY PLAN                                                                     
 ---------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2261454580.07 rows=1920 width=4)
-   ->  Nested Loop  (cost=0.00..2261454580.04 rows=640 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2261454999.67 rows=1920 width=4)
+   ->  Nested Loop  (cost=0.00..2261454999.64 rows=640 width=4)
          Join Filter: true
-         ->  Result  (cost=0.00..2206727.73 rows=134 width=2)
+         ->  Result  (cost=0.00..2206728.13 rows=134 width=2)
                Filter: (a_table_1.a = ((SubPlan 1)))
-               ->  Seq Scan on a_table a_table_1  (cost=0.00..2206727.70 rows=334 width=4)
+               ->  Seq Scan on a_table a_table_1  (cost=0.00..2206728.11 rows=334 width=4)
                      SubPlan 1
                        ->  Materialize  (cost=0.00..1293.00 rows=12 width=2)
                              ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..1293.00 rows=12 width=2)

@@ -425,7 +425,7 @@
     <dxl:Plan Id="0" SpaceSize="1440">
       <dxl:Sequence>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1324033.362722" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="1324033.465122" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -478,7 +478,7 @@
         </dxl:CTEProducer>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1324033.362596" Rows="1.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="1324033.464996" Rows="1.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="20" Alias="coalesce">
@@ -498,7 +498,7 @@
           <dxl:OneTimeFilter/>
           <dxl:Aggregate AggregationStrategy="Plain" StreamSafe="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1324033.362588" Rows="1.000000" Width="16"/>
+              <dxl:Cost StartupCost="0" TotalCost="1324033.464988" Rows="1.000000" Width="16"/>
             </dxl:Properties>
             <dxl:GroupingColumns/>
             <dxl:ProjList>
@@ -555,7 +555,7 @@
             <dxl:Filter/>
             <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false" OuterRefAsParam="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1324033.362502" Rows="3.000000" Width="32"/>
+                <dxl:Cost StartupCost="0" TotalCost="1324033.464902" Rows="3.000000" Width="32"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="9" Alias="val">
@@ -577,7 +577,7 @@
               </dxl:JoinFilter>
               <dxl:HashJoin JoinType="Full">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="431.000865" Rows="3.000000" Width="24"/>
+                  <dxl:Cost StartupCost="0" TotalCost="431.000965" Rows="3.000000" Width="24"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="9" Alias="val">

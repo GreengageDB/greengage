@@ -363,11 +363,14 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Hash Join
                      Hash Cond: (r.id = s.id)
-                     ->  Seq Scan on simple r
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: r.id
+                           ->  Seq Scan on simple r
                      ->  Hash
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: s.id
                                  ->  Seq Scan on bigger_than_it_looks s
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 select count(*) FROM simple r JOIN bigger_than_it_looks s USING (id);
@@ -402,11 +405,14 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Hash Join
                      Hash Cond: (r.id = s.id)
-                     ->  Seq Scan on simple r
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: r.id
+                           ->  Seq Scan on simple r
                      ->  Hash
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: s.id
                                  ->  Seq Scan on bigger_than_it_looks s
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 select count(*) from simple r join bigger_than_it_looks s using (id);
@@ -441,11 +447,14 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Hash Join
                      Hash Cond: (r.id = s.id)
-                     ->  Seq Scan on simple r
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: r.id
+                           ->  Seq Scan on simple r
                      ->  Hash
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: s.id
                                  ->  Seq Scan on bigger_than_it_looks s
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (13 rows)
 
 select count(*) from simple r join bigger_than_it_looks s using (id);

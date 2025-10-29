@@ -3940,6 +3940,22 @@ create_mergejoin_path(PlannerInfo *root,
 		inner_path->pathkeys)
 		innersortkeys = NIL;
 
+	/*
+	 * If this join path is parameterized by a parameter above this path,
+	 * and outer path is not rescannable, then materialize it,
+	 * so it can be rescanned.
+	 * We don't need to materialize the inner path, since it will be
+	 * rescanable on its own (maybe not directly but in some form).
+	 */
+	if (!outer_path->rescannable && !bms_is_empty(required_outer))
+	{
+		MaterialPath *matouter = create_material_path(root, outer_path->parent, outer_path);
+
+		matouter->cdb_shield_child_from_rescans = true;
+
+		outer_path = (Path *) matouter;
+	}
+
 	pathnode->jpath.path.pathtype = T_MergeJoin;
 	pathnode->jpath.path.parent = joinrel;
 	pathnode->jpath.path.pathtarget = joinrel->reltarget;
@@ -4055,6 +4071,22 @@ create_hashjoin_path(PlannerInfo *root,
 										 inner_must_be_local);
 	if (CdbPathLocus_IsNull(join_locus))
 		return NULL;
+
+	/*
+	 * If this join path is parameterized by a parameter above this path,
+	 * and outer path is not rescannable, then materialize it,
+	 * so it can be rescanned.
+	 * We don't need to materialize the inner path, since it will be
+	 * rescanable on its own (maybe not directly but in some form).
+	 */
+	if (!outer_path->rescannable && !bms_is_empty(required_outer))
+	{
+		MaterialPath *matouter = create_material_path(root, outer_path->parent, outer_path);
+
+		matouter->cdb_shield_child_from_rescans = true;
+
+		outer_path = (Path *) matouter;
+	}
 
 	/*
 	 * CDB: If gp_enable_hashjoin_size_heuristic is set, disallow inner

@@ -1901,7 +1901,7 @@
     <dxl:Plan Id="0" SpaceSize="110">
       <dxl:GatherMotion InputSegments="0,1" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="34972.709569" Rows="19097.637457" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="35012.760569" Rows="19097.637457" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="35" Alias="ps_suppkey">
@@ -1912,7 +1912,7 @@
         <dxl:SortingColumnList/>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="34972.366576" Rows="19097.637457" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="35012.417576" Rows="19097.637457" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="35" Alias="ps_suppkey">
@@ -1921,7 +1921,7 @@
           </dxl:ProjList>
           <dxl:CTEProducer CTEId="0" Columns="24">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="34110.198135" Rows="9548.818729" Width="1"/>
+              <dxl:Cost StartupCost="0" TotalCost="34150.249135" Rows="9548.818729" Width="1"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="24" Alias="ps_suppkey">
@@ -1930,7 +1930,7 @@
             </dxl:ProjList>
             <dxl:Aggregate AggregationStrategy="Hashed" StreamSafe="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="34110.193360" Rows="9548.818729" Width="4"/>
+                <dxl:Cost StartupCost="0" TotalCost="34150.244360" Rows="9548.818729" Width="4"/>
               </dxl:Properties>
               <dxl:GroupingColumns>
                 <dxl:GroupingColumn ColId="24"/>
@@ -1943,7 +1943,7 @@
               <dxl:Filter/>
               <dxl:HashJoin JoinType="Inner">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="5232.137626" Rows="479510577.526431" Width="4"/>
+                  <dxl:Cost StartupCost="0" TotalCost="5272.188626" Rows="479510577.526431" Width="4"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="24" Alias="ps_suppkey">

@@ -12407,6 +12407,11 @@ where out.b in (select max(tcorr2.b + out.b - 1)
  1 | 99
 (1 row)
 
+-- We insert one additional row in this case for testing that materialization
+-- of outer side of parametrized from above join works as intended.
+-- For some time this test passed fine on wrong plan because
+-- there was only one row in outer table.
+insert into tcorr1 values (1,88);
 explain
 select *
 from tcorr1 out
@@ -12424,8 +12429,9 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
    ->  Materialize  (cost=1.08..2.17 rows=3 width=8)
          ->  Hash Left Join  (cost=1.08..2.15 rows=3 width=8)
                Hash Cond: (tcorr1.a = tcorr2.a)
-               ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
-                     ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
+               ->  Materialize  (cost=0.00..1.03 rows=1 width=4)
+                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
+                           ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
                ->  Hash  (cost=1.07..1.07 rows=1 width=12)
                      ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
                            Group Key: tcorr2.a
@@ -12435,7 +12441,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                        ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
                                              ->  Seq Scan on tcorr2  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
-(18 rows)
+(19 rows)
 
 -- expect 1 row
 select *
@@ -12450,6 +12456,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  1 | 99
 (1 row)
 
+delete from tcorr1 where b = 88;
 -- expect 1 row
 select *
 from tcorr1 out
@@ -12528,6 +12535,11 @@ where out.b in (select max(tcorr2.b + out.b - 1)
  1 | 99
 (1 row)
 
+-- We insert one additional row in this case for testing that materialization
+-- of outer side of parametrized from above join works as intended.
+-- For some time this test passed fine on wrong plan because
+-- there was only one row in outer table.
+insert into tcorr1 values (1,88);
 explain
 select *
 from tcorr1 out
@@ -12545,8 +12557,9 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
    ->  Materialize  (cost=1.08..2.17 rows=3 width=8)
          ->  Hash Left Join  (cost=1.08..2.15 rows=3 width=8)
                Hash Cond: (tcorr1.a = tcorr2.a)
-               ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
-                     ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
+               ->  Materialize  (cost=0.00..1.03 rows=1 width=4)
+                     ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
+                           ->  Seq Scan on tcorr1  (cost=0.00..1.01 rows=1 width=4)
                ->  Hash  (cost=1.07..1.07 rows=1 width=12)
                      ->  HashAggregate  (cost=1.05..1.06 rows=1 width=12)
                            Group Key: tcorr2.a
@@ -12556,7 +12569,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
                                        ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
                                              ->  Seq Scan on tcorr2  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
-(18 rows)
+(19 rows)
 
 -- expect 1 row
 select *
@@ -12571,6 +12584,7 @@ where out.b in (select coalesce(tcorr2_d.c, 99)
  1 | 99
 (1 row)
 
+delete from tcorr1 where b = 88;
 -- expect 1 row
 select *
 from tcorr1 out

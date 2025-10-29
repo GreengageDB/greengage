@@ -660,6 +660,108 @@ ANALYZE ext_stats_tbl;
 
 explain SELECT 1 FROM ext_stats_tbl t11 FULL JOIN ext_stats_tbl t12 ON t12.c2;
 
+-- This test is introduced to verify that outer side of HashJoin path
+-- is rescannable, if this HashJoin is parametrized by the inner side of
+-- another join.
+--start_ignore
+drop table if exists ot cascade;
+drop foreign table if exists w cascade;
+drop function if exists foo(i int);
+--end_ignore
+create table ot (i int);
+insert into ot values (1), (1);
+
+create external web table w (i int) execute 'echo 1' on all format 'text';
+
+create function foo(i int)
+returns table (i int)
+language sql
+execute on all segments
+strict
+rows 30000
+cost 100000
+as $$
+    select 1;
+$$;
+
+set enable_nestloop = 'on';
+set enable_mergejoin = 'off';
+set enable_hashjoin = 'on';
+set from_collapse_limit = '1';
+set join_collapse_limit = '1';
+
+explain (verbose, costs off) select 1
+from ot,
+     foo(ot.i) as f
+join w on w.i = f.i;
+
+reset enable_nestloop;
+reset enable_mergejoin;
+reset enable_hashjoin;
+reset from_collapse_limit;
+reset join_collapse_limit;
+
+-- This test is introduced to verify that outer side of MergeJoin path
+-- is rescannable, if this MergeJoin is parametrized by the inner side of
+-- another join.
+--start_ignore
+drop table if exists a, b, t1, t2 cascade;
+--end_ignore
+
+create table t1(a int, b int);
+create table t2(a int);
+create table a (i int4);
+create table b (i int4);
+
+insert into t1 values (1, 99), (1, 99);
+insert into t2 values (1), (1);
+insert into a values (1);
+insert into b values (1);
+
+analyze t1;
+analyze t2;
+analyze a;
+analyze b;
+
+set allow_system_table_mods = on;
+
+update pg_class set reltuples=10000000 where oid ='a'::regclass;
+update pg_class set relpages=10000 where oid ='a'::regclass;
+
+update pg_class set reltuples=1000000 where oid ='b'::regclass;
+update pg_class set relpages=1000 where oid ='b'::regclass;
+
+set join_collapse_limit=1;
+set from_collapse_limit=1;
+
+set enable_mergejoin=on;
+set enable_hashjoin=off;
+
+explain (verbose, costs off) select *
+from t1 out
+where out.b in (select t1.a
+                from (select a.i as a from a order by a) t1 left outer join (select a
+                                             from t2
+                                             where t2.a = out.b
+                                             order by a) t2_d on t1.a=t2_d.a);
+
+reset join_collapse_limit;
+reset from_collapse_limit;
+reset enable_mergejoin;
+reset enable_hashjoin;
+reset allow_system_table_mods;
+-- test that empty table gets hashed instead of a bigger table
+create table big_table(s smallint) distributed replicated;
+create table empty_table(i int) distributed replicated;
+insert into big_table select generate_series(1, 10000);
+analyze big_table;
+analyze empty_table;
+
+explain select * from big_table, empty_table where s = i;
+
+drop table big_table;
+drop table empty_table;
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

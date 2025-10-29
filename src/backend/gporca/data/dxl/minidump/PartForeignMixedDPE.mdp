@@ -454,7 +454,7 @@ explain select * from part, bar where part.b=bar.b;
     <dxl:Plan Id="0" SpaceSize="4">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1465.155190" Rows="1.000000" Width="16"/>
+          <dxl:Cost StartupCost="0" TotalCost="1465.155290" Rows="1.000000" Width="16"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -474,7 +474,7 @@ explain select * from part, bar where part.b=bar.b;
         <dxl:SortingColumnList/>
         <dxl:HashJoin JoinType="Inner">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1465.155130" Rows="1.000000" Width="16"/>
+            <dxl:Cost StartupCost="0" TotalCost="1465.155230" Rows="1.000000" Width="16"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
