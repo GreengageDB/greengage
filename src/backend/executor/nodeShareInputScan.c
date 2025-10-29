@@ -520,8 +520,10 @@ ExecInitShareInputScan(ShareInputScan *node, EState *estate, int eflags)
  * ExecShareInputScanExplainEnd
  *      Called before ExecutorEnd to finish EXPLAIN ANALYZE reporting.
  *
- * Some of the cleanup that ordinarily would occur during ExecEndShareInputScan()
- * needs to be done earlier in order to report statistics to EXPLAIN ANALYZE.
+ * Some of the statistics reporting that ordinarily would occur during
+ * ExecEndShareInputScan() needs to be done earlier.
+ * We cannot free resources here since the ShareInputScan consumers
+ * might still need them if they aren't done yet.
  * Note that ExecEndShareInputScan() will still be during ExecutorEnd().
  */
 static void
@@ -531,12 +533,11 @@ ExecShareInputScanExplainEnd(PlanState *planstate, struct StringInfoData *buf)
 	shareinput_local_state *local_state = ((ShareInputScanState *) planstate)->local_state;
 
 	/*
-	 * Release tuplestore resources
+	 * Report statistics
 	 */
 	if (!sisc->cross_slice && local_state && local_state->ts_state)
 	{
-		tuplestore_end(local_state->ts_state);
-		local_state->ts_state = NULL;
+		tuplestore_report(local_state->ts_state);
 	}
 }
 
