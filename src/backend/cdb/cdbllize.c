@@ -470,21 +470,16 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 			{
 				materializeFunctionScan = true;
 
-				if (CdbPathLocus_IsEntry(*((Plan *) node)->flow))
+				foreach(lc, fscan->functions)
 				{
-					FunctionScan *fscan = (FunctionScan *) node;
+					RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
-					foreach(lc, fscan->functions)
+					if (rtfunc->funcexpr && ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
 					{
-						RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
-
-						if (rtfunc->funcexpr && ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
-						{
-							ereport(ERROR,
-									(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-									 errmsg("cannot parallelize that query yet"),
-									 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference.")));
-						}
+						ereport(ERROR,
+								(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+								 errmsg("cannot parallelize that query yet"),
+								 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference.")));
 					}
 				}
 			}
