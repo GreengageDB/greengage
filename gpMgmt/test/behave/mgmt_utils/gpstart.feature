@@ -203,12 +203,12 @@ Feature: gpstart behave tests
           And gpcheckcat should not print "Number of segments which failed to start:.*" to stdout
 
     @demo_cluster
-    Scenario: gpstart succeeds when cluster shutdowned during segment promote
+    Scenario: gpstart succeeds when cluster shut down during segment promotion
         Given the database is running
           And the user runs psql with "-c "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"" against database "postgres"
           And the user runs psql with "-c "SELECT gp_inject_fault('before_persisting_new_tli', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'm' AND content = 0"" against database "postgres"
           And user immediately stops all primary processes for content 0
           And the user runs psql with "-c "SELECT gp_request_fts_probe_scan()"" against database "postgres"
         When the user runs "gpstop -a -M immediate"
-          And the user runs "gpstart -a"
+          Then "gpstart -a" should return a return code of 0
 
