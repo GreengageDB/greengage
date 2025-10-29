@@ -938,6 +938,8 @@ shareinput_mutator_xslice_1(Node *node, PlannerInfo *root, bool fPop)
 		if (shared)
 			ctxt->shared_inputs[sisc->share_id].producer_slice_id = motId;
 		share_info->participant_slices = bms_add_member(share_info->participant_slices, motId);
+		if (sisc->isUnderProducerInitPlan)
+			share_info->participant_slices_same_initplan = bms_add_member(share_info->participant_slices_same_initplan, motId);
 		if (currentSlice->directDispatch.haveProcessedAnyCalculations)
 			MergeDirectDispatchCalculationInfo(
 				&share_info->directDispatch,
@@ -993,7 +995,10 @@ shareinput_mutator_xslice_2(Node *node, PlannerInfo *root, bool fPop)
 		}
 
 		sisc->producer_slice_id = pershare->producer_slice_id;
-		sisc->nconsumers = bms_num_members(pershare->participant_slices) - 1;
+		if (bms_is_empty(pershare->participant_slices_same_initplan))
+			sisc->nconsumers = bms_num_members(pershare->participant_slices) - 1;
+		else
+			sisc->nconsumers = bms_num_members(pershare->participant_slices_same_initplan) - 1;
 		currentSlice->directDispatch = pershare->directDispatch;
 
 		/*

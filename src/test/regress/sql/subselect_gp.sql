@@ -1492,14 +1492,34 @@ drop table bar;
 
 -- Test materialized CTEs inside InitPlans
 set optimizer to off;
-create table t(i int) distributed by (i);
-insert into t select generate_series(1, 5);
+create table t(i int, j int) distributed by (i);
+insert into t select i, i from generate_series(1, 5) i;
 
 explain (costs off) with cte as materialized (select i from t)
-select (select count(*) from cte) as a, (select count(*) from cte) as b, i from cte;
+select (select count(*) from cte) as a, (select count(*) from cte) as b;
 
 with cte as materialized (select i from t)
-select (select count(*) from cte) as a, (select count(*) from cte) as b, i from cte;
+select (select count(*) from cte) as a, (select count(*) from cte) as b;
+
+explain (costs off) with cte as materialized (select i, j from t)
+select (select count(*) from cte t1 join cte t2 on t1.j = t2.j) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+with cte as materialized (select i, j from t)
+select (select count(*) from cte t1 join cte t2 on t1.j = t2.j) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+explain (costs off) with cte as materialized (select i, j from t)
+select (select count(*) from cte t1 where (select count(*) from cte t2) > 0) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+with cte as materialized (select i, j from t)
+select (select count(*) from cte t1 where (select count(*) from cte t2) > 0) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
 
 reset optimizer;
 drop table t;

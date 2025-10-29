@@ -328,7 +328,7 @@ init_tuplestore_state(ShareInputScanState *node)
 
 			estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
 
-			if (!sisc->isUnderInitPlan)
+			if (!sisc->isUnderInitPlan || sisc->isUnderProducerInitPlan)
 				shareinput_reader_waitready(node->ref);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
@@ -584,8 +584,7 @@ ExecEndShareInputScan(ShareInputScanState *node)
 			{
 				if (!local_state->ready)
 					init_tuplestore_state(node);
-				if (!sisc->isUnderInitPlan)
-					shareinput_writer_waitdone(node->ref, sisc->nconsumers);
+				shareinput_writer_waitdone(node->ref, sisc->nconsumers);
 			}
 			else
 			{

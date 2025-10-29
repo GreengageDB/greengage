@@ -4411,9 +4411,6 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 	Assert(list_length(cteroot->list_cteplaninfo) > planinfo_id);
 	cteplaninfo = list_nth(cteroot->list_cteplaninfo, planinfo_id);
 
-	if (root->config->isUnderInitPlan)
-		cteplaninfo->isUnderInitPlan = true;
-
 	/* Sort clauses into best execution order */
 	scan_clauses = order_qual_clauses(root, scan_clauses);
 
@@ -4476,6 +4473,12 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 				root->curSlice->gangType != saved_gangType &&
 				root->curSlice->gangType == GANGTYPE_PRIMARY_WRITER)
 				cteplaninfo->rootSliceIsWriter = true;
+
+			if (Gp_role == GP_ROLE_DISPATCH && root->config->isUnderInitPlan)
+			{
+				cteplaninfo->isUnderInitPlan = true;
+				cteplaninfo->writerInitPlanId = root->config->currentInitPlanCounter;
+			}
 		}
 		/* Wrap the common Plan tree in a ShareInputScan node */
 		subplan = share_prepared_plan(cteroot, cteplaninfo->shared_plan);
@@ -4483,7 +4486,11 @@ create_ctescan_plan(PlannerInfo *root, Path *best_path,
 		if (cteplaninfo->rootSliceIsWriter)
 			((ShareInputScan *) subplan)->rootSliceIsWriter = true;
 		if (cteplaninfo->isUnderInitPlan)
+		{
 			((ShareInputScan *) subplan)->isUnderInitPlan = true;
+			if (cteplaninfo->writerInitPlanId == root->config->currentInitPlanCounter)
+				((ShareInputScan *) subplan)->isUnderProducerInitPlan = true;
+		}
 	}
 
 	scan_plan = (Plan *) make_subqueryscan(tlist,

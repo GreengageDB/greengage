@@ -28,6 +28,7 @@ typedef struct PlannerConfig
 	bool        may_rescan; /* true means the subquery may be rescanned. */
 
 	bool		isUnderInitPlan; /* True for plan rooted at a subquery which is planned as an initplan */
+	int			currentInitPlanCounter; /* Id of the current sublink that's being planned. Must be unique for each subplan */
 } PlannerConfig;
 
 extern PlannerConfig *DefaultPlannerConfig(void);

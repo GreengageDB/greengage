@@ -1207,10 +1207,16 @@ typedef struct ShareInputScan
 	bool		rootSliceIsWriter;
 
 	/*
-	 * The producer is inside InitPlan, disable notifications and postpone
-	 * cleanup until the end of command (if cross-slice).
+	 * The producer is inside InitPlan, postpone cleanup until the end of
+	 * command (if cross-slice).
 	 */
 	bool		isUnderInitPlan;
+
+	/*
+	 * The SharedInputScan is inside the same InitPlan as the producer, we
+	 * still need ready notifications for synchronization.
+	 */
+	bool		isUnderProducerInitPlan;
 } ShareInputScan;
 
 /* ----------------

@@ -1168,6 +1168,7 @@ _outShareInputScan(StringInfo str, const ShareInputScan *node)
 	WRITE_INT_FIELD(nconsumers);
 	WRITE_BOOL_FIELD(rootSliceIsWriter);
 	WRITE_BOOL_FIELD(isUnderInitPlan);
+	WRITE_BOOL_FIELD(isUnderProducerInitPlan);
 
 	_outPlanInfo(str, (Plan *) node);
 }

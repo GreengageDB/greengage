@@ -42,6 +42,7 @@ make_shareinputscan(PlannerInfo *root, Plan *inputplan)
 	sisc->discard_output = false;
 	sisc->rootSliceIsWriter = false;
 	sisc->isUnderInitPlan = false;
+	sisc->isUnderProducerInitPlan = false;
 
 	sisc->scan.plan.qual = NIL;
 	sisc->scan.plan.righttree = NULL;

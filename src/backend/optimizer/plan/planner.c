@@ -442,6 +442,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	glob->oneoffPlan = false;
 	glob->numSlices = 0;
 	glob->slices = NULL;
+	glob->currentInitPlanCounter = 0;
 	/* ApplyShareInputContext initialization. */
 	glob->share.shared_inputs = NULL;
 	glob->share.shared_input_count = 0;

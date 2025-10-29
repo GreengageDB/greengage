@@ -123,6 +123,7 @@ typedef struct ApplyShareInputContextPerShare
 	int			producer_slice_id;
 	Bitmapset  *participant_slices;
 	DirectDispatchInfo directDispatch;
+	Bitmapset  *participant_slices_same_initplan;
 } ApplyShareInputContextPerShare;
 
 typedef struct ApplyShareInputContext
@@ -223,6 +224,8 @@ typedef struct PlannerGlobal
 	 */
 	int			numSlices;
 	struct PlanSlice *slices;
+
+	int			currentInitPlanCounter; /* counts InitPlans to provide unique ids */
 
 } PlannerGlobal;
 
@@ -503,6 +506,7 @@ typedef struct CtePlanInfo
 	bool rootSliceIsWriter;
 
 	bool isUnderInitPlan;
+	int writerInitPlanId; /* Must be unique for every InitPlan */
 } CtePlanInfo;
 
 /*
