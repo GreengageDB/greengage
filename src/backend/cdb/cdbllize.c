@@ -461,23 +461,31 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 * locus Entry can be materialized and broadcased if their paramenters
 		 * are not depending on outer query results
 		 */
-		if (CdbPathLocus_IsEntry(*((Plan *) node)->flow) &&
-			ctx->movement == MOVEMENT_BROADCAST)
+		if (ctx->movement == MOVEMENT_BROADCAST)
 		{
 			FunctionScan *fscan = (FunctionScan *) node;
 
-			materializeFunctionScan = true;
-
-			foreach(lc, fscan->functions)
+			if (CdbPathLocus_IsEntry(*fscan->scan.plan.flow) ||
+				CdbPathLocus_IsStrewn(*fscan->scan.plan.flow))
 			{
-				RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+				materializeFunctionScan = true;
 
-				if (rtfunc->funcexpr && ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
+				if (CdbPathLocus_IsEntry(*((Plan *) node)->flow))
 				{
-					ereport(ERROR,
-							(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-							 errmsg("cannot parallelize that query yet"),
-							 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference.")));
+					FunctionScan *fscan = (FunctionScan *) node;
+
+					foreach(lc, fscan->functions)
+					{
+						RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+
+						if (rtfunc->funcexpr && ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
+						{
+							ereport(ERROR,
+									(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+									 errmsg("cannot parallelize that query yet"),
+									 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference.")));
+						}
+					}
 				}
 			}
 		}

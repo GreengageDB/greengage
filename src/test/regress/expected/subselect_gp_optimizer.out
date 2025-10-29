@@ -4049,29 +4049,35 @@ select (select a from a(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select s from s(1) limit 1 offset t) from t;
-                        QUERY PLAN                         
------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
    Output: ((SubPlan 1))
    ->  Seq Scan on subselect_gp.t
          Output: (SubPlan 1)
-         SubPlan 1  (slice1; segments: 3)
+         SubPlan 1  (slice2; segments: 3)
            ->  Limit
                  Output: s.s
                  ->  Limit
                        Output: s.s
-                       ->  Function Scan on subselect_gp.s
+                       ->  Result
                              Output: s.s
-                             Function Call: s(1)
+                             ->  Materialize
+                                   Output: s.s
+                                   ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                                         Output: s.s
+                                         ->  Function Scan on subselect_gp.s
+                                               Output: s.s
+                                               Function Call: s(1)
  Optimizer: Postgres query optimizer
-(13 rows)
+(19 rows)
 
 select (select s from s(1) limit 1 offset t) from t;
  s 
 ---
  1
-  
-  
+ 1
+ 1
 (3 rows)
 
 explain (verbose, costs off)
