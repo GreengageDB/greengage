@@ -7676,12 +7676,6 @@ CONTEXT:  SQL statement "UPDATE bar SET d = d+1 WHERE c = $1"
 PL/pgSQL function func2_mod_int_stb(integer) line 3 at SQL statement
 rollback;
 -- Test motions are not allowed on QE
---start_ignore
-drop table if exists d;
-NOTICE:  table "d" does not exist, skipping
-drop function if exists f();
-NOTICE:  function f() does not exist, skipping
---end_ignore
 create table d(i int) distributed by (i);
 insert into d select 1;
 -- ensure function contains motion
