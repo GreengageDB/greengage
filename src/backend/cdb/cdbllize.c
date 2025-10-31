@@ -429,7 +429,7 @@ ParallelizeCorrelatedSubPlanUpdateFlowMutator(Node *node)
 static Node *
 ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerContext *ctx)
 {
-	bool		materializeFunctionScan = false;
+	bool		shouldMaterializeFunctionScan = false;
 
 	if (node == NULL)
 		return NULL;
@@ -468,7 +468,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 			if (CdbPathLocus_IsEntry(*fscan->scan.plan.flow) ||
 				CdbPathLocus_IsStrewn(*fscan->scan.plan.flow))
 			{
-				materializeFunctionScan = true;
+				shouldMaterializeFunctionScan = true;
 
 				foreach(lc, fscan->functions)
 				{
@@ -496,7 +496,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (IsA(node, SeqScan)
 		||IsA(node, ShareInputScan)
 		||IsA(node, ExternalScan)
-		||(IsA(node, FunctionScan) && materializeFunctionScan)
+		||(IsA(node, FunctionScan) && shouldMaterializeFunctionScan)
 		||(IsA(node, SubqueryScan) && IsA(((SubqueryScan *) node)->subplan, ModifyTable))
 		||IsA(node,ModifyTable))
 	{
