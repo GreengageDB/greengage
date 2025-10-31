@@ -545,7 +545,6 @@ tuplestore_report(Tuplestorestate *state)
 static void
 tuplestore_close(Tuplestorestate *state)
 {
-	MemoryContext oldcxt = MemoryContextSwitchTo(state->context);
 	int			i;
 
 	if (state->myfile)
@@ -559,8 +558,6 @@ tuplestore_close(Tuplestorestate *state)
 		pfree(state->memtuples);
 	}
 	pfree(state->readptrs);
-
-	MemoryContextSwitchTo(oldcxt);
 }
 
 /*
@@ -571,15 +568,11 @@ tuplestore_close(Tuplestorestate *state)
 static void
 tuplestore_cleanup(Tuplestorestate *state)
 {
-	MemoryContext oldcxt = MemoryContextSwitchTo(state->context);
-
 	if (state->share_status == TSHARE_WRITER)
 		BufFileDeleteShared(state->fileset, state->shared_filename);
 	if (state->shared_filename)
 		pfree(state->shared_filename);
 	pfree(state);
-
-	MemoryContextSwitchTo(oldcxt);
 }
 
 /*
@@ -620,7 +613,6 @@ tuplestore_end_delayed(Tuplestorestate *state)
 void
 tuplestore_cleanup_pending(void)
 {
-	MemoryContext oldcxt = MemoryContextSwitchTo(TopCommandContext);
 	ListCell 	 *cell;
 	foreach(cell, tuplestores_pending_delete)
 	{
@@ -630,8 +622,6 @@ tuplestore_cleanup_pending(void)
 
 	list_free(tuplestores_pending_delete);
 	tuplestores_pending_delete = NIL;
-
-	MemoryContextSwitchTo(oldcxt);
 }
 
 /*
