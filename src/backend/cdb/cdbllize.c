@@ -465,8 +465,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		{
 			FunctionScan *fscan = (FunctionScan *) node;
 
-			if (CdbPathLocus_IsEntry(*fscan->scan.plan.flow) ||
-				CdbPathLocus_IsStrewn(*fscan->scan.plan.flow))
+			if (!CdbPathLocus_IsGeneral(*fscan->scan.plan.flow))
 			{
 				shouldMaterializeFunctionScan = true;
 
@@ -479,7 +478,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 						ereport(ERROR,
 								(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 								 errmsg("cannot parallelize that query yet"),
-								 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference in it's parameters.")));
+								 errdetail("Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.")));
 					}
 				}
 			}

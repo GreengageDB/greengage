@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/ \(subselect\.c:\d+\)/
+-- s/ \(subselect\.c:\d+\)//
+-- end_matchsubs
 -- start_ignore
 create schema subselect_gp;
 set search_path to subselect_gp, public;
@@ -1521,6 +1525,59 @@ select (select m from m(1) limit 1 offset t) from t;
 explain (verbose, costs off)
 select (select i from i(1) limit 1 offset t) from t;
 select (select i from i(1) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select a from a(t)) from t;
+select (select a from a(t)) from t;
+
+explain (verbose, costs off)
+select (select s from s(t)) from t;
+select (select s from s(t)) from t;
+
+explain (verbose, costs off)
+select (select m from m(t)) from t;
+select (select m from m(t)) from t;
+
+explain (verbose, costs off)
+select (select i from i(t)) from t;
+select (select i from i(t)) from t;
+
+alter function a(int) immutable;
+alter function s(int) immutable;
+alter function m(int) immutable;
+alter function i(int) immutable;
+
+explain (verbose, costs off)
+select (select a from a(1) limit 1 offset t) from t;
+select (select a from a(1) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset t) from t;
+select (select s from s(1) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select m from m(1) limit 1 offset t) from t;
+select (select m from m(1) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset t) from t;
+select (select i from i(1) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select a from a(t)) from t;
+select (select a from a(t)) from t;
+
+explain (verbose, costs off)
+select (select s from s(t)) from t;
+select (select s from s(t)) from t;
+
+explain (verbose, costs off)
+select (select m from m(t)) from t;
+select (select m from m(t)) from t;
+
+explain (verbose, costs off)
+select (select i from i(t)) from t;
+select (select i from i(t)) from t;
 
 drop table t;
 drop function a(a int);
