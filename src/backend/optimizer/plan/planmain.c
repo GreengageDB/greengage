@@ -143,9 +143,37 @@ query_planner(PlannerInfo *root,
 						 create_group_result_path(root, final_rel,
 												  final_rel->reltarget,
 												  (List *) parse->jointree->quals);
-				add_path(final_rel, result_path);
 
-				/* Select cheapest path (pretty easy in this case...) */
+				if (root->is_correlated_subplan)
+				{
+					Path	   *origpath = result_path;
+					Path	   *path;
+					CdbPathLocus outerquery_locus;
+
+					if (!CdbPathLocus_IsOuterQuery(origpath->locus))
+					{
+
+						/*
+						* param_info cannot cover the case that an index path's orderbyclauses
+						* See github issue: https://github.com/GreengageDB/greengage/issues/9733
+						*/
+
+						CdbPathLocus_MakeOuterQuery(&outerquery_locus);
+
+						path = cdbpath_create_motion_path(root,
+														  origpath,
+														  NIL, // DESTROY pathkeys
+														  false,
+														  outerquery_locus);
+					}
+					else
+						path = origpath;
+
+					add_path(final_rel, path);
+				}
+				else 
+					add_path(final_rel, result_path);
+
 				set_cheapest(final_rel);
 
 				/*
