@@ -1906,3 +1906,15 @@ DROP TABLE dist_replicated;
 DROP TABLE dist_by_key;
 DROP FUNCTION fn_vol();
 DROP FUNCTION fn_val();
+
+-- DROP TABLE with invalid reloptions
+CREATE TABLE ao_reloptions_t1 (c1 INT) WITH (appendonly=true,compresstype=zstd);
+CREATE TABLE ao_reloptions_t2 (c1 INT) WITH (appendonly=true,compresstype=zstd);
+SET allow_system_table_mods = on;
+UPDATE pg_class SET reloptions = '{appendonly=true,foo=bar,compresstype=quicklz,compresslevel=3}' WHERE relname = 'ao_reloptions_t1';
+UPDATE pg_class SET reloptions = '{appendonly=true,foo=bar,compresstype=zzzz,compresslevel=3}' WHERE relname = 'ao_reloptions_t2';
+SELECT reloptions FROM pg_class WHERE relname = 'ao_reloptions_t1';
+SELECT reloptions FROM pg_class WHERE relname = 'ao_reloptions_t2';
+SET allow_system_table_mods = off;
+DROP TABLE ao_reloptions_t1;
+DROP TABLE ao_reloptions_t2;
