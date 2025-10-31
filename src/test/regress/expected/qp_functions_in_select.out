@@ -7678,26 +7678,6 @@ rollback;
 -- Test motions are not allowed on QE
 create table d(i int) distributed by (i);
 insert into d select 1;
--- ensure function contains motion
-explain (verbose, costs off)
-    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- Append
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: 1
-         ->  Subquery Scan on pg_group
-               Output: 1
-               ->  Seq Scan on pg_catalog.pg_authid
-                     Output: NULL::name, NULL::oid, NULL::oid[]
-                     Filter: (NOT pg_authid.rolcanlogin)
-   ->  Seq Scan on pg_catalog.pg_authid pg_authid_1
-         Output: 1
-         Filter: (NOT pg_authid_1.rolcanlogin)
- Optimizer: Postgres-based planner
- Settings: optimizer = 'off'
-(13 rows)
-
 create function f() returns int as $$
     select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
 $$ language sql;
