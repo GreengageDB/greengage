@@ -2124,10 +2124,10 @@ insert into d select 1;
 
 -- ensure function contains motion
 explain (verbose, costs off)
-    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
+    select count(1) from gp_dist_random('pg_group');
 
-create function f() returns int as $$
-    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
+create function f() returns bigint as $$
+    select count(1) from gp_dist_random('pg_group');
 $$ language sql;
 
 -- error when execute such function on QE
