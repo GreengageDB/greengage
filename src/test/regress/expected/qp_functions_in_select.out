@@ -7680,28 +7680,30 @@ create table d(i int) distributed by (i);
 insert into d select 1;
 -- ensure function contains motion
 explain (verbose, costs off)
-    select count(1) from gp_dist_random('pg_group');
+    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
                            QUERY PLAN                           
 ----------------------------------------------------------------
- Finalize Aggregate
-   Output: count(1)
+ Append
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL count(1))
-         ->  Partial Aggregate
-               Output: PARTIAL count(1)
+         Output: 1
+         ->  Subquery Scan on pg_group
+               Output: 1
                ->  Seq Scan on pg_catalog.pg_authid
                      Output: NULL::name, NULL::oid, NULL::oid[]
                      Filter: (NOT pg_authid.rolcanlogin)
+   ->  Seq Scan on pg_catalog.pg_authid pg_authid_1
+         Output: 1
+         Filter: (NOT pg_authid_1.rolcanlogin)
  Optimizer: Postgres-based planner
  Settings: optimizer = 'off'
-(11 rows)
+(13 rows)
 
-create function f() returns bigint as $$
-    select count(1) from gp_dist_random('pg_group');
+create function f() returns int as $$
+    select 1 from gp_dist_random('pg_group') union all select 1 from pg_group;
 $$ language sql;
 -- error when execute such function on QE
 select f() from d;
-ERROR:  cannot create Motion on QE slice  (seg1 slice1 172.18.0.6:7003 pid=56166)
+ERROR:  cannot create Motion on QE slice  (seg1 slice1 172.18.0.3:7003 pid=69340)
 CONTEXT:  SQL function "f" during startup
 drop table d;
 drop function f();
