@@ -479,7 +479,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 						ereport(ERROR,
 								(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 								 errmsg("cannot parallelize that query yet"),
-								 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference.")));
+								 errdetail("In a subquery FROM clause, a non-immutable function invocation cannot contain a correlated reference in it's parameters.")));
 					}
 				}
 			}
