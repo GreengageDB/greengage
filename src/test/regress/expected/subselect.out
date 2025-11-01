@@ -1585,7 +1585,7 @@ begin
 end;
 $$;
 select * from explain_sq_limit();
-                                  explain_sq_limit                               
+                                  explain_sq_limit                                  
 ------------------------------------------------------------------------------
  Result (actual rows=3 loops=1)
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=3 loops=1)

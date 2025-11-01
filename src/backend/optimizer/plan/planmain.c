@@ -144,6 +144,14 @@ query_planner(PlannerInfo *root,
 												  final_rel->reltarget,
 												  (List *) parse->jointree->quals);
 
+				/*
+				 * If this is correlated subplan, then we need to bring it to 
+				 * OuterQuery locus like we do for relations if we do not 
+				 * bypass functions below by going in this section. 
+				 * This logic is similar to bring_to_outer_query() except
+				 * that we don't need to worry about what's type of 
+				 * path presented.
+				 */
 				if (root->is_correlated_subplan)
 				{
 					Path	   *origpath = result_path;
@@ -153,16 +161,11 @@ query_planner(PlannerInfo *root,
 					if (!CdbPathLocus_IsOuterQuery(origpath->locus))
 					{
 
-						/*
-						* param_info cannot cover the case that an index path's orderbyclauses
-						* See github issue: https://github.com/GreengageDB/greengage/issues/9733
-						*/
-
 						CdbPathLocus_MakeOuterQuery(&outerquery_locus);
 
 						path = cdbpath_create_motion_path(root,
 														  origpath,
-														  NIL, // DESTROY pathkeys
+														  NIL,
 														  false,
 														  outerquery_locus);
 					}
@@ -173,7 +176,8 @@ query_planner(PlannerInfo *root,
 				}
 				else 
 					add_path(final_rel, result_path);
-
+					
+				/* Select cheapest path (pretty easy in this case...) */
 				set_cheapest(final_rel);
 
 				/*

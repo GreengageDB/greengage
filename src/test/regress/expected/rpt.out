@@ -1051,6 +1051,55 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
  Optimizer: Postgres query optimizer
 (8 rows)
 
+explain (costs off) select * from t_hashdist cross join (select * from generate_series(1, 10) limit 1) x;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Broadcast Motion 1:3  (slice2; segments: 1)
+               ->  Limit
+                     ->  Function Scan on generate_series
+         ->  Seq Scan on t_hashdist
+ Optimizer: Postgres-based planner
+(7 rows)
+
+explain (costs off) select (select t_replicate_volatile.a from t_replicate_volatile limit 1 offset t_hashdist.a) from t_hashdist;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on t_hashdist
+         SubPlan 1
+           ->  Limit
+                 ->  Materialize
+                       ->  Broadcast Motion 1:3  (slice2; segments: 1)
+                             ->  Seq Scan on t_replicate_volatile
+ Optimizer: Postgres-based planner
+(8 rows)
+
+explain (costs off) select (select generate_series(1,3) limit 1 offset trv.a) from t_replicate_volatile trv;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Seq Scan on t_replicate_volatile trv
+         SubPlan 1
+           ->  Limit
+                 ->  ProjectSet
+                       ->  Result
+ Optimizer: Postgres-based planner
+(7 rows)
+
+explain (costs off) select (select t_replicate_volatile.a from t_replicate_volatile limit 1 offset trv.a) from t_replicate_volatile trv;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Seq Scan on t_replicate_volatile trv
+         SubPlan 1
+           ->  Limit
+                 ->  Materialize
+                       ->  Seq Scan on t_replicate_volatile
+ Optimizer: Postgres-based planner
+(7 rows)
+
 -- ORCA
 -- verify that JOIN derives the inner child distribution if the outer is tainted replicated (in this
 -- case, the inner child is the hash distributed table, but the distribution is random because the
