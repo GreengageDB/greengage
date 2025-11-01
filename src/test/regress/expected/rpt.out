@@ -1658,9 +1658,21 @@ select count(distinct(rand)) from cte join d on cte.a = d.a;
      1
 (1 row)
 
--- prohibit adding motion on late stage when subplan has external parameters
+-- ensure we're able to create plan when subplan has external parameters
 explain (costs off, verbose) select (select b + random() o) from d;
-ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:2056)
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on rpt.d
+         Output: (SubPlan 1)
+         SubPlan 1
+           ->  Result
+                 Output: ((d.b)::double precision + random())
+ Optimizer: Postgres-based planner
+ Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
+(9 rows)
+
 drop table t1;
 drop table t2;
 drop table r;

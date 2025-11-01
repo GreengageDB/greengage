@@ -1796,10 +1796,10 @@ INSERT INTO test_replicated_table values (null, null, null, null, null);
 explain(costs off) select e,d,a from test_replicated_table order by e desc nulls last, d, a desc limit 3;
                                 QUERY PLAN
 --------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   Merge Key: e, d, a
-   ->  Limit
-         ->  Index Only Scan using rep_index_eda on test_replicated_table
+ Result
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Limit
+               ->  Index Only Scan using rep_index_eda on test_replicated_table
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -1815,10 +1815,10 @@ select e,d,a from test_replicated_table order by e desc nulls last, d, a desc li
 explain(costs off) select e,d,a from test_replicated_table order by e nulls first, d desc, a limit 3;
                                     QUERY PLAN
 -----------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   Merge Key: e, d, a
-   ->  Limit
-         ->  Index Only Scan Backward using rep_index_eda on test_replicated_table
+ Result
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Limit
+               ->  Index Only Scan Backward using rep_index_eda on test_replicated_table
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -1834,12 +1834,12 @@ select e,d,a from test_replicated_table order by e nulls first, d desc, a limit 
 explain(costs off) select d,a from test_replicated_table order by d,a desc limit 3;
                      QUERY PLAN
 -----------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   Merge Key: d, a
-   ->  Limit
-         ->  Sort
-               Sort Key: d, a DESC
-               ->  Seq Scan on test_replicated_table
+ Result
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Limit
+               ->  Sort
+                     Sort Key: d, a DESC
+                     ->  Seq Scan on test_replicated_table
  Optimizer: Postgres query optimizer
 (7 rows)
 
