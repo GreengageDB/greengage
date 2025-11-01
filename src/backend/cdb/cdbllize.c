@@ -484,7 +484,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 **/
 		Assert(scanPlan->flow && ctx->currentPlanFlow);
 		if (scanPlan->flow->locustype == CdbLocusType_Entry &&
-			ctx->currentPlanFlow == CdbLocusType_Entry)
+			ctx->currentPlanFlow->locustype == CdbLocusType_Entry)
 			return (Node *) node;
 
 		/**
