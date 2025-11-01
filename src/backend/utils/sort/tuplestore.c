@@ -504,18 +504,15 @@ tuplestore_clear(Tuplestorestate *state)
 }
 
 /*
- * tuplestore_end
+ * tuplestore_report
  *
- *	Release resources and clean up.
+ *	CDB: Report statistics to EXPLAIN ANALYZE.
+ *
+ *	This should be okay to call multiple times.
  */
 void
-tuplestore_end(Tuplestorestate *state)
+tuplestore_report(Tuplestorestate *state)
 {
-	int			i;
-
-	/*
-	 * CDB: Report statistics to EXPLAIN ANALYZE.
-	 */
 	if (state->instrument && state->instrument->need_cdb)
 	{
 		double  nbytes;
@@ -536,6 +533,19 @@ tuplestore_end(Tuplestorestate *state)
 		if (state->myfile)
 			state->instrument->workfileCreated = true;
 	}
+}
+
+/*
+ * tuplestore_end
+ *
+ *	Release resources and clean up.
+ */
+void
+tuplestore_end(Tuplestorestate *state)
+{
+	int			i;
+
+	tuplestore_report(state);
 
 	if (state->myfile)
 		BufFileClose(state->myfile);
