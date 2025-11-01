@@ -5027,17 +5027,15 @@ EXPLAIN SELECT
          LIMIT 1
      )
 FROM ext_subplan_t1;
-                                          QUERY PLAN                                          
-----------------------------------------------------------------------------------------------
- External Scan on ext_subplan_t1  (cost=0.00..-0.02 rows=1 width=4)
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ External Scan on ext_subplan_t1  (cost=0.00..0.00 rows=1 width=4)
    SubPlan 1
-     ->  Limit  (cost=0.00..-0.01 rows=1 width=4)
-           ->  Result  (cost=0.00..-0.01 rows=1 width=4)
-                 Filter: (ext_subplan_t2.c1 = ext_subplan_t1.c1)
-                 ->  Materialize  (cost=0.00..-0.01 rows=1 width=4)
-                       ->  External Scan on ext_subplan_t2  (cost=0.00..-0.01 rows=1 width=4)
+     ->  Limit  (cost=0.00..0.00 rows=1 width=4)
+           ->  External Scan on ext_subplan_t2  (cost=0.00..0.00 rows=1 width=4)
+                 Filter: (c1 = ext_subplan_t1.c1)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 SELECT
      c1,
