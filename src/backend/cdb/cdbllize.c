@@ -434,52 +434,26 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (node == NULL)
 		return NULL;
 
-	if (IsA(node, FunctionScan))
+	if (IsA(node, FunctionScan) && ctx->movement == MOVEMENT_BROADCAST)
 	{
-		RangeTblEntry *rte;
-		ListCell   *lc;
+		FunctionScan *fscan = (FunctionScan *) node;
 
-		rte = rt_fetch(((Scan *) node)->scanrelid, ctx->rtable);
-		Assert(rte->rtekind == RTE_FUNCTION);
-
-		foreach(lc, rte->functions)
+		if (fscan->scan.plan.flow->locustype != CdbLocusType_General)
 		{
-			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+			ListCell   *lc;
 
-			if (rtfunc->funcexpr &&
-				ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ) && ctx->subPlanDistributed)
+			shouldMaterializeFunctionScan = true;
+
+			foreach(lc, fscan->functions)
 			{
-				ereport(ERROR,
-						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("cannot parallelize that query yet"),
-						 errdetail("In a subquery FROM clause, a function invocation cannot contain a correlated reference.")));
-			}
-		}
+				RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
-		/*
-		 * Check whether FunctionScan can be materialized. FunctionScans with
-		 * locus Entry can be materialized and broadcased if their paramenters
-		 * are not depending on outer query results
-		 */
-		if (ctx->movement == MOVEMENT_BROADCAST)
-		{
-			FunctionScan *fscan = (FunctionScan *) node;
-
-			if (!CdbPathLocus_IsGeneral(*fscan->scan.plan.flow))
-			{
-				shouldMaterializeFunctionScan = true;
-
-				foreach(lc, fscan->functions)
+				if (ContainsParamWalker(rtfunc->funcexpr, NULL))
 				{
-					RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
-
-					if (rtfunc->funcexpr && ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
-					{
-						ereport(ERROR,
-								(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-								 errmsg("cannot parallelize that query yet"),
-								 errdetail("Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.")));
-					}
+					ereport(ERROR,
+							(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+							 errmsg("cannot parallelize that query yet"),
+							 errdetail("Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.")));
 				}
 			}
 		}
@@ -511,8 +485,8 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 * else 'pg_catalog.' end) FROM pg_proc p;
 		 **/
 		Assert(scanPlan->flow && ctx->currentPlanFlow);
-		if (CdbPathLocus_IsEntry(*scanPlan->flow) &&
-			CdbPathLocus_IsEntry(*ctx->currentPlanFlow))
+		if (scanPlan->flow->locustype == CdbLocusType_Entry &&
+			ctx->currentPlanFlow == CdbLocusType_Entry)
 			return (Node *) node;
 
 		/**
