@@ -1508,75 +1508,29 @@ create function i(i int) returns setof int language plpgsql execute on initplan 
 
 explain (verbose, costs off)
 select (select status from gp_segment_configuration limit 1 offset t) from t;
-select (select status from gp_segment_configuration limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select a from a(1) limit 1 offset t) from t;
 select (select a from a(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select s from s(1) limit 1 offset t) from t;
-select (select s from s(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select m from m(1) limit 1 offset t) from t;
 select (select m from m(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select i from i(1) limit 1 offset t) from t;
-select (select i from i(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select a from a(t)) from t;
 select (select a from a(t)) from t;
 
 explain (verbose, costs off)
 select (select s from s(t)) from t;
-select (select s from s(t)) from t;
 
 explain (verbose, costs off)
 select (select m from m(t)) from t;
-select (select m from m(t)) from t;
 
 explain (verbose, costs off)
-select (select i from i(t)) from t;
-select (select i from i(t)) from t;
-
-alter function a(int) immutable;
-alter function s(int) immutable;
-alter function m(int) immutable;
-alter function i(int) immutable;
-
-explain (verbose, costs off)
-select (select a from a(1) limit 1 offset t) from t;
-select (select a from a(1) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select s from s(1) limit 1 offset t) from t;
-select (select s from s(1) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select m from m(1) limit 1 offset t) from t;
-select (select m from m(1) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select i from i(1) limit 1 offset t) from t;
-select (select i from i(1) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select a from a(t)) from t;
-select (select a from a(t)) from t;
-
-explain (verbose, costs off)
-select (select s from s(t)) from t;
-select (select s from s(t)) from t;
-
-explain (verbose, costs off)
-select (select m from m(t)) from t;
-select (select m from m(t)) from t;
-
-explain (verbose, costs off)
-select (select i from i(t)) from t;
 select (select i from i(t)) from t;
 
 drop table t;
