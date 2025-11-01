@@ -225,3 +225,27 @@ WITH cte AS (
 (11 rows)
 
 DROP TABLE with_dml;
+-- Test that EXPLAIN ANALYZE of shared CTE inside InitPlans doesn't segfault
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) 
+WITH mat_cte AS MATERIALIZED (SELECT oid FROM pg_class LIMIT 10)
+SELECT (SELECT count(*) FROM mat_cte), (SELECT count(*) FROM mat_cte);
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Result (actual rows=1 loops=1)
+   InitPlan 1 (returns $0)
+     ->  Aggregate (actual rows=1 loops=1)
+           ->  Shared Scan (share slice:id 0:0) (actual rows=10 loops=1)
+                 ->  Limit (actual rows=10 loops=1)
+                       ->  Seq Scan on pg_class (actual rows=10 loops=1)
+   InitPlan 2 (returns $1)
+     ->  Aggregate (actual rows=1 loops=1)
+           ->  Shared Scan (share slice:id 0:0) (actual rows=10 loops=1)
+ Optimizer: Postgres-based planner
+ Planning Time: 0.426 ms
+   (slice0)    Executor memory: 52K bytes.  Work_mem: 17K bytes max.
+   (slice1)    Executor memory: 54K bytes.
+   (slice2)    Executor memory: 54K bytes.  Work_mem: 17K bytes max.
+ Memory used:  128000kB
+ Execution Time: 0.119 ms
+(16 rows)
+

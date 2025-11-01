@@ -236,18 +236,17 @@ class GpSegStart:
         self.logger.info("Starting segments... (mirroringMode %s)" % self.mirroringMode)
 
         for datadir, seg in list(self.overall_status.dirmap.items()):
+            cmd = PgControlData(name='run pg_controldata', datadir=datadir)
+            cmd.run(validateAfter=True)
+            res = cmd.get_results()
+
+            if res.rc != 0:
+                msg = "pg_controldata failed.\nstdout:%s\nstderr:%s\n" % (res.stdout, res.stderr)
+                reasoncode = gp.SEGSTART_ERROR_PG_CONTROLDATA_FAILED
+                self.overall_status.mark_failed(datadir, msg, reasoncode)
+                continue
 
             if self.coordinator_checksum_version != None:
-                cmd = PgControlData(name='run pg_controldata', datadir=datadir)
-                cmd.run(validateAfter=True)
-                res = cmd.get_results()
-
-                if res.rc != 0:
-                    msg = "pg_controldata failed.\nstdout:%s\nstderr:%s\n" % (res.stdout, res.stderr)
-                    reasoncode = gp.SEGSTART_ERROR_PG_CONTROLDATA_FAILED
-                    self.overall_status.mark_failed(datadir, msg, reasoncode)
-                    continue
-
                 segment_heap_checksum_version = cmd.get_value('Data page checksum version')
                 if segment_heap_checksum_version != self.coordinator_checksum_version:
                     msg = "Segment checksum %s does not match coordinator checksum %s.\n" % (segment_heap_checksum_version,
@@ -256,7 +255,7 @@ class GpSegStart:
                     self.overall_status.mark_failed(datadir, msg, reasoncode)
                     continue
 
-            mirrorFastWait = seg.isSegmentMirror(current_role=True)
+            mirrorFastWait = cmd.get_value('Database cluster state').endswith('recovery')
             cmd = gp.SegmentStart("Starting seg at dir %s" % datadir,
                                   seg,
                                   self.num_cids,
