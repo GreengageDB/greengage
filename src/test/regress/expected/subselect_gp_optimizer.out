@@ -3989,11 +3989,8 @@ drop table t1;
 -- scans are planned and executed correctly. The result should be broadcasted
 -- and materialized.
 create table t(t int) distributed by (t);
-insert into t select i from generate_series(0, 2) i;
-create function a(a int) returns setof int language plpgsql execute on any as $$ begin return next a;end;$$;
-create function s(s int) returns setof int language plpgsql execute on all segments as $$ begin return next s;end;$$;
-create function m(m int) returns setof int language plpgsql execute on master as $$ begin return next m;end;$$;
-create function i(i int) returns setof int language plpgsql execute on initplan as $$ begin return next i;end;$$;
+insert into t select i from generate_series(0, 10) i;
+create function f(f int) returns setof int language sql as $$ select f $$;
 explain (verbose, costs off)
 select (select status from gp_segment_configuration limit 1 offset t) from t;
                                    QUERY PLAN                                    
@@ -4017,7 +4014,7 @@ select (select status from gp_segment_configuration limit 1 offset t) from t;
 (16 rows)
 
 explain (verbose, costs off)
-select (select a from a(1) limit 1 offset t) from t;
+select (select f from f(1) limit 1 offset t) from t;
                    QUERY PLAN                   
 ------------------------------------------------
  Result
@@ -4028,90 +4025,15 @@ select (select a from a(1) limit 1 offset t) from t;
                Output: t.t
    SubPlan 1  (slice0)
      ->  Limit
-           Output: a.a
-           ->  Function Scan on subselect_gp.a
-                 Output: a.a
-                 Function Call: a(1)
+           Output: f.f
+           ->  Function Scan on subselect_gp.f
+                 Output: f.f
+                 Function Call: f(1)
  Optimizer: Pivotal Optimizer (GPORCA)
 (13 rows)
 
 explain (verbose, costs off)
-select (select s from s(1) limit 1 offset t) from t;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   Output: ((SubPlan 1))
-   ->  Seq Scan on subselect_gp.t
-         Output: (SubPlan 1)
-         SubPlan 1  (slice2; segments: 3)
-           ->  Limit
-                 Output: s.s
-                 ->  Limit
-                       Output: s.s
-                       ->  Result
-                             Output: s.s
-                             ->  Materialize
-                                   Output: s.s
-                                   ->  Broadcast Motion 3:3  (slice1; segments: 3)
-                                         Output: s.s
-                                         ->  Function Scan on subselect_gp.s
-                                               Output: s.s
-                                               Function Call: s(1)
- Optimizer: Postgres query optimizer
-(19 rows)
-
-explain (verbose, costs off)
-select (select m from m(1) limit 1 offset t) from t;
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   Output: ((SubPlan 1))
-   ->  Seq Scan on subselect_gp.t
-         Output: (SubPlan 1)
-         SubPlan 1  (slice2; segments: 3)
-           ->  Limit
-                 Output: m.m
-                 ->  Result
-                       Output: m.m
-                       ->  Materialize
-                             Output: m.m
-                             ->  Broadcast Motion 1:3  (slice1)
-                                   Output: m.m
-                                   ->  Function Scan on subselect_gp.m
-                                         Output: m.m
-                                         Function Call: m(1)
- Optimizer: Postgres query optimizer
-(17 rows)
-
-explain (verbose, costs off)
-select (select i from i(1) limit 1 offset t) from t;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   Output: ((SubPlan 2))
-   ->  Seq Scan on subselect_gp.t
-         Output: (SubPlan 2)
-         SubPlan 2  (slice2; segments: 3)
-           ->  Limit
-                 Output: i_1.i
-                 InitPlan 1 (returns $1)  (slice3)
-                   ->  Function Scan on subselect_gp.i
-                         Output: i.i
-                         Function Call: i(1)
-                 ->  Result
-                       Output: i_1.i
-                       ->  Materialize
-                             Output: i_1.i
-                             ->  Broadcast Motion 1:3  (slice1)
-                                   Output: i_1.i
-                                   ->  Function Scan on subselect_gp.i i_1
-                                         Output: i_1.i
-                                         Function Call: i(1)
- Optimizer: Postgres query optimizer
-(21 rows)
-
-explain (verbose, costs off)
-select (select a from a(t)) from t;
+select (select f from f(t)) from t;
                    QUERY PLAN                   
 ------------------------------------------------
  Result
@@ -4121,25 +4043,100 @@ select (select a from a(t)) from t;
          ->  Seq Scan on subselect_gp.t
                Output: t.t
    SubPlan 1  (slice0)
-     ->  Function Scan on subselect_gp.a
-           Output: a.a
-           Function Call: a(t.t)
+     ->  Function Scan on subselect_gp.f
+           Output: f.f
+           Function Call: f(t.t)
  Optimizer: Pivotal Optimizer (GPORCA)
 (11 rows)
 
+alter function f(f int) execute on all segments;
 explain (verbose, costs off)
-select (select s from s(t)) from t;
+select (select f from f(1) limit 1 offset t) from t;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Limit
+                 Output: f.f
+                 ->  Limit
+                       Output: f.f
+                       ->  Result
+                             Output: f.f
+                             ->  Materialize
+                                   Output: f.f
+                                   ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                                         Output: f.f
+                                         ->  Function Scan on subselect_gp.f
+                                               Output: f.f
+                                               Function Call: f(1)
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from t;
 ERROR:  cannot parallelize that query yet
 DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+alter function f(f int) execute on master;
 explain (verbose, costs off)
-select (select m from m(t)) from t;
+select (select f from f(1) limit 1 offset t) from t;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Limit
+                 Output: f.f
+                 ->  Result
+                       Output: f.f
+                       ->  Materialize
+                             Output: f.f
+                             ->  Broadcast Motion 1:3  (slice1)
+                                   Output: f.f
+                                   ->  Function Scan on subselect_gp.f
+                                         Output: f.f
+                                         Function Call: f(1)
+ Optimizer: Postgres query optimizer
+(17 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from t;
 ERROR:  cannot parallelize that query yet
 DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+alter function f(f int) execute on initplan;
 explain (verbose, costs off)
-select (select i from i(t)) from t;
+select (select f from f(1) limit 1 offset t) from t;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: ((SubPlan 2))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 2)
+         SubPlan 2  (slice2; segments: 3)
+           ->  Limit
+                 Output: f_1.f
+                 InitPlan 1 (returns $1)  (slice3)
+                   ->  Function Scan on subselect_gp.f
+                         Output: f.f
+                         Function Call: f(1)
+                 ->  Result
+                       Output: f_1.f
+                       ->  Materialize
+                             Output: f_1.f
+                             ->  Broadcast Motion 1:3  (slice1)
+                                   Output: f_1.f
+                                   ->  Function Scan on subselect_gp.f f_1
+                                         Output: f_1.f
+                                         Function Call: f(1)
+ Optimizer: Postgres query optimizer
+(21 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from t;
 ERROR:  plan should not reference subplan's variable
 drop table t;
-drop function a(a int);
-drop function s(s int);
-drop function m(m int);
-drop function i(i int);
+drop function f(f int);

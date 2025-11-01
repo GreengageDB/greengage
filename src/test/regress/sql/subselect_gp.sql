@@ -1492,49 +1492,46 @@ drop table t1;
 -- and materialized.
 --start_ignore
 drop table if exists t;
-drop function if exists a(a int);
-drop function if exists s(s int);
-drop function if exists m(m int);
-drop function if exists i(i int);
+drop function if exists f(a int);
 --end_ignore
 
 create table t(t int) distributed by (t);
-insert into t select i from generate_series(0, 2) i;
+insert into t select i from generate_series(0, 10) i;
 
-create function a(a int) returns setof int language plpgsql execute on any as $$ begin return next a;end;$$;
-create function s(s int) returns setof int language plpgsql execute on all segments as $$ begin return next s;end;$$;
-create function m(m int) returns setof int language plpgsql execute on master as $$ begin return next m;end;$$;
-create function i(i int) returns setof int language plpgsql execute on initplan as $$ begin return next i;end;$$;
+create function f(f int) returns setof int language sql as $$ select f $$;
 
 explain (verbose, costs off)
 select (select status from gp_segment_configuration limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select a from a(1) limit 1 offset t) from t;
+select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select s from s(1) limit 1 offset t) from t;
+select (select f from f(t)) from t;
+
+alter function f(f int) execute on all segments;
 
 explain (verbose, costs off)
-select (select m from m(1) limit 1 offset t) from t;
+select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select i from i(1) limit 1 offset t) from t;
+select (select f from f(t)) from t;
+
+alter function f(f int) execute on master;
 
 explain (verbose, costs off)
-select (select a from a(t)) from t;
+select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select s from s(t)) from t;
+select (select f from f(t)) from t;
+
+alter function f(f int) execute on initplan;
 
 explain (verbose, costs off)
-select (select m from m(t)) from t;
+select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
-select (select i from i(t)) from t;
+select (select f from f(t)) from t;
 
 drop table t;
-drop function a(a int);
-drop function s(s int);
-drop function m(m int);
-drop function i(i int);
+drop function f(f int);
