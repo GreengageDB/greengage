@@ -2030,8 +2030,6 @@ roleSpecsToIds(List *memberNames)
  * memberIds: OIDs of roles to add
  * grantorId: who is granting the membership
  * admin_opt: granting admin option?
- *
- * Note: caller is responsible for calling auth_file_update_needed().
  */
 static void
 AddRoleMems(const char *rolename, Oid roleid,
@@ -2108,8 +2106,8 @@ AddRoleMems(const char *rolename, Oid roleid,
 		if (is_member_of_role_nosuper(roleid, memberid))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_GRANT_OPERATION),
-					 (errmsg("role \"%s\" is a member of role \"%s\"",
-							 rolename, get_rolespec_name(memberRole)))));
+					 errmsg("role \"%s\" is a member of role \"%s\"",
+							rolename, get_rolespec_name(memberRole))));
 
 		/*
 		 * Check if entry for this role/member already exists; if so, give
@@ -2465,8 +2463,6 @@ static void SetCreateExtTableForRole(List* allow,
  * memberSpecs: list of RoleSpec of roles to del (used only for error messages)
  * memberIds: OIDs of roles to del
  * admin_opt: remove admin option only?
- *
- * Note: caller is responsible for calling auth_file_update_needed().
  */
 static void
 DelRoleMems(const char *rolename, Oid roleid,

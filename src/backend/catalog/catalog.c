@@ -38,7 +38,6 @@
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_namespace.h"
-#include "catalog/pg_pltemplate.h"
 #include "catalog/pg_replication_origin.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_shdescription.h"
@@ -372,7 +371,6 @@ IsSharedRelation(Oid relationId)
 	if (relationId == AuthIdRelationId ||
 		relationId == AuthMemRelationId ||
 		relationId == DatabaseRelationId ||
-		relationId == PLTemplateRelationId ||
 		relationId == SharedDescriptionRelationId ||
 		relationId == SharedDependRelationId ||
 		relationId == SharedSecLabelRelationId ||
@@ -407,7 +405,6 @@ IsSharedRelation(Oid relationId)
 		relationId == AuthMemMemRoleIndexId ||
 		relationId == DatabaseNameIndexId ||
 		relationId == DatabaseOidIndexId ||
-		relationId == PLTemplateNameIndexId ||
 		relationId == SharedDescriptionObjIndexId ||
 		relationId == SharedDependDependerIndexId ||
 		relationId == SharedDependReferenceIndexId ||
@@ -453,8 +450,6 @@ IsSharedRelation(Oid relationId)
 		relationId == PgDatabaseToastIndex ||
 		relationId == PgDbRoleSettingToastTable ||
 		relationId == PgDbRoleSettingToastIndex ||
-		relationId == PgPlTemplateToastTable ||
-		relationId == PgPlTemplateToastIndex ||
 		relationId == PgReplicationOriginToastTable ||
 		relationId == PgReplicationOriginToastIndex ||
 		relationId == PgShdescriptionToastTable ||

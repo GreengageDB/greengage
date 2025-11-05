@@ -274,10 +274,11 @@ Where column_reference_storage_directive is:
     <term><literal>SET</literal>/<literal>DROP DEFAULT</literal></term>
     <listitem>
      <para>
-      These forms set or remove the default value for a column.
-      Default values only apply in subsequent <command>INSERT</command>
-      or <command>UPDATE</command> commands; they do not cause rows already in the
-      table to change.
+      These forms set or remove the default value for a column (where
+      removal is equivalent to setting the default value to NULL).  The new
+      default value will only apply in subsequent <command>INSERT</command>
+      or <command>UPDATE</command> commands; it does not cause rows already
+      in the table to change.
      </para>
     </listitem>
    </varlistentry>
@@ -292,7 +293,7 @@ Where column_reference_storage_directive is:
 
      <para>
       <literal>SET NOT NULL</literal> may only be applied to a column
-      providing none of the records in the table contain a
+      provided none of the records in the table contain a
       <literal>NULL</literal> value for the column.  Ordinarily this is
       checked during the <literal>ALTER TABLE</literal> by scanning the
       entire table; however, if a valid <literal>CHECK</literal> constraint is
@@ -339,6 +340,10 @@ Where column_reference_storage_directive is:
       These forms change whether a column is an identity column or change the
       generation attribute of an existing identity column.
       See <xref linkend="sql-createtable"/> for details.
+      Like <literal>SET DEFAULT</literal>, these forms only affect the
+      behavior of subsequent <command>INSERT</command>
+      and <command>UPDATE</command> commands; they do not cause rows
+      already in the table to change.
      </para>
 
      <para>
@@ -795,9 +800,7 @@ Where column_reference_storage_directive is:
      <para>
       <literal>SHARE UPDATE EXCLUSIVE</literal> lock will be taken for
       fillfactor, toast and autovacuum storage parameters, as well as the
-      following planner related parameters:
-      <varname>effective_io_concurrency</varname>, <varname>parallel_workers</varname>, <varname>seq_page_cost</varname>,
-      <varname>random_page_cost</varname>, <varname>n_distinct</varname> and <varname>n_distinct_inherited</varname>.
+      planner parameter <varname>parallel_workers</varname>.
      </para>
     </listitem>
    </varlistentry>
@@ -1468,6 +1471,32 @@ Where column_reference_storage_directive is:
 <programlisting>
 ALTER TABLE distributors ADD COLUMN address varchar(30);
 </programlisting>
+   That will cause all existing rows in the table to be filled with null
+   values for the new column.
+  </para>
+
+  <para>
+   To add a column with a non-null default:
+<programlisting>
+ALTER TABLE measurements
+  ADD COLUMN mtime timestamp with time zone DEFAULT now();
+</programlisting>
+   Existing rows will be filled with the current time as the value of the
+   new column, and then new rows will receive the time of their insertion.
+  </para>
+
+  <para>
+   To add a column and fill it with a value different from the default to
+   be used later:
+<programlisting>
+ALTER TABLE transactions
+  ADD COLUMN status varchar(30) DEFAULT 'old',
+  ALTER COLUMN status SET default 'current';
+</programlisting>
+   Existing rows will be filled with <literal>old</literal>, but then
+   the default for subsequent commands will be <literal>current</literal>.
+   The effects are the same as if the two sub-commands had been issued
+   in separate <command>ALTER TABLE</command> commands.
   </para>
 
   <para>

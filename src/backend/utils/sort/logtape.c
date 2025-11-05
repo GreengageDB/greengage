@@ -382,9 +382,9 @@ parent_offset(unsigned long i)
 static long
 ltsGetFreeBlock(LogicalTapeSet *lts)
 {
-	long	   *heap = lts->freeBlocks;
-	long		blocknum;
-	int			heapsize;
+	long	*heap = lts->freeBlocks;
+	long	 blocknum;
+	int		 heapsize;
 	unsigned long pos;
 
 	/* freelist empty; allocate a new block */
@@ -408,7 +408,7 @@ ltsGetFreeBlock(LogicalTapeSet *lts)
 	heapsize = lts->nFreeBlocks;
 	while (true)
 	{
-		unsigned long left = left_offset(pos);
+		unsigned long left  = left_offset(pos);
 		unsigned long right = right_offset(pos);
 		unsigned long min_child;
 
@@ -476,7 +476,7 @@ ltsGetPreallocBlock(LogicalTapeSet *lts, LogicalTape *lt)
 static void
 ltsReleaseBlock(LogicalTapeSet *lts, long blocknum)
 {
-	long	   *heap;
+	long	*heap;
 	unsigned long pos;
 
 	/*
@@ -513,7 +513,6 @@ ltsReleaseBlock(LogicalTapeSet *lts, long blocknum)
 	while (pos != 0)
 	{
 		unsigned long parent = parent_offset(pos);
-
 		if (heap[parent] < heap[pos])
 			break;
 

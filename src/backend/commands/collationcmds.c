@@ -585,7 +585,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 	if (!superuser())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 (errmsg("must be superuser to import system collations"))));
+				 errmsg("must be superuser to import system collations")));
 
 	if (Gp_role != GP_ROLE_DISPATCH)
 		ereport(ERROR,

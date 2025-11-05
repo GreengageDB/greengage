@@ -48,7 +48,6 @@ EXCL_OBJS+=\
 	src/backend/utils/adt/geo_selfuncs.o \
 	src/backend/utils/adt/gp_optimizer_functions.o \
 	src/backend/utils/adt/interpolate.o \
-	src/backend/utils/adt/jsonfuncs.o \
 	src/backend/utils/adt/like.o \
 	src/backend/utils/adt/like_match.o \
 	src/backend/utils/adt/mac.o \

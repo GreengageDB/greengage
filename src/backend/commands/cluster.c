@@ -1810,8 +1810,8 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 /*
  * Get a list of tables that the current user owns and
  * have indisclustered set.  Return the list in a List * of RelToCluster
- * with the tableOid and the indexOid on which the table is already
- * clustered.
+ * (stored in the specified memory context), each one giving the tableOid
+ * and the indexOid on which the table is already clustered.
  */
 static List *
 get_tables_to_cluster(MemoryContext cluster_context)
@@ -1827,9 +1827,7 @@ get_tables_to_cluster(MemoryContext cluster_context)
 
 	/*
 	 * Get all indexes that have indisclustered set and are owned by
-	 * appropriate user. System relations or nailed-in relations cannot ever
-	 * have indisclustered set, because CLUSTER will refuse to set it when
-	 * called with one of them as argument.
+	 * appropriate user.
 	 */
 	indRelation = table_open(IndexRelationId, AccessShareLock);
 	ScanKeyInit(&entry,

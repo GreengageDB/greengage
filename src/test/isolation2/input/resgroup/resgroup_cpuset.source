@@ -1,5 +1,5 @@
 -- start_ignore
-DROP LANGUAGE IF EXISTS plpython3u;
+DROP EXTENSION IF EXISTS plpython3u CASCADE;
 DROP VIEW IF EXISTS busy;
 DROP VIEW IF EXISTS cancel_all;
 DROP TABLE IF EXISTS bigtable;
@@ -305,7 +305,7 @@ DROP RESOURCE GROUP rg1_cpuset_test;
 DROP FUNCTION check_rules();
 DROP FUNCTION check_cpuset(TEXT, TEXT);
 DROP FUNCTION create_allcores_group(TEXT);
-DROP LANGUAGE plpython3u CASCADE;
+DROP EXTENSION plpython3u CASCADE;
 DROP VIEW cancel_all;
 DROP VIEW busy;
 DROP TABLE bigtable;

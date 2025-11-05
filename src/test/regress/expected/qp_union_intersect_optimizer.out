@@ -626,7 +626,7 @@ SELECT COUNT(*) FROM ( SELECT * FROM (SELECT * FROM dml_union_r EXCEPT SELECT * 
 (1 row)
 
 INSERT INTO dml_union_s SELECT * FROM (SELECT * FROM dml_union_r EXCEPT SELECT * FROM dml_union_s) foo WHERE c='text';
-ERROR:  null value in column "b" violates not-null constraint
+ERROR:  null value in column "b" of relation "dml_union_s_1_prt_def" violates not-null constraint
 DETAIL:  Failing row contains (null, null, text, null).
 --SELECT COUNT(*) FROM dml_union_r;
 -- @description union_test28: Negative tests MORE THAN ONE ROW RETURNED
@@ -1708,7 +1708,7 @@ SELECT COUNT(DISTINCT(b)) FROM dml_union_s;
 (1 row)
 
 UPDATE dml_union_s SET b = (SELECT NULL UNION SELECT NULL)::numeric;
-ERROR:  null value in column "b" violates not-null constraint  (seg0 127.0.0.1:7002 pid=31287)
+ERROR:  null value in column "b" of relation "dml_union_s_1_prt_2" violates not-null constraint  (seg0 127.0.0.1:7002 pid=31287)
 DETAIL:  Failing row contains (1, null, s, 1).
 --SELECT COUNT(DISTINCT(b)) FROM dml_union_s;
 --SELECT DISTINCT(b) FROM dml_union_s;

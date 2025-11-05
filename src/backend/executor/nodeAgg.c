@@ -652,8 +652,7 @@ initialize_aggregate(AggState *aggstate, AggStatePerTrans pertrans,
 	{
 		MemoryContext oldContext;
 
-		oldContext = MemoryContextSwitchTo(
-										   aggstate->curaggcontext->ecxt_per_tuple_memory);
+		oldContext = MemoryContextSwitchTo(aggstate->curaggcontext->ecxt_per_tuple_memory);
 		pergroupstate->transValue = datumCopy(pertrans->initValue,
 											  pertrans->transtypeByVal,
 											  pertrans->transtypeLen);
@@ -759,8 +758,7 @@ advance_transition_function(AggState *aggstate,
 			 * We must copy the datum into aggcontext if it is pass-by-ref. We
 			 * do not need to pfree the old transValue, since it's NULL.
 			 */
-			oldContext = MemoryContextSwitchTo(
-											   aggstate->curaggcontext->ecxt_per_tuple_memory);
+			oldContext = MemoryContextSwitchTo(aggstate->curaggcontext->ecxt_per_tuple_memory);
 			pergroupstate->transValue = datumCopy(fcinfo->args[1].value,
 												  pertrans->transtypeByVal,
 												  pertrans->transtypeLen);
@@ -1520,7 +1518,7 @@ static void
 build_hash_table(AggState *aggstate, int setno, long nbuckets)
 {
 	AggStatePerHash perhash = &aggstate->perhash[setno];
-	MemoryContext	metacxt = aggstate->hash_metacxt;
+	MemoryContext	metacxt = aggstate->ss.ps.state->es_query_cxt;
 	MemoryContext	hashcxt = aggstate->hashcontext->ecxt_per_tuple_memory;
 	MemoryContext	tmpcxt	= aggstate->tmpcontext->ecxt_per_tuple_memory;
 	Size            additionalsize;
@@ -1693,32 +1691,14 @@ find_hash_columns(AggState *aggstate)
  * Estimate per-hash-table-entry overhead.
  */
 Size
-hash_agg_entry_size(int numTrans, Size tupleWidth, Size transitionSpace)
+hash_agg_entry_size(int numAggs, Size tupleWidth, Size transitionSpace)
 {
-	Size    tupleChunkSize;
-	Size    pergroupChunkSize;
-	Size    transitionChunkSize;
-	Size    tupleSize	 = (MAXALIGN(SizeofMinimalTupleHeader) +
-							tupleWidth);
-	Size    pergroupSize = numTrans * sizeof(AggStatePerGroupData);
-
-	tupleChunkSize = CHUNKHDRSZ + tupleSize;
-
-	if (pergroupSize > 0)
-		pergroupChunkSize = CHUNKHDRSZ + pergroupSize;
-	else
-		pergroupChunkSize = 0;
-
-	if (transitionSpace > 0)
-		transitionChunkSize = CHUNKHDRSZ + transitionSpace;
-	else
-		transitionChunkSize = 0;
-
 	return
-		sizeof(TupleHashEntryData) +
-		tupleChunkSize +
-		pergroupChunkSize +
-		transitionChunkSize;
+		MAXALIGN(SizeofMinimalTupleHeader) +
+		MAXALIGN(tupleWidth) +
+		MAXALIGN(sizeof(TupleHashEntryData) +
+				 numAggs * sizeof(AggStatePerGroupData)) +
+		transitionSpace;
 }
 
 /*
@@ -3418,8 +3398,8 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 		 * The output of the tuplesort, and the output from the outer child
 		 * might not use the same type of slot. In most cases the child will
 		 * be a Sort, and thus return a TTSOpsMinimalTuple type slot - but the
-		 * input can also be be presorted due an index, in which case it could
-		 * be a different type of slot.
+		 * input can also be presorted due an index, in which case it could be
+		 * a different type of slot.
 		 *
 		 * XXX: For efficiency it would be good to instead/additionally
 		 * generate expressions with corresponding settings of outerops* for

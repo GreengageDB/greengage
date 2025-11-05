@@ -1140,7 +1140,7 @@ relname='tenk_renamed'));
 ALTER TABLE tenk_renamed ALTER COLUMN twothousand SET NOT NULL;
 ALTER TABLE tenk_renamed ADD COLUMN sercol serial; -- MPP-10015
 ALTER TABLE tenk_renamed ADD COLUMN newcol2 int NOT NULL; -- should fail
-ERROR:  column "newcol2" contains null values  (seg1 127.0.0.1:40001 pid=10274)
+ERROR:  column "newcol2" of relation "tenk_renamed" contains null values  (seg1 127.0.0.1:40001 pid=10274)
 SELECT count(*) FROM tenk_renamed;
  count 
 -------

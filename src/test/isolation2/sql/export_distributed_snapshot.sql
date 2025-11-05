@@ -11,7 +11,7 @@
 -- start_ignore
 DROP FUNCTION IF EXISTS corrupt_snapshot_file(text, text);
 DROP FUNCTION IF EXISTS snapshot_file_ds_fields_exist(text);
-DROP LANGUAGE IF EXISTS plpython3u cascade;
+DROP EXTENSION IF EXISTS plpython3u cascade;
 DROP TABLE IF EXISTS export_distributed_snapshot_test1;
 -- end_ignore
 

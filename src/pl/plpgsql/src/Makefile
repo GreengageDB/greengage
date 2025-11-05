@@ -28,7 +28,7 @@ OBJS = \
 	pl_handler.o \
 	pl_scanner.o
 
-DATA = plpgsql.control plpgsql--1.0.sql plpgsql--unpackaged--1.0.sql
+DATA = plpgsql.control plpgsql--1.0.sql
 
 REGRESS_OPTS = --dbname=$(PL_TESTDB)
 REGRESS_OPTS += --init-file=init_file
@@ -41,6 +41,11 @@ REGRESS = plpgsql_call plpgsql_control plpgsql_copy plpgsql_domain \
 TOOLSDIR = $(top_srcdir)/src/tools
 GEN_KEYWORDLIST = $(PERL) -I $(TOOLSDIR) $(TOOLSDIR)/gen_keywordlist.pl
 GEN_KEYWORDLIST_DEPS = $(TOOLSDIR)/gen_keywordlist.pl $(TOOLSDIR)/PerfectHash.pm
+
+# Test input and expected files.  These are created by pg_regress itself, so we
+# don't have a rule to create them.  We do need rules to clean them however.
+input_files = $(patsubst $(srcdir)/input/%.source,sql/%.sql, $(wildcard $(srcdir)/input/*.source))
+output_files := $(patsubst $(srcdir)/output/%.source,expected/%.out, $(wildcard $(srcdir)/output/*.source))
 
 all: all-lib
 
@@ -112,6 +117,7 @@ distprep: pl_gram.h pl_gram.c plerrcodes.h pl_reserved_kwlist_d.h pl_unreserved_
 # are not cleaned here.
 clean distclean: clean-lib
 	rm -f $(OBJS)
+	rm -f $(output_files) $(input_files)
 	rm -rf $(pg_regress_clean_files)
 
 maintainer-clean: distclean

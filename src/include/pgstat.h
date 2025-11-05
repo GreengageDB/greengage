@@ -873,13 +873,13 @@ typedef enum
 {
 	WAIT_EVENT_CLIENT_READ = PG_WAIT_CLIENT,
 	WAIT_EVENT_CLIENT_WRITE,
+	WAIT_EVENT_GSS_OPEN_SERVER,
 	WAIT_EVENT_LIBPQWALRECEIVER_CONNECT,
 	WAIT_EVENT_LIBPQWALRECEIVER_RECEIVE,
 	WAIT_EVENT_SSL_OPEN_SERVER,
 	WAIT_EVENT_WAL_RECEIVER_WAIT_START,
 	WAIT_EVENT_WAL_SENDER_WAIT_WAL,
 	WAIT_EVENT_WAL_SENDER_WRITE_DATA,
-	WAIT_EVENT_GSS_OPEN_SERVER,
 } WaitEventClient;
 
 /* ----------
@@ -1295,9 +1295,9 @@ typedef struct PgStat_FunctionCallUsage
  * GUC parameters
  * ----------
  */
-extern bool pgstat_track_activities;
-extern bool pgstat_track_counts;
-extern int	pgstat_track_functions;
+extern PGDLLIMPORT bool pgstat_track_activities;
+extern PGDLLIMPORT bool pgstat_track_counts;
+extern PGDLLIMPORT int pgstat_track_functions;
 extern PGDLLIMPORT int pgstat_track_activity_query_size;
 extern char *pgstat_stat_directory;
 extern char *pgstat_stat_tmpname;

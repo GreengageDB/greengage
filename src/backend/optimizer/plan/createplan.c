@@ -6193,6 +6193,30 @@ label_sort_with_costsize(PlannerInfo *root, Sort *plan, double limit_tuples)
 	plan->plan.parallel_safe = lefttree->parallel_safe;
 }
 
+#if 0
+/* GPDB_12_MERGE_FEATURE_NOT_SUPPORTED: the parallel StreamBitmap scan is not implemented */
+/*
+ * bitmap_subplan_mark_shared
+ *	 Set isshared flag in bitmap subplan so that it will be created in
+ *	 shared memory.
+ */
+static void
+bitmap_subplan_mark_shared(Plan *plan)
+{
+	if (IsA(plan, BitmapAnd))
+		bitmap_subplan_mark_shared(linitial(((BitmapAnd *) plan)->bitmapplans));
+	else if (IsA(plan, BitmapOr))
+	{
+		((BitmapOr *) plan)->isshared = true;
+		bitmap_subplan_mark_shared(linitial(((BitmapOr *) plan)->bitmapplans));
+	}
+	else if (IsA(plan, BitmapIndexScan))
+		((BitmapIndexScan *) plan)->isshared = true;
+	else
+		elog(ERROR, "unrecognized node type: %d", nodeTag(plan));
+}
+#endif
+
 /*****************************************************************************
  *
  *	PLAN NODE BUILDING ROUTINES

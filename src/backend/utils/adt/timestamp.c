@@ -6117,8 +6117,7 @@ generate_series_timestamp(PG_FUNCTION_ARGS)
 		timestamp_cmp_internal(result, fctx->finish) >= 0)
 	{
 		/* increment current in preparation for next iteration */
-		fctx->current = DatumGetTimestamp(
-										  DirectFunctionCall2(timestamp_pl_interval,
+		fctx->current = DatumGetTimestamp(DirectFunctionCall2(timestamp_pl_interval,
 															  TimestampGetDatum(fctx->current),
 															  PointerGetDatum(&fctx->step)));
 
@@ -6198,8 +6197,7 @@ generate_series_timestamptz(PG_FUNCTION_ARGS)
 		timestamp_cmp_internal(result, fctx->finish) >= 0)
 	{
 		/* increment current in preparation for next iteration */
-		fctx->current = DatumGetTimestampTz(
-											DirectFunctionCall2(timestamptz_pl_interval,
+		fctx->current = DatumGetTimestampTz(DirectFunctionCall2(timestamptz_pl_interval,
 																TimestampTzGetDatum(fctx->current),
 																PointerGetDatum(&fctx->step)));
 

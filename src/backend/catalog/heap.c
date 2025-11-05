@@ -745,7 +745,8 @@ CheckAttributeType(const char *attname,
 		/*
 		 * If it's a range, recurse to check its subtype.
 		 */
-		CheckAttributeType(attname, get_range_subtype(atttypid), attcollation,
+		CheckAttributeType(attname, get_range_subtype(atttypid),
+						   get_range_collation(atttypid),
 						   containing_rowtypes,
 						   flags);
 	}
@@ -2770,8 +2771,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 			else
 			{
 				/* otherwise make a one-element array of the value */
-				missingval = PointerGetDatum(
-											 construct_array(&missingval,
+				missingval = PointerGetDatum(construct_array(&missingval,
 															 1,
 															 defAttStruct->atttypid,
 															 defAttStruct->attlen,
@@ -3930,15 +3930,26 @@ List *
 heap_truncate_find_FKs(List *relationIds)
 {
 	List	   *result = NIL;
+	List	   *oids = list_copy(relationIds);
+	List	   *parent_cons;
+	ListCell   *cell;
+	ScanKeyData key;
 	Relation	fkeyRel;
 	SysScanDesc fkeyScan;
 	HeapTuple	tuple;
+	bool		restart;
+
+	oids = list_copy(relationIds);
 
 	/*
 	 * Must scan pg_constraint.  Right now, it is a seqscan because there is
 	 * no available index on confrelid.
 	 */
 	fkeyRel = table_open(ConstraintRelationId, AccessShareLock);
+
+restart:
+	restart = false;
+	parent_cons = NIL;
 
 	fkeyScan = systable_beginscan(fkeyRel, InvalidOid, false,
 								  NULL, 0, NULL);
@@ -3952,16 +3963,85 @@ heap_truncate_find_FKs(List *relationIds)
 			continue;
 
 		/* Not referencing one of our list of tables */
-		if (!list_member_oid(relationIds, con->confrelid))
+		if (!list_member_oid(oids, con->confrelid))
 			continue;
 
-		/* Add referencer to result, unless present in input list */
+		/*
+		 * If this constraint has a parent constraint which we have not seen
+		 * yet, keep track of it for the second loop, below.  Tracking parent
+		 * constraints allows us to climb up to the top-level level constraint
+		 * and look for all possible relations referencing the partitioned
+		 * table.
+		 */
+		if (OidIsValid(con->conparentid) &&
+			!list_member_oid(parent_cons, con->conparentid))
+			parent_cons = lappend_oid(parent_cons, con->conparentid);
+
+		/*
+		 * Add referencer to result, unless present in input list.  (Don't
+		 * worry about dupes: we'll fix that below).
+		 */
 		if (!list_member_oid(relationIds, con->conrelid))
 			result = lappend_oid(result, con->conrelid);
 	}
 
 	systable_endscan(fkeyScan);
+
+	/*
+	 * Process each parent constraint we found to add the list of referenced
+	 * relations by them to the oids list.  If we do add any new such
+	 * relations, redo the first loop above.  Also, if we see that the parent
+	 * constraint in turn has a parent, add that so that we process all
+	 * relations in a single additional pass.
+	 */
+	foreach(cell, parent_cons)
+	{
+		Oid		parent = lfirst_oid(cell);
+
+		ScanKeyInit(&key,
+					Anum_pg_constraint_oid,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(parent));
+
+		fkeyScan = systable_beginscan(fkeyRel, ConstraintOidIndexId,
+									  true, NULL, 1, &key);
+
+		tuple = systable_getnext(fkeyScan);
+		if (HeapTupleIsValid(tuple))
+		{
+			Form_pg_constraint con = (Form_pg_constraint) GETSTRUCT(tuple);
+
+			/*
+			 * pg_constraint rows always appear for partitioned hierarchies
+			 * this way: on the each side of the constraint, one row appears
+			 * for each partition that points to the top-most table on the
+			 * other side.
+			 *
+			 * Because of this arrangement, we can correctly catch all
+			 * relevant relations by adding to 'parent_cons' all rows with
+			 * valid conparentid, and to the 'oids' list all rows with a
+			 * zero conparentid.  If any oids are added to 'oids', redo the
+			 * first loop above by setting 'restart'.
+			 */
+			if (OidIsValid(con->conparentid))
+				parent_cons = list_append_unique_oid(parent_cons,
+													 con->conparentid);
+			else if (!list_member_oid(oids, con->confrelid))
+			{
+				oids = lappend_oid(oids, con->confrelid);
+				restart = true;
+			}
+		}
+
+		systable_endscan(fkeyScan);
+	}
+
+	list_free(parent_cons);
+	if (restart)
+		goto restart;
+
 	table_close(fkeyRel, AccessShareLock);
+	list_free(oids);
 
 	/* Now sort and de-duplicate the result list */
 	list_sort(result, list_oid_cmp);

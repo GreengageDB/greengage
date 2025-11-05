@@ -417,8 +417,6 @@ FindTupleHashEntry(TupleHashTable hashtable, TupleTableSlot *slot,
 }
 
 /*
- * Compute the hash value for a tuple
- *
  * If tuple is NULL, use the input slot instead. This convention avoids the
  * need to materialize virtual input tuples unless they actually need to get
  * copied into the table.

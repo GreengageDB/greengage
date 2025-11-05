@@ -82,7 +82,7 @@ static int	set_wal_segsize;
 static uint64 system_identifier = 0;
 
 static void CheckDataVersion(void);
-static bool ReadControlFile(void);
+static bool read_controlfile(void);
 static void GuessControlValues(void);
 static void PrintControlValues(bool guessed);
 static void PrintNewControlValues(void);
@@ -517,7 +517,7 @@ main(int argc, char *argv[])
 	/*
 	 * Attempt to read the existing pg_control file
 	 */
-	if (!ReadControlFile())
+	if (!read_controlfile())
 		GuessControlValues();
 
 	/*
@@ -752,7 +752,7 @@ CheckDataVersion(void)
  * to the current format.  (Currently we don't do anything of the sort.)
  */
 static bool
-ReadControlFile(void)
+read_controlfile(void)
 {
 	int			fd;
 	int			len;

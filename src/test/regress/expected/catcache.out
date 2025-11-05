@@ -56,7 +56,7 @@ explain update dml_14027_union_s set a = (select null union select null)::numeri
 -- Should not raise error due to stale catcache in reader gang.
 -- eg: ERROR: expected partdefid 134733, but got 0
 update dml_14027_union_s set a = (select null union select null)::numeric;
-ERROR:  null value in column "a" violates not-null constraint  (seg0 127.0.1.1:7002 pid=27795)
+ERROR:  null value in column "a" of relation "dml_14027_union_s_1_prt_2" violates not-null constraint  (seg0 127.0.1.1:7002 pid=27795)
 DETAIL:  Failing row contains (null, 1).
 drop table dml_14027_union_s;
 reset optimizer_force_multistage_agg;

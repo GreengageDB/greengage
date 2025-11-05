@@ -17,7 +17,6 @@
 20190628:12:33:29:008863 gpstop:Adams-MBP:adamberlin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.479.gb6a83cfcde build dev'
 20190628:12:33:29:008863 gpstop:Adams-MBP:adamberlin-[INFO]:-Signalling all postmaster processes to reload
 -- end_ignore
-create or replace language plpython3u;
 create or replace function remove_tablespace_location_directory(tablespace_location_dir text) returns void as $$
 	import shutil
 	import os

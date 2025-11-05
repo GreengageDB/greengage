@@ -27,8 +27,8 @@ NAME = plperl
 
 OBJS = plperl.o SPI.o Util.o $(WIN32RES)
 
-DATA = plperl.control plperl--1.0.sql plperl--unpackaged--1.0.sql \
-       plperlu.control plperlu--1.0.sql plperlu--unpackaged--1.0.sql
+DATA = plperl.control plperl--1.0.sql \
+       plperlu.control plperlu--1.0.sql
 
 PERLCHUNKS = plc_perlboot.pl plc_trusted.pl
 
@@ -55,9 +55,11 @@ endif # win32
 
 SHLIB_LINK = $(perl_embed_ldflags)
 
-REGRESS_OPTS = --dbname=$(PL_TESTDB) --load-extension=plperl  --load-extension=plperlu
+REGRESS_OPTS = --dbname=$(PL_TESTDB)
 REGRESS_OPTS += --init-file=init_file
-REGRESS = plperl plperl_lc plperl_trigger plperl_shared plperl_elog plperl_util plperl_init plperlu plperl_array plperl_call plperl_transaction
+REGRESS = plperl_setup plperl plperl_lc plperl_trigger plperl_shared \
+	plperl_elog plperl_util plperl_init plperlu plperl_array \
+	plperl_call plperl_transaction
 # if Perl can support two interpreters in one backend,
 # test plperl-and-plperlu cases
 ifneq ($(PERL),)

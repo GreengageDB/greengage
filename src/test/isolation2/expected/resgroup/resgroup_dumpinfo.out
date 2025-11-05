@@ -72,5 +72,5 @@ DROP ROLE role_permission;
 DROP
 DROP RESOURCE GROUP rg_dumpinfo_test;
 DROP
-DROP LANGUAGE plpython3u CASCADE;
+DROP EXTENSION plpython3u CASCADE;
 DROP

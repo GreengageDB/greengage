@@ -60,10 +60,17 @@ sub DeterminePlatform
 {
 	my $self = shift;
 
-	# Examine CL help output to determine if we are in 32 or 64-bit mode.
-	my $output = `cl /? 2>&1`;
-	$? >> 8 == 0 or die "cl command not found";
-	$self->{platform} = ($output =~ /^\/favor:<.+AMD64/m) ? 'x64' : 'Win32';
+	if ($^O eq "MSWin32")
+	{
+		# Examine CL help output to determine if we are in 32 or 64-bit mode.
+		my $output = `cl /? 2>&1`;
+		$? >> 8 == 0 or die "cl command not found";
+		$self->{platform} = ($output =~ /^\/favor:<.+AMD64/m) ? 'x64' : 'Win32';
+	}
+	else
+	{
+		$self->{platform} = 'FAKE';
+	}
 	print "Detected hardware platform: $self->{platform}\n";
 	return;
 }
@@ -201,12 +208,12 @@ sub GenerateFiles
 		ALIGNOF_SHORT              => 2,
 		AC_APPLE_UNIVERSAL_BUILD   => undef,
 		BLCKSZ                     => 1024 * $self->{options}->{blocksize},
+		CONFIGURE_ARGS             => '"' . $self->GetFakeConfigure() . '"',
 		DEF_PGPORT                 => $port,
 		DEF_PGPORT_STR             => qq{"$port"},
 		ENABLE_GSS                 => $self->{options}->{gss} ? 1 : undef,
 		ENABLE_NLS                 => $self->{options}->{nls} ? 1 : undef,
 		ENABLE_THREAD_SAFETY       => 1,
-		FLEXIBLE_ARRAY_MEMBER      => '/**/',
 		GETTIMEOFDAY_1ARG          => undef,
 		HAVE_APPEND_HISTORY        => undef,
 		HAVE_ASN1_STRING_GET0_DATA => undef,
@@ -215,8 +222,6 @@ sub GenerateFiles
 		HAVE_BACKTRACE_SYMBOLS     => undef,
 		HAVE_BIO_GET_DATA          => undef,
 		HAVE_BIO_METH_NEW          => undef,
-		HAVE_CBRT                  => undef,
-		HAVE_CLASS                 => undef,
 		HAVE_CLOCK_GETTIME         => undef,
 		HAVE_COMPUTED_GOTO         => undef,
 		HAVE_COPYFILE              => undef,
@@ -245,10 +250,6 @@ sub GenerateFiles
 		HAVE_EXPLICIT_BZERO                         => undef,
 		HAVE_FDATASYNC                              => undef,
 		HAVE_FLS                                    => undef,
-		HAVE_FPCLASS                                => undef,
-		HAVE_FP_CLASS                               => undef,
-		HAVE_FP_CLASS_D                             => undef,
-		HAVE_FP_CLASS_H                             => undef,
 		HAVE_FSEEKO                                 => 1,
 		HAVE_FUNCNAME__FUNC                         => undef,
 		HAVE_FUNCNAME__FUNCTION                     => 1,
@@ -274,19 +275,17 @@ sub GenerateFiles
 		HAVE_GSSAPI_H                               => undef,
 		HAVE_HISTORY_H                              => undef,
 		HAVE_HISTORY_TRUNCATE_FILE                  => undef,
-		HAVE_IEEEFP_H                               => undef,
 		HAVE_IFADDRS_H                              => undef,
 		HAVE_INET_ATON                              => undef,
 		HAVE_INT_TIMEZONE                           => 1,
 		HAVE_INT64                                  => undef,
 		HAVE_INT8                                   => undef,
-		HAVE_INTPTR_T                               => undef,
 		HAVE_INTTYPES_H                             => undef,
 		HAVE_INT_OPTERR                             => undef,
 		HAVE_INT_OPTRESET                           => undef,
 		HAVE_IPV6                                   => 1,
-		HAVE_ISINF                                  => 1,
 		HAVE_I_CONSTRAINT__BUILTIN_CONSTANT_P       => undef,
+		HAVE_KQUEUE                                 => undef,
 		HAVE_LANGINFO_H                             => undef,
 		HAVE_LDAP_H                                 => undef,
 		HAVE_LDAP_INITIALIZE                        => undef,
@@ -307,7 +306,6 @@ sub GenerateFiles
 		HAVE_LONG_LONG_INT_64       => 1,
 		HAVE_MBARRIER_H             => undef,
 		HAVE_MBSTOWCS_L             => 1,
-		HAVE_MEMMOVE                => 1,
 		HAVE_MEMORY_H               => 1,
 		HAVE_MEMSET_S               => undef,
 		HAVE_MINIDUMP_TYPE          => 1,
@@ -335,10 +333,12 @@ sub GenerateFiles
 		HAVE_READLINE_HISTORY_H     => undef,
 		HAVE_READLINE_READLINE_H    => undef,
 		HAVE_READLINK               => undef,
-		HAVE_RINT                   => 1,
 		HAVE_RL_COMPLETION_APPEND_CHARACTER      => undef,
 		HAVE_RL_COMPLETION_MATCHES               => undef,
+		HAVE_RL_COMPLETION_SUPPRESS_QUOTE        => undef,
 		HAVE_RL_FILENAME_COMPLETION_FUNCTION     => undef,
+		HAVE_RL_FILENAME_QUOTE_CHARACTERS        => undef,
+		HAVE_RL_FILENAME_QUOTING_FUNCTION        => undef,
 		HAVE_RL_RESET_SCREEN_SIZE                => undef,
 		HAVE_SECURITY_PAM_APPL_H                 => undef,
 		HAVE_SETPROCTITLE                        => undef,
@@ -348,7 +348,7 @@ sub GenerateFiles
 		HAVE_SPINLOCKS                           => 1,
 		HAVE_SRANDOM                             => undef,
 		HAVE_STDBOOL_H                           => 1,
-		HAVE_STDINT_H                            => undef,
+		HAVE_STDINT_H                            => 1,
 		HAVE_STDLIB_H                            => 1,
 		HAVE_STRCHRNUL                           => undef,
 		HAVE_STRERROR_R                          => undef,
@@ -377,6 +377,7 @@ sub GenerateFiles
 		HAVE_SYMLINK                             => 1,
 		HAVE_SYSLOG                              => undef,
 		HAVE_SYS_EPOLL_H                         => undef,
+		HAVE_SYS_EVENT_H                         => undef,
 		HAVE_SYS_IPC_H                           => undef,
 		HAVE_SYS_PRCTL_H                         => undef,
 		HAVE_SYS_PROCCTL_H                       => undef,
@@ -396,22 +397,17 @@ sub GenerateFiles
 		HAVE_UCRED_H                             => undef,
 		HAVE_UINT64                              => undef,
 		HAVE_UINT8                               => undef,
-		HAVE_UINTPTR_T                           => undef,
 		HAVE_UNION_SEMUN                         => undef,
 		HAVE_UNISTD_H                            => 1,
 		HAVE_UNIX_SOCKETS                        => undef,
 		HAVE_UNSETENV                            => undef,
 		HAVE_USELOCALE                           => undef,
-		HAVE_UTIME                               => 1,
-		HAVE_UTIMES                              => undef,
-		HAVE_UTIME_H                             => 1,
 		HAVE_UUID_BSD                            => undef,
 		HAVE_UUID_E2FS                           => undef,
 		HAVE_UUID_OSSP                           => undef,
 		HAVE_UUID_H                              => undef,
 		HAVE_UUID_UUID_H                         => undef,
 		HAVE_WINLDAP_H                           => undef,
-		HAVE_WCHAR_H                             => 1,
 		HAVE_WCSTOMBS_L                          => 1,
 		HAVE_WCTYPE_H                            => 1,
 		HAVE_X509_GET_SIGNATURE_NID              => 1,
@@ -498,13 +494,10 @@ sub GenerateFiles
 		_LARGEFILE_SOURCE => undef,
 		_LARGE_FILES      => undef,
 		inline            => '__inline',
-		intptr_t          => undef,
 		pg_restrict       => '__restrict',
 		# not defined, because it'd conflict with __declspec(restrict)
 		restrict  => undef,
-		signed    => undef,
-		typeof    => undef,
-		uintptr_t => undef,);
+		typeof    => undef,);
 
 	if ($self->{options}->{uuid})
 	{
@@ -540,12 +533,6 @@ sub GenerateFiles
 	$self->GenerateConfigHeader('src/include/pg_config.h', \%define, 1);
 	$self->GenerateConfigHeader('src/include/pg_config_ext.h', \%define, 0);
 	$self->GenerateConfigHeader('src/interfaces/ecpg/include/ecpg_config.h', \%define, 0);
-
-	open(my $f, '>>', 'src/include/pg_config.h')
-	  || confess "Could not write to src/include/pg_config.h\n";
-	print $f "\n";
-	print $f "#define VAL_CONFIGURE \"" . $self->GetFakeConfigure() . "\"\n";
-	close($f);
 
 	$self->GenerateDefFile(
 		"src/interfaces/libpq/libpqdll.def",
@@ -1099,7 +1086,7 @@ EOF
 		}
 		if ($fld ne "")
 		{
-			$flduid{$fld} = Win32::GuidGen();
+			$flduid{$fld} = $^O eq "MSWin32" ? Win32::GuidGen() : 'FAKE';
 			print $sln <<EOF;
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "$fld", "$fld", "$flduid{$fld}"
 EndProject

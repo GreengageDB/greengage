@@ -934,12 +934,13 @@ static void UpdateLastRemovedPtr(char *filename);
 static void ValidateXLOGDirectoryStructure(void);
 static void CleanupBackupHistory(void);
 static void UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force);
-static XLogRecord *ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
+static XLogRecord *ReadRecord(XLogReaderState *xlogreader,
 							  int emode, bool fetching_ckpt);
 static void CheckRecoveryConsistency(void);
 static XLogRecord *ReadCheckpointRecord(XLogReaderState *xlogreader,
 										XLogRecPtr RecPtr, int whichChkpt, bool report);
 static bool rescanLatestTimeLine(void);
+static void InitControlFile(uint64 sysidentifier);
 static void WriteControlFile(void);
 static void ReadControlFile(void);
 static char *str_time(pg_time_t tnow);
@@ -4300,17 +4301,17 @@ CleanupBackupHistory(void)
 }
 
 /*
- * Attempt to read an XLOG record.
+ * Attempt to read the next XLOG record.
  *
- * If RecPtr is valid, try to read a record at that position.  Otherwise
- * try to read a record just after the last one previously read.
+ * Before first call, the reader needs to be positioned to the first record
+ * by calling XLogBeginRead().
  *
  * If no valid record is available, returns NULL, or fails if emode is PANIC.
  * (emode must be either PANIC, LOG). In standby mode, retries until a valid
  * record is available.
  */
 static XLogRecord *
-ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr, int emode,
+ReadRecord(XLogReaderState *xlogreader, int emode,
 		   bool fetching_ckpt)
 {
 	XLogRecord *record;
@@ -4319,7 +4320,7 @@ ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr, int emode,
 	/* Pass through parameters to XLogPageRead */
 	private->fetching_ckpt = fetching_ckpt;
 	private->emode = emode;
-	private->randAccess = (RecPtr != InvalidXLogRecPtr);
+	private->randAccess = (xlogreader->ReadRecPtr == InvalidXLogRecPtr);
 
 	/* This is the first attempt to read this page. */
 	lastSourceFailed = false;
@@ -4328,7 +4329,7 @@ ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr, int emode,
 	{
 		char	   *errormsg;
 
-		record = XLogReadRecord(xlogreader, RecPtr, &errormsg);
+		record = XLogReadRecord(xlogreader, &errormsg);
 		ReadRecPtr = xlogreader->ReadRecPtr;
 		EndRecPtr = xlogreader->EndRecPtr;
 		if (record == NULL)
@@ -4359,8 +4360,7 @@ ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr, int emode,
 			 * shouldn't loop anymore in that case.
 			 */
 			if (errormsg)
-				ereport(emode_for_corrupt_record(emode,
-												 RecPtr ? RecPtr : EndRecPtr),
+				ereport(emode_for_corrupt_record(emode, EndRecPtr),
 						(errmsg_internal("%s", errormsg) /* already translated */ ));
 		}
 
@@ -4378,8 +4378,7 @@ ReadRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr, int emode,
 									   wal_segment_size);
 			XLogFileName(fname, xlogreader->seg.ws_tli, segno,
 						 wal_segment_size);
-			ereport(emode_for_corrupt_record(emode,
-											 RecPtr ? RecPtr : EndRecPtr),
+			ereport(emode_for_corrupt_record(emode, EndRecPtr),
 					(errmsg("unexpected timeline ID %u in log segment %s, offset %u",
 							xlogreader->latestPageTLI,
 							fname,
@@ -4555,12 +4554,49 @@ rescanLatestTimeLine(void)
  * given a preloaded buffer, ReadControlFile() loads the buffer from
  * the pg_control file (during postmaster or standalone-backend startup),
  * and UpdateControlFile() rewrites pg_control after we modify xlog state.
+ * InitControlFile() fills the buffer with initial values.
  *
  * For simplicity, WriteControlFile() initializes the fields of pg_control
  * that are related to checking backend/database compatibility, and
  * ReadControlFile() verifies they are correct.  We could split out the
  * I/O and compatibility-check functions, but there seems no need currently.
  */
+
+static void
+InitControlFile(uint64 sysidentifier)
+{
+	char		mock_auth_nonce[MOCK_AUTH_NONCE_LEN];
+
+	/*
+	 * Generate a random nonce. This is used for authentication requests that
+	 * will fail because the user does not exist. The nonce is used to create
+	 * a genuine-looking password challenge for the non-existent user, in lieu
+	 * of an actual stored password.
+	 */
+	if (!pg_strong_random(mock_auth_nonce, MOCK_AUTH_NONCE_LEN))
+		ereport(PANIC,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("could not generate secret authorization token")));
+
+	memset(ControlFile, 0, sizeof(ControlFileData));
+	/* Initialize pg_control status fields */
+	ControlFile->system_identifier = sysidentifier;
+	memcpy(ControlFile->mock_authentication_nonce, mock_auth_nonce, MOCK_AUTH_NONCE_LEN);
+	ControlFile->state = DB_SHUTDOWNED;
+	ControlFile->unloggedLSN = FirstNormalUnloggedLSN;
+
+	/* Set important parameter values for use when replaying WAL */
+	ControlFile->MaxConnections = MaxConnections;
+	ControlFile->max_worker_processes = max_worker_processes;
+	ControlFile->max_wal_senders = max_wal_senders;
+	ControlFile->max_prepared_xacts = max_prepared_xacts;
+	ControlFile->max_locks_per_xact = max_locks_per_xact;
+	ControlFile->wal_level = wal_level;
+	ControlFile->wal_log_hints = wal_log_hints;
+	ControlFile->track_commit_timestamp = track_commit_timestamp;
+	ControlFile->data_checksum_version = bootstrap_data_checksum_version;
+}
+
 static void
 WriteControlFile(void)
 {
@@ -5157,7 +5193,6 @@ BootStrapXLOG(void)
 	char	   *recptr;
 	bool		use_existent;
 	uint64		sysidentifier;
-	char		mock_auth_nonce[MOCK_AUTH_NONCE_LEN];
 	struct timeval tv;
 	pg_crc32c	crc;
 
@@ -5177,17 +5212,6 @@ BootStrapXLOG(void)
 	sysidentifier = ((uint64) tv.tv_sec) << 32;
 	sysidentifier |= ((uint64) tv.tv_usec) << 12;
 	sysidentifier |= getpid() & 0xFFF;
-
-	/*
-	 * Generate a random nonce. This is used for authentication requests that
-	 * will fail because the user does not exist. The nonce is used to create
-	 * a genuine-looking password challenge for the non-existent user, in lieu
-	 * of an actual stored password.
-	 */
-	if (!pg_strong_random(mock_auth_nonce, MOCK_AUTH_NONCE_LEN))
-		ereport(PANIC,
-				(errcode(ERRCODE_INTERNAL_ERROR),
-				 errmsg("could not generate secret authorization token")));
 
 	/* First timeline ID is always 1 */
 	ThisTimeLineID = 1;
@@ -5302,30 +5326,12 @@ BootStrapXLOG(void)
 	openLogFile = -1;
 
 	/* Now create pg_control */
-
-	memset(ControlFile, 0, sizeof(ControlFileData));
-	/* Initialize pg_control status fields */
-	ControlFile->system_identifier = sysidentifier;
-	memcpy(ControlFile->mock_authentication_nonce, mock_auth_nonce, MOCK_AUTH_NONCE_LEN);
-	ControlFile->state = DB_SHUTDOWNED;
+	InitControlFile(sysidentifier);
 	ControlFile->time = checkPoint.time;
 	ControlFile->checkPoint = checkPoint.redo;
 	ControlFile->checkPointCopy = checkPoint;
-	ControlFile->unloggedLSN = FirstNormalUnloggedLSN;
-
-	/* Set important parameter values for use when replaying WAL */
-	ControlFile->MaxConnections = MaxConnections;
-	ControlFile->max_worker_processes = max_worker_processes;
-	ControlFile->max_wal_senders = max_wal_senders;
-	ControlFile->max_prepared_xacts = max_prepared_xacts;
-	ControlFile->max_locks_per_xact = max_locks_per_xact;
-	ControlFile->wal_level = wal_level;
-	ControlFile->wal_log_hints = wal_log_hints;
-	ControlFile->track_commit_timestamp = track_commit_timestamp;
-	ControlFile->data_checksum_version = bootstrap_data_checksum_version;
 
 	/* some additional ControlFile fields are set in WriteControlFile() */
-
 	WriteControlFile();
 
 	/* Bootstrap the commit log, too */
@@ -6435,7 +6441,7 @@ StartupXLOG(void)
 	XLogCtlInsert *Insert;
 	CheckPoint	checkPoint;
 	bool		wasShutdown;
-	bool		reachedStopPoint = false;
+	bool		reachedRecoveryTarget = false;
 	bool		haveBackupLabel = false;
 	bool		haveTblspcMap = false;
 	XLogRecPtr	RecPtr,
@@ -6532,20 +6538,21 @@ StartupXLOG(void)
 
 	/*----------
 	 * If we previously crashed, perform a couple of actions:
-	 *	- The pg_wal directory may still include some temporary WAL segments
-	 * used when creating a new segment, so perform some clean up to not
-	 * bloat this path.  This is done first as there is no point to sync this
-	 * temporary data.
-	 *	- There might be data which we had written, intending to fsync it,
-	 * but which we had not actually fsync'd yet. Therefore, a power failure
-	 * in the near future might cause earlier unflushed writes to be lost,
-	 * even though more recent data written to disk from here on would be
-	 * persisted.  To avoid that, fsync the entire data directory.
+	 *
+	 * - The pg_wal directory may still include some temporary WAL segments
+	 *   used when creating a new segment, so perform some clean up to not
+	 *   bloat this path.  This is done first as there is no point to sync
+	 *   this temporary data.
+	 *
+	 * - There might be data which we had written, intending to fsync it, but
+	 *   which we had not actually fsync'd yet.  Therefore, a power failure in
+	 *   the near future might cause earlier unflushed writes to be lost, even
+	 *   though more recent data written to disk from here on would be
+	 *   persisted.  To avoid that, fsync the entire data directory.
 	 *
 	 * GPDB: We don't force to fsync the whole pgdata directory as upstream
 	 * code since that could be very slow in cases that the pgdata
 	 * directory has a lot of (e.g. millions of) files. See below for details.
-	 *---------
 	 */
 	if (ControlFile->state != DB_SHUTDOWNED &&
 		ControlFile->state != DB_SHUTDOWNED_IN_RECOVERY)
@@ -6686,7 +6693,8 @@ StartupXLOG(void)
 			 */
 			if (checkPoint.redo < checkPointLoc)
 			{
-				if (!ReadRecord(xlogreader, checkPoint.redo, LOG, false))
+				XLogBeginRead(xlogreader, checkPoint.redo);
+				if (!ReadRecord(xlogreader, LOG, false))
 					ereport(FATAL,
 							(errmsg("could not find redo location referenced by checkpoint record"),
 							 errhint("If you are restoring from a backup, touch \"%s/recovery.signal\" and add required recovery options.\n"
@@ -7330,12 +7338,13 @@ StartupXLOG(void)
 		if (checkPoint.redo < RecPtr)
 		{
 			/* back up to find the record */
-			record = ReadRecord(xlogreader, checkPoint.redo, PANIC, false);
+			XLogBeginRead(xlogreader, checkPoint.redo);
+			record = ReadRecord(xlogreader, PANIC, false);
 		}
 		else
 		{
 			/* just have to read next record after CheckPoint */
-			record = ReadRecord(xlogreader, InvalidXLogRecPtr, LOG, false);
+			record = ReadRecord(xlogreader, LOG, false);
 		}
 
 		if (record != NULL)
@@ -7399,7 +7408,7 @@ StartupXLOG(void)
 				 */
 				if (recoveryStopsBefore(xlogreader))
 				{
-					reachedStopPoint = true;	/* see below */
+					reachedRecoveryTarget = true;
 					break;
 				}
 
@@ -7579,19 +7588,19 @@ StartupXLOG(void)
 				/* Exit loop if we reached inclusive recovery target */
 				if (recoveryStopsAfter(xlogreader))
 				{
-					reachedStopPoint = true;
+					reachedRecoveryTarget = true;
 					break;
 				}
 
 				/* Else, try to fetch the next WAL record */
-				record = ReadRecord(xlogreader, InvalidXLogRecPtr, LOG, false);
+				record = ReadRecord(xlogreader, LOG, false);
 			} while (record != NULL);
 
 			/*
 			 * end of main redo apply loop
 			 */
 
-			if (reachedStopPoint)
+			if (reachedRecoveryTarget)
 			{
 				if (!reachedConsistency)
 					ereport(FATAL,
@@ -7648,7 +7657,18 @@ StartupXLOG(void)
 			/* there are no WAL records following the checkpoint */
 			ereport(LOG,
 					(errmsg("redo is not required")));
+
 		}
+
+		/*
+		 * This check is intentionally after the above log messages that
+		 * indicate how far recovery went.
+		 */
+		if (ArchiveRecoveryRequested &&
+			recoveryTarget != RECOVERY_TARGET_UNSET &&
+			!reachedRecoveryTarget)
+			ereport(FATAL,
+					(errmsg("recovery ended before configured recovery target was reached")));
 	}
 
 	/*
@@ -7691,7 +7711,8 @@ StartupXLOG(void)
 	 * valid or last applied record, so we can identify the exact endpoint of
 	 * what we consider the valid portion of WAL.
 	 */
-	record = ReadRecord(xlogreader, LastRec, PANIC, false);
+	XLogBeginRead(xlogreader, LastRec);
+	record = ReadRecord(xlogreader, PANIC, false);
 	EndOfLog = EndRecPtr;
 
 	/*
@@ -8483,7 +8504,8 @@ ReadCheckpointRecord(XLogReaderState *xlogreader, XLogRecPtr RecPtr,
 		return NULL;
 	}
 
-	record = ReadRecord(xlogreader, RecPtr, LOG, true);
+	XLogBeginRead(xlogreader, RecPtr);
+	record = ReadRecord(xlogreader, LOG, true);
 
 	if (record == NULL)
 	{

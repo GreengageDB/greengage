@@ -1413,7 +1413,7 @@ select * from sirv_test12_result1;
 -- Test: test13_ctas_plpython.sql
 -- ----------------------------------------------------------------------
 --start_ignore
-drop language if exists plpython3u cascade;
+drop extension if exists plpython3u cascade;
 NOTICE:  drop cascades to function public.count_operator(text,text)
 drop table if exists sirv_test13_result1;
 NOTICE:  table "sirv_test13_result1" does not exist, skipping
@@ -1495,7 +1495,7 @@ select * from sirv_test13_result2;
 -- Test: test14_insert_select_plpython.sql
 -- ----------------------------------------------------------------------
 --start_ignore
-drop language if exists plpython3u cascade;
+drop extension if exists plpython3u cascade;
 NOTICE:  drop cascades to function sirv_test13_fun2(double precision,integer)
 NOTICE:  drop cascades to function sirv_test13_fun1()
 drop table if exists sirv_test14_result1;

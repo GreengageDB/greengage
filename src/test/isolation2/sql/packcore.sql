@@ -68,52 +68,58 @@ stderr: {stderr}
                 os.environ['LD_LIBRARY_PATH'] = ld_library_path
             os.chdir('..')
 
-    # gzip runs much faster with -1
-    os.putenv('GZIP', '-1')
+    curdir = os.getcwd()
 
-    # do not put the packcore results under master data, that will cause
-    # failures in other tests
-    os.chdir('/tmp')
+    try:
+        # gzip runs much faster with -1
+        os.putenv('GZIP', '-1')
 
-    gphome = os.getenv('GPHOME')
-    assert gphome
+        # do not put the packcore results under master data, that will cause
+        # failures in other tests
+        os.chdir('/tmp')
 
-    postgres = '{}/bin/postgres'.format(gphome)
-    assert os.path.exists(postgres)
+        gphome = os.getenv('GPHOME')
+        assert gphome
 
-    packcore = '{}/sbin/packcore'.format(gphome)
-    assert os.path.exists(packcore)
+        postgres = '{}/bin/postgres'.format(gphome)
+        assert os.path.exists(postgres)
 
-    # 'packcore --help' should return 0
-    check_call([packcore, '--help'])
-    check_call([packcore, '-h'])
+        packcore = '{}/sbin/packcore'.format(gphome)
+        assert os.path.exists(packcore)
 
-    # 'packcore --version' should return 0
-    check_call([packcore, '--version'])
+        # 'packcore --help' should return 0
+        check_call([packcore, '--help'])
+        check_call([packcore, '-h'])
 
-    cores = glob.glob('/tmp/core.postgres.*')
-    if not cores:
-        # no postgres coredump found, skip the packcore tests
-        return
+        # 'packcore --version' should return 0
+        check_call([packcore, '--version'])
 
-    corefile = cores[0]
-    corename = os.path.basename(corefile)
-    tarball = 'packcore-{}.tgz'.format(corename)
-    dirname = 'packcore-{}'.format(corename)
+        cores = glob.glob('/tmp/core.postgres.*')
+        if not cores:
+            # no postgres coredump found, skip the packcore tests
+            return
 
-    # 'packcore core' should work
-    test_packcore([packcore,
-                   corefile])
+        corefile = cores[0]
+        corename = os.path.basename(corefile)
+        tarball = 'packcore-{}.tgz'.format(corename)
+        dirname = 'packcore-{}'.format(corename)
 
-    # 'packcore -b postgres core' should work
-    test_packcore([packcore,
-                   '--binary={}'.format(postgres),
-                   corefile])
-    test_packcore([packcore,
-                   '--binary', postgres,
-                   corefile])
-    test_packcore([packcore,
-                   '-b', postgres,
-                   corefile])
+        # 'packcore core' should work
+        test_packcore([packcore,
+                       corefile])
+
+        # 'packcore -b postgres core' should work
+        test_packcore([packcore,
+                       '--binary={}'.format(postgres),
+                       corefile])
+        test_packcore([packcore,
+                       '--binary', postgres,
+                       corefile])
+        test_packcore([packcore,
+                       '-b', postgres,
+                       corefile])
+
+    finally:
+        os.chdir(curdir)
 $$;
 -- vi: sw=4 et :
