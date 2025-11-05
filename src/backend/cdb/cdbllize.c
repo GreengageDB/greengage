@@ -1111,23 +1111,6 @@ is_plan_node(Node *node)
 	return false;
 }
 
-/*
- * Is the node a "subclass" of Scan?
- */
-bool
-is_scan_node(Node *node)
-{
-	if (node == NULL)
-		return false;
-
-	if (nodeTag(node) == T_ShareInputScan)
-		return true;
-
-	if (nodeTag(node) >= T_SeqScan && nodeTag(node) <= T_ForeignScan)
-		return true;
-	return false;
-}
-
 /* Functions focusPlan, broadcastPlan, and repartitionPlan annotate the top
  * of the given plan tree with a motion request for later implementation by
  * function apply_motion in cdbmutate.c.
