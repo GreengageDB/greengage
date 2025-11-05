@@ -443,7 +443,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		{
 			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
-			if (rtfunc->funcexpr && ctx->subPlanDistributed &&
+			if (ctx->subPlanDistributed && rtfunc->funcexpr &&
 				ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ) &&
 				contain_mutable_functions((Node *) rtfunc->funcexpr))
 			{
@@ -455,8 +455,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		}
 	}
 
-	if (ctx->movement == MOVEMENT_BROADCAST &&
-		is_scan_node(node) && !IsA(node, SubqueryScan) &&
+	if (is_scan_node(node) && !IsA(node, SubqueryScan) &&
 		((Plan *) node)->flow->locustype != CdbLocusType_General)
 	{
 		shouldMaterializeNode = true;
