@@ -434,20 +434,18 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (node == NULL)
 		return NULL;
 
-	if (ctx->movement == MOVEMENT_BROADCAST && IsA(node, FunctionScan) &&
-		((Plan *) node)->flow->locustype != CdbLocusType_General)
+	if (IsA(node, FunctionScan))
 	{
 		FunctionScan *fscan = (FunctionScan *) node;
 		ListCell   *lc;
-
-		shouldMaterializeNode = true;
 
 		foreach(lc, fscan->functions)
 		{
 			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
-			if (rtfunc->funcexpr &&
-				ContainsParamWalker(rtfunc->funcexpr, NULL))
+			if (rtfunc->funcexpr && ctx->subPlanDistributed &&
+				ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ) &&
+				contain_mutable_functions((Node *) rtfunc->funcexpr))
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
@@ -457,6 +455,13 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		}
 	}
 
+	if (ctx->movement == MOVEMENT_BROADCAST &&
+		is_scan_node(node) && !IsA(node, SubqueryScan) &&
+		((Plan *) node)->flow->locustype != CdbLocusType_General)
+	{
+		shouldMaterializeNode = true;
+	}
+
 	/*
 	 * If the ModifyTable node appears inside the correlated Subplan, it has
 	 * to be handled the same way as various *Scan nodes. Currently such
@@ -464,10 +469,10 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	 * mutator shouldn't go under ModifyTable's plans and should broadcast or
 	 * focus the result of modifying operation if needed.
 	 */
-	if (IsA(node, SeqScan)
+	if (shouldMaterializeNode
+		||IsA(node, SeqScan)
 		||IsA(node, ShareInputScan)
 		||IsA(node, ExternalScan)
-		||(IsA(node, FunctionScan) && shouldMaterializeNode)
 		||(IsA(node, SubqueryScan) && IsA(((SubqueryScan *) node)->subplan, ModifyTable))
 		||IsA(node,ModifyTable))
 	{
@@ -1108,6 +1113,23 @@ is_plan_node(Node *node)
 		return false;
 
 	if (nodeTag(node) >= T_Plan_Start && nodeTag(node) < T_Plan_End)
+		return true;
+	return false;
+}
+
+/*
+ * Is the node a "subclass" of Scan?
+ */
+bool
+is_scan_node(Node *node)
+{
+	if (node == NULL)
+		return false;
+
+	if (nodeTag(node) == T_ShareInputScan)
+		return true;
+
+	if (nodeTag(node) >= T_SeqScan && nodeTag(node) <= T_ForeignScan)
 		return true;
 	return false;
 }

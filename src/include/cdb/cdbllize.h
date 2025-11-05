@@ -24,6 +24,7 @@
 extern Plan *cdbparallelize(struct PlannerInfo *root, Plan *plan, Query *query);
 
 extern bool is_plan_node(Node *node);
+extern bool is_scan_node(Node *node);
 
 extern Flow *makeFlow(FlowType flotype, int numsegments);
 
