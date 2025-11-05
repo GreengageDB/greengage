@@ -431,8 +431,6 @@ ParallelizeCorrelatedSubPlanUpdateFlowMutator(Node *node)
 static Node *
 ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerContext *ctx)
 {
-	bool		shouldMaterializeNode = false;
-
 	if (node == NULL)
 		return NULL;
 
@@ -458,12 +456,6 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		}
 	}
 
-	if (is_scan_node(node) && !IsA(node, SubqueryScan) &&
-		((Plan *) node)->flow->locustype != CdbLocusType_General)
-	{
-		shouldMaterializeNode = true;
-	}
-
 	/*
 	 * If the ModifyTable node appears inside the correlated Subplan, it has
 	 * to be handled the same way as various *Scan nodes. Currently such
@@ -471,10 +463,10 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	 * mutator shouldn't go under ModifyTable's plans and should broadcast or
 	 * focus the result of modifying operation if needed.
 	 */
-	if (shouldMaterializeNode
-		||IsA(node, SeqScan)
+	if (IsA(node, SeqScan)
 		||IsA(node, ShareInputScan)
 		||IsA(node, ExternalScan)
+		||(IsA(node, FunctionScan) && ((Plan *) node)->flow->locustype != CdbLocusType_General)
 		||(IsA(node, SubqueryScan) && IsA(((SubqueryScan *) node)->subplan, ModifyTable))
 		||IsA(node,ModifyTable))
 	{
