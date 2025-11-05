@@ -3863,26 +3863,8 @@ select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(t)) from t;
-                           QUERY PLAN                            
------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   Output: ((SubPlan 1))
-   ->  Seq Scan on subselect_gp.t
-         Output: (SubPlan 1)
-         SubPlan 1  (slice2; segments: 3)
-           ->  Result
-                 Output: f.f
-                 ->  Materialize
-                       Output: f.f
-                       ->  Broadcast Motion 1:3  (slice1)
-                             Output: f.f
-                             ->  Function Scan on subselect_gp.f
-                                   Output: f.f
-                                   Function Call: f(t.t)
- Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(16 rows)
-
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
 alter function f(f int) execute on all segments;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
@@ -3941,26 +3923,8 @@ select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(t)) from t;
-                           QUERY PLAN                            
------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   Output: ((SubPlan 1))
-   ->  Seq Scan on subselect_gp.t
-         Output: (SubPlan 1)
-         SubPlan 1  (slice2; segments: 3)
-           ->  Result
-                 Output: f.f
-                 ->  Materialize
-                       Output: f.f
-                       ->  Broadcast Motion 1:3  (slice1)
-                             Output: f.f
-                             ->  Function Scan on subselect_gp.f
-                                   Output: f.f
-                                   Function Call: f(t.t)
- Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(16 rows)
-
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
 alter function f(f int) execute on initplan;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
