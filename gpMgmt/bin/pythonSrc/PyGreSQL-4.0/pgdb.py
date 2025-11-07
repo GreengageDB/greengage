@@ -76,6 +76,10 @@ try: # use Decimal if available
 except ImportError: # otherwise (Python < 2.4)
     Decimal = float # use float instead of Decimal
 
+try:
+    basestring
+except NameError:
+    basestring = (str, bytes)
 
 ### Module Constants
 
@@ -577,6 +581,6 @@ def Binary(value):
 # If run as script, print some information:
 
 if __name__ == '__main__':
-    print 'PyGreSQL version', version
-    print
-    print __doc__
+    print('PyGreSQL version', version)
+    print()
+    print(__doc__)

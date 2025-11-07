@@ -18,6 +18,7 @@ For a DB-API 2 compliant interface use the newer pgdb module.
 
 """
 
+from __future__ import print_function
 from _pg import *
 try:
     frozenset
@@ -28,6 +29,11 @@ try:
     set_decimal(Decimal)
 except ImportError:
     pass # Python < 2.4
+
+try:
+    basestring
+except NameError:
+    basestring = (str, bytes)
 
 
 # Auxiliary functions which are independent from a DB connection:
@@ -147,9 +153,9 @@ class DB(object):
         """Print a debug message."""
         if self.debug:
             if isinstance(self.debug, basestring):
-                print self.debug % s
+                print(self.debug % s)
             elif isinstance(self.debug, file):
-                print >> self.debug, s
+                print(s, file=file)
             elif callable(self.debug):
                 self.debug(s)
 
@@ -328,7 +334,7 @@ class DB(object):
             # make sure that all classes have a namespace
             self._pkeys = dict([
                 ('.' in cl and cl or 'public.' + cl, pkey)
-                for cl, pkey in newpkey.iteritems()])
+                for cl, pkey in newpkey.items()])
             return self._pkeys
 
         qcl = self._add_schema(cl) # build fully qualified class name
@@ -360,7 +366,7 @@ class DB(object):
                 cl, pkey = _join_parts(r[:2]), r[2]
                 self._pkeys.setdefault(cl, []).append(pkey)
             # (only) for composite primary keys, the values will be frozensets
-            for cl, pkey in self._pkeys.iteritems():
+            for cl, pkey in self._pkeys.items():
                 self._pkeys[cl] = len(pkey) > 1 and frozenset(pkey) or pkey[0]
             self._do_debug(self._pkeys)
 
@@ -515,7 +521,7 @@ class DB(object):
         res = self.db.query(q).dictresult()
         if not res:
             raise DatabaseError('No such record in %s where %s' % (qcl, where))
-        for att, value in res[0].iteritems():
+        for att, value in res[0].items():
             arg[att == 'oid' and qoid or att] = value
         return arg
 
@@ -555,7 +561,7 @@ class DB(object):
         res = self.db.query(q)
         if ret:
             res = res.dictresult()
-            for att, value in res[0].iteritems():
+            for att, value in res[0].items():
                 d[att == 'oid' and qoid or att] = value
         elif isinstance(res, int):
             d[qoid] = res
@@ -625,7 +631,7 @@ class DB(object):
         res = self.db.query(q)
         if ret:
             res = self.db.query(q).dictresult()
-            for att, value in res[0].iteritems():
+            for att, value in res[0].items():
                 d[att == 'oid' and qoid or att] = value
         else:
             self.db.query(q)
@@ -651,7 +657,7 @@ class DB(object):
         if a is None:
             a = {} # empty if argument is not present
         attnames = self.get_attnames(qcl)
-        for n, t in attnames.iteritems():
+        for n, t in attnames.items():
             if n == 'oid':
                 continue
             if t in ('int', 'float', 'num', 'money'):
@@ -706,6 +712,6 @@ class DB(object):
 # if run as script, print some information
 
 if __name__ == '__main__':
-    print 'PyGreSQL version', version
-    print
-    print __doc__
+    print('PyGreSQL version', version)
+    print()
+    print(__doc__)
