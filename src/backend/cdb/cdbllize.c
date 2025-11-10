@@ -440,11 +440,10 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		foreach(lc, fscan->functions)
 		{
 			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
-			FuncExpr	*funcexpr = (FuncExpr *)rtfunc->funcexpr;
 
 			if ((ctx->subPlanDistributed || ctx->movement == MOVEMENT_BROADCAST) &&
-				ContainsParamWalker(funcexpr, NULL /* ctx */ ) &&
-				contain_mutable_functions((Node *) funcexpr))
+				ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ) &&
+				contain_mutable_functions(rtfunc->funcexpr))
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
