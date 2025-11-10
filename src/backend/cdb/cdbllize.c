@@ -29,14 +29,12 @@
 #include "nodes/makefuncs.h"	/* for makeTargetEntry() */
 #include "utils/guc.h"			/* for Debug_pretty_print */
 
-#include "catalog/pg_proc.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbplan.h"
 #include "cdb/cdbpullup.h"
 #include "cdb/cdbllize.h"
 #include "cdb/cdbmutate.h"
 #include "optimizer/tlist.h"
-#include "utils/lsyscache.h"
 
 /*
  * A PlanProfile holds state for recursive prescan_walker().
