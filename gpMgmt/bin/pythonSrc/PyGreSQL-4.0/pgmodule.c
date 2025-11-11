@@ -1251,9 +1251,9 @@ static PyTypeObject PgSourceType = {
 	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pgsource_dealloc,
-	#if IS_PY3
+#if PY_MAJOR_VERSION >= 3
 	.tp_print = (printfunc) pgsource_print,
-	#endif
+#endif
 	.tp_getattro = (getattrofunc) pgsource_getattr,
 	.tp_setattr = (setattrfunc) pgsource_setattr,
 	.tp_methods = pgsource_methods
@@ -1720,9 +1720,9 @@ static PyTypeObject PglargeType = {
 	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pglarge_dealloc,
-	#if IS_PY3 == 0
+#if PY_MAJOR_VERSION > 3
 	.tp_print = (printfunc) pglarge_print,
-	#endif
+#endif
 	.tp_getattro = (getattrofunc) pglarge_getattr,
 	.tp_methods = pglarge_methods
 };
@@ -2161,11 +2161,11 @@ pgquery_getresult(pgqueryobject * self, PyObject * args)
 						if (decimal)
 						{
 							tmp_obj = Py_BuildValue("(s)", s);
-							#if IS_PY3 == 0
-								val = PyEval_CallObject(decimal, tmp_obj);
-							#else
+#if PY_MAJOR_VERSION >= 3
 								val = PyObject_Call(decimal, tmp_obj, NULL);
-							#endif
+#else
+								val = PyEval_CallObject(decimal, tmp_obj);
+#endif
 						}
 						else
 						{
@@ -3308,11 +3308,11 @@ static PyTypeObject PgQueryType = {
 	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pgquery_dealloc,
-	#if IS_PY3
+#if PY_MAJOR_VERSION >= 3
 	.tp_print = (printfunc) pgquery_print,	/* tp_print */
-	#else
+#else
 	.tp_str = (reprfunc) queryStr,
-	#endif
+#endif
 	.tp_getattro = (getattrofunc) pgquery_getattr,
 	.tp_repr = (reprfunc) pgquery_repr,
 	.tp_methods = pgquery_methods
@@ -3818,7 +3818,7 @@ MODULE_INIT_FUNC(_pg)
 			   *dict,
 			   *v;
 	mod = PyModule_Create(&moduleDef);
-#if IS_PY3
+#if PY_MAJOR_VERSION >= 3
 	PglargeType.tp_base = PgType.tp_base = PgQueryType.tp_base =
 		PgSourceType.tp_base = &PyBaseObject_Type;
 #else

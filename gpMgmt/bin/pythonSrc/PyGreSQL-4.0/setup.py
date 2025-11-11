@@ -41,7 +41,7 @@ version = "4.0"
 import sys
 import os
 
-if not (2, 2) < sys.version_info[:2] < (3, 0):
+if not (2, 7) < sys.version_info[:2]:
     raise Exception("PyGreSQL %s requires a Python 2 version"
         " newer than 2.2." % version)
 

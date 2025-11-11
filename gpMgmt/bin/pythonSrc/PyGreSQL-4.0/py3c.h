@@ -52,7 +52,7 @@
     PyMODINIT_FUNC PyInit_ ## name(void); \
     PyMODINIT_FUNC PyInit_ ## name(void)
 
-#else
+#else /* if PY_MAJOR_VERSION >= 3 */
 
 /***** Python 2 *****/
 
@@ -131,6 +131,6 @@ typedef struct PyModuleDef {
     static PyObject *PyInit_ ## name(void)
 
 
-#endif
+#endif /* if PY_MAJOR_VERSION >= 3 */
 
-#endif
+#endif /* _PY3C_COMPAT_H_ */
