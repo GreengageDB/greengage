@@ -5582,8 +5582,10 @@ create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 
 	/*
 	 * Greengage specific behavior:
-	 * If the limit path's locus is general or segmentgeneral
-	 * we have to make it singleQE.
+	 * The limit path's locus must be set to singleQE to ensure deterministic
+	 * ordering of tuples. When distributed across multiple segments, there
+	 * is no guarantee of the global ordering of tuples passed to the limit
+	 * operator, which could yield non-deterministic results.
 	 */
 	return turn_volatile_seggen_to_singleqe(root, (Path *) pathnode, NULL);
 }

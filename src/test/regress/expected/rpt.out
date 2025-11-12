@@ -1027,6 +1027,17 @@ ERROR:  could not devise a plan (cdbpath.c:2578)
 explain (costs off) update t_replicate_volatile set a = random();
 ERROR:  could not devise a plan. (cdbpath.c:2441)
 -- limit
+explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Insert on t_replicate_volatile
+   ->  Broadcast Motion 1:3  (slice1; segments: 1)
+         ->  Result
+               ->  Limit
+                     ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
+ Optimizer: Postgres-based planner
+(6 rows)
+
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
@@ -1038,6 +1049,20 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
  Optimizer: Postgres query optimizer
 (6 rows)
 
+explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit random()) x;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         ->  Broadcast Motion 1:3  (slice2; segments: 1)
+               ->  Result
+                     ->  Limit
+                           ->  Seq Scan on t_replicate_volatile
+         ->  Materialize
+               ->  Seq Scan on t_hashdist
+ Optimizer: Postgres query optimizer
+(9 rows)
+
 explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit 1) x;
                            QUERY PLAN                           
 ----------------------------------------------------------------
@@ -1048,7 +1073,7 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
                      ->  Limit
                            ->  Seq Scan on t_replicate_volatile
          ->  Seq Scan on t_hashdist
- Optimizer: Postgres query optimizer
+ Optimizer: Postgres-based planner
 (8 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from generate_series(1, 10) limit 1) x;
