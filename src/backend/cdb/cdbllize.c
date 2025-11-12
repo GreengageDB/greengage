@@ -457,12 +457,10 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 				if (!IsA(rtfunc->funcexpr, FuncExpr))
 					continue;
 
-				FuncExpr	*funcexpr = (FuncExpr *)rtfunc->funcexpr;
-
-				if (!ContainsParamWalker((Node *) funcexpr, NULL /* ctx */ ))
+				if (!ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
 					continue;
 
-				if (!contain_mutable_functions((Node *) funcexpr))
+				if (!contain_mutable_functions(rtfunc->funcexpr))
 					continue;
 
 				ereport(ERROR,
