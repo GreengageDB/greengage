@@ -3839,65 +3839,105 @@ select (select status from gp_segment_configuration limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
    Output: ((SubPlan 1))
    ->  Seq Scan on subselect_gp.t
          Output: (SubPlan 1)
-         SubPlan 1  (slice2; segments: 3)
+         SubPlan 1  (slice1; segments: 1)
            ->  Limit
                  Output: f.f
-                 ->  Result
+                 ->  Function Scan on subselect_gp.f
                        Output: f.f
-                       ->  Materialize
-                             Output: f.f
-                             ->  Broadcast Motion 1:3  (slice1)
-                                   Output: f.f
-                                   ->  Function Scan on subselect_gp.f
-                                         Output: f.f
-                                         Function Call: f(1)
+                       Function Call: f(1)
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
-(18 rows)
+(12 rows)
 
 explain (verbose, costs off)
 select (select f from f(t)) from t;
-ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+                  QUERY PLAN                   
+-----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 1)
+         SubPlan 1  (slice1; segments: 1)
+           ->  Function Scan on subselect_gp.f
+                 Output: f.f
+                 Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(10 rows)
+
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from t;
-ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 1)
+         SubPlan 1  (slice1; segments: 1)
+           ->  Limit
+                 Output: f.f
+                 ->  Function Scan on subselect_gp.f
+                       Output: f.f
+                       Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(12 rows)
+
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
-                        QUERY PLAN                         
------------------------------------------------------------
+                  QUERY PLAN                   
+-----------------------------------------------
  Function Scan on pg_catalog.generate_series t
    Output: (SubPlan 1)
    Function Call: generate_series(0, 9)
    SubPlan 1
      ->  Limit
            Output: f.f
-           ->  Result
+           ->  Function Scan on subselect_gp.f
                  Output: f.f
-                 ->  Materialize
-                       Output: f.f
-                       ->  Function Scan on subselect_gp.f
-                             Output: f.f
-                             Function Call: f(1)
+                 Function Call: f(1)
  Optimizer: Postgres query optimizer
  Settings: optimizer=off
-(15 rows)
+(11 rows)
 
 explain (verbose, costs off)
 select (select f from f(t)) from generate_series(0, 9) t(t);
-ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+                  QUERY PLAN                   
+-----------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1
+     ->  Function Scan on subselect_gp.f
+           Output: f.f
+           Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(9 rows)
+
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
-ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+                  QUERY PLAN                   
+-----------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1
+     ->  Limit
+           Output: f.f
+           ->  Function Scan on subselect_gp.f
+                 Output: f.f
+                 Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(11 rows)
+
 alter function f(f int) execute on all segments;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
@@ -3928,11 +3968,11 @@ select (select f from f(1) limit 1 offset t) from t;
 explain (verbose, costs off)
 select (select f from f(t)) from t;
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from t;
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
                                 QUERY PLAN                                
@@ -3961,11 +4001,11 @@ select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
 explain (verbose, costs off)
 select (select f from f(t)) from generate_series(0, 9) t(t);
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 alter function f(f int) execute on master;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
@@ -3994,11 +4034,11 @@ select (select f from f(1) limit 1 offset t) from t;
 explain (verbose, costs off)
 select (select f from f(t)) from t;
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from t;
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
                         QUERY PLAN                         
@@ -4023,11 +4063,11 @@ select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
 explain (verbose, costs off)
 select (select f from f(t)) from generate_series(0, 9) t(t);
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
 ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+DETAIL:  Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.
 alter function f(f int) execute on initplan;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
