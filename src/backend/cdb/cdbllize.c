@@ -454,6 +454,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 
 			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
+			Assert(rtfunc->funcexpr);
 			if (!IsA(rtfunc->funcexpr, FuncExpr))
 				continue;
 
