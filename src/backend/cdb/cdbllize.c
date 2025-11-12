@@ -37,7 +37,6 @@
 #include "optimizer/tlist.h"
 
 #include "catalog/pg_proc.h"
-#include "utils/lsyscache.h"
 
 /*
  * A PlanProfile holds state for recursive prescan_walker().
@@ -460,10 +459,10 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 
 				FuncExpr	*funcexpr = (FuncExpr *)rtfunc->funcexpr;
 
-				if (!ContainsParamWalker(funcexpr, NULL /* ctx */ ))
+				if (!ContainsParamWalker((Node *) funcexpr, NULL /* ctx */ ))
 					continue;
 
-				if (!contain_mutable_functions(funcexpr))
+				if (!contain_mutable_functions((Node *) funcexpr))
 					continue;
 
 				ereport(ERROR,
