@@ -102,3 +102,8 @@ WITH cte AS (
     RETURNING i
 ) SELECT * FROM cte;
 DROP TABLE with_dml;
+
+-- Test that EXPLAIN ANALYZE of shared CTE inside InitPlans doesn't segfault
+EXPLAIN (ANALYZE, TIMING OFF, COSTS OFF) 
+WITH mat_cte AS MATERIALIZED (SELECT oid FROM pg_class LIMIT 10)
+SELECT (SELECT count(*) FROM mat_cte), (SELECT count(*) FROM mat_cte);

@@ -43,7 +43,7 @@ params=(
 )
 for param in "\${params[@]}"; do
   read -r path type name <<< "\$param"
-  find \$path -name \$name -type \$type -exec tar -rf "/logs/\$name.tar" "{}" \;
+  find \$path -name \$name -type \$type -exec bash -c "tar -rf '/logs/\$name.tar' '{}' ; [ '\$name' == 'regression.diffs' ] && cat '{}' || true" \;
 done
 chmod -R a+rwX /logs
 
