@@ -460,13 +460,10 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 				if (!ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
 					continue;
 
-				if (!contain_mutable_functions(rtfunc->funcexpr))
-					continue;
-
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 						 errmsg("cannot parallelize that query yet"),
-						 errdetail("Only IMMUTABLE or EXECUTE ON ANY function can contain correlated parameters.")));
+						 errdetail("Only EXECUTE ON ANY function can contain correlated parameters.")));
 			}
 
 			Assert(fscan->scan.plan.flow);
