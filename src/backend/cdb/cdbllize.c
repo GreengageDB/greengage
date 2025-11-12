@@ -36,6 +36,9 @@
 #include "cdb/cdbmutate.h"
 #include "optimizer/tlist.h"
 
+#include "catalog/pg_proc.h"
+#include "utils/lsyscache.h"
+
 /*
  * A PlanProfile holds state for recursive prescan_walker().
  */
@@ -440,10 +443,11 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		foreach(lc, fscan->functions)
 		{
 			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+			FuncExpr	*funcexpr = (FuncExpr *)rtfunc->funcexpr;
 
-			if ((ctx->subPlanDistributed || ctx->movement == MOVEMENT_BROADCAST) &&
-				ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ) &&
-				contain_mutable_functions(rtfunc->funcexpr))
+			if (ContainsParamWalker(funcexpr, NULL /* ctx */ ) &&
+				contain_mutable_functions(funcexpr) &&
+				func_exec_location(funcexpr->funcid) != PROEXECLOCATION_ANY)
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),

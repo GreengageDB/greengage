@@ -1496,7 +1496,7 @@ drop function if exists f(a int);
 --end_ignore
 
 create table t(t int) distributed by (t);
-insert into t select i from generate_series(0, 10) i;
+insert into t select i from generate_series(0, 9) i;
 
 create function f(f int) returns setof int language sql as $$ select f $$;
 
@@ -1505,33 +1505,67 @@ select (select status from gp_segment_configuration limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
-
 explain (verbose, costs off)
 select (select f from f(t)) from t;
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+
 
 alter function f(f int) execute on all segments;
 
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
-
 explain (verbose, costs off)
 select (select f from f(t)) from t;
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+
 
 alter function f(f int) execute on master;
 
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
-
 explain (verbose, costs off)
 select (select f from f(t)) from t;
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
 
 alter function f(f int) execute on initplan;
 
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
-
 explain (verbose, costs off)
 select (select f from f(t)) from t;
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
 
 drop table t;
 drop function f(f int);

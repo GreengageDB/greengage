@@ -3812,7 +3812,7 @@ drop table t1;
 -- scans are planned and executed correctly. The result should be broadcasted
 -- and materialized.
 create table t(t int) distributed by (t);
-insert into t select i from generate_series(0, 10) i;
+insert into t select i from generate_series(0, 9) i;
 create function f(f int) returns setof int language sql as $$ select f $$;
 explain (verbose, costs off)
 select (select status from gp_segment_configuration limit 1 offset t) from t;
@@ -3863,8 +3863,111 @@ select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(t)) from t;
-ERROR:  cannot parallelize that query yet
-DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Result
+                 Output: f.f
+                 ->  Materialize
+                       Output: f.f
+                       ->  Broadcast Motion 1:3  (slice1)
+                             Output: f.f
+                             ->  Function Scan on subselect_gp.f
+                                   Output: f.f
+                                   Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(16 rows)
+
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: ((SubPlan 1))
+   ->  Seq Scan on subselect_gp.t
+         Output: (SubPlan 1)
+         SubPlan 1  (slice2; segments: 3)
+           ->  Limit
+                 Output: f.f
+                 ->  Result
+                       Output: f.f
+                       ->  Materialize
+                             Output: f.f
+                             ->  Broadcast Motion 1:3  (slice1)
+                                   Output: f.f
+                                   ->  Function Scan on subselect_gp.f
+                                         Output: f.f
+                                         Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(18 rows)
+
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1
+     ->  Limit
+           Output: f.f
+           ->  Result
+                 Output: f.f
+                 ->  Materialize
+                       Output: f.f
+                       ->  Function Scan on subselect_gp.f
+                             Output: f.f
+                             Function Call: f(1)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(15 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+                     QUERY PLAN                      
+-----------------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1
+     ->  Result
+           Output: f.f
+           ->  Materialize
+                 Output: f.f
+                 ->  Function Scan on subselect_gp.f
+                       Output: f.f
+                       Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(13 rows)
+
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1
+     ->  Limit
+           Output: f.f
+           ->  Result
+                 Output: f.f
+                 ->  Materialize
+                       Output: f.f
+                       ->  Function Scan on subselect_gp.f
+                             Output: f.f
+                             Function Call: f(t.t)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(15 rows)
+
 alter function f(f int) execute on all segments;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
@@ -3896,6 +3999,43 @@ explain (verbose, costs off)
 select (select f from f(t)) from t;
 ERROR:  cannot parallelize that query yet
 DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1  (slice0)
+     ->  Limit
+           Output: f.f
+           ->  Limit
+                 Output: f.f
+                 ->  Result
+                       Output: f.f
+                       ->  Materialize
+                             Output: f.f
+                             ->  Gather Motion 3:1  (slice1; segments: 3)
+                                   Output: f.f
+                                   ->  Function Scan on subselect_gp.f
+                                         Output: f.f
+                                         Function Call: f(1)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(19 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
 alter function f(f int) execute on master;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
@@ -3923,6 +4063,39 @@ select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(t)) from t;
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 1)
+   Function Call: generate_series(0, 9)
+   SubPlan 1
+     ->  Limit
+           Output: f.f
+           ->  Result
+                 Output: f.f
+                 ->  Materialize
+                       Output: f.f
+                       ->  Function Scan on subselect_gp.f
+                             Output: f.f
+                             Function Call: f(1)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(15 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+ERROR:  cannot parallelize that query yet
+DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
 ERROR:  cannot parallelize that query yet
 DETAIL:  Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.
 alter function f(f int) execute on initplan;
@@ -3956,6 +4129,40 @@ select (select f from f(1) limit 1 offset t) from t;
 
 explain (verbose, costs off)
 select (select f from f(t)) from t;
+ERROR:  plan should not reference subplan's variable
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from t;
+ERROR:  plan should not reference subplan's variable
+explain (verbose, costs off)
+select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Function Scan on pg_catalog.generate_series t
+   Output: (SubPlan 2)
+   Function Call: generate_series(0, 9)
+   SubPlan 2
+     ->  Limit
+           Output: f_1.f
+           InitPlan 1 (returns $1)
+             ->  Function Scan on subselect_gp.f
+                   Output: f.f
+                   Function Call: f(1)
+           ->  Result
+                 Output: f_1.f
+                 ->  Materialize
+                       Output: f_1.f
+                       ->  Function Scan on subselect_gp.f f_1
+                             Output: f_1.f
+                             Function Call: f(1)
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=off
+(19 rows)
+
+explain (verbose, costs off)
+select (select f from f(t)) from generate_series(0, 9) t(t);
+ERROR:  plan should not reference subplan's variable
+explain (verbose, costs off)
+select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
 ERROR:  plan should not reference subplan's variable
 drop table t;
 drop function f(f int);
