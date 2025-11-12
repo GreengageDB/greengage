@@ -440,20 +440,36 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		FunctionScan *fscan = (FunctionScan *) node;
 		ListCell   *lc;
 
+#ifdef USE_ASSERT_CHECKING
+		RangeTblEntry *rte = rt_fetch(((Scan *) node)->scanrelid, ctx->rtable);
+#endif
+		Assert(rte->rtekind == RTE_FUNCTION);
+		Assert(rte->functions == NIL);
+
 		foreach(lc, fscan->functions)
 		{
+			Assert(ctx->currentPlanFlow->locustype);
+			if (ctx->currentPlanFlow->locustype == CdbLocusType_Entry)
+				continue;
+
 			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
+
+			if (!IsA(rtfunc->funcexpr, FuncExpr))
+				continue;
+
 			FuncExpr	*funcexpr = (FuncExpr *)rtfunc->funcexpr;
 
-			if (ContainsParamWalker(funcexpr, NULL /* ctx */ ) &&
-				contain_mutable_functions(funcexpr) &&
-				func_exec_location(funcexpr->funcid) != PROEXECLOCATION_ANY)
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("cannot parallelize that query yet"),
-						 errdetail("Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.")));
-			}
+			if (!ContainsParamWalker(funcexpr, NULL /* ctx */ ))
+				continue;
+
+			if (!contain_mutable_functions(funcexpr) &&
+				func_exec_location(funcexpr->funcid) == PROEXECLOCATION_ANY)
+				continue;
+
+			ereport(ERROR,
+					(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+					 errmsg("cannot parallelize that query yet"),
+					 errdetail("Only IMMUTABLE EXECUTE ON ANY function can contain correlated parameters.")));
 		}
 	}
 
