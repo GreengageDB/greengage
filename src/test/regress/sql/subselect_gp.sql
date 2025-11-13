@@ -1487,9 +1487,7 @@ drop table t_repl;
 drop table t2;
 drop table t1;
 
--- Test correlated SubPlans containing coordinator-only tables or function
--- scans are planned and executed correctly. The result should be broadcasted
--- and materialized.
+-- Test subplan with correlated functions or master-only tables
 --start_ignore
 drop table if exists t;
 drop function if exists f(a int);
@@ -1498,10 +1496,28 @@ drop function if exists f(a int);
 create table t(t int) distributed by (t);
 insert into t select i from generate_series(0, 9) i;
 
-create function f(f int) returns setof int language sql as $$ select f $$;
-
 explain (verbose, costs off)
 select (select status from gp_segment_configuration limit 1 offset t) from t;
+explain (verbose, costs off)
+select (select status from gp_segment_configuration where dbid = t) from t;
+explain (verbose, costs off)
+select (select status from gp_segment_configuration where dbid = t limit 1 offset t) from t;
+
+explain (verbose, costs off)
+select (select status from gp_segment_configuration limit 1 offset t) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select status from gp_segment_configuration where dbid = t) from generate_series(0, 9) t(t);
+explain (verbose, costs off)
+select (select status from gp_segment_configuration where dbid = t limit 1 offset t) from generate_series(0, 9) t(t);
+
+explain (verbose, costs off)
+select (select t from generate_series(0, 9) t(t) limit 1 offset dbid) from gp_segment_configuration;
+explain (verbose, costs off)
+select (select t from generate_series(0, 9) t(t) where dbid = t) from gp_segment_configuration;
+explain (verbose, costs off)
+select (select t from generate_series(0, 9) t(t) where dbid = t limit 1 offset dbid) from gp_segment_configuration;
+
+create function f(f int) returns setof int language sql as $$ select f $$;
 
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
@@ -1550,6 +1566,7 @@ explain (verbose, costs off)
 select (select f from f(t)) from generate_series(0, 9) t(t);
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+
 
 alter function f(f int) execute on initplan;
 

@@ -36,8 +36,6 @@
 #include "cdb/cdbmutate.h"
 #include "optimizer/tlist.h"
 
-#include "catalog/pg_proc.h"
-
 /*
  * A PlanProfile holds state for recursive prescan_walker().
  */
@@ -431,31 +429,8 @@ ParallelizeCorrelatedSubPlanUpdateFlowMutator(Node *node)
 static Node *
 ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerContext *ctx)
 {
-	bool		materializeFunctionScan = false;
-	
 	if (node == NULL)
 		return NULL;
-
-	if (IsA(node, FunctionScan))
-	{
-		FunctionScan *fscan = (FunctionScan *) node;
-#ifdef USE_ASSERT_CHECKING
-		RangeTblEntry *rte = rt_fetch(fscan->scan.scanrelid, ctx->rtable);
-#endif
-		Assert(rte->rtekind == RTE_FUNCTION);
-		Assert(rte->functions == NIL);
-
-		if (check_execute_on_functions((Node *) fscan->functions) != PROEXECLOCATION_ANY)
-		{
-			if (ContainsParamWalker((Node *) fscan->functions, NULL /* ctx */ ))
-				ereport(ERROR,
-						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("cannot parallelize that query yet"),
-						 errdetail("Only EXECUTE ON ANY function can contain correlated parameters.")));
-
-			materializeFunctionScan = true;
-		}
-	}
 
 	/*
 	 * If the ModifyTable node appears inside the correlated Subplan, it has
@@ -467,7 +442,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (IsA(node, SeqScan)
 		||IsA(node, ShareInputScan)
 		||IsA(node, ExternalScan)
-		||materializeFunctionScan
+		||IsA(node, FunctionScan)
 		||(IsA(node, SubqueryScan) && IsA(((SubqueryScan *) node)->subplan, ModifyTable))
 		||IsA(node,ModifyTable))
 	{
@@ -485,7 +460,27 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		Assert(scanPlan->flow && ctx->currentPlanFlow);
 		if (scanPlan->flow->locustype == CdbLocusType_Entry &&
 			ctx->currentPlanFlow->locustype == CdbLocusType_Entry)
-			return (Node *) node;
+			return node;
+
+		if (scanPlan->flow->locustype == CdbLocusType_General ||
+			ctx->currentPlanFlow->locustype == CdbLocusType_General)
+			return node;
+
+		if (IsA(node, FunctionScan))
+		{
+			FunctionScan *fscan = (FunctionScan *) node;
+#ifdef USE_ASSERT_CHECKING
+			RangeTblEntry *rte = rt_fetch(fscan->scan.scanrelid, ctx->rtable);
+#endif
+
+			Assert(rte->rtekind == RTE_FUNCTION);
+			Assert(rte->functions == NIL);
+
+			if (ContainsParamWalker((Node *) fscan->functions, NULL /* ctx */ ))
+				ereport(ERROR,
+						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+						 errmsg("cannot materialize function with correlated parameters")));
+		}
 
 		/**
 		 * Steps:
