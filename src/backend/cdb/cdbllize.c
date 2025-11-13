@@ -447,24 +447,11 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 
 		if (check_execute_on_functions((Node *) fscan->functions) != PROEXECLOCATION_ANY)
 		{
-			ListCell   *lc;
-
-			foreach(lc, fscan->functions)
-			{
-				RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
-
-				Assert(rtfunc->funcexpr);
-				if (!IsA(rtfunc->funcexpr, FuncExpr))
-					continue;
-
-				if (!ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ))
-					continue;
-
+			if (ContainsParamWalker((Node *) fscan->functions, NULL /* ctx */ ))
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 						 errmsg("cannot parallelize that query yet"),
 						 errdetail("Only EXECUTE ON ANY function can contain correlated parameters.")));
-			}
 
 			Assert(fscan->scan.plan.flow);
 			if (fscan->scan.plan.flow->locustype != CdbLocusType_General)
