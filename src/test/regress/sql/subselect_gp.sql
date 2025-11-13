@@ -1489,100 +1489,508 @@ drop table t1;
 
 -- Test subplan with correlated functions or master-only tables
 --start_ignore
-drop table if exists t;
-drop function if exists f(a int);
+drop function if exists i(a int);
+drop function if exists s(a int);
+drop function if exists v(a int);
+drop table if exists d;
+drop table if exists p;
+drop table if exists r;
+drop view if exists c;
+drop view if exists g;
 --end_ignore
+create table d(d int) distributed by (d);
+insert into d select g from generate_series(0, 9) g;
 
-create table t(t int) distributed by (t);
-insert into t select i from generate_series(0, 9) i;
+create table p(p int) distributed replicated;
+insert into p select g from generate_series(0, 9) g;
 
-explain (verbose, costs off)
-select (select status from gp_segment_configuration limit 1 offset t) from t;
-explain (verbose, costs off)
-select (select status from gp_segment_configuration where dbid = t) from t;
-explain (verbose, costs off)
-select (select status from gp_segment_configuration where dbid = t limit 1 offset t) from t;
+create table r(r int) distributed randomly;
+insert into r select g from generate_series(0, 9) g;
 
-explain (verbose, costs off)
-select (select status from gp_segment_configuration limit 1 offset t) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select status from gp_segment_configuration where dbid = t) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select status from gp_segment_configuration where dbid = t limit 1 offset t) from generate_series(0, 9) t(t);
-
-explain (verbose, costs off)
-select (select t from generate_series(0, 9) t(t) limit 1 offset dbid) from gp_segment_configuration;
-explain (verbose, costs off)
-select (select t from generate_series(0, 9) t(t) where dbid = t) from gp_segment_configuration;
-explain (verbose, costs off)
-select (select t from generate_series(0, 9) t(t) where dbid = t limit 1 offset dbid) from gp_segment_configuration;
-
-create function f(f int) returns setof int language sql as $$ select f $$;
-
-explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from t;
-explain (verbose, costs off)
-select (select f from f(t)) from t;
-explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select f from f(t)) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+create view g as select g from generate_series(0, 9) g;
+create view c as select dbid c from gp_segment_configuration c;
 
 
-alter function f(f int) execute on all segments;
+explain (verbose, costs off)
+select (select c from c limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select c from c where c = g) from g;
+explain (verbose, costs off)
+select (select c from c where c = g limit 1 offset g) from g;
 
 explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from t;
+select (select g from g limit 1 offset c) from c;
 explain (verbose, costs off)
-select (select f from f(t)) from t;
+select (select g from g where g = c) from c;
 explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select f from f(t)) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+select (select g from g where g = c limit 1 offset c) from c;
 
 
-alter function f(f int) execute on master;
-
-explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from t;
-explain (verbose, costs off)
-select (select f from f(t)) from t;
-explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from t;
-
-explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select f from f(t)) from generate_series(0, 9) t(t);
-explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+create function i(i int) returns setof int language sql immutable as $$ select i $$;
+create function s(s int) returns setof int language sql stable as $$ select s $$;
+create function v(v int) returns setof int language sql volatile as $$ select v $$;
 
 
-alter function f(f int) execute on initplan;
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select i from i(c)) from c;
+explain (verbose, costs off)
+select (select i from i(c) limit 1 offset c) from c;
 
 explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from t;
+select (select s from s(1) limit 1 offset c) from c;
 explain (verbose, costs off)
-select (select f from f(t)) from t;
+select (select s from s(c)) from c;
 explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from t;
+select (select s from s(c) limit 1 offset c) from c;
 
 explain (verbose, costs off)
-select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
+select (select v from v(1) limit 1 offset c) from c;
 explain (verbose, costs off)
-select (select f from f(t)) from generate_series(0, 9) t(t);
+select (select v from v(c)) from c;
 explain (verbose, costs off)
-select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
+select (select v from v(c) limit 1 offset c) from c;
 
-drop table t;
-drop function f(f int);
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select i from i(d)) from d;
+explain (verbose, costs off)
+select (select i from i(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select s from s(d)) from d;
+explain (verbose, costs off)
+select (select s from s(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select v from v(d)) from d;
+explain (verbose, costs off)
+select (select v from v(d) limit 1 offset d) from d;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select i from i(g)) from g;
+explain (verbose, costs off)
+select (select i from i(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select s from s(g)) from g;
+explain (verbose, costs off)
+select (select s from s(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select v from v(g)) from g;
+explain (verbose, costs off)
+select (select v from v(g) limit 1 offset g) from g;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select i from i(p)) from p;
+explain (verbose, costs off)
+select (select i from i(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select s from s(p)) from p;
+explain (verbose, costs off)
+select (select s from s(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select v from v(p)) from p;
+explain (verbose, costs off)
+select (select v from v(p) limit 1 offset p) from p;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select i from i(r)) from r;
+explain (verbose, costs off)
+select (select i from i(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select s from s(r)) from r;
+explain (verbose, costs off)
+select (select s from s(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select v from v(r)) from r;
+explain (verbose, costs off)
+select (select v from v(r) limit 1 offset r) from r;
+
+
+alter function i(i int) execute on all segments;
+alter function s(s int) execute on all segments;
+alter function v(v int) execute on all segments;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select i from i(c)) from c;
+explain (verbose, costs off)
+select (select i from i(c) limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select s from s(c)) from c;
+explain (verbose, costs off)
+select (select s from s(c) limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select v from v(c)) from c;
+explain (verbose, costs off)
+select (select v from v(c) limit 1 offset c) from c;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select i from i(d)) from d;
+explain (verbose, costs off)
+select (select i from i(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select s from s(d)) from d;
+explain (verbose, costs off)
+select (select s from s(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select v from v(d)) from d;
+explain (verbose, costs off)
+select (select v from v(d) limit 1 offset d) from d;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select i from i(g)) from g;
+explain (verbose, costs off)
+select (select i from i(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select s from s(g)) from g;
+explain (verbose, costs off)
+select (select s from s(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select v from v(g)) from g;
+explain (verbose, costs off)
+select (select v from v(g) limit 1 offset g) from g;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select i from i(p)) from p;
+explain (verbose, costs off)
+select (select i from i(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select s from s(p)) from p;
+explain (verbose, costs off)
+select (select s from s(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select v from v(p)) from p;
+explain (verbose, costs off)
+select (select v from v(p) limit 1 offset p) from p;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select i from i(r)) from r;
+explain (verbose, costs off)
+select (select i from i(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select s from s(r)) from r;
+explain (verbose, costs off)
+select (select s from s(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select v from v(r)) from r;
+explain (verbose, costs off)
+select (select v from v(r) limit 1 offset r) from r;
+
+
+alter function i(i int) execute on master;
+alter function s(s int) execute on master;
+alter function v(v int) execute on master;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select i from i(c)) from c;
+explain (verbose, costs off)
+select (select i from i(c) limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select s from s(c)) from c;
+explain (verbose, costs off)
+select (select s from s(c) limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select v from v(c)) from c;
+explain (verbose, costs off)
+select (select v from v(c) limit 1 offset c) from c;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select i from i(d)) from d;
+explain (verbose, costs off)
+select (select i from i(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select s from s(d)) from d;
+explain (verbose, costs off)
+select (select s from s(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select v from v(d)) from d;
+explain (verbose, costs off)
+select (select v from v(d) limit 1 offset d) from d;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select i from i(g)) from g;
+explain (verbose, costs off)
+select (select i from i(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select s from s(g)) from g;
+explain (verbose, costs off)
+select (select s from s(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select v from v(g)) from g;
+explain (verbose, costs off)
+select (select v from v(g) limit 1 offset g) from g;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select i from i(p)) from p;
+explain (verbose, costs off)
+select (select i from i(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select s from s(p)) from p;
+explain (verbose, costs off)
+select (select s from s(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select v from v(p)) from p;
+explain (verbose, costs off)
+select (select v from v(p) limit 1 offset p) from p;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select i from i(r)) from r;
+explain (verbose, costs off)
+select (select i from i(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select s from s(r)) from r;
+explain (verbose, costs off)
+select (select s from s(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select v from v(r)) from r;
+explain (verbose, costs off)
+select (select v from v(r) limit 1 offset r) from r;
+
+
+alter function i(i int) execute on initplan;
+alter function s(s int) execute on initplan;
+alter function v(v int) execute on initplan;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select i from i(c)) from c;
+explain (verbose, costs off)
+select (select i from i(c) limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select s from s(c)) from c;
+explain (verbose, costs off)
+select (select s from s(c) limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select v from v(c)) from c;
+explain (verbose, costs off)
+select (select v from v(c) limit 1 offset c) from c;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select i from i(d)) from d;
+explain (verbose, costs off)
+select (select i from i(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select s from s(d)) from d;
+explain (verbose, costs off)
+select (select s from s(d) limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select v from v(d)) from d;
+explain (verbose, costs off)
+select (select v from v(d) limit 1 offset d) from d;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select i from i(g)) from g;
+explain (verbose, costs off)
+select (select i from i(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select s from s(g)) from g;
+explain (verbose, costs off)
+select (select s from s(g) limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select v from v(g)) from g;
+explain (verbose, costs off)
+select (select v from v(g) limit 1 offset g) from g;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select i from i(p)) from p;
+explain (verbose, costs off)
+select (select i from i(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select s from s(p)) from p;
+explain (verbose, costs off)
+select (select s from s(p) limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select v from v(p)) from p;
+explain (verbose, costs off)
+select (select v from v(p) limit 1 offset p) from p;
+
+
+explain (verbose, costs off)
+select (select i from i(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select i from i(r)) from r;
+explain (verbose, costs off)
+select (select i from i(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select s from s(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select s from s(r)) from r;
+explain (verbose, costs off)
+select (select s from s(r) limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select v from v(1) limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select v from v(r)) from r;
+explain (verbose, costs off)
+select (select v from v(r) limit 1 offset r) from r;
+
+
+drop function i(a int);
+drop function s(a int);
+drop function v(a int);
+drop table d;
+drop table p;
+drop table r;
+drop view c;
+drop view g;
