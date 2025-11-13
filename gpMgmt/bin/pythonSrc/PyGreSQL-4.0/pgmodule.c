@@ -2352,11 +2352,11 @@ pgquery_dictresult(pgqueryobject * self, PyObject * args)
 						if (decimal)
 						{
 							tmp_obj = Py_BuildValue("(s)", s);
-							#if IS_PY3 == 0
-								val = PyEval_CallObject(decimal, tmp_obj);
-							#else
-								val = PyObject_Call(decimal, tmp_obj, NULL);
-							#endif
+#if PY_MAJOR_VERSION >= 3
+							val = PyObject_Call(decimal, tmp_obj, NULL);
+#else
+							val = PyEval_CallObject(decimal, tmp_obj);
+#endif
 						}
 						else
 						{
