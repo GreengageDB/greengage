@@ -4306,8 +4306,8 @@ select (select f from f(t) limit 1 offset t) from t;
 ERROR:  cannot materialize function with correlated parameters
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
-                     QUERY PLAN                      
------------------------------------------------------
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
  Function Scan on pg_catalog.generate_series t
    Output: (SubPlan 1)
    Function Call: generate_series(0, 9)
@@ -4316,44 +4316,24 @@ select (select f from f(1) limit 1 offset t) from generate_series(0, 9) t(t);
            Output: f.f
            ->  Limit
                  Output: f.f
-                 ->  Function Scan on subselect_gp.f
+                 ->  Result
                        Output: f.f
-                       Function Call: f(1)
+                       ->  Materialize
+                             Output: f.f
+                             ->  Gather Motion 3:1  (slice1; segments: 3)
+                                   Output: f.f
+                                   ->  Function Scan on subselect_gp.f
+                                         Output: f.f
+                                         Function Call: f(1)
  Optimizer: Postgres query optimizer
-(12 rows)
+(18 rows)
 
 explain (verbose, costs off)
 select (select f from f(t)) from generate_series(0, 9) t(t);
-                  QUERY PLAN                   
------------------------------------------------
- Function Scan on pg_catalog.generate_series t
-   Output: (SubPlan 1)
-   Function Call: generate_series(0, 9)
-   SubPlan 1  (slice0)
-     ->  Function Scan on subselect_gp.f
-           Output: f.f
-           Function Call: f(t.t)
- Optimizer: Postgres query optimizer
-(8 rows)
-
+ERROR:  cannot materialize function with correlated parameters
 explain (verbose, costs off)
 select (select f from f(t) limit 1 offset t) from generate_series(0, 9) t(t);
-                     QUERY PLAN                      
------------------------------------------------------
- Function Scan on pg_catalog.generate_series t
-   Output: (SubPlan 1)
-   Function Call: generate_series(0, 9)
-   SubPlan 1  (slice0)
-     ->  Limit
-           Output: f.f
-           ->  Limit
-                 Output: f.f
-                 ->  Function Scan on subselect_gp.f
-                       Output: f.f
-                       Function Call: f(t.t)
- Optimizer: Postgres query optimizer
-(12 rows)
-
+ERROR:  cannot materialize function with correlated parameters
 alter function f(f int) execute on master;
 explain (verbose, costs off)
 select (select f from f(1) limit 1 offset t) from t;
