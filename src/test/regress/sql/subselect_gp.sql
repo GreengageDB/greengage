@@ -1526,9 +1526,9 @@ explain (verbose, costs off)
 select (select g from g where g = c limit 1 offset c) from c;
 
 
-create function i(i int) returns setof int language sql immutable as $$ select i $$;
-create function s(s int) returns setof int language sql stable as $$ select s $$;
-create function v(v int) returns setof int language sql volatile as $$ select v $$;
+create function i(i int) returns setof int language plpgsql immutable as $$ begin return query select i; end $$;
+create function s(s int) returns setof int language plpgsql stable as $$ begin return query select s; end $$;
+create function v(v int) returns setof int language plpgsql volatile as $$ begin return query select v; end $$;
 
 
 explain (verbose, costs off)
