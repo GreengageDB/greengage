@@ -470,12 +470,6 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 			if (ctx->currentPlanFlow->locustype == CdbLocusType_General)
 				return node;
 		}
-		else if (scanPlan->flow->locustype == CdbLocusType_Strewn)
-		{
-			if (ctx->currentPlanFlow->locustype == CdbLocusType_Strewn &&
-				ctx->currentPlanFlow->numsegments == scanPlan->flow->numsegments)
-				return node;
-		}
 
 		if (IsA(node, FunctionScan))
 		{
