@@ -453,9 +453,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 						 errmsg("cannot parallelize that query yet"),
 						 errdetail("Only EXECUTE ON ANY function can contain correlated parameters.")));
 
-			Assert(fscan->scan.plan.flow);
-			if (fscan->scan.plan.flow->locustype != CdbLocusType_General)
-				materializeFunctionScan = true;
+			materializeFunctionScan = true;
 		}
 	}
 
