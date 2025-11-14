@@ -52,7 +52,6 @@
 #define PyString_FromString PyUnicode_FromString
 #define PyString_FromStringAndSize PyUnicode_FromStringAndSize
 #define PyString_AsString PyUnicode_AsUTF8
-#define _PyString_Resize _PyBytes_Resize
 
 #define PyStr_AsUTF8String PyUnicode_AsUTF8String // returns PyBytes
 #define PyStr_AsUTF8AndSize PyUnicode_AsUTF8AndSize
@@ -70,11 +69,6 @@
 	PyMODINIT_FUNC PyInit_ ## name(void); \
 	PyMODINIT_FUNC PyInit_ ## name(void)
 
-#define PyEval_CallObject(callable, arg) PyObject_Call(callable, arg, NULL)
-#define PyFloat_FromString(str, _) PyFloat_FromString(str)
-
-#define staticforward static
-
 #else /* if PY_MAJOR_VERSION >= 3 */
 
 /***** Python 2 *****/
@@ -84,6 +78,10 @@
 #define PyStr_AsUTF8String(str) (Py_INCREF(str), (str))
 #define PyStr_AsUTF8AndSize(pystr, sizeptr) \
 	((*sizeptr=PyString_Size(pystr)), PyString_AsString(pystr))
+
+/* Floats */
+
+#define PyFloat_FromString(str) PyFloat_FromString(str, NULL)
 
 /* Module init */
 
@@ -120,9 +118,6 @@ typedef int Py_ssize_t;
 #define PY_SSIZE_T_MAX INT_MAX
 #define PY_SSIZE_T_MIN INT_MIN
 #endif
-
-/* taken from fileobject.c */
-#define BUF(v) PyBytes_AS_STRING((PyStringObject *)(v))
 
 /* default values */
 #define MODULE_NAME			"pgsql"
@@ -200,7 +195,7 @@ static PyObject *pg_default_passwd;	/* default password */
 #ifdef HANDLE_NOTICES
 #define MAX_BUFFERED_NOTICES 100              /* max notices to keep for each connection */
 static void notice_processor(void *arg, const char *message);
-#endif /* HANDLE_NOTICES */ 
+#endif /* HANDLE_NOTICES */
 
 int *get_type_array(PGresult *result, int nfields);
 
@@ -222,7 +217,7 @@ typedef struct
 #endif /* HANDLE_NOTICES */
 }	pgobject;
 
-staticforward PyTypeObject PgType;
+static PyTypeObject PgType;
 
 #define is_pgobject(v) ((v)->ob_type == &PgType)
 
@@ -254,7 +249,7 @@ typedef struct
 	long		num_rows;		/* number of (affected) rows */
 }	pgqueryobject;
 
-staticforward PyTypeObject PgQueryType;
+static PyTypeObject PgQueryType;
 
 #define is_pgqueryobject(v) ((v)->ob_type == &PgQueryType)
 
@@ -273,7 +268,7 @@ typedef struct
 	int			num_fields;		/* number of fields in each row */
 }	pgsourceobject;
 
-staticforward PyTypeObject PgSourceType;
+static PyTypeObject PgSourceType;
 
 #define is_pgsourceobject(v) ((v)->ob_type == &PgSourceType)
 
@@ -289,7 +284,7 @@ typedef struct
 	int			lo_fd;			/* large object fd */
 }	pglargeobject;
 
-staticforward PyTypeObject PglargeType;
+static PyTypeObject PglargeType;
 
 #define is_pglargeobject(v) ((v)->ob_type == &PglargeType)
 #endif /* LARGE_OBJECTS */
@@ -297,13 +292,107 @@ staticforward PyTypeObject PglargeType;
 /* --------------------------------------------------------------------- */
 /* INTERNAL FUNCTIONS */
 
+
+/* prints result (mostly useful for debugging) */
+/* Note: This is a simplified version of the Postgres function PQprint().
+ * PQprint() is not used because handing over a stream from Python to
+ * Postgres can be problematic if they use different libs for streams.
+ * Also, PQprint() is considered obsolete and may be removed sometime.
+ */
+static void
+print_result(FILE *fout, const PGresult *res)
+{
+	int n = PQnfields(res);
+	if (n > 0)
+	{
+		int i, j;
+		int *fieldMax = NULL;
+		char **fields = NULL;
+		const char **fieldNames;
+		int m = PQntuples(res);
+		if (!(fieldNames = (const char **) calloc(n, sizeof(char *))))
+		{
+			fprintf(stderr, "out of memory\n"); exit(1);
+		}
+		if (!(fieldMax = (int *) calloc(n, sizeof(int))))
+		{
+			fprintf(stderr, "out of memory\n"); exit(1);
+		}
+		for (j = 0; j < n; j++)
+		{
+			const char *s = PQfname(res, j);
+			fieldNames[j] = s;
+			fieldMax[j] = s ? strlen(s) : 0;
+		}
+		if (!(fields = (char **) calloc(n * (m + 1), sizeof(char *))))
+		{
+			fprintf(stderr, "out of memory\n"); exit(1);
+		}
+		for (i = 0; i < m; i++)
+		{
+			for (j = 0; j < n; j++)
+			{
+				const char *val;
+				int len;
+				len = PQgetlength(res, i, j);
+				val = PQgetvalue(res, i, j);
+				if (len >= 1 && val && *val)
+				{
+					if (len > fieldMax[j])
+						fieldMax[j] = len;
+					if (!(fields[i * n + j] = (char *) malloc(len + 1)))
+					{
+						fprintf(stderr, "out of memory\n"); exit(1);
+					}
+					strcpy(fields[i * n + j], val);
+				}
+			}
+		}
+		for (j = 0; j < n; j++)
+		{
+			const char *s = PQfname(res, j);
+			int len = strlen(s);
+			if (len > fieldMax[j])
+				fieldMax[j] = len;
+			fprintf(fout, "%-*s", fieldMax[j], s);
+			if (j + 1 < n)
+				fputc('|', fout);
+		}
+		fputc('\n', fout);
+		for (j = 0; j < n; j++)
+		{
+			for (i = fieldMax[j]; i--; fputc('-', fout));
+			if (j + 1 < n)
+				fputc('+', fout);
+		}
+		fputc('\n', fout);
+		for (i = 0; i < m; i++)
+		{
+			for (j = 0; j < n; j++)
+			{
+				char *s = fields[i * n + j];
+				fprintf(fout, "%-*s", fieldMax[j], s ? s : "");
+				if (j + 1 < n)
+					fputc('|', fout);
+				if (s)
+					free(s);
+			}
+			fputc('\n', fout);
+		}
+		free(fields);
+		fprintf(fout, "(%d row%s)\n\n", m, m == 1 ? "" : "s");
+		free(fieldMax);
+		free((void *) fieldNames);
+	}
+}
+
 /* format result (mostly useful for debugging) */
 /* Note: This is similar to the Postgres function PQprint().
  * PQprint() is not used because handing over a stream from Python to
  * Postgres can be problematic if they use different libs for streams
  * and because using PQprint() and tp_print is not recommended any more.
  */
-static char *
+static PyObject *
 format_result(const PGresult *res)
 {
 	const int n = PQnfields(res);
@@ -419,14 +508,14 @@ format_result(const PGresult *res)
 						if (align)
 						{
 							snprintf(p, size - (p - buffer), align == 'r' ?
-															 "%*s" : "%-*s", k,
-									 PQgetvalue(res, i, j));
+								"%*s" : "%-*s", k,
+								PQgetvalue(res, i, j));
 						}
 						else
 						{
 							snprintf(p, size - (p - buffer), "%-*s", k,
-									 PQgetisnull(res, i, j) ?
-									 "" : "<binary>");
+								PQgetisnull(res, i, j) ?
+								"" : "<binary>");
 						}
 						p += k;
 						if (j + 1 < n)
@@ -439,7 +528,9 @@ format_result(const PGresult *res)
 				/* create the footer */
 				snprintf(p, size - (p - buffer), "(%d row%s)", m, m == 1 ? "" : "s");
 				/* return the result */
-				return buffer;
+				result = PyString_FromString(buffer);
+				PyMem_Free(buffer);
+				return result;
 			}
 			else
 			{
@@ -453,20 +544,6 @@ format_result(const PGresult *res)
 	}
 	else
 		return PyString_FromString("(nothing selected)");
-}
-
-/* prints result (mostly useful for debugging) */
-/* Note: This is a simplified version of the Postgres function PQprint().
- * PQprint() is not used because handing over a stream from Python to
- * Postgres can be problematic if they use different libs for streams.
- * Also, PQprint() is considered obsolete and may be removed sometime.
- */
-static void
-print_result(FILE *fout, const PGresult *res)
-{
-	const char *result = format_result(res);
-	fprintf(fout, "%s", result);
-	PyMem_Free(result);
 }
 
 /* checks connection validity */
@@ -1225,18 +1302,16 @@ pgsource_print(pgsourceobject * self, FILE *fp, int flags)
 static PyObject *
 queryStr(pgqueryobject *self)
 {
-	char *resultStr = format_result(self->last_result);
-	PyObject *result = PyString_FromString(resultStr);
-	PyMem_Free(resultStr);
-	return result;
+	return format_result(self->last_result);
 }
 
 /* query type definition */
-staticforward PyTypeObject PgSourceType = {
+static PyTypeObject PgSourceType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 
 	.tp_name = "pgsourceobject",
 	.tp_basicsize = sizeof(pgsourceobject),
+	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pgsource_dealloc,
 #if PY_MAJOR_VERSION < 3
@@ -1378,7 +1453,7 @@ pglarge_read(pglargeobject * self, PyObject * args)
 	/* allocate buffer and runs read */
 	buffer = PyString_FromStringAndSize((char *) NULL, size);
 
-	if ((size = lo_read(self->pgcnx->cnx, self->lo_fd, BUF(buffer), size)) < 0)
+	if ((size = lo_read(self->pgcnx->cnx, self->lo_fd, PyBytes_AS_STRING(buffer), size)) < 0)
 	{
 		PyErr_SetString(PyExc_IOError, "error while reading.");
 		Py_XDECREF(buffer);
@@ -1386,7 +1461,7 @@ pglarge_read(pglargeobject * self, PyObject * args)
 	}
 
 	/* resize buffer and returns it */
-	_PyString_Resize(&buffer, size);
+	_PyBytes_Resize(&buffer, size);
 	return buffer;
 }
 
@@ -1700,11 +1775,12 @@ pglarge_print(pglargeobject * self, FILE *fp, int flags)
 }
 
 /* object type definition */
-staticforward PyTypeObject PglargeType = {
+static PyTypeObject PglargeType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 
 	.tp_name = "pglarge",
 	.tp_basicsize = sizeof(pglargeobject),
+	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pglarge_dealloc,
 #if PY_MAJOR_VERSION < 3
@@ -2127,7 +2203,7 @@ pgquery_getresult(pgqueryobject * self, PyObject * args)
 
 					case 3:
 						tmp_obj = PyString_FromString(s);
-						val = PyFloat_FromString(tmp_obj, NULL);
+						val = PyFloat_FromString(tmp_obj);
 						Py_DECREF(tmp_obj);
 						break;
 
@@ -2157,7 +2233,7 @@ pgquery_getresult(pgqueryobject * self, PyObject * args)
 						else
 						{
 							tmp_obj = PyString_FromString(s);
-							val = PyFloat_FromString(tmp_obj, NULL);
+							val = PyFloat_FromString(tmp_obj);
 						}
 						Py_DECREF(tmp_obj);
 						break;
@@ -2255,7 +2331,7 @@ pgquery_dictresult(pgqueryobject * self, PyObject * args)
 
 					case 3:
 						tmp_obj = PyString_FromString(s);
-						val = PyFloat_FromString(tmp_obj, NULL);
+						val = PyFloat_FromString(tmp_obj);
 						Py_DECREF(tmp_obj);
 						break;
 
@@ -2285,7 +2361,7 @@ pgquery_dictresult(pgqueryobject * self, PyObject * args)
 						else
 						{
 							tmp_obj = PyString_FromString(s);
-							val = PyFloat_FromString(tmp_obj, NULL);
+							val = PyFloat_FromString(tmp_obj);
 						}
 						Py_DECREF(tmp_obj);
 						break;
@@ -3060,12 +3136,12 @@ pg_loimport(pgobject * self, PyObject * args)
 #endif /* LARGE_OBJECTS */
 
 #ifdef HANDLE_NOTICES
- 
+
 /* fetch accumulated backend notices */
 static char pg_notices__doc__[] =
   "notices() -- returns and clears the list of currently accumulated backend notices for the connection.";
- 
-static void 
+
+static void
 notice_processor(void *arg, const char *message)
 {
 	/* require a GIL to avoid multi threads access this code */
@@ -3089,6 +3165,7 @@ notice_processor(void *arg, const char *message)
 		PySequence_DelItem(self->notices, 0);
 	PyGILState_Release(gstate);
 }
+
 static PyObject *
 pg_notices(pgobject *self, PyObject *args)
 {
@@ -3103,9 +3180,14 @@ pg_notices(pgobject *self, PyObject *args)
 	else
 		retval = PyList_New(0);
 
-	Py_CLEAR(self->notices);
+	if (self->notices)
+	{
+		Py_DECREF(self->notices);
+		self->notices = NULL;
+	}
 	return retval;
 }
+
 #endif /* HANDLE_NOTICES */
 
 /* connection object methods */
@@ -3242,7 +3324,7 @@ pg_getattr(pgobject * self, PyObject *nameobj)
 }
 
 /* object type definition */
-staticforward PyTypeObject PgType = {
+static PyTypeObject PgType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 
 	.tp_name = "pgobject",
@@ -3281,7 +3363,7 @@ pgquery_getattr(pgqueryobject * self, PyObject *nameobj)
 }
 
 /* query type definition */
-staticforward PyTypeObject PgQueryType = {
+static PyTypeObject PgQueryType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 
 	.tp_name = "pgqueryobject",
