@@ -33,7 +33,6 @@
 #include "libpq-fe.h"
 #include "libpq/libpq-fs.h"
 #include "catalog/pg_type.h"
-#include "py3c.h"
 
 /* these will be defined in Python.h again: */
 #undef _POSIX_C_SOURCE
@@ -42,6 +41,72 @@
 #undef vsnprintf
 
 #include <Python.h>
+
+#if PY_MAJOR_VERSION >= 3
+
+/***** Python 3 *****/
+
+/* Strings */
+
+#define PyStr_Check PyUnicode_Check
+#define PyStr_FromString PyUnicode_FromString
+#define PyStr_FromStringAndSize PyUnicode_FromStringAndSize
+#define PyStr_AsString PyUnicode_AsUTF8
+
+/* Ints */
+
+#define PyInt_Check PyLong_Check
+#define PyInt_FromString PyLong_FromString
+#define PyInt_FromLong PyLong_FromLong
+#define PyInt_AsLong PyLong_AsLong
+
+/* Module init */
+
+#define MODULE_INIT_FUNC(name) \
+	PyMODINIT_FUNC PyInit_ ## name(void); \
+	PyMODINIT_FUNC PyInit_ ## name(void)
+
+#else /* if PY_MAJOR_VERSION >= 3 */
+
+/***** Python 2 *****/
+
+/* Strings */
+
+#define PyStr_Check PyString_Check
+#define PyStr_FromString PyString_FromString
+#define PyStr_FromStringAndSize PyString_FromStringAndSize
+#define PyStr_AsString PyString_AsString
+
+#define PyBytes_AS_STRING PyString_AS_STRING
+#define _PyBytes_Resize _PyString_Resize
+
+/* Floats */
+
+#define PyFloat_FromString(str) PyFloat_FromString(str, NULL)
+
+/* Module init */
+
+#define PyModuleDef_HEAD_INIT 0
+
+typedef struct PyModuleDef {
+	int m_base;
+	const char* m_name;
+	const char* m_doc;
+	Py_ssize_t m_size;
+	PyMethodDef *m_methods;
+} PyModuleDef;
+
+#define PyModule_Create(def) \
+	Py_InitModule3((def)->m_name, (def)->m_methods, (def)->m_doc)
+
+#define MODULE_INIT_FUNC(name) \
+	static PyObject *PyInit_ ## name(void); \
+	void init ## name(void); \
+	void init ## name(void) { PyInit_ ## name(); } \
+	static PyObject *PyInit_ ## name(void)
+
+
+#endif /* if PY_MAJOR_VERSION >= 3 */
 
 static PyObject *Error, *Warning, *InterfaceError,
 	*DatabaseError, *InternalError, *OperationalError, *ProgrammingError,
@@ -228,111 +293,16 @@ static PyTypeObject PglargeType;
 /* --------------------------------------------------------------------- */
 /* INTERNAL FUNCTIONS */
 
-
-/* prints result (mostly useful for debugging) */
-/* Note: This is a simplified version of the Postgres function PQprint().
- * PQprint() is not used because handing over a stream from Python to
- * Postgres can be problematic if they use different libs for streams.
- * Also, PQprint() is considered obsolete and may be removed sometime.
- */
-static void
-print_result(FILE *fout, const PGresult *res)
-{
-	int n = PQnfields(res);
-	if (n > 0)
-	{
-		int i, j;
-		int *fieldMax = NULL;
-		char **fields = NULL;
-		const char **fieldNames;
-		int m = PQntuples(res);
-		if (!(fieldNames = (const char **) calloc(n, sizeof(char *))))
-		{
-			fprintf(stderr, "out of memory\n"); exit(1);
-		}
-		if (!(fieldMax = (int *) calloc(n, sizeof(int))))
-		{
-			fprintf(stderr, "out of memory\n"); exit(1);
-		}
-		for (j = 0; j < n; j++)
-		{
-			const char *s = PQfname(res, j);
-			fieldNames[j] = s;
-			fieldMax[j] = s ? strlen(s) : 0;
-		}
-		if (!(fields = (char **) calloc(n * (m + 1), sizeof(char *))))
-		{
-			fprintf(stderr, "out of memory\n"); exit(1);
-		}
-		for (i = 0; i < m; i++)
-		{
-			for (j = 0; j < n; j++)
-			{
-				const char *val;
-				int len;
-				len = PQgetlength(res, i, j);
-				val = PQgetvalue(res, i, j);
-				if (len >= 1 && val && *val)
-				{
-					if (len > fieldMax[j])
-						fieldMax[j] = len;
-					if (!(fields[i * n + j] = (char *) malloc(len + 1)))
-					{
-						fprintf(stderr, "out of memory\n"); exit(1);
-					}
-					strcpy(fields[i * n + j], val);
-				}
-			}
-		}
-		for (j = 0; j < n; j++)
-		{
-			const char *s = PQfname(res, j);
-			int len = strlen(s);
-			if (len > fieldMax[j])
-				fieldMax[j] = len;
-			fprintf(fout, "%-*s", fieldMax[j], s);
-			if (j + 1 < n)
-				fputc('|', fout);
-		}
-		fputc('\n', fout);
-		for (j = 0; j < n; j++)
-		{
-			for (i = fieldMax[j]; i--; fputc('-', fout));
-			if (j + 1 < n)
-				fputc('+', fout);
-		}
-		fputc('\n', fout);
-		for (i = 0; i < m; i++)
-		{
-			for (j = 0; j < n; j++)
-			{
-				char *s = fields[i * n + j];
-				fprintf(fout, "%-*s", fieldMax[j], s ? s : "");
-				if (j + 1 < n)
-					fputc('|', fout);
-				if (s)
-					free(s);
-			}
-			fputc('\n', fout);
-		}
-		free(fields);
-		fprintf(fout, "(%d row%s)\n\n", m, m == 1 ? "" : "s");
-		free(fieldMax);
-		free((void *) fieldNames);
-	}
-}
-
 /* format result (mostly useful for debugging) */
 /* Note: This is similar to the Postgres function PQprint().
  * PQprint() is not used because handing over a stream from Python to
  * Postgres can be problematic if they use different libs for streams
  * and because using PQprint() and tp_print is not recommended any more.
  */
-static PyObject *
+static char *
 format_result(const PGresult *res)
 {
 	const int n = PQnfields(res);
-	#undef sprintf
 
 	if (n > 0)
 	{
@@ -445,14 +415,14 @@ format_result(const PGresult *res)
 						if (align)
 						{
 							snprintf(p, size - (p - buffer), align == 'r' ?
-								"%*s" : "%-*s", k,
-								PQgetvalue(res, i, j));
+															 "%*s" : "%-*s", k,
+									 PQgetvalue(res, i, j));
 						}
 						else
 						{
 							snprintf(p, size - (p - buffer), "%-*s", k,
-								PQgetisnull(res, i, j) ?
-								"" : "<binary>");
+									 PQgetisnull(res, i, j) ?
+									 "" : "<binary>");
 						}
 						p += k;
 						if (j + 1 < n)
@@ -465,22 +435,46 @@ format_result(const PGresult *res)
 				/* create the footer */
 				snprintf(p, size - (p - buffer), "(%d row%s)", m, m == 1 ? "" : "s");
 				/* return the result */
-				result = PyStr_FromString(buffer);
-				PyMem_Free(buffer);
-				return result;
+				return buffer;
 			}
 			else
 			{
-				PyMem_Free(aligns); PyMem_Free(sizes); return PyErr_NoMemory();
+				PyMem_Free(aligns); PyMem_Free(sizes); return NULL;
 			}
 		}
 		else
 		{
-			PyMem_Free(aligns); PyMem_Free(sizes); return PyErr_NoMemory();
+			PyMem_Free(aligns); PyMem_Free(sizes); return NULL;
 		}
 	}
 	else
-		return PyStr_FromString("(nothing selected)");
+	{
+		const char message[] = "(nothing selected)";
+		char *buffer = PyMem_Malloc(sizeof(message));
+		strncpy(buffer, message, sizeof(message));
+		return buffer;
+	}
+}
+
+/* prints result (mostly useful for debugging) */
+/* Note: This is a simplified version of the Postgres function PQprint().
+ * PQprint() is not used because handing over a stream from Python to
+ * Postgres can be problematic if they use different libs for streams.
+ * Also, PQprint() is considered obsolete and may be removed sometime.
+ */
+static void
+print_result(FILE *fout, const PGresult *res)
+{
+	char *result = format_result(res);
+
+	if (result == NULL)
+	{
+		fprintf(stderr, "out of memory\n");
+		exit(1);
+	}
+
+	fprintf(fout, "%s", result);
+	PyMem_Free(result);
 }
 
 /* checks connection validity */
@@ -1239,7 +1233,14 @@ pgsource_print(pgsourceobject * self, FILE *fp, int flags)
 static PyObject *
 queryStr(pgqueryobject *self)
 {
-	return format_result(self->last_result);
+	char *resultStr = format_result(self->last_result);
+	if (resultStr == NULL)
+	{
+		return PyErr_NoMemory();
+	}
+	PyObject *result = PyStr_FromString(resultStr);
+	PyMem_Free(resultStr);
+	return result;
 }
 
 /* query type definition */
@@ -1248,7 +1249,6 @@ static PyTypeObject PgSourceType = {
 
 	.tp_name = "pgsourceobject",
 	.tp_basicsize = sizeof(pgsourceobject),
-	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pgsource_dealloc,
 #if PY_MAJOR_VERSION >= 3
@@ -1717,10 +1717,9 @@ static PyTypeObject PglargeType = {
 
 	.tp_name = "pglarge",
 	.tp_basicsize = sizeof(pglargeobject),
-	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pglarge_dealloc,
-#if PY_MAJOR_VERSION > 3
+#if PY_MAJOR_VERSION < 3
 	.tp_print = (printfunc) pglarge_print,
 #endif
 	.tp_getattro = (getattrofunc) pglarge_getattr,
@@ -2289,11 +2288,11 @@ pgquery_dictresult(pgqueryobject * self, PyObject * args)
 						if (decimal)
 						{
 							tmp_obj = Py_BuildValue("(s)", s);
-							#if IS_PY3 == 0
-								val = PyEval_CallObject(decimal, tmp_obj);
-							#else
-								val = PyObject_Call(decimal, tmp_obj, NULL);
-							#endif
+#if PY_MAJOR_VERSION >= 3
+							val = PyObject_Call(decimal, tmp_obj, NULL);
+#else
+							val = PyEval_CallObject(decimal, tmp_obj);
+#endif
 						}
 						else
 						{
@@ -3266,7 +3265,6 @@ static PyTypeObject PgType = {
 
 	.tp_name = "pgobject",
 	.tp_basicsize = sizeof(pgobject),
-	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pg_dealloc,
 	.tp_getattro = (getattrofunc) pg_getattr,
@@ -3305,10 +3303,9 @@ static PyTypeObject PgQueryType = {
 
 	.tp_name = "pgqueryobject",
 	.tp_basicsize = sizeof(pgqueryobject),
-	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pgquery_dealloc,
-#if PY_MAJOR_VERSION >= 3
+#if PY_MAJOR_VERSION < 3
 	.tp_print = (printfunc) pgquery_print,	/* tp_print */
 #else
 	.tp_str = (reprfunc) queryStr,
