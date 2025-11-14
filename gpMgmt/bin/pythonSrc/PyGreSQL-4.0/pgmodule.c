@@ -3247,6 +3247,7 @@ staticforward PyTypeObject PgType = {
 
 	.tp_name = "pgobject",
 	.tp_basicsize = sizeof(pgobject),
+	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pg_dealloc,
 	.tp_getattro = (getattrofunc) pg_getattr,
@@ -3285,6 +3286,7 @@ staticforward PyTypeObject PgQueryType = {
 
 	.tp_name = "pgqueryobject",
 	.tp_basicsize = sizeof(pgqueryobject),
+	.tp_itemsize = 0,
 	/* methods */
 	.tp_dealloc = (destructor) pgquery_dealloc,
 #if PY_MAJOR_VERSION < 3
