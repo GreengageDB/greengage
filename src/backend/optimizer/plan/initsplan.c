@@ -2516,6 +2516,13 @@ build_implied_join_equality(PlannerInfo *root,
 	check_mergejoinable(restrictinfo);
 	check_hashjoinable(restrictinfo);
 
+	/*
+	 * Check if the new clause contains outer references
+	 * If so, set corresponding flag for the RestrictInfo node
+	 */
+	if (contains_outer_params((Node*) restrictinfo->clause, root))
+		restrictinfo->contain_outer_query_references = true;
+
 	return restrictinfo;
 }
 
