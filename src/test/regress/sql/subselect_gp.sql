@@ -1525,6 +1525,132 @@ select (select g from g where g = c) from c;
 explain (verbose, costs off)
 select (select g from g where g = c limit 1 offset c) from c;
 
+explain (verbose, costs off)
+select (select d from d limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select d from d where d = g) from g;
+explain (verbose, costs off)
+select (select d from d where d = g limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select g from g limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select g from g where g = d) from d;
+explain (verbose, costs off)
+select (select g from g where g = d limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select p from p limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select p from p where p = g) from g;
+explain (verbose, costs off)
+select (select p from p where p = g limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select g from g limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select g from g where g = p) from p;
+explain (verbose, costs off)
+select (select g from g where g = p limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select r from r limit 1 offset g) from g;
+explain (verbose, costs off)
+select (select r from r where r = g) from g;
+explain (verbose, costs off)
+select (select r from r where r = g limit 1 offset g) from g;
+
+explain (verbose, costs off)
+select (select g from g limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select g from g where g = r) from r;
+explain (verbose, costs off)
+select (select g from g where g = r limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select c from c limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select c from c where c = d) from d;
+explain (verbose, costs off)
+select (select c from c where c = d limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select d from d limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select d from d where d = c) from c;
+explain (verbose, costs off)
+select (select d from d where d = c limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select c from c limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select c from c where c = p) from p;
+explain (verbose, costs off)
+select (select c from c where c = p limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select p from p limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select p from p where p = c) from c;
+explain (verbose, costs off)
+select (select p from p where p = c limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select c from c limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select c from c where c = r) from r;
+explain (verbose, costs off)
+select (select c from c where c = r limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select r from r limit 1 offset c) from c;
+explain (verbose, costs off)
+select (select r from r where r = c) from c;
+explain (verbose, costs off)
+select (select r from r where r = c limit 1 offset c) from c;
+
+explain (verbose, costs off)
+select (select d from d limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select d from d where d = p) from p;
+explain (verbose, costs off)
+select (select d from d where d = p limit 1 offset p) from p;
+
+explain (verbose, costs off)
+select (select p from p limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select p from p where p = d) from d;
+explain (verbose, costs off)
+select (select p from p where p = d limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select d from d limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select d from d where d = r) from r;
+explain (verbose, costs off)
+select (select d from d where d = r limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select r from r limit 1 offset d) from d;
+explain (verbose, costs off)
+select (select r from r where r = d) from d;
+explain (verbose, costs off)
+select (select r from r where r = d limit 1 offset d) from d;
+
+explain (verbose, costs off)
+select (select p from p limit 1 offset r) from r;
+explain (verbose, costs off)
+select (select p from p where p = r) from r;
+explain (verbose, costs off)
+select (select p from p where p = r limit 1 offset r) from r;
+
+explain (verbose, costs off)
+select (select r from r limit 1 offset p) from p;
+explain (verbose, costs off)
+select (select r from r where r = p) from p;
+explain (verbose, costs off)
+select (select r from r where r = p limit 1 offset p) from p;
+
 
 create function i(i int) returns setof int language plpgsql immutable as $$ begin return query select i; end $$;
 create function s(s int) returns setof int language plpgsql stable as $$ begin return query select s; end $$;
