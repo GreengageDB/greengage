@@ -606,6 +606,12 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 				broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
 					   ctx->currentPlanFlow->numsegments /* numsegments */ );
 		}
+		else if (ctx->currentPlanFlow->locustype == CdbLocusType_SegmentGeneral &&
+				 scanPlan->flow->locustype == CdbLocusType_Entry)
+		{
+			broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
+					   1 /* numsegments */ );
+		}
 		else
 		{
 			focusPlan(scanPlan, false /* stable */ , false /* rescannable */ );

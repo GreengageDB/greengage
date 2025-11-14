@@ -6893,24 +6893,26 @@ select (select v from v(g) limit 1 offset g) from g;
 
 explain (verbose, costs off)
 select (select i from i(1) limit 1 offset p) from p;
-                           QUERY PLAN                            
------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 1:1  (slice2; segments: 1)
    Output: ((SubPlan 1))
    ->  Seq Scan on subselect_gp.p
          Output: (SubPlan 1)
-         SubPlan 1  (slice1; segments: 1)
+         SubPlan 1  (slice2; segments: 1)
            ->  Limit
                  Output: i.i
                  ->  Result
                        Output: i.i
                        ->  Materialize
                              Output: i.i
-                             ->  Function Scan on subselect_gp.i
+                             ->  Broadcast Motion 1:1  (slice1)
                                    Output: i.i
-                                   Function Call: i(1)
+                                   ->  Function Scan on subselect_gp.i
+                                         Output: i.i
+                                         Function Call: i(1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(17 rows)
 
 explain (verbose, costs off)
 select (select i from i(p)) from p;
@@ -6920,24 +6922,26 @@ select (select i from i(p) limit 1 offset p) from p;
 ERROR:  cannot materialize function with correlated parameters
 explain (verbose, costs off)
 select (select s from s(1) limit 1 offset p) from p;
-                           QUERY PLAN                            
------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 1:1  (slice2; segments: 1)
    Output: ((SubPlan 1))
    ->  Seq Scan on subselect_gp.p
          Output: (SubPlan 1)
-         SubPlan 1  (slice1; segments: 1)
+         SubPlan 1  (slice2; segments: 1)
            ->  Limit
                  Output: s.s
                  ->  Result
                        Output: s.s
                        ->  Materialize
                              Output: s.s
-                             ->  Function Scan on subselect_gp.s
+                             ->  Broadcast Motion 1:1  (slice1)
                                    Output: s.s
-                                   Function Call: s(1)
+                                   ->  Function Scan on subselect_gp.s
+                                         Output: s.s
+                                         Function Call: s(1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(17 rows)
 
 explain (verbose, costs off)
 select (select s from s(p)) from p;
@@ -6947,24 +6951,26 @@ select (select s from s(p) limit 1 offset p) from p;
 ERROR:  cannot materialize function with correlated parameters
 explain (verbose, costs off)
 select (select v from v(1) limit 1 offset p) from p;
-                           QUERY PLAN                            
------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 1:1  (slice2; segments: 1)
    Output: ((SubPlan 1))
    ->  Seq Scan on subselect_gp.p
          Output: (SubPlan 1)
-         SubPlan 1  (slice1; segments: 1)
+         SubPlan 1  (slice2; segments: 1)
            ->  Limit
                  Output: v.v
                  ->  Result
                        Output: v.v
                        ->  Materialize
                              Output: v.v
-                             ->  Function Scan on subselect_gp.v
+                             ->  Broadcast Motion 1:1  (slice1)
                                    Output: v.v
-                                   Function Call: v(1)
+                                   ->  Function Scan on subselect_gp.v
+                                         Output: v.v
+                                         Function Call: v(1)
  Optimizer: Postgres query optimizer
-(15 rows)
+(17 rows)
 
 explain (verbose, costs off)
 select (select v from v(p)) from p;
@@ -7316,16 +7322,16 @@ select (select v from v(g) limit 1 offset g) from g;
 ERROR:  plan should not reference subplan's variable
 explain (verbose, costs off)
 select (select i from i(1) limit 1 offset p) from p;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 1:1  (slice2; segments: 1)
    Output: ((SubPlan 2))
    ->  Seq Scan on subselect_gp.p
          Output: (SubPlan 2)
-         SubPlan 2  (slice1; segments: 1)
+         SubPlan 2  (slice2; segments: 1)
            ->  Limit
                  Output: i_1.i
-                 InitPlan 1 (returns $1)  (slice2)
+                 InitPlan 1 (returns $1)  (slice3)
                    ->  Function Scan on subselect_gp.i
                          Output: i.i
                          Function Call: i(1)
@@ -7333,11 +7339,13 @@ select (select i from i(1) limit 1 offset p) from p;
                        Output: i_1.i
                        ->  Materialize
                              Output: i_1.i
-                             ->  Function Scan on subselect_gp.i i_1
+                             ->  Broadcast Motion 1:1  (slice1)
                                    Output: i_1.i
-                                   Function Call: i(1)
+                                   ->  Function Scan on subselect_gp.i i_1
+                                         Output: i_1.i
+                                         Function Call: i(1)
  Optimizer: Postgres query optimizer
-(19 rows)
+(21 rows)
 
 explain (verbose, costs off)
 select (select i from i(p)) from p;
@@ -7347,16 +7355,16 @@ select (select i from i(p) limit 1 offset p) from p;
 ERROR:  plan should not reference subplan's variable
 explain (verbose, costs off)
 select (select s from s(1) limit 1 offset p) from p;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 1:1  (slice2; segments: 1)
    Output: ((SubPlan 2))
    ->  Seq Scan on subselect_gp.p
          Output: (SubPlan 2)
-         SubPlan 2  (slice1; segments: 1)
+         SubPlan 2  (slice2; segments: 1)
            ->  Limit
                  Output: s_1.s
-                 InitPlan 1 (returns $1)  (slice2)
+                 InitPlan 1 (returns $1)  (slice3)
                    ->  Function Scan on subselect_gp.s
                          Output: s.s
                          Function Call: s(1)
@@ -7364,11 +7372,13 @@ select (select s from s(1) limit 1 offset p) from p;
                        Output: s_1.s
                        ->  Materialize
                              Output: s_1.s
-                             ->  Function Scan on subselect_gp.s s_1
+                             ->  Broadcast Motion 1:1  (slice1)
                                    Output: s_1.s
-                                   Function Call: s(1)
+                                   ->  Function Scan on subselect_gp.s s_1
+                                         Output: s_1.s
+                                         Function Call: s(1)
  Optimizer: Postgres query optimizer
-(19 rows)
+(21 rows)
 
 explain (verbose, costs off)
 select (select s from s(p)) from p;
@@ -7378,16 +7388,16 @@ select (select s from s(p) limit 1 offset p) from p;
 ERROR:  plan should not reference subplan's variable
 explain (verbose, costs off)
 select (select v from v(1) limit 1 offset p) from p;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 1:1  (slice2; segments: 1)
    Output: ((SubPlan 2))
    ->  Seq Scan on subselect_gp.p
          Output: (SubPlan 2)
-         SubPlan 2  (slice1; segments: 1)
+         SubPlan 2  (slice2; segments: 1)
            ->  Limit
                  Output: v_1.v
-                 InitPlan 1 (returns $1)  (slice2)
+                 InitPlan 1 (returns $1)  (slice3)
                    ->  Function Scan on subselect_gp.v
                          Output: v.v
                          Function Call: v(1)
@@ -7395,11 +7405,13 @@ select (select v from v(1) limit 1 offset p) from p;
                        Output: v_1.v
                        ->  Materialize
                              Output: v_1.v
-                             ->  Function Scan on subselect_gp.v v_1
+                             ->  Broadcast Motion 1:1  (slice1)
                                    Output: v_1.v
-                                   Function Call: v(1)
+                                   ->  Function Scan on subselect_gp.v v_1
+                                         Output: v_1.v
+                                         Function Call: v(1)
  Optimizer: Postgres query optimizer
-(19 rows)
+(21 rows)
 
 explain (verbose, costs off)
 select (select v from v(p)) from p;
