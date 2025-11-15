@@ -432,6 +432,17 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (node == NULL)
 		return NULL;
 
+#ifdef USE_ASSERT_CHECKING
+	if (IsA(node, FunctionScan))
+	{
+		RangeTblEntry *rte;
+
+		rte = rt_fetch(((Scan *) node)->scanrelid, ctx->rtable);
+		Assert(rte->rtekind == RTE_FUNCTION);
+		Assert(rte->functions == NIL);
+	}
+#endif
+
 	/*
 	 * If the ModifyTable node appears inside the correlated Subplan, it has
 	 * to be handled the same way as various *Scan nodes. Currently such
@@ -474,12 +485,6 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		if (IsA(node, FunctionScan))
 		{
 			FunctionScan *fscan = (FunctionScan *) node;
-#ifdef USE_ASSERT_CHECKING
-			RangeTblEntry *rte = rt_fetch(fscan->scan.scanrelid, ctx->rtable);
-#endif
-
-			Assert(rte->rtekind == RTE_FUNCTION);
-			Assert(rte->functions == NIL);
 
 			if (ContainsParamWalker((Node *) fscan->functions, NULL /* ctx */ ))
 				ereport(ERROR,
