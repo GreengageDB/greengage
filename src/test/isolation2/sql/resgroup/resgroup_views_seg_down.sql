@@ -50,8 +50,7 @@ SELECT gp_request_fts_probe_scan();
 SELECT content, preferred_role, role, status, mode
 FROM gp_segment_configuration WHERE content = 0;
 
--- Wait until the query wakes up and starts cancelation
-SELECT pg_sleep(2);
+1<:
 
 -- Check the hanged query has complete.
 SELECT count(*) = 0 AS query_complete FROM pg_stat_activity
@@ -83,8 +82,6 @@ SELECT wait_until_all_segments_synchronized();
 
 -- Verify that no segment is down after the recovery.
 SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
-
-1<:
 
 -- Case 2: check the scenario with 'pg_terminate_backend'.
 
@@ -103,10 +100,6 @@ SELECT gp_request_fts_probe_scan();
 1: SELECT gp_inject_fault('exec_mpp_query_start', 'suspend', dbid, current_setting('gp_session_id')::int)
 FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 
--- Triggering indicates query got out from hanged state.
-1: SELECT gp_inject_fault('cdbcomponent_recycle_idle_qe_error', 'skip', dbid, current_setting('gp_session_id')::int)
-FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-
 2: @pre_run ' echo "${RAW_STR}" | sed "s#@DATADIR#${DATADIR}#" ': SELECT exec_cmd_on_segments('ps aux | grep ''@DATADIR'' | awk ''FNR == 1 {print $2; exit}'' | xargs kill -STOP');
 
 -- Launch the query again, now it will hang.
@@ -124,20 +117,11 @@ SELECT gp_request_fts_probe_scan();
 SELECT content, preferred_role, role, status, mode
 FROM gp_segment_configuration WHERE content = 0;
 
--- Since the FTS sends MIRROR FTS_PROMOTED_MIRROR after the configuration
--- update, there may be a delay in signal handling. Thus, wait until the
--- hanged query starts destroying its gang.
-SELECT gp_wait_until_triggered_fault('cdbcomponent_recycle_idle_qe_error', 1, dbid)
-FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-
-SELECT pg_sleep(2);
+1<:
 
 -- Check the hanged query has complete.
 SELECT count(*) = 0 AS query_complete FROM pg_stat_activity
 WHERE state = 'active' AND query = 'SELECT count(1) FROM gp_toolkit.gp_resgroup_status_per_segment WHERE groupname = ''admin_group'';';
-
-SELECT gp_inject_fault('cdbcomponent_recycle_idle_qe_error', 'reset', dbid)
-FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 
 -- Recover back the segment
 2: @pre_run ' echo "${RAW_STR}" | sed "s#@DATADIR#${DATADIR}#" ': SELECT exec_cmd_on_segments('ps aux | grep ''@DATADIR'' | awk ''FNR == 1 {print $2; exit}'' | xargs kill -CONT');
@@ -166,7 +150,6 @@ SELECT wait_until_all_segments_synchronized();
 -- Verify that no segment is down after the recovery.
 SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
 
-1<:
 1q:
 
 -- Restore parameters.
