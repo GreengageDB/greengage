@@ -5514,6 +5514,13 @@ PostgresMain(int argc, char *argv[],
 					MyProc->queryCommandId = pq_getmsgint(&input_message, 4);
 					gp_command_count = MyProc->queryCommandId;
 
+#ifdef USE_ASSERT_CHECKING
+					static int last_gp_command_count = 0;
+					if (gp_command_count != last_gp_command_count)
+						Assert(tuplestore_has_no_shared());
+					last_gp_command_count = gp_command_count;
+#endif
+
 					elog(DEBUG1, "Message type %c received by from libpq, len = %d", firstchar, input_message.len); /* TODO: Remove this */
 
 					/* Get the userid info  (session, outer, current) */

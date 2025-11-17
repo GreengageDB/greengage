@@ -284,6 +284,15 @@ struct Tuplestorestate
  *--------------------
  */
 
+/*
+ * List of all shared tuplestores created on this backend.
+ * These should all be deleted on abort, and should be gone by
+ * the end of current command (as defined by gp_command_count).
+ *
+ * Note that each shared tuplestore must only be remembered on
+ * one of the backends, the one that created it.
+ */
+static List* shared_tuplestores = NIL;
 
 static Tuplestorestate *tuplestore_begin_common(int eflags,
 												bool interXact,
@@ -536,12 +545,11 @@ tuplestore_report(Tuplestorestate *state)
 }
 
 /*
- * tuplestore_end
- *
- *	Release resources and clean up.
+ * tuplestore_cleanup
+ * Release resources and clean up.
  */
-void
-tuplestore_end(Tuplestorestate *state)
+static void
+tuplestore_cleanup(Tuplestorestate *state)
 {
 	int			i;
 
@@ -563,6 +571,19 @@ tuplestore_end(Tuplestorestate *state)
 	}
 	pfree(state->readptrs);
 	pfree(state);
+}
+
+/*
+ * tuplestore_end
+ *
+ *	Release resources and clean up. Also deletes the tuplestore from the list.
+ */
+void
+tuplestore_end(Tuplestorestate *state)
+{
+	if (state->share_status == TSHARE_WRITER)
+		shared_tuplestores = list_delete_ptr(shared_tuplestores, state);
+	tuplestore_cleanup(state);
 }
 
 /*
@@ -1709,6 +1730,16 @@ tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const cha
 	Assert(state->status == TSS_INMEM);
 	Assert(state->tuples == 0);
 	Assert(state->share_status == TSHARE_NOT_SHARED);
+	/*
+	 * QE must create shared tuplestores only in transaction lifetime, since InitPlans
+	 * are executed as separate queries and so Executor lifetime is not enough.
+	 * 
+	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
+	 * live only for the duration of one query.
+	 */
+	AssertImply(Gp_role == GP_ROLE_EXECUTE, state->resowner == CurTransactionResourceOwner);
+	AssertImply(Gp_role == GP_ROLE_EXECUTE, CurrentMemoryContext == CurTransactionContext);
+
 	state->share_status = TSHARE_WRITER;
 	state->fileset = fileset;
 	state->shared_filename = pstrdup(filename);
@@ -1736,6 +1767,9 @@ tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const cha
 	 */
 	state->backward = true;
 	state->status = TSS_WRITEFILE;
+
+	/* Remember this tuplestore to clear it in case of error */
+	shared_tuplestores = lappend(shared_tuplestores, state);
 }
 
 static void
@@ -1796,3 +1830,25 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 
 	return state;
 }
+
+void
+AtAbort_SharedTuplestores()
+{
+	ListCell *lc;
+	foreach(lc, shared_tuplestores)
+	{
+		Tuplestorestate *state = (Tuplestorestate *) lfirst(lc);
+		tuplestore_cleanup(state);
+	}
+
+	list_free(shared_tuplestores);
+	shared_tuplestores = NIL;
+}
+
+#ifdef USE_ASSERT_CHECKING
+bool
+tuplestore_has_no_shared()
+{
+	return list_length(shared_tuplestores) == 0;
+}
+#endif

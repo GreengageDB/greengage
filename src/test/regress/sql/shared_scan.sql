@@ -123,3 +123,37 @@ reset gp_cte_sharing;
 drop table sisc1;
 drop table sisc2;
 drop table sisc3;
+
+--
+-- Check error handling in shared scans
+--
+-- Helper function to count the number of temporary files in
+-- pgsql_tmp.
+create or replace function get_temp_file_num() returns int as
+$$
+import os
+fileNum = 0
+for root, directories, filenames in os.walk('base/pgsql_tmp'):
+  for filename in filenames:
+    fileNum += 1
+return fileNum
+$$ language plpython3u;
+
+create table sisc(i int) distributed by (i);
+insert into sisc select generate_series(1, 100);
+
+-- Temp file number before running Shared Scan queries
+select get_temp_file_num() as num_temp_files_before
+\gset
+
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+
+-- All temporary files should have been cleaned up, so the number of files shouldn't be more than
+-- previously. It could be less if some previously existing file has been cleaned up in the meantime.
+select get_temp_file_num() as num_temp_files_after
+\gset
+select :num_temp_files_before >= :num_temp_files_after;
+drop table sisc;

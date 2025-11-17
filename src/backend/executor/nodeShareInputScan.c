@@ -230,6 +230,10 @@ init_tuplestore_state(ShareInputScanState *node)
 			if (sisc->cross_slice)
 			{
 				char		rwfile_prefix[100];
+				/* Make sure the tuplestore lives between InitPlans */
+				MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+				ResourceOwner old_resowner = CurrentResourceOwner;
+				CurrentResourceOwner = CurTransactionResourceOwner;
 
 				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): No tuplestore yet, creating tuplestore",
 					 sisc->share_id, currentSliceId);
@@ -242,6 +246,9 @@ init_tuplestore_state(ShareInputScanState *node)
 				tuplestore_make_shared(ts,
 									   get_shareinput_fileset(),
 									   rwfile_prefix);
+
+				MemoryContextSwitchTo(old_context);
+				CurrentResourceOwner = old_resowner;
 #ifdef FAULT_INJECTOR
 				if (SIMPLE_FAULT_INJECTOR("sisc_xslice_temp_files") == FaultInjectorTypeSkip)
 				{

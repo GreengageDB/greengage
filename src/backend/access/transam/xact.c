@@ -3553,6 +3553,8 @@ AbortTransaction(void)
 			CallXactCallbacks(XACT_EVENT_ABORT);
 		CallXactCallbacksOnce(XACT_EVENT_ABORT);
 
+		AtAbort_SharedTuplestores();
+
 		ResourceOwnerRelease(TopTransactionResourceOwner,
 							 RESOURCE_RELEASE_BEFORE_LOCKS,
 							 false, true);
