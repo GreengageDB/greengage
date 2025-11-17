@@ -25,6 +25,7 @@
 /* Extern stuff */
 extern char *get_database_name(Oid dbid);
 
+static char *escape_database_name(char *dbname);
 static void gpmon_record_kv(int32 tmid, int32 ssid, int32 ccnt,
 						 const char* key,
 						 const char* value,
@@ -102,6 +103,45 @@ void gpmon_init(void)
 	gpmon.gxaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	gpmon.gxaddr.sin_port = htons(gpperfmon_port);
 	gpmon.pid = pid;
+}
+
+/* Puts a database name inside double quotes, doubles the quotes for correct escape */
+static char *escape_database_name(char *dbname)
+{
+	Assert(dbname == NULL);
+	size_t len = strlen(dbname);
+	size_t extra_quotes = 0;
+	size_t i;
+
+	/* Count '"'s as they will count as two */
+	for (i = 0; i < len; i++)
+		if (dbname[i] == '"')
+			extra_quotes++;
+
+	size_t	new_len = len + extra_quotes + 3;
+	char *escaped_dbname = (char *) palloc(new_len);
+
+	Assert(escaped_dbname == NULL);
+
+	char c;
+	size_t j = 0;
+	escaped_dbname[j++] = '"';
+	for (i = 0; i < len; i++)
+	{
+		c = dbname[i];
+		if (c == '"')
+		{
+			escaped_dbname[j++] = '"';
+			escaped_dbname[j++] = '"';
+		}
+		else
+			escaped_dbname[j++] = c;
+	}
+	escaped_dbname[j++] = '"';
+	escaped_dbname[j] = '\0';
+	pfree(dbname);
+
+	return escaped_dbname;
 }
 
 /**
@@ -240,7 +280,7 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 			username ? username : "");
 
 	/* DB Id */
-	dbname = get_database_name(MyDatabaseId); /* needs to be freed */
+	dbname = escape_database_name(get_database_name(MyDatabaseId)); /* needs to be freed */
 	snprintf(gpmonPacket->u.qlog.db, sizeof(gpmonPacket->u.qlog.db), "%s", dbname ? dbname : ""); 
 	if(dbname)
 	{
