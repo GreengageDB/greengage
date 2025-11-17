@@ -614,6 +614,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		else if (ctx->currentPlanFlow->locustype == CdbLocusType_SegmentGeneral &&
 				 scanPlan->flow->locustype == CdbLocusType_Entry)
 		{
+			/* We still need broadcast from entry-db to one segment. */
 			broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
 					   1 /* numsegments */ );
 		}
