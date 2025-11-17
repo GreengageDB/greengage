@@ -594,7 +594,7 @@ ROLLBACK;
 begin;
 set local enable_hashjoin = on;
 
-explain (costs off, verbose)
+explain (costs off)
 select i8.q2, ss.* from
 int8_tbl i8,
 lateral (select t1.fivethous, i4.f1 from tenk1 t1 join int4_tbl i4
