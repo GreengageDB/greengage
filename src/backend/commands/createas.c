@@ -683,7 +683,7 @@ intorel_initplan(struct QueryDesc *queryDesc, int eflags)
 	if (check_enable_rls(intoRelationAddr.objectId, InvalidOid, false) == RLS_ENABLED)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 (errmsg("policies not yet implemented for this command"))));
+				 errmsg("policies not yet implemented for this command")));
 
 	/*
 	 * Tentatively mark the target as populated, if it's a matview and we're

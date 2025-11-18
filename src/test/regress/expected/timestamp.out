@@ -1745,7 +1745,7 @@ SELECT '' AS to_timestamp_8, to_timestamp('2000January09Sunday', 'YYYYFMMonthDDF
 (1 row)
 
 SELECT '' AS to_timestamp_9, to_timestamp('97/Feb/16', 'YYMonDD');
-ERROR:  invalid value "/Fe" for "Mon"
+ERROR:  invalid value "/Feb/16" for "Mon"
 DETAIL:  The given value did not match any of the allowed values for this field.
 SELECT '' AS to_timestamp_10, to_timestamp('19971116', 'YYYYMMDD');
  to_timestamp_10 |         to_timestamp         

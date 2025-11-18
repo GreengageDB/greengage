@@ -86,6 +86,7 @@
 ProcessUtility_hook_type ProcessUtility_hook = NULL;
 
 /* local function declarations */
+static int ClassifyUtilityCommandAsReadOnly(Node *parsetree);
 static void ProcessUtilitySlow(ParseState *pstate,
 							   PlannedStmt *pstmt,
 							   const char *queryString,
@@ -135,122 +136,290 @@ CommandIsReadOnly(PlannedStmt *pstmt)
 }
 
 /*
- * check_xact_readonly: is a utility command read-only?
+ * Determine the degree to which a utility command is read only.
  *
- * Here we use the loose rules of XactReadOnly mode: no permanent effects
- * on the database are allowed.
+ * Note the definitions of the relevant flags in src/include/utility/tcop.h.
  */
-static void
-check_xact_readonly(Node *parsetree)
+static int
+ClassifyUtilityCommandAsReadOnly(Node *parsetree)
 {
-	/* Only perform the check if we have a reason to do so. */
-	if (!XactReadOnly && !IsInParallelMode())
-		return;
-
-	/*
-	 * Note: Commands that need to do more complicated checking are handled
-	 * elsewhere, in particular COPY and plannable statements do their own
-	 * checking.  However they should all call PreventCommandIfReadOnly or
-	 * PreventCommandIfParallelMode to actually throw the error.
-	 */
-
 	switch (nodeTag(parsetree))
 	{
-		case T_AlterDatabaseStmt:
+		case T_AlterCollationStmt:
 		case T_AlterDatabaseSetStmt:
+		case T_AlterDatabaseStmt:
+		case T_AlterDefaultPrivilegesStmt:
 		case T_AlterDomainStmt:
+		case T_AlterEnumStmt:
+		case T_AlterEventTrigStmt:
+		case T_AlterExtensionContentsStmt:
+		case T_AlterExtensionStmt:
+		case T_AlterFdwStmt:
+		case T_AlterForeignServerStmt:
 		case T_AlterFunctionStmt:
-		case T_AlterQueueStmt:
-		case T_AlterResourceGroupStmt:
-		case T_AlterRoleStmt:
-		case T_AlterRoleSetStmt:
 		case T_AlterObjectDependsStmt:
 		case T_AlterObjectSchemaStmt:
-		case T_AlterOwnerStmt:
+		case T_AlterOpFamilyStmt:
 		case T_AlterOperatorStmt:
+		case T_AlterOwnerStmt:
+		case T_AlterPolicyStmt:
+		case T_AlterPublicationStmt:
+		case T_AlterQueueStmt:
+		case T_AlterResourceGroupStmt:
+		case T_AlterRoleSetStmt:
+		case T_AlterRoleStmt:
 		case T_AlterSeqStmt:
+		case T_AlterStatsStmt:
+		case T_AlterSubscriptionStmt:
+		case T_AlterTSConfigurationStmt:
+		case T_AlterTSDictionaryStmt:
 		case T_AlterTableMoveAllStmt:
+		case T_AlterTableSpaceOptionsStmt:
 		case T_AlterTableStmt:
-		case T_RenameStmt:
+		case T_AlterTypeStmt:
+		case T_AlterUserMappingStmt:
 		case T_CommentStmt:
-		case T_DefineStmt:
+		case T_CompositeTypeStmt:
+		case T_CreateAmStmt:
 		case T_CreateCastStmt:
-		case T_CreateEventTrigStmt:
-		case T_AlterEventTrigStmt:
 		case T_CreateConversionStmt:
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
+		case T_CreateEnumStmt:
+		case T_CreateEventTrigStmt:
+		case T_CreateExtensionStmt:
+		case T_CreateFdwStmt:
+		case T_CreateForeignServerStmt:
+		case T_CreateForeignTableStmt:
 		case T_CreateFunctionStmt:
-		case T_CreateQueueStmt:
-		case T_CreateResourceGroupStmt:
-		case T_CreateRoleStmt:
-		case T_IndexStmt:
-		case T_CreatePLangStmt:
 		case T_CreateOpClassStmt:
 		case T_CreateOpFamilyStmt:
-		case T_AlterOpFamilyStmt:
-		case T_RuleStmt:
+		case T_CreatePLangStmt:
+		case T_CreatePolicyStmt:
+		case T_CreatePublicationStmt:
+		case T_CreateQueueStmt:
+		case T_CreateRangeStmt:
+		case T_CreateResourceGroupStmt:
+		case T_CreateRoleStmt:
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
+		case T_CreateStatsStmt:
 		case T_CreateStmt:
 		case T_CreateExternalStmt:
+		case T_CreateSubscriptionStmt:
 		case T_CreateTableAsStmt:
-		case T_RefreshMatViewStmt:
 		case T_CreateTableSpaceStmt:
 		case T_CreateTransformStmt:
 		case T_CreateTrigStmt:
-		case T_CompositeTypeStmt:
-		case T_CreateEnumStmt:
-		case T_CreateRangeStmt:
-		case T_AlterEnumStmt:
-		case T_ViewStmt:
-		case T_DropStmt:
+		case T_CreateUserMappingStmt:
+		case T_DefineStmt:
 		case T_DropdbStmt:
-		case T_DropTableSpaceStmt:
 		case T_DropQueueStmt:
 		case T_DropResourceGroupStmt:
-		case T_DropRoleStmt:
-		case T_GrantStmt:
-		case T_GrantRoleStmt:
-		case T_AlterDefaultPrivilegesStmt:
-		case T_TruncateStmt:
 		case T_DropOwnedStmt:
-		case T_ReassignOwnedStmt:
-		case T_AlterTSDictionaryStmt:
-		case T_AlterTSConfigurationStmt:
-		case T_CreateExtensionStmt:
-		case T_AlterExtensionStmt:
-		case T_AlterExtensionContentsStmt:
-		case T_CreateFdwStmt:
-		case T_AlterFdwStmt:
-		case T_CreateForeignServerStmt:
-		case T_AlterForeignServerStmt:
-		case T_CreateUserMappingStmt:
-		case T_AlterUserMappingStmt:
-		case T_DropUserMappingStmt:
-		case T_AlterTableSpaceOptionsStmt:
-		case T_CreateForeignTableStmt:
-		case T_ImportForeignSchemaStmt:
-		case T_SecLabelStmt:
-		case T_CreatePublicationStmt:
-		case T_AlterPublicationStmt:
-		case T_CreateSubscriptionStmt:
-		case T_AlterSubscriptionStmt:
+		case T_DropRoleStmt:
+		case T_DropStmt:
 		case T_DropSubscriptionStmt:
-			PreventCommandIfReadOnly(CreateCommandTag(parsetree));
-			PreventCommandIfParallelMode(CreateCommandTag(parsetree));
-			break;
+		case T_DropTableSpaceStmt:
+		case T_DropUserMappingStmt:
+		case T_GrantRoleStmt:
+		case T_GrantStmt:
+		case T_ImportForeignSchemaStmt:
+		case T_IndexStmt:
+		case T_ReassignOwnedStmt:
+		case T_RefreshMatViewStmt:
+		case T_RenameStmt:
+		case T_RuleStmt:
+		case T_SecLabelStmt:
+		case T_TruncateStmt:
+		case T_ViewStmt:
+			{
+				/* DDL is not read-only, and neither is TRUNCATE. */
+				return COMMAND_IS_NOT_READ_ONLY;
+			}
+
+		case T_AlterSystemStmt:
+			{
+				/*
+				 * Surprisingly, ALTER SYSTEM meets all our definitions of
+				 * read-only: it changes nothing that affects the output of
+				 * pg_dump, it doesn't write WAL or imperil the application
+				 * of future WAL, and it doesn't depend on any state that needs
+				 * to be synchronized with parallel workers.
+				 *
+				 * So, despite the fact that it writes to a file, it's read
+				 * only!
+				 */
+				return COMMAND_IS_STRICTLY_READ_ONLY;
+			}
+
+		case T_CallStmt:
+		case T_DoStmt:
+			{
+				/*
+				 * Commands inside the DO block or the called procedure might
+				 * not be read only, but they'll be checked separately when we
+				 * try to execute them.  Here we only need to worry about the
+				 * DO or CALL command itself.
+				 */
+				return COMMAND_IS_STRICTLY_READ_ONLY;
+			}
+
+		case T_CheckPointStmt:
+			{
+				/*
+				 * You might think that this should not be permitted in
+				 * recovery, but we interpret a CHECKPOINT command during
+				 * recovery as a request for a restartpoint instead. We allow
+				 * this since it can be a useful way of reducing switchover
+				 * time when using various forms of replication.
+				 */
+				return COMMAND_IS_STRICTLY_READ_ONLY;
+			}
+
+		case T_ClosePortalStmt:
+		case T_ConstraintsSetStmt:
+		case T_DeallocateStmt:
+		case T_DeclareCursorStmt:
+		case T_DiscardStmt:
+		case T_ExecuteStmt:
+		case T_FetchStmt:
+		case T_LoadStmt:
+		case T_PrepareStmt:
+		case T_UnlistenStmt:
+		case T_VariableSetStmt:
+		case T_RetrieveStmt:
+			{
+				/*
+				 * These modify only backend-local state, so they're OK to
+				 * run in a read-only transaction or on a standby. However,
+				 * they are disallowed in parallel mode, because they either
+				 * rely upon or modify backend-local state that might not be
+				 * synchronized among cooperating backends.
+				 */
+				return COMMAND_OK_IN_RECOVERY | COMMAND_OK_IN_READ_ONLY_TXN;
+			}
+
+		case T_ClusterStmt:
+		case T_ReindexStmt:
+		case T_VacuumStmt:
+			{
+				/*
+				 * These commands write WAL, so they're not strictly read-only,
+				 * and running them in parallel workers isn't supported.
+				 *
+				 * However, they don't change the database state in a way that
+				 * would affect pg_dump output, so it's fine to run them in a
+				 * read-only transaction. (CLUSTER might change the order of
+				 * rows on disk, which could affect the ordering of pg_dump
+				 * output, but that's not semantically significant.)
+				 */
+				return COMMAND_OK_IN_READ_ONLY_TXN;
+			}
+
+		case T_CopyStmt:
+			{
+				CopyStmt *stmt = (CopyStmt *) parsetree;
+
+				/*
+				 * You might think that COPY FROM is not at all read only,
+				 * but it's OK to copy into a temporary table, because that
+				 * wouldn't change the output of pg_dump.  If the target table
+				 * turns out to be non-temporary, DoCopy itself will call
+				 * PreventCommandIfReadOnly.
+				 */
+				if (stmt->is_from)
+					return COMMAND_OK_IN_READ_ONLY_TXN;
+				else
+					return COMMAND_IS_STRICTLY_READ_ONLY;
+			}
+
+		case T_ExplainStmt:
+		case T_VariableShowStmt:
+			{
+				/*
+				 * These commands don't modify any data and are safe to run
+				 * in a parallel worker.
+				 */
+				return COMMAND_IS_STRICTLY_READ_ONLY;
+			}
+
+		case T_ListenStmt:
+		case T_NotifyStmt:
+			{
+				/*
+				 * NOTIFY requires an XID assignment, so it can't be permitted
+				 * on a standby. Perhaps LISTEN could, since without NOTIFY
+				 * it would be OK to just do nothing, at least until promotion,
+				 * but we currently prohibit it lest the user get the wrong
+				 * idea.
+				 *
+				 * (We do allow T_UnlistenStmt on a standby, though, because
+				 * it's a no-op.)
+				 */
+				return COMMAND_OK_IN_READ_ONLY_TXN;
+			}
+
+		case T_LockStmt:
+			{
+				LockStmt *stmt = (LockStmt *) parsetree;
+
+				/*
+				 * Only weaker locker modes are allowed during recovery. The
+				 * restrictions here must match those in LockAcquireExtended().
+				 */
+				if (stmt->mode > RowExclusiveLock)
+					return COMMAND_OK_IN_READ_ONLY_TXN;
+				else
+					return COMMAND_IS_STRICTLY_READ_ONLY;
+			}
+
+		case T_TransactionStmt:
+			{
+				TransactionStmt *stmt = (TransactionStmt *) parsetree;
+
+				/*
+				 * PREPARE, COMMIT PREPARED, and ROLLBACK PREPARED all
+				 * write WAL, so they're not read-only in the strict sense;
+				 * but the first and third do not change pg_dump output, so
+				 * they're OK in a read-only transactions.
+				 *
+				 * We also consider COMMIT PREPARED to be OK in a read-only
+				 * transaction environment, by way of exception.
+				 */
+				switch (stmt->kind)
+				{
+					case TRANS_STMT_BEGIN:
+					case TRANS_STMT_START:
+					case TRANS_STMT_COMMIT:
+					case TRANS_STMT_ROLLBACK:
+					case TRANS_STMT_SAVEPOINT:
+					case TRANS_STMT_RELEASE:
+					case TRANS_STMT_ROLLBACK_TO:
+						return COMMAND_IS_STRICTLY_READ_ONLY;
+
+					case TRANS_STMT_PREPARE:
+					case TRANS_STMT_COMMIT_PREPARED:
+					case TRANS_STMT_ROLLBACK_PREPARED:
+						return COMMAND_OK_IN_READ_ONLY_TXN;
+				}
+				elog(ERROR, "unrecognized TransactionStmtKind: %d",
+					 (int) stmt->kind);
+				return 0;		/* silence stupider compilers */
+			}
+
 		default:
-			/* do nothing */
-			break;
+			elog(ERROR, "unrecognized node type: %d",
+				 (int) nodeTag(parsetree));
+			return 0;			/* silence stupider compilers */
 	}
 }
 
 /*
  * PreventCommandIfReadOnly: throw error if XactReadOnly
  *
- * This is useful mainly to ensure consistency of the error message wording;
- * most callers have checked XactReadOnly for themselves.
+ * This is useful partly to ensure consistency of the error message wording;
+ * some callers have checked XactReadOnly for themselves.
  */
 void
 PreventCommandIfReadOnly(const char *cmdname)
@@ -273,8 +442,8 @@ PreventCommandIfReadOnly(const char *cmdname)
  * PreventCommandIfParallelMode: throw error if current (sub)transaction is
  * in parallel mode.
  *
- * This is useful mainly to ensure consistency of the error message wording;
- * most callers have checked IsInParallelMode() for themselves.
+ * This is useful partly to ensure consistency of the error message wording;
+ * some callers have checked IsInParallelMode() for themselves.
  */
 void
 PreventCommandIfParallelMode(const char *cmdname)
@@ -409,11 +578,25 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 	bool		isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
 	bool		isAtomicContext = (!(context == PROCESS_UTILITY_TOPLEVEL || context == PROCESS_UTILITY_QUERY_NONATOMIC) || IsTransactionBlock());
 	ParseState *pstate;
+	int			readonly_flags;
 
 	/* This can recurse, so check for excessive recursion */
 	check_stack_depth();
 
-	check_xact_readonly(parsetree);
+	/* Prohibit read/write commands in read-only states. */
+	readonly_flags = ClassifyUtilityCommandAsReadOnly(parsetree);
+	if (readonly_flags != COMMAND_IS_STRICTLY_READ_ONLY &&
+		(XactReadOnly || IsInParallelMode()))
+	{
+		const char *commandtag = CreateCommandTag(parsetree);
+
+		if ((readonly_flags & COMMAND_OK_IN_READ_ONLY_TXN) == 0)
+			PreventCommandIfReadOnly(commandtag);
+		if ((readonly_flags & COMMAND_OK_IN_PARALLEL_MODE) == 0)
+			PreventCommandIfParallelMode(commandtag);
+		if ((readonly_flags & COMMAND_OK_IN_RECOVERY) == 0)
+			PreventCommandDuringRecovery(commandtag);
+	}
 
 	if (completionTag)
 		completionTag[0] = '\0';
@@ -484,7 +667,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 									errmsg("PREPARE TRANSACTION is not yet supported in Greenplum Database")));
 
 						}
-						PreventCommandDuringRecovery("PREPARE TRANSACTION");
 						if (!PrepareTransactionBlock(stmt->gid))
 						{
 							/* report unsuccessful commit in completionTag */
@@ -500,7 +682,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 									errmsg("COMMIT PREPARED is not yet supported in Greenplum Database")));
 						}
 						PreventInTransactionBlock(isTopLevel, "COMMIT PREPARED");
-						PreventCommandDuringRecovery("COMMIT PREPARED");
 						FinishPreparedTransaction(stmt->gid, /* isCommit */ true, /* raiseErrorIfNotFound */ true);
 						break;
 
@@ -511,7 +692,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 									errmsg("ROLLBACK PREPARED is not yet supported in Greenplum Database")));
 						}
 						PreventInTransactionBlock(isTopLevel, "ROLLBACK PREPARED");
-						PreventCommandDuringRecovery("ROLLBACK PREPARED");
 						FinishPreparedTransaction(stmt->gid, /* isCommit */ false, /* raiseErrorIfNotFound */ true);
 						break;
 
@@ -693,7 +873,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 					ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
 							errmsg("notify command cannot run in a function running on a segDB")));
 
-				PreventCommandDuringRecovery("NOTIFY");
 				Async_Notify(stmt->conditionname, stmt->payload);
 			}
 			break;
@@ -706,7 +885,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 					ereport(ERROR,(errcode(ERRCODE_GP_COMMAND_ERROR),
 							errmsg("listen command cannot run in a function running on a segDB")));
 
-				PreventCommandDuringRecovery("LISTEN");
 				CheckRestrictedOperation("LISTEN");
 				Async_Listen(stmt->conditionname);
 			}
@@ -720,7 +898,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 					ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
 							errmsg("unlisten command cannot run in a function running on a segDB")));
 
-				/* we allow UNLISTEN during recovery, as it's a noop */
 				CheckRestrictedOperation("UNLISTEN");
 				if (stmt->conditionname)
 					Async_Unlisten(stmt->conditionname);
@@ -758,22 +935,11 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			break;
 
 		case T_ClusterStmt:
-			/* we choose to allow this during "read only" transactions */
-			PreventCommandDuringRecovery("CLUSTER");
-			/* forbidden in parallel mode due to CommandIsReadOnly */
 			cluster((ClusterStmt *) parsetree, isTopLevel);
 			break;
 
 		case T_VacuumStmt:
-			{
-				VacuumStmt *stmt = (VacuumStmt *) parsetree;
-
-				/* we choose to allow this during "read only" transactions */
-				PreventCommandDuringRecovery(stmt->is_vacuumcmd ?
-											 "VACUUM" : "ANALYZE");
-				/* forbidden in parallel mode due to CommandIsReadOnly */
-				ExecVacuum(pstate, stmt, isTopLevel, false);
-			}
+			ExecVacuum(pstate, (VacuumStmt *) parsetree, isTopLevel, false);
 			break;
 
 		case T_ExplainStmt:
@@ -902,7 +1068,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			 * outside a transaction block is presumed to be user error.
 			 */
 			RequireTransactionBlock(isTopLevel, "LOCK TABLE");
-			/* forbidden in parallel mode due to CommandIsReadOnly */
 			LockTableCommand((LockStmt *) parsetree);
 			break;
 
@@ -917,17 +1082,11 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 						 errmsg("must be superuser to do CHECKPOINT")));
 
-			/*
-			 * You might think we should have a PreventCommandDuringRecovery()
-			 * here, but we interpret a CHECKPOINT command during recovery as
-			 * a request for a restartpoint instead. We allow this since it
-			 * can be a useful way of reducing switchover time when using
-			 * various forms of replication.
-			 */
 			if (Gp_role == GP_ROLE_DISPATCH)
 			{
 				CdbDispatchCommand("CHECKPOINT", 0, NULL);
 			}
+
 			RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_WAIT |
 							  (RecoveryInProgress() ? 0 : CHECKPOINT_FORCE));
 			break;
@@ -940,9 +1099,6 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 					PreventInTransactionBlock(isTopLevel,
 											  "REINDEX CONCURRENTLY");
 
-				/* we choose to allow this during "read only" transactions */
-				PreventCommandDuringRecovery("REINDEX");
-				/* forbidden in parallel mode due to CommandIsReadOnly */
 				switch (stmt->kind)
 				{
 					case REINDEX_OBJECT_INDEX:
@@ -2850,8 +3006,7 @@ CreateCommandTag(Node *parsetree)
 			 * When the column is renamed, the command tag is created from its
 			 * relation type
 			 */
-			tag = AlterObjectTypeCommandTag(
-											((RenameStmt *) parsetree)->renameType == OBJECT_COLUMN ?
+			tag = AlterObjectTypeCommandTag(((RenameStmt *) parsetree)->renameType == OBJECT_COLUMN ?
 											((RenameStmt *) parsetree)->relationType :
 											((RenameStmt *) parsetree)->renameType);
 			break;

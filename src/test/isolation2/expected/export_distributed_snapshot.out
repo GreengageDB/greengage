@@ -13,7 +13,7 @@ DROP FUNCTION IF EXISTS corrupt_snapshot_file(text, text);
 DROP
 DROP FUNCTION IF EXISTS snapshot_file_ds_fields_exist(text);
 DROP
-DROP LANGUAGE IF EXISTS plpython3u cascade;
+DROP EXTENSION IF EXISTS plpython3u cascade;
 DROP
 DROP TABLE IF EXISTS export_distributed_snapshot_test1;
 DROP

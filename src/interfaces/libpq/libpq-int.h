@@ -411,6 +411,8 @@ struct pg_conn
 	char	   *krbsrvname;		/* Kerberos service name */
 	char	   *gsslib;			/* What GSS library to use ("gssapi" or
 								 * "sspi") */
+	char	   *sslminprotocolversion;	/* minimum TLS protocol version */
+	char	   *sslmaxprotocolversion;	/* maximum TLS protocol version */
 
     char       *gpconntype; /* type of connection */
     char       *gpqeid;        /* MPP: session id & startup info for qExec */

@@ -425,7 +425,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save default_tablespace GUC to gp_guc_restore_list
@@ -448,7 +448,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -470,7 +470,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save gp_default_storage_options GUC to gp_guc_restore_list
@@ -493,7 +493,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -517,7 +517,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save lc_numeric GUC to gp_guc_restore_list
@@ -540,7 +540,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -562,7 +562,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save pljava_classpath GUC to gp_guc_restore_list
@@ -585,7 +585,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -607,7 +607,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save pljava_vmoptions GUC to gp_guc_restore_list
@@ -630,7 +630,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -654,7 +654,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save TimeZone GUC to gp_guc_restore_list
@@ -677,7 +677,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -700,7 +700,7 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save default_tablespace GUC to gp_guc_restore_list
@@ -723,7 +723,7 @@ SELECT 1;
 SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup

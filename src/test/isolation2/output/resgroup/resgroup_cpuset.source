@@ -313,7 +313,7 @@ DROP FUNCTION check_cpuset(TEXT, TEXT);
 DROP
 DROP FUNCTION create_allcores_group(TEXT);
 DROP
-DROP LANGUAGE plpython3u CASCADE;
+DROP EXTENSION plpython3u CASCADE;
 DROP
 DROP VIEW cancel_all;
 DROP

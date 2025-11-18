@@ -6770,7 +6770,7 @@ select * from sirv_test12_result1;
 -- ----------------------------------------------------------------------
 --start_ignore
 
-drop language if exists plpython3u cascade;
+drop extension if exists plpython3u cascade;
 
 drop table if exists sirv_test13_result1;
 drop table if exists sirv_test13_result2;
@@ -6858,7 +6858,7 @@ select * from sirv_test13_result2;
 -- ----------------------------------------------------------------------
 --start_ignore
 
-drop language if exists plpython3u cascade;
+drop extension if exists plpython3u cascade;
 
 drop table if exists sirv_test14_result1;
 

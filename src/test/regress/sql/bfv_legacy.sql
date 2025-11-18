@@ -3,12 +3,9 @@
 --
 
 -- The helper functions are written in python.
+-- start_ignore
 create or replace language plpython3u;
-
--- While we're at it, test that CREATE OR REPLACE LANGUAGE works when
--- the language exists already (we had a little bug at one point, where
--- the "OR REPLACE" was not dispatched to segments, and this failed)
-create or replace language plpython3u;
+-- end_ignore
 
 --start_ignore
 drop schema if exists bfv_legacy cascade;

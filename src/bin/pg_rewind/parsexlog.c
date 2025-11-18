@@ -70,15 +70,14 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 	if (xlogreader == NULL)
 		pg_fatal("out of memory");
 
+	XLogBeginRead(xlogreader, startpoint);
 	do
 	{
-		record = XLogReadRecord(xlogreader, startpoint, &errormsg);
+		record = XLogReadRecord(xlogreader, &errormsg);
 
 		if (record == NULL)
 		{
-			XLogRecPtr	errptr;
-
-			errptr = startpoint ? startpoint : xlogreader->EndRecPtr;
+			XLogRecPtr	errptr = xlogreader->EndRecPtr;
 
 			if (errormsg)
 				pg_fatal("could not read WAL record at %X/%X: %s",
@@ -90,8 +89,6 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 		}
 
 		extractPageInfo(xlogreader);
-
-		startpoint = InvalidXLogRecPtr; /* continue reading at next record */
 
 	} while (xlogreader->ReadRecPtr != endpoint);
 
@@ -122,7 +119,8 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, int tliIndex)
 	if (xlogreader == NULL)
 		pg_fatal("out of memory");
 
-	record = XLogReadRecord(xlogreader, ptr, &errormsg);
+	XLogBeginRead(xlogreader, ptr);
+	record = XLogReadRecord(xlogreader, &errormsg);
 	if (record == NULL)
 	{
 		if (errormsg)
@@ -184,7 +182,8 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 	{
 		uint8		info;
 
-		record = XLogReadRecord(xlogreader, searchptr, &errormsg);
+		XLogBeginRead(xlogreader, searchptr);
+		record = XLogReadRecord(xlogreader, &errormsg);
 
 		if (record == NULL)
 		{

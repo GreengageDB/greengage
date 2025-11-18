@@ -731,7 +731,7 @@ sub init_from_backup
 
 	$params{has_streaming} = 0 unless defined $params{has_streaming};
 	$params{has_restoring} = 0 unless defined $params{has_restoring};
-	$params{standby}       = 1 unless defined $params{standby};
+	$params{standby} = 1 unless defined $params{standby};
 
 	print
 	  "# Initializing node \"$node_name\" from backup \"$backup_name\" of node \"$root_name\"\n";
@@ -762,8 +762,7 @@ port = $port
 			"unix_socket_directories = '$host'");
 	}
 	$self->enable_streaming($root_node) if $params{has_streaming};
-	$self->enable_restoring($root_node, $params{standby})
-	  if $params{has_restoring};
+	$self->enable_restoring($root_node, $params{standby}) if $params{has_restoring};
 	return;
 }
 
@@ -839,7 +838,7 @@ sub start
 		return 0;
 	}
 
-	$self->_update_pid(1);
+	$self->_update_pid(1, $params{fail_ok});
 	$ENV{PGOPTIONS}      = '-c gp_role=utility';
 	return 1;
 }
@@ -1040,10 +1039,10 @@ restore_command = '$copy_command'
 
 =pod
 
-
 =item $node->set_recovery_mode()
 
 Place recovery.signal file.
+
 =cut
 
 sub set_recovery_mode
@@ -1103,7 +1102,7 @@ archive_command = '$copy_command'
 # Internal method
 sub _update_pid
 {
-	my ($self, $is_running) = @_;
+	my ($self, $is_running, $fail_ok) = @_;
 	my $name = $self->name;
 
 	#GPDB_12_MERGE_FIXME: somehow without this fails to find the pid file
@@ -1118,7 +1117,7 @@ sub _update_pid
 		close $pidfile;
 
 		# If we found a pidfile when there shouldn't be one, complain.
-		BAIL_OUT("postmaster.pid unexpectedly present") unless $is_running;
+		BAIL_OUT("postmaster.pid unexpectedly present") unless $is_running or $fail_ok;
 		return;
 	}
 
@@ -1126,7 +1125,7 @@ sub _update_pid
 	print "# No postmaster PID for node \"$name\"\n";
 
 	# Complain if we expected to find a pidfile.
-	BAIL_OUT("postmaster.pid unexpectedly not present") if $is_running;
+	BAIL_OUT("postmaster.pid unexpectedly not present") if $is_running and !$fail_ok;
 	return;
 }
 
@@ -1298,20 +1297,6 @@ sub can_bind
 	return $ret;
 }
 
-# Retain the errno on die() if set, else assume a generic errno of 1.
-# This will instruct the END handler on how to handle artifacts left
-# behind from tests.
-$SIG{__DIE__} = sub {
-	if ($!)
-	{
-		$died = $!;
-	}
-	else
-	{
-		$died = 1;
-	}
-};
-
 # Automatically shut down any still-running nodes when the test script exits.
 # Note that this just stops the postmasters (in the same order the nodes were
 # created in).  Any temporary directories are deleted, in an unspecified
@@ -1330,8 +1315,7 @@ END
 		next if defined $ENV{'PG_TEST_NOCLEAN'};
 
 		# clean basedir on clean test invocation
-		$node->clean_node
-		  if TestLib::all_tests_passing() && !defined $died && !$exit_code;
+		$node->clean_node if $exit_code == 0 && TestLib::all_tests_passing();
 	}
 
 	$? = $exit_code;

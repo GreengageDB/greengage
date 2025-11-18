@@ -26,9 +26,7 @@
 #include <pwd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#ifdef HAVE_UTIME_H
 #include <utime.h>
-#endif
 
 #include "access/htup_details.h"
 #include "catalog/pg_authid.h"
@@ -1303,29 +1301,8 @@ TouchSocketLockFiles(void)
 		if (strcmp(socketLockFile, DIRECTORY_LOCK_FILE) == 0)
 			continue;
 
-		/*
-		 * utime() is POSIX standard, utimes() is a common alternative; if we
-		 * have neither, fall back to actually reading the file (which only
-		 * sets the access time not mod time, but that should be enough in
-		 * most cases).  In all paths, we ignore errors.
-		 */
-#ifdef HAVE_UTIME
-		utime(socketLockFile, NULL);
-#else							/* !HAVE_UTIME */
-#ifdef HAVE_UTIMES
-		utimes(socketLockFile, NULL);
-#else							/* !HAVE_UTIMES */
-		int			fd;
-		char		buffer[1];
-
-		fd = open(socketLockFile, O_RDONLY | PG_BINARY, 0);
-		if (fd >= 0)
-		{
-			read(fd, buffer, sizeof(buffer));
-			close(fd);
-		}
-#endif							/* HAVE_UTIMES */
-#endif							/* HAVE_UTIME */
+		/* we just ignore any error here */
+		(void) utime(socketLockFile, NULL);
 	}
 }
 
@@ -1423,8 +1400,7 @@ AddToDataDirLockFile(int target_line, const char *str)
 	len = strlen(destbuffer);
 	errno = 0;
 	pgstat_report_wait_start(WAIT_EVENT_LOCK_FILE_ADDTODATADIR_WRITE);
-	if (lseek(fd, (off_t) 0, SEEK_SET) != 0 ||
-		(int) write(fd, destbuffer, len) != len)
+	if (pg_pwrite(fd, destbuffer, len, 0) != len)
 	{
 		pgstat_report_wait_end();
 		/* if write didn't set errno, assume problem is no disk space */

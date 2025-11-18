@@ -153,8 +153,6 @@ static int	wal_segment_size_mb;
 static const char *progname;
 static int	encodingid;
 static char *bki_file;
-static char *desc_file;
-static char *shdesc_file;
 static char *hba_file;
 static char *ident_file;
 static char *conf_file;
@@ -1691,38 +1689,11 @@ setup_sysviews(FILE *cmdfd)
 }
 
 /*
- * load description data
+ * fill in extra description data
  */
 static void
 setup_description(FILE *cmdfd)
 {
-	PG_CMD_PUTS("CREATE TEMP TABLE tmp_pg_description ( "
-				"	objoid oid, "
-				"	classname name, "
-				"	objsubid int4, "
-				"	description text);\n\n");
-
-	PG_CMD_PRINTF("COPY tmp_pg_description FROM E'%s';\n\n",
-				   escape_quotes(desc_file));
-
-	PG_CMD_PUTS("INSERT INTO pg_description "
-				" SELECT t.objoid, c.oid, t.objsubid, t.description "
-				"  FROM tmp_pg_description t, pg_class c "
-				"    WHERE c.relname = t.classname;\n\n");
-
-	PG_CMD_PUTS("CREATE TEMP TABLE tmp_pg_shdescription ( "
-				" objoid oid, "
-				" classname name, "
-				" description text);\n\n");
-
-	PG_CMD_PRINTF("COPY tmp_pg_shdescription FROM E'%s';\n\n",
-				   escape_quotes(shdesc_file));
-
-	PG_CMD_PUTS("INSERT INTO pg_shdescription "
-				" SELECT t.objoid, c.oid, t.description "
-				"  FROM tmp_pg_shdescription t, pg_class c "
-				"   WHERE c.relname = t.classname;\n\n");
-
 	/* Create default descriptions for operator implementation functions */
 	PG_CMD_PUTS("WITH funcdescs AS ( "
 				"SELECT p.oid as p_oid, o.oid as o_oid, oprname "
@@ -1736,13 +1707,6 @@ setup_description(FILE *cmdfd)
 				"  AND NOT EXISTS (SELECT 1 FROM pg_description "
 				"   WHERE objoid = o_oid AND classoid = 'pg_operator'::regclass"
 				"         AND description LIKE 'deprecated%');\n\n");
-
-	/*
-	 * Even though the tables are temp, drop them explicitly so they don't get
-	 * copied into template0/postgres databases.
-	 */
-	PG_CMD_PUTS("DROP TABLE tmp_pg_description;\n\n");
-	PG_CMD_PUTS("DROP TABLE tmp_pg_shdescription;\n\n");
 }
 
 #if 0
@@ -2211,7 +2175,7 @@ make_postgres(FILE *cmdfd)
  * signal handler in case we are interrupted.
  *
  * The Windows runtime docs at
- * http://msdn.microsoft.com/library/en-us/vclib/html/_crt_signal.asp
+ * https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/signal
  * specifically forbid a number of things being done from a signal handler,
  * including IO, memory allocation and system calls, and only allow jmpbuf
  * if you are handling SIGFPE.
@@ -2220,11 +2184,10 @@ make_postgres(FILE *cmdfd)
  * exit() directly.
  *
  * Also note the behaviour of Windows with SIGINT, which says this:
- *	 Note	SIGINT is not supported for any Win32 application, including
- *	 Windows 98/Me and Windows NT/2000/XP. When a CTRL+C interrupt occurs,
- *	 Win32 operating systems generate a new thread to specifically handle
- *	 that interrupt. This can cause a single-thread application such as UNIX,
- *	 to become multithreaded, resulting in unexpected behavior.
+ *  SIGINT is not supported for any Win32 application. When a CTRL+C interrupt
+ *  occurs, Win32 operating systems generate a new thread to specifically
+ *  handle that interrupt. This can cause a single-thread application, such as
+ *  one in UNIX, to become multithreaded and cause unexpected behavior.
  *
  * I have no idea how to handle this. (Strange they call UNIX an application!)
  * So this will need some testing on Windows.
@@ -2825,8 +2788,6 @@ void
 setup_data_file_paths(void)
 {
 	set_input(&bki_file, "postgres.bki");
-	set_input(&desc_file, "postgres.description");
-	set_input(&shdesc_file, "postgres.shdescription");
 	set_input(&hba_file, "pg_hba.conf.sample");
 	set_input(&ident_file, "pg_ident.conf.sample");
 	set_input(&conf_file, "postgresql.conf.sample");
@@ -2843,13 +2804,11 @@ setup_data_file_paths(void)
 				"VERSION=%s\n"
 				"PGDATA=%s\nshare_path=%s\nPGPATH=%s\n"
 				"POSTGRES_SUPERUSERNAME=%s\nPOSTGRES_BKI=%s\n"
-				"POSTGRES_DESCR=%s\nPOSTGRES_SHDESCR=%s\n"
 				"POSTGRESQL_CONF_SAMPLE=%s\n"
 				"PG_HBA_SAMPLE=%s\nPG_IDENT_SAMPLE=%s\n",
 				PG_VERSION,
 				pg_data, share_path, bin_path,
 				username, bki_file,
-				desc_file, shdesc_file,
 				conf_file,
 				hba_file, ident_file);
 		if (show_setting)
@@ -2857,8 +2816,6 @@ setup_data_file_paths(void)
 	}
 
 	check_input(bki_file);
-	check_input(desc_file);
-	check_input(shdesc_file);
 	check_input(hba_file);
 	check_input(ident_file);
 	check_input(conf_file);

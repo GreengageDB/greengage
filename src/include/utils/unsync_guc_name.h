@@ -141,6 +141,7 @@
 		"extra_float_digits",
 		"from_collapse_limit",
 		"fsync",
+		"ignore_invalid_pages",
 		"full_page_writes",
 		"geqo",
 		"geqo_effort",

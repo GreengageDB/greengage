@@ -212,8 +212,7 @@ static int	check_valid_until_for_gssapi(Port *port);
  */
 #ifdef ENABLE_SSPI
 typedef SECURITY_STATUS
-			(WINAPI * QUERY_SECURITY_CONTEXT_TOKEN_FN) (
-														PCtxtHandle, void **);
+			(WINAPI * QUERY_SECURITY_CONTEXT_TOKEN_FN) (PCtxtHandle, void **);
 static int	pg_SSPI_recvauth(Port *port);
 static int	pg_SSPI_make_upn(char *accountname,
 							 size_t accountnamesize,
@@ -1519,8 +1518,7 @@ pg_GSS_recvauth(Port *port)
 		elog(DEBUG4, "processing received GSS token of length %u",
 			 (unsigned int) gbuf.length);
 
-		maj_stat = gss_accept_sec_context(
-										  &min_stat,
+		maj_stat = gss_accept_sec_context(&min_stat,
 										  &port->gss->ctx,
 										  port->gss->cred,
 										  &gbuf,
@@ -1759,6 +1757,13 @@ pg_SSPI_recvauth(Port *port)
 		mtype = pq_getbyte();
 		if (mtype != 'p')
 		{
+			if (sspictx != NULL)
+			{
+				DeleteSecurityContext(sspictx);
+				free(sspictx);
+			}
+			FreeCredentialsHandle(&sspicred);
+
 			/* Only log error if client didn't disconnect. */
 			if (mtype != EOF)
 				ereport(ERROR,
@@ -1774,6 +1779,12 @@ pg_SSPI_recvauth(Port *port)
 		{
 			/* EOF - pq_getmessage already logged error */
 			pfree(buf.data);
+			if (sspictx != NULL)
+			{
+				DeleteSecurityContext(sspictx);
+				free(sspictx);
+			}
+			FreeCredentialsHandle(&sspicred);
 			return STATUS_ERROR;
 		}
 
@@ -2870,9 +2881,9 @@ InitializeLDAPConnection(Port *port, LDAP **ldap)
 		if (_ldap_start_tls_sA == NULL)
 		{
 			/*
-			 * Need to load this function dynamically because it does not
-			 * exist on Windows 2000, and causes a load error for the whole
-			 * exe if referenced.
+			 * Need to load this function dynamically because it may not exist
+			 * on Windows, and causes a load error for the whole exe if
+			 * referenced.
 			 */
 			HANDLE		ldaphandle;
 
@@ -2895,6 +2906,7 @@ InitializeLDAPConnection(Port *port, LDAP **ldap)
 						(errmsg("could not load function _ldap_start_tls_sA in wldap32.dll"),
 						 errdetail("LDAP over SSL is not supported on this platform.")));
 				ldap_unbind(*ldap);
+				FreeLibrary(ldaphandle);
 				return STATUS_ERROR;
 			}
 

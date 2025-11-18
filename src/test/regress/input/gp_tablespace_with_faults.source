@@ -9,11 +9,9 @@
 -- start_ignore
 \! gpconfig -c create_restartpoint_on_ckpt_record_replay -v on --skipvalidation;
 \! gpstop -u;
--- end_ignore
-
 
 create or replace language plpython3u;
-
+-- end_ignore
 
 create or replace function remove_tablespace_location_directory(tablespace_location_dir text) returns void as $$
 	import shutil

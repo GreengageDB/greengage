@@ -74,18 +74,37 @@ static double sind_q1(double x);
 static double cosd_q1(double x);
 static void init_degree_constants(void);
 
-#ifndef HAVE_CBRT
+
 /*
- * Some machines (in particular, some versions of AIX) have an extern
- * declaration for cbrt() in <math.h> but fail to provide the actual
- * function, which causes configure to not set HAVE_CBRT.  Furthermore,
- * their compilers spit up at the mismatch between extern declaration
- * and static definition.  We work around that here by the expedient
- * of a #define to make the actual name of the static function different.
+ * We use these out-of-line ereport() calls to report float overflow,
+ * underflow, and zero-divide, because following our usual practice of
+ * repeating them at each call site would lead to a lot of code bloat.
+ *
+ * This does mean that you don't get a useful error location indicator.
  */
-#define cbrt my_cbrt
-static double cbrt(double x);
-#endif							/* HAVE_CBRT */
+pg_noinline void
+float_overflow_error(void)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+			 errmsg("value out of range: overflow")));
+}
+
+pg_noinline void
+float_underflow_error(void)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+			 errmsg("value out of range: underflow")));
+}
+
+pg_noinline void
+float_zero_divide_error(void)
+{
+	ereport(ERROR,
+			(errcode(ERRCODE_DIVISION_BY_ZERO),
+			 errmsg("division by zero")));
+}
 
 
 /*
@@ -1218,10 +1237,15 @@ Datum
 dtof(PG_FUNCTION_ARGS)
 {
 	float8		num = PG_GETARG_FLOAT8(0);
+	float4		result;
 
-	check_float4_val((float4) num, isinf(num), num == 0);
+	result = (float4) num;
+	if (unlikely(isinf(result)) && !isinf(num))
+		float_overflow_error();
+	if (unlikely(result == 0.0f) && num != 0.0)
+		float_underflow_error();
 
-	PG_RETURN_FLOAT4((float4) num);
+	PG_RETURN_FLOAT4(result);
 }
 
 
@@ -1472,8 +1496,11 @@ dsqrt(PG_FUNCTION_ARGS)
 				 errmsg("cannot take square root of a negative number")));
 
 	result = sqrt(arg1);
+	if (unlikely(isinf(result)) && !isinf(arg1))
+		float_overflow_error();
+	if (unlikely(result == 0.0) && arg1 != 0.0)
+		float_underflow_error();
 
-	check_float8_val(result, isinf(arg1), arg1 == 0);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1488,7 +1515,11 @@ dcbrt(PG_FUNCTION_ARGS)
 	float8		result;
 
 	result = cbrt(arg1);
-	check_float8_val(result, isinf(arg1), arg1 == 0);
+	if (unlikely(isinf(result)) && !isinf(arg1))
+		float_overflow_error();
+	if (unlikely(result == 0.0) && arg1 != 0.0)
+		float_underflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1560,7 +1591,11 @@ dpow(PG_FUNCTION_ARGS)
 	else if (errno == ERANGE && result != 0 && !isinf(result))
 		result = get_float8_infinity();
 
-	check_float8_val(result, isinf(arg1) || isinf(arg2), arg1 == 0);
+	if (unlikely(isinf(result)) && !isinf(arg1) && !isinf(arg2))
+		float_overflow_error();
+	if (unlikely(result == 0.0) && arg1 != 0.0)
+		float_underflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1579,7 +1614,11 @@ dexp(PG_FUNCTION_ARGS)
 	if (errno == ERANGE && result != 0 && !isinf(result))
 		result = get_float8_infinity();
 
-	check_float8_val(result, isinf(arg1), false);
+	if (unlikely(isinf(result)) && !isinf(arg1))
+		float_overflow_error();
+	if (unlikely(result == 0.0))
+		float_underflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1607,8 +1646,11 @@ dlog1(PG_FUNCTION_ARGS)
 				 errmsg("cannot take logarithm of a negative number")));
 
 	result = log(arg1);
+	if (unlikely(isinf(result)) && !isinf(arg1))
+		float_overflow_error();
+	if (unlikely(result == 0.0) && arg1 != 1.0)
+		float_underflow_error();
 
-	check_float8_val(result, isinf(arg1), arg1 == 1);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1637,8 +1679,11 @@ dlog10(PG_FUNCTION_ARGS)
 				 errmsg("cannot take logarithm of a negative number")));
 
 	result = log10(arg1);
+	if (unlikely(isinf(result)) && !isinf(arg1))
+		float_overflow_error();
+	if (unlikely(result == 0.0) && arg1 != 1.0)
+		float_underflow_error();
 
-	check_float8_val(result, isinf(arg1), arg1 == 1);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1667,8 +1712,9 @@ dacos(PG_FUNCTION_ARGS)
 				 errmsg("input is out of range")));
 
 	result = acos(arg1);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
 
-	check_float8_val(result, false, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1697,8 +1743,9 @@ dasin(PG_FUNCTION_ARGS)
 				 errmsg("input is out of range")));
 
 	result = asin(arg1);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
 
-	check_float8_val(result, false, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1722,8 +1769,9 @@ datan(PG_FUNCTION_ARGS)
 	 * finite, even if the input is infinite.
 	 */
 	result = atan(arg1);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
 
-	check_float8_val(result, false, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1747,8 +1795,9 @@ datan2(PG_FUNCTION_ARGS)
 	 * should always be finite, even if the inputs are infinite.
 	 */
 	result = atan2(arg1, arg2);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
 
-	check_float8_val(result, false, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1787,8 +1836,9 @@ dcos(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("input is out of range")));
+	if (unlikely(isinf(result)))
+		float_overflow_error();
 
-	check_float8_val(result, false, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1814,7 +1864,8 @@ dcot(PG_FUNCTION_ARGS)
 				 errmsg("input is out of range")));
 
 	result = 1.0 / result;
-	check_float8_val(result, true /* cot(0) == Inf */ , true);
+	/* Not checking for overflow because cot(0) == Inf */
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1839,8 +1890,9 @@ dsin(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("input is out of range")));
+	if (unlikely(isinf(result)))
+		float_overflow_error();
 
-	check_float8_val(result, false, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -1864,8 +1916,8 @@ dtan(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
 				 errmsg("input is out of range")));
+	/* Not checking for overflow because tan(pi/2) == Inf */
 
-	check_float8_val(result, true /* tan(pi/2) == Inf */ , true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2016,7 +2068,9 @@ dacosd(PG_FUNCTION_ARGS)
 	else
 		result = 90.0 + asind_q1(-arg1);
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2051,7 +2105,9 @@ dasind(PG_FUNCTION_ARGS)
 	else
 		result = -asind_q1(-arg1);
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2081,7 +2137,9 @@ datand(PG_FUNCTION_ARGS)
 	atan_arg1 = atan(arg1);
 	result = (atan_arg1 / atan_1_0) * 45.0;
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2115,7 +2173,9 @@ datan2d(PG_FUNCTION_ARGS)
 	atan2_arg1_arg2 = atan2(arg1, arg2);
 	result = (atan2_arg1_arg2 / atan_1_0) * 45.0;
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2236,7 +2296,9 @@ dcosd(PG_FUNCTION_ARGS)
 
 	result = sign * cosd_q1(arg1);
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2301,7 +2363,8 @@ dcotd(PG_FUNCTION_ARGS)
 	if (result == 0.0)
 		result = 0.0;
 
-	check_float8_val(result, true /* cotd(0) == Inf */ , true);
+	/* Not checking for overflow because cotd(0) == Inf */
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2355,7 +2418,9 @@ dsind(PG_FUNCTION_ARGS)
 
 	result = sign * sind_q1(arg1);
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2420,7 +2485,8 @@ dtand(PG_FUNCTION_ARGS)
 	if (result == 0.0)
 		result = 0.0;
 
-	check_float8_val(result, true /* tand(90) == Inf */ , true);
+	/* Not checking for overflow because tand(90) == Inf */
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2487,7 +2553,6 @@ dsinh(PG_FUNCTION_ARGS)
 			result = get_float8_infinity();
 	}
 
-	check_float8_val(result, true, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2511,7 +2576,9 @@ dcosh(PG_FUNCTION_ARGS)
 	if (errno == ERANGE)
 		result = get_float8_infinity();
 
-	check_float8_val(result, true, false);
+	if (unlikely(result == 0.0))
+		float_underflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2529,7 +2596,9 @@ dtanh(PG_FUNCTION_ARGS)
 	 */
 	result = tanh(arg1);
 
-	check_float8_val(result, false, true);
+	if (unlikely(isinf(result)))
+		float_overflow_error();
+
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2547,7 +2616,6 @@ dasinh(PG_FUNCTION_ARGS)
 	 */
 	result = asinh(arg1);
 
-	check_float8_val(result, true, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2573,7 +2641,6 @@ dacosh(PG_FUNCTION_ARGS)
 
 	result = acosh(arg1);
 
-	check_float8_val(result, true, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2608,7 +2675,6 @@ datanh(PG_FUNCTION_ARGS)
 	else
 		result = atanh(arg1);
 
-	check_float8_val(result, true, true);
 	PG_RETURN_FLOAT8(result);
 }
 
@@ -2809,7 +2875,8 @@ float8_combine(PG_FUNCTION_ARGS)
 		Sx = float8_pl(Sx1, Sx2);
 		tmp = Sx1 / N1 - Sx2 / N2;
 		Sxx = Sxx1 + Sxx2 + N1 * N2 * tmp * tmp / N;
-		check_float8_val(Sxx, isinf(Sxx1) || isinf(Sxx2), true);
+		if (unlikely(isinf(Sxx)) && !isinf(Sxx1) && !isinf(Sxx2))
+			float_overflow_error();
 	}
 
 	/*
@@ -2878,9 +2945,7 @@ float8_accum(PG_FUNCTION_ARGS)
 		if (isinf(Sx) || isinf(Sxx))
 		{
 			if (!isinf(transvalues[1]) && !isinf(newval))
-				ereport(ERROR,
-						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-						 errmsg("value out of range: overflow")));
+				float_overflow_error();
 
 			Sxx = get_float8_nan();
 		}
@@ -2954,9 +3019,7 @@ float4_accum(PG_FUNCTION_ARGS)
 		if (isinf(Sx) || isinf(Sxx))
 		{
 			if (!isinf(transvalues[1]) && !isinf(newval))
-				ereport(ERROR,
-						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-						 errmsg("value out of range: overflow")));
+				float_overflow_error();
 
 			Sxx = get_float8_nan();
 		}
@@ -3177,9 +3240,7 @@ float8_regr_accum(PG_FUNCTION_ARGS)
 				(isinf(Sxy) &&
 				 !isinf(transvalues[1]) && !isinf(newvalX) &&
 				 !isinf(transvalues[3]) && !isinf(newvalY)))
-				ereport(ERROR,
-						(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-						 errmsg("value out of range: overflow")));
+				float_overflow_error();
 
 			if (isinf(Sxx))
 				Sxx = get_float8_nan();
@@ -3319,13 +3380,16 @@ float8_regr_combine(PG_FUNCTION_ARGS)
 		Sx = float8_pl(Sx1, Sx2);
 		tmp1 = Sx1 / N1 - Sx2 / N2;
 		Sxx = Sxx1 + Sxx2 + N1 * N2 * tmp1 * tmp1 / N;
-		check_float8_val(Sxx, isinf(Sxx1) || isinf(Sxx2), true);
+		if (unlikely(isinf(Sxx)) && !isinf(Sxx1) && !isinf(Sxx2))
+			float_overflow_error();
 		Sy = float8_pl(Sy1, Sy2);
 		tmp2 = Sy1 / N1 - Sy2 / N2;
 		Syy = Syy1 + Syy2 + N1 * N2 * tmp2 * tmp2 / N;
-		check_float8_val(Syy, isinf(Syy1) || isinf(Syy2), true);
+		if (unlikely(isinf(Syy)) && !isinf(Syy1) && !isinf(Syy2))
+			float_overflow_error();
 		Sxy = Sxy1 + Sxy2 + N1 * N2 * tmp1 * tmp2 / N;
-		check_float8_val(Sxy, isinf(Sxy1) || isinf(Sxy2), true);
+		if (unlikely(isinf(Sxy)) && !isinf(Sxy1) && !isinf(Sxy2))
+			float_overflow_error();
 	}
 
 	/*
@@ -3912,28 +3976,3 @@ width_bucket_float8(PG_FUNCTION_ARGS)
 
 	PG_RETURN_INT32(result);
 }
-
-/* ========== PRIVATE ROUTINES ========== */
-
-#ifndef HAVE_CBRT
-
-static double
-cbrt(double x)
-{
-	int			isneg = (x < 0.0);
-	double		absx = fabs(x);
-	double		tmpres = pow(absx, (double) 1.0 / (double) 3.0);
-
-	/*
-	 * The result is somewhat inaccurate --- not really pow()'s fault, as the
-	 * exponent it's handed contains roundoff error.  We can improve the
-	 * accuracy by doing one iteration of Newton's formula.  Beware of zero
-	 * input however.
-	 */
-	if (tmpres > 0.0)
-		tmpres -= (tmpres - absx / (tmpres * tmpres)) / (double) 3.0;
-
-	return isneg ? -tmpres : tmpres;
-}
-
-#endif							/* !HAVE_CBRT */

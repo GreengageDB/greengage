@@ -85,9 +85,7 @@
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
 #endif
-#ifdef HAVE_UTIME_H
 #include <utime.h>
-#endif
 #ifdef _MSC_VER					/* mstcpip.h is missing on mingw */
 #include <mstcpip.h>
 #endif
@@ -191,8 +189,8 @@ static int	internal_putbytes(const char *s, size_t len);
 static int	internal_flush(void);
 
 #ifdef HAVE_UNIX_SOCKETS
-static int	Lock_AF_UNIX(char *unixSocketDir, char *unixSocketPath);
-static int	Setup_AF_UNIX(char *sock_path);
+static int	Lock_AF_UNIX(const char *unixSocketDir, const char *unixSocketPath);
+static int	Setup_AF_UNIX(const char *sock_path);
 #endif							/* HAVE_UNIX_SOCKETS */
 
 static const PQcommMethods PqCommSocketMethods = {
@@ -368,8 +366,8 @@ pq_comm_close_fatal(void)
  */
 
 int
-StreamServerPort(int family, char *hostName, unsigned short portNumber,
-				 char *unixSocketDir,
+StreamServerPort(int family, const char *hostName, unsigned short portNumber,
+				 const char *unixSocketDir,
 				 pgsocket ListenSocket[], int MaxListen)
 {
 	pgsocket	fd;
@@ -652,7 +650,7 @@ StreamServerPort(int family, char *hostName, unsigned short portNumber,
  * Lock_AF_UNIX -- configure unix socket file path
  */
 static int
-Lock_AF_UNIX(char *unixSocketDir, char *unixSocketPath)
+Lock_AF_UNIX(const char *unixSocketDir, const char *unixSocketPath)
 {
 	/*
 	 * Grab an interlock file associated with the socket file.
@@ -683,7 +681,7 @@ Lock_AF_UNIX(char *unixSocketDir, char *unixSocketPath)
  * Setup_AF_UNIX -- configure unix socket permissions
  */
 static int
-Setup_AF_UNIX(char *sock_path)
+Setup_AF_UNIX(const char *sock_path)
 {
 	/*
 	 * Fix socket ownership/permission if requested.  Note we must do this
@@ -924,20 +922,8 @@ TouchSocketFiles(void)
 	{
 		char	   *sock_path = (char *) lfirst(l);
 
-		/*
-		 * utime() is POSIX standard, utimes() is a common alternative. If we
-		 * have neither, there's no way to affect the mod or access time of
-		 * the socket :-(
-		 *
-		 * In either path, we ignore errors; there's no point in complaining.
-		 */
-#ifdef HAVE_UTIME
-		utime(sock_path, NULL);
-#else							/* !HAVE_UTIME */
-#ifdef HAVE_UTIMES
-		utimes(sock_path, NULL);
-#endif							/* HAVE_UTIMES */
-#endif							/* HAVE_UTIME */
+		/* Ignore errors; there's no point in complaining */
+		(void) utime(sock_path, NULL);
 	}
 }
 

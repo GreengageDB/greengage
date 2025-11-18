@@ -23,7 +23,9 @@
 #include "nodes/lockoptions.h"
 #include "nodes/primnodes.h"
 #include "storage/bufpage.h"
+#include "storage/dsm.h"
 #include "storage/lockdefs.h"
+#include "storage/shm_toc.h"
 #include "utils/relcache.h"
 #include "utils/snapshot.h"
 
@@ -190,6 +192,9 @@ extern BlockNumber ss_get_location(Relation rel, BlockNumber relnblocks);
 extern void SyncScanShmemInit(void);
 extern Size SyncScanShmemSize(void);
 
+/* in heap/vacuumlazy.c */
+extern void parallel_vacuum_main(dsm_segment *seg, shm_toc *toc);
+
 /* in heap/heapam_visibility.c */
 extern bool HeapTupleSatisfiesVisibility(Relation relation, HeapTuple stup, Snapshot snapshot,
 										 Buffer buffer);
@@ -212,5 +217,7 @@ extern bool ResolveCminCmaxDuringDecoding(struct HTAB *tuplecid_data,
 										  HeapTuple htup,
 										  Buffer buffer,
 										  CommandId *cmin, CommandId *cmax);
+extern void HeapCheckForSerializableConflictOut(bool valid, Relation relation, HeapTuple tuple,
+												Buffer buffer, Snapshot snapshot);
 
 #endif							/* HEAPAM_H */

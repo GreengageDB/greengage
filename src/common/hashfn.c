@@ -23,7 +23,8 @@
  *	  It is expected that every bit of a hash function's 32-bit result is
  *	  as random as every other; failure to ensure this is likely to lead
  *	  to poor performance of hash tables.  In most cases a hash
- *	  function should use hash_any() or its variant hash_uint32().
+ *	  function should use hash_bytes() or its variant hash_bytes_uint32(),
+ *	  or the wrappers hash_any() and hash_uint32 defined in hashfn.h.
  *
  *-------------------------------------------------------------------------
  */
@@ -706,6 +707,7 @@ uint32_hash(const void *key, Size keysize)
 	Assert(keysize == sizeof(uint32));
 	return hash_bytes_uint32(*((const uint32 *) key));
 }
+
 /*
  * int32_hash: hash function for int32: no-op
  */
