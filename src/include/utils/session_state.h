@@ -96,6 +96,13 @@ typedef struct SessionState
 	 */
 	void *resGroupSlot;
 
+	/*
+	 * Bypass mode resource group information.
+	 * When gp_resource_group_bypass is enabled, store the bypass group ID
+	 * so retrieve sessions can initialize their bypass mode correctly.
+	 */
+	Oid bypassResGroupId;
+
 	/* MyProc->queryCommandId of the latest cursor command in this session */
 	int latestCursorCommandId;
 
@@ -132,6 +139,7 @@ extern volatile SessionStateArray *AllSessionStateEntries;
 extern Size SessionState_ShmemSize(void);
 extern void SessionState_ShmemInit(void);
 extern void SessionState_Init(void);
+extern void SessionState_Init_Retrieve(void);
 extern void SessionState_Shutdown(void);
 extern bool SessionState_IsAcquired(SessionState *sessionState);
 

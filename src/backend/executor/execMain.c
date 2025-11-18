@@ -87,6 +87,7 @@
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
 #include "utils/typcache.h"
+#include "utils/vmem_tracker.h"
 #include "utils/workfile_mgr.h"
 #include "utils/faultinjector.h"
 #include "utils/resource_manager.h"

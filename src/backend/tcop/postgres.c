@@ -5032,6 +5032,16 @@ PostgresMain(int argc, char *argv[],
 										   ALLOCSET_DEFAULT_INITSIZE,
 										   ALLOCSET_DEFAULT_MAXSIZE);
 
+	if (am_cursor_retrieve_handler && IsResGroupActivated())
+	{
+		/*
+		 * We're currently in utility mode. Initialize now-empty SessionState
+		 * and apply resource group limits.
+		 */
+
+		SessionState_Init_Retrieve();
+		GPMemoryProtect_Init();
+	}
 
 	/*
 	 * POSTGRES main processing loop begins here
@@ -5399,6 +5409,11 @@ PostgresMain(int argc, char *argv[],
 					pq_getmsgend(&input_message);
 
 					elogif(Debug_print_full_dtm, LOG, "Simple query stmt: %s.",query_string);
+
+					if (ShouldUseRetrieveResGroup())
+					{
+						SwitchResGroupOnRetrieveSession();
+					}
 
 					if (am_walsender)
 						exec_replication_command(query_string);

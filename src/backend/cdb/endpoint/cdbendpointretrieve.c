@@ -41,6 +41,8 @@
 #include "cdbendpoint_private.h"
 #include "cdb/cdbendpoint.h"
 #include "cdb/cdbsrlz.h"
+#include "utils/resource_manager.h"
+#include "utils/vmem_tracker.h"
 
 /* Is this the utility-mode backend for RETRIEVE? */
 bool		am_cursor_retrieve_handler = false;
@@ -154,6 +156,18 @@ AuthEndpoint(Oid userID, const char *tokenStr)
 	}
 
 	return found;
+}
+
+int
+RetrieveSessionId(void)
+{
+	return RetrieveCtl.sessionID;
+}
+
+bool
+IsRetrieveSessionOpen(void)
+{
+	return RetrieveCtl.current_entry != NULL;
 }
 
 /*
@@ -749,6 +763,15 @@ retrieve_exit_callback(int code, Datum arg)
 			detach_receiver_mq(entry);
 	}
 	entryHTB = NULL;
+
+	/*
+	 * Unassign resource group once at process exit.
+	 * Called here after all endpoint cleanup is done.
+	 */
+	if (ShouldUnassignResGroup())
+	{
+		UnassignResGroup();
+	}
 }
 
 /*
@@ -772,7 +795,15 @@ retrieve_xact_callback(XactEvent ev, void *arg pg_attribute_unused())
 				retrieve_cancel_action(RetrieveCtl.current_entry,
 									   "Endpoint retrieve statement aborted");
 			finish_retrieve(true);
+		}
 
+		/*
+		 * Unassign resource group once at transaction abort.
+		 * Called here after all endpoint cleanup is done.
+		 */
+		if (ShouldUnassignResGroup())
+		{
+			UnassignResGroup();
 		}
 	}
 }

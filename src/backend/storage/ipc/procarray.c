@@ -52,6 +52,7 @@
 #include "access/xact.h"
 #include "access/twophase.h"
 #include "catalog/catalog.h"
+#include "cdb/cdbendpoint.h"
 #include "miscadmin.h"
 #include "port/atomics.h"
 #include "storage/proc.h"
@@ -4951,8 +4952,22 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
 	{
 		PGPROC	   *proc = &allProcs[arrayP->pgprocnos[i]];
 
-		if (proc->mppSessionId != sessionId)
+		if (proc->mppSessionId != sessionId &&
+			proc->mppSessionId != InvalidGpSessionId)
+		{
 			continue;
+		}
+
+		if (proc->mppSessionId == InvalidGpSessionId)
+		{
+			/*
+			 * If this session is running PARALLEL RETRIEVE CURSOR, we must move
+			 * signal to retrieve connection.
+			 */
+			if (!isRetrieveConnection(proc->pid, sessionId))
+				continue;
+		}
+
 
 		/*
 		 * Before, we didn't distinguish entrydb processes from main target

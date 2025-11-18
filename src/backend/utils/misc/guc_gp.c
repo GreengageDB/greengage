@@ -233,6 +233,7 @@ bool		gp_resource_group_cpu_ceiling_enforcement;
 double		gp_resource_group_memory_limit;
 bool		gp_resource_group_bypass;
 bool		gp_resource_group_enable_recalculate_query_mem;
+bool		gp_resource_group_retrieve;
 
 /* Perfmon segment GUCs */
 int			gp_perfmon_segment_interval;
@@ -3184,6 +3185,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
+		{"gp_resource_group_retrieve", PGC_SIGHUP, RESOURCES,
+			gettext_noop("Activate resource groups for parallel retrieve cursor sessions."),
+			gettext_noop("When enabled, retrieve sessions use the same resource group as the "
+						 "session that declared the parallel retrieve cursor, sharing slots and "
+						 "enforcing resource limits.")
+		},
+		&gp_resource_group_retrieve,
+		false, NULL, NULL, NULL
+	},
+
+	{
 		{"gp_count_host_segments_using_address", PGC_POSTMASTER, RESOURCES,
 		   gettext_noop("Count the number segments on a host using the address field in gp_segment_configuration"),
 		   gettext_noop("If false, count it using gp_segment_configuration.hostname instead")
@@ -5546,7 +5558,11 @@ assign_pljava_classpath_insecure(bool newval, void *extra)
 static bool
 check_gp_resource_group_bypass(bool *newval, void **extra, GucSource source)
 {
-	if (!ResGroupIsAssigned())
+	/* 
+	 * RETRIEVE cursor sessions exist only during a transaction. That means we
+	 * can't really change the GUC while handler is alive.
+	 */
+	if (!ResGroupIsAssigned() && !am_cursor_retrieve_handler)
 		return true;
 
 	GUC_check_errmsg("SET gp_resource_group_bypass cannot run inside a transaction block");
