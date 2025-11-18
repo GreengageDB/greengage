@@ -879,7 +879,6 @@ INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
 select * from dd_singlecol_1 t1 where a=1 and b < (select count(*) from dd_singlecol_2 t2 where t2.a=t1.a);
 INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
  a | b 
 ---+---
 (0 rows)
@@ -887,7 +886,6 @@ INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL c
 select * from dd_singlecol_1 t1 where a=1 and b in (select count(*) from dd_singlecol_2 t2 where t2.a<=t1.a);
 INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
  a | b 
 ---+---
  1 | 1
