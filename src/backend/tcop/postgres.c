@@ -1807,7 +1807,7 @@ exec_simple_query(const char *query_string)
 		foreach(plantree_item, plantree_list)
 		{
 			PlannedStmt *plannedstmt = (PlannedStmt*) lfirst(plantree_item);
-			if (list_length(plannedstmt->paramExecTypes) > 0)
+			if (plannedstmt->hasInitPlans)
 				use_implicit_block = true;
 		}
 

@@ -654,8 +654,8 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * transactions, since they happen in an implicit
 			 * transaction block.
 			 */
-			bool hasInitPlans = list_length(queryDesc->plannedstmt->paramExecTypes) > 0;
-			needDtx = hasInitPlans || ExecutorSaysTransactionDoesWrites();
+			needDtx = (queryDesc->plannedstmt->hasInitPlans ||
+					   ExecutorSaysTransactionDoesWrites());
 			if (needDtx)
 				setupDtxTransaction();
 

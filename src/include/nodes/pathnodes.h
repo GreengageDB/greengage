@@ -224,6 +224,8 @@ typedef struct PlannerGlobal
 	int			numSlices;
 	struct PlanSlice *slices;
 
+	bool hasInitPlans;
+
 } PlannerGlobal;
 
 /*----------

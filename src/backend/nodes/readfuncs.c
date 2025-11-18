@@ -2462,6 +2462,7 @@ _readPlannedStmt(void)
 	READ_NODE_FIELD(copyIntoClause);
 	READ_NODE_FIELD(refreshClause);
 	READ_INT_FIELD(metricsQueryType);
+	READ_BOOL_FIELD(hasInitPlans);
 
 	READ_DONE();
 }
