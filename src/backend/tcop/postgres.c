@@ -98,7 +98,6 @@
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbendpoint.h"
 #include "cdb/cdbgang.h"
-#include "cdb/cdbsubplan.h"
 #include "cdb/ml_ipc.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
@@ -1725,7 +1724,6 @@ exec_simple_query(const char *query_string)
 		Portal		portal;
 		DestReceiver *receiver;
 		int16		format;
-		ListCell   *plantree_item;
 
 		/*
 		 * Get the command name for use in status display (it also becomes the
@@ -1777,6 +1775,16 @@ exec_simple_query(const char *query_string)
 		/* Make sure we are in a transaction command */
 		start_xact_command();
 
+		/*
+		 * If using an implicit transaction block, and we're not already in a
+		 * transaction block, start an implicit block to force this statement
+		 * to be grouped together with any following ones.  (We must do this
+		 * each time through the loop; otherwise, a COMMIT/ROLLBACK in the
+		 * list would cause later statements to not be grouped.)
+		 */
+		if (use_implicit_block)
+			BeginImplicitTransactionBlock();
+
 		/* If we got a cancel signal in parsing or prior command, quit */
 		CHECK_FOR_INTERRUPTS();
 
@@ -1802,24 +1810,6 @@ exec_simple_query(const char *query_string)
 
 		plantree_list = pg_plan_queries(querytree_list,
 										CURSOR_OPT_PARALLEL_OK, NULL);
-
-		/* Queries with InitPlans also use implicit transaction blocks */
-		foreach(plantree_item, plantree_list)
-		{
-			PlannedStmt *plannedstmt = (PlannedStmt*) lfirst(plantree_item);
-			if (plannedstmt->hasInitPlans)
-				use_implicit_block = true;
-		}
-
-		/*
-		 * If using an implicit transaction block, and we're not already in a
-		 * transaction block, start an implicit block to force this statement
-		 * to be grouped together with any following ones.  (We must do this
-		 * each time through the loop; otherwise, a COMMIT/ROLLBACK in the
-		 * list would cause later statements to not be grouped.)
-		 */
-		if (use_implicit_block)
-			BeginImplicitTransactionBlock();
 
 		/* Done with the snapshot used for parsing/planning */
 		if (snapshot_set)
