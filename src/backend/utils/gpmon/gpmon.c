@@ -16,6 +16,7 @@
 
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "utils/builtins.h"
 
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
@@ -25,7 +26,6 @@
 /* Extern stuff */
 extern char *get_database_name(Oid dbid);
 
-static char *escape_database_name(char *dbname);
 static void gpmon_record_kv(int32 tmid, int32 ssid, int32 ccnt,
 						 const char* key,
 						 const char* value,
@@ -262,6 +262,7 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 {
 	const char *username = NULL;
 	char *dbname = NULL;
+	char *escaped_dbname = NULL;
 
 	Assert(gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH);
 	Assert(gpmonPacket);
@@ -280,12 +281,19 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 			username ? username : "");
 
 	/* DB Id */
-	dbname = escape_database_name(get_database_name(MyDatabaseId)); /* needs to be freed */
-	snprintf(gpmonPacket->u.qlog.db, sizeof(gpmonPacket->u.qlog.db), "%s", dbname ? dbname : ""); 
-	if(dbname)
+	dbname = get_database_name(MyDatabaseId); /* needs to be freed */
+	if (dbname)
 	{
-		pfree(dbname);
+		escaped_dbname = quote_identifier(dbname);
+		if (dbname != escaped_dbname)
+			pfree(dbname);
 		dbname = NULL;
+	}
+	snprintf(gpmonPacket->u.qlog.db, sizeof(gpmonPacket->u.qlog.db), "%s", escaped_dbname ? escaped_dbname : ""); 
+	if(escaped_dbname)
+	{
+		pfree(escaped_dbname);
+		escaped_dbname = NULL;
 	}
 
 	/* Fix up command count */
