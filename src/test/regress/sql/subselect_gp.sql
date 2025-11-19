@@ -1520,6 +1520,12 @@ select (select count(*) from foo), (select i/0 from foo where i = 1), (select co
 
 select (select count(*) from foo), (select i/0 from foo where i = 1), (select count(*) from foo);
 
+-- Check InitPlans not on the root node
+explain (verbose, costs off)
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+
 reset test_print_direct_dispatch_info;
 reset optimizer;
 drop table foo;

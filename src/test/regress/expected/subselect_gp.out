@@ -4133,6 +4133,54 @@ INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 4) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to ALL contents: 0 1 2
 ERROR:  division by zero  (seg1 slice4 127.0.1.1:7003 pid=17104)
+-- Check InitPlans not on the root node
+explain (verbose, costs off)
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((SubPlan 2))
+   ->  Seq Scan on subselect_gp.foo t2
+         Output: (SubPlan 2)
+         SubPlan 2
+           ->  Result
+                 Output: $0
+                 Filter: (t1.i = t2.i)
+                 InitPlan 1 (returns $0)  (slice3)
+                   ->  Aggregate
+                         Output: count(*)
+                         ->  Materialize
+                               ->  Gather Motion 3:1  (slice4; segments: 3)
+                                     ->  Seq Scan on subselect_gp.foo
+                 ->  Materialize
+                       Output: t1.i
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                             Output: t1.i
+                             ->  Seq Scan on subselect_gp.foo t1
+                                   Output: t1.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off', optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on'
+(22 rows)
+
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+INFO:  (slice 4) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
+ count 
+-------
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+(10 rows)
+
 reset test_print_direct_dispatch_info;
 reset optimizer;
 drop table foo;
