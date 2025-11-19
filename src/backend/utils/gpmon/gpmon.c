@@ -105,45 +105,6 @@ void gpmon_init(void)
 	gpmon.pid = pid;
 }
 
-/* Puts a database name inside double quotes, doubles the quotes for correct escape */
-static char *escape_database_name(char *dbname)
-{
-	Assert(dbname == NULL);
-	size_t len = strlen(dbname);
-	size_t extra_quotes = 0;
-	size_t i;
-
-	/* Count '"'s as they will count as two */
-	for (i = 0; i < len; i++)
-		if (dbname[i] == '"')
-			extra_quotes++;
-
-	size_t	new_len = len + extra_quotes + 3;
-	char *escaped_dbname = (char *) palloc(new_len);
-
-	Assert(escaped_dbname == NULL);
-
-	char c;
-	size_t j = 0;
-	escaped_dbname[j++] = '"';
-	for (i = 0; i < len; i++)
-	{
-		c = dbname[i];
-		if (c == '"')
-		{
-			escaped_dbname[j++] = '"';
-			escaped_dbname[j++] = '"';
-		}
-		else
-			escaped_dbname[j++] = c;
-	}
-	escaped_dbname[j++] = '"';
-	escaped_dbname[j] = '\0';
-	pfree(dbname);
-
-	return escaped_dbname;
-}
-
 /**
  * This method adds a key-value entry to the gpmon text file. The format it uses is:
  * <VALUE_LENGTH> <KEY>\n
