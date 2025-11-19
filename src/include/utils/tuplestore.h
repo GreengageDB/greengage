@@ -105,8 +105,4 @@ extern Tuplestorestate *tuplestore_open_shared(SharedFileSet *fileset, const cha
 
 extern void AtAbort_SharedTuplestores(void);
 
-#ifdef USE_ASSERT_CHECKING
-extern bool tuplestore_has_no_shared(void);
-#endif
-
 #endif							/* TUPLESTORE_H */

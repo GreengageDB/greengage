@@ -1844,11 +1844,3 @@ AtAbort_SharedTuplestores()
 	list_free(shared_tuplestores);
 	shared_tuplestores = NIL;
 }
-
-#ifdef USE_ASSERT_CHECKING
-bool
-tuplestore_has_no_shared()
-{
-	return list_length(shared_tuplestores) == 0;
-}
-#endif
