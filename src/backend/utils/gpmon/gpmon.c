@@ -251,7 +251,7 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 		dbname = NULL;
 	}
 	snprintf(gpmonPacket->u.qlog.db, sizeof(gpmonPacket->u.qlog.db), "%s", escaped_dbname ? escaped_dbname : ""); 
-	if(escaped_dbname)
+	if (escaped_dbname)
 	{
 		pfree(escaped_dbname);
 		escaped_dbname = NULL;
