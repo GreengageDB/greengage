@@ -90,8 +90,8 @@ extern Agg *make_agg(List *tlist, List *qual,
 					 AggStrategy aggstrategy, AggSplit aggsplit,
 					 bool streaming,
 					 int numGroupCols, AttrNumber *grpColIdx, Oid *grpOperators, Oid *grpCollations,
-					 List *groupingSets, List *chain,
-					 double dNumGroups, Plan *lefttree);
+					 List *groupingSets, List *chain, double dNumGroups,
+					 Size transitionSpace, Plan *lefttree);
 extern Limit *make_limit(Plan *lefttree, Node *limitOffset, Node *limitCount);
 extern TupleSplit *make_tup_split(List *tlist, List *dqa_info_lst, int numGroupCols,
 								  AttrNumber *grpColIdx, Plan *lefttree);

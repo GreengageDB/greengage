@@ -196,7 +196,7 @@ void
 ExecuteQuery(ParseState *pstate,
 			 ExecuteStmt *stmt, IntoClause *intoClause,
 			 ParamListInfo params,
-			 DestReceiver *dest, char *completionTag)
+			 DestReceiver *dest, QueryCompletion *qc)
 {
 	PreparedStatement *entry;
 	CachedPlan *cplan;
@@ -308,7 +308,7 @@ ExecuteQuery(ParseState *pstate,
 	 */
 	PortalStart(portal, paramLI, eflags, GetActiveSnapshot(), NULL);
 
-	(void) PortalRun(portal, count, false, true, dest, dest, completionTag);
+	(void) PortalRun(portal, count, false, true, dest, dest, qc);
 
 	PortalDrop(portal, false);
 
@@ -833,6 +833,7 @@ build_regtype_array(Oid *param_types, int num_params)
 		tmp_ary[i] = ObjectIdGetDatum(param_types[i]);
 
 	/* XXX: this hardcodes assumptions about the regtype type */
-	result = construct_array(tmp_ary, num_params, REGTYPEOID, 4, true, 'i');
+	result = construct_array(tmp_ary, num_params, REGTYPEOID,
+							 4, true, TYPALIGN_INT);
 	return PointerGetDatum(result);
 }

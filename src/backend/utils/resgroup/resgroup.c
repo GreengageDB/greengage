@@ -2918,7 +2918,7 @@ waitOnGroup(ResGroupData *group, bool isMoveQuery)
 		new_status = (char *) palloc(len + strlen(queueStr) + 1);
 		memcpy(new_status, old_status, len);
 		strcpy(new_status + len, queueStr);
-		set_ps_display(new_status, false);
+		set_ps_display(new_status);
 		/* truncate off " queuing" */
 		new_status[len] = '\0';
 	}
@@ -2977,7 +2977,7 @@ waitOnGroup(ResGroupData *group, bool isMoveQuery)
 		/* reset ps status */
 		if (update_process_title)
 		{
-			set_ps_display(new_status, false);
+			set_ps_display(new_status);
 			pfree(new_status);
 		}
 
@@ -2991,7 +2991,7 @@ waitOnGroup(ResGroupData *group, bool isMoveQuery)
 	/* reset ps status */
 	if (update_process_title)
 	{
-		set_ps_display(new_status, false);
+		set_ps_display(new_status);
 		pfree(new_status);
 	}
 }

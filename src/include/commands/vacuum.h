@@ -19,7 +19,7 @@
 #include "catalog/pg_statistic.h"
 #include "catalog/pg_type.h"
 #include "fmgr.h"
-#include "nodes/parsenodes.h"
+#include "parser/parse_node.h"
 #include "storage/buf.h"
 #include "storage/lock.h"
 #include "utils/relcache.h"

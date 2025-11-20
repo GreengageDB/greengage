@@ -122,11 +122,11 @@
  */
 #define att_align_nominal(cur_offset, attalign) \
 ( \
-	((attalign) == 'i') ? INTALIGN(cur_offset) : \
-	 (((attalign) == 'c') ? (uintptr_t) (cur_offset) : \
-	  (((attalign) == 'd') ? DOUBLEALIGN(cur_offset) : \
+	((attalign) == TYPALIGN_INT) ? INTALIGN(cur_offset) : \
+	 (((attalign) == TYPALIGN_CHAR) ? (uintptr_t) (cur_offset) : \
+	  (((attalign) == TYPALIGN_DOUBLE) ? DOUBLEALIGN(cur_offset) : \
 	   ( \
-			AssertMacro((attalign) == 's'), \
+			AssertMacro((attalign) == TYPALIGN_SHORT), \
 			SHORTALIGN(cur_offset) \
 	   ))) \
 )

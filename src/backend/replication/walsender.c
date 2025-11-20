@@ -88,6 +88,7 @@
 #include "storage/procarray.h"
 #include "tcop/dest.h"
 #include "tcop/tcopprot.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -1112,8 +1113,11 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 static void
 DropReplicationSlot(DropReplicationSlotCmd *cmd)
 {
+	QueryCompletion qc;
+
 	ReplicationSlotDrop(cmd->slotname, !cmd->wait);
-	EndCommand("DROP_REPLICATION_SLOT", DestRemote);
+	SetQueryCompletion(&qc, CMDTAG_DROP_REPLICATION_SLOT, 0);
+	EndCommand(&qc, DestRemote, false);
 }
 
 /*
@@ -1124,6 +1128,7 @@ static void
 StartLogicalReplication(StartReplicationCmd *cmd)
 {
 	StringInfoData buf;
+	QueryCompletion qc;
 
 	/* make sure that our requirements are still fulfilled */
 	CheckLogicalDecodingRequirements();
@@ -1198,7 +1203,8 @@ StartLogicalReplication(StartReplicationCmd *cmd)
 	WalSndSetState(WALSNDSTATE_STARTUP);
 
 	/* Get out of COPY mode (CommandComplete). */
-	EndCommand("COPY 0", DestRemote);
+	SetQueryCompletion(&qc, CMDTAG_COPY, 0);
+	EndCommand(&qc, DestRemote, false);
 }
 
 /*
@@ -1502,6 +1508,7 @@ exec_replication_command(const char *cmd_string)
 	Node	   *cmd_node;
 	MemoryContext cmd_context;
 	MemoryContext old_context;
+	QueryCompletion qc;
 
 	/*
 	 * If WAL sender has been told that shutdown is getting close, switch its
@@ -1652,7 +1659,8 @@ exec_replication_command(const char *cmd_string)
 	MemoryContextDelete(cmd_context);
 
 	/* Send CommandComplete message */
-	EndCommand("SELECT", DestRemote);
+	SetQueryCompletion(&qc, CMDTAG_SELECT, 0);
+	EndCommand(&qc, DestRemote, true);
 
 	/* Report to pgstat that this process is now idle */
 	pgstat_report_activity(STATE_IDLE, NULL);
@@ -2889,7 +2897,7 @@ retry:
 
 		snprintf(activitymsg, sizeof(activitymsg), "streaming %X/%X",
 				 (uint32) (sentPtr >> 32), (uint32) sentPtr);
-		set_ps_display(activitymsg, false);
+		set_ps_display(activitymsg);
 	}
 
 	elogif(debug_walrepl_snd, LOG,
@@ -3012,8 +3020,11 @@ WalSndDone(WalSndSendDataCallback send_data)
 	if (WalSndCaughtUp && sentPtr == replicatedPtr &&
 		!pq_is_send_pending())
 	{
+		QueryCompletion qc;
+
 		/* Inform the standby that XLOG streaming is done */
-		EndCommand("COPY 0", DestRemote);
+		SetQueryCompletion(&qc, CMDTAG_COPY, 0);
+		EndCommand(&qc, DestRemote, false);
 		pq_flush();
 
 		proc_exit(0);

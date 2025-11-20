@@ -173,8 +173,6 @@ extern bool Log_truncate_on_rotation;
 extern int	Log_file_mode;
 extern int gp_log_format;
 
-extern bool am_syslogger;
-
 #ifndef WIN32
 extern int	syslogPipe[2];
 #else

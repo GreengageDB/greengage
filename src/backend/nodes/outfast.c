@@ -1733,8 +1733,8 @@ _outNode(StringInfo str, void *obj)
 				_outDenyLoginPoint(str, obj);
 				break;
 
-			case T_AlterTypeStmt:
-				_outAlterTypeStmt(str, obj);
+			case T_AlterTypeStmtSetDefaultEnc:
+				_outAlterTypeStmtSetDefaultEnc(str, obj);
 				break;
 			case T_AlterExtensionStmt:
 				_outAlterExtensionStmt(str, obj);

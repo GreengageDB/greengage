@@ -19,13 +19,6 @@
  *	  function should use hash_bytes() or its variant hash_bytes_uint32(),
  *	  or the wrappers hash_any() and hash_uint32 defined in hashfn.h.
  *
- * NOTES
- *	  It is expected that every bit of a hash function's 32-bit result is
- *	  as random as every other; failure to ensure this is likely to lead
- *	  to poor performance of hash tables.  In most cases a hash
- *	  function should use hash_bytes() or its variant hash_bytes_uint32(),
- *	  or the wrappers hash_any() and hash_uint32 defined in hashfn.h.
- *
  *-------------------------------------------------------------------------
  */
 

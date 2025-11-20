@@ -30,6 +30,7 @@
 
 #include "libpq/libpq.h"
 #include "miscadmin.h"
+#include "pgstat.h"
 #include "utils/guc.h"
 #include "utils/ps_status.h"
 
@@ -261,17 +262,20 @@ save_ps_display_args(int argc, char **argv)
 
 /*
  * Call this once during subprocess startup to set the identification
- * values.  At this point, the original argv[] array may be overwritten.
+ * values.
+ *
+ * If fixed_part is NULL, a default will be obtained from MyBackendType.
+ *
+ * At this point, the original argv[] array may be overwritten.
  */
 void
-init_ps_display(const char *username, const char *dbname,
-				const char *host_info, const char *initial_str)
+init_ps_display(const char *fixed_part)
 {
-	Assert(username);
-	Assert(dbname);
-	Assert(host_info);
+	bool		save_update_process_title;
 
-	StrNCpy(ps_username, username, sizeof(ps_username));    /*CDB*/
+	Assert(fixed_part || MyBackendType);
+	if (!fixed_part)
+		fixed_part = GetBackendTypeDesc(MyBackendType);
 
 #ifndef PS_USE_NONE
 	/* no ps display for stand-alone backend */
@@ -325,20 +329,26 @@ init_ps_display(const char *username, const char *dbname,
 	if (*cluster_name == '\0')
 	{
 		snprintf(ps_buffer, ps_buffer_size,
-				 PROGRAM_NAME_PREFIX "%5d, %s %s %s ",
-				 PostPortNumber, username, dbname, host_info);
+				 PROGRAM_NAME_PREFIX "%5d, %s ",
+				 PostPortNumber, fixed_part);
 	}
 	else
 	{
 		snprintf(ps_buffer, ps_buffer_size,
-				 PROGRAM_NAME_PREFIX "%5d, %s: %s %s %s ",
-				 PostPortNumber, cluster_name, username, dbname, host_info);
+				 PROGRAM_NAME_PREFIX "%5d, %s: %s ",
+				 PostPortNumber, cluster_name, fixed_part);
 	}
 
 	ps_buffer_cur_len = ps_buffer_fixed_size = strlen(ps_buffer);
 	real_act_prefix_size = ps_buffer_fixed_size;
 
-	set_ps_display(initial_str, true);
+	/*
+	 * On the first run, force the update.
+	 */
+	save_update_process_title = update_process_title;
+	update_process_title = true;
+	set_ps_display("");
+	update_process_title = save_update_process_title;
 #endif							/* not PS_USE_NONE */
 }
 
@@ -349,14 +359,14 @@ init_ps_display(const char *username, const char *dbname,
  * indication of what you're currently doing passed in the argument.
  */
 void
-set_ps_display(const char *activity, bool force)
+set_ps_display(const char *activity)
 {
 #ifndef PS_USE_NONE
-	/* update_process_title=off disables updates, unless force = true */
 	char	   *cp = ps_buffer + ps_buffer_fixed_size;
 	char	   *ep = ps_buffer + ps_buffer_size;
 
-	if (!force && !update_process_title)
+	/* update_process_title=off disables updates */
+	if (!update_process_title)
 		return;
 
 	/* no ps display for stand-alone backend */
@@ -500,7 +510,13 @@ get_ps_display(int *displen)
 }
 
 
-/* CDB: Get the "username" string saved by init_ps_display().  */
+/* GPDB: Set/Get the "username" string.  */
+void
+set_ps_display_username(const char *username)
+{
+	StrNCpy(ps_username, username, sizeof(ps_username));
+}
+
 const char *
 get_ps_display_username(void)
 {

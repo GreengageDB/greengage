@@ -911,6 +911,119 @@ explain (verbose, costs off)
 (9 rows)
 
 --
+-- Test rescan of a hashed subplan (the use of random() is to prevent the
+-- sub-select from being pulled up, which would result in not hashing)
+--
+explain (verbose, costs off)
+select sum(ss.tst::int) from
+  onek o cross join lateral (
+  select i.ten in (select f1 from int4_tbl where f1 <= o.hundred) as tst,
+         random() as r
+  from onek i where i.unique1 = o.unique1 ) ss
+where o.ten = 0;
+ERROR:  correlated subquery with skip-level correlations is not supported
+select sum(ss.tst::int) from
+  onek o cross join lateral (
+  select i.ten in (select f1 from int4_tbl where f1 <= o.hundred) as tst,
+         random() as r
+  from onek i where i.unique1 = o.unique1 ) ss
+where o.ten = 0;
+ERROR:  correlated subquery with skip-level correlations is not supported
+--
+-- Test rescan of a SetOp node
+--
+explain (costs off)
+select count(*) from
+  onek o cross join lateral (
+    select * from onek i1 where i1.unique1 = o.unique1
+    except
+    select * from onek i2 where i2.unique1 = o.unique2
+  ) ss
+where o.ten = 1;
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Nested Loop
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Seq Scan on onek o
+                     Filter: (ten = 1)
+         ->  Materialize
+               ->  Subquery Scan on ss
+                     ->  HashSetOp Except
+                           ->  Append
+                                 ->  Subquery Scan on "*SELECT* 1"
+                                       ->  Result
+                                             Filter: (i1.unique1 = o.unique1)
+                                             ->  Materialize
+                                                   ->  Gather Motion 3:1  (slice2; segments: 3)
+                                                         ->  Seq Scan on onek i1
+                                 ->  Subquery Scan on "*SELECT* 2"
+                                       ->  Result
+                                             Filter: (i2.unique1 = o.unique2)
+                                             ->  Materialize
+                                                   ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                         ->  Seq Scan on onek i2
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+select count(*) from
+  onek o cross join lateral (
+    select * from onek i1 where i1.unique1 = o.unique1
+    except
+    select * from onek i2 where i2.unique1 = o.unique2
+  ) ss
+where o.ten = 1;
+ count 
+-------
+   100
+(1 row)
+
+--
+-- Test rescan of a RecursiveUnion node
+--
+explain (costs off)
+select sum(o.four), sum(ss.a) from
+  onek o cross join lateral (
+    with recursive x(a) as
+      (select o.four as a
+       union
+       select a + 1 from x
+       where a < 10)
+    select * from x
+  ) ss
+where o.ten = 1;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     ->  Seq Scan on onek o
+                           Filter: (ten = 1)
+                     ->  Materialize
+                           ->  Recursive Union
+                                 ->  Result
+                                 ->  WorkTable Scan on x
+                                       Filter: (a < 10)
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select sum(o.four), sum(ss.a) from
+  onek o cross join lateral (
+    with recursive x(a) as
+      (select o.four as a
+       union
+       select a + 1 from x
+       where a < 10)
+    select * from x
+  ) ss
+where o.ten = 1;
+ sum  | sum  
+------+------
+ 1700 | 5350
+(1 row)
+
+--
 -- Check we don't misoptimize a NOT IN where the subquery returns no rows.
 --
 create temp table notinouter (a int);

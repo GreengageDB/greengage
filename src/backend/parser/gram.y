@@ -263,7 +263,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 		AlterDatabaseStmt AlterDatabaseSetStmt AlterDomainStmt AlterEnumStmt
 		AlterFdwStmt AlterForeignServerStmt AlterGroupStmt
 		AlterObjectDependsStmt AlterObjectSchemaStmt AlterOwnerStmt
-		AlterOperatorStmt AlterSeqStmt AlterSystemStmt AlterTableStmt
+		AlterOperatorStmt AlterTypeStmt AlterSeqStmt AlterSystemStmt AlterTableStmt
 		AlterTblSpcStmt AlterExtensionStmt AlterExtensionContentsStmt AlterForeignTableStmt
 		AlterCompositeTypeStmt AlterUserMappingStmt
 		AlterRoleStmt AlterRoleSetStmt AlterPolicyStmt AlterStatsStmt
@@ -300,7 +300,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 		RetrieveStmt
 
 /* GPDB-specific commands */
-%type <node>	AlterTypeStmt AlterQueueStmt AlterResourceGroupStmt
+%type <node>	AlterTypeStmtSetDefaultEnc AlterQueueStmt AlterResourceGroupStmt
 		CreateExternalStmt
 		CreateQueueStmt CreateResourceGroupStmt
 		DropQueueStmt DropResourceGroupStmt
@@ -1296,6 +1296,7 @@ stmt :
 			| AlterObjectSchemaStmt
 			| AlterOwnerStmt
 			| AlterOperatorStmt
+			| AlterTypeStmt
 			| AlterPolicyStmt
 			| AlterQueueStmt
 			| AlterResourceGroupStmt
@@ -1311,7 +1312,7 @@ stmt :
 			| AlterStatsStmt
 			| AlterTSConfigurationStmt
 			| AlterTSDictionaryStmt
-			| AlterTypeStmt
+			| AlterTypeStmtSetDefaultEnc
 			| AlterUserMappingStmt
 			| AnalyzeStmt
 			| CallStmt
@@ -11073,9 +11074,9 @@ reindex_option_elem:
  *
  * Used to set storage parameter defaults for types.
  */
-AlterTypeStmt: ALTER TYPE_P any_name SET DEFAULT ENCODING definition
+AlterTypeStmtSetDefaultEnc: ALTER TYPE_P any_name SET DEFAULT ENCODING definition
 				{
-					AlterTypeStmt *n = makeNode(AlterTypeStmt);
+					AlterTypeStmtSetDefaultEnc *n = makeNode(AlterTypeStmtSetDefaultEnc);
 
 					n->typeName = $3;
 					n->encoding = $7;
@@ -12009,6 +12010,24 @@ operator_def_arg:
 			| qual_all_Op					{ $$ = (Node *)$1; }
 			| NumericOnly					{ $$ = (Node *)$1; }
 			| Sconst						{ $$ = (Node *)makeString($1); }
+		;
+
+/*****************************************************************************
+ *
+ * ALTER TYPE name SET define
+ *
+ * We repurpose ALTER OPERATOR's version of "definition" here
+ *
+ *****************************************************************************/
+
+AlterTypeStmt:
+			ALTER TYPE_P any_name SET '(' operator_def_list ')'
+				{
+					AlterTypeStmt *n = makeNode(AlterTypeStmt);
+					n->typeName = $3;
+					n->options = $6;
+					$$ = (Node *)n;
+				}
 		;
 
 /*****************************************************************************

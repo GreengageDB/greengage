@@ -1046,6 +1046,7 @@ _outAgg(StringInfo str, const Agg *node)
 	WRITE_OID_ARRAY(grpOperators, node->numCols);
 	WRITE_OID_ARRAY(grpCollations, node->numCols);
 	WRITE_LONG_FIELD(numGroups);
+	WRITE_UINT64_FIELD(transitionSpace);
 	WRITE_BITMAPSET_FIELD(aggParams);
 	WRITE_NODE_FIELD(groupingSets);
 	WRITE_NODE_FIELD(chain);
@@ -2486,6 +2487,7 @@ _outAggPath(StringInfo str, const AggPath *node)
 	WRITE_ENUM_FIELD(aggstrategy, AggStrategy);
 	WRITE_ENUM_FIELD(aggsplit, AggSplit);
 	WRITE_FLOAT_FIELD(numGroups, "%.0f");
+	WRITE_UINT64_FIELD(transitionSpace);
 	WRITE_NODE_FIELD(groupClause);
 	WRITE_NODE_FIELD(qual);
 	WRITE_BOOL_FIELD(streaming);
@@ -2524,6 +2526,7 @@ _outGroupingSetsPath(StringInfo str, const GroupingSetsPath *node)
 	WRITE_ENUM_FIELD(aggstrategy, AggStrategy);
 	WRITE_NODE_FIELD(rollups);
 	WRITE_NODE_FIELD(qual);
+	WRITE_UINT64_FIELD(transitionSpace);
 }
 
 static void
@@ -5298,9 +5301,9 @@ _outTableValueExpr(StringInfo str, const TableValueExpr *node)
 }
 
 static void
-_outAlterTypeStmt(StringInfo str, const AlterTypeStmt *node)
+_outAlterTypeStmtSetDefaultEnc(StringInfo str, const AlterTypeStmtSetDefaultEnc *node)
 {
-	WRITE_NODE_TYPE("ALTERTYPESTMT");
+	WRITE_NODE_TYPE("ALTERTYPESTMTSETDEFAULTENC");
 
 	WRITE_NODE_FIELD(typeName);
 	WRITE_NODE_FIELD(encoding);
@@ -6500,8 +6503,8 @@ outNode(StringInfo str, const void *obj)
 				_outDenyLoginPoint(str, obj);
 				break;
 
-			case T_AlterTypeStmt:
-				_outAlterTypeStmt(str, obj);
+			case T_AlterTypeStmtSetDefaultEnc:
+				_outAlterTypeStmtSetDefaultEnc(str, obj);
 				break;
 			case T_AlterExtensionStmt:
 				_outAlterExtensionStmt(str, obj);

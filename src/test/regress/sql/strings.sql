@@ -59,6 +59,7 @@ SET standard_conforming_strings TO on;
 
 SELECT U&'d\0061t\+000061' AS U&"d\0061t\+000061";
 SELECT U&'d!0061t\+000061' UESCAPE '!' AS U&"d*0061t\+000061" UESCAPE '*';
+SELECT U&'a\\b' AS "a\b";
 
 SELECT U&' \' UESCAPE '!' AS "tricky";
 SELECT 'tricky' AS U&"\" UESCAPE '!';
@@ -67,6 +68,25 @@ SELECT U&'wrong: \061';
 SELECT U&'wrong: \+0061';
 SELECT U&'wrong: +0061' UESCAPE +;
 SELECT U&'wrong: +0061' UESCAPE '+';
+
+SELECT U&'wrong: \db99';
+SELECT U&'wrong: \db99xy';
+SELECT U&'wrong: \db99\\';
+SELECT U&'wrong: \db99\0061';
+SELECT U&'wrong: \+00db99\+000061';
+SELECT U&'wrong: \+2FFFFF';
+
+-- while we're here, check the same cases in E-style literals
+SELECT E'd\u0061t\U00000061' AS "data";
+SELECT E'a\\b' AS "a\b";
+SELECT E'wrong: \u061';
+SELECT E'wrong: \U0061';
+SELECT E'wrong: \udb99';
+SELECT E'wrong: \udb99xy';
+SELECT E'wrong: \udb99\\';
+SELECT E'wrong: \udb99\u0061';
+SELECT E'wrong: \U0000db99\U00000061';
+SELECT E'wrong: \U002FFFFF';
 
 SET standard_conforming_strings TO off;
 
@@ -647,16 +667,6 @@ select 'a\bcd' as f1, 'a\b''cd' as f2, 'a\b''''cd' as f3, 'abcd\'   as f4, 'ab\'
 set standard_conforming_strings = off;
 
 select 'a\\bcd' as f1, 'a\\b\'cd' as f2, 'a\\b\'''cd' as f3, 'abcd\\'   as f4, 'ab\\\'cd' as f5, '\\\\' as f6;
-
---
--- test unicode escape
---
-select E'A\u0041' as f1, E'\u0127' as f2;
-select E'\u0000';
-select E'\udsfs';
-select E'\uD843\uE001';
-select E'\uDC01';
-select E'\uD834';
 
 --
 -- Additional string functions

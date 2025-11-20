@@ -176,11 +176,12 @@ checkIODataDirectory(void)
 }
 
 static void
-SendFtsResponse(FtsResponse *response, const char *messagetype)
+SendFtsResponse(FtsResponse *response, CommandTag commandTag)
 {
 	StringInfoData buf;
+	QueryCompletion qc;
 
-	BeginCommand(messagetype, DestRemote);
+	BeginCommand(commandTag, DestRemote);
 
 	pq_beginmessage(&buf, 'T');
 	pq_sendint(&buf, Natts_fts_message_response, 2); /* # of columns */
@@ -247,7 +248,8 @@ SendFtsResponse(FtsResponse *response, const char *messagetype)
 	pq_sendint(&buf, response->RequestRetry, 1);
 
 	pq_endmessage(&buf);
-	EndCommand(messagetype, DestRemote);
+	SetQueryCompletion(&qc, commandTag, 0);
+	EndCommand(&qc, DestRemote, false);
 	pq_flush();
 }
 
@@ -293,7 +295,7 @@ HandleFtsWalRepProbe(void)
 	 * helped detect and trigger failover.
 	 */
 	checkIODataDirectory();
-	SendFtsResponse(&response, FTS_MSG_PROBE);
+	SendFtsResponse(&response, CMDTAG_FTS_PROBE);
 }
 
 static void
@@ -312,7 +314,7 @@ HandleFtsWalRepSyncRepOff(void)
 	UnsetSyncStandbysDefined();
 	GetMirrorStatus(&response, NULL);
 
-	SendFtsResponse(&response, FTS_MSG_SYNCREP_OFF);
+	SendFtsResponse(&response, CMDTAG_FTS_SYNCREP_OFF);
 }
 
 static void
@@ -407,7 +409,7 @@ HandleFtsWalRepPromote(void)
 			 " DBState = %d", state);
 	}
 
-	SendFtsResponse(&response, FTS_MSG_PROMOTE);
+	SendFtsResponse(&response, CMDTAG_FTS_PROMOTE);
 }
 
 void

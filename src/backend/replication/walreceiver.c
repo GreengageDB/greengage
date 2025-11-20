@@ -64,6 +64,7 @@
 #include "storage/pmsignal.h"
 #include "storage/procarray.h"
 #include "storage/procsignal.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/pg_lsn.h"
@@ -671,8 +672,7 @@ WalRcvWaitForStartPosition(XLogRecPtr *startpoint, TimeLineID *startpointTLI)
 	walrcv->receiveStartTLI = 0;
 	SpinLockRelease(&walrcv->mutex);
 
-	if (update_process_title)
-		set_ps_display("idle", false);
+	set_ps_display("idle");
 
 	/*
 	 * nudge startup process to notice that we've stopped streaming and are
@@ -720,7 +720,7 @@ WalRcvWaitForStartPosition(XLogRecPtr *startpoint, TimeLineID *startpointTLI)
 		snprintf(activitymsg, sizeof(activitymsg), "restarting at %X/%X",
 				 (uint32) (*startpoint >> 32),
 				 (uint32) *startpoint);
-		set_ps_display(activitymsg, false);
+		set_ps_display(activitymsg);
 	}
 }
 
@@ -1057,7 +1057,7 @@ XLogWalRcvFlush(bool dying)
 			snprintf(activitymsg, sizeof(activitymsg), "streaming %X/%X",
 					 (uint32) (LogstreamResult.Write >> 32),
 					 (uint32) LogstreamResult.Write);
-			set_ps_display(activitymsg, false);
+			set_ps_display(activitymsg);
 		}
 
 		/* Also let the master know that we made some progress */

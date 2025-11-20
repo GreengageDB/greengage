@@ -935,6 +935,7 @@ HandleFaultMessage(const char* msg)
 	int sid;
 	char *result;
 	int len;
+	QueryCompletion qc;
 
 	if (sscanf(msg, "faultname=%s type=%s ddl=%s db=%s table=%s "
 			   "start=%d end=%d extra=%d sid=%d",
@@ -950,6 +951,8 @@ HandleFaultMessage(const char* msg)
 
 	result = InjectFault(name, type, ddl, db, table, start, end, extra, sid);
 	len = strlen(result);
+
+	BeginCommand(CMDTAG_FAULT, DestRemote);
 
 	StringInfoData buf;
 	pq_beginmessage(&buf, 'T');
@@ -971,7 +974,8 @@ HandleFaultMessage(const char* msg)
 	pq_sendint(&buf, len, 4);
 	pq_sendbytes(&buf, result, len);
 	pq_endmessage(&buf);
-	EndCommand(GPCONN_TYPE_FAULT, DestRemote);
+	SetQueryCompletion(&qc, CMDTAG_FAULT, 0);
+	EndCommand(&qc, DestRemote, false);
 	pq_flush();
 }
 

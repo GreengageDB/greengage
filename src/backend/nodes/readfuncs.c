@@ -3258,6 +3258,7 @@ _readAgg(void)
 	READ_OID_ARRAY(grpOperators, local_node->numCols);
 	READ_OID_ARRAY(grpCollations, local_node->numCols);
 	READ_LONG_FIELD(numGroups);
+	READ_UINT64_FIELD(transitionSpace);
 	READ_BITMAPSET_FIELD(aggParams);
 	READ_NODE_FIELD(groupingSets);
 	READ_NODE_FIELD(chain);
@@ -4287,10 +4288,10 @@ _readTableValueExpr(void)
 	READ_DONE();
 }
 
-static AlterTypeStmt *
-_readAlterTypeStmt(void)
+static AlterTypeStmtSetDefaultEnc *
+_readAlterTypeStmtSetDefaultEnc(void)
 {
-	READ_LOCALS(AlterTypeStmt);
+	READ_LOCALS(AlterTypeStmtSetDefaultEnc);
 
 	READ_NODE_FIELD(typeName);
 	READ_NODE_FIELD(encoding);
@@ -4780,8 +4781,8 @@ parseNodeString(void)
 		return_value = _readAlterDatabaseStmt();
 	else if (MATCHX("ALTERTABLESTMT"))
 		return_value = _readAlterTableStmt();
-	else if (MATCHX("ALTERTYPESTMT"))
-		return_value = _readAlterTypeStmt();
+	else if (MATCHX("ALTERTYPESTMTSETDEFAULTENC"))
+		return_value = _readAlterTypeStmtSetDefaultEnc();
 	else if (MATCHX("CDBPROCESS"))
 		return_value = _readCdbProcess();
 	else if (MATCHX("CLUSTERSTMT"))
