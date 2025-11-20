@@ -787,7 +787,10 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	splan->plan_id = list_length(root->glob->subplans);
 
 	if (splan->is_initplan)
+	{
 		root->init_plans = lappend(root->init_plans, splan);
+		root->glob->hasInitPlans = true;
+	}
 
 	/*
 	 * If it's an initplan, then there's no point in REWIND, since it won't get
@@ -3575,6 +3578,7 @@ SS_make_initplan_from_plan(PlannerInfo *root,
 	node->setParam = list_make1_int(prm->paramid);
 
 	root->init_plans = lappend(root->init_plans, node);
+	root->glob->hasInitPlans = true;
 
 	/*
 	 * The node can't have any inputs (since it's an initplan), so the
