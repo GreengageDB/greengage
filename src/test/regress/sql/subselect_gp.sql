@@ -1500,12 +1500,15 @@ drop view if exists g;
 --end_ignore
 create table d(d int) distributed by (d);
 insert into d select g from generate_series(0, 9) g;
+analyze d;
 
 create table p(p int) distributed replicated;
 insert into p select g from generate_series(0, 9) g;
+analyze p;
 
 create table r(r int) distributed randomly;
 insert into r select g from generate_series(0, 9) g;
+analyze r;
 
 create view g as select g from generate_series(0, 9) g;
 create view c as select dbid c from gp_segment_configuration c;
