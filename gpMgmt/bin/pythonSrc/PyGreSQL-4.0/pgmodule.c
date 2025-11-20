@@ -60,6 +60,10 @@
 #define PyInt_FromLong PyLong_FromLong
 #define PyInt_AsLong PyLong_AsLong
 
+/* Floats */
+
+#define PyFloat_FromString(str, pend) PyFloat_FromString(str)
+
 /* Module init */
 
 #define MODULE_INIT_FUNC(name) \
@@ -79,10 +83,6 @@
 
 #define PyBytes_AS_STRING PyString_AS_STRING
 #define _PyBytes_Resize _PyString_Resize
-
-/* Floats */
-
-#define PyFloat_FromString(str) PyFloat_FromString(str, NULL)
 
 /* Module init */
 
@@ -379,7 +379,6 @@ format_result(const PGresult *res)
 			if (buffer)
 			{
 				char *p = buffer;
-				PyObject *result;
 
 				/* create the header */
 				for (j = 0; j < n; ++j)
@@ -1251,7 +1250,7 @@ static PyTypeObject PgSourceType = {
 	.tp_basicsize = sizeof(pgsourceobject),
 	/* methods */
 	.tp_dealloc = (destructor) pgsource_dealloc,
-#if PY_MAJOR_VERSION >= 3
+#if PY_MAJOR_VERSION < 3
 	.tp_print = (printfunc) pgsource_print,
 #endif
 	.tp_getattro = (getattrofunc) pgsource_getattr,
@@ -1742,7 +1741,7 @@ pgconnect(pgobject * self, PyObject * args, PyObject * dict)
 	static const char *kwlist[] = {"dbname", "host", "port", "opt",
 	"tty", "user", "passwd", NULL};
 
-	char	   *pghost,
+	const char *pghost,
 			   *pgopt,
 			   *pgtty,
 			   *pgdbname,
@@ -2139,7 +2138,7 @@ pgquery_getresult(pgqueryobject * self, PyObject * args)
 
 					case 3:
 						tmp_obj = PyStr_FromString(s);
-						val = PyFloat_FromString(tmp_obj);
+						val = PyFloat_FromString(tmp_obj, NULL);
 						Py_DECREF(tmp_obj);
 						break;
 
@@ -2169,7 +2168,7 @@ pgquery_getresult(pgqueryobject * self, PyObject * args)
 						else
 						{
 							tmp_obj = PyStr_FromString(s);
-							val = PyFloat_FromString(tmp_obj);
+							val = PyFloat_FromString(tmp_obj, NULL);
 						}
 						Py_DECREF(tmp_obj);
 						break;
@@ -2267,7 +2266,7 @@ pgquery_dictresult(pgqueryobject * self, PyObject * args)
 
 					case 3:
 						tmp_obj = PyStr_FromString(s);
-						val = PyFloat_FromString(tmp_obj);
+						val = PyFloat_FromString(tmp_obj, NULL);
 						Py_DECREF(tmp_obj);
 						break;
 
@@ -2297,7 +2296,7 @@ pgquery_dictresult(pgqueryobject * self, PyObject * args)
 						else
 						{
 							tmp_obj = PyStr_FromString(s);
-							val = PyFloat_FromString(tmp_obj);
+							val = PyFloat_FromString(tmp_obj, NULL);
 						}
 						Py_DECREF(tmp_obj);
 						break;
@@ -2474,7 +2473,7 @@ pg_query(pgobject * self, PyObject * args)
 
 						if (ret[0])		/* return number of rows affected */
 						{
-							PyObject* obj = PyString_FromString(ret);
+							PyObject* obj = PyStr_FromString(ret);
 							PQclear(result);
 							return obj;
 						}
@@ -3116,11 +3115,7 @@ pg_notices(pgobject *self, PyObject *args)
 	else
 		retval = PyList_New(0);
 
-	if (self->notices)
-	{
-		Py_DECREF(self->notices);
-		self->notices = NULL;
-	}
+	Py_CLEAR(self->notices);
 	return retval;
 }
  
