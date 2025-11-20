@@ -649,8 +649,13 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * main body of query) We need to call
 			 * ExecutorSaysTransactionDoesWrites() before any dispatch
 			 * work for this query.
+			 *
+			 * In fact, all queries with initPlans must use distributed
+			 * transactions, since they happen in an implicit
+			 * transaction block.
 			 */
-			needDtx = ExecutorSaysTransactionDoesWrites();
+			needDtx = (queryDesc->plannedstmt->hasInitPlans ||
+					   ExecutorSaysTransactionDoesWrites());
 			if (needDtx)
 				setupDtxTransaction();
 
