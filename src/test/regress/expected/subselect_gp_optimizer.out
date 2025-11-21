@@ -4623,73 +4623,60 @@ select (select d from d where d = c limit 1 offset c) from c;
 
 explain (verbose, costs off)
 select (select c from c limit 1 offset p) from p;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
- Gather Motion 1:1  (slice2; segments: 1)
-   Output: ((SubPlan 1))
-   ->  Result
-         Output: (SubPlan 1)
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Result
+   Output: (SubPlan 1)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         Output: p.p
          ->  Seq Scan on subselect_gp.p
                Output: p.p
-         SubPlan 1  (slice2; segments: 1)
-           ->  Limit
+   SubPlan 1  (slice0)
+     ->  Limit
+           Output: gp_segment_configuration.dbid
+           ->  Seq Scan on pg_catalog.gp_segment_configuration
                  Output: gp_segment_configuration.dbid
-                 ->  Materialize
-                       Output: gp_segment_configuration.dbid
-                       ->  Broadcast Motion 1:1  (slice1)
-                             Output: gp_segment_configuration.dbid
-                             ->  Seq Scan on pg_catalog.gp_segment_configuration
-                                   Output: gp_segment_configuration.dbid
  Optimizer: Pivotal Optimizer (GPORCA)
-(16 rows)
+ Settings: optimizer=on
+(13 rows)
 
 explain (verbose, costs off)
 select (select c from c where c = p) from p;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
- Gather Motion 1:1  (slice2; segments: 1)
-   Output: ((SubPlan 1))
-   ->  Result
-         Output: (SubPlan 1)
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Result
+   Output: (SubPlan 1)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         Output: p.p
          ->  Seq Scan on subselect_gp.p
                Output: p.p
-         SubPlan 1  (slice2; segments: 1)
-           ->  Result
-                 Output: gp_segment_configuration.dbid
-                 Filter: (gp_segment_configuration.dbid = p.p)
-                 ->  Materialize
-                       Output: gp_segment_configuration.dbid
-                       ->  Broadcast Motion 1:1  (slice1)
-                             Output: gp_segment_configuration.dbid
-                             ->  Seq Scan on pg_catalog.gp_segment_configuration
-                                   Output: gp_segment_configuration.dbid
+   SubPlan 1  (slice0)
+     ->  Seq Scan on pg_catalog.gp_segment_configuration
+           Output: gp_segment_configuration.dbid
+           Filter: (gp_segment_configuration.dbid = p.p)
  Optimizer: Pivotal Optimizer (GPORCA)
-(17 rows)
+ Settings: optimizer=on
+(12 rows)
 
 explain (verbose, costs off)
 select (select c from c where c = p limit 1 offset p) from p;
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
- Gather Motion 1:1  (slice2; segments: 1)
-   Output: ((SubPlan 1))
-   ->  Result
-         Output: (SubPlan 1)
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Result
+   Output: (SubPlan 1)
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         Output: p.p
          ->  Seq Scan on subselect_gp.p
                Output: p.p
-         SubPlan 1  (slice2; segments: 1)
-           ->  Limit
+   SubPlan 1  (slice0)
+     ->  Limit
+           Output: gp_segment_configuration.dbid
+           ->  Seq Scan on pg_catalog.gp_segment_configuration
                  Output: gp_segment_configuration.dbid
-                 ->  Result
-                       Output: gp_segment_configuration.dbid
-                       Filter: (gp_segment_configuration.dbid = p.p)
-                       ->  Materialize
-                             Output: gp_segment_configuration.dbid
-                             ->  Broadcast Motion 1:1  (slice1)
-                                   Output: gp_segment_configuration.dbid
-                                   ->  Seq Scan on pg_catalog.gp_segment_configuration
-                                         Output: gp_segment_configuration.dbid
+                 Filter: (gp_segment_configuration.dbid = p.p)
  Optimizer: Pivotal Optimizer (GPORCA)
-(19 rows)
+ Settings: optimizer=on
+(14 rows)
 
 explain (verbose, costs off)
 select (select p from p limit 1 offset c) from c;
