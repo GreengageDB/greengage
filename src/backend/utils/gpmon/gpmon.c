@@ -244,18 +244,18 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 	/* DB Id */
 	dbname = get_database_name(MyDatabaseId); /* needs to be freed */
 	if (dbname)
-	{
 		escaped_dbname = quote_identifier(dbname);
-		if (dbname != escaped_dbname)
-			pfree(dbname);
-		dbname = NULL;
-	}
 	snprintf(gpmonPacket->u.qlog.db, sizeof(gpmonPacket->u.qlog.db), "%s",
 			 escaped_dbname ? escaped_dbname : "");
-	if (escaped_dbname)
+	if (escaped_dbname != dbname)
 	{
 		pfree(escaped_dbname);
 		escaped_dbname = NULL;
+	}
+	if(dbname)
+	{
+		pfree(dbname);
+		dbname = NULL;
 	}
 
 	/* Fix up command count */
