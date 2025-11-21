@@ -151,10 +151,53 @@ insert into sisc select generate_series(1, 100);
 select sum(n) as num_temp_files_before from get_temp_file_num() n
 \gset
 
+-- No error, 2 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i = 1;
+
+-- Error, 2 SISC nodes
 explain (verbose, costs off)
 with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
 
 with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+
+-- No error, 3 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
+
+-- Error, 3 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1;
+
+-- No error, 3 SISC nodes with 2 in the same slice
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1 and t1.i = t2.i;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1 and t1.i = t2.i;
+
+-- Error, 3 SISC nodes with 2 in the same slice
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1 and t1.i = t2.i;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1 and t1.i = t2.i;
+
+-- No error, 2 different SISCs
+explain (verbose, costs off)
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i = 1;
+
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i = 1;
+
+-- Error, 2 different SISCs
+explain (verbose, costs off)
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
+
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
 
 -- All temporary files should have been cleaned up, so the number of files shouldn't be more than
 -- previously. It could be less if some previously existing file has been cleaned up in the meantime.
