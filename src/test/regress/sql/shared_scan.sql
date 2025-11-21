@@ -129,21 +129,26 @@ drop table sisc3;
 --
 -- Helper function to count the number of temporary files in
 -- pgsql_tmp.
-create or replace function get_temp_file_num() returns int as
+
+-- start_ignore
+create language plpython3u;
+-- end_ignore
+
+create or replace function get_temp_file_num() returns setof int as
 $$
 import os
 fileNum = 0
 for root, directories, filenames in os.walk('base/pgsql_tmp'):
   for filename in filenames:
     fileNum += 1
-return fileNum
-$$ language plpython3u;
+return [fileNum]
+$$ language plpython3u execute on all segments;
 
 create table sisc(i int) distributed by (i);
 insert into sisc select generate_series(1, 100);
 
 -- Temp file number before running Shared Scan queries
-select get_temp_file_num() as num_temp_files_before
+select sum(n) as num_temp_files_before from get_temp_file_num() n
 \gset
 
 explain (verbose, costs off)
@@ -153,7 +158,8 @@ with cte as materialized (select i from sisc) select count(*) from cte t1, cte t
 
 -- All temporary files should have been cleaned up, so the number of files shouldn't be more than
 -- previously. It could be less if some previously existing file has been cleaned up in the meantime.
-select get_temp_file_num() as num_temp_files_after
+select sum(n) as num_temp_files_after from get_temp_file_num() n
 \gset
 select :num_temp_files_before >= :num_temp_files_after;
 drop table sisc;
+drop function get_temp_file_num();
