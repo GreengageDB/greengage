@@ -1818,14 +1818,6 @@ ProcessUtilitySlow(Node *parsetree,
 static void
 ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 {
-	DropStmt   *copyStmt;
-
-	/* stmt->objects could be modified (e.g.
-	 * CREATE TABLE test_exists(a int, b int);
-	 * DROP TRIGGER IF EXISTS test_trigger_exists ON test_exists;)
-	 * so copy for later use. */
-	copyStmt = copyObject(stmt);
-
 	switch (stmt->removeType)
 	{
 		case OBJECT_INDEX:
@@ -1875,7 +1867,9 @@ ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 			flags |= DF_WITH_SNAPSHOT;
 		}
 
-		CdbDispatchUtilityStatement((Node *) copyStmt,
+		SIMPLE_FAULT_INJECTOR("wait_before_drop_dispatch");
+
+		CdbDispatchUtilityStatement((Node *) stmt,
 									flags,
 									NIL,
 									NULL);
