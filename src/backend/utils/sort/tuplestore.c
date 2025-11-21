@@ -84,11 +84,14 @@
 #include "executor/executor.h"
 #include "miscadmin.h"
 #include "storage/buffile.h"
+#include "storage/lwlock.h"
+#include "storage/shmem.h"
 #include "utils/memutils.h"
 #include "utils/resowner.h"
 
 #include "cdb/cdbvars.h"
 #include "executor/instrument.h"        /* struct Instrumentation */
+#include "executor/nodeShareInputScan.h" /* get_shareinput_fileset */
 #include "utils/workfile_mgr.h"
 
 
@@ -284,15 +287,35 @@ struct Tuplestorestate
  *--------------------
  */
 
+typedef struct
+{
+	char		tag[NAMEDATALEN]; /* hash key */
+	int32		session_id;
+	/*
+	 * Total number of consumers who aren't done with this tuplestore.
+	 * The tuplestore can be deleted automatically when this reachers zero.
+	 */
+	pg_atomic_uint32 num_total_left;
+	/*
+	 * Number of consumers who are currently using this tuplestore.
+	 * It's only safe to delete it when it's zero.
+	 */
+	pg_atomic_uint32 num_current;
+	pg_atomic_uint32 aborting; /* True if we are currently aborting */
+} TuplestoreSharingState;
+
 /*
- * List of all shared tuplestores created on this backend.
- * These should all be deleted on abort, and should be gone by
- * the end of current command (as defined by gp_command_count).
- *
- * Note that each shared tuplestore must only be remembered on
- * one of the backends, the one that created it.
+ * Hash table of all shared tuplestores. The entry should be
+ * created when a shared tuplestore is opened, and deleted
+ * when it is deleted.
  */
-static List* shared_tuplestores = NIL;
+static HTAB *shared_tuplestores = NULL;
+/*
+ * List of all shared tuplestore states open locally on this
+ * backend. The entry should be deleted once the tuplestore
+ * is closed.
+ */
+static List *local_shared_tuplestores = NIL;
 
 static Tuplestorestate *tuplestore_begin_common(int eflags,
 												bool interXact,
@@ -549,16 +572,75 @@ tuplestore_report(Tuplestorestate *state)
  * Release resources and clean up.
  */
 static void
-tuplestore_cleanup(Tuplestorestate *state)
+tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 {
 	int			i;
 
 	tuplestore_report(state);
 
+	if (state->share_status != TSHARE_NOT_SHARED)
+	{
+		TuplestoreSharingState *sstate;
+		char		tag[NAMEDATALEN];
+		bool		found;
+
+		/*
+		 * When aborting we free the whole list later,
+		 * so no need to delete individual items here
+		 */
+		if (!should_abort)
+			local_shared_tuplestores = list_delete_ptr(local_shared_tuplestores, state);
+
+		/* Time to clean up the shared state */
+		LWLockAcquire(SharedTuplestoreLock, LW_SHARED);
+
+		Assert(strlen(state->shared_filename) < NAMEDATALEN);
+		strncpy(tag, state->shared_filename, NAMEDATALEN);
+		sstate = hash_search(shared_tuplestores,
+							&tag,
+							HASH_FIND,
+							&found);
+		Assert(found);
+		Assert(sstate->session_id == gp_session_id);
+		/*
+		 * If we are aborting, set the atomic variable in shared memory.
+		 * This must be done before everything else, since if we can't
+		 * delete the tuplestore right now, we expect other backends to
+		 * do so after they're done using it.
+		 */
+		if (should_abort)
+			pg_atomic_exchange_u32(&sstate->aborting, 1);
+		uint32 num_total_left = pg_atomic_sub_fetch_u32(&sstate->num_total_left, 1);
+		uint32 num_current = pg_atomic_sub_fetch_u32(&sstate->num_current, 1);
+		Assert(num_current <= num_total_left);
+		if (num_current == 0) /* safe to delete, no one is using it */
+		{
+			/*
+			 * Either our backend is aborting, or some other backend was
+			 * and set the flag for us. It's this backend's job to delete
+			 * the files now.
+			 */
+			uint32 aborting = pg_atomic_read_u32(&sstate->aborting);
+			if (aborting || num_total_left == 0) /* should delete */
+			{
+				/*
+				 * We can now safely delete the files, since we were the
+				 * last user of this tuplestore and no one is going to use it
+				 * after us.
+				 */
+				BufFileDeleteShared(state->fileset, state->shared_filename);
+				if (hash_search(shared_tuplestores,
+								&tag,
+								HASH_REMOVE, NULL) == NULL)
+					elog(ERROR, "hash table corrupted");
+			}
+		}
+
+		LWLockRelease(SharedTuplestoreLock);
+	}
+
 	if (state->myfile)
 		BufFileClose(state->myfile);
-	if (state->share_status == TSHARE_WRITER)
-		BufFileDeleteShared(state->fileset, state->shared_filename);
 	if (state->work_set)
 		workfile_mgr_close_set(state->work_set);
 	if (state->shared_filename)
@@ -581,9 +663,7 @@ tuplestore_cleanup(Tuplestorestate *state)
 void
 tuplestore_end(Tuplestorestate *state)
 {
-	if (state->share_status == TSHARE_WRITER)
-		shared_tuplestores = list_delete_ptr(shared_tuplestores, state);
-	tuplestore_cleanup(state);
+	tuplestore_cleanup(state, false /* should_abort */);
 }
 
 /*
@@ -1715,25 +1795,70 @@ tuplestore_set_instrument(Tuplestorestate *state,
 /* Extra GPDB functions for sharing tuplestores across processes */
 
 /*
- * tuplestore_make_shared
+ * Initialization of the shared hash table for shared tuplestores.
+ *
+ * XXX: Use MaxBackends to size it, on the assumption that max_connections
+ * will scale accordingly to query complexity. This is quite fuzzy, you could
+ * create a query with tons of tuplestores but only a few
+ * slice, but that ought to be rare enough in practice. This isn't a hard
+ * limit anyway, the hash table will use up any "slop" in shared memory if
+ * needed.
+ */
+#define N_TUPLESTORE_SLOTS() (MaxBackends * 5)
+
+Size
+SharedTuplestoreShmemSize(void)
+{
+	Size		size;
+
+	size = hash_estimate_size(N_TUPLESTORE_SLOTS(), sizeof(TuplestoreSharingState));
+
+	return size;
+}
+
+void
+SharedTuplestoreShmemInit(void)
+{
+	HASHCTL		info;
+
+	info.keysize = NAMEDATALEN;
+	info.entrysize = sizeof(TuplestoreSharingState);
+
+	shared_tuplestores = ShmemInitHash("Shared tuplestores data",
+									   N_TUPLESTORE_SLOTS(),
+									   N_TUPLESTORE_SLOTS(),
+									   &info,
+									   HASH_ELEM | HASH_BLOBS);
+}
+
+/*
+ * tuplestore_make_shared_many
  *
  * Make a tuplestore available for sharing later. This must be called
  * immediately after tuplestore_begin_heap().
+ *
+ * The ntotal parameter sets the number of times the tuplestore can be
+ * opened before it is automatically deleted.
  */
 void
-tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const char *filename)
+tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, const char *filename, uint32 ntotal)
 {
 	ResourceOwner oldowner;
+	TuplestoreSharingState *sstate;
+	char		tag[NAMEDATALEN];
+	bool		found;
 
 	state->work_set = workfile_mgr_create_set("SharedTupleStore", filename, true /* hold pin */);
 
 	Assert(state->status == TSS_INMEM);
 	Assert(state->tuples == 0);
 	Assert(state->share_status == TSHARE_NOT_SHARED);
+	/* We only support one shared fileset currently */
+	Assert(fileset == get_shareinput_fileset());
 	/*
 	 * QE must create shared tuplestores only in transaction lifetime, since InitPlans
 	 * are executed as separate queries and so Executor lifetime is not enough.
-	 * 
+	 *
 	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
 	 * live only for the duration of one query.
 	 */
@@ -1769,7 +1894,44 @@ tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const cha
 	state->status = TSS_WRITEFILE;
 
 	/* Remember this tuplestore to clear it in case of error */
-	shared_tuplestores = lappend(shared_tuplestores, state);
+	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
+
+	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
+
+	Assert(strlen(filename) < NAMEDATALEN);
+	strncpy(tag, filename, NAMEDATALEN);
+	sstate = hash_search(shared_tuplestores,
+						 &tag,
+						 HASH_ENTER_NULL,
+						 &found);
+	Assert(!found);
+	if (sstate == NULL)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("out of shared tuplestore slots")));
+	}
+	sstate->session_id = gp_session_id;
+	pg_atomic_init_u32(&sstate->num_current, 1);
+	pg_atomic_init_u32(&sstate->num_total_left, ntotal);
+	pg_atomic_init_u32(&sstate->aborting, 0);
+
+	LWLockRelease(SharedTuplestoreLock);
+}
+
+/*
+ * tuplestore_make_shared_many
+ *
+ * Make a tuplestore available for sharing later. This must be called
+ * immediately after tuplestore_begin_heap().
+ *
+ * The ntotal parameter defaults to 2, so the tuplestore will be deleted
+ * after both the writer and a single reader close it.
+ */
+void
+tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset, const char *filename)
+{
+	tuplestore_make_shared_many(state, fileset, filename, 2);
 }
 
 static void
@@ -1804,7 +1966,33 @@ Tuplestorestate *
 tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 {
 	Tuplestorestate *state;
+	TuplestoreSharingState *sstate;
 	int			eflags;
+	char		tag[NAMEDATALEN];
+	bool		found;
+
+	/*
+	 * QE must open shared tuplestores only in transaction lifetime, since InitPlans
+	 * are executed as separate queries and so Executor lifetime is not enough.
+	 *
+	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
+	 * live only for the duration of one query.
+	 */
+	AssertImply(Gp_role == GP_ROLE_EXECUTE, CurrentMemoryContext == CurTransactionContext);
+
+	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
+
+	Assert(strlen(filename) < NAMEDATALEN);
+	strncpy(tag, filename, NAMEDATALEN);
+	sstate = hash_search(shared_tuplestores,
+						 &tag,
+						 HASH_FIND,
+						 &found);
+	Assert(found);
+	Assert(sstate->session_id == gp_session_id);
+	pg_atomic_add_fetch_u32(&sstate->num_current, 1);
+
+	LWLockRelease(SharedTuplestoreLock);
 
 	eflags = EXEC_FLAG_BACKWARD | EXEC_FLAG_REWIND;
 
@@ -1828,19 +2016,59 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	state->fileset = fileset;
 	state->shared_filename = pstrdup(filename);
 
+	/* Remember this tuplestore in case we have to close it while aborting */
+	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
+
 	return state;
 }
 
+/*
+ * AtAbort_SharedTuplestores
+ *
+ * Cleans up all shared tuplestores of this session if possible.
+ */
 void
 AtAbort_SharedTuplestores()
 {
+	TuplestoreSharingState *sstate;
+	HASH_SEQ_STATUS seq_status;
 	ListCell *lc;
-	foreach(lc, shared_tuplestores)
+
+	/* First close all the tuplestores we have opened locally */
+	foreach(lc, local_shared_tuplestores)
 	{
 		Tuplestorestate *state = (Tuplestorestate *) lfirst(lc);
-		tuplestore_cleanup(state);
+		tuplestore_cleanup(state, true /* should_abort */);
+	}
+	list_free(local_shared_tuplestores);
+	local_shared_tuplestores = NIL;
+
+	/* Then attempt to delete the files */
+	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
+
+	hash_seq_init(&seq_status, shared_tuplestores);
+	while ((sstate = hash_seq_search(&seq_status)) != NULL)
+	{
+		/* Check if this is tuplestore belongs to this session */
+		if (sstate->session_id != gp_session_id)
+			continue;
+		/* Check if anyone is using it, can't delete it if it's in use */
+		uint32 num_current = pg_atomic_read_u32(&sstate->num_current);
+		if (num_current > 0)
+			continue;
+
+		/*
+		 * No one is using it, and we're aborting so no one will use it
+		 * in the future either. It's safe to delete the files now.
+		 * Also delete the shared memory entry.
+		 */
+		BufFileDeleteShared(get_shareinput_fileset(), sstate->tag);
+
+		if (hash_search(shared_tuplestores,
+						sstate->tag,
+						HASH_REMOVE, NULL) == NULL)
+				elog(ERROR, "hash table corrupted");
 	}
 
-	list_free(shared_tuplestores);
-	shared_tuplestores = NIL;
+	LWLockRelease(SharedTuplestoreLock);
 }
