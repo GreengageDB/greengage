@@ -104,16 +104,13 @@ typedef struct shareinput_Xslice_state
 
 	int			refcount;		/* reference count of this entry */
 	pg_atomic_uint32	ready;	/* is the input fully materialized and ready to be read? */
-	pg_atomic_uint32	ndone;	/* # of consumers that have finished the scan */
 
 	/*
-	 * ready_done_cv is used for signaling when the scan becomes "ready", and
-	 * when it becomes "done". The producer wakes up everyone waiting on this
-	 * condition variable when it sets ready = true. Also, when the last
-	 * consumer finishes the scan (ndone reaches nconsumers), it wakes up the
-	 * producer using this same condition variable.
+	 * ready_cv is used for signaling when the scan becomes "ready".
+	 * The producer wakes up everyone waiting on this condition
+	 * variable when it sets ready = true.
 	 */
-	ConditionVariable ready_done_cv;
+	ConditionVariable ready_cv;
 
 } shareinput_Xslice_state;
 
@@ -168,9 +165,6 @@ static bool shareinput_resowner_callback_registered = false;
 typedef struct shareinput_local_state
 {
 	bool		ready;
-	bool		closed;
-	int			ndone;
-	int			nsharers;
 
 	/*
 	 * This points to the child node that's being shared. Set by
@@ -191,8 +185,6 @@ static void shareinput_release_callback(ResourceReleasePhase phase,
 
 static void shareinput_writer_notifyready(shareinput_Xslice_reference *ref);
 static void shareinput_reader_waitready(shareinput_Xslice_reference *ref);
-static void shareinput_reader_notifydone(shareinput_Xslice_reference *ref, int nconsumers);
-static void shareinput_writer_waitdone(shareinput_Xslice_reference *ref, int nconsumers);
 
 static void ExecShareInputScanExplainEnd(PlanState *planstate, struct StringInfoData *buf);
 
@@ -322,7 +314,6 @@ init_tuplestore_state(ShareInputScanState *node)
 
 			Assert(sisc->cross_slice);
 
-			estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
 			shareinput_reader_waitready(node->ref);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
@@ -390,8 +381,6 @@ ExecShareInputScan(PlanState *pstate)
 		return NULL;
 
 	slot = node->ss.ps.ps_ResultTupleSlot;
-
-	Assert(!node->local_state->closed);
 
 	tuplestore_select_read_pointer(node->ts_state, node->ts_pos);
 	while(1)
@@ -494,16 +483,6 @@ ExecInitShareInputScan(ShareInputScan *node, EState *estate, int eflags)
 
 	local_state = list_nth(estate->es_sharenode, node->share_id);
 
-	/*
-	 * To accumulate the number of CTE consumers executed in this slice.
-	 * This variable will be used by the last finishing CTE consumer
-	 * in current slice, to wake the corresponding CTE producer up for
-	 * cleaning the materialized tuplestore, during squelching.
-	 */
-	if (currentSliceId == node->this_slice_id &&
-		currentSliceId != node->producer_slice_id)
-		local_state->nsharers++;
-
 	if (childState)
 		local_state->childState = childState;
 	sisstate->local_state = local_state;
@@ -571,24 +550,10 @@ ExecEndShareInputScan(ShareInputScanState *node)
 	{
 		if (sisc->this_slice_id == currentSliceId || estate->es_plannedstmt->numSlices == 1)
 		{
-			/*
-			 * The producer needs to wait for all the consumers to finish.
-			 * Consumers signal the producer that they're done reading,
-			 * but are free to exit immediately after that.
-			 */
 			if (currentSliceId == sisc->producer_slice_id)
 			{
 				if (!local_state->ready)
 					init_tuplestore_state(node);
-				shareinput_writer_waitdone(node->ref, sisc->nconsumers);
-			}
-			else
-			{
-				if (!local_state->closed)
-				{
-					shareinput_reader_notifydone(node->ref, sisc->nconsumers);
-					local_state->closed = true;
-				}
 			}
 		}
 		release_shareinput_reference(node->ref, false);
@@ -672,16 +637,6 @@ ExecSquelchShareInputScan(ShareInputScanState *node)
 		}
 		else
 		{
-			/* We are a consumer. Let the producer know that we're done. */
-			Assert(!local_state->closed);
-
-			local_state->ndone++;
-
-			if (local_state->ndone == local_state->nsharers)
-			{
-				shareinput_reader_notifydone(node->ref, sisc->nconsumers);
-				local_state->closed = true;
-			}
 			release_shareinput_reference(node->ref, true);
 			node->ref = NULL;
 		}
@@ -846,9 +801,8 @@ get_shareinput_reference(int share_id)
 
 		xslice_state->refcount = 0;
 		pg_atomic_init_u32(&xslice_state->ready, 0);
-		pg_atomic_init_u32(&xslice_state->ndone, 0);
 
-		ConditionVariableInit(&xslice_state->ready_done_cv);
+		ConditionVariableInit(&xslice_state->ready_cv);
 		elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (shareid=%d, slice=%d): initialized xslice state",
 			 share_id, currentSliceId);
 	}
@@ -969,7 +923,7 @@ shareinput_reader_waitready(shareinput_Xslice_reference *ref)
 		if (ready)
 			break;
 
-		ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+		ConditionVariableSleep(&state->ready_cv, WAIT_EVENT_SHAREINPUT_SCAN);
 	}
 	ConditionVariableCancelSleep();
 
@@ -997,91 +951,8 @@ shareinput_writer_notifyready(shareinput_Xslice_reference *ref)
 	SIMPLE_FAULT_INJECTOR("shareinput_writer_notifyready");
 #endif
 
-	ConditionVariableBroadcast(&state->ready_done_cv);
+	ConditionVariableBroadcast(&state->ready_cv);
 
 	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): wrote notify_ready",
 		 ref->share_id, currentSliceId);
-}
-
-/*
- * shareinput_reader_notifydone
- *
- *  Called by the reader (consumer) to notify the writer (producer) that
- *  it is done reading tuples from disk.
- *
- *  This is a non-blocking operation.
- */
-static void
-shareinput_reader_notifydone(shareinput_Xslice_reference *ref, int nconsumers)
-{
-	shareinput_Xslice_state *state = ref->xslice_state;
-	int ndone = pg_atomic_add_fetch_u32(&state->ndone, 1);
-
-	/* If we were the last consumer, wake up the producer. */
-	if (ndone >= nconsumers)
-		ConditionVariableBroadcast(&state->ready_done_cv);
-
-	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): wrote notify_done",
-		 ref->share_id, currentSliceId);
-}
-
-void
-ShareInputReaderNotifyDone(ShareInputScanState *node)
-{
-	shareinput_local_state *local_state = node->local_state;
-	ShareInputScan *sisc = (ShareInputScan *) node->ss.ps.plan;
-
-	if (node->ref == NULL || local_state->closed)
-		return;
-
-	shareinput_reader_notifydone(node->ref, sisc->nconsumers);
-
-	local_state->closed = true;
-}
-
-/*
- * shareinput_writer_waitdone
- *
- *  Called by the writer (producer) to wait for the "done" notification from
- *  all readers (consumers).
- *
- *  This is a blocking operation.
- */
-static void
-shareinput_writer_waitdone(shareinput_Xslice_reference *ref, int nconsumers)
-{
-	shareinput_Xslice_state *state = ref->xslice_state;
-
-	int ready = pg_atomic_read_u32(&state->ready);
-	if (!ready)
-		elog(ERROR, "shareinput_writer_waitdone() called without creating the tuplestore");
-
-	ConditionVariablePrepareToSleep(&state->ready_done_cv);
-	for (;;)
-	{
-		/*
-		 * set state->ndone via pg_atomic_add_fetch_u32() in shareinput_reader_notifydone()
-		 * it acts as a memory barrier, so always get the latest value here
-		 */
-		int	ndone = pg_atomic_read_u32(&state->ndone);
-		if (ndone < nconsumers)
-		{
-			elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): waiting for DONE message from %d / %d readers",
-				 ref->share_id, currentSliceId, nconsumers - ndone, nconsumers);
-
-			ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
-
-			continue;
-		}
-		ConditionVariableCancelSleep();
-		if (ndone > nconsumers)
-			elog(WARNING, "%d sharers of ShareInputScan reported to be done, but only %d were expected",
-				 ndone, nconsumers);
-		break;
-	}
-
-	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): got DONE message from %d readers",
-		 ref->share_id, currentSliceId, nconsumers);
-
-	/* it's all done now */
 }
