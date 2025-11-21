@@ -1489,3 +1489,43 @@ select * from bar where 2 = (select cte.i from cte);
 
 drop table foo;
 drop table bar;
+
+--
+-- Check error handling during InitPlans
+--
+
+create table foo (i int) distributed by (i);
+insert into foo select generate_series(1, 10);
+
+set optimizer to off;
+-- Display dispatch info
+set test_print_direct_dispatch_info = on;
+
+-- All InitPlans must be executed in a single transaction
+-- and commited using one-phase commit
+explain (verbose, costs off)
+select (select count(*) from foo), (select count(*) from foo);
+
+select (select count(*) from foo), (select count(*) from foo);
+
+-- Error during one of the InitPlans must abort the transaction on all segments
+explain (verbose, costs off)
+select (select count(*) from foo), (select i/0 from foo), (select count(*) from foo);
+
+select (select count(*) from foo), (select i/0 from foo), (select count(*) from foo);
+
+-- Even if direct dispatch is used
+explain (verbose, costs off)
+select (select count(*) from foo), (select i/0 from foo where i = 1), (select count(*) from foo);
+
+select (select count(*) from foo), (select i/0 from foo where i = 1), (select count(*) from foo);
+
+-- Check InitPlans not on the root node
+explain (verbose, costs off)
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+
+reset test_print_direct_dispatch_info;
+reset optimizer;
+drop table foo;

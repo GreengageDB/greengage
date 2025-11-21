@@ -4350,6 +4350,15 @@ void
 PreventInTransactionBlock(bool isTopLevel, const char *stmtType)
 {
 	/*
+	 * inside a function call?
+	 */
+	if (!isTopLevel)
+		ereport(ERROR,
+				(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+		/* translator: %s represents an SQL statement name */
+				 errmsg("%s cannot be executed from a function", stmtType)));
+
+	/*
 	 * xact block already started?
 	 */
 	if (IsTransactionBlock())
@@ -4378,15 +4387,6 @@ PreventInTransactionBlock(bool isTopLevel, const char *stmtType)
 		/* translator: %s represents an SQL statement name */
 				 errmsg("%s cannot be executed within a pipeline",
 						stmtType)));
-
-	/*
-	 * inside a function call?
-	 */
-	if (!isTopLevel)
-		ereport(ERROR,
-				(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-		/* translator: %s represents an SQL statement name */
-				 errmsg("%s cannot be executed from a function", stmtType)));
 
 	/* If we got past IsTransactionBlock test, should be in default state */
 	if (CurrentTransactionState->blockState != TBLOCK_DEFAULT &&
