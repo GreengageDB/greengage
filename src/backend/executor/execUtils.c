@@ -1540,22 +1540,6 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 	}
 
 	/*
-	 * Notify corresponding producer that the reading is completed. We need to
-	 * do notification before processing the results in order to avoid a
-	 * deadlock. Deadlock could occur when the consumer of a cross slice Shared
-	 * Scan was in slice 0 and the producer was in another slice. QE with
-	 * producer couldn't complete until the consumer sent the notification,
-	 * however that didn't happen because consumer at slice 0 send a
-	 * notification after all QEs are completed.
-	 */
-	ListCell *cell;
-	foreach (cell, estate->sharedScanConsumers)
-	{
-		ShareInputScanState *node = lfirst(cell);
-		ShareInputReaderNotifyDone(node);
-	}
-
-	/*
 	 * If QD, wait for QEs to finish and check their results.
 	 */
 	if (estate->dispatcherState && estate->dispatcherState->primaryResults)
