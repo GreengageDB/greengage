@@ -4065,3 +4065,180 @@ select * from bar where 2 = (select cte.i from cte);
 
 drop table foo;
 drop table bar;
+--
+-- Check error handling during InitPlans
+--
+create table foo (i int) distributed by (i);
+insert into foo select generate_series(1, 10);
+set optimizer to off;
+-- Display dispatch info
+set test_print_direct_dispatch_info = on;
+-- All InitPlans must be executed in a single transaction
+-- and commited using one-phase commit
+explain (verbose, costs off)
+select (select count(*) from foo), (select count(*) from foo);
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: $0, $1
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           Output: count(*)
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 Output: (PARTIAL count(*))
+                 ->  Partial Aggregate
+                       Output: PARTIAL count(*)
+                       ->  Seq Scan on subselect_gp.foo
+                             Output: foo.i
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Finalize Aggregate
+           Output: count(*)
+           ->  Gather Motion 3:1  (slice4; segments: 3)
+                 Output: (PARTIAL count(*))
+                 ->  Partial Aggregate
+                       Output: PARTIAL count(*)
+                       ->  Seq Scan on subselect_gp.foo foo_1
+                             Output: foo_1.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off', optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on'
+(22 rows)
+
+select (select count(*) from foo), (select count(*) from foo);
+INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 4) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
+ count | count 
+-------+-------
+    10 |    10
+(1 row)
+
+-- Error during one of the InitPlans must abort the transaction on all segments
+explain (verbose, costs off)
+select (select count(*) from foo), (select i/0 from foo), (select count(*) from foo);
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: $0, $1, $2
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           Output: count(*)
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 Output: (PARTIAL count(*))
+                 ->  Partial Aggregate
+                       Output: PARTIAL count(*)
+                       ->  Seq Scan on subselect_gp.foo
+                             Output: foo.i
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Gather Motion 3:1  (slice4; segments: 3)
+           Output: ((foo_1.i / 0))
+           ->  Seq Scan on subselect_gp.foo foo_1
+                 Output: (foo_1.i / 0)
+   InitPlan 3 (returns $2)  (slice5)
+     ->  Finalize Aggregate
+           Output: count(*)
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 Output: (PARTIAL count(*))
+                 ->  Partial Aggregate
+                       Output: PARTIAL count(*)
+                       ->  Seq Scan on subselect_gp.foo foo_2
+                             Output: foo_2.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off', optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on'
+(27 rows)
+
+select (select count(*) from foo), (select i/0 from foo), (select count(*) from foo);
+INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 4) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to ALL contents: 0 1 2
+ERROR:  division by zero  (seg2 slice4 127.0.1.1:7004 pid=17083)
+-- Even if direct dispatch is used
+explain (verbose, costs off)
+select (select count(*) from foo), (select i/0 from foo where i = 1), (select count(*) from foo);
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: $0, $1, $2
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           Output: count(*)
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 Output: (PARTIAL count(*))
+                 ->  Partial Aggregate
+                       Output: PARTIAL count(*)
+                       ->  Seq Scan on subselect_gp.foo
+                             Output: foo.i
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Gather Motion 1:1  (slice4; segments: 1)
+           Output: ((foo_1.i / 0))
+           ->  Seq Scan on subselect_gp.foo foo_1
+                 Output: (foo_1.i / 0)
+                 Filter: (foo_1.i = 1)
+   InitPlan 3 (returns $2)  (slice5)
+     ->  Finalize Aggregate
+           Output: count(*)
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 Output: (PARTIAL count(*))
+                 ->  Partial Aggregate
+                       Output: PARTIAL count(*)
+                       ->  Seq Scan on subselect_gp.foo foo_2
+                             Output: foo_2.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off', optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on'
+(28 rows)
+
+select (select count(*) from foo), (select i/0 from foo where i = 1), (select count(*) from foo);
+INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 4) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Abort (No Prepared)' to ALL contents: 0 1 2
+ERROR:  division by zero  (seg1 slice4 127.0.1.1:7003 pid=17104)
+-- Check InitPlans not on the root node
+explain (verbose, costs off)
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((SubPlan 2))
+   ->  Seq Scan on subselect_gp.foo t2
+         Output: (SubPlan 2)
+         SubPlan 2
+           ->  Result
+                 Output: $0
+                 Filter: (t1.i = t2.i)
+                 InitPlan 1 (returns $0)  (slice3)
+                   ->  Aggregate
+                         Output: count(*)
+                         ->  Materialize
+                               ->  Gather Motion 3:1  (slice4; segments: 3)
+                                     ->  Seq Scan on subselect_gp.foo
+                 ->  Materialize
+                       Output: t1.i
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                             Output: t1.i
+                             ->  Seq Scan on subselect_gp.foo t1
+                                   Output: t1.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off', optimizer_enable_coordinator_only_queries = 'on', optimizer_enable_master_only_queries = 'on'
+(22 rows)
+
+select (select (select count(*) from foo) from foo t1 where t1.i = t2.i) from foo t2;
+INFO:  (slice 4) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 2) Dispatch command to ALL contents: 0 1 2
+INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
+ count 
+-------
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+    10
+(10 rows)
+
+reset test_print_direct_dispatch_info;
+reset optimizer;
+drop table foo;

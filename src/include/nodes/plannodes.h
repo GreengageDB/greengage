@@ -156,6 +156,7 @@ typedef struct PlannedStmt
  	 * GPDB: whether a query is a SPI inner query for extension usage 
  	 */
 	int8		metricsQueryType;
+	bool		hasInitPlans;
 } PlannedStmt;
 
 /*
