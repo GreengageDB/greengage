@@ -1862,8 +1862,11 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
 	 * live only for the duration of one query.
 	 */
-	AssertImply(Gp_role == GP_ROLE_EXECUTE, state->resowner == CurTransactionResourceOwner);
-	AssertImply(Gp_role == GP_ROLE_EXECUTE, CurrentMemoryContext == CurTransactionContext);
+	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
+	{
+		Assert(state->resowner == CurTransactionResourceOwner);
+		Assert(CurrentMemoryContext == CurTransactionContext);
+	}
 
 	state->share_status = TSHARE_WRITER;
 	state->fileset = fileset;
@@ -1978,7 +1981,8 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
 	 * live only for the duration of one query.
 	 */
-	AssertImply(Gp_role == GP_ROLE_EXECUTE, CurrentMemoryContext == CurTransactionContext);
+	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
+		Assert(CurrentMemoryContext == CurTransactionContext);
 
 	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
 
