@@ -2774,6 +2774,15 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 
 		CdbPathLocus_MakeSingleQE(&singleQE,
 								  CdbPathLocus_NumSegments(path->locus));
+
+		if (IsA(path, LimitPath)) {
+			mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, singleQE);
+			
+			if (mpath == NULL)
+				mpath = path;
+			return mpath;
+		}
+
 		mpath = cdbpath_create_motion_path(root, path, NIL, false, singleQE);
 		/*
 		 * mpath might be NULL, like path contain outer Params
