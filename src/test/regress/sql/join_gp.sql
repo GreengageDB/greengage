@@ -1290,6 +1290,7 @@ select * from tbl1 join tbl2 using (b);
 drop table tbl1;
 drop table tbl2;
 
+drop table if exists outer_tbl;
 -- We need to explicitly handle outer references inside JOINs
 -- as it is currently impossible for them to be passed across motions
 -- So, check if we do it correctly
