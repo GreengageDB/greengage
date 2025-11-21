@@ -592,7 +592,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			local_shared_tuplestores = list_delete_ptr(local_shared_tuplestores, state);
 
 		/* Time to clean up the shared state */
-		LWLockAcquire(SharedTuplestoreLock, LW_SHARED);
+		LWLockAcquire(ShareInputScanLock, LW_SHARED);
 
 		Assert(strlen(state->shared_filename) < NAMEDATALEN);
 		strncpy(tag, state->shared_filename, NAMEDATALEN);
@@ -636,7 +636,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			}
 		}
 
-		LWLockRelease(SharedTuplestoreLock);
+		LWLockRelease(ShareInputScanLock);
 	}
 
 	if (state->myfile)
@@ -1899,7 +1899,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	/* Remember this tuplestore to clear it in case of error */
 	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
 
-	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
+	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 	Assert(strlen(filename) < NAMEDATALEN);
 	strncpy(tag, filename, NAMEDATALEN);
@@ -1919,7 +1919,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	pg_atomic_init_u32(&sstate->num_total_left, ntotal);
 	pg_atomic_init_u32(&sstate->aborting, 0);
 
-	LWLockRelease(SharedTuplestoreLock);
+	LWLockRelease(ShareInputScanLock);
 }
 
 /*
@@ -1984,7 +1984,7 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
 		Assert(CurrentMemoryContext == CurTransactionContext);
 
-	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
+	LWLockAcquire(ShareInputScanLock, LW_SHARED);
 
 	Assert(strlen(filename) < NAMEDATALEN);
 	strncpy(tag, filename, NAMEDATALEN);
@@ -1996,7 +1996,7 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	Assert(sstate->session_id == gp_session_id);
 	pg_atomic_add_fetch_u32(&sstate->num_current, 1);
 
-	LWLockRelease(SharedTuplestoreLock);
+	LWLockRelease(ShareInputScanLock);
 
 	eflags = EXEC_FLAG_BACKWARD | EXEC_FLAG_REWIND;
 
@@ -2048,7 +2048,7 @@ AtAbort_SharedTuplestores()
 	local_shared_tuplestores = NIL;
 
 	/* Then attempt to delete the files */
-	LWLockAcquire(SharedTuplestoreLock, LW_EXCLUSIVE);
+	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 	hash_seq_init(&seq_status, shared_tuplestores);
 	while ((sstate = hash_seq_search(&seq_status)) != NULL)
@@ -2074,5 +2074,5 @@ AtAbort_SharedTuplestores()
 				elog(ERROR, "hash table corrupted");
 	}
 
-	LWLockRelease(SharedTuplestoreLock);
+	LWLockRelease(ShareInputScanLock);
 }
