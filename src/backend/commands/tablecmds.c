@@ -1302,6 +1302,7 @@ RemoveRelations(DropStmt *drop)
 		if (!OidIsValid(relOid))
 		{
 			DropErrorMsgNonExistent(rel, relkind, drop->missing_ok);
+			Assert(drop->missing_ok);
 			drop->objects = list_delete_cell(drop->objects, cell, prev);
 			continue;
 		}
