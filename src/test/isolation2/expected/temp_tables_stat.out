@@ -1368,3 +1368,9 @@ SELECT content, size FROM tts_get_seg_files();
  2       | 0      
  2       | 32768  
 (12 rows)
+
+--
+-- Cleanup
+DROP EXTENSION temp_tables_stat;
+DROP
+

@@ -109,6 +109,37 @@ lExit:
 	LWLockRelease(&head->lock);
 }
 
+static void
+delete_from_ttsnode(TTSNode *node, int index, TTSNode *prev_node)
+{
+	/* Find the last node */
+	TTSNode *last_node = node;
+	TTSNode *last_prev_node = prev_node;
+
+	while (last_node->next != DSM_HANDLE_INVALID)
+	{
+		last_prev_node = last_node;
+		last_node = next_node(last_node);
+	}
+
+	/* replace the deleted element with the last one */
+	node->files[index] = last_node->files[last_node->num - 1];
+
+	if (last_node->num > 1)
+		last_node->num--;
+	else if (last_node == &head->node)
+		head->node.num = 0;
+	else
+	{
+		/*
+		 * last_prev_node != NULL because last_node is not head.
+		 * next_node() has been called, so the mapping exists.
+		 */
+		dsm_detach(dsm_find_mapping(last_prev_node->next));
+		last_prev_node->next = DSM_HANDLE_INVALID;
+	}
+}
+
 /* This function is called once for all forks. Delete file info from the list */
 static void
 tts_file_unlink_hook(RelFileNodeBackend rnode)
@@ -122,10 +153,7 @@ tts_file_unlink_hook(RelFileNodeBackend rnode)
 	rnode.backend = MyBackendId;
 	LWLockAcquire(&head->lock, LW_EXCLUSIVE);
 
-	/*
-	 * Find rnode in the list of arrays, replace rnode with the last element,
-	 * decrement array length.
-	 */
+	/* Find rnode in the list of arrays and delete it from the list node */
 	for (TTSNode *node = &head->node, *prev_node = NULL;
 		 node != NULL;
 		 prev_node = node, node = next_node(node))
@@ -133,30 +161,7 @@ tts_file_unlink_hook(RelFileNodeBackend rnode)
 		for (int i = 0; i < node->num; i++)
 			if (RelFileNodeBackendEquals(rnode, node->files[i]))
 			{
-				/* Find the last node */
-				TTSNode *last_node = node, *last_prev_node = prev_node;
-				while (last_node->next != DSM_HANDLE_INVALID)
-				{
-					last_prev_node = last_node;
-					last_node = next_node(last_node);
-				}
-
-				node->files[i] = last_node->files[last_node->num - 1];
-
-				if (last_node->num > 1)
-					last_node->num--;
-				else if (last_node == &head->node)
-					head->node.num = 0;
-				else
-				{
-					/*
-					 * last_prev_node != NULL because last_node is not head.
-					 * next_node() has been called, so the mapping exists.
-					 */
-					dsm_detach(dsm_find_mapping(last_prev_node->next));
-					last_prev_node->next = DSM_HANDLE_INVALID;
-				}
-
+				delete_from_ttsnode(node, i, prev_node);
 				goto lExit;
 			}
 	}
@@ -225,6 +230,37 @@ tts_get_file_size(const char *dirname, const char *fn_start)
 	return dirsize;
 }
 
+/* Copy the files info from the list to local memory */
+static RelFileNodeBackend *
+get_files(uint32 *files_num)
+{
+	RelFileNodeBackend *files;
+
+	*files_num = 0;
+
+	LWLockAcquire(&head->lock, LW_SHARED);
+
+	/* Count files of temp tables */
+	for (const TTSNode *node = &head->node; node != NULL; node = next_node(node))
+		*files_num += node->num;
+
+	/* Allocate local memory for array of the files data */
+	files = palloc(sizeof(*files) * (*files_num));
+
+	/* Combine arrays from the list nodes into one array */
+	*files_num = 0;
+	for (const TTSNode *node = &head->node; node != NULL; node = next_node(node))
+	{
+		RelFileNodeBackend *dst = files + (*files_num);
+		memcpy(dst, node->files, sizeof(*files) * node->num);
+		*files_num += node->num;
+	}
+
+	LWLockRelease(&head->lock);
+
+	return files;
+}
+
 /* Get temp tables files list on segments */
 PG_FUNCTION_INFO_V1(tts_get_seg_files);
 Datum
@@ -233,8 +269,8 @@ tts_get_seg_files(PG_FUNCTION_ARGS)
 	enum { NATTR = 5 };
 
 	FuncCallContext *funcctx;
-	PgBackendStatus *beStatus;
-	RelFileNodeBackend *file;
+	const PgBackendStatus *beStatus;
+	const RelFileNodeBackend *file;
 	char	   *sep;
 	char	   *path;
 	HeapTuple	tuple;
@@ -246,8 +282,6 @@ tts_get_seg_files(PG_FUNCTION_ARGS)
 	{
 		MemoryContext oldcontext;
 		TupleDesc tupdesc;
-		RelFileNodeBackend *files;
-		int files_num = 0;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 
@@ -268,27 +302,7 @@ tts_get_seg_files(PG_FUNCTION_ARGS)
 			SRF_RETURN_DONE(funcctx);
 		}
 
-		LWLockAcquire(&head->lock, LW_SHARED);
-
-		/* Count files of temp tables */
-		for (TTSNode *node = &head->node; node != NULL; node = next_node(node))
-			files_num += node->num;
-
-		/* Allocate local memory for array of the files data */
-		files = palloc(sizeof(*files) * files_num);
-
-		/* Combine arrays from the list nodes into one array */
-		funcctx->max_calls = 0;
-		for (TTSNode *node = &head->node; node != NULL; node = next_node(node))
-		{
-			RelFileNodeBackend *dst = files + funcctx->max_calls;
-			memcpy(dst, node->files, sizeof(*files) * node->num);
-			funcctx->max_calls += node->num;
-		}
-
-		LWLockRelease(&head->lock);
-
-		funcctx->user_fctx = files;
+		funcctx->user_fctx = get_files(&funcctx->max_calls);
 		MemoryContextSwitchTo(oldcontext);
 	}
 
@@ -318,6 +332,7 @@ tts_get_seg_files(PG_FUNCTION_ARGS)
 	Assert(sep != NULL);
 	*sep = '\0';
 	values[4] = Int64GetDatum(tts_get_file_size(path, sep + 1));
+	pfree(path);
 
 	tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 

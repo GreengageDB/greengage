@@ -462,3 +462,12 @@ SELECT content, size FROM tts_get_seg_files();
 -- Vaccum adds FSM and VM
 VACUUM t1;
 SELECT content, size FROM tts_get_seg_files();
+
+--
+-- Cleanup
+DROP EXTENSION temp_tables_stat;
+
+-- start_ignore
+! gpconfig -r shared_preload_libraries;
+! gpstop -raiq;
+-- end_ignore
