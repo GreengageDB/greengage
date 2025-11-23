@@ -5,6 +5,21 @@
 1: CREATE EXTENSION IF NOT EXISTS temp_tables_stat;
 -- end_ignore
 
+1: CREATE OR REPLACE FUNCTION get_files
+(OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8)
+RETURNS SETOF record
+AS $$
+    SELECT (SELECT a.oid = f.user_id
+             FROM pg_authid a
+            WHERE a.rolname = current_user) user_id_ok,
+          (SELECT s.setting::int = f.sess_id
+             FROM pg_settings s
+            WHERE name = 'gp_session_id') cur_sess_id,
+          content,
+          size
+     FROM tts_get_seg_files() f; /**/
+$$ LANGUAGE SQL;
+
 -- No tables, the files list is empty
 1: SELECT * FROM tts_get_seg_files();
 
@@ -13,56 +28,16 @@
 
 -- We can see tables created in the current session
 1: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 1: CREATE TEMP TABLE t2(i INT) DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-2: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-3: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
+2: SELECT * FROM get_files();
+3: SELECT * FROM get_files();
 
 -- Dropped tables are removed from the list in all sessions
 1: DROP TABLE t2;
@@ -83,57 +58,17 @@
 -- We can see tables created in the current session
 1: BEGIN;
 1: CREATE TEMP TABLE t1(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 1: CREATE TEMP TABLE t2(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 
 -- We can see tables created in other sessions
 2: BEGIN;
 2: CREATE TEMP TABLE t1(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-2: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-3: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
+2: SELECT * FROM get_files();
+3: SELECT * FROM get_files();
 
 -- Dropped tables are removed from the list in all sessions
 1: ROLLBACK;
@@ -154,56 +89,16 @@
 
 -- We can see tables created in the current session
 1: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-2: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-3: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
+2: SELECT * FROM get_files();
+3: SELECT * FROM get_files();
 
 -- Dropped tables are removed from the list in all sessions
 1: DROP TABLE t2;
@@ -224,57 +119,17 @@
 -- We can see tables created in the current session
 1: BEGIN;
 1: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 
 -- We can see tables created in other sessions
 2: BEGIN;
 2: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-2: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-3: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
+2: SELECT * FROM get_files();
+3: SELECT * FROM get_files();
 
 -- Dropped tables are removed from the list in all sessions
 1: ROLLBACK;
@@ -297,62 +152,22 @@
 1: CREATE TEMP TABLE t1(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 1: CREATE TEMP TABLE t2(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-2: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-3: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
+2: SELECT * FROM get_files();
+3: SELECT * FROM get_files();
 
 -- Dropped tables are removed from the list in all sessions
 1: DROP TABLE t2;
@@ -377,15 +192,7 @@
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    ON COMMIT DROP
    DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 1: CREATE TEMP TABLE t2(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    ON COMMIT DROP
@@ -394,15 +201,7 @@
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    ON COMMIT DROP
    DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') sess_id_ok,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
 
 -- We can see tables created in other sessions
 2: BEGIN;
@@ -410,33 +209,9 @@
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    ON COMMIT DROP
    DISTRIBUTED BY (i);
-1: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-2: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
-3: SELECT (SELECT a.oid = f.user_id
-             FROM pg_authid a
-            WHERE a.rolname = current_user) user_id_ok,
-          (SELECT s.setting::int = f.sess_id
-             FROM pg_settings s
-            WHERE name = 'gp_session_id') cur_sess_id,
-          content,
-          size
-     FROM tts_get_seg_files() f;
+1: SELECT * FROM get_files();
+2: SELECT * FROM get_files();
+3: SELECT * FROM get_files();
 
 -- Dropped tables are removed from the list in all sessions
 1: ROLLBACK;
@@ -465,6 +240,9 @@ SELECT content, size FROM tts_get_seg_files();
 
 --
 -- Cleanup
+DROP FUNCTION get_files
+(OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8);
+
 DROP EXTENSION temp_tables_stat;
 
 -- start_ignore

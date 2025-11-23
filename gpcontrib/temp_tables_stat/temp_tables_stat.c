@@ -276,7 +276,7 @@ tts_get_seg_files(PG_FUNCTION_ARGS)
 	HeapTuple	tuple;
 	Datum		values[NATTR] = {0};
 	bool		nulls [NATTR] = {0};
-	static PgBackendStatus *beStatuses = NULL;
+	static const PgBackendStatus *beStatuses = NULL;
 
 	if (SRF_IS_FIRSTCALL())
 	{
