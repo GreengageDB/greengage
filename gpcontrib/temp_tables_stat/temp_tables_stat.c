@@ -288,11 +288,11 @@ tts_get_seg_files(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
 		tupdesc = CreateTemplateTupleDesc(NATTR, false);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "user_id", OIDOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "sess_id", INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "path", TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "content", INT2OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "size", INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, 1, "user_id", OIDOID, -1, 0);
+		TupleDescInitEntry(tupdesc, 2, "sess_id", INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, 3, "path", TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, 4, "content", INT2OID, -1, 0);
+		TupleDescInitEntry(tupdesc, 5, "size", INT8OID, -1, 0);
 
 		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
