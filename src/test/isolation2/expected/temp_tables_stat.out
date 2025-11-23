@@ -9,7 +9,7 @@
 CREATE
 -- end_ignore
 
-1: CREATE OR REPLACE FUNCTION get_files (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8) RETURNS SETOF record AS $$ SELECT (SELECT a.oid = f.user_id FROM pg_authid a WHERE a.rolname = current_user) user_id_ok, (SELECT s.setting::int = f.sess_id FROM pg_settings s WHERE name = 'gp_session_id') cur_sess_id, content, size FROM tts_get_seg_files() f; /**/ $$ LANGUAGE SQL;
+1: CREATE OR REPLACE FUNCTION get_files (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8) RETURNS SETOF record AS $$ SELECT (SELECT a.oid = f.user_id FROM pg_authid a WHERE a.rolname = current_user) user_id_ok, (SELECT s.setting::int = f.sess_id FROM pg_settings s WHERE name = 'gp_session_id') cur_sess_id, content, size FROM tts_get_seg_files() f; -- $$ LANGUAGE SQL;
 CREATE
 
 -- No tables, the files list is empty

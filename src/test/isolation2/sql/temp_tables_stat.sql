@@ -17,7 +17,7 @@ AS $$
             WHERE name = 'gp_session_id') cur_sess_id,
           content,
           size
-     FROM tts_get_seg_files() f; /**/
+     FROM tts_get_seg_files() f; --
 $$ LANGUAGE SQL;
 
 -- No tables, the files list is empty
