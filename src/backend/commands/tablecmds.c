@@ -1303,7 +1303,12 @@ RemoveRelations(DropStmt *drop)
 		{
 			DropErrorMsgNonExistent(rel, relkind, drop->missing_ok);
 			Assert(drop->missing_ok);
-			drop->objects = list_delete_cell(drop->objects, cell, prev);
+
+			if (gp_dispatch_drop_always)
+				prev = cell;
+			else
+				drop->objects = list_delete_cell(drop->objects, cell, prev);
+
 			continue;
 		}
 

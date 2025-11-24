@@ -165,3 +165,30 @@ select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
 DROP
 drop type t5;
 DROP
+
+-- start_ignore
+drop schema if exists t6;
+DROP
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&:drop schema if exists t6;  <waiting ...>
+create schema t6;
+CREATE
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+DROP
+drop schema t6;
+DROP

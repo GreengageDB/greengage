@@ -77,3 +77,14 @@ select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
 select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
 1<:
 drop type t5;
+
+-- start_ignore
+drop schema if exists t6;
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+1&:drop schema if exists t6;
+create schema t6;
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+1<:
+drop schema t6;

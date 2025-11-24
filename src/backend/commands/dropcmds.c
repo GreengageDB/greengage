@@ -26,6 +26,7 @@
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/syscache.h"
 #include "cdb/cdbvars.h"
 
@@ -94,7 +95,12 @@ RemoveObjects(DropStmt *stmt)
 		{
 			Assert(stmt->missing_ok);
 			does_not_exist_skipping(stmt->removeType, objname, objargs);
-			stmt->objects = list_delete_cell(stmt->objects, cell1, prev);
+
+			if (gp_dispatch_drop_always)
+				prev = cell1;
+			else
+				stmt->objects = list_delete_cell(stmt->objects, cell1, prev);
+
 			continue;
 		}
 
