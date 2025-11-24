@@ -1214,7 +1214,7 @@ RemoveRelations(DropStmt *drop)
 		 */
 		lockmode = ShareUpdateExclusiveLock;
 		Assert(drop->removeType == OBJECT_INDEX);
-		if (list_length(drop->objects) != 1)
+		if (list_length(drop->objects) > 1)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("DROP INDEX CONCURRENTLY does not support dropping multiple objects")));
