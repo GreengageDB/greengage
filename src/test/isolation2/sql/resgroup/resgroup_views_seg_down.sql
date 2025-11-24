@@ -50,6 +50,8 @@ SELECT gp_request_fts_probe_scan();
 SELECT content, preferred_role, role, status, mode
 FROM gp_segment_configuration WHERE content = 0;
 
+1<:
+
 -- Check the hanged query has complete.
 SELECT count(*) = 0 AS query_complete FROM pg_stat_activity
 WHERE state = 'active' AND query = 'SELECT count(1) FROM gp_toolkit.gp_resgroup_status_per_segment WHERE groupname = ''admin_group'';';
@@ -80,8 +82,6 @@ SELECT wait_until_all_segments_synchronized();
 
 -- Verify that no segment is down after the recovery.
 SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
-
-1<:
 
 -- Case 2: check the scenario with 'pg_terminate_backend'.
 
@@ -117,6 +117,8 @@ SELECT gp_request_fts_probe_scan();
 SELECT content, preferred_role, role, status, mode
 FROM gp_segment_configuration WHERE content = 0;
 
+1<:
+
 -- Check the hanged query has complete.
 SELECT count(*) = 0 AS query_complete FROM pg_stat_activity
 WHERE state = 'active' AND query = 'SELECT count(1) FROM gp_toolkit.gp_resgroup_status_per_segment WHERE groupname = ''admin_group'';';
@@ -148,7 +150,6 @@ SELECT wait_until_all_segments_synchronized();
 -- Verify that no segment is down after the recovery.
 SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
 
-1<:
 1q:
 
 -- Restore parameters.

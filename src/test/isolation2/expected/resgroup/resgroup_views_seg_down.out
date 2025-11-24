@@ -82,6 +82,9 @@ SELECT content, preferred_role, role, status, mode FROM gp_segment_configuration
  0       | m              | p    | u      | n    
 (2 rows)
 
+1<:  <... completed>
+ERROR:  canceling statement due to user request
+
 -- Check the hanged query has complete.
 SELECT count(*) = 0 AS query_complete FROM pg_stat_activity WHERE state = 'active' AND query = 'SELECT count(1) FROM gp_toolkit.gp_resgroup_status_per_segment WHERE groupname = ''admin_group'';';
  query_complete 
@@ -145,9 +148,6 @@ SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
 -------
  0     
 (1 row)
-
-1<:  <... completed>
-ERROR:  canceling statement due to user request
 
 -- Case 2: check the scenario with 'pg_terminate_backend'.
 
@@ -211,6 +211,12 @@ SELECT content, preferred_role, role, status, mode FROM gp_segment_configuration
  0       | m              | p    | u      | n    
 (2 rows)
 
+1<:  <... completed>
+FATAL:  terminating connection due to administrator command
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
 -- Check the hanged query has complete.
 SELECT count(*) = 0 AS query_complete FROM pg_stat_activity WHERE state = 'active' AND query = 'SELECT count(1) FROM gp_toolkit.gp_resgroup_status_per_segment WHERE groupname = ''admin_group'';';
  query_complete 
@@ -275,11 +281,6 @@ SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
  0     
 (1 row)
 
-1<:  <... completed>
-FATAL:  terminating connection due to administrator command
-server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
 1q: ... <quitting>
 
 -- Restore parameters.
