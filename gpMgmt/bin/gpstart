@@ -13,6 +13,7 @@ from gppylib.mainUtils import *
 
 try:
     import pickle
+    import psycopg2
 
     from gppylib.db import dbconn
     from gppylib.gpparseopts import OptParser, OptChecker
@@ -420,6 +421,19 @@ class GpStart:
 
         logger.info("Obtaining Segment details from coordinator...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
+
+        retry = self.timeout
+        while retry:
+            try:
+                with closing(dbconn.connect(self.dburl, utility=True)) as conn:
+                    break
+            except psycopg2.OperationalError as e:
+                if retry > 1:
+                    retry -= 1
+                    time.sleep(1)
+                else:
+                    raise
+
         self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
 
         logger.info("Setting new coordinator era")
