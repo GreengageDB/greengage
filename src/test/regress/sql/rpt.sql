@@ -633,8 +633,12 @@ with cte as (
 )
 select count(distinct(rand)) from cte join d on cte.a = d.a;
 
--- ensure we're able to create plan when subplan has external parameters
-explain (costs off, verbose) select (select b + random() o) from d;
+-- prohibit adding motion on late stage when subplan has external parameters
+alter table d set distributed by (a);
+alter table r set distributed by (a);
+alter table r drop column b;
+
+select (select dbid from gp_segment_configuration join r on a = dbid where content = b) from d;
 
 drop table t1;
 drop table t2;

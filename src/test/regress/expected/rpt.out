@@ -1032,22 +1032,20 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
 ---------------------------------------------------------------------------------
  Insert on t_replicate_volatile
    ->  Broadcast Motion 1:3  (slice1; segments: 1)
-         ->  Result
-               ->  Limit
-                     ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
+         ->  Limit
+               ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
  Optimizer: Postgres-based planner
-(6 rows)
+(5 rows)
 
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
  Insert on t_replicate_volatile
    ->  Broadcast Motion 1:3  (slice1; segments: 1)
-         ->  Result
-               ->  Limit
-                     ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
- Optimizer: Postgres query optimizer
-(6 rows)
+         ->  Limit
+               ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
+ Optimizer: Postgres-based planner
+(5 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit random()) x;
                            QUERY PLAN                           
@@ -1055,13 +1053,12 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Result
-                     ->  Limit
-                           ->  Seq Scan on t_replicate_volatile
+               ->  Limit
+                     ->  Seq Scan on t_replicate_volatile
          ->  Materialize
                ->  Seq Scan on t_hashdist
- Optimizer: Postgres query optimizer
-(9 rows)
+ Optimizer: Postgres-based planner
+(8 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit 1) x;
                            QUERY PLAN                           
@@ -1069,12 +1066,11 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Result
-                     ->  Limit
-                           ->  Seq Scan on t_replicate_volatile
+               ->  Limit
+                     ->  Seq Scan on t_replicate_volatile
          ->  Seq Scan on t_hashdist
  Optimizer: Postgres-based planner
-(8 rows)
+(7 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from generate_series(1, 10) limit 1) x;
                         QUERY PLAN                        
@@ -1732,21 +1728,12 @@ select count(distinct(rand)) from cte join d on cte.a = d.a;
      1
 (1 row)
 
--- ensure we're able to create plan when subplan has external parameters
-explain (costs off, verbose) select (select b + random() o) from d;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   Output: ((SubPlan 1))
-   ->  Seq Scan on rpt.d
-         Output: (SubPlan 1)
-         SubPlan 1
-           ->  Result
-                 Output: ((d.b)::double precision + random())
- Optimizer: Postgres-based planner
- Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', optimizer = 'off'
-(9 rows)
-
+-- prohibit adding motion on late stage when subplan has external parameters
+alter table d set distributed by (a);
+alter table r set distributed by (a);
+alter table r drop column b;
+select (select dbid from gp_segment_configuration join r on a = dbid where content = b) from d;
+ERROR:  Passing parameters across motion is not supported. (cdbmutate.c:2052)
 drop table t1;
 drop table t2;
 drop table r;

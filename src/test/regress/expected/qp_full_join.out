@@ -267,21 +267,19 @@ select count(*) from uni full join rep on uni.c1 = rep.c1;
 -- Both left and right relations are tainted-replicated. To avoid duplicates,
 -- both sides are gathered onto the coordinator.
 explain (costs off, timing off, summary off) select * from tainted_rep full join tainted_rep2 on tainted_rep.c1 = tainted_rep2.c1;
-                QUERY PLAN                
-------------------------------------------
+                      QUERY PLAN                      
+------------------------------------------------------
  Hash Full Join
    Hash Cond: (rep2.c1 = rep.c1)
-   ->  Result
-         ->  Gather Motion 1:1  (slice1; segments: 1)
-               ->  Limit
-                     ->  Seq Scan on rep2
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Limit
+               ->  Seq Scan on rep2
    ->  Hash
-         ->  Result
-               ->  Gather Motion 1:1  (slice2; segments: 1)
-                     ->  Limit
-                           ->  Seq Scan on rep
+         ->  Gather Motion 1:1  (slice2; segments: 1)
+               ->  Limit
+                     ->  Seq Scan on rep
  Optimizer: Postgres-based planner
-(12 rows)
+(10 rows)
 
 -- tainted-replicated ⟗  distributed 
 -- The left relation is tainted-replicated. To avoid duplicates, the left side
@@ -296,11 +294,10 @@ explain (costs off, timing off, summary off) select * from tainted_rep full join
          ->  Hash
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: rep.c1
-                     ->  Result
-                           ->  Limit
-                                 ->  Seq Scan on rep
+                     ->  Limit
+                           ->  Seq Scan on rep
  Optimizer: Postgres-based planner
-(11 rows)
+(10 rows)
 
 ------------------------------------------
 -- 3-table join: test derived distribution spec
