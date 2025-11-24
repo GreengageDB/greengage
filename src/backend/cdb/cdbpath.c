@@ -2779,7 +2779,7 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 		 * If we have only LimitPath, without any volatile functions we can
 		 * omit creation of projection path, because it would serve no purpose.
 		 */
-		if (IsA(path, LimitPath) && contain_volatile_functions(node)) {
+		if (IsA(path, LimitPath) && !contain_volatile_functions(node)) {
 			mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, singleQE);
 			
 			if (mpath == NULL)
