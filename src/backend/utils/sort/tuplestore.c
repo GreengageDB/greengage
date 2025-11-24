@@ -301,7 +301,11 @@ typedef struct
 	 * It's only safe to delete it when it's zero.
 	 */
 	pg_atomic_uint32 num_current;
-	pg_atomic_uint32 aborting; /* True if we are currently aborting */
+	/*
+	 * True if we are currently aborting.
+	 * Please only set under exclusive lock to prevent races.
+	 */
+	pg_atomic_uint32 aborting;
 } TuplestoreSharingState;
 
 /*
@@ -591,8 +595,11 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		if (!should_abort)
 			local_shared_tuplestores = list_delete_ptr(local_shared_tuplestores, state);
 
-		/* Time to clean up the shared state */
-		LWLockAcquire(ShareInputScanLock, LW_SHARED);
+		/*
+		 * Time to clean up the shared state. The lock is exclusive since we
+		 * might have to delete the hashtable entry.
+		 */
+		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 		Assert(strlen(state->shared_filename) < NAMEDATALEN);
 		strncpy(tag, state->shared_filename, NAMEDATALEN);
@@ -1992,7 +1999,16 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 						 &tag,
 						 HASH_FIND,
 						 &found);
-	Assert(found);
+	/*
+	 * Aborting flag can only be set under exclusive lock, so we can be sure
+	 * nobody will delete the tuplestore before we release the lock here.
+	 * The next process to get the lock will see num_current > 0.
+	 */
+	if (!found || pg_atomic_read_u32(&sstate->aborting)) {
+		ereport(ERROR,
+				(errcode(ERRCODE_GP_OPERATION_CANCELED),
+				 errmsg("tuplestore already deleted, canceling MPP operation")));
+	}
 	Assert(sstate->session_id == gp_session_id);
 	pg_atomic_add_fetch_u32(&sstate->num_current, 1);
 
@@ -2056,6 +2072,8 @@ AtAbort_SharedTuplestores()
 		/* Check if this is tuplestore belongs to this session */
 		if (sstate->session_id != gp_session_id)
 			continue;
+		/* Set its aborting flag */
+		pg_atomic_exchange_u32(&sstate->aborting, 1);
 		/* Check if anyone is using it, can't delete it if it's in use */
 		uint32 num_current = pg_atomic_read_u32(&sstate->num_current);
 		if (num_current > 0)
