@@ -1290,10 +1290,15 @@ select * from tbl1 join tbl2 using (b);
 drop table tbl1;
 drop table tbl2;
 
-drop table if exists outer_tbl;
 -- We need to explicitly handle outer references inside JOINs
 -- as it is currently impossible for them to be passed across motions
 -- So, check if we do it correctly
+-- start_ignore
+drop table if exists tbl1;
+drop table if exists tbl2;
+drop table if exists outer_tbl;
+-- end_ignore
+
 create table tbl1 (a text) DISTRIBUTED BY (a);
 create table tbl2 (a text) DISTRIBUTED BY (a);
 create table outer_tbl (a text) DISTRIBUTED BY (a);
