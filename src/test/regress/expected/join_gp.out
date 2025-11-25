@@ -3522,3 +3522,61 @@ select * from tbl1 join tbl2 using (b);
 
 drop table tbl1;
 drop table tbl2;
+-- We need to explicitly handle outer references inside JOINs
+-- as it is currently impossible for them to be passed across motions
+-- So, check if we do it correctly
+create table tbl1 (a text) DISTRIBUTED BY (a);
+create table tbl2 (a text) DISTRIBUTED BY (a);
+create table outer_tbl (a text) DISTRIBUTED BY (a);
+insert into tbl1 select i from generate_series(1, 10) i;
+insert into tbl2 select i::text || i::text from generate_series(1, 10) i;
+insert into outer_tbl select i from generate_series(1, 10) i;
+explain (verbose, costs off)
+select outer_tbl.a from outer_tbl where outer_tbl.a = (select tbl1.a from tbl1 inner join tbl2 on (tbl2.a = tbl1.a||outer_tbl.a));
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: outer_tbl.a
+   ->  Seq Scan on public.outer_tbl
+         Output: outer_tbl.a
+         Filter: (outer_tbl.a = (SubPlan 1))
+         SubPlan 1
+           ->  Hash Join
+                 Output: tbl1.a
+                 Hash Cond: ((tbl1.a || outer_tbl.a) = tbl2.a)
+                 ->  Materialize
+                       Output: tbl1.a
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                             Output: tbl1.a
+                             ->  Seq Scan on public.tbl1
+                                   Output: tbl1.a
+                 ->  Hash
+                       Output: tbl2.a
+                       ->  Materialize
+                             Output: tbl2.a
+                             ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                   Output: tbl2.a
+                                   ->  Seq Scan on public.tbl2
+                                         Output: tbl2.a
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(25 rows)
+
+select outer_tbl.a from outer_tbl where outer_tbl.a = (select tbl1.a from tbl1 inner join tbl2 on (tbl2.a = tbl1.a||outer_tbl.a));
+ a  
+----
+ 1
+ 9
+ 10
+ 2
+ 3
+ 4
+ 7
+ 5
+ 6
+ 8
+(10 rows)
+
+drop table outer_tbl;
+drop table tbl1;
+drop table tbl2;
