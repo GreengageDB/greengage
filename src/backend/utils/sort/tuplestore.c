@@ -585,7 +585,6 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 	if (state->share_status != TSHARE_NOT_SHARED)
 	{
 		TuplestoreSharingState *sstate;
-		char		tag[NAMEDATALEN];
 		bool		found;
 
 		/*
@@ -602,9 +601,8 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 		Assert(strlen(state->shared_filename) < NAMEDATALEN);
-		strncpy(tag, state->shared_filename, NAMEDATALEN);
 		sstate = hash_search(shared_tuplestores,
-							&tag,
+							state->shared_filename,
 							HASH_FIND,
 							&found);
 		Assert(found);
@@ -637,7 +635,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 				 */
 				BufFileDeleteShared(state->fileset, state->shared_filename);
 				if (hash_search(shared_tuplestores,
-								&tag,
+								state->shared_filename,
 								HASH_REMOVE, NULL) == NULL)
 					elog(ERROR, "hash table corrupted");
 			}
@@ -1835,7 +1833,7 @@ SharedTuplestoreShmemInit(void)
 									   N_TUPLESTORE_SLOTS(),
 									   N_TUPLESTORE_SLOTS(),
 									   &info,
-									   HASH_ELEM | HASH_BLOBS);
+									   HASH_ELEM);
 }
 
 /*
@@ -1852,7 +1850,6 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 {
 	ResourceOwner oldowner;
 	TuplestoreSharingState *sstate;
-	char		tag[NAMEDATALEN];
 	bool		found;
 
 	state->work_set = workfile_mgr_create_set("SharedTupleStore", filename, true /* hold pin */);
@@ -1909,9 +1906,8 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 	Assert(strlen(filename) < NAMEDATALEN);
-	strncpy(tag, filename, NAMEDATALEN);
 	sstate = hash_search(shared_tuplestores,
-						 &tag,
+						 filename,
 						 HASH_ENTER_NULL,
 						 &found);
 	Assert(!found);
@@ -1978,7 +1974,6 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
 	int			eflags;
-	char		tag[NAMEDATALEN];
 	bool		found;
 
 	/*
@@ -1994,9 +1989,8 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	LWLockAcquire(ShareInputScanLock, LW_SHARED);
 
 	Assert(strlen(filename) < NAMEDATALEN);
-	strncpy(tag, filename, NAMEDATALEN);
 	sstate = hash_search(shared_tuplestores,
-						 &tag,
+						 filename,
 						 HASH_FIND,
 						 &found);
 	/*
