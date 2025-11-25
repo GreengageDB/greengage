@@ -1847,12 +1847,16 @@ ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 			break;
 	}
 
+	SIMPLE_FAULT_INJECTOR("wait_before_drop_dispatch");
+
 	/*
 	 * Dispatch the original, unmodified statement.
 	 *
 	 * Event triggers are not stored in QE nodes, so skip those.
 	 */
-	if (Gp_role == GP_ROLE_DISPATCH && stmt->removeType != OBJECT_EVENT_TRIGGER)
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		stmt->removeType != OBJECT_EVENT_TRIGGER &&
+		list_length(copyStmt->objects) > 0)
 	{
 		int			flags;
 
@@ -1874,8 +1878,6 @@ ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 			/* all other commands run normally, in a distributed transaction */
 			flags |= DF_WITH_SNAPSHOT;
 		}
-
-		SIMPLE_FAULT_INJECTOR("wait_before_drop_dispatch");
 
 		CdbDispatchUtilityStatement((Node *) copyStmt,
 									flags,
