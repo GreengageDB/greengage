@@ -1839,6 +1839,9 @@ SharedTuplestoreShmemInit(void)
  * Make a tuplestore available for sharing later. This must be called
  * immediately after tuplestore_begin_heap().
  *
+ * The caller must make sure to set transaction-level MemoryContext
+ * and ResourceOwner if this might be called on segments.
+ *
  * The ntotal parameter sets the number of times the tuplestore can be
  * opened before it is automatically deleted.
  */
@@ -1857,11 +1860,13 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	/* We only support one shared fileset currently */
 	Assert(fileset == get_shareinput_fileset());
 	/*
-	 * QE must create shared tuplestores only in transaction lifetime, since InitPlans
-	 * are executed as separate queries and so Executor lifetime is not enough.
+	 * QE must create shared tuplestores only in transaction-level
+	 * MemoryContext and ResourceOwner, since InitPlans are executed as
+	 * separate queries. Because of that, default Executor or Portal
+	 * lifetime might not last long enough.
 	 *
-	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
-	 * live only for the duration of one query.
+	 * For QD and Utility mode it's fine to use Executor lifetime since
+	 * tuplestore must live only for the duration of one query.
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
 	{
@@ -1966,6 +1971,9 @@ tuplestore_freeze(Tuplestorestate *state)
  *
  * Open a shared tuplestore that has been populated in another process
  * for reading.
+ *
+ * The caller must make sure to set transaction-level MemoryContext
+ * if this might be called on segments.
  */
 Tuplestorestate *
 tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
@@ -1976,11 +1984,13 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	bool		found;
 
 	/*
-	 * QE must open shared tuplestores only in transaction lifetime, since InitPlans
-	 * are executed as separate queries and so Executor lifetime is not enough.
+	 * QE must open shared tuplestores only in transaction-level
+	 * MemoryContext, since InitPlans are executed as separate queries.
+	 * Because of that, default Executor or Portal lifetime might not last
+	 * long enough.
 	 *
-	 * For QD and Utility mode it's fine to use Executor lifetime since tuplestore must
-	 * live only for the duration of one query.
+	 * For QD and Utility mode it's fine to use Executor lifetime since
+	 * tuplestore must live only for the duration of one query.
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
 		Assert(CurrentMemoryContext == CurTransactionContext);
