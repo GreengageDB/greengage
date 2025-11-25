@@ -1035,7 +1035,7 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
          ->  Result
                ->  Limit
                      ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (6 rows)
 
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;
@@ -1059,7 +1059,7 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
                            ->  Seq Scan on t_replicate_volatile
          ->  Materialize
                ->  Seq Scan on t_hashdist
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit 1) x;
