@@ -6225,6 +6225,8 @@ AbortSubTransaction(void)
 		CallSubXactCallbacks(SUBXACT_EVENT_ABORT_SUB, s->subTransactionId,
 							 s->parent->subTransactionId);
 
+		AtAbort_SharedTuplestores();
+
 		ResourceOwnerRelease(s->curTransactionOwner,
 							 RESOURCE_RELEASE_BEFORE_LOCKS,
 							 false, false);

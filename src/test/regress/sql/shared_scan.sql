@@ -163,6 +163,19 @@ with cte as materialized (select i from sisc) select count(*) from cte t1, cte t
 
 with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
 
+-- Explicit transaction, 2 SISC nodes
+begin;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+rollback;
+
+-- Subtransaction, 2 SISC nodes
+begin;
+savepoint s1;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+rollback to s1;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+rollback;
+
 -- No error, 3 SISC nodes
 explain (verbose, costs off)
 with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
