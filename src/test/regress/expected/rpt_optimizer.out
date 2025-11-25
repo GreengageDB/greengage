@@ -1025,7 +1025,7 @@ explain (costs off) update t_replicate_volatile set a = random();
 ERROR:  could not devise a plan. (cdbpath.c:2441)
 -- limit
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
-                                      QUERY PLAN                                       
+                                   QUERY PLAN                                    
 ---------------------------------------------------------------------------------------
  Insert on t_replicate_volatile
    ->  Result
@@ -1033,7 +1033,7 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
                ->  Limit
                      ->  Gather Motion 1:1  (slice2; segments: 1)
                            ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
- Optimizer: GPORCA
+ Optimizer: Pivotal Optimizer (GPORCA)
 (7 rows)
 
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;

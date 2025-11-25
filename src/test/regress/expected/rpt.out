@@ -1032,10 +1032,11 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
 ---------------------------------------------------------------------------------
  Insert on t_replicate_volatile
    ->  Broadcast Motion 1:3  (slice1; segments: 1)
-         ->  Limit
-               ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
+         ->  Result
+               ->  Limit
+                     ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
  Optimizer: Postgres-based planner
-(5 rows)
+(6 rows)
 
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit 1;
                                    QUERY PLAN                                    
@@ -1053,12 +1054,13 @@ explain (costs off) select * from t_hashdist cross join (select * from t_replica
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Limit
-                     ->  Seq Scan on t_replicate_volatile
+               ->  Result
+                     ->  Limit
+                           ->  Seq Scan on t_replicate_volatile
          ->  Materialize
                ->  Seq Scan on t_hashdist
  Optimizer: Postgres-based planner
-(8 rows)
+(9 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit 1) x;
                            QUERY PLAN                           

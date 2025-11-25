@@ -1671,7 +1671,7 @@ select * from explain_sq_limit();
                      Sort Method:  top-N heapsort  Memory: xxx
                      Executor Memory: xxx  Segments: x  Max: xxkB (segment x)
                      ->  Seq Scan on sq_limit (actual rows=8 loops=1)
- Optimizer: Postgres-based planner
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 -- a subpath is sorted under a subqueryscan. however, the subqueryscan is not.
