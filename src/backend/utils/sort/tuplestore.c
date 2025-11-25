@@ -134,6 +134,28 @@ typedef enum
 	TSHARE_READER
 } TSSharedStatus;
 
+/* State in shared memory for shared tuplestores */
+typedef struct
+{
+	char		tag[NAMEDATALEN]; /* hash key */
+	int32		session_id;
+	/*
+	 * Total number of consumers who aren't done with this tuplestore.
+	 * The tuplestore can be deleted automatically when this reachers zero.
+	 */
+	pg_atomic_uint32 num_total_left;
+	/*
+	 * Number of consumers who are currently using this tuplestore.
+	 * It's only safe to delete it when it's zero.
+	 */
+	pg_atomic_uint32 num_current;
+	/*
+	 * True if we are currently aborting.
+	 * Please only set under exclusive lock to prevent races.
+	 */
+	pg_atomic_uint32 aborting;
+} TuplestoreSharingState;
+
 /*
  * Private state of a Tuplestore operation.
  */
@@ -228,6 +250,8 @@ struct Tuplestorestate
 	struct Instrumentation *instrument;
 	long        availMemMin;    /* availMem low water mark (bytes) */
 	int64       spilledBytes;   /* memory used for spilled tuples */
+
+	TuplestoreSharingState *shared_state; /* shared state reference */
 };
 
 #define COPYTUP(state,tup)	((*(state)->copytup) (state, tup))
@@ -286,27 +310,6 @@ struct Tuplestorestate
  *
  *--------------------
  */
-
-typedef struct
-{
-	char		tag[NAMEDATALEN]; /* hash key */
-	int32		session_id;
-	/*
-	 * Total number of consumers who aren't done with this tuplestore.
-	 * The tuplestore can be deleted automatically when this reachers zero.
-	 */
-	pg_atomic_uint32 num_total_left;
-	/*
-	 * Number of consumers who are currently using this tuplestore.
-	 * It's only safe to delete it when it's zero.
-	 */
-	pg_atomic_uint32 num_current;
-	/*
-	 * True if we are currently aborting.
-	 * Please only set under exclusive lock to prevent races.
-	 */
-	pg_atomic_uint32 aborting;
-} TuplestoreSharingState;
 
 /*
  * Hash table of all shared tuplestores. The entry should be
@@ -584,8 +587,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 
 	if (state->share_status != TSHARE_NOT_SHARED)
 	{
-		TuplestoreSharingState *sstate;
-		bool		found;
+		TuplestoreSharingState *sstate = state->shared_state;
 
 		/*
 		 * When aborting we free the whole list later,
@@ -600,12 +602,6 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		 */
 		LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
-		Assert(strlen(state->shared_filename) < NAMEDATALEN);
-		sstate = hash_search(shared_tuplestores,
-							state->shared_filename,
-							HASH_FIND,
-							&found);
-		Assert(found);
 		Assert(sstate->session_id == gp_session_id);
 		/*
 		 * If we are aborting, set the atomic variable in shared memory.
@@ -633,6 +629,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 				 * last user of this tuplestore and no one is going to use it
 				 * after us.
 				 */
+				Assert(strlen(state->shared_filename) < NAMEDATALEN);
 				BufFileDeleteShared(state->fileset, state->shared_filename);
 				if (hash_search(shared_tuplestores,
 								state->shared_filename,
@@ -1923,6 +1920,8 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	pg_atomic_init_u32(&sstate->aborting, 0);
 
 	LWLockRelease(ShareInputScanLock);
+
+	state->shared_state = sstate;
 }
 
 /*
@@ -2029,6 +2028,7 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	state->frozen = false;
 	state->fileset = fileset;
 	state->shared_filename = pstrdup(filename);
+	state->shared_state = sstate;
 
 	/* Remember this tuplestore in case we have to close it while aborting */
 	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
