@@ -1,4 +1,4 @@
-# Greengage CI Workflow TEST PR next
+# Greengage CI Workflow
 
 This directory contains the CI pipelines for the Greengage project,
 orchestrating the build, test, and upload stages for containerized
