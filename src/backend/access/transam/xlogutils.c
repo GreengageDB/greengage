@@ -313,6 +313,7 @@ XLogReadBufferExtended(RelFileNode rnode, ForkNumber forknum,
 
 	/* Open the relation at smgr level */
 	smgr = smgropen(rnode, InvalidBackendId);
+	smgr->smgr_which = RELSTORAGE_HEAP;
 
 	/*
 	 * Create the target file if it doesn't already exist.  This lets us cope
