@@ -317,7 +317,10 @@ init_tuplestore_state(ShareInputScanState *node)
 			 * tuplestore.
 			 */
 			char		rwfile_prefix[100];
-			/* Make sure the tuplestore lives between InitPlans */
+			/*
+			 * Make sure the tuplestore lives between InitPlans. We don't need
+			 * to set ResourceOwner here since it's not used for consumers.
+			 */
 			MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
 
 			Assert(sisc->cross_slice);

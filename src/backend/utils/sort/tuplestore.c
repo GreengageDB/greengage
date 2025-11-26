@@ -1930,7 +1930,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 }
 
 /*
- * tuplestore_make_shared_many
+ * tuplestore_make_shared
  *
  * Make a tuplestore available for sharing later. This must be called
  * immediately after tuplestore_begin_heap().
