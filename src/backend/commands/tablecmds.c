@@ -13156,6 +13156,7 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 	newrnode.relNode = newrelfilenode;
 	newrnode.spcNode = newTableSpace;
 	dstrel = smgropen(newrnode, rel->rd_backend);
+	dstrel->smgr_which = rel->rd_rel->relstorage;
 
 	RelationOpenSmgr(rel);
 
