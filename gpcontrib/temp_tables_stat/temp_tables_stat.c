@@ -63,6 +63,38 @@ next_node(const TTSNode *node)
 }
 
 /*
+ * Returns the last node or a new node if the last one is full.
+ * Returns NULL when no need to add rnode to the list.
+ */
+static TTSNode *
+get_node_to_append(RelFileNodeBackend rnode)
+{
+	for (TTSNode *node = &head->node;; node = next_node(node))
+	{
+		/* Don't add rnode when it exists in the list of arrays */
+		for (int i = 0; i < node->num; i++)
+			if (RelFileNodeBackendEquals(rnode, node->files[i]))
+				return NULL;
+
+		if (node->next != DSM_HANDLE_INVALID)
+			continue;
+
+		/* Create a new node if the last node is full */
+		if (node->num == ARRAY_SIZE(node->files))
+		{
+			dsm_segment *next_seg = dsm_create(sizeof(TTSNode));
+			dsm_pin_mapping(next_seg);
+			node->next = dsm_segment_handle(next_seg);
+			node = dsm_segment_address(next_seg);
+			node->next = DSM_HANDLE_INVALID;
+			node->num = 0;
+		}
+
+		return node;
+	}
+}
+
+/*
  * This function is called with the same argument when each fork is created.
  * Add file info to the list if it is not there.
  */
@@ -81,31 +113,10 @@ tts_file_create_hook(RelFileNodeBackend rnode)
 
 	LWLockAcquire(&head->lock, LW_EXCLUSIVE);
 
-	/* Don't add rnode when it exists in the list of arrays */
-	for (node = &head->node;; node = next_node(node))
-	{
-		for (int i = 0; i < node->num; i++)
-			if (RelFileNodeBackendEquals(rnode, node->files[i]))
-				goto lExit;
+	node = get_node_to_append(rnode);
+	if (node != NULL)
+		node->files[node->num++] = rnode;
 
-		if (node->next == DSM_HANDLE_INVALID)
-			break;
-	}
-
-	/* Create a new node if the last node is full */
-	if (node->num == ARRAY_SIZE(node->files))
-	{
-		dsm_segment *next_seg = dsm_create(sizeof(TTSNode));
-		dsm_pin_mapping(next_seg);
-		node->next = dsm_segment_handle(next_seg);
-		node = dsm_segment_address(next_seg);
-		node->next = DSM_HANDLE_INVALID;
-		node->num = 0;
-	}
-
-	node->files[node->num++] = rnode;
-
-lExit:
 	LWLockRelease(&head->lock);
 }
 
@@ -218,11 +229,8 @@ tts_get_file_size(const char *dirname, const char *fn_start)
 		snprintf(fn, sizeof(fn), "%s/%s", dirname, direntry->d_name);
 
 		if (stat(fn, &fst) < 0)
-		{
-			ereport(ERROR,
-					(errcode_for_file_access(),
-					 errmsg("could not stat file \"%s\": %m", fn)));
-		}
+			continue;
+
 		dirsize += fst.st_size;
 	}
 
