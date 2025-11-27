@@ -152,27 +152,21 @@ query_planner(PlannerInfo *root,
 				 * that we don't need to worry about what's type of 
 				 * path presented.
 				 */
-				if (root->is_correlated_subplan)
+				if (root->is_correlated_subplan && !CdbPathLocus_IsOuterQuery(result_path->locus))
 				{
 					Path	   *origpath = result_path;
 					Path	   *path;
 					CdbPathLocus outerquery_locus;
-
-					if (!CdbPathLocus_IsOuterQuery(origpath->locus))
-					{
-
-						CdbPathLocus_MakeOuterQuery(&outerquery_locus);
-
-						path = cdbpath_create_motion_path(root,
-														  origpath,
-														  NIL,
-														  false,
-														  outerquery_locus);
-					}
+					CdbPathLocus_MakeOuterQuery(&outerquery_locus);
+					path = cdbpath_create_motion_path(root,
+													  origpath,
+													  NIL,
+													  false,
+													  outerquery_locus);
+					if (path == NULL)
+						add_path(final_rel, result_path);
 					else
-						path = origpath;
-
-					add_path(final_rel, path);
+						add_path(final_rel, path);
 				}
 				else 
 					add_path(final_rel, result_path);
