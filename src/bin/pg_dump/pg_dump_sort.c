@@ -53,7 +53,8 @@
 /* This enum lists the priority levels in order */
 enum dbObjectTypePriorities
 {
-	PRIO_NAMESPACE = 1,
+	PRIO_BINARYUPGRADE = 1,
+	PRIO_NAMESPACE,
 	PRIO_PROCLANG,
 	PRIO_COLLATION,
 	PRIO_TRANSFORM,
@@ -61,6 +62,7 @@ enum dbObjectTypePriorities
 	PRIO_TYPE,					/* used for DO_TYPE and DO_SHELL_TYPE */
 	PRIO_FUNC,
 	PRIO_AGG,
+	PRIO_EXTPROCOL,
 	PRIO_ACCESS_METHOD,
 	PRIO_OPERATOR,
 	PRIO_OPFAMILY,				/* used for DO_OPFAMILY and DO_OPCLASS */
@@ -138,15 +140,20 @@ static const int dbObjectTypePriority[] =
 	PRIO_TRANSFORM,				/* DO_TRANSFORM */
 	PRIO_BLOB,					/* DO_BLOB */
 	PRIO_BLOB_DATA,				/* DO_BLOB_DATA */
+	PRIO_EXTPROCOL,				/* DO_EXTPROTOCOL */
 	PRIO_PRE_DATA_BOUNDARY,		/* DO_PRE_DATA_BOUNDARY */
 	PRIO_POST_DATA_BOUNDARY,	/* DO_POST_DATA_BOUNDARY */
 	PRIO_EVENT_TRIGGER,			/* DO_EVENT_TRIGGER */
 	PRIO_REFRESH_MATVIEW,		/* DO_REFRESH_MATVIEW */
+	PRIO_BINARYUPGRADE,			/* DO_BINARY_UPGRADE */
 	PRIO_POLICY,				/* DO_POLICY */
 	PRIO_PUBLICATION,			/* DO_PUBLICATION */
 	PRIO_PUBLICATION_REL,		/* DO_PUBLICATION_REL */
 	PRIO_SUBSCRIPTION			/* DO_SUBSCRIPTION */
 };
+
+StaticAssertDecl(lengthof(dbObjectTypePriority) == (DO_SUBSCRIPTION + 1),
+				 "array length mismatch");
 
 static DumpId preDataBoundId;
 static DumpId postDataBoundId;
