@@ -1289,3 +1289,27 @@ select * from tbl1 join tbl2 using (b);
 
 drop table tbl1;
 drop table tbl2;
+
+-- We need to explicitly handle outer references inside JOINs
+-- as it is currently impossible for them to be passed across motions
+-- So, check if we do it correctly
+-- start_ignore
+drop table if exists tbl1;
+drop table if exists tbl2;
+drop table if exists outer_tbl;
+-- end_ignore
+
+create table tbl1 (a text) DISTRIBUTED BY (a);
+create table tbl2 (a text) DISTRIBUTED BY (a);
+create table outer_tbl (a text) DISTRIBUTED BY (a);
+insert into tbl1 select i from generate_series(1, 10) i;
+insert into tbl2 select i::text || i::text from generate_series(1, 10) i;
+insert into outer_tbl select i from generate_series(1, 10) i;
+
+explain (verbose, costs off)
+select outer_tbl.a from outer_tbl where outer_tbl.a = (select tbl1.a from tbl1 inner join tbl2 on (tbl2.a = tbl1.a||outer_tbl.a));
+select outer_tbl.a from outer_tbl where outer_tbl.a = (select tbl1.a from tbl1 inner join tbl2 on (tbl2.a = tbl1.a||outer_tbl.a));
+
+drop table outer_tbl;
+drop table tbl1;
+drop table tbl2;

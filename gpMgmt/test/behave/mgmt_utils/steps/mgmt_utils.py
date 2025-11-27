@@ -1288,9 +1288,21 @@ def impl(context):
     coordinator = CoordinatorStop("Stopping Coordinator", coordinator_data_dir, mode='immediate')
     coordinator.run()
 
+@when('the coordinator {mode} goes down')
+@then('the coordinator {mode} goes down')
+def impl(context, mode):
+    coordinator = CoordinatorStop("Stopping Coordinator", coordinator_data_dir, mode=mode)
+    coordinator.run()
+
 @when('the standby coordinator goes down')
 def impl(context):
     coordinator = CoordinatorStop("Stopping Coordinator Standby", context.standby_data_dir, mode='immediate', ctxt=REMOTE,
+                        remoteHost=context.standby_hostname)
+    coordinator.run(validateAfter=True)
+
+@when('the standby coordinator {mode} goes down')
+def impl(context, mode):
+    coordinator = CoordinatorStop("Stopping Coordinator Standby", context.standby_data_dir, mode=mode, ctxt=REMOTE,
                         remoteHost=context.standby_hostname)
     coordinator.run(validateAfter=True)
 
