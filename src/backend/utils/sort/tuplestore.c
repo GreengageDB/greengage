@@ -2057,6 +2057,8 @@ AtAbort_SharedTuplestores()
 	TuplestoreSharingState *sstate;
 	HASH_SEQ_STATUS seq_status;
 	ListCell *lc;
+	/* Must be done outside of lock */
+	SharedFileSet *sisc_fileset = get_shareinput_fileset();
 
 	/* First close all the tuplestores we have opened locally */
 	foreach(lc, local_shared_tuplestores)
@@ -2088,7 +2090,7 @@ AtAbort_SharedTuplestores()
 		 * in the future either. It's safe to delete the files now.
 		 * Also delete the shared memory entry.
 		 */
-		BufFileDeleteShared(get_shareinput_fileset(), sstate->tag);
+		BufFileDeleteShared(sisc_fileset, sstate->tag);
 
 		if (hash_search(shared_tuplestores,
 						sstate->tag,
