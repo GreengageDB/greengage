@@ -2057,8 +2057,6 @@ AtAbort_SharedTuplestores()
 	TuplestoreSharingState *sstate;
 	HASH_SEQ_STATUS seq_status;
 	ListCell *lc;
-	/* Must be done outside of lock */
-	SharedFileSet *sisc_fileset = get_shareinput_fileset();
 
 	/* First close all the tuplestores we have opened locally */
 	foreach(lc, local_shared_tuplestores)
@@ -2068,6 +2066,12 @@ AtAbort_SharedTuplestores()
 	}
 	list_free(local_shared_tuplestores);
 	local_shared_tuplestores = NIL;
+
+	/* Return early if nothing to delete */
+	if (hash_get_num_entries(shared_tuplestores) == 0)
+		return;
+	/* Must be done outside of lock */
+	SharedFileSet *sisc_fileset = get_shareinput_fileset();
 
 	/* Then attempt to delete the files */
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
