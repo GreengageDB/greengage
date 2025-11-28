@@ -53,11 +53,17 @@ void
 AOCSCompaction_DropSegmentFile(Relation aorel,
 							   int segno)
 {
-	int			col;
+	int			col = 0;
 
 	Assert(RelationIsAoCols(aorel));
 
-	for (col = 0; col < RelationGetNumberOfAttributes(aorel); col++)
+	/*
+	 * We try to truncate all segment files beyoud
+	 * RelationGetNumberOfAttributes(), as we may have non-empty segment files
+	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
+	 * ao_foreach_extent_file().
+	 */
+	for (;;)
 	{
 		char		filenamepath[MAXPGPATH];
 		int			pseudoSegNo;
@@ -84,7 +90,11 @@ AOCSCompaction_DropSegmentFile(Relation aorel,
 			 * for example, if a column is added with ALTER TABLE ADD COLUMN.
 			 */
 			elog(DEBUG1, "could not truncate segfile %s, because it does not exist", filenamepath);
+			if (col >= RelationGetNumberOfAttributes(aorel))
+				break;
 		}
+
+		col++;
 	}
 }
 
@@ -628,9 +638,25 @@ AOCSCompact(Relation aorel,
 				 aorel->rd_node.relNode,
 				 segno);
 
+		/*
+		 * In cases, when we ADD COLUMN in a transaction, that is rolled back,
+		 * we may end up with a non-empty segment file, about which the system
+		 * is not aware, as it is not reflected in the vpinfo. We handle such
+		 * files in AOCSCompaction_DropSegmentFile(). But, if the table didn't
+		 * have data by that time, and we do first insert in the same rolled
+		 * back transaction, the `total_tupcount` will be 0 and
+		 * AppendOnlyCompaction_ShouldCompact will return false and we will not
+		 * set AOSEG_STATE_AWAITING_DROP state. Therefore, we force
+		 * compaction in this case (if compaction is enabled).
+		 */
+		bool force_compaction = gp_appendonly_compaction &&
+			(fsinfo->total_tupcount == 0) &&
+			(fsinfo->modcount == 0);
+
 		if (AppendOnlyCompaction_ShouldCompact(aorel,
 											   fsinfo->segno, fsinfo->total_tupcount, isFull,
-											   appendOnlyMetaDataSnapshot))
+											   appendOnlyMetaDataSnapshot) ||
+			force_compaction)
 		{
 			AOCSSegmentFileFullCompaction(aorel, insertDesc, fsinfo,
 										  appendOnlyMetaDataSnapshot);
