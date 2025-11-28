@@ -2196,6 +2196,29 @@ def impl(context, dbname):
     drop_database_if_exists(context, dbname)
     create_database(context, dbname)
 
+@given('database with special characters "{dbname}" is created if not exists')
+@when('database with special characters "{dbname}" is created if not exists')
+@then('database with special characters "{dbname}" is created if not exists')
+def impl(context, dbname):
+    context.exception = None    
+    if not check_db_exists(dbname.replace("'", "''")):
+        createdb_cmd = 'psql -d postgres -c \'CREATE DATABASE "%s";\'' % dbname.replace('"', '""')
+        run_command(context, createdb_cmd)
+    if context.exception:
+        raise context.exception
+
+@given('database with special characters "{dbname}" is dropped if exists')
+@when('database with special characters "{dbname}" is dropped if exists')
+@then('database with special characters "{dbname}" is dropped if exists')
+def impl(context, dbname):
+    context.exception = None    
+    if check_db_exists(dbname.replace("'", "''")):
+        dropdb_cmd = 'psql -d postgres -c \'DROP DATABASE "%s";\'' % dbname.replace('"', '""')
+        run_command(context, dropdb_cmd)
+    if context.exception:
+        raise context.exception
+
+
 @then('validate gpcheckcat logs contain skipping ACL and Owner tests')
 def imp(context):
     dirname = 'gpAdminLogs'
@@ -2513,6 +2536,30 @@ def impl(context, sql, boolean):
         if _str2bool(result) != _str2bool(boolean):
             raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
 
+@then('wait until the history of database with special characters "{dbname}" appears')
+def impl(context, dbname):
+    escape_dbname = dbname.replace('"', '\\"')
+    cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "select count(*) > 0 from queries_history where db=\'%s\';"' % escape_dbname)
+    start_time = current_time = datetime.now()
+    result = None
+    while (current_time - start_time).seconds < 120:
+        cmd.run()
+        if cmd.get_return_code() != 0:
+            break
+        result = cmd.get_stdout()
+        if _str2bool(result):
+            break
+        time.sleep(2)
+        current_time = datetime.now()
+
+    if cmd.get_return_code() != 0:
+        context.ret_code = cmd.get_return_code()
+        context.error_message = 'psql internal error: %s' % cmd.get_stderr()
+        check_return_code(context, 0)
+    else:
+        if not _str2bool(result):
+            raise Exception("history of '%s' did not appear" % (dbname))
+
 @then('check that the result from boolean sql "{sql}" is "{boolean}"')
 def impl(context, sql, boolean):
     cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "%s"' % sql)
@@ -2634,6 +2681,14 @@ def impl(context):
     raise Exception("File: %s is empty" % gpdb_alert_file_path_src)
 
 
+@given("_queries_tail.dat is not clogged")
+def impl(context):
+    filename = '%s/gpperfmon/data/_queries_tail.dat' % os.getenv("MASTER_DATA_DIRECTORY")
+    with open(filename, 'w') as f:
+        f.truncate()
+    filename = '%s/gpperfmon/data/queries_tail.dat' % os.getenv("MASTER_DATA_DIRECTORY")
+    with open(filename, 'w') as f:
+        f.truncate()
 
 @then('the file with the fake timestamp no longer exists')
 def impl(context):
