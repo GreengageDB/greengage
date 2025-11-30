@@ -457,6 +457,19 @@ explain (costs off) select * from t_hashdist cross join (select * from generate_
 explain (costs off) select (select t_replicate_volatile.a from t_replicate_volatile limit 1 offset t_hashdist.a) from t_hashdist;
 explain (costs off) select (select generate_series(1,3) limit 1 offset trv.a) from t_replicate_volatile trv;
 explain (costs off) select (select t_replicate_volatile.a from t_replicate_volatile limit 1 offset trv.a) from t_replicate_volatile trv;
+explain (costs off) with cte as (
+    insert into t_replicate_volatile values(1, 1, 1) returning *
+)
+select * from t_hashdist cross join (select a from cte limit 2) x;
+explain (costs off) with cte as (
+    insert into t_replicate_volatile values(1, 1, 1) returning *
+)
+select * from t_replicate_volatile cross join (select a from cte limit 2) x;
+explain (costs off) with cte as (
+    insert into t_replicate_volatile values(1, 1, 1) returning *
+)
+select * from generate_series(1,3) cross join (select a from cte limit 2) x;
+
 
 -- ORCA
 -- verify that JOIN derives the inner child distribution if the outer is tainted replicated (in this

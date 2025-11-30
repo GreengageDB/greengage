@@ -303,7 +303,7 @@ extern ModifyTablePath *create_modifytable_path(PlannerInfo *root,
 												List *is_split_updates,
 												List *rowMarks, OnConflictExpr *onconflict,
 												int epqParam);
-extern LimitPath *create_limit_path(PlannerInfo *root, RelOptInfo *rel,
+extern Path *create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 									Path *subpath,
 									Node *limitOffset, Node *limitCount,
 									int64 offset_est, int64 count_est);

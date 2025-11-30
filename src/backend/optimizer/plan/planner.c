@@ -2880,48 +2880,57 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 		 */
 		if (limit_needed(parse))
 		{
+			CdbPathLocus locus;
+			Path	   *mpath;
+			/*
+			 * Greengage-specific behavior:
+			 * If the limit path locus is SegmentGeneral, General, or
+			 * Replicated, we must bring it to a singleQE to ensure
+			 * deterministic values of tuples. When tuples are distributed
+			 * across multiple segments, as there is no guarantee of the
+			 * global ordering of tuples passed to the limit operator, and
+			 * applying limit on such data could break the locus meaning.
+			 * OuterQuery is an exception to this rule, because this locus
+			 * means that data from this operator should be executed in
+			 * the same slice as the parameters on which it depends. So even
+			 * if it is brought to a single segment, the limit operator
+			 * will be re-executed for each value of the parameter and could
+			 * yield different tuple values depending on the order
+			 * provided from below.
+			 * For Replicated locus we firstly do motion and then limit,
+			 * because this motion could not be omitted, but could be
+			 * made gather one, so we will be trapped in execution of limit
+			 * on separate segments, which we are trying to prevent.
+			 */
+			CdbPathLocus_MakeSingleQE(&locus, getgpsegmentCount());
+			if (CdbPathLocus_IsReplicated(path->locus))
+			{
+				mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
+				if (mpath != NULL) {
+					path = mpath;
+				}
+			}
 			path = (Path *) create_limit_path(root, final_rel, path,
 											  parse->limitOffset,
 											  parse->limitCount,
 											  offset_est, count_est);
 
-			/*
-			 * Greengage-specific behavior:
-			 * If the limit path locus is SegmentGeneral, General, or 
-			 * Replicated, we must bring it to a single QE to ensure 
-			 * deterministic values of tuples. When tuples are distributed 
-			 * across multiple segments, as there is no guarantee of the 
-			 * global ordering of tuples passed to the limit operator, and 
-			 * applying LIMIT on such data could break the locus meaning.
-			 * OuterQuery is an exception to this rule, because this locus
-			 * means that data from this operator should be executed in
-			 * the same slice as the parameters on which it depends. So even 
-			 * if it is brought to a single segment, the limit operator
-			 * will be re-executed for each value of the parameter and could 
-			 * yield different tuple values depending on the order 
-			 * provided from below.  
+			/* 
+			 * General is selfcontained everywhere so can just make it
+			 * SingleQE, without any motions.
 			 */
-			if (!CdbPathLocus_IsPartitioned(path->locus) &&
-				!CdbPathLocus_IsOuterQuery(path->locus)) 
+			if (CdbPathLocus_IsGeneral(path->locus))
 			{
-				CdbPathLocus locus;
-				Path 		 *mpath;
-				/* 
-				 * General is selfcontained everywhere so can just make it
-				 * SingleQE, without any motions.
-				 */
-				if (CdbPathLocus_IsGeneral(path->locus))
-				{
-					CdbPathLocus_MakeSingleQE(&(path->locus),
-											getgpsegmentCount());
-				}
-				else 
-				{
-					CdbPathLocus_MakeSingleQE(&locus, getgpsegmentCount());
-					mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
-					if (mpath != NULL) {
-						path = mpath;
-					}
+				CdbPathLocus_MakeSingleQE(&(path->locus),
+										getgpsegmentCount());
+			}
+			else if (CdbPathLocus_IsSegmentGeneral(path->locus))
+			{
+				/* We don't want to lose our limit path node */
+				mpath = NULL;
+				mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
+				if (mpath != NULL) {
+					path = mpath;
 				}
 			}
 
@@ -3092,7 +3101,7 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 					CdbPathLocus locus;
 					CdbPathLocus_MakeSingleQE(&locus, path->locus.numsegments);
 					path = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
-					path = (Path *) create_limit_path(root, final_rel, path,
+					path = create_limit_path(root, final_rel, path,
 											 parse->limitOffset,
 											 parse->limitCount,
 											 offset_est, count_est);

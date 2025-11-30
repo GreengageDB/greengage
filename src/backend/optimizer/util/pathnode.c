@@ -5540,8 +5540,11 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
  * 'limitCount' is the actual LIMIT expression, or NULL
  * 'offset_est' is the estimated value of the OFFSET expression
  * 'count_est' is the estimated value of the LIMIT expression
+ * 
+ * Greengage specific change: the return type is still Path
+ * because of need to comply with binary compatibility.
  */
-LimitPath *
+Path *
 create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 				  Path *subpath,
 				  Node *limitOffset, Node *limitCount,
@@ -5576,7 +5579,7 @@ create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 							&pathnode->path.total_cost,
 							offset_est, count_est);
 
-	return pathnode;
+	return (Path *) pathnode;
 }
 
 /*
