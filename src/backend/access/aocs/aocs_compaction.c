@@ -58,7 +58,7 @@ AOCSCompaction_DropSegmentFile(Relation aorel,
 	Assert(RelationIsAoCols(aorel));
 
 	/*
-	 * We try to truncate all segment files beyoud
+	 * We try to truncate all segment files beyond
 	 * RelationGetNumberOfAttributes(), as we may have non-empty segment files
 	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
 	 * ao_foreach_extent_file().
@@ -639,15 +639,15 @@ AOCSCompact(Relation aorel,
 				 segno);
 
 		/*
-		 * In cases, when we ADD COLUMN in a transaction, that is rolled back,
-		 * we may end up with a non-empty segment file, about which the system
-		 * is not aware, as it is not reflected in the vpinfo. We handle such
-		 * files in AOCSCompaction_DropSegmentFile(). But, if the table didn't
-		 * have data by that time, and we do first insert in the same rolled
-		 * back transaction, the `total_tupcount` will be 0 and
+		 * In cases, when we ADD COLUMN in a transaction, that is later rolled
+		 * back, we may end up with a non-empty segment file, about which
+		 * the system is not aware, as it is not reflected in the vpinfo.
+		 * We clean up such files in AOCSCompaction_DropSegmentFile(). But,
+		 * if the table didn't have data by that time, and we do first insert
+		 * in the transaction, the `total_tupcount` will be 0 and
 		 * AppendOnlyCompaction_ShouldCompact will return false and we will not
-		 * set AOSEG_STATE_AWAITING_DROP state. Therefore, we force
-		 * compaction in this case (if compaction is enabled).
+		 * perform compaction, and will not reach
+		 * AOCSCompaction_DropSegmentFile(). Force compaction in this case.
 		 */
 		bool force_compaction = gp_appendonly_compaction &&
 			(fsinfo->total_tupcount == 0) &&
