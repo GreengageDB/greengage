@@ -65,42 +65,42 @@ vacuum table_ao_col;
 drop table table_ao_col;
 
 -- Test that vacuum can process segment files created for a new column in an aborted transaction (case 1)
-create table table_ao_col (i int, j int, k int) with (appendonly='true', orientation="column");
-insert into table_ao_col select i, i + 1, i + 2 from generate_series(1, 20) i;
+create table table_ao_col_1 (i int, j int, k int) with (appendonly='true', orientation="column");
+insert into table_ao_col_1 select i, i + 1, i + 2 from generate_series(1, 20) i;
 
 begin;
-alter table table_ao_col add column a int;
-update table_ao_col set a = 1;
+alter table table_ao_col_1 add column a int;
+update table_ao_col_1 set a = 1 where true;
 rollback;
 
-select cmdCheckSegmentFileSizes('table_ao_col') check_segfiles_size
+select cmdCheckSegmentFileSizes('table_ao_col_1') check_segfiles_size_1
 \gset
 
-delete from table_ao_col where true;
+delete from table_ao_col_1 where true;
 
-vacuum table_ao_col;
+vacuum table_ao_col_1;
 
-:check_segfiles_size
+:check_segfiles_size_1
 
-drop table table_ao_col;
+drop table table_ao_col_1;
 
 -- Test that vacuum can process segment files created for a new column in an aborted transaction (case 2)
-create table table_ao_col (i int, j int, k int) with (appendonly='true', orientation="column");
+create table table_ao_col_2 (i int, j int, k int) with (appendonly='true', orientation="column");
 
 begin;
-insert into table_ao_col select i, i + 1, i + 2 from generate_series(1, 20) i;
-alter table table_ao_col add column a int;
-update table_ao_col set a = 1;
+insert into table_ao_col_2 select i, i + 1, i + 2 from generate_series(1, 20) i;
+alter table table_ao_col_2 add column a int;
+update table_ao_col_2 set a = 1 where true;
 rollback;
 
-select cmdCheckSegmentFileSizes('table_ao_col') check_segfiles_size
+select cmdCheckSegmentFileSizes('table_ao_col_2') check_segfiles_size_2
 \gset
 
-vacuum table_ao_col;
+vacuum table_ao_col_2;
 
-:check_segfiles_size
+:check_segfiles_size_2
 
-drop table table_ao_col;
+drop table table_ao_col_2;
 
 drop function cmdCheckSegmentFileSizes(table_name text);
 drop function getTableSegFiles(t regclass, out gp_contentid smallint, out filepath text);
