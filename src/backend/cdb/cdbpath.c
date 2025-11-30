@@ -2746,7 +2746,7 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 	if ((CdbPathLocus_IsSegmentGeneral(path->locus) || 
 		 CdbPathLocus_IsGeneral(path->locus) ||
 		 CdbPathLocus_IsReplicated(path->locus)) &&
-		(contain_volatile_functions(node) || IsA(path, LimitPath)))
+		(contain_volatile_functions(node)))
 	{
 		CdbPathLocus     singleQE;
 		Path            *mpath;
@@ -2774,22 +2774,6 @@ turn_volatile_seggen_to_singleqe(PlannerInfo *root, Path *path, Node *node)
 
 		CdbPathLocus_MakeSingleQE(&singleQE,
 								  CdbPathLocus_NumSegments(path->locus));
-
-		/*
-		 * If we have only LimitPath, without any volatile functions we can
-		 * omit creation of projection path, because it would serve no purpose.
-		 */
-		if (IsA(path, LimitPath) && 
-		    !(contain_volatile_functions(((LimitPath *)path)->limitOffset) || 
-			contain_volatile_functions(((LimitPath *)path)->limitCount))) {
-
-			mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, singleQE);
-			
-			if (mpath == NULL)
-				mpath = path;
-			return mpath;
-		}
-
 		mpath = cdbpath_create_motion_path(root, path, NIL, false, singleQE);
 		/*
 		 * mpath might be NULL, like path contain outer Params

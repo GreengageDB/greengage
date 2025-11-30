@@ -147,29 +147,32 @@ query_planner(PlannerInfo *root,
 				/*
 				 * If this is correlated subplan, then we need to bring it to 
 				 * OuterQuery locus like we do for relations if we do not 
-				 * bypass functions below by going in this section. 
+				 * bypass functions below by going into this section. 
 				 * This logic is similar to bring_to_outer_query() except
-				 * that we don't need to worry about what's type of 
+				 * that we don't need to worry about the type of 
 				 * path presented.
 				 */
+				Path *path = NULL;
+
 				if (root->is_correlated_subplan && !CdbPathLocus_IsOuterQuery(result_path->locus))
 				{
-					Path	   *origpath = result_path;
-					Path	   *path;
 					CdbPathLocus outerquery_locus;
 					CdbPathLocus_MakeOuterQuery(&outerquery_locus);
 					path = cdbpath_create_motion_path(root,
-													  origpath,
+													  result_path,
 													  NIL,
 													  false,
 													  outerquery_locus);
-					if (path == NULL)
-						add_path(final_rel, result_path);
-					else
-						add_path(final_rel, path);
 				}
-				else 
+
+				/* 
+				 * We either didn't pass conditions earlier, or we got null 
+				 * in cdbpath_create_motion_path().
+				 */
+				if (path == NULL)
 					add_path(final_rel, result_path);
+				else
+					add_path(final_rel, path);
 					
 				/* Select cheapest path (pretty easy in this case...) */
 				set_cheapest(final_rel);

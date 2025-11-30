@@ -634,11 +634,7 @@ with cte as (
 select count(distinct(rand)) from cte join d on cte.a = d.a;
 
 -- prohibit adding motion on late stage when subplan has external parameters
-alter table d set distributed by (a);
-alter table r set distributed by (a);
-alter table r drop column b;
-
-select (select dbid from gp_segment_configuration join r on a = dbid where content = b) from d;
+select (select dbid from gp_segment_configuration join d as d2 on a = dbid where content = d1.b) from d as d1;
 
 drop table t1;
 drop table t2;
