@@ -2880,8 +2880,11 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 		 */
 		if (limit_needed(parse))
 		{
-			CdbPathLocus locus;
-			Path	   *mpath;
+			path = (Path *) create_limit_path(root, final_rel, path,
+											  parse->limitOffset,
+											  parse->limitCount,
+											  offset_est, count_est);
+
 			/*
 			 * Greengage-specific behavior:
 			 * If the limit path locus is SegmentGeneral, General, or
@@ -2897,37 +2900,22 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 			 * will be re-executed for each value of the parameter and could
 			 * yield different tuple values depending on the order
 			 * provided from below.
-			 * For Replicated locus we firstly do motion and then limit,
-			 * because this motion could not be omitted, but could be
-			 * made gather one, so we will be trapped in execution of limit
-			 * on separate segments, which we are trying to prevent.
-			 */
-			CdbPathLocus_MakeSingleQE(&locus, getgpsegmentCount());
-			if (CdbPathLocus_IsReplicated(path->locus))
-			{
-				mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
-				if (mpath != NULL) {
-					path = mpath;
-				}
-			}
-			path = (Path *) create_limit_path(root, final_rel, path,
-											  parse->limitOffset,
-											  parse->limitCount,
-											  offset_est, count_est);
-
-			/* 
-			 * General is selfcontained everywhere so can just make it
-			 * SingleQE, without any motions.
 			 */
 			if (CdbPathLocus_IsGeneral(path->locus))
 			{
+				/*
+				 * General is selfcontained everywhere so can just make it
+			 	 * SingleQE, without any motions.
+				 */
 				CdbPathLocus_MakeSingleQE(&(path->locus),
 										getgpsegmentCount());
 			}
-			else if (CdbPathLocus_IsSegmentGeneral(path->locus))
+			else if (CdbPathLocus_IsSegmentGeneral(path->locus) ||
+					 CdbPathLocus_IsReplicated(path->locus))
 			{
-				/* We don't want to lose our limit path node */
-				mpath = NULL;
+				CdbPathLocus locus;
+				Path	   *mpath;
+				CdbPathLocus_MakeSingleQE(&locus, getgpsegmentCount());
 				mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
 				if (mpath != NULL) {
 					path = mpath;
