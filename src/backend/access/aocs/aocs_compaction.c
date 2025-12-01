@@ -53,8 +53,6 @@ void
 AOCSCompaction_DropSegmentFile(Relation aorel,
 							   int segno)
 {
-	int			col = 0;
-
 	Assert(RelationIsAoCols(aorel));
 
 	/*
@@ -63,7 +61,7 @@ AOCSCompaction_DropSegmentFile(Relation aorel,
 	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
 	 * ao_foreach_extent_file().
 	 */
-	for (;;)
+	for (int col = 0; ; col++)
 	{
 		char		filenamepath[MAXPGPATH];
 		int			pseudoSegNo;
@@ -93,8 +91,6 @@ AOCSCompaction_DropSegmentFile(Relation aorel,
 			if (col >= RelationGetNumberOfAttributes(aorel))
 				break;
 		}
-
-		col++;
 	}
 }
 
