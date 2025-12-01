@@ -150,16 +150,14 @@
     su - $USER # Apply settings
     ```
 
-5. Install psutils and yaml for python2:
+5. Install python dependencies:
+
     ```bash
-    python2 -m pip install psutil pyyaml
+    (cd gpMgmt/bin && make install)
     ```
 
-6. Make sure that you update submodules. To do this, either use 
+To be able to run unit tests the mock package is required run:
+
     ```bash
-    git clone --recurse-submodules https://github.com/GreengageDB/greengage
-    ``` 
-when downloading the source code, or update the submodules:
-    ```bash
-    git submodule update --init --recursive --force
+    python2 -m pip install mock==1.0.1
     ```
