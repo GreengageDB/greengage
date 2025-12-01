@@ -154,6 +154,9 @@ typedef struct
 	 * Please only set under exclusive lock to prevent races.
 	 */
 	pg_atomic_uint32 aborting;
+	/* Data to identify the SharedFileSet that was used */
+	pid_t		sfs_creator_pid;
+	uint32		sfs_number;
 } TuplestoreSharingState;
 
 /*
@@ -1923,6 +1926,8 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	pg_atomic_init_u32(&sstate->num_current, 1);
 	pg_atomic_init_u32(&sstate->num_total_left, ntotal);
 	pg_atomic_init_u32(&sstate->aborting, 0);
+	sstate->sfs_creator_pid = fileset->creator_pid;
+	sstate->sfs_number = fileset->number;
 
 	LWLockRelease(ShareInputScanLock);
 
@@ -2092,9 +2097,14 @@ AtAbort_SharedTuplestores()
 		/*
 		 * No one is using it, and we're aborting so no one will use it
 		 * in the future either. It's safe to delete the files now.
-		 * Also delete the shared memory entry.
+		 * Also delete the shared memory entry. We do not need to delete
+		 * files if the SharedFileSet was already cleaned up.
 		 */
-		BufFileDeleteShared(sisc_fileset, sstate->tag);
+		if (sstate->sfs_creator_pid == sisc_fileset->creator_pid &&
+			sstate->sfs_number == sisc_fileset->number)
+		{
+			BufFileDeleteShared(sisc_fileset, sstate->tag);
+		}
 
 		if (hash_search(shared_tuplestores,
 						sstate->tag,
