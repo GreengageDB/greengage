@@ -836,7 +836,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	 * PARAM_EXEC Params instead of the PARAM_SUBLINK Params emitted by the
 	 * parser.
 	 */
-	if (splan->parParam == NIL && subLinkType == EXISTS_SUBLINK && Gp_role == GP_ROLE_DISPATCH)
+	if (splan->parParam == NIL && subLinkType == EXISTS_SUBLINK && Gp_role == GP_ROLE_DISPATCH && !root->is_correlated_subplan)
 	{
 		Param	   *prm;
 
