@@ -226,3 +226,364 @@ reset gp_cte_sharing;
 drop table sisc1;
 drop table sisc2;
 drop table sisc3;
+--
+-- Check error handling in shared scans
+--
+-- Helper function to count the number of temporary files in
+-- pgsql_tmp.
+-- start_ignore
+create language plpython3u;
+-- end_ignore
+create or replace function get_temp_file_num() returns setof int as
+$$
+import os
+fileNum = 0
+for root, directories, filenames in os.walk('base/pgsql_tmp'):
+  for filename in filenames:
+    fileNum += 1
+return [fileNum]
+$$ language plpython3u execute on all segments;
+create table sisc(i int) distributed by (i);
+insert into sisc select generate_series(1, 100);
+-- Temp file number before running Shared Scan queries
+select sum(n) as num_temp_files_before from get_temp_file_num() n
+\gset
+-- No error, 2 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i = 1;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Subquery Scan on t1
+                           Output: t1.i
+                           Filter: (t1.i = 1)
+                           ->  Shared Scan (share slice:id 1:0)
+                                 Output: share0_ref2.i
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Subquery Scan on t2
+                                       ->  Shared Scan (share slice:id 2:0)
+                                             Output: share0_ref1.i
+                                             ->  Seq Scan on shared_scan.sisc
+                                                   Output: sisc.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(21 rows)
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i = 1;
+ count 
+-------
+   100
+(1 row)
+
+-- Error, 2 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Subquery Scan on t1
+                           Output: t1.i
+                           Filter: ((t1.i / 0) = 1)
+                           ->  Shared Scan (share slice:id 1:0)
+                                 Output: share0_ref2.i
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Subquery Scan on t2
+                                       ->  Shared Scan (share slice:id 2:0)
+                                             Output: share0_ref1.i
+                                             ->  Seq Scan on shared_scan.sisc
+                                                   Output: sisc.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(21 rows)
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=156496)
+-- Explicit transaction, 2 SISC nodes
+begin;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=64495)
+rollback;
+-- Subtransaction, 2 SISC nodes
+begin;
+savepoint s1;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=64495)
+rollback to s1;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=64495)
+rollback;
+-- No error, 3 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Nested Loop
+                           ->  Subquery Scan on t1
+                                 Output: t1.i
+                                 Filter: (t1.i = 1)
+                                 ->  Shared Scan (share slice:id 1:0)
+                                       Output: share0_ref3.i
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Subquery Scan on t2
+                                             ->  Shared Scan (share slice:id 2:0)
+                                                   Output: share0_ref2.i
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                 ->  Subquery Scan on t3
+                                       ->  Shared Scan (share slice:id 3:0)
+                                             Output: share0_ref1.i
+                                             ->  Seq Scan on shared_scan.sisc
+                                                   Output: sisc.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(27 rows)
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
+ count 
+-------
+ 10000
+(1 row)
+
+-- Error, 3 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Nested Loop
+                           ->  Subquery Scan on t1
+                                 Output: t1.i
+                                 Filter: ((t1.i / 0) = 1)
+                                 ->  Shared Scan (share slice:id 1:0)
+                                       Output: share0_ref3.i
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                       ->  Subquery Scan on t2
+                                             ->  Shared Scan (share slice:id 2:0)
+                                                   Output: share0_ref2.i
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                 ->  Subquery Scan on t3
+                                       ->  Shared Scan (share slice:id 3:0)
+                                             Output: share0_ref1.i
+                                             ->  Seq Scan on shared_scan.sisc
+                                                   Output: sisc.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(27 rows)
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=156496)
+-- No error, 3 SISC nodes with 2 in the same slice
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1 and t1.i = t2.i;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: 1
+                           ->  Subquery Scan on t3
+                                 ->  Shared Scan (share slice:id 2:0)
+                                       Output: share0_ref3.i
+                     ->  Materialize
+                           ->  Nested Loop
+                                 ->  Subquery Scan on t1
+                                       Output: t1.i
+                                       Filter: (t1.i = 1)
+                                       ->  Shared Scan (share slice:id 1:0)
+                                             Output: share0_ref2.i
+                                 ->  Materialize
+                                       Output: t2.i
+                                       ->  Subquery Scan on t2
+                                             Output: t2.i
+                                             Filter: (t2.i = 1)
+                                             ->  Shared Scan (share slice:id 1:0)
+                                                   Output: share0_ref1.i
+                                                   ->  Seq Scan on shared_scan.sisc
+                                                         Output: sisc.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(30 rows)
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1 and t1.i = t2.i;
+ count 
+-------
+   100
+(1 row)
+
+-- Error, 3 SISC nodes with 2 in the same slice
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1 and t1.i = t2.i;
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Hash Join
+                     Hash Cond: (t1.i = share0_ref1.i)
+                     ->  Nested Loop
+                           Output: t1.i
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Subquery Scan on t3
+                                       ->  Shared Scan (share slice:id 2:0)
+                                             Output: share0_ref3.i
+                           ->  Materialize
+                                 Output: t1.i
+                                 ->  Subquery Scan on t1
+                                       Output: t1.i
+                                       Filter: ((t1.i / 0) = 1)
+                                       ->  Shared Scan (share slice:id 1:0)
+                                             Output: share0_ref2.i
+                     ->  Hash
+                           Output: share0_ref1.i
+                           ->  Shared Scan (share slice:id 1:0)
+                                 Output: share0_ref1.i
+                                 ->  Seq Scan on shared_scan.sisc
+                                       Output: sisc.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(29 rows)
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1 and t1.i = t2.i;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=156496)
+-- No error, 2 different SISCs
+explain (verbose, costs off)
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i = 1;
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Nested Loop
+                           ->  Nested Loop
+                                 ->  Subquery Scan on t1
+                                       Output: t1.i
+                                       Filter: (t1.i = 1)
+                                       ->  Shared Scan (share slice:id 1:1)
+                                             Output: share1_ref2.i
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                             ->  Subquery Scan on t2
+                                                   ->  Shared Scan (share slice:id 2:1)
+                                                         Output: share1_ref1.i
+                                                         ->  Seq Scan on shared_scan.sisc
+                                                               Output: sisc.i
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Subquery Scan on t3
+                                             ->  Shared Scan (share slice:id 3:0)
+                                                   Output: share0_ref2.i
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Subquery Scan on t4
+                                       ->  Shared Scan (share slice:id 4:0)
+                                             Output: share0_ref1.i
+                                             ->  Seq Scan on shared_scan.sisc sisc_1
+                                                   Output: sisc_1.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(35 rows)
+
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i = 1;
+  count  
+---------
+ 1000000
+(1 row)
+
+-- Error, 2 different SISCs
+explain (verbose, costs off)
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(*)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(*))
+         ->  Partial Aggregate
+               Output: PARTIAL count(*)
+               ->  Nested Loop
+                     ->  Nested Loop
+                           ->  Nested Loop
+                                 ->  Subquery Scan on t1
+                                       Output: t1.i
+                                       Filter: ((t1.i / 0) = 1)
+                                       ->  Shared Scan (share slice:id 1:1)
+                                             Output: share1_ref2.i
+                                 ->  Materialize
+                                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                             ->  Subquery Scan on t2
+                                                   ->  Shared Scan (share slice:id 2:1)
+                                                         Output: share1_ref1.i
+                                                         ->  Seq Scan on shared_scan.sisc
+                                                               Output: sisc.i
+                           ->  Materialize
+                                 ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                       ->  Subquery Scan on t3
+                                             ->  Shared Scan (share slice:id 3:0)
+                                                   Output: share0_ref2.i
+                     ->  Materialize
+                           ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                 ->  Subquery Scan on t4
+                                       ->  Shared Scan (share slice:id 4:0)
+                                             Output: share0_ref1.i
+                                             ->  Seq Scan on shared_scan.sisc sisc_1
+                                                   Output: sisc_1.i
+ Optimizer: Postgres-based planner
+ Settings: optimizer = 'off'
+(35 rows)
+
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
+ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=156369)
+-- All temporary files should have been cleaned up, so the number of files shouldn't be more than
+-- previously. It could be less if some previously existing file has been cleaned up in the meantime.
+select sum(n) as num_temp_files_after from get_temp_file_num() n
+\gset
+select :num_temp_files_before >= :num_temp_files_after;
+ ?column? 
+----------
+ t
+(1 row)
+
+drop table sisc;
+drop function get_temp_file_num();

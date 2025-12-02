@@ -230,6 +230,10 @@ init_tuplestore_state(ShareInputScanState *node)
 			if (sisc->cross_slice)
 			{
 				char		rwfile_prefix[100];
+				/* Make sure the tuplestore lives between InitPlans */
+				MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+				ResourceOwner old_resowner = CurrentResourceOwner;
+				CurrentResourceOwner = CurTransactionResourceOwner;
 
 				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): No tuplestore yet, creating tuplestore",
 					 sisc->share_id, currentSliceId);
@@ -239,9 +243,13 @@ init_tuplestore_state(ShareInputScanState *node)
 										   10); /* maxKBytes FIXME */
 
 				shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
-				tuplestore_make_shared(ts,
-									   get_shareinput_fileset(),
-									   rwfile_prefix);
+				tuplestore_make_shared_many(ts,
+											get_shareinput_fileset(),
+											rwfile_prefix,
+											sisc->nconsumers + 1);
+
+				MemoryContextSwitchTo(old_context);
+				CurrentResourceOwner = old_resowner;
 #ifdef FAULT_INJECTOR
 				if (SIMPLE_FAULT_INJECTOR("sisc_xslice_temp_files") == FaultInjectorTypeSkip)
 				{
@@ -309,6 +317,11 @@ init_tuplestore_state(ShareInputScanState *node)
 			 * tuplestore.
 			 */
 			char		rwfile_prefix[100];
+			/*
+			 * Make sure the tuplestore lives between InitPlans. We don't need
+			 * to set ResourceOwner here since it's not used for consumers.
+			 */
+			MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
 
 			Assert(sisc->cross_slice);
 
@@ -317,6 +330,8 @@ init_tuplestore_state(ShareInputScanState *node)
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 			ts = tuplestore_open_shared(get_shareinput_fileset(), rwfile_prefix);
+
+			MemoryContextSwitchTo(old_context);
 		}
 		local_state->ts_state = ts;
 		local_state->ready = true;
