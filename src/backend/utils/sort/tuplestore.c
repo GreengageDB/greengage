@@ -159,11 +159,13 @@ typedef struct
 {
 	char		tag[NAMEDATALEN]; /* hash key */
 	int32		session_id;
+	/* Total number of participants */
+	uint32 num_total;
 	/*
-	 * Total number of consumers who aren't done with this tuplestore.
-	 * The tuplestore can be deleted automatically when this reachers zero.
+	 * Total number of participants who are done with this tuplestore.
+	 * The tuplestore can be deleted automatically when this reachers num_total.
 	 */
-	uint32 num_total_left;
+	uint32 num_done;
 	/*
 	 * Number of consumers who are currently using this tuplestore.
 	 * It's only safe to delete it when it's zero.
@@ -647,9 +649,9 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 		 */
 		if (should_abort)
 			sstate->aborting = true;
-		sstate->num_total_left--;
+		sstate->num_done++;
 		sstate->num_current--;
-		Assert(sstate->num_current <= sstate->num_total_left);
+		Assert(sstate->num_done <= sstate->num_total);
 		if (sstate->num_current == 0) /* safe to delete, no one is using it */
 		{
 			/*
@@ -657,7 +659,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			 * and set the flag for us. It's this backend's job to delete
 			 * the files now.
 			 */
-			if (sstate->aborting || sstate->num_total_left == 0) /* should delete */
+			if (sstate->aborting || sstate->num_done >= sstate->num_total) /* should delete */
 			{
 				/*
 				 * We can now safely delete the files, since we were the
@@ -670,6 +672,9 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 								state->shared_filename,
 								HASH_REMOVE, NULL) == NULL)
 					elog(ERROR, "hash table corrupted");
+				
+				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): file deleted",
+					 state->shared_filename, currentSliceId);
 			}
 		}
 
@@ -1893,18 +1898,22 @@ get_shared_state(SharedFileSet *fileset, const char *filename)
 		}
 		sstate->session_id = gp_session_id;
 		sstate->num_current = 0;
+		sstate->num_done = 0;
 		sstate->aborting = 0;
 		/*
 		 * We might not know the total number of shares, the writer will set it.
 		 * It's okay to set it later since no process will cleanup before the
 		 * writer is ready anyway.
 		 */
-		sstate->num_total_left = UINT32_MAX;
+		sstate->num_total = UINT32_MAX;
 		sstate->sfs_creator_pid = fileset->creator_pid;
 		sstate->sfs_number = fileset->number;
 
 		pg_atomic_init_u32(&sstate->ready, 0);
 		ConditionVariableInit(&sstate->ready_done_cv);
+
+		elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): initialized shared state",
+			 filename, currentSliceId);
 	}
 
 	/*
@@ -1978,7 +1987,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	PG_TRY();
 	{
 		state->shared_state = get_shared_state(fileset, filename);
-		state->shared_state->num_total_left = ntotal;
+		state->shared_state->num_total = ntotal;
 	}
 	PG_CATCH();
 	{
@@ -2093,14 +2102,19 @@ tuplestore_reader_waitready(TuplestoreSharingState *sstate)
  * tuplestore_open_shared
  *
  * Open a shared tuplestore that has been populated in another process
- * for reading. Will block until that process fills the tuplestore and
- * marks it as ready.
+ * for reading.
+ *
+ * Waiting is determined by skip_open parameter. If it is set to true,
+ * this call will block until the tuplestore is filled by the writer.
+ * If it is set to false, it will return immediately, without actually
+ * opening any files (as they might not even be created yet). Reading
+ * from this tuplestore is then invalid.
  *
  * The caller must make sure to set transaction-level MemoryContext
  * if this might be called on segments.
  */
 Tuplestorestate *
-tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
+tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bool skip_open)
 {
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
@@ -2142,9 +2156,6 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 
 	LWLockRelease(ShareInputScanLock);
 
-	/* Wait until writer is ready */
-	tuplestore_reader_waitready(sstate);
-
 	eflags = EXEC_FLAG_BACKWARD | EXEC_FLAG_REWIND;
 
 	state = tuplestore_begin_common(eflags,
@@ -2156,22 +2167,45 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	state->copytup = copytup_heap;
 	state->writetup = writetup_forbidden;
 	state->readtup = readtup_heap;
+	state->shared_state = sstate;
+
+	state->share_status = TSHARE_READER;
+	state->frozen = false;
+	state->fileset = fileset;
+	state->shared_filename = pstrdup(filename);
+
+	/* Early exit if requested */
+	if (skip_open)
+		return state;
+
+	/* Wait until writer is ready */
+	tuplestore_reader_waitready(sstate);
 
 	state->myfile = BufFileOpenShared(fileset, filename);
 	state->readptrs[0].file = 0;
 	state->readptrs[0].offset = 0L;
 	state->status = TSS_READFILE;
 
-	state->share_status = TSHARE_READER;
-	state->frozen = false;
-	state->fileset = fileset;
-	state->shared_filename = pstrdup(filename);
-	state->shared_state = sstate;
-
 	/* Remember this tuplestore in case we have to close it while aborting */
 	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
 
 	return state;
+}
+
+/*
+ * tuplestore_open_shared
+ *
+ * Open a shared tuplestore that has been populated in another process
+ * for reading. Will block until that process fills the tuplestore and
+ * marks it as ready.
+ *
+ * The caller must make sure to set transaction-level MemoryContext
+ * if this might be called on segments.
+ */
+Tuplestorestate *
+tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
+{
+	return tuplestore_open_shared_extended(fileset, filename, false);
 }
 
 /*
@@ -2226,6 +2260,8 @@ AtAbort_SharedTuplestores()
 			sstate->sfs_number == sisc_fileset->number)
 		{
 			BufFileDeleteShared(sisc_fileset, sstate->tag);
+			elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (file=%s, slice=%d): file deleted on abort",
+				 sstate->tag, currentSliceId);
 		}
 
 		if (hash_search(shared_tuplestores,

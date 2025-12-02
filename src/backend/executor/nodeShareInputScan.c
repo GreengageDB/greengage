@@ -121,7 +121,7 @@ static void ExecShareInputScanExplainEnd(PlanState *planstate, struct StringInfo
  *    is not initialized.
  */
 static void
-init_tuplestore_state(ShareInputScanState *node)
+init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 {
 	EState	   *estate = node->ss.ps.state;
 	ShareInputScan *sisc = (ShareInputScan *) node->ss.ps.plan;
@@ -239,7 +239,7 @@ init_tuplestore_state(ShareInputScanState *node)
 			estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
 
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
-			ts = tuplestore_open_shared(get_shareinput_fileset(), rwfile_prefix);
+			ts = tuplestore_open_shared_extended(get_shareinput_fileset(), rwfile_prefix, skip_waiting);
 
 			MemoryContextSwitchTo(old_context);
 		}
@@ -291,7 +291,7 @@ ExecShareInputScan(PlanState *pstate)
 
 	/* if first time call, need to initialize the tuplestore state.  */
 	if (!node->isready)
-		init_tuplestore_state(node);
+		init_tuplestore_state(node, false);
 	
 	/*
 	 * Return NULL when necessary.
@@ -479,7 +479,7 @@ ExecEndShareInputScan(ShareInputScanState *node)
 			if (currentSliceId == sisc->producer_slice_id)
 			{
 				if (!local_state->ready)
-					init_tuplestore_state(node);
+					init_tuplestore_state(node, false);
 			}
 			
 			local_state->closed = true;
@@ -509,7 +509,7 @@ ExecReScanShareInputScan(ShareInputScanState *node)
 {
 	/* On first call, initialize the tuplestore state */
 	if (!node->isready)
-		init_tuplestore_state(node);
+		init_tuplestore_state(node, false);
 
 	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 	Assert(node->ts_pos != -1);
@@ -558,10 +558,31 @@ ExecSquelchShareInputScan(ShareInputScanState *node)
 			{
 				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (shareid=%d, slice=%d): initializing because squelched",
 					 sisc->share_id, currentSliceId);
-				init_tuplestore_state(node);
+				init_tuplestore_state(node, false);
+			}
+		} else {
+			/*
+			 * We are the consumer, so initialize the state without actually
+			 * waiting for anyone
+			 */
+			if (!local_state->ready)
+			{
+				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): initializing because squelched",
+					 sisc->share_id, currentSliceId);
+				init_tuplestore_state(node, true);
 			}
 		}
-		local_state->closed = true;
+
+		/* In either case, clean up the local tuplestore state */
+		if (local_state && local_state->ts_state)
+		{
+			tuplestore_end(local_state->ts_state);
+			local_state->ts_state = NULL;
+			local_state->closed = true;
+			SIMPLE_FAULT_INJECTOR("shareinput_squelched");
+			elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (shareid=%d, slice=%d): squelched",
+				 sisc->share_id, currentSliceId);
+		}
 	}
 }
 

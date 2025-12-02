@@ -107,6 +107,9 @@ extern void tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *f
 										const char *filename, uint32 ntotal);
 extern void tuplestore_freeze(Tuplestorestate *state);
 extern Tuplestorestate *tuplestore_open_shared(SharedFileSet *fileset, const char *filename);
+extern Tuplestorestate *tuplestore_open_shared_extended(SharedFileSet *fileset,
+														const char *filename,
+														bool skip_wait);
 
 extern void AtAbort_SharedTuplestores(void);
 
