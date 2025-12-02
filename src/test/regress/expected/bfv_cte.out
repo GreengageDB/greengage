@@ -481,6 +481,10 @@ select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 -- start_matchsubs
 -- m/file=SIRW_[0-9]+_[0-9]+_0/
 -- s/file=SIRW_[0-9]+_[0-9]+_0/file=SIRW_X_X_0/g
+-- m/SISC \(file=SIRW_X_X_0, slice=2\)/
+-- s/SISC \(file=SIRW_X_X_0, slice=2\)/SISC (file=SIRW_X_X_0, slice={2|4})/g
+-- m/SISC \(file=SIRW_X_X_0, slice=4\)/
+-- s/SISC \(file=SIRW_X_X_0, slice=4\)/SISC (file=SIRW_X_X_0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=2\)/
 -- s/SISC READER \(shareid=0, slice=2\)/SISC READER (shareid=0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=4\)/
@@ -495,12 +499,10 @@ select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 \! cat /tmp/bfv_cte.out | grep -P '^(?!LOG)|^(LOG.*seg2)' | grep -vP 'LOG.*fault|decreased xslice state refcount'
 LOG:  SISC READER (shareid=0, slice=2): initializing because squelched  (seg2 slice2 127.0.1.1:7004 pid=416192)
 LOG:  SISC (file=SIRW_269_5_0, slice=2): initialized shared state  (seg2 slice2 127.0.1.1:7004 pid=416192)
-LOG:  SISC (shareid=0, slice=2): squelched  (seg2 slice2 127.0.1.1:7004 pid=416192)
 LOG:  SISC WRITER (shareid=0, slice=4): initializing because squelched  (seg2 slice4 127.0.1.1:7004 pid=416204)
 LOG:  SISC WRITER (shareid=0, slice=4): No tuplestore yet, creating tuplestore  (seg2 slice4 127.0.1.1:7004 pid=416204)
 LOG:  SISC WRITER (file=SIRW_269_5_0, slice=4): wrote notify_ready  (seg2 slice4 127.0.1.1:7004 pid=416204)
 LOG:  SISC (file=SIRW_269_5_0, slice=4): file deleted  (seg2 slice4 127.0.1.1:7004 pid=416204)
-LOG:  SISC (shareid=0, slice=4): squelched  (seg2 slice4 127.0.1.1:7004 pid=416204)
  a | a 
 ---+---
  1 | 2

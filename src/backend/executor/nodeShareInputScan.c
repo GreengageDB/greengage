@@ -592,8 +592,6 @@ ExecSquelchShareInputScan(ShareInputScanState *node)
 				local_state->ts_state = NULL;
 				local_state->closed = true;
 				SIMPLE_FAULT_INJECTOR("shareinput_squelched");
-				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (shareid=%d, slice=%d): squelched",
-					sisc->share_id, currentSliceId);
 			}
 		}
 	}

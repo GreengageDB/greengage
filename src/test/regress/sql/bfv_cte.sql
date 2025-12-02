@@ -317,6 +317,10 @@ select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 -- start_matchsubs
 -- m/file=SIRW_[0-9]+_[0-9]+_0/
 -- s/file=SIRW_[0-9]+_[0-9]+_0/file=SIRW_X_X_0/g
+-- m/SISC \(file=SIRW_X_X_0, slice=2\)/
+-- s/SISC \(file=SIRW_X_X_0, slice=2\)/SISC (file=SIRW_X_X_0, slice={2|4})/g
+-- m/SISC \(file=SIRW_X_X_0, slice=4\)/
+-- s/SISC \(file=SIRW_X_X_0, slice=4\)/SISC (file=SIRW_X_X_0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=2\)/
 -- s/SISC READER \(shareid=0, slice=2\)/SISC READER (shareid=0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=4\)/
