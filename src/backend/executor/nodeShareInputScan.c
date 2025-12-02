@@ -101,6 +101,8 @@ typedef struct shareinput_local_state
 {
 	bool		ready;
 	bool		closed;
+	int			ndone;
+	int			nsharers;
 
 	/*
 	 * This points to the child node that's being shared. Set by
@@ -407,6 +409,13 @@ ExecInitShareInputScan(ShareInputScan *node, EState *estate, int eflags)
 
 	local_state = list_nth(estate->es_sharenode, node->share_id);
 
+	/*
+	 * To accumulate the number of CTE participant executed in this slice.
+	 * This variable will be used by the last finishing CTE participant
+	 * in current slice, to delete the tuplestore during squelching.
+	 */
+	local_state->nsharers++;
+
 	if (childState)
 		local_state->childState = childState;
 	sisstate->local_state = local_state;
@@ -576,12 +585,16 @@ ExecSquelchShareInputScan(ShareInputScanState *node)
 		/* In either case, clean up the local tuplestore state */
 		if (local_state && local_state->ts_state)
 		{
-			tuplestore_end(local_state->ts_state);
-			local_state->ts_state = NULL;
-			local_state->closed = true;
-			SIMPLE_FAULT_INJECTOR("shareinput_squelched");
-			elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (shareid=%d, slice=%d): squelched",
-				 sisc->share_id, currentSliceId);
+			local_state->ndone++;
+			if (local_state->ndone == local_state->nsharers)
+			{
+				tuplestore_end(local_state->ts_state);
+				local_state->ts_state = NULL;
+				local_state->closed = true;
+				SIMPLE_FAULT_INJECTOR("shareinput_squelched");
+				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC (shareid=%d, slice=%d): squelched",
+					sisc->share_id, currentSliceId);
+			}
 		}
 	}
 }
