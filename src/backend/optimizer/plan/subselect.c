@@ -835,8 +835,14 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	 * initPlan.  For ROWCOMPARE, we must modify the testexpr tree to contain
 	 * PARAM_EXEC Params instead of the PARAM_SUBLINK Params emitted by the
 	 * parser.
+	 * 
+	 * Note about: root->is_correlated_subplan
+	 * We also check that this subplan is not nested inside other, correlated
+	 * one. We need this check, because otherwise undirect correlated plans
+	 * would be executed as initplans on segments (even with master-only table)
 	 */
-	if (splan->parParam == NIL && subLinkType == EXISTS_SUBLINK && Gp_role == GP_ROLE_DISPATCH && !root->is_correlated_subplan)
+	if (splan->parParam == NIL && subLinkType == EXISTS_SUBLINK && Gp_role == GP_ROLE_DISPATCH 
+		&& !root->is_correlated_subplan)
 	{
 		Param	   *prm;
 
@@ -846,7 +852,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && Gp_role == GP_ROLE_DISPATCH)
+	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && Gp_role == GP_ROLE_DISPATCH 
+			&& !root->is_correlated_subplan)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Param	   *prm;
@@ -861,7 +868,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == ARRAY_SUBLINK && Gp_role == GP_ROLE_DISPATCH)
+	else if (splan->parParam == NIL && subLinkType == ARRAY_SUBLINK && Gp_role == GP_ROLE_DISPATCH
+			&& !root->is_correlated_subplan)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Oid			arraytype;
@@ -881,7 +889,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == ROWCOMPARE_SUBLINK && Gp_role == GP_ROLE_DISPATCH)
+	else if (splan->parParam == NIL && subLinkType == ROWCOMPARE_SUBLINK && Gp_role == GP_ROLE_DISPATCH
+			&& !root->is_correlated_subplan)
 	{
 		/* Adjust the Params */
 		List	   *params;
