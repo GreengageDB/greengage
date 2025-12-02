@@ -82,11 +82,14 @@
 #include "access/htup_details.h"
 #include "commands/tablespace.h"
 #include "executor/executor.h"
+#include "pgstat.h"
 #include "miscadmin.h"
 #include "storage/buffile.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
+#include "utils/faultinjector.h"
 #include "utils/memutils.h"
+#include "utils/guc.h"
 #include "utils/resowner.h"
 
 #include "cdb/cdbvars.h"
@@ -134,6 +137,23 @@ typedef enum
 	TSHARE_READER
 } TSSharedStatus;
 
+/*
+ * In a shared tuplestore, the writer and reader processes
+ * communicate using shared memory. There's a hash table containing one
+ * 'TuplestoreSharingState' for each currently existing shared tuplestore.
+ *
+ * The hash table itself, and the fields within every entry, are protected
+ * by ShareInputScanLock. (Although some operations get away without the
+ * lock, when the field is atomic and/or there's only one possible writer.)
+ *
+ * All writers and readers that participate in a shared scan hold
+ * a reference to the 'TuplestoreSharingState' entry of the scan, for
+ * the whole lifecycle of the tuplestore from creation to cleanup.
+ * The entry in the hash table is created by the first participant that
+ * initializes, which is not necessarily the writer! When the last participant
+ * releases the entry, it is removed from the hash table.
+ */
+
 /* State in shared memory for shared tuplestores */
 typedef struct
 {
@@ -143,17 +163,30 @@ typedef struct
 	 * Total number of consumers who aren't done with this tuplestore.
 	 * The tuplestore can be deleted automatically when this reachers zero.
 	 */
-	pg_atomic_uint32 num_total_left;
+	uint32 num_total_left;
 	/*
 	 * Number of consumers who are currently using this tuplestore.
 	 * It's only safe to delete it when it's zero.
+	 * Please only access under lock.
 	 */
-	pg_atomic_uint32 num_current;
+	uint32 num_current;
 	/*
 	 * True if we are currently aborting.
-	 * Please only set under exclusive lock to prevent races.
+	 * Please only access under lock.
 	 */
-	pg_atomic_uint32 aborting;
+	bool aborting;
+
+	pg_atomic_uint32	ready;	/* is the input fully materialized and ready to be read? */
+
+	/*
+	 * ready_done_cv is used for signaling when the scan becomes "ready", and
+	 * when it becomes "done". The producer wakes up everyone waiting on this
+	 * condition variable when it sets ready = true. Also, when the last
+	 * consumer finishes the scan (ndone reaches nconsumers), it wakes up the
+	 * producer using this same condition variable.
+	 */
+	ConditionVariable ready_done_cv;
+
 	/* Data to identify the SharedFileSet that was used */
 	pid_t		sfs_creator_pid;
 	uint32		sfs_number;
@@ -607,25 +640,24 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 
 		Assert(sstate->session_id == gp_session_id);
 		/*
-		 * If we are aborting, set the atomic variable in shared memory.
+		 * If we are aborting, set the variable in shared memory.
 		 * This must be done before everything else, since if we can't
 		 * delete the tuplestore right now, we expect other backends to
 		 * do so after they're done using it.
 		 */
 		if (should_abort)
-			pg_atomic_exchange_u32(&sstate->aborting, 1);
-		uint32 num_total_left = pg_atomic_sub_fetch_u32(&sstate->num_total_left, 1);
-		uint32 num_current = pg_atomic_sub_fetch_u32(&sstate->num_current, 1);
-		Assert(num_current <= num_total_left);
-		if (num_current == 0) /* safe to delete, no one is using it */
+			sstate->aborting = true;
+		sstate->num_total_left--;
+		sstate->num_current--;
+		Assert(sstate->num_current <= sstate->num_total_left);
+		if (sstate->num_current == 0) /* safe to delete, no one is using it */
 		{
 			/*
 			 * Either our backend is aborting, or some other backend was
 			 * and set the flag for us. It's this backend's job to delete
 			 * the files now.
 			 */
-			uint32 aborting = pg_atomic_read_u32(&sstate->aborting);
-			if (aborting || num_total_left == 0) /* should delete */
+			if (sstate->aborting || sstate->num_total_left == 0) /* should delete */
 			{
 				/*
 				 * We can now safely delete the files, since we were the
@@ -1836,6 +1868,54 @@ SharedTuplestoreShmemInit(void)
 									   HASH_ELEM);
 }
 
+static TuplestoreSharingState *
+get_shared_state(SharedFileSet *fileset, const char *filename)
+{
+	TuplestoreSharingState *sstate;
+	bool		found;
+
+	/* We only support one shared fileset currently */
+	Assert(fileset == get_shareinput_fileset());
+	Assert(LWLockHeldByMeInMode(ShareInputScanLock, LW_EXCLUSIVE));
+
+	Assert(strlen(filename) < NAMEDATALEN);
+	sstate = hash_search(shared_tuplestores,
+						 filename,
+						 HASH_ENTER_NULL,
+						 &found);
+	if (!found)
+	{
+		if (sstate == NULL)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					errmsg("out of shared tuplestore slots")));
+		}
+		sstate->session_id = gp_session_id;
+		sstate->num_current = 0;
+		sstate->aborting = 0;
+		/*
+		 * We might not know the total number of shares, the writer will set it.
+		 * It's okay to set it later since no process will cleanup before the
+		 * writer is ready anyway.
+		 */
+		sstate->num_total_left = UINT32_MAX;
+		sstate->sfs_creator_pid = fileset->creator_pid;
+		sstate->sfs_number = fileset->number;
+
+		pg_atomic_init_u32(&sstate->ready, 0);
+		ConditionVariableInit(&sstate->ready_done_cv);
+	}
+
+	/*
+	 * This ensures the shared state won't be suddenly deleted after we
+	 * release the lock.
+	 */
+	sstate->num_current++;
+
+	return sstate;
+}
+
 /*
  * tuplestore_make_shared_many
  *
@@ -1852,16 +1932,12 @@ void
 tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, const char *filename, uint32 ntotal)
 {
 	ResourceOwner oldowner;
-	TuplestoreSharingState *sstate;
-	bool		found;
 
 	state->work_set = workfile_mgr_create_set("SharedTupleStore", filename, true /* hold pin */);
 
 	Assert(state->status == TSS_INMEM);
 	Assert(state->tuples == 0);
 	Assert(state->share_status == TSHARE_NOT_SHARED);
-	/* We only support one shared fileset currently */
-	Assert(fileset == get_shareinput_fileset());
 	/*
 	 * QE must create shared tuplestores only in transaction-level
 	 * MemoryContext and ResourceOwner, since InitPlans are executed as
@@ -1876,6 +1952,8 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 		Assert(state->resowner == CurTransactionResourceOwner);
 		Assert(CurrentMemoryContext == CurTransactionContext);
 	}
+
+	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
 	state->share_status = TSHARE_WRITER;
 	state->fileset = fileset;
@@ -1896,6 +1974,19 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	state->myfile = BufFileCreateShared(fileset, filename, state->work_set);
 	CurrentResourceOwner = oldowner;
 
+	/* Make sure the file only exists if and only if shared state was successfully created */
+	PG_TRY();
+	{
+		state->shared_state = get_shared_state(fileset, filename);
+		state->shared_state->num_total_left = ntotal;
+	}
+	PG_CATCH();
+	{
+		BufFileDeleteShared(fileset, filename);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
 	/*
 	 * For now, be conservative and always use trailing length words for
 	 * cross-process tuplestores. It's important that the writer and the
@@ -1908,30 +1999,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	/* Remember this tuplestore to clear it in case of error */
 	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
 
-	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
-
-	Assert(strlen(filename) < NAMEDATALEN);
-	sstate = hash_search(shared_tuplestores,
-						 filename,
-						 HASH_ENTER_NULL,
-						 &found);
-	Assert(!found);
-	if (sstate == NULL)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_OUT_OF_MEMORY),
-				 errmsg("out of shared tuplestore slots")));
-	}
-	sstate->session_id = gp_session_id;
-	pg_atomic_init_u32(&sstate->num_current, 1);
-	pg_atomic_init_u32(&sstate->num_total_left, ntotal);
-	pg_atomic_init_u32(&sstate->aborting, 0);
-	sstate->sfs_creator_pid = fileset->creator_pid;
-	sstate->sfs_number = fileset->number;
-
 	LWLockRelease(ShareInputScanLock);
-
-	state->shared_state = sstate;
 }
 
 /*
@@ -1969,13 +2037,64 @@ tuplestore_freeze(Tuplestorestate *state)
 	dumptuples(state);
 	BufFileExportShared(state->myfile);
 	state->frozen = true;
+
+	TuplestoreSharingState *sstate = state->shared_state;
+
+	uint32 old_ready PG_USED_FOR_ASSERTS_ONLY = pg_atomic_exchange_u32(&sstate->ready, 1);
+	Assert(old_ready == 0);
+
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("tuplestore_freeze");
+#endif
+
+	ConditionVariableBroadcast(&sstate->ready_done_cv);
+
+	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC WRITER (file=%s, slice=%d): wrote notify_ready",
+		 state->shared_filename, currentSliceId);
+}
+
+/*
+ * tuplestore_reader_waitready
+ *
+ *  Called by the reader to wait for the writer to produce
+ *  all the tuples and write them to disk.
+ *
+ *  This is a blocking operation.
+ */
+static void
+tuplestore_reader_waitready(TuplestoreSharingState *sstate)
+{
+	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (file=%s, slice=%d): Waiting for writer",
+		 sstate->tag, currentSliceId);
+	/*
+	 * Wait until the the writer sets 'ready' to true. The writer will
+	 * use the condition variable to wake us up.
+	 */
+	for (;;)
+	{
+		/*
+		 * set state->ready via pg_atomic_exchange_u32() in tuplestore_freeze()
+		 * it acts as a memory barrier, so always get the latest value here
+		 */
+		int ready = pg_atomic_read_u32(&sstate->ready);
+		if (ready)
+			break;
+
+		ConditionVariableSleep(&sstate->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+	}
+	ConditionVariableCancelSleep();
+
+	/* it's ready now */
+	elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (file=%s, slice=%d): Wait ready got writer's handshake",
+		 sstate->tag, currentSliceId);
 }
 
 /*
  * tuplestore_open_shared
  *
  * Open a shared tuplestore that has been populated in another process
- * for reading.
+ * for reading. Will block until that process fills the tuplestore and
+ * marks it as ready.
  *
  * The caller must make sure to set transaction-level MemoryContext
  * if this might be called on segments.
@@ -1986,7 +2105,6 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	Tuplestorestate *state;
 	TuplestoreSharingState *sstate;
 	int			eflags;
-	bool		found;
 
 	/*
 	 * QE must open shared tuplestores only in transaction-level
@@ -2000,27 +2118,32 @@ tuplestore_open_shared(SharedFileSet *fileset, const char *filename)
 	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
 		Assert(CurrentMemoryContext == CurTransactionContext);
 
-	LWLockAcquire(ShareInputScanLock, LW_SHARED);
+	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
-	Assert(strlen(filename) < NAMEDATALEN);
-	sstate = hash_search(shared_tuplestores,
-						 filename,
-						 HASH_FIND,
-						 &found);
+	sstate = get_shared_state(fileset, filename);
+	Assert(sstate->session_id == gp_session_id);
+
 	/*
 	 * Aborting flag can only be set under exclusive lock, so we can be sure
-	 * nobody will delete the tuplestore before we release the lock here.
-	 * The next process to get the lock will see num_current > 0.
+	 * nobody will abort before we release the lock here. Someone else will
+	 * delete it after we are done here.
 	 */
-	if (!found || pg_atomic_read_u32(&sstate->aborting)) {
+	if (sstate->aborting) {
+		sstate->num_current--;
+		/*
+		 * This couldn't be a freshly created shared state,
+	     * so someone else must be holding it right now.
+		 */
+		Assert(sstate->num_current > 0);
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_OPERATION_CANCELED),
-				 errmsg("tuplestore already deleted, canceling MPP operation")));
+				 errmsg("tuplestore operation aborted, canceling")));
 	}
-	Assert(sstate->session_id == gp_session_id);
-	pg_atomic_add_fetch_u32(&sstate->num_current, 1);
 
 	LWLockRelease(ShareInputScanLock);
+
+	/* Wait until writer is ready */
+	tuplestore_reader_waitready(sstate);
 
 	eflags = EXEC_FLAG_BACKWARD | EXEC_FLAG_REWIND;
 
@@ -2088,10 +2211,9 @@ AtAbort_SharedTuplestores()
 		if (sstate->session_id != gp_session_id)
 			continue;
 		/* Set its aborting flag */
-		pg_atomic_exchange_u32(&sstate->aborting, 1);
+		sstate->aborting = true;
 		/* Check if anyone is using it, can't delete it if it's in use */
-		uint32 num_current = pg_atomic_read_u32(&sstate->num_current);
-		if (num_current > 0)
+		if (sstate->num_current > 0)
 			continue;
 
 		/*

@@ -146,6 +146,8 @@ $$ language plpython3u execute on all segments;
 
 create table sisc(i int) distributed by (i);
 insert into sisc select generate_series(1, 100);
+create table sisc2 (i int, j int) distributed by (i);
+insert into sisc2 select x, x from generate_series(1, 10) x;
 
 -- Temp file number before running Shared Scan queries
 select sum(n) as num_temp_files_before from get_temp_file_num() n
@@ -212,10 +214,105 @@ with cte1 as materialized (select i from sisc), cte2 as materialized (select i f
 
 with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
 
+-- InitPlan tests
+-- 1 CTE, 2 references in 2 InitPlans
+explain (costs off) with cte as materialized (select i from sisc2)
+select (select count(*) from cte) as a, (select count(*) from cte) as b;
+
+with cte as materialized (select i from sisc2)
+select (select count(*) from cte) as a, (select count(*) from cte) as b;
+
+-- 1 CTE, 4 references in 2 InitPlans and main plan
+explain (costs off) with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 join cte t2 on t1.j = t2.j) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 join cte t2 on t1.j = t2.j) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+-- 1 CTE, 4 references in 3 nested InitPlans and main plan
+explain (costs off) with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 where (select count(*) from cte t2) > 0) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 where (select count(*) from cte t2) > 0) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+
+-- 2 CTEs, 4 references in 4 InitPlans
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i > 0)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i > 0)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+
+-- 2 CTEs, 4 references in 4 InitPlans with direct dispatch in one
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+
+-- 2 CTEs, 4 references in 4 InitPlans with error in direct dispatch
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j/0) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j/0) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+
+-- 2 CTEs, 4 references in 4 InitPlans with error in full dispatch
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j/0) from cte1),
+       (select count(j) from cte2);
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j/0) from cte1),
+       (select count(j) from cte2);
+
 -- All temporary files should have been cleaned up, so the number of files shouldn't be more than
 -- previously. It could be less if some previously existing file has been cleaned up in the meantime.
 select sum(n) as num_temp_files_after from get_temp_file_num() n
 \gset
 select :num_temp_files_before >= :num_temp_files_after;
 drop table sisc;
+drop table sisc2;
 drop function get_temp_file_num();
