@@ -9,9 +9,9 @@ Feature: ggrebalance behave tests
          And segment information for content 2 is saved in context
          And segment information for content 3 is saved in context
          And all files in gpAdminLogs directory are deleted
-        When the user runs "ggrebalance -x 4"
-        Then ggrebalance should return a return code of 1
-         And ggrebalance should print "Target segment count (4) >= current segment count (4)." to logfile with latest timestamp
+        When the user runs "ggrebalance -x 4 --skip-rebalance"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Skipping rebalance" to logfile with latest timestamp
         When the user runs "ggrebalance -c"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance schema doesn't exist. Cleanup is not required." to logfile with latest timestamp
@@ -24,11 +24,11 @@ Feature: ggrebalance behave tests
         When the user runs "ggrebalance -r"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance schema doesn't exist. Can't perform rollback." to logfile with latest timestamp
-        When the user runs "ggrebalance -x 2"
+        When the user runs "ggrebalance -x 2 --skip-rebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
          And verify no segment running for saved segment information
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Previous run was completed successfully. Please execute cleanup before a new run." to logfile with latest timestamp
         When the user runs "ggrebalance -r"
@@ -44,7 +44,7 @@ Feature: ggrebalance behave tests
          And a cluster is created with mirrors on "cdw" and "sdw1"
          And all files in gpAdminLogs directory are deleted
          And set fault inject "on_enter_STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_STARTED_end"
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -68,14 +68,14 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
         When the user runs "ggrebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "Rebalance schema doesn't exists and no shrink plan is supplied. Please specify shrink plan." to logfile with latest timestamp
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
          And verify no segment running for saved segment information
@@ -101,7 +101,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -110,7 +110,7 @@ Feature: ggrebalance behave tests
          And ggrebalance should print "Can't determine next state. Try to execute cleanup." to logfile with latest timestamp
         When the user runs "ggrebalance -c -y"
         Then ggrebalance should return a return code of 0
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
          And verify no segment running for saved segment information
@@ -136,14 +136,14 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1"
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
-        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1"
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "Can't start a new operation, because the previous one was interrupted" to logfile with latest timestamp
-        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1"
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "Can't start a new operation, because the previous one was interrupted" to logfile with latest timestamp
         When the user runs "ggrebalance --parallel 1 --batch-size 1"
@@ -197,7 +197,7 @@ Feature: ggrebalance behave tests
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
         When set fault inject "<fault_name>"
-         And the user runs "ggrebalance -x 1"
+         And the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -232,7 +232,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -262,7 +262,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1"
+        When the user runs "ggrebalance -x 1 --parallel 1 --batch-size 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -311,7 +311,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -352,7 +352,7 @@ Feature: ggrebalance behave tests
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
         When set fault inject "<fault_name>"
-         And the user runs "ggrebalance -x 1"
+         And the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -404,7 +404,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -443,7 +443,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -504,7 +504,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
@@ -546,7 +546,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
-        When the user runs "ggrebalance -x 1"
+        When the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject

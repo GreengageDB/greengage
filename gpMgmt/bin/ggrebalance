@@ -58,6 +58,20 @@ def parseargs():
                       help='show this help message and exit.')
     parser.add_option('-y', '--non-interactive-mode', dest="interactive", action='store_false', default=True,
                          help="non-interactive mode, do not require user input for confirmations, use defaults.")
+    parser.add_option('-H', '--target-hosts', dest='target_hosts', metavar='<target_hosts>',
+                      help='Set of hostnames where rebalance will distribute segments to')
+    parser.add_option('-A', '--add-hosts', dest='add_hosts', metavar='<hosts_to_add>', 
+                      help='Hosts extending the configuration')
+    parser.add_option('-R', '--remove-hosts', dest='remove_hosts', metavar='<hosts_to_remove>', 
+                      help='Decomissioned hosts')
+    parser.add_option('-m', '--mirror-mode', dest='mirror_mode', metavar='<mirror_mode>',
+                      help='Desirable mirroring strategy after rebalance.')
+    parser.add_option('--skip-rebalance', dest='skip_rebalance', metavar='<skip_rebalance>', action='store_true', default=False,
+                      help='Perform shrink or expand only.')
+    parser.add_option('-p', '--show-plan', dest='show_plan', metavar='<show_plan>', action='store_true', default=False,
+                      help='Show rebalance plan')
+    parser.add_option('-d', '--target-datadirs', dest='target_datadirs', metavar='<target_datadirs>',
+                      help='segment datadirs on new hosts')
 
     parser.set_defaults(verbose=False)
 
@@ -100,6 +114,57 @@ def validate_options(options, args, parser):
     if ((options.clean_required or options.rollback_required) and
         options.target_segment_count != None):
         logger.error("Can't use '--target-segment-count' together option '--clean' or '--rollback'")
+        parser.exit(1)
+    
+    if options.clean_required or options.rollback_required:
+        if options.target_hosts:
+            logger.error("Can't use '--target-hosts' with '--clean' or '--rollback'")
+            parser.exit(1)
+        
+        if options.add_hosts:
+            logger.error("Can't use '--add-hosts' with '--clean' or '--rollback'")
+            parser.exit(1)
+        
+        if options.remove_hosts:
+            logger.error("Can't use '--remove-hosts' with '--clean' or '--rollback'")
+            parser.exit(1)
+        
+        if options.mirror_mode:
+            logger.error("Can't use '--mirror-mode' with '--clean' or '--rollback'")
+            parser.exit(1)
+        
+        if options.skip_rebalance:
+            logger.error("Can't use '--skip-rebalance' with '--clean' or '--rollback'")
+            parser.exit(1)
+        
+        if options.target_datadirs:
+            logger.error("Can't use '--target-datadirs' with '--clean' or '--rollback'")
+            parser.exit(1)
+    
+    if options.target_hosts:
+        if options.add_hosts:
+            logger.error("Can't use together options '--target-hosts' and '--add-hosts'")
+            parser.exit(1)
+        elif options.remove_hosts:
+            logger.error("Can't use together options '--target-hosts' and '--remove-hosts'")
+            parser.exit(1)
+    
+    if (options.target_hosts or options.add_hosts)\
+       and not options.target_datadirs:
+        logger.error("-target-datadirs options is not provided")
+        parser.exit(1)
+
+    if not (options.target_hosts or options.add_hosts)\
+       and options.target_datadirs:
+        logger.error("--target-hosts option is not provided")
+        parser.exit(1)
+
+    if options.mirror_mode and options.mirror_mode not in ('grouped', 'spread'):
+        logger.error('Mirroring strategy %s is not supported' %
+                     options.mirroring)
+        parser.exit(1)
+    elif options.mirror_mode and options.skip_rebalance:
+        logger.error("Can't use together options '--skip-rebalance' and '--mirror-mode'")
         parser.exit(1)
 
     return options, args
@@ -213,19 +278,20 @@ def main(options, args, parser):
         # But for now we simply create a Plan object from the options directly.
         # We'll keep this stub till planner is ready.
         # If shrink_plan is None, we assume that we need to continue previous operation
-        shrink_plan = None
+        plan = None
         if options.target_segment_count != None:
-            shrink_plan = Plan()
-            shrink_plan.setTargetSegmentCount(options.target_segment_count)
-
-        gg_shrink.run(shrink_plan)
+            plan = Planner(logger, dburl, gparray, options).plan()
+        
+        if options.target_segment_count != None and options.show_plan:
+            logger.info(f"Final plan:\n{plan}")
+            sys.exit(0)
+        
+        if plan is None or isinstance(plan, ShrinkPlan):
+            gg_shrink.run(plan)
 
         sys.exit(0)
     except Exception as e:
-        if options and options.verbose:
-            logger.exception('ggrebalance failed. exiting...')
-        else:
-            logger.error(f'ggrebalance failed: {e} \n\nExiting...')
+        logger.error(f'ggrebalance failed: {e} \n\nExiting...')
         sys.exit(1)
     finally:
         remove_pid_file(get_coordinatordatadir())
