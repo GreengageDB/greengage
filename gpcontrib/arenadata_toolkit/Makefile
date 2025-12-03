@@ -3,7 +3,7 @@
 MODULES = arenadata_toolkit
 
 EXTENSION = arenadata_toolkit
-EXTENSION_VERSION = 1.7
+EXTENSION_VERSION = 1.8
 DATA = \
        arenadata_toolkit--1.0.sql \
        arenadata_toolkit--1.0--1.1.sql \
@@ -13,6 +13,7 @@ DATA = \
        arenadata_toolkit--1.4--1.5.sql \
        arenadata_toolkit--1.5--1.6.sql \
        arenadata_toolkit--1.6--1.7.sql \
+       arenadata_toolkit--1.7--1.8.sql \
 
 DATA_built = $(EXTENSION)--$(EXTENSION_VERSION).sql
 

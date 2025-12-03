@@ -180,7 +180,12 @@ ORDER BY 1;
  1.6: column tablespace_location check
  1.6: create the latest check
  1.6: only alter check
-(39 rows)
+ 1.7: alter and create_tables check
+ 1.7: alter, create_tables and collect_table_stats check
+ 1.7: column tablespace_location check
+ 1.7: create the latest check
+ 1.7: only alter check
+(44 rows)
 
 -- Cleanup
 DROP FUNCTION do_upgrade_test_for_arenadata_toolkit(TEXT);
