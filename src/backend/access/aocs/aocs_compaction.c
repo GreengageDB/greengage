@@ -118,7 +118,6 @@ AOCSSegmentFileTruncateToEOF(Relation aorel,
 	{
 		int64		segeof = 0;
 		char		filenamepath[MAXPGPATH];
-
 		File		fd;
 		int32		fileSegNo;
 
