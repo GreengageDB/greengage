@@ -53,15 +53,11 @@ void
 AOCSCompaction_DropSegmentFile(Relation aorel,
 							   int segno)
 {
+	int			col;
+
 	Assert(RelationIsAoCols(aorel));
 
-	/*
-	 * We try to truncate all segment files beyond
-	 * RelationGetNumberOfAttributes(), as we may have non-empty segment files
-	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
-	 * ao_foreach_extent_file().
-	 */
-	for (int col = 0; ; col++)
+	for (col = 0; col < RelationGetNumberOfAttributes(aorel); col++)
 	{
 		char		filenamepath[MAXPGPATH];
 		int			pseudoSegNo;
@@ -88,8 +84,6 @@ AOCSCompaction_DropSegmentFile(Relation aorel,
 			 * for example, if a column is added with ALTER TABLE ADD COLUMN.
 			 */
 			elog(DEBUG1, "could not truncate segfile %s, because it does not exist", filenamepath);
-			if (col >= RelationGetNumberOfAttributes(aorel))
-				break;
 		}
 	}
 }
@@ -114,16 +108,25 @@ AOCSSegmentFileTruncateToEOF(Relation aorel,
 
 	segno = fsinfo->segno;
 
-	for (j = 0; j < fsinfo->vpinfo.nEntry; ++j)
+	/*
+	 * We try to truncate all segment files beyond
+	 * `vpinfo.nEntry`, as we may have non-empty segment files
+	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
+	 * ao_foreach_extent_file().
+	 */
+	for (j = 0; ; ++j)
 	{
-		int64		segeof;
+		int64		segeof = 0;
 		char		filenamepath[MAXPGPATH];
-		AOCSVPInfoEntry *entry;
+
 		File		fd;
 		int32		fileSegNo;
 
-		entry = getAOCSVPEntry(fsinfo, j);
-		segeof = entry->eof;
+		if (j < fsinfo->vpinfo.nEntry)
+		{
+			AOCSVPInfoEntry *entry = getAOCSVPEntry(fsinfo, j);
+			segeof = entry->eof;
+		}
 
 		/* Open and truncate the relation segfile to its eof */
 		MakeAOSegmentFileName(aorel, segno, j, &fileSegNo, filenamepath);
@@ -168,6 +171,9 @@ AOCSSegmentFileTruncateToEOF(Relation aorel,
 				   segno,
 				   fileSegNo,
 				   segeof);
+
+			if (j >= fsinfo->vpinfo.nEntry)
+				break;
 		}
 	}
 }
@@ -634,25 +640,9 @@ AOCSCompact(Relation aorel,
 				 aorel->rd_node.relNode,
 				 segno);
 
-		/*
-		 * In cases, when we ADD COLUMN in a transaction, that is later rolled
-		 * back, we may end up with a non-empty segment file, about which
-		 * the system is not aware, as it is not reflected in the vpinfo.
-		 * We clean up such files in AOCSCompaction_DropSegmentFile(). But,
-		 * if the table didn't have data by that time, and we do first insert
-		 * in the transaction, the `total_tupcount` will be 0 and
-		 * AppendOnlyCompaction_ShouldCompact will return false and we will not
-		 * perform compaction, and will not reach
-		 * AOCSCompaction_DropSegmentFile(). Force compaction in this case.
-		 */
-		bool force_compaction = gp_appendonly_compaction &&
-			(fsinfo->total_tupcount == 0) &&
-			(fsinfo->modcount == 0);
-
 		if (AppendOnlyCompaction_ShouldCompact(aorel,
 											   fsinfo->segno, fsinfo->total_tupcount, isFull,
-											   appendOnlyMetaDataSnapshot) ||
-			force_compaction)
+											   appendOnlyMetaDataSnapshot))
 		{
 			AOCSSegmentFileFullCompaction(aorel, insertDesc, fsinfo,
 										  appendOnlyMetaDataSnapshot);
