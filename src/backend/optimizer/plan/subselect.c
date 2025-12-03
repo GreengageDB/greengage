@@ -841,8 +841,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	 * one. We need this check, because otherwise undirect correlated plans
 	 * would be executed as initplans on segments (even with master-only table)
 	 */
-	if (splan->parParam == NIL && subLinkType == EXISTS_SUBLINK && Gp_role == GP_ROLE_DISPATCH 
-		&& !root->is_correlated_subplan)
+	if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == EXISTS_SUBLINK
+		&& Gp_role == GP_ROLE_DISPATCH)
 	{
 		Param	   *prm;
 
@@ -852,8 +852,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && Gp_role == GP_ROLE_DISPATCH 
-			&& !root->is_correlated_subplan)
+	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == EXPR_SUBLINK &&
+			Gp_role == GP_ROLE_DISPATCH )
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Param	   *prm;
@@ -868,8 +868,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == ARRAY_SUBLINK && Gp_role == GP_ROLE_DISPATCH
-			&& !root->is_correlated_subplan)
+	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == ARRAY_SUBLINK
+			&& Gp_role == GP_ROLE_DISPATCH)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Oid			arraytype;
@@ -889,8 +889,8 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && subLinkType == ROWCOMPARE_SUBLINK && Gp_role == GP_ROLE_DISPATCH
-			&& !root->is_correlated_subplan)
+	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == ROWCOMPARE_SUBLINK
+			&& Gp_role == GP_ROLE_DISPATCH)
 	{
 		/* Adjust the Params */
 		List	   *params;
