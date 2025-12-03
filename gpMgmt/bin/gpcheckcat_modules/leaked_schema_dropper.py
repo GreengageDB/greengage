@@ -8,6 +8,9 @@ class LeakedSchemaDropper:
     # The simpler form of this query that pushed the union into the
     # inner select does not run correctly on 3.2.x
     # Also note autovacuum lancher and worker will not generate temp namespace
+    # Additionally, we should take into account orphaned schemas, whose session_id may
+    # conflict with coordinator bgworkers, which shouldn't create orphaned schemas.
+    # Also try to avoid connection id collision with truly orphaned schema id.
     leaked_schema_query = """
         SELECT distinct nspname as schema
         FROM (
@@ -20,6 +23,8 @@ class LeakedSchemaDropper:
           WHERE  nspname ~ '^pg_toast_temp_[0-9]+'
         ) n LEFT OUTER JOIN pg_stat_activity x using (sess_id)
         WHERE x.sess_id is null OR x.backend_type like 'autovacuum%'
+        OR x.datname is null OR x.datname <> current_database()
+        OR x.pid=pg_backend_pid()
         UNION
         SELECT nspname as schema
         FROM (
@@ -32,6 +37,8 @@ class LeakedSchemaDropper:
           WHERE  nspname ~ '^pg_toast_temp_[0-9]+'
         ) n LEFT OUTER JOIN pg_stat_activity x using (sess_id)
         WHERE x.sess_id is null OR x.backend_type like 'autovacuum%'
+        OR x.datname is null OR x.datname <> current_database()
+        OR x.pid=pg_backend_pid()
     """
 
     def __get_leaked_schemas(self, db_connection):

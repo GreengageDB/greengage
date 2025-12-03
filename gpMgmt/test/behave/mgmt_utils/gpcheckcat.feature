@@ -14,9 +14,9 @@ Feature: gpcheckcat tests
         And gpcheckcat should not print "Execution error:" to stdout
         And the user runs "dropdb all_good"
 
-    Scenario: gpcheckcat should drop leaked schemas
+    Scenario Outline: gpcheckcat should drop leaked schemas
         Given database "leak_db" is dropped and recreated
-        And the user runs the command "psql leak_db -f 'test/behave/mgmt_utils/steps/data/gpcheckcat/create_temp_schema_leak.sql'" in the background without sleep
+        And the user runs the command "<command>" in the background without sleep
         And waiting "1" seconds
         Then read pid from file "test/behave/mgmt_utils/steps/data/gpcheckcat/pid_leak" and kill the process
         And the temporary file "test/behave/mgmt_utils/steps/data/gpcheckcat/pid_leak" is removed
@@ -35,6 +35,10 @@ Feature: gpcheckcat tests
         And psql should print "(0 rows)" to stdout
         And verify that the schema "good_schema" exists in "leak_db"
         And the user runs "dropdb leak_db"
+    Examples:
+        | command                                                                                        |
+        | psql leak_db -f 'test/behave/mgmt_utils/steps/data/gpcheckcat/create_temp_schema_leak.sql'     |
+        | psql leak_db -f 'test/behave/mgmt_utils/steps/data/gpcheckcat/create_temp_schema_conflict.sql' |
 
     Scenario: gpcheckcat should report unique index violations
         Given database "unique_index_db" is dropped and recreated
