@@ -178,6 +178,8 @@ typedef struct
 	 */
 	bool aborting;
 
+	/* True if the file was created and should be deleted on abort */
+	bool created;
 	pg_atomic_uint32	ready;	/* is the input fully materialized and ready to be read? */
 
 	/*
@@ -667,7 +669,8 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 				 * after us.
 				 */
 				Assert(strlen(state->shared_filename) < NAMEDATALEN);
-				BufFileDeleteShared(state->fileset, state->shared_filename);
+				if (sstate->created)
+					BufFileDeleteShared(state->fileset, state->shared_filename);
 				if (hash_search(shared_tuplestores,
 								state->shared_filename,
 								HASH_REMOVE, NULL) == NULL)
@@ -1900,6 +1903,7 @@ get_shared_state(SharedFileSet *fileset, const char *filename)
 		sstate->num_current = 0;
 		sstate->num_done = 0;
 		sstate->aborting = 0;
+		sstate->created = 0;
 		/*
 		 * We might not know the total number of shares, the writer will set it.
 		 * It's okay to set it later since no process will cleanup before the
@@ -1988,6 +1992,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	{
 		state->shared_state = get_shared_state(fileset, filename);
 		state->shared_state->num_total = ntotal;
+		state->shared_state->created = true;
 	}
 	PG_CATCH();
 	{
@@ -2256,7 +2261,8 @@ AtAbort_SharedTuplestores()
 		 * Also delete the shared memory entry. We do not need to delete
 		 * files if the SharedFileSet was already cleaned up.
 		 */
-		if (sstate->sfs_creator_pid == sisc_fileset->creator_pid &&
+		if (sstate->created &&
+			sstate->sfs_creator_pid == sisc_fileset->creator_pid &&
 			sstate->sfs_number == sisc_fileset->number)
 		{
 			BufFileDeleteShared(sisc_fileset, sstate->tag);
