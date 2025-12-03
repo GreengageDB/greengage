@@ -634,9 +634,25 @@ AOCSCompact(Relation aorel,
 				 aorel->rd_node.relNode,
 				 segno);
 
+		/*
+		 * In cases, when we ADD COLUMN in a transaction, that is later rolled
+		 * back, we may end up with a non-empty segment file, about which
+		 * the system is not aware, as it is not reflected in the vpinfo.
+		 * We clean up such files in AOCSCompaction_DropSegmentFile(). But,
+		 * if the table didn't have data by that time, and we do first insert
+		 * in the transaction, the `total_tupcount` will be 0 and
+		 * AppendOnlyCompaction_ShouldCompact will return false and we will not
+		 * perform compaction, and will not reach
+		 * AOCSCompaction_DropSegmentFile(). Force compaction in this case.
+		 */
+		bool force_compaction = gp_appendonly_compaction &&
+			(fsinfo->total_tupcount == 0) &&
+			(fsinfo->modcount == 0);
+
 		if (AppendOnlyCompaction_ShouldCompact(aorel,
 											   fsinfo->segno, fsinfo->total_tupcount, isFull,
-											   appendOnlyMetaDataSnapshot))
+											   appendOnlyMetaDataSnapshot) ||
+			force_compaction)
 		{
 			AOCSSegmentFileFullCompaction(aorel, insertDesc, fsinfo,
 										  appendOnlyMetaDataSnapshot);
