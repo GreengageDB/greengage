@@ -527,3 +527,18 @@ CREATE table aoco_insert_empty_row (a integer, b text, c integer) WITH (APPENDON
 INSERT INTO aoco_insert_empty_row SELECT 1,'a',1 FROM gp_id WHERE dbid=-999;
 -- assert non-empty seg entries
 SELECT * FROM gp_toolkit.__gp_aocsseg('aoco_insert_empty_row'::regclass);
+
+-- test case: Ensure that reads don't fail after aborting an add column + insert operation and we don't project the aborted column
+CREATE TABLE aocs_addcol_abort(a int, b int) WITH (APPENDONLY=TRUE, ORIENTATION=COLUMN);
+INSERT INTO aocs_addcol_abort SELECT i,i FROM generate_series(1,10)i;
+BEGIN;
+ALTER TABLE aocs_addcol_abort ADD COLUMN c int;
+INSERT INTO aocs_addcol_abort SELECT i,i,i FROM generate_series(1,10)i;
+-- check state of aocsseg for entries of add column + insert
+SELECT * FROM gp_toolkit.__gp_aocsseg('aocs_addcol_abort') ORDER BY column_num;
+SELECT * FROM aocs_addcol_abort;
+ABORT;
+-- check state of aocsseg if entries for new column are rolled back correctly
+SELECT * FROM gp_toolkit.__gp_aocsseg('aocs_addcol_abort') ORDER BY column_num;
+SELECT * FROM aocs_addcol_abort;
+DROP TABLE aocs_addcol_abort;
