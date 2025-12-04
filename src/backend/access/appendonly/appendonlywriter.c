@@ -2117,6 +2117,7 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 {
 	int			i;
 	bool		entry_updated = false;
+	bool		transaction_aborted = false;
 
 	/*
 	 * Only look at tables that are marked in use currently
@@ -2140,6 +2141,9 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 		}
 		/* bingo! */
 
+		if (segfilestat->aborted)
+			transaction_aborted = true;
+
 		AtEOXact_AppendOnly_StateTransition(aoentry, i, segfilestat);
 		entry_updated = true;
 	}
@@ -2152,16 +2156,8 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 		ereportif(Debug_appendonly_print_segfile_choice, LOG,
 				  (errmsg("AtEOXact_AppendOnly: updated txns_using_rel, it is now %d",
 						  aoentry->txns_using_rel)));
-	}
 
-	if (test_AppendOnlyHash_eviction_vs_just_marking_not_inuse)
-	{
-		/*
-		 * If no transaction is using this entry, it can be removed if
-		 * hash-table gets full. So perform the same here if the above GUC is
-		 * set.
-		 */
-		if (!is_entry_in_use_by_other_transactions(aoentry))
+		if (transaction_aborted && !is_entry_in_use_by_other_transactions(aoentry))
 		{
 			AORelRemoveHashEntry(aoentry->key.relid);
 		}
@@ -2180,7 +2176,7 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
  * AtAbort_AppendOnly as well.
  */
 void
-AtEOXact_AppendOnly(void)
+AtEOXact_AppendOnly()
 {
 	HASH_SEQ_STATUS status;
 	AORelHashEntry aoentry = NULL;
