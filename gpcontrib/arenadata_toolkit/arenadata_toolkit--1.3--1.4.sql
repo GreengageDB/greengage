@@ -45,9 +45,9 @@ BEGIN
 			CASE
 				WHEN 'pg_default' = t.spcname THEN gpconf.datadir || '/base'
 				WHEN 'pg_global' = t.spcname THEN gpconf.datadir || '/global'
-				ELSE (SELECT tblspc_loc
-					  FROM gp_tablespace_segment_location(t.oid)
-					  WHERE gp_segment_id = dbf.segindex)
+				ELSE (SELECT pg_tablespace_location(oid)
+					  FROM gp_dist_random('pg_catalog.pg_tablespace')
+					  WHERE oid = t.oid and gp_segment_id = dbf.segindex)
 				END AS tablespace_location
 		FROM arenadata_toolkit.__db_segment_files dbf
 		LEFT JOIN pg_class c ON c.oid = dbf.reloid
