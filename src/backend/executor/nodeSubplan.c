@@ -1237,6 +1237,10 @@ PG_TRY();
 	if (subLinkType == INITPLAN_FUNC_SUBLINK && node->ts_state == NULL)
 	{
 		char rwfile_prefix[100];
+		/* Make sure the tuplestore lives long enough */
+		MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+		ResourceOwner old_resowner = CurrentResourceOwner;
+		CurrentResourceOwner = CurTransactionResourceOwner;
 
 		function_scan_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), subplan->plan_id);
 
@@ -1246,6 +1250,8 @@ PG_TRY();
 		tuplestore_make_shared(node->ts_state,
 							   get_shareinput_fileset(),
 							   rwfile_prefix);
+		MemoryContextSwitchTo(old_context);
+		CurrentResourceOwner = old_resowner;
 	}
 
 	/*
