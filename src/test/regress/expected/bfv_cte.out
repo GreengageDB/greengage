@@ -497,7 +497,6 @@ select wait_until_query_output_to_file('/tmp/bfv_cte.out');
 -- end_matchsubs
 -- Filter out irrelevant LOG messages from segments other than seg2.
 \! cat /tmp/bfv_cte.out | grep -P '^(?!LOG)|^(LOG.*seg2)' | grep -vP 'LOG.*fault|decreased xslice state refcount'
-LOG:  SISC READER (shareid=0, slice=2): initializing because squelched  (seg2 slice2 127.0.1.1:7004 pid=416192)
 LOG:  SISC (file=SIRW_269_5_0, slice=2): initialized shared state  (seg2 slice2 127.0.1.1:7004 pid=416192)
 LOG:  SISC WRITER (shareid=0, slice=4): initializing because squelched  (seg2 slice4 127.0.1.1:7004 pid=416204)
 LOG:  SISC WRITER (shareid=0, slice=4): No tuplestore yet, creating tuplestore  (seg2 slice4 127.0.1.1:7004 pid=416204)

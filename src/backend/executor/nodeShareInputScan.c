@@ -576,8 +576,6 @@ ExecSquelchShareInputScan(ShareInputScanState *node)
 			 */
 			if (!local_state->ready)
 			{
-				elog((Debug_shareinput_xslice ? LOG : DEBUG1), "SISC READER (shareid=%d, slice=%d): initializing because squelched",
-					 sisc->share_id, currentSliceId);
 				init_tuplestore_state(node, true);
 			}
 		}

@@ -517,9 +517,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- end_matchsubs
 -- Filter out irrelevant LOG messages from segments other than seg2.
 \! cat /tmp/bfv_cte.out | grep -P '^(?!LOG)|^(LOG.*seg2)' | grep -vP 'LOG.*fault|decreased xslice state refcount'
-LOG:  SISC READER (shareid=0, slice=4): initializing because squelched  (seg2 slice4 127.0.1.1:7004 pid=502227)
 LOG:  SISC (file=SIRW_1048_5_0, slice=4): initialized shared state  (seg2 slice4 127.0.1.1:7004 pid=502227)
-LOG:  SISC READER (shareid=0, slice=2): initializing because squelched  (seg2 slice2 127.0.1.1:7004 pid=502215)
 LOG:  SISC WRITER (shareid=0, slice=1): No tuplestore yet, creating tuplestore  (seg2 slice1 127.0.1.1:7004 pid=502209)
 LOG:  SISC WRITER (file=SIRW_1048_5_0, slice=1): wrote notify_ready  (seg2 slice1 127.0.1.1:7004 pid=502209)
 LOG:  SISC (file=SIRW_1048_5_0, slice=1): file deleted  (seg2 slice1 127.0.1.1:7004 pid=502209)
