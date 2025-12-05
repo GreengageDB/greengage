@@ -238,8 +238,6 @@ init_tuplestore_state(ShareInputScanState *node, bool skip_waiting)
 
 			Assert(sisc->cross_slice);
 
-			estate->sharedScanConsumers = lappend(estate->sharedScanConsumers, node);
-
 			shareinput_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), sisc->share_id);
 			ts = tuplestore_open_shared_extended(get_shareinput_fileset(), rwfile_prefix, skip_waiting);
 
