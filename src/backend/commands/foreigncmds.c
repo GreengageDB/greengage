@@ -1704,6 +1704,15 @@ CreateForeignTable(CreateForeignTableStmt *stmt, Oid relid, bool skip_permission
 	recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 
 	table_close(ftrel, RowExclusiveLock);
+
+	/*
+	 * DefineRelation loaded the new relation into relcache, but the relcache
+	 * contains the distribution policy, which in turn depends on the contents
+	 * of pg_foreign_table (see GpPolicyFetch()).
+	 * Now that we have created the pg_foreign_table entry, invalidate the
+	 * relcache, so that it gets loaded with the correct information.
+	 */
+	CacheInvalidateRelcacheByRelid(relid);
 }
 
 /*
