@@ -1462,6 +1462,21 @@ explain (costs false) update t1 set b = b + 1 where b in (select a from gp_coord
  Optimizer: Pivotal Optimizer (GPORCA)
 (23 rows)
 
+-- Validate foreign table created in the same transaction
+begin;
+CREATE FOREIGN TABLE gp_all_transaction (
+	a int,
+	b int
+) SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 't1', mpp_execute 'all segments');
+explain select * from gp_all_transaction;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=8)
+   ->  Foreign Scan on gp_all_transaction  (cost=0.00..431.00 rows=1 width=8)
+ Optimizer: GPORCA
+(3 rows)
+
+commit;
 ---
 --- Test for #16376 of multi-level partition table with foreign table
 ---
