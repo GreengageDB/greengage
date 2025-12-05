@@ -15,6 +15,7 @@
 
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/reloptions.h"
 #include "catalog/partition.h"
 #include "catalog/pg_collation.h"
 #include "catalog/gp_partition_template.h"
@@ -1777,7 +1778,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 	 * merged result will be column i having zlib and column j having
 	 * rle_type.
 	 */
-	penc_cls = merge_partition_encoding(pstate, penc_cls, parent_tblenc);
+	// penc_cls = merge_partition_encoding(pstate, penc_cls, parent_tblenc);
 
 	hasImplicitRangeBounds = false;
 	foreach(lc, gpPartSpec->partDefElems)
@@ -1786,6 +1787,8 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 		GpPartDefElem	*elem;
 		List			*new_parts;
 		PartitionSpec	*tmpSubPartSpec = NULL;
+		List	   *with_cls = NIL;
+		List       *final_cls = NIL;
 
 		Assert(IsA(n, GpPartDefElem));
 		/* Avoid scribbling on input */
@@ -1820,6 +1823,28 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 						errmsg("subpartition specification provided but table doesn't have SUBPARTITION BY clause"),
 						parser_errposition(pstate, ((GpPartitionDefinition*)elem->subSpec)->location)));
 
+		if (elem->options != NIL) 
+		{
+			List	   *tmpenc = NIL;
+			ColumnReferenceStorageDirective *deflt = NULL;
+			if ((tmpenc = form_default_storage_directive(elem->options)) != NIL)
+			{
+				TupleDesc tupdesc = parentrel->rd_att;
+				int natts = tupdesc->natts;
+				for (int i = 0; i < natts; i++)
+				{
+					Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+					deflt = makeNode(ColumnReferenceStorageDirective);
+					deflt->column = pstrdup(NameStr(att->attname));
+					deflt->encoding = transformStorageEncodingClause(tmpenc, false);
+					with_cls = lappend(with_cls, deflt);
+				}
+			}
+		}
+		final_cls = merge_partition_encoding(pstate, with_cls, parent_tblenc);
+		final_cls = merge_partition_encoding(pstate, penc_cls, final_cls);
+
+
 		/* if WITH has "tablename" then it will be used as name for partition */
 		partcomp.tablename = extract_tablename_from_options(&elem->options);
 
@@ -1834,7 +1859,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 			elem->options = parentoptions ? copyObject(parentoptions) : NIL;
 
 		if (elem->accessMethod && strcmp(elem->accessMethod, "ao_column") == 0)
-			elem->colencs = merge_partition_encoding(pstate, elem->colencs, penc_cls);
+			elem->colencs = merge_partition_encoding(pstate, elem->colencs, final_cls);
 
 		if (elem->isDefault)
 			new_parts = generateDefaultPartition(pstate, parentrel, elem,
