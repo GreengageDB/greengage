@@ -661,7 +661,7 @@ tuplestore_cleanup(Tuplestorestate *state, bool should_abort)
 			 * and set the flag for us. It's this backend's job to delete
 			 * the files now.
 			 */
-			if (sstate->aborting || sstate->num_done >= sstate->num_total) /* should delete */
+			if (sstate->aborting || sstate->num_done == sstate->num_total) /* should delete */
 			{
 				/*
 				 * We can now safely delete the files, since we were the
@@ -1902,8 +1902,8 @@ get_shared_state(SharedFileSet *fileset, const char *filename)
 		sstate->session_id = gp_session_id;
 		sstate->num_current = 0;
 		sstate->num_done = 0;
-		sstate->aborting = 0;
-		sstate->created = 0;
+		sstate->aborting = false;
+		sstate->created = false;
 		/*
 		 * We might not know the total number of shares, the writer will set it.
 		 * It's okay to set it later since no process will cleanup before the
