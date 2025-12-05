@@ -1997,6 +1997,7 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	PG_CATCH();
 	{
 		BufFileDeleteShared(fileset, filename);
+		LWLockRelease(ShareInputScanLock);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
