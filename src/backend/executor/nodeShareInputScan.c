@@ -35,14 +35,6 @@
  * the whole tuplestore, and advertises that it's ready in shared memory.
  * Consumer slices wait for that before trying to read the store.
  *
- * The producer and the consumers communicate the status of the scan using
- * shared memory. There's a hash table in shared memory, containing a
- * 'shareinput_Xslice_state' struct for each shared scan. The producer uses
- * a condition variable to wake up consumers, when the tuplestore is fully
- * materialized, and the consumers use the same condition variable to inform
- * the producer when they're done reading it. The producer slice keeps the
- * underlying tuplestore open, until all the consumers have finished.
- *
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
@@ -84,7 +76,7 @@
  * reaches zero, but we don't rely on that mechanism. All the files are
  * held in the same SharedFileSet, so it cannot be recycled until all
  * ShareInputScans in the system have finished, which might never happen if
- * new queries are started continuously. The shareinput_Xslice_state entries
+ * new queries are started continuously. The shared tuplestore entries
  * are reference counted separately, and we clean up the files backing each
  * individual ShareInputScan whenever its reference count reaches zero.
  */

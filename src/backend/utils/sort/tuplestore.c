@@ -60,9 +60,13 @@
  * as many times as you want, in different processes, until it is destroyed
  * by the original writer process by calling tuplestore_end().
  *
- * Note that tuplestore doesn't do any synchronization across processes!
- * It is up to the calling code to do the freezing, opening for reading, and
- * destroying the tuplestore in the right order!
+ * The writer and the readers communicate the status of the tuplestore using
+ * shared memory. There's a hash table in shared memory, containing a
+ * 'TuplestoreSharingState' struct for each shared tuplestpre. The writer uses
+ * a condition variable to wake up readers, when the tuplestore is fully
+ * materialized. The tuplestore is deleted once all readers are done using it,
+ * as determined with a reference count, or if one of the processes aborts the
+ * transaction.
  *
  * Portions Copyright (c) 2007-2010, Greenplum Inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
