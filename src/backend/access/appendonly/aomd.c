@@ -655,7 +655,6 @@ ao_rel_get_physical_size(Relation aorel)
 		{
 			Datum		d;
 			AOCSVPInfo *vpinfo;
-			int			col;
 
 			Assert(RelationStorageIsAoCols(aorel));
 
@@ -667,10 +666,31 @@ ao_rel_get_physical_size(Relation aorel)
 							pg_aoseg_dsc, &isNull);
 			vpinfo = (AOCSVPInfo *) PG_DETOAST_DATUM(d);
 
-			for (col = 0; col < vpinfo->nEntry; ++col)
+			for (int i = 1;; ++i)
 			{
-				FileNumber filenum = GetFilenumForAttribute(RelationGetRelid(aorel), col + 1);
-				total_physical_size += ao_segfile_get_physical_size(aorel, segno, filenum);
+				bool		found = false;
+
+				for (int j = 0; j < 2; j++)
+				{
+					/*
+					 * Filenum for the column.
+					 * We cannot directly use GetFilenumForAttribute() here
+					 * since it accesses pg_attribute_encoding table, which
+					 * might not have entries for some of the files, for
+					 * example if a column was added and then rolled back.
+					 * Instead we have to iterate through filenums directly.
+					 * Note the nested loop to ensure we iterate in order
+					 * 1, 1601, 2, 1602, 3, 1603 etc.
+					 */
+					FileNumber	filenum = i + MaxHeapAttributeNumber * j;
+					uint64		size = ao_segfile_get_physical_size(aorel, segno, filenum);
+
+					total_physical_size += size;
+					if (size > 0)
+						found = true;
+				}
+				if (!found && i > vpinfo->nEntry)
+					break;
 			}
 
 			if (DatumGetPointer(d) != (Pointer) vpinfo)
