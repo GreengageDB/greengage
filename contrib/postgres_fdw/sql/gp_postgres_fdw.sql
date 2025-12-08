@@ -345,7 +345,7 @@ CREATE FOREIGN TABLE gp_all_transaction (
 	b int
 ) SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 't1', mpp_execute 'all segments');
 
-explain select * from gp_all_transaction;
+explain (verbose, costs off) select * from gp_all_transaction;
 
 commit;
 

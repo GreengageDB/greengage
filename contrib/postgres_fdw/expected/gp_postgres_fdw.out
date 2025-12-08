@@ -1429,13 +1429,17 @@ CREATE FOREIGN TABLE gp_all_transaction (
 	a int,
 	b int
 ) SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 't1', mpp_execute 'all segments');
-explain select * from gp_all_transaction;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=100.00..6227.00 rows=258300 width=8)
-   ->  Foreign Scan on gp_all_transaction  (cost=100.00..2783.00 rows=86100 width=8)
+explain (verbose, costs off) select * from gp_all_transaction;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: a, b
+   ->  Foreign Scan on postgres_fdw_gp.gp_all_transaction
+         Output: a, b
+         Remote SQL: SELECT a, b FROM postgres_fdw_gp.t1
  Optimizer: Postgres-based planner
-(3 rows)
+ Settings: optimizer = 'off'
+(7 rows)
 
 commit;
 ---
