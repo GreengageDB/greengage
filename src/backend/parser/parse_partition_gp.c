@@ -1834,9 +1834,14 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 				for (int i = 0; i < natts; i++)
 				{
 					Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+
+					if (att->attisdropped)
+						continue;
+
 					deflt = makeNode(ColumnReferenceStorageDirective);
 					deflt->column = pstrdup(NameStr(att->attname));
 					deflt->encoding = transformStorageEncodingClause(tmpenc, false);
+
 					with_cls = lappend(with_cls, deflt);
 				}
 			}
