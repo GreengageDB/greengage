@@ -1315,6 +1315,17 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 	}
 	PG_END_TRY();
 
+	/*
+	 * GPDB specific
+	 * Clean the special resources created by INITPLAN.
+	 * The resources have long life cycle and are used by the main plan.
+	 * It's too early to clean them in preprocess_initplans.
+	 */
+	if (list_length(queryDesc->plannedstmt->paramExecTypes) > 0)
+	{
+		postprocess_initplans(queryDesc);
+	}
+
     /*
      * If normal termination, let each operator clean itself up.
      * Otherwise don't risk it... an error might have left some
