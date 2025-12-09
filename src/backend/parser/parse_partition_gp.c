@@ -1764,22 +1764,6 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 		penc_cls = lappend(penc_cls, lfirst(lc));
 	}
 
-	/*
-	 * Merge encoding specified for parent table level and partition
-	 * configuration level. (Each partition element level encoding will be
-	 * merged later to this). For example:
-	 *
-	 * create table example (i int, j int, DEFAULT COLUMN ENCODING (compresstype=zlib))
-	 * with (appendonly = true, orientation=column) distributed by (i)
-	 * partition by range(j)
-	 * (partition p1 start(1) end(10), partition p2 start(10) end (20),
-	 *  COLUMN j ENCODING (compresstype=rle_type));
-	 *
-	 * merged result will be column i having zlib and column j having
-	 * rle_type.
-	 */
-	// penc_cls = merge_partition_encoding(pstate, penc_cls, parent_tblenc);
-
 	hasImplicitRangeBounds = false;
 	foreach(lc, gpPartSpec->partDefElems)
 	{
@@ -1789,6 +1773,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 		PartitionSpec	*tmpSubPartSpec = NULL;
 		List	   *with_cls = NIL;
 		List       *final_cls = NIL;
+		List 	   *penc_cls_tmp = list_copy(penc_cls);
 
 		Assert(IsA(n, GpPartDefElem));
 		/* Avoid scribbling on input */
@@ -1822,13 +1807,23 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("subpartition specification provided but table doesn't have SUBPARTITION BY clause"),
 						parser_errposition(pstate, ((GpPartitionDefinition*)elem->subSpec)->location)));
-
+		
+		/*
+		 * If options on current partition is not null, then we need to 
+		 * account them too, when we choose storage options for columns.
+		 * We must do it here, because if not, then parental options in
+		 * transformColumnEncoding() will dominate over this WITH options.
+		 */
 		if (elem->options != NIL) 
 		{
 			List	   *tmpenc = NIL;
-			ColumnReferenceStorageDirective *deflt = NULL;
+			/* 
+			 * We need to analyze only storage options, so if there is none of
+			 * them, then we can skip this step.
+			 */
 			if ((tmpenc = form_default_storage_directive(elem->options)) != NIL)
 			{
+				ColumnReferenceStorageDirective *deflt = NULL;
 				TupleDesc tupdesc = parentrel->rd_att;
 				int natts = tupdesc->natts;
 				for (int i = 0; i < natts; i++)
@@ -1846,8 +1841,14 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 				}
 			}
 		}
+		
+		/*
+		 * Merge encodings specified for parent table level and partition
+		 * configuration level. (Each partition element level encoding will be
+		 * merged later to this). 
+		 */
 		final_cls = merge_partition_encoding(pstate, with_cls, parent_tblenc);
-		final_cls = merge_partition_encoding(pstate, penc_cls, final_cls);
+		final_cls = merge_partition_encoding(pstate, penc_cls_tmp, final_cls);
 
 
 		/* if WITH has "tablename" then it will be used as name for partition */
