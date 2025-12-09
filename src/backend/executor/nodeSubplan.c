@@ -1234,7 +1234,8 @@ PG_TRY();
 	 * closing file. This is due to the tuplestore reader is outside
 	 * initplan, and reader will delete the file when it finished.
 	 */
-	if (subLinkType == INITPLAN_FUNC_SUBLINK && node->ts_state == NULL)
+	Assert(node->ts_state == NULL);
+	if (subLinkType == INITPLAN_FUNC_SUBLINK)
 	{
 		char rwfile_prefix[100];
 		/* Make sure the tuplestore lives long enough */
