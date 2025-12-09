@@ -2279,19 +2279,23 @@ ExecDropStmt(DropStmt *stmt, bool isTopLevel)
 		case OBJECT_VIEW:
 		case OBJECT_MATVIEW:
 		case OBJECT_FOREIGN_TABLE:
-			RemoveRelations(stmt);
+			RemoveRelations(copyStmt);
 			break;
 		default:
-			RemoveObjects(stmt);
+			RemoveObjects(copyStmt);
 			break;
 	}
+
+	SIMPLE_FAULT_INJECTOR("wait_before_drop_dispatch");
 
 	/*
 	 * Dispatch the original, unmodified statement.
 	 *
 	 * Event triggers are not stored in QE nodes, so skip those.
 	 */
-	if (Gp_role == GP_ROLE_DISPATCH && shouldDispatchForObject(stmt->removeType))
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		shouldDispatchForObject(stmt->removeType) &&
+		list_length(copyStmt->objects) > 0)
 	{
 		int			flags;
 
