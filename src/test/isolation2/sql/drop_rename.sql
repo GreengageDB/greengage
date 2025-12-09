@@ -54,3 +54,40 @@
 3<:
 2<:
 2:select count(*) from t3;
+
+-- Ensure DROP doesn't make inconsistency
+-- start_ignore
+drop table if exists t4;
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+1&:drop table if exists t4;
+create table t4 (a int, b text) distributed by (a);
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+1<:
+table t4;
+drop table t4;
+
+-- start_ignore
+drop type if exists t5;
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+1&:drop type if exists t5;
+create type t5 as (a int, b text);
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+1<:
+select null::t5 from gp_dist_random('gp_id');
+drop type t5;
+
+-- start_ignore
+drop schema if exists t6;
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+1&:drop schema if exists t6;
+create schema t6;
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+1<:
+create table t6.t7 (a int, b text) distributed by (a);
+drop schema t6 cascade;

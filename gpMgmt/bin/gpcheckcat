@@ -324,6 +324,7 @@ def connect(user=None, password=None, host=None, port=None,
     '''Connect to DB using parameters in GV'''
     # unset search path due to CVE-2018-1058
     options = '-c search_path='
+    options += ' -c gp_dispatch_drop_always=on'
     if utilityMode:
         options += ' -c gp_role=utility'
     for val in GV.opt['-x']:

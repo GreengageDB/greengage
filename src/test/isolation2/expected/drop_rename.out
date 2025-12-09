@@ -110,3 +110,98 @@ DROP TABLE
 ERROR:  relation "t3" does not exist
 LINE 1: select count(*) from t3;
                              ^
+
+-- Ensure DROP doesn't make inconsistency
+-- start_ignore
+drop table if exists t4;
+DROP TABLE
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&:drop table if exists t4;  <waiting ...>
+create table t4 (a int, b text) distributed by (a);
+CREATE TABLE
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+DROP TABLE
+table t4;
+ a | b 
+---+---
+(0 rows)
+drop table t4;
+DROP TABLE
+
+-- start_ignore
+drop type if exists t5;
+DROP TYPE
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&:drop type if exists t5;  <waiting ...>
+create type t5 as (a int, b text);
+CREATE TYPE
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+DROP TYPE
+select null::t5 from gp_dist_random('gp_id');
+ t5 
+----
+    
+    
+    
+(3 rows)
+drop type t5;
+DROP TYPE
+
+-- start_ignore
+drop schema if exists t6;
+DROP SCHEMA
+-- end_ignore
+select gp_inject_fault('wait_before_drop_dispatch', 'suspend', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&:drop schema if exists t6;  <waiting ...>
+create schema t6;
+CREATE SCHEMA
+select gp_wait_until_triggered_fault('wait_before_drop_dispatch', 1, 1);
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+select gp_inject_fault('wait_before_drop_dispatch', 'reset', 1);
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1<:  <... completed>
+DROP SCHEMA
+create table t6.t7 (a int, b text) distributed by (a);
+CREATE TABLE
+drop schema t6 cascade;
+DROP SCHEMA

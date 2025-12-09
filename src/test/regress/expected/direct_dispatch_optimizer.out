@@ -647,7 +647,6 @@ INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL cont
 -- the tests will fail.
 drop table if exists bar_randDistr;
 NOTICE:  table "bar_randdistr" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 create table bar_randDistr(col1 int, col2 int) distributed randomly;
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
@@ -1094,7 +1093,6 @@ INFO:  (slice 1) Dispatch command to PARTIAL contents: 0 1
 --test direct dispatch if distribution column is of varchar type
 drop table if exists t1_varchar;
 NOTICE:  table "t1_varchar" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 create table t1_varchar(col1_varchar varchar, col2_int int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1_varchar' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -1327,7 +1325,6 @@ INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 --No direct dispatch case, scenario: cast exists but not binary coercible
 drop table if exists t3;
 NOTICE:  table "t3" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 create table t3 (c1 timestamp without time zone);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -1361,10 +1358,8 @@ INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL cont
 --check direct dispatch working based on the distribution policy of relation
 drop extension if exists citext cascade;
 NOTICE:  extension "citext" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 drop table if exists srt_dd;
 NOTICE:  table "srt_dd" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 CREATE EXTENSION citext;
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
@@ -1420,7 +1415,6 @@ INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 drop table if exists srt_dd;
 NOTICE:  table "srt_dd" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 -- test direct dispatch via SQLValueFunction and FuncExpr for single row insertion.
 create table t_sql_value_function1 (a int, b date);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
