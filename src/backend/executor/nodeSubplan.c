@@ -1346,6 +1346,13 @@ PG_TRY();
 	if (subLinkType == INITPLAN_FUNC_SUBLINK && node->ts_state)
 	{
 		tuplestore_freeze(node->ts_state);
+		/*
+		 * Close the local tuplestore. This should not actually delete the
+		 * files because of the internal shared reference count, they will
+		 * only be deleted once the reader is done.
+		 */
+		tuplestore_end(node->ts_state);
+		node->ts_state = NULL;
 	}
 
 	if (!found)
