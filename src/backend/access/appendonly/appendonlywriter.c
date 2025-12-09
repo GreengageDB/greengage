@@ -2176,7 +2176,7 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
  * AtAbort_AppendOnly as well.
  */
 void
-AtEOXact_AppendOnly()
+AtEOXact_AppendOnly(void)
 {
 	HASH_SEQ_STATUS status;
 	AORelHashEntry aoentry = NULL;
