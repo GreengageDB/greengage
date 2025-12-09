@@ -569,4 +569,5 @@ SELECT reloptions FROM pg_class WHERE relname = 'part_table_1_sss_2_prt_sp1';
 
 --start_ignore
 DROP TABLE part_table;
+DROP TABLE part_table2;
 --end_ignore
