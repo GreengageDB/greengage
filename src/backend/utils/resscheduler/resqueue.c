@@ -1090,7 +1090,7 @@ ResWaitOnLock(LOCALLOCK *locallock, ResourceOwner owner, ResPortalIncrement *inc
 		len = Min(len, sizeof(new_status) - 9);
 		snprintf(new_status, sizeof(new_status), "%.*s queuing",
 				 len, old_status);
-		set_ps_display(new_status, false);
+		set_ps_display(new_status);
 
 		/* Truncate off " queuing" */
 		new_status[len] = '\0';
@@ -1118,7 +1118,7 @@ ResWaitOnLock(LOCALLOCK *locallock, ResourceOwner owner, ResPortalIncrement *inc
 	/* Report change to non-waiting status */
 	if (update_process_title)
 	{
-		set_ps_display(new_status, false);
+		set_ps_display(new_status);
 	}
 
 	return;

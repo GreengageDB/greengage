@@ -633,14 +633,14 @@ DtxRecoveryMain(Datum main_arg)
 	 */
 	if (!*shmDtmStarted)
 	{
-		set_ps_display("recovering", false);
+		set_ps_display("recovering");
 
 		StartTransactionCommand();
 		recoverTM();
 		CommitTransactionCommand();
 		DisconnectAndDestroyAllGangs(true);
 
-		set_ps_display("", false);
+		set_ps_display("");
 	}
 
 	/* Fetch the gxid batch in advance. */

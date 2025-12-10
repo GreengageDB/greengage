@@ -159,7 +159,7 @@ MakeRefreshClause(bool concurrent, bool skipData, RangeVar *relation)
  */
 ObjectAddress
 ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
-				   ParamListInfo params, char *completionTag)
+				   ParamListInfo params, QueryCompletion *qc)
 {
 	Oid			matviewOid;
 	Relation	matviewRel;

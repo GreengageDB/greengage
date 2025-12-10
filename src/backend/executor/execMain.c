@@ -1585,7 +1585,7 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 		if (plannedstmt->intoClause->rel->relpersistence == RELPERSISTENCE_TEMP)
 			ExecutorMarkTransactionDoesWrites();
 		else
-			PreventCommandIfReadOnly(CreateCommandTag((Node *) plannedstmt));
+			PreventCommandIfReadOnly(CreateCommandName((Node *) plannedstmt));
 	}
 
 	/*
@@ -1593,7 +1593,7 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 	 */
 	if (plannedstmt->refreshClause != NULL)
 	{
-		PreventCommandIfReadOnly(CreateCommandTag((Node *) plannedstmt));
+		PreventCommandIfReadOnly(CreateCommandName((Node *) plannedstmt));
 	}
 
     rti = 0;
@@ -1648,11 +1648,11 @@ ExecCheckXactReadOnly(PlannedStmt *plannedstmt)
 				continue;
         }
 
-		PreventCommandIfReadOnly(CreateCommandTag((Node *) plannedstmt));
+		PreventCommandIfReadOnly(CreateCommandName((Node *) plannedstmt));
 	}
 
 	if (plannedstmt->commandType != CMD_SELECT || plannedstmt->hasModifyingCTE)
-		PreventCommandIfParallelMode(CreateCommandTag((Node *) plannedstmt));
+		PreventCommandIfParallelMode(CreateCommandName((Node *) plannedstmt));
 }
 
 

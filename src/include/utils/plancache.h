@@ -19,6 +19,7 @@
 #include "lib/ilist.h"
 #include "nodes/params.h"
 #include "nodes/primnodes.h"
+#include "tcop/cmdtag.h"
 #include "utils/queryenvironment.h"
 
 /* Forward declaration, to avoid including parsenodes.h here */
@@ -96,7 +97,7 @@ typedef struct CachedPlanSource
 	int			magic;			/* should equal CACHEDPLANSOURCE_MAGIC */
 	struct RawStmt *raw_parse_tree; /* output of raw_parser(), or NULL */
 	const char *query_string;	/* source text of query */
-	const char *commandTag;		/* command tag (a constant!), or NULL */
+	CommandTag	commandTag;		/* 'nuff said */
 	NodeTag		sourceTag;		/* GPDB: Original statement NodeTag */
 	Oid		   *param_types;	/* array of parameter type OIDs, or NULL */
 	int			num_params;		/* length of param_types array */
@@ -188,10 +189,10 @@ extern void ResetPlanCache(void);
 
 extern CachedPlanSource *CreateCachedPlan(struct RawStmt *raw_parse_tree,
 										  const char *query_string,
-										  const char *commandTag);
+										  CommandTag commandTag);
 extern CachedPlanSource *CreateOneShotCachedPlan(struct RawStmt *raw_parse_tree,
 												 const char *query_string,
-												 const char *commandTag);
+												 CommandTag commandTag);
 extern void CompleteCachedPlan(CachedPlanSource *plansource,
 							   List *querytree_list,
 							   MemoryContext querytree_context,

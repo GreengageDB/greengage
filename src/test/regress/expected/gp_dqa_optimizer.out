@@ -2384,11 +2384,11 @@ DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disab
                                                  QUERY PLAN
 -------------------------------------------------------------------------------------------------------------
  Finalize Aggregate
-   Output: count(DISTINCT ((b)::text)), count(DISTINCT (a)::character varying)
+   Output: count(DISTINCT ((b)::text)), count(DISTINCT a)
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL count(DISTINCT ((b)::text))), (PARTIAL count(DISTINCT (a)::character varying))
+         Output: (PARTIAL count(DISTINCT ((b)::text))), (PARTIAL count(DISTINCT a))
          ->  Partial Aggregate
-               Output: PARTIAL count(DISTINCT ((b)::text)), PARTIAL count(DISTINCT (a)::character varying)
+               Output: PARTIAL count(DISTINCT ((b)::text)), PARTIAL count(DISTINCT a)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Output: b, a, ((b)::text), (AggExprId)
                      Hash Key: ((b)::text), a, (AggExprId)

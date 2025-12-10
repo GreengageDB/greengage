@@ -2479,8 +2479,8 @@ readNodeBinary(void)
 				return_value = _readTableValueExpr();
 				break;
 
-			case T_AlterTypeStmt:
-				return_value = _readAlterTypeStmt();
+			case T_AlterTypeStmtSetDefaultEnc:
+				return_value = _readAlterTypeStmtSetDefaultEnc();
 				break;
 			case T_AlterExtensionStmt:
 				return_value = _readAlterExtensionStmt();

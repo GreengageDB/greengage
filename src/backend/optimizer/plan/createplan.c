@@ -1787,6 +1787,7 @@ create_unique_plan(PlannerInfo *root, UniquePath *best_path, int flags)
 								 NIL,
 								 NIL,
 								 best_path->path.rows,
+								 0,
 								 subplan);
 	}
 	else
@@ -2299,6 +2300,7 @@ create_agg_plan(PlannerInfo *root, AggPath *best_path)
 					NIL,
 					NIL,
 					best_path->numGroups,
+					best_path->transitionSpace,
 					subplan);
 
 	copy_generic_path_info(&plan->plan, (Path *) best_path);
@@ -2506,6 +2508,7 @@ create_groupingsets_plan(PlannerInfo *root, GroupingSetsPath *best_path)
 										 rollup->gsets,
 										 NIL,
 										 rollup->numGroups,
+										 best_path->transitionSpace,
 										 sort_plan);
 
 			/*
@@ -2545,6 +2548,7 @@ create_groupingsets_plan(PlannerInfo *root, GroupingSetsPath *best_path)
 						rollup->gsets,
 						chain,
 						rollup->numGroups,
+						best_path->transitionSpace,
 						subplan);
 
 		/* Copy cost data from Path to Plan */
@@ -7439,8 +7443,8 @@ make_agg(List *tlist, List *qual,
 		 AggStrategy aggstrategy, AggSplit aggsplit,
 		 bool streaming,
 		 int numGroupCols, AttrNumber *grpColIdx, Oid *grpOperators, Oid *grpCollations,
-		 List *groupingSets, List *chain,
-		 double dNumGroups, Plan *lefttree)
+		 List *groupingSets, List *chain, double dNumGroups,
+		 Size transitionSpace, Plan *lefttree)
 {
 	Agg		   *node = makeNode(Agg);
 	Plan	   *plan = &node->plan;
@@ -7457,6 +7461,7 @@ make_agg(List *tlist, List *qual,
 	node->grpCollations = grpCollations;
 	node->groupingSets = groupingSets;
 	node->numGroups = numGroups;
+	node->transitionSpace = transitionSpace;
 	node->aggParams = NULL;		/* SS_finalize_plan() will fill this */
 	node->groupingSets = groupingSets;
 	node->chain = chain;

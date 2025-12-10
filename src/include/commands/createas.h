@@ -16,13 +16,14 @@
 
 #include "catalog/objectaddress.h"
 #include "nodes/params.h"
-#include "nodes/parsenodes.h"
+#include "parser/parse_node.h"
 #include "tcop/dest.h"
 #include "utils/queryenvironment.h"
 
 
 extern ObjectAddress ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
-									   ParamListInfo params, QueryEnvironment *queryEnv, char *completionTag);
+									   ParamListInfo params, QueryEnvironment *queryEnv,
+									   QueryCompletion *qc);
 
 extern int	GetIntoRelEFlags(IntoClause *intoClause);
 

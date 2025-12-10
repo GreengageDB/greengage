@@ -642,7 +642,6 @@ ExtensibleNodeEntry
 ExtensibleNodeMethods
 ExtensionControlFile
 ExtensionInfo
-ExtensionMemberId
 ExtensionVersionInfo
 FDWCollateState
 FD_SET
@@ -2860,8 +2859,6 @@ ec_member_foreign_arg
 ec_member_matches_arg
 emit_log_hook_type
 eval_const_expressions_context
-event_trigger_command_tag_check_result
-event_trigger_support_data
 exec_thread_arg
 execution_state
 explain_get_index_name_hook_type

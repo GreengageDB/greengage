@@ -10,7 +10,7 @@
 #include "../ftsmessagehandler.c"
 
 static void
-expectSendFtsResponse(const char *expectedMessageType, const FtsResponse *expectedResponse)
+expectSendFtsResponse(CommandTag expectedMessageType, const FtsResponse *expectedResponse)
 {
 	expect_value(BeginCommand, commandTag, expectedMessageType);
 	expect_value(BeginCommand, dest, DestRemote);
@@ -58,8 +58,9 @@ expectSendFtsResponse(const char *expectedMessageType, const FtsResponse *expect
 	expect_any_count(pq_sendstring, str, -1);
 	will_be_called_count(pq_sendstring, Natts_fts_message_response);
 
-	expect_value(EndCommand, commandTag, expectedMessageType);
+	expect_any(EndCommand, qc);
 	expect_value(EndCommand, dest, DestRemote);
+	expect_value(EndCommand, force_undecorated_output, false);
 	will_be_called(EndCommand);
 
 	will_be_called(socket_flush);
@@ -82,7 +83,7 @@ test_HandleFtsWalRepProbePrimary(void **state)
 	will_be_called(GetMirrorStatus);
 
 	/* mirror being up does not mean SyncRep should be enabled. */
-	expectSendFtsResponse(FTS_MSG_PROBE, &mockresponse);
+	expectSendFtsResponse(CMDTAG_FTS_PROBE, &mockresponse);
 
 	HandleFtsWalRepProbe();
 }
@@ -106,7 +107,7 @@ test_HandleFtsWalRepSyncRepOff(void **state)
 	will_be_called(UnsetSyncStandbysDefined);
 
 	/* since this function doesn't have any logic, the test just verified the message type */
-	expectSendFtsResponse(FTS_MSG_SYNCREP_OFF, &mockresponse);
+	expectSendFtsResponse(CMDTAG_FTS_SYNCREP_OFF, &mockresponse);
 	
 	HandleFtsWalRepSyncRepOff();
 }
@@ -124,7 +125,7 @@ test_HandleFtsWalRepProbeMirror(void **state)
 	/* expect the IsRoleMirror changed to reflect the global variable */
 	am_mirror = true;
 	mockresponse.IsRoleMirror = true;
-	expectSendFtsResponse(FTS_MSG_PROBE, &mockresponse);
+	expectSendFtsResponse(CMDTAG_FTS_PROBE, &mockresponse);
 
 	HandleFtsWalRepProbe();
 }
@@ -174,7 +175,7 @@ test_HandleFtsWalRepPromoteMirror(void **state)
 								   set_replication_slot, &ReplicationSlotCtl);
 
 	/* expect SignalPromote() */
-	expectSendFtsResponse(FTS_MSG_PROMOTE, &mockresponse);
+	expectSendFtsResponse(CMDTAG_FTS_PROMOTE, &mockresponse);
 
 	HandleFtsWalRepPromote();
 }
@@ -194,7 +195,7 @@ test_HandleFtsWalRepPromotePrimary(void **state)
 	mockresponse.RequestRetry     = false;
 
 	/* expect no SignalPromote() */
-	expectSendFtsResponse(FTS_MSG_PROMOTE, &mockresponse);
+	expectSendFtsResponse(CMDTAG_FTS_PROMOTE, &mockresponse);
 
 	HandleFtsWalRepPromote();
 }

@@ -1643,6 +1643,15 @@ _equalAlterOperatorStmt(const AlterOperatorStmt *a, const AlterOperatorStmt *b)
 }
 
 static bool
+_equalAlterTypeStmt(const AlterTypeStmt *a, const AlterTypeStmt *b)
+{
+	COMPARE_NODE_FIELD(typeName);
+	COMPARE_NODE_FIELD(options);
+
+	return true;
+}
+
+static bool
 _equalRuleStmt(const RuleStmt *a, const RuleStmt *b)
 {
 	COMPARE_NODE_FIELD(relation);
@@ -3083,7 +3092,7 @@ _equalTableValueExpr(const TableValueExpr *a, const TableValueExpr *b)
 }
 
 static bool
-_equalAlterTypeStmt(const AlterTypeStmt *a, const AlterTypeStmt *b)
+_equalAlterTypeStmtSetDefaultEnc(const AlterTypeStmtSetDefaultEnc *a, const AlterTypeStmtSetDefaultEnc *b)
 {
 	COMPARE_NODE_FIELD(typeName);
 	COMPARE_NODE_FIELD(encoding);
@@ -3658,6 +3667,9 @@ equal(const void *a, const void *b)
 		case T_AlterOperatorStmt:
 			retval = _equalAlterOperatorStmt(a, b);
 			break;
+		case T_AlterTypeStmt:
+			retval = _equalAlterTypeStmt(a, b);
+			break;
 		case T_RuleStmt:
 			retval = _equalRuleStmt(a, b);
 			break;
@@ -4048,8 +4060,8 @@ equal(const void *a, const void *b)
 		case T_DenyLoginPoint:
 			retval = _equalDenyLoginPoint(a, b);
 			break;
-		case T_AlterTypeStmt:
-			retval = _equalAlterTypeStmt(a, b);
+		case T_AlterTypeStmtSetDefaultEnc:
+			retval = _equalAlterTypeStmtSetDefaultEnc(a, b);
 			break;
 		case T_DistributedBy:
 			retval = _equalDistributedBy(a, b);

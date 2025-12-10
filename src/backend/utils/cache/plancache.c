@@ -164,13 +164,12 @@ InitPlanCache(void)
  *
  * raw_parse_tree: output of raw_parser(), or NULL if empty query
  * query_string: original query text
- * commandTag: compile-time-constant tag for query, or NULL if empty query
- * sourceTag: GPDB specific.
+ * commandTag: command tag for query, or UNKNOWN if empty query
  */
 CachedPlanSource *
 CreateCachedPlan(RawStmt *raw_parse_tree,
 				 const char *query_string,
-				 const char *commandTag)
+				 CommandTag commandTag)
 {
 	CachedPlanSource *plansource;
 	MemoryContext source_context;
@@ -249,12 +248,12 @@ CreateCachedPlan(RawStmt *raw_parse_tree,
  *
  * raw_parse_tree: output of raw_parser(), or NULL if empty query
  * query_string: original query text
- * commandTag: compile-time-constant tag for query, or NULL if empty query
+ * commandTag: command tag for query, or NULL if empty query
  */
 CachedPlanSource *
 CreateOneShotCachedPlan(RawStmt *raw_parse_tree,
 						const char *query_string,
-						const char *commandTag)
+						CommandTag commandTag)
 {
 	CachedPlanSource *plansource;
 

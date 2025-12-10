@@ -480,6 +480,8 @@ pg_stat_get_progress_info(PG_FUNCTION_ARGS)
 		cmdtype = PROGRESS_COMMAND_CLUSTER;
 	else if (pg_strcasecmp(cmd, "CREATE INDEX") == 0)
 		cmdtype = PROGRESS_COMMAND_CREATE_INDEX;
+	else if (pg_strcasecmp(cmd, "BASEBACKUP") == 0)
+		cmdtype = PROGRESS_COMMAND_BASEBACKUP;
 	else
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -873,7 +875,7 @@ pg_stat_get_activity(PG_FUNCTION_ARGS)
 			}
 			else
 				values[17] =
-					CStringGetTextDatum(pgstat_get_backend_desc(beentry->st_backendType));
+					CStringGetTextDatum(GetBackendTypeDesc(beentry->st_backendType));
 
 			/* SSL information */
 			if (beentry->st_ssl)

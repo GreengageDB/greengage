@@ -10,7 +10,7 @@
  *
  * Formerly, CTAS was implemented as a variant of SELECT, which led
  * to assorted legacy behaviors that we still try to preserve, notably that
- * we must return a tuples-processed count in the completionTag.  (We no
+ * we must return a tuples-processed count in the QueryCompletion.  (We no
  * longer do that for CTAS ... WITH NO DATA, however.)
  *
  * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
@@ -292,7 +292,7 @@ create_ctas_nodata(List *tlist, IntoClause *into, QueryDesc *queryDesc)
 ObjectAddress
 ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 				  ParamListInfo params, QueryEnvironment *queryEnv,
-				  char *completionTag)
+				  QueryCompletion *qc)
 {
 	Query	   *query = castNode(Query, stmt->query);
 	IntoClause *into = stmt->into;
@@ -352,7 +352,7 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 		ExecuteStmt *estmt = castNode(ExecuteStmt, query->utilityStmt);
 
 		Assert(!is_matview);	/* excluded by syntax */
-		ExecuteQuery(pstate, estmt, into, params, dest, completionTag);
+		ExecuteQuery(pstate, estmt, into, params, dest, qc);
 
 		/* get object address that intorel_startup saved for us */
 		address = ((DR_intorel *) dest)->reladdr;
@@ -470,11 +470,9 @@ ExecCreateTableAs(ParseState *pstate, CreateTableAsStmt *stmt,
 		/* get object address that intorel_startup saved for us */
 		address = ((DR_intorel *) dest)->reladdr;
 
-		/* save the rowcount if we're given a completionTag to fill */
-		if (completionTag)
-			snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-					 "SELECT " UINT64_FORMAT,
-					 queryDesc->es_processed);
+		/* save the rowcount if we're given a qc to fill */
+		if (qc)
+			SetQueryCompletion(qc, CMDTAG_SELECT, queryDesc->es_processed);
 
 		/* MPP-14001: Running auto_stats */
 		if (Gp_role == GP_ROLE_DISPATCH)

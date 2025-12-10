@@ -478,7 +478,10 @@ static void ExecEagerFreeAgg(AggState *node);
 static void
 select_current_set(AggState *aggstate, int setno, bool is_hash)
 {
-	/* when changing this, also adapt ExecInterpExpr() and friends */
+	/*
+	 * When changing this, also adapt ExecAggPlainTransByVal() and
+	 * ExecAggPlainTransByRef().
+	 */
 	if (is_hash)
 		aggstate->curaggcontext = aggstate->hashcontext;
 	else

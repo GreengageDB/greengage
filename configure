@@ -585,7 +585,7 @@ PACKAGE_TARNAME='greenplum-database'
 PACKAGE_VERSION='8.0.0-alpha.0'
 PACKAGE_STRING='Greenplum Database 8.0.0-alpha.0'
 PACKAGE_BUGREPORT='support@greenplum.org'
-PACKAGE_URL=''
+PACKAGE_URL='https://greengagedb.org/'
 
 ac_unique_file="src/backend/access/common/heaptuple.c"
 ac_default_prefix=/usr/local/gpdb
@@ -1667,6 +1667,7 @@ Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
 
 Report bugs to <support@greenplum.org>.
+Greenplum Database home page: <https://greengagedb.org/>.
 _ACEOF
 ac_status=$?
 fi
@@ -2872,10 +2873,22 @@ _ACEOF
 
 
 PG_MAJORVERSION=`expr "$PG_PACKAGE_VERSION" : '\([0-9][0-9]*\)'`
+PG_MINORVERSION=`expr "$PG_PACKAGE_VERSION" : '.*\.\([0-9][0-9]*\)'`
+test -n "$PG_MINORVERSION" || PG_MINORVERSION=0
 
 
 cat >>confdefs.h <<_ACEOF
 #define PG_MAJORVERSION "$PG_MAJORVERSION"
+_ACEOF
+
+
+cat >>confdefs.h <<_ACEOF
+#define PG_MAJORVERSION_NUM $PG_MAJORVERSION
+_ACEOF
+
+
+cat >>confdefs.h <<_ACEOF
+#define PG_MINORVERSION_NUM $PG_MINORVERSION
 _ACEOF
 
 
@@ -17813,6 +17826,19 @@ esac
 
 fi
 
+ac_fn_c_check_func "$LINENO" "link" "ac_cv_func_link"
+if test "x$ac_cv_func_link" = xyes; then :
+  $as_echo "#define HAVE_LINK 1" >>confdefs.h
+
+else
+  case " $LIBOBJS " in
+  *" link.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS link.$ac_objext"
+ ;;
+esac
+
+fi
+
 ac_fn_c_check_func "$LINENO" "mkdtemp" "ac_cv_func_mkdtemp"
 if test "x$ac_cv_func_mkdtemp" = xyes; then :
   $as_echo "#define HAVE_MKDTEMP 1" >>confdefs.h
@@ -21547,8 +21573,7 @@ _ACEOF
 
 # Supply a numeric version string for use by 3rd party add-ons
 # awk -F is a regex on some platforms, and not on others, so make "." a tab
-PG_VERSION_NUM="`echo "$PG_PACKAGE_VERSION" | sed 's/[A-Za-z].*$//' |
-tr '.' '	' |
+PG_VERSION_NUM="`echo $PG_MAJORVERSION $PG_MINORVERSION |
 $AWK '{printf "%d%04d", $1, $2}'`"
 
 cat >>confdefs.h <<_ACEOF
@@ -22215,7 +22240,8 @@ $config_links
 Configuration commands:
 $config_commands
 
-Report bugs to <support@greenplum.org>."
+Report bugs to <support@greenplum.org>.
+Greenplum Database home page: <https://greengagedb.org/>."
 
 _ACEOF
 cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1

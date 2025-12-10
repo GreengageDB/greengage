@@ -186,11 +186,12 @@ toast_insert_or_update_generic(Relation rel, void *newtup, void *oldtup,
 	/* ----------
 	 * Compress and/or save external until data fits into target length
 	 *
-	 *	1: Inline compress attributes with attstorage 'x', and store very
-	 *	   large attributes with attstorage 'x' or 'e' external immediately
-	 *	2: Store attributes with attstorage 'x' or 'e' external
-	 *	3: Inline compress attributes with attstorage 'm'
-	 *	4: Store attributes with attstorage 'm' external
+	 *	1: Inline compress attributes with attstorage EXTENDED, and store very
+	 *	   large attributes with attstorage EXTENDED or EXTERNAL external
+	 *	   immediately
+	 *	2: Store attributes with attstorage EXTENDED or EXTERNAL external
+	 *	3: Inline compress attributes with attstorage MAIN
+	 *	4: Store attributes with attstorage MAIN external
 	 * ----------
 	 */
 
@@ -211,8 +212,9 @@ toast_insert_or_update_generic(Relation rel, void *newtup, void *oldtup,
 	}
 
 	/*
-	 * Look for attributes with attstorage 'x' to compress.  Also find large
-	 * attributes with attstorage 'x' or 'e', and store them external.
+	 * Look for attributes with attstorage EXTENDED to compress.  Also find
+	 * large attributes with attstorage EXTENDED or EXTERNAL, and store them
+	 * external.
 	 */
 	while (compute_dest_tuplen(tupleDesc, pbind,
 							   (ttc.ttc_flags & TOAST_HAS_NULLS) != 0,
@@ -225,13 +227,16 @@ toast_insert_or_update_generic(Relation rel, void *newtup, void *oldtup,
 			break;
 
 		/*
-		 * Attempt to compress it inline, if it has attstorage 'x'
+		 * Attempt to compress it inline, if it has attstorage EXTENDED
 		 */
-		if (TupleDescAttr(tupleDesc, biggest_attno)->attstorage == 'x')
+		if (TupleDescAttr(tupleDesc, biggest_attno)->attstorage == TYPSTORAGE_EXTENDED)
 			toast_tuple_try_compression(&ttc, biggest_attno);
 		else
 		{
-			/* has attstorage 'e', ignore on subsequent compression passes */
+			/*
+			 * has attstorage EXTERNAL, ignore on subsequent compression
+			 * passes
+			 */
 			toast_attr[biggest_attno].tai_colflags |= TOASTCOL_INCOMPRESSIBLE;
 		}
 
@@ -249,9 +254,9 @@ toast_insert_or_update_generic(Relation rel, void *newtup, void *oldtup,
 	}
 
 	/*
-	 * Second we look for attributes of attstorage 'x' or 'e' that are still
-	 * inline, and make them external.  But skip this if there's no toast
-	 * table to push them to.
+	 * Second we look for attributes of attstorage EXTENDED or EXTERNAL that
+	 * are still inline, and make them external.  But skip this if there's no
+	 * toast table to push them to.
 	 */
 	while (compute_dest_tuplen(tupleDesc, pbind,
 							   (ttc.ttc_flags & TOAST_HAS_NULLS) != 0,
@@ -267,7 +272,7 @@ toast_insert_or_update_generic(Relation rel, void *newtup, void *oldtup,
 	}
 
 	/*
-	 * Round 3 - this time we take attributes with storage 'm' into
+	 * Round 3 - this time we take attributes with storage MAIN into
 	 * compression
 	 */
 	while (compute_dest_tuplen(tupleDesc, pbind,
@@ -284,8 +289,8 @@ toast_insert_or_update_generic(Relation rel, void *newtup, void *oldtup,
 	}
 
 	/*
-	 * Finally we store attributes of type 'm' externally.  At this point we
-	 * increase the target tuple size, so that 'm' attributes aren't stored
+	 * Finally we store attributes of type MAIN externally.  At this point we
+	 * increase the target tuple size, so that MAIN attributes aren't stored
 	 * externally unless really necessary.
 	 */
 	/*

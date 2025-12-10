@@ -412,7 +412,8 @@ usage(void)
 	printf(_("  -E, --exclude          exclude path names\n"));
 	printf(_("      --exclude-from=FILE\n"
 			 "                         get path names to exclude from FILE\n"));
-	printf(_("\nReport bugs to <bugs@greenplum.org>.\n"));
+	printf(_("\nReport bugs to <%s>.\n"), PACKAGE_BUGREPORT);
+	printf(_("%s home page: <%s>\n"), PACKAGE_NAME, PACKAGE_URL);
 }
 
 
