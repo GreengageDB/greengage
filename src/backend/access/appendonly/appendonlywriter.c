@@ -2117,7 +2117,7 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 {
 	int			i;
 	bool		entry_updated = false;
-	bool		transaction_aborted = false;
+	bool		aborted = false;
 
 	/*
 	 * Only look at tables that are marked in use currently
@@ -2142,7 +2142,9 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 		/* bingo! */
 
 		if (segfilestat->aborted)
-			transaction_aborted = true;
+		{
+			aborted = true;
+		}
 
 		AtEOXact_AppendOnly_StateTransition(aoentry, i, segfilestat);
 		entry_updated = true;
@@ -2157,7 +2159,7 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 				  (errmsg("AtEOXact_AppendOnly: updated txns_using_rel, it is now %d",
 						  aoentry->txns_using_rel)));
 
-		if (transaction_aborted && !is_entry_in_use_by_other_transactions(aoentry))
+		if (aborted && !is_entry_in_use_by_other_transactions(aoentry))
 		{
 			AORelRemoveHashEntry(aoentry->key.relid);
 		}
