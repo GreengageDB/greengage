@@ -108,7 +108,8 @@ FunctionNext_guts(FunctionScanState *node)
 			 * Make sure the tuplestore lives long enough. We don't need
 			 * to set ResourceOwner here since it's not used for consumers.
 			 */
-			MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+			MemoryContext old_context =
+				MemoryContextSwitchTo(CurTransactionContext);
 			function_scan_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), node->initplanId);
 
 			node->ts_state = tuplestore_open_shared(get_shareinput_fileset(),

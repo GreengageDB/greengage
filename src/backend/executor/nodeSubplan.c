@@ -1239,7 +1239,8 @@ PG_TRY();
 	{
 		char rwfile_prefix[100];
 		/* Make sure the tuplestore lives long enough */
-		MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+		MemoryContext old_context =
+			MemoryContextSwitchTo(CurTransactionContext);
 		ResourceOwner old_resowner = CurrentResourceOwner;
 		CurrentResourceOwner = CurTransactionResourceOwner;
 
