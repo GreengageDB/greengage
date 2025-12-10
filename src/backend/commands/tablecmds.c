@@ -1682,6 +1682,8 @@ RemoveRelations(DropStmt *drop)
 	ObjectAddresses *objects;
 	char		relkind;
 	ListCell   *cell;
+	ListCell   *next;
+	ListCell   *prev = NULL;
 	int			flags = 0;
 	LOCKMODE	lockmode = AccessExclusiveLock;
 
@@ -1748,12 +1750,14 @@ RemoveRelations(DropStmt *drop)
 	/* Lock and validate each relation; build a list of object addresses */
 	objects = new_object_addresses();
 
-	foreach(cell, drop->objects)
+	for (cell = list_head(drop->objects); cell; cell = next)
 	{
 		RangeVar   *rel = makeRangeVarFromNameList((List *) lfirst(cell));
 		Oid			relOid;
 		ObjectAddress obj;
 		struct DropRelationCallbackState state;
+
+		next = lnext(cell);
 
 		/*
 		 * These next few steps are a great deal like relation_openrv, but we
@@ -1783,6 +1787,13 @@ RemoveRelations(DropStmt *drop)
 		if (!OidIsValid(relOid))
 		{
 			DropErrorMsgNonExistent(rel, relkind, drop->missing_ok);
+			Assert(drop->missing_ok);
+
+			if (gp_dispatch_drop_always)
+				prev = cell;
+			else
+				drop->objects = list_delete_cell(drop->objects, cell, prev);
+
 			continue;
 		}
 
@@ -1827,6 +1838,8 @@ RemoveRelations(DropStmt *drop)
 		obj.objectSubId = 0;
 
 		add_exact_object_address(&obj, objects);
+
+		prev = cell;
 	}
 
 	performMultipleDeletions(objects, drop->behavior, flags);

@@ -337,6 +337,18 @@ explain (costs false) update t1 set b = b + 1 where b in (select a from gp_all w
 explain (costs false) update t1 set b = b + 1 where b in (select a from gp_any where gp_any.a > 10);
 explain (costs false) update t1 set b = b + 1 where b in (select a from gp_coord where gp_coord.a > 10);
 
+-- Validate foreign table created in the same transaction
+begin;
+
+CREATE FOREIGN TABLE gp_all_transaction (
+	a int,
+	b int
+) SERVER loopback OPTIONS (schema_name 'postgres_fdw_gp', table_name 't1', mpp_execute 'all segments');
+
+explain (verbose, costs off) select * from gp_all_transaction;
+
+commit;
+
 ---
 --- Test for #16376 of multi-level partition table with foreign table
 ---

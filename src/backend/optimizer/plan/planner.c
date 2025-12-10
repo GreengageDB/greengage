@@ -2886,6 +2886,43 @@ grouping_planner(PlannerInfo *root, bool inheritance_update,
 											  offset_est, count_est);
 
 			/*
+			 * Greengage-specific behavior:
+			 * If the limit path locus is SegmentGeneral, General, or
+			 * Replicated, we must bring it to a singleQE to ensure
+			 * deterministic values of tuples. When tuples are distributed
+			 * across multiple segments, as there is no guarantee of the
+			 * global ordering of tuples passed to the limit operator, and
+			 * applying limit on such data could break the locus meaning.
+			 * OuterQuery is an exception to this rule, because this locus
+			 * means that data from this operator should be executed in
+			 * the same slice as the parameters on which it depends. So even
+			 * if it is brought to a single segment, the limit operator
+			 * will be re-executed for each value of the parameter and could
+			 * yield different tuple values depending on the order
+			 * provided from below.
+			 */
+			if (CdbPathLocus_IsGeneral(path->locus))
+			{
+				/*
+				 * General is selfcontained everywhere so can just make it
+			 	 * SingleQE, without any motions.
+				 */
+				CdbPathLocus_MakeSingleQE(&(path->locus),
+										getgpsegmentCount());
+			}
+			else if (CdbPathLocus_IsSegmentGeneral(path->locus) ||
+					 CdbPathLocus_IsReplicated(path->locus))
+			{
+				CdbPathLocus locus;
+				Path	   *mpath;
+				CdbPathLocus_MakeSingleQE(&locus, getgpsegmentCount());
+				mpath = cdbpath_create_motion_path(root, path, path->pathkeys, false, locus);
+				if (mpath != NULL) {
+					path = mpath;
+				}
+			}
+
+			/*
 			 * If there was a SCATTER BY clause, obey it. (If there was
 			 * no LIMIT, we did this before sorting for ORDER BY already.)
 			 */

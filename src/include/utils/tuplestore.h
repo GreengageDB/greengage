@@ -98,9 +98,16 @@ extern void tuplestore_end(Tuplestorestate *state);
 extern void tuplestore_set_instrument(Tuplestorestate *state,
 									  struct Instrumentation *instrument);
 
+extern Size SharedTuplestoreShmemSize(void);
+extern void SharedTuplestoreShmemInit(void);
+
 extern void tuplestore_make_shared(Tuplestorestate *state, SharedFileSet *fileset,
 								   const char *filename);
+extern void tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset,
+										const char *filename, uint32 ntotal);
 extern void tuplestore_freeze(Tuplestorestate *state);
 extern Tuplestorestate *tuplestore_open_shared(SharedFileSet *fileset, const char *filename);
+
+extern void AtAbort_SharedTuplestores(void);
 
 #endif							/* TUPLESTORE_H */

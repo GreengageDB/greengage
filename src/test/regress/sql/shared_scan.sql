@@ -123,3 +123,99 @@ reset gp_cte_sharing;
 drop table sisc1;
 drop table sisc2;
 drop table sisc3;
+
+--
+-- Check error handling in shared scans
+--
+-- Helper function to count the number of temporary files in
+-- pgsql_tmp.
+
+-- start_ignore
+create language plpython3u;
+-- end_ignore
+
+create or replace function get_temp_file_num() returns setof int as
+$$
+import os
+fileNum = 0
+for root, directories, filenames in os.walk('base/pgsql_tmp'):
+  for filename in filenames:
+    fileNum += 1
+return [fileNum]
+$$ language plpython3u execute on all segments;
+
+create table sisc(i int) distributed by (i);
+insert into sisc select generate_series(1, 100);
+
+-- Temp file number before running Shared Scan queries
+select sum(n) as num_temp_files_before from get_temp_file_num() n
+\gset
+
+-- No error, 2 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i = 1;
+
+-- Error, 2 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+
+-- Explicit transaction, 2 SISC nodes
+begin;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+rollback;
+
+-- Subtransaction, 2 SISC nodes
+begin;
+savepoint s1;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+rollback to s1;
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2 where t1.i/0 = 1;
+rollback;
+
+-- No error, 3 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1;
+
+-- Error, 3 SISC nodes
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1;
+
+-- No error, 3 SISC nodes with 2 in the same slice
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1 and t1.i = t2.i;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i = 1 and t1.i = t2.i;
+
+-- Error, 3 SISC nodes with 2 in the same slice
+explain (verbose, costs off)
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1 and t1.i = t2.i;
+
+with cte as materialized (select i from sisc) select count(*) from cte t1, cte t2, cte t3 where t1.i/0 = 1 and t1.i = t2.i;
+
+-- No error, 2 different SISCs
+explain (verbose, costs off)
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i = 1;
+
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i = 1;
+
+-- Error, 2 different SISCs
+explain (verbose, costs off)
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
+
+with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
+
+-- All temporary files should have been cleaned up, so the number of files shouldn't be more than
+-- previously. It could be less if some previously existing file has been cleaned up in the meantime.
+select sum(n) as num_temp_files_after from get_temp_file_num() n
+\gset
+select :num_temp_files_before >= :num_temp_files_after;
+drop table sisc;
+drop function get_temp_file_num();

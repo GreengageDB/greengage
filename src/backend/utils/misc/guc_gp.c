@@ -432,6 +432,8 @@ bool		gp_allow_date_field_width_5digits = false;
 
 bool		gp_track_pending_delete = true;
 
+bool		gp_dispatch_drop_always = false;
+
 /* GUCs for Just In Time (JIT) compilation */
 double		optimizer_jit_above_cost;
 double		optimizer_jit_inline_above_cost;
@@ -3067,6 +3069,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_track_pending_delete,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_dispatch_drop_always", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Dispatch DROP if object doesn't exist on coordinator"),
+			NULL,
+			GUC_DISALLOW_IN_FILE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_dispatch_drop_always,
+		false,
 		NULL, NULL, NULL
 	},
 
