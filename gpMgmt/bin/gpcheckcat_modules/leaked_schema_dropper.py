@@ -10,23 +10,17 @@ class LeakedSchemaDropper:
     leaked_schema_query = """
         WITH temp_schemas AS (
           SELECT nspname, 
-                 CASE 
-                   WHEN nspname ~ '^pg_temp_[0-9]+' THEN replace(nspname, 'pg_temp_', '')::int
-                   ELSE replace(nspname, 'pg_toast_temp_', '')::int
-                 END as sess_id
-          FROM gp_dist_random('pg_namespace')
-          WHERE nspname ~ '^pg_t(emp|oast_temp)_[0-9]+'
+                 regexp_replace(nspname, '\D', '', 'g')::int as sess_id
+          FROM gp_dist_random('pg_catalog.pg_namespace')
+          WHERE nspname ~ '^pg_t(emp|oast_temp)_\d+'
           UNION
           SELECT nspname,
-                 CASE 
-                   WHEN nspname ~ '^pg_temp_[0-9]+' THEN replace(nspname, 'pg_temp_', '')::int
-                   ELSE replace(nspname, 'pg_toast_temp_', '')::int
-                 END as sess_id
-          FROM pg_namespace
-          WHERE nspname ~ '^pg_t(emp|oast_temp)_[0-9]+'
+                regexp_replace(nspname, '\D', '', 'g')::int as sess_id
+          FROM pg_catalog.pg_namespace
+          WHERE nspname ~ '^pg_t(emp|oast_temp)_\d+'
         )
         SELECT DISTINCT nspname as schema
-        FROM temp_schemas n 
+        FROM temp_schemas n
         LEFT JOIN pg_stat_activity x USING (sess_id)
         WHERE x.sess_id IS NULL 
            OR x.backend_type LIKE 'autovacuum%'
