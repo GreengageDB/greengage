@@ -1234,9 +1234,15 @@ PG_TRY();
 	 * closing file. This is due to the tuplestore reader is outside
 	 * initplan, and reader will delete the file when it finished.
 	 */
-	if (subLinkType == INITPLAN_FUNC_SUBLINK && node->ts_state == NULL)
+	Assert(node->ts_state == NULL);
+	if (subLinkType == INITPLAN_FUNC_SUBLINK)
 	{
 		char rwfile_prefix[100];
+		/* Make sure the tuplestore lives long enough */
+		MemoryContext old_context =
+			MemoryContextSwitchTo(CurTransactionContext);
+		ResourceOwner old_resowner = CurrentResourceOwner;
+		CurrentResourceOwner = CurTransactionResourceOwner;
 
 		function_scan_create_bufname_prefix(rwfile_prefix, sizeof(rwfile_prefix), subplan->plan_id);
 
@@ -1246,6 +1252,8 @@ PG_TRY();
 		tuplestore_make_shared(node->ts_state,
 							   get_shareinput_fileset(),
 							   rwfile_prefix);
+		MemoryContextSwitchTo(old_context);
+		CurrentResourceOwner = old_resowner;
 	}
 
 	/*
@@ -1340,6 +1348,13 @@ PG_TRY();
 	if (subLinkType == INITPLAN_FUNC_SUBLINK && node->ts_state)
 	{
 		tuplestore_freeze(node->ts_state);
+		/*
+		 * Close the local tuplestore. This should not actually delete the
+		 * files because of the internal shared reference count, they will
+		 * only be deleted once the reader is done.
+		 */
+		tuplestore_end(node->ts_state);
+		node->ts_state = NULL;
 	}
 
 	if (!found)

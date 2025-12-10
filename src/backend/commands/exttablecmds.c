@@ -306,15 +306,6 @@ DefineExternalRelation(CreateExternalStmt *createExtStmt)
 	CreateForeignTable(createForeignTableStmt, reloid,
 					   true /* skip permission checks, we checked them ourselves */);
 
-	/*
-	 * DefineRelation loaded the new relation into relcache, but the relcache
-	 * contains the distribution policy, which in turn depends on the contents
-	 * of pg_foreign_table, for EXECUTE-type external tables (see GpPolicyFetch()).
-	 * Now that we have created the pg_foreign_table entry, invalidate the
-	 * relcache, so that it gets loaded with the correct information.
-	 */
-	CacheInvalidateRelcacheByRelid(reloid);
-
 	if (shouldDispatch)
 	{
 		/*
