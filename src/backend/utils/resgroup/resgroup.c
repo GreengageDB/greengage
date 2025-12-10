@@ -2845,6 +2845,9 @@ SwitchResGroupImpl(ResGroupCaps caps, Oid newGroupId)
 		
 		/* Record the bypass memory limit of current query */
 		self->bypassMemoryLimit = self->memUsage + RESGROUP_BYPASS_MODE_MEMORY_LIMIT_ON_QE;
+
+		pgstat_report_resgroup(0, bypassedSlot.groupId);
+
 		return;
 	}
 
@@ -2918,6 +2921,8 @@ SwitchResGroupImpl(ResGroupCaps caps, Oid newGroupId)
 
 	/* Add into cgroup */
 	ResGroupOps_AssignGroup(self->groupId, &(self->caps), MyProcPid);
+
+	pgstat_report_resgroup(0, self->groupId);
 }
 
 /*
@@ -4889,8 +4894,6 @@ HandleMoveResourceGroup(void)
 		 * transaction.
 		 */
 		ResGroupOps_AssignGroup(self->groupId, &(self->caps), MyProcPid);
-
-		pgstat_report_resgroup(0, self->groupId);
 	}
 
 	/*
@@ -4994,6 +4997,8 @@ HandleMoveResourceGroup(void)
 		/* Add into cgroup */
 		ResGroupOps_AssignGroup(self->groupId, &(self->caps), MyProcPid);
 	}
+
+	pgstat_report_resgroup(0, self->groupId);
 }
 
 static bool
