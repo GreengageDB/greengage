@@ -83,6 +83,12 @@ static List *generateDefaultPartition(ParseState *pstate,
 
 static char *extract_tablename_from_options(List **options);
 
+static List *mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
+											   Relation parentrel,
+											   ParseState *pstate,
+											   List *penc_cls,
+											   List *parent_tblenc);
+
 /*
  * qsort_stmt_cmp
  *
@@ -1121,6 +1127,61 @@ merge_partition_encoding(ParseState *pstate, List *elem_colencs, List *penc)
 	return elem_colencs;
 }
 
+static List *
+mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
+								  Relation parentrel,
+								  ParseState *pstate,
+								  List *penc_cls,
+								  List *parent_tblenc)
+{
+
+	List	   *with_cls = NIL;
+	List       *out_cls = NIL;
+	List 	   *penc_cls_tmp = list_copy(penc_cls);
+	/*
+	 * If options on current partition is not null, then we need to 
+	 * account them too, when we choose storage options for columns.
+	 * We must do it here, because if not, then parental options in
+	 * transformColumnEncoding() will dominate over this WITH options.
+	 */
+	if (elem->options != NIL) 
+	{
+		List	   *tmpenc = form_default_storage_directive(elem->options);
+		/* 
+		 * We need to analyze only storage options, so if there is none of
+		 * them, then we can skip this step.
+		 */
+		if (tmpenc != NIL)
+		{
+			ColumnReferenceStorageDirective *deflt = NULL;
+			TupleDesc tupdesc = RelationGetDescr(parentrel);
+
+			for (int i = 0; i < tupdesc->natts; i++)
+			{
+				Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+
+				if (att->attisdropped)
+					continue;
+
+				deflt = makeNode(ColumnReferenceStorageDirective);
+				deflt->column = pstrdup(NameStr(att->attname));
+				deflt->encoding = transformStorageEncodingClause(tmpenc, false);
+
+				with_cls = lappend(with_cls, deflt);
+			}
+		}
+	}
+	
+	/*
+	 * Merge encodings specified for parent table level and partition
+	 * configuration level. (Each partition element level encoding will be
+	 * merged later to this). 
+	 */
+	out_cls = merge_partition_encoding(pstate, with_cls, parent_tblenc);
+	out_cls = merge_partition_encoding(pstate, penc_cls_tmp, out_cls);
+	return out_cls;
+}
+
 /*
  * Convert an exclusive start (or inclusive end) value from the legacy
  * START..EXCLUSIVE (END..INCLUSIVE) syntax into an inclusive start (exclusive
@@ -1771,9 +1832,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 		GpPartDefElem	*elem;
 		List			*new_parts;
 		PartitionSpec	*tmpSubPartSpec = NULL;
-		List	   *with_cls = NIL;
-		List       *final_cls = NIL;
-		List 	   *penc_cls_tmp = list_copy(penc_cls);
+		List	   	 	*final_cls = NIL;
 
 		Assert(IsA(n, GpPartDefElem));
 		/* Avoid scribbling on input */
@@ -1807,49 +1866,10 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("subpartition specification provided but table doesn't have SUBPARTITION BY clause"),
 						parser_errposition(pstate, ((GpPartitionDefinition*)elem->subSpec)->location)));
-		
-		/*
-		 * If options on current partition is not null, then we need to 
-		 * account them too, when we choose storage options for columns.
-		 * We must do it here, because if not, then parental options in
-		 * transformColumnEncoding() will dominate over this WITH options.
-		 */
-		if (elem->options != NIL) 
-		{
-			List	   *tmpenc = NIL;
-			/* 
-			 * We need to analyze only storage options, so if there is none of
-			 * them, then we can skip this step.
-			 */
-			if ((tmpenc = form_default_storage_directive(elem->options)) != NIL)
-			{
-				ColumnReferenceStorageDirective *deflt = NULL;
-				TupleDesc tupdesc = parentrel->rd_att;
-				int natts = tupdesc->natts;
-				for (int i = 0; i < natts; i++)
-				{
-					Form_pg_attribute att = TupleDescAttr(tupdesc, i);
 
-					if (att->attisdropped)
-						continue;
-
-					deflt = makeNode(ColumnReferenceStorageDirective);
-					deflt->column = pstrdup(NameStr(att->attname));
-					deflt->encoding = transformStorageEncodingClause(tmpenc, false);
-
-					with_cls = lappend(with_cls, deflt);
-				}
-			}
-		}
-		
-		/*
-		 * Merge encodings specified for parent table level and partition
-		 * configuration level. (Each partition element level encoding will be
-		 * merged later to this). 
-		 */
-		final_cls = merge_partition_encoding(pstate, with_cls, parent_tblenc);
-		final_cls = merge_partition_encoding(pstate, penc_cls_tmp, final_cls);
-
+		/* Merge parental, default and with options in separate place. */
+		final_cls = mergeInheritedAndDefaultEncodings(elem, parentrel, pstate,
+													  penc_cls, parent_tblenc);
 
 		/* if WITH has "tablename" then it will be used as name for partition */
 		partcomp.tablename = extract_tablename_from_options(&elem->options);
