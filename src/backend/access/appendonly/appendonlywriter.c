@@ -2159,6 +2159,11 @@ AtEOXact_AppendOnly_Relation(AORelHashEntry aoentry, TransactionId currentXid)
 				  (errmsg("AtEOXact_AppendOnly: updated txns_using_rel, it is now %d",
 						  aoentry->txns_using_rel)));
 
+		/*
+		 * If the transaction was aborted, AO hash entry may contain not valid
+		 * data left from the transaction. We remove the hash entry to allow
+		 * the entry re-creation with the correct data on the next hash access.
+		 */
 		if (aborted && !is_entry_in_use_by_other_transactions(aoentry))
 		{
 			AORelRemoveHashEntry(aoentry->key.relid);
