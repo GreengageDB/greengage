@@ -2953,11 +2953,11 @@ pgstat_report_resgroup(TimestampTz queueStart, Oid groupid)
 		beentry->st_waiting = PGBE_WAITING_RESGROUP;
 	}
 
-	elog(DEBUG1, "Reporting resource group ID of %d", groupid);
-
 	beentry->st_rsgid = groupid;
 	beentry->st_changecount++;
 	Assert((beentry->st_changecount & 1) == 0);
+
+	elog(DEBUG1, "Reported resource group ID of %d", groupid);
 }
 
 /*
