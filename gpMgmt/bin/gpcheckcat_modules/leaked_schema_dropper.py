@@ -3,35 +3,30 @@ from gppylib.utils import escapeDoubleQuoteInSQLString
 class LeakedSchemaDropper:
 
     # This query does a union of all the leaked temp schemas on the coordinator as well as all the segments.
-    # The first part of the query uses gp_dist_random which gets the leaked schemas from only the segments
-    # The second part of the query gets the leaked temp schemas from just the coordinator
-    # The simpler form of this query that pushed the union into the
-    # inner select does not run correctly on 3.2.x
     # Also note autovacuum lancher and worker will not generate temp namespace
+    # Additionally, we should take into account orphaned schemas, whose session_id may
+    # conflict with coordinator bgworkers, which shouldn't create orphaned schemas.
+    # Also try to avoid connection id collision with truly orphaned schema id.
     leaked_schema_query = """
-        SELECT distinct nspname as schema
-        FROM (
-          SELECT nspname, replace(nspname, 'pg_temp_','')::int as sess_id
-          FROM   gp_dist_random('pg_namespace')
-          WHERE  nspname ~ '^pg_temp_[0-9]+'
-          UNION ALL
-          SELECT nspname, replace(nspname, 'pg_toast_temp_','')::int as sess_id
-          FROM   gp_dist_random('pg_namespace')
-          WHERE  nspname ~ '^pg_toast_temp_[0-9]+'
-        ) n LEFT OUTER JOIN pg_stat_activity x using (sess_id)
-        WHERE x.sess_id is null OR x.backend_type like 'autovacuum%'
-        UNION
-        SELECT nspname as schema
-        FROM (
-          SELECT nspname, replace(nspname, 'pg_temp_','')::int as sess_id
-          FROM   pg_namespace
-          WHERE  nspname ~ '^pg_temp_[0-9]+'
-          UNION ALL
-          SELECT nspname, replace(nspname, 'pg_toast_temp_','')::int as sess_id
-          FROM   pg_namespace
-          WHERE  nspname ~ '^pg_toast_temp_[0-9]+'
-        ) n LEFT OUTER JOIN pg_stat_activity x using (sess_id)
-        WHERE x.sess_id is null OR x.backend_type like 'autovacuum%'
+        WITH temp_schemas AS (
+          SELECT nspname, 
+                 regexp_replace(nspname, '\D', '', 'g')::int as sess_id
+          FROM gp_dist_random('pg_catalog.pg_namespace')
+          WHERE nspname ~ '^pg_t(emp|oast_temp)_\d+'
+          UNION
+          SELECT nspname,
+                regexp_replace(nspname, '\D', '', 'g')::int as sess_id
+          FROM pg_catalog.pg_namespace
+          WHERE nspname ~ '^pg_t(emp|oast_temp)_\d+'
+        )
+        SELECT DISTINCT nspname as schema
+        FROM temp_schemas n
+        LEFT JOIN pg_stat_activity x USING (sess_id)
+        WHERE x.sess_id IS NULL 
+           OR x.backend_type LIKE 'autovacuum%'
+           OR x.datname IS NULL 
+           OR x.datname <> current_database()
+           OR x.pid = pg_backend_pid()
     """
 
     def __get_leaked_schemas(self, db_connection):

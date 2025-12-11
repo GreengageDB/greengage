@@ -4,7 +4,9 @@ SELECT distinct nspname as schema
       FROM   gp_dist_random('pg_namespace')
       WHERE  nspname ~ '^pg_temp_[0-9]+'
     ) n LEFT OUTER JOIN pg_stat_activity x using (sess_id)
-    WHERE x.sess_id is null
+    WHERE x.sess_id is null OR x.backend_type like 'autovacuum%'
+        OR x.datname is null OR x.datname <> current_database()
+        OR x.pid=pg_backend_pid()
     UNION
     SELECT nspname as schema
     FROM (
@@ -12,4 +14,6 @@ SELECT distinct nspname as schema
       FROM   pg_namespace
       WHERE  nspname ~ '^pg_temp_[0-9]+'
     ) n LEFT OUTER JOIN pg_stat_activity x using (sess_id)
-    WHERE x.sess_id is null;
+    WHERE x.sess_id is null OR x.backend_type like 'autovacuum%'
+        OR x.datname is null OR x.datname <> current_database()
+        OR x.pid=pg_backend_pid();
