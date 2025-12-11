@@ -1599,14 +1599,6 @@ void mppExecutorFinishup(QueryDesc *queryDesc)
 
 		/* sum up rejected rows if any (single row error handling only) */
 		cdbdisp_sumRejectedRows(pr);
-
-		/*
-		 * Check and free the results of all gangs. If any QE had an
-		 * error, report it and exit to our error handler via PG_THROW.
-		 * NB: This call doesn't wait, because we already waited above.
-		 */
-		estate->dispatcherState = NULL;
-		cdbdisp_destroyDispatcherState(ds);
 	}
 }
 

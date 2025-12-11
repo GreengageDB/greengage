@@ -172,40 +172,13 @@ preprocess_initplans(QueryDesc *queryDesc)
 	}
 }
 
-/*
- * CDB: Post processing INITPLAN to clean up resource with long life cycle
- * 
- * INITPLAN usually communicate with main plan through scalar PARAM, but in some case,
- * the main plan need to get more data from INITPLAN which long life cycle resource like
- * temp file will be used.
- * Take INITPLAN function case as an example, INITPLAN will store its result into
- * tuplestore, which will be read by entryDB in main plan. Tuplestore and corresponding
- * files should not be cleaned before the main plan finished.
- *
- * postprocess_initplans is used to clean these resources in ExecutorEnd of main plan.
- */
 void
 postprocess_initplans(QueryDesc *queryDesc)
 {
-	EState	   *estate = queryDesc->estate;
-	int			nParamExec;
-	ParamExecData *prm;
-	SubPlanState *sps;
-	int			i;
-
-	nParamExec = list_length(queryDesc->plannedstmt->paramExecTypes);
-
-	/* clean ntuplestore used by INITPLAN function */
-	for (i = 0; i < nParamExec; i++)
-	{
-		prm = &estate->es_param_exec_vals[i];
-		sps = (SubPlanState *) prm->execPlan;
-		if (sps && sps->ts_state)
-		{
-			tuplestore_end(sps->ts_state);
-			sps->ts_state = NULL;
-		}
-	}
+	/*
+	 * Don't have to do anything since cleanup is handled by the shared
+	 * tuplestore itself now.
+	 */
 }
 
 static bool
