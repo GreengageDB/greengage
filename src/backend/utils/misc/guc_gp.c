@@ -483,6 +483,8 @@ bool		gp_allow_date_field_width_5digits = false;
 
 bool		gp_track_pending_delete = true;
 
+bool		gp_dispatch_drop_always = false;
+
 /* GUC to set interval for streaming archival status */
 int wal_sender_archiving_status_interval;
 
@@ -1500,7 +1502,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"test_AppendOnlyHash_eviction_vs_just_marking_not_inuse", PGC_SUSET, DEVELOPER_OPTIONS,
+		{"test_AppendOnlyHash_eviction_vs_just_marking_not_inuse", PGC_SUSET, DEPRECATED_OPTIONS,
 			gettext_noop("Helps to test evicting the entry for AppendOnlyHash as soon as its usage is done instead of just marking it not inuse."),
 			NULL,
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
@@ -3443,6 +3445,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_track_pending_delete,
 		true,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_dispatch_drop_always", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Dispatch DROP if object doesn't exist on coordinator"),
+			NULL,
+			GUC_DISALLOW_IN_FILE | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_dispatch_drop_always,
+		false,
 		NULL, NULL, NULL
 	},
 

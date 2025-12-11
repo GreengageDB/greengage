@@ -567,3 +567,4 @@
 		"xmloption",
 		"zero_damaged_pages",
 		"gp_track_pending_delete",
+		"gp_dispatch_drop_always",
