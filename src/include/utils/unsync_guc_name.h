@@ -565,4 +565,5 @@
 		"xmlbinary",
 		"xmloption",
 		"gp_track_pending_delete",
+		"gp_dispatch_drop_always",
 		"max_slot_wal_keep_size",

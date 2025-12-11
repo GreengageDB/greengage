@@ -143,8 +143,37 @@ query_planner(PlannerInfo *root,
 						 create_group_result_path(root, final_rel,
 												  final_rel->reltarget,
 												  (List *) parse->jointree->quals);
-				add_path(final_rel, result_path);
 
+				/*
+				 * If this is correlated subplan, then we need to bring it to 
+				 * OuterQuery locus like we do for relations if we do not 
+				 * bypass functions below by going into this section. 
+				 * This logic is similar to bring_to_outer_query() except
+				 * that we don't need to worry about the type of 
+				 * path presented.
+				 */
+				Path *path = NULL;
+
+				if (root->is_correlated_subplan && !CdbPathLocus_IsOuterQuery(result_path->locus))
+				{
+					CdbPathLocus outerquery_locus;
+					CdbPathLocus_MakeOuterQuery(&outerquery_locus);
+					path = cdbpath_create_motion_path(root,
+													  result_path,
+													  NIL,
+													  false,
+													  outerquery_locus);
+				}
+
+				/* 
+				 * We either didn't pass conditions earlier, or we got null 
+				 * in cdbpath_create_motion_path().
+				 */
+				if (path == NULL)
+					add_path(final_rel, result_path);
+				else
+					add_path(final_rel, path);
+					
 				/* Select cheapest path (pretty easy in this case...) */
 				set_cheapest(final_rel);
 

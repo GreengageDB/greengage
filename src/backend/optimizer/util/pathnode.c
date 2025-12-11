@@ -5540,10 +5540,9 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
  * 'limitCount' is the actual LIMIT expression, or NULL
  * 'offset_est' is the estimated value of the OFFSET expression
  * 'count_est' is the estimated value of the LIMIT expression
- *
- * Greengage specific change: the return type is changed to Path
- * because at the end of function, we need to check if it is
- * segment general locus and may create other kind of path.
+ * 
+ * Greengage specific change: the return type is still Path
+ * because of need to comply with binary compatibility.
  */
 Path *
 create_limit_path(PlannerInfo *root, RelOptInfo *rel,
@@ -5580,15 +5579,7 @@ create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 							&pathnode->path.total_cost,
 							offset_est, count_est);
 
-	/*
-	 * Greengage specific behavior:
-	 * If the limit path's locus is general or segmentgeneral
-	 * we have to make it singleQE.
-	 */
-	if (contain_volatile_functions(pathnode->limitOffset) || contain_volatile_functions(pathnode->limitCount))
-		return turn_volatile_seggen_to_singleqe(root, (Path *) pathnode, NULL);
-	else
-		return (Path *)pathnode;
+	return (Path *) pathnode;
 }
 
 /*

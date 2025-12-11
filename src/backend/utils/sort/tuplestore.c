@@ -1960,15 +1960,9 @@ tuplestore_make_shared_many(Tuplestorestate *state, SharedFileSet *fileset, cons
 	 * MemoryContext and ResourceOwner, since InitPlans are executed as
 	 * separate queries. Because of that, default Executor or Portal
 	 * lifetime might not last long enough.
-	 *
-	 * For QD and Utility mode it's fine to use Executor lifetime since
-	 * tuplestore must live only for the duration of one query.
 	 */
-	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
-	{
-		Assert(state->resowner == CurTransactionResourceOwner);
-		Assert(CurrentMemoryContext == CurTransactionContext);
-	}
+	Assert(state->resowner == CurTransactionResourceOwner);
+	Assert(CurrentMemoryContext == CurTransactionContext);
 
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 
@@ -2135,12 +2129,8 @@ tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bo
 	 * MemoryContext, since InitPlans are executed as separate queries.
 	 * Because of that, default Executor or Portal lifetime might not last
 	 * long enough.
-	 *
-	 * For QD and Utility mode it's fine to use Executor lifetime since
-	 * tuplestore must live only for the duration of one query.
 	 */
-	if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
-		Assert(CurrentMemoryContext == CurTransactionContext);
+	Assert(CurrentMemoryContext == CurTransactionContext);
 
 	LWLockAcquire(ShareInputScanLock, LW_EXCLUSIVE);
 

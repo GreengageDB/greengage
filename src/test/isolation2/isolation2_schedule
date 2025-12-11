@@ -74,7 +74,8 @@ test: deadlock_under_entry_db_singleton
 #  conflict when running in parallel with other cases.
 test: misc
 
-test: starve_case pg_views_concurrent_drop alter_blocks_for_update_and_viceversa drop_rename reader_waits_for_lock bitmap_index_ao_sparse
+test: drop_rename
+test: starve_case pg_views_concurrent_drop alter_blocks_for_update_and_viceversa reader_waits_for_lock bitmap_index_ao_sparse
 
 test: create_index_deadlock
 

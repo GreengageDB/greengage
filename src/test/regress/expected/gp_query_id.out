@@ -726,8 +726,6 @@ NOTICE:  START ExecutorRun | Q: insert into test_data values (1, 1) | QUERY ID: 
 NOTICE:  END ExecutorRun | Q: insert into test_data values (1, 1) | QUERY ID: 108
 NOTICE:  START ExecutorFinish | Q: insert into test_data values (1, 1) | QUERY ID: 108
 NOTICE:  END ExecutorFinish | Q: insert into test_data values (1, 1) | QUERY ID: 108
-NOTICE:  START ExecutorEnd | Q: insert into test_data values (1, 1) | QUERY ID: 108
-NOTICE:  END ExecutorEnd | Q: insert into test_data values (1, 1) | QUERY ID: 108
 NOTICE:  END ExecutorRun | Q: select sirv_function(); | QUERY ID: 106
 ERROR:  fault triggered, fault name:'appendonly_insert' fault type:'panic'  (seg1 127.0.1.1:7003 pid=1429662)
 CONTEXT:  SQL statement "insert into test_data values (1, 1)"
