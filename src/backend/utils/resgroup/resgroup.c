@@ -2840,6 +2840,9 @@ SwitchResGroupOnSegment(const char *buf, int len)
 		
 		/* Record the bypass memory limit of current query */
 		self->bypassMemoryLimit = self->memUsage + RESGROUP_BYPASS_MODE_MEMORY_LIMIT_ON_QE;
+
+		pgstat_report_resgroup(0, bypassedSlot.groupId);
+
 		return;
 	}
 
