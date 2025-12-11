@@ -527,7 +527,7 @@ PARTITION BY RANGE(a)
         PARTITION p1 start(1) end(10)
         WITH
         (
-                tablename='part_table_1_sss',
+                tablename='part_table_p1',
                 appendoptimized='true',
                 compresstype=zstd,
                 compresslevel=7,
@@ -566,7 +566,7 @@ FROM pg_attribute_encoding AS e
 WHERE p.relname LIKE 'part_table%'
 ORDER BY e.attrelid, e.attnum;
 
-SELECT reloptions FROM pg_class WHERE relname = 'part_table_1_sss_2_prt_sp1';
+SELECT reloptions FROM pg_class WHERE relname = 'part_table_p1_2_prt_sp1';
 
 DROP TABLE part_table;
 DROP TABLE part_table2;
