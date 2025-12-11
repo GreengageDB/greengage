@@ -83,9 +83,8 @@ static List *generateDefaultPartition(ParseState *pstate,
 
 static char *extract_tablename_from_options(List **options);
 
-static List *mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
+static List *merge_inherited_and_default_encodings(GpPartDefElem *elem,
 											   Relation parentrel,
-											   ParseState *pstate,
 											   List *penc_cls,
 											   List *parent_tblenc);
 
@@ -1054,7 +1053,7 @@ split_encoding_clauses(List *encs, List **non_def,
 }
 
 static List *
-merge_partition_encoding(ParseState *pstate, List *elem_colencs, List *penc)
+merge_partition_encoding(List *elem_colencs, List *penc)
 {
 	List	   *elem_nondefs = NIL;
 	List	   *part_nondefs = NIL;
@@ -1127,10 +1126,18 @@ merge_partition_encoding(ParseState *pstate, List *elem_colencs, List *penc)
 	return elem_colencs;
 }
 
+/*
+ * Merge storage options together according to precedence described
+ * in documentation. 
+ *
+ * elem: used for extracting 'with' options
+ * parentrel: used for getting columns names
+ * penc_cls: carries column encodings specified on table level
+ * parent_tblenc: carries encodings on columns from parent table
+ */
 static List *
-mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
+merge_inherited_and_default_encodings(GpPartDefElem *elem,
 								  Relation parentrel,
-								  ParseState *pstate,
 								  List *penc_cls,
 								  List *parent_tblenc)
 {
@@ -1153,7 +1160,7 @@ mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
 		 */
 		if (tmpenc != NIL)
 		{
-			ColumnReferenceStorageDirective *deflt = NULL;
+			
 			TupleDesc tupdesc = RelationGetDescr(parentrel);
 
 			for (int i = 0; i < tupdesc->natts; i++)
@@ -1163,7 +1170,8 @@ mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
 				if (att->attisdropped)
 					continue;
 
-				deflt = makeNode(ColumnReferenceStorageDirective);
+				ColumnReferenceStorageDirective *deflt 
+					= makeNode(ColumnReferenceStorageDirective);
 				deflt->column = pstrdup(NameStr(att->attname));
 				deflt->encoding = transformStorageEncodingClause(tmpenc, false);
 
@@ -1177,8 +1185,8 @@ mergeInheritedAndDefaultEncodings(GpPartDefElem *elem,
 	 * configuration level. (Each partition element level encoding will be
 	 * merged later to this). 
 	 */
-	out_cls = merge_partition_encoding(pstate, with_cls, parent_tblenc);
-	out_cls = merge_partition_encoding(pstate, penc_cls_tmp, out_cls);
+	out_cls = merge_partition_encoding(with_cls, parent_tblenc);
+	out_cls = merge_partition_encoding(penc_cls_tmp, out_cls);
 	return out_cls;
 }
 
@@ -1868,8 +1876,9 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 						parser_errposition(pstate, ((GpPartitionDefinition*)elem->subSpec)->location)));
 
 		/* Merge parental, default and with options in separate place. */
-		final_cls = mergeInheritedAndDefaultEncodings(elem, parentrel, pstate,
-													  penc_cls, parent_tblenc);
+		final_cls = merge_inherited_and_default_encodings(elem, parentrel,
+														  penc_cls,
+														  parent_tblenc);
 
 		/* if WITH has "tablename" then it will be used as name for partition */
 		partcomp.tablename = extract_tablename_from_options(&elem->options);
@@ -1885,7 +1894,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 			elem->options = parentoptions ? copyObject(parentoptions) : NIL;
 
 		if (elem->accessMethod && strcmp(elem->accessMethod, "ao_column") == 0)
-			elem->colencs = merge_partition_encoding(pstate, elem->colencs, final_cls);
+			elem->colencs = merge_partition_encoding(elem->colencs, final_cls);
 
 		if (elem->isDefault)
 			new_parts = generateDefaultPartition(pstate, parentrel, elem,

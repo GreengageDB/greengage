@@ -503,6 +503,7 @@ drop table if exists co_can cascade;
 
 --start_ignore
 DROP TABLE IF EXISTS part_table cascade;
+DROP TABLE IF EXISTS part_table2 cascade;
 --end_ignore
 
 CREATE TABLE part_table
@@ -567,7 +568,5 @@ ORDER BY e.attrelid, e.attnum;
 
 SELECT reloptions FROM pg_class WHERE relname = 'part_table_1_sss_2_prt_sp1';
 
---start_ignore
 DROP TABLE part_table;
 DROP TABLE part_table2;
---end_ignore

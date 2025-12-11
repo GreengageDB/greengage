@@ -947,10 +947,6 @@ Options: compresstype=zlib, compresslevel=1, blocksize=32768, checksum=true
  SET gp_default_storage_options TO DEFAULT;
  SET default_table_access_method TO DEFAULT;
 -- check that compression settings are applied correctly
---start_ignore
-DROP TABLE IF EXISTS part_table cascade;
-NOTICE:  table "part_table" does not exist, skipping
---end_ignore
 CREATE TABLE part_table
 (
         id int ENCODING(compresstype=zstd, compresslevel=3),
@@ -1040,7 +1036,5 @@ SELECT reloptions FROM pg_class WHERE relname = 'part_table_1_sss_2_prt_sp1';
  {compresstype=zstd,compresslevel=9,blocksize=32768,checksum=true}
 (1 row)
 
---start_ignore
 DROP TABLE part_table;
 DROP TABLE part_table2;
---end_ignore
