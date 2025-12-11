@@ -202,3 +202,10 @@ explain (slicetable, costs off) SELECT * FROM explaintest;
 
 -- same in JSON format
 explain (slicetable, costs off, format json) SELECT * FROM explaintest;
+
+-- explain should not hide error from segment
+-- error must be handled by executor earlier
+CREATE TABLE t1 (a int);
+EXPLAIN ANALYZE INSERT INTO t1 SELECT 1/gp_segment_id
+FROM gp_dist_random('gp_id');
+DROP TABLE t1;
