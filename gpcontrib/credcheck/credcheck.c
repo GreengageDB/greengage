@@ -1440,7 +1440,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	char load_roleid[NAMEDATALEN] = {0};
 	Oid roleid = InvalidOid;
 
-	if (NOT_IN_PARALLEL_WORKER)
+	/* If top level (not SPI re-enter, etc) and not in a parallel worker */
+	if (context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
 	{
 		Node *parsetree = pstmt->utilityStmt;
 
