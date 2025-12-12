@@ -2108,9 +2108,9 @@ tuplestore_reader_waitready(TuplestoreSharingState *sstate)
  * Open a shared tuplestore that has been populated in another process
  * for reading.
  *
- * Waiting is determined by skip_open parameter. If it is set to true,
+ * Waiting is determined by skip_open parameter. If it is set to false,
  * this call will block until the tuplestore is filled by the writer.
- * If it is set to false, it will return immediately, without actually
+ * If it is set to true, it will return immediately, without actually
  * opening any files (as they might not even be created yet). Reading
  * from this tuplestore is then invalid.
  *
