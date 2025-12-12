@@ -2174,17 +2174,16 @@ tuplestore_open_shared_extended(SharedFileSet *fileset, const char *filename, bo
 	state->fileset = fileset;
 	state->shared_filename = pstrdup(filename);
 
-	/* Early exit if requested */
-	if (skip_open)
-		return state;
+	/* Only open file if requested */
+	if (!skip_open) {
+		/* Wait until writer is ready */
+		tuplestore_reader_waitready(sstate);
 
-	/* Wait until writer is ready */
-	tuplestore_reader_waitready(sstate);
-
-	state->myfile = BufFileOpenShared(fileset, filename);
-	state->readptrs[0].file = 0;
-	state->readptrs[0].offset = 0L;
-	state->status = TSS_READFILE;
+		state->myfile = BufFileOpenShared(fileset, filename);
+		state->readptrs[0].file = 0;
+		state->readptrs[0].offset = 0L;
+		state->status = TSS_READFILE;
+	}
 
 	/* Remember this tuplestore in case we have to close it while aborting */
 	local_shared_tuplestores = lappend(local_shared_tuplestores, state);
