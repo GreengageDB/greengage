@@ -66,7 +66,7 @@ InitResManager(void)
 	}
 	else if (IsResGroupEnabled() &&
 			 (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE ||
-			  (am_cursor_retrieve_handler)) &&
+			  am_cursor_retrieve_handler) &&
 			 IsUnderPostmaster && !amAuxiliaryBgWorker() && !am_walsender &&
 			 !am_ftshandler && !am_faulthandler)
 	{

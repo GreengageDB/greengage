@@ -2951,7 +2951,7 @@ SwitchResGroupOnRetrieveSession(void)
 	ResGroupCaps caps = {0};
 	Oid	groupId = InvalidOid;
 
-	ResGroupSlotData *slot = MySessionState->resGroupSlot;
+	const ResGroupSlotData *slot = MySessionState->resGroupSlot;
 
 	Assert(am_cursor_retrieve_handler);
 
@@ -2972,7 +2972,9 @@ SwitchResGroupOnRetrieveSession(void)
 
 	if (slot != NULL)
 	{
+#ifdef USE_ASSERT_CHECKING
 		slotValidate(slot);
+#endif
 
 		caps = slot->caps;
 		groupId = slot->groupId;
