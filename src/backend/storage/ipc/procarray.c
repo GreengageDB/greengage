@@ -4952,22 +4952,12 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
 	{
 		PGPROC	   *proc = &allProcs[arrayP->pgprocnos[i]];
 
+		/* Retrieve sessions are in utility mode. Grab them too. */
 		if (proc->mppSessionId != sessionId &&
-			proc->mppSessionId != InvalidGpSessionId)
+			!isRetrieveConnection(proc->pid, sessionId))
 		{
 			continue;
 		}
-
-		if (proc->mppSessionId == InvalidGpSessionId)
-		{
-			/*
-			 * If this session is running PARALLEL RETRIEVE CURSOR, we must move
-			 * signal to retrieve connection.
-			 */
-			if (!isRetrieveConnection(proc->pid, sessionId))
-				continue;
-		}
-
 
 		/*
 		 * Before, we didn't distinguish entrydb processes from main target
