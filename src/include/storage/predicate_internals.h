@@ -377,6 +377,7 @@ typedef enum PredicateLockTargetType
 	/* TODO SSI: Other types may be needed for index locking */
 } PredicateLockTargetType;
 
+#define PREDLOCKTAG_LAST PREDLOCKTAG_TUPLE
 
 /*
  * This structure is used to quickly capture a copy of all predicate
