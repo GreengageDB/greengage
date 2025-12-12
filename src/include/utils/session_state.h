@@ -96,15 +96,14 @@ typedef struct SessionState
 	 */
 	void *resGroupSlot;
 
-	/*
-	 * Bypass mode resource group information.
-	 * When gp_resource_group_bypass is enabled, store the bypass group ID
-	 * so retrieve sessions can initialize their bypass mode correctly.
-	 */
-	Oid bypassResGroupId;
-
 	/* MyProc->queryCommandId of the latest cursor command in this session */
 	int latestCursorCommandId;
+
+	/*
+	 * When gp_resource_group_bypass is enabled, stores the bypass group ID
+	 * so retrieve sessions can grab it from the backend holding the cursor.
+	 */
+	Oid bypassResGroupId;
 
 #ifdef USE_ASSERT_CHECKING
 	/* If we modify the sessionId in ProcMppSessionId, this field is turned on */
