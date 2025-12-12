@@ -17,7 +17,8 @@ DATA = $(wildcard updates/*--*.sql) $(EXTENSION)--$(EXTVERSION).sql
 
 REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
 TESTS = 01_username 02_password 03_rename 04_alter_pwd \
-	05_reuse_history 06_reuse_interval 07_valid_until
+	05_reuse_history 06_reuse_interval 07_valid_until \
+	08_first_login
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 

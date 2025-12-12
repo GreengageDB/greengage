@@ -215,7 +215,6 @@ static float save_auth_failure(Port *port, Oid userid);
 static void remove_auth_failure(const char *username, Oid userid);
 static void pg_banned_role_internal(FunctionCallInfo fcinfo);
 static void set_force_change_password(Oid databaseid, Oid roleid, char *valuestr);
-static void reset_force_change_password(Oid databaseid, Oid roleid);
 
 /* Username flags*/
 static int username_min_length = 1;
@@ -866,7 +865,7 @@ password_guc()
 				NULL, NULL, NULL);
 
 	DefineCustomBoolVariable("credcheck_internal.force_change_password",
-				gettext_noop("force the user to change his password at first login"),
+				gettext_noop("force the user to change his password"),
 				NULL, &force_change_password, false, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
@@ -1438,6 +1437,9 @@ _PG_fini(void)
 static void
 cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
+	char load_roleid[NAMEDATALEN] = {0};
+	Oid roleid = InvalidOid;
+
 	if (NOT_IN_PARALLEL_WORKER)
 	{
 		Node *parsetree = pstmt->utilityStmt;
@@ -1583,7 +1585,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 #endif
 				if (force_change_password)
 				{
-					reset_force_change_password(0, get_role_oid(stmt->role->rolename, true));
+					/* RESET variable, valuestr = NULL*/
+					set_force_change_password(InvalidOid, get_role_oid(stmt->role->rolename, true), NULL);
 					force_change_password = false;
 				}
 
@@ -1692,15 +1695,13 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("require a VALID UNTIL option with a date beyond %d days"), password_valid_max)));
 
-				/* set force change password option if password_change_first_login is set */
-				if (password_change_first_login)
-					set_force_change_password(0, get_role_oid(stmt->role, true), "true");
-
 #if PG_VERSION_NUM >= 120000
 				/* The password can be saved into the history */
 				if (save_password)
 					save_password_in_history(stmt->role, password);
 #endif
+				strcpy(load_roleid, stmt->role);
+
 				break;
 			}
 
@@ -1729,6 +1730,13 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
 	else
 		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+
+	if (load_roleid[0] != '\0')
+		roleid = get_role_oid(load_roleid, true);
+
+	/* set force change password option if password_change_first_login is set */
+	if (password_change_first_login && roleid != InvalidOid)
+		set_force_change_password(InvalidOid, roleid, "true");
 
 }
 
@@ -2691,54 +2699,6 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 static void
 set_force_change_password(Oid databaseid, Oid roleid, char *valuestr)
 {
-	//HeapTuple       tuple;
-	Relation	rel;
-	ScanKeyData scankey[2];
-	SysScanDesc scan;
-
-	/* Get the old tuple, if any. */
-
-	rel = table_open(DbRoleSettingRelationId, RowExclusiveLock);
-	ScanKeyInit(&scankey[0],
-				Anum_pg_db_role_setting_setdatabase,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(databaseid));
-	ScanKeyInit(&scankey[1],
-				Anum_pg_db_role_setting_setrole,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(roleid));
-	scan = systable_beginscan(rel, DbRoleSettingDatidRolidIndexId, true,
-							  NULL, 2, scankey);
-	//tuple = systable_getnext(scan);
-
-	if (valuestr)
-	{
-		/* non-null valuestr means it's not RESET, so insert a new tuple */
-		HeapTuple	newtuple;
-		Datum		values[Natts_pg_db_role_setting];
-		bool		nulls[Natts_pg_db_role_setting];
-		ArrayType  *a;
-
-		memset(nulls, false, sizeof(nulls));
-
-		a = GUCArrayAdd(NULL, "credcheck_internal.force_change_password", valuestr);
-
-		values[Anum_pg_db_role_setting_setdatabase - 1] = ObjectIdGetDatum(databaseid);
-		values[Anum_pg_db_role_setting_setrole - 1] = ObjectIdGetDatum(roleid);
-		values[Anum_pg_db_role_setting_setconfig - 1] = PointerGetDatum(a);
-		newtuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
-
-		CatalogTupleInsert(rel, newtuple);
-	}
-	systable_endscan(scan);
-
-	/* Close pg_db_role_setting, but keep lock till commit */
-	table_close(rel, NoLock);
-}
-
-static void
-reset_force_change_password(Oid databaseid, Oid roleid)
-{
 	bool need_priv_escalation = !superuser(); /* we might be a SU */
 	Oid     save_userid;
 	int     save_sec_context;
@@ -2746,6 +2706,9 @@ reset_force_change_password(Oid databaseid, Oid roleid)
 	Relation	rel;
 	ScanKeyData scankey[2];
 	SysScanDesc scan;
+
+	if (roleid == InvalidOid)
+		return;
 
 	/* The setting reseet must be done as SU */
 	if (need_priv_escalation)
@@ -2791,7 +2754,11 @@ reset_force_change_password(Oid databaseid, Oid roleid)
 							 RelationGetDescr(rel), &isnull);
 		a = isnull ? NULL : DatumGetArrayTypeP(datum);
 
-		a = GUCArrayDelete(a, "credcheck_internal.force_change_password");
+                /* Update (valuestr is NULL in RESET cases) */
+                if (valuestr)
+                        a = GUCArrayAdd(a, "credcheck_internal.force_change_password", valuestr);
+                else
+                        a = GUCArrayDelete(a,  "credcheck_internal.force_change_password");
 
 		if (a)
 		{
@@ -2804,6 +2771,25 @@ reset_force_change_password(Oid databaseid, Oid roleid)
 		}
 		else
 			CatalogTupleDelete(rel, &tuple->t_self);
+	}
+	else if (valuestr)
+	{
+                /* non-null valuestr means it's not RESET, so insert a new tuple */
+                HeapTuple       newtuple;
+                Datum           values[Natts_pg_db_role_setting];
+                bool            nulls[Natts_pg_db_role_setting];
+                ArrayType  *a;
+
+                memset(nulls, false, sizeof(nulls));
+
+                a = GUCArrayAdd(NULL, "credcheck_internal.force_change_password", valuestr);
+
+                values[Anum_pg_db_role_setting_setdatabase - 1] = ObjectIdGetDatum(databaseid);
+                values[Anum_pg_db_role_setting_setrole - 1] = ObjectIdGetDatum(roleid);
+                values[Anum_pg_db_role_setting_setconfig - 1] = PointerGetDatum(a);
+                newtuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
+
+                CatalogTupleInsert(rel, newtuple);
 	}
 
 	systable_endscan(scan);

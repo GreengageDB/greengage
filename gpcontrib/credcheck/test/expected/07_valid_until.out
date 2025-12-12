@@ -29,7 +29,7 @@ SET credcheck.password_valid_until TO 4;
 SET credcheck.password_valid_max TO 0;
 -- the VALID UNTIL clause must be present, if not it will be added automaticaly
 CREATE USER aaa PASSWORD 'DummY';
-select count(*) from pg_shadow where usename = 'aaa' AND valuntil = (now()+'5 days'::interval)::date;
+select count(*) from pg_shadow where usename = 'aaa' AND valuntil::date = (now()+'5 days'::interval)::date;
  count 
 -------
      1
