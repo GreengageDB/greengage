@@ -853,7 +853,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		/*
 			There can be several tables... Rework this later.
 		*/
-		GpPolicy* levelPolicy;
+		GpPolicy* levelPolicy = NULL;
 		foreach(l, subroot->parse->rtable)
 		{
 			RangeTblEntry *rte = lfirst(l);
@@ -866,19 +866,19 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 			foreach(l,  r->plan_params)
 			{
 				PlannerParamItem *p = lfirst(l);
-
 				for (i = 0; i < extParamCnt; i++)
 				{
 					if (p->paramId == extParamIds[i])
 					{
-						GpPolicy* paramPolicy;
+						GpPolicy* paramPolicy = NULL;
 						ListCell *t;
 						foreach(t, r->parse->rtable)
 						{
 							RangeTblEntry *rte = lfirst(t);
 							paramPolicy = GpPolicyFetch(rte->relid);
 
-							if (paramPolicy->ptype != levelPolicy->ptype) {
+							if (levelPolicy && paramPolicy && paramPolicy->ptype != levelPolicy->ptype) 
+							{
 								sameDistributed = false;
 								break;
 							}
@@ -886,7 +886,6 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 					}
 				}
 			}
-
 			r = root->parent_root;
 		}
 	}
