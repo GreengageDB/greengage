@@ -3886,7 +3886,7 @@ TerminateOtherDBBackends(Oid databaseId)
 
 		/*
 		 * Check whether we have the necessary rights to terminate other
-		 * sessions.  We don't terminate any session untill we ensure that we
+		 * sessions.  We don't terminate any session until we ensure that we
 		 * have rights on all the sessions to be terminated.  These checks are
 		 * the same as we do in pg_terminate_backend.
 		 *
@@ -4543,7 +4543,14 @@ KnownAssignedXidsAdd(TransactionId from_xid, TransactionId to_xid,
 		 * If it still won't fit then we're out of memory
 		 */
 		if (head + nxids > pArray->maxKnownAssignedXids)
-			elog(ERROR, "too many KnownAssignedXids");
+		{
+			StandbyParamErrorPauseRecovery();
+			ereport(ERROR,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					 errmsg("out of shared memory"),
+					 errdetail("There are no more KnownAssignedXids slots."),
+					 errhint("You might need to increase max_connections.")));
+		}
 	}
 
 	/* Now we can insert the xids into the space starting at head */

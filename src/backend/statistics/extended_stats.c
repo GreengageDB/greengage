@@ -494,12 +494,14 @@ statext_store(Oid statOid,
 			  MVNDistinct *ndistinct, MVDependencies *dependencies,
 			  MCVList *mcv, VacAttrStats **stats)
 {
+	Relation	pg_stextdata;
 	HeapTuple	stup,
 				oldtup;
 	Datum		values[Natts_pg_statistic_ext_data];
 	bool		nulls[Natts_pg_statistic_ext_data];
 	bool		replaces[Natts_pg_statistic_ext_data];
-	Relation	pg_stextdata;
+
+	pg_stextdata = table_open(StatisticExtDataRelationId, RowExclusiveLock);
 
 	memset(nulls, true, sizeof(nulls));
 	memset(replaces, false, sizeof(replaces));
@@ -543,8 +545,6 @@ statext_store(Oid statOid,
 		elog(ERROR, "cache lookup failed for statistics object %u", statOid);
 
 	/* replace it */
-	pg_stextdata = table_open(StatisticExtDataRelationId, RowExclusiveLock);
-
 	stup = heap_modify_tuple(oldtup,
 							 RelationGetDescr(pg_stextdata),
 							 values,
@@ -994,7 +994,7 @@ statext_is_compatible_clause_internal(PlannerInfo *root, Node *clause,
 		if (list_length(expr->args) != 2)
 			return false;
 
-		/* Check if the expression the right shape (one Var, one Const) */
+		/* Check if the expression has the right shape (one Var, one Const) */
 		if (!examine_clause_args(expr->args, &var, NULL, NULL))
 			return false;
 
@@ -1050,7 +1050,7 @@ statext_is_compatible_clause_internal(PlannerInfo *root, Node *clause,
 		if (list_length(expr->args) != 2)
 			return false;
 
-		/* Check if the expression the right shape (one Var, one Const) */
+		/* Check if the expression has the right shape (one Var, one Const) */
 		if (!examine_clause_args(expr->args, &var, NULL, NULL))
 			return false;
 

@@ -358,7 +358,7 @@ SKIP:
 	$node->safe_psql('postgres',
 		"CREATE TABLESPACE tblspc3 LOCATION '$tempdir/$superlongname';");
 	$node->command_ok(
-		[ 'pg_basebackup', '-D', "$tempdir/tarbackup_l3", '--target-gp-dbid', '123', '-Ft' ],
+		[ 'pg_basebackup', '-D', "$tempdir/tarbackup_l3", '--no-estimate-size', '--target-gp-dbid', '123', '-Ft' ],
 		'pg_basebackup tar with long symlink target');
 	$node->safe_psql('postgres', "DROP TABLESPACE tblspc3;");
 	rmtree("$tempdir/tarbackup_l3");

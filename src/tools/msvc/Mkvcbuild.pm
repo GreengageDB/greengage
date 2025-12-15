@@ -123,6 +123,7 @@ sub mkvcbuild
 	}
 
 	our @pgcommonallfiles = qw(
+	  archive.c
 	  base64.c config_info.c controldata_utils.c d2s.c encnames.c exec.c
 	  f2s.c file_perm.c hashfn.c ip.c jsonapi.c
 	  keywords.c kwlookup.c link-canary.c md5.c
@@ -141,8 +142,8 @@ sub mkvcbuild
 	}
 
 	our @pgcommonfrontendfiles = (
-		@pgcommonallfiles, qw(fe_memutils.c file_utils.c
-		  logging.c restricted_token.c));
+		@pgcommonallfiles, qw(fe_archive.c fe_memutils.c
+		  file_utils.c logging.c restricted_token.c));
 
 	our @pgcommonbkndfiles = @pgcommonallfiles;
 
@@ -447,7 +448,7 @@ sub mkvcbuild
 
 	if (!$solution->{options}->{openssl})
 	{
-		push @contrib_excludes, 'sslinfo';
+		push @contrib_excludes, 'sslinfo', 'ssl_passphrase_callback';
 	}
 
 	if (!$solution->{options}->{uuid})

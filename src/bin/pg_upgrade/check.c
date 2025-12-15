@@ -1100,6 +1100,7 @@ check_for_reg_data_type_usage(ClusterInfo *cluster)
 								"            WHERE nspname = 'pg_catalog') AND"
 								"		t.typname IN ( "
 		/* regclass.oid is preserved, so 'regclass' is OK */
+								"           'regcollation', "
 								"           'regconfig', "
 								"           'regdictionary', "
 								"           'regnamespace', "

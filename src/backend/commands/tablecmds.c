@@ -6912,12 +6912,14 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 					ereport(ERROR,
 							(errcode(ERRCODE_CHECK_VIOLATION),
 							 errmsg("updated partition constraint for default partition \"%s\" would be violated by some row",
-									RelationGetRelationName(oldrel))));
+									RelationGetRelationName(oldrel)),
+							 errtable(oldrel)));
 				else
 					ereport(ERROR,
 							(errcode(ERRCODE_CHECK_VIOLATION),
 							 errmsg("partition constraint of relation \"%s\" is violated by some row",
-									RelationGetRelationName(oldrel))));
+									RelationGetRelationName(oldrel)),
+							 errtable(oldrel)));
 			}
 
 			/* Write the tuple out to the new relation */
@@ -7689,7 +7691,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 
 	ReleaseSysCache(typeTuple);
 
-	InsertPgAttributeTuple(attrdesc, &attribute, NULL);
+	InsertPgAttributeTuple(attrdesc, &attribute, (Datum) 0, NULL);
 
 	table_close(attrdesc, RowExclusiveLock);
 
@@ -16697,7 +16699,7 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 		rawstmt->stmt_len = 0;
 
 		q_list = pg_analyze_and_rewrite(rawstmt, synthetic_sql, NULL, 0, NULL);
-		p_list = pg_plan_queries(q_list, 0, NULL);
+		p_list = pg_plan_queries(q_list, NULL, 0, NULL);
 		pstmt = linitial_node(PlannedStmt, p_list);
 		ctas = castNode(CreateTableAsStmt, pstmt->utilityStmt);
 
@@ -16729,7 +16731,7 @@ build_ctas_with_dist(Relation rel, DistributedBy *dist_clause,
 	Assert(q->commandType == CMD_SELECT || q->commandType == CMD_INSERT);
 
 	/* plan the query */
-	stmt = planner(q, 0, NULL);
+	stmt = planner(q, NULL, 0, NULL);
 	stmt->intoClause = into;
 
 	/*
@@ -20628,7 +20630,8 @@ CloneRowTriggersToPartition(Relation parent, Relation partition)
 		/*
 		 * Complain if we find an unexpected trigger type.
 		 */
-		if (!TRIGGER_FOR_AFTER(trigForm->tgtype))
+		if (!TRIGGER_FOR_BEFORE(trigForm->tgtype) &&
+			!TRIGGER_FOR_AFTER(trigForm->tgtype))
 			elog(ERROR, "unexpected trigger \"%s\" found",
 				 NameStr(trigForm->tgname));
 

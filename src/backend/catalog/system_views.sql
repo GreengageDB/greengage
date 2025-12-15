@@ -580,6 +580,7 @@ CREATE VIEW pg_stat_all_tables_internal AS
             pg_stat_get_live_tuples(C.oid) AS n_live_tup,
             pg_stat_get_dead_tuples(C.oid) AS n_dead_tup,
             pg_stat_get_mod_since_analyze(C.oid) AS n_mod_since_analyze,
+            pg_stat_get_ins_since_vacuum(C.oid) AS n_ins_since_vacuum,
             pg_stat_get_last_vacuum_time(C.oid) as last_vacuum,
             pg_stat_get_last_autovacuum_time(C.oid) as last_autovacuum,
             pg_stat_get_last_analyze_time(C.oid) as last_analyze,
@@ -612,6 +613,7 @@ SELECT
     m.n_live_tup,
     m.n_dead_tup,
     m.n_mod_since_analyze,
+    m.n_ins_since_vacuum,
     s.last_vacuum,
     s.last_autovacuum,
     s.last_analyze,
@@ -636,6 +638,7 @@ FROM
          case when d.policytype = 'r' then (sum(n_live_tup)/d.numsegments)::bigint else sum(n_live_tup) end n_live_tup,
          case when d.policytype = 'r' then (sum(n_dead_tup)/d.numsegments)::bigint else sum(n_dead_tup) end n_dead_tup,
          case when d.policytype = 'r' then (sum(n_mod_since_analyze)/d.numsegments)::bigint else sum(n_mod_since_analyze) end n_mod_since_analyze,
+         case when d.policytype = 'r' then (sum(n_ins_since_vacuum)/d.numsegments)::bigint else sum(n_ins_since_vacuum) end n_ins_since_vacuum,
          max(last_vacuum) as last_vacuum,
          max(last_autovacuum) as last_autovacuum,
          max(last_analyze) as last_analyze,
@@ -966,6 +969,19 @@ CREATE VIEW gp_stat_replication AS
          spill_txns int8, spill_count int8, spill_bytes int8)
          ON G.gp_segment_id = R.gp_segment_id
     );
+
+CREATE VIEW pg_stat_slru AS
+    SELECT
+            s.name,
+            s.blks_zeroed,
+            s.blks_hit,
+            s.blks_read,
+            s.blks_written,
+            s.blks_exists,
+            s.flushes,
+            s.truncates,
+            s.stats_reset
+    FROM pg_stat_get_slru() s;
 
 CREATE VIEW pg_stat_wal_receiver AS
     SELECT
@@ -1458,7 +1474,7 @@ CREATE VIEW pg_stat_progress_basebackup AS
                       WHEN 4 THEN 'waiting for wal archiving to finish'
                       WHEN 5 THEN 'transferring wal files'
                       END AS phase,
-	S.param2 AS backup_total,
+	CASE S.param2 WHEN -1 THEN NULL ELSE S.param2 END AS backup_total,
 	S.param3 AS backup_streamed,
 	S.param4 AS tablespaces_total,
 	S.param5 AS tablespaces_streamed
@@ -1775,6 +1791,21 @@ LANGUAGE INTERNAL
 STRICT STABLE PARALLEL SAFE
 AS 'jsonb_path_query_first_tz';
 
+-- default normalization form is NFC, per SQL standard
+CREATE OR REPLACE FUNCTION
+  "normalize"(text, text DEFAULT 'NFC')
+RETURNS text
+LANGUAGE internal
+STRICT IMMUTABLE PARALLEL SAFE
+AS 'unicode_normalize_func';
+
+CREATE OR REPLACE FUNCTION
+  is_normalized(text, text DEFAULT 'NFC')
+RETURNS boolean
+LANGUAGE internal
+STRICT IMMUTABLE PARALLEL SAFE
+AS 'unicode_is_normalized';
+
 --
 -- The default permissions for functions mean that anyone can execute them.
 -- A number of functions shouldn't be executable by just anyone, but rather
@@ -1798,6 +1829,7 @@ REVOKE EXECUTE ON FUNCTION pg_promote(boolean, integer) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_stat_reset() FROM public;
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_shared(text) FROM public;
+REVOKE EXECUTE ON FUNCTION pg_stat_reset_slru(text) FROM public;
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_single_table_counters(oid) FROM public;
 REVOKE EXECUTE ON FUNCTION pg_stat_reset_single_function_counters(oid) FROM public;
 

@@ -40,7 +40,7 @@ bool am_startup = false;
  */
 static volatile sig_atomic_t got_SIGHUP = false;
 static volatile sig_atomic_t shutdown_requested = false;
-static volatile sig_atomic_t promote_triggered = false;
+static volatile sig_atomic_t promote_signaled = false;
 
 /*
  * Flag set when executing a restore command, to tell SIGTERM signal handler
@@ -64,7 +64,7 @@ StartupProcTriggerHandler(SIGNAL_ARGS)
 {
 	int			save_errno = errno;
 
-	promote_triggered = true;
+	promote_signaled = true;
 	WakeupRecovery();
 
 	errno = save_errno;
@@ -97,17 +97,51 @@ StartupProcShutdownHandler(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
+/*
+ * Re-read the config file.
+ *
+ * If one of the critical walreceiver options has changed, flag xlog.c
+ * to restart it.
+ */
+static void
+StartupRereadConfig(void)
+{
+	char	   *conninfo = pstrdup(PrimaryConnInfo);
+	char	   *slotname = pstrdup(PrimarySlotName);
+	bool		tempSlot = wal_receiver_create_temp_slot;
+	bool		conninfoChanged;
+	bool		slotnameChanged;
+	bool		tempSlotChanged = false;
+
+	ProcessConfigFile(PGC_SIGHUP);
+
+	conninfoChanged = strcmp(conninfo, PrimaryConnInfo) != 0;
+	slotnameChanged = strcmp(slotname, PrimarySlotName) != 0;
+
+	/*
+	 * wal_receiver_create_temp_slot is used only when we have no slot
+	 * configured.  We do not need to track this change if it has no effect.
+	 */
+	if (!slotnameChanged && strcmp(PrimarySlotName, "") == 0)
+		tempSlotChanged = tempSlot != wal_receiver_create_temp_slot;
+	pfree(conninfo);
+	pfree(slotname);
+
+	if (conninfoChanged || slotnameChanged || tempSlotChanged)
+		StartupRequestWalReceiverRestart();
+}
+
 /* Handle various signals that might be sent to the startup process */
 void
 HandleStartupProcInterrupts(void)
 {
 	/*
-	 * Check if we were requested to re-read config file.
+	 * Process any requests or signals received recently.
 	 */
 	if (got_SIGHUP)
 	{
 		got_SIGHUP = false;
-		ProcessConfigFile(PGC_SIGHUP);
+		StartupRereadConfig();
 	}
 
 	/*
@@ -221,13 +255,13 @@ PostRestoreCommand(void)
 }
 
 bool
-IsPromoteTriggered(void)
+IsPromoteSignaled(void)
 {
-	return promote_triggered;
+	return promote_signaled;
 }
 
 void
-ResetPromoteTriggered(void)
+ResetPromoteSignaled(void)
 {
-	promote_triggered = false;
+	promote_signaled = false;
 }

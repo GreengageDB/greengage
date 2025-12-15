@@ -235,14 +235,15 @@ SELECT count(*) FROM testjsonb WHERE j ?& ARRAY['public','disabled'];
 CREATE INDEX jidx_array ON testjsonb USING gin((j->'array'));
 -- gin index on expression not support for orca
 EXPLAIN SELECT count(*) from testjsonb  WHERE j->'array' ? 'bar';
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
- Aggregate  (cost=400.05..400.06 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=300.01..400.04 rows=2 width=0)
-         ->  Bitmap Heap Scan on testjsonb  (cost=300.01..400.02 rows=1 width=0)
-               Recheck Cond: ((j -> 'array'::text) ? 'bar'::text)
-               ->  Bitmap Index Scan on jidx_array  (cost=0.00..300.01 rows=1 width=0)
-                     Index Cond: ((j -> 'array'::text) ? 'bar'::text)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=14.19..14.20 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=14.14..14.19 rows=3 width=8)
+         ->  Partial Aggregate  (cost=14.14..14.15 rows=1 width=8)
+               ->  Bitmap Heap Scan on testjsonb  (cost=12.08..14.13 rows=3 width=0)
+                     Recheck Cond: ((j -> 'array'::text) ? 'bar'::text)
+                     ->  Bitmap Index Scan on jidx_array  (cost=0.00..12.08 rows=3 width=0)
+                           Index Cond: ((j -> 'array'::text) ? 'bar'::text)
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -256,14 +257,15 @@ SELECT count(*) from testjsonb  WHERE j->'array' ? 'bar';
 -- matches strings that are either object keys or array elements)
 -- gin index on expression not support for orca
 EXPLAIN SELECT count(*) from testjsonb  WHERE j->'array' ? '5'::text;
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
- Aggregate  (cost=400.05..400.06 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=300.01..400.04 rows=2 width=0)
-         ->  Bitmap Heap Scan on testjsonb  (cost=300.01..400.02 rows=1 width=0)
-               Recheck Cond: ((j -> 'array'::text) ? '5'::text)
-               ->  Bitmap Index Scan on jidx_array  (cost=0.00..300.01 rows=1 width=0)
-                     Index Cond: ((j -> 'array'::text) ? '5'::text)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=14.19..14.20 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=14.14..14.19 rows=3 width=8)
+         ->  Partial Aggregate  (cost=14.14..14.15 rows=1 width=8)
+               ->  Bitmap Heap Scan on testjsonb  (cost=12.08..14.13 rows=3 width=0)
+                     Recheck Cond: ((j -> 'array'::text) ? '5'::text)
+                     ->  Bitmap Index Scan on jidx_array  (cost=0.00..12.08 rows=3 width=0)
+                           Index Cond: ((j -> 'array'::text) ? '5'::text)
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -275,14 +277,15 @@ SELECT count(*) from testjsonb  WHERE j->'array' ? '5'::text;
 
 -- However, a raw scalar is *contained* within the array
 EXPLAIN SELECT count(*) from testjsonb  WHERE j->'array' @> '5'::jsonb;
-                                      QUERY PLAN                                       
----------------------------------------------------------------------------------------
- Aggregate  (cost=400.05..400.06 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=300.01..400.04 rows=2 width=0)
-         ->  Bitmap Heap Scan on testjsonb  (cost=300.01..400.02 rows=1 width=0)
-               Recheck Cond: ((j -> 'array'::text) @> '5'::jsonb)
-               ->  Bitmap Index Scan on jidx_array  (cost=0.00..300.01 rows=1 width=0)
-                     Index Cond: ((j -> 'array'::text) @> '5'::jsonb)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=14.19..14.20 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=14.14..14.19 rows=3 width=8)
+         ->  Partial Aggregate  (cost=14.14..14.15 rows=1 width=8)
+               ->  Bitmap Heap Scan on testjsonb  (cost=12.08..14.13 rows=3 width=0)
+                     Recheck Cond: ((j -> 'array'::text) @> '5'::jsonb)
+                     ->  Bitmap Index Scan on jidx_array  (cost=0.00..12.08 rows=3 width=0)
+                           Index Cond: ((j -> 'array'::text) @> '5'::jsonb)
  Optimizer: Postgres query optimizer
 (8 rows)
 

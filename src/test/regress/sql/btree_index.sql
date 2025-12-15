@@ -228,3 +228,6 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 -- inspect the state of the stats on segments
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
+
+-- Test unsupported btree opclass parameters
+create index on btree_tall_tbl (id int4_ops(foo=1));

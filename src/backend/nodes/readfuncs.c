@@ -800,6 +800,7 @@ _readIndexElem(void)
 	READ_STRING_FIELD(indexcolname);
 	READ_NODE_FIELD(collation);
 	READ_NODE_FIELD(opclass);
+	READ_NODE_FIELD(opclassopts);
 	READ_ENUM_FIELD(ordering, SortByDir);
 	READ_ENUM_FIELD(nulls_ordering, SortByNulls);
 

@@ -46,6 +46,7 @@ LIBS += $(PTHREAD_LIBS)
 # If you add objects here, see also src/tools/msvc/Mkvcbuild.pm
 
 OBJS_COMMON = \
+	archive.o \
 	base64.o \
 	config_info.o \
 	controldata_utils.o \
@@ -88,6 +89,7 @@ endif
 # (Mkvcbuild.pm has a copy of this list, too)
 OBJS_FRONTEND = \
 	$(OBJS_COMMON) \
+	fe_archive.o \
 	fe_memutils.o \
 	file_utils.o \
 	logging.o \

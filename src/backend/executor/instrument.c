@@ -31,8 +31,6 @@ BufferUsage pgBufferUsage;
 static BufferUsage save_pgBufferUsage;
 
 static void BufferUsageAdd(BufferUsage *dst, const BufferUsage *add);
-static void BufferUsageAccumDiff(BufferUsage *dst,
-								 const BufferUsage *add, const BufferUsage *sub);
 
 /* GPDB specific */
 static bool shouldPickInstrInShmem(NodeTag tag);
@@ -234,7 +232,7 @@ BufferUsageAdd(BufferUsage *dst, const BufferUsage *add)
 }
 
 /* dst += add - sub */
-static void
+void
 BufferUsageAccumDiff(BufferUsage *dst,
 					 const BufferUsage *add,
 					 const BufferUsage *sub)

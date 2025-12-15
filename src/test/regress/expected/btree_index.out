@@ -470,3 +470,6 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
          2
 (1 row)
 
+-- Test unsupported btree opclass parameters
+create index on btree_tall_tbl (id int4_ops(foo=1));
+ERROR:  operator class int4_ops has no options

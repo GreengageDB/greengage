@@ -2519,8 +2519,7 @@ create_unique_rowid_path(PlannerInfo *root,
 					 subpath->startup_cost,
 					 subpath->total_cost,
 					 (rel->rows / numsegments),
-					 false /* streaming */
-				);
+					 subpath->pathtarget->width);
 	}
 
 	if (all_btree && all_hash)
