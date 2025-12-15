@@ -175,6 +175,7 @@ extern void SwitchResGroupOnSegment(const char *buf, int len);
 extern void SwitchResGroupOnRetrieveSession(void);
 
 extern bool ResGroupIsAssigned(void);
+extern bool ResGroupIsBypassed(void);
 
 /* Retrieve statistic information of type from resource group */
 extern Datum ResGroupGetStat(Oid groupId, ResGroupStatType type);

@@ -32,6 +32,7 @@
 #include "postgres.h"
 
 #include "access/xact.h"
+#include "nodes/parsenodes.h"
 #include "storage/ipc.h"
 #include "utils/backend_cancel.h"
 #include "utils/dynahash.h"
@@ -43,6 +44,7 @@
 #include "cdb/cdbsrlz.h"
 #include "utils/resource_manager.h"
 #include "utils/vmem_tracker.h"
+#include "tcop/pquery.h"
 
 /* Is this the utility-mode backend for RETRIEVE? */
 bool		am_cursor_retrieve_handler = false;
@@ -162,12 +164,6 @@ int
 RetrieveSessionId(void)
 {
 	return RetrieveCtl.sessionID;
-}
-
-bool
-IsRetrieveSessionOpen(void)
-{
-	return RetrieveCtl.current_entry != NULL;
 }
 
 /*
@@ -416,6 +412,12 @@ validate_retrieve_endpoint(Endpoint *endpoint, const char *endpointName)
 				 errmsg("endpoint %s was already attached by receiver(pid: %d)",
 						endpointName, endpoint->receiverPid),
 				 errdetail("An endpoint can only be attached by one retrieving session.")));
+	}
+
+	if (ShouldUseRetrieveResGroup())
+	{
+		/* We should have assigned the resource group already. */
+		Assert(ResGroupIsAssigned() || ResGroupIsBypassed());
 	}
 }
 

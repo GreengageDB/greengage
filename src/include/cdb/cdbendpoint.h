@@ -166,7 +166,6 @@ extern TupleDesc GetRetrieveStmtTupleDesc(const RetrieveStmt *stmt);
 extern void ExecRetrieveStmt(const RetrieveStmt *stmt, DestReceiver *dest);
 extern void check_parallel_retrieve_cursor_errors(EState *estate);
 extern int RetrieveSessionId(void);
-extern bool IsRetrieveSessionOpen(void);
 
 /* Endpoint shared memory utility functions in "cdbendpoint.c" */
 extern Endpoint *get_endpointdesc_by_index(int index);

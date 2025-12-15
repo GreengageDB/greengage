@@ -978,6 +978,12 @@ ResGroupIsAssigned(void)
 	return selfIsAssigned();
 }
 
+bool
+ResGroupIsBypassed(void)
+{
+	return bypassedGroup != NULL;
+}
+
 /*
  * Get resource group id of my proc.
  *
@@ -2681,10 +2687,8 @@ AssignResGroupOnMaster(void)
 		bypassedSlot.memQuota = 0;
 		bypassedSlot.memUsage = 0;
 
-		if (MySessionState)
-		{
-			MySessionState->bypassResGroupId = groupInfo.groupId;
-		}
+		/* Share bypassed group id for RETRIEVE connections. */
+		MySessionState->bypassResGroupId = groupInfo.groupId;
 
 		/* Attach self memory usage to resgroup */
 		groupIncMemUsage(bypassedGroup, &bypassedSlot, self->memUsage);
@@ -2759,8 +2763,11 @@ UnassignResGroup(void)
 		bypassedSlot.groupId = InvalidOid;
 		bypassedGroup = NULL;
 
-		/* Clear bypass group ID from SessionState */
-		MySessionState->bypassResGroupId = InvalidOid;
+		/* Clear shared bypass group ID. */
+		if (!am_cursor_retrieve_handler)
+		{
+			MySessionState->bypassResGroupId = InvalidOid;
+		}
 
 		/* Update pg_stat_activity statistics */
 		pgstat_report_resgroup(0, InvalidOid);
@@ -2831,7 +2838,7 @@ SwitchResGroupImpl(ResGroupCaps caps, Oid newGroupId)
 
 		Assert(bypassedGroup != NULL);
 
-		if (MySessionState)
+		if (!am_cursor_retrieve_handler)
 		{
 			MySessionState->bypassResGroupId = bypassedSlot.groupId;
 		}
@@ -2959,22 +2966,38 @@ SwitchResGroupOnRetrieveSession(void)
 	{
 		bypassedSlot.groupId = MySessionState->bypassResGroupId;
 
+		SIMPLE_FAULT_INJECTOR("switch_resgroup_ppc_bypass");
+
 		LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
 		bypassedSlot.group = groupHashFind(bypassedSlot.groupId, true);
 		LWLockRelease(ResGroupLock);
 	}
 	else if (slot == NULL)
 	{
-		/* The cursor was closed. */
-		Assert(!IsRetrieveSessionOpen());
+		if (bypassedGroup != NULL)
+		{
+			/* Already in bypass mode. */
+			Assert(bypassedGroup->groupId == bypassedSlot.groupId);
+		}
+		else
+		{
+			/* Cursor was closed while in bypass mode. */
+		}
+
 		return;
 	}
 
 	if (slot != NULL)
 	{
 #ifdef USE_ASSERT_CHECKING
+		/*
+		 * We reach here even if cursor was closed on coordinator, to fail
+		 * later.
+		 */
 		slotValidate(slot);
 #endif
+
+		SIMPLE_FAULT_INJECTOR("switch_resgroup_ppc");
 
 		caps = slot->caps;
 		groupId = slot->groupId;
