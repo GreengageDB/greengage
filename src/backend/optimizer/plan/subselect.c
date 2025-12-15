@@ -835,14 +835,63 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 	 * initPlan.  For ROWCOMPARE, we must modify the testexpr tree to contain
 	 * PARAM_EXEC Params instead of the PARAM_SUBLINK Params emitted by the
 	 * parser.
-	 * 
-	 * Note about: root->is_correlated_subplan
-	 * We also check that this subplan is not nested inside other, correlated
-	 * one. We need this check, because otherwise undirect correlated plans
-	 * would be executed as initplans on segments (even with master-only table)
 	 */
-	if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == EXISTS_SUBLINK
-		&& Gp_role == GP_ROLE_DISPATCH)
+	bool sameDistributed = true;
+	List *extParam = splan->extParam;
+	if (extParam != NIL) 
+	{
+		int extParamCnt = extParam->length;
+		int extParamIds[extParamCnt];
+		int i = 0;
+		ListCell   *l;
+		foreach(l, extParam)
+		{
+			extParamIds[i] = lfirst(l);
+			i++;
+		}
+
+		/*
+			There can be several tables... Rework this later.
+		*/
+		GpPolicy* levelPolicy;
+		foreach(l, subroot->parse->rtable)
+		{
+			RangeTblEntry *rte = lfirst(l);
+			levelPolicy = GpPolicyFetch(rte->relid);
+		}
+
+		PlannerInfo* r = root->parent_root;
+		while (r && sameDistributed) 
+		{
+			foreach(l,  r->plan_params)
+			{
+				PlannerParamItem *p = lfirst(l);
+
+				for (i = 0; i < extParamCnt; i++)
+				{
+					if (p->paramId == extParamIds[i])
+					{
+						GpPolicy* paramPolicy;
+						ListCell *t;
+						foreach(t, r->parse->rtable)
+						{
+							RangeTblEntry *rte = lfirst(t);
+							paramPolicy = GpPolicyFetch(rte->relid);
+
+							if (paramPolicy->ptype != levelPolicy->ptype) {
+								sameDistributed = false;
+								break;
+							}
+						}
+					}
+				}
+			}
+
+			r = root->parent_root;
+		}
+	}
+
+	if (splan->parParam == NIL && subLinkType == EXISTS_SUBLINK && sameDistributed && Gp_role == GP_ROLE_DISPATCH)
 	{
 		Param	   *prm;
 
@@ -852,8 +901,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == EXPR_SUBLINK &&
-			Gp_role == GP_ROLE_DISPATCH )
+	else if (splan->parParam == NIL && subLinkType == EXPR_SUBLINK && sameDistributed && Gp_role == GP_ROLE_DISPATCH)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Param	   *prm;
@@ -868,7 +916,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == ARRAY_SUBLINK
+	else if (splan->parParam == NIL && splan->extParam == NIL && sameDistributed && subLinkType == ARRAY_SUBLINK
 			&& Gp_role == GP_ROLE_DISPATCH)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
@@ -889,7 +937,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == ROWCOMPARE_SUBLINK
+	else if (splan->parParam == NIL && splan->extParam == NIL && sameDistributed && subLinkType == ROWCOMPARE_SUBLINK
 			&& Gp_role == GP_ROLE_DISPATCH)
 	{
 		/* Adjust the Params */
