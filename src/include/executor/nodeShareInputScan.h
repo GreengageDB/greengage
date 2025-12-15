@@ -24,7 +24,7 @@ extern void ExecEndShareInputScan(ShareInputScanState *node);
 extern void ExecReScanShareInputScan(ShareInputScanState *node);
 extern void ExecSquelchShareInputScan(ShareInputScanState *node);
 
-extern void ShareInputReaderNotifyDone(ShareInputScanState *node);
+extern void ShareInputReaderNotifyDone(ShareInputScanState *node); /* obsolete */
 
 extern Size ShareInputShmemSize(void);
 extern void ShareInputShmemInit(void);

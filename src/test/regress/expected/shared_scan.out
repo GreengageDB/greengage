@@ -245,6 +245,8 @@ return [fileNum]
 $$ language plpython3u execute on all segments;
 create table sisc(i int) distributed by (i);
 insert into sisc select generate_series(1, 100);
+create table sisc2 (i int, j int) distributed by (i);
+insert into sisc2 select x, x from generate_series(1, 10) x;
 -- Temp file number before running Shared Scan queries
 select sum(n) as num_temp_files_before from get_temp_file_num() n
 \gset
@@ -575,6 +577,319 @@ with cte1 as materialized (select i from sisc), cte2 as materialized (select i f
 
 with cte1 as materialized (select i from sisc), cte2 as materialized (select i from sisc) select count(*) from cte1 t1, cte1 t2, cte2 t3, cte2 t4 where t1.i/0 = 1;
 ERROR:  division by zero  (seg0 slice1 127.0.1.1:7002 pid=156369)
+-- InitPlan tests
+-- 1 CTE, 2 references in 2 InitPlans
+explain (costs off) with cte as materialized (select i from sisc2)
+select (select count(*) from cte) as a, (select count(*) from cte) as b;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Result
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 2:0)
+                             ->  Seq Scan on sisc2
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice4; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 4:0)
+ Optimizer: Postgres-based planner
+(13 rows)
+
+with cte as materialized (select i from sisc2)
+select (select count(*) from cte) as a, (select count(*) from cte) as b;
+ a  | b  
+----+----
+ 10 | 10
+(1 row)
+
+-- 1 CTE, 4 references in 2 InitPlans and main plan
+explain (costs off) with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 join cte t2 on t1.j = t2.j) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   InitPlan 1 (returns $0)  (slice2)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice3; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Hash Join
+                             Hash Cond: (t1.j = t2.j)
+                             ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                                   Hash Key: t1.j
+                                   ->  Subquery Scan on t1
+                                         ->  Shared Scan (share slice:id 4:0)
+                             ->  Hash
+                                   ->  Redistribute Motion 3:3  (slice5; segments: 3)
+                                         Hash Key: t2.j
+                                         ->  Subquery Scan on t2
+                                               ->  Shared Scan (share slice:id 5:0)
+                                                     ->  Seq Scan on sisc2
+   InitPlan 2 (returns $1)  (slice6)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice7; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 7:0)
+   ->  Subquery Scan on t4
+         ->  Shared Scan (share slice:id 1:0)
+ Optimizer: Postgres-based planner
+(25 rows)
+
+with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 join cte t2 on t1.j = t2.j) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+ a  | b  | i  
+----+----+----
+ 10 | 10 |  1
+ 10 | 10 |  5
+ 10 | 10 |  6
+ 10 | 10 |  9
+ 10 | 10 | 10
+ 10 | 10 |  2
+ 10 | 10 |  3
+ 10 | 10 |  4
+ 10 | 10 |  7
+ 10 | 10 |  8
+(10 rows)
+
+-- 1 CTE, 4 references in 3 nested InitPlans and main plan
+explain (costs off) with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 where (select count(*) from cte t2) > 0) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   InitPlan 2 (returns $1)  (slice2)
+     ->  Finalize Aggregate
+           InitPlan 1 (returns $0)  (slice4)
+             ->  Finalize Aggregate
+                   ->  Gather Motion 3:1  (slice5; segments: 3)
+                         ->  Partial Aggregate
+                               ->  Shared Scan (share slice:id 5:0)
+                                     ->  Seq Scan on sisc2
+           ->  Gather Motion 3:1  (slice3; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Result
+                             One-Time Filter: ($0 > 0)
+                             ->  Shared Scan (share slice:id 3:0)
+   InitPlan 3 (returns $2)  (slice6)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice7; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 7:0)
+   ->  Subquery Scan on t4
+         ->  Shared Scan (share slice:id 1:0)
+ Optimizer: Postgres-based planner
+(22 rows)
+
+with cte as materialized (select i, j from sisc2)
+select (select count(*) from cte t1 where (select count(*) from cte t2) > 0) as a,
+       (select count(*) from cte t3) as b, i
+from cte t4;
+ a  | b  | i  
+----+----+----
+ 10 | 10 |  2
+ 10 | 10 |  3
+ 10 | 10 |  4
+ 10 | 10 |  7
+ 10 | 10 |  8
+ 10 | 10 |  5
+ 10 | 10 |  6
+ 10 | 10 |  9
+ 10 | 10 | 10
+ 10 | 10 |  1
+(10 rows)
+
+-- 2 CTEs, 4 references in 4 InitPlans
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i > 0)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Result
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 2:0)
+                             ->  Seq Scan on sisc2
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice4; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 4:1)
+                             ->  Seq Scan on sisc2 sisc2_1
+                                   Filter: (i > 0)
+   InitPlan 3 (returns $2)  (slice5)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 6:0)
+   InitPlan 4 (returns $3)  (slice7)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice8; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 8:1)
+ Optimizer: Postgres-based planner
+(25 rows)
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i > 0)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+ count | count | count | count 
+-------+-------+-------+-------
+    10 |    10 |    10 |    10
+(1 row)
+
+-- 2 CTEs, 4 references in 4 InitPlans with direct dispatch in one
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Result
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 2:0)
+                             ->  Seq Scan on sisc2
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Finalize Aggregate
+           ->  Gather Motion 1:1  (slice4; segments: 1)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 4:1)
+                             ->  Seq Scan on sisc2 sisc2_1
+                                   Filter: (i = 1)
+   InitPlan 3 (returns $2)  (slice5)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 6:0)
+   InitPlan 4 (returns $3)  (slice7)
+     ->  Finalize Aggregate
+           ->  Gather Motion 1:1  (slice8; segments: 1)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 8:1)
+ Optimizer: Postgres-based planner
+(25 rows)
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+ count | count | count | count 
+-------+-------+-------+-------
+    10 |     1 |    10 |     1
+(1 row)
+
+-- 2 CTEs, 4 references in 4 InitPlans with error in direct dispatch
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j/0) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Result
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 2:0)
+                             ->  Seq Scan on sisc2
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Finalize Aggregate
+           ->  Gather Motion 1:1  (slice4; segments: 1)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 4:1)
+                             ->  Seq Scan on sisc2 sisc2_1
+                                   Filter: (i = 1)
+   InitPlan 3 (returns $2)  (slice5)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 6:0)
+   InitPlan 4 (returns $3)  (slice7)
+     ->  Finalize Aggregate
+           ->  Gather Motion 1:1  (slice8; segments: 1)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 8:1)
+ Optimizer: Postgres-based planner
+(25 rows)
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j/0) from cte2),
+       (select count(j) from cte1),
+       (select count(j) from cte2);
+ERROR:  division by zero  (seg1 slice4 127.0.1.1:7003 pid=174923)
+-- 2 CTEs, 4 references in 4 InitPlans with error in full dispatch
+explain (costs off)
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j/0) from cte1),
+       (select count(j) from cte2);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Result
+   InitPlan 1 (returns $0)  (slice1)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 2:0)
+                             ->  Seq Scan on sisc2
+   InitPlan 2 (returns $1)  (slice3)
+     ->  Finalize Aggregate
+           ->  Gather Motion 1:1  (slice4; segments: 1)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 4:1)
+                             ->  Seq Scan on sisc2 sisc2_1
+                                   Filter: (i = 1)
+   InitPlan 3 (returns $2)  (slice5)
+     ->  Finalize Aggregate
+           ->  Gather Motion 3:1  (slice6; segments: 3)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 6:0)
+   InitPlan 4 (returns $3)  (slice7)
+     ->  Finalize Aggregate
+           ->  Gather Motion 1:1  (slice8; segments: 1)
+                 ->  Partial Aggregate
+                       ->  Shared Scan (share slice:id 8:1)
+ Optimizer: Postgres-based planner
+(25 rows)
+
+with cte1 as materialized (select i, j from sisc2),
+     cte2 as materialized (select i, j from sisc2 where i = 1)
+select (select count(j) from cte1),
+       (select count(j) from cte2),
+       (select count(j/0) from cte1),
+       (select count(j) from cte2);
+ERROR:  division by zero  (seg1 slice6 127.0.1.1:7003 pid=174923)
 -- All temporary files should have been cleaned up, so the number of files shouldn't be more than
 -- previously. It could be less if some previously existing file has been cleaned up in the meantime.
 select sum(n) as num_temp_files_after from get_temp_file_num() n
@@ -586,4 +901,5 @@ select :num_temp_files_before >= :num_temp_files_after;
 (1 row)
 
 drop table sisc;
+drop table sisc2;
 drop function get_temp_file_num();

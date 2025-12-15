@@ -444,7 +444,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  Success:
 (1 row)
 
-select gp_inject_fault('get_shareinput_reference_done', 'skip', dbid) from gp_segment_configuration where content = 2 and role = 'p';
+select gp_inject_fault('shareinput_squelched', 'skip', dbid) from gp_segment_configuration where content = 2 and role = 'p';
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
  gp_inject_fault 
@@ -461,7 +461,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- ability to redirect the LOGs as sterr into stdout. Hence directly using bash.
 \! bash -c 'psql -X regression -c "set client_min_messages to log; set debug_shareinput_xslice to true; set optimizer_enable_motion_broadcast to off; WITH cte AS MATERIALIZED (SELECT * FROM sisc_t1) SELECT y.a, z.a FROM (SELECT cte1.a, cte1.b FROM cte cte1 JOIN sisc_t2 ON (cte1.a = sisc_t2.d)) y, (SELECT cte2.a, cte2.b FROM cte cte2 JOIN sisc_t2 ON (cte2.a = sisc_t2.d)) z WHERE y.b = z.b - 1;" &> /tmp/bfv_cte.out' &
 -- Wait for both SISC READERs to be initialized and squelched
-select gp_wait_until_triggered_fault('get_shareinput_reference_done', 1, dbid) from gp_segment_configuration where content = 2 and role = 'p';
+select gp_wait_until_triggered_fault('shareinput_squelched', 1, dbid) from gp_segment_configuration where content = 2 and role = 'p';
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
  gp_wait_until_triggered_fault 
@@ -469,7 +469,7 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  Success:
 (1 row)
 
-select gp_inject_fault('get_shareinput_reference_done', 'reset', dbid) from gp_segment_configuration where content = 2 and role = 'p';
+select gp_inject_fault('shareinput_squelched', 'reset', dbid) from gp_segment_configuration where content = 2 and role = 'p';
 INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
 DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
  gp_inject_fault 
@@ -499,6 +499,12 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 (1 row)
 
 -- start_matchsubs
+-- m/file=SIRW_[0-9]+_[0-9]+_0/
+-- s/file=SIRW_[0-9]+_[0-9]+_0/file=SIRW_X_X_0/g
+-- m/SISC \(file=SIRW_X_X_0, slice=2\)/
+-- s/SISC \(file=SIRW_X_X_0, slice=2\)/SISC (file=SIRW_X_X_0, slice={2|4})/g
+-- m/SISC \(file=SIRW_X_X_0, slice=4\)/
+-- s/SISC \(file=SIRW_X_X_0, slice=4\)/SISC (file=SIRW_X_X_0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=2\)/
 -- s/SISC READER \(shareid=0, slice=2\)/SISC READER (shareid=0, slice={2|4})/g
 -- m/SISC READER \(shareid=0, slice=4\)/
@@ -511,13 +517,10 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
 -- end_matchsubs
 -- Filter out irrelevant LOG messages from segments other than seg2.
 \! cat /tmp/bfv_cte.out | grep -P '^(?!LOG)|^(LOG.*seg2)' | grep -vP 'LOG.*fault|decreased xslice state refcount'
-LOG:  SISC (shareid=0, slice=2): initialized xslice state  (seg2 slice2 127.0.1.1:7004 pid=1048240)
-LOG:  SISC READER (shareid=0, slice=2): wrote notify_done  (seg2 slice2 127.0.1.1:7004 pid=1048240)
-LOG:  SISC READER (shareid=0, slice=4): wrote notify_done  (seg2 slice4 127.0.1.1:7004 pid=1048252)
-LOG:  SISC WRITER (shareid=0, slice=1): No tuplestore yet, creating tuplestore  (seg2 slice1 127.0.1.1:7004 pid=1048234)
-LOG:  SISC WRITER (shareid=0, slice=1): wrote notify_ready  (seg2 slice1 127.0.1.1:7004 pid=1048234)
-LOG:  SISC WRITER (shareid=0, slice=1): got DONE message from 2 readers  (seg2 slice1 127.0.1.1:7004 pid=1048234)
-LOG:  SISC (shareid=0, slice=1): removed xslice state  (seg2 slice1 127.0.1.1:7004 pid=1048234)
+LOG:  SISC (file=SIRW_1048_5_0, slice=4): initialized shared state  (seg2 slice4 127.0.1.1:7004 pid=502227)
+LOG:  SISC WRITER (shareid=0, slice=1): No tuplestore yet, creating tuplestore  (seg2 slice1 127.0.1.1:7004 pid=502209)
+LOG:  SISC WRITER (file=SIRW_1048_5_0, slice=1): wrote notify_ready  (seg2 slice1 127.0.1.1:7004 pid=502209)
+LOG:  SISC (file=SIRW_1048_5_0, slice=1): file deleted  (seg2 slice1 127.0.1.1:7004 pid=502209)
  a | a 
 ---+---
  1 | 2
