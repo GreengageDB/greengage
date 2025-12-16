@@ -38,9 +38,22 @@ as 'select current_setting(''gp_contentid'')::smallint, pg_relation_filepath(t)'
 language sql
 execute on all segments;
 
-select '\! (stat --format=''%s'' ' || string_agg(full_path_relfilenode, ' ') || ' 2>/dev/null || echo 0) | awk ''{sum += $1} END {print sum}''' check_segfiles_size from 
-(select d.datadir || '/' || f.filepath || '.*' as full_path_relfilenode from getTableSegFiles('table_ao_col'::regclass) f join gp_segment_configuration d
-on f.gp_contentid = d.content where d.content <> -1 and d.role = 'p')t
+create or replace function cmdCheckSegmentFileSizes(table_name text) returns text as
+$$
+declare
+  cmd text;
+begin
+  select '\! (stat --format=''%s'' ' || string_agg(full_path_relfilenode, ' ') || ' 2>/dev/null || echo 0) | awk ''{sum += $1} END {print sum}'''
+  into cmd
+  from
+  (select d.datadir || '/' || f.filepath || '.*' as full_path_relfilenode from getTableSegFiles(table_name::regclass) f join gp_segment_configuration d
+    on f.gp_contentid = d.content where d.content <> -1 and d.role = 'p')t;
+
+  return cmd;
+end
+$$ language plpgsql;
+
+select cmdCheckSegmentFileSizes('table_ao_col') check_segfiles_size
 \gset
 
 delete from table_ao_col where true;
@@ -49,5 +62,65 @@ vacuum table_ao_col;
 
 :check_segfiles_size
 
-drop function getTableSegFiles(t regclass, out gp_contentid smallint, out filepath text);
 drop table table_ao_col;
+
+-- Test that vacuum can process segment files created for a new column in an aborted transaction (case 1)
+create table table_ao_col_1 (i int, j int, k int) with (appendonly='true', orientation="column");
+insert into table_ao_col_1 select i, i + 1, i + 2 from generate_series(1, 20) i;
+
+begin;
+alter table table_ao_col_1 add column a int;
+update table_ao_col_1 set a = 1 where true;
+rollback;
+
+select cmdCheckSegmentFileSizes('table_ao_col_1') check_segfiles_size_1
+\gset
+
+delete from table_ao_col_1 where true;
+
+vacuum table_ao_col_1;
+
+:check_segfiles_size_1
+
+drop table table_ao_col_1;
+
+-- Test that vacuum can process segment files created for a new column in an aborted transaction (case 2)
+create table table_ao_col_2 (i int, j int, k int) with (appendonly='true', orientation="column");
+
+begin;
+insert into table_ao_col_2 select i, i + 1, i + 2 from generate_series(1, 20) i;
+alter table table_ao_col_2 add column a int;
+update table_ao_col_2 set a = 1 where true;
+rollback;
+
+select cmdCheckSegmentFileSizes('table_ao_col_2') check_segfiles_size_2
+\gset
+
+vacuum table_ao_col_2;
+
+:check_segfiles_size_2
+
+drop table table_ao_col_2;
+
+-- Test vacuum for a AORO table after adding column in an aborted transaction
+create table table_ao_row (i int, j int, k int) with (appendonly='true', orientation="row");
+insert into table_ao_row select i, i + 1, i + 2 from generate_series(1, 20) i;
+
+begin;
+alter table table_ao_row add column a int;
+update table_ao_row set a = 1 where true;
+rollback;
+
+select cmdCheckSegmentFileSizes('table_ao_row') check_segfiles_size_aoro
+\gset
+
+delete from table_ao_row where true;
+
+vacuum table_ao_row;
+
+:check_segfiles_size_aoro
+
+drop table table_ao_row;
+
+drop function cmdCheckSegmentFileSizes(table_name text);
+drop function getTableSegFiles(t regclass, out gp_contentid smallint, out filepath text);
