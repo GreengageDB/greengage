@@ -861,7 +861,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		}
 
 		PlannerInfo* r = root->parent_root;
-		while (r->parent_root && sameDistributed) 
+		while (r && sameDistributed) 
 		{
 			foreach(l,  r->plan_params)
 			{
@@ -886,7 +886,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 					}
 				}
 			}
-			r = root->parent_root;
+			r = r->parent_root;
 		}
 	}
 
