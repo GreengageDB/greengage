@@ -498,3 +498,75 @@ drop table if exists co_can cascade;
  DROP TABLE pt_co_to_heap;
  SET gp_default_storage_options TO DEFAULT;
  SET default_table_access_method TO DEFAULT;
+
+-- check that compression settings are applied correctly
+
+--start_ignore
+DROP TABLE IF EXISTS part_table cascade;
+DROP TABLE IF EXISTS part_table2 cascade;
+--end_ignore
+
+CREATE TABLE part_table
+(
+        id int ENCODING(compresstype=zstd, compresslevel=3),
+        a int,
+        b text ENCODING(compresstype=zlib, compresslevel=4),
+        c text
+)
+        WITH (appendoptimized=true, compresstype=zstd, compresslevel=1, orientation='column')
+DISTRIBUTED BY (id)
+PARTITION BY RANGE(a)
+        SUBPARTITION BY LIST(b)
+        SUBPARTITION TEMPLATE
+        (
+                DEFAULT SUBPARTITION df_sp,
+                SUBPARTITION sp1 VALUES('M') WITH (appendoptimized=true, compresstype=zstd, compresslevel=9, orientation='row'),
+                SUBPARTITION sp2 VALUES('F') WITH (compresstype=zstd, compresslevel=10)
+        )
+(
+        PARTITION p1 start(1) end(10)
+        WITH
+        (
+                tablename='part_table_p1',
+                appendoptimized='true',
+                compresstype=zstd,
+                compresslevel=7,
+                orientation='column'
+        )                           
+        COLUMN id ENCODING(compresstype=zstd, compresslevel=5),
+        COLUMN a ENCODING(compresstype=zstd, compresslevel=2, blocksize=57344)
+);
+
+CREATE TABLE part_table2
+(
+        i int,
+        j int,
+        DEFAULT COLUMN ENCODING (compresstype=zlib)
+)
+WITH (appendonly = true, orientation=column)
+DISTRIBUTED BY (i)
+PARTITION BY RANGE(j)
+(
+        PARTITION p1 start(1) end(10),
+        PARTITION p2 start(10) end (20)
+        WITH
+        (
+                appendoptimized='true',
+                compresstype=zstd,
+                compresslevel=7,
+                orientation='column'
+        ),
+        COLUMN j ENCODING (compresstype=rle_type)
+);
+
+SELECT p.relname, a.attname, e.attoptions
+FROM pg_attribute_encoding AS e
+	JOIN pg_class AS p ON e.attrelid=p.oid
+	JOIN pg_attribute AS a ON a.attrelid=e.attrelid AND a.attnum=e.attnum
+WHERE p.relname LIKE 'part_table%'
+ORDER BY e.attrelid, e.attnum;
+
+SELECT reloptions FROM pg_class WHERE relname = 'part_table_p1_2_prt_sp1';
+
+DROP TABLE part_table;
+DROP TABLE part_table2;

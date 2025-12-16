@@ -946,3 +946,95 @@ Options: compresstype=zlib, compresslevel=1, blocksize=32768, checksum=true
  DROP TABLE pt_co_to_heap;
  SET gp_default_storage_options TO DEFAULT;
  SET default_table_access_method TO DEFAULT;
+-- check that compression settings are applied correctly
+CREATE TABLE part_table
+(
+        id int ENCODING(compresstype=zstd, compresslevel=3),
+        a int,
+        b text ENCODING(compresstype=zlib, compresslevel=4),
+        c text
+)
+        WITH (appendoptimized=true, compresstype=zstd, compresslevel=1, orientation='column')
+DISTRIBUTED BY (id)
+PARTITION BY RANGE(a)
+        SUBPARTITION BY LIST(b)
+        SUBPARTITION TEMPLATE
+        (
+                DEFAULT SUBPARTITION df_sp,
+                SUBPARTITION sp1 VALUES('M') WITH (appendoptimized=true, compresstype=zstd, compresslevel=9, orientation='row'),
+                SUBPARTITION sp2 VALUES('F') WITH (compresstype=zstd, compresslevel=10)
+        )
+(
+        PARTITION p1 start(1) end(10)
+        WITH
+        (
+                tablename='part_table_p1',
+                appendoptimized='true',
+                compresstype=zstd,
+                compresslevel=7,
+                orientation='column'
+        )                           
+        COLUMN id ENCODING(compresstype=zstd, compresslevel=5),
+        COLUMN a ENCODING(compresstype=zstd, compresslevel=2, blocksize=57344)
+);
+CREATE TABLE part_table2
+(
+        i int,
+        j int,
+        DEFAULT COLUMN ENCODING (compresstype=zlib)
+)
+WITH (appendonly = true, orientation=column)
+DISTRIBUTED BY (i)
+PARTITION BY RANGE(j)
+(
+        PARTITION p1 start(1) end(10),
+        PARTITION p2 start(10) end (20)
+        WITH
+        (
+                appendoptimized='true',
+                compresstype=zstd,
+                compresslevel=7,
+                orientation='column'
+        ),
+        COLUMN j ENCODING (compresstype=rle_type)
+);
+SELECT p.relname, a.attname, e.attoptions
+FROM pg_attribute_encoding AS e
+	JOIN pg_class AS p ON e.attrelid=p.oid
+	JOIN pg_attribute AS a ON a.attrelid=e.attrelid AND a.attnum=e.attnum
+WHERE p.relname LIKE 'part_table%'
+ORDER BY e.attrelid, e.attnum;
+          relname          | attname |                       attoptions                        
+---------------------------+---------+---------------------------------------------------------
+ part_table                | id      | {compresstype=zstd,compresslevel=3,blocksize=32768}
+ part_table                | a       | {compresstype=zstd,compresslevel=1,blocksize=32768}
+ part_table                | b       | {compresstype=zlib,compresslevel=4,blocksize=32768}
+ part_table                | c       | {compresstype=zstd,compresslevel=1,blocksize=32768}
+ part_table_p1             | id      | {compresstype=zstd,compresslevel=5,blocksize=32768}
+ part_table_p1             | a       | {compresstype=zstd,compresslevel=2,blocksize=57344}
+ part_table_p1             | b       | {compresstype=zstd,compresslevel=7,blocksize=32768}
+ part_table_p1             | c       | {compresstype=zstd,compresslevel=7,blocksize=32768}
+ part_table_p1_2_prt_df_sp | id      | {compresstype=zstd,compresslevel=5,blocksize=32768}
+ part_table_p1_2_prt_df_sp | a       | {compresstype=zstd,compresslevel=2,blocksize=57344}
+ part_table_p1_2_prt_df_sp | b       | {compresstype=zstd,compresslevel=7,blocksize=32768}
+ part_table_p1_2_prt_df_sp | c       | {compresstype=zstd,compresslevel=7,blocksize=32768}
+ part_table_p1_2_prt_sp2   | id      | {compresstype=zstd,compresslevel=10,blocksize=32768}
+ part_table_p1_2_prt_sp2   | a       | {compresstype=zstd,compresslevel=10,blocksize=32768}
+ part_table_p1_2_prt_sp2   | b       | {compresstype=zstd,compresslevel=10,blocksize=32768}
+ part_table_p1_2_prt_sp2   | c       | {compresstype=zstd,compresslevel=10,blocksize=32768}
+ part_table2               | i       | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ part_table2               | j       | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ part_table2_1_prt_p1      | i       | {compresstype=zlib,compresslevel=1,blocksize=32768}
+ part_table2_1_prt_p1      | j       | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+ part_table2_1_prt_p2      | i       | {compresstype=zstd,compresslevel=7,blocksize=32768}
+ part_table2_1_prt_p2      | j       | {compresstype=rle_type,compresslevel=1,blocksize=32768}
+(22 rows)
+
+SELECT reloptions FROM pg_class WHERE relname = 'part_table_p1_2_prt_sp1';
+                            reloptions                             
+-------------------------------------------------------------------
+ {compresstype=zstd,compresslevel=9,blocksize=32768,checksum=true}
+(1 row)
+
+DROP TABLE part_table;
+DROP TABLE part_table2;

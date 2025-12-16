@@ -15,6 +15,7 @@
 
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/reloptions.h"
 #include "catalog/partition.h"
 #include "catalog/pg_collation.h"
 #include "catalog/gp_partition_template.h"
@@ -81,6 +82,11 @@ static List *generateDefaultPartition(ParseState *pstate,
 									  CreateStmtOrigin origin);
 
 static char *extract_tablename_from_options(List **options);
+
+static List *merge_inherited_and_default_encodings(GpPartDefElem *elem,
+											   Relation parentrel,
+											   List *penc_cls,
+											   List *parent_tblenc);
 
 /*
  * qsort_stmt_cmp
@@ -1047,7 +1053,7 @@ split_encoding_clauses(List *encs, List **non_def,
 }
 
 static List *
-merge_partition_encoding(ParseState *pstate, List *elem_colencs, List *penc)
+merge_partition_encoding(List *elem_colencs, List *penc)
 {
 	List	   *elem_nondefs = NIL;
 	List	   *part_nondefs = NIL;
@@ -1118,6 +1124,70 @@ merge_partition_encoding(ParseState *pstate, List *elem_colencs, List *penc)
 		elem_colencs = lappend(elem_colencs, part_def);
 
 	return elem_colencs;
+}
+
+/*
+ * Merge storage options together according to precedence described
+ * in documentation. 
+ *
+ * elem: used for extracting 'with' options
+ * parentrel: used for getting columns names
+ * penc_cls: carries column encodings specified on table level
+ * parent_tblenc: carries encodings on columns from parent table
+ */
+static List *
+merge_inherited_and_default_encodings(GpPartDefElem *elem,
+								  Relation parentrel,
+								  List *penc_cls,
+								  List *parent_tblenc)
+{
+
+	List	   *with_cls = NIL;
+	List       *out_cls = NIL;
+	List 	   *penc_cls_tmp = list_copy(penc_cls);
+	/*
+	 * If options on current partition is not null, then we need to 
+	 * account them too, when we choose storage options for columns.
+	 * We must do it here, because if not, then parental options in
+	 * transformColumnEncoding() will dominate over this WITH options.
+	 */
+	if (elem->options != NIL) 
+	{
+		List	   *tmpenc = form_default_storage_directive(elem->options);
+		/* 
+		 * We need to analyze only storage options, so if there is none of
+		 * them, then we can skip this step.
+		 */
+		if (tmpenc != NIL)
+		{
+			
+			TupleDesc tupdesc = RelationGetDescr(parentrel);
+
+			for (int i = 0; i < tupdesc->natts; i++)
+			{
+				Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+
+				if (att->attisdropped)
+					continue;
+
+				ColumnReferenceStorageDirective *deflt 
+					= makeNode(ColumnReferenceStorageDirective);
+				deflt->column = pstrdup(NameStr(att->attname));
+				deflt->encoding = transformStorageEncodingClause(tmpenc, false);
+
+				with_cls = lappend(with_cls, deflt);
+			}
+		}
+	}
+	
+	/*
+	 * Merge encodings specified for parent table level and partition
+	 * configuration level. (Each partition element level encoding will be
+	 * merged later to this). 
+	 */
+	out_cls = merge_partition_encoding(with_cls, parent_tblenc);
+	out_cls = merge_partition_encoding(penc_cls_tmp, out_cls);
+	return out_cls;
 }
 
 /*
@@ -1763,22 +1833,6 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 		penc_cls = lappend(penc_cls, lfirst(lc));
 	}
 
-	/*
-	 * Merge encoding specified for parent table level and partition
-	 * configuration level. (Each partition element level encoding will be
-	 * merged later to this). For example:
-	 *
-	 * create table example (i int, j int, DEFAULT COLUMN ENCODING (compresstype=zlib))
-	 * with (appendonly = true, orientation=column) distributed by (i)
-	 * partition by range(j)
-	 * (partition p1 start(1) end(10), partition p2 start(10) end (20),
-	 *  COLUMN j ENCODING (compresstype=rle_type));
-	 *
-	 * merged result will be column i having zlib and column j having
-	 * rle_type.
-	 */
-	penc_cls = merge_partition_encoding(pstate, penc_cls, parent_tblenc);
-
 	hasImplicitRangeBounds = false;
 	foreach(lc, gpPartSpec->partDefElems)
 	{
@@ -1786,6 +1840,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 		GpPartDefElem	*elem;
 		List			*new_parts;
 		PartitionSpec	*tmpSubPartSpec = NULL;
+		List	   	 	*final_cls = NIL;
 
 		Assert(IsA(n, GpPartDefElem));
 		/* Avoid scribbling on input */
@@ -1820,6 +1875,11 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 						errmsg("subpartition specification provided but table doesn't have SUBPARTITION BY clause"),
 						parser_errposition(pstate, ((GpPartitionDefinition*)elem->subSpec)->location)));
 
+		/* Merge parental, default and with options in separate place. */
+		final_cls = merge_inherited_and_default_encodings(elem, parentrel,
+														  penc_cls,
+														  parent_tblenc);
+
 		/* if WITH has "tablename" then it will be used as name for partition */
 		partcomp.tablename = extract_tablename_from_options(&elem->options);
 
@@ -1834,7 +1894,7 @@ generatePartitions(Oid parentrelid, GpPartitionDefinition *gpPartSpec,
 			elem->options = parentoptions ? copyObject(parentoptions) : NIL;
 
 		if (elem->accessMethod && strcmp(elem->accessMethod, "ao_column") == 0)
-			elem->colencs = merge_partition_encoding(pstate, elem->colencs, penc_cls);
+			elem->colencs = merge_partition_encoding(elem->colencs, final_cls);
 
 		if (elem->isDefault)
 			new_parts = generateDefaultPartition(pstate, parentrel, elem,
