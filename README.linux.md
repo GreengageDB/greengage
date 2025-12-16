@@ -155,9 +155,3 @@
     ```bash
     (cd gpMgmt/bin && make install)
     ```
-
-To be able to run unit tests the mock package is required run:
-
-    ```bash
-    python2 -m pip install mock==1.0.1
-    ```
