@@ -245,7 +245,7 @@ CPhysicalHashJoin::PrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 //---------------------------------------------------------------------------
 CDistributionSpec *
 CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
-							ULONG ulSourceChildIndex) const
+							ULONG ulSourceChildIndex, ULONG ulOptReq) const
 {
 	GPOS_ASSERT(nullptr != pds);
 
@@ -292,7 +292,7 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 			// require second child to provide a matching hashed distribution
 			return PdshashedMatching(mp,
 									 CDistributionSpecHashed::PdsConvert(pds),
-									 ulSourceChildIndex, true);
+									 ulSourceChildIndex, true, ulOptReq);
 
 		default:
 			GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pds->Edt() ||
@@ -558,7 +558,7 @@ CPhysicalHashJoin::PdshashedMatching(
 		ulSourceChild,	// index of child that delivered the given hashed distribution
 	// indicates whether function is called within the distribution request (true)
 	// or within property derivation (false) from PdsDeriveFromHashedOuter/PdsDeriveFromReplicatedOuter
-	BOOL isPdsReq) const
+	BOOL isPdsReq, ULONG ulOptReq) const
 {
 	GPOS_ASSERT(2 > ulSourceChild);
 
@@ -592,8 +592,47 @@ CPhysicalHashJoin::PdshashedMatching(
 		{
 			equiv_distribution_exprs = (*all_equiv_exprs)[ulDlvrdIdx];
 		}
+
+		// first, try try to match inititial source expression from which this request was derived
+		if (ulOptReq < pdrgpexprSource->Size())
+		{
+			CExpression *source_expr = (*pdrgpexprSource)[ulOptReq];
+			BOOL fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
+			if (!fSuccess)
+			{
+				// if failed to find a equal match in the source distribution expr
+				// array, check the equivalent exprs to find a match
+				fSuccess =
+					CUtils::Contains(equiv_distribution_exprs, source_expr);
+			}
+			if (fSuccess)
+			{
+				// TODO: 02/21/2012 - ; source column may be mapped to multiple
+				// target columns (e.g. i=j and i=k);
+				// in this case, we need to generate multiple optimization requests to the target child
+				CExpression *pexprTarget = (*pdrgpexprTarget)[ulOptReq];
+				pexprTarget->AddRef();
+				pdrgpexpr->Append(pexprTarget);
+
+				if (nullptr != opfamilies)
+				{
+					GPOS_ASSERT(nullptr != m_hash_opfamilies);
+					IMDId *opfamily = (*m_hash_opfamilies)[ulOptReq];
+					opfamily->AddRef();
+					opfamilies->Append(opfamily);
+				}
+				continue;
+			}
+		}
+
+		// then, try the rest of the expressions
 		for (ULONG idx = 0; idx < ulSourceSize; idx++)
 		{
+			// we've already mathed this child above
+			if (idx == ulOptReq)
+			{
+				continue;
+			}
 			BOOL fSuccess = false;
 			CExpression *source_expr = (*pdrgpexprSource)[idx];
 			fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
@@ -655,7 +694,7 @@ CPhysicalHashJoin::PdshashedMatching(
 			CRefCount::SafeRelease(opfamilies);
 			// try again using the equivalent hashed distribution
 			return PdshashedMatching(mp, pdshashed->PdshashedEquiv(),
-									 ulSourceChild, isPdsReq);
+									 ulSourceChild, isPdsReq, ulOptReq);
 		}
 		// it should never happen, but instead of creating wrong spec, raise an exception
 		GPOS_RAISE(
@@ -937,7 +976,8 @@ CPhysicalHashJoin::PdsRequiredRedistribute(CMemoryPool *mp,
 	}
 
 	// return a matching distribution request for the second child
-	CDistributionSpec *pdsMatch = PdsMatch(mp, pdsInputForMatch, ulFirstChild);
+	CDistributionSpec *pdsMatch =
+		PdsMatch(mp, pdsInputForMatch, ulFirstChild, ulOptReq);
 	if (pdsFirst->Edt() == CDistributionSpec::EdtHashed)
 	{
 		// if the input spec was created as a copy, release it

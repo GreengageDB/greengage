@@ -68,8 +68,10 @@ CPhysicalInnerHashJoin::PdshashedCreateMatching(
 {
 	GPOS_ASSERT(nullptr != pdshashed);
 
+	// Hack: we don't care which distribution request created this distribution, so specify the first value.
+	// It shouldn't be a problem, as long as there is at least one distrubtion key
 	CDistributionSpecHashed *pdshashedMatching =
-		PdshashedMatching(mp, pdshashed, ulSourceChild, false);
+		PdshashedMatching(mp, pdshashed, ulSourceChild, false, 0);
 
 	// create a new spec with input and the output spec as equivalents, as you don't want to lose
 	// the already existing equivalent specs of pdshashed
