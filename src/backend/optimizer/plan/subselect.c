@@ -861,8 +861,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == ARRAY_SUBLINK
-			&& Gp_role == GP_ROLE_DISPATCH)
+	else if (splan->parParam == NIL && subLinkType == ARRAY_SUBLINK && Gp_role == GP_ROLE_DISPATCH)
 	{
 		TargetEntry *te = linitial(plan->targetlist);
 		Oid			arraytype;
@@ -882,8 +881,7 @@ build_subplan(PlannerInfo *root, Plan *plan, PlannerInfo *subroot,
 		splan->is_initplan = true;
 		result = (Node *) prm;
 	}
-	else if (splan->parParam == NIL && splan->extParam == NIL && subLinkType == ROWCOMPARE_SUBLINK
-			&& Gp_role == GP_ROLE_DISPATCH)
+	else if (splan->parParam == NIL && subLinkType == ROWCOMPARE_SUBLINK && Gp_role == GP_ROLE_DISPATCH)
 	{
 		/* Adjust the Params */
 		List	   *params;
