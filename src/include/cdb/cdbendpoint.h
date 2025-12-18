@@ -31,6 +31,7 @@
 #include "storage/shm_toc.h"
 #include "nodes/execnodes.h"
 #include "utils/resgroup.h"
+#include "utils/resource_manager.h"
 
 /*
  * Endpoint allocate positions.

@@ -42,9 +42,6 @@
 #include "cdbendpoint_private.h"
 #include "cdb/cdbendpoint.h"
 #include "cdb/cdbsrlz.h"
-#include "utils/resource_manager.h"
-#include "utils/vmem_tracker.h"
-#include "tcop/pquery.h"
 
 /* Is this the utility-mode backend for RETRIEVE? */
 bool		am_cursor_retrieve_handler = false;

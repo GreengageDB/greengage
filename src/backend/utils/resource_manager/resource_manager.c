@@ -99,8 +99,10 @@ InitResManager(void)
 		SPI_InitMemoryReservation();
 	}
 
-	if (MySessionState &&
-		!IsBackgroundWorker &&
-		(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE))
+	if (MySessionState && !IsBackgroundWorker &&
+		(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE ||
+		 am_cursor_retrieve_handler))
+	{
 		GPMemoryProtect_TrackStartupMemory();
+	}
 }
