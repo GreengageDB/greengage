@@ -223,7 +223,7 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 {
 	const char *username = NULL;
 	char *dbname = NULL;
-	char *escaped_dbname = NULL;
+	const char *escaped_dbname = NULL;
 
 	Assert(gp_enable_gpperfmon && Gp_role == GP_ROLE_DISPATCH);
 	Assert(gpmonPacket);
@@ -244,12 +244,12 @@ void gpmon_qlog_packet_init(gpmon_packet_t *gpmonPacket)
 	/* DB Id */
 	dbname = get_database_name(MyDatabaseId); /* needs to be freed */
 	if (dbname)
-		escaped_dbname = (char *) quote_identifier(dbname);
+		escaped_dbname = quote_identifier(dbname);
 	snprintf(gpmonPacket->u.qlog.db, sizeof(gpmonPacket->u.qlog.db), "%s",
 			 escaped_dbname ? escaped_dbname : "");
 	if (escaped_dbname != dbname)
 	{
-		pfree(escaped_dbname);
+		pfree((void *) escaped_dbname);
 		escaped_dbname = NULL;
 	}
 	if(dbname)
