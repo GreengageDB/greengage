@@ -5032,17 +5032,6 @@ PostgresMain(int argc, char *argv[],
 										   ALLOCSET_DEFAULT_INITSIZE,
 										   ALLOCSET_DEFAULT_MAXSIZE);
 
-	if (am_cursor_retrieve_handler && IsResGroupActivated())
-	{
-		/*
-		 * We're currently in utility mode. Initialize now-empty SessionState
-		 * and apply resource group limits.
-		 */
-
-		SessionState_Init_Retrieve();
-		GPMemoryProtect_Init();
-	}
-
 	/*
 	 * POSTGRES main processing loop begins here
 	 *
