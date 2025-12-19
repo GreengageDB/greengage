@@ -838,8 +838,6 @@ reset optimizer_trace_fallback;
 -- not with master-only tables. Postgres Legacy planner should give an error to 
 -- any skip-level query.
 --------------------------------------------------------------------------------
-set optimizer to on;
-
 CREATE TABLE skip_correlated_partitioned (
     a INT
 ) DISTRIBUTED BY (a);
@@ -897,29 +895,6 @@ SELECT (
     )
 ) FROM skip_correlated_partitioned ORDER BY c;
 
-set optimizer to off;
-
-EXPLAIN (COSTS OFF)
-SELECT (
-    SELECT (
-        SELECT a FROM skip_correlated_partitioned WHERE a = c
-    )
-) FROM skip_correlated_replicated;
-
-EXPLAIN (COSTS OFF)
-SELECT (
-    SELECT (
-        SELECT b FROM skip_correlated_random WHERE b = a
-    )
-) FROM skip_correlated_partitioned;
-
-EXPLAIN (COSTS OFF)
-SELECT (
-    SELECT (
-        SELECT c FROM skip_correlated_replicated WHERE c = a
-    )
-) FROM skip_correlated_partitioned;
-
 EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
@@ -927,7 +902,6 @@ SELECT (
     )
 ) FROM skip_correlated_partitioned;
 
-reset optimizer;
 DROP TABLE IF EXISTS skip_correlated_partitioned;
 DROP TABLE IF EXISTS skip_correlated_random;
 DROP TABLE IF EXISTS skip_correlated_replicated;
