@@ -833,7 +833,104 @@ DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
 reset optimizer_join_order;
 reset optimizer_trace_fallback;
+--------------------------------------------------------------------------------
+-- ORCA should be able to plan and execute correctly one skip-level queries, but
+-- not with master-only tables. Postgres Legacy planner should give an error to 
+-- any skip-level query.
+--------------------------------------------------------------------------------
+set optimizer to on;
 
+CREATE TABLE skip_correlated_partitioned (
+    a INT
+) DISTRIBUTED BY (a);
+INSERT INTO skip_correlated_partitioned VALUES(1);
+INSERT INTO skip_correlated_partitioned VALUES(2);
+INSERT INTO skip_correlated_partitioned VALUES(3);
+
+CREATE TABLE skip_correlated_random (
+    b INT
+) DISTRIBUTED RANDOMLY;
+INSERT INTO skip_correlated_random VALUES(1);
+INSERT INTO skip_correlated_random VALUES(2);
+INSERT INTO skip_correlated_random VALUES(3);
+
+CREATE TABLE skip_correlated_replicated (
+    c INT
+) DISTRIBUTED REPLICATED;
+INSERT INTO skip_correlated_replicated VALUES(1);
+INSERT INTO skip_correlated_replicated VALUES(2);
+INSERT INTO skip_correlated_replicated VALUES(3);
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_partitioned WHERE a = c
+    )
+) FROM skip_correlated_replicated;
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_partitioned WHERE a = c
+    )
+) FROM skip_correlated_replicated ORDER BY a;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_partitioned;
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_partitioned ORDER BY b;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_partitioned;
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_partitioned ORDER BY c;
+
+set optimizer to off;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_partitioned WHERE a = c
+    )
+) FROM skip_correlated_replicated;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_partitioned;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_partitioned;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = a
+    )
+) FROM skip_correlated_partitioned;
+
+reset optimizer;
+DROP TABLE IF EXISTS skip_correlated_partitioned;
+DROP TABLE IF EXISTS skip_correlated_random;
+DROP TABLE IF EXISTS skip_correlated_replicated;
 --------------------------------------------------------------------------------
 -- Ensure ORCA generates the correct plan with the exists clause
 -- for the partitioned table.
