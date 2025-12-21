@@ -602,6 +602,10 @@ CPhysicalHashJoin::PdshashedMatching(
 		//
 		// if we don't perform this check right away, we might lose a distribution.
 		// consider the following query, before this logic was introduced:
+		//
+		// create table t1 as (select gen::numeric as a from generate_series(1, 20) as gen) distributed by (a);
+		// create table t2 as (select gen::numeric as a from generate_series(1, 20) as gen) distributed by (a);
+		// explain (verbose) select t1.a from t1 where t1.a = (select sum(t2.a) from t2 where t1.a = t2.a);
 		//   Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
 		//   Output: t1.a
 		//   ->  Hash Join  (cost=0.00..862.00 rows=1 width=8)
