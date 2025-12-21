@@ -16,6 +16,8 @@
 #include "gpopt/base/CColRef.h"
 #include "gpopt/base/CReqdProp.h"
 
+#define GPOPT_INVALID_OPT_REQUEST gpos::ulong_max
+
 namespace gpopt
 {
 using namespace gpos;

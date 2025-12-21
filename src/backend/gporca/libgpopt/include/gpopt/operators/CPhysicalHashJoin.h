@@ -243,7 +243,6 @@ public:
 
 		return dynamic_cast<CPhysicalHashJoin *>(pop);
 	}
-
 };	// class CPhysicalHashJoin
 
 }  // namespace gpopt
