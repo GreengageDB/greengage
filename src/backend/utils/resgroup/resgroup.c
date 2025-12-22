@@ -4829,8 +4829,7 @@ HandleMoveResourceGroup(void)
 	Oid			groupId;
 	pid_t		callerPid;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE ||
-		   am_cursor_retrieve_handler);
+	Assert(IsResGroupRoleAllowed());
 
 	/* transaction has finished */
 	if (!IsTransactionState() || !selfIsAssigned())
