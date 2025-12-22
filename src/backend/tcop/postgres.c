@@ -5031,6 +5031,8 @@ PostgresMain(int argc, char *argv[],
 										   ALLOCSET_DEFAULT_MINSIZE,
 										   ALLOCSET_DEFAULT_INITSIZE,
 										   ALLOCSET_DEFAULT_MAXSIZE);
+
+
 	/*
 	 * POSTGRES main processing loop begins here
 	 *
