@@ -3187,17 +3187,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_resource_group_retrieve", PGC_SIGHUP, RESOURCES,
-			gettext_noop("Activate resource groups for parallel retrieve cursor sessions."),
-			gettext_noop("When enabled, retrieve sessions use the same resource group as the "
-						 "session that declared the parallel retrieve cursor, sharing slots and "
-						 "enforcing resource limits.")
-		},
-		&gp_resource_group_retrieve,
-		false, NULL, NULL, NULL
-	},
-
-	{
 		{"gp_count_host_segments_using_address", PGC_POSTMASTER, RESOURCES,
 		   gettext_noop("Count the number segments on a host using the address field in gp_segment_configuration"),
 		   gettext_noop("If false, count it using gp_segment_configuration.hostname instead")
@@ -3457,6 +3446,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		&gp_dispatch_drop_always,
 		false,
 		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_resource_group_retrieve", PGC_SIGHUP, RESOURCES,
+			gettext_noop("Activate resource groups for parallel retrieve cursor sessions."),
+			gettext_noop("When enabled, retrieve sessions use the same resource group as the "
+						 "session that declared the parallel retrieve cursor, sharing slots and "
+						 "enforcing resource limits.")
+		},
+		&gp_resource_group_retrieve,
+		false, NULL, NULL, NULL
 	},
 
 	/* End-of-list marker */
