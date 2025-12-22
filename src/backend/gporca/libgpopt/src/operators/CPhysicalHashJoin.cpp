@@ -671,7 +671,7 @@ CPhysicalHashJoin::PdshashedMatching(
 		for (ULONG idx = 0; idx < ulSourceSize; idx++)
 		{
 			// check if we've already mathed this child above
-			if (GPOPT_INVALID_OPT_REQUEST != ulOptReq && idx == ulOptReq)
+			if (idx == ulOptReq)
 			{
 				continue;
 			}
