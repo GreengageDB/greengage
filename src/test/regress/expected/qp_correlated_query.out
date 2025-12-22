@@ -3915,6 +3915,9 @@ reset optimizer_trace_fallback;
 -- not with master-only tables. Postgres Legacy planner should give an error to 
 -- any skip-level query.
 --------------------------------------------------------------------------------
+DROP TABLE IF EXISTS skip_correlated_partitioned;
+DROP TABLE IF EXISTS skip_correlated_random;
+DROP TABLE IF EXISTS skip_correlated_replicated;
 CREATE TABLE skip_correlated_partitioned (
     a INT
 ) DISTRIBUTED BY (a);
@@ -3979,9 +3982,9 @@ SELECT (
     )
 ) FROM skip_correlated_partitioned;
 ERROR:  correlated subquery with skip-level correlations is not supported
-DROP TABLE IF EXISTS skip_correlated_partitioned;
-DROP TABLE IF EXISTS skip_correlated_random;
-DROP TABLE IF EXISTS skip_correlated_replicated;
+DROP TABLE skip_correlated_partitioned;
+DROP TABLE skip_correlated_random;
+DROP TABLE skip_correlated_replicated;
 --------------------------------------------------------------------------------
 -- Ensure ORCA generates the correct plan with the exists clause
 -- for the partitioned table.
