@@ -2634,9 +2634,7 @@ bool
 ShouldUnassignResGroup(void)
 {
 	return IsResGroupActivated() && IsNormalProcessingMode() &&
-		   (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE ||
-			am_cursor_retrieve_handler) &&
-		   !AmIInSIGUSR1Handler();
+		   IsResGroupRoleAllowed() && !AmIInSIGUSR1Handler();
 }
 
 /*
