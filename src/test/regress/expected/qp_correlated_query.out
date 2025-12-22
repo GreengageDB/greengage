@@ -3915,11 +3915,6 @@ reset optimizer_trace_fallback;
 -- not with master-only tables. Postgres Legacy planner should give an error to 
 -- any skip-level query.
 --------------------------------------------------------------------------------
---start_ignore
-DROP TABLE IF EXISTS skip_correlated_partitioned;
-DROP TABLE IF EXISTS skip_correlated_random;
-DROP TABLE IF EXISTS skip_correlated_replicated;
---end_ignore
 CREATE TABLE skip_correlated_partitioned (
     a INT
 ) DISTRIBUTED BY (a);
