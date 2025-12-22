@@ -846,24 +846,19 @@ DROP TABLE IF EXISTS skip_correlated_replicated;
 CREATE TABLE skip_correlated_partitioned (
     a INT
 ) DISTRIBUTED BY (a);
-INSERT INTO skip_correlated_partitioned VALUES(1);
-INSERT INTO skip_correlated_partitioned VALUES(2);
-INSERT INTO skip_correlated_partitioned VALUES(3);
+INSERT INTO skip_correlated_partitioned VALUES (1), (2), (3);
 
 CREATE TABLE skip_correlated_random (
     b INT
 ) DISTRIBUTED RANDOMLY;
-INSERT INTO skip_correlated_random VALUES(1);
-INSERT INTO skip_correlated_random VALUES(2);
-INSERT INTO skip_correlated_random VALUES(3);
+INSERT INTO skip_correlated_random VALUES (1), (2), (3);
 
 CREATE TABLE skip_correlated_replicated (
     c INT
 ) DISTRIBUTED REPLICATED;
-INSERT INTO skip_correlated_replicated VALUES(1);
-INSERT INTO skip_correlated_replicated VALUES(2);
-INSERT INTO skip_correlated_replicated VALUES(3);
+INSERT INTO skip_correlated_replicated VALUES(1), (2), (3);
 
+-- easy cases
 EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
@@ -906,6 +901,39 @@ SELECT (
         SELECT dbid FROM gp_segment_configuration WHERE dbid = a
     )
 ) FROM skip_correlated_partitioned;
+
+-- hard cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
 
 DROP TABLE skip_correlated_partitioned;
 DROP TABLE skip_correlated_random;

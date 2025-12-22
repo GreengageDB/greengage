@@ -420,7 +420,8 @@ get_first_col_type(Plan *plan, Oid *coltype, int32 *coltypmod,
 }
 
 /**
- * Returns true if query refers to any distributed table.
+ * Returns true if query refers to any table on this level or on some other
+ * subquery level, if recursive is true.
  */
 bool QueryHasDistributedRelation(Query *q, bool recursive)
 {
