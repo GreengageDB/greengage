@@ -1440,8 +1440,10 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	char load_roleid[NAMEDATALEN] = {0};
 	Oid roleid = InvalidOid;
 
-	/* If top level (not SPI re-enter, etc) and not in a parallel worker */
-	if (context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
+	elog(DEBUG1, "Start cc_ProcessUtility()");
+
+	/* If real user connection and top level (not SPI re-enter, etc) */
+	if (MyProcPort != NULL && context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
 	{
 		Node *parsetree = pstmt->utilityStmt;
 
@@ -1732,13 +1734,17 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	else
 		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
 
-	if (load_roleid[0] != '\0')
-		roleid = get_role_oid(load_roleid, true);
+	if (MyProcPort != NULL && context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
+	{
+		if (load_roleid[0] != '\0')
+			roleid = get_role_oid(load_roleid, true);
 
-	/* set force change password option if password_change_first_login is set */
-	if (password_change_first_login && roleid != InvalidOid)
-		set_force_change_password(InvalidOid, roleid, "true");
+		/* set force change password option if password_change_first_login is set */
+		if (password_change_first_login && roleid != InvalidOid)
+			set_force_change_password(InvalidOid, roleid, "true");
+	}
 
+	elog(DEBUG1, "End cc_ProcessUtility()");
 }
 
 #if PG_VERSION_NUM >= 120000
