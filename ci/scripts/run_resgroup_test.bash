@@ -1,5 +1,6 @@
 #!/bin/bash
 set -eox pipefail
+LOGS=${LOGS:-$PWD/logs}
 
 project="resgroup"
 
@@ -94,4 +95,6 @@ docker compose -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
     gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/pg_log
 EOF
 
+mkdir -p "$LOGS"
+echo ${exitcode:-1} > "$LOGS/.exitcode"
 exit $exitcode
