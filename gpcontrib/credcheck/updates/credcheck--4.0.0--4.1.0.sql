@@ -1,5 +1,5 @@
 -- credcheck extension for PostgreSQL
--- Copyright (c) 2024-2025 HexaCluster Corp - All rights reserved.
+-- Copyright (c) 2024-2026 HexaCluster Corp - All rights reserved.
 
 DROP SCHEMA credcheck;
 

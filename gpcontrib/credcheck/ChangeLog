@@ -1,3 +1,14 @@
+2025-12-23 - Version 4.3.0
+
+This is a maintenance release to fix issues reported by users since last release.
+
+  - Fix background workers crash when pg_cron is used and potentially others
+    extension using background workers. Thanks to Anton Glushakov for the report.
+  - Only execute processUtility hook if we are at top level (not SPI re-enter).
+    Thanks to vidierr and Anton Glushakov for the report.
+  - Fix the change password after first login feature that was not affected only
+    to the new user but to all users connecting to the database.
+
 2025-10-22 - Version 4.2.0
 
 This is a quick maintenance release to fix a PG crash when parallel workers

@@ -1,7 +1,7 @@
 -- credcheck extension for PostgreSQL
 -- Copyright (c) 2021-2023 MigOps Inc
 -- Copyright (c) 2023 Gilles Darold
--- Copyright (c) 2024-2025 HexaCluster Corp
+-- Copyright (c) 2024-2026 HexaCluster Corp
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION credcheck" to load this file. \quit
