@@ -1,18 +1,15 @@
 #!/bin/bash
 set -eox pipefail
-export LOGS=${LOGS:-$PWD/logs}
-export EXIT_CODE=1
 
 project="resgroup"
+logdir="$PWD/logs"
+logfile=".exitcode"
 
 function cleanup {
   docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down
-  mkdir -p "$LOGS"
-  echo "$EXIT_CODE" > "$LOGS/.exitcode"
-  exit "$EXIT_CODE"
 }
 
-mkdir ssh_keys -p
+mkdir ssh_keys logs -p
 if [ ! -e "ssh_keys/id_rsa" ]
 then
   ssh-keygen -P "" -f ssh_keys/id_rsa
@@ -76,7 +73,8 @@ EOF1
         )
 EOF
 
-export EXIT_CODE=$?
+exitcode=$?
+echo $exitcode > $logdir/$logfile
 docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
   cd /home/gpadmin
   tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
@@ -98,3 +96,5 @@ docker compose -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
     gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/pg_log \
     gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/pg_log
 EOF
+
+exit $exitcode
