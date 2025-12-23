@@ -8,7 +8,7 @@ project="resgroup"
 function cleanup {
   docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down
   mkdir -p "$LOGS"
-  echo "$EXIT_CODE" > "$LOGS/.EXIT_CODE"
+  echo "$EXIT_CODE" > "$LOGS/.exitcode"
   exit "$EXIT_CODE"
 }
 
