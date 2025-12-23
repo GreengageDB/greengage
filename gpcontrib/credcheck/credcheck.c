@@ -2673,7 +2673,7 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
         elog(DEBUG1, "cc_ExecutorStart()");
 
-	if (NOT_IN_PARALLEL_WORKER)
+	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER)
 	{
 		/*
 		 * When first login we don't allow anything else than password change.
