@@ -133,7 +133,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v9
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v10
     with:
       version: 6
       target_os: ${{ matrix.target_os }}

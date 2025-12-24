@@ -1,0 +1,27 @@
+# Release creation workflow
+name: Greengage release
+
+on:
+  release:
+    types: [released]
+
+jobs:
+  upload-to-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - version: 6
+          extensions: deb ddeb
+          artifact_name: deb-packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Upload packages to release
+        uses: greengagedb/greengage-ci/.github/actions/upload-pkgs-to-release@v10
+        with:
+          version: ${{ matrix.version }}
+          extensions: ${{ matrix.extensions }}
+          artifact_name: ${{ matrix.artifact_name }}
