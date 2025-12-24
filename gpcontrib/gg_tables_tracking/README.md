@@ -5,50 +5,176 @@
 The main purpose of this code is achieving fast database size calculation and tracking file changes at relation
 level. The extension implements a probabilistic tracking system using Bloom filters to monitor file changes across Greenplum segments. It utilizes shared memory for state management and employs background workers to maintain consistency. 
 
-#### Configuring GPDB and extension usage
-Since extension uses shared memory, configuration on all GPDB segments must be changed by setting
+### Architecture Overview
+
+The extension implements a probabilistic tracking system using:
+
+* Bloom filters for space-efficient change detectio
+* Background workers to maintain consistency across coordinator and segments
+* File operation hooks to capture CREATE, EXTEND, TRUNCATE, and UNLINK events
+* Version control to ensure transactional consistency during snapshot acquisition
+
+### Key Features
+
+* Incremental tracking: Only modified relations are reported
+* Transactional semantics: Track acquisition is transaction-safe
+* Automatic initialization: Background worker handles cluster setup
+* Segment failure recovery: Automatic re-initialization of failed/promoted segments
+
+## Configuring GG and extension usage
+* Since extension uses shared memory, configuration on all GPDB segments must be changed by setting
 ```shell script
 gpconfig -c shared_preload_libraries -v 'gg_tables_tracking'
 ```
-Extension may track restricted number of databases. The maximum number of them is defined by GUC
+Restart is required.
+
+* Configure Background Worker (Optional).
+```shell script
+gpconfig -c gg_tables_tracking.tracking_worker_naptime_sec -v '10'
+gpstop -u
+```
+|GUC|Requires restart|Range|
+--|--|--
+| gg_tables_tracking.tracking_db_track_count | No (SIGHUP) |Possible values [1, 3600]; Default 60|
+
+* Extension may track restricted number of databases. The maximum number of them is defined by GUC
+
 ||||
 --|--|--
-| gg_tables_tracking.tracking_db_track_count | Need restart |Possible values [1, 1000]; Default 5|
+| gg_tables_tracking.tracking_worker_naptime_sec | Need restart |Possible values [1, 1000]; Default 5|
 
-For each tracked database there allocated a Bloom filter in shared memory. The size of each filter is controlled via
+* For each tracked database there allocated a Bloom filter in shared memory. The size of each filter is controlled via
+
 ||||
 --|--|--
 | gg_tables_tracking.tracking_bloom_size | Need restart |Possible values (bytes) [64, 128000000] Default 1048576|
 
-The specific database can be bound to unoccupied filter with function
-```shell script
-psql -d my_db -c select gg_tables_tracking.tracking_register_db()
-or
-psql -c select gg_tables_tracking.tracking_register_db(12345)
+### Create extension
+```sql script
+CREATE EXTENSION gg_tables_tracking;
 ```
-After registering each relation file change within the database will be noted in Bloom filter.
-Using Bloom filter allows us to calculate the sizes of only relations whose relfilenode is present in the filter.
-The current size snapshot can be taken via view:
+### Usage
+```sql script
+-- Register current database
+SELECT gg_tables_tracking.tracking_register_db();
+
+-- Register specific database by OID
+SELECT gg_tables_tracking.tracking_register_db(16384)
 ```
+What happens:
+* Database is bound to an available Bloom filter slot
+* Initial snapshot mode is set based on tracking_snapshot_on_recovery
+* Configuration is persisted in pg_db_role_setting
+* Change tracking begins immediately for all file operations
+
+### Check if database is tracked
+```sql script
+SHOW gg_tables_tracking.tracking_is_db_tracked;  -- Should return 'on'
+```
+
+### Configuring Tracking files
+1. Track specific schemas
+```sql script
+-- Register a schema
+SELECT gg_tables_tracking.tracking_register_schema('my_schema');
+
+-- Unregister a schema  
+SELECT gg_tables_tracking.tracking_unregister_schema('public');
+```
+
+Default schemas: public, gg_tables_tracking, pg_catalog, pg_toast, pg_aoseg, information_schema
+
+1. Track specific relkinds
+```sql script
+--- Track only tables and indexes
+SELECT gg_tables_tracking.tracking_set_relkinds('r,i');
+```
+Valid relkinds: 
+* r - ordinary table
+* i - index
+* S - sequence
+* t - TOAST table
+* v - view
+* c - composite type
+* f - foreign table
+* m - materialized view
+* o - AO segments file
+* b - AO block directory
+* M - AO visimap
+* p - partitioned table
+* I - partitioned index
+
+Default: r,i,t,m,o,b,M
+
+3. Track Specific Access Methods
+```sql script
+-- Track only heap and AO tables
+SELECT gg_tables_tracking.tracking_set_relams('heap,ao_row');
+```
+Default: heap,ao_row,ao_column,btree,hash,gist,gin,spgist,brin,bitmap
+
+### Acquire Tracking Snapshots
+
+Incremental Snapshot (Default)
+Returns only relations modified since last snapshot
+
+```sql script
 select * from gg_tables_tracking.tables_track;
 ```
-In order to get the snapshot of all database relations you should call in the database of interest
-```
-gg_tables_tracking.tracking_trigger_initial_snapshot();
+|Column|Type|Description|
+--|--|--
+| relid | OID |Relation OID (NULL for dropped relations)|
+| relname | NAME |Relation name (NULL for dropped)|
+| relfilenode | OID |Physical file identifier|
+| size | BIGINT |Total size in bytes across all forks|
+| state | CHAR |'a' = active, 'd' = dropped, 'i' = initial snapshot|
+| segid | INT |Segment ID (-1 for coordinator)|
+| relnamespace | OID |Schema OID|
+| relkind | CHAR |relkind OID|
+| relam | OID |Access method OID|
+| parent_relid | OID |Parent relation OID|
+
+State Meanings:
+* 'a' - Active relation that was modified (created, extended, truncated)
+* 'd' - Dropped relation (only relfilenode and state are populated)
+* 'i' - Initial snapshot entry (all relations returned after trigger)
+
+### Full Snapshot (One-Time)
+```sql script
+-- Trigger full snapshot
+SELECT gg_tables_tracking.tracking_trigger_initial_snapshot();
+
+-- Check if full snapshot is active across cluster
+SELECT * FROM gg_tables_tracking.is_initial_snapshot_triggered;
+
+-- Acquire full snapshot
+SELECT * FROM gg_tables_tracking.tables_track;
 ```
 
 ***Attention***:  Acquiring size track from parallel sessions is not recommended, since there is the only
 instance of Bloom filter for a database. I.e. track acquisition can return whole accumulated relation set
 in one session, and empty set for acquisition from the second session (the first session acquired data earlier). 
 
-The result of track acquisition can be filtered via following GUC
-|GUC|Setter|Default value|
---|--|--
-| gg_tables_tracking.tracking_schemas | gg_tables_tracking.tracking_register_schema(schema name) |public,gg_tables_tracking,pg_catalog,pg_toast,pg_aoseg,information_schema
-| gg_tables_tracking.tracking_relkinds | gg_tables_tracking.tracking_set_relkinds(relkinds name) |r,i,t,m,o,b,M|
-| gg_tables_tracking.tracking_relstorages | gg_tables_tracking.tracking_set_relstorages(relstorages name) |h,a,c|
+### Snapshot on Recovery (Automatic)
 
-If one of that params is empty, the track acquisition will return an empty track as well.
+Configure database to return full snapshot after cluster restart:
+```sql script
+-- Enable
+SELECT gg_tables_tracking.tracking_set_snapshot_on_recovery(true);
+
+-- Disable
+SELECT gg_tables_tracking.tracking_set_snapshot_on_recovery(false);
+```
+
+### Unregister a Database
+```sql script
+SELECT gg_tables_tracking.tracking_unregister_db();
+```
+This will:
+* Clear the Bloom filter
+* Unbind the database from its filter slot
+* Remove tracking configuration from pg_db_role_setting
+* Stop tracking file operations
 
 #### Choosing optimal Bloom size
 
