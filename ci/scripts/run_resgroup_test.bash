@@ -9,7 +9,7 @@ function cleanup {
   docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down
 }
 
-mkdir ssh_keys logs -p
+mkdir ssh_keys "$logdir" -p
 if [ ! -e "ssh_keys/id_rsa" ]
 then
   ssh-keygen -P "" -f ssh_keys/id_rsa
@@ -74,7 +74,7 @@ EOF1
 EOF
 
 exitcode=$?
-echo $exitcode > $logdir/$logfile
+echo $exitcode > "$logdir/$logfile"
 docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
   cd /home/gpadmin
   tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
