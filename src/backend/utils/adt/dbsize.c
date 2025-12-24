@@ -31,6 +31,7 @@
 #include "storage/fd.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/dbsize.h"
 #include "utils/int8.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -55,7 +56,8 @@
 #define half_rounded(x)   (((x) + ((x) < 0 ? -1 : 1)) / 2)
 
 static int64 calculate_total_relation_size(Relation rel);
-static int64 calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum, bool include_ao_aux);
+static int64 calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum,
+												 bool include_ao_aux, bool on_error_continue);
 static bool stat_ao_callback(const int segno, void *ctx);
 
 #define SEGNO_SUFFIX_LENGTH 12
@@ -399,6 +401,7 @@ struct stat_ao_callback_ctx
 	char *segPath;
 	char *segPathSuffixPosition;
 	int64 totalFilesSize;
+	bool throwStatError;
 };
 
 static bool
@@ -420,6 +423,13 @@ stat_ao_callback(const int segno, void *ctx)
 	{
 		if (errno == ENOENT)
 			return false;
+		else if (!statFiles->throwStatError)
+		{
+			ereport(DEBUG1,
+					(errcode_for_file_access(),
+					errmsg("could not stat file %s: %m", segPath)));
+			return false;
+		}
 		else
 			ereport(ERROR,
 				(errcode_for_file_access(),
@@ -470,7 +480,8 @@ calculate_total_ao_aux_size(Relation rel)
 
 
 static int64
-calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum, bool include_ao_aux)
+calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum, bool include_ao_aux,
+									bool on_error_continue)
 {
 	/* We consider only the main fork when dealing with AO tables*/
 	if (forknum != MAIN_FORKNUM)
@@ -483,6 +494,7 @@ calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum, bool inclu
 
 	struct stat_ao_callback_ctx statFiles;
 	statFiles.totalFilesSize = 0;
+	statFiles.throwStatError = on_error_continue;
 
 	/* Get base path for this relation file */
 	basepath = relpathbackend(rel->rd_node, rel->rd_backend, MAIN_FORKNUM);
@@ -526,10 +538,13 @@ calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum, bool inclu
  * GPDB: We add the following args that control the behavior only for AO/CO tables:
  * 'include_ao_aux': Include aux tables (and their indexes) in size calculation
  * 'ao_physical_size': Calculate physical size on disk as opposed to
- * logical size based on segment eofs.
+ * logical size based on segment eofs. on_error_continue - ignore stat call
+ * errors, just return zero size for a path.
  */
-static int64
-calculate_relation_size(Relation rel, ForkNumber forknum, bool include_ao_aux, bool ao_physical_size)
+int64
+calculate_relation_size(Relation rel, ForkNumber forknum,
+						bool include_ao_aux, bool ao_physical_size,
+						bool on_error_continue)
 {
 	int64		totalsize = 0;
 	char	   *relationpath;
@@ -544,7 +559,7 @@ calculate_relation_size(Relation rel, ForkNumber forknum, bool include_ao_aux, b
 	if (RelationStorageIsAO(rel))
 	{
 		if (ao_physical_size)
-			return calculate_ao_relation_physical_size(rel, forknum, include_ao_aux);
+			return calculate_ao_relation_physical_size(rel, forknum, include_ao_aux, on_error_continue);
 		else
 			return table_relation_size(rel, forknum);
 	}
@@ -573,12 +588,20 @@ calculate_relation_size(Relation rel, ForkNumber forknum, bool include_ao_aux, b
 		{
 			if (errno == ENOENT)
 				break;
+			else if (on_error_continue)
+			{
+				ereport(DEBUG1,
+						(errcode_for_file_access(),
+						 errmsg("could not stat file %s: %m", pathname)));
+				break;
+			}
 			else
 				ereport(ERROR,
 						(errcode_for_file_access(),
 						 errmsg("could not stat file %s: %m", pathname)));
 		}
-		totalsize += fst.st_size;
+		else
+			totalsize += fst.st_size;
 	}
 
 	/* RELSTORAGE_VIRTUAL has no space usage */
@@ -659,7 +682,7 @@ pg_relation_size(PG_FUNCTION_ARGS)
 
 	forkNumber = forkname_to_number(text_to_cstring(forkName));
 
-	size = calculate_relation_size(rel, forkNumber, include_ao_aux, physical_ao_size);
+	size = calculate_relation_size(rel, forkNumber, include_ao_aux, physical_ao_size, false);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
@@ -701,7 +724,8 @@ calculate_toast_table_size(Oid toastrelid)
 		size += calculate_relation_size(toastRel,
 										forkNum,
 										/* include_ao_aux */ false,
-										/* physical_ao_size */ false);
+										/* physical_ao_size */ false,
+										/* on_error_continue */ false);
 
 	/* toast index size, including FSM and VM size */
 	indexlist = RelationGetIndexList(toastRel);
@@ -717,7 +741,8 @@ calculate_toast_table_size(Oid toastrelid)
 			size += calculate_relation_size(toastIdxRel,
 											forkNum,
 											/* include_ao_aux */ false,
-											/* physical_ao_size */ false);
+											/* physical_ao_size */ false,
+											/* on_error_continue */ false);
 
 		relation_close(toastIdxRel, AccessShareLock);
 	}
@@ -754,7 +779,8 @@ calculate_table_size(Relation rel)
 			size += calculate_relation_size(rel,
 											forkNum,
 											/* include_ao_aux */ true,
-											/* physical_ao_size */ true);
+											/* physical_ao_size */ true,
+											/* on_error_continue */ false);
 	}
 
 	/*
@@ -798,7 +824,8 @@ calculate_indexes_size(Relation rel)
 					size += calculate_relation_size(idxRel,
 													forkNum,
 													/* include_ao_aux */ false,
-													/* physical_ao_size */ false);
+													/* physical_ao_size */ false,
+													/* on_error_continue */ false);
 
 				relation_close(idxRel, AccessShareLock);
 			}
