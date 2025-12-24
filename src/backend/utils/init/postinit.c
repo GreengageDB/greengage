@@ -1162,7 +1162,9 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 			 * limits.
 			 */
 
-			SessionState_Init_Retrieve();
+			gp_session_id = RetrieveSessionId();
+
+			SessionState_Init();
 			GPMemoryProtect_Init();
 		}
 	}

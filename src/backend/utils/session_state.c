@@ -277,8 +277,9 @@ SessionState_ShmemInit()
 	}
 }
 
-static void
-SessionState_Init_Impl(void)
+/* Initialize the SessionState for current session */
+void
+SessionState_Init()
 {
 	Assert(NULL == MySessionState);
 
@@ -294,21 +295,6 @@ SessionState_Init_Impl(void)
 	Assert(NULL != MySessionState);
 
 	sessionStateInited = true;
-}
-
-/* Initialize the SessionState for current session */
-void
-SessionState_Init()
-{
-	SessionState_Init_Impl();
-}
-
-void
-SessionState_Init_Retrieve(void)
-{
-	gp_session_id = RetrieveSessionId();
-
-	SessionState_Init_Impl();
 }
 
 /* Shutdown the SessionState for current session */

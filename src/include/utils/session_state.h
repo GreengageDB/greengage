@@ -138,7 +138,6 @@ extern volatile SessionStateArray *AllSessionStateEntries;
 extern Size SessionState_ShmemSize(void);
 extern void SessionState_ShmemInit(void);
 extern void SessionState_Init(void);
-extern void SessionState_Init_Retrieve(void);
 extern void SessionState_Shutdown(void);
 extern bool SessionState_IsAcquired(SessionState *sessionState);
 
