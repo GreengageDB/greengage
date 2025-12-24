@@ -916,27 +916,24 @@ Endpoint
 }
 
 /*
- * isRetrieveConnection - Check if there's an endpoint with given receiverPid
+ * isRetrieveConnection - Check if there's an endpoint with given receiver pid
  * and session id.
- *
- * For the endpoint, the session_id is the gp_session_id since it is taked from
- * the session which created the cursor.
  */
 bool
-isRetrieveConnection(int pid, int sessionID)
+sharedEndpointsContain(int receiverPid, int sessionId)
 {
 	bool	res = false;
 
-	Assert(sessionID != InvalidEndpointSessionId);
-	Assert(pid != InvalidPid);
+	Assert(receiverPid != InvalidPid);
+	Assert(sessionId != InvalidEndpointSessionId);
 
 	LWLockAcquire(ParallelCursorEndpointLock, LW_SHARED);
 
 	for (int i = 0; i < MAX_ENDPOINT_SIZE; ++i)
 	{
 		if (!sharedEndpoints[i].empty &&
-			sharedEndpoints[i].sessionID == sessionID &&
-			sharedEndpoints[i].receiverPid == pid &&
+			sharedEndpoints[i].sessionID == sessionId &&
+			sharedEndpoints[i].receiverPid == receiverPid &&
 			sharedEndpoints[i].databaseID == MyDatabaseId)
 		{
 			res = true;

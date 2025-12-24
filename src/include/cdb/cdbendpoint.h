@@ -171,7 +171,7 @@ extern int RetrieveSessionId(void);
 /* Endpoint shared memory utility functions in "cdbendpoint.c" */
 extern Endpoint *get_endpointdesc_by_index(int index);
 extern void get_token_from_session_hashtable(int sessionId, Oid userID, int8 *token /* out */ );
-extern bool isRetrieveConnection(int pid, int sessionID);
+extern bool sharedEndpointsContain(int receiverPid, int sessionId);
 
 /* utility functions in "cdbendpointutilities.c" */
 extern void endpoint_token_str2arr(const char *tokenStr, int8 *token);

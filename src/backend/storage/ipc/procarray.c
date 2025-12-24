@@ -4954,7 +4954,7 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
 
 		/* Retrieve sessions are in utility mode. Grab them too. */
 		if (proc->mppSessionId != sessionId &&
-			!isRetrieveConnection(proc->pid, sessionId))
+			!sharedEndpointsContain(proc->pid, sessionId))
 		{
 			continue;
 		}
