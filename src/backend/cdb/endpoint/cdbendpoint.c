@@ -916,7 +916,7 @@ Endpoint
 }
 
 /*
- * isRetrieveConnection - Check if there's an endpoint with given receiver pid
+ * sharedEndpointsContain - Check if there's an endpoint with given receiver pid
  * and session id.
  */
 bool
