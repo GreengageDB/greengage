@@ -228,7 +228,7 @@ dispatch_empty_initialization(List *segment_ids)
 
 	/* Just mark the segments as initialized */
 	CdbDispatchCommandToSegments(
-		"SELECT gg_tables_tracking.internal_initialze_segments()",
+		"SELECT gg_tables_tracking.internal_initialize_segments()",
 		0,
 		segment_ids,
 		&cdb_pgresults);

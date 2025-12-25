@@ -52,7 +52,7 @@ PG_FUNCTION_INFO_V1(tracking_is_initial_snapshot_triggered);
 PG_FUNCTION_INFO_V1(tracking_get_track);
 PG_FUNCTION_INFO_V1(tracking_track_version);
 PG_FUNCTION_INFO_V1(internal_bind_db);
-PG_FUNCTION_INFO_V1(internal_initialze_segments);
+PG_FUNCTION_INFO_V1(internal_initialize_segments);
 
 /*
  * Tuple description for result of tracking_get_track function.
@@ -1133,7 +1133,7 @@ tracking_set_relkinds(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("Invalid relkind: %s", token),
-					 errhint("Valid relkinds are: 'r', 'i', 'S', 't', 'v', 'c', 'f', 'u', 'm', 'o', 'b', 'M'")));
+					 errhint("Valid relkinds are: 'r', 'i', 'S', 't', 'v', 'c', 'm', 'f', 'p', 'I', 'o', 'b', 'M'")));
 
 		if (!seen_relkinds[(unsigned char) token[0]])
 		{
@@ -1551,7 +1551,7 @@ internal_bind_db(PG_FUNCTION_ARGS)
 }
 
 Datum
-internal_initialze_segments(PG_FUNCTION_ARGS)
+internal_initialize_segments(PG_FUNCTION_ARGS)
 {
 	/* Mark this segment as initialized */
 	pg_atomic_test_set_flag(&tf_shared_state->tracking_is_initialized);

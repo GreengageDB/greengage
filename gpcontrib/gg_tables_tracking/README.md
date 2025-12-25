@@ -9,7 +9,7 @@ level. The extension implements a probabilistic tracking system using Bloom filt
 
 The extension implements a probabilistic tracking system using:
 
-* Bloom filters for space-efficient change detectio
+* Bloom filters for space-efficient change detection
 * Background workers to maintain consistency across coordinator and segments
 * File operation hooks to capture CREATE, EXTEND, TRUNCATE, and UNLINK events
 * Version control to ensure transactional consistency during snapshot acquisition

@@ -167,9 +167,9 @@ LANGUAGE C STRICT VOLATILE;
 
 REVOKE ALL ON FUNCTION gg_tables_tracking.internal_bind_db(dbid OID, rec BOOLEAN) FROM public;
 
-CREATE OR REPLACE FUNCTION gg_tables_tracking.internal_initialze_segments()
+CREATE OR REPLACE FUNCTION gg_tables_tracking.internal_initialize_segments()
 RETURNS VOID
-AS '$libdir/gg_tables_tracking', 'internal_initialze_segments'
+AS '$libdir/gg_tables_tracking', 'internal_initialize_segments'
 LANGUAGE C STRICT VOLATILE;
 
-REVOKE ALL ON FUNCTION gg_tables_tracking.internal_initialze_segments() FROM public;
+REVOKE ALL ON FUNCTION gg_tables_tracking.internal_initialize_segments() FROM public;
