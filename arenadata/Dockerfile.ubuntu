@@ -28,7 +28,7 @@ RUN set -eux; \
     apt install -y protobuf-compiler libpq-dev libossp-uuid-dev; \
 # Install allure-behave for behave tests
     pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0 protobuf==3.20.0; \
-    pip3 install PyGreSQL; \
+    pip3 install PyGreSQL==6.1.0; \
     pip3 cache purge
 
 WORKDIR /home/gpadmin
