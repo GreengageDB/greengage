@@ -50,7 +50,14 @@ get_bin_version(ClusterInfo *cluster)
 	pclose(output);
 
 	if (sscanf(cmd_output, "%*s (Greengage Database) %d.%d", &v1, &v2) < 1)
-		pg_fatal("could not get pg_ctl version output from %s\n", cmd);
+	{
+		/* for versions less GG-7 */
+		if (sscanf(cmd_output, "%*s (Greenplum Database) %d.%d", &v1, &v2) < 1)
+			pg_fatal("could not get pg_ctl version output from %s\n", cmd);
+
+		if (v1 > 10)
+			pg_fatal("could not get pg_ctl version output from %s\n", cmd);
+	}
 
 	if (v1 < 10)
 	{

@@ -153,6 +153,41 @@ executeQueryOrDie(PGconn *conn, const char *fmt,...)
 		return result;
 }
 
+/*
+ * executeQueryOrDieWithoutLog()
+ *
+ *     Formats a query string from the given arguments and executes the
+ *     resulting query.  If the query fails, this function logs an error
+ *     message and calls exit() to kill the program.
+ */
+PGresult *
+executeQueryOrDieWithoutLog(PGconn *conn, const char *fmt,...)
+{
+       static char query[QUERY_ALLOC];
+       va_list         args;
+       PGresult   *result;
+       ExecStatusType status;
+
+       va_start(args, fmt);
+       vsnprintf(query, sizeof(query), fmt, args);
+       va_end(args);
+
+       result = PQexec(conn, query);
+       status = PQresultStatus(result);
+
+       if ((status != PGRES_TUPLES_OK) && (status != PGRES_COMMAND_OK))
+       {
+               pg_log(PG_REPORT, "SQL command failed\n%s\n%s", query,
+                          PQerrorMessage(conn));
+               PQclear(result);
+               PQfinish(conn);
+               printf(_("Failure, exiting\n"));
+               exit(1);
+       }
+       else
+               return result;
+}
+
 
 /*
  * get_major_server_version()

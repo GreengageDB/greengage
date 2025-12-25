@@ -7347,10 +7347,6 @@ getPartitionDefs(Archive *fout, TableInfo tblinfo[], int numTables)
 	int			i_partclause;
 	int			i_parttemplate;
 
-	/* Only relevant for GP5/GP6 */
-	if (fout->remoteVersion > GPDB6_MAJOR_PGVERSION)
-		return;
-
 	/*
 	 * We want to perform just one query against pg_class.
 	 * However, we mustn't try to select every row of those catalogs and then
@@ -17629,7 +17625,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 				appendPQExpBufferStr(q, "::pg_catalog.regclass;\n");
 			}
 
-			if (numParents > 0 && !tbinfo->ispartition)
+			if (numParents > 0 && !tbinfo->ispartition && (fout->remoteVersion < GPDB7_MAJOR_PGVERSION))
 			{
 				appendPQExpBufferStr(q, "\n-- For binary upgrade, set up inheritance this way.\n");
 				for (k = 0; k < numParents; k++)
