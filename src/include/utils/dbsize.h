@@ -19,6 +19,6 @@
  */
 int64 calculate_relation_size(Relation rel, ForkNumber forknum,
 							  bool include_ao_aux, bool ao_physical_size,
-							  bool on_error_continue);
+							  int stat_error_level);
 
 #endif    /* DBSIZE_H */

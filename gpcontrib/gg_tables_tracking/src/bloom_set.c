@@ -56,7 +56,12 @@ bloom_set_init(const uint32_t bloom_count, const uint32_t bloom_size)
 
 	LWLockPadded *locks = GetNamedLWLockTranche("gg_tables_tracking");
 
-	bloom_set_lock = &(locks[1].lock);
+	/*
+	 * Start assigning locks from second lock. The first one will be assigned
+	 * to a drops_track_lock.
+	 */
+	locks++;
+	bloom_set_lock = &(locks[0].lock);
 	locks++;
 
 	for (uint32_t i = 0; i < bloom_count; i++)
@@ -64,7 +69,7 @@ bloom_set_init(const uint32_t bloom_count, const uint32_t bloom_size)
 		bloom_entry_t *bloom_entry = bloom_entry_get(bloom_set, i);
 
 		bloom_entry_init(bloom_size, bloom_entry);
-		bloom_locks[i].lock = &locks[i + 1].lock;
+		bloom_locks[i].lock = &locks[i].lock;
 		bloom_locks[i].entry = (void *) bloom_entry;
 	}
 

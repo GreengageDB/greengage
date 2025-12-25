@@ -694,8 +694,8 @@ is_initialized()
 			segindex = atoi(PQgetvalue(pgresult, 0, 0));
 			is_initialized = strcmp(PQgetvalue(pgresult, 0, 1), "t") == 0;
 
-			elog(LOG, "[gg_tables_tracking] tracking_register_db initialization check"
-			  " segindex: %d, is_initialized: %d", segindex, is_initialized);
+			ereport(LOG, (errmsg("[gg_tables_tracking] tracking_register_db initialization check"
+			  " segindex: %d, is_initialized: %d", segindex, is_initialized)));
 
 			if (!is_initialized)
 			{
@@ -733,7 +733,7 @@ tracking_register_db(PG_FUNCTION_ARGS)
 				(errmsg("[gg_tables_tracking] Cannot register database before worker initialize tracking"),
 				 errhint("Wait gg_tables_tracking.tracking_worker_naptime_sec and try again")));
 
-	elog(LOG, "[gg_tables_tracking] registering database %u for tracking", dbid);
+	ereport(LOG, (errmsg("[gg_tables_tracking] registering database %u for tracking", dbid)));
 
 	track_db(dbid, true);
 
@@ -771,7 +771,7 @@ tracking_unregister_db(PG_FUNCTION_ARGS)
 				(errmsg("[gg_tables_tracking] Cannot unregister database before worker initialize tracking"),
 				 errhint("Wait gg_tables_tracking.tracking_worker_naptime_sec and try again")));
 
-	elog(LOG, "[gg_tables_tracking] unregistering database %u from tracking", dbid);
+	ereport(LOG, (errmsg("[gg_tables_tracking] unregistering database %u from tracking", dbid)));
 
 	track_db(dbid, false);
 
@@ -1170,7 +1170,7 @@ tracking_set_relkinds(PG_FUNCTION_ARGS)
 
 	v_stmt.kind = VAR_SET_VALUE;
 	v_stmt.args = list_make1(&arg);
-	elog(LOG, "[gg_tables_tracking] setting relkinds %s in database %u for tracking", buf.data, dbid);
+	ereport(LOG, (errmsg("[gg_tables_tracking] setting relkinds %s in database %u for tracking", buf.data, dbid)));
 
 	tf_guc_unlock();
 
@@ -1294,7 +1294,8 @@ tracking_set_relams(PG_FUNCTION_ARGS)
 
 	v_stmt.kind = VAR_SET_VALUE;
 	v_stmt.args = list_make1(&arg);
-	elog(LOG, "[gg_tables_tracking] setting relams %s in database %u for tracking", buf.data, dbid);
+	ereport(LOG, (errmsg("[gg_tables_tracking] setting relams %s "
+			"in database %u for tracking", buf.data, dbid)));
 
 	tf_guc_unlock();
 
@@ -1326,7 +1327,8 @@ tracking_trigger_initial_snapshot(PG_FUNCTION_ARGS)
 				(errmsg("Cannot execute tracking_trigger_initial_snapshot outside query dispatcher")));
 	}
 
-	elog(LOG, "[gg_tables_tracking] tracking_trigger_initial_snapshot dbid: %u", dbid);
+	ereport(LOG,
+			(errmsg("[gg_tables_tracking] tracking_trigger_initial_snapshot dbid: %u", dbid)));
 
 	ctx = bloom_set_get_entry(MyDatabaseId, LW_SHARED, LW_EXCLUSIVE);
 
@@ -1367,7 +1369,8 @@ tracking_is_initial_snapshot_triggered(PG_FUNCTION_ARGS)
 
 	is_triggered = bloom_set_is_all_bits_triggered(dbid);
 
-	elog(LOG, "[gg_tables_tracking] is_initial_snapshot_triggered:%d dbid: %u", is_triggered, dbid);
+	ereport(LOG,
+			(errmsg("[gg_tables_tracking] is_initial_snapshot_triggered:%d dbid: %u", is_triggered, dbid)));
 
 	PG_RETURN_BOOL(is_triggered);
 }

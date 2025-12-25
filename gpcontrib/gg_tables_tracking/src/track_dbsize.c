@@ -23,7 +23,6 @@ dbsize_calc_size(Form_pg_class relform)
 {
 	RelationData	rel = {0};
 	int64		size = 0;
-	RelFileNode rnode;
 
 	/*
 	 * Initialize Relfilenode field of RelationData.
@@ -42,33 +41,25 @@ dbsize_calc_size(Form_pg_class relform)
 
 			/* This logic should match RelationInitPhysicalAddr */
 			if (relform->reltablespace)
-				rnode.spcNode = relform->reltablespace;
+				rel.rd_node.spcNode = relform->reltablespace;
 			else
-				rnode.spcNode = MyDatabaseTableSpace;
-			if (rnode.spcNode == GLOBALTABLESPACE_OID)
-				rnode.dbNode = InvalidOid;
-			else
-				rnode.dbNode = MyDatabaseId;
+				rel.rd_node.spcNode = MyDatabaseTableSpace;
+			if (rel.rd_node.spcNode != GLOBALTABLESPACE_OID)
+				rel.rd_node.dbNode = MyDatabaseId;
 			if (relform->relfilenode)
-				rnode.relNode = relform->relfilenode;
+				rel.rd_node.relNode = relform->relfilenode;
 			else				/* Consult the relation mapper */
-				rnode.relNode = RelationMapOidToFilenode(relform->oid,
+				rel.rd_node.relNode = RelationMapOidToFilenode(relform->oid,
 														 relform->relisshared);
 			break;
 
 		default:
-			/* no storage, return NULL */
-			rnode.relNode = InvalidOid;
-			/* some compilers generate warnings without these next two lines */
-			rnode.dbNode = InvalidOid;
-			rnode.spcNode = InvalidOid;
-			break;
+			/* no storage, return zero size */
+			return 0;
 	}
 
-	if (rnode.relNode == InvalidOid)
-		return size;
-
-	rel.rd_node = rnode;
+	if (rel.rd_node.relNode == InvalidOid)
+		return 0;
 
 	rel.rd_rel = relform;
 
@@ -95,8 +86,8 @@ dbsize_calc_size(Form_pg_class relform)
 			}
 			break;
 		default:
-			elog(ERROR, "invalid relpersistence: %c",
-					relform->relpersistence);
+			ereport(ERROR, (errmsg("invalid relpersistence: %c",
+					relform->relpersistence)));
 			break;
 	}
 
@@ -105,7 +96,7 @@ dbsize_calc_size(Form_pg_class relform)
 		size += calculate_relation_size(&rel, forkNum,
 										/* include_ao_aux */ false,
 										/* physical_ao_size */ true,
-										/* on_error_continue */ true);
+										/* stat_error_level */ DEBUG1);
 	}
 
 	return size;

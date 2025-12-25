@@ -18,7 +18,7 @@ OBJS = \
 	src/gg_tables_tracking.o \
 	src/gg_tables_tracking_worker.o \
 	src/track_files.o \
-	src/dbsize.o \
+	src/track_dbsize.o \
 	
 PG_CFLAGS = -I$(libpq_srcdir) -I$(CURDIR)/src/include
 

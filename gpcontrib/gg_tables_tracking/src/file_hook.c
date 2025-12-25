@@ -50,7 +50,7 @@ xact_end_create_callback(XactEvent event, void *arg)
 	if (event != XACT_EVENT_COMMIT && event != XACT_EVENT_ABORT)
 		return;
 
-	elog(DEBUG1, "xact_end_create_callback");
+	ereport(DEBUG1, (errmsg("xact_end_create_callback")));
 
 	if (event == XACT_EVENT_COMMIT)
 		bloom_set_merge(non_committed_dbid, non_committed_bloom);
