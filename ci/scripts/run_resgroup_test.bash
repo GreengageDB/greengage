@@ -78,7 +78,7 @@ EOF
 
 # Cloud-init monitors will check for this file's existence and content.
 # Missing file or invalid content will be interpreted as script failure.
-exitcode=$?
+exitcode='wrong exitcode'
 echo "$exitcode" > "$logdir/$logfile"
 
 docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
