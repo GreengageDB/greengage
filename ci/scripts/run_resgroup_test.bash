@@ -76,6 +76,8 @@ EOF1
         )
 EOF
 
+exit 1 # test unexpected exit
+
 # Cloud-init monitors will check for this file's existence and content.
 # Missing file or invalid content will be interpreted as script failure.
 exitcode=$?
