@@ -638,8 +638,7 @@ CPhysicalHashJoin::PdshashedMatching(
 		// also, it isn't obvious if the same problem might arise when matching a distribution containing
 		// multiple keys. theoretically, it can, so it might be worth exploring
 
-		if (GPOPT_INVALID_OPT_REQUEST != ulOptReq &&
-			ulSourceSize > ulOptReq)
+		if (GPOPT_INVALID_OPT_REQUEST != ulOptReq && ulSourceSize > ulOptReq)
 		{
 			CExpression *source_expr = (*pdrgpexprSource)[ulOptReq];
 			BOOL fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
