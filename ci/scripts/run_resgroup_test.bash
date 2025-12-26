@@ -2,6 +2,9 @@
 set -eox pipefail
 
 project="resgroup"
+
+# Exit status file for cloud-init environments where exit codes aren't propagated.
+# Parent processes can read this file to determine script success/failure.
 logdir="$PWD/logs"
 logfile=".exitcode"
 
@@ -73,8 +76,11 @@ EOF1
         )
 EOF
 
+# Cloud-init monitors will check for this file's existence and content.
+# Missing file or invalid content will be interpreted as script failure.
 exitcode=$?
 echo $exitcode > "$logdir/$logfile"
+
 docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
   cd /home/gpadmin
   tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
