@@ -7347,6 +7347,10 @@ getPartitionDefs(Archive *fout, TableInfo tblinfo[], int numTables)
 	int			i_partclause;
 	int			i_parttemplate;
 
+	/* Only relevant for GP5/GP6 */
+	if (fout->remoteVersion >= GPDB7_MAJOR_PGVERSION)
+		return;
+
 	/*
 	 * We want to perform just one query against pg_class.
 	 * However, we mustn't try to select every row of those catalogs and then
