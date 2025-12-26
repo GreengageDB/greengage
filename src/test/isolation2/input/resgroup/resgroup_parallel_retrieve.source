@@ -1,0 +1,192 @@
+-- start_ignore
+DROP TABLE IF EXISTS t CASCADE;
+DROP ROLE r;
+DROP RESOURCE GROUP rg;
+DROP RESOURCE GROUP rg2;
+
+CREATE TABLE t (i INT) DISTRIBUTED BY (i);
+CREATE RESOURCE GROUP rg WITH (concurrency=10, cpu_max_percent=10, memory_limit=20);
+CREATE RESOURCE GROUP rg2 WITH (concurrency=10, cpu_max_percent=10, memory_limit=40);
+
+CREATE ROLE r SUPERUSER RESOURCE GROUP rg2;
+
+INSERT INTO t SELECT generate_series(1, 7);
+
+GRANT ALL ON t TO r;
+
+ALTER ROLE gpadmin WITH RESOURCE GROUP rg;
+-- end_ignore
+-- start_matchsubs
+-- m/ERROR:  (.*) \([a-zA-Z_]+\.c:[0-9]+\)$/
+-- s/ERROR:  (.*) \([a-zA-Z_]+\.c:[0-9]+\)$/ERROR:  $1/
+-- end_matchsubs
+
+--
+-- Normal mode with GUC enabled.
+--
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v on;
+!\retcode gpstop -u;
+
+1: BEGIN;
+1: DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(2), i FROM t;
+1: @post_run 'parse_endpoint_info 1 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c1';
+
+1: SELECT gp_inject_fault('switch_resgroup_ppc', 'skip', dbid)
+   FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+1&: SELECT gp_wait_until_triggered_fault('switch_resgroup_ppc', 1, dbid)
+    FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT1': RETRIEVE 1 FROM ENDPOINT "@ENDPOINT1";
+
+0U: SHOW gp_resource_group_retrieve;
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE 1%';
+
+0R<:
+1<:
+
+1: SELECT gp_inject_fault('all', 'reset', dbid)
+   FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+1q:
+
+-- Retrieve on closed cursor.
+0R: @pre_run 'set_endpoint_variable @ENDPOINT1': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT1";
+0Rq:
+
+--
+-- Normal mode with GUC disabled.
+--
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v off;
+!\retcode gpstop -u;
+
+1: BEGIN;
+1: DECLARE c2 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(2), i FROM t;
+1: @post_run 'parse_endpoint_info 2 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c2';
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT2': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT2";
+
+0U: SHOW gp_resource_group_retrieve;
+-- No resource groups assigned.
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+
+0R<:
+0Rq:
+1: ROLLBACK;
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v on;
+!\retcode gpconfig -c gp_resource_group_bypass -v on;
+!\retcode gpstop -u;
+
+--
+--  Bypass mode with GUC enabled.
+--
+
+1: BEGIN;
+
+1: DECLARE c3 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(2), i FROM t;
+1: @post_run 'parse_endpoint_info 3 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c3';
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT3': RETRIEVE 1 FROM ENDPOINT "@ENDPOINT3";
+
+0U: SHOW gp_resource_group_bypass;
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE 1%';
+
+0R<:
+
+-- All subsequent queries are run with bypass mode.
+
+1: SELECT gp_inject_fault('switch_resgroup_ppc_bypass', 'skip', dbid),
+          gp_inject_fault('switch_resgroup_ppc', 'error', dbid)
+   FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+1&: SELECT gp_wait_until_triggered_fault('switch_resgroup_ppc_bypass', 1, dbid)
+    FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+
+0R: @pre_run 'set_endpoint_variable @ENDPOINT3': RETRIEVE 1 FROM ENDPOINT "@ENDPOINT3";
+
+1<:
+
+1: SELECT gp_inject_fault('all', 'reset', dbid)
+   FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+1q:
+
+-- Retrieve on closed cursor with bypass mode.
+0R: @pre_run 'set_endpoint_variable @ENDPOINT3': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT3";
+0Rq:
+
+!\retcode gpconfig -r gp_resource_group_bypass;
+!\retcode gpstop -u;
+
+--
+-- Multiple retrieve sessions sharing slot.
+--
+
+1: BEGIN;
+
+1: DECLARE c4 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(3), i FROM t;
+1: @post_run 'parse_endpoint_info 4 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c4';
+1: DECLARE c5 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(3), i FROM t;
+1: @post_run 'parse_endpoint_info 5 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c5';
+1: DECLARE c6 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(3), i FROM t;
+1: @post_run 'parse_endpoint_info 6 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c6';
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT4': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT4";
+1R&: @pre_run 'set_endpoint_variable @ENDPOINT5': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT5";
+2R&: @pre_run 'set_endpoint_variable @ENDPOINT6': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT6";
+
+-- All should have the same resource group.
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+2U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+
+0R<:
+1R<:
+2R<:
+
+0Rq:
+
+1: COMMIT;
+1q:
+
+--
+-- GUC value must be the same on segments and on the master.
+--
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v on -m off;
+
+---
+--- Moving resource group should move the retrieve sessions as well.
+---
+
+1: BEGIN;
+
+1: DECLARE c7 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(5), i FROM t;
+1: @post_run 'parse_endpoint_info 7 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c7';
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT7': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT7";
+
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+
+2: SET ROLE r;
+2: SELECT pg_resgroup_move_query(pid, 'rg2') FROM pg_stat_activity WHERE rsgname = 'rg';
+
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+
+0R<:
+
+1: ROLLBACK;
+
+1q:
+0Rq:
+0Uq:
+-- start_ignore
+! gpconfig -r gp_resource_group_retrieve;
+! gpstop -u;
+
+ALTER ROLE gpadmin WITH RESOURCE GROUP admin_group;
+
+DROP TABLE t;
+DROP ROLE r;
+DROP RESOURCE GROUP rg;
+DROP RESOURCE GROUP rg2;
+-- end_ignore

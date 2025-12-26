@@ -19,6 +19,7 @@
 
 #include "utils/memutils.h"
 #include "cdb/cdbvars.h"
+#include "cdb/cdbendpoint.h"
 #include "miscadmin.h"
 #include "port/atomics.h"
 #include "storage/lwlock.h"
@@ -101,6 +102,7 @@ SessionState_Acquire(int sessionId)
 		acquired->idle_start = 0;
 		acquired->latestCursorCommandId = 0;
 		acquired->resGroupSlot = NULL;
+		acquired->bypassResGroupId = InvalidOid;
 
 #ifdef USE_ASSERT_CHECKING
 		acquired->isModifiedSessionId = false;
@@ -175,6 +177,7 @@ SessionState_Release(SessionState *acquired)
 		acquired->idle_start = 0;
 		acquired->latestCursorCommandId = 0;
 		acquired->resGroupSlot = NULL;
+		acquired->bypassResGroupId = InvalidOid;
 
 #ifdef USE_ASSERT_CHECKING
 		acquired->isModifiedSessionId = false;

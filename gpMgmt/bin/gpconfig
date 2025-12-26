@@ -39,7 +39,7 @@ except ImportError as err:
 EXECNAME = os.path.split(__file__)[-1]
 
 PROHIBITED_GUCS = set(["port", "listen_addresses"])
-SAMEVALUE_GUCS = set(["gp_default_storage_options"])
+SAMEVALUE_GUCS = set(["gp_default_storage_options", "gp_resource_group_retrieve"])
 read_only_gucs = set()  # populated at runtime
 LOGGER = get_default_logger()
 setup_tool_logging(EXECNAME, getLocalHostname(), getUserName())

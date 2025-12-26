@@ -5454,6 +5454,11 @@ PostgresMain(int argc, char *argv[],
 
 					elog((Debug_print_full_dtm ? LOG : DEBUG5), "Simple query stmt: %s.",query_string);
 
+					if (ShouldUseRetrieveResGroup())
+					{
+						SwitchResGroupOnRetrieveSession();
+					}
+
 					if (am_walsender)
 					{
 						if (!exec_replication_command(query_string))

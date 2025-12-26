@@ -110,6 +110,7 @@ extern bool gp_resource_group_bypass_catalog_query;
 extern int gp_resource_group_move_timeout;
 extern bool gp_resource_group_bypass_direct_dispatch;
 extern char *gp_resource_group_cgroup_parent;
+extern bool gp_resource_group_retrieve;
 
 /*
  * Non-GUC global variables.
@@ -174,8 +175,10 @@ extern bool ShouldUnassignResGroup(void);
 extern void AssignResGroupOnCoordinator(void);
 extern void UnassignResGroup(void);
 extern void SwitchResGroupOnSegment(const char *buf, int len);
+extern void SwitchResGroupOnRetrieveSession(void);
 
 extern bool ResGroupIsAssigned(void);
+extern bool ResGroupIsBypassed(void);
 
 /* Retrieve statistic information of type from resource group */
 extern Datum ResGroupGetStat(Oid groupId, ResGroupStatType type);

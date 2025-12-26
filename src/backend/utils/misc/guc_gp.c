@@ -208,6 +208,7 @@ bool		gp_resource_group_bypass;
 bool		gp_resource_group_bypass_catalog_query;
 bool		gp_resource_group_bypass_direct_dispatch;
 char	   *gp_resource_group_cgroup_parent;
+bool		gp_resource_group_retrieve;
 
 /* Metrics collector debug GUC */
 bool		vmem_process_interrupt = false;
@@ -3083,6 +3084,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"gp_resource_group_retrieve", PGC_SIGHUP, RESOURCES,
+			gettext_noop("Activate resource groups for parallel retrieve cursor sessions."),
+			gettext_noop("When enabled, retrieve sessions use the same resource group as the "
+						 "session that declared the parallel retrieve cursor, sharing slots and "
+						 "enforcing resource limits.")
+		},
+		&gp_resource_group_retrieve,
+		false, NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, false, NULL, NULL
@@ -5068,7 +5080,11 @@ assign_pljava_classpath_insecure(bool newval, void *extra)
 static bool
 check_gp_resource_group_bypass(bool *newval, void **extra, GucSource source)
 {
-	if (!ResGroupIsAssigned())
+	/* 
+	 * RETRIEVE cursor sessions exist only during a transaction. That means we
+	 * can't really change the GUC while handler is alive.
+	 */
+	if (!ResGroupIsAssigned() && !am_cursor_retrieve_handler)
 		return true;
 
 	GUC_check_errmsg("SET gp_resource_group_bypass cannot run inside a transaction block");
