@@ -476,6 +476,9 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 * pg_largeobject contains user data that does not appear in pg_dump
 	 * output, so we have to copy that system table.  It's easiest to do that
 	 * by treating it as a user table.
+	 * 
+	 * We ignore partitioned tables, as they do not need to transfer files and indexes, 
+	 * as well as create toast tables starting from version 12.
 	 */
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
 			 "WITH regular_heap (reloid, indtable, toastheap) AS ( "
@@ -487,7 +490,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 CppAsString2(RELKIND_AOBLOCKDIR) ", "
 			 CppAsString2(RELKIND_MATVIEW) ", "
 			 CppAsString2(RELKIND_FOREIGN_TABLE) ", "
-			 CppAsString2(RELKIND_PARTITIONED_TABLE) ", "
+			 "%s"
 			 CppAsString2(RELKIND_SEQUENCE) ") AND "
 	/* exclude possible orphaned temp tables */
 			 "    ((n.nspname !~ '^pg_temp_' AND "
@@ -498,6 +501,8 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "      c.oid >= %u::pg_catalog.oid) OR "
 			 "     (n.nspname = 'pg_catalog' AND "
 			 "      relname IN ('pg_largeobject') ))), ",
+			(GET_MAJOR_VERSION(old_cluster.major_version) >= 1200) ? "" :
+			 CppAsString2(RELKIND_PARTITIONED_TABLE) ", " ,
 			 FirstNormalObjectId);
 
 	/*
@@ -507,10 +512,6 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 *
 	 * GPDB: Starting GPDB7 CO tables no longer have TOAST tables. Hence,
 	 * ignore toast OIDs for CO tables to avoid upgrade failures.
-	 * 
-	 * We purposefully ignore toast OIDs for partitioned tables; the reason is
-	 * that versions 10 and 11 have them, but later versions do not, so
-	 * emitting them causes the upgrade to fail.
 	 */
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
 			 "  toast_heap (reloid, indtable, toastheap) AS ( "
@@ -519,9 +520,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "      ON regular_heap.reloid = c.oid "
 			 "  WHERE c.reltoastrelid != 0%s), ",
 			 (GET_MAJOR_VERSION(cluster->major_version) <= 904) ?
-			 " AND c.relstorage <> 'c'" : 
-			((GET_MAJOR_VERSION(cluster->major_version) >= 1200) && cluster == &old_cluster ?		
-			 " AND c.relkind <> 'p'" : ""));
+			 " AND c.relstorage <> 'c'" : "");
 
 	/*
 	 * Add a CTE that collects OIDs of all valid indexes on the previously
