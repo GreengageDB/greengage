@@ -3525,6 +3525,10 @@ _selectTableAccessMethod(ArchiveHandle *AH, const char *tableam)
 			else
 					ahprintf(AH, "%s\n\n", cmd->data);
 			destroyPQExpBuffer(cmd);
+
+			if (AH->currTableAm)
+				free(AH->currTableAm);
+			AH->currTableAm = NULL;
 		}
 		return;
 	}

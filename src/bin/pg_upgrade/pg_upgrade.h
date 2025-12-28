@@ -240,6 +240,7 @@ typedef struct
 	bool		has_numerics;
 	AttInfo	   *atts;
 	int			natts;
+	char		relkind;
 } RelInfo;
 
 typedef struct

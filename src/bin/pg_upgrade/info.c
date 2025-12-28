@@ -137,10 +137,15 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		}
 
 		/*
+		 * For the following cases, file transfer is not necessary:
 		 * External tables have relfilenodes but no physical files, and aoseg
-		 * tables are handled by their AO table
+		 * tables are handled by their AO table.
+		 * Partitioned tables have relfilenodes = 0 and no physical files in GG7.
+		 * The value of the sequences is set via set_val.
 		 */
-		if (old_rel->relstorage == 'x' || strcmp(new_rel->nspname, "pg_aoseg") == 0)
+		if ((old_rel->relstorage == 'x' || strcmp(new_rel->nspname, "pg_aoseg") == 0) ||
+			(new_rel->relkind == RELKIND_PARTITIONED_TABLE) ||
+			(new_rel->relkind == RELKIND_SEQUENCE) )
 		{
 			old_relnum++;
 			new_relnum++;
@@ -502,6 +507,10 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 *
 	 * GPDB: Starting GPDB7 CO tables no longer have TOAST tables. Hence,
 	 * ignore toast OIDs for CO tables to avoid upgrade failures.
+	 * 
+	 * We purposefully ignore toast OIDs for partitioned tables; the reason is
+	 * that versions 10 and 11 have them, but later versions do not, so
+	 * emitting them causes the upgrade to fail.
 	 */
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
 			 "  toast_heap (reloid, indtable, toastheap) AS ( "
@@ -510,7 +519,9 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "      ON regular_heap.reloid = c.oid "
 			 "  WHERE c.reltoastrelid != 0%s), ",
 			 (GET_MAJOR_VERSION(cluster->major_version) <= 904) ?
-			 " AND c.relstorage <> 'c'" : "");
+			 " AND c.relstorage <> 'c'" : 
+			((GET_MAJOR_VERSION(cluster->major_version) >= 1200) && cluster == &old_cluster ?		
+			 " AND c.relkind <> 'p'" : ""));
 
 	/*
 	 * Add a CTE that collects OIDs of all valid indexes on the previously
@@ -683,6 +694,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 		relstorage = PQgetvalue(res, relnum, i_relstorage) [0];
 		curr->relstorage = relstorage;
 		relkind = PQgetvalue(res, relnum, i_relkind) [0];
+		curr->relkind = relkind;
 
 		/*
 		 * The structure of append
