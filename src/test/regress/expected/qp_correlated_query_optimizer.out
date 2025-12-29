@@ -4109,7 +4109,7 @@ DROP TABLE skip_correlated_t4;
 -- For more info, please refer to the comments inside
 -- CPhysicalJoin::PdshashedMatching
 --------------------------------------------------------------------------------
-EXPLAIN (VERBOSE)
+EXPLAIN
 SELECT *
 FROM a
 WHERE NOT EXISTS (
@@ -4117,21 +4117,16 @@ WHERE NOT EXISTS (
     FROM B
     WHERE (a.j = b.i AND a.i = b.i)
 );
-                                       QUERY PLAN
------------------------------------------------------------------------------------------
+                                  QUERY PLAN
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=2 width=8)
-   Output: a.i, a.j
    ->  Hash Anti Join  (cost=0.00..862.00 rows=1 width=8)
-         Output: a.i, a.j
          Hash Cond: ((a.j = b.i) AND (a.i = b.i))
-         ->  Seq Scan on qp_correlated_query.a  (cost=0.00..431.00 rows=2 width=8)
-               Output: a.i, a.j
+         ->  Seq Scan on a  (cost=0.00..431.00 rows=2 width=8)
          ->  Hash  (cost=431.00..431.00 rows=2 width=4)
-               Output: b.i
-               ->  Seq Scan on qp_correlated_query.b  (cost=0.00..431.00 rows=2 width=4)
-                     Output: b.i
+               ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=4)
  Optimizer: GPORCA
-(12 rows)
+(7 rows)
 
 SELECT *
 FROM a

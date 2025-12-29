@@ -882,7 +882,7 @@ DROP TABLE skip_correlated_t4;
 -- For more info, please refer to the comments inside
 -- CPhysicalJoin::PdshashedMatching
 --------------------------------------------------------------------------------
-EXPLAIN (VERBOSE)
+EXPLAIN
 SELECT *
 FROM a
 WHERE NOT EXISTS (
