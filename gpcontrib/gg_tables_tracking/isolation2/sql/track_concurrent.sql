@@ -64,7 +64,3 @@ FROM segment_counts sc, pg_class_count pc;
 
 1q:
 2q:
-
-!\retcode gpconfig -r shared_preload_libraries;
-!\retcode gpconfig -r gg_tables_tracking.tracking_worker_naptime_sec;
-!\retcode gpstop -raq -M fast;

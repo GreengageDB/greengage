@@ -1,10 +1,3 @@
--- start_ignore
-\! gpconfig -c shared_preload_libraries -v 'gg_tables_tracking'
-\! gpstop -raq -M fast
-\! gpconfig -c gg_tables_tracking.tracking_worker_naptime_sec -v '5'
-\! gpstop -u
-\c
--- end_ignore
 -- start_matchsubs
 --
 -- m/ERROR:  \[gg_tables_tracking\] exceeded maximum number of tracked databases \(track_files\.c:\d+\)/
@@ -30,7 +23,7 @@ SHOW gg_tables_tracking.tracking_is_db_tracked;
 SELECT datname, setconfig FROM pg_db_role_setting JOIN pg_database ON
 setdatabase=oid WHERE datname=current_database();
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 2);
+SELECT gg_tables_tracking.wait_for_worker_initialize();
 
 SELECT gg_tables_tracking.tracking_register_db();
 
@@ -219,8 +212,3 @@ SHOW gg_tables_tracking.tracking_relams;
 \c contrib_regression;
 
 DROP DATABASE tracking1;
-
---start_ignore
-\! gpconfig -r gg_tables_tracking.tracking_worker_naptime_sec
-\! gpstop -u
---end_ignore

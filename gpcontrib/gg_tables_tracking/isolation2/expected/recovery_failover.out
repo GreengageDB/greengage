@@ -1,5 +1,7 @@
 -- This test triggers failover of content 1 and checks
 -- the correct tracking state behaviour after recovery
+!\retcode gpconfig -s shared_preload_libraries | grep "value:" | head -1 | awk '{print $3}' > ../../../gpcontrib/gg_tables_tracking/isolation2/results/shared_libs ;
+(exited with code 0)
 !\retcode gpconfig -c shared_preload_libraries -v 'gg_tables_tracking';
 (exited with code 0)
 -- Allow extra time for mirror promotion to complete recovery
@@ -8,6 +10,10 @@
 !\retcode gpconfig -c gp_fts_probe_retries -v 2 --masteronly;
 (exited with code 0)
 !\retcode gpstop -raq -M fast;
+(exited with code 0)
+!\retcode gpconfig -c gg_tables_tracking.tracking_worker_naptime_sec -v '5';
+(exited with code 0)
+!\retcode gpstop -u;
 (exited with code 0)
 
 CREATE EXTENSION IF NOT EXISTS gg_tables_tracking;
@@ -18,10 +24,10 @@ CREATE EXTENSION
 !\retcode gpstop -u;
 (exited with code 0)
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int);
- pg_sleep 
-----------
-          
+SELECT gg_tables_tracking.wait_for_worker_initialize();
+ wait_for_worker_initialize 
+----------------------------
+ t                          
 (1 row)
 SELECT gg_tables_tracking.tracking_register_db();
  tracking_register_db 
@@ -68,11 +74,12 @@ SELECT wait_until_segments_are_down(1);
  t                            
 (1 row)
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 5);
- pg_sleep 
-----------
-          
+1: SELECT gg_tables_tracking.wait_for_worker_initialize();
+ wait_for_worker_initialize 
+----------------------------
+ t                          
 (1 row)
+1q: ... <quitting>
 SELECT * FROM tracking_is_segment_initialized_master() UNION ALL SELECT * FROM tracking_is_segment_initialized_segments();
  segindex | is_initialized 
 ----------+----------------
@@ -118,10 +125,10 @@ SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
  0     
 (1 row)
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 5);
- pg_sleep 
-----------
-          
+SELECT gg_tables_tracking.wait_for_worker_initialize();
+ wait_for_worker_initialize 
+----------------------------
+ t                          
 (1 row)
 
 -- Track should be returned only from recovered segment since

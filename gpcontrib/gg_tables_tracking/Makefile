@@ -22,7 +22,7 @@ OBJS = \
 	
 PG_CFLAGS = -I$(libpq_srcdir) -I$(CURDIR)/src/include
 
-REGRESS = gg_tables_tracking_guc gg_tables_tracking
+REGRESS = setup gg_tables_tracking_guc gg_tables_tracking teardown
 REGRESS_OPTS += --init-file=$(top_srcdir)/src/test/regress/init_file
 
 with_llvm = no

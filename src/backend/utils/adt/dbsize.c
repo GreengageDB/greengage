@@ -423,17 +423,13 @@ stat_ao_callback(const int segno, void *ctx)
 	{
 		if (errno == ENOENT)
 			return false;
-		else if (statFiles->statErrorLevel < ERROR)
+		else
 		{
 			ereport(statFiles->statErrorLevel,
 					(errcode_for_file_access(),
 					errmsg("could not stat file %s: %m", segPath)));
 			return false;
 		}
-		else
-			ereport(ERROR,
-				(errcode_for_file_access(),
-				errmsg("could not stat file %s: %m", segPath)));
 	}
 	statFiles->totalFilesSize += fst.st_size;
 	return true;
@@ -588,20 +584,15 @@ calculate_relation_size(Relation rel, ForkNumber forknum,
 		{
 			if (errno == ENOENT)
 				break;
-			else if (stat_error_level < ERROR)
+			else
 			{
 				ereport(stat_error_level,
 						(errcode_for_file_access(),
 						 errmsg("could not stat file %s: %m", pathname)));
 				break;
 			}
-			else
-				ereport(ERROR,
-						(errcode_for_file_access(),
-						 errmsg("could not stat file %s: %m", pathname)));
 		}
-		else
-			totalsize += fst.st_size;
+		totalsize += fst.st_size;
 	}
 
 	/* RELSTORAGE_VIRTUAL has no space usage */

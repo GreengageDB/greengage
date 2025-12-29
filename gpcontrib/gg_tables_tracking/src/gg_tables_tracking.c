@@ -28,15 +28,9 @@ _PG_init(void)
 	drops_track_init();
 
 	if (IS_QUERY_DISPATCHER())
-	{
 		track_setup_executor_hooks();
-		/*
-		 * Connection to database is rejected for bgworker on segments. Even
-		 * if the connection will be utility, InitPostgres would refuse to
-		 * connect non-system bgworker.
-		 */
-		gg_tables_tracking_worker_register();
-	}
+
+	gg_tables_tracking_worker_register();
 }
 
 void

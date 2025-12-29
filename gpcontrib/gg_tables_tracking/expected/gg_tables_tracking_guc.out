@@ -20,10 +20,10 @@ setdatabase=oid WHERE datname=current_database();
 ---------+-----------
 (0 rows)
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 2);
- pg_sleep 
-----------
- 
+SELECT gg_tables_tracking.wait_for_worker_initialize();
+ wait_for_worker_initialize 
+----------------------------
+ t
 (1 row)
 
 SELECT gg_tables_tracking.tracking_register_db();
@@ -151,7 +151,7 @@ setdatabase=oid WHERE datname=current_database();
 (1 row)
 
 SELECT gg_tables_tracking.tracking_set_relams('v,v,v,,,');
-ERROR:  Invalid access method: v
+ERROR:  access method "v" does not exist
 SELECT datname, setconfig FROM pg_db_role_setting JOIN pg_database ON
 setdatabase=oid WHERE datname=current_database();
   datname  |                                                                         setconfig                                                                         
@@ -160,7 +160,7 @@ setdatabase=oid WHERE datname=current_database();
 (1 row)
 
 SELECT gg_tables_tracking.tracking_set_relams('d,b,c');
-ERROR:  Invalid access method: d
+ERROR:  access method "d" does not exist
 SELECT gg_tables_tracking.tracking_set_relams('');
  tracking_set_relams 
 ---------------------

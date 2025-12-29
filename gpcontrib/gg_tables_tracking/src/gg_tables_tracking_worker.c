@@ -74,17 +74,6 @@ tracking_sighup(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
-static bool
-is_extension_installed(void)
-{
-	Oid			schema_oid;
-
-	/* Check if the schema exists */
-	schema_oid = get_namespace_oid("gg_tables_tracking", true);
-
-	return OidIsValid(schema_oid);
-}
-
 static List *
 get_tracked_dbs()
 {
@@ -158,259 +147,34 @@ track_dbs_local(List *tracked_dbs)
 }
 
 /*
- * Dispatch tracking setup to all segments
- * Uses the internal_bind_db function defined in track_files.c
- */
-static bool
-dispatch_tracking_setup(List *tracked_dbs, List *segment_ids)
-{
-	StringInfoData sql;
-	ListCell   *cell;
-	tracked_db_t *trackedDb;
-	CdbPgResults cdb_pgresults = {NULL, 0};
-
-	if (list_length(tracked_dbs) == 0 || list_length(segment_ids) == 0)
-		return true;
-
-	initStringInfo(&sql);
-
-	/* Build a single SQL statement that calls internal_bind_db for each tracked db */
-	appendStringInfo(&sql, "SELECT ");
-
-	foreach(cell, tracked_dbs)
-	{
-		trackedDb = (tracked_db_t *) lfirst(cell);
-
-		if (cell != list_head(tracked_dbs))
-			appendStringInfo(&sql, ", ");
-
-		appendStringInfo(&sql,
-			"gg_tables_tracking.internal_bind_db(%u, %s)",
-			trackedDb->dbid,
-			trackedDb->get_full_snapshot_on_recovery ? "true" : "false");
-	}
-
-	ereport(DEBUG1,
-		(errmsg("[gg_tables_tracking] Dispatching to segments: %s", sql.data)));
-
-	/* Dispatch to all segments */
-	CdbDispatchCommandToSegments(sql.data,
-								 0,
-								 segment_ids,
-								 &cdb_pgresults);
-
-	if (cdb_pgresults.numResults > 0)
-		cdbdisp_clearCdbPgResults(&cdb_pgresults);
-
-	pfree(sql.data);
-
-	ereport(LOG,
-			(errmsg("[gg_tables_tracking] Successfully dispatched tracking setup to %d segment(s)",
-				list_length(segment_ids))));
-
-	return true;
-}
-
-/*
- * Mark segments as initialized even when there are no databases to track
- */
-static bool
-dispatch_empty_initialization(List *segment_ids)
-{
-	CdbPgResults cdb_pgresults = {NULL, 0};
-
-	if (list_length(segment_ids) == 0)
-		return true;
-
-	ereport(DEBUG1,
-		(errmsg("[gg_tables_tracking] Marking %d segment(s) as initialized (no databases to track)",
-			list_length(segment_ids))));
-
-	/* Just mark the segments as initialized */
-	CdbDispatchCommandToSegments(
-		"SELECT gg_tables_tracking.internal_initialize_segments()",
-		0,
-		segment_ids,
-		&cdb_pgresults);
-
-	if (cdb_pgresults.numResults > 0)
-		cdbdisp_clearCdbPgResults(&cdb_pgresults);
-
-	ereport(LOG,
-			(errmsg("[gg_tables_tracking] Successfully marked %d segment(s) as initialized",
-				list_length(segment_ids))));
-
-	return true;
-}
-
-/*
- * Check which segments need initialization and initialize them
- * Returns true if all segments are initialized, false otherwise.
- * This must be called on every worker cycle to handle segment
- * failures and mirror promotions.
- */
-static bool
-ensure_all_segments_initialized(List *tracked_dbs)
-{
-	CdbPgResults cdb_pgresults = {NULL, 0};
-	List	   *uninitialized_segments = NIL;
-	bool		all_initialized = true;
-	int			i;
-
-	ereport(DEBUG1,
-		(errmsg("[gg_tables_tracking] Checking segment initialization status")));
-
-	CdbDispatchCommand("SELECT * FROM gg_tables_tracking.tracking_is_segment_initialized()",
-						   0,
-						   &cdb_pgresults);
-
-	/* Collect segments that are not initialized */
-	for (i = 0; i < cdb_pgresults.numResults; i++)
-	{
-		struct pg_result *pgresult = cdb_pgresults.pg_results[i];
-
-		if (PQresultStatus(pgresult) != PGRES_TUPLES_OK)
-		{
-			ereport(WARNING,
-				(errmsg("[gg_tables_tracking] Failed to get initialization status from segment %d", i)));
-			all_initialized = false;
-			continue;
-		}
-
-		if (PQntuples(pgresult) > 0)
-		{
-			int32		segindex;
-			bool		is_initialized;
-
-			segindex = atoi(PQgetvalue(pgresult, 0, 0));
-			is_initialized = (strcmp(PQgetvalue(pgresult, 0, 1), "t") == 0);
-
-			if (!is_initialized)
-			{
-				uninitialized_segments = lappend_int(uninitialized_segments, segindex);
-				all_initialized = false;
-
-				ereport(LOG,
-					(errmsg("[gg_tables_tracking] Segment %d requires initialization", segindex)));
-			}
-			else
-			{
-				ereport(DEBUG2,
-					(errmsg("[gg_tables_tracking] Segment %d is initialized", segindex)));
-			}
-		}
-	}
-
-	if (cdb_pgresults.numResults > 0)
-		cdbdisp_clearCdbPgResults(&cdb_pgresults);
-
-	/* If we found uninitialized segments, initialize them */
-	if (list_length(uninitialized_segments) > 0)
-	{
-		ereport(LOG,
-			(errmsg("[gg_tables_tracking] Found %d uninitialized segment(s), initializing now",
-				list_length(uninitialized_segments))));
-
-		if (list_length(tracked_dbs) > 0)
-		{
-			/* Initialize segments with tracked databases */
-			dispatch_tracking_setup(tracked_dbs, uninitialized_segments);
-		}
-		else
-		{
-			/* No databases to track, but still mark segments as initialized */
-			dispatch_empty_initialization(uninitialized_segments);
-		}
-		all_initialized = true;
-		list_free(uninitialized_segments);
-	}
-	else
-		ereport(DEBUG1,
-			(errmsg("[gg_tables_tracking] All segments are initialized")));
-
-	return all_initialized;
-}
-
-/*
  * Main worker tracking status check
  *
- * Each iteration:
- * 1. Check if extension is installed (early return if not)
- * 2. Check coordinator initialization
- * 3. Check all segments initialization status
- * 4. Initialize only uninitialized segments
- * 5. Set global flag only when all are initialized
+ * 1. Test the global flag whether reinitialization is required.
+ * 2. Get the db oids, for which the tracking_is_db_tracked is set.
+ * 3. Assign unassigned bloom filters to the dbs
+ * 4. Set global flag to initialize the segment
  */
 static void
 worker_tracking_status_check()
 {
 	List	   *tracked_dbs = NIL;
-	bool		coordinator_initialized;
-	bool		all_segments_initialized;
 
-	StartTransactionCommand();
-
-	/*
-	* EARLY CHECK: If extension is not installed, skip this cycle.
-	 */
-	if (!is_extension_installed())
+	if (pg_atomic_unlocked_test_flag(&tf_shared_state->tracking_is_initialized))
 	{
-		ereport(LOG,
-			(errmsg("[gg_tables_tracking] Extension not yet installed, skipping initialization")));
-		CommitTransactionCommand();
-		return;
-	}
+		StartTransactionCommand();
 
+		tracked_dbs = get_tracked_dbs();
 
-	tracked_dbs = get_tracked_dbs();
-
-	/*
-	 * Step 1: Ensure coordinator is initialized
-	 */
-	coordinator_initialized = !pg_atomic_unlocked_test_flag(
-						&tf_shared_state->tracking_is_initialized);
-
-	if (!coordinator_initialized)
-	{
-		ereport(LOG,
-			(errmsg("[gg_tables_tracking] Initializing tracking on coordinator for %d database(s)",
-				list_length(tracked_dbs))));
-
-		/* Initialize coordinator */
 		if (list_length(tracked_dbs) > 0)
 			track_dbs_local(tracked_dbs);
-	}
-	/*
-	 * Step 2: Ensure all segments are initialized
-	 * This will:
-	 * - Check each segment's initialization status
-	 * - Dispatch setup only to uninitialized segments
-	 * - Automatically handle segment restarts/failures
-	 */
-	all_segments_initialized = ensure_all_segments_initialized(tracked_dbs);
 
-	if (all_segments_initialized)
-	{
-		if (pg_atomic_unlocked_test_flag(&tf_shared_state->tracking_is_initialized))
-		{
-			pg_atomic_test_set_flag(&tf_shared_state->tracking_is_initialized);
-			ereport(LOG,
-					(errmsg("[gg_tables_tracking] Cluster fully initialized")));
-		}
-	}
-	else
-	{
-		if (!pg_atomic_unlocked_test_flag(&tf_shared_state->tracking_is_initialized))
-		{
-			/* We were initialized but lost some segments */
-			pg_atomic_clear_flag(&tf_shared_state->tracking_is_initialized);
-		}
-	}
+		if (tracked_dbs)
+			list_free_deep(tracked_dbs);
 
-	if (tracked_dbs)
-		list_free_deep(tracked_dbs);
+		CommitTransactionCommand();
 
-	CommitTransactionCommand();
+		pg_atomic_test_set_flag(&tf_shared_state->tracking_is_initialized);
+	}
 }
 
 /* Main worker cycle. Scans pg_db_role_setting and binds tracked dbids to
@@ -431,6 +195,10 @@ gg_tables_tracking_main(Datum main_arg)
 	{
 		proc_exit(0);
 	}
+
+	/* Run as utility to get the pg_db_role_setting info */
+	if (!IS_QUERY_DISPATCHER())
+		Gp_role = GP_ROLE_UTILITY;
 
 	pqsignal(SIGHUP, tracking_sighup);
 	pqsignal(SIGTERM, tracking_sigterm);

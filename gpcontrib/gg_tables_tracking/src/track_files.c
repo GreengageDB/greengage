@@ -7,7 +7,7 @@
 #include "access/tableam.h"
 #include "access/heapam.h"
 #include "catalog/indexing.h"
-#include "catalog/pg_namespace.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_db_role_setting.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
@@ -21,13 +21,14 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 #include "storage/shmem.h"
+#include "storage/latch.h"
 #include "tcop/utility.h"
 #include "utils/rel.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
 #include "utils/fmgroids.h"
 #include "utils/syscache.h"
-#include "utils/lsyscache.h"
+#include "pgstat.h"
 
 #include "gg_tables_tracking_guc.h"
 #include "gg_tables_tracking_worker.h"
@@ -51,8 +52,7 @@ PG_FUNCTION_INFO_V1(tracking_trigger_initial_snapshot);
 PG_FUNCTION_INFO_V1(tracking_is_initial_snapshot_triggered);
 PG_FUNCTION_INFO_V1(tracking_get_track);
 PG_FUNCTION_INFO_V1(tracking_track_version);
-PG_FUNCTION_INFO_V1(internal_bind_db);
-PG_FUNCTION_INFO_V1(internal_initialize_segments);
+PG_FUNCTION_INFO_V1(wait_for_worker_initialize);
 
 /*
  * Tuple description for result of tracking_get_track function.
@@ -331,7 +331,7 @@ get_filters_from_guc()
 		Oid			nspOid;
 		char	   *name = (char *) lfirst(lc);
 
-		nspOid = GetSysCacheOid1(NAMESPACENAME, Anum_pg_namespace_oid, CStringGetDatum(name));
+		nspOid = get_namespace_oid(name, true);
 
 		if (!OidIsValid(nspOid))
 		{
@@ -347,11 +347,11 @@ get_filters_from_guc()
 			Oid			amoid;
 			char	   *name = (char *) lfirst(lc);
 
-			amoid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum(name));
+			amoid = get_am_oid(name, true);
 
 			if (!OidIsValid(amoid))
 			{
-				ereport(DEBUG1, (errmsg("[tracking_get_track] schema \"%s\" does not exist", name)));
+				ereport(DEBUG1, (errmsg("[tracking_get_track] access method \"%s\" does not exist", name)));
 				continue;
 			}
 
@@ -362,25 +362,6 @@ get_filters_from_guc()
 		pfree(schema_names);
 }
 
-
-static bool
-oid_is_tracked(Oid objoid, List* oids)
-{
-	ListCell   *lc;
-
-	if (oids == NIL)
-		return false;
-
-	foreach(lc, oids)
-	{
-		Oid			tracked_oid = lfirst_oid(lc);
-
-		if (objoid == tracked_oid)
-			return true;
-	}
-
-	return false;
-}
 
 static bool
 kind_is_tracked(char type, uint64 allowed_kinds)
@@ -530,18 +511,31 @@ tracking_get_track(PG_FUNCTION_ARGS)
 
 	HeapTuple	pg_class_tuple = NULL;
 
-	while (state->scan &&
-		   (pg_class_tuple = heap_getnext(state->scan, ForwardScanDirection)) != NULL)
+	while (true)
 	{
+		if (!state->scan)
+			break;
+
+		pg_class_tuple = heap_getnext(state->scan, ForwardScanDirection);
+
+		if (!HeapTupleIsValid(pg_class_tuple))
+		{
+			table_endscan(state->scan);
+			table_close(state->pg_class_rel, AccessShareLock);
+			state->scan = NULL;
+			state->pg_class_rel = NULL;
+			break;
+		}
+
 		Form_pg_class classForm = (Form_pg_class) GETSTRUCT(pg_class_tuple);
 
 		if (!kind_is_tracked(classForm->relkind, tf_get_global_state.relkinds))
 			continue;
 
-		if (!oid_is_tracked(classForm->relam, tf_get_global_state.am_oids))
+		if (!list_member_oid(tf_get_global_state.am_oids, classForm->relam))
 			continue;
 
-		if (!oid_is_tracked(classForm->relnamespace, tf_get_global_state.schema_oids))
+		if (!list_member_oid(tf_get_global_state.schema_oids, classForm->relnamespace))
 			continue;
 
 		/* Bloom filter check */
@@ -562,17 +556,6 @@ tracking_get_track(PG_FUNCTION_ARGS)
 		result = heap_form_tuple(funcctx->tuple_desc, datums, nulls);
 
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(result));
-	}
-
-	if (!HeapTupleIsValid(pg_class_tuple))
-	{
-		if (state->scan)
-		{
-			table_endscan(state->scan);
-			table_close(state->pg_class_rel, AccessShareLock);
-			state->scan = NULL;
-			state->pg_class_rel = NULL;
-		}
 	}
 
 	while (true)
@@ -1187,16 +1170,6 @@ tracking_set_relkinds(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(true);
 }
 
-static bool
-is_valid_relam(const char *relam)
-{
-	Oid amoid;
-
-	amoid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum(relam));
-
-	return OidIsValid(amoid);
-}
-
 Datum
 tracking_set_relams(PG_FUNCTION_ARGS)
 {
@@ -1245,7 +1218,7 @@ tracking_set_relams(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("invalid relams argument")));
 
-		if (!is_valid_relam(trimmed_token))
+		if (!OidIsValid(get_am_oid(trimmed_token, false)))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("Invalid access method: %s", trimmed_token)));
@@ -1525,40 +1498,63 @@ tracking_track_version(PG_FUNCTION_ARGS)
 	PG_RETURN_INT64((int64) CurrentVersion);
 }
 
-Datum
-internal_bind_db(PG_FUNCTION_ARGS)
+static bool
+check_for_timeout(TimestampTz start_time, long timeout_ms)
 {
-	Oid			dbid;
-	bool		get_snapshot_on_recovery = true;
+	TimestampTz current_time;
+	long        elapsed_ms;
 
-	dbid = PG_GETARG_OID(0);
+	current_time = GetCurrentTimestamp();
+	elapsed_ms = TimestampDifferenceMilliseconds(start_time, current_time);
 
-	if (PG_NARGS() == 2)
-		get_snapshot_on_recovery = PG_GETARG_BOOL(1);
+	if (elapsed_ms >= timeout_ms)
+		return true;
 
-	ereport(DEBUG1,
-			(errmsg("[gg_tables_tracking] Binding database %u (snapshot_on_recovery=%d)",
-			dbid, get_snapshot_on_recovery)));
-
-	/* Bind the database to bloom filter */
-	if (bloom_set_bind(dbid))
-	{
-		bloom_set_trigger_bits(dbid, get_snapshot_on_recovery);
-		pg_atomic_test_set_flag(&tf_shared_state->tracking_is_initialized);
-	}
-
-	PG_RETURN_VOID();
+	return false;
 }
 
+/*
+ * Wait for all segments in to be initialized by background workers.
+ *
+ * This function periodically checks if all segments have completed
+ * initialization by dispatching queries to segments and examining
+ * their initialization status.
+ */
 Datum
-internal_initialize_segments(PG_FUNCTION_ARGS)
+wait_for_worker_initialize(PG_FUNCTION_ARGS)
 {
-	/* Mark this segment as initialized */
-	pg_atomic_test_set_flag(&tf_shared_state->tracking_is_initialized);
+	TimestampTz start_time;
+	int         check_count = 0;
+	long        timeout_ms;
 
-	ereport(DEBUG1,
-		(errmsg("[gg_tables_tracking] Segment %d marked as initialized (no databases to track)",
-		 GpIdentity.segindex)));
+	start_time = GetCurrentTimestamp();
+	timeout_ms = (long) tracking_worker_naptime_sec * 1000L;
 
-	PG_RETURN_VOID();
+	for (;;)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		/* Let's wait for 5 naptimes max */
+		if (check_for_timeout(start_time, timeout_ms * 5))
+			PG_RETURN_BOOL(false);
+
+		/* Check if all segments are initialized */
+		if (is_initialized())
+		{
+			ereport(LOG,
+					(errmsg("[gg_tables_tracking] all segments initialized successfully after %d checks",
+							check_count)));
+			PG_RETURN_BOOL(true);
+		}
+
+		check_count++;
+
+		(void)WaitLatch(MyLatch,
+						WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+						timeout_ms,
+						PG_WAIT_EXTENSION);
+		ResetLatch(MyLatch);
+	}
+
+	PG_RETURN_BOOL(false);
 }

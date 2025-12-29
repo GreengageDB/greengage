@@ -1,9 +1,4 @@
 -- Tests for size tracking logic
--- start_ignore
-\! gpconfig -c gg_tables_tracking.tracking_worker_naptime_sec -v '5'
-\! gpstop -u
-\c
--- end_ignore
 -- start_matchsubs
 -- m/ERROR:  database \d+ is not tracked/
 -- s/\d+/XXX/g
@@ -20,7 +15,7 @@ CREATE EXTENSION gg_tables_tracking;
 -- 1. Test getting track on not registered database;
 SELECT * FROM gg_tables_tracking.tables_track;
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 2);
+SELECT gg_tables_tracking.wait_for_worker_initialize();
 SELECT gg_tables_tracking.tracking_register_db();
 
 -- 2. Test initial snapshot behaviour. Triggering initial snapshot leads to
@@ -142,8 +137,3 @@ SELECT gg_tables_tracking.tracking_unregister_db();
 
 \c contrib_regression;
 DROP DATABASE tracking_db1;
--- start_ignore
-\! gpconfig -r shared_preload_libraries
-\! gpconfig -r gg_tables_tracking.tracking_worker_naptime_sec
-\! gpstop -u
--- end_ignore

@@ -160,16 +160,8 @@ FROM (
 
 GRANT SELECT ON gg_tables_tracking.is_initial_snapshot_triggered TO public;
 
-CREATE FUNCTION gg_tables_tracking.internal_bind_db(dbid OID, get_snapshot_on_recovery BOOLEAN)
-RETURNS VOID
-AS '$libdir/gg_tables_tracking', 'internal_bind_db'
-LANGUAGE C STRICT VOLATILE;
+CREATE FUNCTION gg_tables_tracking.wait_for_worker_initialize()
+RETURNS SETOF BOOLEAN AS '$libdir/gg_tables_tracking.so', 'wait_for_worker_initialize'
+LANGUAGE C EXECUTE ON COORDINATOR;
 
-REVOKE ALL ON FUNCTION gg_tables_tracking.internal_bind_db(dbid OID, rec BOOLEAN) FROM public;
-
-CREATE OR REPLACE FUNCTION gg_tables_tracking.internal_initialize_segments()
-RETURNS VOID
-AS '$libdir/gg_tables_tracking', 'internal_initialize_segments'
-LANGUAGE C STRICT VOLATILE;
-
-REVOKE ALL ON FUNCTION gg_tables_tracking.internal_initialize_segments() FROM public;
+GRANT EXECUTE ON FUNCTION gg_tables_tracking.wait_for_worker_initialize() TO public;

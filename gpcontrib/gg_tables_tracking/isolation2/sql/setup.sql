@@ -42,22 +42,22 @@ returns text as $$
         raise PgCtlError(stdout.decode()+'|'+stderr.decode())
 $$ language plpython3u;
 
-CREATE or REPLACE FUNCTION wait_until_segments_are_down(num_segs int)
-RETURNS BOOL AS
+create or replace function wait_until_segments_are_down(num_segs int)
+returns bool as
 $$
-DECLARE
+declare
 retries int; /* in func */
-BEGIN /* in func */
+begin /* in func */
   retries := 1200; /* in func */
   loop /* in func */
-    IF (select count(*) = num_segs FROM gp_segment_configuration WHERE status = 'd') THEN /* in func */
+    if (select count(*) = num_segs from gp_segment_configuration where status = 'd') then /* in func */
       return TRUE; /* in func */
-    END IF; /* in func */
-    IF retries <= 0 THEN /* in func */
+    end if; /* in func */
+    if retries <= 0 then /* in func */
       return FALSE; /* in func */
-    END IF; /* in func */
+    end if; /* in func */
     perform pg_sleep(0.1); /* in func */
     retries := retries - 1; /* in func */
-  END loop; /* in func */
-END; /* in func */
+  end loop; /* in func */
+end; /* in func */
 $$ language plpgsql;

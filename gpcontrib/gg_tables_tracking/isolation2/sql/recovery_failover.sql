@@ -1,17 +1,20 @@
 -- This test triggers failover of content 1 and checks
 -- the correct tracking state behaviour after recovery
+!\retcode gpconfig -s shared_preload_libraries | grep "value:" | head -1 | awk '{print $3}' > ../../../gpcontrib/gg_tables_tracking/isolation2/results/shared_libs ;
 !\retcode gpconfig -c shared_preload_libraries -v 'gg_tables_tracking';
 -- Allow extra time for mirror promotion to complete recovery
 !\retcode gpconfig -c gp_fts_probe_timeout -v 5 --masteronly;
 !\retcode gpconfig -c gp_fts_probe_retries -v 2 --masteronly;
 !\retcode gpstop -raq -M fast;
+!\retcode gpconfig -c gg_tables_tracking.tracking_worker_naptime_sec -v '5';
+!\retcode gpstop -u;
 
 CREATE EXTENSION IF NOT EXISTS gg_tables_tracking;
 
 !\retcode gpconfig -c gg_tables_tracking.tracking_worker_naptime_sec -v '5';
 !\retcode gpstop -u;
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int);
+SELECT gg_tables_tracking.wait_for_worker_initialize();
 SELECT gg_tables_tracking.tracking_register_db();
 SELECT gg_tables_tracking.tracking_trigger_initial_snapshot();
 
@@ -51,7 +54,8 @@ WHERE c.role='p' AND c.content=1), 'stop');
 
 SELECT wait_until_segments_are_down(1);
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 5);
+1: SELECT gg_tables_tracking.wait_for_worker_initialize();
+1q:
 SELECT * FROM tracking_is_segment_initialized_master()
 UNION ALL
 SELECT * FROM tracking_is_segment_initialized_segments();
@@ -85,7 +89,7 @@ SELECT wait_until_all_segments_synchronized();
 -- verify no segment is down after recovery
 SELECT count(*) FROM gp_segment_configuration WHERE status = 'd';
 
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 5);
+SELECT gg_tables_tracking.wait_for_worker_initialize();
 
 -- Track should be returned only from recovered segment since
 -- initial snapshot is activated on recovery by default.

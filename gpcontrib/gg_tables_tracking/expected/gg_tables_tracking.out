@@ -15,10 +15,10 @@ CREATE EXTENSION gg_tables_tracking;
 SELECT * FROM gg_tables_tracking.tables_track;
 ERROR:  database 92054 is not tracked
 HINT:  Call 'gg_tables_tracking.tracking_register_db()'to enable tracking
-SELECT pg_sleep(current_setting('gg_tables_tracking.tracking_worker_naptime_sec')::int * 2);
- pg_sleep 
-----------
- 
+SELECT gg_tables_tracking.wait_for_worker_initialize();
+ wait_for_worker_initialize 
+----------------------------
+ t
 (1 row)
 
 SELECT gg_tables_tracking.tracking_register_db();
