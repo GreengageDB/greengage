@@ -26,8 +26,6 @@ mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 chown -R gpadmin:gpadmin /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 
-exit 1 # unexpected exit test
-
 sudo -u gpadmin -- bash -c "
   set -ex
   source \$GPHOME/greengage_path.sh
