@@ -1214,7 +1214,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 * utility mode. If a bgworker like autovacuum wants to connect, allow it.
 	 */
 	if (IsUnderPostmaster &&
-		(!IsBackgroundWorker || !IsAutoVacuumWorkerProcess()) &&
+		!(IsBackgroundWorker || IsAutoVacuumWorkerProcess()) &&
 		Gp_role == GP_ROLE_UTILITY)
 	{
 		should_reject_connection = true;
