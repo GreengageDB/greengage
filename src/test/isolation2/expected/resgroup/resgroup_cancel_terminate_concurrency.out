@@ -297,4 +297,4 @@ DROP RESOURCE GROUP rg_concurrency_test;
 DROP RESOURCE GROUP
 
 DROP VIEW rg_concurrency_view;
-DROP VIEW
+BREAK
