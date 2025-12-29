@@ -1,5 +1,4 @@
 import random
-from typing import List, Dict, Tuple
 from collections import defaultdict
 
 from gppylib.test.unit.gp_unittest import *
@@ -17,7 +16,8 @@ class TestGreedySolver(GpTestCase):
         if len(solution) != solver.n_segments:
             return False
 
-        return True    
+        return True
+  
     def _validate_solution_host_ids(self, solution: Solution, 
                                      solver: GreedySolver) -> bool:
         for seg_id, (primary, mirror) in solution.items():

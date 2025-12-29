@@ -4454,3 +4454,7 @@ def impl(context, fault):
 @when('unset fault inject')
 def impl(context):
     os.environ['GPMGMT_FAULT_POINT'] = ""
+
+@given('stub')
+def impl(context):
+    pass

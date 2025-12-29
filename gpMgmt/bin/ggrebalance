@@ -34,7 +34,7 @@ _usage = """
 EXECNAME = os.path.split(__file__)[-1]
 MAX_BATCH_SIZE = 128
 MAX_PARALLEL_WORKERS = 96
-
+MAX_SEGMENTS = 4096
 
 def parseargs():
     parser = OptParser(option_class=OptChecker,
@@ -72,8 +72,18 @@ def parseargs():
                       help='Show rebalance plan')
     parser.add_option('-d', '--target-datadirs', dest='target_datadirs', metavar='<target_datadirs>',
                       help='segment datadirs on new hosts')
-
-    parser.set_defaults(verbose=False)
+    parser.add_option('--target-hosts-file', dest='target_hosts_file', metavar='<target_hosts_file>',
+                      help='Target hosts list file. One host per line')
+    parser.add_option('--target-datadirs-file', dest='target_datadirs_file', metavar='<target_datadirs_file>',
+                      help='Target segment data directories passed as file. One datadir per line')
+    parser.add_option('--add-hosts-file', dest='add_hosts_file', metavar='<add_hosts_file>',
+                      help='Hosts that user wants to add to a cluster. One host per line')
+    parser.add_option('--remove-hosts-file', dest='remove_hosts_file', metavar='<remove_hosts_file>',
+                      help='Hosts that user wants to remove from a cluster. One host per line')
+    parser.add_option('--skip-resource-estimation', dest='skip_resource_estimation', metavar='<skip_resource_estimation>',
+                      action='store_true', default=False, help='Skip resource estimation (storage)')
+    parser.add_option('-v', '--verbose', action='store_true', default=False,
+                      help='debug output.')
 
     # Parse the command line arguments
     options, args = parser.parse_args()
@@ -106,65 +116,65 @@ def validate_options(options, args, parser):
         logger.error(
             'Invalid argument.  parallel value must be >= 1 and <= %d' % MAX_PARALLEL_WORKERS)
         parser.exit(1)
-
-    if options.clean_required and options.rollback_required:
-        logger.error("Can't use together options '--clean' and '--rollback'")
-        parser.exit(1)
-
-    if ((options.clean_required or options.rollback_required) and
-        options.target_segment_count != None):
-        logger.error("Can't use '--target-segment-count' together option '--clean' or '--rollback'")
-        parser.exit(1)
     
-    if options.clean_required or options.rollback_required:
-        if options.target_hosts:
-            logger.error("Can't use '--target-hosts' with '--clean' or '--rollback'")
-            parser.exit(1)
-        
-        if options.add_hosts:
-            logger.error("Can't use '--add-hosts' with '--clean' or '--rollback'")
-            parser.exit(1)
-        
-        if options.remove_hosts:
-            logger.error("Can't use '--remove-hosts' with '--clean' or '--rollback'")
-            parser.exit(1)
-        
-        if options.mirror_mode:
-            logger.error("Can't use '--mirror-mode' with '--clean' or '--rollback'")
-            parser.exit(1)
-        
-        if options.skip_rebalance:
-            logger.error("Can't use '--skip-rebalance' with '--clean' or '--rollback'")
-            parser.exit(1)
-        
-        if options.target_datadirs:
-            logger.error("Can't use '--target-datadirs' with '--clean' or '--rollback'")
-            parser.exit(1)
-    
-    if options.target_hosts:
-        if options.add_hosts:
-            logger.error("Can't use together options '--target-hosts' and '--add-hosts'")
-            parser.exit(1)
-        elif options.remove_hosts:
-            logger.error("Can't use together options '--target-hosts' and '--remove-hosts'")
-            parser.exit(1)
-    
-    if (options.target_hosts or options.add_hosts)\
-       and not options.target_datadirs:
-        logger.error("-target-datadirs options is not provided")
+    if options.target_segment_count and (
+        options.target_segment_count < 1
+        or options.target_segment_count > MAX_SEGMENTS):
+        logger.error(
+            'Invalid value of --target-segment-count. It must be >= 1 and <= %d' % MAX_SEGMENTS)
         parser.exit(1)
 
-    if not (options.target_hosts or options.add_hosts)\
-       and options.target_datadirs:
-        logger.error("--target-hosts option is not provided")
+    incompatibility_rules = [
+        # (condition_option, incompatible_options)
+        ('target_hosts', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file', 'target_hosts_file']),
+        ('target_hosts_file', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file']),
+        ('add_hosts', ['add_hosts_file', 'remove_hosts', 'remove_hosts_file']),
+        ('add_hosts_file', ['remove_hosts', 'remove_hosts_file']),
+        ('remove_hosts', ['remove_hosts_file']),
+
+        ('target_datadirs', ['target_datadirs_file']),
+
+        ('skip_rebalance', ['mirror_mode']),
+
+        ('clean_required', [
+            'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
+            'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
+            'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
+            'skip_resource_estimation'
+        ]),
+
+        ('rollback_required', [
+            'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
+            'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
+            'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
+            'skip_resource_estimation', 'duration', 'end'
+        ]),
+    ]
+
+    def option_is_set(opt_name):
+        """Check if option is set"""
+        if not hasattr(options, opt_name):
+            return False
+        value = getattr(options, opt_name)
+        return value is not None and value != False
+    
+    for rule in incompatibility_rules:
+        condition_opt, incompatible_opts = rule
+        if option_is_set(condition_opt):
+            # Check if any incompatible option is set
+            for incomp_opt in incompatible_opts:
+                if option_is_set(incomp_opt):
+                    error_msg = \
+                    f"Can't use together options '--{condition_opt.replace('_', '-')}' and '--{incomp_opt.replace('_', '-')}'"
+                    logger.error(error_msg)
+                    parser.exit(1)
+    
+    if (option_is_set('target_hosts') or option_is_set('add_hosts')) and not option_is_set('target_datadirs'):
+        logger.error("--target-datadirs option is required when using --target-hosts or --add-hosts")
         parser.exit(1)
 
-    if options.mirror_mode and options.mirror_mode not in ('grouped', 'spread'):
-        logger.error('Mirroring strategy %s is not supported' %
-                     options.mirroring)
-        parser.exit(1)
-    elif options.mirror_mode and options.skip_rebalance:
-        logger.error("Can't use together options '--skip-rebalance' and '--mirror-mode'")
+    if option_is_set('mirror_mode') and options.mirror_mode not in ('grouped', 'spread'):
+        logger.error('Mirroring strategy %s is not supported' % options.mirror_mode)
         parser.exit(1)
 
     return options, args
