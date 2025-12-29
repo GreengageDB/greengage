@@ -1211,9 +1211,9 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 
 	/*
 	 * Reject non-utility connections if the PostMaster was started in the
-	 * utility mode.
+	 * utility mode. If a bgworker like autovacuum wants to connect, allow it.
 	 */
-	if (IsUnderPostmaster && !IsAutoVacuumWorkerProcess() && Gp_role == GP_ROLE_UTILITY)
+	if (IsUnderPostmaster && !IsBackgroundWorker && Gp_role == GP_ROLE_UTILITY)
 		should_reject_connection = true;
 
 	/*
