@@ -109,7 +109,7 @@ PerformCursorOpen(ParseState *pstate, DeclareCursorStmt *cstmt, ParamListInfo pa
 	cstmt->options |= CURSOR_OPT_UPDATABLE;
 
 	/* Plan the query, applying the specified options */
-	plan = pg_plan_query(query, cstmt->options, params);
+	plan = pg_plan_query(query, pstate->p_sourcetext, cstmt->options, params);
 
 	/*
 	 * Allow using the SCROLL keyword even though we don't support its

@@ -22,8 +22,11 @@
 #include "tcop/cmdtag.h"
 #include "utils/queryenvironment.h"
 
+
 /* Forward declaration, to avoid including parsenodes.h here */
 struct RawStmt;
+/* Forward declaration, to avoid including resowner.h here */
+typedef struct ResourceOwnerData *ResourceOwner;
 
 /* possible values for plan_cache_mode */
 typedef enum
@@ -223,6 +226,13 @@ extern CachedPlan *GetCachedPlan(CachedPlanSource *plansource,
 								 QueryEnvironment *queryEnv,
 								 IntoClause *intoClause);
 extern void ReleaseCachedPlan(CachedPlan *plan, bool useResOwner);
+
+extern bool CachedPlanAllowsSimpleValidityCheck(CachedPlanSource *plansource,
+												CachedPlan *plan,
+												ResourceOwner owner);
+extern bool CachedPlanIsSimplyValid(CachedPlanSource *plansource,
+									CachedPlan *plan,
+									ResourceOwner owner);
 
 extern CachedExpression *GetCachedExpression(Node *expr);
 extern void FreeCachedExpression(CachedExpression *cexpr);

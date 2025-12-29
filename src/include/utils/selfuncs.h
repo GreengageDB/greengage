@@ -45,6 +45,9 @@
 /* default selectivity estimate for pattern-match operators such as LIKE */
 #define DEFAULT_MATCH_SEL	    (50 * DEFAULT_EQ_SEL)               /*CDB*/
 
+/* default selectivity estimate for other matching operators */
+#define DEFAULT_MATCHING_SEL	0.010
+
 /* default selectivity estimate for boolean and null test nodes */
 #define DEFAULT_UNK_SEL			DEFAULT_EQ_SEL                      /*CDB*/
 #define DEFAULT_NOT_UNK_SEL		(1.0 - DEFAULT_UNK_SEL)
@@ -152,6 +155,10 @@ extern double histogram_selectivity(VariableStatData *vardata, FmgrInfo *opproc,
 									Datum constval, bool varonleft,
 									int min_hist_size, int n_skip,
 									int *hist_size);
+/* GPDB: avoid C++ keyword "operator" for header include in gpopt C++ code */
+extern double generic_restriction_selectivity(PlannerInfo *root, Oid operOid,
+											  List *args, int varRelid,
+											  double default_selectivity);
 extern double ineq_histogram_selectivity(PlannerInfo *root,
 										 VariableStatData *vardata,
 										 FmgrInfo *opproc, bool isgt, bool iseq,

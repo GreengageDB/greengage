@@ -113,7 +113,7 @@ static relopt_string stringRelOpts_gp[] =
 			RELOPT_KIND_APPENDOPTIMIZED,
 			AccessExclusiveLock
 		},
-		0, true, NULL, ""
+		0, true, NULL, NULL, ""
 	},
 	/* list terminator */
 	{{NULL}}

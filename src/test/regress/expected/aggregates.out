@@ -2383,6 +2383,30 @@ select least_agg(variadic array[q1,q2]) from int8_tbl;
  -4567890123456789
 (1 row)
 
+select cleast_agg(q1,q2) from int8_tbl;
+    cleast_agg     
+-------------------
+ -4567890123456789
+(1 row)
+
+select cleast_agg(4.5,f1) from int4_tbl;
+ cleast_agg  
+-------------
+ -2147483647
+(1 row)
+
+select cleast_agg(variadic array[4.5,f1]) from int4_tbl;
+ cleast_agg  
+-------------
+ -2147483647
+(1 row)
+
+select pg_typeof(cleast_agg(variadic array[4.5,f1])) from int4_tbl;
+ pg_typeof 
+-----------
+ numeric
+(1 row)
+
 -- test aggregates with common transition functions share the same states
 begin work;
 create type avg_state as (total bigint, count bigint);
@@ -2876,34 +2900,34 @@ WARNING:  "work_mem": setting is deprecated, and may be removed in a future rele
 set enable_hashagg = false;
 set jit_above_cost = 0;
 explain (costs off)
-select g%100000 as c1, sum(g::numeric) as c2, count(*) as c3
-  from generate_series(0, 199999) g
-  group by g%100000;
+select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
+  from generate_series(0, 19999) g
+  group by g%10000;
                    QUERY PLAN                   
 ------------------------------------------------
  GroupAggregate
-   Group Key: ((g % 100000))
+   Group Key: ((g % 10000))
    ->  Sort
-         Sort Key: ((g % 100000))
+         Sort Key: ((g % 10000))
          ->  Function Scan on generate_series g
 (5 rows)
 
 create table agg_group_1 as
-select g%100000 as c1, sum(g::numeric) as c2, count(*) as c3
-  from generate_series(0, 199999) g
-  group by g%100000;
-/*
- * create table agg_group_2 as
- * select * from
- *   (values (100), (300), (500)) as r(a),
- *   lateral (
- *     select (g/2)::numeric as c1,
- *            array_agg(g::numeric) as c2,
- *            count(*) as c3
- *     from generate_series(0, 1999) g
- *     where g < r.a
- *     group by g/2) as s;
- */
+select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
+  from generate_series(0, 19999) g
+  group by g%10000;
+/* GPDB_13_MERGE_FIXME: enable this test
+create table agg_group_2 as
+select * from
+  (values (100), (300), (500)) as r(a),
+  lateral (
+    select (g/2)::numeric as c1,
+           array_agg(g::numeric) as c2,
+	   count(*) as c3
+    from generate_series(0, 1999) g
+    where g < r.a
+    group by g/2) as s;
+*/
 set jit_above_cost to default;
 create table agg_group_3 as
 select (g/2)::numeric as c1, sum(7::int4) as c2, count(*) as c3
@@ -2918,32 +2942,32 @@ set enable_hashagg = true;
 set enable_sort = false;
 set jit_above_cost = 0;
 explain (costs off)
-select g%100000 as c1, sum(g::numeric) as c2, count(*) as c3
-  from generate_series(0, 199999) g
-  group by g%100000;
+select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
+  from generate_series(0, 19999) g
+  group by g%10000;
                 QUERY PLAN                
 ------------------------------------------
  HashAggregate
-   Group Key: (g % 100000)
+   Group Key: (g % 10000)
    ->  Function Scan on generate_series g
 (3 rows)
 
 create table agg_hash_1 as
-select g%100000 as c1, sum(g::numeric) as c2, count(*) as c3
-  from generate_series(0, 199999) g
-  group by g%100000;
-/*
- * create table agg_hash_2 as
- * select * from
- *   (values (100), (300), (500)) as r(a),
- *   lateral (
- *     select (g/2)::numeric as c1,
- *            array_agg(g::numeric) as c2,
- *            count(*) as c3
- *     from generate_series(0, 1999) g
- *     where g < r.a
- *     group by g/2) as s;
- */
+select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
+  from generate_series(0, 19999) g
+  group by g%10000;
+/* GPDB_13_MERGE_FIXME: enable this test
+create table agg_hash_2 as
+select * from
+  (values (100), (300), (500)) as r(a),
+  lateral (
+    select (g/2)::numeric as c1,
+           array_agg(g::numeric) as c2,
+	   count(*) as c3
+    from generate_series(0, 1999) g
+    where g < r.a
+    group by g/2) as s;
+*/
 set jit_above_cost to default;
 create table agg_hash_3 as
 select (g/2)::numeric as c1, sum(7::int4) as c2, count(*) as c3
@@ -2964,11 +2988,11 @@ WARNING:  "work_mem": setting is deprecated, and may be removed in a future rele
 ----+----+----
 (0 rows)
 
-/*
- * (select * from agg_hash_2 except select * from agg_group_2)
- *   union all
- * (select * from agg_group_2 except select * from agg_hash_2);
- */
+/* GPDB_13_MERGE_FIXME: enable this test
+(select * from agg_hash_2 except select * from agg_group_2)
+  union all
+(select * from agg_group_2 except select * from agg_hash_2);
+*/
 (select * from agg_hash_3 except select * from agg_group_3)
   union all
 (select * from agg_group_3 except select * from agg_hash_3);
@@ -2995,15 +3019,15 @@ drop table agg_hash_4;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
                                                       QUERY PLAN                                                       
 -----------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000025.03..10000000025.05 rows=1 width=8) (actual time=0.214..0.214 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000023.48 rows=622 width=0) (actual time=0.013..0.179 rows=848 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.003..0.003 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..17.22 rows=622 width=0) (actual time=0.010..0.116 rows=848 loops=1)
- Planning Time: 0.534 ms
-   (slice0)    Executor memory: 50K bytes.
- Memory used:  128000kB
+ Aggregate  (cost=10000000017.65..10000000017.66 rows=1 width=8) (actual time=3.113..3.115 rows=1 loops=1)
+   ->  Nested Loop  (cost=10000000000.02..10000000016.36 rows=516 width=0) (actual time=0.026..2.361 rows=670 loops=1)
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.009..0.011 rows=1 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.003..0.005 rows=1 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..11.16 rows=516 width=0) (actual time=0.012..0.811 rows=670 loops=1)
  Optimizer: Postgres query optimizer
- Execution Time: 0.302 ms
+ Planning Time: 0.804 ms
+   (slice0)    Executor memory: 125K bytes.
+ Memory used:  128000kB
+ Execution Time: 3.243 ms
 (10 rows)
 

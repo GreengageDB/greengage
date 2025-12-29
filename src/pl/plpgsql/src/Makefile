@@ -34,8 +34,8 @@ REGRESS_OPTS = --dbname=$(PL_TESTDB)
 REGRESS_OPTS += --init-file=init_file
 
 REGRESS = plpgsql_call plpgsql_control plpgsql_copy plpgsql_domain \
-	plpgsql_record plpgsql_cache plpgsql_transaction plpgsql_trap \
-	plpgsql_trigger plpgsql_varprops
+	plpgsql_record plpgsql_cache plpgsql_simple plpgsql_transaction \
+	plpgsql_trap plpgsql_trigger plpgsql_varprops
 
 # where to find gen_keywordlist.pl and subsidiary files
 TOOLSDIR = $(top_srcdir)/src/tools

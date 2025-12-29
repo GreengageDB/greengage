@@ -1087,6 +1087,8 @@ static const char *const table_storage_parameters[] = {
 	"autovacuum_multixact_freeze_table_age",
 	"autovacuum_vacuum_cost_delay",
 	"autovacuum_vacuum_cost_limit",
+	"autovacuum_vacuum_insert_scale_factor",
+	"autovacuum_vacuum_insert_threshold",
 	"autovacuum_vacuum_scale_factor",
 	"autovacuum_vacuum_threshold",
 	"fillfactor",
@@ -1101,6 +1103,8 @@ static const char *const table_storage_parameters[] = {
 	"toast.autovacuum_multixact_freeze_table_age",
 	"toast.autovacuum_vacuum_cost_delay",
 	"toast.autovacuum_vacuum_cost_limit",
+	"toast.autovacuum_vacuum_insert_scale_factor",
+	"toast.autovacuum_vacuum_insert_threshold",
 	"toast.autovacuum_vacuum_scale_factor",
 	"toast.autovacuum_vacuum_threshold",
 	"toast.log_autovacuum_min_duration",
@@ -2156,7 +2160,7 @@ psql_completion(const char *text, int start, int end)
 	/* ALTER TABLESPACE <foo> SET|RESET ( */
 	else if (Matches("ALTER", "TABLESPACE", MatchAny, "SET|RESET", "("))
 		COMPLETE_WITH("seq_page_cost", "random_page_cost",
-					  "effective_io_concurrency");
+					  "effective_io_concurrency", "maintenance_io_concurrency");
 
 	/* ALTER TEXT SEARCH */
 	else if (Matches("ALTER", "TEXT", "SEARCH"))
@@ -3920,7 +3924,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_routines, NULL);
 	else if (TailMatchesCS("\\sv*"))
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_views, NULL);
-	else if (TailMatchesCS("\\cd|\\e|\\edit|\\g|\\i|\\include|"
+	else if (TailMatchesCS("\\cd|\\e|\\edit|\\g|\\gx|\\i|\\include|"
 						   "\\ir|\\include_relative|\\o|\\out|"
 						   "\\s|\\w|\\write|\\lo_import"))
 	{

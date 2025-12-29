@@ -85,12 +85,11 @@ endif
 ifeq ($(PORTNAME), win32)
 SHLIB_LINK += -L../../../../gpAux/ext/win32/kfw-3-2-2/lib -L../../../src/bin/gpfdist/ext/lib -lgssapi32 -lshell32 -lws2_32 -lsecur32 $(filter -leay32 -lssleay32 -lcomerr32 -lkrb5_32, $(LIBS))
 endif
+SHLIB_PREREQS = submake-libpgport
 
 SHLIB_EXPORTS = exports.txt
 
 all: all-lib
-
-all-lib: | submake-libpgport
 
 # Shared library stuff
 include $(top_srcdir)/src/Makefile.shlib

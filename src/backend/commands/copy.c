@@ -2061,7 +2061,7 @@ BeginCopy(ParseState *pstate,
 		if (cstate->skip_foreign_partitions)
 			cursorOptions |= CURSOR_OPT_SKIP_FOREIGN_PARTITIONS;
 
-		plan = pg_plan_query(query, cursorOptions, NULL);
+		plan = pg_plan_query(query, pstate->p_sourcetext, cursorOptions, NULL);
 
 		/*
 		 * With row level security and a user using "COPY relation TO", we

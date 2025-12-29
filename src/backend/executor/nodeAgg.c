@@ -272,7 +272,6 @@
 #include "utils/datum.h"
 #include "utils/dynahash.h"
 #include "utils/expandeddatum.h"
-#include "utils/faultinjector.h"
 #include "utils/logtape.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -282,6 +281,7 @@
 #include "cdb/cdbexplain.h"
 #include "lib/stringinfo.h"             /* StringInfo */
 #include "optimizer/walkers.h"
+#include "utils/faultinjector.h"
 
 /*
  * Control how many partitions are created when spilling HashAgg to
@@ -1521,7 +1521,7 @@ static void
 build_hash_table(AggState *aggstate, int setno, long nbuckets)
 {
 	AggStatePerHash perhash = &aggstate->perhash[setno];
-	MemoryContext	metacxt = aggstate->ss.ps.state->es_query_cxt;
+	MemoryContext	metacxt = aggstate->hash_metacxt;
 	MemoryContext	hashcxt = aggstate->hashcontext->ecxt_per_tuple_memory;
 	MemoryContext	tmpcxt	= aggstate->tmpcontext->ecxt_per_tuple_memory;
 	Size            additionalsize;
@@ -1753,9 +1753,8 @@ hashagg_recompile_expressions(AggState *aggstate, bool minslot, bool nullcheck)
 			aggstate->ss.ps.outeropsfixed = true;
 		}
 
-		phase->evaltrans_cache[i][j] = ExecBuildAggTrans(aggstate, phase,
-														 dosort, dohash,
-														 nullcheck);
+		phase->evaltrans_cache[i][j] = ExecBuildAggTrans(
+			aggstate, phase, dosort, dohash, nullcheck);
 
 		/* change back */
 		aggstate->ss.ps.outerops = outerops;
@@ -3684,7 +3683,7 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 		aggstate->hash_pergroup = pergroups;
 
 		aggstate->hashentrysize = hash_agg_entry_size(
-			aggstate->numtrans, outerplan->plan_width, 0);
+			aggstate->numtrans, outerplan->plan_width, node->transitionSpace);
 
 		/*
 		 * Consider all of the grouping sets together when setting the limits
