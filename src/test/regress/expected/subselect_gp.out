@@ -3761,7 +3761,6 @@ select (SELECT EXISTS
                   FROM pg_views
                   WHERE schemaname = a)) from tmp;
 ERROR:  correlated subquery with skip-level correlations is not supported
-
 drop table tmp;
 -- Test LEAST() and GREATEST() with an embedded subquery
 drop table if exists foo;
