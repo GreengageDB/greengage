@@ -85,19 +85,7 @@
 
 ## Common Platform Tasks:
 
-1. Create gpadmin and setup ssh keys
-
-    Either use:
-
-    ```bash
-    # Requires gpdb clone to be named gpdb_src
-    gpdb_src/concourse/scripts/setup_gpadmin_user.bash
-    ```
-    to create the gpadmin user and set up keys,
-
-    OR
-
-    manually create ssh keys so you can do ssh localhost without a password, e.g., 
+1. Create gpadmin and setup ssh keys so you can do ssh localhost without a password, e.g., 
    
     ```bash
     ssh-keygen
