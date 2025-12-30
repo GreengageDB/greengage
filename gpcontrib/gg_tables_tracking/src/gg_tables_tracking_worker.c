@@ -177,8 +177,10 @@ worker_tracking_status_check()
 	}
 }
 
-/* Main worker cycle. Scans pg_db_role_setting and binds tracked dbids to
- * corresponding Bloom filter. Dispatches to segments for binding. */
+/*
+ * Main worker cycle. Scans pg_db_role_setting and binds tracked dbids to
+ * corresponding Bloom filter. Lives on segments for binding.
+ */
 void
 gg_tables_tracking_main(Datum main_arg)
 {
@@ -189,7 +191,7 @@ gg_tables_tracking_main(Datum main_arg)
 	ereport(LOG, (errmsg("[gg_tables_tracking] Starting background worker")));
 
 	/*
-	 * The worker shouldn't exist when the master boots in utility mode.
+	 * The worker shouldn't exist when the coordinator boots in utility mode.
 	 */
 	if (IS_QUERY_DISPATCHER() && Gp_role != GP_ROLE_DISPATCH)
 	{
@@ -264,9 +266,7 @@ gg_tables_tracking_worker_register()
 
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
-	worker.bgw_restart_time = (tracking_worker_naptime_sec / 2);
-	if (worker.bgw_restart_time < 1)
-		worker.bgw_restart_time = 1;
+	worker.bgw_restart_time = BGW_DEFAULT_RESTART_INTERVAL;
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, TOOLKIT_BINARY_NAME);
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "gg_tables_tracking_main");
 	worker.bgw_notify_pid = 0;
