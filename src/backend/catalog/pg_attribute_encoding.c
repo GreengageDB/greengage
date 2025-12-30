@@ -734,7 +734,7 @@ GetFilenumForAttribute(Oid relid, AttrNumber attnum)
 	SysScanDesc scan;
 	ScanKeyData skey[2];
 	HeapTuple	tup;
-	FileNumber  filenum;
+	FileNumber  filenum = InvalidFileNumber;
 	bool        isnull;
 
 	Assert(OidIsValid(relid));
@@ -754,10 +754,12 @@ GetFilenumForAttribute(Oid relid, AttrNumber attnum)
 							  NULL, 2, skey);
 
 	tup = systable_getnext(scan);
-	Assert(HeapTupleIsValid(tup));
+	if (HeapTupleIsValid(tup))
+	{
 	filenum = heap_getattr(tup, Anum_pg_attribute_encoding_filenum,
 							  RelationGetDescr(rel), &isnull);
 	Assert(!isnull);
+	}
 	systable_endscan(scan);
 	heap_close(rel, AccessShareLock);
 	return filenum;
@@ -775,6 +777,7 @@ FileNumber
 GetFilenumForRewriteAttribute(Oid relid, AttrNumber attnum)
 {
 	FileNumber currentfilenum = GetFilenumForAttribute(relid, attnum);
+	Assert(currentfilenum != InvalidFileNumber);
 	if (currentfilenum <= MaxHeapAttributeNumber)
 		return currentfilenum + MaxHeapAttributeNumber;
 	else

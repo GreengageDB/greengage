@@ -670,6 +670,7 @@ ao_rel_get_physical_size(Relation aorel)
 			for (col = 0; col < vpinfo->nEntry; ++col)
 			{
 				FileNumber filenum = GetFilenumForAttribute(RelationGetRelid(aorel), col + 1);
+				if (filenum == InvalidFileNumber) continue;
 				total_physical_size += ao_segfile_get_physical_size(aorel, segno, filenum);
 			}
 
