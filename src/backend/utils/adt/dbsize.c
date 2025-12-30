@@ -57,7 +57,7 @@
 
 static int64 calculate_total_relation_size(Relation rel);
 static int64 calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum,
-												 bool include_ao_aux, int on_error_continue);
+												 bool include_ao_aux, int stat_error_level);
 static bool stat_ao_callback(const int segno, void *ctx);
 
 #define SEGNO_SUFFIX_LENGTH 12

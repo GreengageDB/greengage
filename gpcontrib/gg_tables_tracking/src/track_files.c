@@ -343,20 +343,20 @@ get_filters_from_guc()
 	}
 
 	foreach(lc, am_names)
+	{
+		Oid			amoid;
+		char	   *name = (char *) lfirst(lc);
+
+		amoid = get_am_oid(name, true);
+
+		if (!OidIsValid(amoid))
 		{
-			Oid			amoid;
-			char	   *name = (char *) lfirst(lc);
-
-			amoid = get_am_oid(name, true);
-
-			if (!OidIsValid(amoid))
-			{
-				ereport(DEBUG1, (errmsg("[tracking_get_track] access method \"%s\" does not exist", name)));
-				continue;
-			}
-
-			tf_get_global_state.am_oids = lappend_oid(tf_get_global_state.am_oids, amoid);
+			ereport(DEBUG1, (errmsg("[tracking_get_track] access method \"%s\" does not exist", name)));
+			continue;
 		}
+
+		tf_get_global_state.am_oids = lappend_oid(tf_get_global_state.am_oids, amoid);
+	}
 
 	if (schema_names)
 		pfree(schema_names);
@@ -1401,7 +1401,9 @@ explain_detector_ProcessUtility(PlannedStmt *stmt,
 {
 	Node	   *parsetree = stmt->utilityStmt;
 
-	if (parsetree && IsA(parsetree, ExplainStmt))
+	Assert(parsetree != NULL);
+
+	if (IsA(parsetree, ExplainStmt))
 	{
 		ExplainStmt *stmt = (ExplainStmt *) parsetree;
 
