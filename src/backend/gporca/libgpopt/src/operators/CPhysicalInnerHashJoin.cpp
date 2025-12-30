@@ -14,6 +14,7 @@
 #include "gpos/base.h"
 
 #include "gpopt/base/CDistributionSpecHashed.h"
+#include "gpopt/base/COptimizationContext.h"
 #include "gpopt/base/CUtils.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPredicateUtils.h"
@@ -68,8 +69,10 @@ CPhysicalInnerHashJoin::PdshashedCreateMatching(
 {
 	GPOS_ASSERT(nullptr != pdshashed);
 
-	CDistributionSpecHashed *pdshashedMatching =
-		PdshashedMatching(mp, pdshashed, ulSourceChild, false);
+	// if we end up here, it is completely unknown how our child derived its distribution
+	// so tell the function that we don't know how the spec was derived, and hope for the best
+	CDistributionSpecHashed *pdshashedMatching = PdshashedMatching(
+		mp, pdshashed, ulSourceChild, false, GPOPT_INVALID_OPT_REQUEST);
 
 	// create a new spec with input and the output spec as equivalents, as you don't want to lose
 	// the already existing equivalent specs of pdshashed

@@ -245,7 +245,7 @@ CPhysicalHashJoin::PrsRequired(CMemoryPool *mp, CExpressionHandle &exprhdl,
 //---------------------------------------------------------------------------
 CDistributionSpec *
 CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
-							ULONG ulSourceChildIndex) const
+							ULONG ulSourceChildIndex, ULONG ulOptReq) const
 {
 	GPOS_ASSERT(nullptr != pds);
 
@@ -292,7 +292,7 @@ CPhysicalHashJoin::PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
 			// require second child to provide a matching hashed distribution
 			return PdshashedMatching(mp,
 									 CDistributionSpecHashed::PdsConvert(pds),
-									 ulSourceChildIndex, true);
+									 ulSourceChildIndex, true, ulOptReq);
 
 		default:
 			GPOS_ASSERT(CDistributionSpec::EdtStrictReplicated == pds->Edt() ||
@@ -554,11 +554,14 @@ CPhysicalHashJoin::PdsDeriveForOuterJoin(CMemoryPool *mp,
 CDistributionSpecHashed *
 CPhysicalHashJoin::PdshashedMatching(
 	CMemoryPool *mp, CDistributionSpecHashed *pdshashed,
-	ULONG
-		ulSourceChild,	// index of child that delivered the given hashed distribution
+	// index of child that delivered the given hashed distribution
+	ULONG ulSourceChild,
 	// indicates whether function is called within the distribution request (true)
 	// or within property derivation (false) from PdsDeriveFromHashedOuter/PdsDeriveFromReplicatedOuter
-	BOOL isPdsReq) const
+	BOOL isPdsReq,
+	// index of the request that created the distribution
+	// if this value is unknown, GPOPT_INVALID_OPT_REQUEST should be provided instead
+	ULONG ulOptReq) const
 {
 	GPOS_ASSERT(2 > ulSourceChild);
 
@@ -592,8 +595,86 @@ CPhysicalHashJoin::PdshashedMatching(
 		{
 			equiv_distribution_exprs = (*all_equiv_exprs)[ulDlvrdIdx];
 		}
+
+		// first, try to match the initial source expression from which this request was derived, when
+		// 1) we know an optimization request index
+		// 2) requested distribution is on a single key
+		//
+		// if we don't perform this check right away, we might lose a distribution.
+		// consider the following query, before this logic was introduced:
+		//
+		// create table t1 as (select gen::numeric as a from generate_series(1, 20) as gen) distributed by (a);
+		// create table t2 as (select gen::numeric as a from generate_series(1, 20) as gen) distributed by (a);
+		// explain (verbose) select t1.a from t1 where t1.a = (select sum(t2.a) from t2 where t1.a = t2.a);
+		//   Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=8)
+		//   Output: t1.a
+		//   ->  Hash Join  (cost=0.00..862.00 rows=1 width=8)
+		//         Output: t1.a
+		//         Hash Cond: (((sum(t2.a)) = t1.a) AND (t2.a = t1.a))
+		//         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.00 rows=1 width=16)
+		//               Output: t2.a, (sum(t2.a))
+		//               Hash Key: (sum(t2.a))
+		//               ->  GroupAggregate  (cost=0.00..431.00 rows=1 width=16)
+		//                     Output: t2.a, sum(t2.a)
+		//                     Group Key: t2.a
+		//                     ->  Sort  (cost=0.00..431.00 rows=1 width=8)
+		//                           Output: t2.a
+		//                           Sort Key: t2.a
+		//                           ->  Seq Scan on public.t2  (cost=0.00..431.00 rows=1 width=8)
+		//                                 Output: t2.a
+		//         ->  Hash  (cost=431.00..431.00 rows=1 width=8)
+		//               Output: t1.a
+		//               ->  Seq Scan on public.t1  (cost=0.00..431.00 rows=1 width=8)
+		//                     Output: t1.a
+		//
+		// here, the join condition has two expressions, and all of them have the same
+		// right-hand side. It means that for every single-key redistribution request we get the same
+		// pexprDlvrd value (t1.a)
+		// and, when we go through the source expressions in order,
+		// the first expression will always be selected as matching for every redistribution request,
+		// meaning that the second expression has no chance to be matched, and therefore the distribution
+		// by t2.a is not considered
+		//
+		// also, it isn't obvious if the same problem might arise when matching a distribution containing
+		// multiple keys. theoretically, it can, so it might be worth exploring
+
+		if (GPOPT_INVALID_OPT_REQUEST != ulOptReq && ulSourceSize > ulOptReq)
+		{
+			CExpression *source_expr = (*pdrgpexprSource)[ulOptReq];
+			BOOL fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
+			if (!fSuccess)
+			{
+				// if failed to find a equal match in the source distribution expr
+				// array, check the equivalent exprs to find a match
+				fSuccess =
+					CUtils::Contains(equiv_distribution_exprs, source_expr);
+			}
+			if (fSuccess)
+			{
+				CExpression *pexprTarget = (*pdrgpexprTarget)[ulOptReq];
+				pexprTarget->AddRef();
+				pdrgpexpr->Append(pexprTarget);
+
+				if (nullptr != opfamilies)
+				{
+					GPOS_ASSERT(nullptr != m_hash_opfamilies);
+					IMDId *opfamily = (*m_hash_opfamilies)[ulOptReq];
+					opfamily->AddRef();
+					opfamilies->Append(opfamily);
+				}
+				continue;
+			}
+		}
+
+		// then, try the rest of the expressions
 		for (ULONG idx = 0; idx < ulSourceSize; idx++)
 		{
+			// check if we've already mathed this child above
+			if (idx == ulOptReq)
+			{
+				continue;
+			}
+
 			BOOL fSuccess = false;
 			CExpression *source_expr = (*pdrgpexprSource)[idx];
 			fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
@@ -655,7 +736,7 @@ CPhysicalHashJoin::PdshashedMatching(
 			CRefCount::SafeRelease(opfamilies);
 			// try again using the equivalent hashed distribution
 			return PdshashedMatching(mp, pdshashed->PdshashedEquiv(),
-									 ulSourceChild, isPdsReq);
+									 ulSourceChild, isPdsReq, ulOptReq);
 		}
 		// it should never happen, but instead of creating wrong spec, raise an exception
 		GPOS_RAISE(
@@ -908,6 +989,18 @@ CPhysicalHashJoin::PdsRequiredRedistribute(CMemoryPool *mp,
 	}
 
 	// find the distribution delivered by first child
+	// it should be noted that it is not guaranteed that the first child derived CDistributionSpecHashed
+	// for example, we might get a CDistributionthe SpecSingleton from it, so even though
+	// the initial request says (redistribute, redistribute), we would get (singleton, singleton)
+	// distribution as a result of this function
+	//
+	// it means that we don't guarantee that any requested distribution can be actually enforced.
+	// moreover, even when the first child derives CDistributionSpecHashed, the way we match distribution
+	// expressions inside PdshashedMatching is not perfect, and might possibly distort distribution
+	// of the second child
+	//
+	// this logic is far from being straightforward, but it is not a trivial problem to fix it
+	// at least you are warned about it
 	CDistributionSpec *pdsFirst =
 		CDrvdPropPlan::Pdpplan((*pdrgpdpCtxt)[0])->Pds();
 	GPOS_ASSERT(nullptr != pdsFirst);
@@ -937,7 +1030,8 @@ CPhysicalHashJoin::PdsRequiredRedistribute(CMemoryPool *mp,
 	}
 
 	// return a matching distribution request for the second child
-	CDistributionSpec *pdsMatch = PdsMatch(mp, pdsInputForMatch, ulFirstChild);
+	CDistributionSpec *pdsMatch =
+		PdsMatch(mp, pdsInputForMatch, ulFirstChild, ulOptReq);
 	if (pdsFirst->Edt() == CDistributionSpec::EdtHashed)
 	{
 		// if the input spec was created as a copy, release it
@@ -1239,7 +1333,8 @@ CPhysicalHashJoin::CreateOptRequests(CMemoryPool *mp)
 	//		to be distributed on single hash join keys separately, as well as the set
 	//		of all hash join keys,
 	//		the second hash join child is always required to match the distribution returned
-	//		by first child
+	//		by the first child. note, that the returned distribution may have different distribution keys
+	// 		compared to the requested one, or even have a different distribution kind altogether
 	// Req(N + 1) (hashed, broadcast)
 	// Req(N + 2) (non-singleton, broadcast)
 	// Req(N + 3) (singleton, singleton)
