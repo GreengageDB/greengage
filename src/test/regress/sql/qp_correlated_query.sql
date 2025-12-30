@@ -874,6 +874,31 @@ DROP TABLE skip_correlated_t2;
 DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
 
+--------------------------------------------------------------------------------
+-- Test: ORCA-specific behavior related to distribution requests.
+-- If a join condition has an 'AND' clause and multiple subexpressions that have
+-- the same right-hand side, distribution requests to the outer table
+-- can be lost, making it erroneously require a redistribute motion.
+-- For more info, please refer to the comments inside
+-- CPhysicalJoin::PdshashedMatching
+--------------------------------------------------------------------------------
+EXPLAIN
+SELECT *
+FROM a
+WHERE NOT EXISTS (
+    SELECT *
+    FROM B
+    WHERE (a.j = b.i AND a.i = b.i)
+);
+
+SELECT *
+FROM a
+WHERE NOT EXISTS (
+    SELECT *
+    FROM B
+    WHERE (a.j = b.i AND a.i = b.i)
+);
+
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
