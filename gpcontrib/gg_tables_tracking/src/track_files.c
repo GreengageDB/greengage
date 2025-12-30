@@ -388,6 +388,13 @@ tracking_get_track(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errmsg("Can't perform tracking for database %u properly due to internal error", MyDatabaseId)));
 
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		state = funcctx->user_fctx;
+		goto srf_done;
+	}
+
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
@@ -583,6 +590,8 @@ tracking_get_track(PG_FUNCTION_ARGS)
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(result));
 	}
 
+srf_done:
+
 	if (tf_get_global_state.bloom)
 	{
 		pfree(tf_get_global_state.bloom);
@@ -599,6 +608,14 @@ tracking_get_track(PG_FUNCTION_ARGS)
 	{
 		pfree(tf_get_global_state.am_oids);
 		tf_get_global_state.am_oids = NIL;
+	}
+
+	if (state->scan)
+	{
+		table_endscan(state->scan);
+		table_close(state->pg_class_rel, AccessShareLock);
+		pfree(state);
+		funcctx->user_fctx = NULL;
 	}
 
 	SRF_RETURN_DONE(funcctx);
@@ -1526,8 +1543,11 @@ Datum
 wait_for_worker_initialize(PG_FUNCTION_ARGS)
 {
 	TimestampTz start_time;
-	int         check_count = 0;
-	long        timeout_ms;
+	int			check_count = 0;
+	long		timeout_ms;
+	long		current_timeout = -1;
+	instr_time	current_time_timeout;
+	instr_time	start_time_timeout;
 
 	start_time = GetCurrentTimestamp();
 	timeout_ms = (long) tracking_worker_naptime_sec * 1000L;
@@ -1540,22 +1560,33 @@ wait_for_worker_initialize(PG_FUNCTION_ARGS)
 		if (check_for_timeout(start_time, timeout_ms * 5))
 			PG_RETURN_BOOL(false);
 
-		/* Check if all segments are initialized */
-		if (is_initialized())
+		if (current_timeout <= 0)
 		{
-			ereport(LOG,
-					(errmsg("[gg_tables_tracking] all segments initialized successfully after %d checks",
-							check_count)));
-			PG_RETURN_BOOL(true);
+			/* Check if all segments are initialized */
+			if (is_initialized())
+			{
+				ereport(LOG,
+						(errmsg("[gg_tables_tracking] all segments initialized successfully after %d checks",
+								check_count)));
+				PG_RETURN_BOOL(true);
+			}
+
+			INSTR_TIME_SET_CURRENT(start_time_timeout);
+			current_timeout = timeout_ms;
 		}
 
 		check_count++;
 
 		(void)WaitLatch(MyLatch,
 						WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-						timeout_ms,
+						current_timeout,
 						PG_WAIT_EXTENSION);
 		ResetLatch(MyLatch);
+
+		/* Calculate remaining time since the last initialization check */
+		INSTR_TIME_SET_CURRENT(current_time_timeout);
+		INSTR_TIME_SUBTRACT(current_time_timeout, start_time_timeout);
+		current_timeout = timeout_ms - (long) INSTR_TIME_GET_MILLISEC(current_time_timeout);
 	}
 
 	PG_RETURN_BOOL(false);

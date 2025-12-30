@@ -1,7 +1,6 @@
 -- This test triggers failover of content 1 and checks
 -- the correct tracking state behaviour after recovery
-!\retcode gpconfig -s shared_preload_libraries | grep "value:" | head -1 | awk '{print $3}' > ../../../gpcontrib/gg_tables_tracking/isolation2/results/shared_libs ;
-!\retcode gpconfig -c shared_preload_libraries -v 'gg_tables_tracking';
+!\retcode gpconfig -c shared_preload_libraries -v "$(psql -At -c "SELECT array_to_string(array_append(string_to_array(current_setting('shared_preload_libraries'), ','), 'gg_tables_tracking'), ',')" postgres)";
 -- Allow extra time for mirror promotion to complete recovery
 !\retcode gpconfig -c gp_fts_probe_timeout -v 5 --masteronly;
 !\retcode gpconfig -c gp_fts_probe_retries -v 2 --masteronly;
