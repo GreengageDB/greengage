@@ -153,5 +153,6 @@
 5. Install python dependencies:
 
     ```bash
-    (cd gpMgmt/bin && make install)
+    curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python
+    pip install psutil PyYAML
     ```

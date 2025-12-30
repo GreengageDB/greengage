@@ -43,9 +43,20 @@ Follow [appropriate linux steps](README.linux.md) for getting your system ready 
 # Configure build environment to install at /usr/local/gpdb
 ./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/gpdb
 
+# Note that to run the full test suite (see below), fault injector is required, 
+and the following configure command line is required:
+
+./configure \
+    --enable-debug --enable-orca --enable-debug-extensions \
+    --with-openssl --with-perl --with-python \
+    --enable-gpfdist \
+    --with-libxml --with-gssapi --prefix=/usr/local/gpdb
+
 # Compile and install
 make -j8
 make -j8 install
+
+# Note that current user shall have a rights to write to the directory /usr/local/gpdb
 
 # Bring in greengage environment into your running shell
 source /usr/local/gpdb/greengage_path.sh
@@ -73,7 +84,7 @@ PGPORT=5555 make installcheck-world
 
 To turn GPORCA off and use Postgres planner for query optimization:
 ```
-set optimizer=off;
+PGOPTIONS='-c optimizer=off' make installcheck-world
 ```
 
 If you want to clean all generated files
