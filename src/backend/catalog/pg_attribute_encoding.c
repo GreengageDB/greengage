@@ -777,7 +777,6 @@ FileNumber
 GetFilenumForRewriteAttribute(Oid relid, AttrNumber attnum)
 {
 	FileNumber currentfilenum = GetFilenumForAttribute(relid, attnum);
-	Assert(currentfilenum != InvalidFileNumber);
 	if (currentfilenum <= MaxHeapAttributeNumber)
 		return currentfilenum + MaxHeapAttributeNumber;
 	else
