@@ -4134,13 +4134,13 @@ SELECT (
  Result
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Seq Scan on skip_correlated_replicated
-   SubPlan 1  (slice0)
+   SubPlan 1
      ->  Result
            Filter: (skip_correlated_partitioned.a = skip_correlated_replicated.c)
            ->  Materialize
                  ->  Gather Motion 3:1  (slice2; segments: 3)
                        ->  Seq Scan on skip_correlated_partitioned
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (10 rows)
 
 SELECT (
@@ -4163,17 +4163,16 @@ SELECT (
 ) FROM skip_correlated_partitioned;
                                      QUERY PLAN                                     
 ------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice2; segments: 3)
-   ->  Result
-         ->  Seq Scan on skip_correlated_partitioned
-         SubPlan 1  (slice2; segments: 3)
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on skip_correlated_partitioned
+         SubPlan 1
            ->  Result
                  Filter: (skip_correlated_random.b = skip_correlated_partitioned.a)
                  ->  Materialize
-                       ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
                              ->  Seq Scan on skip_correlated_random
- Optimizer: Pivotal Optimizer (GPORCA)
-(10 rows)
+ Optimizer: GPORCA
+(9 rows)
 
 SELECT (
     SELECT (
@@ -4196,13 +4195,12 @@ SELECT (
                          QUERY PLAN                          
 -------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Result
-         ->  Seq Scan on skip_correlated_partitioned
-         SubPlan 1  (slice1; segments: 3)
+   ->  Seq Scan on skip_correlated_partitioned
+         SubPlan 1
            ->  Seq Scan on skip_correlated_replicated
                  Filter: (c = skip_correlated_partitioned.a)
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+ Optimizer: GPORCA
+(6 rows)
 
 SELECT (
     SELECT (
@@ -4222,6 +4220,8 @@ SELECT (
         SELECT dbid FROM gp_segment_configuration WHERE dbid = a
     )
 ) FROM skip_correlated_partitioned;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
 ERROR:  correlated subquery with skip-level correlations is not supported
 -- hard cases
 EXPLAIN (COSTS OFF)
@@ -4239,13 +4239,13 @@ SELECT (
    ->  Result
          ->  Gather Motion 1:1  (slice1; segments: 1)
                ->  Seq Scan on skip_correlated_replicated
-         SubPlan 1  (slice0)
+         SubPlan 1
            ->  Result
                  Filter: (skip_correlated_partitioned.a = skip_correlated_replicated.c)
                  ->  Materialize
                        ->  Gather Motion 3:1  (slice2; segments: 3)
                              ->  Seq Scan on skip_correlated_partitioned
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (12 rows)
 
 SELECT (
@@ -4270,14 +4270,14 @@ SELECT (
         ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
     )
 ) AS l1 FROM skip_correlated_replicated ORDER BY l1;
-                                                                                 QUERY PLAN                                                                                 
+                                                                                 QUERY PLAN                                                                                  
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort
    Sort Key: ((SubPlan 2))
    ->  Result
          ->  Gather Motion 1:1  (slice1; segments: 1)
                ->  Seq Scan on skip_correlated_replicated
-         SubPlan 2  (slice0)
+         SubPlan 2
            ->  Limit
                  ->  Sort
                        Sort Key: ((SubPlan 1))
@@ -4285,13 +4285,13 @@ SELECT (
                              ->  Materialize
                                    ->  Gather Motion 3:1  (slice2; segments: 3)
                                          ->  Seq Scan on skip_correlated_random
-                             SubPlan 1  (slice0)
+                             SubPlan 1
                                ->  Result
                                      Filter: ((skip_correlated_partitioned.a = skip_correlated_replicated.c) AND (skip_correlated_partitioned.a = skip_correlated_random.b))
                                      ->  Materialize
                                            ->  Gather Motion 3:1  (slice3; segments: 3)
                                                  ->  Seq Scan on skip_correlated_partitioned
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: GPORCA
 (20 rows)
 
 SELECT (
