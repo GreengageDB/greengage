@@ -18,3 +18,4 @@ insert into myao_rollback select i , i + 10, i - 10 from generate_series(1,10) i
 select count(*) from myao_rollback;
 rollback;
 select count(*) from myao_rollback;
+vacuum myao_rollback;

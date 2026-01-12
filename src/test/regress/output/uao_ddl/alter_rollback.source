@@ -35,3 +35,4 @@ select count(*) from myao_rollback;
   8000
 (1 row)
 
+vacuum myao_rollback;
