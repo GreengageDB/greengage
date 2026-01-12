@@ -37,6 +37,7 @@
 #include "utils/syscache.h"
 
 static void check_attribute_encoding_entry_exist(Oid relid, bool *attnum_entry_present);
+static bool update_attribute_encoding_entry_internal(Oid relid, AttrNumber attnum, FileNumber newfilenum, Datum newlastrownums, Datum newattoptions, bool error_on_missing);
 
 /*
  * Transform the lastrownums int64 array into datum 
@@ -98,6 +99,14 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber filenum, D
 	Assert(attnum != InvalidAttrNumber);
 	Assert(filenum != InvalidFileNumber);
 
+	if (update_attribute_encoding_entry_internal(relid,
+												 attnum,
+												 InvalidFileNumber /* newfilenum */,
+												 lastrownums,
+												 attoptions,
+												 false /* error_on_missing */))
+		return;
+
 	rel = heap_open(AttributeEncodingRelationId, RowExclusiveLock);
 
 	MemSet(nulls, 0, sizeof(nulls));
@@ -116,6 +125,7 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber filenum, D
 
 	/* insert a new tuple */
 	CatalogTupleInsert(rel, tuple);
+	heap_freeze_tuple_wal_logged(rel, tuple);
 
 	heap_freetuple(tuple);
 
@@ -125,9 +135,26 @@ add_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber filenum, D
 /*
  * Update a pg_attribute_encoding entry.
  * Note that if the value is invalid, we'll skip setting the field instead of setting it to NULL.
+ * Throw error if the entry is missing.
  */
 void
 update_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber newfilenum, Datum newlastrownums, Datum newattoptions)
+{
+	(void) update_attribute_encoding_entry_internal(relid,
+													attnum,
+													newfilenum,
+													newlastrownums,
+													newattoptions,
+													true /* error_on_missing */);
+}
+
+/*
+ * Update a pg_attribute_encoding entry.
+ * Note that if the value is invalid, we'll skip setting the field instead of setting it to NULL.
+ * If the entry is missing, throw an error if error_on_missing is true, or return false if it's false.
+ */
+static bool
+update_attribute_encoding_entry_internal(Oid relid, AttrNumber attnum, FileNumber newfilenum, Datum newlastrownums, Datum newattoptions, bool error_on_missing)
 {
 	Relation 	rel;
 	SysScanDesc scan;
@@ -157,7 +184,16 @@ update_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber newfile
 
 	oldtup = systable_getnext(scan);
 	if (!HeapTupleIsValid(oldtup))
-		elog(ERROR, "could not find tuple for attnum %d for relid %d during scan on pg_attribute_encoding", attnum, relid);
+	{
+		if (error_on_missing)
+			elog(ERROR, "could not find tuple for attnum %d for relid %d during scan on pg_attribute_encoding", attnum, relid);
+		else
+		{
+			systable_endscan(scan);
+			heap_close(rel, RowExclusiveLock);
+			return false;
+		}
+	}
 
 	heap_deform_tuple(oldtup, RelationGetDescr(rel), values, nulls);
 
@@ -189,6 +225,8 @@ update_attribute_encoding_entry(Oid relid, AttrNumber attnum, FileNumber newfile
 
 	systable_endscan(scan);
 	heap_close(rel, RowExclusiveLock);
+
+	return true;
 }
 /*
  * Get the set of functions implementing a compression algorithm.
@@ -251,7 +289,9 @@ get_rel_attoptions(Oid relid, AttrNumber max_attno)
 		Datum attoptions;
 		bool isnull;
 
-		Assert(attnum > 0 && attnum <= max_attno);
+		Assert(attnum > 0);
+		if (attnum > max_attno)
+			continue;
 
 		attoptions = heap_getattr(tuple, Anum_pg_attribute_encoding_attoptions,
 								  RelationGetDescr(pgae), &isnull);
@@ -876,7 +916,8 @@ GetAttnumToLastrownumMapping(Oid relid, int natts)
 		attnum = heap_getattr(tup, Anum_pg_attribute_encoding_attnum,
 							   RelationGetDescr(rel), &isnull);
 		Assert(!isnull); /* have to have a valid attnum */
-		Assert(attnum <= natts); /* the attnum cannot be larger than the number of attributes */
+		if (attnum > natts)
+			continue;
 
 		col = heap_getattr(tup, Anum_pg_attribute_encoding_lastrownums,
 							   RelationGetDescr(rel), &isnull);
