@@ -1545,9 +1545,10 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					struct pg_tm tt, *tm = &tt;
 					fsec_t          fsec;
 					int             julian;
-					char           *validuntil;
+					char            *validuntil;
+					int             tz;
 
-					if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, session_timezone) != 0)
+					if (timestamp2tm(dt_now, &tz, tm, &fsec, NULL, session_timezone) != 0)
 						ereport(ERROR,
 								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 								 errmsg("timestamp out of range")));
@@ -1653,8 +1654,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					fsec_t          fsec;
 					int             julian;
 					char            *validuntil;
+					int             tz;
 
-					if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, session_timezone) != 0)
+					if (timestamp2tm(dt_now, &tz, tm, &fsec, NULL, session_timezone) != 0)
 						ereport(ERROR,
 								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 								 errmsg("timestamp out of range")));
