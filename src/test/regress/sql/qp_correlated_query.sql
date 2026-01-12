@@ -873,6 +873,7 @@ DROP TABLE skip_correlated_t1;
 DROP TABLE skip_correlated_t2;
 DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
+
 --------------------------------------------------------------------------------
 -- ORCA should be able to plan and execute correctly one skip-level queries, but
 -- not with master-only tables. Postgres Legacy planner should give an error to 
@@ -978,6 +979,7 @@ SELECT (
 DROP TABLE skip_correlated_partitioned;
 DROP TABLE skip_correlated_random;
 DROP TABLE skip_correlated_replicated;
+
 --------------------------------------------------------------------------------
 -- Test: ORCA-specific behavior related to distribution requests.
 -- If a join condition has an 'AND' clause and multiple subexpressions that have
