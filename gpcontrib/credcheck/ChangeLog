@@ -1,3 +1,11 @@
+2026-01-12 - Version 4.4.0
+
+This is a maintenance release to fix issues reported by users since last release.
+
+  - Fix backend crash when current_user is used in ALTER ROLE statement. Thanks to Andrii for the report.
+  - Add the session timezone in the call to timestamp2tm(). Thanks to Christoph Berg for the report.
+  - Move extension SQL files into a dedicated directory.
+
 2025-12-23 - Version 4.3.0
 
 This is a maintenance release to fix issues reported by users since last release.
