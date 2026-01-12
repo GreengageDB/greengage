@@ -833,14 +833,16 @@ select colabort from t_addcol;
 ERROR:  column "colabort" does not exist
 LINE 1: select colabort from t_addcol;
                ^
--- the aborted column is not visible in pg_attribute_encoding
+-- the aborted column is still visible in pg_attribute_encoding
+-- this is expected because vacuum should still clean it up
 execute checkattributeencoding('t_addcol');
  attnum | filenum | lastrownums | attoptions 
 --------+---------+-------------+------------
       2 |       1 | {0,100}     | 
       3 |       2 | {0,100}     | 
       4 |       3 | {0,100}     | 
-(3 rows)
+      5 |       4 | {0,400}     | 
+(4 rows)
 
 --
 -- table rewrite scenarios 

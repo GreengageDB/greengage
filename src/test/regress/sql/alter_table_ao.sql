@@ -514,7 +514,8 @@ abort;
 select sum(a), sum(def10), sum(defnull1), sum(defnull2) from t_addcol;
 -- error out
 select colabort from t_addcol;
--- the aborted column is not visible in pg_attribute_encoding
+-- the aborted column is still visible in pg_attribute_encoding
+-- this is expected because vacuum should still clean it up
 execute checkattributeencoding('t_addcol');
 
 --

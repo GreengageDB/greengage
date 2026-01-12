@@ -1076,7 +1076,8 @@ execute checkattributeencoding('t_addcol_aoco');
       2 |       2 | {0,100}     | {compresstype=none,blocksize=32768,compresslevel=0}
       3 |       3 | {0,100}     | {compresstype=none,blocksize=32768,compresslevel=0}
       4 |       4 | {0,100}     | {compresstype=none,blocksize=32768,compresslevel=0}
-(4 rows)
+      5 |       5 | {0,400}     | {compresstype=none,blocksize=32768,compresslevel=0}
+(5 rows)
 
 --
 -- column rewrite scenarios
