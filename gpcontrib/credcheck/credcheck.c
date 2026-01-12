@@ -1541,7 +1541,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					int             julian;
 					char           *validuntil;
 
-					if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, NULL) != 0)
+					if (timestamp2tm(dt_now, NULL, tm, &fsec, NULL, session_timezone) != 0)
 						ereport(ERROR,
 								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
 								 errmsg("timestamp out of range")));
