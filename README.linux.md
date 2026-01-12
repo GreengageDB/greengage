@@ -141,6 +141,6 @@
 5. Install python dependencies:
 
     ```bash
-    curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | python
+    curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | sudo python
     pip install psutil PyYAML
     ```
