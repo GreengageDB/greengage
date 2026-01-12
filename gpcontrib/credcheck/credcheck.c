@@ -42,6 +42,7 @@
 #include "common/sha2.h"
 #include "executor/spi.h"
 #include "libpq/auth.h"
+#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
@@ -1497,6 +1498,11 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				DefElem    *dvalidUntil = NULL;
 				DefElem    *dpassword = NULL;
 
+				/* When current_user is used rolename is null */
+				if (stmt->role->rolename == NULL)
+					stmt->role->rolename = GetUserNameFromId(GetSessionUserId(), false);
+
+				/* verify if the user in whitelisted or not */
 				if (is_in_whitelist(stmt->role->rolename, username_whitelist))
 					break;
 
