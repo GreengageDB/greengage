@@ -146,14 +146,14 @@ function export_gpdb() {
 	tar -czf "${TARBALL}" ./*
 	popd
 
-	cp "${TARBALL}" "${server_build}"
+	ln "${TARBALL}" "${server_build}"
 }
 
 function export_gpdb_extensions() {
 	pushd ${GPDB_SRC_PATH}/gpAux
 	if ls greengage-*zip* 1>/dev/null 2>&1; then
 		chmod 755 greengage-*zip*
-		cp greengage-*zip* "${GPDB_ARTIFACTS_DIR}/"
+		ln greengage-*zip* "${GPDB_ARTIFACTS_DIR}/"
 	fi
 	popd
 }
@@ -163,10 +163,10 @@ function export_gpdb_clients() {
 	pushd ${GREENGAGE_CL_INSTALL_DIR}
 	source ./greengage_clients_path.sh
 	mkdir -p bin/ext/gppylib
-	cp ${GREENGAGE_INSTALL_DIR}/lib/python/gppylib/__init__.py ./bin/ext/gppylib
-	cp ${GREENGAGE_INSTALL_DIR}/lib/python/gppylib/gpversion.py ./bin/ext/gppylib
+	ln ${GREENGAGE_INSTALL_DIR}/lib/python/gppylib/__init__.py ./bin/ext/gppylib
+	ln ${GREENGAGE_INSTALL_DIR}/lib/python/gppylib/gpversion.py ./bin/ext/gppylib
 	if ls ${GREENGAGE_INSTALL_DIR}/lib/libzstd* 1> /dev/null 2>&1; then
-	  cp ${GREENGAGE_INSTALL_DIR}/lib/libzstd* ./lib/
+	  ln ${GREENGAGE_INSTALL_DIR}/lib/libzstd* ./lib/
 	fi
 	# GPHOME_LOADERS and greengage_loaders_path.sh are still requried by some users
 	# So link greengage_loaders_path.sh to greengage_clients_path.sh for compatible
