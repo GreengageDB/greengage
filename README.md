@@ -76,12 +76,6 @@ Instead of `make create-demo-cluster`, consider:
 DATADIRS=/tmp/gpdb-cluster PORT_BASE=5555 NUM_PRIMARY_MIRROR_PAIRS=1 WITH_MIRRORS=false make create-demo-cluster
 ```
 
-The TCP port for the regression test can be changed on the fly:
-
-```
-PGPORT=5555 make installcheck-world
-```
-
 If you want to clean all generated files
 ```
 make distclean
@@ -103,6 +97,12 @@ PGOPTIONS='-c optimizer=off' make installcheck-world
 
 ```
 make installcheck-world
+```
+
+* The TCP port for the regression test can be changed on the fly:
+
+```
+PGPORT=5555 make installcheck-world
 ```
 
 * The top-level target __installcheck-world__ will run all regression
