@@ -2399,7 +2399,7 @@ add partition foo3
 start (date '2013-01-01') end (date '2014-01-01') WITH (appendonly=true);
 
 select * from pg_partition_tree('mpp5992');
-select relname, relam, pg_get_expr(relpartbound, oid) from pg_class where relname like 'mpp5992%';
+select relname, amname, pg_get_expr(relpartbound, c.oid) from pg_class c join pg_am a on a.oid = relam where relname like 'mpp5992%';
 select relid::regclass, level, pg_get_expr(template, relid) from gp_partition_template where relid = 'mpp5992'::regclass;
 
 -- MPP-10223: split subpartitions

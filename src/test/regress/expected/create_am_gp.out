@@ -110,11 +110,11 @@ Partitions: create_am_gp_part1_1_prt_1 FOR VALUES FROM (1) TO (2)
 Distributed by: (a)
 Access method: ao_row
 
-select relam, relname from pg_class where relname IN ('create_am_gp_part1', 'create_am_gp_part1_1_prt_1');
- relam |          relname           
--------+----------------------------
-  3434 | create_am_gp_part1_1_prt_1
-  3434 | create_am_gp_part1
+select amname, relname from pg_class join pg_am a on a.oid = relam where relname IN ('create_am_gp_part1', 'create_am_gp_part1_1_prt_1');
+ amname |          relname           
+--------+----------------------------
+ ao_row | create_am_gp_part1_1_prt_1
+ ao_row | create_am_gp_part1
 (2 rows)
 
 select count(*) from create_am_gp_part1;

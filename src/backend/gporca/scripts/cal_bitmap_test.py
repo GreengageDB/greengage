@@ -1704,7 +1704,7 @@ def inspectExistingTables(conn):
     if glob_gpdb_major_version < 7:
         sqlStr = "SELECT lower(unnest(reloptions)) from pg_class where relname = 'cal_txtest'"
     else:
-        sqlStr = "SELECT case when relam=3434 then 'appendonly' else 'appendonly,column' end from pg_class where relname = 'cal_txtest' and relam in (3434,3435)"
+        sqlStr = "SELECT case when amname='ao_row' then 'appendonly' else 'appendonly,column' end from pg_class join pg_am a on a.oid = relam where relname = 'cal_txtest' and amname in ('ao_row','ao_column')"
     curs = dbconn.query(conn, sqlStr)
 
     rows = curs.fetchall()

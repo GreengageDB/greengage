@@ -311,16 +311,16 @@ def check_table_exists(context, dbname, table_name, table_type=None, host=None, 
         if '.' in table_name:
             schemaname, tablename = table_name.split('.')
             SQL_format = """
-                SELECT c.oid, c.relkind, c.relam, c.reloptions
-                FROM pg_class c, pg_namespace n
-                WHERE c.relname = '%s' AND n.nspname = '%s' AND c.relnamespace = n.oid;
+                SELECT c.oid, c.relkind, a.amname, c.reloptions
+                FROM pg_class c, pg_am a, pg_namespace n
+                WHERE c.relname = '%s' AND a.oid = c.relam AND n.nspname = '%s' AND c.relnamespace = n.oid;
                 """
             SQL = SQL_format % (escape_string(tablename), escape_string(schemaname))
         else:
             SQL_format = """
-                SELECT oid, relkind, relam, reloptions \
-                FROM pg_class \
-                WHERE relname = E'%s';\
+                SELECT c.oid, relkind, amname, reloptions \
+                FROM pg_class c, pg_am a \
+                WHERE relname = E'%s' AND a.oid = c.relam;\
                 """
             SQL = SQL_format % (escape_string(table_name))
 
@@ -334,11 +334,11 @@ def check_table_exists(context, dbname, table_name, table_type=None, host=None, 
         if table_type is None:
             return True
 
-    if table_row[2] == 3434:
+    if table_row[2] == 'ao_row':
         original_table_type = 'ao'
-    elif table_row[2] == 3435:
+    elif table_row[2] == 'ao_column':
         original_table_type = 'co'
-    elif table_row[2] == 2:
+    elif table_row[2] == 'heap':
         original_table_type = 'heap'
     else:
         raise Exception('Unknown table type %s' % table_row[2])
