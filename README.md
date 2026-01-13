@@ -54,7 +54,7 @@ and the following configure command line is required:
 
 # Compile and install
 make -j8
-make -j8 install
+make install
 
 # Note that current user shall have a rights to write to the directory /usr/local/gpdb
 
@@ -82,17 +82,22 @@ The TCP port for the regression test can be changed on the fly:
 PGPORT=5555 make installcheck-world
 ```
 
-To turn GPORCA off and use Postgres planner for query optimization:
-```
-PGOPTIONS='-c optimizer=off' make installcheck-world
-```
-
 If you want to clean all generated files
 ```
 make distclean
 ```
 
 ## Running tests
+
+* Tests with GPORCA are not using table alias, so one can run them with table alias off:
+```
+PGOPTIONS='-c optimizer_enable_table_alias=false' make installcheck-world
+```
+
+* To turn GPORCA off and use Postgres planner for query optimization:
+```
+PGOPTIONS='-c optimizer=off' make installcheck-world
+```
 
 * The default regression tests
 
