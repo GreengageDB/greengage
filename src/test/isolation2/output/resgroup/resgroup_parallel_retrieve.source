@@ -1,0 +1,326 @@
+-- start_matchsubs
+-- m/ERROR:  (.*) \([a-zA-Z_]+\.c:[0-9]+\)$/
+-- s/ERROR:  (.*) \([a-zA-Z_]+\.c:[0-9]+\)$/ERROR:  $1/
+-- end_matchsubs
+
+--
+-- Normal mode with GUC enabled.
+--
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v on;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+1: BEGIN;
+BEGIN
+1: DECLARE c1 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(2), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 1 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c1';
+ endpoint_id1 | token_id | host_id | port_id | READY
+ endpoint_id1 | token_id | host_id | port_id | READY
+ endpoint_id1 | token_id | host_id | port_id | READY
+(3 rows)
+
+1: SELECT gp_inject_fault('switch_resgroup_ppc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1&: SELECT gp_wait_until_triggered_fault('switch_resgroup_ppc', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 0;  <waiting ...>
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT1': RETRIEVE 1 FROM ENDPOINT "@ENDPOINT1";  <waiting ...>
+
+0U: SHOW gp_resource_group_retrieve;
+ gp_resource_group_retrieve 
+----------------------------
+ on                         
+(1 row)
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE 1%';
+ rsgname | query                                          
+---------+------------------------------------------------
+ rg      | RETRIEVE 1 FROM ENDPOINT "endpoint_id1 "; 
+(1 row)
+
+0R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 2 
+(1 row)
+1<:  <... completed>
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+1: SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1q: ... <quitting>
+
+-- Retrieve on closed cursor.
+0R: @pre_run 'set_endpoint_variable @ENDPOINT1': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT1";
+ERROR:  endpoint is not available because the parallel retrieve cursor was aborted
+0Rq: ... <quitting>
+
+--
+-- Normal mode with GUC disabled.
+--
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v off;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+1: BEGIN;
+BEGIN
+1: DECLARE c2 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(2), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 2 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c2';
+ endpoint_id2 | token_id | host_id | port_id | READY
+ endpoint_id2 | token_id | host_id | port_id | READY
+ endpoint_id2 | token_id | host_id | port_id | READY
+(3 rows)
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT2': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT2";  <waiting ...>
+
+0U: SHOW gp_resource_group_retrieve;
+ gp_resource_group_retrieve 
+----------------------------
+ off                        
+(1 row)
+-- No resource groups assigned.
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+ rsgname | query                                            
+---------+--------------------------------------------------
+ unknown | RETRIEVE ALL FROM ENDPOINT "endpoint_id2 "; 
+(1 row)
+
+0R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 2 
+          | 3 
+          | 4 
+          | 7 
+(4 rows)
+0Rq: ... <quitting>
+1: ABORT;
+ABORT
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v on;
+(exited with code 0)
+!\retcode gpconfig -c gp_resource_group_bypass -v on;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+--
+--  Bypass mode with GUC enabled.
+--
+
+1: BEGIN;
+BEGIN
+
+1: DECLARE c3 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(2), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 3 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c3';
+ endpoint_id3 | token_id | host_id | port_id | READY
+ endpoint_id3 | token_id | host_id | port_id | READY
+ endpoint_id3 | token_id | host_id | port_id | READY
+(3 rows)
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT3': RETRIEVE 1 FROM ENDPOINT "@ENDPOINT3";  <waiting ...>
+
+0U: SHOW gp_resource_group_bypass;
+ gp_resource_group_bypass 
+--------------------------
+ on                       
+(1 row)
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE 1%';
+ rsgname | query                                          
+---------+------------------------------------------------
+ rg      | RETRIEVE 1 FROM ENDPOINT "endpoint_id3 "; 
+(1 row)
+
+0R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 2 
+(1 row)
+
+-- All subsequent queries are run with bypass mode.
+
+1: SELECT gp_inject_fault('switch_resgroup_ppc_bypass', 'skip', dbid), gp_inject_fault('switch_resgroup_ppc', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+ gp_inject_fault | gp_inject_fault 
+-----------------+-----------------
+ Success:        | Success:        
+(1 row)
+1&: SELECT gp_wait_until_triggered_fault('switch_resgroup_ppc_bypass', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 0;  <waiting ...>
+
+0R: @pre_run 'set_endpoint_variable @ENDPOINT3': RETRIEVE 1 FROM ENDPOINT "@ENDPOINT3";
+ pg_sleep | i 
+----------+---
+          | 3 
+(1 row)
+
+1<:  <... completed>
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+
+1: SELECT gp_inject_fault('all', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1q: ... <quitting>
+
+-- Retrieve on closed cursor with bypass mode.
+0R: @pre_run 'set_endpoint_variable @ENDPOINT3': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT3";
+ERROR:  endpoint is not available because the parallel retrieve cursor was aborted
+0Rq: ... <quitting>
+
+!\retcode gpconfig -r gp_resource_group_bypass;
+(exited with code 0)
+!\retcode gpstop -u;
+(exited with code 0)
+
+--
+-- Multiple retrieve sessions sharing slot.
+--
+
+1: BEGIN;
+BEGIN
+
+1: DECLARE c4 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(3), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 4 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c4';
+ endpoint_id4 | token_id | host_id | port_id | READY
+ endpoint_id4 | token_id | host_id | port_id | READY
+ endpoint_id4 | token_id | host_id | port_id | READY
+(3 rows)
+1: DECLARE c5 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(3), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 5 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c5';
+ endpoint_id5 | token_id | host_id | port_id | READY
+ endpoint_id5 | token_id | host_id | port_id | READY
+ endpoint_id5 | token_id | host_id | port_id | READY
+(3 rows)
+1: DECLARE c6 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(3), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 6 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c6';
+ endpoint_id6 | token_id | host_id | port_id | READY
+ endpoint_id6 | token_id | host_id | port_id | READY
+ endpoint_id6 | token_id | host_id | port_id | READY
+(3 rows)
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT4': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT4";  <waiting ...>
+1R&: @pre_run 'set_endpoint_variable @ENDPOINT5': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT5";  <waiting ...>
+2R&: @pre_run 'set_endpoint_variable @ENDPOINT6': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT6";  <waiting ...>
+
+-- All should have the same resource group.
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+ rsgname | query                                            
+---------+--------------------------------------------------
+ rg      | RETRIEVE ALL FROM ENDPOINT "endpoint_id4 "; 
+(1 row)
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+ rsgname | query                                            
+---------+--------------------------------------------------
+ rg      | RETRIEVE ALL FROM ENDPOINT "endpoint_id5 "; 
+(1 row)
+2U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+ rsgname | query                                            
+---------+--------------------------------------------------
+ rg      | RETRIEVE ALL FROM ENDPOINT "endpoint_id6 "; 
+(1 row)
+
+0R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 2 
+          | 3 
+          | 4 
+          | 7 
+(4 rows)
+1R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 1 
+(1 row)
+2R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 5 
+          | 6 
+(2 rows)
+
+0Rq: ... <quitting>
+
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
+
+--
+-- GUC value must be the same on segments and on the master.
+--
+
+!\retcode gpconfig -c gp_resource_group_retrieve -v on -m off;
+(exited with code 1)
+
+---
+--- Moving resource group should move the retrieve sessions as well.
+---
+
+1: BEGIN;
+BEGIN
+
+1: DECLARE c7 PARALLEL RETRIEVE CURSOR FOR SELECT pg_sleep(5), i FROM t;
+DECLARE
+1: @post_run 'parse_endpoint_info 7 1 2 3 4': SELECT endpointname, auth_token, hostname, port, state FROM gp_get_endpoints() WHERE cursorname = 'c7';
+ endpoint_id7 | token_id | host_id | port_id | READY
+ endpoint_id7 | token_id | host_id | port_id | READY
+ endpoint_id7 | token_id | host_id | port_id | READY
+(3 rows)
+
+0R&: @pre_run 'set_endpoint_variable @ENDPOINT7': RETRIEVE ALL FROM ENDPOINT "@ENDPOINT7";  <waiting ...>
+
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+ rsgname | query                                            
+---------+--------------------------------------------------
+ rg      | RETRIEVE ALL FROM ENDPOINT "endpoint_id7 "; 
+(1 row)
+
+2: SET ROLE r;
+SET
+2: SELECT gp_toolkit.pg_resgroup_move_query(pid, 'rg2') FROM pg_stat_activity WHERE rsgname = 'rg';
+ pg_resgroup_move_query 
+------------------------
+ t                      
+(1 row)
+
+0U: SELECT rsgname, query FROM pg_stat_activity WHERE query LIKE 'RETRIEVE ALL%';
+ rsgname | query                                            
+---------+--------------------------------------------------
+ rg2     | RETRIEVE ALL FROM ENDPOINT "endpoint_id7 "; 
+(1 row)
+
+0R<:  <... completed>
+ pg_sleep | i 
+----------+---
+          | 2 
+          | 3 
+          | 4 
+          | 7 
+(4 rows)
+
+1: ABORT;
+ABORT
+
+1q: ... <quitting>
+0Rq: ... <quitting>
+0Uq: ... <quitting>

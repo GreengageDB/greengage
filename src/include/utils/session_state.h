@@ -99,6 +99,12 @@ typedef struct SessionState
 	/* MyProc->queryCommandId of the latest cursor command in this session */
 	int latestCursorCommandId;
 
+	/*
+	 * When gp_resource_group_bypass is enabled, stores the bypass group ID
+	 * so retrieve sessions can grab it from the backend holding the cursor.
+	 */
+	Oid bypassResGroupId;
+
 #ifdef USE_ASSERT_CHECKING
 	/* If we modify the sessionId in ProcMppSessionId, this field is turned on */
 	bool isModifiedSessionId;

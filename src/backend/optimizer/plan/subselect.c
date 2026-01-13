@@ -420,7 +420,8 @@ get_first_col_type(Plan *plan, Oid *coltype, int32 *coltypmod,
 }
 
 /**
- * Returns true if query refers to a distributed table.
+ * Returns true if query refers to any table on this level or on some other
+ * subquery level, if recursive is true.
  */
 bool QueryHasDistributedRelation(Query *q, bool recursive)
 {
@@ -435,17 +436,10 @@ bool QueryHasDistributedRelation(Query *q, bool recursive)
 				&& QueryHasDistributedRelation(rte->subquery, true))
 			return true;
 
+		/* Really, any kind of distribution policy causes rescan issues */
 		if (rte->relid != InvalidOid
 				&& rte->rtekind == RTE_RELATION)
-		{
-			GpPolicy *policy = GpPolicyFetch(rte->relid);
-			if (GpPolicyIsPartitioned(policy))
-			{
-				pfree(policy);
 				return true;
-			}
-			pfree(policy);
-		}
 	}
 	return false;
 }

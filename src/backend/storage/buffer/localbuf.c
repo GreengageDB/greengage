@@ -207,6 +207,7 @@ LocalBufferAlloc(SMgrRelation smgr, ForkNumber forkNum, BlockNumber blockNum,
 
 		/* Find smgr relation for buffer */
 		oreln = smgropen(bufHdr->tag.rnode, MyBackendId);
+		oreln->smgr_which = 0;
 
 		// GPDB_93_MERGE_FIXME: is this TODO comment still relevant?
 		// UNDONE: Unfortunately, I think we write temp relations to the mirror...

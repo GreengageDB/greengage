@@ -4061,6 +4061,212 @@ DROP TABLE skip_correlated_t4;
 reset optimizer_join_order;
 reset optimizer_trace_fallback;
 --------------------------------------------------------------------------------
+-- ORCA should be able to plan and execute correctly one skip-level queries, but
+-- not with master-only tables. Postgres Legacy planner should give an error to 
+-- any skip-level query.
+--------------------------------------------------------------------------------
+CREATE TABLE skip_correlated_partitioned (
+    a INT
+) DISTRIBUTED BY (a);
+INSERT INTO skip_correlated_partitioned VALUES (1), (2), (3);
+CREATE TABLE skip_correlated_random (
+    b INT
+) DISTRIBUTED RANDOMLY;
+INSERT INTO skip_correlated_random VALUES (1), (2), (3);
+CREATE TABLE skip_correlated_replicated (
+    c INT
+) DISTRIBUTED REPLICATED;
+INSERT INTO skip_correlated_replicated VALUES(1), (2), (3);
+-- easy cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_partitioned WHERE a = c
+    )
+) FROM skip_correlated_replicated;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on skip_correlated_replicated
+   SubPlan 1  (slice0)
+     ->  Result
+           Filter: (skip_correlated_partitioned.a = skip_correlated_replicated.c)
+           ->  Materialize
+                 ->  Gather Motion 3:1  (slice2; segments: 3)
+                       ->  Seq Scan on skip_correlated_partitioned
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_partitioned WHERE a = c
+    )
+) FROM skip_correlated_replicated ORDER BY a;
+ a 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_partitioned;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   ->  Result
+         ->  Seq Scan on skip_correlated_partitioned
+         SubPlan 1  (slice2; segments: 3)
+           ->  Result
+                 Filter: (skip_correlated_random.b = skip_correlated_partitioned.a)
+                 ->  Materialize
+                       ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                             ->  Seq Scan on skip_correlated_random
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_partitioned ORDER BY b;
+ b 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_partitioned;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Result
+         ->  Seq Scan on skip_correlated_partitioned
+         SubPlan 1  (slice1; segments: 3)
+           ->  Seq Scan on skip_correlated_replicated
+                 Filter: (c = skip_correlated_partitioned.a)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_partitioned ORDER BY c;
+ c 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = a
+    )
+) FROM skip_correlated_partitioned;
+ERROR:  correlated subquery with skip-level correlations is not supported
+-- hard cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Sort
+   Sort Key: ((SubPlan 1))
+   ->  Result
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Seq Scan on skip_correlated_replicated
+         SubPlan 1  (slice0)
+           ->  Result
+                 Filter: (skip_correlated_partitioned.a = skip_correlated_replicated.c)
+                 ->  Materialize
+                       ->  Gather Motion 3:1  (slice2; segments: 3)
+                             ->  Seq Scan on skip_correlated_partitioned
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
+
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+ l1 
+----
+  1
+  2
+  3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+                                                                                 QUERY PLAN                                                                                 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: ((SubPlan 2))
+   ->  Result
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Seq Scan on skip_correlated_replicated
+         SubPlan 2  (slice0)
+           ->  Limit
+                 ->  Sort
+                       Sort Key: ((SubPlan 1))
+                       ->  Result
+                             ->  Materialize
+                                   ->  Gather Motion 3:1  (slice2; segments: 3)
+                                         ->  Seq Scan on skip_correlated_random
+                             SubPlan 1  (slice0)
+                               ->  Result
+                                     Filter: ((skip_correlated_partitioned.a = skip_correlated_replicated.c) AND (skip_correlated_partitioned.a = skip_correlated_random.b))
+                                     ->  Materialize
+                                           ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                 ->  Seq Scan on skip_correlated_partitioned
+ Optimizer: Pivotal Optimizer (GPORCA)
+(20 rows)
+
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_partitioned WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+ l1 
+----
+  1
+  2
+  3
+(3 rows)
+
+DROP TABLE skip_correlated_partitioned;
+DROP TABLE skip_correlated_random;
+DROP TABLE skip_correlated_replicated;
+--------------------------------------------------------------------------------
 -- Ensure ORCA generates the correct plan with the exists clause
 -- for the partitioned table.
 --------------------------------------------------------------------------------

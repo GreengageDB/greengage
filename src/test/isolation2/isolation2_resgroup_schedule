@@ -63,4 +63,7 @@ test: resgroup/resgroup_startup_memory
 
 test: resgroup/resgroup_oom
 
+# parallel retrieve cursor integration
+test: resgroup/resgroup_parallel_retrieve
+
 test: resgroup/disable_resgroup

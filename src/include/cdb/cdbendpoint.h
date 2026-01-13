@@ -30,6 +30,8 @@
 #include "executor/tqueue.h"
 #include "storage/shm_toc.h"
 #include "nodes/execnodes.h"
+#include "utils/resgroup.h"
+#include "utils/resource_manager.h"
 
 /*
  * Endpoint allocate positions.
@@ -56,6 +58,10 @@ enum EndPointExecPosition
 /* ACK NOTICE MESSAGE FROM ENDPOINT QE/Entry DB to QD */
 #define ENDPOINT_READY_ACK_MSG			"ENDPOINT_READY"
 #define ENDPOINT_FINISHED_ACK_MSG		"ENDPOINT_FINISHED"
+
+#define ShouldUseRetrieveResGroup()                              \
+	(am_cursor_retrieve_handler && gp_resource_group_retrieve && \
+	 IsResGroupActivated())
 
 /*
  * Endpoint attach status, used by parallel retrieve cursor.
@@ -160,10 +166,12 @@ extern bool AuthEndpoint(Oid userID, const char *tokenStr);
 extern TupleDesc GetRetrieveStmtTupleDesc(const RetrieveStmt *stmt);
 extern void ExecRetrieveStmt(const RetrieveStmt *stmt, DestReceiver *dest);
 extern void check_parallel_retrieve_cursor_errors(EState *estate);
+extern int RetrieveSessionId(void);
 
 /* Endpoint shared memory utility functions in "cdbendpoint.c" */
 extern Endpoint *get_endpointdesc_by_index(int index);
 extern void get_token_from_session_hashtable(int sessionId, Oid userID, int8 *token /* out */ );
+extern bool sharedEndpointsContain(int receiverPid, int sessionId);
 
 /* utility functions in "cdbendpointutilities.c" */
 extern void endpoint_token_str2arr(const char *tokenStr, int8 *token);

@@ -46,6 +46,7 @@
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdispatchresult.h"
 #include "cdb/cdbdisp_query.h"
+#include "cdb/cdbendpoint.h"
 #include "cdb/memquota.h"
 #include "commands/resgroupcmds.h"
 #include "funcapi.h"
@@ -975,6 +976,12 @@ bool
 ResGroupIsAssigned(void)
 {
 	return selfIsAssigned();
+}
+
+bool
+ResGroupIsBypassed(void)
+{
+	return bypassedGroup != NULL;
 }
 
 /*
@@ -2626,10 +2633,8 @@ ShouldAssignResGroupOnMaster(void)
 bool
 ShouldUnassignResGroup(void)
 {
-	return IsResGroupActivated() &&
-		IsNormalProcessingMode() &&
-		(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
-		!AmIInSIGUSR1Handler();
+	return IsResGroupActivated() && IsNormalProcessingMode() &&
+		   IsResGroupRoleAllowed() && !AmIInSIGUSR1Handler();
 }
 
 /*
@@ -2679,6 +2684,9 @@ AssignResGroupOnMaster(void)
 		bypassedSlot.groupId = groupInfo.groupId;
 		bypassedSlot.memQuota = 0;
 		bypassedSlot.memUsage = 0;
+
+		/* Share bypassed group id for RETRIEVE connections. */
+		MySessionState->bypassResGroupId = groupInfo.groupId;
 
 		/* Attach self memory usage to resgroup */
 		groupIncMemUsage(bypassedGroup, &bypassedSlot, self->memUsage);
@@ -2753,6 +2761,12 @@ UnassignResGroup(void)
 		bypassedSlot.groupId = InvalidOid;
 		bypassedGroup = NULL;
 
+		/* Clear shared bypass group ID. */
+		if (!am_cursor_retrieve_handler)
+		{
+			MySessionState->bypassResGroupId = InvalidOid;
+		}
+
 		/* Update pg_stat_activity statistics */
 		pgstat_report_resgroup(0, InvalidOid);
 		return;
@@ -2796,20 +2810,11 @@ UnassignResGroup(void)
 	pgstat_report_resgroup(0, InvalidOid);
 }
 
-/*
- * QEs are not assigned/unassigned to a resource group on segments for each
- * transaction, instead, they switch resource group when a new resource group
- * id or slot id is dispatched.
- */
-void
-SwitchResGroupOnSegment(const char *buf, int len)
+static void
+SwitchResGroupImpl(ResGroupCaps caps, Oid newGroupId)
 {
-	Oid		newGroupId;
-	ResGroupCaps		caps;
 	ResGroupData		*group;
 	ResGroupSlotData	*slot;
-
-	DeserializeResGroupInfo(&caps, &newGroupId, buf, len);
 
 	/*
 	 * QD will dispatch the resgroup id via bypassedSlot.groupId
@@ -2831,6 +2836,11 @@ SwitchResGroupOnSegment(const char *buf, int len)
 
 		Assert(bypassedGroup != NULL);
 
+		if (!am_cursor_retrieve_handler)
+		{
+			MySessionState->bypassResGroupId = bypassedSlot.groupId;
+		}
+
 		/* Initialize the fake slot */
 		bypassedSlot.memQuota = 0;
 		bypassedSlot.memUsage = 0;
@@ -2840,6 +2850,9 @@ SwitchResGroupOnSegment(const char *buf, int len)
 		
 		/* Record the bypass memory limit of current query */
 		self->bypassMemoryLimit = self->memUsage + RESGROUP_BYPASS_MODE_MEMORY_LIMIT_ON_QE;
+
+		pgstat_report_resgroup(0, bypassedSlot.groupId);
+
 		return;
 	}
 
@@ -2879,7 +2892,7 @@ SwitchResGroupOnSegment(const char *buf, int len)
 	Assert(group != NULL);
 
 	/* Init self */
-	Assert(host_segments > 0);
+	Assert(host_segments > 0 || am_cursor_retrieve_handler);
 	Assert(caps.concurrency > 0);
 	self->caps = caps;
 
@@ -2913,6 +2926,82 @@ SwitchResGroupOnSegment(const char *buf, int len)
 
 	/* Add into cgroup */
 	ResGroupOps_AssignGroup(self->groupId, &(self->caps), MyProcPid);
+
+	pgstat_report_resgroup(0, group->groupId);
+}
+
+/*
+ * QEs are not assigned/unassigned to a resource group on segments for each
+ * transaction, instead, they switch resource group when a new resource group
+ * id or slot id is dispatched.
+ */
+void
+SwitchResGroupOnSegment(const char *buf, int len)
+{
+	Oid		newGroupId;
+	ResGroupCaps		caps;
+
+	DeserializeResGroupInfo(&caps, &newGroupId, buf, len);
+
+	SwitchResGroupImpl(caps, newGroupId);
+}
+
+/*
+ * Special path to activate resource group caps for RETRIEVE sessions.
+ */
+void
+SwitchResGroupOnRetrieveSession(void)
+{
+	/* Both of these are not used when a group is to be bypassed. */
+	ResGroupCaps caps = {0};
+	Oid	groupId = InvalidOid;
+
+	const ResGroupSlotData *slot = MySessionState->resGroupSlot;
+
+	Assert(am_cursor_retrieve_handler);
+
+	if (MySessionState->bypassResGroupId != InvalidOid)
+	{
+		bypassedSlot.groupId = MySessionState->bypassResGroupId;
+
+		SIMPLE_FAULT_INJECTOR("switch_resgroup_ppc_bypass");
+
+		LWLockAcquire(ResGroupLock, LW_EXCLUSIVE);
+		bypassedSlot.group = groupHashFind(bypassedSlot.groupId, true);
+		LWLockRelease(ResGroupLock);
+	}
+	else if (slot == NULL)
+	{
+		if (bypassedGroup != NULL)
+		{
+			/* Already in bypass mode. */
+			Assert(bypassedGroup->groupId == bypassedSlot.groupId);
+		}
+		else
+		{
+			/* Cursor was closed while in bypass mode. */
+		}
+
+		return;
+	}
+
+	if (slot != NULL)
+	{
+#ifdef USE_ASSERT_CHECKING
+		/*
+		 * We reach here even if cursor was closed on coordinator, to fail
+		 * later.
+		 */
+		slotValidate(slot);
+#endif
+
+		SIMPLE_FAULT_INJECTOR("switch_resgroup_ppc");
+
+		caps = slot->caps;
+		groupId = slot->groupId;
+	}
+
+	SwitchResGroupImpl(caps, groupId);
 }
 
 /*
@@ -4735,10 +4824,10 @@ HandleMoveResourceGroup(void)
 	ResGroupSlotData *slot;
 	ResGroupData *group;
 	ResGroupData *oldGroup;
-	Oid			groupId;
+	Oid			groupId = InvalidOid;
 	pid_t		callerPid;
 
-	Assert(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE);
+	Assert(IsResGroupRoleAllowed());
 
 	/* transaction has finished */
 	if (!IsTransactionState() || !selfIsAssigned())
@@ -4827,8 +4916,6 @@ HandleMoveResourceGroup(void)
 		 * transaction.
 		 */
 		ResGroupOps_AssignGroup(self->groupId, &(self->caps), MyProcPid);
-
-		pgstat_report_resgroup(0, self->groupId);
 	}
 
 	/*
@@ -4873,8 +4960,10 @@ HandleMoveResourceGroup(void)
 	/*
 	 * Move segment's executor. Use simple manual counters manipulation. We
 	 * can't call same complex designed for coordinator functions like above.
+	 * Move retrieve connection if am_cursor_retrieve_handler
 	 */
-	else if (Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER())
+	else if ((Gp_role == GP_ROLE_EXECUTE || am_cursor_retrieve_handler) &&
+			 !IS_QUERY_DISPATCHER())
 	{
 		SpinLockAcquire(&MyProc->movetoMutex);
 		groupId = MyProc->movetoGroupId;
@@ -4930,6 +5019,8 @@ HandleMoveResourceGroup(void)
 		/* Add into cgroup */
 		ResGroupOps_AssignGroup(self->groupId, &(self->caps), MyProcPid);
 	}
+
+	pgstat_report_resgroup(GetCurrentTimestamp(), groupId);
 }
 
 static bool
