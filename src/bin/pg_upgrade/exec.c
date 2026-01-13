@@ -55,7 +55,7 @@ get_bin_version(ClusterInfo *cluster)
 		if (sscanf(cmd_output, "%*s (Greenplum Database) %d.%d", &v1, &v2) < 1)
 			pg_fatal("could not get pg_ctl version output from %s\n", cmd);
 
-		if (v1 > 10)
+		if (v1 >= 10)
 			pg_fatal("could not get pg_ctl version output from %s\n", cmd);
 	}
 
