@@ -1,12 +1,23 @@
 FROM ubuntu:20.04
 
-RUN apt update && apt install -y git parallel clang-format-11 && \
-    ln -s /usr/bin/clang-format-11 /usr/bin/clang-format
+RUN apt-get update && apt-get install -y git parallel clang-format-11 && \
+    ln -s /usr/bin/clang-format-11 /usr/bin/clang-format && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/gpdb_src
 
-COPY . /opt/gpdb_src
+COPY . .
+
+# Initialize git repository if not already in a git repository (e.g., in Docker without .git directory)
+# This enables git diff for formatting checks without requiring .git in the build context
+RUN if ! git rev-parse --git-dir > /dev/null 2>&1; then \
+        git init && \
+        git config user.email "ci@greengagedb.org" && \
+        git config user.name "CI" && \
+        git add . && \
+        git commit -m "Initial commit for formatting check"; \
+    fi
 
 ENV CLANG_FORMAT=clang-format-11
 
-ENTRYPOINT src/tools/fmt gen && git diff --exit-code && src/tools/fmt chk
+ENTRYPOINT ["/bin/bash", "-c", "src/tools/fmt gen && git diff --exit-code && src/tools/fmt chk"]
