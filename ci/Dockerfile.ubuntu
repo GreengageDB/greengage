@@ -52,6 +52,3 @@ COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
 # Install entab used by pgindent utility.
 # This should be done using gpdb sources.
 RUN make -C gpdb_src/src/tools/entab install clean
-
-# Volume for tests output
-VOLUME /home/gpadmin/gpdb_src/src/test
