@@ -31,7 +31,7 @@ class TestDML(threading.Thread):
     def run(self):
         with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
             self.loop(conn)
-            self.verify()
+            self.verify(conn)
             conn.commit()
 
     def prepare(self):
@@ -83,7 +83,7 @@ class TestDML(threading.Thread):
 
         return self.retval, self.retmsg
 
-    def verify(self):
+    def verify(self, conn):
         pass
 
     def stop(self):

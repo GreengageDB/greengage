@@ -524,7 +524,7 @@ def createSegmentRows( hostlist
     content = 0
 
     for host in hostlist:
-        isprimary='t'
+        isprimary=True
         port=primary_portbase
         index = 0
         for pdir in primary_list:
@@ -555,7 +555,7 @@ def createSegmentRows( hostlist
         #      this is a general problem for GPDB these days.
         #      best to have the interface mapping stuff 1st.
         content=0
-        isprimary='f'
+        isprimary=False
         num_hosts = len(hostlist)
         num_dirs=len(primary_list)
         if num_hosts <= num_dirs:
@@ -610,7 +610,7 @@ def createSegmentRows( hostlist
         #we'll pick our mirror host to be 1 host "ahead" of the primary.
         mirror_host_offset = 1
 
-        isprimary='f'
+        isprimary=False
         for host in hostlist:
             mirror_host = hostlist[mirror_host_offset % num_hosts]
             mirror_host_offset += 1
@@ -661,7 +661,7 @@ def createSegmentRowsFromSegmentList( newHostlist
     interfaceDict = {}
 
     for host in newHostlist:
-        isprimary='t'
+        isprimary=True
         port=primary_portbase
         index = 0
         for pSeg in primary_segment_list:
@@ -690,7 +690,7 @@ def createSegmentRowsFromSegmentList( newHostlist
         return rows
     elif mirror_type.lower().strip() == 'spread':
         content=0
-        isprimary='f'
+        isprimary=False
         num_hosts = len(newHostlist)
         num_dirs=len(primary_segment_list)
         if num_hosts <= num_dirs:
@@ -743,7 +743,7 @@ def createSegmentRowsFromSegmentList( newHostlist
         #we'll pick our mirror host to be 1 host "ahead" of the primary.
         mirror_host_offset = 1
 
-        isprimary='f'
+        isprimary=False
         for host in newHostlist:
             mirror_host = newHostlist[mirror_host_offset % num_hosts]
             mirror_host_offset += 1
