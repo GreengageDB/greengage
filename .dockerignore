@@ -1,9 +1,0 @@
-.git/
-.gitignore
-.gitmodules
-.gitattributes
-.github/
-.git-blame-ignore-revs
-.dockerignore
-.abi-check/
-*.log
