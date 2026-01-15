@@ -37,6 +37,13 @@ Follow [these macOS steps](README.macOS.md) for getting your system ready for GP
 ### Installing dependencies (for Linux developers)
 Follow [appropriate linux steps](README.linux.md) for getting your system ready for GPDB
 
+### Downloading submodules
+Make sure that you download submodules. To do this, use `git clone --recurse-submodules` 
+when downloading the source code. If you want to update the submodules, run:
+```bash
+git submodule update --init --recursive --force
+```
+
 ### Build the database
 
 The recommended way to build the database is to use build system located in gpAux 
@@ -45,7 +52,7 @@ directory, which is also used for CI testing and building packages.
 To make optimized release build use the following:
 
 ```
-make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 devel -C gpAux
+make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 dist -C gpAux
 ```
 
 In order to run regression tests debug build is required with debug extensions. It can be built using the following command:
