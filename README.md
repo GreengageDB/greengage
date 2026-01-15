@@ -64,7 +64,7 @@ make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 devel -C gpAux
 Bring in greengage environment into your running shell:
 
 ```
-source /usr/local/gpdb/greengage_path.sh
+source $HOME/build/greengage-db-dist/greengage_path.sh
 ```
 
 Start demo cluster:
