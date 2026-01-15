@@ -96,51 +96,49 @@
 2. Verify that you can ssh to your machine name without a password
 
     ```bash
-    ssh <hostname of your machine>  # e.g., ssh briarwood
+    ssh `hostname`  # e.g., ssh briarwood
     ```
 
 3. Set up your system configuration:
 
-    ```bash
-    sudo bash -c 'cat >> /etc/sysctl.conf <<-EOF
-    kernel.shmmax = 500000000
-    kernel.shmmni = 4096
-    kernel.shmall = 4000000000
-    kernel.sem = 500 1024000 200 4096
-    kernel.sysrq = 1
-    kernel.core_uses_pid = 1
-    kernel.msgmnb = 65536
-    kernel.msgmax = 65536
-    kernel.msgmni = 2048
-    net.ipv4.tcp_syncookies = 1
-    net.ipv4.ip_forward = 0
-    net.ipv4.conf.default.accept_source_route = 0
-    net.ipv4.tcp_tw_recycle = 1
-    net.ipv4.tcp_max_syn_backlog = 4096
-    net.ipv4.conf.all.arp_filter = 1
-    net.ipv4.ip_local_port_range = 1025 65535
-    net.core.netdev_max_backlog = 10000
-    net.core.rmem_max = 2097152
-    net.core.wmem_max = 2097152
-    vm.overcommit_memory = 2
-    EOF'
-    sudo sysctl -p # Apply settings
-    ```      
+```bash
+sudo bash -c 'cat >> /etc/sysctl.conf <<-EOF
+kernel.shmmax = 500000000
+kernel.shmmni = 4096
+kernel.shmall = 4000000000
+kernel.sem = 500 1024000 200 4096
+kernel.sysrq = 1
+kernel.core_uses_pid = 1
+kernel.msgmnb = 65536
+kernel.msgmax = 65536
+kernel.msgmni = 2048
+net.ipv4.tcp_syncookies = 1
+net.ipv4.ip_forward = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.tcp_tw_recycle = 1
+net.ipv4.tcp_max_syn_backlog = 4096
+net.ipv4.conf.all.arp_filter = 1
+net.ipv4.ip_local_port_range = 1025 65535
+net.core.netdev_max_backlog = 10000
+net.core.rmem_max = 2097152
+net.core.wmem_max = 2097152
+vm.overcommit_memory = 2
+EOF'
+sudo sysctl -p # Apply settings
+```      
 
 4. Change user and system limits:
-    ```bash
-    sudo bash -c 'cat >> /etc/security/limits.conf <<-EOF
-    * soft nofile 65536
-    * hard nofile 65536
-    * soft nproc 131072
-    * hard nproc 131072
-    EOF'
-    su - $USER # Apply settings
-    ```
+```bash
+sudo bash -c 'cat >> /etc/security/limits.conf <<-EOF
+* soft nofile 65536
+* hard nofile 65536
+* soft nproc 131072
+* hard nproc 131072
+EOF'
+su - $USER # Apply settings
+```
 
-5. Install python dependencies:
-
-    ```bash
-    curl https://bootstrap.pypa.io/pip/2.7/get-pip.py | sudo python
-    pip install psutil PyYAML
-    ```
+5. Make sure that you download submodules. To do this, use `git clone --recurse-submodules` when downloading the source code. If you want to update the submodules, run:
+```bash
+git submodule update --init --recursive --force
+```

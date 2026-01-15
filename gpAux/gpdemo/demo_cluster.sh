@@ -392,11 +392,13 @@ if [ -n "${STATEMENT_MEM}" ]; then
 	EOF
 fi
 
-if [ -n "${OPTIMIZER_ENABLE_TABLE_ALIAS}" ]; then
-	cat >> $CLUSTER_CONFIG_POSTGRES_ADDONS<<-EOF
-		optimizer_enable_table_alias = ${OPTIMIZER_ENABLE_TABLE_ALIAS}
-	EOF
-fi
+# Demo cluster always works with disabled optimizer_enable_table_alias, so it's
+# easy to run tests suite with no additional setup.
+# TODO: remove this and GUC optimizer_enable_table_alias when tests are 
+# corrected for aliases.
+cat >> $CLUSTER_CONFIG_POSTGRES_ADDONS<<-EOF
+optimizer_enable_table_alias   = false
+EOF
 
 if [ "${ONLY_PREPARE_CLUSTER_ENV}" == "true" ]; then
     echo "ONLY_PREPARE_CLUSTER_ENV set, generated clusterConf file: $CLUSTER_CONFIG, exiting"

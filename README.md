@@ -39,53 +39,59 @@ Follow [appropriate linux steps](README.linux.md) for getting your system ready 
 
 ### Build the database
 
+The recommended way to build the database is to use build system located in gpAux 
+directory, which is also used for CI testing and building packages.
+
+To make optimized release build use the following:
+
 ```
-# Configure build environment to install at /usr/local/gpdb
-./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/gpdb
+make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 devel -C gpAux
+```
 
-# Note that to run the full test suite (see below), fault injector is required, 
-and the following configure command line is required:
+In order to run regression tests debug build is required with debug extensions. It can be built using the following command:
 
-./configure \
-    --enable-debug --enable-orca --enable-debug-extensions \
-    --with-openssl --with-perl --with-python \
-    --enable-gpfdist \
-    --with-libxml --with-gssapi --prefix=/usr/local/gpdb
+```
+make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 devel -C gpAux
+```
 
-# Compile and install
-make -j8
-make install
+Bring in greengage environment into your running shell:
 
-# Note that current user shall have a rights to write to the directory /usr/local/gpdb
-
-# Bring in greengage environment into your running shell
+```
 source /usr/local/gpdb/greengage_path.sh
+```
 
-# Start demo cluster
+Start demo cluster:
+
+```
 make create-demo-cluster
-# (gpdemo-env.sh contains __PGPORT__ and __MASTER_DATA_DIRECTORY__ values)
+```
+
+To use demo cluster use environment variables in gpdemo-env.sh which contains 
+__PGPORT__ and __MASTER_DATA_DIRECTORY__ values:
+
+```
 source gpAux/gpdemo/gpdemo-env.sh
 ```
 
 The directory, the TCP ports, the number of segments, and the existence of
 standbys for segments and coordinator for the demo cluster can be changed
-on the fly.
+when starting demo cluster. 
 Instead of `make create-demo-cluster`, consider:
 
 ```
 DATADIRS=/tmp/gpdb-cluster PORT_BASE=5555 NUM_PRIMARY_MIRROR_PAIRS=1 WITH_MIRRORS=false make create-demo-cluster
 ```
 
-If you want to clean all generated files
+If you want to clean all generated files:
 ```
 make distclean
 ```
 
 ## Running tests
 
-* Tests with GPORCA are not using table alias, so one can run them with table alias off:
+* By default tests are using GPORCA optimizer:
 ```
-PGOPTIONS='-c optimizer_enable_table_alias=false' make installcheck-world
+make installcheck-world
 ```
 
 * To turn GPORCA off and use Postgres planner for query optimization:
@@ -93,13 +99,7 @@ PGOPTIONS='-c optimizer_enable_table_alias=false' make installcheck-world
 PGOPTIONS='-c optimizer=off' make installcheck-world
 ```
 
-* The default regression tests
-
-```
-make installcheck-world
-```
-
-* The TCP port for the regression test can be changed on the fly:
+* The TCP port for the regression test can be changed:
 
 ```
 PGPORT=5555 make installcheck-world
@@ -128,17 +128,15 @@ PGPORT=5555 make installcheck-world
 
 ## Alternative Configurations
 
+Internally, the configure script is used to adapt the build system to the characteristics of the host machine. For finer control over the components that are built, configuration options must be specified explicitly. The configuration options in effect are recorded in the file config.log and may be inspected with the following command:
+```
+head config.log
+```
+
 ### Building GPDB without GPORCA
 
 Currently, GPDB is built with GPORCA by default. If you want to build GPDB
 without GPORCA, configure requires `--disable-orca` flag to be set.
-```
-# Clean environment
-make distclean
-
-# Configure build environment to install at /usr/local/gpdb
-./configure --disable-orca --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb
-```
 
 ### Building GPDB with gpperfmon enabled
 

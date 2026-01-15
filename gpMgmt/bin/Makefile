@@ -175,9 +175,7 @@ pylint:
 $(MOCK_BIN):
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
 	@if [ $(UBUNTU_PLATFORM) = "Ubuntu" ]; then\
-		wget https://bootstrap.pypa.io/pip/2.7/get-pip.py && \
-		python2 get-pip.py && \
-		pip install mock==1.0.1;\
+		pip2 install mock==1.0.1;\
      else\
        mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
 	   cd $(PYLIB_SRC_EXT)/ && tar xzf $(MOCK_DIR).tar.gz && \
