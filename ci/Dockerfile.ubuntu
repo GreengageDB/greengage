@@ -41,8 +41,9 @@ ENV TARGET_OS=ubuntu \
 RUN gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base AS code
-
+# Use --exclude, when it will be available in stable syntax.
 COPY . gpdb_src
+RUN rm -rf gpdb_src/.git/
 
 FROM base AS test
 
