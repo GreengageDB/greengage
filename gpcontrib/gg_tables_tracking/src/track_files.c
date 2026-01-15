@@ -413,7 +413,7 @@ tracking_get_track(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_GP_COMMAND_ERROR),
 					 errmsg("database %u is not tracked", MyDatabaseId),
-					 errhint("Call 'gg_tables_tracking.tracking_register_db()'"
+					 errhint("Call 'gg_tables_tracking.tracking_register_db()' "
 							 "to enable tracking")));
 		}
 
@@ -1499,7 +1499,7 @@ tracking_track_version(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_GP_COMMAND_ERROR),
 							errmsg("database %u is not tracked", MyDatabaseId),
-							errhint("Call 'gg_tables_tracking.tracking_register_db()'"
+							errhint("Call 'gg_tables_tracking.tracking_register_db()' "
 									"to enable tracking")));
 		}
 		else if (!pg_atomic_test_set_flag(&ctx.entry->capture_in_progress))
