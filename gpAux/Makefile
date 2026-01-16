@@ -292,7 +292,7 @@ endif
 devel : INSTCFLAGS=$(DEBUGFLAGS)
 devel : INSTLOC=$(DESTDIR)$(DEVPATH)
 devel : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDEVPATH)
-devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-depend
+devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-debug-extensions --enable-depend
 ifdef ENABLE_VPATH_BUILD
 devel : BUILDDIR=Debug
 devel : ISCONFIG=$(BUILDDIR)/GNUmakefile

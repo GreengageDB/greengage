@@ -57,7 +57,7 @@
     ./README.CentOS.bash
     ```
 
-## For Ubuntu (versions 20.04 or 22.04):
+## For Ubuntu (22.04):
 
 - Install dependencies using README.ubuntu.bash script:
   ```bash
@@ -85,19 +85,7 @@
 
 ## Common Platform Tasks:
 
-1. Create gpadmin and setup ssh keys
-
-    Either use:
-
-    ```bash
-    # Requires gpdb clone to be named gpdb_src
-    gpdb_src/concourse/scripts/setup_gpadmin_user.bash
-    ```
-    to create the gpadmin user and set up keys,
-
-    OR
-
-    manually create ssh keys so you can do ssh localhost without a password, e.g., 
+1. Setup SSH keys so you can run ssh localhost without a password, e.g., 
    
     ```bash
     ssh-keygen
@@ -108,7 +96,7 @@
 2. Verify that you can ssh to your machine name without a password
 
     ```bash
-    ssh <hostname of your machine>  # e.g., ssh briarwood
+    ssh `hostname`  # e.g., ssh briarwood
     ```
 
 3. Set up your system configuration:
@@ -150,7 +138,3 @@
     su - $USER # Apply settings
     ```
 
-5. Make sure that you download yaml and psutil as submodules. To do this, use `git clone --recurse-submodules` when downloading the source code. If you want to update the submodules, run:
-    ```bash
-    git submodule update --init --recursive --force
-    ```
