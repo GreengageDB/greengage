@@ -57,7 +57,7 @@
     ./README.CentOS.bash
     ```
 
-## For Ubuntu (versions 20.04 or 22.04):
+## For Ubuntu (22.04):
 
 - Install dependencies using README.ubuntu.bash script:
   ```bash
@@ -85,7 +85,7 @@
 
 ## Common Platform Tasks:
 
-1. Create gpadmin and setup ssh keys so you can do ssh localhost without a password, e.g., 
+1. Setup SSH keys so you can run ssh localhost without a password, e.g., 
    
     ```bash
     ssh-keygen

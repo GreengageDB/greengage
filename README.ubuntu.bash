@@ -46,7 +46,6 @@ apt-get install -y \
   python-pip \
   python2 \
   python2-dev \
-  python-pip \
   python3-dev \
   rsync \
   sudo \

@@ -46,25 +46,25 @@ git submodule update --init --recursive --force
 
 ### Build the database
 
-The recommended way to build the database is to use build system located in gpAux 
+The recommended way to build the database is to use build system located in the gpAux 
 directory, which is also used for CI testing and building packages.
 
-To make optimized release build use the following:
+To create optimized release build, use the following:
 
 ```
 make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 dist -C gpAux
 ```
 
-In order to run regression tests debug build is required with debug extensions. It can be built using the following command:
+To run regression tests, a debug build with debug extensions is required. It can be built using the following command:
 
 ```
 make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 devel -C gpAux
 ```
 
-Bring in greengage environment into your running shell:
+Load the greengage environment into your current shell:
 
 ```
-source $HOME/build/greengage-db-dist/greengage_path.sh
+source ~/build/greengage-db-devel/greengage_path.sh
 ```
 
 Start demo cluster:
@@ -73,7 +73,7 @@ Start demo cluster:
 make create-demo-cluster
 ```
 
-To use demo cluster use environment variables in gpdemo-env.sh which contains 
+To use the demo cluster, source the environment variables from gpdemo-env.sh, which contains 
 __PGPORT__ and __MASTER_DATA_DIRECTORY__ values:
 
 ```
@@ -82,7 +82,7 @@ source gpAux/gpdemo/gpdemo-env.sh
 
 The directory, the TCP ports, the number of segments, and the existence of
 standbys for segments and coordinator for the demo cluster can be changed
-when starting demo cluster. 
+when starting the demo cluster.
 Instead of `make create-demo-cluster`, consider:
 
 ```
@@ -96,12 +96,12 @@ make distclean
 
 ## Running tests
 
-* By default tests are using GPORCA optimizer:
+* By default, tests use the GPORCA optimizer:
 ```
 make installcheck-world
 ```
 
-* To turn GPORCA off and use Postgres planner for query optimization:
+* To turn GPORCA off and use the Postgres planner for query optimization:
 ```
 PGOPTIONS='-c optimizer=off' make installcheck-world
 ```
