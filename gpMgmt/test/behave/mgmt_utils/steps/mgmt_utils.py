@@ -83,6 +83,7 @@ def create_local_demo_cluster(context, extra_config='', with_mirrors='true', wit
     cmd = """
         cd ../gpAux/gpdemo &&
         export DEMO_PORT_BASE={port_base} &&
+        export HOSTS_LIST="" && \
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} &&
         export WITH_STANDBY={with_standby} &&
         export WITH_MIRRORS={with_mirrors} &&
@@ -291,6 +292,7 @@ def impl(context, checksum_toggle):
         cmd = """
         cd ../gpAux/gpdemo; \
             export DEMO_PORT_BASE={port_base} && \
+            export HOSTS_LIST="" && \
             export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
             export WITH_MIRRORS={with_mirrors} && \
             ./demo_cluster.sh -d && ./demo_cluster.sh -c && \

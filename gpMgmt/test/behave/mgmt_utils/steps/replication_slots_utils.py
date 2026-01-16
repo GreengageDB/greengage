@@ -28,6 +28,7 @@ def create_cluster(context, with_mirrors=True):
     cmd = """
     cd ../gpAux/gpdemo; \
         export DEMO_PORT_BASE={port_base} && \
+        export HOSTS_LIST="" && \
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
         export WITH_MIRRORS={with_mirrors} && \A
         ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
