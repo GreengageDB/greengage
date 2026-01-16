@@ -4,8 +4,6 @@ set -eox pipefail
 
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../concourse/scripts" && pwd )"
 source "${CWDIR}/common.bash"
-HOSTS_LIST="sdw1 sdw2 sdw3"
-NUM_PRIMARY_MIRROR_PAIRS=1
 
 function gen_env(){
 		cat > /opt/run_test.sh <<-EOF
@@ -34,6 +32,9 @@ function _main() {
 				echo "FATAL: BEHAVE_TAGS or BEHAVE_FLAGS not set"
 				exit 1
 		fi
+
+		export HOSTS_LIST="sdw1 sdw2 sdw3"
+		export NUM_PRIMARY_MIRROR_PAIRS=1
 
 		# Run inside a subshell so it does not pollute the environment after
 		# sourcing greengage_path
