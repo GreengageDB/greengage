@@ -77,6 +77,7 @@ extern void UpdateOrAddAttributeEncodingsAttoptionsOnly(Relation rel, List *new_
 extern void ClearAttributeEncodingLastrownums(Oid relid);
 extern void ClearAttributeEncodingLastrownumsByAttnum(Oid relid, int attnum);
 extern FileNumber GetFilenumForAttribute(Oid relid, AttrNumber attnum);
+extern AttrNumber GetAttnumForFilenum(Oid relid, FileNumber filenum);
 extern FileNumber GetFilenumForRewriteAttribute(Oid relid, AttrNumber attnum);
 extern List *GetNextNAvailableFilenums(Oid relid, int n);
 extern int64 *GetAttnumToLastrownumMapping(Oid relid, int natts);
