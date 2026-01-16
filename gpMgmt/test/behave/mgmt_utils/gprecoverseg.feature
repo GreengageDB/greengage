@@ -2,7 +2,7 @@
 Feature: gprecoverseg tests
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg recovery with a recovery configuration file and differential flag
       Given the database is running
         And all the segments are running
@@ -22,7 +22,7 @@ Feature: gprecoverseg tests
 
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg" with a recovery configuration file specifying the recovery type
       Given the database is running
         And all the segments are running
@@ -76,7 +76,7 @@ Feature: gprecoverseg tests
         | full         | -aF                |
 
     @demo_cluster
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: differential recovery runs successfully
         Given the database is running
           And the segments are synchronized
@@ -115,7 +115,7 @@ Feature: gprecoverseg tests
 
 
     @demo_cluster
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: Differential recovery succeeds if previous incremental recovery failed
         Given the database is running
           And user stops all primary processes
@@ -132,6 +132,7 @@ Feature: gprecoverseg tests
           And the cluster is rebalanced
 
     @demo_cluster
+    @multihost_demo_cluster
     Scenario: Differential recovery succeeds if previous full recovery failed
         Given the database is running
           And user stops all primary processes
@@ -152,7 +153,7 @@ Feature: gprecoverseg tests
           And verify replication slot internal_wal_replication_slot is available on all the segments
           And the cluster is rebalanced
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpstate track of differential recovery for single host
       Given the database is running
       And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -176,7 +177,7 @@ Feature: gprecoverseg tests
       And the cluster is rebalanced
 
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: check Tablespace Recovery Progress with gpstate
        Given the database is running
       And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -570,7 +571,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg gives warning if pg_basebackup already running for one of the failed segments
     Given the database is running
     And all the segments are running
@@ -604,7 +605,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg gives warning if pg_basebackup already running for some of the failed segments
     Given the database is running
     And all the segments are running
@@ -640,7 +641,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg -aF gives warning if pg_basebackup already running for all of the failed segments
     Given the database is running
     And all the segments are running
@@ -674,7 +675,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg -i gives warning if pg_basebackup already running for all failed segments
     Given the database is running
     And all the segments are running
@@ -738,10 +739,10 @@ Feature: gprecoverseg tests
       And the "primary" segment pg_log directory content preserved
 
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
     @demo_cluster
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: <scenario> recovery skips unreachable segments
       Given the database is running
       And all the segments are running
@@ -782,7 +783,7 @@ Feature: gprecoverseg tests
         | full         | -aF                |
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg creates output sample config file correctly when failed segment hosts are unreachable
     Given the database is running
     And all the segments are running
@@ -801,7 +802,7 @@ Feature: gprecoverseg tests
     And the created config file /tmp/output_config contains the commented row for unreachable failed segment
     And the cluster is returned to a good state
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario Outline: <scenario> incremental recovery works with tablespaces on a multi-host environment
     Given the database is running
     And user stops all primary processes
@@ -829,7 +830,7 @@ Feature: gprecoverseg tests
         | differential | -a --differential  |
         | full         | -aF                |
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: recovering a host with tablespaces succeeds
     Given the database is running
 
@@ -873,7 +874,7 @@ Feature: gprecoverseg tests
     And the row count from table "public.after_host_is_down" in "gptest" is verified against the saved data
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg creates recovery_progress.file in gpAdminLogs
     Given the database is running
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -923,7 +924,7 @@ Feature: gprecoverseg tests
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg creates recovery_progress.file in gpAdminLogs for full recovery of mirrors
     Given the database is running
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -943,7 +944,7 @@ Feature: gprecoverseg tests
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg creates recovery_progress.file in custom logdir for full recovery of mirrors
     Given the database is running
     And all files in "/tmp/custom_logdir" directory are deleted on all hosts in the cluster
@@ -962,7 +963,7 @@ Feature: gprecoverseg tests
     And all files in "/tmp/custom_logdir" directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg creates recovery_progress.file in gpAdminLogs for differential recovery of mirrors
     Given the database is running
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -980,7 +981,7 @@ Feature: gprecoverseg tests
 
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg -i creates recovery_progress.file in gpAdminLogs for mixed recovery of mirrors
     Given the database is running
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
@@ -1007,7 +1008,7 @@ Feature: gprecoverseg tests
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario:  SIGINT on gprecoverseg should delete the progress file
     Given the database is running
     And all the segments are running
@@ -1030,7 +1031,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario:  SIGINT on gprecoverseg differential recovery should delete the progress file
     Given the database is running
     And all the segments are running
@@ -1052,7 +1053,7 @@ Feature: gprecoverseg tests
 
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario:  SIGHUP on gprecoverseg should not display progress in gpstate -e
     Given the database is running
     And all the segments are running
@@ -1077,7 +1078,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg mixed recovery segments come up even if one basebackup takes longer
     Given the database is running
     And all the segments are running
@@ -1111,7 +1112,7 @@ Feature: gprecoverseg tests
     And the row count from table "test_recoverseg" in "postgres" is verified against the saved data
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg incremental recovery segments come up even if one rewind fails
     Given the database is running
     And all the segments are running
@@ -1166,13 +1167,13 @@ Feature: gprecoverseg tests
       | differential | using differential |
       | full         | in full            |
 
-   @concourse_cluster
+   @multihost_demo_cluster
     Scenario: Propagating env var
     Given the database is running
     And An entry to send SUSPEND_PG_REWIND env var is added on all hosts of cluster
     And An entry to accept SUSPEND_PG_REWIND env var is added on all hosts of cluster
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg gives warning if pg_rewind already running for one failed segments
     Given the database is running
     And all the segments are running
@@ -1205,7 +1206,7 @@ Feature: gprecoverseg tests
     And the user waits until mirror on content 0,1,2 is up
     And the cluster is rebalanced
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg gives warning if pg_rewind already running for some failed segments
     Given the database is running
     And all the segments are running
@@ -1238,7 +1239,7 @@ Feature: gprecoverseg tests
     And the user waits until mirror on content 0,1,2,3 is up
     And the cluster is rebalanced
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg gives warning if pg_rewind already running for all failed segments
     Given the database is running
     And all the segments are running
@@ -1268,7 +1269,7 @@ Feature: gprecoverseg tests
     And the user waits until mirror on content 0,1,2,3 is up
     And the cluster is rebalanced
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg -i gives warning if pg_rewind already running for some of the failed segments
     Given the database is running
     And all the segments are running
@@ -1307,7 +1308,7 @@ Feature: gprecoverseg tests
     And the user waits until mirror on content 0,1,2 is up
     And the cluster is rebalanced
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg -i gives warning if pg_rewind already running for all of the failed segments
     Given the database is running
     And all the segments are running
@@ -1345,7 +1346,7 @@ Feature: gprecoverseg tests
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg mixed recovery one basebackup fails and one rewind fails while others succeed
     Given the database is running
     And all the segments are running
@@ -1387,7 +1388,7 @@ Feature: gprecoverseg tests
     And the row count from table "test_recoverseg" in "postgres" is verified against the saved data
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg mixed recovery segments come up even if one pg_ctl_start fails
     Given the database is running
     And all the segments are running
@@ -1435,7 +1436,7 @@ Feature: gprecoverseg tests
     And the row count from table "test_recoverseg" in "postgres" is verified against the saved data
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg mixed recovery segments come up even if all pg_ctl_start fails
     Given the database is running
     And all the segments are running
@@ -1479,7 +1480,7 @@ Feature: gprecoverseg tests
     And the row count from table "test_recoverseg" in "postgres" is verified against the saved data
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg differential recovery gives warning if any of the failed segment's source is in backup already
     Given the database is running
     And all the segments are running
@@ -1500,7 +1501,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg differential recovery gives warning if some of the failed segment's source is in backup already
     Given the database is running
     And all the segments are running
@@ -1521,7 +1522,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg differential recovery gives warning if all of the failed segment's source is in backup already
     Given the database is running
     And all the segments are running
@@ -1540,13 +1541,13 @@ Feature: gprecoverseg tests
     And the user waits until mirror on content 0,1,2 is up
     And the cluster is rebalanced
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg behave test requires a cluster with at least 2 hosts
         Given the database is running
         Given database "gptest" exists
         And the information of a "mirror" segment on a remote host is saved
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: When gprecoverseg <scenario> recovery is executed and an existing postmaster.pid on the killed primary segment corresponds to a non postgres process
         Given the database is running
         And all the segments are running
@@ -1577,7 +1578,7 @@ Feature: gprecoverseg tests
         | full         | -aF                |
 
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg full recovery testing
         Given the database is running
         And all the segments are running
@@ -1595,7 +1596,7 @@ Feature: gprecoverseg tests
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg with -i and -o option
         Given the database is running
         And all the segments are running
@@ -1613,7 +1614,7 @@ Feature: gprecoverseg tests
         And all the segments are running
         And the segments are synchronized
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg should not throw exception for empty input file
         Given the database is running
         And all the segments are running
@@ -1630,7 +1631,7 @@ Feature: gprecoverseg tests
         Then all the segments are running
         And the segments are synchronized
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg should use the same setting for data_checksums for a full recovery
         Given the database is running
         And results of the sql "show data_checksums" db "template1" are stored in the context
@@ -1653,7 +1654,7 @@ Feature: gprecoverseg tests
         # validate the new segment has the correct setting by getting admin connection to that segment
         Then the saved primary segment reports the same value for sql "show data_checksums" db "template1" as was saved
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg should use the same setting for data_checksums for a differential recovery
         Given the database is running
         And results of the sql "show data_checksums" db "template1" are stored in the context
@@ -1676,7 +1677,7 @@ Feature: gprecoverseg tests
         Then the saved primary segment reports the same value for sql "show data_checksums" db "template1" as was saved
 
 
-  @concourse_cluster
+  @multihost_demo_cluster
     Scenario: moving mirror to a different host must work
         Given the database is running
           And all the segments are running
@@ -1704,7 +1705,7 @@ Feature: gprecoverseg tests
 
 
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg does not create backout scripts if a segment recovery fails before the catalog is changed
         Given the database is running
           And all the segments are running
@@ -1729,7 +1730,7 @@ Feature: gprecoverseg tests
           And check segment conf: postgresql.conf
 
 
-    @concourse_cluster
+    @multihost_demo_cluster
       #TODO do we need to add a test for old way of testing this scenario(by killing gprecoverseg)
     Scenario: gprecoverseg can revert catalog changes after a failed segment recovery
       Given the database is running
@@ -1765,7 +1766,7 @@ Feature: gprecoverseg tests
       And check segment conf: postgresql.conf
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg can revert catalog changes even if all segments failed during recovery
     Given the database is running
     And all the segments are running
@@ -1810,7 +1811,7 @@ Feature: gprecoverseg tests
     And check segment conf: postgresql.conf
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg can revert catalog changes even if some segments failed during recovery
     Given the database is running
     And all the segments are running
@@ -1857,7 +1858,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
     And check segment conf: postgresql.conf
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg cleans up backout scripts upon successful segment recovery
         Given the database is running
           And all the segments are running
@@ -1879,7 +1880,7 @@ Feature: gprecoverseg tests
 
 
 
-  @concourse_cluster
+  @multihost_demo_cluster
     Scenario: gprecoverseg recovery to new host populates hostname and address from the config file correctly
         Given the database is running
           And all the segments are running
@@ -1896,7 +1897,7 @@ Feature: gprecoverseg tests
           And all the segments are running
           And the segments are synchronized
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg recovery to same host (full inplace) populates hostname and address from the config file correctly
         Given the database is running
           And all the segments are running
@@ -1914,7 +1915,7 @@ Feature: gprecoverseg tests
           And the segments are synchronized
 
 
-  @concourse_cluster
+  @multihost_demo_cluster
     Scenario: gprecoverseg recovery with invalid format with hostname in config file
         Given the database is running
           And all the segments are running
@@ -1933,7 +1934,7 @@ Feature: gprecoverseg tests
           And the cluster is rebalanced
 
 
-  @concourse_cluster
+  @multihost_demo_cluster
     Scenario: gprecoverseg incremental recovery populates hostname and address from the config file correctly
         Given the database is running
           And all the segments are running
@@ -1950,7 +1951,7 @@ Feature: gprecoverseg tests
           And all the segments are running
           And the segments are synchronized
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg recovery with and without hostname parameter in config file
         Given the database is running
           And all the segments are running
@@ -1964,7 +1965,7 @@ Feature: gprecoverseg tests
           And all the segments are running
           And the segments are synchronized
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg throws warning and skips recovery if provided hostname and address can not be resolved to same host
         Given the database is running
           And all the segments are running
@@ -1982,7 +1983,7 @@ Feature: gprecoverseg tests
           And all the segments are running
           And the segments are synchronized
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg incremental recovery with config file and wrong hostname
         Given the database is running
           And all the segments are running
@@ -2039,7 +2040,7 @@ Feature: gprecoverseg tests
     And the cluster is rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gprecoverseg rebalance aborts and throws exception if replay lag on mirror is more than or equal to the allowed limit
       Given the database is running
         And all the segments are running
@@ -2063,7 +2064,7 @@ Feature: gprecoverseg tests
 
 
     @remove_rsync_bash
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: None of the accumulated wal (after running pg_start_backup and before copying the pg_control file) is lost during differential
       Given the database is running
         And all the segments are running
@@ -2085,7 +2086,7 @@ Feature: gprecoverseg tests
 
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: Cleanup orphaned directory of dropped database after differential recovery
       Given the database is running
         And all the segments are running

@@ -9,7 +9,7 @@ Feature: gpconfig integration tests
     # would be too slow), you must choose parameters with a sighup or weaker
     # context.
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: running gpconfig test case: <test_case>, for guc type: <type>
       Given the user runs "gpstop -u"
@@ -85,7 +85,7 @@ Feature: gpconfig integration tests
 # 'Integer with time unit with spaces' fails because the live server parses '7 min' as 7min, and our comparison logic does not handle this correctly.
         | client min messages works              | client_min_messages          | string     | log        | notice    | notice     | notice     | notice            | notice                 | notice       | notice            | notice            |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: write directly to postgresql.conf file: <type>
       Given the user runs "gpstop -u"
@@ -123,7 +123,7 @@ Feature: gpconfig integration tests
         | application_name             |  string  | xxxxxx     | 'bod hi' | 'bod hi'   | bod hi     |
         | application_name             |  string  | xxxxxx     | ''       | ''         |            |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: write a newline using gpconfig
       Given the user runs "gpstop -u"
@@ -151,7 +151,7 @@ Feature: gpconfig integration tests
        Then gpconfig should return a return code of 0
         And gpconfig should print "Master  value: a\nb" to stdout
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: gpconfig basic removal for type: <type>
       Given the user runs "gpstop -u"
@@ -180,7 +180,7 @@ Feature: gpconfig integration tests
         | application_name             |  string  | 'ben gie'  |
         | application_name             |  string  | ''         |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: gpconfig when a primary is unreachable
       Given the database is running
@@ -216,7 +216,7 @@ Feature: gpconfig integration tests
         | asks for confirmation and aborts when user selects no     | 1           | should         | User Aborted. Exiting. | should not           | should not            | gpconfig -c application_name -v "easy" < test/behave/mgmt_utils/steps/data/no.txt |
         | does not ask for confirmation for master only change      | 0           | should not     | completed successfully | should               | should not            | gpconfig -c application_name -v "easy" --masteronly                               |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpconfig check for GUC's with same prefix
       Given the user runs "gpstop -u"

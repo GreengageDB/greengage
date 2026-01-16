@@ -1,14 +1,14 @@
 @gpcheckperf
 Feature: Tests for gpcheckperf
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs disk and memory tests
     Given the database is running
     When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r ds"
     Then  gpcheckperf should return a return code of 0
     And   gpcheckperf should print "disk write tot bytes" to stdout
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs runs sequential network test
     Given the database is running
     When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r n"
@@ -27,7 +27,7 @@ Feature: Tests for gpcheckperf
     When  the user runs "gpcheckperf -h localhost -r d -d /tmp -S abc"
     Then  gpcheckperf should return a return code of 1
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario Outline: gpcheckperf run <test_type> test by passing hostfile in regular mode
     Given the database is running
     And create a gpcheckperf input host file
@@ -47,7 +47,7 @@ Feature: Tests for gpcheckperf
     | network   | N         | Netperf bisection bandwidth test   |
     | matrix    | M         | Full matrix netperf bandwidth test |
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario Outline: gpcheckperf runs <test_type> test with hostfile in <verbosity> mode
      Given the database is running
      And create a gpcheckperf input host file
@@ -69,7 +69,7 @@ Feature: Tests for gpcheckperf
     | matrix    | verbose       | M          | -v           | -f          | Full matrix netperf bandwidth test |
     | matrix    | extra verbose | M          | -V           | -v -f       | Full matrix netperf bandwidth test |
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario Outline: running gpcheckperf single host <test_name> test case
      Given the database is running
      And create a gpcheckperf input host file
@@ -85,7 +85,7 @@ Feature: Tests for gpcheckperf
     | network test| N        |
 
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs successfully when scp is not available or does not have execute permission on master host
     Given the database is running
     And   "/usr/bin/scp" has its permissions set to "664" on "cdw"
@@ -95,7 +95,7 @@ Feature: Tests for gpcheckperf
     And   gpcheckperf should print "rsync -P -a -c -e * .*multidd sdw1:*" to stdout
     And   rely on environment.py to restore path permissions
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs successfully when scp is not available or does not have execute permission on segment host
     Given the database is running
     And   "/usr/bin/scp" has its permissions set to "664" on "sdw1"
@@ -105,7 +105,7 @@ Feature: Tests for gpcheckperf
     And   gpcheckperf should print "rsync -P -a -c -e * .*multidd cdw:*" to stdout
     And   rely on environment.py to restore path permissions
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs sequential network test with buffer size flag
     Given the database is running
     When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r n --buffer-size 8 -v"
@@ -113,13 +113,13 @@ Feature: Tests for gpcheckperf
     And   gpcheckperf should print "avg = " to stdout
     And   gpcheckperf should print "gpnetbenchClient -H cdw -p 23000 -l 15 -P 0 -b 8" to stdout
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs sequential network test with buffer size flag and netperf option
     Given the database is running
     When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r n --buffer-size 8 --netperf"
     Then  gpcheckperf should print "--buffer-size option will be ignored when the --netperf option is enabled" to stdout
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs sequential network test without buffer size flag
     Given the database is running
     When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r n"
@@ -128,7 +128,7 @@ Feature: Tests for gpcheckperf
     And   gpcheckperf should print "avg = " to stdout
 
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: gpcheckperf runs sequential network test with hostfile
     Given the database is running
     Given the user runs command "echo -e "cdw\nsdw1" > /tmp/hostfile_gpchecknet"

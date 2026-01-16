@@ -56,10 +56,10 @@ Feature: gppkg tests
         Then gppkg should return a return code of 2
         And gppkg should print "Package sample has not been installed" to stdout
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --install should report success because the package is not yet installed
         Given the database is running
         When the user runs "gppkg --install test/behave/mgmt_utils/steps/data/sample.gppkg"
@@ -68,14 +68,14 @@ Feature: gppkg tests
         And gppkg should print "Completed local installation of sample" to stdout
         And "sample" gppkg files exist on all hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --install should report failure because the package is already installed
         Given the database is running
         When the user runs "gppkg --install test/behave/mgmt_utils/steps/data/sample.gppkg"
         Then gppkg should return a return code of 2
         And gppkg should print "sample.gppkg is already installed." to stdout
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --remove should report success when the package is already installed
         Given the database is running
         When the user runs "gppkg --remove sample"
@@ -85,7 +85,7 @@ Feature: gppkg tests
         And gppkg should print "sample.gppkg successfully uninstalled" to stdout
         And "sample" gppkg files do not exist on any hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --query should report installed packages
         Given the database is running
         # to be idempotent, potentially reinstalling if the above test just ran,
@@ -96,7 +96,7 @@ Feature: gppkg tests
         And gppkg should print "Starting gppkg with args: --query --all" to stdout
         And gppkg should print "sample" to stdout
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --clean (which should be named "sync") should install to the segment host that lacks a gppkg found elsewhere
         Given the database is running
         When the user runs "gppkg --install test/behave/mgmt_utils/steps/data/sample.gppkg"
@@ -106,7 +106,7 @@ Feature: gppkg tests
         And gppkg should print "The following packages will be installed on .*: sample.gppkg" to stdout
         And "sample" gppkg files exist on all hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --clean (which should be named "sync") should remove on all segment hosts when gppkg does not exist in master
         Given the database is running
         When the user runs "gppkg --install test/behave/mgmt_utils/steps/data/sample.gppkg"
@@ -116,7 +116,7 @@ Feature: gppkg tests
         And gppkg should print "The following packages will be uninstalled on .*: sample.gppkg" to stdout
         And "sample" gppkg files do not exist on any hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gppkg --migrate copies all packages from master to all segment hosts
         Given the database is running
         And the user runs "gppkg -r sample"

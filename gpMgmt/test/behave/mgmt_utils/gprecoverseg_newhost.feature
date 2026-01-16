@@ -1,11 +1,11 @@
 @gprecoverseg_newhost
 Feature: gprecoverseg tests involving migrating to a new host
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
 
     # TODO: There is a false dependency on PGDATABASE=gptest in our behave tests, so we create it here.
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: "gprecoverseg -p newhosts" successfully recovers for <test_case>
       Given the database is running
       And all the segments are running
@@ -33,7 +33,7 @@ Feature: gprecoverseg tests involving migrating to a new host
       | one_host_down  |  "sdw1"      | "sdw5" | "sdw6"   | sdw5 | sdw2           | "gprecoverseg -a -p sdw5 --hba-hostnames"   | "hostname='sdw1' and status='u'"                      |
       | two_hosts_down |  "sdw1,sdw3" | "sdw5,sdw6" | none   | sdw5 | sdw2           | "gprecoverseg -a -p sdw5,sdw6 --hba-hostnames" | "(hostname='sdw1' or hostname='sdw3') and status='u'" |
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: "gprecoverseg -p newhost" failure correctly for start failures
     Given the database is running
     And all the segments are running
@@ -64,7 +64,7 @@ Feature: gprecoverseg tests involving migrating to a new host
     And the cluster configuration is saved for "after_recreation"
     And the "before" and "after_recreation" cluster configuration matches with the expected for gprecoverseg newhost
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: "gprecoverseg -p newhost" failure correctly for basebackup failures
     Given the database is running
     And all the segments are running
@@ -99,7 +99,7 @@ Feature: gprecoverseg tests involving migrating to a new host
     And the cluster configuration is saved for "after_recreation"
     And the "before" and "after_recreation" cluster configuration matches with the expected for gprecoverseg newhost
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: failed host is not in reach gprecoverseg recovery works well with all instances recovered
     Given  the database is running
     And all the segments are running
@@ -121,7 +121,7 @@ Feature: gprecoverseg tests involving migrating to a new host
     And the cluster configuration is saved for "after_recreation"
     And the "before" and "after_recreation" cluster configuration matches with the expected for gprecoverseg newhost
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: failed host is not in reach gprecoverseg recovery works well with partial recovery
     Given  the database is running
     And all the segments are running
@@ -141,7 +141,7 @@ Feature: gprecoverseg tests involving migrating to a new host
     And the cluster configuration is saved for "after_recreation"
     And the "before" and "after_recreation" cluster configuration matches with the expected for gprecoverseg newhost
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: failed host is not in reach gprecoverseg recovery works well only primaries are recovered
     Given  the database is running
     And all the segments are running
@@ -161,7 +161,7 @@ Feature: gprecoverseg tests involving migrating to a new host
     And the cluster configuration is saved for "after_recreation"
     And the "before" and "after_recreation" cluster configuration matches with the expected for gprecoverseg newhost
 
-  @concourse_cluster
+  @multihost_demo_cluster
   Scenario: failover host is not in reach gprecoverseg recovery to new host skips
     Given  the database is running
     And all the segments are running

@@ -4,6 +4,8 @@ set -eox pipefail
 
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../concourse/scripts" && pwd )"
 source "${CWDIR}/common.bash"
+HOSTS_LIST="sdw1 sdw2 sdw3"
+NUM_PRIMARY_MIRROR_PAIRS=1
 
 function gen_env(){
 		cat > /opt/run_test.sh <<-EOF

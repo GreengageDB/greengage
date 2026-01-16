@@ -646,10 +646,10 @@ Feature: gpstate tests
             | Mirrors not configured on this array
         And "MASTER_DATA_DIRECTORY" environment variable should be restored
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpstate -e -v logs no errors when the user unsets PGDATABASE
         Given the database is running
         And all the segments are running

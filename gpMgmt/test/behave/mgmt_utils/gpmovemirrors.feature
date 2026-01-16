@@ -232,7 +232,7 @@ Feature: Tests for gpmovemirrors
     And the cluster is recovered in full and rebalanced
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   @skip_cleanup
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for one of the mirrors to be moved
     Given the database is running
@@ -272,7 +272,7 @@ Feature: Tests for gpmovemirrors
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   @skip_cleanup
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for some of the mirrors to be moved
     Given the database is running
@@ -314,7 +314,7 @@ Feature: Tests for gpmovemirrors
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
   @demo_cluster
-  @concourse_cluster
+  @multihost_demo_cluster
   @skip_cleanup
   Scenario: gpmovemirrors gives warning if pg_basebackup is already running for all mirrors to be moved
     Given the database is running
@@ -350,10 +350,10 @@ Feature: Tests for gpmovemirrors
     And all files in gpAdminLogs directory are deleted on all hosts in the cluster
 
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpmovemirrors can change from group mirroring to spread mirroring
         Given verify that mirror segments are in "group" configuration
         And pg_hba file "/data/gpdata/primary/gpseg1/pg_hba.conf" on host "sdw1" contains only cidr addresses
@@ -390,7 +390,7 @@ Feature: Tests for gpmovemirrors
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpmovemirrors can change from spread mirroring to group mirroring
         Given verify that mirror segments are in "spread" configuration
         And a sample gpmovemirrors input file is created in "group" configuration
@@ -427,7 +427,7 @@ Feature: Tests for gpmovemirrors
         And the segments are synchronized
         And check segment conf: postgresql.conf
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: tablespaces work on a multi-host environment
         Given verify that mirror segments are in "group" configuration
           And a tablespace is created with data
@@ -449,7 +449,7 @@ Feature: Tests for gpmovemirrors
          Then the tablespace is valid
           And the cluster is recovered in full and rebalanced
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpmovemirrors mirrors come up even if one pg_ctl_start fails
         Given the database is running
         And verify that mirror segments are in "spread" configuration
@@ -484,7 +484,7 @@ Feature: Tests for gpmovemirrors
         And check segment conf: postgresql.conf
         And the row count from table "test_movemirrors" in "postgres" is verified against the saved data
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpmovemirrors mirrors come up even if one basebackup fails
         Given the database is running
         And verify that mirror segments are in "spread" configuration
@@ -521,7 +521,7 @@ Feature: Tests for gpmovemirrors
         And check segment conf: postgresql.conf
         And the row count from table "test_movemirrors" in "postgres" is verified against the saved data
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpmovemirrors mirrors works even if all the mirrors to moved fail during basebackup
         Given the database is running
         And verify that mirror segments are in "spread" configuration
@@ -557,7 +557,7 @@ Feature: Tests for gpmovemirrors
         And check segment conf: postgresql.conf
         And the row count from table "test_movemirrors" in "postgres" is verified against the saved data
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpmovemirrors mirrors works even if all mirrors are moved and all fail during basebackup
         Given the database is running
         And verify that mirror segments are in "spread" configuration

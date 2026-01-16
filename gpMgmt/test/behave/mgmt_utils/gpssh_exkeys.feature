@@ -1,7 +1,7 @@
 @gpssh-exkeys
 Feature: gpssh-exkeys behave tests
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: fail sensibly if 1-N is not in place
         Given the gpssh-exkeys master host is set to "cdw"
           And the gpssh-exkeys segment host is set to "sdw1,sdw2,sdw3"
@@ -11,7 +11,7 @@ Feature: gpssh-exkeys behave tests
           And gpssh-exkeys writes "[ERROR]: Failed to ssh to sdw" to stderr
           And gpssh-exkeys writes "[ERROR]: Expected passwordless ssh to host sdw" to stderr
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: N-to-N exchange works
         Given the gpssh-exkeys master host is set to "cdw"
           And the gpssh-exkeys segment host is set to "sdw1,sdw2,sdw3"
@@ -29,7 +29,7 @@ Feature: gpssh-exkeys behave tests
           And there is no duplication in the "known_hosts" files
           And there is no duplication in the "authorized_keys" files
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: additional hosts may be added after initial run
         Given the gpssh-exkeys master host is set to "cdw"
           And the gpssh-exkeys segment host is set to "sdw1,sdw2,sdw3"
@@ -48,7 +48,7 @@ Feature: gpssh-exkeys behave tests
           And there is no duplication in the "known_hosts" files
           And there is no duplication in the "authorized_keys" files
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: hostfiles are accepted as well
         Given the gpssh-exkeys master host is set to "cdw"
           And the gpssh-exkeys segment host is set to "sdw1,sdw2,sdw3"
@@ -61,7 +61,7 @@ Feature: gpssh-exkeys behave tests
          Then all hosts "can" reach each other or themselves automatically
 
     @skip
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: IPv6 addresses are accepted
         Given the gpssh-exkeys master host is set to "cdw"
           And the gpssh-exkeys segment host is set to "sdw1,sdw2,sdw3"

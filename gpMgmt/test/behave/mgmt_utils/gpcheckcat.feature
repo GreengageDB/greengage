@@ -583,10 +583,10 @@ Feature: gpcheckcat tests
         Then gpcheckcat should print "Found no catalog issue" to stdout
         And the user runs "dropdb miss_attr_db5"
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: gpcheckcat should discover missing attributes for external tables
         Given database "miss_attr_db3" is dropped and recreated
         And the user runs "echo > /tmp/backup_gpfdist_dummy"
@@ -605,7 +605,7 @@ Feature: gpcheckcat tests
             | attrname   | tablename     |
             | reloid     | pg_exttable   |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: gpcheckcat should discover missing attributes for external tables
         Given database "miss_attr_db3" is dropped and recreated
         And the user runs "echo > /tmp/backup_gpfdist_dummy"

@@ -1,7 +1,7 @@
 @gpstop
 Feature: gpstop behave tests
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpstop succeeds
         Given the database is running
@@ -30,7 +30,7 @@ Feature: gpstop behave tests
           And "MASTER_DATA_DIRECTORY" environment variable should be restored
           And verify no postgres process is running on all hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: when there are user connections gpstop waits to shutdown until user switches to fast mode
         Given the database is running
@@ -41,7 +41,7 @@ Feature: gpstop behave tests
          Then gpstop should return a return code of 0
          And verify no postgres process is running on all hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: when there are user connections gpstop waits to shutdown until user connections are disconnected
         Given the database is running
@@ -87,7 +87,7 @@ Feature: gpstop behave tests
          Then gpstop should return a return code of 0
           And verify no postgres process is running on all hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: when the first gpstop interrupted and second gpstop handles the unfinished state with <scenario> mode
         Given the database is running
@@ -107,7 +107,7 @@ Feature: gpstop behave tests
         | immediate | i       |
         | fast      | f       |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: when the first gpstop interrupted and second gpstop handles the unfinished state with default mode
         Given the database is running
@@ -122,7 +122,7 @@ Feature: gpstop behave tests
         Then gpstop should return a return code of 0
         And verify no postgres process is running on all hosts
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: when the first gpstop interrupted and second gpstop with <scenario> succeed
         Given the database is running
@@ -139,7 +139,7 @@ Feature: gpstop behave tests
         | skip_standby       | gpstop -ay         |
         | master_only        | gpstop -am         |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: when the first gpstop interrupted and second gpstop with restart option succeed
         Given the database is running
@@ -155,7 +155,7 @@ Feature: gpstop behave tests
         And gpstop should return a return code of 0
 
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: when the first gpstop interrupted and second gpstop with sighup option fails
         Given the database is running
@@ -169,7 +169,7 @@ Feature: gpstop behave tests
         And the user runs gpstop -a and selects f
         And gpstop should return a return code of 0
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpstop fails when the lock file is already held by another gpstop process
         Given the database is running
@@ -182,7 +182,7 @@ Feature: gpstop behave tests
         And the user runs gpstop -a and selects f
         And gpstop should return a return code of 0
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpstart succeed when the lock file is already held by a gpstop process
         Given the database is running
@@ -197,7 +197,7 @@ Feature: gpstop behave tests
         And gpstop should return a return code of 0
 
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: when the first gpstop is killed abruptly and the lock file is getting removed.
         Given the database is running
@@ -209,7 +209,7 @@ Feature: gpstop behave tests
         And the user runs gpstop -a and selects f
         And gpstop should return a return code of 0
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpstop removes the lock directory when it is empty
         Given the database is running

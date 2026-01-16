@@ -1,7 +1,7 @@
 @gpstart
 Feature: gpstart behave tests
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpstart correctly identifies down segments
         Given the database is running
@@ -53,7 +53,7 @@ Feature: gpstart behave tests
           And "MASTER_DATA_DIRECTORY" environment variable should be restored
           And all the segments are running
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: gpstart starts even if a segment host is unreachable
         Given the database is running
@@ -70,7 +70,7 @@ Feature: gpstart behave tests
 
           And the cluster is returned to a good state
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: non-super user 'foouser' can connect to psql database
         Given the database is running
@@ -80,7 +80,7 @@ Feature: gpstart behave tests
          When the user runs psql with "-c '\l'" against database "postgres"
          Then psql should return a return code of 0
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: "gpstart" accepts <test_scenarios> when utility mode is set to <utility_mode>
         Given the database is not running
@@ -100,7 +100,7 @@ Feature: gpstart behave tests
          | super user connections     | False                   | -c '\l'              |
          | non-super user connections | False                   | -U foouser -c '\l'   |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: "gpstart -m" <database> <test_scenarios> when utility mode is set to <utility_mode>
         Given the database is not running
@@ -121,7 +121,7 @@ Feature: gpstart behave tests
          | super user connections     | False                   | -c '\l'              | 2           | rejects       | should          | psql: FATAL:  System was started in master-only utility mode - only utility mode connections are allowed        |
          | non-super user connections | False                   | -U foouser -c '\l'   | 2           | rejects       | should          | psql: FATAL:  System was started in master-only utility mode - only utility mode connections are allowed        |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: "gpstart -m -R" <database> <test_scenarios> when utility mode is set to <utility_mode>
         Given the database is not running
@@ -142,7 +142,7 @@ Feature: gpstart behave tests
          | super user connections     | False                   | -c '\l'              | 2           | rejects       | should          | psql: FATAL:  System was started in master-only utility mode - only utility mode connections are allowed        |
          | non-super user connections | False                   | -U foouser -c '\l'   | 2           | rejects       | should          | psql: error: FATAL:  remaining connection slots are reserved for non-replication superuser connections          |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario Outline: "gpstart -R" <database> <test_scenarios> when utility mode is set to <utility_mode>
         Given the database is not running
@@ -163,7 +163,7 @@ Feature: gpstart behave tests
          | super user connections     | False                   | -c '\l'              | 0           | accepts       | should not      | psql: error: FATAL:  remaining connection slots are reserved for non-replication superuser connections          |
          | non-super user connections | False                   | -U foouser -c '\l'   | 2           | rejects       | should          | psql: error: FATAL:  remaining connection slots are reserved for non-replication superuser connections          |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     @demo_cluster
     Scenario: Removal of non-super user role succeeds
         Given the database is not running

@@ -221,10 +221,10 @@ Feature: Tests for gpaddmirrors
 #        And verify that lines from recovery_progress.file are present in segment progress files in gpAdminLogs
 #        And all files in gpAdminLogs directory are deleted
 
-########################### @concourse_cluster tests ###########################
-# The @concourse_cluster tag denotes the scenario that requires a remote cluster
+########################### @multihost_demo_cluster tests ###########################
+# The @multihost_demo_cluster tag denotes the scenario that requires a remote cluster
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: spread mirroring configuration
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -238,7 +238,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: gpaddmirrors can add mirrors even if <failed_count> mirrors failed during basebackup
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -280,7 +280,7 @@ Feature: Tests for gpaddmirrors
             | some         | 0,1,2                  | 3                |
             | all          | None                   | 0,1,2,3          |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario Outline: gpaddmirrors can add mirrors even if start fails for <failed_count> mirrors
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -320,7 +320,7 @@ Feature: Tests for gpaddmirrors
             | some         | 0,1,2                  | 3               |
             | all          | None                   | 0,1,2,3         |
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg works correctly on a newly added mirror with HBA_HOSTNAMES=0
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -358,7 +358,7 @@ Feature: Tests for gpaddmirrors
         And the segments are synchronized
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gprecoverseg works correctly on a newly added mirror with HBA_HOSTNAMES=1
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -394,7 +394,7 @@ Feature: Tests for gpaddmirrors
         And the segments are synchronized
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors puts mirrors on the same hosts when there is a standby configured
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -411,7 +411,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors puts mirrors on different host
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -421,7 +421,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors with a default master data directory
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -431,7 +431,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors with a given master data directory [-d <master datadir>]
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -441,7 +441,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors mirrors are recognized after a cluster restart
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -458,7 +458,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors should create consistent port entry on mirrors postgresql.conf file
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -468,7 +468,7 @@ Feature: Tests for gpaddmirrors
         And check segment conf: postgresql.conf
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: gpaddmirrors when the primaries have data
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
@@ -487,7 +487,7 @@ Feature: Tests for gpaddmirrors
         Then verify that there is a "co" table "public.co_table" in "gptest" with "202" rows
         And the user runs "gpstop -aqM fast"
 
-    @concourse_cluster
+    @multihost_demo_cluster
     Scenario: tablespaces work on a multi-host environment
         Given a working directory of the test as '/tmp/gpaddmirrors'
           And the database is not running
