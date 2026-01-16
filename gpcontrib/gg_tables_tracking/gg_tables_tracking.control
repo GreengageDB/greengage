@@ -1,0 +1,5 @@
+# gg_tables_tracking extension
+comment = 'extension is used for acquiring size from relations which changed their size'
+default_version = '1.0'
+module_pathname = '$libdir/gg_tables_tracking'
+relocatable = false
