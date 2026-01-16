@@ -4,7 +4,7 @@ from behave import fixture
 @fixture
 def init_cluster(context, default=False):
     if default:
-        context.execute_steps("Given a standard local demo cluster is created")
+        context.execute_steps(u"Given a standard local demo cluster is created")
     else:
         context.execute_steps(u"""
         Given the database is not running
