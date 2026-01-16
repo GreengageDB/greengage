@@ -132,7 +132,6 @@ Feature: gprecoverseg tests
           And the cluster is rebalanced
 
     @demo_cluster
-    @concourse_cluster
     Scenario: Differential recovery succeeds if previous full recovery failed
         Given the database is running
           And user stops all primary processes
