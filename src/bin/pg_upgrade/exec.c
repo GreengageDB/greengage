@@ -56,7 +56,7 @@ get_bin_version(ClusterInfo *cluster)
 			pg_fatal("could not get pg_ctl version output from %s\n", cmd);
 
 		if (v1 >= 10)
-			pg_fatal("could not get pg_ctl version output from %s\n", cmd);
+			pg_fatal("upgrading from Greenplum version higher than 6 is not supported");
 	}
 
 	if (v1 < 10)

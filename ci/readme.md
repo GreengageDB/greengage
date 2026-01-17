@@ -176,3 +176,18 @@ All tests are run in one way or another on the demo cluster, wherever possible.
 For example, cross_subnet tests or tests with tag `concourse_cluster` currently not worked because of too complex cluster preconditions.
 
 Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
+
+
+## pg_upgrade tests from Greengage 6
+
+Change directory to gpdb sources destination. Make sure that directry doesn't contain binary objects from previous builds. Then run:
+
+```bash
+docker build -t gpdb7_u22_up67:latest -f ci/Dockerfile.ubuntu.gg67 .
+```
+
+```bash
+ docker run --name gpdb_upgrade67 --rm -it \
+ gpdb7_u22_up67:latest \
+ /home/gpadmin/gpdb_src/concourse/scripts/test_upgrade67.bash
+```

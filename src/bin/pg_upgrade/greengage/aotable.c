@@ -53,30 +53,15 @@ executeLargeCommandOrDie(PGconn *conn, const char *command)
  * map tables (pg_ao{cs}seg_<oid>), for one AO relation.
  */
 static void
-restore_aosegment_table(PGconn *conn, RelInfo *rel, PGresult *res, int numAO)
+restore_aosegment_table(PGconn *conn, RelInfo *rel, char *segrelname, char *vmaprelname, Oid segrelid, char *blkdirrelname)
 {
 	PQExpBuffer query;
 	int			i;
-	char	   *segrelname;
-	char	   *vmaprelname;
-	char	   *blkdirrelname;
-	Oid			segrelid;
-
 	/*
 	 * The visibility maps and such can be quite large, so we need a large
 	 * buffer.
 	 */
 	query = createPQExpBuffer();
-
-	segrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "segrelname")));
-	vmaprelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "vmaprelname")));
-	segrelid = atooid(PQgetvalue(res, numAO, PQfnumber(res, "segrelid")));
-
-	if (!PQgetisnull(res, numAO, PQfnumber(res, "blkdirrelname")))
-			blkdirrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "blkdirrelname")));
-	else
-		blkdirrelname = NULL;
-
 
 	/*
 	 * Restore the entry in the AO segment table.
@@ -238,6 +223,10 @@ void
 restore_aosegment_tables(void)
 {
 	int			dbnum;
+	PGresult   *res;
+	int			resNum;
+	int			i_relid;
+	int			numAO;	
 
 	prep_status("Restoring append-only auxiliary tables in new cluster");
 
@@ -261,15 +250,16 @@ restore_aosegment_tables(void)
 		 */
 		PQclear(executeQueryOrDie(conn, "set allow_system_table_mods=true"));
 
-		PGresult   *res;
-		int			resNum;
-		int			i_relid;
-		int			numAO;
-
-		PQclear(executeQueryOrDieWithoutLog(conn, "set allow_system_table_mods=true"));
-
+		/*
+		 * Clearing the gp_fastsequence table
+		 * The gp_fastsequence will filled in restore_aosegment_table
+		 */		
 		executeQueryOrDieWithoutLog(conn, "TRUNCATE TABLE gp_fastsequence");
 
+		/*
+		 * The vmaprelnames, the blkdirrelnames are for all AO tables at once in one query
+		 * This will be much faster than getting for each AO table individually
+		 */			
 		res = executeQueryOrDieWithoutLog(conn, "SELECT relid, s.relname AS segrelname, "
 									"       v.relname AS vmaprelname, "
 									"       b.relname AS blkdirrelname, "
@@ -289,15 +279,34 @@ restore_aosegment_tables(void)
 			if (is_appendonly(rel->relstorage))
 			{
 					numAO = 0;
+
+					/*
+					* find AO settings
+					*/
 					while (numAO < resNum)
 					{
 							if (atooid(PQgetvalue(res, numAO, i_relid)) == rel->reloid)
-									break;
+							{
+								char	   *segrelname;
+								char	   *vmaprelname;
+								char	   *blkdirrelname;
+								Oid			segrelid;
+
+								segrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "segrelname")));
+								vmaprelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "vmaprelname")));
+								segrelid = atooid(PQgetvalue(res, numAO, PQfnumber(res, "segrelid")));
+
+								if (!PQgetisnull(res, numAO, PQfnumber(res, "blkdirrelname")))
+										blkdirrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "blkdirrelname")));
+								else
+									blkdirrelname = NULL;
+
+								restore_aosegment_table(conn, rel, segrelname, vmaprelname, segrelid, blkdirrelname);
+
+								break;
+							}
 							numAO++;
 					}
-
-					if (numAO < resNum)
-							restore_aosegment_table(conn, rel, res, numAO);
 			}
 		}
 

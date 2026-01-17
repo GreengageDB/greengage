@@ -17629,6 +17629,13 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 				appendPQExpBufferStr(q, "::pg_catalog.regclass;\n");
 			}
 
+			/*
+			 * Add INHERIT excluding partitions of partitioned tables
+			 *
+			 * tbinfo->ispartition is filled in GG5/GG6
+			 * tbinfo->partclause is filled in GG7
+			 * 
+			 */			
 			if (numParents > 0 && !tbinfo->ispartition && 
 				!(fout->remoteVersion < GPDB7_MAJOR_PGVERSION && tbinfo->partclause && *tbinfo->partclause != '\0'))
 			{
