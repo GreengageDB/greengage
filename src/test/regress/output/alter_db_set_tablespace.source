@@ -1068,13 +1068,7 @@ SELECT gp_inject_fault('start_prepare', 'panic', dbid) FROM gp_segment_configura
 ALTER DATABASE alter_db SET TABLESPACE adst_destination_tablespace;
 WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 1802)
 ERROR:  fault triggered, fault name:'start_prepare' fault type:'panic'  (seg0 127.0.0.1:25432 pid=61308)
--- Wait for primaries to recover after panics
-SELECT count(gp_segment_id) > 0 FROM gp_dist_random('pg_tablespace');
- ?column? 
-----------
- t
-(1 row)
-
+-- Ignore first command after panic due to race conditions, which may lead to fatal error "reader could not find writer proc entry"
 -- Then the tablespace for the database remains to be the source tablespace in all segments and the master.
 SELECT * FROM list_db_tablespace('alter_db', 'adst_source_tablespace');
  gp_segment_id | db_name  |    tablespace_name     
@@ -1211,6 +1205,7 @@ SELECT gp_inject_fault('after_xlog_xact_prepare_flushed', 'panic', dbid) FROM gp
 ALTER DATABASE alter_db SET TABLESPACE adst_destination_tablespace;
 WARNING:  Any temporary tables for this session have been dropped because the gang was disconnected (session id = 3078)
 ERROR:  fault triggered, fault name:'after_xlog_xact_prepare_flushed' fault type:'panic'  (seg0 127.0.0.1:25432 pid=78007)
+-- Ignore first command after panic due to race conditions, which may lead to fatal error "reader could not find writer proc entry"
 -- Then the tablespace for the database remains to be the source tablespace in all segments and the master.
 SELECT * FROM list_db_tablespace('alter_db', 'adst_source_tablespace');
  gp_segment_id | db_name  |    tablespace_name     

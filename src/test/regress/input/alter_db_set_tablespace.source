@@ -655,8 +655,10 @@ SELECT gp_inject_fault('start_prepare', 'panic', dbid) FROM gp_segment_configura
 -- When we execute an ALTER DATABASE SET TABLESPACE command on alter_db and the panic is triggered
 ALTER DATABASE alter_db SET TABLESPACE adst_destination_tablespace;
 
--- Wait for primaries to recover after panics
+-- Ignore first command after panic due to race conditions, which may lead to fatal error "reader could not find writer proc entry"
+-- start_ignore
 SELECT count(gp_segment_id) > 0 FROM gp_dist_random('pg_tablespace');
+-- end_ignore
 
 -- Then the tablespace for the database remains to be the source tablespace in all segments and the master.
 SELECT * FROM list_db_tablespace('alter_db', 'adst_source_tablespace');
@@ -726,6 +728,11 @@ SELECT gp_inject_fault('after_xlog_xact_prepare_flushed', 'panic', dbid) FROM gp
 
 -- When we execute an ALTER DATABASE SET TABLESPACE command on alter_db and the panic is triggered
 ALTER DATABASE alter_db SET TABLESPACE adst_destination_tablespace;
+
+-- Ignore first command after panic due to race conditions, which may lead to fatal error "reader could not find writer proc entry"
+-- start_ignore
+SELECT count(gp_segment_id) > 0 FROM gp_dist_random('pg_tablespace');
+-- end_ignore
 
 -- Then the tablespace for the database remains to be the source tablespace in all segments and the master.
 SELECT * FROM list_db_tablespace('alter_db', 'adst_source_tablespace');
