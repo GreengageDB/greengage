@@ -5385,6 +5385,19 @@ PostgresMain(int argc, char *argv[],
 
 		check_forbidden_in_gpdb_handlers(firstchar);
 
+		/*
+		 * If several queries are processed within the same transaction during
+		 * extended protocol communication, and the first of them is a bypassing
+		 * command, the next commands may also bypass resgroup quota assignment.
+		 * In order to prevent that, the best option would be to reassign resgroup
+		 * at the start of each command.
+		 */
+		if (xact_started && Gp_role == GP_ROLE_DISPATCH && ResGroupIsBypassed())
+		{
+			UnassignResGroup();
+			AssignResGroupOnMaster();
+		}
+
 		switch (firstchar)
 		{
 			case 'Q':			/* simple query */
