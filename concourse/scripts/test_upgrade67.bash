@@ -1,6 +1,6 @@
 #!/bin/bash -l
 
-set -eox pipefail
+set -u
 
 CWDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

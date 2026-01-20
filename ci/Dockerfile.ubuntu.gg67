@@ -1,21 +1,17 @@
 FROM ubuntu:22.04 as base
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*  
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /home/gpadmin
 
 RUN mkdir gg6; \
     cd gg6; \
-    git clone https://github.com/GreengageDB/greengage.git; 
+    git clone --depth=1 https://github.com/GreengageDB/greengage.git; 
 
 
 RUN set -eux; \
     /home/gpadmin/gg6/greengage/README.ubuntu.bash; \
     ln -s python2 /usr/bin/python; \
-# Install pg_bsd_indent used by pgindent utility
-    wget https://ftp.postgresql.org/pub/dev/pg_bsd_indent-1.3.tar.gz -O - | tar -xzf -; \
-    make install -C pg_bsd_indent; \
-    rm -r pg_bsd_indent; \
 # The en_US.UTF-8 locale is needed to run GPDB
     locale-gen en_US.UTF-8; \
 # To run sshd directly, but not using `/etc/init.d/ssh start`
@@ -26,11 +22,8 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive \
         apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip \
             openjdk-11-jdk protobuf-compiler python3-dev; \
-# Install allure-behave for behave tests
-    pip2 install allure-behave==2.4.0; \
-    pip2 cache purge;\
-    python -m pip install psutil; 
-    
+    python -m pip install psutil;
+
 COPY . gpdb_src
 
 WORKDIR /home/gpadmin/gpdb_src
@@ -50,7 +43,6 @@ RUN ./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/
 
 
 # Compile and install
-RUN make -j"$(nproc)"
 RUN make -j"$(nproc)" install
 
 
@@ -65,7 +57,6 @@ WORKDIR /home/gpadmin/gpdb_src
 RUN ./configure --with-perl --with-python --with-libxml --with-gssapi --prefix=/usr/local/gpdb7
 
 # Compile and install
-RUN make -j"$(nproc)"
 RUN make -j"$(nproc)" install
 
 FROM base AS test

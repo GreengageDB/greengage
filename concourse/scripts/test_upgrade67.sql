@@ -40,7 +40,7 @@ CREATE  TABLE test (
   ,ORIENTATION=COLUMN
   ,CHECKSUM=TRUE
   ,COMPRESSLEVEL=3
-) distributed BY (i2 )
+) distributed BY (i2)
 partition by range (i1) (
   START (1) INCLUSIVE END (100),
   START (100) INCLUSIVE END (200),
