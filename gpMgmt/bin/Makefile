@@ -156,7 +156,6 @@ PYTHON_VERSION=$(shell python -c "import sys; print ('%s.%s' % (sys.version_info
 PYTHONSRC_INSTALL_SITE=$(PYLIB_SRC_EXT)/install/lib/python$(PYTHON_VERSION)/site-packages
 PYTHONSRC_INSTALL_PYTHON_PATH=$(PYTHONPATH):$(PYTHONSRC_INSTALL_SITE)
 UBUNTU_PLATFORM=$(shell if lsb_release -a 2>/dev/null | grep -q 'Ubuntu' ; then echo "Ubuntu"; fi)
-PIP=$(if $(filter Ubuntu, $(UBUNTU_PLATFORM)), pip2, pip)
 
 pylint:
 	@echo "--- pylint"
@@ -173,7 +172,7 @@ pylint:
 
 mockinstall:
 	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
-	$(PIP) install $(PYLIB_SRC_EXT)/$(MOCK_DIR).tar.gz; \
+	python -m pip install $(PYLIB_SRC_EXT)/$(MOCK_DIR).tar.gz; \
 
 PYTHON_FILES=`grep -l --exclude=Makefile --exclude=gplogfilter "/bin/env python" *`\
 			 `grep -l "/bin/env python" $(SRC)/../sbin/*`\
