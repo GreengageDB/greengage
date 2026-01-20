@@ -22,7 +22,7 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive \
         apt install -y krb5-kdc krb5-admin-server fakeroot sudo python-pip \
             openjdk-11-jdk protobuf-compiler python3-dev; \
-    python -m pip install psutil;
+    pip2 install psutil;
 
 COPY . gpdb_src
 
