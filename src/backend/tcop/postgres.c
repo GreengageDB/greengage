@@ -2321,6 +2321,30 @@ exec_bind_message(StringInfo input_message)
 		ResetUsage();
 
 	/*
+	 * If several queries are processed within the same transaction during
+	 * extended protocol communication, and the first of them is a bypassing
+	 * command, the next commands may also bypass resgroup quota assignment.
+	 * In order to prevent that, the best option would be to reassign resgroup
+	 * at the start of normal command until the transaction end.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH && ResGroupIsBypassed()
+		&& IsTransactionState())
+	{
+		List *parsetree_list = list_make1(psrc->raw_parse_tree);
+
+		if (!ShouldBypassQueryFromParseTree(parsetree_list))
+		{
+			elog(DEBUG1, "Upgrading from bypassed resource group at bind time for statement: %s",
+				 psrc->query_string);
+
+			UnassignResGroup();
+			AttachResGroupSlot();
+		}
+
+		list_free(parsetree_list);
+	}
+
+	/*
 	 * Start up a transaction command so we can call functions etc. (Note that
 	 * this will normally change current memory context.) Nothing happens if
 	 * we are already in one.
@@ -5384,19 +5408,6 @@ PostgresMain(int argc, char *argv[],
 			   "First char: '%c'; gp_role = '%s'.", firstchar, role_to_string(Gp_role));
 
 		check_forbidden_in_gpdb_handlers(firstchar);
-
-		/*
-		 * If several queries are processed within the same transaction during
-		 * extended protocol communication, and the first of them is a bypassing
-		 * command, the next commands may also bypass resgroup quota assignment.
-		 * In order to prevent that, the best option would be to reassign resgroup
-		 * at the start of each command.
-		 */
-		if (xact_started && Gp_role == GP_ROLE_DISPATCH && ResGroupIsBypassed())
-		{
-			UnassignResGroup();
-			AssignResGroupOnMaster();
-		}
 
 		switch (firstchar)
 		{
