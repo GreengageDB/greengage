@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -u
+set -ux
 
 CWDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -15,8 +15,6 @@ OLD_GPDB_SRC_PATH=/home/gpadmin/gpdb_src6
 NEW_GPDB_SRC_PATH=/home/gpadmin/gpdb_src
 OLD_DATABASE=${CWDIR}/test_upgrade67.sql
 CHECK_NEW_DATABASE=${CWDIR}/test_upgrade67_check.sql
-
-set -euo pipefail
 
 create_old_cluster() {
 
@@ -100,6 +98,7 @@ create_new_cluster
 echo "Upgrading master at ${MASTER_HOST}..."
 
 su - gpadmin -c bash -- -e <<EOF
+set -ux
 source ${NEW_GPHOME}/greengage_path.sh
 source ${DATADIR_PREFIX}/gpdemo-env.sh
 
