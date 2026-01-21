@@ -159,7 +159,7 @@ def impl(context, seg_type, content, expected_status):
     # it takes gp_fts_mark_mirror_down_grace_period seconds between fts probes
     # for fts to mark a mirror as down.  That guc is not settable per session;
     # it must be changed for the database.
-    timeout = 3
+    timeout = 5
     if preferred_role == 'm':
         orig = get_guc_value("gp_fts_mark_mirror_down_grace_period")
         set_guc_value(context, "gp_fts_mark_mirror_down_grace_period", timeout)

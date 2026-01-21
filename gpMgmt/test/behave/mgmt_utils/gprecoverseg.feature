@@ -753,6 +753,7 @@ Feature: gprecoverseg tests
       And user can start transactions
       And the primary on content 1 is stopped
       And user can start transactions
+      And an FTS probe is triggered
       And the status of the primary on content 0 should be "d"
       And the status of the primary on content 1 should be "d"
 
