@@ -5,19 +5,18 @@ CREATE  TABLE table1 (
     n2 numeric,
     t1 text)
  WITH (
-    APPENDONLY=TRUE
-    ,BLOCKSIZE=131072
-    ,ORIENTATION=COLUMN
-    ,CHECKSUM=TRUE
-    ,COMPRESSTYPE=ZLIB
-    ,COMPRESSLEVEL=3
+    APPENDONLY=TRUE,
+    BLOCKSIZE=131072,
+    ORIENTATION=COLUMN,
+    CHECKSUM=TRUE,
+    COMPRESSTYPE=ZLIB,
+    COMPRESSLEVEL=3
 ) DISTRIBUTED BY (i1);
 
-INSERT INTO table1 
+INSERT INTO table1
 SELECT 
-  g, g, g, g, g 
+  g, g, g, g, g
 FROM generate_series(1,100) g;
-
 
 CREATE  TABLE test (
     i1 int default 0,
@@ -33,15 +32,15 @@ CREATE  TABLE test (
   n1 numeric default 0,
   n2 numeric,
   t1 text,
-  t2 text )
+  t2 text)
  WITH (
-  APPENDONLY=TRUE
-  ,BLOCKSIZE=131072
-  ,ORIENTATION=COLUMN
-  ,CHECKSUM=TRUE
-  ,COMPRESSLEVEL=3
-) distributed BY (i2)
-partition by range (i1) (
+  APPENDONLY=TRUE,
+  BLOCKSIZE=131072,
+  ORIENTATION=COLUMN,
+  CHECKSUM=TRUE,
+  COMPRESSLEVEL=3
+) DISTRIBUTED BY (i2)
+PARTITION BY RANGE (i1) (
   START (1) INCLUSIVE END (100),
   START (100) INCLUSIVE END (200),
   START (200) INCLUSIVE END (300),
@@ -57,7 +56,6 @@ CREATE SEQUENCE seq1
         CACHE 1;
 
 SELECT pg_catalog.setval('public.seq1', 150, true);
-
 
 CREATE READABLE EXTERNAL TABLE table_ext (
         id numeric,
