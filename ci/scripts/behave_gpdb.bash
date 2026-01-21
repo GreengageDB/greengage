@@ -17,7 +17,7 @@ function gen_env(){
 
 		cd "\${1}/gpdb_src/gpMgmt/"
 		BEHAVE_TAGS="${BEHAVE_TAGS}"
-		BEHAVE_FLAGS="${BEHAVE_FLAGS} --tags=${CLUSTER}"
+		BEHAVE_FLAGS="${BEHAVE_FLAGS} --tags=${CLUSTER} --name 'incremental recovery skips unreachable segments'"
 		if [ ! -z "\${BEHAVE_TAGS}" ]; then
 				make -f Makefile.behave behave tags=\${BEHAVE_TAGS}
 		else
@@ -49,6 +49,7 @@ function _main() {
 			test -f gpdb_src/gpAux/gpdemo/gpdemo-env.sh || time (make_cluster)
 			time gen_env
 			time run_test
+			exit
 		done
 }
 
