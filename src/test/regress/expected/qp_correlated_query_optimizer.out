@@ -4102,9 +4102,9 @@ DROP TABLE skip_correlated_t2;
 DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
 --------------------------------------------------------------------------------
--- ORCA should be able to plan and execute correctly one skip-level queries, but
--- not with master-only tables. Postgres Legacy planner should give an error to 
--- any skip-level query.
+-- ORCA should be able to plan and execute correctly skip-level queries, but not
+-- with master-only. Postgres Legacy planner should give an error to skip-level 
+-- query involving distributed or replicated tables.
 --------------------------------------------------------------------------------
 CREATE TABLE skip_correlated_partitioned (
     a INT
@@ -4302,6 +4302,40 @@ SELECT (
   1
   2
   3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Seq Scan on gp_distribution_policy
+   SubPlan 2
+     ->  Result
+           InitPlan 1 (returns $1)
+             ->  Limit
+                   ->  Seq Scan on gp_segment_configuration
+                         Filter: (dbid = gp_distribution_policy.numsegments)
+ Optimizer: Postgres-based planner
+(8 rows)
+
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
+ dbid 
+------
+    3
+    3
+    3
 (3 rows)
 
 DROP TABLE skip_correlated_partitioned;

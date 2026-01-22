@@ -158,8 +158,7 @@ get_first_col_type(Plan *plan, Oid *coltype, int32 *coltypmod,
 }
 
 /**
- * Returns true if query refers to any table on this level or on some other
- * subquery level, if recursive is true.
+ * Returns true if query refers to a distributed or replicated table.
  */
 bool QueryHasDistributedRelation(Query *q, bool recursive)
 {
@@ -174,10 +173,18 @@ bool QueryHasDistributedRelation(Query *q, bool recursive)
 				&& QueryHasDistributedRelation(rte->subquery, true))
 			return true;
 
-		/* Really, any kind of distribution policy causes rescan issues */
 		if (rte->relid != InvalidOid
 				&& rte->rtekind == RTE_RELATION)
+		{
+			GpPolicy *policy = GpPolicyFetch(rte->relid);
+			if (GpPolicyIsPartitioned(policy) ||
+				GpPolicyIsReplicated(policy))
+			{
+				pfree(policy);
 				return true;
+			}
+			pfree(policy);
+		}
 	}
 	return false;
 }
@@ -263,7 +270,8 @@ check_multi_subquery_correlated(PlannerInfo *root, Var *var)
 		 * Only check sublink not include subquery
 		 */
 		if(parent_root->parse->hasSubLinks &&
-			QueryHasDistributedRelation(root->parse, parent_root->is_correlated_subplan))
+			(QueryHasDistributedRelation(root->parse, parent_root->is_correlated_subplan) ||
+			QueryHasDistributedRelation(parent_root->parse, false)))
 		{
 			ereport(ERROR,
 					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

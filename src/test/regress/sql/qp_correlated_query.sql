@@ -875,9 +875,9 @@ DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
 
 --------------------------------------------------------------------------------
--- ORCA should be able to plan and execute correctly one skip-level queries, but
--- not with master-only tables. Postgres Legacy planner should give an error to 
--- any skip-level query.
+-- ORCA should be able to plan and execute correctly skip-level queries, but not
+-- with master-only. Postgres Legacy planner should give an error to skip-level 
+-- query involving distributed or replicated tables.
 --------------------------------------------------------------------------------
 --start_ignore
 DROP TABLE IF EXISTS skip_correlated_partitioned;
@@ -975,6 +975,18 @@ SELECT (
         ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
     )
 ) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+
+EXPLAIN (COSTS OFF)
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
 
 DROP TABLE skip_correlated_partitioned;
 DROP TABLE skip_correlated_random;
