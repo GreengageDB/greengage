@@ -77,7 +77,7 @@ su - gpadmin -c bash -- -e <<EOF
     gpstop -a
 EOF
 
-    if (test /tmp/errors ) ; then
+    if (test -f /tmp/errors ) ; then
         if (grep -q . /tmp/errors); then
             cat /tmp/errors
             return 1
