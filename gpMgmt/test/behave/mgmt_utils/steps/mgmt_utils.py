@@ -4326,7 +4326,7 @@ def impl(context):
 @then('restore /etc/hosts file and cleanup hostlist file')
 @when('restore /etc/hosts file and cleanup hostlist file')
 def impl(context):
-    cmd = "sudo mv -f /tmp/hosts_orig /etc/hosts && rm -f /tmp/clusterConfigFile-1 && rm -f /tmp/hostfile--1"
+    cmd = "sudo cp -f /tmp/hosts_orig /etc/hosts && sudo rm /tmp/hosts_orig && rm -f /tmp/clusterConfigFile-1 && rm -f /tmp/hostfile--1"
     context.execute_steps(u'''Then the user runs command "%s"''' % cmd)
 
 @given('create a gpcheckperf input host file')
