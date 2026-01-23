@@ -4253,7 +4253,7 @@ def impl(context):
      cmd.run(validateAfter=True)
      hostname = cmd.get_stdout()
      # Update entry in current /etc/hosts file to add new host-address
-     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts; sudo cp -f /tmp/hosts /etc/hosts;rm /tmp/hosts"
+     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts && sudo cp -f /tmp/hosts /etc/hosts && rm /tmp/hosts"
                                                         %(hostname, hostname, hostname))
      cmd.run(validateAfter=True)
 
