@@ -584,25 +584,6 @@ class Planner:
         return target_hostname_list, add_hostname_list, remove_hostname_list
                 
     def plan(self) -> Plan:
-        # TODO Remove with future development. Temp code before state machine is implemented.
-        from gprebalance_modules.rebalance_schema import RebalanceSchema
-        conn = dbconn.connect(self.dburl, encoding='UTF8')
-        rebalance_schema = RebalanceSchema(conn)
-        if rebalance_schema.schemaExists():
-            state_from_prev_run = rebalance_schema.getStateFromPreviousRun()
-            if state_from_prev_run in ['STATE_SHRINK_TABLES_DONE',
-                                       'STATE_SHRINK_CATALOG_STARTED',
-                                       'STATE_SHRINK_CATALOG_DONE',
-                                       'STATE_SHRINK_SEGMENTS_STOP_STARTED',
-                                       'STATE_SHRINK_SEGMENTS_STOP_DONE',
-                                       'STATE_SHRINK_DONE']:
-                plan = ShrinkPlan([])
-                plan.setTargetSegmentCount(self.options.target_segment_count)
-                conn.close()
-                return plan
-        conn.close()
-        
-        # Planning starts here
         plan = Plan()
 
         self.validate_segment_status()

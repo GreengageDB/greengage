@@ -14,6 +14,7 @@ try:
     from gppylib.system.environment import GpCoordinatorEnvironment
     from gppylib.system import configurationInterface, configurationImplGpdb
     from gprebalance_modules.shrink import GGShrink, DBNAME
+    from gprebalance_modules.ggrebalance_main_sm import GGRebalanceMainSM
     from gprebalance_modules.planner import *
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
@@ -228,13 +229,42 @@ def remove_pid_file(coordinator_data_directory: str):
     except IOError:
         pass
 
-gg_shrink = None
+gg_main_rebalance_SM = None
+cmd_recoverseg = None
 
 def sig_handler(sig, arg):
-    if gg_shrink is not None:
-        gg_shrink.shutdown()
+    if gg_main_rebalance_SM is not None:
+        gg_main_rebalance_SM.shutdown()
     else:
+        if cmd_recoverseg != None:
+            cmd_recoverseg.cancel()
         sys.exit(1)
+
+def check_down_segments(logger: Any, dburl: dbconn.DbURL):
+    # check if some of the segments are down - it can happen if we're recovering from an
+    # interrupted state, and such segments are left by the interrupted gprecoverseg
+    conn = dbconn.connect(dburl, encoding='UTF8', allowSystemTableMods=True)
+    dbconn.execSQL(conn, "SELECT gp_request_fts_probe_scan()")
+    cnt_primaries_down = int(dbconn.queryRow(conn, f"SELECT COUNT(1) FROM gp_segment_configuration WHERE role = 'p' AND status = 'd'")[0])
+    cnt_mirrors_down = int(dbconn.queryRow(conn, f"SELECT COUNT(1) FROM gp_segment_configuration WHERE role = 'm' AND status = 'd'")[0])
+    conn.close()
+
+    if cnt_primaries_down != 0:
+        raise Exception('Detected some primary segments are down, please recover manually')
+
+    if cnt_mirrors_down != 0:
+        logger.info("Some mirrors are down, trying to recover them, it may take some time...")
+        recoverseg_options = "-a -F"
+        global cmd_recoverseg
+        try:
+            cmd_recoverseg = GpRecoverSeg("Running gprecoverseg", options=recoverseg_options)
+            cmd_recoverseg.run(validateAfter=True)
+        except Exception as e:
+            logger.error(str(e))
+            error_msg = f"Failed to execute 'gprecoverseg {recoverseg_options}'"
+            raise Exception(error_msg)
+        finally:
+            cmd_recoverseg = None
 
 def main(options, args, parser):
     try:
@@ -268,6 +298,8 @@ def main(options, args, parser):
 
         gparray_dump_filename = options.coordinator_data_directory + '/gparraydump'
 
+        check_down_segments(logger, dburl)
+
         logger.info('Init gparray from catalog')
         try:
             gparray = GpArray.initFromCatalog(dburl, utility=True)
@@ -281,23 +313,9 @@ def main(options, args, parser):
             logger.error(f"{str(ex)}")
             sys.exit(1)
 
-        global gg_shrink
-        gg_shrink = GGShrink(logger, dburl, options, gpenv, gparray, gparray_dump_filename)
-
-        # Note: the plan for a shrink later will be provided by the planner component.
-        # But for now we simply create a Plan object from the options directly.
-        # We'll keep this stub till planner is ready.
-        # If shrink_plan is None, we assume that we need to continue previous operation
-        plan = None
-        if options.target_segment_count != None:
-            plan = Planner(logger, dburl, gparray, options).plan()
-        
-        if options.target_segment_count != None and options.show_plan:
-            logger.info(f"Final plan:\n{plan}")
-            sys.exit(0)
-        
-        if plan is None or isinstance(plan, ShrinkPlan):
-            gg_shrink.run(plan)
+        global gg_main_rebalance_SM
+        gg_main_rebalance_SM = GGRebalanceMainSM(logger, dburl, options, gpenv, gparray, gparray_dump_filename)
+        gg_main_rebalance_SM.run()
 
         sys.exit(0)
     except Exception as e:

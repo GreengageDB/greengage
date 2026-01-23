@@ -1615,6 +1615,15 @@ def impl(context, filter):
     Given the user runs psql with "-c 'BEGIN; CREATE TEMP TABLE tempt(a int); COMMIT'" against database "postgres"
     ''')
 
+@given('the cluster configuration has {segment_count} segments where "{filter}"')
+@when('the cluster configuration has {segment_count} segments where "{filter}"')
+@then('the cluster configuration has {segment_count} segments where "{filter}"')
+def impl(context, segment_count, filter):
+    sql = "SELECT count(*) FROM gp_segment_configuration WHERE %s" % filter
+    with closing(dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)) as conn:
+        row = dbconn.queryRow(conn, sql)
+    if int(row[0]) != int(segment_count):
+        raise Exception(f"Expected {segment_count} segments, but got {row[0]}")
 
 @given('the cluster configuration is saved for "{when}"')
 @then('the cluster configuration is saved for "{when}"')
@@ -4454,6 +4463,18 @@ def impl(context, fault):
 @when('unset fault inject')
 def impl(context):
     os.environ['GPMGMT_FAULT_POINT'] = ""
+
+@given('set fault inject delay {delay} ms')
+@then('set fault inject delay {delay} ms')
+@when('set fault inject delay {delay} ms')
+def impl(context, delay):
+    os.environ['GPMGMT_FAULT_DELAY_MS'] = delay
+
+@given('unset fault inject delay')
+@then('unset fault inject delay')
+@when('unset fault inject delay')
+def impl(context):
+    os.environ['GPMGMT_FAULT_DELAY_MS'] = ""
 
 @given('stub')
 def impl(context):

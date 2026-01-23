@@ -4,6 +4,8 @@ from psycopg2.extensions import cursor
 from gppylib.db import dbconn
 from gprebalance_modules.planner import Plan, deserializePlan
 
+STATE_NOT_DEFINED = 'not defined'
+
 def get_table_distr_segment_count(conn: dbconn.Connection, schema_name: str, table_name: str) -> int:
     row = dbconn.queryRow(conn,
                           f'''SELECT p.numsegments
@@ -13,6 +15,10 @@ def get_table_distr_segment_count(conn: dbconn.Connection, schema_name: str, tab
     return int(row[0])
 
 class RebalanceSchema:
+    STATE_CATEGORY_SHRINK = 'SHRINK'
+    STATE_CATEGORY_REBALANCE = 'REBALANCE'
+    STATE_CATEGORY_MAIN = 'MAIN'
+
     def __init__(self, conn: dbconn.Connection):
         self.schema_name = 'ggrebalance'
         self.rebalance_status = 'rebalance_status'
@@ -25,7 +31,7 @@ class RebalanceSchema:
         dbconn.execSQL(self.conn, f'CREATE SCHEMA {self.schema_name}')
         dbconn.execSQL(self.conn,
                        f'''CREATE TABLE {self.schema_name}.{self.rebalance_status}
-                       (status TEXT, updated TIMESTAMP WITH TIME ZONE)
+                       (state TEXT, state_category TEXT, updated TIMESTAMP WITH TIME ZONE)
                        DISTRIBUTED REPLICATED''')
         dbconn.execSQL(self.conn,
                        f'''CREATE TABLE {self.schema_name}.{self.table_rebalance_status_detail}
@@ -70,11 +76,21 @@ class RebalanceSchema:
         row = dbconn.queryRow(self.conn, f"SELECT COUNT(1) FROM pg_namespace WHERE nspname = '{self.schema_name}'")
         return int(row[0]) == 1
 
-    def getStateFromPreviousRun(self) -> str:
-        cursor = dbconn.query(self.conn, f'SELECT status FROM {self.schema_name}.{self.rebalance_status} ORDER BY updated DESC LIMIT 1')
-        if cursor.rowcount > 0:
-            return str(cursor.fetchone()[0])
-        return 'not defined'
+    def getStateFromPreviousRun(self, state_category: str) -> str:
+        if self.schemaExists():
+            cursor = dbconn.query(self.conn, f"SELECT state FROM {self.schema_name}.{self.rebalance_status} WHERE state_category = '{state_category}' ORDER BY updated DESC LIMIT 1")
+            if cursor.rowcount > 0:
+                return str(cursor.fetchone()[0])
+        return STATE_NOT_DEFINED
+
+    def getShrinkStateFromPreviousRun(self) -> str:
+        return self.getStateFromPreviousRun(self.STATE_CATEGORY_SHRINK)
+
+    def getRebalanceStateFromPreviousRun(self) -> str:
+        return self.getStateFromPreviousRun(self.STATE_CATEGORY_REBALANCE)
+
+    def getMainStateFromPreviousRun(self) -> str:
+        return self.getStateFromPreviousRun(self.STATE_CATEGORY_MAIN)
 
     def rebalanceSchema(self, target_segment_count: int) -> None:
         # Before rebalancing check if the tables are already rebalanced
@@ -94,11 +110,20 @@ class RebalanceSchema:
                            f'''ALTER TABLE "{self.schema_name}"."{self.saved_plan}"
                            REBALANCE {target_segment_count}''')
 
-    def storeState(self, state: str) -> None:
+    def storeState(self, state: str, state_category: str) -> None:
         if self.schemaExists():
             dbconn.execSQL(self.conn,
                            f'''INSERT INTO {self.schema_name}.{self.rebalance_status}
-                           VALUES ('{state}', NOW())''')
+                           VALUES ('{state}', '{state_category}', NOW())''')
+
+    def storeShrinkState(self, state: str) -> None:
+        self.storeState(state, self.STATE_CATEGORY_SHRINK)
+
+    def storeRebalanceState(self, state: str) -> None:
+        self.storeState(state, self.STATE_CATEGORY_REBALANCE)
+
+    def storeMainState(self, state: str) -> None:
+        self.storeState(state, self.STATE_CATEGORY_MAIN)
 
     def clearTablesToRebalanceWithStatus(self, status: str) -> None:
         dbconn.execSQL(self.conn,
