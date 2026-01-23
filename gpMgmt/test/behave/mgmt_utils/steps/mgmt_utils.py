@@ -286,19 +286,27 @@ def impl(context, checksum_toggle):
             is_ok = False
 
     if not is_ok:
-        stop_database(context)
+        stop_database_if_started(context)
 
         os.environ['PGPORT'] = '15432'
         port_base = os.getenv('PORT_BASE', 15432)
+        demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+        global master_data_dir
+        master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+        os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
 
         cmd = """
         cd ../gpAux/gpdemo; \
             export DEMO_PORT_BASE={port_base} && \
             export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
+            export PGPORT={pgport} &&
+            export MASTER_DATA_DIRECTORY={master_data_dir} &&
             export WITH_MIRRORS={with_mirrors} && \
             ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
             env EXTRA_CONFIG="HEAP_CHECKSUM={checksum_toggle}" ./demo_cluster.sh
         """.format(port_base=port_base,
+                   pgport=os.getenv('PGPORT', 15432),
+                   master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                    num_primary_mirror_pairs=os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3),
                    with_mirrors='true',
                    checksum_toggle=checksum_toggle)
