@@ -1440,6 +1440,9 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
 	char load_roleid[NAMEDATALEN] = {0};
 	Oid roleid = InvalidOid;
+	bool use_superuser_priv = false;
+	Oid     save_userid;
+	int     save_sec_context;
 
 	elog(DEBUG1, "Start cc_ProcessUtility()");
 
@@ -1567,6 +1570,17 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
 					dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), -1);
 					((AlterRoleStmt *)parsetree)->options = lappend(((AlterRoleStmt *)parsetree)->options, dvalidUntil);
+					/*
+					 * As we modify the VALID UNTIL clause it will generate an error message
+					 * when the user changes his password:
+					 * 	Only roles with the CREATEROLE attribute and the ADMIN option
+					 * 	on role "..." may alter this role.
+					 * force use of the superuser privilege to modify the password user.
+					 */
+					if (!superuser() &&
+							strcmp(stmt->role->rolename,
+								GetUserNameFromId(GetSessionUserId(), false)) == 0)
+						use_superuser_priv = true;
 				}
 
 				/* when a valid until date is set check that it is > to password_valid_until */
@@ -1736,11 +1750,25 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 		}
 	}
 
-	/* Execute the utility command now */
+	/* The password change must be done using SU privilege */
+	if (use_superuser_priv)
+	{
+		/* Get current user's Oid and security context */
+		GetUserIdAndSecContext(&save_userid, &save_sec_context);
+		/* Become superuser */
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context
+							| SECURITY_LOCAL_USERID_CHANGE
+							| SECURITY_RESTRICTED_OPERATION);
+	}
+
 	if (prev_ProcessUtility)
 		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
 	else
 		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+
+	/* Restore user's privileges */
+	if (use_superuser_priv)
+		SetUserIdAndSecContext(save_userid, save_sec_context);
 
 	if (MyProcPort != NULL && context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
 	{
