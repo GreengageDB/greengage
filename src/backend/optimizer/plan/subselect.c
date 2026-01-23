@@ -270,8 +270,8 @@ check_multi_subquery_correlated(PlannerInfo *root, Var *var)
 		 * Only check sublink not include subquery
 		 */
 		if(parent_root->parse->hasSubLinks &&
-			(QueryHasDistributedRelation(root->parse, parent_root->is_correlated_subplan) ||
-			QueryHasDistributedRelation(parent_root->parse, false)))
+			(QueryHasDistributedRelation(root->parse, parent_root->is_correlated_subplan)) !=
+			QueryHasDistributedRelation(parent_root->parse, false))
 		{
 			ereport(ERROR,
 					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
