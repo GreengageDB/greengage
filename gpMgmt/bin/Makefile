@@ -193,9 +193,9 @@ check-regress:
 check: mockinstall
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
 	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
-	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log
+	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
 	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
-	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log
+	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
 
 unitdevel:
 	@echo "Running pure unit tests..."
@@ -209,7 +209,7 @@ installcheck-bash:
 	./test/suite.bash
 
 .PHONY: installcheck
-installcheck: installcheck-bash
+installcheck: check installcheck-bash
 	$(MAKE) -C gpload_test $@
 
 clean distclean:
