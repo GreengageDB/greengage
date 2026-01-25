@@ -1,5 +1,5 @@
 -- start_ignore
-0: ! gpconfig -c shared_preload_libraries -v 'temp_tables_stat';
+0: ! gpconfig -c shared_preload_libraries -v "$(psql -At -c "SELECT array_to_string(array_append(string_to_array(current_setting('shared_preload_libraries'), ','), 'temp_tables_stat'), ',')" postgres)"
 0: ! gpstop -raiq;
 
 1: CREATE EXTENSION IF NOT EXISTS temp_tables_stat;
@@ -246,6 +246,6 @@ DROP FUNCTION get_files
 DROP EXTENSION temp_tables_stat;
 
 -- start_ignore
-! gpconfig -r shared_preload_libraries;
+! gpconfig -c shared_preload_libraries -v "$(psql -At -c "SELECT array_to_string(array_remove(string_to_array(current_setting('shared_preload_libraries'), ','), 'temp_tables_stat'), ',')" postgres)"
 ! gpstop -raiq;
 -- end_ignore
