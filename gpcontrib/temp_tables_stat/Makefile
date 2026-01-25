@@ -1,7 +1,7 @@
 # gpcontrib/temp_tables_stat/Makefile
 
 MODULE_big = temp_tables_stat
-OBJS = $(MODULE_big).o $(WIN32RES)
+OBJS = $(MODULE_big).o
 
 EXTENSION = $(MODULE_big)
 PGFILEDESC = "Collect and show statistics on temporary tables"
