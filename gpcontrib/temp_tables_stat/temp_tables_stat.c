@@ -1,3 +1,15 @@
+/*----------------------------------------------------------------------
+ *
+ * Greengage Database
+ *
+ * Copyright (c) 2025 Greengage Community
+ *
+ * Greengage Database is licensed under the Apache License Version 2.0
+ * (see LICENSE & NOTICE) and is based on the PostgreSQL Database
+ * Management System and Greenplum Database.
+ * 
+ *----------------------------------------------------------------------
+ */
 #include "postgres.h"
 
 #include <sys/stat.h>
