@@ -187,6 +187,8 @@ def check_database_is_running(context):
         return False
 
     pgport = int(os.environ['PGPORT'])
+    global master_data_dir
+    master_data_dir = os.environ['MASTER_DATA_DIRECTORY']
 
     running_status = chk_local_db_running(os.environ.get('MASTER_DATA_DIRECTORY'), pgport)
     gpdb_running = running_status[0] and running_status[1] and running_status[2] and running_status[3]
