@@ -198,6 +198,8 @@ static void
 tts_shmem_startup(void)
 {
 	bool		found;
+	int			tranche_id;
+	static LWLockTranche tranche;
 
 	if (prev_shmem_startup_hook)
 		(*prev_shmem_startup_hook)();
@@ -206,7 +208,12 @@ tts_shmem_startup(void)
 	if (found)
 		return;
 
-	LWLockInitialize(&head->lock, 0);
+	tranche_id = LWLockNewTrancheId();
+	tranche.name = "temp_tables_stat";
+	tranche.array_base = &head->lock;
+	tranche.array_stride = sizeof(head->lock);
+	LWLockRegisterTranche(tranche_id, &tranche);
+	LWLockInitialize(&head->lock, tranche_id);
 	head->node.next = DSM_HANDLE_INVALID;
 	head->node.num = 0;
 }
@@ -372,7 +379,6 @@ _PG_init(void)
 		return;
 
 	RequestAddinShmemSpace(sizeof(TTSHeadNode));
-	RequestAddinLWLocks(1);
 
 	prev_file_create_hook = file_create_hook;
 	file_create_hook = tts_file_create_hook;
