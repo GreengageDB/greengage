@@ -7,7 +7,7 @@ services:
     working_dir: /home/gpadmin
     hostname: cdw
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/allure-results:/tmp/allure-results"
       - "$PWD/logs_cdw:/logs"
     privileged: true
@@ -23,7 +23,7 @@ services:
     privileged: true
     hostname: sdw1
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/logs_sdw1:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
@@ -37,7 +37,7 @@ services:
     privileged: true
     hostname: sdw2
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/logs_sdw2:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
@@ -51,7 +51,7 @@ services:
     privileged: true
     hostname: sdw3
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/logs_sdw3:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
@@ -65,7 +65,7 @@ services:
     privileged: true
     hostname: sdw4
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/logs_sdw4:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
@@ -79,7 +79,7 @@ services:
     privileged: true
     hostname: sdw5
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/logs_sdw5:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
@@ -93,7 +93,7 @@ services:
     privileged: true
     hostname: sdw6
     volumes:
-      - "$PWD/ssh_keys:/home/gpadmin/.ssh"
+      - "$PWD/ssh_keys:/home/gpadmin/.ssh."
       - "$PWD/logs_sdw6:/logs"
     sysctls:
       kernel.sem: 500 1024000 200 4096
