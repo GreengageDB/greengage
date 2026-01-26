@@ -17,7 +17,7 @@ fi
 for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
-    $service bash -c "mkdir -p /data/gpdata && chmod -R 777 /data &&
+    $service bash -c "mkdir -p /data/gpdata && chmod -R 777 /data && cp -rf /home/gpadmin/.ssh. /home/gpadmin/.ssh &&
       source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
       ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
 done
