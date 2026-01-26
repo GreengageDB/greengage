@@ -4324,20 +4324,6 @@ DETAIL:  Falling back to Postgres-based planner because GPORCA does not support 
  Optimizer: Postgres-based planner
 (8 rows)
 
-SELECT (                                  
-    SELECT (
-        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
-    )                                                        
-) FROM gp_distribution_policy;
-INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
-DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
- dbid 
-------
-    3
-    3
-    3
-(3 rows)
-
 DROP TABLE skip_correlated_partitioned;
 DROP TABLE skip_correlated_random;
 DROP TABLE skip_correlated_replicated;

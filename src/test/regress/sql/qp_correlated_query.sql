@@ -982,11 +982,6 @@ SELECT (
         SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
     )                                                        
 ) FROM gp_distribution_policy;
-SELECT (                                  
-    SELECT (
-        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
-    )                                                        
-) FROM gp_distribution_policy;
 
 DROP TABLE skip_correlated_partitioned;
 DROP TABLE skip_correlated_random;
