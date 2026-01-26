@@ -31,17 +31,16 @@ def before_feature(context, feature):
             """.format(host=host, ip=ip, hosts=' -h '.join(hosts))
             Command(name, cmdStr).run(validateAfter=True)
 
+    # we should be able to run gpexpand without having a cluster initialized
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate',
+                    'ggssh_exkeys', 'gpinitsystem', 'cross_subnet']
+    if set(context.feature.tags).intersection(tags_to_skip):
+        return
+
     if not hasattr(context, "cluster_created"):
         context.cluster_created = True
         from test.behave_utils.ci.fixtures import init_cluster
         use_fixture(init_cluster, context)
-
-    # we should be able to run gpexpand without having a cluster initialized
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
-                    'gpconfig', 'ggssh_exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet',
-                    'gplogfilter']
-    if set(context.feature.tags).intersection(tags_to_skip):
-        return
 
     drop_database_if_exists(context, 'testdb')
     drop_database_if_exists(context, 'bkdb')
@@ -154,7 +153,7 @@ def before_scenario(context, scenario):
     if 'analyzedb' not in context.feature.tags:
         start_database_if_not_started(context)
         drop_database_if_exists(context, 'testdb')
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+    if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         backup_bashrc()
 
 def after_scenario(context, scenario):
@@ -174,7 +173,7 @@ def after_scenario(context, scenario):
             And gpstart should return a return code of 0
             ''')
 
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+    if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         restore_bashrc()
 
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
