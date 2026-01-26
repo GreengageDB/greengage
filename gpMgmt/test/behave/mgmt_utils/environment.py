@@ -134,7 +134,7 @@ def before_scenario(context, scenario):
     if 'analyzedb' not in context.feature.tags:
         start_database_if_not_started(context)
         drop_database_if_exists(context, 'testdb')
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+    if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         backup_bashrc()
 
 def after_scenario(context, scenario):
@@ -154,7 +154,7 @@ def after_scenario(context, scenario):
             And gpstart should return a return code of 0
             ''')
 
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+    if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         restore_bashrc()
 
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`

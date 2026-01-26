@@ -1,4 +1,4 @@
-@gp_bash_functions.sh
+@gp_bash_functions
 Feature: gp_bash_funtions.sh unit test cases
     Scenario: REMOTE_EXECUTE_AND_GET_OUTPUT returns proper output when no banner is set
         Given a standard local demo cluster is running

@@ -1884,7 +1884,7 @@ jobs:
             file: gpdb_src/concourse/tasks/behave_gpdb.yml
             image: gpdb6-rocky8-test
             params:
-              BEHAVE_FLAGS: --tags=gp_bash_functions.sh --tags=~concourse_cluster,demo_cluster
+              BEHAVE_FLAGS: --tags=gp_bash_functions --tags=~concourse_cluster,demo_cluster
               
 - name: gpcheckcat_rocky8
   plan:

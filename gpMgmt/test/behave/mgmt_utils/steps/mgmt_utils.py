@@ -4253,7 +4253,7 @@ def impl(context):
      cmd.run(validateAfter=True)
      hostname = cmd.get_stdout()
      # Update entry in current /etc/hosts file to add new host-address
-     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts; sudo cp -f /tmp/hosts /etc/hosts;rm /tmp/hosts"
+     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts && sudo cp -f /tmp/hosts /etc/hosts && rm /tmp/hosts"
                                                         %(hostname, hostname, hostname))
      cmd.run(validateAfter=True)
 
@@ -4326,7 +4326,7 @@ def impl(context):
 @then('restore /etc/hosts file and cleanup hostlist file')
 @when('restore /etc/hosts file and cleanup hostlist file')
 def impl(context):
-    cmd = "sudo mv -f /tmp/hosts_orig /etc/hosts; rm -f /tmp/clusterConfigFile-1; rm -f /tmp/hostfile--1"
+    cmd = "sudo cp -f /tmp/hosts_orig /etc/hosts && sudo rm /tmp/hosts_orig && rm -f /tmp/clusterConfigFile-1 && rm -f /tmp/hostfile--1"
     context.execute_steps(u'''Then the user runs command "%s"''' % cmd)
 
 @given('create a gpcheckperf input host file')
