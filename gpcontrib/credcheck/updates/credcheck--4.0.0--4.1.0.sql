@@ -4,6 +4,7 @@
 DROP SCHEMA credcheck;
 
 -- Show rolename instead of role oid
+DROP VIEW pg_banned_role;
 CREATE OR REPLACE VIEW pg_banned_role AS
   SELECT roleid::regrole, failure_count, banned_date FROM pg_banned_role();
 
