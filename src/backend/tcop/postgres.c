@@ -2330,6 +2330,8 @@ exec_bind_message(StringInfo input_message)
 	if (Gp_role == GP_ROLE_DISPATCH && ResGroupIsBypassed()
 		&& IsTransactionState())
 	{
+		MemoryContextSwitchTo(CurTransactionContext);
+
 		List *parsetree_list = list_make1(psrc->raw_parse_tree);
 
 		if (!ShouldBypassQueryFromParseTree(parsetree_list))
