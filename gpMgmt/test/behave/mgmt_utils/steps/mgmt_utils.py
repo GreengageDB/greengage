@@ -38,9 +38,7 @@ from gppylib import pgconf
 from gppylib.operations.package import linux_distribution_id, linux_distribution_version
 from gppylib.commands.gp import get_coordinatordatadir
 
-coordinator_data_dir = gp.get_coordinatordatadir()
-if coordinator_data_dir is None:
-    raise Exception('Please set COORDINATOR_DATA_DIRECTORY in environment')
+coordinator_data_dir = None
 
 def show_all_installed(gphome):
     x = linux_distribution_id(), linux_distribution_version()
@@ -72,15 +70,24 @@ def create_local_demo_cluster(context, extra_config='', with_mirrors='true', wit
         num_primaries = os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3)
 
     os.environ['PGPORT'] = '15432'
+    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+    global coordinator_data_dir
+    coordinator_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+    os.environ['COORDINATOR_DATA_DIRECTORY'] = coordinator_data_dir
+
     cmd = """
         cd ../gpAux/gpdemo &&
         export DEMO_PORT_BASE={port_base} &&
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} &&
+        export PGPORT={pgport} &&
+        export COORDINATOR_DATA_DIRECTORY={coordinator_data_dir} &&
         export WITH_STANDBY={with_standby} &&
         export WITH_MIRRORS={with_mirrors} &&
         ./demo_cluster.sh -d && ./demo_cluster.sh -c &&
         {extra_config} ./demo_cluster.sh
     """.format(port_base=os.getenv('PORT_BASE', 15432),
+               pgport=os.getenv('PGPORT', 15432),
+               coordinator_data_dir=os.getenv('COORDINATOR_DATA_DIRECTORY', coordinator_data_dir),
                num_primary_mirror_pairs=num_primaries,
                with_mirrors=with_mirrors,
                with_standby=with_standby,
@@ -142,10 +149,6 @@ def impl(context, checksum_toggle):
 
 @given('the cluster is generated with "{num_primaries}" primaries only')
 def impl(context, num_primaries):
-    os.environ['PGPORT'] = '15432'
-    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
-    os.environ['COORDINATOR_DATA_DIRECTORY'] = "%s/datadirs/qddir/demoDataDir-1" % demoDir
-
     create_local_demo_cluster(context, with_mirrors='false', with_standby='false', num_primaries=num_primaries)
 
     context.gpexpand_mirrors_enabled = False
@@ -243,19 +246,27 @@ def impl(context, checksum_toggle):
             is_ok = False
 
     if not is_ok:
-        stop_database(context)
+        stop_database_if_started(context)
 
         os.environ['PGPORT'] = '15432'
         port_base = os.getenv('PORT_BASE', 15432)
+        demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+        global coordinator_data_dir
+        coordinator_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+        os.environ['COORDINATOR_DATA_DIRECTORY'] = coordinator_data_dir
 
         cmd = """
         cd ../gpAux/gpdemo; \
             export DEMO_PORT_BASE={port_base} && \
             export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
+            export PGPORT={pgport} &&
+            export COORDINATOR_DATA_DIRECTORY={coordinator_data_dir} &&
             export WITH_MIRRORS={with_mirrors} && \
             ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
             env EXTRA_CONFIG="HEAP_CHECKSUM={checksum_toggle}" ./demo_cluster.sh
         """.format(port_base=port_base,
+                   pgport=os.getenv('PGPORT', 15432),
+                   coordinator_data_dir=os.getenv('COORDINATOR_DATA_DIRECTORY', coordinator_data_dir),
                    num_primary_mirror_pairs=os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3),
                    with_mirrors='true',
                    checksum_toggle=checksum_toggle)
@@ -2811,6 +2822,7 @@ def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames=
     global coordinator_data_dir
     coordinator_data_dir = os.path.join(context.working_directory, 'data/coordinator/gpseg-1')
     os.environ['COORDINATOR_DATA_DIRECTORY'] = coordinator_data_dir
+    os.environ['PGPORT'] = '10300'
 
     try:
         with closing(dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False)) as conn:
