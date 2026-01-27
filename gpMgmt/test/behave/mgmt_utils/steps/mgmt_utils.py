@@ -4426,7 +4426,7 @@ if [[ "\$arguments" == *"pg_xlog"* ]]
 then
     ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p {port} -h cdw"
     # run checkpoint
-    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c "CHECKPOINT" -d postgres -p {port} -h cdw"
+    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'CHECKPOINT' -d postgres -p {port} -h cdw"
 fi
 /usr/bin/rsync \$arguments
 EOL
