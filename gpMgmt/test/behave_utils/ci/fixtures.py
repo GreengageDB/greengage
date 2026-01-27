@@ -16,6 +16,10 @@ def init_cluster(context):
             And a working directory of the test as '/data/gpdata'
             And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
             And a cluster is created with mirrors on "cdw" and "{}"
+            And the user runs "gpconfig -c gp_interconnect_transmit_timeout -v 10s"
+            And gpconfig should return a return code of 0
+            And the user runs "gpstop -u"
+            And gpstop should return a return code of 0
         """.format(segments_str))
     else:
         context.execute_steps(u"""
