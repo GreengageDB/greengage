@@ -1,3 +1,21 @@
+2026-01-27 - Version 4.5.0
+
+This is a maintenance release to fix issues reported by users since last release.
+
+  - Fix error cannot change data type of view column "roleid" from oid to
+    regrole. Thanks to dbacvetkov for the report.
+  - Add missing upgrade SQL file from 4.3 to 4.4. Thanks to dbacvetkov for
+    the report.
+  - Fix error when the user want to modify his password and
+    credcheck.password_valid_until option is set.  As we modify
+    the VALID UNTIL clause it will generate an error message when
+    the user changes his password:
+         Only roles with the CREATEROLE attribute and the ADMIN
+         option on role "..." may alter this role.
+    Thanks to dwshin0416 for the report.
+  - Set the tzp argument in timestamp2tm() call to apply timezone to converted
+    timestamp. Thanks to Christoph Berg for the report.
+
 2026-01-12 - Version 4.4.0
 
 This is a maintenance release to fix issues reported by users since last release.
