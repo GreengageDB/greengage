@@ -3,7 +3,7 @@ Feature: ggssh_exkeys behave tests
 
     @concourse_cluster
     Scenario: fail sensibly if 1-N is not in place
-        Given the ggssh_exkeys master host is set to "cdw"
+        Given the gpssh-exkeys master host is set to "cdw"
           And the gpssh-exkeys segment host is set to "sdw1,sdw2,sdw3"
           And the local SSH configuration is backed up and removed
          When gpssh-exkeys is run
