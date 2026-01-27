@@ -128,6 +128,9 @@ def before_scenario(context, scenario):
         scenario.skip("skipping scenario tagged with @skip")
         return
 
+    if "concourse_cluster" in scenario.effective_tags and "demo_cluster" not in scenario.effective_tags and "concourse_cluster" not in set(context.config.tags):
+        raise Exception("This test can only be run under concourse cluster.")
+
     if 'gpmovemirrors' in context.feature.tags:
         context.mirror_context = MirrorMgmtContext()
 
