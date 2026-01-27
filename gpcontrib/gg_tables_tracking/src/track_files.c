@@ -103,8 +103,8 @@ static bool callbackRegistered = false;
 static uint32 CurrentVersion = InvalidVersion;
 
 static bool isExecutorExplainMode = false;
-ProcessUtility_hook_type next_ProcessUtility_hook = NULL;
-ExecutorEnd_hook_type next_ExecutorEnd_hook = NULL;
+static ProcessUtility_hook_type next_ProcessUtility_hook = NULL;
+static ExecutorEnd_hook_type next_ExecutorEnd_hook = NULL;
 
 static inline void
 tf_check_shmem_error(void)
