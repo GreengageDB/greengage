@@ -5,7 +5,7 @@ set -eox pipefail
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../concourse/scripts" && pwd )"
 source "${CWDIR}/common.bash"
 
-CLUSTERS="concourse_cluster"
+CLUSTERS="~concourse_cluster,demo_cluster concourse_cluster"
 
 function gen_env(){
 		cat > /opt/run_test.sh <<-EOF
