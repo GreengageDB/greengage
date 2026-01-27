@@ -1,15 +1,10 @@
--- start_ignore
-0: ! gpconfig -c shared_preload_libraries -v 'temp_tables_stat';
-20251123:12:36:14:039354 gpconfig:sokolov43a-yu-lin:sokolov43a-yu-[INFO]:-completed successfully with parameters '-c shared_preload_libraries -v temp_tables_stat'
-
-0: ! gpstop -raiq;
-
-
-1: CREATE EXTENSION IF NOT EXISTS temp_tables_stat;
-CREATE
--- end_ignore
 
 1: CREATE OR REPLACE FUNCTION get_files (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8) RETURNS SETOF record AS $$ SELECT (SELECT a.oid = f.user_id FROM pg_authid a WHERE a.rolname = current_user) user_id_ok, (SELECT s.setting::int = f.sess_id FROM pg_settings s WHERE name = 'gp_session_id') cur_sess_id, content, size FROM tts_get_seg_files() f; -- $$ LANGUAGE SQL;
+CREATE
+
+1: ! mkdir -p /tmp/tts_tblspace;
+
+1: CREATE TABLESPACE tts_tblspace LOCATION '/tmp/tts_tblspace';
 CREATE
 
 -- No tables, the files list is empty
@@ -31,6 +26,8 @@ CREATE
  t          | t           | 1       | 0    
  t          | t           | 2       | 0    
 (3 rows)
+1: CREATE TEMP TABLE ts(i INT) TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
 1: CREATE TEMP TABLE t2(i INT) DISTRIBUTED BY (i);
 CREATE
 1: CREATE TEMP TABLE t3(i INT) DISTRIBUTED BY (i);
@@ -41,13 +38,18 @@ CREATE
  t          | t           | 1       | 0    
  t          | t           | 1       | 0    
  t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 0       | 0    
  t          | t           | 0       | 0    
  t          | t           | 0       | 0    
-(9 rows)
+ t          | t           | 0       | 0    
+(12 rows)
+1: DROP TABLE ts;
+DROP
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
@@ -155,6 +157,8 @@ CREATE
  t          | t           | 2       | 0    
  t          | t           | 0       | 0    
 (3 rows)
+1: CREATE TEMP TABLE ts(i INT) ON COMMIT DROP TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
 1: CREATE TEMP TABLE t2(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
 CREATE
 1: CREATE TEMP TABLE t3(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
@@ -165,13 +169,16 @@ CREATE
  t          | t           | 1       | 0    
  t          | t           | 1       | 0    
  t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 0       | 0    
  t          | t           | 0       | 0    
  t          | t           | 0       | 0    
-(9 rows)
+ t          | t           | 0       | 0    
+(12 rows)
 
 -- We can see tables created in other sessions
 2: BEGIN;
@@ -184,7 +191,9 @@ CREATE
  t          | t           | 2       | 0    
  t          | t           | 2       | 0    
  t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
  t          | f           | 2       | 0    
+ t          | t           | 1       | 0    
  t          | t           | 1       | 0    
  t          | t           | 1       | 0    
  t          | t           | 1       | 0    
@@ -192,11 +201,13 @@ CREATE
  t          | t           | 0       | 0    
  t          | t           | 0       | 0    
  t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
  t          | f           | 0       | 0    
-(12 rows)
+(15 rows)
 2: SELECT * FROM get_files();
  user_id_ok | cur_sess_id | content | size 
 ------------+-------------+---------+------
+ t          | f           | 2       | 0    
  t          | f           | 2       | 0    
  t          | f           | 2       | 0    
  t          | f           | 2       | 0    
@@ -204,12 +215,14 @@ CREATE
  t          | f           | 0       | 0    
  t          | f           | 0       | 0    
  t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
  t          | t           | 0       | 0    
  t          | f           | 1       | 0    
  t          | f           | 1       | 0    
  t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
  t          | t           | 1       | 0    
-(12 rows)
+(15 rows)
 3: SELECT * FROM get_files();
  user_id_ok | cur_sess_id | content | size 
 ------------+-------------+---------+------
@@ -217,6 +230,8 @@ CREATE
  t          | f           | 1       | 0    
  t          | f           | 1       | 0    
  t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 2       | 0    
  t          | f           | 2       | 0    
  t          | f           | 2       | 0    
  t          | f           | 2       | 0    
@@ -225,7 +240,8 @@ CREATE
  t          | f           | 0       | 0    
  t          | f           | 0       | 0    
  t          | f           | 0       | 0    
-(12 rows)
+ t          | f           | 0       | 0    
+(15 rows)
 
 -- Dropped tables are removed from the list in all sessions
 1: ROLLBACK;
@@ -289,6 +305,8 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
 (12 rows)
+1: CREATE TEMP TABLE ts(i INT) WITH (APPENDOPTIMIZED = TRUE) TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
 1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
 CREATE
 1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
@@ -308,6 +326,14 @@ CREATE
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
@@ -332,7 +358,14 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
-(36 rows)
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(48 rows)
+1: DROP TABLE ts;
+DROP
+
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
@@ -557,6 +590,8 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
 (12 rows)
+1: CREATE TEMP TABLE ts(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
 1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
 CREATE
 1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
@@ -576,6 +611,14 @@ CREATE
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
@@ -600,7 +643,11 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
-(36 rows)
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(48 rows)
 
 -- We can see tables created in other sessions
 2: BEGIN;
@@ -622,10 +669,18 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
@@ -654,14 +709,22 @@ CREATE
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 32768 
-(48 rows)
+(60 rows)
 2: SELECT * FROM get_files();
  user_id_ok | cur_sess_id | content | size  
 ------------+-------------+---------+-------
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
@@ -690,6 +753,10 @@ CREATE
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
  t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
@@ -706,11 +773,15 @@ CREATE
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 32768 
-(48 rows)
+(60 rows)
 3: SELECT * FROM get_files();
  user_id_ok | cur_sess_id | content | size  
 ------------+-------------+---------+-------
@@ -730,6 +801,14 @@ CREATE
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
@@ -762,7 +841,11 @@ CREATE
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 32768 
-(48 rows)
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+(60 rows)
 
 -- Dropped tables are removed from the list in all sessions
 1: ROLLBACK;
@@ -826,6 +909,8 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
 (12 rows)
+1: CREATE TEMP TABLE ts(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
 1: CREATE TEMP TABLE t2(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
 CREATE
 1: CREATE TEMP TABLE t3(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
@@ -845,6 +930,14 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
@@ -869,7 +962,13 @@ CREATE
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 32768 
-(36 rows)
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+(48 rows)
+1: DROP TABLE ts;
+DROP
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
@@ -1072,7 +1171,7 @@ DROP
 
 
 --
--- AO tables, on commit drop
+-- AOCO tables, on commit drop
 
 -- We can see tables created in the current session
 1: BEGIN;
@@ -1095,6 +1194,8 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
 (12 rows)
+1: CREATE TEMP TABLE ts(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
 1: CREATE TEMP TABLE t2(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP DISTRIBUTED BY (i);
 CREATE
 1: CREATE TEMP TABLE t3(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP DISTRIBUTED BY (i);
@@ -1114,6 +1215,14 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
@@ -1138,7 +1247,11 @@ CREATE
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 32768 
-(36 rows)
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+(48 rows)
 
 -- We can see tables created in other sessions
 2: BEGIN;
@@ -1160,6 +1273,10 @@ CREATE
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
@@ -1176,6 +1293,10 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
@@ -1192,14 +1313,22 @@ CREATE
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
  t          | f           | 1       | 32768 
-(48 rows)
+(60 rows)
 2: SELECT * FROM get_files();
  user_id_ok | cur_sess_id | content | size  
 ------------+-------------+---------+-------
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
@@ -1216,6 +1345,10 @@ CREATE
  t          | t           | 1       | 0     
  t          | t           | 1       | 0     
  t          | t           | 1       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
@@ -1232,6 +1365,10 @@ CREATE
  t          | t           | 0       | 0     
  t          | t           | 0       | 0     
  t          | t           | 0       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
@@ -1248,7 +1385,7 @@ CREATE
  t          | t           | 2       | 0     
  t          | t           | 2       | 0     
  t          | t           | 2       | 32768 
-(48 rows)
+(60 rows)
 3: SELECT * FROM get_files();
  user_id_ok | cur_sess_id | content | size  
 ------------+-------------+---------+-------
@@ -1268,6 +1405,14 @@ CREATE
  t          | f           | 2       | 0     
  t          | f           | 2       | 0     
  t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
  t          | f           | 0       | 0     
@@ -1300,7 +1445,11 @@ CREATE
  t          | f           | 1       | 0     
  t          | f           | 1       | 0     
  t          | f           | 1       | 32768 
-(48 rows)
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+(60 rows)
 
 -- Dropped tables are removed from the list in all sessions
 1: ROLLBACK;
@@ -1384,16 +1533,11 @@ SELECT content, size FROM tts_get_seg_files();
 
 --
 -- Cleanup
+DROP TABLESPACE tts_tblspace;
+DROP
 DROP FUNCTION get_files (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8);
 DROP
 
 DROP EXTENSION temp_tables_stat;
 DROP
 
--- start_ignore
-! gpconfig -r shared_preload_libraries;
-20251123:12:36:27:042380 gpconfig:sokolov43a-yu-lin:sokolov43a-yu-[INFO]:-completed successfully with parameters '-r shared_preload_libraries'
-
-! gpstop -raiq;
-
--- end_ignore

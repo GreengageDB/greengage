@@ -20,6 +20,9 @@ AS $$
      FROM tts_get_seg_files() f; --
 $$ LANGUAGE SQL;
 
+1: ! mkdir -p /tmp/tts_tblspace;
+1: CREATE TABLESPACE tts_tblspace LOCATION '/tmp/tts_tblspace';
+
 -- No tables, the files list is empty
 1: SELECT * FROM tts_get_seg_files();
 
@@ -29,9 +32,13 @@ $$ LANGUAGE SQL;
 -- We can see tables created in the current session
 1: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: CREATE TEMP TABLE ts(i INT)
+   TABLESPACE tts_tblspace
+   DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t2(i INT) DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: DROP TABLE ts;
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
@@ -59,6 +66,10 @@ $$ LANGUAGE SQL;
 1: BEGIN;
 1: CREATE TEMP TABLE t1(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: CREATE TEMP TABLE ts(i INT)
+   ON COMMIT DROP
+   TABLESPACE tts_tblspace
+   DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t2(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
@@ -90,9 +101,15 @@ $$ LANGUAGE SQL;
 -- We can see tables created in the current session
 1: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: CREATE TEMP TABLE ts(i INT)
+   WITH (APPENDOPTIMIZED = TRUE)
+   TABLESPACE tts_tblspace
+   DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: DROP TABLE ts;
+
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
@@ -120,6 +137,11 @@ $$ LANGUAGE SQL;
 1: BEGIN;
 1: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: CREATE TEMP TABLE ts(i INT)
+   WITH (APPENDOPTIMIZED = TRUE)
+   ON COMMIT DROP
+   TABLESPACE tts_tblspace
+   DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
@@ -153,6 +175,10 @@ $$ LANGUAGE SQL;
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: CREATE TEMP TABLE ts(i INT, j INT)
+   WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
+   TABLESPACE tts_tblspace
+   DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t2(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
@@ -160,6 +186,7 @@ $$ LANGUAGE SQL;
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: DROP TABLE ts;
 
 -- We can see tables created in other sessions
 2: CREATE TEMP TABLE t1(i INT, j INT)
@@ -184,7 +211,7 @@ $$ LANGUAGE SQL;
 
 
 --
--- AO tables, on commit drop 
+-- AOCO tables, on commit drop 
 
 -- We can see tables created in the current session
 1: BEGIN;
@@ -193,6 +220,11 @@ $$ LANGUAGE SQL;
    ON COMMIT DROP
    DISTRIBUTED BY (i);
 1: SELECT * FROM get_files();
+1: CREATE TEMP TABLE ts(i INT, j INT)
+   WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
+   ON COMMIT DROP
+   TABLESPACE tts_tblspace
+   DISTRIBUTED BY (i);
 1: CREATE TEMP TABLE t2(i INT, j INT)
    WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN)
    ON COMMIT DROP
@@ -240,6 +272,7 @@ SELECT content, size FROM tts_get_seg_files();
 
 --
 -- Cleanup
+DROP TABLESPACE tts_tblspace;
 DROP FUNCTION get_files
 (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8);
 
