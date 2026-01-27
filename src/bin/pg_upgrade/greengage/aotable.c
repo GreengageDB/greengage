@@ -278,35 +278,32 @@ restore_aosegment_tables(void)
 
 			if (is_appendonly(rel->relstorage))
 			{
-					numAO = 0;
-
-					/*
-					* find AO settings
-					*/
-					while (numAO < resNum)
+				/*
+				* find AO settings
+				*/
+				for (numAO = 0; numAO < resNum; numAO++)
+				{
+					if (atooid(PQgetvalue(res, numAO, i_relid)) == rel->reloid)
 					{
-							if (atooid(PQgetvalue(res, numAO, i_relid)) == rel->reloid)
-							{
-								char	   *segrelname;
-								char	   *vmaprelname;
-								char	   *blkdirrelname;
-								Oid			segrelid;
+						char	   *segrelname;
+						char	   *vmaprelname;
+						char	   *blkdirrelname;
+						Oid			segrelid;
 
-								segrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "segrelname")));
-								vmaprelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "vmaprelname")));
-								segrelid = atooid(PQgetvalue(res, numAO, PQfnumber(res, "segrelid")));
+						segrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "segrelname")));
+						vmaprelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "vmaprelname")));
+						segrelid = atooid(PQgetvalue(res, numAO, PQfnumber(res, "segrelid")));
 
-								if (!PQgetisnull(res, numAO, PQfnumber(res, "blkdirrelname")))
-										blkdirrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "blkdirrelname")));
-								else
-									blkdirrelname = NULL;
+						if (!PQgetisnull(res, numAO, PQfnumber(res, "blkdirrelname")))
+								blkdirrelname = pg_strdup(PQgetvalue(res, numAO, PQfnumber(res, "blkdirrelname")));
+						else
+							blkdirrelname = NULL;
 
-								restore_aosegment_table(conn, rel, segrelname, vmaprelname, segrelid, blkdirrelname);
+						restore_aosegment_table(conn, rel, segrelname, vmaprelname, segrelid, blkdirrelname);
 
-								break;
-							}
-							numAO++;
+						break;
 					}
+				}
 			}
 		}
 
