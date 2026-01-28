@@ -10,7 +10,7 @@ import tempfile
 from behave import given, when, then
 from test.behave_utils.utils import *
 
-from .mgmt_utils import *
+from mgmt_utils import *
 
 # This file contains steps for gpaddmirrors and gpmovemirrors tests
 
