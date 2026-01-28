@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from builtins import str
 from builtins import map
 from builtins import object
 from gppylib.gplog import *

@@ -3,7 +3,6 @@
 
 
 from __future__ import print_function
-from builtins import str
 from builtins import zip
 import datetime
 import subprocess
@@ -16,6 +15,7 @@ from contextlib import closing
 from distutils.version import LooseVersion
 from optparse import OptionParser
 from pygresql import pgdb
+import six
 
 gpsd_version = '%prog 1.0'
 
@@ -162,7 +162,7 @@ def dumpStats(cur, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, (str, str)) and val[0] == '{':
+            elif isinstance(val, six.string_types) and val[0] == '{':
                 val = val.replace("'", "''").replace('\\', '\\\\')
                 val = "E'" + val + "'"
             if i == 25 and hll == True:

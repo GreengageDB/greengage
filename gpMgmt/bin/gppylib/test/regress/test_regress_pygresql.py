@@ -5,7 +5,6 @@
 
 """ Unittesting for pygres module
 """
-from builtins import str
 import logging
 import unittest
 

@@ -1,7 +1,7 @@
-from builtins import str
 from . import redirect_stderr
 from mock import call, Mock, patch, ANY
 import sys
+import json
 
 from .gp_unittest import GpTestCase, FakeCursor
 import gpsegrecovery
@@ -47,7 +47,7 @@ class IncrementalRecoveryTestCase(GpTestCase):
     def _assert_cmd_failed(self, expected_stderr):
         self.assertEqual(1, self.incremental_recovery_cmd.get_results().rc)
         self.assertEqual('', self.incremental_recovery_cmd.get_results().stdout)
-        self.assertItemsEqual(expected_stderr, self.incremental_recovery_cmd.get_results().stderr)
+        self.assertItemsEqual(json.loads(expected_stderr), json.loads(self.incremental_recovery_cmd.get_results().stderr))
         self.assertEqual(False, self.incremental_recovery_cmd.get_results().wasSuccessful())
 
     def test_incremental_run_passes(self):
@@ -175,7 +175,7 @@ class FullRecoveryTestCase(GpTestCase):
     def _assert_cmd_failed(self, expected_stderr):
         self.assertEqual(1, self.full_recovery_cmd.get_results().rc)
         self.assertEqual('', self.full_recovery_cmd.get_results().stdout)
-        self.assertItemsEqual(expected_stderr, self.full_recovery_cmd.get_results().stderr)
+        self.assertItemsEqual(json.loads(expected_stderr), json.loads(self.full_recovery_cmd.get_results().stderr))
         self.assertEqual(False, self.full_recovery_cmd.get_results().wasSuccessful())
 
     def test_basebackup_run_passes(self):

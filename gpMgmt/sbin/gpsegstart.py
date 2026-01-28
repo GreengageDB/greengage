@@ -11,7 +11,6 @@ Internal Use Function.
 
 # THIS IMPORT MUST COME FIRST
 from builtins import map
-from builtins import str
 from builtins import object
 from gppylib.mainUtils import simple_main, addStandardLoggingAndHelpOptions
 

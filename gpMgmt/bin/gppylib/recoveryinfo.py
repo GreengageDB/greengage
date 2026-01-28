@@ -1,4 +1,3 @@
-from builtins import str
 from builtins import object
 from collections import defaultdict
 import datetime

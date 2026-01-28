@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-from builtins import str
 from builtins import range
 from builtins import object
 import unittest
@@ -15,6 +14,7 @@ import platform
 import re
 import pytest
 import io
+import six
 
 # from gppylib.commands.gp import get_coordinatordatadir
 
@@ -223,7 +223,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
     if port_range:
         f.write(u"\n         PORT_RANGE: "+port_range)
     f.write("\n         FILE:")
-    if(isinstance(file,str)):
+    if(isinstance(file,six.string_types)):
         f.write("\n            - "+mkpath(file))
     if (isinstance(file,list)):
         for ff in file:

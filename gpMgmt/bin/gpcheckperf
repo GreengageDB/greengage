@@ -34,9 +34,6 @@ Usage: gpcheckperf <options>
 from __future__ import print_function
 from __future__ import division
 
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
 from builtins import range
 from past.utils import old_div
 from builtins import object
@@ -44,6 +41,7 @@ import datetime
 import os
 import sys
 from functools import reduce
+import re
 
 sys.path.append(sys.path[0] + '/lib')
 try:
@@ -112,7 +110,7 @@ def gpssh(cmd, verbose):
     p = subprocess.Popen(c, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = p.stdout.read(-1)
     rc = p.wait()
-    return not rc, out
+    return not rc, out.decode('utf-8')
 
 
 def gpscp(src, dst):
@@ -473,7 +471,7 @@ def copyExecOver(fname):
 
 def parseMultiDDResult(out):
     # parse output of "time -p"
-    out = io.StringIO(out)
+    out = io.StringIO(out.decode('utf-8'))
     result = {}
     bytes = 0
     for line in out:
@@ -549,7 +547,7 @@ def runStreamTest():
     (ok, out) = gpssh(cmd, GV.opt['-V'])
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
-    out = io.StringIO(out)
+    out = io.StringIO(out.decode('utf-8'))
     result = {}
     for line in out:
         i = line.find(']')
@@ -645,7 +643,7 @@ def reapNetperfTest(proc, x, y):
         print('[Warning] netperf failed on %s -> %s' % (x, y))
         return []
 
-    for line in io.StringIO(out):
+    for line in io.StringIO(out.decode('utf-8')):
         line = line.split()
         if len(line) != 5:
             continue
@@ -819,7 +817,7 @@ def get_host_map(hostlist):
 
     # get unique hostname list
     for line in out.splitlines():
-        seg, host = line.translate(None, '[]').split()
+        seg, host = re.sub(r'[\[\]]', '', line).split()
         uniqhosts[host] = seg
 
     # get list of segments associated with each host (can't use gpssh since it de-dupes hosts)
