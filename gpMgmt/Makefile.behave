@@ -1,5 +1,6 @@
 PEXPECT_LIB=$(GPHOME)/bin/lib
 TEST_DIR=$(CURDIR)/test
+STEPS_DIR=$(TEST_DIR)/behave/mgmt_utils/steps
 
 # To pass in custom flags as behave args(such as multiple flags),
 # use flags=--tags=foo, --tags=-bar
@@ -7,9 +8,9 @@ behave:
 	@which behave || (echo "behave not found" && exit 1)
 	@echo "Running behave on management scripts..."
 	@if [ -n """$(flags)""" ]; then \
-		PYTHONPATH=$$PYTHONPATH:$(PEXPECT_LIB):$(TEST_DIR) behave $(CURDIR)/test/behave/* --no-source --no-skipped $(flags) 2>&1 ; \
+		PYTHONPATH=$$PYTHONPATH:$(PEXPECT_LIB):$(TEST_DIR):$(STEPS_DIR) behave $(CURDIR)/test/behave/* --no-source --no-skipped $(flags) 2>&1 ; \
 	elif [ -n """$(tags)""" ]; then \
-		PYTHONPATH=$$PYTHONPATH:$(PEXPECT_LIB):$(TEST_DIR) behave $(CURDIR)/test/behave/* --no-source --no-skipped --tags=$(tags) 2>&1 ; \
+		PYTHONPATH=$$PYTHONPATH:$(PEXPECT_LIB):$(TEST_DIR):$(STEPS_DIR) behave $(CURDIR)/test/behave/* --no-source --no-skipped --tags=$(tags) 2>&1 ; \
 	else \
 		echo "Please specify tags=tagname or flags=[behave flags]"; \
 		exit 1; \

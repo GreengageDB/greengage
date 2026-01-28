@@ -17,7 +17,7 @@ import pipes
 from behave import given, when, then
 from test.behave_utils.utils import *
 
-from .mgmt_utils import *
+from mgmt_utils import *
 
 class GpsshExkeysMgmtContext:
     """

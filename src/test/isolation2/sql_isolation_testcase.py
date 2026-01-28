@@ -312,7 +312,7 @@ class SQLIsolationExecutor(object):
                 print(r.rstrip(), file=self.out_file)
 
         def fork(self, command, blocking, global_sh_executor):
-            print(" <waiting ...>", file=self.out_file)
+            print("  <waiting ...>", file=self.out_file)
             self.pipe.send((command, True))
 
             if blocking:
@@ -324,7 +324,7 @@ class SQLIsolationExecutor(object):
 
         def join(self):
             r = None
-            print(" <... completed>", file=self.out_file)
+            print("  <... completed>", file=self.out_file)
             if self.has_open:
                 r = self.pipe.recv()
             if r is None:
@@ -339,7 +339,7 @@ class SQLIsolationExecutor(object):
                 raise Exception("Should not finish test case while waiting for results")
 
         def quit(self):
-            print("... <quitting>", file=self.out_file)
+            print(" ... <quitting>", file=self.out_file)
             self.stop()
 
         def terminate(self):
@@ -845,11 +845,14 @@ class SQLIsolationExecutor(object):
             to output file
         """
         shell_executor = GlobalShellExecutor(output_file, initfile_prefix)
+        newline = False
         try:
             command = ""
             for line in sql_file:
                 #tinctest.logger.info("re.match: %s" %re.match(r"^\d+[q\\<]:$", line))
-                print(line.strip(), end=' ', file=output_file)
+                print((" " if command and not newline else "") + line.strip(), end="", file=output_file)
+                newline = False
+                # output_file.write(line.strip())
                 if line[0] == "!":
                     command_part = line # shell commands can use -- for long options like --include
                 elif re.match(r";.*--", line) or re.match(r"^--", line):
@@ -858,6 +861,7 @@ class SQLIsolationExecutor(object):
                     command_part = line
                 if command_part == "" or command_part == "\n":
                     print(file=output_file)
+                    newline = True
                 elif re.match(r".*;\s*$", command_part) or re.match(r"^\d+[qt\\<]:\s*$", line) or re.match(r"^\*R[qt]:$", line) or re.match(r"^-?\d+[SUMR][qt\\<]:\s*$", line):
                     command += command_part
                     try:
