@@ -1,6 +1,8 @@
 # Line too long - pylint: disable=C0301
 # Copyright (c) Greenplum Inc 2011. All Rights Reserved.
 
+from builtins import str
+from builtins import object
 from optparse import OptionGroup
 import os
 import sys
@@ -25,7 +27,7 @@ except ImportError as ex:
 
 logger = gplog.get_default_logger()
 
-class GpPkgProgram:
+class GpPkgProgram(object):
     """ This is the CLI entry point to package management code.  """
     def __init__(self, options, args):
         self.master_datadir = options.masterDataDirectory

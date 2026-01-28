@@ -2,6 +2,7 @@
 #
 # Copyright (c) Greenplum Inc 2010. All Rights Reserved.
 #
+from builtins import object
 from gppylib import gplog, pgconf
 from gppylib.commands import gp
 from gppylib.db import catalog, dbconn
@@ -9,7 +10,7 @@ from gppylib.utils import toNonNoneString, checkNotNone
 
 logger = gplog.get_default_logger()
 
-class GpMasterEnvironment:
+class GpMasterEnvironment(object):
     """
 
     Encapsulates information about the environment in which the script is running AND about the

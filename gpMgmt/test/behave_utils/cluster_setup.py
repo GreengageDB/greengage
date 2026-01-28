@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
+from builtins import str
+from builtins import object
 import os
 import socket
 import inspect
@@ -20,7 +22,7 @@ class GpDeleteSystem(Command):
         return result
 
 
-class TestCluster:
+class TestCluster(object):
     def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0'):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
@@ -137,7 +139,7 @@ def substitute_strings_in_file(input_file, output_file, sub_dictionary):
         with open(input_file, 'r') as input_file_object:
             for each_line in input_file_object:
                 new_line = each_line
-                for key,value in sub_dictionary.items():
+                for key,value in list(sub_dictionary.items()):
                     new_line = new_line.replace(key, value)
                 if not each_line == new_line:
                     substituted = True
@@ -173,7 +175,7 @@ def reset_hosts(hosts, test_base_dir):
     mirror_dir = os.path.join(test_base_dir, 'data', 'mirror')
     master_dir = os.path.join(test_base_dir, 'data', 'master')
 
-    host_args = " ".join(map(lambda x: "-h %s" % x, hosts))
+    host_args = " ".join(["-h %s" % x for x in hosts])
     reset_primary_dirs_cmd = "gpssh %s -e 'rm -rf %s; mkdir -p %s'" % (host_args, primary_dir, primary_dir)
     res = run_shell_command(reset_primary_dirs_cmd, 'reset segment dirs', verbose=True)
     if res['rc'] > 0:

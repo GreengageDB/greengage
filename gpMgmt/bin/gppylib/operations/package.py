@@ -2,6 +2,9 @@ from __future__ import print_function
 # Line too long - pylint: disable=C0301
 # Copyright (c) Greenplum Inc 2011. All Rights Reserved.
 
+from builtins import str
+from builtins import range
+from builtins import object
 from contextlib import closing
 import os
 import platform
@@ -143,7 +146,7 @@ class RequiredDependencyError(Exception):
     pass
 
 
-class Gppkg:
+class Gppkg(object):
     """
         This class stores all the information about a gppkg
     """
@@ -242,7 +245,7 @@ class Gppkg:
                 if cur_file.endswith(SPECFILE_NAME):
                     specfile = tarinfo.extractfile(cur_file)
                     yamlfile = yaml.safe_load(specfile)
-                    keys = yamlfile.keys()
+                    keys = list(yamlfile.keys())
                     break
 
         # store all the tags
@@ -1176,7 +1179,7 @@ class PerformHooks(Operation):
         if self.hooks is None:
             return
         for hook in self.hooks:
-            key = hook.keys()
+            key = list(hook.keys())
             if key is None:
                 return
             key_str = key[0]
@@ -1250,7 +1253,7 @@ class UninstallPackage(Operation):
 
 
 class QueryPackage(Operation):
-    INFO, LIST, ALL = range(3)
+    INFO, LIST, ALL = list(range(3))
 
     def __init__(self, query_type, package_path):
         self.query_type = query_type
@@ -1366,7 +1369,7 @@ class BuildGppkg(Operation):
         with open(specfile) as cur_file:
             yamlfile = yaml.safe_load(cur_file)
 
-            tags = yamlfile.keys()
+            tags = list(yamlfile.keys())
 
             pkg_path_details = {}
 
@@ -1404,7 +1407,7 @@ class BuildGppkg(Operation):
         """
 
         logger.debug('_verify_tags')
-        tags = yamlfile.keys()
+        tags = list(yamlfile.keys())
 
         tags = [tag.lower() for tag in tags]
 

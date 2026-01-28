@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import object
 from collections import defaultdict
 import datetime
 import json
@@ -161,7 +163,7 @@ class RecoveryResult(object):
 
     def _print_invalid_errors(self):
         if self._invalid_recovery_errors:
-            for hostname, error in self._invalid_recovery_errors.items():
+            for hostname, error in list(self._invalid_recovery_errors.items()):
                 self._logger.error("Unable to parse recovery error. hostname: {}, error: {}".format(hostname, error))
 
     def setup_successful(self):
@@ -182,7 +184,7 @@ class RecoveryResult(object):
         if len(self._setup_recovery_errors) > 0:
             self._logger.info("----------------------------------------------------------")
             self._logger.info("Failed to setup recovery for the following segments")
-            for hostname, errors in self._setup_recovery_errors.items():
+            for hostname, errors in list(self._setup_recovery_errors.items()):
                 for error in errors:
                     self._logger.error(setup_recovery_error_pattern.format(hostname, error.port, error.error_msg))
         self._print_invalid_errors()
@@ -199,16 +201,16 @@ class RecoveryResult(object):
                                   " or gprecoverseg -F for all differential failures".format(self.action_name))
             else:
                 self._logger.info("Failed to {} the following segments".format(self.action_name))
-            for hostname, errors in self._rewind_errors.items():
+            for hostname, errors in list(self._rewind_errors.items()):
                 for error in errors:
                     self._logger.info(bb_rewind_differential_error_pattern.format(hostname, error.port, error.progress_file,
                                                                      error.error_type))
 
-            for hostname, errors in self._differential_errors.items():
+            for hostname, errors in list(self._differential_errors.items()):
                 for error in errors:
                     self._logger.info(bb_rewind_differential_error_pattern.format(hostname, error.port, error.progress_file,
                                                                      error.error_type))
-            for hostname, errors in self._bb_errors.items():
+            for hostname, errors in list(self._bb_errors.items()):
                 for error in errors:
                     self._logger.info(bb_rewind_differential_error_pattern.format(hostname, error.port, error.progress_file,
                                                                  error.error_type))
@@ -219,7 +221,7 @@ class RecoveryResult(object):
             self._logger.info("Failed to start the following segments. "
                               "Please check the latest logs located in segment's data directory")
 
-            for hostname, errors in self._start_errors.items():
+            for hostname, errors in list(self._start_errors.items()):
                 for error in errors:
                     self._logger.info(start_error_pattern.format(hostname, error.port, error.datadir))
 
@@ -229,7 +231,7 @@ class RecoveryResult(object):
             self._logger.info("Did not start the following segments due to failure while updating the port."
                               "Please update the port in postgresql.conf located in the segment's data directory")
 
-            for hostname, errors in self._update_errors.items():
+            for hostname, errors in list(self._update_errors.items()):
                 for error in errors:
                     self._logger.info(update_error_pattern.format(hostname, error.port, error.datadir))
 

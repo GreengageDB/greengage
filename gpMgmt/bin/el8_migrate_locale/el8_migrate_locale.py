@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 #!-*- coding: utf-8 -*-
 from __future__ import print_function
+from builtins import str
+from builtins import range
+from builtins import object
 import argparse
 import sys
 from pygresql.pg import DB
@@ -471,7 +474,7 @@ class migrate(connection):
 
     def run(self):
         try:
-            for db_name, commands in self.dbdict.items():
+            for db_name, commands in list(self.dbdict.items()):
                 total_counts = len(commands)
                 logger.info("db: {}, total have {} commands to execute".format(db_name, total_counts))
                 for command in commands:

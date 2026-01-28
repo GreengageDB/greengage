@@ -1,5 +1,6 @@
 from __future__ import print_function
 from __future__ import absolute_import
+from builtins import object
 from future.utils import raise_
 from os import path
 import os
@@ -19,7 +20,7 @@ from test.behave_utils.utils import *
 
 from mgmt_utils import *
 
-class GpsshExkeysMgmtContext:
+class GpsshExkeysMgmtContext(object):
     """
     This class is intended to store per-Scenario state that is built up over a
     series of steps.

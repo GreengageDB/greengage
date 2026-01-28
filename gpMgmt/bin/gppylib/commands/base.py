@@ -16,7 +16,12 @@ for executing this set of commands.
 
 """
 
-from Queue import Queue, Empty
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import object
+from queue import Queue, Empty
 from threading import Thread
 
 import os
@@ -327,7 +332,7 @@ TODO: consider just having a single interface that needs to be implemented for
 
 # --------------------------------NEW WORLD-----------------------------------
 
-class CommandResult():
+class CommandResult(object):
     """ Used as a way to package up the results from a GpCommand
 
     """
@@ -410,7 +415,7 @@ def createExecutionContext(execution_context_id, remoteHost, stdin, gphome=None)
         return RemoteExecutionContext(remoteHost, stdin, gphome)
 
 
-class ExecutionContext():
+class ExecutionContext(object):
     """ An ExecutionContext defines where and how to execute the Command and how to
     gather up information that are the results of the command.
 
@@ -444,7 +449,7 @@ class LocalExecutionContext(ExecutionContext):
         # e.g. Given {'FOO': 1, 'BAR': 2}, we'll produce "FOO=1 BAR=2 ..."
 
         # also propagate env from command instance specific map
-        keys = sorted(cmd.propagate_env_map.keys(), reverse=True)
+        keys = sorted(list(cmd.propagate_env_map.keys()), reverse=True)
         for k in keys:
             cmd.cmdStr = "%s=%s && %s" % (k, cmd.propagate_env_map[k], cmd.cmdStr)
 
@@ -495,7 +500,7 @@ class RemoteExecutionContext(LocalExecutionContext):
         self.__class__.trail.add(self.targetHost)
 
         # also propagate env from command instance specific map
-        keys = sorted(cmd.propagate_env_map.keys(), reverse=True)
+        keys = sorted(list(cmd.propagate_env_map.keys()), reverse=True)
         for k in keys:
             cmd.cmdStr = "%s=%s && %s" % (k, cmd.propagate_env_map[k], cmd.cmdStr)
 
@@ -641,7 +646,7 @@ def run_remote_commands(name, commands):
     """
     cmds = {}
     pool = WorkerPool()
-    for host, cmdStr in commands.items():
+    for host, cmdStr in list(commands.items()):
         cmd = Command(name=name, cmdStr=cmdStr, ctxt=REMOTE, remoteHost=host)
         pool.addCommand(cmd)
         cmds[host] = cmd

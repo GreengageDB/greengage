@@ -9,6 +9,10 @@
 """
 
 # ===========================================================
+from past.builtins import cmp
+from builtins import map
+from builtins import str
+from builtins import object
 import sys, os, re
 
 # Python version 2.6.2 is expected, must be between 2.5-3.0
@@ -22,7 +26,7 @@ MAIN_VERSION = [6,99,99]    # version number for main
 
 
 #============================================================
-class GpVersion:
+class GpVersion(object):
     '''
     The gpversion class is an abstraction of a given Greengage release 
     version.  It exists in order to facilitate version comparisons,
@@ -167,7 +171,7 @@ class GpVersion:
                 raise Exception("Version too long")
             elif len(v) < maxlen:
                 v.extend([99,99])
-            v = map(int, v)  # Convert to integers
+            v = list(map(int, v))  # Convert to integers
             if v[0] <= 4:
                 self.version = v[:4]
             else:

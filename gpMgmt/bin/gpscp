@@ -17,6 +17,8 @@ Usage: gpscp [--version] [-?v] [-r] [-p port] [-u user]
 from __future__ import print_function
 
 # disable deprecationwarnings
+from builtins import str
+from builtins import object
 import warnings
 
 warnings.simplefilter('ignore', DeprecationWarning)
@@ -40,7 +42,7 @@ if sys.version_info < (2, 5, 0):
 #
 # all the command line options
 #
-class Global:
+class Global(object):
     script_name = os.path.split(__file__)[-1]
     USER = os.environ.get('LOGNAME') or os.environ.get('USER')
     opt = {}

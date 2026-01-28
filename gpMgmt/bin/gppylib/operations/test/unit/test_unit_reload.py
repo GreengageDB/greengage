@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from builtins import object
 import os
 import unittest
 
@@ -10,7 +11,7 @@ from mock import MagicMock, Mock, mock_open, patch
 class GpReloadTestCase(unittest.TestCase):
 
     def setUp(self):
-        class Options:
+        class Options(object):
             def __init__(self):
                 if 'PGPORT' not in os.environ:
                     self.port = None

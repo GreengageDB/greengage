@@ -1,3 +1,4 @@
+from builtins import str
 from . import redirect_stderr
 from mock import call, Mock, patch, ANY
 import sys

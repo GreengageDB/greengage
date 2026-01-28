@@ -30,6 +30,8 @@ Usage: gpssh-exkeys [--version] [-?v]
 
 from __future__ import with_statement
 from __future__ import print_function
+from builtins import str
+from builtins import object
 import os, sys
 
 progname = os.path.split(sys.argv[0])[-1]
@@ -60,7 +62,7 @@ except ImportError as e:
 # all the command line options
 #
 
-class Global:
+class Global(object):
     script_name = os.path.split(__file__)[-1]
     opt = {}
     opt['-v'] = False
@@ -100,7 +102,7 @@ def print_version():
     sys.exit(0)
 
 
-class Host:
+class Host(object):
     def __init__(self, host, localhost=False):
         self.m_host = host
         self.m_popen = None

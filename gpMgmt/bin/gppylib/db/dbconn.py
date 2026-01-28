@@ -6,6 +6,10 @@
 TODO: module docs
 """
 from __future__ import print_function
+from builtins import oct
+from builtins import str
+from builtins import range
+from builtins import object
 import sys
 import os
 import stat
@@ -24,7 +28,7 @@ logger = gplog.get_default_logger()
 
 class ConnectionError(Exception): pass
 
-class Pgpass():
+class Pgpass(object):
     """ Class for handling .pgpass file.
     """
     entries = []
@@ -84,7 +88,7 @@ class Pgpass():
     def pgpass_valid(self):
         return self.valid_pgpass
 
-class DbURL:
+class DbURL(object):
     """ DbURL is used to store all of the data required to get at a PG
         or GP database.
 

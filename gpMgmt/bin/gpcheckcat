@@ -22,6 +22,15 @@ Usage: gpcheckcat [<option>] [dbname]
 
 '''
 from __future__ import print_function
+from __future__ import division
+from past.builtins import cmp
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import map
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import datetime
 import getopt
 import logging
@@ -102,7 +111,7 @@ def setError(level):
 
 
 ###############################
-class Global():
+class Global(object):
     def __init__(self):
         self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
@@ -350,7 +359,7 @@ def connect(user=None, password=None, host=None, port=None,
                      (database, str(ex).strip()))
         exit(1)
 
-    class DbWrapper:
+    class DbWrapper(object):
         def __init__(self, db):
             self.db = db
 
@@ -2215,7 +2224,7 @@ def checkOwners():
 
 
 def closeDbs():
-    for key, conns in GV.db.iteritems():
+    for key, conns in GV.db.items():
         db = conns[0]
         db.close()
     GV.db = {}  # remove everything
@@ -2339,7 +2348,7 @@ def checkForeignKey(cat_tables=None):
         if foreign_key_issues:
             GV.checkStatus = False
 
-        for catname, tuples in foreign_key_issues.iteritems():
+        for catname, tuples in foreign_key_issues.items():
                 for pkcatname, fields, results in tuples:
                     processForeignKeyResult(catname, pkcatname, fields, results)
                     if catname == 'gp_fastsequence' and pkcatname == 'pg_class':
@@ -2503,7 +2512,7 @@ class checkAOSegVpinfoThread(execThread):
                 #
                 # 	AOCSVPInfoEntry entry[1];
                 # } AOCSVPInfo;
-                vpinfo_attr_count = (vpinfo_length - 12) / 16
+                vpinfo_attr_count = old_div((vpinfo_length - 12), 16)
                 if vpinfo_attr_count != attr_count:
                     GV.checkStatus = False
                     setError(ERROR_NOREPAIR)
@@ -3394,8 +3403,8 @@ def runAllChecks(run_tests):
         # name adjustments
 
         dbids = set(GV.Remove.keys())
-        dbids = dbids.union(GV.AdjustConname.keys())
-        dbids = dbids.union(GV.DemoteConstraint.keys())
+        dbids = dbids.union(list(GV.AdjustConname.keys()))
+        dbids = dbids.union(list(GV.DemoteConstraint.keys()))
 
         for seg in dbids:
             script += '\n%secho "Repairing segment %i"\n' % (maybeRemove, seg)
@@ -3441,7 +3450,7 @@ def do_repair_for_segments(segments_to_repair_statements, issue_type, descriptio
 def do_repair_for_extra(catalog_issues):
     setError(ERROR_REMOVE)
     repair_dir_path = ""
-    for (catalog_table_obj, pk_name), issues in catalog_issues.iteritems():
+    for (catalog_table_obj, pk_name), issues in catalog_issues.items():
         try:
             repair_obj = Repair(context=GV, issue_type="extra", desc="Removing extra entries")
             repair_dir_path = repair_obj.create_repair_for_extra_missing(catalog_table_obj=catalog_table_obj,
@@ -3542,7 +3551,7 @@ def getCatalog():
 # -------------------------------------------------------------------------------
 def getReportConfiguration():
     cfg = {}
-    for _, each in GV.cfg.iteritems():
+    for _, each in GV.cfg.items():
         cfg[each['content']] = {'segname': "content " + str(each['content']),
                                 'hostname': each['hostname'],
                                 'port': each['port']}
@@ -3629,7 +3638,7 @@ def getGPObject(oid, catname):
 # -------------------------------------------------------------------------------
 def getOidFromPK(catname, pkeys):
     # pkeys: name-value pair
-    pkeystrList = ["%s='%s'" % (key, value) for key, value in pkeys.iteritems()]
+    pkeystrList = ["%s='%s'" % (key, value) for key, value in pkeys.items()]
     pkeystr = ' and '.join(pkeystrList)
 
     qry = """
@@ -3757,11 +3766,11 @@ def processMissingDuplicateEntryResult(catname, colname, allValues, type):
 
             ids = [int(i) for i in segids]
 
-            if len(ids) <= (GV.max_content + 2) / 2:
+            if len(ids) <= old_div((GV.max_content + 2), 2):
                 issue = CatMissingIssue(catname, pkeys, segids, 'extra')
                 gpObj.addMissingIssue(issue)
 
-            if len(ids) >= (GV.max_content + 2) / 2:
+            if len(ids) >= old_div((GV.max_content + 2), 2):
                 allids = [int(i) for i in range(-1, GV.max_content+1)]
                 diffids = set(allids) - set(ids)
 
@@ -3810,7 +3819,7 @@ def processInconsistentEntryResult(catname, pknames, colname, allValues):
     elif 'oid' in colname:
         gpColName = 'oid'
 
-    for keys, values in groupedValues.iteritems():
+    for keys, values in groupedValues.items():
         rowObjName = gpObjName
         pkeys = dict((n, values[0][colname.index(n)]) for n in pknames)
 
@@ -3939,7 +3948,7 @@ def processACLResult(catname, colname, allValues):
 
 
 # -------------------------------------------------------------------------------
-class CatInconsistentIssue:
+class CatInconsistentIssue(object):
     def __init__(self, catname, columns, rows):
 
         self.catname = catname
@@ -3968,7 +3977,7 @@ class CatInconsistentIssue:
 
 
 # -------------------------------------------------------------------------------
-class CatForeignKeyIssue:
+class CatForeignKeyIssue(object):
     def __init__(self, catname, pkeys, segids, fcatname, fkeys):
 
         self.catname = catname
@@ -3994,7 +4003,7 @@ class CatForeignKeyIssue:
 
 
 # -------------------------------------------------------------------------------
-class CatMissingIssue:
+class CatMissingIssue(object):
     def __init__(self, catname, pkeys, segids, type):
 
         self.catname = catname
@@ -4027,7 +4036,7 @@ class CatMissingIssue:
 
 
 # -------------------------------------------------------------------------------
-class CatDuplicateIssue:
+class CatDuplicateIssue(object):
     def __init__(self, catname, pkeys, segids, enum):
         self.catname = catname
         self.pkeys = pkeys  # string of pkey=xxxx or oid=xxxx
@@ -4041,7 +4050,7 @@ class CatDuplicateIssue:
 
 
 # -------------------------------------------------------------------------------
-class CatACLIssue:
+class CatACLIssue(object):
     def __init__(self, catname, pkeys, segid, macl_only, sacl_only):
 
         self.catname = catname
@@ -4067,7 +4076,7 @@ class CatACLIssue:
                     (GV.report_cfg[self.segid]['segname'], self.sacl_only))
 
 # -------------------------------------------------------------------------------
-class CatUniqueIndexViolationIssue:
+class CatUniqueIndexViolationIssue(object):
     def __init__(self, table_name, index_name):
         self.catname = table_name
         self.index_name = index_name
@@ -4078,7 +4087,7 @@ class CatUniqueIndexViolationIssue:
             % (self.catname, self.index_name)
         )
 
-class CatDependencyIssue:
+class CatDependencyIssue(object):
     def __init__(self, table_name, oid, content):
         self.catname = table_name
         self.oid = oid
@@ -4091,7 +4100,7 @@ class CatDependencyIssue:
         )
 
 # -------------------------------------------------------------------------------
-class CatOrphanToastTableIssue:
+class CatOrphanToastTableIssue(object):
     def __init__(self, oid, catname, issue, segments):
         self.oid = oid
         self.catname = catname
@@ -4103,7 +4112,7 @@ class CatOrphanToastTableIssue:
         myprint('''On segment(s) %s table '%s' (oid: %s) %s''' % (', '.join(map(str, sorted(self.segments))), self.catname, self.oid, self.issue.cause))
 
 # -------------------------------------------------------------------------------
-class GPObject:
+class GPObject(object):
     def __init__(self, oid, catname):
         self.oid = oid
         self.catname = catname
@@ -4186,7 +4195,7 @@ class GPObject:
 
         # Report dependency issues
         if len(self.dependencyIssues):
-            for catname, issues in self.dependencyIssues.iteritems():
+            for catname, issues in self.dependencyIssues.items():
                 myprint('    Name of test which found this issue: dependency_%s' % catname)
                 for each in issues:
                     each.report()
@@ -4194,7 +4203,7 @@ class GPObject:
 
         # Report inconsistent issues
         if len(self.inconsistentIssues):
-            for catname, issues in self.inconsistentIssues.iteritems():
+            for catname, issues in self.inconsistentIssues.items():
                 myprint('    Name of test which found this issue: inconsistent_%s' % catname)
                 for each in issues:
                     each.report()
@@ -4211,13 +4220,13 @@ class GPObject:
                 for each in self.missingIssues['pg_class']:
                     each.report()
 
-                for catname, issues in self.missingIssues.iteritems():
+                for catname, issues in self.missingIssues.items():
                     if catname != 'pg_class' and catname not in omitlist:
                         myprint('    Name of test which found this issue: missing_extraneous_%s' % catname)
                         for each in issues:
                             each.report()
             else:
-                for catname, issues in self.missingIssues.iteritems():
+                for catname, issues in self.missingIssues.items():
                     myprint('    Name of test which found this issue: missing_extraneous_%s' % catname)
                     for each in issues:
                         each.report()
@@ -4227,7 +4236,7 @@ class GPObject:
 
         # Report foreign key issues
         if len(self.foreignkeyIssues):
-            for catname, issues in self.foreignkeyIssues.iteritems():
+            for catname, issues in self.foreignkeyIssues.items():
                 myprint('    Name of test which found this issue: foreign_key_%s' % catname)
                 for each in issues:
                     each.report()
@@ -4235,7 +4244,7 @@ class GPObject:
 
         # Report duplicate issues
         if len(self.duplicateIssues):
-            for catname, issues in self.duplicateIssues.iteritems():
+            for catname, issues in self.duplicateIssues.items():
                 myprint('    Name of test which found this issue: duplicate_%s' % catname)
                 for each in issues:
                     each.report()
@@ -4243,7 +4252,7 @@ class GPObject:
 
         # Report ACL issues
         if len(self.aclIssues):
-            for catname, issues in self.aclIssues.iteritems():
+            for catname, issues in self.aclIssues.items():
                 myprint('    Name of test which found this issue: acl_%s' % catname)
                 for each in issues:
                     each.report()
@@ -4251,7 +4260,7 @@ class GPObject:
 
         # Report Orphan Toast Table issues
         if len(self.orphanToastTableIssues):
-            for catname, issues in self.orphanToastTableIssues.iteritems():
+            for catname, issues in self.orphanToastTableIssues.items():
                 for each in issues:
                     each.report()
             myprint('')
@@ -4263,7 +4272,7 @@ class GPObject:
             db = connect2(GV.cfg[GV.master_dbid], utilityMode=False)
             oid_query = "select (select nspname from pg_namespace where oid=relnamespace) || '.' || relname from pg_class where oid=%d"
             type_query = "select (select nspname from pg_namespace where oid=relnamespace) || '.' || relname from pg_class where reltype=%d"
-            for issues in self.missingIssues.values() :
+            for issues in list(self.missingIssues.values()) :
                 for issue in issues:
                     # Get schemaname.tablename corresponding to oid
                     for key in issue.pkeys:
@@ -4447,7 +4456,7 @@ def buildGraph():
         if objects == {}: return
         getRelInfo(objects)
         localObjects = {}
-        for (oid, catname), obj in objects.iteritems():
+        for (oid, catname), obj in objects.items():
             # Top level object, add to graph
             if obj.isTopLevel():
                 if obj not in graph:
@@ -4642,7 +4651,7 @@ def main():
     check_gpexpand()
 
     GV.cfg = getGPConfiguration()
-    truncate_batch_size(len(GV.cfg.keys()))
+    truncate_batch_size(len(list(GV.cfg.keys())))
 
     GV.report_cfg = getReportConfiguration()
     GV.max_content = max([GV.cfg[dbid]['content'] for dbid in GV.cfg])
@@ -4694,7 +4703,7 @@ def main():
                 skip_tests = check_test_names_parsed(skip_names_array)
                 run_tests = [x for x in all_checks if x not in skip_tests]
             else:
-                run_tests = all_checks.keys()
+                run_tests = list(all_checks.keys())
 
             runAllChecks(run_tests)
 

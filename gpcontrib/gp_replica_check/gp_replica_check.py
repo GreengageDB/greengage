@@ -29,6 +29,9 @@ gp_replica_check.py -d "mydb1,mydb2,..." -r "hash,bitmap,gist,..."
 '''
 from __future__ import print_function
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import map
 import argparse
 import sys
 try:
@@ -36,7 +39,7 @@ try:
 except:
     import subprocess
 import threading
-import Queue
+import queue
 import pipes  # for shell-quoting, pipes.quote()
 import time
 
@@ -107,7 +110,7 @@ def install_extension(databases):
     get_datname_sql = ''' SELECT datname FROM pg_database WHERE datname != 'template0' '''
     create_ext_sql = ''' CREATE EXTENSION IF NOT EXISTS gp_replica_check '''
 
-    database_list = map(str.strip, databases.split(','))
+    database_list = list(map(str.strip, databases.split(',')))
     print("Creating gp_replica_check extension on databases if needed:")
     datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     for datname in datnames:
@@ -127,7 +130,7 @@ WHERE gscp.content = gscm.content
     seglist = subprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     segmap = {}
     for segrow in seglist:
-        segelements = map(str.strip, segrow.split('|'))
+        segelements = list(map(str.strip, segrow.split('|')))
         if len(segelements) > 1:
             segmap.setdefault(segelements[2], []).append(segelements)
 
@@ -143,7 +146,7 @@ def get_databases(databases):
 SELECT datname FROM pg_catalog.pg_database WHERE datname != 'template0'
 '''
 
-    database_list = map(str.strip, databases.split(','))
+    database_list = list(map(str.strip, databases.split(',')))
 
     dbrawlist = subprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     dblist = []
@@ -157,7 +160,7 @@ SELECT datname FROM pg_catalog.pg_database WHERE datname != 'template0'
 def start_verification(segmap, dblist, relation_types):
     replica_check_list = []
     failed = False
-    for content, seglist in segmap.items():
+    for content, seglist in list(segmap.items()):
         for segrow in seglist:
             for dbname in dblist:
                 replica_check = ReplicaCheck(segrow, dbname, relation_types)

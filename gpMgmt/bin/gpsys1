@@ -19,6 +19,7 @@ Output:
 """
 from __future__ import print_function
 
+from builtins import str
 import sys, os, getopt
 
 script_name = os.path.split(__file__)[-1]

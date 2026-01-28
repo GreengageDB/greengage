@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import object
 import os
 import shutil
 import unittest
@@ -132,7 +134,7 @@ def run_remote_command(cmd_str, host):
     else:
         return results.stdout.strip()
 
-class GppkgSpec:
+class GppkgSpec(object):
     """Represents the gppkg spec file"""
     def __init__(self, name, version, gpdbversion = GPDB_VERSION, os = OS, arch = ARCH):
         """
@@ -213,7 +215,7 @@ class BuildGppkg(Operation):
 
         return self.gppkg_spec.get_filename()
 
-class RPMSpec:
+class RPMSpec(object):
     """Represents an RPM spec file used for creating an RPM"""
     def __init__(self, name, version, release, depends = []):
         """

@@ -3,6 +3,8 @@
 # Copyright (c) 2017, Pivotal Software Inc.
 #
 
+from builtins import str
+from builtins import object
 import os
 import sys
 from gppylib.commands import gp
@@ -94,7 +96,7 @@ class cgroup(object):
             fullpath = os.path.join(self.mount_point, comp, compdir, path)
             pathtype = path[-1] == "/" and "directory" or "file"
             modebits = reduce(lambda x, y: x | y,
-                              map(lambda x: self.tab[x], mode), 0)
+                              [self.tab[x] for x in mode], 0)
 
             if not os.path.exists(fullpath):
                 self.die("%s '%s' does not exist" % (pathtype, fullpath))

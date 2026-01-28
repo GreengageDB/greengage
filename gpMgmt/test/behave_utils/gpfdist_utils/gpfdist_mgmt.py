@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import object
 try:
     import time
     import os
@@ -8,7 +10,7 @@ except ImportError as import_exception:
              ' greengage_path.sh.  Detail: %s' % str(import_exception))
 import socket
 
-class Gpfdist:
+class Gpfdist(object):
     """
     Gpfdist class to management create and cleanup of gpfdist instance
     """
