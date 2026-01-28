@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import imp
 import os
 import io
@@ -5,7 +6,7 @@ import io
 import sys
 from mock import patch
 
-from gp_unittest import GpTestCase
+from .gp_unittest import GpTestCase
 
 
 class GpSshTestCase(GpTestCase):

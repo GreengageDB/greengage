@@ -4,6 +4,7 @@
 #
 # This file contains ssh Session class and support functions/classes.
 
+from __future__ import print_function
 import cmd
 import os
 import sys
@@ -66,7 +67,7 @@ class HostList():
         if host.find(':') >= 0:
             try:
                 socket.inet_pton(socket.AF_INET6, host)
-            except socket.error, e:
+            except socket.error as e:
                 raise HostNameError(str(e), lineno)
 
         # MPP-13617 - check for ipv4
@@ -75,7 +76,7 @@ class HostList():
             if len(octs) == 4 and False not in [o.isdigit() for o in octs]:
                 try:
                     socket.inet_pton(socket.AF_INET, host)
-                except socket.error, e:
+                except socket.error as e:
                     raise HostNameError(str(e), lineno)
 
         self.list.append(host)
@@ -143,10 +144,10 @@ class Session(cmd.Cmd):
     userName = None
     echoCommand = False
 
-    class SessionError(StandardError):
+    class SessionError(Exception):
         pass
 
-    class SessionCmdExit(StandardError):
+    class SessionCmdExit(Exception):
         pass
 
     def __init__(self, hostList=None, userName=None):
@@ -169,7 +170,7 @@ class Session(cmd.Cmd):
 
     def login(self, hostList=None, userName=None, delaybeforesend=0.05, sync_multiplier=1.0, sync_retries=3):
         """This is the normal entry point used to add host names to the object and log in to each of them"""
-        if self.verbose: print '\n[Reset ...]'
+        if self.verbose: print('\n[Reset ...]')
         if not (self.hostList or hostList):
             raise self.SessionError('No host list available to Login method')
         if not (self.userName or userName):
@@ -212,7 +213,7 @@ class Session(cmd.Cmd):
                     good_list.append(p)
                     if self.verbose:
                         with print_lock:
-                            print '[INFO] login %s' % hostname
+                            print('[INFO] login %s' % hostname)
                 except Exception as e:
                     # some logins fail due to the clearing of the TERM env variable
                     # retry by restoring the TERM variable to see if it succeeds or else error out
@@ -222,14 +223,14 @@ class Session(cmd.Cmd):
                         continue
 
                     with print_lock:
-                        print '[ERROR] unable to login to %s' % hostname
+                        print('[ERROR] unable to login to %s' % hostname)
                         if type(e) is pxssh.ExceptionPxssh:
-                            print e
+                            print(e)
                         elif type(e) is pxssh.EOF:
-                            print 'Could not acquire connection.'
-                            print e
+                            print('Could not acquire connection.')
+                            print(e)
                         else:
-                            print 'hint: use gpssh-exkeys to setup public-key authentication between hosts'
+                            print('hint: use gpssh-exkeys to setup public-key authentication between hosts')
 
                 break
 
@@ -315,7 +316,7 @@ class Session(cmd.Cmd):
 
         line = self.escapeLine(command)
 
-        if self.verbose: print command
+        if self.verbose: print(command)
 
         # Execute the command on our ssh sessions
         commandoutput = self.executeCommand(command)
@@ -325,13 +326,13 @@ class Session(cmd.Cmd):
         '''Takes a list of output lists as an iterator and writes them to standard output,
         formatted with the hostname from which each output array was obtained'''
         for s in self.pxssh_list:
-            output = commandoutput.next()
+            output = next(commandoutput)
             # Write the output
             if len(output) == 0:
                 print (self.peerStringFormat() % s.x_peer)
             else:
                 for line in output:
-                    print (self.peerStringFormat() % s.x_peer), line
+                    print((self.peerStringFormat() % s.x_peer), line)
 
     def closePxsshList(self, list):
         lock = threading.Lock()

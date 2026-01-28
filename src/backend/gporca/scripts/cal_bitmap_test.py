@@ -21,6 +21,7 @@
 # See comment "How to add a test" below in the program for how to
 # extend this program.
 
+from __future__ import print_function
 import argparse
 import time
 import re
@@ -30,7 +31,7 @@ import sys
 
 try:
     from gppylib.db import dbconn
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants

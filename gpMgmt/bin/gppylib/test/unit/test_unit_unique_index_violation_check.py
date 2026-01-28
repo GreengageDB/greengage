@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gpcheckcat_modules.unique_index_violation_check import UniqueIndexViolationCheck
 
 

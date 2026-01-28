@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import base64
 import errno
 import imp
@@ -10,7 +11,7 @@ import tempfile
 from gppylib.gparray import Segment, GpArray, SegmentPair
 from gpconfig_modules.parse_guc_metadata import ParseGuc
 
-from gp_unittest import *
+from .gp_unittest import *
 from mock import *
 from pygresql.pg import DatabaseError
 from StringIO import StringIO
@@ -87,7 +88,7 @@ class GpConfig(GpTestCase):
         self.guc.vartype = "string"
 
         shared_dir = os.path.join(self.temp_dir, ParseGuc.DESTINATION_DIR)
-        _mkdir_p(shared_dir, 0755)
+        _mkdir_p(shared_dir, 0o755)
         self.guc_disallowed_readonly_file = os.path.abspath(os.path.join(shared_dir, ParseGuc.DESTINATION_FILENAME))
         with open(self.guc_disallowed_readonly_file, 'w') as f:
             f.writelines("x\ny\n")

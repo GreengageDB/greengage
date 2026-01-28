@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import unittest
 import sys
 import os
@@ -39,7 +40,7 @@ def get_port_from_conf():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
     if os.path.isfile(file):
         with open(file) as f:
-            for line in f.xreadlines():
+            for line in f:
                 match = re.search('port=\d+',line)
                 if match:
                     match1 = re.search('\d+', match.group())
