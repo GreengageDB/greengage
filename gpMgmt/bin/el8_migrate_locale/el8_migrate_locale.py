@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 #!-*- coding: utf-8 -*-
+from __future__ import print_function
 import argparse
 import sys
 from pygresql.pg import DB
@@ -14,7 +15,7 @@ import os
 import re
 try:
     from pygresql import pg
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 class connection(object):
@@ -40,7 +41,7 @@ class connection(object):
             file = datadir +'/postgresql.conf'
             if os.path.isfile(file):
                 with open(file) as f:
-                    for line in f.xreadlines():
+                    for line in f:
                         match = re.search('port=\d+',line)
                         if match:
                             match1 = re.search('\d+', match.group())
@@ -113,21 +114,21 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
         # print all catalog indexes that might be affected.
         cindex = self.get_affected_catalog_indexes()
         if cindex:
-            print>>f, "\c ", self.dbname
+            print("\c ", self.dbname, file=f)
         for indexrelid, indexname, tablename, collname, indexdef in cindex:
-            print>>f, "-- catalog indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef
-            print>>f, self.handle_one_index(indexname)
-            print>>f
+            print("-- catalog indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef, file=f)
+            print(self.handle_one_index(indexname), file=f)
+            print(file=f)
 
         # print all user indexes in all databases that might be affected.
         for dbname in dblist:
             index = self.get_affected_user_indexes(dbname)
             if index:
-                print>>f, "\c ", dbname
+                print("\c ", dbname, file=f)
             for indexrelid, indexname, tablename, collname, indexdef in index:
-                print>>f, "-- indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef
-                print>>f, self.handle_one_index(indexname)
-                print>>f
+                print("-- indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef, file=f)
+                print(self.handle_one_index(indexname), file=f)
+                print(file=f)
 
         f.close()
 
@@ -215,7 +216,7 @@ class CheckTables(connection):
             result = tabsForDebug.getresult()
             logger.debug("There are {} range partitioning tables in database {}.".format(len(result), dbname))
             if len(result):
-                print tabsForDebug
+                print(tabsForDebug)
 
         # Filtered partition range table that partition key in collate types.
         filterTabs = db.query(sql)
@@ -223,7 +224,7 @@ class CheckTables(connection):
         if len(filterResult):
             logger.warning("There are {} range partitioning tables with partition key in collate types(like varchar, char, text) in database {}, these tables might be affected due to Glibc upgrade and should be checked when doing OS upgrade from EL7 to EL8.".format(len(filterResult), dbname))
             if self.loglevel == logging.DEBUG:
-                print filterTabs
+                print(filterTabs)
 
         db.close()
         return filterResult
@@ -238,7 +239,7 @@ class CheckTables(connection):
         result = tables.getresult()
         if result:
             logger.warning("There are {} tables in database {} that the distribution key is using custom operator class, should be checked when doing OS upgrade from EL7 to EL8.".format(len(result), dbname))
-            print tables
+            print(tables)
         db.close()
 
     # Escape double-quotes in a string, so that the resulting string is suitable for
@@ -319,9 +320,9 @@ class CheckTables(connection):
 
             # dump the table info to the specified output file
             if table_info:
-                print>>f, "-- order table by size in %s order " % 'ascending' if self.order_size_ascend else '-- order table by size in descending order'
-                print>>f, "\c ", dbname
-                print>>f
+                print("-- order table by size in %s order " % 'ascending' if self.order_size_ascend else '-- order table by size in descending order', file=f)
+                print("\c ", dbname, file=f)
+                print(file=f)
 
                 # sort the tables by size
                 if self.order_size_ascend:
@@ -335,9 +336,9 @@ class CheckTables(connection):
                     coll = result[2]
                     attname = result[3]
                     msg = result[4]
-                    print>>f, "-- parrelid:", parrelid, "| coll:", coll, "| attname:", attname, "| msg:", msg
-                    print>>f, self.handle_one_table(name)
-                    print>>f
+                    print("-- parrelid:", parrelid, "| coll:", coll, "| attname:", attname, "| msg:", msg, file=f)
+                    print(self.handle_one_table(name), file=f)
+                    print(file=f)
 
         # print the total partition table size
         self.print_size_summary_info()
@@ -345,7 +346,7 @@ class CheckTables(connection):
         f.close()
 
     def print_size_summary_info(self):
-        print "---------------------------------------------"
+        print("---------------------------------------------")
         KB = float(1024)
         MB = float(KB ** 2)
         GB = float(KB ** 3)
@@ -360,7 +361,7 @@ class CheckTables(connection):
 
         print("total partition tables       : {}".format(self.total_roots))
         print("total leaf partitions        : {}".format(self.total_leafs))
-        print "---------------------------------------------"
+        print("---------------------------------------------")
 
     # start multiple threads to do the check
     def concurrent_check(self, dbname):
@@ -496,7 +497,7 @@ class migrate(connection):
                     db.query(analyze_sql)
 
             db.close()
-        except Exception, e:
+        except Exception as e:
             logger.error("{}".format(str(e)))
 
 def parseargs():

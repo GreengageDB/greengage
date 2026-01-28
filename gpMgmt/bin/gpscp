@@ -14,6 +14,7 @@ Usage: gpscp [--version] [-?v] [-r] [-p port] [-u user]
 	     -f file      : a file listing all hosts to connect to
              -J character : character to be substitute as hostname [default='=']
 '''
+from __future__ import print_function
 
 # disable deprecationwarnings
 import warnings
@@ -60,13 +61,13 @@ def usage(exitarg):
     try:
         parser.print_help()
     except:
-        print __doc__
+        print(__doc__)
     sys.exit(exitarg)
 
 
 #############
 def print_version():
-    print '%s version $Revision$' % GV.script_name
+    print('%s version $Revision$' % GV.script_name)
     sys.exit(0)
 
 
@@ -74,7 +75,7 @@ def print_version():
 def parseCommandLine():
     try:
         (options, args) = getopt.getopt(sys.argv[1:], '?vrJ:p:u:h:f:', ['version'])
-    except Exception, e:
+    except Exception as e:
         usage('Error: ' + str(e))
 
     for (switch, val) in options:
@@ -105,7 +106,7 @@ def parseCommandLine():
 
 #############
 def run(cmd, peer):
-    if GV.opt['-v']: print '[INFO]', cmd
+    if GV.opt['-v']: print('[INFO]', cmd)
     p = popen2.Popen4(cmd)
     p.x_cmd = cmd
     p.x_peer = peer
@@ -124,7 +125,7 @@ try:
 
     try:
         hostlist.checkSSH()
-    except ssh_utils.SSHError, e:
+    except ssh_utils.SSHError as e:
         sys.exit('[ERROR] ' + str(e))
 
     GV.opt['-h'] = hostlist.filterMultiHomedHosts()
@@ -145,14 +146,14 @@ try:
     errmsg = None
     for p in proc:
         for out in p.fromchild:
-            print '[OUT %s] %s' % (p.x_peer, out)
+            print('[OUT %s] %s' % (p.x_peer, out))
         status = p.wait()
         if status:
             errmsg = '[ERROR %s] exit %d, cmd - %s' % (p.x_peer, status, p.x_cmd)
-            print errmsg
+            print(errmsg)
 
     if errmsg: sys.exit(1)
-    if GV.opt['-v']: print '[INFO] completed successfully'
+    if GV.opt['-v']: print('[INFO] completed successfully')
 
 except KeyboardInterrupt:
     sys.exit('\nInterrupted...')

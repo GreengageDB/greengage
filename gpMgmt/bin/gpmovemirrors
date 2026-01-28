@@ -28,7 +28,7 @@ try:
     from gppylib.operations.segment_tablespace_locations import get_tablespace_locations
     from gppylib.operations.update_pg_hba_on_segments import update_pg_hba_for_new_mirrors
 
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants
@@ -114,7 +114,7 @@ def parseargs():
         if options.master_data_directory is None:
             options.master_data_directory = get_masterdatadir()
         options.gphome = get_gphome()
-    except GpError, msg:
+    except GpError as msg:
         logger.error(msg)
         parser.exit()
 
@@ -264,7 +264,7 @@ class Configuration:
                     self.newMirrorList.append(newMirror)
                 except ValueError:
                     raise ValueError('Missing or invalid value on line %d of file: %s.' % (lineno, inputFile))
-                except Exception, e:
+                except Exception as e:
                     raise Exception('Invalid input file on line %d of file %s: %s' % (lineno, inputFile, str(e)))
 
     def write_output_file(self, filename, oldToNew=True):
@@ -335,7 +335,7 @@ try:
     # Get array configuration
     try:
         gpArrayInstance = GpArray.initFromCatalog(dburl, utility=True)
-    except DatabaseError, ex:
+    except DatabaseError as ex:
         logger.error('Failed to connect to database.  Make sure the')
         logger.error('Greengage instance is running, and that')
         logger.error('your environment is correct, then rerun')
@@ -445,7 +445,7 @@ try:
             logging.error("There was an issue removing the old mirror segment directories.")
             raise Exception("Unable to complete removal of old mirror segment directories.")
 
-except Exception, e:
+except Exception as e:
     if options is not None and options.verbose:
         logger.exception("gpmovemirrors failed. exiting...")
     else:

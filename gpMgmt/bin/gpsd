@@ -2,6 +2,7 @@
 # Copyright (c) 2014 Pivotal inc.
 
 
+from __future__ import print_function
 import datetime
 import subprocess
 import os
@@ -81,8 +82,8 @@ def dumpTupleCount(cur):
     columns = map(lambda x: x[0], cur.description)
     types = ['int', 'real', 'int']
     for vals in ResultIter(cur):
-        print setStmt.format(',\n'.join(map(lambda t: '\t%s = %s::%s' %
-                                            t, zip(columns[2:], vals[2:], types))), vals[0], vals[1])
+        print(setStmt.format(',\n'.join(map(lambda t: '\t%s = %s::%s' %
+                                            t, zip(columns[2:], vals[2:], types))), vals[0], vals[1]))
 
 
 def dumpStats(cur, inclHLL):
@@ -170,7 +171,7 @@ def dumpStats(cur, inclHLL):
                     rowVals.append('\t{0}'.format('NULL::int4[]'))
             else:
                 rowVals.append('\t{0}::{1}'.format(val, typ))
-        print pstring.format(vals[0], vals[2], ',\n'.join(rowVals))
+        print(pstring.format(vals[0], vals[2], ',\n'.join(rowVals)))
 
 
 def parseCmdLine():
@@ -250,11 +251,11 @@ def main():
         dumpGlobals(connectionInfo, envOpts)
         # Now be sure that when we load the rest we are doing it in the right
         # database
-        print '\\connect ' + db + '\n'
+        print('\\connect ' + db + '\n')
         sys.stdout.flush()
         dumpSchema(connectionInfo, envOpts)
     else:
-        print '\\connect ' + db + '\n'
+        print('\\connect ' + db + '\n')
         sys.stdout.flush()
 
     # Now we have to explicitly allow editing of these pg_class &
@@ -276,7 +277,7 @@ def main():
         sys.stderr.writelines(['WARNING: This tool collects statistics about your data, including most common values, '
                                'which requires some data elements to be included in the output file.\n',
                                'Please review output file to ensure it is within corporate policy to transport the output file.\n'])
-    except pgdb.DatabaseError, err:  # catch *all* exceptions
+    except pgdb.DatabaseError as err:  # catch *all* exceptions
         sys.stderr.write('Error while dumping statistics:\n')
         sys.stderr.write(err.message)
         sys.exit(1)

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import shutil
 import sys
@@ -5,7 +6,7 @@ import tempfile
 
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.gparray import GpArray, Segment
 from gppylib.heapchecksum import HeapChecksum
 from gppylib.operations.buildMirrorSegments import GpMirrorToBuild, GpMirrorListToBuild

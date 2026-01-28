@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import imp
 import os
 import sys
@@ -5,7 +6,7 @@ from gpcheckcat_modules.foreign_key_check import ForeignKeyCheck
 
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 
 
 class GpCheckCatTestCase(GpTestCase):

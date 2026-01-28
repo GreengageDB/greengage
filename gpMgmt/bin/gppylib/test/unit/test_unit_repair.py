@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 from mock import *
 import os
-from gp_unittest import *
+from .gp_unittest import *
 from gpcheckcat_modules.repair import Repair
 import tempfile
 import shutil

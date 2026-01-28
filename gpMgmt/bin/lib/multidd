@@ -15,6 +15,7 @@ Usage: multidd {-i infile} {-o outfile} [-B blocksz] [-S filesz]
 
 	e.g. multidd -i /dev/zero -o /dbfast1/ddtest -B 8kb -S 2gb
 """
+from __future__ import print_function
 
 import getopt
 import math

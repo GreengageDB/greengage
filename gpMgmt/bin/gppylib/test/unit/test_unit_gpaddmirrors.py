@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 import os
 import sys
 
 import StringIO
 from mock import *
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.programs.clsAddMirrors import GpAddMirrorsProgram, ProgramArgumentValidationException
 from gparray import Segment, GpArray
 from gppylib.system.environment import GpMasterEnvironment

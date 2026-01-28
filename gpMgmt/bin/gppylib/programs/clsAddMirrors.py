@@ -6,6 +6,7 @@
 #
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
+from __future__ import print_function
 from gppylib.mainUtils import *
 
 from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRESS_USAGE
@@ -371,13 +372,13 @@ class GpAddMirrorsProgram:
             # get from stdin
             #
             while len(dirs) < maxPrimariesPerHost:
-                print 'Enter mirror segment data directory location %d of %d >' % (len(dirs) + 1, maxPrimariesPerHost)
+                print('Enter mirror segment data directory location %d of %d >' % (len(dirs) + 1, maxPrimariesPerHost))
                 line = raw_input().strip()
                 if len(line) > 0:
                     try:
                         dirs.append(normalizeAndValidateInputPath(line))
-                    except PathNormalizationException, e:
-                        print "\n%s\n" % e
+                    except PathNormalizationException as e:
+                        print("\n%s\n" % e)
 
         return dirs
 

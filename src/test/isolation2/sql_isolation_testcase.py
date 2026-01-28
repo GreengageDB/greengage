@@ -16,6 +16,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from __future__ import print_function
 
 import pygresql.pg
 import pty
@@ -293,7 +294,7 @@ class SQLIsolationExecutor(object):
             sp.do()
 
         def query(self, command, post_run_cmd = None, global_sh_executor = None):
-            print >>self.out_file
+            print(file=self.out_file)
             self.out_file.flush()
             if len(command.strip()) == 0:
                 return
@@ -308,12 +309,12 @@ class SQLIsolationExecutor(object):
             if post_run_cmd != None:
                 new_out = global_sh_executor.exec_global_shell_with_orig_str(r.rstrip(), post_run_cmd, True)
                 for line in new_out:
-                    print >>self.out_file, line.rstrip()
+                    print(line.rstrip(), file=self.out_file)
             else:
-                print >>self.out_file, r.rstrip()
+                print(r.rstrip(), file=self.out_file)
 
         def fork(self, command, blocking, global_sh_executor):
-            print >>self.out_file, " <waiting ...>"
+            print(" <waiting ...>", file=self.out_file)
             self.pipe.send((command, True))
 
             if blocking:
@@ -325,12 +326,12 @@ class SQLIsolationExecutor(object):
 
         def join(self):
             r = None
-            print >>self.out_file, " <... completed>"
+            print(" <... completed>", file=self.out_file)
             if self.has_open:
                 r = self.pipe.recv()
             if r is None:
                 raise Exception("Execution failed")
-            print >>self.out_file, r.rstrip()
+            print(r.rstrip(), file=self.out_file)
             self.has_open = False
 
         def stop(self):
@@ -340,7 +341,7 @@ class SQLIsolationExecutor(object):
                 raise Exception("Should not finish test case while waiting for results")
 
         def quit(self):
-            print >>self.out_file, "... <quitting>"
+            print("... <quitting>", file=self.out_file)
             self.stop()
 
         def terminate(self):
@@ -613,7 +614,7 @@ class SQLIsolationExecutor(object):
 
         self.processes[(name, mode)].terminate()
         del self.processes[(name, mode)]
-        print >> out_file, "... <terminating>"
+        print("... <terminating>", file=out_file)
 
     def get_all_primary_contentids(self, dbname):
         """
@@ -733,13 +734,13 @@ class SQLIsolationExecutor(object):
                 cmd_output = subprocess.Popen(sql.strip(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
                 if not bg_mode:
                     stdout, _ = cmd_output.communicate()
-                    print >> output_file
+                    print(file=output_file)
                     if mode == '\\retcode':
-                        print >> output_file, '-- start_ignore'
-                    print >> output_file, stdout
+                        print('-- start_ignore', file=output_file)
+                    print(stdout, file=output_file)
                     if mode == '\\retcode':
-                        print >> output_file, '-- end_ignore'
-                        print >> output_file, '(exited with code {})'.format(cmd_output.returncode)
+                        print('-- end_ignore', file=output_file)
+                        print('(exited with code {})'.format(cmd_output.returncode), file=output_file)
             elif sql.startswith('include:'):
                 helper_file = parse_include_statement(sql)
 
@@ -804,7 +805,7 @@ class SQLIsolationExecutor(object):
                     (retrieve_user, retrieve_token) = self.__get_retrieve_user_token(name, global_sh_executor)
                     self.get_process(output_file, name, con_mode, dbname=dbname, user=retrieve_user, passwd=retrieve_token).query(sql_new, post_run_cmd, global_sh_executor)
                 except SQLIsolationExecutor.SessionError as e:
-                    print >> output_file, str(e)
+                    print(str(e), file=output_file)
                     self.processes[(e.name, e.mode)].terminate()
                     del self.processes[(e.name, e.mode)]
         elif flag == "R&":
@@ -829,7 +830,7 @@ class SQLIsolationExecutor(object):
                 try:
                     self.quit_process(output_file, name, con_mode, dbname=dbname)
                 except Exception as e:
-                    print >> output_file, str(e)
+                    print(str(e), file=output_file)
                     pass
         elif flag == "M":
             self.get_process(output_file, process_name, con_mode, dbname=dbname).query(sql.strip(), post_run_cmd, global_sh_executor)
@@ -850,7 +851,7 @@ class SQLIsolationExecutor(object):
             command = ""
             for line in sql_file:
                 #tinctest.logger.info("re.match: %s" %re.match(r"^\d+[q\\<]:$", line))
-                print >>output_file, line.strip(),
+                print(line.strip(), end=' ', file=output_file)
                 if line[0] == "!":
                     command_part = line # shell commands can use -- for long options like --include
                 elif re.match(r";.*--", line) or re.match(r"^--", line):
@@ -858,7 +859,7 @@ class SQLIsolationExecutor(object):
                 else:
                     command_part = line
                 if command_part == "" or command_part == "\n":
-                    print >>output_file
+                    print(file=output_file)
                 elif re.match(r".*;\s*$", command_part) or re.match(r"^\d+[qt\\<]:\s*$", line) or re.match(r"^\*R[qt]:$", line) or re.match(r"^-?\d+[SUMR][qt\\<]:\s*$", line):
                     command += command_part
                     try:
@@ -867,7 +868,7 @@ class SQLIsolationExecutor(object):
                         # error of the GlobalShellExecutor cannot be recovered
                         raise
                     except Exception as e:
-                        print >>output_file, "FAILED: ", e
+                        print("FAILED: ", e, file=output_file)
                     command = ""
                 else:
                     command += command_part
