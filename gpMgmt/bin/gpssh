@@ -17,6 +17,10 @@ Usage: gpssh [--version] [-?v] [-h host] [-f hostfile] [cmd]
                       go into interactive mode
 '''
 from __future__ import print_function
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import os
 import sys
 
@@ -29,7 +33,7 @@ import atexit
 import signal
 import pexpect
 import time
-import ConfigParser
+import configparser
 from gppylib.util import ssh_utils
 from gppylib.gpparseopts import OptParser
 
@@ -37,7 +41,7 @@ from gppylib.gpparseopts import OptParser
 #
 # all the command line options
 #
-class __globals__:
+class __globals__(object):
     script_name = os.path.split(__file__)[-1]
     USER = os.environ.get('LOGNAME') or os.environ.get('USER')
     opt = {}
@@ -108,7 +112,7 @@ def parseConfigFile():
         return
 
     try:
-        config = ConfigParser.RawConfigParser()
+        config = configparser.RawConfigParser()
         config.read(os.environ.get('MASTER_DATA_DIRECTORY') + '/gpssh.conf')
         if GV.DELAY_BEFORE_SEND is None:
             GV.DELAY_BEFORE_SEND = config.getfloat('gpssh', 'delaybeforesend')

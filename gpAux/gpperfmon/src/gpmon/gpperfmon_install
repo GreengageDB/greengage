@@ -20,6 +20,10 @@ USAGE:   gpperfmon_install --port GPDB_PORT [--enable --password GPMON_PASSWORD]
 '''
 from __future__ import print_function
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import os, sys, time, re
 from subprocess import Popen
 
@@ -34,7 +38,7 @@ except ImportError as e:
 
 EXECNAME = os.path.split(__file__)[-1]
 
-class Command:
+class Command(object):
     def __init__(self, cmdstr, showOutput=False):
         self.cmd = cmdstr
         self.verbose = showOutput

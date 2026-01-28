@@ -13,6 +13,8 @@
 # to rewrite the file, and we do not synchronize those.
 
 from __future__ import print_function
+from builtins import str
+from builtins import object
 import os
 import sys
 import re
@@ -115,19 +117,19 @@ def validate_mutual_options(options):
         options.mastervalue = options.value
 
 
-class ToolkitQuery:
+class ToolkitQuery(object):
     def __init__(self, name):
         self.query = "select * from gp_toolkit.gp_param_setting('%s')" % name
 
 
-class GucQuery:
+class GucQuery(object):
     def __init__(self, name=None):
         self.query = 'SELECT name, setting, unit, short_desc, context, vartype, min_val, max_val FROM pg_settings'
         if name:
             self.query = self.query + " where name = '" + name + "'"
 
 
-class Guc:
+class Guc(object):
     def __init__(self, row):
         self.name = row[0]
         self.setting = row[1]
@@ -251,7 +253,7 @@ def _print_gucs(gucname, gucs, options):
 
     if _show_all_segment_values_always(options):
         print("GUC                 : %s" % gucname)
-        for guc in collection.values():
+        for guc in list(collection.values()):
             print("Context: %5s Value: %s" % (guc.context, guc.value))
     else:
         if collection.are_segments_consistent():

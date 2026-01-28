@@ -132,13 +132,13 @@ class GpCheckCatTestCase(GpTestCase):
 
             def __generate_pg_class_call(table, primary_key_cat_name, col_type, with_filter=True):
                 if with_filter:
-                    return call(table_name, '%s' % primary_key_cat_name, '%s' % col_type.keys()[0], 'oid',
+                    return call(table_name, '%s' % primary_key_cat_name, '%s' % list(col_type.keys())[0], 'oid',
                                 ['%s_pkey1' % (table_name), '%s_pkey2' % (table_name)],
                                 filter=self._get_filter(table_name),
                                 cat1pkeys=['cat1.pkey1 as %s_pkey1' % (table_name),
                                         'cat1.pkey2 as %s_pkey2' % (table_name)])
                 else:
-                    return call(table_name, '%s' % primary_key_cat_name, '%s' % col_type.keys()[0], 'oid',
+                    return call(table_name, '%s' % primary_key_cat_name, '%s' % list(col_type.keys())[0], 'oid',
                                 ['%s_pkey1' % (table_name), '%s_pkey2' % (table_name)],
                                 ['cat1.pkey1 as %s_pkey1' % (table_name),
                                  'cat1.pkey2 as %s_pkey2' % (table_name)])
@@ -204,7 +204,7 @@ class GpCheckCatTestCase(GpTestCase):
                            'gp_distribution_policy': {}
                           }
 
-        if table_name not in table_col_types.keys():
+        if table_name not in list(table_col_types.keys()):
             table_name = 'pg_attribute'
 
         return table_col_types[table_name]

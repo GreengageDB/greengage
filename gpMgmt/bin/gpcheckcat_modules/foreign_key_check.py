@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
+from builtins import str
+from builtins import map
+from builtins import object
 from gppylib.gplog import *
 from gppylib.gpcatalog import *
 import re
 
-class ForeignKeyCheck:
+class ForeignKeyCheck(object):
     """
     PURPOSE: detect differences between foreign key and reference key values among catalogs
     """

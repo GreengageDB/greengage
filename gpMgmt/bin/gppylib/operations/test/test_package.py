@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from builtins import str
+from builtins import object
 import os
 import shutil
 import unittest
@@ -87,7 +89,7 @@ def run_command(cmd_str):
         return results.stdout.strip()
 
 
-class RPMSpec:
+class RPMSpec(object):
     def __init__(self, name, version, release, depends=[]):
         self.name = name
         self.version = version
@@ -166,7 +168,7 @@ class BuildRPM(Operation):
         return self.spec.get_filename()
 
 
-class GppkgSpec:
+class GppkgSpec(object):
     def __init__(self, name, version, gpdbversion=GPDB_VERSION, os=OS, arch=ARCH):
         self.name = name
         self.version = version

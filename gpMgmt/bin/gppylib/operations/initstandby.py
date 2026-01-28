@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from builtins import str
 import os
 import base64
 import pickle
@@ -61,7 +62,7 @@ def cleanup_pg_hba_backup_on_segment(gparr):
     pool = WorkerPool(numWorkers=DEFAULT_BATCH_SIZE)
 
     try:
-        for host, data_dirs_list in host_to_seg_map.items():
+        for host, data_dirs_list in list(host_to_seg_map.items()):
             pickled_data_dirs_list = base64.urlsafe_b64encode(pickle.dumps(data_dirs_list))
             cmdStr = "$GPHOME/lib/python/gppylib/operations/initstandby.py -d %s -D" % pickled_data_dirs_list
             cmd = Command('Cleanup the pg_hba.conf backups on remote hosts', cmdStr=cmdStr , ctxt=REMOTE, remoteHost=host)
@@ -100,7 +101,7 @@ def restore_pg_hba_on_segment(gparr):
     pool = WorkerPool(numWorkers=DEFAULT_BATCH_SIZE)
 
     try:
-        for host, data_dirs_list in host_to_seg_map.items():
+        for host, data_dirs_list in list(host_to_seg_map.items()):
             pickled_data_dirs_list = base64.urlsafe_b64encode(pickle.dumps(data_dirs_list))
             cmdStr = "$GPHOME/lib/python/gppylib/operations/initstandby.py -d %s -r" % pickled_data_dirs_list
             cmd = Command('Restore the pg_hba.conf on remote hosts', cmdStr=cmdStr , ctxt=REMOTE, remoteHost=host)
@@ -165,7 +166,7 @@ def update_pg_hba_conf_on_segments(gparr, standby_host, is_hba_hostnames=False):
     pool = WorkerPool(numWorkers=DEFAULT_BATCH_SIZE)
 
     try:
-        for host, data_dirs_list in host_to_seg_map.items():
+        for host, data_dirs_list in list(host_to_seg_map.items()):
             pickled_data_dirs_list = base64.urlsafe_b64encode(pickle.dumps(data_dirs_list))
             cmdStr = "$GPHOME/lib/python/gppylib/operations/initstandby.py -p %s -d %s" % (pickled_standby_pg_hba_info, pickled_data_dirs_list)
             cmd = Command('Update the pg_hba.conf on remote hosts', cmdStr=cmdStr, ctxt=REMOTE, remoteHost=host)

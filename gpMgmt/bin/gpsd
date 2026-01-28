@@ -3,6 +3,8 @@
 
 
 from __future__ import print_function
+from builtins import str
+from builtins import zip
 import datetime
 import subprocess
 import os
@@ -78,11 +80,11 @@ def dumpTupleCount(cur):
         '(SELECT oid FROM pg_namespace WHERE nspname = \'{2}\');\n\n'
 
     cur.execute(stmt)
-    columns = map(lambda x: x[0], cur.description)
+    columns = [x[0] for x in cur.description]
     types = ['int', 'real', 'int']
     for vals in ResultIter(cur):
-        print(setStmt.format(',\n'.join(map(lambda t: '\t%s = %s::%s' %
-                                            t, zip(columns[2:], vals[2:], types))), vals[0], vals[1]))
+        print(setStmt.format(',\n'.join(['\t%s = %s::%s' %
+                                            t for t in zip(columns[2:], vals[2:], types)]), vals[0], vals[1]))
 
 
 def dumpStats(cur, inclHLL):
@@ -159,7 +161,7 @@ def dumpStats(cur, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, (str, unicode)) and val[0] == '{':
+            elif isinstance(val, (str, str)) and val[0] == '{':
                 val = val.replace("'", "''").replace('\\', '\\\\')
                 val = "E'" + val + "'"
             if i == 25 and hll == True:

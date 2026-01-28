@@ -1,4 +1,5 @@
 from __future__ import print_function
+from builtins import object
 import errno
 import os
 import re
@@ -10,7 +11,7 @@ import sys
 GUCS_DISALLOWED_IN_FILE_REGEX = r"\"(\w+)\"[^}]+GUC_DISALLOW_IN_FILE"
 
 
-class ParseGuc:
+class ParseGuc(object):
     """
     metadata about gucs, like GUC_DISALLOW_IN_FILE, is not available via
 sql. Work around that by parsing the C code that defines this metadata, and store

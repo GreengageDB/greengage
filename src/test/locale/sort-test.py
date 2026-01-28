@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 from __future__ import print_function
+from builtins import range
 import sys, string, locale
 locale.setlocale(locale.LC_ALL, "")
 

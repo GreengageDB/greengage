@@ -1,4 +1,5 @@
 from __future__ import print_function
+from builtins import object
 from contextlib import contextmanager
 import unittest
 
@@ -78,7 +79,7 @@ def run_tests():
 skip = unittest.skip
 
 
-class FakeCursor:
+class FakeCursor(object):
     def __init__(self, my_list=None):
         self.list = []
         self.rowcount = 0
@@ -101,7 +102,7 @@ class FakeCursor:
 
 # python2 unittest does not have a concept of subTest.
 # (see https://docs.python.org/3/library/unittest.html#distinguishing-test-iterations-using-subtests)
-class SubTest:
+class SubTest(object):
     @staticmethod
     @contextmanager
     def subTest(name):

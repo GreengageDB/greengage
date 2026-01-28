@@ -4,6 +4,7 @@
 #
 
 from __future__ import print_function
+from builtins import input
 import getpass
 from  gppylib import gplog
 
@@ -75,7 +76,7 @@ def ask_input(bg_info,msg,help,default,validator, *validator_opts):
     
     val = None
     while True:
-        val = raw_input("%s%s:\n> " % (msg,help))
+        val = input("%s%s:\n> " % (msg,help))
         
         retval = validator(val,default, *validator_opts)
         

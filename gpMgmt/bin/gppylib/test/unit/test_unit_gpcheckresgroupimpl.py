@@ -141,10 +141,10 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
         # set comp dir to comp.dir
         compdirs = self.cgroup.compdirs
         self.cgroup.compdirs = {}
-        for comp in compdirs.keys():
+        for comp in list(compdirs.keys()):
             self.cgroup.compdirs[comp] = comp + '.dir'
         # move /sys/fs/cgroup/comp to /sys/fs/cgroup/comp/comp.dir
-        for comp in self.cgroup.compdirs.keys():
+        for comp in list(self.cgroup.compdirs.keys()):
             compdir = self.cgroup.compdirs[comp]
             olddir = os.path.join(self.cgroup_mntpnt, comp)
             tmpdir = os.path.join(self.cgroup_mntpnt, compdir)

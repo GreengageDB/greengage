@@ -1,4 +1,6 @@
 from __future__ import absolute_import
+from builtins import range
+from builtins import object
 import imp
 import logging
 import os
@@ -583,7 +585,7 @@ where
 
 
 # Define a mock class to represent CatalogTable objects
-class MockCatalogTable:
+class MockCatalogTable(object):
     def __init__(self, table_name):
         self.table_name = table_name
 
@@ -592,7 +594,7 @@ class MockCatalogTable:
 
     def getCatalogTables(self):
         return self
-class Global():
+class Global(object):
     def __init__(self):
         self.opt = {}
 

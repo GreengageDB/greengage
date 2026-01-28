@@ -1,9 +1,10 @@
+from builtins import str
+from builtins import object
 import abc
+from future.utils import with_metaclass
 
 
-class SegmentGuc():
-    __metaclass__ = abc.ABCMeta
-
+class SegmentGuc(with_metaclass(abc.ABCMeta, object)):
     MASTER_CONTEXT = '-1'
 
     def __init__(self, row):

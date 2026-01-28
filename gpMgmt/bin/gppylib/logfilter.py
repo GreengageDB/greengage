@@ -43,7 +43,12 @@ Module contents:
 """
 from __future__ import print_function
 
-import cStringIO
+from future import standard_library
+standard_library.install_aliases()
+from builtins import next
+from past.builtins import basestring
+from builtins import object
+import io
 import csv
 from datetime import date, datetime
 import re
@@ -277,13 +282,13 @@ class CsvFlatten(object):
 
     def __init__(self,iterable):
         self.source = iter(iterable)
-        self.buffer = cStringIO.StringIO()
+        self.buffer = io.StringIO()
         self.writer = csv.writer(self.buffer, delimiter=csvDelimeter, quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         item = next(self.source)
         #we need to make a minor format change to the log level field so that
         # our single regex will match both.
@@ -312,7 +317,7 @@ class Count(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         item = next(self.source)
         self.n += 1
         return item
@@ -345,7 +350,7 @@ class TimestampSpy(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         try:
             item = next(self.source)
         except StopIteration as e:
@@ -708,7 +713,7 @@ def NoMatchInFirstLine(iterable, regex):
 def MatchColumns(iterable, cols):
     if isinstance(cols, basestring):
         cols = cols.split(',')
-        cols = map(lambda x: int(x), cols)
+        cols = [int(x) for x in cols]
 
     # Yield items in which a match is found for the 'include' pattern.
     for item in iterable:

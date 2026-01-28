@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from builtins import object
 import glob
 from datetime import datetime, timedelta
 try:
@@ -10,7 +11,7 @@ from .utils import run_gpcommand
 from gppylib.commands.base import Command
 from gppylib.db import dbconn
 
-class Gpexpand:
+class Gpexpand(object):
     def __init__(self, context, working_directory=None):
         self.database = 'postgres'
         self.working_directory = working_directory
@@ -69,8 +70,7 @@ class Gpexpand:
         return output, p1.wait()
 
     def initialize_segments(self, additional_params=''):
-        fns = filter(lambda fn: not fn.endswith(".ts"),
-                     glob.glob('%s/gpexpand_inputfile*' % self.working_directory))
+        fns = [fn for fn in glob.glob('%s/gpexpand_inputfile*' % self.working_directory) if not fn.endswith(".ts")]
         input_files = sorted(fns)
         return run_gpcommand(self.context, "gpexpand -i %s %s" % (input_files[-1], additional_params))
 

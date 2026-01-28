@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 
+from builtins import object
 class OrphanToastTableIssue(object):
     def __init__(self, cause, row, table):
         self.cause = cause

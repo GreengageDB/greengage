@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+from builtins import object
 import os
 
 from gppylib.gplog import *
@@ -73,7 +74,7 @@ class GpTempFileForTesting(GpFileSystemProvider):
 # An implementation of GpFileSystemProvider that passes operations through to the underlying
 #  operating system
 #
-class GpFileSystemProviderForTest :
+class GpFileSystemProviderForTest(object) :
 
 
     def __init__(self):

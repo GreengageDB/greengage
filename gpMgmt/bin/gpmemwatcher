@@ -15,6 +15,7 @@
 #------------------------------------------------------------------------
 
 from __future__ import print_function
+from builtins import str
 import gzip
 import os
 import subprocess
@@ -130,7 +131,7 @@ def parseHostfile(hostfile):
     # returns an array of tuples of the form (host, work_dir
     try:
         with open(hostfile, 'r') as f:
-            return map(lambda x: tuple(x.rstrip().split(':')), f)
+            return [tuple(x.rstrip().split(':')) for x in f]
     except Exception as e:
         raise Exception(e)
 
