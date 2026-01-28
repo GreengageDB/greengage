@@ -7,7 +7,6 @@ TODO: module docs
 """
 from __future__ import print_function
 from builtins import oct
-from builtins import str
 from builtins import range
 from builtins import object
 import sys

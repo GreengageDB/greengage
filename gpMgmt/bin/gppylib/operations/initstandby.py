@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from builtins import str
 import os
 import base64
 import pickle

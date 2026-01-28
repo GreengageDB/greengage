@@ -9,3 +9,4 @@ psutil==5.7.0
 setuptools==36.6.0
 unittest2==0.5.1
 pyyaml==5.3.1
+future==0.16

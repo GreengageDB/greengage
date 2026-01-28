@@ -12,7 +12,6 @@
 """
 from __future__ import print_function
 from past.builtins import cmp
-from builtins import str
 from builtins import object
 import copy
 from gppylib.gplog import *

@@ -2,7 +2,6 @@ from __future__ import print_function
 # Line too long - pylint: disable=C0301
 # Copyright (c) Greenplum Inc 2011. All Rights Reserved.
 
-from builtins import str
 from builtins import range
 from builtins import object
 from contextlib import closing

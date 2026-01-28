@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-from builtins import str
 import os
 import imp
 
@@ -58,7 +57,7 @@ class GpExpand(GpTestCase):
             patch('gpexpand.get_default_logger', return_value=self.subject.logger),
             patch('gpexpand.HeapChecksum'),
         ])
-        self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
+        # self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
         self.getConfigProviderFunctionMock = self.get_mock_from_apply_patch("getConfigurationProvider")
         self.gpMasterEnvironmentMock = self.get_mock_from_apply_patch("GpMasterEnvironment")
         self.previous_master_data_directory = os.getenv('MASTER_DATA_DIRECTORY', '')
@@ -119,14 +118,14 @@ class GpExpand(GpTestCase):
     #
     # unit tests for interview_setup()
     #
-    def test_user_aborts(self):
-        self.raw_input_mock.return_value = "N"
+    @patch('gppylib.userinput.input', side_effect=['N'])
+    def test_user_aborts(self, mock1):
         with self.assertRaises(SystemExit):
             self.subject.interview_setup(self.gparray, self.options)
         self.subject.logger.info.assert_any_call("User Aborted. Exiting...")
 
-    def test_nonstandard_gpArray_user_aborts(self):
-        self.raw_input_mock.side_effect = ["Y", "N"]
+    @patch('gppylib.userinput.input', side_effect=['Y', 'N'])
+    def test_nonstandard_gpArray_user_aborts(self, mock1):
         self.gparray.isStandardArray = Mock(return_value=(False, ""))
         with patch('sys.stdout', new=io.BytesIO()) as mock_stdout:
             with self.assertRaises(SystemExit):

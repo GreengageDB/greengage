@@ -4,7 +4,6 @@
 #
 # Copyright (c) EMC Inc 2010. All Rights Reserved.
 #
-from builtins import str
 from builtins import range
 from builtins import object
 from gppylib.mainUtils import SimpleMainLock, ExceptionNoStackTraceNeeded

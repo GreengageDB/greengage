@@ -10,7 +10,6 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
-from builtins import str
 from builtins import object
 from gppylib.mainUtils import *
 

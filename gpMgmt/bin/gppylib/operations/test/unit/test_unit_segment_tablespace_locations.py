@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from builtins import str
 from mock import Mock, patch, call
 from gppylib.operations.segment_tablespace_locations import get_tablespace_locations, get_segment_tablespace_oid_locations
 from test.unit.gp_unittest import GpTestCase

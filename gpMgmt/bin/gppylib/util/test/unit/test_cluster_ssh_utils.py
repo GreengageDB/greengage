@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
 import mock
 import sys, os, pwd
 import unittest
 from io import StringIO
 from mock import patch, call
+import six
 
 try:
     gphome = os.environ.get('GPHOME')
@@ -74,7 +72,7 @@ class SshUtilsTestCase(unittest.TestCase):
             session2.login(['localhost'], 'gpadmin', 1.0, 4.0)
             mock_login.assert_called_with('localhost', 'gpadmin', sync_multiplier=4.0)
 
-    @patch('sys.stdout', new_callable=StringIO)
+    @patch('sys.stdout', new_callable=six.StringIO)
     def test04_exceptions(self, mock_stdout):
         '''
         Test pxssh.login() exceptions
@@ -98,7 +96,7 @@ class SshUtilsTestCase(unittest.TestCase):
 
     @patch('os.getenv', return_value="term")
     @patch('os.putenv')
-    @patch('sys.stdout', new_callable=StringIO)
+    @patch('sys.stdout', new_callable=six.StringIO)
     def test05_login_retry_when_term_variable_is_set(self, mock_stdout, mock_putenv, mock_getenv):
         '''
         Test pxssh.login() retry when there is an exception and TERM env variable is set
@@ -114,7 +112,7 @@ class SshUtilsTestCase(unittest.TestCase):
 
     @patch('os.getenv', return_value=None)
     @patch('os.putenv')
-    @patch('sys.stdout', new_callable=StringIO)
+    @patch('sys.stdout', new_callable=six.StringIO)
     def test06_login_does_not_retry_when_term_variable_is_not_set(self, mock_stdout, mock_putenv, mock_getenv):
         '''
         Test pxssh.login() does not retry when there is an exception and TERM env variable is not set

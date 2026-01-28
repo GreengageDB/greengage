@@ -1,6 +1,5 @@
 # coding=utf-8
 from __future__ import absolute_import
-from builtins import str
 from .TEST_local_base import write_config_file, psql_run, mkpath
 from .TEST_local_base import prepare_before_test, drop_tables, runfile
 from .TEST_local_base import runfile, copy_data, run, hostNameAddrs, masterPort

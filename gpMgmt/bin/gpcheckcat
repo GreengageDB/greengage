@@ -24,9 +24,6 @@ Usage: gpcheckcat [<option>] [dbname]
 from __future__ import print_function
 from __future__ import division
 from past.builtins import cmp
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
 from builtins import map
 from builtins import range
 from past.utils import old_div
@@ -37,6 +34,7 @@ import logging
 import re
 import sys
 import time
+import six
 from contextlib import closing
 from functools import reduce
 
@@ -85,7 +83,7 @@ def parse_int(val):
 ###############################
 def quote_value(name):
     """Add surrounding single quote, double interior single quote."""
-    assert isinstance(name, str)
+    assert isinstance(name, six.string_types)
     return "'" + "''".join(name.split("'")) + "'"
 
 
