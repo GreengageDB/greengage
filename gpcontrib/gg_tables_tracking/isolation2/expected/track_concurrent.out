@@ -1,0 +1,108 @@
+-- start_matchsubs
+-- m/ERROR:  Track for database \d+ is being acquired in other transaction/
+-- s/\d+/XXX/g
+-- end_matchsubs
+-- Test concurrent track acquisition.
+1: CREATE EXTENSION IF NOT EXISTS gg_tables_tracking;
+CREATE EXTENSION
+1: SELECT gg_tables_tracking.tracking_register_db();
+ tracking_register_db 
+----------------------
+ t                    
+(1 row)
+1: SELECT gg_tables_tracking.tracking_trigger_initial_snapshot();
+ tracking_trigger_initial_snapshot 
+-----------------------------------
+ t                                 
+(1 row)
+1: BEGIN;
+BEGIN
+1: WITH segment_counts AS ( SELECT tt.segid, COUNT(*) AS cnt FROM gg_tables_tracking.tables_track tt GROUP BY tt.segid ), pg_class_count AS ( SELECT COUNT(*) AS cnt FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid WHERE nspname = ANY (string_to_array(current_setting('gg_tables_tracking.tracking_schemas'), ',')) AND c.relkind = ANY (string_to_array(current_setting('gg_tables_tracking.tracking_relkinds'), ',')) ) SELECT bool_and(sc.cnt = pc.cnt) FROM segment_counts sc, pg_class_count pc;
+ bool_and 
+----------
+ t        
+(1 row)
+
+2: SELECT tt.segid, count(*) FROM gg_tables_tracking.tables_track tt GROUP BY tt.segid;
+ERROR:  Track for database 160632 is being acquired in other transaction
+
+1: ROLLBACK;
+ROLLBACK
+
+2: WITH segment_counts AS ( SELECT tt.segid, COUNT(*) AS cnt FROM gg_tables_tracking.tables_track tt GROUP BY tt.segid ), pg_class_count AS ( SELECT COUNT(*) AS cnt FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid WHERE nspname = ANY (string_to_array(current_setting('gg_tables_tracking.tracking_schemas'), ',')) AND c.relkind = ANY (string_to_array(current_setting('gg_tables_tracking.tracking_relkinds'), ',')) ) SELECT bool_and(sc.cnt = pc.cnt) FROM segment_counts sc, pg_class_count pc;
+ bool_and 
+----------
+ t        
+(1 row)
+
+-- Test uncommited file creation is not seen from other transaction until the
+-- first one is commited.
+1: BEGIN;
+BEGIN
+1: CREATE TABLE tracking_t1 AS SELECT generate_series (1, 100) i DISTRIBUTED BY (i);
+SELECT 100
+
+2: SELECT relname, size, state, segid, relkind, relam FROM gg_tables_tracking.tables_track;
+ relname                               | size  | state | segid | relkind | relam 
+---------------------------------------+-------+-------+-------+---------+-------
+ gp_distribution_policy_localoid_index | 65536 | a     | -1    | i       | 403   
+ gp_distribution_policy                | 32768 | a     | -1    | r       | 2     
+ gp_distribution_policy_localoid_index | 65536 | a     | 2     | i       | 403   
+ gp_distribution_policy                | 32768 | a     | 2     | r       | 2     
+ gp_distribution_policy_localoid_index | 65536 | a     | 0     | i       | 403   
+ gp_distribution_policy                | 32768 | a     | 0     | r       | 2     
+ gp_distribution_policy_localoid_index | 65536 | a     | 1     | i       | 403   
+ gp_distribution_policy                | 32768 | a     | 1     | r       | 2     
+(8 rows)
+
+1: COMMIT;
+COMMIT
+
+2: SELECT relname, size, state, segid, relkind, relam FROM gg_tables_tracking.tables_track;
+ relname     | size  | state | segid | relkind | relam 
+-------------+-------+-------+-------+---------+-------
+ tracking_t1 | 0     | a     | -1    | r       | 2     
+ tracking_t1 | 32768 | a     | 2     | r       | 2     
+ tracking_t1 | 32768 | a     | 0     | r       | 2     
+ tracking_t1 | 32768 | a     | 1     | r       | 2     
+(4 rows)
+
+-- Test file creation is seen from other transaction after the first transaction
+-- has taken the track.
+1: BEGIN;
+BEGIN
+1: CREATE TABLE tracking_t2 AS SELECT generate_series (1, 100) i DISTRIBUTED BY (i);
+SELECT 100
+1: SELECT relname, size, state, segid, relkind, relam FROM gg_tables_tracking.tables_track;
+ relname     | size  | state | segid | relkind | relam 
+-------------+-------+-------+-------+---------+-------
+ tracking_t2 | 32768 | a     | 1     | r       | 2     
+ tracking_t2 | 32768 | a     | 2     | r       | 2     
+ tracking_t2 | 32768 | a     | 0     | r       | 2     
+(3 rows)
+1: COMMIT;
+COMMIT
+
+2: SELECT relname, size, state, segid, relkind, relam FROM gg_tables_tracking.tables_track;
+ relname     | size  | state | segid | relkind | relam 
+-------------+-------+-------+-------+---------+-------
+ tracking_t2 | 0     | a     | -1    | r       | 2     
+ tracking_t2 | 32768 | a     | 2     | r       | 2     
+ tracking_t2 | 32768 | a     | 1     | r       | 2     
+ tracking_t2 | 32768 | a     | 0     | r       | 2     
+(4 rows)
+
+1: DROP TABLE tracking_t1;
+DROP TABLE
+1: DROP TABLE tracking_t2;
+DROP TABLE
+1: SELECT gg_tables_tracking.tracking_unregister_db();
+ tracking_unregister_db 
+------------------------
+ t                      
+(1 row)
+1: DROP EXTENSION gg_tables_tracking;
+DROP EXTENSION
+
+1q: ... <quitting>
+2q: ... <quitting>
