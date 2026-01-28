@@ -2247,7 +2247,7 @@ def checkACL():
     # looks up information in the catalog:
     tables = GV.catalog.getCatalogTables()
 
-    for cat in sorted(tables):
+    for cat in sorted(tables, key=lambda table: table.getTableName()):
         checkTableACL(cat)
 # -------------------------------------------------------------------------------
 
@@ -2382,7 +2382,7 @@ def checkMissingEntry():
 def _checkAllTablesForMissingEntries():
     catalog_issues = {}
     tables = GV.catalog.getCatalogTables()
-    for catalog_table_obj in sorted(tables):
+    for catalog_table_obj in sorted(tables, key=lambda table: table.getTableName()):
         catalog_name = catalog_table_obj.getTableName()
         if catalog_name == "pg_description" or catalog_name == "pg_shdescription":
             continue
@@ -2625,7 +2625,7 @@ def checkInconsistentEntry():
     # looks up information in the catalog:
     tables = GV.catalog.getCatalogTables()
 
-    for cat in sorted(tables):
+    for cat in sorted(tables, key=lambda table: table.getTableName()):
         checkTableInconsistentEntry(cat)
 
 
@@ -2768,7 +2768,7 @@ def checkDuplicateEntry():
     # looks up information in the catalog:
     tables = GV.catalog.getCatalogTables()
 
-    for cat in sorted(tables):
+    for cat in sorted(tables, key=lambda table: table.getTableName()):
         ## pg_depend does not care about duplicates at the moment
         if cat == 'pg_depend':
             continue
@@ -4484,7 +4484,7 @@ def checkcatReport():
         par.reportAllIssues()
         if par not in graph:
             return
-        for child in sorted(graph[par]):
+        for child in sorted(graph[par], key=lambda obj: (obj.oid, obj.catname)):
             reportAllIssuesRecursive(child, graph)
 
     buildGraph()
@@ -4512,7 +4512,7 @@ def checkcatReport():
         else:
             myprint('Found a total of %d issue(s)' % total)
 
-        for par in sorted(GPObjectGraph):
+        for par in sorted(GPObjectGraph, key=lambda obj: (obj.oid, obj.catname)):
             if par.isTopLevel():
                 reportAllIssuesRecursive(par, GPObjectGraph)
         myprint('')

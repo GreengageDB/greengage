@@ -875,7 +875,7 @@ def impl(context, command, out_msg, num):
 
     match_count = len(re.findall(out_msg, context.stdout_message))
     if match_count != int(num):
-        raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, count, msg_list))
+        raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, match_count, msg_list))
 
 @given('the user records the current timestamp in log_timestamp table')
 @when('the user records the current timestamp in log_timestamp table')
@@ -925,7 +925,7 @@ def impl(context, command, called_command, num, args):
 
     if len(matches) != int(num):
         raise Exception("Expected %s to occur with %s args %s times. Found %d. \n %s"
-                        % (called_command, args, num, len(matches), context.stdout_message))
+                        % (called_command, args, int(num), len(matches), context.stdout_message))
 
 
 @then('{command} should only spawn up to {num} workers in WorkerPool')
@@ -938,7 +938,7 @@ def impl(context, command, num):
         init_workers = int(iw_re.group(1))
         if init_workers > int(num):
             raise Exception("Expected Workerpool for %s to be initialized with %d workers. Found %d. \n %s"
-                            % (command, num, init_workers, context.stdout_message))
+                            % (command, int(num), init_workers, context.stdout_message))
 
 
 @given('{command} should return a return code of {ret_code}')
@@ -1766,7 +1766,7 @@ def impl(context, seg):
     # have finished.
     cmd = Command(name="get non-existing pid", cmdStr="echo \$\$", remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
-    pid = cmd.get_results().stdout.strip()
+    pid = cmd.get_results().stdout
 
     with open('/tmp/postmaster.pid', 'r') as fr:
         lines = fr.readlines()
@@ -2120,7 +2120,7 @@ def impl(context, filename, contain, output):
         cmd = Command(name='Running remote command: %s' % cmd_str, cmdStr=cmd_str)
         cmd.run(validateAfter=True)
 
-        actual = cmd.get_stdout().decode('utf-8')
+        actual = cmd.get_stdout()
         if valuesShouldExist and (output not in actual):
                 raise Exception('File %s on host %s does not contain "%s"' % (filepath, host, output))
         if (not valuesShouldExist) and (output in actual):
@@ -3811,7 +3811,7 @@ def impl(context, table_name, dbname):
     current_row_count = _get_row_count_per_segment(table_name, dbname)
 
     if saved_row_count != current_row_count:
-        raise Exception("%s table in %s has %d rows, expected %d rows." % (table_name, dbname, current_row_count, saved_row_count))
+        raise Exception("%s table in %s has %d rows, expected %d rows." % (table_name, dbname, sum(current_row_count), sum(saved_row_count)))
 
 
 @then('distribution information from table "{table1}" and "{table2}" in "{dbname}" are the same')

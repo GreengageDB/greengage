@@ -18,7 +18,7 @@ RUN set -eux; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Install allure-behave for behave tests
-    pip2 install --no-cache-dir allure-behave==2.4.0 future && \
+    python -m pip install --no-cache-dir allure-behave==2.4.0 future && \
 # Cleanup to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/man/

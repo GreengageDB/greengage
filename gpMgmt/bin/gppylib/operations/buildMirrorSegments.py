@@ -343,6 +343,7 @@ class GpMirrorListToBuild(object):
 
             self.__logger.debug("Generating configuration backout scripts")
         finally:
+            # FIXME we can silents error here. Is it expected?
             # Reenable Ctrl-C
             signal.signal(signal.SIGINT, signal.default_int_handler)
             return backout_map
