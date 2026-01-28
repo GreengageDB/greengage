@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from builtins import object
 import os
 import shutil
 import sys
@@ -18,7 +19,7 @@ from gppylib.utils import TableLogger
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 
 
-class Options:
+class Options(object):
     def __init__(self):
         self.newRecoverHosts = None
         self.spareDataDirectoryFile = ""

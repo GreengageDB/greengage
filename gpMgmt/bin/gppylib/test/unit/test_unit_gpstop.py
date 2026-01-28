@@ -1,3 +1,5 @@
+from __future__ import division
+from past.utils import old_div
 import imp
 import logging
 import os
@@ -145,7 +147,7 @@ class GpStop(GpTestCase):
 
     def test_host_missing_from_config(self):
         sys.argv = ["gpstop", "-a", "--host", "nothere"]
-        host_names = self.gparray.getSegmentsByHostName(self.gparray.getDbList()).keys()
+        host_names = list(self.gparray.getSegmentsByHostName(self.gparray.getDbList()).keys())
 
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
@@ -549,7 +551,7 @@ class GpStopPrintProgressTestCase(unittest.TestCase):
 
         # We run a command for ten milliseconds, printing progress every
         # millisecond, so at some point we should transition from 50% to 100%.
-        gpstop.print_progress(self.pool, interval=(duration / 10))
+        gpstop.print_progress(self.pool, interval=(old_div(duration, 10)))
         self.logger.info.assert_has_calls([
             call('50.00% of jobs completed'),
             call('100.00% of jobs completed'),

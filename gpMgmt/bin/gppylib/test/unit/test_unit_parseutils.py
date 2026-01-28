@@ -1,3 +1,4 @@
+from builtins import next
 import sys, os
 from mock import Mock, patch
 from gppylib.test.unit.gp_unittest import GpTestCase

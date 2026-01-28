@@ -13,6 +13,8 @@ failed.  Will promote the standby, update the system catalog
 tables to make the standby master instance as the new master.
 """
 
+from builtins import str
+from builtins import range
 import os
 import sys
 import signal
@@ -321,7 +323,7 @@ def promote_standby(master_data_dir):
     cmd.run(validateAfter=True)
 
     logger.debug('Waiting for connection...')
-    for i in xrange(600):
+    for i in range(600):
         try:
             dburl = dbconn.DbURL()
             with dbconn.connect(dburl, utility=True, logConn=False) as conn:

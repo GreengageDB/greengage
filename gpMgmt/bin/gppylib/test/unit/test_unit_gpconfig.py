@@ -1,4 +1,7 @@
 from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
 import base64
 import errno
 import imp
@@ -14,7 +17,7 @@ from gpconfig_modules.parse_guc_metadata import ParseGuc
 from .gp_unittest import *
 from mock import *
 from pygresql.pg import DatabaseError
-from StringIO import StringIO
+from io import StringIO
 
 db_singleton_side_effect_list = []
 

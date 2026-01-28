@@ -6,6 +6,8 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
+from builtins import str
+from builtins import object
 import sys
 from optparse import OptionGroup, SUPPRESS_HELP
 
@@ -40,7 +42,7 @@ logger = get_default_logger()
 
 
 # ---------------------------------------------------------------
-class GpStart:
+class GpStart(object):
     ######
     def __init__(self, specialMode, restricted, start_standby, master_datadir,
                  wrapper,
@@ -569,7 +571,7 @@ class GpStart:
         # stop them, stopping primaries before mirrors
         #
         for type in ["primary", "mirror"]:
-            for hostName, segments in segmentsByHost.iteritems():
+            for hostName, segments in segmentsByHost.items():
 
                 if type == "primary":
                     segments = [seg for seg in segments if seg.isSegmentPrimary(current_role=True)]

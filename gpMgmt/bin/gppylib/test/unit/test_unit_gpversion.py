@@ -5,6 +5,7 @@
 """ 
 Unit testing for gpversion module
 """
+from builtins import str
 import unittest
 
 from gpversion import *

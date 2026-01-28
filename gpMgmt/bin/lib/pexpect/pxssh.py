@@ -20,6 +20,8 @@ PEXPECT LICENSE
 
 '''
 
+from builtins import str
+from builtins import range
 from pexpect import ExceptionPexpect, TIMEOUT, EOF, spawn
 import time
 import os
@@ -132,7 +134,7 @@ class pxssh (spawn):
         if n > m:
             a,b = b,a
             n,m = m,n
-        current = range(n+1)
+        current = list(range(n+1))
         for i in range(1,m+1):
             previous, current = current, [i]+[0]*n
             for j in range(1,n+1):
@@ -245,7 +247,7 @@ class pxssh (spawn):
         manually set the :attr:`PROMPT` attribute.
         '''
 
-        ssh_options = ''.join([" -o '%s=%s'" % (o, v) for (o, v) in self.options.items()]) 
+        ssh_options = ''.join([" -o '%s=%s'" % (o, v) for (o, v) in list(self.options.items())]) 
         if quiet:
             ssh_options = ssh_options + ' -q'
         if not check_local_ip:

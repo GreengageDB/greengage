@@ -14,6 +14,10 @@
 """
 
 # ============================================================================
+from past.builtins import cmp
+from builtins import str
+from builtins import range
+from builtins import object
 from datetime import date
 import copy
 import traceback
@@ -80,7 +84,7 @@ class InvalidSegmentConfiguration(Exception):
 
 # ============================================================================
 # ============================================================================
-class Segment:
+class Segment(object):
     """
     Segment class representing configuration information for a single dbid
     within a Greengage Array.
@@ -405,7 +409,7 @@ class Segment:
 
 
 # ============================================================================
-class SegmentPair:
+class SegmentPair(object):
     """
     Used to represent all of the SegmentDBs with the same contentID.  Today this
     can be at most a primary SegDB and a single mirror SegDB. Future plans to
@@ -482,7 +486,7 @@ class SegmentPair:
 
 # --------------------------------------------------------------------
 # --------------------------------------------------------------------
-class SegmentRow():
+class SegmentRow(object):
 
     def __init__(self, content, isprimary, dbid, host, address, port, fulldir):
         self.content         = content
@@ -776,7 +780,7 @@ def createSegmentRowsFromSegmentList( newHostlist
 
 
 # ============================================================================
-class GpArray:
+class GpArray(object):
     """
     GpArray is a python class that describes a Greengage array.
 
@@ -1091,7 +1095,7 @@ class GpArray:
             arr.append(seg)
 
         result = {}
-        for contentId, arr in contentIdToSegments.iteritems():
+        for contentId, arr in contentIdToSegments.items():
             if len(arr) == 1:
                 pass
             elif len(arr) != 2:
@@ -1824,7 +1828,7 @@ def get_segment_hosts(master_port):
     """
     gparray = GpArray.initFromCatalog( dbconn.DbURL(port=master_port), utility=True )
     segments = GpArray.getSegmentsByHostName( gparray.getDbList() )
-    return segments.keys()
+    return list(segments.keys())
 
 
 def get_session_ids(master_port):

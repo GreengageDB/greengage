@@ -18,6 +18,9 @@ limitations under the License.
 """
 from __future__ import print_function
 
+from builtins import str
+from builtins import range
+from builtins import object
 import pygresql.pg
 import pty
 import os
@@ -873,19 +876,19 @@ class SQLIsolationExecutor(object):
                 else:
                     command += command_part
 
-            for process in self.processes.values():
+            for process in list(self.processes.values()):
                 process.stop()
         except:
-            for process in self.processes.values():
+            for process in list(self.processes.values()):
                 process.terminate()
             shell_executor.terminate()
             raise
         finally:
-            for process in self.processes.values():
+            for process in list(self.processes.values()):
                 process.terminate()
             shell_executor.terminate()
 
-class SQLIsolationTestCase:
+class SQLIsolationTestCase(object):
     """
         The isolation test case allows a fine grained control of interleaved
         executing transactions. This is mainly used to test isolation behavior.

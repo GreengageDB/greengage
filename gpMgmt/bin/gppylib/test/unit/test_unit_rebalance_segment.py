@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from builtins import str
 from mock import *
 
 from .gp_unittest import *

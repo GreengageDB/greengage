@@ -10,6 +10,8 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
+from builtins import str
+from builtins import object
 from gppylib.mainUtils import *
 
 import os, sys, time, signal
@@ -37,7 +39,7 @@ logger = gplog.get_default_logger()
 
 
 # -------------------------------------------------------------------------
-class SegStopStatus:
+class SegStopStatus(object):
     def __init__(self, datadir, stopped, reason):
         self.datadir = datadir
         self.stopped = stopped
@@ -143,7 +145,7 @@ class SegStop(base.Command):
 
 
 # -------------------------------------------------------------------------
-class GpSegStop:
+class GpSegStop(object):
     ######
     def __init__(self, dblist, mode, gpversion, timeout=SEGMENT_STOP_TIMEOUT_DEFAULT, logfileDirectory=False, segment_batch_size=DEFAULT_SEGHOST_NUM_WORKERS):
         self.dblist = dblist

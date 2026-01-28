@@ -17,7 +17,11 @@ Example:
     sb = d.kB('shared_buffers')
     at = d.time('authentication_timeout', 'ms', 2500)
 """
+from __future__ import division
 
+from builtins import chr
+from builtins import object
+from past.utils import old_div
 import os
 import os.path
 import re
@@ -261,7 +265,7 @@ class setting(object):
             if len(t) > 1:
                 i = ['ms', 's', 'min', 'h', 'd'].index(t[1])
                 m = (1, 1000, 60*1000, 3600*1000, 24*3600*1000)[i]
-            return int(t[0], 0) * m / u
+            return old_div(int(t[0], 0) * m, u)
         except (ValueError, IndexError):
             raise self.ConfigurationError('Value should be integer with '
                                           'optional suffix ms, s, min, h, or d '

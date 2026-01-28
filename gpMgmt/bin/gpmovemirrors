@@ -4,6 +4,9 @@
 #
 # Copyright (c) EMC Inc 2010. All Rights Reserved.
 #
+from builtins import str
+from builtins import range
+from builtins import object
 from gppylib.mainUtils import SimpleMainLock, ExceptionNoStackTraceNeeded
 
 import os
@@ -185,7 +188,7 @@ def lookupGpdb(address, port, dataDirectory):
 
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
-class Mirror:
+class Mirror(object):
     """ This class represents information about a mirror. """
 
     def __init__(self, address, port, dataDirectory, inPlace=False):
@@ -203,7 +206,7 @@ class Mirror:
 
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
-class Configuration:
+class Configuration(object):
     """ This class represents the mirrors. """
 
     def __init__(self):
@@ -348,7 +351,7 @@ try:
 
     PgHbaEntriesToUpdate = []
     """ Do some sanity checks on the input. """
-    for oldMirror, newMirror in itertools.izip(newConfig.oldMirrorList, newConfig.newMirrorList):
+    for oldMirror, newMirror in zip(newConfig.oldMirrorList, newConfig.newMirrorList):
         seg = lookupGpdb(oldMirror.address, oldMirror.port, oldMirror.dataDirectory)
         if seg is None:
             raise Exception(

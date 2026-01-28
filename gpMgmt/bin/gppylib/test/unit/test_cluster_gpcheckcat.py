@@ -18,7 +18,7 @@ class GpCheckCatColumnsTestCase(unittest.TestCase):
 
         # 5.json has an incomplete list of catalog tables
         # src/backend/catalog has .h files for some catalog tables
-        for key in subject.TableMainColumn.keys():
+        for key in list(subject.TableMainColumn.keys()):
             cursor = dbconn.execSQL(conn, table_query.format(table_name=key))
             self.assertTrue(cursor.rowcount == 1, "%s not found in catalog dir" % key)
 

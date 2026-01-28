@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import object
 import sys
 import signal
 from contextlib import closing
@@ -51,7 +53,7 @@ class ReconfigDetectionSQLQueryCommand(base.SQLCommand):
         dbconn.execSQL(self.cancel_conn, self.query)
 
 
-class GpSegmentRebalanceOperation:
+class GpSegmentRebalanceOperation(object):
     def __init__(self, gpEnv, gpArray, batch_size, segment_batch_size, replay_lag):
         self.gpEnv = gpEnv
         self.gpArray = gpArray
@@ -99,7 +101,7 @@ class GpSegmentRebalanceOperation:
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             self.logger.info("Stopping unbalanced primary segments...")
-            for hostname in unbalanced_primary_segs.keys():
+            for hostname in list(unbalanced_primary_segs.keys()):
                 cmd = GpSegStopCmd("stop unbalanced primary segs",
                                    self.gpEnv.getGpHome(),
                                    self.gpEnv.getGpVersion(),

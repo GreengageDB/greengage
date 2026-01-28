@@ -60,6 +60,9 @@ minirepro gptest -h locahost -U gpadmin -p 4444 -q ~/in.sql -f ~/out.sql
 '''
 from __future__ import print_function
 
+from builtins import zip
+from builtins import str
+from builtins import object
 import pwd
 import os, sys, re, json, platform, subprocess
 from optparse import OptionParser
@@ -300,7 +303,7 @@ def dump_stats(cur, oid_str, f_out, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, (str, unicode)) and val[0] == '{':
+            elif isinstance(val, (str, str)) and val[0] == '{':
                 # use an Escape string for array constants and also add one
                 # more layer of backslash escape symbols, since the string
                 # will go through two layers of escape processing

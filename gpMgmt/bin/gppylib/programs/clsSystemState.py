@@ -5,6 +5,8 @@
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
 from __future__ import print_function
+from builtins import str
+from builtins import object
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
@@ -28,7 +30,7 @@ from gppylib.utils import TableLogger
 
 logger = gplog.get_default_logger()
 
-class FieldDefinition:
+class FieldDefinition(object):
     """
     Represent a field of our data.  Note that we could infer columnName from name, but we would like
               for columnName to be more stable than "name"
@@ -102,7 +104,7 @@ VALUE__POSTMASTER_PID_FILE = FieldDefinition("File postmaster.pid", "postmaster_
 VALUE__POSTMASTER_PID_VALUE = FieldDefinition("PID from postmaster.pid file", "postmaster_pid", "text", "pid file PID") # int would be better, but we print error messages here sometimes
 VALUE__LOCK_FILES= FieldDefinition("Lock files in /tmp", "lock_files_exist", "text", "local files exist") # boolean would be nice
 
-class GpStateData:
+class GpStateData(object):
     """
     Store key-value pairs of unpacked data for each segment in the cluster
 
@@ -171,7 +173,7 @@ class GpStateData:
                     ]:
             self.__allValues[k] = True
 
-        for values in self.__entriesByCategory.values():
+        for values in list(self.__entriesByCategory.values()):
             for v in values:
                 self.__allValues[v] = True
 
@@ -278,7 +280,7 @@ def replication_state_to_string(state):
 
 
 #-------------------------------------------------------------------------
-class GpSystemStateProgram:
+class GpSystemStateProgram(object):
 
     #
     # Constructor:
@@ -581,7 +583,7 @@ class GpSystemStateProgram:
         logger.info("Gathering data from segments...")
         segmentsByHost = GpArray.getSegmentsByHostName(gpArray.getDbList())
         hostNameToCmd = {}
-        for hostName, segments in segmentsByHost.iteritems():
+        for hostName, segments in segmentsByHost.items():
             cmd = gp.GpGetSegmentStatusValues("get segment version status", segments,
                               [gp.SEGMENT_STATUS__GET_VERSION,
                                 gp.SEGMENT_STATUS__GET_PID,
@@ -597,7 +599,7 @@ class GpSystemStateProgram:
         self.__poolWait()
 
         hostNameToResults = {}
-        for hostName, cmd in hostNameToCmd.iteritems():
+        for hostName, cmd in hostNameToCmd.items():
             hostNameToResults[hostName] = cmd.decodeResults()
         return hostNameToResults
 
@@ -789,7 +791,7 @@ class GpSystemStateProgram:
             tabLog = TableLogger().setWarnWithArrows(True)
             logger.info("Number of tables to be redistributed")
             tabLog.info(["  Database", "Count of Tables to redistribute"])
-            for dbname, count in uncompleted.iteritems():
+            for dbname, count in uncompleted.items():
                 tabLog.info(["  %s" % dbname, "%d" % count])
             tabLog.addSeparator()
             tabLog.outputTable()
@@ -1009,7 +1011,7 @@ class GpSystemStateProgram:
         recovery_progress_segs = []
         for seg in gpArray.getSegDbList():
             dbid = seg.getSegmentDbId()
-            if dbid in recovery_progress_by_dbid.keys():
+            if dbid in list(recovery_progress_by_dbid.keys()):
                 data.switchSegment(seg)
                 recovery_progress_segs.append(seg)
                 recovery_type, completed_bytes, total_bytes, percentage, stage = recovery_progress_by_dbid[dbid]
@@ -1210,7 +1212,7 @@ class GpSystemStateProgram:
         replay_left = kwargs.pop('replay_left', None)
 
         if kwargs:
-            raise TypeError('unexpected keyword argument {!r}'.format(kwargs.keys()[0]))
+            raise TypeError('unexpected keyword argument {!r}'.format(list(kwargs.keys())[0]))
 
         if state:
             # Sharp eyes will notice that we may have already set the
@@ -1462,7 +1464,7 @@ class GpSystemStateProgram:
 
         # fetch from hosts
         segmentsByHost = GpArray.getSegmentsByHostName(upSegmentsAndMaster)
-        for hostName, segments in segmentsByHost.iteritems():
+        for hostName, segments in segmentsByHost.items():
             cmd = gp.GpGetSegmentStatusValues("get segment version status", segments,
                                [gp.SEGMENT_STATUS__GET_VERSION],
                                verbose=logging_is_verbose(),

@@ -1,3 +1,4 @@
+from builtins import object
 import time
 
 from gppylib.commands import base
@@ -7,7 +8,7 @@ import pygresql.pg
 
 FTS_PROBE_QUERY = 'SELECT pg_catalog.gp_request_fts_probe_scan()'
 
-class SegmentReconfigurer:
+class SegmentReconfigurer(object):
     def __init__(self, logger, worker_pool, timeout):
         self.logger = logger
         self.pool = worker_pool

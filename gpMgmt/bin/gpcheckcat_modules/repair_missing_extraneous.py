@@ -1,7 +1,10 @@
 #!/usr/bin/env python
+from builtins import zip
+from builtins import str
+from builtins import object
 from gppylib.utils import escapeDoubleQuoteInSQLString
 
-class RepairMissingExtraneous:
+class RepairMissingExtraneous(object):
 
     def __init__(self, catalog_table_obj,  issues, pk_name):
         self.catalog_table_obj = catalog_table_obj

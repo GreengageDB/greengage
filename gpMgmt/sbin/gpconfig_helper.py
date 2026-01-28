@@ -11,6 +11,8 @@
 #   file but swaps the inodes of the files, so the os.rename() does NOT affect any current readers who have already
 #   opened the OLD file.
 
+from builtins import str
+from builtins import bytes
 try:
     import base64
     import os

@@ -26,6 +26,10 @@ Assuming all of the above, you can just run the tool as so:
 """
 from __future__ import print_function
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import argparse
 import os
 import sys
@@ -72,7 +76,7 @@ def displaySegmentConfiguration():
     commands.append("psql postgres -c \"select * from gp_segment_configuration order by content, dbid\"")
     runcommands(commands, "", "")
 
-class InitMirrors():
+class InitMirrors(object):
     ''' Initialize the WAL replication mirror segment '''
 
     def __init__(self, cluster_config, hostname, init=True):
@@ -132,7 +136,7 @@ class InitMirrors():
         for thread in initThreads:
             thread.join()
 
-class StartInstances():
+class StartInstances(object):
     ''' Start a greengage segment '''
 
     def __init__(self, cluster_config, host, operation, wait=False):
@@ -212,7 +216,7 @@ class StartInstances():
         for thread in startThreads:
             thread.join()
 
-class StopInstances():
+class StopInstances(object):
     ''' Stop all segments'''
 
     def __init__(self, cluster_config):
@@ -247,7 +251,7 @@ class StopInstances():
         for thread in stopThreads:
             thread.join()
 
-class DestroyMirrors():
+class DestroyMirrors(object):
     ''' Destroy the WAL replication mirror segment '''
 
     def __init__(self, cluster_config):
@@ -296,7 +300,7 @@ class DestroyMirrors():
         for thread in destroyThreads:
             thread.join()
 
-class GpSegmentConfiguration():
+class GpSegmentConfiguration(object):
     ROLE_PRIMARY = 'p'
     ROLE_MIRROR = 'm'
     STATUS_DOWN = 'd'
@@ -315,7 +319,7 @@ class GpSegmentConfiguration():
         self.status = status
         self.mode = mode
 
-class ClusterConfiguration():
+class ClusterConfiguration(object):
     ''' Cluster configuration '''
 
     def __init__(self, hostname, port, dbname, role = "all", status = "all", include_master = True, content = "all"):

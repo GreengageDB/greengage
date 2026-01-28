@@ -1,3 +1,5 @@
+from builtins import range
+from builtins import object
 import os, pickle, base64
 
 from gppylib.utils import checkNotNone
@@ -19,7 +21,7 @@ MIRROR_MODE_MIRRORLESS = "mirrorless"
 MIRROR_MODE_PRIMARY = "primary"
 MIRROR_MODE_QUIESCENT = "quiescent"
 
-class FailedSegmentResult:
+class FailedSegmentResult(object):
 
     def __init__(self, segment, reason, reasonCode):
         self.__segment = segment
@@ -38,7 +40,7 @@ class FailedSegmentResult:
 #
 # Note that a failed segments may still be up -- it could be that the conversion to mirror/primary mode failed
 #
-class StartSegmentsResult:
+class StartSegmentsResult(object):
     def __init__(self):
         self.__successfulSegments = []
         self.__failedSegments = []
@@ -61,7 +63,7 @@ class StartSegmentsResult:
     def clearSuccessfulSegments(self):
         self.__successfulSegments = []
 
-class StartSegmentsOperation:
+class StartSegmentsOperation(object):
     """
        This operation, to be run from the master, will start the segments up
             and, if necessary, convert them to the proper mode
@@ -152,7 +154,7 @@ class StartSegmentsOperation:
         mirroringModePreTransition = MIRROR_MODE_MIRRORLESS if startMethod == START_AS_MIRRORLESS else MIRROR_MODE_QUIESCENT
 
         # launch the start
-        for hostName, segments in GpArray.getSegmentsByHostName(segments).iteritems():
+        for hostName, segments in GpArray.getSegmentsByHostName(segments).items():
             logger.debug("Dispatching command to start segments on host: %s, " \
                             "with %s contents in cluster" % (hostName, numContentsInCluster))
 

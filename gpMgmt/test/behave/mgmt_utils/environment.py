@@ -1,3 +1,4 @@
+from builtins import map
 import os
 import shutil
 
@@ -15,7 +16,7 @@ from gppylib.db import dbconn
 from gppylib.commands.base import Command, REMOTE
 
 def before_all(context):
-    if map(int, behave.__version__.split('.')) < [1,2,6]:
+    if list(map(int, behave.__version__.split('.'))) < [1,2,6]:
         raise Exception("Requires at least behave version 1.2.6 (found %s)" % behave.__version__)
 
 def before_feature(context, feature):
@@ -150,7 +151,7 @@ def after_scenario(context, scenario):
         return
 
     if 'tablespaces' in context:
-        for tablespace in context.tablespaces.values():
+        for tablespace in list(context.tablespaces.values()):
             tablespace.cleanup()
 
     if 'gpstop' in scenario.effective_tags:

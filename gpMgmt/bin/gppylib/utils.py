@@ -1,4 +1,9 @@
 from __future__ import print_function
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import object
 import shutil, filecmp,re
 import os, fcntl, select, getpass, socket
 import stat
@@ -142,9 +147,9 @@ def openAnything(source):
         return sys.stdin
 
     # try to open with urllib (if source is http, ftp, or file URL)
-    import urllib                         
+    import urllib.request, urllib.parse, urllib.error                         
     try:                                  
-        return urllib.urlopen(source)     
+        return urllib.request.urlopen(source)     
     except (IOError, OSError):            
         pass                              
     
@@ -156,8 +161,8 @@ def openAnything(source):
         
     
     # treat source as string
-    import StringIO                       
-    return StringIO.StringIO(str(source)) 
+    import io                       
+    return io.StringIO(str(source)) 
 def getOs():
     dist=None
     fdesc = None
@@ -223,7 +228,7 @@ def docIter(node):
         #have no set order. The values() call
         #gets a list of actual attribute node objects
         #from the dictionary
-        for attr in node.attributes.values():
+        for attr in list(node.attributes.values()):
             yield attr
     for child in node.childNodes:
         #Create a generator for each child,
@@ -354,7 +359,7 @@ def sortedDictByKey(di):
     return  [ (k,di[k]) for k in sorted(di.keys())]
 
 
-class TableLogger:
+class TableLogger(object):
 
     """
     Use this by constructing it, then calling warn, info, and infoOrWarn with arrays of columns, then outputTable

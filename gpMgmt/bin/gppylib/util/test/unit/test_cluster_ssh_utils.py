@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
 import mock
 import sys, os, pwd
 import unittest
-from StringIO import StringIO
+from io import StringIO
 from mock import patch, call
 
 try:
