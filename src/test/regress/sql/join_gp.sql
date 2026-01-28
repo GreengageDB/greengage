@@ -428,6 +428,7 @@ set enable_nestloop = 1;
 set enable_material = 0;
 set enable_seqscan = 0;
 set enable_bitmapscan = 0;
+analyze tenk2;
 explain select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
 select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
 reset enable_nestloop;
