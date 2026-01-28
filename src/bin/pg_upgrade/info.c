@@ -137,10 +137,19 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		}
 
 		/*
+		 * For the following cases, file transfer is not necessary:
+
 		 * External tables have relfilenodes but no physical files, and aoseg
-		 * tables are handled by their AO table
+		 * tables are handled by their AO table.
+		 * 
+		 * Partitioned tables have relfilenodes = 0 and no physical files in GG7.
+		 * 
+		 * The value of the sequences is set via setval in dumpSequenceData when pg_dump.
+		 * 
 		 */
-		if (old_rel->relstorage == 'x' || strcmp(new_rel->nspname, "pg_aoseg") == 0)
+		if ((old_rel->relstorage == 'x' || strcmp(new_rel->nspname, "pg_aoseg") == 0) ||
+			(new_rel->relkind == RELKIND_PARTITIONED_TABLE) ||
+			(new_rel->relkind == RELKIND_SEQUENCE) )
 		{
 			old_relnum++;
 			new_relnum++;
@@ -445,13 +454,20 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 				i_indtable,
 				i_toastheap,
 				i_relfilenode,
-				i_reltablespace;
+				i_reltablespace,
+				i_relkind,
+				i_segrel,
+				i_visimaprel,
+				i_blkdirrel,
+				i_segrelid;
+
 	char		query[QUERY_ALLOC];
 	char	   *last_namespace = NULL,
 			   *last_tablespace = NULL;
 
 	char		relstorage;
 	int			i_relstorage = -1;
+	char		relkind;
 
 	query[0] = '\0';			/* initialize query string to empty */
 
@@ -464,6 +480,9 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 * pg_largeobject contains user data that does not appear in pg_dump
 	 * output, so we have to copy that system table.  It's easiest to do that
 	 * by treating it as a user table.
+	 * 
+	 * We ignore partitioned tables, as they do not need to transfer files and indexes, 
+	 * as well as create toast tables starting from version 12.
 	 */
 	snprintf(query + strlen(query), sizeof(query) - strlen(query),
 			 "WITH regular_heap (reloid, indtable, toastheap) AS ( "
@@ -474,6 +493,8 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 CppAsString2(RELKIND_AOSEGMENTS) ", "
 			 CppAsString2(RELKIND_AOBLOCKDIR) ", "
 			 CppAsString2(RELKIND_MATVIEW) ", "
+			 CppAsString2(RELKIND_FOREIGN_TABLE) ", "
+			 "%s"
 			 CppAsString2(RELKIND_SEQUENCE) ") AND "
 	/* exclude possible orphaned temp tables */
 			 "    ((n.nspname !~ '^pg_temp_' AND "
@@ -484,6 +505,8 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "      c.oid >= %u::pg_catalog.oid) OR "
 			 "     (n.nspname = 'pg_catalog' AND "
 			 "      relname IN ('pg_largeobject') ))), ",
+			(GET_MAJOR_VERSION(old_cluster.major_version) >= 1200) ? "" :
+			 CppAsString2(RELKIND_PARTITIONED_TABLE) ", " ,
 			 FirstNormalObjectId);
 
 	/*
@@ -517,8 +540,32 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "    AND indrelid IN "
 			 "        (SELECT reloid FROM regular_heap "
 			 "         UNION ALL "
-			 "         SELECT reloid FROM toast_heap)) ");
+			 "         SELECT reloid FROM toast_heap)), ");
 
+	/*
+	* First query the catalog for the auxiliary heap relations which
+	* describe AO{CS} relations. The segrel and visimap must exist
+	* but the blkdirrel is created when required so it might not
+	* exist.
+	*
+	* We don't dump the block directory, even if it exists, if the
+	* table doesn't have any indexes. This isn't just an optimization:
+	* restoring it wouldn't work, because without indexes, restore
+	* won't create a block directory in the new cluster.
+	*/
+	snprintf(query + strlen(query), sizeof(query) - strlen(query),
+			"  ao (relid, segrel, visimaprel, blkdirrel, segrelid) AS ( "
+			"  SELECT relid, "
+			"       cs.relname AS segrel, "
+			"       cv.relname AS visimaprel, "
+			"       cb.relname AS blkdirrel, "
+			"       a.segrelid  "
+			"  FROM pg_appendonly a "
+			"       JOIN pg_class cs on (cs.oid = a.segrelid) "
+			"       JOIN pg_class cv on (cv.oid = a.visimaprelid) "
+			"       LEFT JOIN pg_class cb on (cb.oid = a.blkdirrelid "
+			"                                 AND a.blkdirrelid <> 0 "
+			"                                 AND EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.relid))) ");
 	/*
 	 * And now we can write the query that retrieves the data we want for each
 	 * heap and index relation.  Make sure result is sorted by OID.
@@ -527,7 +574,11 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "SELECT all_rels.*, n.nspname, c.relname, "
 			 "  %s as relstorage, c.relkind, "
 			 "  c.relfilenode, c.reltablespace, "
-			 "  pg_catalog.pg_tablespace_location(t.oid) AS spclocation "
+			 "  pg_catalog.pg_tablespace_location(t.oid) AS spclocation, "
+			 "  ao.segrel, "
+			 "  ao.visimaprel, "
+			 "  ao.blkdirrel, "
+			 "  ao.segrelid  "
 			 "FROM (SELECT * FROM regular_heap "
 			 "      UNION ALL "
 			 "      SELECT * FROM toast_heap "
@@ -540,6 +591,8 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "  %s"
 			 "  LEFT OUTER JOIN pg_catalog.pg_tablespace t "
 			 "     ON c.reltablespace = t.oid "
+			 "  LEFT OUTER JOIN ao "
+			 "     ON ao.relid = all_rels.reloid "
 			 "ORDER BY 1;",
 	/*
 	 * GPDB 7 with PostgreSQL v12 merge removed the relstorage column.
@@ -571,6 +624,12 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	i_relfilenode = PQfnumber(res, "relfilenode");
 	i_reltablespace = PQfnumber(res, "reltablespace");
 	i_spclocation = PQfnumber(res, "spclocation");
+	i_relkind = PQfnumber(res, "relkind");
+	i_segrel = PQfnumber(res, "segrel");
+	i_visimaprel = PQfnumber(res, "visimaprel");
+	i_blkdirrel = PQfnumber(res, "blkdirrel");
+	i_segrelid = PQfnumber(res, "segrelid");
+
 
 	for (relnum = 0; relnum < ntups; relnum++)
 	{
@@ -637,63 +696,47 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 		/* Collect extra information about append-only tables */
 		relstorage = PQgetvalue(res, relnum, i_relstorage) [0];
 		curr->relstorage = relstorage;
+		relkind = PQgetvalue(res, relnum, i_relkind) [0];
+		curr->relkind = relkind;
 
 		/*
 		 * The structure of append
 		 * optimized tables is similar enough for row and column oriented
 		 * tables so we can handle them both here.
 		 */
-		if (is_appendonly(relstorage))
+		if (is_appendonly(relstorage) && relkind != RELKIND_PARTITIONED_TABLE)
 		{
 			char	   *segrel;
 			char	   *visimaprel;
 			char	   *blkdirrel = NULL;
 			PGresult   *aores;
 			int			j;
+			Oid			segrelid;
 
-			/*
-			 * First query the catalog for the auxiliary heap relations which
-			 * describe AO{CS} relations. The segrel and visimap must exist
-			 * but the blkdirrel is created when required so it might not
-			 * exist.
-			 *
-			 * We don't dump the block directory, even if it exists, if the
-			 * table doesn't have any indexes. This isn't just an optimization:
-			 * restoring it wouldn't work, because without indexes, restore
-			 * won't create a block directory in the new cluster.
-			 */
-			aores = executeQueryOrDie(conn,
-					 "SELECT cs.relname AS segrel, "
-					 "       cv.relname AS visimaprel, "
-					 "       cb.relname AS blkdirrel "
-					 "FROM   pg_appendonly a "
-					 "       JOIN pg_class cs on (cs.oid = a.segrelid) "
-					 "       JOIN pg_class cv on (cv.oid = a.visimaprelid) "
-					 "       LEFT JOIN pg_class cb on (cb.oid = a.blkdirrelid "
-					 "                                 AND a.blkdirrelid <> 0 "
-					 "                                 AND EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.relid)) "
-					 "WHERE  a.relid = %u::pg_catalog.oid ",
-					 curr->reloid);
-
-			if (PQntuples(aores) == 0)
+			if (PQgetisnull(res, relnum, i_segrel))
 				pg_log(PG_FATAL, "Unable to find auxiliary AO relations for %u (%s)\n",
-					   curr->reloid, curr->relname);
+							curr->reloid, curr->relname);
 
-			segrel = pg_strdup(PQgetvalue(aores, 0, PQfnumber(aores, "segrel")));
-			visimaprel = pg_strdup(PQgetvalue(aores, 0, PQfnumber(aores, "visimaprel")));
-			if (!PQgetisnull(aores, 0, PQfnumber(aores, "blkdirrel")))
-				blkdirrel = pg_strdup(PQgetvalue(aores, 0, PQfnumber(aores, "blkdirrel")));
+			segrel = pg_strdup(PQgetvalue(res, relnum, i_segrel));
+			visimaprel = pg_strdup(PQgetvalue(res, relnum, i_visimaprel));
+			if (!PQgetisnull(res, relnum, i_blkdirrel))
+					blkdirrel = pg_strdup(PQgetvalue(res, relnum, i_blkdirrel));
 
-			PQclear(aores);
+			segrelid = atooid(PQgetvalue(res, relnum, i_segrelid));
+
+			curr->naosegments = 0;
 
 			if (relstorage == 'a')
 			{
-				aores = executeQueryOrDie(conn,
+				aores = executeQueryOrDieWithoutLog(conn,
 							"SELECT segno, eof, tupcount, varblockcount, "
-							"       eofuncompressed, modcount, state, "
+							"       eofuncompressed, modcount, state, last_sequence, "
 							"       formatversion "
-							"FROM   pg_aoseg.%s",
-							segrel);
+							"FROM   pg_aoseg.%s s"
+							"       LEFT JOIN gp_fastsequence g ON g.objid = %u::pg_catalog.oid "
+							"       AND g.objmod = s.segno "
+							,
+							segrel, segrelid);
 
 				curr->naosegments = PQntuples(aores);
 				curr->aosegments = (AOSegInfo *) pg_malloc(sizeof(AOSegInfo) * curr->naosegments);
@@ -710,17 +753,23 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 					aoseg->modcount = atoll(PQgetvalue(aores, j, PQfnumber(aores, "modcount")));
 					aoseg->state = atoi(PQgetvalue(aores, j, PQfnumber(aores, "state")));
 					aoseg->version = atoi(PQgetvalue(aores, j, PQfnumber(aores, "formatversion")));
+					aoseg->last_sequence = atoi(PQgetvalue(aores, j, PQfnumber(aores, "last_sequence")));
+					aoseg->objid = segrelid;					
 				}
 
 				PQclear(aores);
 			}
 			else
 			{
-				aores = executeQueryOrDie(conn,
+				aores = executeQueryOrDieWithoutLog(conn,
 							"SELECT segno, tupcount, varblockcount, vpinfo, "
-							"       modcount, formatversion, state "
-							"FROM   pg_aoseg.%s",
-							segrel);
+							"       modcount, formatversion, state, last_sequence "
+							"FROM   pg_aoseg.%s s"
+							"       LEFT JOIN gp_fastsequence g ON g.objid = %u::pg_catalog.oid "
+							"       AND g.objmod = s.segno "
+							,
+							segrel, segrelid);
+
 
 				curr->naosegments = PQntuples(aores);
 				curr->aocssegments = (AOCSSegInfo *) pg_malloc(sizeof(AOCSSegInfo) * curr->naosegments);
@@ -736,12 +785,14 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 					aocsseg->modcount = atoll(PQgetvalue(aores, j, PQfnumber(aores, "modcount")));
 					aocsseg->state = atoi(PQgetvalue(aores, j, PQfnumber(aores, "state")));
 					aocsseg->version = atoi(PQgetvalue(aores, j, PQfnumber(aores, "formatversion")));
+					aocsseg->last_sequence = atoi(PQgetvalue(aores, j, PQfnumber(aores, "last_sequence")));
+					aocsseg->objid = segrelid;
 				}
 
 				PQclear(aores);
 			}
 
-			aores = executeQueryOrDie(conn,
+			aores = executeQueryOrDieWithoutLog(conn,
 						"SELECT segno, first_row_no, visimap "
 						"FROM pg_aoseg.%s",
 						visimaprel);
@@ -766,7 +817,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 */
 			if (blkdirrel)
 			{
-				aores = executeQueryOrDie(conn,
+				aores = executeQueryOrDieWithoutLog(conn,
 							"SELECT segno, columngroup_no, first_row_no, minipage "
 							"FROM pg_aoseg.%s",
 							blkdirrel);
