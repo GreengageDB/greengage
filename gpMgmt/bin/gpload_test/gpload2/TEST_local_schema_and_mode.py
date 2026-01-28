@@ -1,8 +1,9 @@
 # coding=utf-8
+from __future__ import absolute_import
 import tempfile
 import pytest
-import TEST_local_base as TestBase
-from TEST_local_base import prepare_before_test_2
+from . import TEST_local_base as TestBase
+from .TEST_local_base import prepare_before_test_2
 
 
 def append_raw_sql(test_num, sql):

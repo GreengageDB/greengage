@@ -10,6 +10,7 @@
   goal state of a gpArray containing the Greengage segment 
   configruation details and computes appropriate changes.
 """
+from __future__ import print_function
 import copy
 from gppylib.gplog import *
 from gppylib.gparray import ROLE_PRIMARY, ROLE_MIRROR, MASTER_CONTENT_ID
@@ -278,25 +279,25 @@ if __name__ == '__main__':
 
     class xxx:
         def xxx():
-            print dbsegmap
-            print goalsegmap
-            print 'db not goal', [seg for seg in dbsegmap.values()   if seg.getSegmentDbId() not in goalsegmap]
-            print 'goal not db', [seg for seg in goalsegmap.values() if seg.getSegmentDbId() not in dbsegmap]
+            print(dbsegmap)
+            print(goalsegmap)
+            print('db not goal', [seg for seg in dbsegmap.values()   if seg.getSegmentDbId() not in goalsegmap])
+            print('goal not db', [seg for seg in goalsegmap.values() if seg.getSegmentDbId() not in dbsegmap])
     
     class GpArray:
         def __init__(s, forceMap=None, useUtilityMode=False, allowPrimary=True):
             s.c = ComputeCatalogUpdate(s,forceMap,useUtilityMode,allowPrimary)
             s.dump()
         def dump(s):
-            print s.__class__.__name__, s.__class__.__doc__
+            print(s.__class__.__name__, s.__class__.__doc__)
             s.c.validate()
-            print " -m", s.c.mirror_to_remove,
-            print " -p", s.c.primary_to_remove,
-            print " +p", s.c.primary_to_add,
-            print " +m", s.c.mirror_to_add,
-            print " +/-m", s.c.mirror_to_remove_and_add,
-            print " u",  s.c.segment_to_update,
-            print " n",  s.c.segment_unchanged
+            print(" -m", s.c.mirror_to_remove, end=' ')
+            print(" -p", s.c.primary_to_remove, end=' ')
+            print(" +p", s.c.primary_to_add, end=' ')
+            print(" +m", s.c.mirror_to_add, end=' ')
+            print(" +/-m", s.c.mirror_to_remove_and_add, end=' ')
+            print(" u",  s.c.segment_to_update, end=' ')
+            print(" n",  s.c.segment_unchanged)
         def __repr__(s):
             return '<%s,%s>' % (s.getDbList(), s.getSegmentsAsLoadedFromDb())
     
@@ -304,9 +305,9 @@ if __name__ == '__main__':
         def __init__(s, forceMap=None, useUtilityMode=False, allowPrimary=True):
             try:
                 GpArray.__init__(s,forceMap,useUtilityMode,allowPrimary)
-                print " ERROR: expected exception"
-            except Exception, e:
-                print " EXPECTED: ", str(e)
+                print(" ERROR: expected exception")
+            except Exception as e:
+                print(" EXPECTED: ", str(e))
 
     class GpArray1(GpArray):
         "expect no change"

@@ -1,3 +1,4 @@
+from __future__ import print_function
 # To setup the command inside gdb session, run:
 #    source path_to_gpdb_sources/src/tools/gdb/plan_dump.py
 # plan_dump is a gdb command which may be useful at core dump debugging

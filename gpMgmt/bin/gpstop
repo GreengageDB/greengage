@@ -36,7 +36,7 @@ try:
     from gppylib.operations.rebalanceSegments import ReconfigDetectionSQLQueryCommand
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
     from contextlib import closing
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 DEFAULT_NUM_WORKERS = 64
@@ -656,7 +656,7 @@ class GpStop:
                                      ctxt=base.REMOTE,
                                      remoteHost=standby.hostname)
                 cmd.run(validateAfter=True)
-            except base.ExecutionError, e:
+            except base.ExecutionError as e:
                 logger.warning("Error occured while stopping the standby master: %s" % e)
 
             if not pg.DbStatus.remote('checking status of standby master instance', standby, standby.hostname):
@@ -669,7 +669,7 @@ class GpStop:
                                          timeout=self.timeout,
                                          ctxt=base.REMOTE, remoteHost=standby.hostname)
                     cmd.run(validateAfter=True)
-                except base.ExecutionError, e:
+                except base.ExecutionError as e:
                     logger.warning("Error occured while stopping the standby master: %s" % e)
 
                 if not pg.DbStatus.remote('checking status of standby master instance', standby, standby.hostname):

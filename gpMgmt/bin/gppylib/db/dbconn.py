@@ -5,6 +5,7 @@
 """
 TODO: module docs
 """
+from __future__ import print_function
 import sys
 import os
 import stat
@@ -13,7 +14,7 @@ try:
     from pygresql import pgdb
     from gppylib.commands.unix import UserId
 
-except ImportError, e:
+except ImportError as e:
     sys.exit('Error: unable to import module: ' + str(e))
 
 from gppylib import gplog
@@ -21,7 +22,7 @@ from gppylib import gplog
 logger = gplog.get_default_logger()
 
 
-class ConnectionError(StandardError): pass
+class ConnectionError(Exception): pass
 
 class Pgpass():
     """ Class for handling .pgpass file.
@@ -37,10 +38,10 @@ class Pgpass():
             return
 
         st_info = os.stat(PGPASSFILE)
-        mode = str(oct(st_info[stat.ST_MODE] & 0777))
+        mode = str(oct(st_info[stat.ST_MODE] & 0o777))
 
         if mode != "0600":
-            print 'WARNING: password file "%s" has group or world access; permissions should be u=rw (0600) or less' % PGPASSFILE
+            print('WARNING: password file "%s" has group or world access; permissions should be u=rw (0600) or less' % PGPASSFILE)
             self.valid_pgpass = False
             return
 
@@ -61,7 +62,7 @@ class Pgpass():
                                  'password': password }
                         self.entries.append(entry)
                     except:
-                        print 'Invalid line in .pgpass file.  Line number %d' % lineno
+                        print('Invalid line in .pgpass file.  Line number %d' % lineno)
                     lineno += 1
             except IOError:
                 pass
@@ -199,7 +200,7 @@ def connect(dburl, utility=False, verbose=False,
             conn = pgdb.connect(host="%s:%d" % (dbhost, dbport), database=dbbase, user=dbuser, password=dbpasswd, options=dbopt, **args)
             break
 
-        except pgdb.InternalError, e:
+        except pgdb.InternalError as e:
             if 'timeout expired' in str(e):
                 logger.warning('Timeout expired connecting to %s, attempt %d/%d' % (dbbase, i+1, retries))
                 continue

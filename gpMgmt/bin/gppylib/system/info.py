@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+from __future__ import print_function
 import psutil
 import os
 import resource
@@ -15,8 +16,8 @@ class SystemInfo():
 
     def print_mem_usage(self):
         mem = psutil.virtual_memory()
-        print "available: %sMB percent: %s" % (mem.available >> 20, mem.percent)
-        print "process memory usage %s" % (self.process.memory_info().vms >> 20)
+        print("available: %sMB percent: %s" % (mem.available >> 20, mem.percent))
+        print("process memory usage %s" % (self.process.memory_info().vms >> 20))
 
     def debug_log_mem_usage(self):
         mem = psutil.virtual_memory()

@@ -58,6 +58,7 @@ EXAMPLE
 
 minirepro gptest -h locahost -U gpadmin -p 4444 -q ~/in.sql -f ~/out.sql
 '''
+from __future__ import print_function
 
 import pwd
 import os, sys, re, json, platform, subprocess
@@ -133,7 +134,7 @@ def parse_cmd_line():
 
 def dump_query(connectionInfo, query_file):
     (host, port, user, db) = connectionInfo
-    print "Extracting metadata from query file %s ..." % query_file
+    print("Extracting metadata from query file %s ..." % query_file)
 
     with open(query_file, 'r') as query_f:
         sql_text = query_f.read()
@@ -145,7 +146,7 @@ def dump_query(connectionInfo, query_file):
 
     # disable .psqlrc to prevent unexpected timing and format output
     query_cmd = "psql %s --pset footer --no-psqlrc -Atq -h %s -p %s -U %s -f %s" % (db, host, port, user, toolkit_sql)
-    print query_cmd
+    print(query_cmd)
 
     p = subprocess.Popen(query_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
 
@@ -194,7 +195,7 @@ def pg_dump_object(mr_query, connectionInfo, envOpts):
     dmp_cmd = 'pg_dump -h %s -p %s -U %s -sxO %s' % connectionInfo
     dmp_cmd = "%s --relation-oids %s --function-oids %s -f %s" % \
         (dmp_cmd, mr_query.relids, mr_query.funcids, E(out_file))
-    print dmp_cmd
+    print(dmp_cmd)
     p = subprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
     if p.wait() is not 0:
         sys.stderr.write('\nError while dumping schema.\n\n' + p.communicate()[1] + '\n\n')
@@ -361,7 +362,7 @@ def main():
 
     # setup the connection info tuple with options
     connectionInfo = (host, port, user, db)
-    print "Connecting to database: host=%s, port=%s, user=%s, db=%s ..." % connectionInfo
+    print("Connecting to database: host=%s, port=%s, user=%s, db=%s ..." % connectionInfo)
     conn = pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions)
     cursor = conn.cursor()
 
@@ -385,7 +386,7 @@ def main():
     mr_query = parse_oids(cursor, json_str)
 
     # dump relations and functions
-    print "Invoking pg_dump to dump DDL ..."
+    print("Invoking pg_dump to dump DDL ...")
     pg_dump_object(mr_query, connectionInfo, envOpts)
 
     ### start writing out to stdout ###
@@ -408,12 +409,12 @@ def main():
     f_out.writelines('set optimizer to off;\n\n')
 
     # first create schema DDLs
-    print "Writing schema DDLs ..."
+    print("Writing schema DDLs ...")
     table_schemas = ["CREATE SCHEMA %s;\n" % E(schema) for schema in mr_query.schemas if schema != 'public']
     f_out.writelines(table_schemas)
 
     # write relation and function DDLs
-    print "Writing relation and function DDLs ..."
+    print("Writing relation and function DDLs ...")
     with open(PATH_PREFIX + PGDUMP_FILE, 'r') as f_pgdump:
 	f_out.writelines(f_pgdump)
 
@@ -424,18 +425,18 @@ def main():
                            '\nset allow_system_table_mods=true;\n\n'])
 
     # dump table stats
-    print "Writing table statistics ..."
+    print("Writing table statistics ...")
     dump_tuple_count(cursor, mr_query.relids, f_out)
 
     # dump column stats
-    print "Writing column statistics ..."
+    print("Writing column statistics ...")
     dump_stats(cursor, mr_query.relids, f_out, inclHLL)
 
     cursor.close()
     conn.close()
 
     # attach query text
-    print "Attaching raw query text ..."
+    print("Attaching raw query text ...")
     f_out.writelines(['\n-- ',
                        '\n-- Query text',
                        '\n-- \n\n'])
@@ -448,11 +449,11 @@ def main():
     f_out.writelines('\n-- MiniRepro completed.\n')
     f_out.close()
 
-    print "--- MiniRepro completed! ---"
+    print("--- MiniRepro completed! ---")
 
     # upon success, leave a warning message about data collected
-    print 'WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.'
-    print 'Please review output file to ensure it is within corporate policy to transport the output file.'
+    print('WARNING: This tool collects statistics about your data, including most common values, which requires some data elements to be included in the output file.')
+    print('Please review output file to ensure it is within corporate policy to transport the output file.')
 
 
 if __name__ == "__main__":

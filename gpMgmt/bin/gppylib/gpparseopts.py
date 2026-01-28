@@ -8,13 +8,14 @@ Standard set of helper functions for gp utilities for parsing command line optio
 
 
 """
+from __future__ import absolute_import
 from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRESS_USAGE, SUPPRESS_HELP
 import os
 import os.path
 import re
 import sys
 
-from logfilter import MatchRegex, NoMatchRegex, filterize, MatchColumns
+from .logfilter import MatchRegex, NoMatchRegex, filterize, MatchColumns
 from gppylib.datetimeutils import str_to_datetime, str_to_duration, DatetimeValueError
 
 
@@ -73,13 +74,13 @@ class OptChecker(Option):
     def datetimeCheck(option, opt, value):
         try:
             return str_to_datetime(value)
-        except DatetimeValueError, e:
+        except DatetimeValueError as e:
             raise OptionValueError('"%s %s" ... %s' % (opt, value, e.description))
             
     def durationCheck(option, opt, value):
         try:
             return str_to_duration(value, signed=False)
-        except DatetimeValueError, e:
+        except DatetimeValueError as e:
             raise OptionValueError('"%s %s" ... %s' % (opt, value, e.description))
             
     def regexCheck(option, opt, value):
@@ -90,7 +91,7 @@ class OptChecker(Option):
             flags |= re.IGNORECASE
         try:
             return re.compile(value, flags)
-        except Exception, e:
+        except Exception as e:
             raise OptionValueError('"%s %s" ... %s' % (opt, value, e))
  
     def regexSetCaseSensitivity(option, opt, value, parser):

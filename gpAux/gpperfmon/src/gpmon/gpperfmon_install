@@ -18,6 +18,7 @@ USAGE:   gpperfmon_install --port GPDB_PORT [--enable --password GPMON_PASSWORD]
         --gpperfmonport sets the guc 'gpperfmon_port' for gpperfmon communication (default is 8888)
         --verbose will show output from sub-commands
 '''
+from __future__ import print_function
 
 import os, sys, time, re
 from subprocess import Popen
@@ -28,7 +29,7 @@ try:
     from gppylib.userinput import ask_input
     from gppylib.gplog import get_default_logger, setup_tool_logging
     from gppylib.commands.unix import getLocalHostname, getUserName
-except ImportError, e:
+except ImportError as e:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 EXECNAME = os.path.split(__file__)[-1]
@@ -79,7 +80,7 @@ def cli_help():
 
 
 def usage():
-    print cli_help() or __doc__
+    print(cli_help() or __doc__)
 
 
 ###### main()

@@ -7,6 +7,7 @@ import os
 import sys
 from gppylib.commands import gp
 from gppylib import gpversion
+from functools import reduce
 
 gpverstr = gp.GpVersion.local("", os.getenv("GPHOME"))
 gpver = gpversion.GpVersion(gpverstr)
@@ -101,7 +102,7 @@ class cgroup(object):
             if not os.access(fullpath, modebits):
                 self.die("%s '%s' permission denied: require permission '%s'" \
                          % (pathtype, fullpath, mode))
-        except IOError, e:
+        except IOError as e:
             self.die("can't check permission on %s '%s': %s" \
                      % (pathtype, fullpath, str(e)))
 
