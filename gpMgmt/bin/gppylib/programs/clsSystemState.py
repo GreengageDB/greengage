@@ -4,6 +4,7 @@
 #
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
+from __future__ import print_function
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
@@ -854,7 +855,7 @@ class GpSystemStateProgram:
               "(%s)\nEXECUTE '%s' ON MASTER\nFORMAT 'TEXT' (DELIMITER '|' NULL AS '');\n" % \
                (", ".join(columns), scriptName )
 
-        print sql
+        print(sql)
 
         return 0
 
@@ -865,7 +866,7 @@ class GpSystemStateProgram:
             if printToLogger:
                 logger.info(str)
             else:
-                print str
+                print(str)
 
     def __showStatus(self, gpEnv, gpArray):
         """

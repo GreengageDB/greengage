@@ -27,6 +27,7 @@ gp_replica_check.py -d "mydb1,mydb2,..."
 gp_replica_check.py -r "heap,ao,btree,..."
 gp_replica_check.py -d "mydb1,mydb2,..." -r "hash,bitmap,gist,..."
 '''
+from __future__ import print_function
 
 import argparse
 import sys
@@ -65,41 +66,41 @@ Mirror Data Directory Location: %s' % (self.getName(), self.host, self.port, sel
                                                                                                                                         self.relation_types,
                                                                                                                                         pipes.quote(self.datname))
         if self.primary_status.strip() == 'd':
-            print "Primary segment for content %d is down" % self.content
+            print("Primary segment for content %d is down" % self.content)
         else:
             try:
                 res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
                 self.result = True if res.strip().split('\n')[-2].strip() == 't' else False
                 with self.lock:
-                    print self
-                    print res
+                    print(self)
+                    print(res)
                     if not self.result:
-                        print "replica check failed"
+                        print("replica check failed")
 
-            except subprocess.CalledProcessError, e:
+            except subprocess.CalledProcessError as e:
                 with self.lock:
-                    print self
-                    print 'returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output)
+                    print(self)
+                    print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
 
 def create_restartpoint_on_ckpt_record_replay(set):
     if set:
         cmd = "gpconfig -c create_restartpoint_on_ckpt_record_replay -v on --skipvalidation && gpstop -u"
     else:
         cmd = "gpconfig -r create_restartpoint_on_ckpt_record_replay --skipvalidation && gpstop -u"
-    print cmd
+    print(cmd)
     try:
         res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-        print res
-    except subprocess.CalledProcessError, e:
-        print 'returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output)
+        print(res)
+    except subprocess.CalledProcessError as e:
+        print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
         if set:
-            print '''guc setting with gpconfig & then updating with "gpstop -u" failed.
+            print('''guc setting with gpconfig & then updating with "gpstop -u" failed.
 Probably there are some nodes could not be brought up and thus we
 can not run the test. That is probably because previous tests cause
 the instability of the cluster (indicate a bug usually) or because more time
 is needed for the cluster to be ready due to heavy load (consider increasing
 timeout configurations for this case). In any case we just fail and skip
-the test. Please check the server logs to find why.'''
+the test. Please check the server logs to find why.''')
         sys.exit(2)
 
 def install_extension(databases):
@@ -107,11 +108,11 @@ def install_extension(databases):
     create_ext_sql = ''' CREATE EXTENSION IF NOT EXISTS gp_replica_check '''
 
     database_list = map(str.strip, databases.split(','))
-    print "Creating gp_replica_check extension on databases if needed:"
+    print("Creating gp_replica_check extension on databases if needed:")
     datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
     for datname in datnames:
         if len(datname) >= 1 and (datname.strip() in database_list or 'all' in database_list):
-            print subprocess.check_output('psql %s -t -c "%s"' % (pipes.quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True)
+            print(subprocess.check_output('psql %s -t -c "%s"' % (pipes.quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True))
 
 # Get the primary and mirror servers, for each content ID.
 def get_segments():
@@ -169,10 +170,10 @@ def start_verification(segmap, dblist, relation_types):
             failed = True
 
     if failed:
-        print "replica check failed for one or more segments. Please check above logs for details."
+        print("replica check failed for one or more segments. Please check above logs for details.")
         sys.exit(1)
 
-    print "replica check succeeded"
+    print("replica check succeeded")
 
 def defargs():
     parser = argparse.ArgumentParser(description='Run replication check on all segments')

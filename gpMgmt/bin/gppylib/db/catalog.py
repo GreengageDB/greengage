@@ -5,10 +5,11 @@
 """ Provides Access Utilities for Examining and Modifying the GP Catalog.
 
 """
+from __future__ import absolute_import
 import copy
 
 import os
-import dbconn
+from . import dbconn
 from  gppylib import gplog
 from  pygresql import pg
 from gppylib.commands.base import Command, WorkerPool

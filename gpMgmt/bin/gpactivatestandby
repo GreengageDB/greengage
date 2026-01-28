@@ -31,7 +31,7 @@ try:
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging, get_logger_if_verbose
     from gppylib import gparray
     from gppylib.userinput import ask_yesno
-except ImportError, e_:
+except ImportError as e_:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
              'have sourced greengage_path.sh.  Detail: ' + str(e_))
 
@@ -331,7 +331,7 @@ def promote_standby(master_data_dir):
                 dbconn.execSQL(conn, 'CHECKPOINT')
             logger.info('Standby master is promoted')
             return True
-        except pygresql.InternalError, e:
+        except pygresql.InternalError as e:
             pass
         time.sleep(1)
 
@@ -393,7 +393,7 @@ try:
     else:
         sys.exit(0)
     
-except Exception, e_:
+except Exception as e_:
     logger.fatal('Error activating standby master: %s' % str(e_))
     sys.exit(2)
 

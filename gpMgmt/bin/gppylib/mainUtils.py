@@ -362,24 +362,24 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
         exitCode = commandObject.run()
         exit_status = exitCode
 
-    except ProgramArgumentValidationException, e:
+    except ProgramArgumentValidationException as e:
         if e.shouldPrintHelp():
             parser.print_help()
         logger.error("%s: error: %s" % (gProgramName, e.getMessage()))
         exit_status = 2
-    except ExceptionNoStackTraceNeeded, e:
+    except ExceptionNoStackTraceNeeded as e:
         logger.error("%s error: %s" % (gProgramName, e))
         exit_status = 2
-    except UserAbortedException, e:
+    except UserAbortedException as e:
         logger.info("User abort requested, Exiting...")
         exit_status = 4
-    except ExecutionError, e:
+    except ExecutionError as e:
         logger.fatal("Error occurred: %s\n Command was: '%s'\n"
                      "rc=%d, stdout='%s', stderr='%s'" % \
                      (e.summary, e.cmd.cmdStr, e.cmd.results.rc, e.cmd.results.stdout,
                       e.cmd.results.stderr))
         exit_status = 2
-    except Exception, e:
+    except Exception as e:
         if parserOptions is None:
             logger.exception("%s failed.  exiting...", gProgramName)
         else:

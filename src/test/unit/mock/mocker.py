@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import logging
 import optparse
 import os
@@ -83,7 +84,7 @@ class CFile(object):
                 if content[m.end()+1:].startswith('#endif'):
                     return self.skip_func_body(content, m.end())
             return m.end()
-        raise StandardError('unexpected syntax')
+        raise Exception('unexpected syntax')
 
     def to_mock(self):
         """Mock up this file.  The basic idea is to replace function body
@@ -212,7 +213,7 @@ class FuncSignature(object):
             # general case
             m = FuncSignature.arg_pat.match(arg.strip())
             if not m:
-                print '%s %s(%s)' % (self.rettype, self.funcname, arg_string)
+                print('%s %s(%s)' % (self.rettype, self.funcname, arg_string))
             argtype = m.group(1)
             argname = m.group(2) if m.group(2) else 'arg' + str(i)
             args.append((argtype.strip(), argname.strip()))

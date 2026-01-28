@@ -22,6 +22,7 @@ Options:
     --version: print version number and exit
     -?: help
 '''
+from __future__ import print_function
 
 import sys
 
@@ -38,7 +39,7 @@ except ImportError:
 import platform
 try:
     from pygresql import pg
-except Exception, e:
+except Exception as e:
     errorMsg = "gpload was unable to import The PyGreSQL Python module (pg.py) - %s\n" % str(e)
     sys.stderr.write(str(errorMsg))
     errorMsg = "Please check if you have the correct Visual Studio redistributable package installed.\n"
@@ -140,11 +141,11 @@ valid_tokens = {
     "schema": {'parse_children': False, 'parent': 'external'}}
 
 _abbrevs = [
-    (1<<50L, ' PB'),
-    (1<<40L, ' TB'),
-    (1<<30L, ' GB'),
-    (1<<20L, ' MB'),
-    (1<<10L, ' kB'),
+    (1<<50, ' PB'),
+    (1<<40, ' TB'),
+    (1<<30, ' GB'),
+    (1<<20, ' MB'),
+    (1<<10, ' kB'),
     (1, ' bytes')
     ]
 
@@ -734,7 +735,7 @@ def bytestr(size, precision=1):
         if size >= factor:
             break
 
-    float_string_split = `size/float(factor)`.split('.')
+    float_string_split = repr(size/float(factor)).split('.')
     integer_part = float_string_split[0]
     decimal_part = float_string_split[1]
     if int(decimal_part[0:precision]):
@@ -786,7 +787,7 @@ class CatThread(threading.Thread):
                     if line=='':
                         break
                     self.gpload.log(self.gpload.DEBUG, 'gpfdist: ' + line.strip('\n'))
-        except Exception, e:
+        except Exception as e:
             # close fd so that not block the worker thread because of stdout/stderr pipe not finish/closed.
             self.fd.close()
             sys.stderr.write("\n\nWarning: gpfdist log halt because Log Thread '%s' got an exception: %s \n" % (self.getName(), str(e)))
@@ -866,7 +867,7 @@ class Progress(threading.Thread):
                     self.condition.notify()
                     self.condition.release()
                     break
-            except socket.error, e:
+            except socket.error as e:
                 self.gpload.log(self.gpload.DEBUG, "got socket exception: %s" % e)
                 break
             time.sleep(1)
@@ -885,7 +886,7 @@ def cli_help():
 
 #============================================================
 def usage(error = None):
-    print cli_help() or __doc__
+    print(cli_help() or __doc__)
     sys.stdout.flush()
     if error:
         sys.stderr.write('ERROR: ' + error + '\n')
@@ -1244,7 +1245,7 @@ class gpload:
 
         try:
             self.logfile = open(self.options.l,'a')
-        except Exception, e:
+        except Exception as e:
             self.log(self.ERROR, "could not open logfile %s: %s" % \
                       (self.options.l, e))
 
@@ -1256,7 +1257,7 @@ class gpload:
 
         try:
             f = open(configFilename,'r')
-        except IOError,e:
+        except IOError as e:
             self.log(self.ERROR, "could not open configuration file: %s" % e)
 
         # pull in the config file, which should be in valid YAML
@@ -1277,10 +1278,10 @@ class gpload:
                 self.control_file_error("configuration file must begin with a mapping")
 
             yaml_walk(self, y.value, [])
-        except yaml.scanner.ScannerError,e:
+        except yaml.scanner.ScannerError as e:
             self.log(self.ERROR, "configuration file error: %s, line %s" % \
                 (e.problem, e.problem_mark.line))
-        except yaml.reader.ReaderError, e:
+        except yaml.reader.ReaderError as e:
             es = ""
             if isinstance(e.character, str):
                 es = "'%s' codec can't decode byte #x%02x: %s position %d" % \
@@ -1290,7 +1291,7 @@ class gpload:
                 es = "unacceptable character #x%04x at byte %d: %s"    \
                     % (ord(e.character), e.position, e.reason)
             self.log(self.ERROR, es)
-        except yaml.error.MarkedYAMLError, e:
+        except yaml.error.MarkedYAMLError as e:
             self.log(self.ERROR, "configuration file error: %s, line %s" % \
                 (e.problem, e.problem_mark.line))
 
@@ -1329,7 +1330,7 @@ class gpload:
                         self.elevel2str(level), a]) + '\n'
 
             str = str.encode('utf-8')
-        except Exception, e:
+        except Exception as e:
             # log even if contains non-utf8 data and pass this exception
             self.logfile.write("\nWarning: Log() threw an exception: %s \n" % (e))
 
@@ -1340,7 +1341,7 @@ class gpload:
             try:
                self.logfile.write(str)
                self.logfile.flush()
-            except AttributeError, e:
+            except AttributeError as e:
                 pass
 
         if level == self.ERROR:
@@ -1595,7 +1596,7 @@ class gpload:
         if transform_config:
             try:
                 f = open(transform_config,'r')
-            except IOError,e:
+            except IOError as e:
                 self.log(self.ERROR, "could not open transform_config file: %s" % e)
             f.close()
             popenList.append('-c')
@@ -1703,7 +1704,7 @@ class gpload:
                                      stderr=subprocess.PIPE,
                                      close_fds=cfds, shell=needshell)
                 self.subprocesses.append(a)
-            except Exception, e:
+            except Exception as e:
                 self.log(self.ERROR, "could not run %s: %s" % \
                                 (' '.join(popenList), str(e)))
 
@@ -1828,7 +1829,7 @@ class gpload:
                 self.gpdb_version = GpVersion(curs.getresult()[0][0])
                 self.log(self.DEBUG, "GPDB version is: %s" % self.gpdb_version)
 
-        except Exception, e:
+        except Exception as e:
             errorMessage = str(e)
             if errorMessage.find("no password supplied") != -1:
                 self.options.password = getpass.getpass()
@@ -1960,7 +1961,7 @@ class gpload:
                 if len(resultList) > 0:
                     self.support_cusfmt = 1
 
-            except Exception, e:
+            except Exception as e:
                 self.log(self.DEBUG, 'could not run SQL "%s": %s' % (queryString, unicode(e)))
 
     def read_table_metadata(self):
@@ -2310,7 +2311,7 @@ class gpload:
             try:
                 resultList = self.db.query(sql.encode('utf-8')).getresult()
                 return resultList[0][0]
-            except Exception, e:
+            except Exception as e:
                 pass
         return None
 
@@ -2578,7 +2579,7 @@ class gpload:
 
         try:
             self.db.query(sql.encode('utf-8'))
-        except Exception, e:
+        except Exception as e:
             get_standard_conforming_strings = 'show standard_conforming_strings;'
             try:
                 scs = self.db.query(get_standard_conforming_strings.encode('utf-8')).getresult()
@@ -2587,7 +2588,7 @@ class gpload:
                     "standard_conforming_strings is set to 'off', please set it to 'on' and try again \n")
                 else:
                     self.log(self.ERROR, 'could not run SQL "%s": %s' % (sql, unicode(e)))
-            except Exception, ee:
+            except Exception as ee:
                 self.log(self.ERROR, 'could not run SQL "%s": %s ' % (sql, unicode(e)) +
                 "could not get standard_conforming_strings, %s " % unicode(ee) +
                 "if standard_conforming_strings is set to 'off', please set it to 'on' and try again \n"
@@ -2743,7 +2744,7 @@ class gpload:
         if not self.options.D:
             try:
                 self.rowsInserted = self.db.query(sql.encode('utf-8'))
-            except Exception, e:
+            except Exception as e:
                 # We need to be a bit careful about the error since it may contain non-unicode characters
                 strE = unicode(str(e), errors = 'ignore')
                 strF = unicode(str(sql), errors = 'ignore')
@@ -2830,7 +2831,7 @@ class gpload:
         if not self.options.D:
             try:
                 self.rowsUpdated = self.db.query(sql.encode('utf-8'))
-            except Exception, e:
+            except Exception as e:
                 # We need to be a bit careful about the error since it may contain non-unicode characters
                 strE = unicode(str(e), errors = 'ignore')
                 strF = unicode(str(sql), errors = 'ignore')
@@ -2933,7 +2934,7 @@ class gpload:
         if not self.options.D:
             try:
                 self.rowsInserted = self.db.query(sql.encode('utf-8'))
-            except Exception, e:
+            except Exception as e:
                 # We need to be a bit careful about the error since it may contain non-unicode characters
                 strE = unicode(str(e), errors = 'ignore')
                 strF = unicode(str(sql), errors = 'ignore')
@@ -2945,7 +2946,7 @@ class gpload:
             try:
                 truncateSQLtext = "truncate %s" % tblname
                 self.db.query(truncateSQLtext.encode('utf-8'))
-            except Exception, e:
+            except Exception as e:
                 self.log(self.ERROR, 'could not execute truncate target %s: %s' % (tblname, str(e)))
 
     def do_method(self):
@@ -2995,7 +2996,7 @@ class gpload:
             if not self.options.D:
                 try:
                     self.db.query(before.encode('utf-8'))
-                except Exception, e:
+                except Exception as e:
                     self.log(self.ERROR, 'could not execute SQL in sql:before "%s": %s' %
                              (before, str(e)))
 
@@ -3019,7 +3020,7 @@ class gpload:
             if not self.options.D:
                 try:
                     self.db.query(after.encode('utf-8'))
-                except Exception, e:
+                except Exception as e:
                     self.log(self.ERROR, 'could not execute SQL in sql:after "%s": %s' %
                              (after, str(e)))
 

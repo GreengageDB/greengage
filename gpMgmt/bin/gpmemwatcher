@@ -14,6 +14,7 @@
 # https://community.pivotal.io/s/article/How-to-Deploy-Start-and-Stop-memwatcher-utility
 #------------------------------------------------------------------------
 
+from __future__ import print_function
 import gzip
 import os
 import subprocess
@@ -36,7 +37,7 @@ gpverstr = " ".join(gp.GpVersion.local(None, gphome).split()[3:])
 def createDaemon():
     try:
         pid = os.fork()
-    except OSError, e:
+    except OSError as e:
         raise Exception("%s [%d]" % (e.strerror, e.errno))
 
     if pid > 0:  # we are the controlling parent
@@ -52,7 +53,7 @@ def createDaemon():
     # process will have no chance to aquire a controlling terminal
     try:
         pid = os.fork()
-    except OSError, e:
+    except OSError as e:
         raise Exception("%s [%d]" % (e.strerror, e.errno))
 
     if pid > 0:
@@ -68,7 +69,7 @@ def createDaemon():
 def lauchAsDaemon(workdir):
     #Test to be sure that workdir exists and we can write to it:
     if not (os.path.isdir(workdir) and os.access(workdir, os.W_OK)):
-        raise (Exception, "Unable to write to work directory: %s" % (workdir))
+        raise Exception
     # OK - after minimal testing, let's fork off and run as a daemon
     createDaemon()
     # now that we're running as a daemon
@@ -147,25 +148,25 @@ def launchProcess(host, workdir):
     # Now let's just quick check the host as to whether the python version is >= 2.6
     try:
         subprocess.check_call("ssh -T %s '%s python -c \"import sys; sys.exit(1) if sys.hexversion < 0x020600f0 else 0\"'" % (host, py_string), shell=True)
-    except subprocess.CalledProcessError, e:
-        print >> sys.stderr, 'Python version on host %s is < 2.6.0.  Aborting' % (host)
+    except subprocess.CalledProcessError as e:
+        print('Python version on host %s is < 2.6.0.  Aborting' % (host), file=sys.stderr)
         sys.exit(1)
 
     try:
         subprocess.check_call("ssh -T %s 'mkdir %s'" % (host, dest_dir), shell=True)
-    except subprocess.CalledProcessError, e:
+    except subprocess.CalledProcessError as e:
         err = "Error when trying to create directory: " + dest_dir + " on host: " + host
-        print >> sys.stderr, err
-        print e
+        print(err, file=sys.stderr)
+        print(e)
         sys.exit(1)
 
     try:
         # SSH is doing something with it's terminal handling here I don't fully understand
         # If we don't force the creation of a pseudo TTY the ssh hangs when the node process exits (forked into background)
         subprocess.check_call("ssh -qtt %s '%s %s/bin/gpmemwatcher --daemon -d %s'" % (host, py_string, gphome, dest_dir), shell=True)
-    except subprocess.CalledProcessError, e:
+    except subprocess.CalledProcessError as e:
         err = 'Error when trying to launch resource watcher on host %s, aborting' % (host)
-        print >> sys.stderr, err
+        print(err, file=sys.stderr)
         sys.exit(1)
 
 
@@ -174,23 +175,23 @@ def stopProcesses(host, workdir):
 
     try:
         subprocess.check_call("ssh -T %s 'kill $(cat %s/%s)'" % (host, dest_dir, pidfile), shell=True)
-    except subprocess.CalledProcessError, e:
-        print >> sys.stderr, 'Error stopping process on host: ' + host
-        print e
+    except subprocess.CalledProcessError as e:
+        print('Error stopping process on host: ' + host, file=sys.stderr)
+        print(e)
         return
 
     try:
         subprocess.check_call('scp -q %s:%s/%s ./%s.%s' % (host, dest_dir, ps_file, host, ps_file), shell=True)
-    except subprocess.CalledProcessError, e:
-        print >> sys.stderr, 'Error retrieving data from host: ' + host
-        print e
+    except subprocess.CalledProcessError as e:
+        print('Error retrieving data from host: ' + host, file=sys.stderr)
+        print(e)
         return
 
     try:
         subprocess.check_call("ssh -T %s 'rm -rf %s'" % (host, dest_dir), shell=True)
-    except subprocess.CalledProcessError, e:
-        print >> sys.stderr, 'Error removing work directory on host: ' + host
-        print e
+    except subprocess.CalledProcessError as e:
+        print('Error removing work directory on host: ' + host, file=sys.stderr)
+        print(e)
         return
 
 
@@ -200,7 +201,7 @@ def main():
         lauchAsDaemon(options.work_dir)
 
     if not options.hostfile:
-        print "Error: host_file must be provided as an argument. Please check the usage by running 'gpmemwatcher -h'.\n"
+        print("Error: host_file must be provided as an argument. Please check the usage by running 'gpmemwatcher -h'.\n")
         return
     hostmap = parseHostfile(options.hostfile)
 

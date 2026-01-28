@@ -1,3 +1,4 @@
+from __future__ import print_function
 import functools
 import json
 import os
@@ -80,7 +81,7 @@ class RecoveryBase(object):
     def _write_to_stderr_and_exit(self, e):
         if self.logger:
             self.logger.error(str(e))
-        print >> sys.stderr, e
+        print(e, file=sys.stderr)
         sys.exit(1)
 
     def run_cmd_list(self, cmd_list, logger, options, pool):
@@ -103,7 +104,7 @@ class RecoveryBase(object):
             sys.exit(0)
 
         str_error = recoveryinfo.serialize_list(errors)
-        print >> sys.stderr, str_error
+        print(str_error, file=sys.stderr)
         if options.verbose:
             logger.exception(str_error)
         logger.error(str_error)

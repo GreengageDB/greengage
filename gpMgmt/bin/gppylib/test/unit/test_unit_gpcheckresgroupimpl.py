@@ -26,10 +26,10 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
     def setUp(self):
         self.cgroup_mntpnt = tempfile.mkdtemp(prefix='fake-cgroup-mnt-')
 
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpu"), 0755)
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuacct"), 0755)
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "memory"), 0755)
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuset"), 0755)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpu"), 0o755)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuacct"), 0o755)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "memory"), 0o755)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuset"), 0o755)
 
         self.cgroup = gpcheckresgroupimpl.cgroup()
         self.cgroup.mount_point = self.cgroup_mntpnt
@@ -38,28 +38,28 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
 
         self.cgroup_default_mntpnt = self.cgroup.detect_cgroup_mount_point()
 
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0700)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cgroup.procs"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_period_us"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_quota_us"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.shares"), 0600)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0o700)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cgroup.procs"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_period_us"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_quota_us"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.shares"), 0o600)
 
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0700)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cgroup.procs"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.usage"), 0400)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.stat"), 0400)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0o700)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cgroup.procs"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.usage"), 0o400)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.stat"), 0o400)
 
-        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "memory.limit_in_bytes"), 0400)
-        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "memory.memsw.limit_in_bytes"), 0400)
+        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "memory.limit_in_bytes"), 0o400)
+        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "memory.memsw.limit_in_bytes"), 0o400)
 
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0700)
-        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.limit_in_bytes"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.usage_in_bytes"), 0400)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0o700)
+        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.limit_in_bytes"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.usage_in_bytes"), 0o400)
 
-        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0700)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cgroup.procs"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.cpus"), 0600)
-        self.touch(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.mems"), 0600)
+        os.mkdir(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0o700)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cgroup.procs"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.cpus"), 0o600)
+        self.touch(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.mems"), 0o600)
 
     def tearDown(self):
         shutil.rmtree(self.cgroup_mntpnt)
@@ -87,30 +87,30 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
         self.assertTrue(self.cgroup.validate_comp_dirs())
 
     def test_comp_dirs_validation_when_cpu_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0o100)
         self.assertFalse(self.cgroup.validate_comp_dirs())
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0o700)
 
     def test_comp_dirs_validation_when_cpu_gpdb_dir_missing(self):
         shutil.rmtree(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"))
         self.assertFalse(self.cgroup.validate_comp_dirs())
 
     def test_comp_dirs_validation_when_cpuacct_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0o100)
         self.assertFalse(self.cgroup.validate_comp_dirs())
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0o700)
 
     def test_comp_dirs_validation_when_cpuacct_gpdb_dir_missing(self):
         shutil.rmtree(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"))
         self.assertFalse(self.cgroup.validate_comp_dirs())
 
     def test_comp_dirs_validation_when_cpuset_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0o100)
         if gpver.version >= [6, 0, 0]:
             self.assertFalse(self.cgroup.validate_comp_dirs())
         else:
             self.assertTrue(self.cgroup.validate_comp_dirs())
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0o700)
 
     def test_comp_dirs_validation_when_cpuset_gpdb_dir_missing(self):
         shutil.rmtree(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"))
@@ -120,12 +120,12 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.assertTrue(self.cgroup.validate_comp_dirs())
 
     def test_comp_dirs_validation_when_memory_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0o100)
         if gpver.version >= [6, 0, 0]:
             self.assertFalse(self.cgroup.validate_comp_dirs())
         else:
             self.assertTrue(self.cgroup.validate_comp_dirs())
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0o700)
 
     def test_comp_dirs_validation_when_memory_gpdb_dir_missing(self):
         shutil.rmtree(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"))
@@ -149,7 +149,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             olddir = os.path.join(self.cgroup_mntpnt, comp)
             tmpdir = os.path.join(self.cgroup_mntpnt, compdir)
             shutil.move(olddir, tmpdir)
-            os.mkdir(olddir, 0700)
+            os.mkdir(olddir, 0o700)
             shutil.move(tmpdir, olddir)
         self.cgroup.validate_all()
 
@@ -159,11 +159,11 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpu_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0500)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0o500)
         with self.assertRaisesRegexp(AssertionError, "directory '.*/cpu/gpdb/' permission denied: require permission 'rwx'"):
             self.cgroup.validate_all()
         # restore permission for the dir to be removed in tearDown()
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb"), 0o700)
 
     def test_when_cpu_gpdb_cgroup_procs_missing(self):
         os.unlink(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cgroup.procs"))
@@ -171,7 +171,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpu_gpdb_cgroup_procs_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cgroup.procs"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cgroup.procs"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpu/gpdb/cgroup.procs' permission denied: require permission 'rw'"):
             self.cgroup.validate_all()
 
@@ -181,7 +181,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpu_gpdb_cpu_cfs_period_us_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_period_us"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_period_us"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpu/gpdb/cpu.cfs_period_us' permission denied: require permission 'rw'"):
             self.cgroup.validate_all()
 
@@ -191,7 +191,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpu_gpdb_cpu_cfs_quota_us_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_quota_us"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.cfs_quota_us"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpu/gpdb/cpu.cfs_quota_us' permission denied: require permission 'rw'"):
             self.cgroup.validate_all()
 
@@ -201,7 +201,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpu_gpdb_cpu_shares_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.shares"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpu", "gpdb", "cpu.shares"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpu/gpdb/cpu.shares' permission denied: require permission 'rw'"):
             self.cgroup.validate_all()
 
@@ -211,11 +211,11 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuacct_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0500)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0o500)
         with self.assertRaisesRegexp(AssertionError, "directory '.*/cpuacct/gpdb/' permission denied: require permission 'rwx'"):
             self.cgroup.validate_all()
         # restore permission for the dir to be removed in tearDown()
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb"), 0o700)
 
     def test_when_cpuacct_gpdb_cgroup_procs_missing(self):
         os.unlink(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cgroup.procs"))
@@ -223,7 +223,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuacct_gpdb_cgroup_procs_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cgroup.procs"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cgroup.procs"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpuacct/gpdb/cgroup.procs' permission denied: require permission 'rw'"):
             self.cgroup.validate_all()
 
@@ -233,7 +233,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuacct_gpdb_cpuacct_usage_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.usage"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.usage"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpuacct/gpdb/cpuacct.usage' permission denied: require permission 'r'"):
             self.cgroup.validate_all()
 
@@ -243,7 +243,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuacct_gpdb_cpuacct_stat_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.stat"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuacct", "gpdb", "cpuacct.stat"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/cpuacct/gpdb/cpuacct.stat' permission denied: require permission 'r'"):
             self.cgroup.validate_all()
 
@@ -253,7 +253,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_memory_limit_in_bytes_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "memory.limit_in_bytes"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "memory.limit_in_bytes"), 0o100)
         with self.assertRaisesRegexp(AssertionError, "file '.*/memory/memory.limit_in_bytes' permission denied: require permission 'r'"):
             self.cgroup.validate_all()
 
@@ -266,14 +266,14 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_memory_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0500)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0o500)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "directory '.*/memory/gpdb/' permission denied: require permission 'rwx'"):
                 self.cgroup.validate_all()
         else:
             self.cgroup.validate_all()
         # restore permission for the dir to be removed in tearDown()
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb"), 0o700)
 
     def test_when_memory_gpdb_limit_in_bytes_missing(self):
         os.unlink(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.limit_in_bytes"))
@@ -284,7 +284,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_memory_gpdb_limit_in_bytes_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.limit_in_bytes"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.limit_in_bytes"), 0o100)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "file '.*/memory/gpdb/memory.limit_in_bytes' permission denied: require permission 'rw'"):
                 self.cgroup.validate_all()
@@ -300,7 +300,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_memory_gpdb_usage_in_bytes_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.usage_in_bytes"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "memory", "gpdb", "memory.usage_in_bytes"), 0o100)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "file '.*/memory/gpdb/memory.usage_in_bytes' permission denied: require permission 'r'"):
                 self.cgroup.validate_all()
@@ -316,14 +316,14 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuset_gpdb_dir_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0500)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0o500)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "directory '.*/cpuset/gpdb/' permission denied: require permission 'rwx'"):
                 self.cgroup.validate_all()
         else:
             self.cgroup.validate_all()
         # restore permission for the dir to be removed in tearDown()
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0700)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb"), 0o700)
 
     def test_when_cpuset_gpdb_cgroup_procs_missing(self):
         os.unlink(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cgroup.procs"))
@@ -334,7 +334,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuset_gpdb_cgroup_procs_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cgroup.procs"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cgroup.procs"), 0o100)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "file '.*/cpuset/gpdb/cgroup.procs' permission denied: require permission 'rw'"):
                 self.cgroup.validate_all()
@@ -350,7 +350,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuset_gpdb_cpuset_cpus_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.cpus"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.cpus"), 0o100)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "file '.*/cpuset/gpdb/cpuset.cpus' permission denied: require permission 'rw'"):
                 self.cgroup.validate_all()
@@ -366,7 +366,7 @@ class GpCheckResGroupImplCGroup(unittest.TestCase):
             self.cgroup.validate_all()
 
     def test_when_cpuset_gpdb_cpuset_mems_bad_permission(self):
-        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.mems"), 0100)
+        os.chmod(os.path.join(self.cgroup_mntpnt, "cpuset", "gpdb", "cpuset.mems"), 0o100)
         if gpver.version >= [6, 0, 0]:
             with self.assertRaisesRegexp(AssertionError, "file '.*/cpuset/gpdb/cpuset.mems' permission denied: require permission 'rw'"):
                 self.cgroup.validate_all()

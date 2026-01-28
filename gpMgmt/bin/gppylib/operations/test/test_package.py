@@ -578,7 +578,7 @@ class MuckWithInternalsTestCases(GppkgTestCase):
 
         try:
             self.remove(self.gppkg_spec.get_filename())
-        except ExecutionError, e:
+        except ExecutionError as e:
             shutil.copy(gppkg_file, os.path.join(ARCHIVE_PATH, gppkg_file))
             self.fail("Execution Error %s" % e)
 
@@ -595,7 +595,7 @@ class MuckWithInternalsTestCases(GppkgTestCase):
 
         try:
             self.install(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             # Install the rpm
             with closing(tarfile.open(self.gppkg_spec.get_filename())) as tf:
                 tf.extract(self.rpm_spec.get_filename())
@@ -619,7 +619,7 @@ class MuckWithInternalsTestCases(GppkgTestCase):
 
         try:
             self.install(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             run_command("rpm -e %s --dbpath %s" % (self.rpm_spec.get_package_name(), RPM_DATABASE))
             os.remove(self.rpm_spec.get_filename())
             self.fail("ExecutionError %s" % e)
@@ -640,7 +640,7 @@ class MuckWithInternalsTestCases(GppkgTestCase):
 
         try:
             self.install(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             Scp(name="copy to segment", srcFile=gppkg_file, dstFile=archive_file, srcHost=None,
                 dstHost=segment_host_list[0]).run(validateAfter=True)
             self.fail("ExecutionError %s" % e)
@@ -661,7 +661,7 @@ class MuckWithInternalsTestCases(GppkgTestCase):
 
         try:
             self.install(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             Scp(name="copy to segment", srcFile=gppkg_file, dstFile=archive_file, srcHost=None, dstHost=standby).run(
                 validateAfter=True)
             self.fail("ExecutionError %s" % e)

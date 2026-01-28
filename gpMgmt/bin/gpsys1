@@ -17,6 +17,7 @@ Output:
 
 	e.g. linux 1073741824
 """
+from __future__ import print_function
 
 import sys, os, getopt
 
@@ -32,14 +33,14 @@ def usage(exitarg):
     try:
 	f = open(help_path);
 	for line in f: 
-	    print line,
+	    print(line, end=' ')
     except:
-        print __doc__
+        print(__doc__)
     sys.exit(exitarg)
 
 #############
 def print_version():
-    print '%s version $Revision$' % script_name
+    print('%s version $Revision$' % script_name)
     sys.exit(0)
 
 ################
@@ -47,7 +48,7 @@ def parseCommandLine():
     global opt
     try:
 	(options, args) = getopt.getopt(sys.argv[1:], '?amp', ['version'])
-    except Exception, e:
+    except Exception as e:
 	usage('Error: ' + str(e))
 
     for (switch, val) in options:
@@ -121,13 +122,13 @@ if opt['-a'] or opt['-p']:
 	v = getPlatform()
     except:
 	v = '?'
-    print v,
+    print(v, end=' ')
 
 if opt['-a'] or opt['-m']:
     try:
 	v = getMemory()
     except:
 	v = '?'
-    print v,
+    print(v, end=' ')
 
-print
+print()
