@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
+from builtins import str
+from builtins import range
+from builtins import object
 import unittest
 import sys
 import os
@@ -285,7 +288,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
         f.write("\n    - UPDATE_CONDITION: "+update_condition)
     if mapping:
         f.write("\n    - MAPPING:")
-        for key, val in mapping.items():
+        for key, val in list(mapping.items()):
             f.write("\n           "+key+": "+val)
 
     if preload:
@@ -500,7 +503,7 @@ class PSQLError(Exception):
     '''
     pass
 
-class AnsFile():
+class AnsFile(object):
     def __init__(self, path):
         self.path = path
     def __eq__(self, other):

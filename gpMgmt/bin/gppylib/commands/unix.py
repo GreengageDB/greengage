@@ -6,6 +6,9 @@
 Set of Classes for executing unix commands.
 """
 from __future__ import print_function
+from builtins import str
+from builtins import range
+from builtins import object
 import os
 import platform
 import psutil
@@ -205,7 +208,7 @@ def get_remote_link_path(path, host):
 """
 
 
-class GenericPlatform():
+class GenericPlatform(object):
     def getName(self):
         "unsupported"
 

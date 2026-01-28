@@ -32,7 +32,14 @@ Usage: gpcheckperf <options>
     --buffer-size : the size of the send buffer in kilobytes ( default 32 kilobytes)
 """
 from __future__ import print_function
+from __future__ import division
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import datetime
 import os
 import sys
@@ -40,7 +47,7 @@ from functools import reduce
 
 sys.path.append(sys.path[0] + '/lib')
 try:
-    import getopt, math, StringIO, stat, subprocess, signal
+    import getopt, math, io, stat, subprocess, signal
     from gppylib.gpparseopts import OptParser
     from gppylib.util import ssh_utils
     from gppylib.commands import unix
@@ -68,7 +75,7 @@ def usage(exitarg):
     sys.exit(exitarg)
 
 
-class Global():
+class Global(object):
     script_name = os.path.split(__file__)[-1]
     opt = {'-d': [], '-D': False, '-v': False, '-V': False, '-r': '',
            '-B': 1024 * 32, '-S': 0, '-h': [], '-f': None,
@@ -84,7 +91,7 @@ def killall(procname):
 
 
 def strcmd(cmd):
-    return reduce(lambda x, y: x + ' ' + y, map(lambda x: x.find(' ') > 0 and "'" + x + "'" or x, cmd))
+    return reduce(lambda x, y: x + ' ' + y, [x.find(' ') > 0 and "'" + x + "'" or x for x in cmd])
 
 
 def gpssh(cmd, verbose):
@@ -310,7 +317,7 @@ def parseCommandLine():
     if GV.opt['-S'] == 0:
         system_mem_size = getMemory()
         if system_mem_size is not None:
-            GV.opt['-S'] = 2 * system_mem_size / len(GV.opt['-d'])
+            GV.opt['-S'] = old_div(2 * system_mem_size, len(GV.opt['-d']))
         else:
             sys.exit('[Error] could not get system memory size. Instead, you can use the -S option to provide the file size value')
 
@@ -338,7 +345,7 @@ def parseCommandLine():
     GV.opt['-d'] = dd
 
     def strcmd(cmd):
-        return reduce(lambda x, y: x + ' ' + y, map(lambda x: x.find(' ') > 0 and "'" + x + "'" or x, cmd))
+        return reduce(lambda x, y: x + ' ' + y, [x.find(' ') > 0 and "'" + x + "'" or x for x in cmd])
 
     print(strcmd(sys.argv))
 
@@ -466,7 +473,7 @@ def copyExecOver(fname):
 
 def parseMultiDDResult(out):
     # parse output of "time -p"
-    out = StringIO.StringIO(out)
+    out = io.StringIO(out)
     result = {}
     bytes = 0
     for line in out:
@@ -487,7 +494,7 @@ def parseMultiDDResult(out):
             time = float(o[1])
             if time < 0.1:
                 time = 0.1  # avoid division by zero
-            mbps = bytes / time / 1024 / 1024
+            mbps = old_div(old_div(old_div(bytes, time), 1024), 1024)
             result[h] = (mbps, time, bytes)
             continue
 
@@ -542,7 +549,7 @@ def runStreamTest():
     (ok, out) = gpssh(cmd, GV.opt['-V'])
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
-    out = StringIO.StringIO(out)
+    out = io.StringIO(out)
     result = {}
     for line in out:
         i = line.find(']')
@@ -558,7 +565,7 @@ def startNetServer():
     port = 23000
     rmtPath = copyExecOver(GV.opt['--netserver'])
 
-    for i in xrange(5):
+    for i in range(5):
         if i > 0:
             print('[Warning] retrying with port %d' % port)
         (ok, out) = gpssh(killall(GV.opt['--netserver']), GV.opt['-V'])
@@ -638,12 +645,12 @@ def reapNetperfTest(proc, x, y):
         print('[Warning] netperf failed on %s -> %s' % (x, y))
         return []
 
-    for line in StringIO.StringIO(out):
+    for line in io.StringIO(out):
         line = line.split()
         if len(line) != 5:
             continue
         l = [x, y]
-        l.extend(map(lambda x: float(x), line))
+        l.extend([float(x) for x in line])
         if GV.opt['-v']:
             print('[Info] %s -> %s : %s' % (x, y, str(line)))
         return l
@@ -705,7 +712,7 @@ def runNetPerfTest():
 
     # run netperf test between host[0] & host[1], host[2] & host[3], ...
     result = []
-    for i in xrange(len(h)):
+    for i in range(len(h)):
         if i & 1 == 0:
             continue
         x = h[i - 1]
@@ -744,7 +751,7 @@ def runNetPerfTestParallel():
     # run netperf test between host[0] & host[1], host[2] & host[3], ...
     result = []
     procList = []
-    for i in xrange(len(h)):
+    for i in range(len(h)):
         if i & 1 == 0:
             continue
         x = h[i - 1]
@@ -760,7 +767,7 @@ def runNetPerfTestParallel():
 
     # second round: test between host[1] & host[0], host[3] & host[2], ...
     procList = []
-    for i in xrange(len(h)):
+    for i in range(len(h)):
         if i & 1 == 0:
             continue
         x = h[i - 1]
@@ -908,7 +915,7 @@ def printMatrixResult(result, seglist):
             print('%s -> %s = %f' % (h[0], h[1], h[6]))
 
     sum = min = max = avg = 0
-    n = map(lambda x: float(x[6]), result)
+    n = [float(x[6]) for x in result]
     sum = reduce(lambda x, y: x + y, n)
     min = reduce(lambda x, y: x > y and y or x, n, 9999999999)
     max = reduce(lambda x, y: x > y and x or y, n)
@@ -916,7 +923,7 @@ def printMatrixResult(result, seglist):
 
     copy = n[:]
     copy.sort()
-    median = copy[len(copy) / 2]
+    median = copy[old_div(len(copy), 2)]
 
     print('')
     print('Summary:')
@@ -934,7 +941,7 @@ def printNetResult(result):
         print('%s -> %s = %f' % (h[0], h[1], h[6]))
 
     sum = min = max = avg = 0
-    n = map(lambda x: float(x[6]), result)
+    n = [float(x[6]) for x in result]
     sum = reduce(lambda x, y: x + y, n)
     min = reduce(lambda x, y: x > y and y or x, n, 9999999999)
     max = reduce(lambda x, y: x > y and x or y, n)
@@ -942,7 +949,7 @@ def printNetResult(result):
 
     copy = n[:]
     copy.sort()
-    median = copy[len(copy) / 2]
+    median = copy[old_div(len(copy), 2)]
 
     print('')
     print('Summary:')
@@ -978,7 +985,7 @@ def printResult(title, result):
             max = mbps
             maxHost = h
 
-    avgTime = totTime / len(result)
+    avgTime = old_div(totTime, len(result))
 
     print()
     if totTime > 0:

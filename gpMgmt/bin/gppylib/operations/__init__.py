@@ -1,4 +1,5 @@
 # Make sure Python loads the modules of this package via absolute paths.
+from builtins import object
 from os.path import abspath as _abspath
 from gppylib.commands.base import WorkerPool
 from gppylib import gplog

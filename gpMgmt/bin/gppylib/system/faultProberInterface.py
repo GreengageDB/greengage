@@ -8,6 +8,7 @@ This file defines the interface that can be used to
    interface with the fault prober
 
 """
+from builtins import object
 import os
 
 from gppylib.gplog import *
@@ -15,7 +16,7 @@ from gppylib.utils import checkNotNone
 
 logger = get_default_logger()
 
-class GpFaultProber:
+class GpFaultProber(object):
     def __init__(self):
         pass
     #

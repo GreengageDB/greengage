@@ -1,3 +1,7 @@
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 import abc
 
 from contextlib import closing
@@ -10,6 +14,7 @@ from gppylib.utils import checkNotNone, normalizeAndValidateInputPath, validateH
 from gppylib.gparray import GpArray, Segment
 from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
+from future.utils import with_metaclass
 
 logger = gplog.get_default_logger()
 
@@ -105,7 +110,7 @@ def extract_recovery_config_info(parts):
     return hostname, address, port, datadir, recovery_type, hostname_check_required
 
 
-class RecoveryTriplet:
+class RecoveryTriplet(object):
     """
     Represents the segments needed to perform a recovery on a given segment.
     failed   = acting mirror that needs to be recovered
@@ -181,7 +186,7 @@ class RecoveryTriplet:
             assert failed.getSegmentDbId() == failover.getSegmentDbId()
 
 
-class RecoveryTripletRequest:
+class RecoveryTripletRequest(object):
     def __init__(self, failed, failover_host_name=None, failover_host_address=None, failover_port=None, failover_datadir=None, is_new_host=False, recovery_type=None):
         self.failed = failed
 
@@ -194,7 +199,7 @@ class RecoveryTripletRequest:
 
 
 # TODO: gparray is mutated for all triplets, even if we skip recovery for them(if they are unreachable)
-class RecoveryTripletsFactory:
+class RecoveryTripletsFactory(object):
     @staticmethod
     def instance(gpArray, config_file=None, new_hosts=[], outputConfigFile=None, paralleldegree=1):
         """
@@ -214,9 +219,7 @@ class RecoveryTripletsFactory:
 
 
 
-class RecoveryTriplets:
-    __metaclass__ = abc.ABCMeta
-
+class RecoveryTriplets(with_metaclass(abc.ABCMeta, object)):
     def __init__(self, gpArray, outputConfigFile=None, paralleldegree=1):
         """
         :param gpArray: Needs to be a shallow copy since we may return a mutated gpArray
@@ -405,7 +408,7 @@ class RecoveryTripletsNewHosts(RecoveryTriplets):
 
         return self._convert_requests_to_triplets(requests)
 
-    class _PortAssigner:
+    class _PortAssigner(object):
         """
         Used to assign new ports to segments on a host
 
@@ -430,7 +433,7 @@ class RecoveryTripletsNewHosts(RecoveryTriplets):
             self.__usedPortsByHostName = {}
 
             byHost = GpArray.getSegmentsByHostName(segments)
-            for hostName, segments in byHost.items():
+            for hostName, segments in list(byHost.items()):
                 usedPorts = self.__usedPortsByHostName[hostName] = {}
                 for seg in segments:
                     usedPorts[seg.getSegmentPort()] = True

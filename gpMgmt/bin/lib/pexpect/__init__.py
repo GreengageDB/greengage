@@ -63,6 +63,13 @@ PEXPECT LICENSE
 
 '''
 
+from builtins import chr
+from builtins import zip
+from builtins import bytes
+from builtins import str
+from builtins import range
+from past.builtins import basestring
+from builtins import object
 try:
     import os
     import sys
@@ -1768,9 +1775,9 @@ class spawnu(spawn):
         linesep = os.linesep
         crlf = '\r\n'
     else:
-        string_type = unicode
-        allowed_string_types = (unicode, )
-        _chr = staticmethod(unichr)
+        string_type = str
+        allowed_string_types = (str, )
+        _chr = staticmethod(chr)
         linesep = os.linesep.decode('ascii')
         crlf = '\r\n'.decode('ascii')
     # This can handle unicode in both Python 2 and 3

@@ -11,13 +11,16 @@
   configruation details and computes appropriate changes.
 """
 from __future__ import print_function
+from past.builtins import cmp
+from builtins import str
+from builtins import object
 import copy
 from gppylib.gplog import *
 from gppylib.gparray import ROLE_PRIMARY, ROLE_MIRROR, MASTER_CONTENT_ID
 
 logger = get_default_logger()
 
-class ComputeCatalogUpdate:
+class ComputeCatalogUpdate(object):
     """
     Helper class for GpConfigurationProvider.updateSystemConfig().
     
@@ -59,14 +62,14 @@ class ComputeCatalogUpdate:
 
         # find mirrors and primaries to remove
         self.mirror_to_remove = [
-            seg for seg in self.dbsegmap.values()		        # segment in database
+            seg for seg in list(self.dbsegmap.values())		        # segment in database
                  if seg.isSegmentMirror()                               # segment is a mirror
                 and (seg.getSegmentDbId() not in self.goalsegmap)       # but not in goal configuration
         ]
         self.debuglog("mirror_to_remove:          %s", self.mirror_to_remove)
 
         self.primary_to_remove = [
-            seg for seg in self.dbsegmap.values()              		# segment is database
+            seg for seg in list(self.dbsegmap.values())              		# segment is database
                  if seg.isSegmentPrimary()                      	# segment is a primary
                 and (seg.getSegmentDbId() not in self.goalsegmap)       # but not in goal configuration
         ]
@@ -74,14 +77,14 @@ class ComputeCatalogUpdate:
 
         # find primaries and mirrors to add
         self.primary_to_add = [
-            seg for seg in self.goalsegmap.values()			# segment in goal configuration
+            seg for seg in list(self.goalsegmap.values())			# segment in goal configuration
                  if seg.isSegmentPrimary()				# segment is a primary
                 and (seg.getSegmentDbId() not in self.dbsegmap)		# but not in the database
         ]
         self.debuglog("primary_to_add:            %s", self.primary_to_add)
 
         self.mirror_to_add = [
-            seg for seg in self.goalsegmap.values()			# segment in goal configuration
+            seg for seg in list(self.goalsegmap.values())			# segment in goal configuration
                  if seg.isSegmentMirror()				# segment is a mirror
                 and (seg.getSegmentDbId() not in self.dbsegmap)		# but not in the database
         ]
@@ -89,7 +92,7 @@ class ComputeCatalogUpdate:
 
         # find segments to update
         initial_segment_to_update = [
-            seg for seg in self.goalsegmap.values()			# segment in goal configuration
+            seg for seg in list(self.goalsegmap.values())			# segment in goal configuration
                  if (seg.getSegmentDbId() in self.dbsegmap)          	# and also in the database 
                 and (seg != self.dbsegmap[ seg.getSegmentDbId() ])   	# but some attributes differ
         ]
@@ -109,7 +112,7 @@ class ComputeCatalogUpdate:
                 continue
 
         # create list of mirrors to update via remove/add
-        self.mirror_to_remove_and_add = [seg for seg in removeandaddmap.values()]
+        self.mirror_to_remove_and_add = [seg for seg in list(removeandaddmap.values())]
         self.debuglog("mirror_to_remove_and_add:  %s", self.mirror_to_remove_and_add)
 
         # find segments to update in the ordinary way
@@ -121,7 +124,7 @@ class ComputeCatalogUpdate:
 
         # find segments that don't need change
         self.segment_unchanged = [
-            seg for seg in self.goalsegmap.values()			# segment in goal configuration
+            seg for seg in list(self.goalsegmap.values())			# segment in goal configuration
                  if (seg.getSegmentDbId() in self.dbsegmap)          	# and also in the database 
                 and (seg == self.dbsegmap[ seg.getSegmentDbId() ])   	# and attribtutes are all the same
         ]
@@ -238,7 +241,7 @@ if __name__ == '__main__':
     MODE_SYNCHRONIZED = 's'
     MODE_RESYNCHRONIZATION = 'r'
 
-    class GpDb:
+    class GpDb(object):
         def __init__(self,dbid,content,pref,mode='',curr=None,status='u',rport=0,misc=None):
             self.dbid           = dbid
             self.content        = content
@@ -277,14 +280,14 @@ if __name__ == '__main__':
             tmp.setSegmentStatus( other.getSegmentStatus() )
             return tmp == other
 
-    class xxx:
+    class xxx(object):
         def xxx():
             print(dbsegmap)
             print(goalsegmap)
-            print('db not goal', [seg for seg in dbsegmap.values()   if seg.getSegmentDbId() not in goalsegmap])
-            print('goal not db', [seg for seg in goalsegmap.values() if seg.getSegmentDbId() not in dbsegmap])
+            print('db not goal', [seg for seg in list(dbsegmap.values())   if seg.getSegmentDbId() not in goalsegmap])
+            print('goal not db', [seg for seg in list(goalsegmap.values()) if seg.getSegmentDbId() not in dbsegmap])
     
-    class GpArray:
+    class GpArray(object):
         def __init__(s, forceMap=None, useUtilityMode=False, allowPrimary=True):
             s.c = ComputeCatalogUpdate(s,forceMap,useUtilityMode,allowPrimary)
             s.dump()

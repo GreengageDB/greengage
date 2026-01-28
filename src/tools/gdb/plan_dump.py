@@ -15,105 +15,107 @@ from __future__ import print_function
 #   won't be NULL
 # - out_file_path optional argument - filesystem path to save the plan tree.
 
+from builtins import str
+from builtins import object
 import gdb
 
 PLANGEN_PLANNER = gdb.parse_and_eval("PLANGEN_PLANNER")
 
-class RangeTblEntry:
+class RangeTblEntry(object):
 	gdb_type = gdb.lookup_type("RangeTblEntry").pointer()
 
-class Slice:
+class Slice(object):
 	gdb_type = gdb.lookup_type('Slice').pointer()
 
-class Node:
+class Node(object):
 	gdb_type = gdb.lookup_type('Node').pointer()
 
-class TargetEntry:
+class TargetEntry(object):
 	gdb_type = gdb.lookup_type('TargetEntry').pointer()
 
-class Plan:
+class Plan(object):
 	gdb_type = gdb.lookup_type('Plan').pointer()
 
-class PlanState:
+class PlanState(object):
 	gdb_type = gdb.lookup_type('PlanState').pointer()
 
-class SubPlan:
+class SubPlan(object):
 	gdb_type = gdb.lookup_type('SubPlan').pointer()
 
-class SubPlanState:
+class SubPlanState(object):
 	gdb_type = gdb.lookup_type('SubPlanState').pointer()
 
-class ModifyTable:
+class ModifyTable(object):
 	gdb_type = gdb.lookup_type('ModifyTable').pointer()
 
-class ModifyTableState:
+class ModifyTableState(object):
 	gdb_type = gdb.lookup_type('ModifyTableState').pointer()
 
-class Append:
+class Append(object):
 	gdb_type = gdb.lookup_type('Append').pointer()
 
-class AppendState:
+class AppendState(object):
 	gdb_type = gdb.lookup_type('AppendState').pointer()
 
-class MergeAppend:
+class MergeAppend(object):
 	gdb_type = gdb.lookup_type('MergeAppend').pointer()
 
-class MergeAppendState:
+class MergeAppendState(object):
 	gdb_type = gdb.lookup_type('MergeAppendState').pointer()
 
-class Sequence:
+class Sequence(object):
 	gdb_type = gdb.lookup_type('Sequence').pointer()
 
-class SequenceState:
+class SequenceState(object):
 	gdb_type = gdb.lookup_type('SequenceState').pointer()
 
-class BitmapAnd:
+class BitmapAnd(object):
 	gdb_type = gdb.lookup_type('BitmapAnd').pointer()
 
-class BitmapAndState:
+class BitmapAndState(object):
 	gdb_type = gdb.lookup_type('BitmapAndState').pointer()
 
-class BitmapOr:
+class BitmapOr(object):
 	gdb_type = gdb.lookup_type('BitmapOr').pointer()
 
-class BitmapOrState:
+class BitmapOrState(object):
 	gdb_type = gdb.lookup_type('BitmapOrState').pointer()
 
-class SubqueryScan:
+class SubqueryScan(object):
 	gdb_type = gdb.lookup_type('SubqueryScan').pointer()
 
-class SubqueryScanState:
+class SubqueryScanState(object):
 	gdb_type = gdb.lookup_type('SubqueryScanState').pointer()
 
-class Result:
+class Result(object):
 	gdb_type = gdb.lookup_type('Result').pointer()
 
-class Join:
+class Join(object):
 	gdb_type = gdb.lookup_type('Join').pointer()
 
-class NestLoop:
+class NestLoop(object):
 	gdb_type = gdb.lookup_type('NestLoop').pointer()
 
-class IndexScan:
+class IndexScan(object):
 	gdb_type = gdb.lookup_type('IndexScan').pointer()
 
-class IndexOnlyScan:
+class IndexOnlyScan(object):
 	gdb_type = gdb.lookup_type('IndexOnlyScan').pointer()
 
-class BitmapIndexScan:
+class BitmapIndexScan(object):
 	gdb_type = gdb.lookup_type('BitmapIndexScan').pointer()
 
-class DynamicBitmapIndexScan:
+class DynamicBitmapIndexScan(object):
 	gdb_type = gdb.lookup_type('DynamicBitmapIndexScan').pointer()
 
-class Gang:
+class Gang(object):
 	GANGTYPE_UNALLOCATED = gdb.parse_and_eval("GANGTYPE_UNALLOCATED")			# a root slice executed by the qDisp
 	GANGTYPE_ENTRYDB_READER = gdb.parse_and_eval("GANGTYPE_ENTRYDB_READER")		# a 1-gang with read access to the entry db
 	GANGTYPE_SINGLETON_READER = gdb.parse_and_eval("GANGTYPE_SINGLETON_READER")	# a 1-gang to read the segment dbs
 	GANGTYPE_PRIMARY_READER = gdb.parse_and_eval("GANGTYPE_PRIMARY_READER")		# a 1-gang or N-gang to read the segment dbs
 	GANGTYPE_PRIMARY_WRITER = gdb.parse_and_eval("GANGTYPE_PRIMARY_WRITER")		# the N-gang that can update the segment dbs
 
-class SetOp:
+class SetOp(object):
 	gdb_type = gdb.lookup_type("SetOp").pointer()
 	# Strategies enum
 	SETOP_SORTED = gdb.parse_and_eval('SETOP_SORTED')
@@ -147,20 +149,20 @@ class SetOp:
 
 		return "%s %s" % (strategyStr, commandStr)
 
-class Agg:
+class Agg(object):
 	gdb_type = gdb.lookup_type('Agg').pointer()
 	# Strategies
 	AGG_PLAIN = gdb.parse_and_eval('AGG_PLAIN')
 	AGG_SORTED = gdb.parse_and_eval('AGG_SORTED')
 	AGG_HASHED = gdb.parse_and_eval('AGG_HASHED')
 
-class Flow:
+class Flow(object):
 	FLOW_UNDEFINED = gdb.parse_and_eval("FLOW_UNDEFINED")		# used prior to calculation of type of derived flow
 	FLOW_SINGLETON = gdb.parse_and_eval("FLOW_SINGLETON")		# flow has single stream
 	FLOW_REPLICATED = gdb.parse_and_eval("FLOW_REPLICATED")		# flow is replicated across IOPs
 	FLOW_PARTITIONED = gdb.parse_and_eval("FLOW_PARTITIONED")	# flow is partitioned across IOPs
 
-class LocusType:
+class LocusType(object):
 	CdbLocusType_Null = gdb.parse_and_eval("CdbLocusType_Null")
 	CdbLocusType_Entry = gdb.parse_and_eval("CdbLocusType_Entry")
 	CdbLocusType_SingleQE = gdb.parse_and_eval("CdbLocusType_SingleQE")
@@ -172,7 +174,7 @@ class LocusType:
 	CdbLocusType_Strewn = gdb.parse_and_eval("CdbLocusType_Strewn")
 	CdbLocusType_End = gdb.parse_and_eval("CdbLocusType_End")
 
-class List:
+class List(object):
 	gdb_type = gdb.lookup_type('List').pointer()
 
 	@staticmethod

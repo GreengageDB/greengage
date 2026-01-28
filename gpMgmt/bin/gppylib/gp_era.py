@@ -7,6 +7,8 @@
   Copyright (c) EMC/Greenplum Inc 2011. All Rights Reserved. 
 """
 
+from builtins import str
+from builtins import object
 import sys, os, stat, re
 import hashlib
 
@@ -20,7 +22,7 @@ def DEBUG(msg):
     self = sys._getframe(1).f_locals['self']
     if self.logger: self.logger.debug(msg)
 
-class GpEraFile:
+class GpEraFile(object):
     """
     Manage the gp_era file.
     """

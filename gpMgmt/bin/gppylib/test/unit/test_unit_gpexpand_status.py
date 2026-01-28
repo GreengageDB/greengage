@@ -4,6 +4,7 @@
 # Copyright (c) 2019-Present Pivotal Software, Inc.
 #
 
+from builtins import object
 import os
 
 from gppylib.test.unit.gp_unittest import GpTestCase, run_tests

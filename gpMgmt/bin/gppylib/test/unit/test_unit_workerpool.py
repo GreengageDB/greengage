@@ -1,5 +1,10 @@
+from __future__ import division
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from past.utils import old_div
 import os
-import StringIO
+import io
 import threading
 import time
 import unittest
@@ -240,7 +245,7 @@ class WorkerPoolTest(unittest.TestCase):
         self.assertEqual(self.pool.assigned, 0)
 
     def test_join_and_indicate_progress_prints_nothing_if_pool_is_done(self):
-        stdout = StringIO.StringIO()
+        stdout = io.StringIO()
         join_and_indicate_progress(self.pool, stdout)
 
         self.assertEqual(stdout.getvalue(), '')
@@ -301,7 +306,7 @@ class WorkerPoolTest(unittest.TestCase):
         self.pool.addCommand(cmd)
 
         stdout = mock.Mock(spec=file)
-        join_and_indicate_progress(self.pool, stdout, interval=(duration / 5))
+        join_and_indicate_progress(self.pool, stdout, interval=(old_div(duration, 5)))
 
         for i, call in enumerate(stdout.mock_calls):
             # Every written dot should be followed by a flush().

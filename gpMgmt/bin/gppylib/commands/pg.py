@@ -4,6 +4,8 @@
 #
 
 from __future__ import absolute_import
+from builtins import str
+from builtins import object
 import os
 import pipes
 
@@ -168,7 +170,7 @@ def killPgProc(db,procname,signal):
     return (parentPID,procPID)
 
 
-class PgReplicationSlot:
+class PgReplicationSlot(object):
     """
     PgReplicationSlot have utility function related to replication slot
     """

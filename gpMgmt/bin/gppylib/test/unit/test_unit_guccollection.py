@@ -261,4 +261,4 @@ class GucCollectionTest(GpTestCase):
                           "[context: 1] [dbid: dbid5] [name: guc_name] [value: value | file: value]", self.subject.report())
 
     def test_values_succeeds(self):
-        self.assertEquals([self.db_seg_guc_1, self.db_seg_guc_2], self.subject.values())
+        self.assertEquals([self.db_seg_guc_1, self.db_seg_guc_2], list(self.subject.values()))

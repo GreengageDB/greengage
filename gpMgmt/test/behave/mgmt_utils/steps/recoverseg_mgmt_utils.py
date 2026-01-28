@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import range
 import glob
 import os
 import tempfile
@@ -212,7 +214,7 @@ def impl(context, utility, output, segment_type):
     role = ROLE_PRIMARY if segment_type == 'primary' else ROLE_MIRROR
 
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == role and seg.content >= 0, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == role and seg.content >= 0]
     for segment in segments:
         expected = r'\(dbid {}\): {}'.format(segment.dbid, output)
         check_stdout_msg(context, expected)
@@ -227,8 +229,8 @@ def impl(context, utility, recovery_type, content_ids):
     content_list = [int(c) for c in content_ids.split(',')]
 
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.content in content_list, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list]
 
     for segment in segments:
         if recovery_type == 'incremental' or recovery_type == 'full':
@@ -354,8 +356,8 @@ def start_fail_check(context, content_ids, utility):
 @then('check if full recovery failed for mirrors with hostname {host}')
 def impl(context, host):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.getSegmentHostName() == host, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.getSegmentHostName() == host]
     content_ids_on_host = [seg.content for seg in segments]
     content_id_str = ','.join(str(i) for i in content_ids_on_host)
     recovery_fail_check(context, recovery_type='full', content_ids=content_id_str)
@@ -363,8 +365,8 @@ def impl(context, host):
 @then('check if moving the mirrors from {original_host} to {new_host} failed')
 def impl(context, original_host, new_host):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.getSegmentHostName() == original_host, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.getSegmentHostName() == original_host]
     content_ids_on_host = [seg.content for seg in segments]
     content_id_str = ','.join(str(i) for i in content_ids_on_host)
 
@@ -393,8 +395,8 @@ def impl(context, original_host, new_host):
 @then('check if start failed for full recovery for mirrors with hostname {host}')
 def impl(context, host):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.getSegmentHostName() == host, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.getSegmentHostName() == host]
     content_ids_on_host = [seg.content for seg in segments]
     content_id_str = ','.join(str(i) for i in content_ids_on_host)
     start_fail_check(context, content_ids=content_id_str, utility='gprecoverseg')
@@ -406,8 +408,8 @@ def impl(context, output, content_ids):
         return
     content_list = [int(c) for c in content_ids.split(',')]
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.content in content_list, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list]
     for segment in segments:
         expected = r'\(dbid {}\): {}'.format(segment.dbid, output)
         check_stdout_msg(context, expected)
@@ -821,7 +823,7 @@ def impl(context):
 def impl(context, filename, category):
     lines = []
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
+    failed_segments = [seg for seg in all_segments if seg.getSegmentStatus() == 'd']
 
     for seg in failed_segments:
         output_str = ""

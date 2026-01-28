@@ -1,8 +1,10 @@
 from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
 import os
 import sys
 
-import StringIO
+import io
 from mock import *
 from .gp_unittest import *
 from gppylib.programs.clsAddMirrors import GpAddMirrorsProgram, ProgramArgumentValidationException
@@ -88,7 +90,7 @@ class GpAddMirrorsTest(GpTestCase):
         with self.assertRaises(ProgramArgumentValidationException):
             self.subject.run()
 
-    @patch('sys.stdout', new_callable=StringIO.StringIO)
+    @patch('sys.stdout', new_callable=io.StringIO)
     def test_option_version(self, mock_stdout):
         sys.argv = ['gpaddmirrors', '--version']
         with self.assertRaises(SystemExit) as cm:

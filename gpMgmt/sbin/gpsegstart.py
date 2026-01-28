@@ -10,6 +10,9 @@ Internal Use Function.
 """
 
 # THIS IMPORT MUST COME FIRST
+from builtins import map
+from builtins import str
+from builtins import object
 from gppylib.mainUtils import simple_main, addStandardLoggingAndHelpOptions
 
 import os, pickle, base64, time
@@ -40,7 +43,7 @@ Return codes:
 
 
 
-class StartResult:
+class StartResult(object):
     """
     Recorded result information from an attempt to start one segment.
     """
@@ -67,7 +70,7 @@ class StartResult:
                 ])
 
 
-class OverallStatus:
+class OverallStatus(object):
     """
     Mapping and segment status information for all segments on this host.
     """
@@ -103,7 +106,7 @@ class OverallStatus:
         """
         Add results for all remaining items in our datadir->segment map.
         """
-        for datadir in self.dirmap.keys():
+        for datadir in list(self.dirmap.keys()):
             self.results.append( StartResult(datadir=datadir, started=True, reason="Start Succeeded", reasoncode=gp.SEGSTART_SUCCESS ) )
 
 
@@ -125,7 +128,7 @@ class OverallStatus:
 
 
 
-class GpSegStart:
+class GpSegStart(object):
     """
     Logic to start segment servers on this host.
     """
@@ -136,7 +139,7 @@ class GpSegStart:
 
         # validate/store arguments
         #
-        self.dblist                = map(gparray.Segment.initFromString, dblist)
+        self.dblist                = list(map(gparray.Segment.initFromString, dblist))
 
         expected_gpversion         = gpversion
         actual_gpversion           = gp.GpVersion.local('local GP software version check', os.path.abspath(os.pardir))
@@ -168,7 +171,7 @@ class GpSegStart:
         self.master_checksum_version = master_checksum_version
 
     def getOverallStatusKeys(self):
-        return self.overall_status.dirmap.keys()
+        return list(self.overall_status.dirmap.keys())
 
     # return True if all running
     # return False if not all running
@@ -202,7 +205,7 @@ class GpSegStart:
         """
         self.logger.info("Validating directories...")
 
-        for datadir in self.overall_status.dirmap.keys():
+        for datadir in list(self.overall_status.dirmap.keys()):
             self.logger.info("Validating directory: %s" % datadir)
 
             if os.path.isdir(datadir):
@@ -235,7 +238,7 @@ class GpSegStart:
         """
         self.logger.info("Starting segments... (mirroringMode %s)" % self.mirroringMode)
 
-        for datadir, seg in self.overall_status.dirmap.items():
+        for datadir, seg in list(self.overall_status.dirmap.items()):
 
             if self.master_checksum_version != None:
                 cmd = PgControlData(name='run pg_controldata', datadir=datadir)
