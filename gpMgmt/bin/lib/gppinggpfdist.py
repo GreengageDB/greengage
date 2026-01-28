@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import sys, httplib, getopt, socket
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+import sys, http.client, getopt, socket
 
 def usage(exitarg):
     print('usage: %s [-q] host:port' % sys.argv[0])
@@ -30,7 +33,7 @@ if len(args) != 1:
 host_port = args[0]
 
 try:
-    conn = httplib.HTTPConnection(host_port)
+    conn = http.client.HTTPConnection(host_port)
     conn.request('GET', '/')
     r = conn.getresponse()
     gpfdist = r.getheader('X-GPFDIST-VERSION', '')

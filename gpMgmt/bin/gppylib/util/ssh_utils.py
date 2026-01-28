@@ -5,6 +5,9 @@
 # This file contains ssh Session class and support functions/classes.
 
 from __future__ import print_function
+from builtins import next
+from builtins import str
+from builtins import object
 import cmd
 import os
 import sys
@@ -49,7 +52,7 @@ def get_hosts(hostsfile):
     return hostlist.get()
 
 
-class HostList():
+class HostList(object):
     def __init__(self):
         self.list = []
 
@@ -131,7 +134,7 @@ class HostList():
             elif hostname == finished_cmd.remoteHost:
                 unique[hostname] = finished_cmd.remoteHost
 
-        self.list = unique.values()
+        self.list = list(unique.values())
 
         return self.list
 

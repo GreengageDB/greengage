@@ -84,7 +84,7 @@ class RepairTestCase(GpTestCase):
         self.subject = Repair(self.context, "orphan_toast_tables", "some desc")
 
         segments_with_repair_statements = []
-        for segment in self.context.cfg.values():
+        for segment in list(self.context.cfg.values()):
             if segment['content'] != -1:
                 segment['repair_statements'] = ['UPDATE pg_class']
                 segments_with_repair_statements.append(segment)

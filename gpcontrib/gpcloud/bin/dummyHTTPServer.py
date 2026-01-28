@@ -13,8 +13,10 @@ Send a POST request::
 """
 from __future__ import print_function
 
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-import SocketServer
+from future import standard_library
+standard_library.install_aliases()
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import socketserver
 import getopt
 import sys
 import os

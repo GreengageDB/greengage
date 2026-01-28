@@ -6,6 +6,8 @@
 # THIS IMPORT MUST COME FIRST
 # import mainUtils FIRST to get python version check
 #
+from builtins import map
+from builtins import object
 from gppylib.mainUtils import *
 import os, sys
 
@@ -94,7 +96,7 @@ def _get_segment_version(seg):
 #
 # todo: the file containing this should be renamed since it gets more status than just from transition
 #
-class GpSegStatusProgram:
+class GpSegStatusProgram(object):
     """
 
     Program to fetch status from the a segment(s).
@@ -165,7 +167,7 @@ class GpSegStatusProgram:
             raise ProgramArgumentValidationException("-D argument not specified")
 
         toFetch = self.__options.statusQueryRequests.split(":")
-        segments = map(gparray.Segment.initFromString, self.__options.dirList)
+        segments = list(map(gparray.Segment.initFromString, self.__options.dirList))
 
         output = {}
         for seg in segments:

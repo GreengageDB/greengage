@@ -7,10 +7,16 @@
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
 from __future__ import print_function
+from past.builtins import cmp
+from future import standard_library
+standard_library.install_aliases()
+from builtins import input
+from builtins import range
+from builtins import object
 from gppylib.mainUtils import *
 
 from optparse import Option, OptionGroup, OptionParser, OptionValueError, SUPPRESS_USAGE
-import os, sys, getopt, socket, StringIO, signal, copy
+import os, sys, getopt, socket, io, signal, copy
 
 from gppylib import gparray, gplog, pgconf, userinput, utils, heapchecksum
 from gppylib.commands.base import Command
@@ -33,7 +39,7 @@ from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 logger = gplog.get_default_logger()
 
 
-class GpMirrorBuildCalculator:
+class GpMirrorBuildCalculator(object):
     """
     Create mirror segment (Segment) objects for an existing array, using different strategies.
 
@@ -57,7 +63,7 @@ class GpMirrorBuildCalculator:
         self.__mirrorsAddedByHost = {}  # map hostname to the # of mirrors that have been added to that host
         self.__primariesUpdatedToHaveMirrorsByHost = {}  # map hostname to the # of primaries that have been attached to mirrors for that host
         self.__primaryPortBaseByHost = {}  # map hostname to the lowest port number in-use by a primary on that host
-        for hostName, segments in self.__primariesByHost.iteritems():
+        for hostName, segments in self.__primariesByHost.items():
             self.__primaryPortBaseByHost[hostName] = min([seg.getSegmentPort() for seg in segments])
             self.__mirrorsAddedByHost[hostName] = 0
             self.__primariesUpdatedToHaveMirrorsByHost[hostName] = 0
@@ -213,7 +219,7 @@ class GpMirrorBuildCalculator:
          Side-effect: self.__gpArray and other fields are updated to contain the returned segments
         """
 
-        hosts = self.__primariesByHost.keys()
+        hosts = list(self.__primariesByHost.keys())
         hosts.sort()
 
         result = []
@@ -232,7 +238,7 @@ class GpMirrorBuildCalculator:
          Side-effect: self.__gpArray is updated to contain the returned segments
         """
 
-        hosts = self.__primariesByHost.keys()
+        hosts = list(self.__primariesByHost.keys())
         hosts.sort()
 
         result = []
@@ -253,7 +259,7 @@ class GpMirrorBuildCalculator:
         return result
 
 
-class GpAddMirrorsProgram:
+class GpAddMirrorsProgram(object):
     """
     The implementation of gpaddmirrors
 
@@ -373,7 +379,7 @@ class GpAddMirrorsProgram:
             #
             while len(dirs) < maxPrimariesPerHost:
                 print('Enter mirror segment data directory location %d of %d >' % (len(dirs) + 1, maxPrimariesPerHost))
-                line = raw_input().strip()
+                line = input().strip()
                 if len(line) > 0:
                     try:
                         dirs.append(normalizeAndValidateInputPath(line))
@@ -387,7 +393,7 @@ class GpAddMirrorsProgram:
 
         maxPrimariesPerHost = 0
         segments = [seg for seg in gpArray.getDbList() if seg.isSegmentPrimary(False)]
-        for hostName, hostSegments in GpArray.getSegmentsByHostName(segments).iteritems():
+        for hostName, hostSegments in GpArray.getSegmentsByHostName(segments).items():
             if len(hostSegments) > maxPrimariesPerHost:
                 maxPrimariesPerHost = len(hostSegments)
 

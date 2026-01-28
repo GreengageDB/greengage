@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import range
+from past.utils import old_div
+from builtins import object
 import datetime
 import time
 
@@ -11,7 +15,7 @@ import contextlib
 import pygresql.pg
 
 
-class MyDbUrl:
+class MyDbUrl(object):
     pass
 
 
@@ -78,9 +82,9 @@ class SegmentReconfiguerTestCase(GpTestCase):
 
         def fail_for_five_minutes():
             new_time = start_time
-            for i in xrange(2):
+            for i in range(2):
                 # leap forward 300 seconds
-                new_time += self.timeout / 2
+                new_time += old_div(self.timeout, 2)
                 now_mock.configure_mock(return_value=new_time)
                 yield pgdb.DatabaseError
 

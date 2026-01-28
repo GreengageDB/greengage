@@ -16,6 +16,8 @@ extend common functions of our gp utilities.  Please keep this in mind
 and try to avoid placing logic for a specific utility here.
 """
 
+from builtins import str
+from builtins import object
 import errno, os, sys, shutil
 
 gProgramName = os.path.split(sys.argv[0])[-1]
@@ -45,7 +47,7 @@ class PIDLockHeld(Exception):
         self.message = message
         self.path = path
 
-class PIDLockFile:
+class PIDLockFile(object):
     """
     Create a lock, utilizing the atomic nature of mkdir on Unix
     Inside of this directory, a file named PID contains exactly the PID, with
@@ -128,7 +130,7 @@ class PIDLockFile:
         self.release()
 
 
-class SimpleMainLock:
+class SimpleMainLock(object):
     """
     Tools like gprecoverseg prohibit running multiple instances at the same time
     via a simple lock file created in the MASTER_DATA_DIRECTORY.  This class takes

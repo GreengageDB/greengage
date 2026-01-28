@@ -1,4 +1,13 @@
 from __future__ import print_function
+from __future__ import division
+from future import standard_library
+standard_library.install_aliases()
+from builtins import next
+from builtins import filter
+from builtins import str
+from builtins import map
+from builtins import range
+from past.utils import old_div
 import codecs
 import math
 import fnmatch
@@ -11,14 +20,14 @@ import platform
 import shutil
 import socket
 import tempfile
-import thread
+import _thread
 import time
 from contextlib import closing
 try:
     from subprocess32 import check_output, Popen, PIPE
 except:
     from subprocess import check_output, Popen, PIPE
-import commands
+import subprocess
 from collections import defaultdict
 
 import psutil
@@ -422,8 +431,8 @@ def impl(context, env_var):
 @given('all files in pg_xlog directory are deleted from data directory of preferred primary of content {content_ids}')
 def impl(context, content_ids):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentPreferredRole() == ROLE_PRIMARY and
-                      seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')], all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentPreferredRole() == ROLE_PRIMARY and
+                      seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')]]
     for seg in segments:
         cmd = Command(name="Remove pg_xlog files",
                       cmdStr='rm -rf {}'.format(os.path.join(seg.getSegmentDataDirectory(), 'pg_xlog')),
@@ -1421,7 +1430,7 @@ def stop_segments_on_contentID(context, role, contents):
 def stop_segments(context, where_clause):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
 
-    segments = filter(where_clause, gparray.getDbList())
+    segments = list(filter(where_clause, gparray.getDbList()))
     print("Stopping segments: {}".format(segments))
     for seg in segments:
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
@@ -1456,7 +1465,7 @@ def stop_all_primary_or_mirror_segments(context, segment_type):
 def stop_segments_immediate(context, where_clause):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
 
-    segments = filter(where_clause, gparray.getDbList())
+    segments = list(filter(where_clause, gparray.getDbList()))
     for seg in segments:
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
@@ -1543,7 +1552,7 @@ def impl(context, second):
 def get_opened_files(filename, pidfile):
     cmd = "PATH=$PATH:/usr/bin:/usr/sbin lsof -p `cat %s` | grep %s | wc -l" % (
     pidfile, filename)
-    return commands.getstatusoutput(cmd)
+    return subprocess.getstatusoutput(cmd)
 
 
 @when('table "{tablename}" is dropped in "{dbname}"')
@@ -1935,14 +1944,14 @@ def impl(context, seq_name, last_value, dbname):
 @given('the user runs the command "{cmd}" in the background')
 @when('the user runs the command "{cmd}" in the background')
 def impl(context, cmd):
-    thread.start_new_thread(run_command, (context, cmd))
+    _thread.start_new_thread(run_command, (context, cmd))
     time.sleep(10)
 
 
 @given('the user runs the command "{cmd}" in the background without sleep')
 @when('the user runs the command "{cmd}" in the background without sleep')
 def impl(context, cmd):
-    thread.start_new_thread(run_command, (context, cmd))
+    _thread.start_new_thread(run_command, (context, cmd))
 
 
 # For any pg_hba.conf line with `host ... trust`, its address should only contain FQDN
@@ -2911,8 +2920,8 @@ def impl(context, has, expected_file):
 def impl(context, expected_file, content_ids):
     content_list = [int(c) for c in content_ids.split(',')]
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.content in content_list, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list]
     host_to_seg_dbids = {}
     for seg in segments:
         segHost = seg.getSegmentHostName()
@@ -2921,7 +2930,7 @@ def impl(context, expected_file, content_ids):
         else:
             host_to_seg_dbids[segHost] = ['dbid{}'.format(seg.dbid)]
 
-    for segHost, expected_files_on_host in host_to_seg_dbids.items():
+    for segHost, expected_files_on_host in list(host_to_seg_dbids.items()):
         log_dir = "%s/gpAdminLogs" % os.path.expanduser("~")
         listdir_cmd = Command(name="list logfiles on host",
                               cmdStr="ls -l {}/{}".format(log_dir, expected_file),
@@ -2952,8 +2961,8 @@ def impl(context, expected_file, content_ids):
 def impl(context, content_ids):
     content_list = [int(c) for c in content_ids.split(',')]
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.content in content_list, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list]
     for seg in segments:
         segHost = seg.getSegmentHostName()
         segDbid = seg.getSegmentDbId()
@@ -3210,7 +3219,7 @@ def impl(context, num_of_segments, num_of_hosts, hostnames):
 
 @given('there are no gpexpand_inputfiles')
 def impl(context):
-    map(os.remove, glob.glob("gpexpand_inputfile*"))
+    list(map(os.remove, glob.glob("gpexpand_inputfile*")))
 
 @given('there are no gpexpand tablespace input configuration files')
 def impl(context):
@@ -3782,11 +3791,11 @@ def impl(context, table, dbname):
     if sum(pre_distribution_row_count) != sum(post_distribution_row_count):
         raise Exception("Redistributed data does not match pre-redistribution data. Actual: %d, Expected: %d" % (sum(post_distribution_row_count), sum(pre_distribution_row_count)))
 
-    mean = sum(post_distribution_row_count) / len(post_distribution_row_count)
-    variance = sum(pow(row_count - mean, 2) for row_count in post_distribution_row_count) / len(post_distribution_row_count)
+    mean = old_div(sum(post_distribution_row_count), len(post_distribution_row_count))
+    variance = old_div(sum(pow(row_count - mean, 2) for row_count in post_distribution_row_count), len(post_distribution_row_count))
     std_deviation = math.sqrt(variance)
-    std_error = std_deviation / math.sqrt(len(post_distribution_row_count))
-    relative_std_error = std_error / mean
+    std_error = old_div(std_deviation, math.sqrt(len(post_distribution_row_count)))
+    relative_std_error = old_div(std_error, mean)
     tolerance = 0.01
     if relative_std_error > tolerance:
         raise Exception("Unexpected variance for redistributed data in table %s. Relative standard error %f exceeded tolerance factor of %f." %
@@ -4504,7 +4513,7 @@ def impl(context, output_config_file):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
     cluster_hosts = gparray.get_hostlist()
     all_segments = gparray.getDbList()
-    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
+    failed_segments = [seg for seg in all_segments if seg.getSegmentStatus() == 'd']
 
     expected_seg_rows = []
     expected_seg_rows.append(
@@ -4539,7 +4548,7 @@ def impl(context, output_config_file):
 @then('the user waits until recovery_progress.file is created in {logdir} and verifies that all dbids progress with {stage} are present')
 def impl(context, logdir, stage):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
+    failed_segments = [seg for seg in all_segments if seg.getSegmentStatus() == 'd']
     stage_patterns = []
     for seg in failed_segments:
         dbid = seg.getSegmentDbId()

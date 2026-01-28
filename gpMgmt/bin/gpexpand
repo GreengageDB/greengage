@@ -5,6 +5,10 @@
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved.
 #
 from __future__ import print_function
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 from gppylib.mainUtils import getProgramName
 
 import copy
@@ -375,7 +379,7 @@ class ValidationError(Exception): pass
 
 
 # -------------------------------------------------------------------------
-class GpExpandStatus():
+class GpExpandStatus(object):
     """Class that manages gpexpand status file.
 
     The status file is placed in the master data directory on both the master and
@@ -503,7 +507,7 @@ class GpExpandStatus():
 
     def get_status_history(self):
         """Gets the full status history"""
-        return zip(self._status, self._status_info)
+        return list(zip(self._status, self._status_info))
 
     def remove_status_file(self):
         """Closes and removes the gpexand status file"""
@@ -589,7 +593,7 @@ class SegmentTemplateError(Exception): pass
 
 
 # -------------------------------------------------------------------------
-class SegmentTemplate:
+class SegmentTemplate(object):
     """Class for creating, distributing and deploying new segments to an
     existing GPDB array"""
 
@@ -626,7 +630,7 @@ class SegmentTemplate:
         for host in hosts:
             tmpHosts[host] = 0
 
-        for host in tmpHosts.keys():
+        for host in list(tmpHosts.keys()):
             hostnameCmd = Hostname('gpexpand associating hostnames with segments', ctxt=REMOTE, remoteHost=host)
             pool.addCommand(hostnameCmd)
 
@@ -952,7 +956,7 @@ class SegmentTemplate:
 
 # ------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------
-class NewSegmentInput:
+class NewSegmentInput(object):
     def __init__(self, hostname, address, port, datadir, dbid, contentId, role):
         self.hostname = hostname
         self.address = address
@@ -965,7 +969,7 @@ class NewSegmentInput:
 
 # ------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------
-class gpexpand:
+class gpexpand(object):
     def __init__(self, logger, gparray, dburl, options, parallel=1):
         self.pastThePointOfNoReturn = False
         self.logger = logger
@@ -2098,7 +2102,7 @@ class gpexpand:
         return
 
 # -----------------------------------------------
-class ExpandTable():
+class ExpandTable(object):
     def __init__(self, options, row=None):
         self.options = options
         if row is not None:

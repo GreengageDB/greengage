@@ -1,3 +1,4 @@
+from builtins import range
 import os
 import signal
 import subprocess
@@ -16,7 +17,7 @@ def _run_sql(sql, opts=None):
         env = os.environ.copy()
 
         options = ''
-        for key, value in opts.items():
+        for key, value in list(opts.items()):
             options += "-c {}={} ".format(key, value)
 
         env['PGOPTIONS'] = options
@@ -178,7 +179,7 @@ def impl(context, seg_type, content, expected_status):
 def impl(context):
     if not hasattr(context, 'old_hostnames'):
         raise Exception("Cannot reset segment hostnames: no hostnames are saved")
-    for key, hostname in context.old_hostnames.items():
+    for key, hostname in list(context.old_hostnames.items()):
         change_hostname(key[0], key[1], hostname)
 
     context.execute_steps(u"""

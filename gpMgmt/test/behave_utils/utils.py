@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
+from builtins import str
+from builtins import range
 import fileinput
 import os
 import pipes
@@ -138,7 +140,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, unicode):
+    if isinstance(msg, str):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):

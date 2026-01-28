@@ -11,6 +11,9 @@
        CatalogTable - metadata about a single tables
 """
 # ============================================================================
+from past.builtins import cmp
+from builtins import str
+from builtins import object
 import os
 import json
 from gppylib import gplog
@@ -64,7 +67,7 @@ DEPENDENCY_EXCLUSION = [
     ]
 
 # ============================================================================
-class GPCatalog():
+class GPCatalog(object):
     """
     Catalog is a container class that contains dictionary of CatalogTable 
     objects.
@@ -102,7 +105,7 @@ class GPCatalog():
         """
         getCatalogTables() => Returns a list of CatalogTable
         """
-        return self._tables.values()
+        return list(self._tables.values())
 
     def getCatalogVersion(self):
         """
@@ -266,7 +269,7 @@ class GPCatalog():
         information is not derivable from the catalog.
         """
         try:
-            for tname, tdef in self._tidycat.iteritems():
+            for tname, tdef in self._tidycat.items():
                 if "foreign_keys" not in tdef:
                     continue
                 for fkdef in tdef["foreign_keys"]:
@@ -372,7 +375,7 @@ class GPCatalog():
 
 
 # ============================================================================
-class GPCatalogTable():
+class GPCatalogTable(object):
 
     # --------------------------------------------------------------------
     # Public API functions:
@@ -582,7 +585,7 @@ class GPCatalogTable():
 
 
 # ============================================================================
-class GPCatalogTableForeignKey():
+class GPCatalogTableForeignKey(object):
     """
     GPCatalogTableForeignKey is a container for a single instance of a
     postgres catalog primary key/foreign key relationship.  The

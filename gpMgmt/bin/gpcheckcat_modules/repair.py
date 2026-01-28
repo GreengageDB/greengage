@@ -11,12 +11,14 @@ Creates repair for the following gpcheckcat checks
        * distribution_policy
 """
 
+from builtins import next
+from builtins import object
 import os
 import stat
 from gpcheckcat_modules.repair_missing_extraneous import RepairMissingExtraneous
 
 
-class Repair:
+class Repair(object):
     def __init__(self, context=None, issue_type=None, desc=None):
         self._context = context
         self._issue_type = issue_type
@@ -25,7 +27,7 @@ class Repair:
     def create_repair(self, sql_repair_contents):
         repair_dir = self.create_repair_dir()
 
-        master_segment = next(segment for segment in self._context.cfg.values() if segment['content'] == -1)
+        master_segment = next(segment for segment in list(self._context.cfg.values()) if segment['content'] == -1)
 
         sql_filename = self._create_sql_file_in_repair_dir(repair_dir, sql_repair_contents, master_segment)
         self._create_bash_script_in_repair_dir(repair_dir, sql_filename, master_segment)
@@ -38,10 +40,10 @@ class Repair:
                                                            issues=issues,
                                                            pk_name=pk_name)
         repair_dir = self.create_repair_dir()
-        segment_to_oids_map = extra_missing_repair_obj.get_segment_to_oid_mapping(map(lambda config: config['content'], segments.values()))
+        segment_to_oids_map = extra_missing_repair_obj.get_segment_to_oid_mapping([config['content'] for config in list(segments.values())])
 
-        for segment_id, oids in segment_to_oids_map.iteritems():
-            segment = next(segment for segment in self._context.cfg.values() if segment['content'] == segment_id)
+        for segment_id, oids in segment_to_oids_map.items():
+            segment = next(segment for segment in list(self._context.cfg.values()) if segment['content'] == segment_id)
 
             sql_content = extra_missing_repair_obj.get_delete_sql(oids)
             self._create_bash_script_in_repair_dir(repair_dir, sql_content,

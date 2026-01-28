@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from builtins import str
 from gppylib import gplog
 from gppylib.db.catalog import RemoteQueryCommand
 
