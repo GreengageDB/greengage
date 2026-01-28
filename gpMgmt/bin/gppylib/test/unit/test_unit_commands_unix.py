@@ -1,10 +1,11 @@
+from __future__ import absolute_import
 import os
 import StringIO
 
 from mock import patch
 
 from commands.unix import RemoveFile, RemoveDirectory, RemoveDirectoryContents, RemoveGlob, REMOTE,Command,isScpEnabled
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.commands.base import CommandResult
 
 

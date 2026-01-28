@@ -22,7 +22,7 @@ try:
     from gppylib.operations.deletesystem import validate_pgport
     from gppylib.userinput import *
     from gppylib.operations.segment_tablespace_locations import get_tablespace_locations
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
              'have sourced greengage_path.sh.  Detail: ' + str(e))
 
@@ -207,7 +207,7 @@ def delete_cluster(options):
     dburl = dbconn.DbURL(port=options.pgport)
     try:
         array = gparray.GpArray.initFromCatalog(dburl, True)
-    except Exception, ex:
+    except Exception as ex:
         raise GpDeleteSystemException('Failed to get database configuration: %s' % ex.__str__())
 
     #get tablespace locations of segments from all hosts
@@ -315,7 +315,7 @@ if __name__ == '__main__':
             # we can ignore this as cwd must no longer exist
             pass
 
-    except GpDeleteSystemException, ex:
+    except GpDeleteSystemException as ex:
         g_errors_generated = True
         if ex.__str__() == 'User canceled':
             logger.info(ex.__str__())
@@ -323,7 +323,7 @@ if __name__ == '__main__':
             logger.fatal(ex.__str__())
         if options.verbose:
             logger.exception(ex)
-    except Exception, ex:
+    except Exception as ex:
         g_errors_generated = True
         logger.fatal('Error deleting system: %s' % ex.__str__())
         if options.verbose:

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import imp
 import logging
 import os
@@ -5,7 +6,7 @@ import sys
 
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.gpcatalog import GPCatalogTable
 
 class GpCheckCatTestCase(GpTestCase):

@@ -1,3 +1,4 @@
+from __future__ import print_function
 # Line too long - pylint: disable=C0301
 # Copyright (c) Greenplum Inc 2011. All Rights Reserved.
 
@@ -23,7 +24,7 @@ try:
 
     import yaml
     from yaml.scanner import ScannerError
-except ImportError, ex:
+except ImportError as ex:
     sys.exit(
         'Operation: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(ex))
 
@@ -494,7 +495,7 @@ class ValidateInstallDebPackage(Operation):
 
         try:
             cmd.run(validateAfter=True)
-        except ExecutionError, e:
+        except ExecutionError as e:
             lines = e.cmd.get_results().stderr.splitlines()
 
             if len(lines) == 0:
@@ -534,7 +535,7 @@ class ValidateInstallDebPackage(Operation):
         try:
             cmd_dir.run(validateAfter=True)
             cmd_file.run(validateAfter=True)
-        except ExecutionError, e:
+        except ExecutionError as e:
             lines = e.cmd.get_results().stderr.splitlines()
 
             raise ExecutionError('Can not setup deb package env', lines)
@@ -592,7 +593,7 @@ class ValidateInstallPackage(Operation):
 
         try:
             cmd.run(validateAfter=True)
-        except ExecutionError, e:
+        except ExecutionError as e:
             already_install = False
             lines = e.cmd.get_results().stderr.splitlines()
 
@@ -714,7 +715,7 @@ class ValidateUninstallPackage(Operation):
 
         try:
             cmd.run(validateAfter=True)
-        except ExecutionError, e:
+        except ExecutionError as e:
             lines = e.cmd.get_results().stderr.splitlines()
 
             # Forking between code paths 2 and 3 depends on some meaningful stderr
@@ -862,7 +863,7 @@ class InstallDebPackageLocally(Operation):
         # know that we didn't have to do anything here
         try:
             deb_set = ValidateInstallDebPackage(gppkg, is_update=self.is_update).run()
-        except AlreadyInstalledError, e:
+        except AlreadyInstalledError as e:
             logger.info(e)
             return
 
@@ -920,7 +921,7 @@ class InstallPackageLocally(Operation):
         # know that we didn't have to do anything here
         try:
             rpm_set = ValidateInstallPackage(gppkg, is_update=self.is_update).run()
-        except AlreadyInstalledError, e:
+        except AlreadyInstalledError as e:
             logger.info(e)
             return
 
@@ -962,7 +963,7 @@ class UninstallDebPackageLocally(Operation):
         # know that we didn't have to do anything here
         try:
             deb_set = ValidateUninstallDebPackage(gppkg).run()
-        except NotInstalledError, e:
+        except NotInstalledError as e:
             logger.info(e)
             return
 
@@ -1006,7 +1007,7 @@ class UninstallPackageLocally(Operation):
         # know that we didn't have to do anything here
         try:
             rpm_set = ValidateUninstallPackage(gppkg).run()
-        except NotInstalledError, e:
+        except NotInstalledError as e:
             logger.info(e)
             return
 
@@ -1277,20 +1278,20 @@ class QueryPackage(Operation):
         elif self.query_type == QueryPackage.LIST:
             package = Gppkg.from_package_path(self.package_path)
             for file in package.file_list:
-                print file
+                print(file)
         elif self.query_type == QueryPackage.ALL:
             package_name_list = ListPackages().run()
             for package_name in package_name_list:
-                print package_name
+                print(package_name)
         else:
             package = Gppkg.from_package_path(self.package_path)
             try:
                 ExtractPackage(package).run()
                 ValidateInstallPackage(package).run()
             except AlreadyInstalledError:
-                print '%s is installed.' % package.pkgname
+                print('%s is installed.' % package.pkgname)
             else:
-                print '%s is not installed.' % package.pkgname
+                print('%s is not installed.' % package.pkgname)
 
 
 class BuildGppkg(Operation):
@@ -1392,7 +1393,7 @@ class BuildGppkg(Operation):
                     return False
 
                 return True
-        except ScannerError, ex:
+        except ScannerError as ex:
             return False
 
     def _verify_tags(self, yamlfile):
@@ -1528,7 +1529,7 @@ class CleanGppkg(Operation):
         for operation in operations:
             try:
                 operation.get_ret()
-            except Exception, e:
+            except Exception as e:
                 exceptions += '\n'+str(e)
 
         if exceptions:

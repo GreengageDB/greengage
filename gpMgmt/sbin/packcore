@@ -2,6 +2,7 @@
 # Copyright Pivotal 2014
 
 
+from __future__ import print_function
 import glob
 import os
 import re
@@ -168,7 +169,7 @@ def _copyFilePath(src, dst):
 
 def _generateGDBScript(b, c):
     with open('runGDB.sh', 'w') as f1:
-        print >>f1, '''\
+        print('''\
 #!/bin/bash
 unset PYTHONHOME
 unset PYTHONPATH
@@ -178,8 +179,8 @@ curDIR=`pwd`
     --eval-command="core {core}" \\
     {binary} \\
     "$@"
-'''.format(core=c, binary=b)
-    os.chmod('runGDB.sh', 0755)
+'''.format(core=c, binary=b), file=f1)
+    os.chmod('runGDB.sh', 0o755)
 
 
 # This is taken from Python 3.3:

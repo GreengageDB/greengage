@@ -3,6 +3,7 @@
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
 #
 
+from __future__ import print_function
 import getpass
 from  gppylib import gplog
 
@@ -70,7 +71,7 @@ def ask_string(bg_info,msg,default,listVals):
 
 def ask_input(bg_info,msg,help,default,validator, *validator_opts):
     if bg_info is not None:             
-        print "%s\n" % bg_info
+        print("%s\n" % bg_info)
     
     val = None
     while True:
@@ -82,7 +83,7 @@ def ask_input(bg_info,msg,help,default,validator, *validator_opts):
         if retval is not None:
             return retval        
         else:
-            print "Invalid input: '%s'\n" % val
+            print("Invalid input: '%s'\n" % val)
             
 
 def ask_create_password(    max_attempts = 5, min_length = 4,
@@ -98,15 +99,15 @@ def ask_create_password(    max_attempts = 5, min_length = 4,
         pw2 = getpass.getpass(custom_attempt2_str)
 
         if pw1 != pw2:
-            print "The same password was not entered twice.\n"
+            print("The same password was not entered twice.\n")
             continue
 
         if len(pw1) < min_length:
-            print "The password entered must be at least %d characters\n" % min_length
+            print("The password entered must be at least %d characters\n" % min_length)
             continue
 
         return pw1
 
-    print "Failed to enter a valid password after the maximum number of attempts\n"
+    print("Failed to enter a valid password after the maximum number of attempts\n")
     return None
 

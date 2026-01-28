@@ -1,3 +1,6 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from future.utils import raise_
 from os import path
 import os
 import shutil
@@ -14,7 +17,7 @@ import pipes
 from behave import given, when, then
 from test.behave_utils.utils import *
 
-from mgmt_utils import *
+from .mgmt_utils import *
 
 class GpsshExkeysMgmtContext:
     """
@@ -159,16 +162,16 @@ def impl(context):
         try:
             addrs = socket.getaddrinfo(host, None, socket.AF_INET6)
         except socket.gaierror as err:
-            raise Exception, \
+            raise_(Exception, \
                 "failed to find IPv6 address for host '{}': {}".format(host, err), \
-                sys.exc_info()[2]
+                sys.exc_info()[2])
 
         # getaddrinfo() return value is a bit opaque. For AF_INET6, it's a list
         # of (family, socktype, proto, canonname, (address, port, flow info, scope id))
         # nested tuples. We're interested in the address piece of the first
         # entry in that list.
         addr = addrs[0][4][0]
-        print host, "maps to", addr
+        print(host, "maps to", addr)
 
         ipv6_addrs.append(addr)
 
@@ -200,7 +203,7 @@ def impl(context, works):
             When the user runs command "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes %s \"ssh -o BatchMode=yes -o StrictHostKeyChecking=yes %s hostname\"" eok
             And ssh should return a return code of %d
             ''' % (fromHost, toHost, ret)
-            print "CMD:%s" % cmd
+            print("CMD:%s" % cmd)
             context.execute_steps(cmd)
 
 

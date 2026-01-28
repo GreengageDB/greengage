@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 from commands.base import Command, CommandResult, REMOTE, GPHOME
-from gp_unittest import *
+from .gp_unittest import *
 
 
 class CommandTest(GpTestCase):

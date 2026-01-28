@@ -141,14 +141,14 @@ class GPCatalog():
         # Read the catalog version from the database
         try:
             curs = self._query(version_query)
-        except Exception, e:
+        except Exception as e:
             raise GPCatalogException("Error reading database version: " + str(e))
         self._version = GpVersion(curs.getresult()[0][0])
 
         # Read the list of catalog tables from the database
         try:
             curs = self._query(catalog_query)
-        except Exception, e:
+        except Exception as e:
             raise GPCatalogException("Error reading catalog: " + str(e))
 
         # Construct our internal representation of the catalog
@@ -254,7 +254,7 @@ class GPCatalog():
                 del d["__info"]
             infil.close()
             self._tidycat = d
-        except Exception, e:
+        except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
             logger.warn("GPCatalogTable: "+ str(e))
@@ -275,7 +275,7 @@ class GPCatalog():
                                                    fkdef[1], 
                                                    fkdef[2])
                     self._tables[tname]._addForeignKey(fk2)
-        except Exception, e:
+        except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
             logger.warn("GPCatalogTable: "+ str(e))

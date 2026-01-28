@@ -1,3 +1,4 @@
+from __future__ import print_function
 import shutil, filecmp,re
 import os, fcntl, select, getpass, socket
 import stat
@@ -150,7 +151,7 @@ def openAnything(source):
     # try to open with native open function (if source is pathname)
     try:                                  
         return open(source)               
-    except Exception, e: 
+    except Exception as e: 
         print ("Exception occurred opening file %s Error: %s"  % (source, str(e)))                             
         
     
@@ -188,7 +189,7 @@ def getOs():
             fdesc.close()
     return dist
 def factory(aClass, *args):
-    return apply(aClass,args)
+    return aClass(*args)
 
 def addDicts(a,b):
     c = dict(a)
@@ -201,7 +202,7 @@ def joinPath(a,b,parm=""):
 
 def debug(varname, o):
     if _debug == 1:
-        print "Debug: %s -> %s" %(varname, o)
+        print("Debug: %s -> %s" %(varname, o))
 
 def loadXmlElement(config,elementName):
     fdesc = openAnything(config)
@@ -290,17 +291,17 @@ def deleteBlock(fileName,beginPattern, endPattern):
                 fdesc.close()
                 os.rename(fileNameTmp,fileName)
         except IOError:
-            print("IOERROR", IOError)
+            print(("IOERROR", IOError))
             sys.exit()
     else:
-        print "***********%s  file does not exits"%(fileName)
+        print("***********%s  file does not exits"%(fileName))
 
 def make_inf_hosts(hp, hstart, hend, istart, iend, hf=None):
     hfArr = []
     inf_hosts=[]
     if None != hf:
         hfArr=hf.split('-')
-    print hfArr 
+    print(hfArr) 
     for h in range(int(hstart), int(hend)+1):
         host = '%s%d' % (hp, h)
         for i in range(int(istart), int(iend)+1):
@@ -324,7 +325,7 @@ def copyFile(srcDir,srcFile, destDir, destFile):
             result=pipe.read().strip()
             #debug ("result",result)
         else:
-            print "no such file or directory " + filePath
+            print("no such file or directory " + filePath)
     except OSError:
         print ("OS Error occurred")
     return result

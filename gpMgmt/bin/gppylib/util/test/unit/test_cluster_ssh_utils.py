@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import mock
 import sys, os, pwd
 import unittest
@@ -14,8 +15,8 @@ try:
     sys.path.append(location)
     from gppylib.util.ssh_utils import HostList, Session, pxssh
 except Exception as e:
-    print "PYTHON PATH: %s" % ":".join(sys.path)
-    print str(e)
+    print("PYTHON PATH: %s" % ":".join(sys.path))
+    print(str(e))
     raise
 
 class SshUtilsTestCase(unittest.TestCase):

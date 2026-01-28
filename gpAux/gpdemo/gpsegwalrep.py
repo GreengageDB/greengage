@@ -24,6 +24,7 @@ Assumptions:
 Assuming all of the above, you can just run the tool as so:
     ./gpsegwalrep.py [init|start|stop|destroy]
 """
+from __future__ import print_function
 
 import argparse
 import os
@@ -49,22 +50,22 @@ def runcommands(commands, thread_name, command_finish, exit_on_error=True):
             output.append('%s: Running command... %s' % (datetime.datetime.now(), command))
             with THREAD_LOCK:
                 output = output + subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True).split('\n')
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             output.append(str(e))
             output.append(e.output)
             if exit_on_error:
                 with PRINT_LOCK:
                     for line in output:
-                        print '%s:  %s' % (thread_name, line)
-                    print ''
+                        print('%s:  %s' % (thread_name, line))
+                    print('')
 
                 sys.exit(e.returncode)
 
     output.append('%s: %s' % (datetime.datetime.now(), command_finish))
     with PRINT_LOCK:
         for line in output:
-            print '%s:  %s' % (thread_name, line)
-        print ''
+            print('%s:  %s' % (thread_name, line))
+        print('')
 
 def displaySegmentConfiguration():
     commands = []
@@ -364,15 +365,15 @@ class ClusterConfiguration():
         query = ("SELECT dbid, content, port, datadir, role, preferred_role, status, mode "
                 "FROM gp_segment_configuration s WHERE 1 = 1")
 
-        print '%s: fetching cluster configuration' % (datetime.datetime.now())
+        print('%s: fetching cluster configuration' % (datetime.datetime.now()))
         dburl = dbconn.DbURL(self.hostname, self.port, self.dbname)
-        print '%s: fetched cluster configuration' % (datetime.datetime.now())
+        print('%s: fetched cluster configuration' % (datetime.datetime.now()))
 
         try:
             with dbconn.connect(dburl, utility=True, unsetSearchPath=False) as conn:
                resultsets  = dbconn.execSQL(conn, query).fetchall()
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             sys.exit(1)
 
         contentIDs = Set()
@@ -406,7 +407,7 @@ class ClusterConfiguration():
                 contentIDs.add(seg_config.content)
 
         self.num_contents = len(contentIDs)
-        print 'found %d distinct content IDs' % (self.num_contents)
+        print('found %d distinct content IDs' % (self.num_contents))
 
     def check_status_and_mode(self, expected_status, expected_mode):
         ''' Check if all the instance reached the expected_state and expected_mode '''
@@ -470,9 +471,9 @@ def WaitForRecover(cluster_configuration, max_retries = 200):
 
     number_of_segments = len(cluster_configuration.seg_configs)
 
-    print "cmd_all_sync: %s" % cmd_all_sync
-    print "cmd_find_error: %s" % cmd_find_error
-    print "number of contents: %s " % number_of_segments
+    print("cmd_all_sync: %s" % cmd_all_sync)
+    print("cmd_find_error: %s" % cmd_find_error)
+    print("number of contents: %s " % number_of_segments)
 
     retry_count = 1
     while (retry_count < max_retries):
@@ -487,7 +488,7 @@ def WaitForRecover(cluster_configuration, max_retries = 200):
         else:
             retry_count += 1
 
-    print "WARNING: Incremental recovery took longer than expected!"
+    print("WARNING: Incremental recovery took longer than expected!")
     cmd_find_recovering = ("psql postgres -A -R ',' -t -c \"SELECT gp_segment_id"
                            " FROM gp_stat_replication"
                            " WHERE gp_segment_id in (%s) and sync_error = 'none'\"" %
@@ -586,7 +587,7 @@ if __name__ == "__main__":
         StopInstances(cluster_config).run()
     elif args.operation == 'rebuild':
         if args.content is None:
-            print "ERROR: missing argument 'content' for rebuild operation"
+            print("ERROR: missing argument 'content' for rebuild operation")
             sys.exit(1)
         cluster_config_mirror = ClusterConfiguration(args.host, args.port, args.database, content=args.content,
                                               role=GpSegmentConfiguration.ROLE_MIRROR)

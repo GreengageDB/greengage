@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import threading
 import time
 from gppylib.db import dbconn
@@ -179,7 +180,7 @@ if __name__ == '__main__':
 
     for dml, job in jobs:
         code, message = job.stop()
-        print '{dml}: {code}, message={message}, avgtime={avgtime}, maxtime={maxtime}'.format(
+        print('{dml}: {code}, message={message}, avgtime={avgtime}, maxtime={maxtime}'.format(
             dml=dml, code=code, message=message,
             avgtime=job.avgtime, maxtime=job.maxtime
-        )
+        ))
