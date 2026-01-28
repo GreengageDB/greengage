@@ -1,7 +1,6 @@
 # Line too long - pylint: disable=C0301
 # Copyright (c) Greenplum Inc 2011. All Rights Reserved.
 
-from builtins import str
 from builtins import object
 from optparse import OptionGroup
 import os

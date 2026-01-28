@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import tempfile
+import json
 
 from .gp_unittest import GpTestCase
 import gpsegsetuprecovery
@@ -51,7 +52,7 @@ class ValidationForFullRecoveryTestCase(GpTestCase):
     def _assert_failed(self, expected_error):
         self.assertEqual(1, self.validation_recovery_cmd.get_results().rc)
         self.assertEqual('', self.validation_recovery_cmd.get_results().stdout)
-        self.assertItemsEqual(expected_error, self.validation_recovery_cmd.get_results().stderr)
+        self.assertItemsEqual(json.loads(expected_error), json.loads(self.validation_recovery_cmd.get_results().stderr))
         self.assertEqual(False, self.validation_recovery_cmd.get_results().wasSuccessful())
 
     def test_forceoverwrite_True(self):

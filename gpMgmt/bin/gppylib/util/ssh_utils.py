@@ -6,7 +6,6 @@
 
 from __future__ import print_function
 from builtins import next
-from builtins import str
 from builtins import object
 import cmd
 import os
@@ -303,7 +302,7 @@ class Session(cmd.Cmd):
         for s in self.pxssh_list:
             # Split the output into an array of lines so that we can add text to the beginning of
             #    each line
-            output = s.before.split('\n')
+            output = s.before.decode('utf-8').split('\n')
             output = output[1:-1]
 
             commandoutput.append(output)

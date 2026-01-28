@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from builtins import zip
-from builtins import str
 from builtins import object
 from gppylib.utils import escapeDoubleQuoteInSQLString
 

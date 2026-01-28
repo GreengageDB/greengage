@@ -7,7 +7,6 @@
 This file defines the interface that can be used to fetch and update system
 configuration information.
 """
-from builtins import str
 import os, copy
 from collections import defaultdict
 

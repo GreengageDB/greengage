@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from builtins import str
 import os, sys
 import unittest
 from gppylib import gplog

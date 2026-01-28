@@ -7,7 +7,6 @@
   Copyright (c) EMC/Greenplum Inc 2011. All Rights Reserved. 
 """
 
-from builtins import str
 from builtins import object
 import sys, os, stat, re
 import hashlib

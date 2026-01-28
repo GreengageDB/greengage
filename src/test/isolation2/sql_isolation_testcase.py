@@ -18,9 +18,10 @@ limitations under the License.
 """
 from __future__ import print_function
 
-from builtins import str
 from builtins import range
 from builtins import object
+import six
+
 import pygresql.pg
 import pty
 import os
@@ -317,7 +318,7 @@ class SQLIsolationExecutor(object):
                 print(r.rstrip(), file=self.out_file)
 
         def fork(self, command, blocking, global_sh_executor):
-            print(" <waiting ...>", file=self.out_file)
+            print("  <waiting ...>", file=self.out_file)
             self.pipe.send((command, True))
 
             if blocking:
@@ -329,7 +330,7 @@ class SQLIsolationExecutor(object):
 
         def join(self):
             r = None
-            print(" <... completed>", file=self.out_file)
+            print("  <... completed>", file=self.out_file)
             if self.has_open:
                 r = self.pipe.recv()
             if r is None:
@@ -344,7 +345,7 @@ class SQLIsolationExecutor(object):
                 raise Exception("Should not finish test case while waiting for results")
 
         def quit(self):
-            print("... <quitting>", file=self.out_file)
+            print(" ... <quitting>", file=self.out_file)
             self.stop()
 
         def terminate(self):
@@ -541,7 +542,7 @@ class SQLIsolationExecutor(object):
             """
             try:
                 r = self.con.query(command)
-                if r and type(r) == str:
+                if r and isinstance(r, six.string_types):
                     echo_content = command[:-1].partition(" ")[0].upper()
                     return "%s %s" % (echo_content, r)
                 elif r is not None:
@@ -598,7 +599,7 @@ class SQLIsolationExecutor(object):
             raise Exception("Session name should be smaller than 1024 unless it is utility mode number")
 
         if not (name, mode) in self.processes:
-            raise Exception("Sessions not started cannot be quit")
+            raise Exception(" Sessions not started cannot be quit")
 
         self.processes[(name, mode)].quit()
         del self.processes[(name, mode)]
@@ -617,7 +618,7 @@ class SQLIsolationExecutor(object):
 
         self.processes[(name, mode)].terminate()
         del self.processes[(name, mode)]
-        print("... <terminating>", file=out_file)
+        print(" ... <terminating>", file=out_file)
 
     def get_all_primary_contentids(self, dbname):
         """
@@ -850,11 +851,13 @@ class SQLIsolationExecutor(object):
             to output file
         """
         shell_executor = GlobalShellExecutor(output_file, initfile_prefix)
+        newline = False
         try:
             command = ""
             for line in sql_file:
                 #tinctest.logger.info("re.match: %s" %re.match(r"^\d+[q\\<]:$", line))
-                print(line.strip(), end=' ', file=output_file)
+                print((" " if command and not newline else "") + line.strip(), end="", file=output_file)
+                newline = False
                 if line[0] == "!":
                     command_part = line # shell commands can use -- for long options like --include
                 elif re.match(r";.*--", line) or re.match(r"^--", line):
@@ -863,6 +866,7 @@ class SQLIsolationExecutor(object):
                     command_part = line
                 if command_part == "" or command_part == "\n":
                     print(file=output_file)
+                    newline = True
                 elif re.match(r".*;\s*$", command_part) or re.match(r"^\d+[qt\\<]:\s*$", line) or re.match(r"^\*R[qt]:$", line) or re.match(r"^-?\d+[SUMR][qt\\<]:\s*$", line):
                     command += command_part
                     try:

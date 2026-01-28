@@ -1,7 +1,4 @@
 from __future__ import print_function
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
 from builtins import range
 from builtins import object
 import shutil, filecmp,re
@@ -17,6 +14,7 @@ from xml.dom import Node
 
 from gppylib.gplog import *
 from socket import gethostbyaddr
+import six
 
 logger = get_default_logger()
 
@@ -161,8 +159,8 @@ def openAnything(source):
         
     
     # treat source as string
-    import io                       
-    return io.StringIO(str(source)) 
+    import io
+    return io.StringIO(six.u(source))
 def getOs():
     dist=None
     fdesc = None

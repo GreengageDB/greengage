@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 from builtins import next
-from builtins import str
 from builtins import range
 from builtins import object
 from collections import defaultdict
@@ -14,7 +13,7 @@ import tempfile
 from behave import given, when, then
 from test.behave_utils.utils import *
 
-from .mgmt_utils import *
+from mgmt_utils import *
 
 # This file contains steps for gpaddmirrors and gpmovemirrors tests
 
