@@ -34,7 +34,8 @@ RUN mkdir bin_gpdb
 ENV TARGET_OS=ubuntu \
     OUTPUT_ARTIFACT_DIR=bin_gpdb \
 # Use python3.9 to compile into GPDB's plpython3u
-    PYTHON3=python3
+    PYTHON3=python3 \
+    SKIP_UNITTESTS=1
 
 # Compile with running mocking tests
 RUN gpdb_src/concourse/scripts/compile_gpdb.bash

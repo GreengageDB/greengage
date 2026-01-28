@@ -152,6 +152,7 @@ workaround_before_concourse_stops_stripping_suid_bits() {
 }
 
 _main() {
+  test -d /home/gpadmin/.ssh. && cp -rf /home/gpadmin/.ssh. /home/gpadmin/.ssh
   TEST_OS=$(determine_os)
   setup_gpadmin_user
   setup_sshd
