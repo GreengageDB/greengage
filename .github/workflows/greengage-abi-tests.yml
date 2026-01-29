@@ -8,22 +8,7 @@ concurrency:
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - 'concourse/scripts/**'
-      - 'src/**'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '.abi-check/**'
-
-  push:
-    branches:
-      - 6X_STABLE
-    paths:
-      - 'concourse/scripts/**'
-      - 'src/**'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '.abi-check/**'
+    branches: ['**']
 
 env:
   # workaround required for checkout@v3, https://github.com/actions/checkout/issues/1590
