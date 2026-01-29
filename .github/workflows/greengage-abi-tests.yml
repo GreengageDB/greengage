@@ -3,22 +3,7 @@ name: Greengage ABI Tests
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - 'concourse/scripts/**'
-      - 'src/**'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '.abi-check/**'
-
-  push:
-    branches:
-      - main
-    paths:
-      - 'concourse/scripts/**'
-      - 'src/**'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '.abi-check/**'
+    branches: ['**']
 
 jobs:
   abi-dump-setup:
