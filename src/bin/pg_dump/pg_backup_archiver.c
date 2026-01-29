@@ -3507,7 +3507,31 @@ _selectTableAccessMethod(ArchiveHandle *AH, const char *tableam)
 	want = tableam;
 
 	if (!want)
+	{
+        if (have)
+        {
+			cmd = createPQExpBuffer();
+			appendPQExpBuffer(cmd, "RESET default_table_access_method;");
+			if (RestoringToDB(AH))
+			{
+					PGresult   *res;
+					res = PQexec(AH->connection, cmd->data);
+					if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
+							warn_or_exit_horribly(AH,
+													"could not reset default_table_access_method: %s",
+													PQerrorMessage(AH->connection));
+					PQclear(res);
+			}
+			else
+					ahprintf(AH, "%s\n\n", cmd->data);
+			destroyPQExpBuffer(cmd);
+
+			if (AH->currTableAm)
+				free(AH->currTableAm);
+			AH->currTableAm = NULL;
+		}
 		return;
+	}
 
 	if (have && strcmp(want, have) == 0)
 		return;

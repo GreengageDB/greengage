@@ -11,8 +11,8 @@ docker run -i --user root:root \
   --sysctl 'kernel.sem=500 1024000 200 4096' \
   --privileged \
   "$IMAGE" /bin/bash << EOF
-set -ex
-set -o pipefail
+set -eox pipefail
+exitcode=1
 
 cd /home/gpadmin/
 ssh-keygen -A
@@ -26,14 +26,13 @@ mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 chown -R gpadmin:gpadmin /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb
 
-EXIT_CODE=0
 sudo -u gpadmin -- bash -c "
   set -ex
   source \$GPHOME/greengage_path.sh
   source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
   make -C /home/gpadmin/gpdb_src/src/test/regress
   make PGOPTIONS='-c optimizer=$OPTIMIZER -c statement_mem=$STATEMENT_MEM' installcheck-resgroup -C gpdb_src/
-" || EXIT_CODE=1
+" && exitcode=0
 
 params=(
   "./ d gpAdminLogs"
@@ -47,7 +46,6 @@ for param in "\${params[@]}"; do
 done
 chmod -R a+rwX /logs
 
-echo \${EXIT_CODE:-1} > /logs/.exitcode
-exit \$EXIT_CODE
+echo \$exitcode > /logs/.exitcode
+exit \$exitcode
 EOF
-echo 0 > "$LOGS"
