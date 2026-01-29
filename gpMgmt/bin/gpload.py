@@ -25,10 +25,10 @@ Options:
 from __future__ import print_function
 
 from builtins import map
-from builtins import str
 from builtins import range
 from builtins import object
 import sys
+import six
 
 if sys.hexversion<0x2040400:
     sys.stderr.write("gpload needs python 2.4.4 or higher\n")
@@ -1287,7 +1287,7 @@ class gpload(object):
                 (e.problem, e.problem_mark.line))
         except yaml.reader.ReaderError as e:
             es = ""
-            if isinstance(e.character, str):
+            if isinstance(e.character, six.string_types):
                 es = "'%s' codec can't decode byte #x%02x: %s position %d" % \
                         (e.encoding, ord(e.character), e.reason,
                          e.position)

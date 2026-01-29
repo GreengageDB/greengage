@@ -1,7 +1,6 @@
 #
 # Copyright (c) Greenplum Inc 2010. All Rights Reserved.
 #
-from builtins import str
 from gppylib import gparray, gplog, pgconf, userinput
 
 logger = gplog.get_default_logger()

@@ -29,8 +29,6 @@ gp_replica_check.py -d "mydb1,mydb2,..." -r "hash,bitmap,gist,..."
 '''
 from __future__ import print_function
 
-from future import standard_library
-standard_library.install_aliases()
 from builtins import map
 import argparse
 import sys

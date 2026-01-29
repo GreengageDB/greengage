@@ -16,9 +16,10 @@ limitations under the License.
 """
 from __future__ import print_function
 
-from builtins import str
 from builtins import range
 from builtins import object
+import six
+
 import pygresql.pg
 import pty
 import os
@@ -539,7 +540,7 @@ class SQLIsolationExecutor(object):
             """
             try:
                 r = self.con.query(command)
-                if r and type(r) == str:
+                if r and isinstance(r, six.string_types):
                     echo_content = command[:-1].partition(" ")[0].upper()
                     return "%s %s" % (echo_content, r)
                 elif r is not None:
@@ -596,7 +597,7 @@ class SQLIsolationExecutor(object):
             raise Exception("Session name should be smaller than 1024 unless it is utility mode number")
 
         if not (name, mode) in self.processes:
-            raise Exception("Sessions not started cannot be quit")
+            raise Exception(" Sessions not started cannot be quit")
 
         self.processes[(name, mode)].quit()
         del self.processes[(name, mode)]
@@ -615,7 +616,7 @@ class SQLIsolationExecutor(object):
 
         self.processes[(name, mode)].terminate()
         del self.processes[(name, mode)]
-        print("... <terminating>", file=out_file)
+        print(" ... <terminating>", file=out_file)
 
     def get_all_primary_contentids(self, dbname):
         """
@@ -855,7 +856,6 @@ class SQLIsolationExecutor(object):
                 #tinctest.logger.info("re.match: %s" %re.match(r"^\d+[q\\<]:$", line))
                 print((" " if command and not newline else "") + line.strip(), end="", file=output_file)
                 newline = False
-                # output_file.write(line.strip())
                 if line[0] == "!":
                     command_part = line # shell commands can use -- for long options like --include
                 elif re.match(r";.*--", line) or re.match(r"^--", line):

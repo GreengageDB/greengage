@@ -25,11 +25,11 @@ Typical usage:
   ...
 
 """
-from builtins import str
 import datetime
 import logging
 import os
 import sys
+import six
 
 
 # ------------------------------- Public Interface --------------------------------
@@ -313,10 +313,10 @@ class EncodingFileHandler(logging.FileHandler):
         logging.FileHandler.__init__(self, filename, mode, encoding, delay)
 
     def emit(self, record):
-        if not isinstance(record.msg, str) and not isinstance(record.msg, str):
-            record.msg = str(record.msg)
-        if not isinstance(record.msg, str):
-            record.msg = str(record.msg, 'utf-8')
+        if isinstance(record.msg, six.binary_type):
+            record.msg = record.msg.decode('utf-8')
+        elif not isinstance(record.msg, six.text_type):
+            record.msg = six.text_type(record.msg)
         logging.FileHandler.emit(self, record)
 
 
@@ -329,8 +329,8 @@ class EncodingStreamHandler(logging.StreamHandler):
         logging.StreamHandler.__init__(self, strm)
 
     def emit(self, record):
-        if not isinstance(record.msg, str) and not isinstance(record.msg, str):
-            record.msg = str(record.msg)
-        if not isinstance(record.msg, str):
-            record.msg = str(record.msg, 'utf-8')
+        if isinstance(record.msg, six.binary_type):
+            record.msg = record.msg.decode('utf-8')
+        elif not isinstance(record.msg, six.text_type):
+            record.msg = six.text_type(record.msg)
         logging.StreamHandler.emit(self, record)

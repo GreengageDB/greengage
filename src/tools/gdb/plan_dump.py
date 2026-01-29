@@ -15,7 +15,6 @@ from __future__ import print_function
 #   won't be NULL
 # - out_file_path optional argument - filesystem path to save the plan tree.
 
-from builtins import str
 from builtins import object
 import gdb
 

@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 from builtins import next
-from builtins import str
 from builtins import range
 from builtins import object
 from collections import defaultdict

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from builtins import str
 import copy
 import io
 from mock import Mock, patch, MagicMock, call

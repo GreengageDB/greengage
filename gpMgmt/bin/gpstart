@@ -6,7 +6,6 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
-from builtins import str
 from builtins import object
 import sys
 from optparse import OptionGroup, SUPPRESS_HELP
