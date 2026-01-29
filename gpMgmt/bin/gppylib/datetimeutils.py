@@ -46,7 +46,6 @@ In the docstrings, the examples preceded by '>>>' can be executed and verified
 automatically by the 'doctest' package of the Python standard library.
 """
 
-from builtins import str
 from datetime import date, datetime, timedelta
 import re
 

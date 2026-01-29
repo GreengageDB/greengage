@@ -16,7 +16,6 @@ extend common functions of our gp utilities.  Please keep this in mind
 and try to avoid placing logic for a specific utility here.
 """
 
-from builtins import str
 from builtins import object
 import errno, os, sys, shutil
 

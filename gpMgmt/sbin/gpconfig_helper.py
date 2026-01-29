@@ -11,8 +11,6 @@
 #   file but swaps the inodes of the files, so the os.rename() does NOT affect any current readers who have already
 #   opened the OLD file.
 
-from builtins import str
-from builtins import bytes
 try:
     import base64
     import os
@@ -112,9 +110,9 @@ def add_parameter(filename, name, value):
         for line in lines:
             outfile.write(line)
             new_lines = new_lines + 1
-        outfile.write(bytes(name) + '=' +
-                      bytes(pickle.loads(base64.urlsafe_b64decode(value))) +
-                      os.linesep)
+        outfile.write(name.encode() + b'=' +
+                      pickle.loads(base64.urlsafe_b64decode(value)).encode() +
+                      os.linesep.encode())
         new_lines = new_lines + 1
 
     if new_lines == len(lines) + 1:

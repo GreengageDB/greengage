@@ -1,4 +1,3 @@
-from builtins import str
 import unittest
 from gppylib.commands import pg
 

@@ -66,7 +66,6 @@ PEXPECT LICENSE
 from builtins import chr
 from builtins import zip
 from builtins import bytes
-from builtins import str
 from builtins import range
 from past.builtins import basestring
 from builtins import object

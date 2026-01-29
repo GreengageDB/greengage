@@ -1,4 +1,3 @@
-from builtins import str
 from gpconfig_modules.segment_guc import SegmentGuc
 
 
