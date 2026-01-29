@@ -190,7 +190,7 @@ bool QueryHasDistributedRelation(Query *q, bool recursive)
 }
 
 /**
- * Returns true if query refers to a entry table.
+ * Returns true if query refers to an entry table.
  */
 bool QueryHasMasterOnlyRelation(Query *q) {
 	ListCell   *rt = NULL;
