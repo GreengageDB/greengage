@@ -145,7 +145,7 @@ class GpCheckCatTestCase(GpTestCase):
 
         for i in range(1, 50):
             primaries.append(dict(hostname='host0', port=123, id=1, address='123', datadir='dir', content=1, dbid=i, isprimary='t'))
-        self.db_connection.query.return_value.getresult.return_value = [['4.3']]
+        self.db_connection.query.return_value.getresult.return_value = [['6.2']]
         self.db_connection.query.return_value.dictresult.return_value = primaries
 
         testargs = ['some_string','-port 1', '-R foo']

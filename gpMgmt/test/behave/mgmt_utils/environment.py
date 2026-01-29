@@ -20,11 +20,15 @@ def before_all(context):
 
 def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate', 'gpmovemirrors',
-                    'gpconfig', 'gpssh-exkeys', 'gpstop', 'gpinitsystem', 'cross_subnet',
-                    'gplogfilter']
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate',
+                    'gpssh-exkeys', 'gpinitsystem', 'cross_subnet']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
+
+    if not hasattr(context, "cluster_created"):
+        context.cluster_created = True
+        from test.behave_utils.ci.fixtures import init_cluster
+        use_fixture(init_cluster, context)
 
     drop_database_if_exists(context, 'testdb')
     drop_database_if_exists(context, 'bkdb')
@@ -102,11 +106,6 @@ def before_scenario(context, scenario):
         scenario.skip("skipping scenario tagged with @skip")
         return
 
-    if "concourse_cluster" in scenario.effective_tags and not hasattr(context, "concourse_cluster_created"):
-        from test.behave_utils.ci.fixtures import init_cluster
-        context.concourse_cluster_created = True
-        return use_fixture(init_cluster, context)
-
     if 'gpmovemirrors' in context.feature.tags:
         context.mirror_context = MirrorMgmtContext()
 
@@ -134,7 +133,7 @@ def before_scenario(context, scenario):
     if 'analyzedb' not in context.feature.tags:
         start_database_if_not_started(context)
         drop_database_if_exists(context, 'testdb')
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+    if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         backup_bashrc()
 
 def after_scenario(context, scenario):
@@ -154,7 +153,7 @@ def after_scenario(context, scenario):
             And gpstart should return a return code of 0
             ''')
 
-    if 'gp_bash_functions.sh' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
+    if 'gp_bash_functions' in context.feature.tags or 'backup_restore_bashrc' in scenario.effective_tags:
         restore_bashrc()
 
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`

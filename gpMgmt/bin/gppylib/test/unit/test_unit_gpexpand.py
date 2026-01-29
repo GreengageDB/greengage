@@ -32,9 +32,13 @@ class GpExpand(GpTestCase):
         self.subject.is_gpexpand_running = Mock(return_value=False)
 
         self.gparray = self.createGpArrayWith2Primary2Mirrors()
+        
+        open_mock = mock_open()
+        open_mock.return_value.encoding = 'utf-8'
+
         self.apply_patches([
             patch('gpexpand.GpArray.initFromCatalog', return_value=self.gparray),
-            patch('__builtin__.open', mock_open(), create=True),
+            patch('__builtin__.open', open_mock, create=True),
             patch('__builtin__.raw_input'),
             patch('gpexpand.copy.deepcopy', return_value=Mock()),
             patch('gpexpand.dbconn.execSQL', return_value=FakeCursor()),
