@@ -1,0 +1,58 @@
+name: Greengage SQL Dump
+
+on:
+  workflow_run:
+    workflows: ["Greengage CI"]
+    types: [completed]
+    branches:
+      - main
+      - 7.x
+
+jobs:
+  create-sql-dump-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: true # Stop on any failure in the matrix
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for cache and artifact upload
+    steps:
+      - name: Move Docker storage to /mnt/docker
+        run: |
+          sudo bash -c '
+            systemctl stop docker
+            mkdir -p /mnt/docker
+            rsync -a /var/lib/docker/ /mnt/docker
+            chown -R docker:docker /mnt/docker
+            echo "{ \"data-root\": \"/mnt/docker\" }" > /etc/docker/daemon.json
+            systemctl start docker
+          '
+      - name: Determine version from branch
+        id: determine-version
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "version=6" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_name }}" = "7.x" ]; then
+            echo "version=7" >> $GITHUB_OUTPUT
+          else
+            echo "Unsupported branch: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+      - name: Create SQL Dump via regression tests
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@ADBDEV-9100
+        with:
+          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}:${{ github.sha }}
+          optimizer: postgres
+          target_os: ${{ matrix.target_os }}
+
+      - name: Upload SQL Dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqldump_ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}
+          path: /mnt/logs/sqldump/dump.sql
+          if-no-files-found: error
