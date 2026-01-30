@@ -7348,7 +7348,7 @@ getPartitionDefs(Archive *fout, TableInfo tblinfo[], int numTables)
 	int			i_parttemplate;
 
 	/* Only relevant for GP5/GP6 */
-	if (fout->remoteVersion > GPDB6_MAJOR_PGVERSION)
+	if (fout->remoteVersion >= GPDB7_MAJOR_PGVERSION)
 		return;
 
 	/*
@@ -17629,7 +17629,15 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 				appendPQExpBufferStr(q, "::pg_catalog.regclass;\n");
 			}
 
-			if (numParents > 0 && !tbinfo->ispartition)
+			/*
+			 * Add INHERIT excluding partitions of partitioned tables
+			 *
+			 * tbinfo->ispartition is filled in GG5/GG6
+			 * tbinfo->partclause is filled in GG7
+			 * 
+			 */			
+			if (numParents > 0 && !tbinfo->ispartition && 
+				!(fout->remoteVersion < GPDB7_MAJOR_PGVERSION && tbinfo->partclause && *tbinfo->partclause != '\0'))
 			{
 				appendPQExpBufferStr(q, "\n-- For binary upgrade, set up inheritance this way.\n");
 				for (k = 0; k < numParents; k++)

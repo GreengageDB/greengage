@@ -764,6 +764,49 @@ GetFilenumForAttribute(Oid relid, AttrNumber attnum)
 }
 
 /*
+ * Returns the attnum value for a relation/filenum entry in pg_attribute_encoding.
+ * Returns InvalidAttrNumber if no corresponding entry is found.
+ */
+AttrNumber
+GetAttnumForFilenum(Oid relid, FileNumber filenum)
+{
+	Relation	rel;
+	SysScanDesc scan;
+	ScanKeyData skey[2];
+	HeapTuple	tup;
+	AttrNumber	attnum = InvalidAttrNumber;
+
+	Assert(OidIsValid(relid));
+	Assert(filenum != InvalidFileNumber);
+
+	rel = heap_open(AttributeEncodingRelationId, AccessShareLock);
+
+	ScanKeyInit(&skey[0],
+				Anum_pg_attribute_encoding_attrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relid));
+	ScanKeyInit(&skey[1],
+				Anum_pg_attribute_encoding_filenum,
+				BTEqualStrategyNumber, F_INT2EQ,
+				Int16GetDatum(filenum));
+	scan = systable_beginscan(rel, AttributeEncodingAttrelidFilenumIndexId, true,
+							  NULL, 2, skey);
+
+	tup = systable_getnext(scan);
+	if (HeapTupleIsValid(tup))
+	{
+		bool		isnull;
+
+		attnum = heap_getattr(tup, Anum_pg_attribute_encoding_attnum,
+							  RelationGetDescr(rel), &isnull);
+		Assert(!isnull);
+	}
+	systable_endscan(scan);
+	heap_close(rel, AccessShareLock);
+	return attnum;
+}
+
+/*
  * Rewriting a column happens on filenum pairs where
  * one of the filenum value (i) is in the range 1 to MaxHeapAttributeNumber
  * and other corresponding value is (i + MaxHeapAttributeNumber)

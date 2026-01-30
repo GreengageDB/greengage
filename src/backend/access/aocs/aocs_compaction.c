@@ -108,67 +108,91 @@ void
 AOCSSegmentFileTruncateToEOF(Relation aorel, int segno, AOCSVPInfo *vpinfo, AOVacuumRelStats *vacrelstats)
 {
 	const char *relname = RelationGetRelationName(aorel);
-	int			j;
 
 	Assert(RelationStorageIsAoCols(aorel));
 
-	for (j = 0; j < vpinfo->nEntry; ++j)
+	/*
+	 * We try to truncate all segment files beyond
+	 * `vpinfo.nEntry`, as we may have non-empty segment files
+	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
+	 * ao_foreach_extent_file().
+	 */
+	for (int i = 1;; ++i)
 	{
-		int64		segeof;
-		char		filenamepath[MAXPGPATH];
-		AOCSVPInfoEntry *entry;
-		File		fd;
-		int32		fileSegNo;
-		/* Filenum for the column */
-		FileNumber  filenum = GetFilenumForAttribute(RelationGetRelid(aorel), j + 1);
+		bool		found = false;
 
-		entry = &vpinfo->entry[j];
-		segeof = entry->eof;
-
-		/* Open and truncate the relation segfile to its eof */
-		MakeAOSegmentFileName(aorel, segno, filenum, &fileSegNo, filenamepath);
-
-		elogif(Debug_appendonly_print_compaction, LOG,
-			   "Opening AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
-			   get_namespace_name(RelationGetNamespace(aorel)),
-			   relname,
-			   aorel->rd_id,
-			   aorel->rd_node.relNode,
-			   j,
-			   segno,
-			   fileSegNo,
-			   segeof);
-
-		fd = OpenAOSegmentFile(filenamepath, segeof);
-		if (fd >= 0)
+		for (int j = 0; j < 2; ++j)
 		{
-			TruncateAOSegmentFile(fd, aorel, fileSegNo, segeof, vacrelstats);
-			CloseAOSegmentFile(fd);
+			int64		segeof = 0;
+			char		filenamepath[MAXPGPATH];
+			File		fd;
+			int32		fileSegNo;
+			/*
+			 * Filenum for the column.
+			 * We cannot directly use GetFilenumForAttribute() here since it
+			 * accesses pg_attribute_encoding table, which might not have
+			 * entries for some of the files, for example if a column was added
+			 * and then rolled back. Instead we have to iterate through
+			 * filenums directly. Note the nested loop to ensure we iterate in
+			 * order 1, 1601, 2, 1602, 3, 1603 etc.
+			 */
+			FileNumber	filenum = i + j * MaxHeapAttributeNumber;
+			AttrNumber	attnum = GetAttnumForFilenum(RelationGetRelid(aorel), filenum);
+
+			if (AttributeNumberIsValid(attnum) && attnum <= vpinfo->nEntry)
+			{
+				AOCSVPInfoEntry *entry = &vpinfo->entry[attnum - 1];
+				segeof = entry->eof;
+			}
+
+			/* Open and truncate the relation segfile to its eof */
+			MakeAOSegmentFileName(aorel, segno, filenum, &fileSegNo, filenamepath);
 
 			elogif(Debug_appendonly_print_compaction, LOG,
-				   "Successfully truncated AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
+				   "Opening AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
 				   get_namespace_name(RelationGetNamespace(aorel)),
 				   relname,
 				   aorel->rd_id,
 				   aorel->rd_node.relNode,
-				   j,
+				   attnum - 1,
 				   segno,
 				   fileSegNo,
 				   segeof);
+
+			fd = OpenAOSegmentFile(filenamepath, segeof);
+			if (fd >= 0)
+			{
+				TruncateAOSegmentFile(fd, aorel, fileSegNo, segeof, vacrelstats);
+				CloseAOSegmentFile(fd);
+
+				elogif(Debug_appendonly_print_compaction, LOG,
+					   "Successfully truncated AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
+					   get_namespace_name(RelationGetNamespace(aorel)),
+					   relname,
+					   aorel->rd_id,
+					   aorel->rd_node.relNode,
+					   attnum - 1,
+					   segno,
+					   fileSegNo,
+					   segeof);
+				found = true;
+			}
+			else
+			{
+				elogif(Debug_appendonly_print_compaction, LOG,
+					   "No gp_relation_node entry for AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
+					   get_namespace_name(RelationGetNamespace(aorel)),
+					   relname,
+					   aorel->rd_id,
+					   aorel->rd_node.relNode,
+					   attnum - 1,
+					   segno,
+					   fileSegNo,
+					   segeof);
+			}
 		}
-		else
-		{
-			elogif(Debug_appendonly_print_compaction, LOG,
-				   "No gp_relation_node entry for AO COL relation \"%s.%s\", relation id %u, relfilenode %u column #%d, logical segment #%d (physical segment file #%d, logical EOF " INT64_FORMAT ")",
-				   get_namespace_name(RelationGetNamespace(aorel)),
-				   relname,
-				   aorel->rd_id,
-				   aorel->rd_node.relNode,
-				   j,
-				   segno,
-				   fileSegNo,
-				   segeof);
-		}
+		if (!found && i > vpinfo->nEntry)
+			break;
 	}
 }
 

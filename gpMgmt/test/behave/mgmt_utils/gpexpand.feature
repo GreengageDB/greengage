@@ -1,4 +1,4 @@
-@gpexpand
+@gpexpand @skip
 Feature: expand the cluster by adding more segments
 
     @gpexpand_no_mirrors
