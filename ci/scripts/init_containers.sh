@@ -39,7 +39,7 @@ do
 done
 wait
 
-# Add ip and host to /etc/hosts
+# Copy /home/gpadmin/.ssh
 for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
