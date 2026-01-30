@@ -120,11 +120,7 @@ def impl(context, action, env):
     if 'centos' in os.lower() and '6' == major_version:
             cmds = [cmdstr, "sudo service sshd restart"]
     else:
-        import os
-        if os.path.exists('/.dockerenv'):
-            cmds = [cmdstr, "sudo service ssh restart"]
-        else:
-            cmds = [cmdstr, "sudo systemctl restart sshd.service"]
+        cmds = [cmdstr, "sudo service ssh restart"]
 
     hosts = GpArray.initFromCatalog(dbconn.DbURL()).getHostList()
     for host in hosts:

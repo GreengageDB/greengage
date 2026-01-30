@@ -2,7 +2,6 @@ import os
 import shutil
 
 import behave
-import socket
 from behave import use_fixture
 
 from test.behave_utils.utils import drop_database_if_exists, start_database_if_not_started,\
@@ -15,22 +14,11 @@ from steps.mgmt_utils import backup_bashrc, restore_bashrc
 from gppylib.db import dbconn
 from gppylib.commands.base import Command, REMOTE
 
-hosts = ["cdw"] + ['sdw{i}'.format(i=i) for i in range(1, 6+1)]
-
 def before_all(context):
     if map(int, behave.__version__.split('.')) < [1,2,6]:
         raise Exception("Requires at least behave version 1.2.6 (found %s)" % behave.__version__)
 
 def before_feature(context, feature):
-    if "concourse_cluster" in set(context.config.tags):
-        for host in hosts:
-            ip = socket.gethostbyname(host)
-            name = "add {ip} and {host} to /etc/hosts".format(host=host, ip=ip)
-            cmdStr = """
-                gpssh -h {hosts} -e "sudo bash -c 'echo \"{ip} {host}\" >>/etc/hosts'"
-            """.format(host=host, ip=ip, hosts=' -h '.join(hosts))
-            Command(name, cmdStr).run(validateAfter=True)
-
     # we should be able to run gpexpand without having a cluster initialized
     tags_to_skip = ['gpexpand', 'gpaddmirrors',
                     'ggssh_exkeys', 'gpinitsystem', 'cross_subnet']

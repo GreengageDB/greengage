@@ -5,8 +5,6 @@ set -eox pipefail
 CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../concourse/scripts" && pwd )"
 source "${CWDIR}/common.bash"
 
-CLUSTERS="~concourse_cluster,demo_cluster concourse_cluster"
-
 function gen_env(){
 		cat > /opt/run_test.sh <<-EOF
 		set -ex
@@ -15,7 +13,7 @@ function gen_env(){
 
 		cd "\${1}/gpdb_src/gpMgmt/"
 		BEHAVE_TAGS="${BEHAVE_TAGS}"
-		BEHAVE_FLAGS="${BEHAVE_FLAGS} --tags=${CLUSTER}"
+		BEHAVE_FLAGS="${BEHAVE_FLAGS}"
 		if [ ! -z "\${BEHAVE_TAGS}" ]; then
 				make -f Makefile.behave behave tags=\${BEHAVE_TAGS}
 		else
@@ -33,13 +31,9 @@ function _main() {
 				exit 1
 		fi
 
-		export BEHAVE_FLAGS="$(echo "$BEHAVE_FLAGS" | sed -e "s| --tags=~concourse_cluster||g")"
-		export LANG=en_US.UTF-8
+		time gen_env
 
-		for CLUSTER in $CLUSTERS; do
-			time gen_env
-			time run_test
-		done
+		time run_test
 }
 
 _main "$@"
