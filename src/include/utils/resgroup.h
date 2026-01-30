@@ -172,6 +172,8 @@ extern void DeserializeResGroupInfo(struct ResGroupCaps *capsOut,
 
 extern bool ShouldAssignResGroupOnCoordinator(void);
 extern bool ShouldUnassignResGroup(void);
+extern bool ShouldBypassQueryFromParseTree(List *parse_tree);
+extern void AttachResGroupSlot(void);
 extern void AssignResGroupOnCoordinator(void);
 extern void UnassignResGroup(void);
 extern void SwitchResGroupOnSegment(const char *buf, int len);
