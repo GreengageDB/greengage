@@ -4,7 +4,7 @@
 -- m/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'f\'\);/
 -- s/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'f\'\);/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(XXX, XXX, \'f\'\)/;
 -- end_matchsubs
-BREAK DATABASE IF EXISTS testanalyze;
+DROP DATABASE IF EXISTS testanalyze;
 CREATE DATABASE testanalyze;
 \c testanalyze
 set client_min_messages='WARNING';
