@@ -49,6 +49,7 @@ jobs:
           image: ghcr.io/${{ github.repository }}/ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}:${{ github.sha }}
           optimizer: postgres
           target_os: ${{ matrix.target_os }}
+          dump_db: 'true'
 
       - name: DEBUG
         run: ls -lah /mnt/logs/*
