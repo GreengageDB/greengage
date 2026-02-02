@@ -4102,6 +4102,232 @@ DROP TABLE skip_correlated_t2;
 DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
 --------------------------------------------------------------------------------
+-- ORCA should be able to plan and execute correctly skip-level queries, but not
+-- with master-only. Postgres Legacy planner should give an error to skip-level 
+-- query involving distributed or replicated tables.
+--------------------------------------------------------------------------------
+CREATE TABLE skip_correlated_distributed (
+    a INT
+) DISTRIBUTED BY (a);
+INSERT INTO skip_correlated_distributed VALUES (1), (2), (3);
+CREATE TABLE skip_correlated_random (
+    b INT
+) DISTRIBUTED RANDOMLY;
+INSERT INTO skip_correlated_random VALUES (1), (2), (3);
+CREATE TABLE skip_correlated_replicated (
+    c INT
+) DISTRIBUTED REPLICATED;
+INSERT INTO skip_correlated_replicated VALUES(1), (2), (3);
+-- easy cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_distributed WHERE a = c
+    )
+) FROM skip_correlated_replicated;
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Result
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on skip_correlated_replicated
+   SubPlan 1
+     ->  Result
+           Filter: (skip_correlated_distributed.a = skip_correlated_replicated.c)
+           ->  Materialize
+                 ->  Gather Motion 3:1  (slice2; segments: 3)
+                       ->  Seq Scan on skip_correlated_distributed
+ Optimizer: GPORCA
+(10 rows)
+
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_distributed WHERE a = c
+    )
+) FROM skip_correlated_replicated ORDER BY a;
+ a 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_distributed;
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on skip_correlated_distributed
+         SubPlan 1
+           ->  Result
+                 Filter: (skip_correlated_random.b = skip_correlated_distributed.a)
+                 ->  Materialize
+                       ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                             ->  Seq Scan on skip_correlated_random
+ Optimizer: GPORCA
+(9 rows)
+
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_distributed ORDER BY b;
+ b 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_distributed;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on skip_correlated_distributed
+         SubPlan 1
+           ->  Seq Scan on skip_correlated_replicated
+                 Filter: (c = skip_correlated_distributed.a)
+ Optimizer: GPORCA
+(6 rows)
+
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_distributed ORDER BY c;
+ c 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = a
+    )
+) FROM skip_correlated_distributed;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
+ERROR:  correlated subquery with skip-level correlations is not supported
+-- hard cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Sort
+   Sort Key: ((SubPlan 1))
+   ->  Result
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Seq Scan on skip_correlated_replicated
+         SubPlan 1
+           ->  Result
+                 Filter: (skip_correlated_distributed.a = skip_correlated_replicated.c)
+                 ->  Materialize
+                       ->  Gather Motion 3:1  (slice2; segments: 3)
+                             ->  Seq Scan on skip_correlated_distributed
+ Optimizer: GPORCA
+(12 rows)
+
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+ l1 
+----
+  1
+  2
+  3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+                                                                                 QUERY PLAN                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: ((SubPlan 2))
+   ->  Result
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Seq Scan on skip_correlated_replicated
+         SubPlan 2
+           ->  Limit
+                 ->  Sort
+                       Sort Key: ((SubPlan 1))
+                       ->  Result
+                             ->  Materialize
+                                   ->  Gather Motion 3:1  (slice2; segments: 3)
+                                         ->  Seq Scan on skip_correlated_random
+                             SubPlan 1
+                               ->  Result
+                                     Filter: ((skip_correlated_distributed.a = skip_correlated_replicated.c) AND (skip_correlated_distributed.a = skip_correlated_random.b))
+                                     ->  Materialize
+                                           ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                 ->  Seq Scan on skip_correlated_distributed
+ Optimizer: GPORCA
+(20 rows)
+
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+ l1 
+----
+  1
+  2
+  3
+(3 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
+INFO:  GPORCA failed to produce a plan, falling back to Postgres-based planner
+DETAIL:  Falling back to Postgres-based planner because GPORCA does not support the following feature: Queries on coordinator-only tables
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Seq Scan on gp_distribution_policy
+   SubPlan 2
+     ->  Result
+           InitPlan 1 (returns $1)
+             ->  Limit
+                   ->  Seq Scan on gp_segment_configuration
+                         Filter: (dbid = gp_distribution_policy.numsegments)
+ Optimizer: Postgres-based planner
+(8 rows)
+
+DROP TABLE skip_correlated_distributed;
+DROP TABLE skip_correlated_random;
+DROP TABLE skip_correlated_replicated;
+--------------------------------------------------------------------------------
 -- Test: ORCA-specific behavior related to distribution requests.
 -- If a join condition has an 'AND' clause and multiple subexpressions that have
 -- the same right-hand side, distribution requests to the outer table
