@@ -1414,7 +1414,7 @@ select * from table_left where exists (select 1 from table_right where l1 = r1);
 drop table table_left;
 drop table table_right;
 -- test cross params of initplan
--- https://github.com/GreengageDB/greengage/issues/16268
+-- https://github.com/GreengageDB/greengage/pull/165
 create table tmp (a varchar, b varchar, c varchar);
 select (SELECT EXISTS
                  (SELECT
