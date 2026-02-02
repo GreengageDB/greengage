@@ -25,7 +25,8 @@ psql \
     echo ""
     echo ""
 done
-
+echo "====== DEBUG env ======="
+env
 mkdir -p sqldump
 pg_dumpall -f ./sqldump/dump.sql
 [ -z "${CI:-}" ] && xz -z ./sqldump/dump.sql

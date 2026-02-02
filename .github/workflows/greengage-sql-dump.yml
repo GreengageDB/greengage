@@ -58,5 +58,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sqldump_ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}
-          path: /mnt/logs/sqldump/dump.sql
+          path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
           if-no-files-found: error
