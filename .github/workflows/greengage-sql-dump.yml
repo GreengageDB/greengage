@@ -50,6 +50,9 @@ jobs:
           optimizer: postgres
           target_os: ${{ matrix.target_os }}
 
+      - name: DEBUG
+        run: ls -lah /mnt/logs/*
+
       - name: Upload SQL Dump
         uses: actions/upload-artifact@v4
         with:

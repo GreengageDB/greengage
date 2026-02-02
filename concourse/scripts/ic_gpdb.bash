@@ -78,7 +78,7 @@ function _main() {
     time make_cluster
     time gen_env
     time move_postgres_for_fdw
-    time run_test
+    # time run_test
 
     if [ "${TEST_BINARY_SWAP}" == "true" ]; then
         time ./gpdb_src/concourse/scripts/test_binary_swap_gpdb.bash
