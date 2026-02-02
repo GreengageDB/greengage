@@ -22,6 +22,7 @@
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
 #include "gpopt/operators/CPredicateUtils.h"
 #include "gpopt/operators/CScalarIdent.h"
+#include "gpopt/exception.h"
 #include "naucrates/dxl/xml/dxltokens.h"
 #include "naucrates/traceflags/traceflags.h"
 
@@ -53,6 +54,9 @@ CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 		NULL == opfamilies)
 	{
 		PopulateDefaultOpfamilies();
+		if (NULL == m_opfamilies)
+			GPOS_RAISE(gpopt::ExmaGPOPT, gpdxl::ExmiUnexpectedOp,
+					   GPOS_WSZ_LIT(": opfamily must exist for each hash expr"));
 	}
 	GPOS_ASSERT(m_opfamilies == NULL ||
 				m_opfamilies->Size() == m_pdrgpexpr->Size());
@@ -81,6 +85,9 @@ CDistributionSpecHashed::CDistributionSpecHashed(
 		NULL == opfamilies)
 	{
 		PopulateDefaultOpfamilies();
+		if (NULL == m_opfamilies)
+			GPOS_RAISE(gpopt::ExmaGPOPT, gpdxl::ExmiUnexpectedOp,
+					   GPOS_WSZ_LIT(": opfamily must exist for each hash expr"));
 	}
 	GPOS_ASSERT(m_opfamilies == NULL ||
 				m_opfamilies->Size() == m_pdrgpexpr->Size());
