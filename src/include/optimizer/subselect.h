@@ -50,6 +50,7 @@ extern void check_multi_subquery_correlated(PlannerInfo *root, Var *var);
 extern List *generate_subquery_vars(PlannerInfo *root, List *tlist,
 					   Index varno);
 extern bool QueryHasDistributedRelation(Query *q, bool recursive);
+extern bool QueryHasMasterOnlyRelation(Query *q);
 
 extern bool cte_contains_dml(Node *ctequery, PlannerInfo *root);
 
