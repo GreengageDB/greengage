@@ -3,6 +3,7 @@
 
 #include "gpopt/base/CDistributionSpecHashedNoOp.h"
 
+#include "gpopt/exception.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
 
