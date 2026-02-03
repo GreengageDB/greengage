@@ -49,7 +49,7 @@ class RepairMissingExtraneous:
         #   [(49401, 'cmax', "extra", [1,2]),
         #    (49401, 'cmax', "extra", [1,2])
 
-        all_seg_ids = set([str(seg_id) for seg_id in all_seg_ids])
+        all_seg_ids = set(all_seg_ids)
         oids_to_segment_mapping = {}
         for issue in self._issues:
 
