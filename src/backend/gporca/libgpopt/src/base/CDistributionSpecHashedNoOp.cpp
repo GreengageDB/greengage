@@ -49,9 +49,14 @@ CDistributionSpecHashedNoOp::AppendEnforcers(CMemoryPool *mp,
 
 	IMdIdArray *opfamilies = pdsChildHashed->Opfamilies();
 
-	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
-		NULL != opfamilies)
+	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution))
+	{
+		if (NULL == opfamilies)
+			GPOS_RAISE(
+				gpopt::ExmaGPOPT, gpdxl::ExmiUnexpectedOp,
+				GPOS_WSZ_LIT(": opfamily must exist for each hash expr"));
 		opfamilies->AddRef();
+	}
 
 	CDistributionSpecHashedNoOp *pdsNoOp =
 		GPOS_NEW(mp) CDistributionSpecHashedNoOp(
