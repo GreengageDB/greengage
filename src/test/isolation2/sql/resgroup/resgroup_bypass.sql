@@ -133,6 +133,18 @@ SELECT gp_inject_fault('func_init_plan_end', 'reset', 1);
 1q:
 2q:
 
+--
+-- resource group should be shown in pg_stat_activity even when it's bypassed
+--
+
+1: SET gp_resource_group_bypass TO on;
+1&: SELECT pg_sleep(3) FROM gp_dist_random('gp_id');
+0U: SELECT query, rsgname FROM pg_stat_activity WHERE query LIKE '%gp_dist_random%';
+1<:
+
+1q:
+0Uq:
+
 -- cleanup
 -- start_ignore
 DROP TABLE t_bypass;
