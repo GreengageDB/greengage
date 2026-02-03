@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Create SQL Dump via regression tests
-        uses: greengagedb/greengage-ci/.github/actions/tests/regression@ADBDEV-9100
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
         with:
           image: ghcr.io/${{ github.repository }}/ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}:${{ github.sha }}
           optimizer: postgres
