@@ -9,8 +9,8 @@
 using namespace gpopt;
 
 CDistributionSpecHashedNoOp::CDistributionSpecHashedNoOp(
-	CExpressionArray *pdrgpexpr)
-	: CDistributionSpecHashed(pdrgpexpr, true)
+	CExpressionArray *pdrgpexpr, IMdIdArray *opfamilies)
+	: CDistributionSpecHashed(pdrgpexpr, true, opfamilies, true)
 {
 }
 
@@ -46,8 +46,16 @@ CDistributionSpecHashedNoOp::AppendEnforcers(CMemoryPool *mp,
 	CExpressionArray *pdrgpexprNoOpRedistributionColumns =
 		pdsChildHashed->Pdrgpexpr();
 	pdrgpexprNoOpRedistributionColumns->AddRef();
-	CDistributionSpecHashedNoOp *pdsNoOp = GPOS_NEW(mp)
-		CDistributionSpecHashedNoOp(pdrgpexprNoOpRedistributionColumns);
+
+	IMdIdArray *opfamilies = pdsChildHashed->Opfamilies();
+
+	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
+		NULL != opfamilies)
+		opfamilies->AddRef();
+
+	CDistributionSpecHashedNoOp *pdsNoOp =
+		GPOS_NEW(mp) CDistributionSpecHashedNoOp(
+			pdrgpexprNoOpRedistributionColumns, opfamilies);
 	pexpr->AddRef();
 	CExpression *pexprMotion = GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CPhysicalMotionHashDistribute(mp, pdsNoOp), pexpr);
