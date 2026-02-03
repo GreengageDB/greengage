@@ -161,6 +161,8 @@ typedef struct
 	int64		modcount;
 	int16		version;
 	int16		state;
+	Oid			objid;
+	int64		last_sequence;
 } AOSegInfo;
 
 /* To hold contents of pf_aocsseg_<oid> */
@@ -173,6 +175,8 @@ typedef struct
 	int64		modcount;
 	int16		state;
 	int16		version;
+	Oid			objid;
+	int64		last_sequence;
 } AOCSSegInfo;
 
 typedef struct
@@ -236,6 +240,7 @@ typedef struct
 	bool		has_numerics;
 	AttInfo	   *atts;
 	int			natts;
+	char		relkind;
 } RelInfo;
 
 typedef struct
@@ -529,6 +534,7 @@ void		init_tablespaces(void);
 
 PGconn	   *connectToServer(ClusterInfo *cluster, const char *db_name);
 PGresult   *executeQueryOrDie(PGconn *conn, const char *fmt,...) pg_attribute_printf(2, 3);
+PGresult   *executeQueryOrDieWithoutLog(PGconn *conn, const char *fmt,...) pg_attribute_printf(2, 3);
 
 char	   *cluster_conn_opts(ClusterInfo *cluster);
 

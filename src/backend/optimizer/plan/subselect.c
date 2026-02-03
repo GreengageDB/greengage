@@ -158,7 +158,7 @@ get_first_col_type(Plan *plan, Oid *coltype, int32 *coltypmod,
 }
 
 /**
- * Returns true if query refers to a distributed table.
+ * Returns true if query refers to a distributed or replicated table.
  */
 bool QueryHasDistributedRelation(Query *q, bool recursive)
 {
@@ -177,7 +177,33 @@ bool QueryHasDistributedRelation(Query *q, bool recursive)
 				&& rte->rtekind == RTE_RELATION)
 		{
 			GpPolicy *policy = GpPolicyFetch(rte->relid);
-			if (GpPolicyIsPartitioned(policy))
+			if (GpPolicyIsPartitioned(policy) ||
+				GpPolicyIsReplicated(policy))
+			{
+				pfree(policy);
+				return true;
+			}
+			pfree(policy);
+		}
+	}
+	return false;
+}
+
+/**
+ * Returns true if query refers to an entry table.
+ */
+bool QueryHasMasterOnlyRelation(Query *q) {
+	ListCell   *rt = NULL;
+
+	foreach(rt, q->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rt);
+
+		if (rte->relid != InvalidOid
+				&& rte->rtekind == RTE_RELATION)
+		{
+			GpPolicy *policy = GpPolicyFetch(rte->relid);
+			if (GpPolicyIsEntry(policy))
 			{
 				pfree(policy);
 				return true;
@@ -258,9 +284,11 @@ check_multi_subquery_correlated(PlannerInfo *root, Var *var)
 	if (var->varlevelsup <= 1)
 		return;
 
+	PlannerInfo *parent_root = NULL;
+	PlannerInfo *cur_root = root;
 	for (levelsup = var->varlevelsup; levelsup > 0; levelsup--)
 	{
-		PlannerInfo *parent_root = root->parent_root;
+		parent_root = cur_root->parent_root;
 
 		if (parent_root == NULL)
 			elog(ERROR, "not found parent root when checking skip-level correlations");
@@ -269,15 +297,24 @@ check_multi_subquery_correlated(PlannerInfo *root, Var *var)
 		 * Only check sublink not include subquery
 		 */
 		if(parent_root->parse->hasSubLinks &&
-			QueryHasDistributedRelation(root->parse, parent_root->is_correlated_subplan))
+			QueryHasDistributedRelation(cur_root->parse, parent_root->is_correlated_subplan))
 		{
 			ereport(ERROR,
 					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			 		errmsg("correlated subquery with skip-level correlations is not supported"));
 		}
 
-		root = root->parent_root;
+		cur_root = cur_root->parent_root;
 	}
+
+	if (parent_root->parse->hasSubLinks && 
+		QueryHasDistributedRelation(parent_root->parse, false) &&
+		QueryHasMasterOnlyRelation(root->parse))
+		{
+			ereport(ERROR,
+					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 		errmsg("correlated subquery with skip-level correlations is not supported"));
+		}
 
 	return;
 }

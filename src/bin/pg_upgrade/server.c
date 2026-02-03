@@ -17,6 +17,8 @@
 
 static PGconn *get_db_conn(ClusterInfo *cluster, const char *db_name);
 
+PGresult *executeQueryOrDieLog(PGconn *conn, bool add_log, const char *query);
+
 
 /*
  * connectToServer()
@@ -116,27 +118,21 @@ cluster_conn_opts(ClusterInfo *cluster)
 	return buf->data;
 }
 
-
 /*
- * executeQueryOrDie()
+ * executeQueryOrDieLog()
  *
  *	Formats a query string from the given arguments and executes the
  *	resulting query.  If the query fails, this function logs an error
  *	message and calls exit() to kill the program.
  */
 PGresult *
-executeQueryOrDie(PGconn *conn, const char *fmt,...)
+executeQueryOrDieLog(PGconn *conn, bool add_log, const char *query)
 {
-	static char query[QUERY_ALLOC];
-	va_list		args;
 	PGresult   *result;
 	ExecStatusType status;
 
-	va_start(args, fmt);
-	vsnprintf(query, sizeof(query), fmt, args);
-	va_end(args);
-
-	pg_log(PG_VERBOSE, "executing: %s\n", query);
+	if (add_log)
+		pg_log(PG_VERBOSE, "executing: %s\n", query);
 	result = PQexec(conn, query);
 	status = PQresultStatus(result);
 
@@ -151,6 +147,46 @@ executeQueryOrDie(PGconn *conn, const char *fmt,...)
 	}
 	else
 		return result;
+}
+
+/*
+ * executeQueryOrDie()
+ *
+ *	Formats a query string from the given arguments and executes the
+ *	resulting query.  If the query fails, this function logs an error
+ *	message and calls exit() to kill the program.
+ */
+PGresult *
+executeQueryOrDie(PGconn *conn, const char *fmt,...)
+{
+	static char query[QUERY_ALLOC];
+	va_list		args;
+
+	va_start(args, fmt);
+	vsnprintf(query, sizeof(query), fmt, args);
+	va_end(args);
+
+	return executeQueryOrDieLog(conn, true, query);
+}
+
+/*
+ * executeQueryOrDieWithoutLog()
+ *Ы
+ *     Formats a query string from the given arguments and executes the
+ *     resulting query.  If the query fails, this function logs an error
+ *     message and calls exit() to kill the program.
+ */
+PGresult *
+executeQueryOrDieWithoutLog(PGconn *conn, const char *fmt,...)
+{
+	static char query[QUERY_ALLOC];
+	va_list		args;
+
+	va_start(args, fmt);
+	vsnprintf(query, sizeof(query), fmt, args);
+	va_end(args);	
+    
+	return executeQueryOrDieLog(conn, false, query);
 }
 
 

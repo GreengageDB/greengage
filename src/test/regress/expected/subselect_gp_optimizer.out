@@ -3777,7 +3777,7 @@ select * from table_left where exists (select 1 from table_right where l1 = r1);
 drop table table_left;
 drop table table_right;
 -- test cross params of initplan
--- https://github.com/GreengageDB/greengage/issues/16268
+-- https://github.com/GreengageDB/greengage/pull/165
 create table tmp (a varchar, b varchar, c varchar);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -3785,10 +3785,7 @@ select (SELECT EXISTS
                  (SELECT
                   FROM pg_views
                   WHERE schemaname = a)) from tmp;
- exists 
---------
-(0 rows)
-
+ERROR:  correlated subquery with skip-level correlations is not supported
 drop table tmp;
 -- Test LEAST() and GREATEST() with an embedded subquery
 drop table if exists foo;
