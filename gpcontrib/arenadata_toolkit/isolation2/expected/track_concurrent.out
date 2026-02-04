@@ -106,10 +106,3 @@ DROP
 
 1q: ... <quitting>
 2q: ... <quitting>
-
-!\retcode gpconfig -r shared_preload_libraries;
-(exited with code 0)
-!\retcode gpconfig -r arenadata_toolkit.tracking_worker_naptime_sec;
-(exited with code 0)
-!\retcode gpstop -raq -M fast;
-(exited with code 0)

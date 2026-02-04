@@ -49,9 +49,9 @@ void
 tf_shmem_init()
 {
 	/*
-	 * tf_state_lock and bloom_set_lock locks plus one lock for each db entry.
+	 * bloom_set_lock locks plus one lock for each db entry.
 	 */
-	RequestAddinLWLocks(2 + db_track_count);
+	RequestAddinLWLocks(1 + db_track_count);
 	RequestAddinShmemSpace(tf_shmem_calc_size());
 
 	next_shmem_startup_hook = shmem_startup_hook;

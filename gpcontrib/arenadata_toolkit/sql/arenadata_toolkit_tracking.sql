@@ -1,9 +1,4 @@
 -- Tests for size tracking logic introduced in version 1.7
--- start_ignore
-\! gpconfig -c arenadata_toolkit.tracking_worker_naptime_sec -v '5'
-\! gpstop -u
-\c
--- end_ignore
 -- start_matchsubs
 -- m/ERROR:  database \d+ is not tracked/
 -- s/\d+/XXX/g
@@ -143,8 +138,3 @@ SELECT arenadata_toolkit.tracking_unregister_db();
 
 \c contrib_regression;
 DROP DATABASE tracking_db1;
--- start_ignore
-\! gpconfig -r shared_preload_libraries
-\! gpconfig -r arenadata_toolkit.tracking_worker_naptime_sec
-\! gpstop -u
--- end_ignore

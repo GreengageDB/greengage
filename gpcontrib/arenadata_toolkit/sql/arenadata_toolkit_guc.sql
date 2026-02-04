@@ -1,8 +1,3 @@
--- start_ignore
-\! gpconfig -c shared_preload_libraries -v 'arenadata_toolkit'
-\! gpstop -raq -M fast
-\c
--- end_ignore
 -- start_matchsubs
 --
 -- m/ERROR:  \[arenadata_toolkit\] exceeded maximum number of tracked databases \(track_files\.c:\d+\)/

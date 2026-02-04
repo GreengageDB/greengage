@@ -383,6 +383,13 @@ tracking_get_track(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errmsg("Can't perform tracking for database %u properly due to internal error", MyDatabaseId)));
 
+	if (SRF_IS_SQUELCH_CALL())
+	{
+		funcctx = SRF_PERCALL_SETUP();
+		state = funcctx->user_fctx;
+		goto srf_done;
+	}
+
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
@@ -610,6 +617,7 @@ tracking_get_track(PG_FUNCTION_ARGS)
 
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(result));
 	}
+srf_done:
 
 	if (tf_get_global_state.bloom)
 	{
@@ -621,6 +629,14 @@ tracking_get_track(PG_FUNCTION_ARGS)
 	{
 		pfree(tf_get_global_state.schema_oids);
 		tf_get_global_state.schema_oids = NIL;
+	}
+
+	if (state->scan)
+	{
+		systable_endscan(state->scan);
+		heap_close(state->pg_class_rel, AccessShareLock);
+		pfree(state);
+		funcctx->user_fctx = NULL;
 	}
 
 	SRF_RETURN_DONE(funcctx);
