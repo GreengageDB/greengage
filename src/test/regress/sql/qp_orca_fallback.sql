@@ -130,12 +130,12 @@ SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
 -- Orca should fallback if a hash distribution expression does not have an opfamily.
 -- (array types does not have legacy opfamilies)
 -- create table with legacy hash distr.
-
 --start_ignore
-SET gp_use_legacy_hashops=1;
 DROP TABLE IF EXISTS t1;
+--end_ignore
+SET gp_use_legacy_hashops=1;
 CREATE TABLE t1 (i INT, arr INT[]) DISTRIBUTED BY (i);
---end ignore
+
 EXPLAIN (COSTS OFF) SELECT * FROM t1 INTERSECT ALL (SELECT * FROM t1);
 
 DROP TABLE t1;
