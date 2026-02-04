@@ -131,12 +131,12 @@ SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
 -- (array types does not have legacy opfamilies)
 -- create table with legacy hash distr.
 -- start_ignore
-DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t_legacy;
 -- end_ignore
 SET gp_use_legacy_hashops=1;
-CREATE TABLE t1 (i INT, arr INT[]) DISTRIBUTED BY (i);
+CREATE TABLE t_legacy (i INT, arr INT[]) DISTRIBUTED BY (i);
 
-EXPLAIN (COSTS OFF) SELECT * FROM t1 INTERSECT ALL (SELECT * FROM t1);
+EXPLAIN (COSTS OFF) SELECT * FROM t_legacy INTERSECT ALL (SELECT * FROM t_legacy);
 
-DROP TABLE t1;
+DROP TABLE t_legacy;
 RESET gp_use_legacy_hashops;

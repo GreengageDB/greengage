@@ -388,8 +388,8 @@ DETAIL:  Feature not supported: WITH ORDINALITY
 -- (array types does not have legacy opfamilies)
 -- create table with legacy hash distr.
 SET gp_use_legacy_hashops=1;
-CREATE TABLE t1 (i INT, arr INT[]) DISTRIBUTED BY (i);
-EXPLAIN (COSTS OFF) SELECT * FROM t1 INTERSECT ALL (SELECT * FROM t1);
+CREATE TABLE t_legacy (i INT, arr INT[]) DISTRIBUTED BY (i);
+EXPLAIN (COSTS OFF) SELECT * FROM t_legacy INTERSECT ALL (SELECT * FROM t_legacy);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Unexpected Operator : opfamily must exist for each hash expr
                             QUERY PLAN                            
@@ -400,13 +400,13 @@ DETAIL:  Unexpected Operator : opfamily must exist for each hash expr
                ->  Redistribute Motion 3:3  (slice1; segments: 3)
                      Hash Key: "*SELECT* 1".i, "*SELECT* 1".arr
                      ->  Subquery Scan on "*SELECT* 1"
-                           ->  Seq Scan on t1
+                           ->  Seq Scan on t_legacy
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: "*SELECT* 2".i, "*SELECT* 2".arr
                      ->  Subquery Scan on "*SELECT* 2"
-                           ->  Seq Scan on t1 t1_1
+                           ->  Seq Scan on t_legacy t_legacy_1
  Optimizer: Postgres query optimizer
 (12 rows)
 
-DROP TABLE t1;
+DROP TABLE t_legacy;
 RESET gp_use_legacy_hashops;
