@@ -1,7 +1,16 @@
-# Greengage CI Workflow
+# CI Workflows
 
-This directory contains the CI pipelines for the Greengage project,
-orchestrating the build, test, and upload stages for containerized
+This directory contains the CI workflows for the Greengage project:
+
+- **Greengage ABI Tests**: Checks for ABI (Application Binary Interface)
+  changes in the codebase
+- **Greengage CI**: Main CI pipeline orchestrating build, test, upload
+- **Greengage release**: Handles the uploading of Debian packages to Releases
+- **Greengage SQL Dump**: Generates SQL dump artifacts after `Greengage CI`
+
+## Greengage CI Workflow
+
+Orchestrating the build, test, and upload stages for containerized
 environments. The pipeline is designed to be flexible, with parameterized
 inputs for version and target operating systems, allowing it to adapt to
 different branches and configurations.
@@ -39,7 +48,7 @@ operating systems:
 
 ## Release Workflow
 
-A separate workflow, `Greengage release`, handles the uploading of Debian packages
+A separate workflow `Greengage release` handles the uploading of Debian package
 to GitHub releases. It is triggered when a release is published and uses a
 composite action to manage package deployment.
 
@@ -72,7 +81,41 @@ release.
 The release workflow is designed to be robust and provide clear feedback when
 issues occur, ensuring that releases are always consistent and reliable.
 
-## SQL Dump Workflow
+## Greengage ABI Tests Workflow
+
+A separate workflow, `Greengage ABI Tests`, is responsible for checking
+Application Binary Interface (ABI) compatibility between the current codebase
+and the latest stable release. It helps ensure that no breaking changes are
+introduced to the binary interface.
+
+### Key Features
+
+- **Triggers:** `workflow_dispatch`, `pull_request` (for specific paths), and
+`push` to the `6X_STABLE` branch (for specific paths).
+- **Concurrency Control:** Uses concurrency groups to cancel previous runs on
+new push to same PR/branch.
+- **Baseline Detection:** Automatically determines the baseline version (latest
+tag in the 6.* series) for ABI comparison.
+- **Exception Lists:** Supports exception lists for symbols and types to ignore
+during ABI comparison.
+- **Artifact Creation:** Generates ABI dumps for both baseline and current
+code, then compares them and produces a compatibility report.
+
+### Behavior
+
+1. **Setup Phase:** Determines the baseline version (latest 6.* tag) and checks
+for exception lists.
+2. **ABI Dump Phase:** Builds Greengage for both the baseline version and the
+current commit (or PR) and creates ABI dumps for the `postgres` library.
+3. **Comparison Phase:** Compares the two ABI dumps using
+`abi-compliance-checker`, taking into account any exception lists. The report
+is then printed and uploaded as an artifact.
+
+The workflow helps ensure that no unintended ABI changes are introduced. If ABI
+changes are detected, the workflow will fail, and the report will show the
+differences.
+
+## Greengage SQL Dump Workflow
 
 A separate workflow `Greengage SQL Dump` is responsible for generating SQL dump
 artifacts after the main CI process completes successfully. It is triggered
@@ -112,7 +155,6 @@ artifact (e.g., `sqldump_ggdb7_ubuntu`) to the workflow run.
 
 This workflow ensures that a current database schema dump is available as an
 artifact following successful CI runs on the primary branches `main` and `7.x`.
-
 ## Configuration
 
 The workflow is parameterized to support flexibility:
