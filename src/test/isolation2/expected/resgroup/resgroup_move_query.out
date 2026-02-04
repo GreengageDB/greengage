@@ -373,11 +373,13 @@ SET
 -----------+-------------+------+---------+----------
  Greenplum | -1          | -1   | -1      |          
 (1 row)
+-- there are two backends on coordinator, the second one is for gather motion
 2<:  <... completed>
  pg_resgroup_move_query 
 ------------------------
  t                      
-(1 row)
+ t                      
+(2 rows)
 2: RESET gp_resource_group_move_timeout;
 RESET
 3: SELECT is_session_in_group(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND state = 'idle in transaction';
@@ -434,11 +436,13 @@ ERROR:  cannot send signal to process
 -----------+-------------+------+---------+----------
  Greenplum | -1          | -1   | -1      |          
 (1 row)
+-- there are two backends on coordinator, the second one is for gather motion
 2<:  <... completed>
  pg_resgroup_move_query 
 ------------------------
  t                      
-(1 row)
+ t                      
+(2 rows)
 3: SELECT is_session_in_group(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND state = 'idle in transaction';
  is_session_in_group 
 ---------------------
@@ -514,10 +518,28 @@ BEGIN
  Greenplum | -1          | -1   | -1      |          
 (1 row)
 1&: SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1;  <waiting ...>
+-- segments should display the resource group name
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
+ rsgname             | query                                                       
+---------------------+-------------------------------------------------------------
+ rg_move_query_small | SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1; 
+(1 row)
+-- there are two backends on coordinator, the second one is for gather motion
 2: SELECT pg_resgroup_move_query(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small';
  pg_resgroup_move_query 
 ------------------------
  t                      
+ t                      
+(2 rows)
+SELECT pg_sleep(1);
+ pg_sleep 
+----------
+          
+(1 row)
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
+ rsgname       | query                                                       
+---------------+-------------------------------------------------------------
+ rg_move_query | SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1; 
 (1 row)
 1<:  <... completed>
  gpname    | numsegments | dbid | content | pg_sleep 
@@ -531,10 +553,26 @@ BEGIN
 (1 row)
 -- and check we can move it back right in the same transaction
 1&: SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1;  <waiting ...>
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
+ rsgname       | query                                                       
+---------------+-------------------------------------------------------------
+ rg_move_query | SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1; 
+(1 row)
 2: SELECT pg_resgroup_move_query(pid, 'rg_move_query_small') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query';
  pg_resgroup_move_query 
 ------------------------
  t                      
+ t                      
+(2 rows)
+SELECT pg_sleep(1);
+ pg_sleep 
+----------
+          
+(1 row)
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
+ rsgname             | query                                                       
+---------------------+-------------------------------------------------------------
+ rg_move_query_small | SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1; 
 (1 row)
 1<:  <... completed>
  gpname    | numsegments | dbid | content | pg_sleep 
