@@ -159,6 +159,7 @@ SELECT is_session_in_group(pid, 'default_group') FROM pg_stat_activity WHERE wai
 3: SELECT gp_inject_fault('resource_group_move_handler_after_qd_control', 'resume', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 3: SELECT gp_inject_fault('resource_group_give_away_after_latch', 'resume', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 1<:
+-- there are two backends on coordinator, the second one is for gather motion
 2<:
 2: RESET gp_resource_group_move_timeout;
 3: SELECT is_session_in_group(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND state = 'idle in transaction';
@@ -183,6 +184,7 @@ SELECT is_session_in_group(pid, 'default_group') FROM pg_stat_activity WHERE wai
 3: SELECT pg_resgroup_move_query(pid, 'default_group') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small';
 3: SELECT gp_inject_fault('resource_group_move_handler_before_qd_control', 'resume', dbid) FROM gp_segment_configuration where role = 'p' and content = -1;
 1<:
+-- there are two backends on coordinator, the second one is for gather motion
 2<:
 3: SELECT is_session_in_group(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND state = 'idle in transaction';
 1: END;
@@ -214,12 +216,20 @@ SELECT is_session_in_group(pid, 'default_group') FROM pg_stat_activity WHERE wai
 --spawn all backends at first short call to guarantee correct pg_resgroup_move_query() execution
 1: SELECT * FROM gp_dist_random('gp_id'), pg_sleep(1) LIMIT 1;
 1&: SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1;
+-- segments should display the resource group name
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
+-- there are two backends on coordinator, the second one is for gather motion
 2: SELECT pg_resgroup_move_query(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query_small';
+SELECT pg_sleep(1);
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
 1<:
 2: SELECT is_session_in_group(pid, 'rg_move_query') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND state = 'idle in transaction';
 -- and check we can move it back right in the same transaction
 1&: SELECT * FROM gp_dist_random('gp_id'), pg_sleep(3) LIMIT 1;
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
 2: SELECT pg_resgroup_move_query(pid, 'rg_move_query_small') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND rsgname='rg_move_query';
+SELECT pg_sleep(1);
+1U: SELECT rsgname, query FROM pg_stat_activity WHERE rsgname LIKE 'rg_move_query%';
 1<:
 2: SELECT is_session_in_group(pid, 'rg_move_query_small') FROM pg_stat_activity WHERE query LIKE '%pg_sleep%' AND state = 'idle in transaction';
 1: END;

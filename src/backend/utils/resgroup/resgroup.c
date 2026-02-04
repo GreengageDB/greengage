@@ -1709,6 +1709,8 @@ SwitchResGroupOnSegment(const char *buf, int len)
 		cgroupOpsRoutine->attachcgroup(bypassedGroup->groupId, MyProcPid,
 									   caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
 
+		pgstat_report_resgroup(bypassedSlot.groupId);
+
 		return;
 	}
 
@@ -1775,6 +1777,8 @@ SwitchResGroupOnSegment(const char *buf, int len)
 	/* Add into cgroup */
 	cgroupOpsRoutine->attachcgroup(self->groupId, MyProcPid,
 								   self->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
+
+	pgstat_report_resgroup(group->groupId);
 }
 
 /*
@@ -3239,7 +3243,7 @@ HandleMoveResourceGroup(void)
 	ResGroupSlotData *slot;
 	ResGroupData *group;
 	ResGroupData *oldGroup;
-	Oid			groupId;
+	Oid			groupId = InvalidOid;
 	pid_t		callerPid;
 
 	Assert(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE);
@@ -3332,8 +3336,6 @@ HandleMoveResourceGroup(void)
 		 */
 		cgroupOpsRoutine->attachcgroup(self->groupId, MyProcPid,
 									   self->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
-
-		pgstat_report_resgroup(self->groupId);
 	}
 
 	/*
@@ -3427,6 +3429,8 @@ HandleMoveResourceGroup(void)
 		cgroupOpsRoutine->attachcgroup(self->groupId, MyProcPid,
 									   self->caps.cpuMaxPercent == CPU_MAX_PERCENT_DISABLED);
 	}
+
+	pgstat_report_resgroup(groupId);
 }
 
 /*
