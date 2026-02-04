@@ -1,9 +1,13 @@
 FROM ubuntu:22.04 AS base
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG UBUNTU_MAIN_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_UPDATES_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_BACKPORTS_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_SECURITY_MIRROR=http://security.ubuntu.com/ubuntu
+
+WORKDIR /home/gpadmin
 
 COPY README.Ubuntu.bash ./
 
@@ -14,8 +18,8 @@ RUN set -eux; \
       -e "s|http://archive.ubuntu.com/ubuntu/ jammy-backports |${UBUNTU_BACKPORTS_MIRROR}/ jammy-backports |g" \
       -e "s|http://security.ubuntu.com/ubuntu/ jammy-security |${UBUNTU_SECURITY_MIRROR}/ jammy-security |g" \
       /etc/apt/sources.list; \
-    export DEBIAN_FRONTEND=noninteractive; \
     ./README.Ubuntu.bash; \
+    rm -rf /var/lib/apt/lists/*; \
     rm README.Ubuntu.bash; \
 # The en_US.UTF-8 locale is needed to run GPDB
     locale-gen en_US.UTF-8; \
@@ -23,31 +27,32 @@ RUN set -eux; \
     mkdir /run/sshd; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
-# Packages for tests
-    apt install -y rsync iproute2 fakeroot lsof sudo python3.11 python3.11-dev openjdk-17-jdk libipc-run-perl; \
-    apt install -y protobuf-compiler; \
 # Install allure-behave for behave tests
-    pip3 install pytest gsutil behave~=1.2.6 coverage~=4.5 'mock<=5.0.0' allure-behave==2.4.0 protobuf==3.20.0; \
-    pip3 cache purge
-
-WORKDIR /home/gpadmin
+    pip3 install --no-cache-dir --prefer-binary \
+      allure-behave==2.4.0 \
+      behave~=1.2.6 \
+      coverage~=4.5 \
+      gsutil \
+      'mock<=5.0.0' \
+      protobuf==3.20.0 \
+      pytest
 
 FROM base AS build
 
 COPY . gpdb_src
 
-RUN mkdir /home/gpadmin/bin_gpdb
+RUN mkdir bin_gpdb
 
-ENV TARGET_OS_VERSION=22
-ENV TARGET_OS=ubuntu
-ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
-ENV SKIP_UNITTESTS=
+ENV TARGET_OS_VERSION=22 \
+    TARGET_OS=ubuntu \
+    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+    SKIP_UNITTESTS= \
 # To set default locale for unittests
-ENV LANG=en_US.UTF-8
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
+    LANG=en_US.UTF-8 \
+    CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 # Compile with running mocking tests
-RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+RUN gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base AS code
 COPY . gpdb_src
