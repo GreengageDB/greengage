@@ -834,19 +834,19 @@ DROP TABLE skip_correlated_t4;
 reset optimizer_join_order;
 reset optimizer_trace_fallback;
 --------------------------------------------------------------------------------
--- ORCA should be able to plan and execute correctly one skip-level queries, but
--- not with master-only tables. Postgres Legacy planner should give an error to 
--- any skip-level query.
+-- ORCA should be able to plan and execute correctly skip-level queries, but not
+-- with master-only. Postgres Legacy planner should give an error to skip-level 
+-- query involving distributed or replicated tables.
 --------------------------------------------------------------------------------
 --start_ignore
-DROP TABLE IF EXISTS skip_correlated_partitioned;
+DROP TABLE IF EXISTS skip_correlated_distributed;
 DROP TABLE IF EXISTS skip_correlated_random;
 DROP TABLE IF EXISTS skip_correlated_replicated;
 --end_ignore
-CREATE TABLE skip_correlated_partitioned (
+CREATE TABLE skip_correlated_distributed (
     a INT
 ) DISTRIBUTED BY (a);
-INSERT INTO skip_correlated_partitioned VALUES (1), (2), (3);
+INSERT INTO skip_correlated_distributed VALUES (1), (2), (3);
 
 CREATE TABLE skip_correlated_random (
     b INT
@@ -862,12 +862,12 @@ INSERT INTO skip_correlated_replicated VALUES(1), (2), (3);
 EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
-        SELECT a FROM skip_correlated_partitioned WHERE a = c
+        SELECT a FROM skip_correlated_distributed WHERE a = c
     )
 ) FROM skip_correlated_replicated;
 SELECT (
     SELECT (
-        SELECT a FROM skip_correlated_partitioned WHERE a = c
+        SELECT a FROM skip_correlated_distributed WHERE a = c
     )
 ) FROM skip_correlated_replicated ORDER BY a;
 
@@ -876,45 +876,45 @@ SELECT (
     SELECT (
         SELECT b FROM skip_correlated_random WHERE b = a
     )
-) FROM skip_correlated_partitioned;
+) FROM skip_correlated_distributed;
 SELECT (
     SELECT (
         SELECT b FROM skip_correlated_random WHERE b = a
     )
-) FROM skip_correlated_partitioned ORDER BY b;
+) FROM skip_correlated_distributed ORDER BY b;
 
 EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
         SELECT c FROM skip_correlated_replicated WHERE c = a
     )
-) FROM skip_correlated_partitioned;
+) FROM skip_correlated_distributed;
 SELECT (
     SELECT (
         SELECT c FROM skip_correlated_replicated WHERE c = a
     )
-) FROM skip_correlated_partitioned ORDER BY c;
+) FROM skip_correlated_distributed ORDER BY c;
 
 EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
         SELECT dbid FROM gp_segment_configuration WHERE dbid = a
     )
-) FROM skip_correlated_partitioned;
+) FROM skip_correlated_distributed;
 
 -- hard cases
 EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
         SELECT (
-            SELECT a FROM skip_correlated_partitioned WHERE a = c
+            SELECT a FROM skip_correlated_distributed WHERE a = c
         ) 
     )
 ) AS l1 FROM skip_correlated_replicated ORDER BY l1;
 SELECT (
     SELECT (
         SELECT (
-            SELECT a FROM skip_correlated_partitioned WHERE a = c
+            SELECT a FROM skip_correlated_distributed WHERE a = c
         ) 
     )
 ) AS l1 FROM skip_correlated_replicated ORDER BY l1;
@@ -923,19 +923,26 @@ EXPLAIN (COSTS OFF)
 SELECT (
     SELECT (
         SELECT (
-            SELECT a FROM skip_correlated_partitioned WHERE a = c and a = b
+            SELECT a FROM skip_correlated_distributed WHERE a = c and a = b
         ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
     )
 ) AS l1 FROM skip_correlated_replicated ORDER BY l1;
 SELECT (
     SELECT (
         SELECT (
-            SELECT a FROM skip_correlated_partitioned WHERE a = c and a = b
+            SELECT a FROM skip_correlated_distributed WHERE a = c and a = b
         ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
     )
 ) AS l1 FROM skip_correlated_replicated ORDER BY l1;
 
-DROP TABLE skip_correlated_partitioned;
+EXPLAIN (COSTS OFF)
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
+
+DROP TABLE skip_correlated_distributed;
 DROP TABLE skip_correlated_random;
 DROP TABLE skip_correlated_replicated;
 --------------------------------------------------------------------------------
