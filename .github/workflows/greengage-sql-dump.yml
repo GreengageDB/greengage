@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
-      fail-fast: true # Stop on any failure in the matrix
+      fail-fast: true
       matrix:
         target_os: [ubuntu]
     permissions:
@@ -21,6 +21,14 @@ jobs:
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for cache and artifact upload
     steps:
+      - name: Display trigger information
+        run: |
+          echo "================== Workflow Trigger Information =================="
+          echo "Triggered by: ${{ github.event.workflow_run.name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "=================================================================="
+
       - name: Move Docker storage to /mnt/docker
         run: |
           sudo bash -c '
@@ -31,32 +39,36 @@ jobs:
             echo "{ \"data-root\": \"/mnt/docker\" }" > /etc/docker/daemon.json
             systemctl start docker
           '
+
       - name: Determine version from branch
-        id: determine-version
+        id: version
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "version=6" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" = "7.x" ]; then
-            echo "version=7" >> $GITHUB_OUTPUT
-          else
-            echo "Unsupported branch: ${{ github.ref_name }}"
-            exit 1
-          fi
+          case "$BRANCH" in
+            main)
+              echo "version=6" >> $GITHUB_OUTPUT
+              ;;
+            7.x)
+              echo "version=7" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "Unsupported branch: $BRANCH"
+              exit 1
+              ;;
+          esac
 
       - name: Create SQL Dump via regression tests
         uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
         with:
-          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}:${{ github.sha }}
+          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}:${{ github.sha }}
           optimizer: postgres
           target_os: ${{ matrix.target_os }}
-          dump_db: 'true'
-
-      - name: DEBUG
-        run: ls -lah /mnt/logs/*
+          dump_db: "true"
 
       - name: Upload SQL Dump
         uses: actions/upload-artifact@v4
         with:
-          name: sqldump_ggdb${{ steps.determine-version.outputs.version }}_${{ matrix.target_os }}
+          name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
           path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
           if-no-files-found: error
