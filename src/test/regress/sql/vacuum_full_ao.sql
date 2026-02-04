@@ -113,5 +113,25 @@ vacuum table_ao_col_2;
 
 drop table table_ao_col_2;
 
+-- Test vacuum for a AORO table after adding column in an aborted transaction
+create table table_ao_row (i int, j int, k int) with (appendonly='true', orientation="row");
+insert into table_ao_row select i, i + 1, i + 2 from generate_series(1, 20) i;
+
+begin;
+alter table table_ao_row add column a int;
+update table_ao_row set a = 1 where true;
+rollback;
+
+select cmdCheckSegmentFileSizes('table_ao_row') check_segfiles_size_aoro
+\gset
+
+delete from table_ao_row where true;
+
+vacuum table_ao_row;
+
+:check_segfiles_size_aoro
+
+drop table table_ao_row;
+
 drop function cmdCheckSegmentFileSizes(table_name text);
 drop function getTableSegFiles(t regclass, out gp_contentid smallint, out filepath text);
