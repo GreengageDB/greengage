@@ -336,8 +336,6 @@ SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
 SET gp_use_legacy_hashops=1;
 CREATE TABLE t1 (i INT, arr INT[]) DISTRIBUTED BY (i);
 EXPLAIN (COSTS OFF) SELECT * FROM t1 INTERSECT ALL (SELECT * FROM t1);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Unexpected Operator : opfamily must exist for each hash expr
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice3; segments: 3)
