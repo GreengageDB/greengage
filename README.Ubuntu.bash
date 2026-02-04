@@ -1,48 +1,57 @@
 #!/bin/bash
-
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
 	bison \
 	ccache \
+	clang \
 	cmake \
 	curl \
+	fakeroot \
 	flex \
-	git-core \
-	gcc \
 	g++ \
-	llvm \
-	clang \
+	gcc \
+	git-core \
 	inetutils-ping \
-	krb5-kdc \
+	iproute2 \
 	krb5-admin-server \
+	krb5-kdc \
 	libapr1-dev \
 	libbz2-dev \
-	libuv1-dev \
 	libcurl4-gnutls-dev \
 	libevent-dev \
+	libipc-run-perl \
 	libkrb5-dev \
-	libpam-dev \
 	libldap-common \
 	libldap-dev \
+	libpam-dev \
 	libperl-dev \
 	libreadline-dev \
 	libssl-dev \
+	libuv1-dev \
 	libxerces-c-dev \
 	libxml2-dev \
 	libyaml-dev \
 	libzstd-dev \
+	llvm \
 	locales \
+	lsof \
 	net-tools \
 	ninja-build \
 	openssh-client \
 	openssh-server \
 	openssl \
 	pkg-config \
+	protobuf-compiler \
+	python3.11 \
+	python3.11-dev \
 	python3-dev \
 	python3-pip \
-	python3-psycopg2 \
 	python3-psutil \
+	python3-psycopg2 \
 	python3-yaml \
+	rsync \
+	sudo \
 	zlib1g-dev
 
 tee -a /etc/sysctl.conf << EOF
