@@ -3,7 +3,9 @@ name: Greengage CI
 
 on:
   push:
-    branches: ['main']  # Trigger on push to main (after merged PR)
+    branches:
+      - main                 # Trigger on push to main (after merged PR)
+      - gh-readonly-queue/** # Trigger for merge queue branch
     tags: ['6.*']   # Trigger on tags for versioned releases
   pull_request:
     branches: ['**'] # Trigger on pull requests for all branches
@@ -32,7 +34,7 @@ jobs:
 
   behave-tests:
     needs: build  # Wait for build to complete
-    if: github.event_name == 'pull_request'  # Only for PR
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/gh-readonly-queue/')
     strategy:
       fail-fast: true
       matrix:
@@ -50,7 +52,7 @@ jobs:
 
   regression-tests:
     needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/gh-readonly-queue/')
     strategy:
       fail-fast: true
       matrix:
@@ -68,7 +70,7 @@ jobs:
 
   orca-tests:
     needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/gh-readonly-queue/')
     strategy:
       fail-fast: true
       matrix:
@@ -86,7 +88,7 @@ jobs:
 
   resgroup-tests:
     needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/gh-readonly-queue/')
     strategy:
       fail-fast: true
       matrix:
