@@ -88,9 +88,9 @@ based on the triggering branch.
 parameter to generate a SQL dump archive, which is then uploaded as a workflow
 artifact.
 - **Controlled Execution:** Since the main CI workflow runs on `main` and `7.x`
-branches only for push events (which occur after tagging or final merge of a
-pull request), SQL dumps are generated exclusively for verified, approved
-patches after they are merged into the main branches.
+branches only for push events (which occur after final merge of a PR), SQL dump
+are generated exclusively for verified, approved patches after they are merged
+into the main branches.
 - **Artifact Retention:** The generated SQL dump artifact is retained 90 days
 after the last download. Each new run of the `behave tests gpexpand` workflow
 (which consumes this artifact as a consumer) resets this retention period to
