@@ -7,7 +7,7 @@ temporary tables and which user created them in which session.
 The extension tracks the creation and deletion of temporary table files on
 segments. The list of files is stored in the shared memory of each segment.
 The extension adds the `tts_get_seg_files` function to get the tracked files,
-their sizes, user and session where they was created from segments.
+their sizes, user and session where they were created from segments.
 
 Example
 
