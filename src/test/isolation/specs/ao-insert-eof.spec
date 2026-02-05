@@ -19,7 +19,6 @@ setup
 
 session "s1"
 step "s1begin"  { BEGIN; }
-step "s1setguc" { SET test_AppendOnlyHash_eviction_vs_just_marking_not_inuse=1; }
 step "s1insert"	{ INSERT INTO appendonly_eof SELECT * FROM generate_series(1, 1000); }
 step "s1commit"	{ COMMIT; }
 
@@ -30,4 +29,4 @@ step "s2insert"	 { INSERT INTO appendonly_eof SELECT * FROM generate_series(1, 1
 step "s2commit"  { COMMIT; }
 
 
-permutation "s1begin" "s1setguc" "s1insert" "s2begin" "s2select" "s1commit" "s2insert" "s2commit" "s2select"
+permutation "s1begin" "s1insert" "s2begin" "s2select" "s1commit" "s2insert" "s2commit" "s2select"
