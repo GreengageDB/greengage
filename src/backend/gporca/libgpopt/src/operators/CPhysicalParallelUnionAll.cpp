@@ -64,7 +64,7 @@ CPhysicalParallelUnionAll::PdsRequired(CMemoryPool *mp, CExpressionHandle &,
 		pdrgpexprFakeRequestedColumns->Append(pexprScalarIdent);
 
 		return GPOS_NEW(mp)
-			CDistributionSpecHashedNoOp(pdrgpexprFakeRequestedColumns);
+			CDistributionSpecHashedNoOp(pdrgpexprFakeRequestedColumns, nullptr);
 	}
 }
 
