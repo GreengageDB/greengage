@@ -2,7 +2,9 @@
 
 from psycopg2.extensions import cursor
 from gppylib.db import dbconn
+from typing import List
 from gprebalance_modules.planner import Plan, deserializePlan
+from gprebalance_modules.rebalance_step import *
 
 STATE_NOT_DEFINED = 'not defined'
 
@@ -24,6 +26,7 @@ class RebalanceSchema:
         self.rebalance_status = 'rebalance_status'
         self.table_rebalance_status_detail = 'table_rebalance_status_detail'
         self.saved_plan = 'saved_plan'
+        self.segment_move_steps = 'segment_move_steps'
         self.conn = conn
 
     def createSchema(self, plan: Plan) -> None:
@@ -143,3 +146,47 @@ class RebalanceSchema:
     def getTablesToRebalanceWithStatus(self, status: str) -> cursor:
         return dbconn.query(self.conn, f"""SELECT db_name, schema_name, rel_name FROM
                             {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = '{status}'""")
+
+    def saveExecutionSteps(self, steps: List[RebalanceStep]) -> None:
+        dbconn.execSQL(self.conn, 'BEGIN')
+
+        dbconn.execSQL(self.conn, f'DROP TABLE IF EXISTS {self.schema_name}.{self.segment_move_steps}')
+
+        dbconn.execSQL(self.conn,
+                       f'''CREATE TABLE {self.schema_name}.{self.segment_move_steps}
+                       (move_order INT NOT NULL UNIQUE, status TEXT, step BYTEA)
+                       DISTRIBUTED REPLICATED''')
+        
+        for step in steps:
+            dbconn.execSQL(self.conn,
+                       f'''INSERT INTO {self.schema_name}.{self.segment_move_steps}
+                       VALUES ({step.getMoveOrder()}, '{step.getStatus().name}', '\\x{step.serializeStep().hex()}')''')
+
+        dbconn.execSQL(self.conn, 'COMMIT')
+
+    def updateExecutionStep(self, step: RebalanceStep) -> None:
+        dbconn.execSQL(self.conn,
+                       f'''UPDATE {self.schema_name}.{self.segment_move_steps}
+                       SET status='{step.getStatus().name}', step='\\x{step.serializeStep().hex()}' WHERE move_order = {step.getMoveOrder()}''')
+
+    def allExecutionStepsAreDone(self) -> bool:
+        row = dbconn.queryRow(self.conn,
+                              f"SELECT count(1) FROM {self.schema_name}.{self.segment_move_steps} WHERE status <> '{RebalanceStep.Status.DONE.name}'")
+        not_done_count = int(row[0])
+        return not_done_count == 0
+
+    def getExecutionSteps(self, status_filter: List[RebalanceStep.Status]) -> List[RebalanceStep]:
+        result = []
+
+        filter = ""
+        if len(status_filter) > 0:
+            status_list = ', '.join("'" +  status.name + "'" for status in status_filter)
+            filter = f" WHERE status IN ({status_list})"
+
+        cursor = dbconn.query(self.conn,
+                              f'SELECT step FROM {self.schema_name}.{self.segment_move_steps} {filter} ORDER BY move_order')
+        for row in cursor:
+            result.append(deserializeStep(row[0]))
+
+        return result
+

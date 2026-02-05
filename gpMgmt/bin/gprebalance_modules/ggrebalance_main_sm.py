@@ -123,13 +123,12 @@ class GGRebalanceMainSM:
         }
     ]
 
-    def __init__(self, logger: Any, dburl: dbconn.DbURL, options: Any, gpEnv: GpCoordinatorEnvironment, gpArray: gparray.GpArray, gpArrayDumpFilename: str):
+    def __init__(self, conn: dbconn.Connection, logger: Any, dburl: dbconn.DbURL, options: Any, gpEnv: GpCoordinatorEnvironment, gpArray: gparray.GpArray, gpArrayDumpFilename: str):
         self.logger = logger
         self.dburl = dburl
         self.options = options
         self.gparray = gpArray
-        self.conn = dbconn.connect(
-            self.dburl, encoding='UTF8', allowSystemTableMods=True)
+        self.conn = conn
 
         self.rebalance_schema = RebalanceSchema(self.conn)
 
@@ -292,7 +291,7 @@ class GGRebalanceMainSM:
 
     @wrap_state_func_with_faults
     def on_enter_STATE_END(self) -> None:
-        self.conn.close()
+        pass
 
     @wrap_state_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:

@@ -267,6 +267,7 @@ def check_down_segments(logger: Any, dburl: dbconn.DbURL):
             cmd_recoverseg = None
 
 def main(options, args, parser):
+    conn = None
     try:
         signal.signal(signal.SIGTERM, sig_handler)
         signal.signal(signal.SIGHUP, sig_handler)
@@ -313,8 +314,10 @@ def main(options, args, parser):
             logger.error(f"{str(ex)}")
             sys.exit(1)
 
+        conn = dbconn.connect(dburl, encoding='UTF8', allowSystemTableMods=True)
+
         global gg_main_rebalance_SM
-        gg_main_rebalance_SM = GGRebalanceMainSM(logger, dburl, options, gpenv, gparray, gparray_dump_filename)
+        gg_main_rebalance_SM = GGRebalanceMainSM(conn, logger, dburl, options, gpenv, gparray, gparray_dump_filename)
         gg_main_rebalance_SM.run()
 
         sys.exit(0)
@@ -322,6 +325,8 @@ def main(options, args, parser):
         logger.error(f'ggrebalance failed: {e} \n\nExiting...')
         sys.exit(1)
     finally:
+        if conn != None:
+            conn.close()
         remove_pid_file(get_coordinatordatadir())
 
 if __name__ == '__main__':

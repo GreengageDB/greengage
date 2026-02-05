@@ -11,6 +11,7 @@ try:
     from gppylib.system.environment import *
     from gprebalance_modules.planner import *
     from gprebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
+    from gprebalance_modules.rebalance_step import *
     from gppylib.fault_injection import *
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
@@ -24,14 +25,13 @@ class RebalanceSM:
 
     states_main_rebalance_flow = [
         'STATE_REBALANCE_STARTED',
-        'STATE_REBALANCE_MOVE_MIRRORS_STARTED',
-        'STATE_REBALANCE_MOVE_MIRRORS_DONE',
-        'STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_STARTED',
-        'STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_DONE',
-        'STATE_REBALANCE_MOVE_PRIMARIES_STARTED',
-        'STATE_REBALANCE_MOVE_PRIMARIES_DONE',
-        'STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_STARTED',
-        'STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_DONE',
+        'STATE_REBALANCE_PREPARE_MOVES_STARTED',
+        'STATE_REBALANCE_PREPARE_MOVES_DONE',
+        'STATE_REBALANCE_EXECUTION_STARTED',
+        'STATE_REBALANCE_MOVES_SUCCEEDED',
+        'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED',
+        'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE',
+        'STATE_REBALANCE_EXECUTION_DONE',
         'STATE_REBALANCE_DONE'
     ]
 
@@ -47,48 +47,43 @@ class RebalanceSM:
             'dest': 'STATE_REBALANCE_STARTED'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_MOVE_MIRRORS_STARTED',
+            'trigger': 'move_to_STATE_REBALANCE_PREPARE_MOVES_STARTED',
             'source': 'STATE_REBALANCE_STARTED',
-            'dest': 'STATE_REBALANCE_MOVE_MIRRORS_STARTED'
+            'dest': 'STATE_REBALANCE_PREPARE_MOVES_STARTED'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_MOVE_MIRRORS_DONE',
-            'source': 'STATE_REBALANCE_MOVE_MIRRORS_STARTED',
-            'dest': 'STATE_REBALANCE_MOVE_MIRRORS_DONE'
+            'trigger': 'move_to_STATE_REBALANCE_PREPARE_MOVES_DONE',
+            'source': 'STATE_REBALANCE_PREPARE_MOVES_STARTED',
+            'dest': 'STATE_REBALANCE_PREPARE_MOVES_DONE'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_STARTED',
-            'source': 'STATE_REBALANCE_MOVE_MIRRORS_DONE',
-            'dest': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_STARTED'
+            'trigger': 'move_to_STATE_REBALANCE_EXECUTION_STARTED',
+            'source': ['STATE_REBALANCE_PREPARE_MOVES_DONE', 'STATE_REBALANCE_MOVES_SUCCEEDED', 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'],
+            'dest': 'STATE_REBALANCE_EXECUTION_STARTED'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_DONE',
-            'source': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_STARTED',
-            'dest': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_DONE'
+            'trigger': 'move_to_STATE_REBALANCE_MOVES_SUCCEEDED',
+            'source': 'STATE_REBALANCE_EXECUTION_STARTED',
+            'dest': 'STATE_REBALANCE_MOVES_SUCCEEDED'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_MOVE_PRIMARIES_STARTED',
-            'source': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_DONE',
-            'dest': 'STATE_REBALANCE_MOVE_PRIMARIES_STARTED'
+            'trigger': 'move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED',
+            'source': 'STATE_REBALANCE_EXECUTION_STARTED',
+            'dest': 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_MOVE_PRIMARIES_DONE',
-            'source': 'STATE_REBALANCE_MOVE_PRIMARIES_STARTED',
-            'dest': 'STATE_REBALANCE_MOVE_PRIMARIES_DONE'
+            'trigger': 'move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE',
+            'source': 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED',
+            'dest': 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'
         },
         {
-            'trigger': 'move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_STARTED',
-            'source': 'STATE_REBALANCE_MOVE_PRIMARIES_DONE',
-            'dest': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_STARTED'
-        },
-        {
-            'trigger': 'move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_DONE',
-            'source': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_STARTED',
-            'dest': 'STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_DONE'
+            'trigger': 'move_to_STATE_REBALANCE_EXECUTION_DONE',
+            'source': 'STATE_REBALANCE_EXECUTION_STARTED',
+            'dest': 'STATE_REBALANCE_EXECUTION_DONE'
         },
         {
             'trigger': 'move_to_STATE_REBALANCE_DONE',
-            'source': ['STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_DONE', 'STATE_REBALANCE_MOVE_MIRRORS_DONE'],
+            'source': 'STATE_REBALANCE_EXECUTION_DONE',
             'dest': 'STATE_REBALANCE_DONE'
         }
     ]
@@ -139,11 +134,14 @@ class RebalanceSM:
         self.trigger('start')
 
     def process_moves(self, moves: List[LogicalMove]):
+        if len(moves) == 0:
+            return
+
         filename = self.create_config_file(moves)
         gpmovemirrors_options = f'-a -i {filename}'
 
-        if self.options.batch_size is not None:
-            batch_size = self.options.batch_size
+        if self.options.parallel is not None:
+            batch_size = self.options.parallel
             # gpmovemirrors has its own limitation for batch size,
             # need to consider it here.
             if batch_size > MAX_COORDINATOR_NUM_WORKERS:
@@ -243,6 +241,15 @@ class RebalanceSM:
 
         if is_gprecoverseg_required:
             recoverseg_options = "-r -a"
+
+            if self.options.parallel is not None:
+                batch_size = self.options.parallel
+                # gprecoverseg has its own limitation for batch size,
+                # need to consider it here.
+                if batch_size > MAX_COORDINATOR_NUM_WORKERS:
+                    batch_size = MAX_COORDINATOR_NUM_WORKERS
+                recoverseg_options += f' -B {batch_size}'
+
             try:
                 self.cmd = GpRecoverSeg("Running gprecoverseg", options=recoverseg_options)
                 self.cmd.run(validateAfter=True)
@@ -284,8 +291,68 @@ class RebalanceSM:
         return state == self.states_main_rebalance_flow[-1]
 
     def get_state_after_interrupt(self, prev_state) -> str:
+        if (prev_state == 'STATE_REBALANCE_EXECUTION_STARTED' or
+            prev_state == 'STATE_REBALANCE_MOVES_SUCCEEDED' or
+            prev_state == 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'):
+            return 'STATE_REBALANCE_EXECUTION_STARTED'
+
         prev_idx = self.states_main_rebalance_flow.index(prev_state)
+
         return self.states_main_rebalance_flow[prev_idx + 1]
+
+    def reset_in_progress_execution_steps(self) -> None:
+        in_progress_steps = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.IN_PROGRESS])
+        for step in in_progress_steps:
+            step.setStatus(RebalanceStep.Status.PLANNED)
+            self.rebalance_schema.updateExecutionStep(step)
+
+    @staticmethod
+    def convert_moves_to_rebalance_steps(moves: List[LogicalMove]) -> List[RebalanceStep]:
+        # In the loop below we create a list of rebalance execution steps from the plan's list of moves.
+        # Mirror's movemenet is simply translated into single step.
+        # But primary's movement is translated into 3 steps:
+        #   1st is switchover with the mirror;
+        #   2nd is movement itself;
+        #   3rd is the back switchover.
+        # If there are several consequent primary movements, we assume that they can be done in parallel,
+        # and, to allow batch processing for them, we re-order their steps to combine together
+        # the respective switchover and movement steps.
+        rebalance_steps = []
+
+        batch_mirror_steps = []
+        batch_primary_steps = [[],[],[]]
+
+        def fill_rebalance_steps():
+            nonlocal rebalance_steps
+            nonlocal batch_mirror_steps
+            nonlocal batch_primary_steps
+            assert not (len(batch_mirror_steps) > 0 and len(batch_primary_steps[0]) > 0)
+            if len(batch_mirror_steps) > 0:
+                rebalance_steps = rebalance_steps + batch_mirror_steps
+            if len(batch_primary_steps[0]) > 0:
+                flattened_batch_primary_steps = [step for sublist in batch_primary_steps for step in sublist]
+                rebalance_steps = rebalance_steps + flattened_batch_primary_steps
+            # clear the batches
+            batch_mirror_steps = []
+            batch_primary_steps = [[],[],[]]
+
+        prev_move = None
+        for move in moves:
+            # if the move type switched, fill rebalance_steps with the content of
+            # previously gathered batches
+            if prev_move != None and prev_move.seg.getSegmentRole() != move.seg.getSegmentRole():
+                fill_rebalance_steps()
+            prev_move = move
+            # add steps to the current batch
+            if move.seg.isSegmentMirror():
+                batch_mirror_steps.append(RebalanceStepMoveMirror(move))
+            else:
+                batch_primary_steps[0].append(RebalanceStepSwitchoverToMirror(move))
+                batch_primary_steps[1].append(RebalanceStepMoveMirror(move))
+                batch_primary_steps[2].append(RebalanceStepSwitchoverToPrimary(move))
+        fill_rebalance_steps() # fill what's left
+
+        return rebalance_steps
 
     # state callbacks start here
 
@@ -311,50 +378,124 @@ class RebalanceSM:
 
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_STARTED(self) -> None:
-        self.trigger('move_to_STATE_REBALANCE_MOVE_MIRRORS_STARTED')
+        self.trigger('move_to_STATE_REBALANCE_PREPARE_MOVES_STARTED')
 
     @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_MOVE_MIRRORS_STARTED(self) -> None:
-        self.logger.info('Rebalance - start moving mirrors')
-        self.process_moves(self.moves_mirrors)
-        self.logger.info('Rebalance - end moving mirrors')
-        self.trigger('move_to_STATE_REBALANCE_MOVE_MIRRORS_DONE')
+    def on_enter_STATE_REBALANCE_PREPARE_MOVES_STARTED(self) -> None:
+        if not self.rebalance_plan.getMoves():
+            raise Exception('Rebalance executor was launched with a plan without segment movements')
+
+        rebalance_steps = self.convert_moves_to_rebalance_steps(self.rebalance_plan.getMoves())
+
+        self.logger.info('Saving following rebalance execution steps:')
+
+        move_order = 0
+        for step in rebalance_steps:
+            step.setMoveOrder(move_order)
+            move_order += 1
+            self.logger.info(str(step))
+
+        self.rebalance_schema.saveExecutionSteps(rebalance_steps)
+
+        self.logger.info('Saved rebalance execution steps')
+
+        self.trigger('move_to_STATE_REBALANCE_PREPARE_MOVES_DONE')
 
     @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_MOVE_MIRRORS_DONE(self) -> None:
-        if self.primary_segments_to_move:
-            self.trigger('move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_STARTED')
-        else:
-            self.trigger('move_to_STATE_REBALANCE_DONE')
+    def on_enter_STATE_REBALANCE_PREPARE_MOVES_DONE(self) -> None:
+        self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
     @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_STARTED(self) -> None:
-        self.execute_role_swaps(self.primary_segments_to_move, self.RoleSwapDirection.PRIMARY_TO_MIRROR)
-        self.trigger('move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_DONE')
+    def on_enter_STATE_REBALANCE_EXECUTION_STARTED(self) -> None:
+
+        if self.rebalance_schema.allExecutionStepsAreDone():
+            self.trigger('move_to_STATE_REBALANCE_EXECUTION_DONE')
+            return
+
+        # In normal execution we shouldn't have IN_PROGRESS steps at this moment.
+        # If they are presented, it means they are left from previous interrupted run.
+        # Bring them back to PLANNED state, so we can try to process them again.
+        self.reset_in_progress_execution_steps()
+
+        steps_to_execute = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
+
+        if len(steps_to_execute) > 0:
+
+            if steps_to_execute[0].getStatus() == RebalanceStep.Status.APPROVE_REQUIRED:
+                self.trigger('move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED')
+                return
+
+            current_batch = []
+            for step in steps_to_execute:
+                # fill current batch until we found a step that requires approve
+                # (it will be handled the next time we enter this state),
+                if (step.getStatus() == RebalanceStep.Status.APPROVE_REQUIRED or
+                    # or till the type of RebalanceStep changes.
+                    (len(current_batch) > 0 and (type(current_batch[0]) is not type(step)))):
+                    break
+
+                step.setStatus(RebalanceStep.Status.IN_PROGRESS)
+                self.rebalance_schema.updateExecutionStep(step)
+                current_batch.append(step)
+
+            if isinstance(current_batch[0], RebalanceStepMoveMirror):
+                self.logger.info('Rebalance - start moving segments:')
+                moves = [step.getMove() for step in current_batch]
+                for move in moves:
+                    self.logger.info(str(move))
+                self.process_moves(moves)
+                self.logger.info('Rebalance - end moving segments')
+            else:
+                direction = self.RoleSwapDirection.PRIMARY_TO_MIRROR
+                if not isinstance(current_batch[0], RebalanceStepSwitchoverToMirror):
+                    direction = self.RoleSwapDirection.MIRROR_TO_PRIMARY
+                segments = [step.getMove().seg for step in current_batch]
+                self.logger.info(f'Rebalance - start role swap {str(direction)} for segments:')
+                for segment in segments:
+                    self.logger.info(str(segment))
+                self.execute_role_swaps(segments, direction)
+                self.logger.info('Rebalance - end role swap')
+
+            # TODO: check the errored segments here, once we implement rollback for the rebalance.
+            # For now if some error happened, the entire tool will halt its work, so if we reached this point
+            # just mark all steps as done.
+            for step in steps_to_execute:
+                if step.getStatus() == RebalanceStep.Status.IN_PROGRESS:
+                    step.setStatus(RebalanceStep.Status.DONE)
+                    self.rebalance_schema.updateExecutionStep(step)
+
+        self.trigger('move_to_STATE_REBALANCE_MOVES_SUCCEEDED')
 
     @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_SWAP_PREFERRED_ROLES_PRIMARY_TO_MIRROR_DONE(self) -> None:
-        self.trigger('move_to_STATE_REBALANCE_MOVE_PRIMARIES_STARTED')
+    def on_enter_STATE_REBALANCE_MOVES_SUCCEEDED(self) -> None:
+        self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
     @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_MOVE_PRIMARIES_STARTED(self) -> None:
-        self.logger.info('Rebalance - start moving primaries')
-        self.process_moves(self.moves_primaries)
-        self.logger.info('Rebalance - end moving primaries')
-        self.trigger('move_to_STATE_REBALANCE_MOVE_PRIMARIES_DONE')
-
-    @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_MOVE_PRIMARIES_DONE(self) -> None:
-        self.trigger('move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_STARTED')
-
-    @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_STARTED(self) -> None:
-        self.execute_role_swaps(self.primary_segments_to_move, self.RoleSwapDirection.MIRROR_TO_PRIMARY)
-        self.trigger('move_to_STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_DONE')
-
-    @wrap_state_func_with_faults
-    def on_enter_STATE_REBALANCE_SWAP_PREFERRED_ROLES_MIRROR_TO_PRIMARY_DONE(self) -> None:
+    def on_enter_STATE_REBALANCE_EXECUTION_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_DONE')
+
+    @wrap_state_func_with_faults
+    def on_enter_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED(self) -> None:
+
+        # Approve all consequent steps that require approval
+        steps = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
+
+        assert len(steps) > 0
+
+        for step in steps:
+            if step.getStatus() != RebalanceStep.Status.APPROVE_REQUIRED:
+                break
+            # TODO: we'll need to add logic here to get approval from the user in the interactive mode,
+            # once we start implementing the interactive mode.
+            # In non-interactive mode we assume that the switchover is always approved.
+            step.setStatus(RebalanceStep.Status.PLANNED)
+            self.rebalance_schema.updateExecutionStep(step)
+
+        self.trigger('move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE')
+
+    @wrap_state_func_with_faults
+    def on_enter_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE(self) -> None:
+        self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
