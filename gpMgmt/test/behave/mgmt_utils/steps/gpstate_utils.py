@@ -71,10 +71,10 @@ def impl(context, recovery_types, contents):
         hostname = seg_to_display.getSegmentHostName()
         port = seg_to_display.getSegmentPort()
         if recovery_types[index] == "differential":
-            expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+(.+?)[ \t]+([\d,]+)[ \t]+[0-9]+\%".format(hostname, port,
+            expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+(.+?)[ \t]+([\\d,]+)[ \t]+[0-9]+\\%".format(hostname, port,
                                                                                               recovery_types[index])
         else:
-            expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\%".format(hostname, port,
+            expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\\%".format(hostname, port,
                                                                                              recovery_types[index])
         check_stdout_msg(context, expected_msg)
 

@@ -63,7 +63,7 @@ FROM (
             AND tst.oid = dep.objid
         LEFT JOIN pg_class tbl ON tst.oid = tbl.reltoastrelid
         LEFT JOIN pg_class dbl
-            ON REGEXP_REPLACE(tst.oid::regclass::text, 'pg_toast(_temp_\d+)?.pg_toast_', '')::int::regclass::oid = dbl.oid
+            ON REGEXP_REPLACE(tst.oid::regclass::text, 'pg_toast(_temp_\\d+)?.pg_toast_', '')::int::regclass::oid = dbl.oid
         LEFT JOIN pg_class dbl_tst ON dbl.reltoastrelid = dbl_tst.oid
     WHERE tst.relkind='t'
         AND	(
@@ -96,7 +96,7 @@ FROM (
             AND tst.gp_segment_id = dep.gp_segment_id
         LEFT JOIN gp_dist_random('pg_class') tbl ON tst.oid = tbl.reltoastrelid AND tst.gp_segment_id = tbl.gp_segment_id
         LEFT JOIN gp_dist_random('pg_class') dbl
-            ON REGEXP_REPLACE(tst.oid::regclass::text, 'pg_toast(_temp_\d+)?.pg_toast_', '')::int::regclass::oid = dbl.oid
+            ON REGEXP_REPLACE(tst.oid::regclass::text, 'pg_toast(_temp_\\d+)?.pg_toast_', '')::int::regclass::oid = dbl.oid
             AND tst.gp_segment_id = dbl.gp_segment_id
         LEFT JOIN pg_class dbl_tst ON dbl.reltoastrelid = dbl_tst.oid AND tst.gp_segment_id = dbl_tst.gp_segment_id
     WHERE tst.relkind='t'
