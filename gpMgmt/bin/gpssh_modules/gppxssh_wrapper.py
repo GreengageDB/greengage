@@ -5,7 +5,7 @@ import sys
 sys.path.insert(1, sys.path[0] + '/lib')
 from pexpect import pxssh, TIMEOUT
 
-CRNL = '\r\n'
+CRNL = b'\r\n'
 DEBUG_VERBOSE_PRINTING = False
 # experimentally derived that a sequence of tries with delays of
 #  1, 5, 25, 125 secs worked to surmount a 1-second delay (via `tc` test)
@@ -36,7 +36,7 @@ class PxsshWrapper(pxssh.pxssh):
         num_retries = self.sync_retries
         retry_attempt = 0
         success = False
-        while (not success) and retry_attempt <= num_retries:
+        while (not success) and num_retries and retry_attempt <= num_retries:
             # each retry will get an exponentially longer timeout interval
             sync_multiplier_for_this_retry = sync_multiplier * (RETRY_EXPONENT ** retry_attempt)
             start = time.time()
@@ -84,7 +84,7 @@ class PxsshWrapper(pxssh.pxssh):
             try:
                 prompt = self.read_nonblocking(size=1, timeout=0.01)
                 if DEBUG_VERBOSE_PRINTING:
-                    sys.stderr.write(prompt)
+                    sys.stderr.write(prompt.decode())
             except TIMEOUT:
                 break
         if DEBUG_VERBOSE_PRINTING:
