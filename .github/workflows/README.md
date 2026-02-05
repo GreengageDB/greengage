@@ -39,7 +39,7 @@ operating systems:
 
 ## Release Workflow
 
-A separate workflow, `Greengage release`, handles the uploading of Debian packages
+A separate workflow `Greengage release` handles the uploading of Debian package
 to GitHub releases. It is triggered when a release is published and uses a
 composite action to manage package deployment.
 
