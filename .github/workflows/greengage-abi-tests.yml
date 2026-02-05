@@ -7,6 +7,9 @@ concurrency:
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - gh-readonly-queue/** # Trigger for merge queue branch
   pull_request:
     branches: ['**']
 
