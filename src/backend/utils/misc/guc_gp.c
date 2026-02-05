@@ -1297,7 +1297,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"test_AppendOnlyHash_eviction_vs_just_marking_not_inuse", PGC_SUSET, DEVELOPER_OPTIONS,
+		{"test_AppendOnlyHash_eviction_vs_just_marking_not_inuse", PGC_SUSET, DEPRECATED_OPTIONS,
 			gettext_noop("Helps to test evicting the entry for AppendOnlyHash as soon as its usage is done instead of just marking it not inuse."),
 			NULL,
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
