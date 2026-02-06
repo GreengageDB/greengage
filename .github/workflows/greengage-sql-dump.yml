@@ -53,7 +53,7 @@ jobs:
       - name: Determine version from branch
         id: version
         env:
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           case "$BRANCH" in
             main)
