@@ -557,7 +557,7 @@ class GPLoad_FormatOpts_TestCase(unittest.TestCase):
     def test_09_gpload_reuse_table_update_mode_without_reuse(self):
         "9  gpload update mode without reuse"
         f = open(mkpath('query9.sql'),'a')
-        f.write("\\! psql -d reuse_gptest -c 'select count(*) from texttable;'\n"+r"\! psql -d reuse_gptest -c 'select * from texttable where n2=222;'")
+        f.write("\\! psql -d reuse_gptest -c 'select count(*) from texttable;'\n"+"\\! psql -d reuse_gptest -c 'select * from texttable where n2=222;'")
         f.close()
         copy_data('external_file_05.txt','data_file.txt')
         write_config_file(mode='update',reuse_flag='false',file='data_file.txt')
