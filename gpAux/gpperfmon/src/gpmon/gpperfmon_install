@@ -20,8 +20,8 @@ USAGE:   gpperfmon_install --port GPDB_PORT [--enable --password GPMON_PASSWORD]
 '''
 from __future__ import print_function
 
-#from future import standard_library
-#standard_library.install_aliases()
+# from future import standard_library
+# standard_library.install_aliases()
 from builtins import str
 from builtins import object
 import os, sys, time, re
