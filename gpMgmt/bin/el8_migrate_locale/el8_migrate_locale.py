@@ -464,8 +464,8 @@ class migrate(connection):
         with open(self.script_file) as f:
             for line in f:
                 sql = line.strip()
-                if sql.startswith(r"\c"):
-                    db_name = sql.split(r"\c")[1].strip()
+                if sql.startswith("\\c"):
+                    db_name = sql.split("\\c")[1].strip()
                 if (sql.startswith("reindex") and sql.endswith(";") and sql.count(";") == 1):
                     self.dbdict[db_name].append(sql)
                 if (sql.startswith("begin;") and sql.endswith("commit;")):

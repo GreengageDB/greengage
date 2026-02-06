@@ -323,7 +323,7 @@ def modify_sql_file(num):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file,inplace=1):
             if platform.system() in ['Windows', 'Microsoft']:
-                line = line.replace(r"\!gpload ",r"\!gpload.py")
+                line = line.replace("\\!gpload ","\\!gpload.py")
                 line = line.replace("gpload ","gpload.py ")
             else:
                 line = line.replace("gpload.py ","gpload ")
@@ -411,7 +411,7 @@ class GPLoad_Env_TestCase(unittest.TestCase):
         "0  gpload setup"
         for num in range(1,6):
            f = open(mkpath('query%d.sql' % num),'w')
-           f.write(r"\! gpload -f "+mkpath('config/config_file')+ " -d gptest")
+           f.write("\\! gpload -f "+mkpath('config/config_file')+ " -d gptest")
            f.close()
 
     def testQuery01(self):
