@@ -65,7 +65,7 @@ timestampPattern = re.compile(r'\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d(\.\d*)?')
 # GPDB log file. The timestamp format is: YYYY-MM-DD_HHMMSS or the
 # YYYY-MM-DD (to preserve an old behaviour).
 logNameTSPattern = re.compile(
-    '^.*gpdb-(?P<datetime>\\d+-\\d+-\\d+(?P<time>_\\d+)?)\\.csv$'
+    r'^.*gpdb-(?P<datetime>\d+-\d+-\d+(?P<time>_\d+)?)\.csv$'
 )
 
 

@@ -44,9 +44,9 @@ class connection(object):
             if os.path.isfile(file):
                 with open(file) as f:
                     for line in f:
-                        match = re.search('port=\\d+',line)
+                        match = re.search(r'port=\d+',line)
                         if match:
-                            match1 = re.search('\\d+', match.group())
+                            match1 = re.search(r'\d+', match.group())
                             if match1:
                                 return match1.group()
 
@@ -464,8 +464,8 @@ class migrate(connection):
         with open(self.script_file) as f:
             for line in f:
                 sql = line.strip()
-                if sql.startswith("\\c"):
-                    db_name = sql.split("\\c")[1].strip()
+                if sql.startswith(r"\c"):
+                    db_name = sql.split(r"\c")[1].strip()
                 if (sql.startswith("reindex") and sql.endswith(";") and sql.count(";") == 1):
                     self.dbdict[db_name].append(sql)
                 if (sql.startswith("begin;") and sql.endswith("commit;")):
