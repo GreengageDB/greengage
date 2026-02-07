@@ -963,12 +963,20 @@ def impl(context, tname, dbname, nrows):
     check_row_count(context, tname, dbname, int(nrows))
 
 @given('schema "{schema_list}" exists in "{dbname}"')
+@when('schema "{schema_list}" exists in "{dbname}"')
 @then('schema "{schema_list}" exists in "{dbname}"')
 def impl(context, schema_list, dbname):
     schemas = [s.strip() for s in schema_list.split(',')]
     for s in schemas:
         drop_schema_if_exists(context, s.strip(), dbname)
         create_schema(context, s.strip(), dbname)
+
+@given('schema "{schema_list}" is removed in "{dbname}"')
+@then('schema "{schema_list}" is removed in "{dbname}"')
+def impl(context, schema_list, dbname):
+    schemas = [s.strip() for s in schema_list.split(',')]
+    for s in schemas:
+        drop_schema_if_exists(context, s.strip(), dbname)
 
 
 @then('the temporary file "{filename}" is removed')
@@ -977,19 +985,25 @@ def impl(context, filename):
         os.remove(filename)
 
 
-def create_table_file_locally(context, filename, table_list, location=os.getcwd()):
-    tables = table_list.split('|')
+def create_value_list_file_locally(context, filename, value_list, location=os.getcwd()):
+    values = value_list.split('|')
     file_path = os.path.join(location, filename)
     with open(file_path, 'w') as fp:
-        for t in tables:
+        for t in values:
             fp.write(t + '\n')
     context.filename = file_path
 
 
-@given('there is a file "{filename}" with tables "{table_list}"')
-@then('there is a file "{filename}" with tables "{table_list}"')
-def impl(context, filename, table_list):
-    create_table_file_locally(context, filename, table_list)
+@given('there is a file "{filename}" with tables "{list}"')
+@then('there is a file "{filename}" with tables "{list}"')
+@given('there is a file "{filename}" with hosts "{list}"')
+@when('there is a file "{filename}" with hosts "{list}"')
+@then('there is a file "{filename}" with hosts "{list}"')
+@given('there is a file "{filename}" with datadirs "{list}"')
+@when('there is a file "{filename}" with datadirs "{list}"')
+@then('there is a file "{filename}" with datadirs "{list}"')
+def impl(context, filename, list):
+    create_value_list_file_locally(context, filename, list)
 
 
 @given('the row "{row_values}" is inserted into "{table}" in "{dbname}"')
@@ -1622,7 +1636,10 @@ def impl(context, segment_count, filter):
     sql = "SELECT count(*) FROM gp_segment_configuration WHERE %s" % filter
     with closing(dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)) as conn:
         row = dbconn.queryRow(conn, sql)
-    if int(row[0]) != int(segment_count):
+    if segment_count == 'some':
+        if int(row[0]) == 0:
+            raise Exception(f"Expected some segments, but got 0")
+    elif int(row[0]) != int(segment_count):
         raise Exception(f"Expected {segment_count} segments, but got {row[0]}")
 
 @given('the cluster configuration is saved for "{when}"')
@@ -1692,6 +1709,30 @@ def impl(context, seg):
     cmd = Command(name="remove pid", cmdStr='rm -rf /tmp/bgpid', remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
 
+
+@given('a sample {lock_file} file is created using the background pid in the coordinator_data_directory')
+@when('a sample {lock_file} file is created using the background pid in the coordinator_data_directory')
+@then('a sample {lock_file} file is created using the background pid in the coordinator_data_directory')
+def impl(context, lock_file):
+    if 'bg_pid' in context:
+        bg_pid = context.bg_pid
+        if not unix.check_pid(bg_pid):
+            raise Exception("The background process with PID {} is not running.".format(bg_pid))
+    else:
+        bg_pid = ""
+
+    utility_pidfile = os.path.join(get_coordinatordatadir(), lock_file)
+
+    with open(utility_pidfile, 'w') as f:
+        f.write(bg_pid)
+
+@given('a sample {lock_file} file is removed from the coordinator_data_directory')
+@when('a sample {lock_file} file is removed from the coordinator_data_directory')
+@then('a sample {lock_file} file is removed from the coordinator_data_directory')
+def impl(context, lock_file):
+    utility_pidfile = os.path.join(get_coordinatordatadir(), lock_file)
+    if os.path.exists(utility_pidfile):
+        os.remove(utility_pidfile)
 
 @when('{process} is killed on mirror with content {contentids}')
 @then('{process} is killed on mirror with content {contentids}')
@@ -2866,7 +2907,7 @@ def _create_working_directory(context, working_directory, mode=''):
         os.mkdir(context.working_directory)
 
 
-def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group'):
+def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group', number_of_segments=2):
     if segment_host_list == "":
         segment_host_list = []
     else:
@@ -2888,7 +2929,10 @@ def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames=
     except:
         pass
 
-    testcluster = TestCluster(hosts=[coordinator_host]+segment_host_list, base_dir=context.working_directory,hba_hostnames=hba_hostnames)
+    testcluster = TestCluster(hosts=[coordinator_host]+segment_host_list,
+                              base_dir=context.working_directory,
+                              hba_hostnames=hba_hostnames,
+                              number_of_segments=number_of_segments)
     testcluster.reset_cluster()
     testcluster.create_cluster(with_mirrors=with_mirrors, mirroring_configuration=mirroring_configuration)
     context.gpexpand_mirrors_enabled = with_mirrors
@@ -2912,6 +2956,10 @@ def impl(context, coordinator_host, segment_host_list):
 @given('a cluster is created with "{mirroring_configuration}" segment mirroring on "{coordinator_host}" and "{segment_host_list}"')
 def impl(context, mirroring_configuration, coordinator_host, segment_host_list):
     _create_cluster(context, coordinator_host, segment_host_list, with_mirrors=True, mirroring_configuration=mirroring_configuration)
+
+@given('a cluster is created with mirrors on "{coordinator_host}" and "{segment_host_list}", with {number_of_segments} segments on each')
+def impl(context, coordinator_host, segment_host_list, number_of_segments):
+    _create_cluster(context, coordinator_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', number_of_segments=int(number_of_segments))
 
 @given('the user runs gpexpand interview to add {num_of_segments} new segment and {num_of_hosts} new host "{hostnames}"')
 @when('the user runs gpexpand interview to add {num_of_segments} new segment and {num_of_hosts} new host "{hostnames}"')

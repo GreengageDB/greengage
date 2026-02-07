@@ -554,15 +554,19 @@ def validate_hosts_basic(hosts: str, option_name: str):
         raise ValidationError(f" --{option_name} must not contain IP adress and hostname simultaniously")
 
 def get_hosts_from_file(file, option_name) -> str:
-    result = ""
+    hosts = []
     with open(file, 'r') as fp:
         i = 0
         for line in fp:
-            i += 1
             if i >= 1000:
                 raise ValidationError(f" --{option_name} contains more than 1000 hosts")
-            result = ", ".join(line.strip())
-    return result
+            hostname = line.strip()
+            if hostname != '':
+                hosts.append(line.strip())
+                i += 1
+    if len(hosts) == 0:
+        raise Exception(f"Empty '{file}' file")
+    return ", ".join(hosts)
 
 @dataclass
 class SegmentId:

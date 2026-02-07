@@ -16,6 +16,7 @@ try:
     from gprebalance_modules.shrink import GGShrink, DBNAME
     from gprebalance_modules.ggrebalance_main_sm import GGRebalanceMainSM
     from gprebalance_modules.planner import *
+    from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
@@ -196,7 +197,18 @@ def check_running_gputils(dburl: dbconn.DbURL, coordinator_data_directory: str):
         except IOError:
             pass
 
+    gpexpand_status_file = 'gpexpand.status'
+    if os.path.exists(os.path.join(coordinator_data_directory, gpexpand_status_file)):
+        logger.error(f'{gpexpand_status_file} file exists. Assuming gpexpand is already running.')
+        sys.exit(1)
+
     with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+        cursor = dbconn.query(conn, "SELECT oid FROM pg_namespace WHERE nspname='gpexpand'")
+        if cursor.rowcount > 0:
+            logger.error(
+                '''gpexpand schema exists. Assuming gpexpand is already running.''')
+            sys.exit(1)
+
         cursor = dbconn.query(conn, '''SELECT datid
                     FROM pg_stat_activity
                     WHERE application_name LIKE 'gpbackup%' OR
@@ -209,6 +221,12 @@ def check_running_gputils(dburl: dbconn.DbURL, coordinator_data_directory: str):
     if is_gprecoverseg_running():
         logger.error(
             '''gprecoverseg is already running.''')
+        sys.exit(1)
+
+    segments_with_running_basebackup = get_segments_with_running_basebackup()
+    if len(segments_with_running_basebackup) > 0:
+        logger.error(
+            f'''Segments {segments_with_running_basebackup} have running pg_basebackup.''')
         sys.exit(1)
 
 

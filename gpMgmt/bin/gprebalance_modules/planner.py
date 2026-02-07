@@ -480,6 +480,9 @@ class Planner:
         self.logger = logger
         self.virtual_gparray = deepcopy(self.gparray)
 
+        if not self.virtual_gparray.hasMirrors:
+            raise ValidationError("Cluster has mirroring disabled. Can't proceed with rebalance")
+
         if self.options.target_hosts_file:
                 self.options.target_hosts = get_hosts_from_file(self.options.target_hosts_file, "target-hosts-file")
         if self.options.add_hosts_file:
@@ -739,9 +742,6 @@ class Planner:
 
     def form_moves(self) -> List[LogicalMove]:
         self.logger.info("Validation of rebalance possibility")
-
-        if not self.virtual_gparray.hasMirrors:
-            raise ValidationError("Cluster has mirroring disabled. Can't proceed with rebalance")
 
         for pair in self.virtual_gparray.segmentPairs:
             prim = pair.primaryDB
