@@ -104,4 +104,5 @@ installcheck:
 	$(MAKE) -C gp_percentile_agg installcheck
 	$(MAKE) -C gp_subtransaction_overflow installcheck
 	$(MAKE) -C gp_check_functions installcheck
+	$(MAKE) -C temp_tables_stat installcheck
 
