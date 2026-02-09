@@ -25,7 +25,7 @@ RUN set -eux; \
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Install allure-behave for behave tests
     if [ "$UBUNTU_VERSION" = "22.04" ]; then \
-        pip2 install --no-cache-dir allure-behave==2.4.0; \
+        pip2 install --no-cache-dir allure-behave==2.4.0 future; \
     else \
         pip3 install --no-cache-dir --break-system-packages allure-behave==2.4.0 future; \
     fi; \
