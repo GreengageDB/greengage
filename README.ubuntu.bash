@@ -48,13 +48,13 @@ apt-get install -y \
   sudo \
   zlib1g-dev
 
-if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "24.04" ]; then
-  apt-get install -y \
-    python3-pip \
-    python-is-python3;
-else
+if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; then
   apt-get install -y \
     python-pip \
     python2 \
     python2-dev
+else
+  apt-get install -y \
+    python3-pip \
+    python-is-python3;
 fi
