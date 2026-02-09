@@ -269,7 +269,7 @@ class Session(cmd.Cmd):
         pass
 
     def escapeLine(self, line):
-        R'''Escape occurrences of \ and $ as needed and package the line as an "eval" shell command'''
+        r'''Escape occurrences of \ and $ as needed and package the line as an "eval" shell command'''
         line = line.strip()
         if line == 'EOF' or line == 'exit' or line == 'quit':
             raise self.SessionCmdExit()
