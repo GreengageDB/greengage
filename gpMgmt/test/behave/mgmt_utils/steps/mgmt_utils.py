@@ -46,9 +46,7 @@ from gppylib import pgconf
 from gppylib.parseutils import canonicalize_address
 
 default_locale = None
-master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
-if master_data_dir is None:
-    raise Exception('Please set MASTER_DATA_DIRECTORY in environment')
+master_data_dir = None
 
 def show_all_installed(gphome):
     x = platform.linux_distribution()
@@ -80,15 +78,24 @@ def create_local_demo_cluster(context, extra_config='', with_mirrors='true', wit
         num_primaries = os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3)
 
     os.environ['PGPORT'] = '15432'
+    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+    global master_data_dir
+    master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+    os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+
     cmd = """
         cd ../gpAux/gpdemo &&
         export DEMO_PORT_BASE={port_base} &&
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} &&
+        export PGPORT={pgport} &&
+        export MASTER_DATA_DIRECTORY={master_data_dir} &&
         export WITH_STANDBY={with_standby} &&
         export WITH_MIRRORS={with_mirrors} &&
         ./demo_cluster.sh -d && ./demo_cluster.sh -c &&
         {extra_config} ./demo_cluster.sh
     """.format(port_base=os.getenv('PORT_BASE', 15432),
+               pgport=os.getenv('PGPORT', 15432),
+               master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                num_primary_mirror_pairs=num_primaries,
                with_mirrors=with_mirrors,
                with_standby=with_standby,
@@ -150,10 +157,6 @@ def impl(context, checksum_toggle):
 
 @given('the cluster is generated with "{num_primaries}" primaries only')
 def impl(context, num_primaries):
-    os.environ['PGPORT'] = '15432'
-    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
-    os.environ['MASTER_DATA_DIRECTORY'] = "%s/datadirs/qddir/demoDataDir-1" % demoDir
-
     create_local_demo_cluster(context, with_mirrors='false', with_standby='false', num_primaries=num_primaries)
 
     context.gpexpand_mirrors_enabled = False
@@ -283,19 +286,27 @@ def impl(context, checksum_toggle):
             is_ok = False
 
     if not is_ok:
-        stop_database(context)
+        stop_database_if_started(context)
 
         os.environ['PGPORT'] = '15432'
         port_base = os.getenv('PORT_BASE', 15432)
+        demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+        global master_data_dir
+        master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+        os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
 
         cmd = """
         cd ../gpAux/gpdemo; \
             export DEMO_PORT_BASE={port_base} && \
             export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
+            export PGPORT={pgport} &&
+            export MASTER_DATA_DIRECTORY={master_data_dir} &&
             export WITH_MIRRORS={with_mirrors} && \
             ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
             env EXTRA_CONFIG="HEAP_CHECKSUM={checksum_toggle}" ./demo_cluster.sh
         """.format(port_base=port_base,
+                   pgport=os.getenv('PGPORT', 15432),
+                   master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                    num_primary_mirror_pairs=os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3),
                    with_mirrors='true',
                    checksum_toggle=checksum_toggle)
@@ -2196,6 +2207,29 @@ def impl(context, dbname):
     drop_database_if_exists(context, dbname)
     create_database(context, dbname)
 
+@given('database with special characters "{dbname}" is created if not exists')
+@when('database with special characters "{dbname}" is created if not exists')
+@then('database with special characters "{dbname}" is created if not exists')
+def impl(context, dbname):
+    context.exception = None    
+    if not check_db_exists(dbname.replace("'", "''")):
+        createdb_cmd = 'psql -d postgres -c \'CREATE DATABASE "%s";\'' % dbname.replace('"', '""')
+        run_command(context, createdb_cmd)
+    if context.exception:
+        raise context.exception
+
+@given('database with special characters "{dbname}" is dropped if exists')
+@when('database with special characters "{dbname}" is dropped if exists')
+@then('database with special characters "{dbname}" is dropped if exists')
+def impl(context, dbname):
+    context.exception = None    
+    if check_db_exists(dbname.replace("'", "''")):
+        dropdb_cmd = 'psql -d postgres -c \'DROP DATABASE "%s";\'' % dbname.replace('"', '""')
+        run_command(context, dropdb_cmd)
+    if context.exception:
+        raise context.exception
+
+
 @then('validate gpcheckcat logs contain skipping ACL and Owner tests')
 def imp(context):
     dirname = 'gpAdminLogs'
@@ -2513,6 +2547,30 @@ def impl(context, sql, boolean):
         if _str2bool(result) != _str2bool(boolean):
             raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
 
+@then('wait until the history of database with special characters "{dbname}" appears')
+def impl(context, dbname):
+    escape_dbname = dbname.replace('"', '\\"')
+    cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "select count(*) > 0 from queries_history where db=\'%s\';"' % escape_dbname)
+    start_time = current_time = datetime.now()
+    result = None
+    while (current_time - start_time).seconds < 120:
+        cmd.run()
+        if cmd.get_return_code() != 0:
+            break
+        result = cmd.get_stdout()
+        if _str2bool(result):
+            break
+        time.sleep(2)
+        current_time = datetime.now()
+
+    if cmd.get_return_code() != 0:
+        context.ret_code = cmd.get_return_code()
+        context.error_message = 'psql internal error: %s' % cmd.get_stderr()
+        check_return_code(context, 0)
+    else:
+        if not _str2bool(result):
+            raise Exception("history of '%s' did not appear" % (dbname))
+
 @then('check that the result from boolean sql "{sql}" is "{boolean}"')
 def impl(context, sql, boolean):
     cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "%s"' % sql)
@@ -2634,6 +2692,14 @@ def impl(context):
     raise Exception("File: %s is empty" % gpdb_alert_file_path_src)
 
 
+@given("_queries_tail.dat is not clogged")
+def impl(context):
+    filename = '%s/gpperfmon/data/_queries_tail.dat' % os.getenv("MASTER_DATA_DIRECTORY")
+    with open(filename, 'w') as f:
+        f.truncate()
+    filename = '%s/gpperfmon/data/queries_tail.dat' % os.getenv("MASTER_DATA_DIRECTORY")
+    with open(filename, 'w') as f:
+        f.truncate()
 
 @then('the file with the fake timestamp no longer exists')
 def impl(context):
@@ -4198,7 +4264,7 @@ def impl(context):
      cmd.run(validateAfter=True)
      hostname = cmd.get_stdout()
      # Update entry in current /etc/hosts file to add new host-address
-     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts; sudo cp -f /tmp/hosts /etc/hosts;rm /tmp/hosts"
+     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts && sudo cp -f /tmp/hosts /etc/hosts && rm /tmp/hosts"
                                                         %(hostname, hostname, hostname))
      cmd.run(validateAfter=True)
 
@@ -4271,7 +4337,7 @@ def impl(context):
 @then('restore /etc/hosts file and cleanup hostlist file')
 @when('restore /etc/hosts file and cleanup hostlist file')
 def impl(context):
-    cmd = "sudo mv -f /tmp/hosts_orig /etc/hosts; rm -f /tmp/clusterConfigFile-1; rm -f /tmp/hostfile--1"
+    cmd = "sudo cp -f /tmp/hosts_orig /etc/hosts && sudo rm /tmp/hosts_orig && rm -f /tmp/clusterConfigFile-1 && rm -f /tmp/hostfile--1"
     context.execute_steps(u'''Then the user runs command "%s"''' % cmd)
 
 @given('create a gpcheckperf input host file')

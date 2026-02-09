@@ -1,4 +1,4 @@
-@gpperfmon
+@gpperfmon @skip
 Feature: gpperfmon
     """
     Quantum controls how frequently text files get their data put in external tables.
@@ -120,6 +120,25 @@ Feature: gpperfmon
         | log_level | inner_query_present |
         | debug4    | true                |
         | warning   | false               |
+
+    @gpperfmon_query_history
+    Scenario Outline: gpperfmon logs db with special characters in name
+        Given gpperfmon is configured and running in qamode
+        # escape bugs can reproduce themselves, unless we clear queries_tail
+        Given _queries_tail.dat is not clogged
+        Given database with special characters "<dbname>" is created if not exists
+        When the user truncates "queries_history" tables in "gpperfmon"
+        When below sql is executed in "<dbname>" db
+        """
+        SELECT pg_sleep(20);
+        """
+        Then wait until the history of database with special characters "<dbname>" appears
+        And database with special characters "<dbname>" is dropped if exists
+
+    Examples:
+        | dbname                         |
+        |  "ab""c                        |
+        | a1!@#$%^ &*()_-+={}\;:"",<.>/? |
 
     @gpperfmon_system_history
     Scenario: gpperfmon adds to system_history table

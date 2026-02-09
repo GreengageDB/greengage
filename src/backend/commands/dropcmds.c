@@ -26,6 +26,7 @@
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/syscache.h"
 #include "cdb/cdbvars.h"
 
@@ -57,16 +58,20 @@ RemoveObjects(DropStmt *stmt)
 	ObjectAddresses *objects;
 	ListCell   *cell1;
 	ListCell   *cell2 = NULL;
+	ListCell   *next;
+	ListCell   *prev = NULL;
 
 	objects = new_object_addresses();
 
-	foreach(cell1, stmt->objects)
+	for (cell1 = list_head(stmt->objects); cell1; cell1 = next)
 	{
 		ObjectAddress address;
 		List	   *objname = lfirst(cell1);
 		List	   *objargs = NIL;
 		Relation	relation = NULL;
 		Oid			namespaceId;
+
+		next = lnext(cell1);
 
 		if (stmt->arguments)
 		{
@@ -90,6 +95,12 @@ RemoveObjects(DropStmt *stmt)
 		{
 			Assert(stmt->missing_ok);
 			does_not_exist_skipping(stmt->removeType, objname, objargs);
+
+			if (gp_dispatch_drop_always)
+				prev = cell1;
+			else
+				stmt->objects = list_delete_cell(stmt->objects, cell1, prev);
+
 			continue;
 		}
 
@@ -129,6 +140,8 @@ RemoveObjects(DropStmt *stmt)
 			heap_close(relation, NoLock);
 
 		add_exact_object_address(&address, objects);
+
+		prev = cell1;
 	}
 
 	/* Here we really delete them. */

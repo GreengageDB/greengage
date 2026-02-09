@@ -38,7 +38,7 @@ BEGIN
   RETURN NEXT r;
   RETURN;
 END
-$$ language plpgsql;
+$$ language plpgsql IMMUTABLE;
 
 -- function in select clause
 select foost(1);
@@ -101,7 +101,7 @@ BEGIN
    RETURN NEXT rec;
    return;
 END
-$$  LANGUAGE plpgsql;
+$$  LANGUAGE plpgsql IMMUTABLE;
 
 -- function in select clause
 --   Fails: plpgsql does not support SFRM_Materialize
@@ -173,7 +173,7 @@ BEGIN
   RETURN NEXT;
   RETURN;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql IMMUTABLE;
 
 -- function in select clause
 select fooro(1);
@@ -231,7 +231,7 @@ BEGIN
   RETURN NEXT;
   RETURN;
 END
-$$ language plpgsql;
+$$ language plpgsql IMMUTABLE;
 
 -- function in select clause
 select foot(1);

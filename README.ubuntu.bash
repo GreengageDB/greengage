@@ -1,20 +1,24 @@
 #!/bin/bash
-
+# Some packages, for example KRB5, not installing properly without this option
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
   bison \
   build-essential \
   cmake \
+  curl \
   debhelper \
   devscripts \
   dh-python \
-  curl \
+  fakeroot \
   flex \
   g++ \
   gcc \
   git \
   iproute2 \
   iputils-ping \
+  krb5-admin-server \
+  krb5-kdc \
   libapr1-dev \
   libaprutil1-dev \
   libbz2-dev \
@@ -38,7 +42,11 @@ apt-get install -y \
   openssh-client \
   openssh-server \
   pkg-config \
+  protobuf-compiler \
+  python-pip \
   python2 \
   python2-dev \
+  python3-dev \
   rsync \
+  sudo \
   zlib1g-dev

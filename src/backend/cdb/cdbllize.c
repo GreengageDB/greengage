@@ -432,28 +432,16 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (node == NULL)
 		return NULL;
 
+#ifdef USE_ASSERT_CHECKING
 	if (IsA(node, FunctionScan))
 	{
 		RangeTblEntry *rte;
-		ListCell   *lc;
 
 		rte = rt_fetch(((Scan *) node)->scanrelid, ctx->rtable);
 		Assert(rte->rtekind == RTE_FUNCTION);
-
-		foreach(lc, rte->functions)
-		{
-			RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
-
-			if (rtfunc->funcexpr &&
-				ContainsParamWalker(rtfunc->funcexpr, NULL /* ctx */ ) && ctx->subPlanDistributed)
-			{
-				ereport(ERROR,
-						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("cannot parallelize that query yet"),
-						 errdetail("In a subquery FROM clause, a function invocation cannot contain a correlated reference.")));
-			}
-		}
+		Assert(rte->functions == NIL);
 	}
+#endif
 
 	/*
 	 * If the ModifyTable node appears inside the correlated Subplan, it has
@@ -465,6 +453,7 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 	if (IsA(node, SeqScan)
 		||IsA(node, ShareInputScan)
 		||IsA(node, ExternalScan)
+		||IsA(node, FunctionScan)
 		||(IsA(node, SubqueryScan) && IsA(((SubqueryScan *) node)->subplan, ModifyTable))
 		||IsA(node,ModifyTable))
 	{
@@ -479,9 +468,29 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 		 * unnest(array[typoutput, typsend]) from pg_type) then 'upg_catalog.'
 		 * else 'pg_catalog.' end) FROM pg_proc p;
 		 **/
-		Assert(scanPlan->flow);
+		Assert(scanPlan->flow && ctx->currentPlanFlow);
+
+		if (scanPlan->flow->locustype == CdbLocusType_General)
+			return node;
+
 		if (scanPlan->flow->locustype == CdbLocusType_Entry)
-			return (Node *) node;
+		{
+			if (ctx->currentPlanFlow->locustype == CdbLocusType_Entry)
+				return node;
+
+			if (ctx->currentPlanFlow->locustype == CdbLocusType_General)
+				return node;
+		}
+
+		if (IsA(node, FunctionScan))
+		{
+			FunctionScan *fscan = (FunctionScan *) node;
+
+			if (ContainsParamWalker((Node *) fscan->functions, NULL /* ctx */ ))
+				ereport(ERROR,
+						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
+						 errmsg("cannot materialize function with correlated parameters")));
+		}
 
 		/**
 		 * Steps:
@@ -601,6 +610,13 @@ ParallelizeCorrelatedSubPlanMutator(Node *node, ParallelizeCorrelatedPlanWalkerC
 			if (scanPlan->flow->locustype != CdbLocusType_Replicated)
 				broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
 					   ctx->currentPlanFlow->numsegments /* numsegments */ );
+		}
+		else if (ctx->currentPlanFlow->locustype == CdbLocusType_SegmentGeneral &&
+				 scanPlan->flow->locustype == CdbLocusType_Entry)
+		{
+			/* We still need broadcast from entry-db to one segment. */
+			broadcastPlan(scanPlan, false /* stable */ , false /* rescannable */ ,
+					   1 /* numsegments */ );
 		}
 		else
 		{

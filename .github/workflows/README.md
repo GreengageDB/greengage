@@ -37,6 +37,41 @@ operating systems:
   DockerHub. Runs for push to `main` (retags to `latest`) and tags (uses tag
   like `6.28.2`) after build.
 
+## Release Workflow
+
+A separate workflow, `Greengage release`, handles the uploading of Debian packages
+to GitHub releases. It is triggered when a release is published and uses a
+composite action to manage package deployment.
+
+### Key Features
+
+- **Triggers:** `release: [published]` - Runs when a release is published,
+including re-publishing.
+- **Concurrency:** Uses the same concurrency group as the CI workflow
+(`Greengage CI-${{ github.ref }}`) to ensure proper sequencing and prevent race
+conditions.
+- **Cache-based Artifacts:** Restores built packages from cache using the
+commit SHA as the key, rather than downloading artifacts from previous jobs.
+- **Manual Recovery:** If the cache is missing, the workflow checks the status
+of the last build for the tag and provides clear instructions for manual
+intervention. It does not automatically trigger builds to avoid infinite loops.
+- **Safe Uploads:** Uploads packages with fixed naming patterns and optional
+overwrite (`clobber` flag).
+
+### Behavior
+
+1. **Normal Flow (Cache Available):** Restores packages from cache, renames
+them to the pattern `${PACKAGE_NAME}${VERSION}.${EXT}`, and uploads to the
+release.
+2. **Cache Miss Scenarios:**
+   - **No previous build or previous build successful:** Provides instructions
+   to manually trigger the CI build, then restart the release workflow.
+   - **Previous build failed:** Reports the failure with a link to the failed
+   run and requires manual fixing before retrying.
+
+The release workflow is designed to be robust and provide clear feedback when
+issues occur, ensuring that releases are always consistent and reliable.
+
 ## Configuration
 
 The workflow is parameterized to support flexibility:

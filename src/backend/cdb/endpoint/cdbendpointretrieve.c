@@ -32,6 +32,7 @@
 #include "postgres.h"
 
 #include "access/xact.h"
+#include "nodes/parsenodes.h"
 #include "storage/ipc.h"
 #include "utils/backend_cancel.h"
 #include "utils/dynahash.h"
@@ -154,6 +155,12 @@ AuthEndpoint(Oid userID, const char *tokenStr)
 	}
 
 	return found;
+}
+
+int
+RetrieveSessionId(void)
+{
+	return RetrieveCtl.sessionID;
 }
 
 /*
@@ -402,6 +409,12 @@ validate_retrieve_endpoint(Endpoint *endpoint, const char *endpointName)
 				 errmsg("endpoint %s was already attached by receiver(pid: %d)",
 						endpointName, endpoint->receiverPid),
 				 errdetail("An endpoint can only be attached by one retrieving session.")));
+	}
+
+	if (ShouldUseRetrieveResGroup())
+	{
+		/* We should have assigned the resource group already. */
+		Assert(ResGroupIsAssigned() || ResGroupIsBypassed());
 	}
 }
 
@@ -749,6 +762,15 @@ retrieve_exit_callback(int code, Datum arg)
 			detach_receiver_mq(entry);
 	}
 	entryHTB = NULL;
+
+	/*
+	 * Unassign resource group once at process exit.
+	 * Called here after all endpoint cleanup is done.
+	 */
+	if (ShouldUnassignResGroup())
+	{
+		UnassignResGroup();
+	}
 }
 
 /*
@@ -772,7 +794,15 @@ retrieve_xact_callback(XactEvent ev, void *arg pg_attribute_unused())
 				retrieve_cancel_action(RetrieveCtl.current_entry,
 									   "Endpoint retrieve statement aborted");
 			finish_retrieve(true);
+		}
 
+		/*
+		 * Unassign resource group once at transaction abort.
+		 * Called here after all endpoint cleanup is done.
+		 */
+		if (ShouldUnassignResGroup())
+		{
+			UnassignResGroup();
 		}
 	}
 }

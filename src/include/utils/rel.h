@@ -451,6 +451,9 @@ typedef struct ViewOptions
 #define RelationIsMapped(relation) \
 	((relation)->rd_rel->relfilenode == InvalidOid)
 
+#define RelationStorageIsAO(relation) \
+	(RelationIsAoRows(relation) || RelationIsAoCols(relation))
+
 /*
  * RelationOpenSmgr
  *		Open the relation at the smgr level, if not already done.
@@ -458,7 +461,10 @@ typedef struct ViewOptions
 #define RelationOpenSmgr(relation) \
 	do { \
 		if ((relation)->rd_smgr == NULL) \
-			smgrsetowner(&((relation)->rd_smgr), smgropen((relation)->rd_node, (relation)->rd_backend)); \
+		{                                                                                                          \
+			smgrsetowner(&((relation)->rd_smgr), smgropen((relation)->rd_node, (relation)->rd_backend));           \
+			(relation)->rd_smgr->smgr_which = RelationStorageIsAO(relation) ? RELSTORAGE_AOROWS : RELSTORAGE_HEAP; \
+		}                                                                                                          \
 	} while (0)
 
 /*
