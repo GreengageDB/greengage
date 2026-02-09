@@ -90,7 +90,7 @@ def run(cmd):
     rc = False if p.wait() else True
     return (rc,ret)
 
-R'''
+r'''
 def getPortCoordinatorOnly(host = 'localhost',coordinator_value = None,
                       user = os.environ.get('USER'),gphome = os.environ['GPHOME'],
                       cdd=get_coordinatordatadir(),port = os.environ['PGPORT']):
