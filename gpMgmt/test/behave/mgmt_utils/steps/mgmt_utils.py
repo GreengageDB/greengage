@@ -3128,6 +3128,7 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
     global master_data_dir
     master_data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+    os.environ['PGPORT'] = '10300'
 
     try:
         with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
