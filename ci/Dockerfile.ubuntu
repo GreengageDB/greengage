@@ -36,6 +36,7 @@ RUN set -eux; \
 ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 FROM base AS build
+ARG UBUNTU_VERSION
 
 COPY . gpdb_src
 
