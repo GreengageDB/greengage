@@ -81,3 +81,11 @@ jobs:
           name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
           path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
           if-no-files-found: error
+
+      - name: Upload diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diffs_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
+          path: /mnt/logs/${{ matrix.target_os }}_postgres_regression.diffs.tar
+          if-no-files-found: ignore
