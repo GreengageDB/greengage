@@ -48,7 +48,7 @@ apt-get install -y \
   sudo \
   zlib1g-dev
 
-if [ "$(lsb_release -r -s)" = "Ubuntu 24.04.5 LTS"]; then
+if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "24.04" ]; then
   USE_PYTHON3_ONLY=1
 fi
 
@@ -56,19 +56,9 @@ if [[ -n "$USE_PYTHON3_ONLY" ]]; then
   apt-get install -y \
     python3-pip \
     python-is-python3;
-  PIP_FLAGS="--break-system-packages";
 else
   apt-get install -y \
     python-pip \
     python2 \
     python2-dev
-  if [ -n "$SET_PYTHON2_DEFAULT" ]; then
-    ln -s python2 /usr/bin/python;
-  fi
-  PIP_FLAGS=""
-fi
-
-# Install allure-behave for behave tests
-if [ -n "$INSTALL_ALLURE_BEHAVE" ]; then
-  python -m pip install --no-cache-dir $PIP_FLAGS allure-behave==2.4.0;
 fi
