@@ -1,12 +1,15 @@
+from __future__ import absolute_import
+# from future import standard_library
+# standard_library.install_aliases()
 import os
-import StringIO
+import io
 
 from mock import patch
 
 from commands.unix import RemoveFile, RemoveDirectory, RemoveDirectoryContents, RemoveGlob, REMOTE,Command,isScpEnabled
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.commands.base import CommandResult
-
+import six
 
 class CommandsUnix(GpTestCase):
     """
@@ -124,7 +127,7 @@ class CommandsUnix(GpTestCase):
     def test_isScpEnabled_when_executable_is_present(self, mock_cmd_run):
         self.assertTrue(isScpEnabled(["localhost"]))
 
-    @patch('sys.stdout', new_callable=StringIO.StringIO)
+    @patch('sys.stdout', new_callable=six.StringIO)
     @patch('gppylib.commands.unix.Command.run', side_effect=[None, Exception()])
     def test_isScpEnabled_when_executable_is_not_present(self, mock_cmd_run, mock_stdout):
         self.assertFalse(isScpEnabled(["localhost", "invalid_host"]))

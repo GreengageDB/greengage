@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+from __future__ import print_function
+from builtins import str
+from builtins import range
 import fileinput
 import os
 import pipes
@@ -29,10 +32,14 @@ master_data_dir = None
 
 
 def execute_sql(dbname, sql):
-    result = None
-
     with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
-        result = dbconn.execSQL(conn, sql)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+def query_sql(dbname, sql):
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        cursor = dbconn.execSQL(conn, sql)
+        result = cursor.fetchall()
         conn.commit()
 
     return result
@@ -62,7 +69,7 @@ def run_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -76,7 +83,7 @@ def run_async_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         proc = cmd.runNoWait()
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
     context.async_proc = proc
 
@@ -85,8 +92,8 @@ def run_cmd(command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
-        print 'caught exception %s' % e
+    except ExecutionError as e:
+        print('caught exception %s' % e)
 
     result = cmd.get_results()
     return (result.rc, result.stdout, result.stderr)
@@ -109,7 +116,7 @@ def run_gpcommand(context, command, cmd_prefix=''):
         cmd = Command(name='run %s' % command, cmdStr='%s;$GPHOME/bin/%s' % (cmd_prefix, command))
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -133,7 +140,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, unicode):
+    if isinstance(msg, str):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):
@@ -272,7 +279,8 @@ def create_database_if_not_exists(context, dbname, host=None, port=0, user=None)
     if not check_db_exists(dbname, host, port, user):
         create_database(context, dbname, host, port, user)
     context.dbname = dbname
-    context.conn = dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)
+    if not hasattr(context, 'conn'):
+        context.conn = dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)
 
 def create_database(context, dbname=None, host=None, port=0, user=None):
     LOOPS = 10
@@ -700,7 +708,7 @@ def are_segments_running():
     result = True
     for seg in segments:
         if seg.status != 'u':
-            print "segment is not up - %s" % seg
+            print("segment is not up - %s" % seg)
             result = False
     return result
 
@@ -718,7 +726,7 @@ def modify_sql_file(file, hostport):
         for line in fileinput.FileInput(file, inplace=1):
             if line.find("gpfdist") >= 0:
                 line = re.sub(r'(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
-            print str(re.sub('\n', '', line))
+            print(str(re.sub('\n', '', line)))
 
 
 def remove_dir(host, directory):

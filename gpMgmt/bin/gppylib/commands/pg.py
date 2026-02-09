@@ -3,6 +3,9 @@
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
 #
 
+from __future__ import absolute_import
+#from builtins import str
+from builtins import object
 import os
 import pipes
 
@@ -10,8 +13,8 @@ from gppylib.gplog import *
 from gppylib.gparray import *
 from gppylib.db import dbconn
 from contextlib import closing
-from base import *
-from unix import *
+from .base import *
+from .unix import *
 from gppylib.commands.base import *
 from gppylib.commands.gp import RECOVERY_REWIND_APPNAME
 from pygresql import pg
@@ -167,7 +170,7 @@ def killPgProc(db,procname,signal):
     return (parentPID,procPID)
 
 
-class PgReplicationSlot:
+class PgReplicationSlot(object):
     """
     PgReplicationSlot have utility function related to replication slot
     """
@@ -267,7 +270,7 @@ class PgControlData(Command):
 
     def get_value(self, name):
         if not self.results:
-            raise Exception, 'Command not yet executed'
+            raise Exception('Command not yet executed')
         if not self.data:
             self.data = {}
             for l in self.results.stdout.split('\n'):

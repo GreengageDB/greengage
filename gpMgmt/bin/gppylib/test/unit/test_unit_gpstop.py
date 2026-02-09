@@ -1,3 +1,5 @@
+from __future__ import division
+from past.utils import old_div
 import imp
 import logging
 import os
@@ -145,7 +147,7 @@ class GpStop(GpTestCase):
 
     def test_host_missing_from_config(self):
         sys.argv = ["gpstop", "-a", "--host", "nothere"]
-        host_names = self.gparray.getSegmentsByHostName(self.gparray.getDbList()).keys()
+        host_names = list(self.gparray.getSegmentsByHostName(self.gparray.getDbList()).keys())
 
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
@@ -549,7 +551,7 @@ class GpStopPrintProgressTestCase(unittest.TestCase):
 
         # We run a command for ten milliseconds, printing progress every
         # millisecond, so at some point we should transition from 50% to 100%.
-        gpstop.print_progress(self.pool, interval=(duration / 10))
+        gpstop.print_progress(self.pool, interval=(old_div(duration, 10)))
         self.logger.info.assert_has_calls([
             call('50.00% of jobs completed'),
             call('100.00% of jobs completed'),
@@ -587,7 +589,8 @@ class GpStopSmartModeTestCase(unittest.TestCase):
 
         subprocess_call.side_effect = _call
 
-    def test_stop_master_smart_issues_pg_ctl_stop(self, subprocess_call, dbconn_connect):
+    @patch('gppylib.db.dbconn.GgdbCursor', side_effect=lambda conn: conn.cursor())
+    def test_stop_master_smart_issues_pg_ctl_stop(self, cursor, subprocess_call, dbconn_connect):
         self._setup_subprocess(subprocess_call)
 
         self.gpstop.master_datadir = 'datadir'
@@ -601,7 +604,8 @@ class GpStopSmartModeTestCase(unittest.TestCase):
         with self.assertRaises(Exception):
             self.gpstop._stop_master_smart()
 
-    def test_stop_master_smart_calls_pg_ctl_status_until_server_stops(self, subprocess_call, dbconn_connect):
+    @patch('gppylib.db.dbconn.GgdbCursor', side_effect=lambda conn: conn.cursor())
+    def test_stop_master_smart_calls_pg_ctl_status_until_server_stops(self, cursor, subprocess_call, dbconn_connect):
         self._setup_subprocess(subprocess_call)
         self.gpstop.conn = dbconn_connect
 

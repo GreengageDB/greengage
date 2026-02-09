@@ -5,6 +5,7 @@
 """ 
 Unit testing for gpload module
 """
+from __future__ import print_function
 import unittest
 import os
 
@@ -30,7 +31,7 @@ class GpLoadTestCase(unittest.TestCase):
         pass
 
     def help_test_with_config(self, gpload_param, expected_begin_value, expected_commit_value):
-        print gpload_param
+        print(gpload_param)
         gploader = gpload(gpload_param)
         gploader.read_config()
         gploader.db = self

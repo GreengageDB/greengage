@@ -6,6 +6,10 @@
 """
 TODO: docs!
 """
+from __future__ import absolute_import
+#from builtins import str
+from builtins import range
+from builtins import object
 import os, pickle, base64, time
 import os.path
 import pipes
@@ -20,7 +24,7 @@ from gppylib.gplog import *
 from gppylib.db import dbconn
 from gppylib import gparray
 from gppylib.commands.base import *
-from unix import *
+from .unix import *
 from gppylib import pgconf
 from gppylib.utils import writeLinesToFile, createFromSingleHostFile, shellEscape
 
@@ -826,7 +830,7 @@ class ModifyConfSetting(Command):
         elif optType == 'string':
             cmdStr = "perl -i -p -e \"s/^%s[ ]*=[ ]*'[^']*'/%s='%s'/\" %s" % (optName, optName, optVal, file)
         else:
-            raise Exception, "Invalid optType for ModifyConfSetting"
+            raise Exception("Invalid optType for ModifyConfSetting")
         self.cmdStr = cmdStr
         Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
 
@@ -952,7 +956,7 @@ class ConfigureNewSegment(Command):
             elif primaryMirror == 'mirror' and seg.isSegmentPrimary() == True:
                continue
             hostname = seg.getSegmentHostName()
-            if result.has_key(hostname):
+            if hostname in result:
                 result[hostname] += ','
             else:
                 result[hostname] = ''
@@ -1402,7 +1406,7 @@ def start_standbymaster(host, datadir, port, era=None,
     # started, this means now postmaster is responsive to signals, which
     # allows shutdown etc.  If we exit earlier, there is a big chance
     # a shutdown message from other process is missed.
-    for i in xrange(60):
+    for i in range(60):
         # Fetch it every time, as postmaster might not have been up yet for
         # the first few cycles, which we have seen when trying wrapper
         # shell script.
@@ -1660,7 +1664,7 @@ class GpRecoverSeg(Command):
        cmdStr = "$GPHOME/bin/gprecoverseg %s" % (options)
        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
 
-class IfAddrs:
+class IfAddrs(object):
     @staticmethod
     def list_addrs(hostname=None, include_loopback=False):
         cmd = ['echo "START_CMD_OUTPUT";%s/libexec/ifaddrs' % GPHOME]

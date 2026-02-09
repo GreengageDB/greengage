@@ -1,3 +1,4 @@
+from builtins import object
 import time
 
 from gppylib.commands import base
@@ -7,7 +8,7 @@ import pygresql.pg
 
 FTS_PROBE_QUERY = 'SELECT pg_catalog.gp_request_fts_probe_scan()'
 
-class SegmentReconfigurer:
+class SegmentReconfigurer(object):
     def __init__(self, logger, worker_pool, timeout):
         self.logger = logger
         self.pool = worker_pool
@@ -36,9 +37,9 @@ class SegmentReconfigurer:
                 # Empty block of 'BEGIN' and 'END' won't start a distributed transaction,
                 # execute a DDL query to start a distributed transaction.
                 # so the primaries'd better be up
-                conn = dbconn.connect(dburl)
-                conn.cursor().execute('CREATE TEMP TABLE temp_test(a int)')
-                conn.cursor().execute('COMMIT')
+                with dbconn.connect(dburl) as conn:
+                    conn.cursor().execute('CREATE TEMP TABLE temp_test(a int)')
+                    conn.cursor().execute('COMMIT')
             except Exception as e:
                 now = time.time()
                 if now < start_time + self.timeout:
@@ -46,5 +47,4 @@ class SegmentReconfigurer:
                 else:
                     raise RuntimeError("Mirror promotion did not complete in {0} seconds.".format(self.timeout))
             else:
-                conn.close()
                 break

@@ -11,6 +11,8 @@
 #   file but swaps the inodes of the files, so the os.rename() does NOT affect any current readers who have already
 #   opened the OLD file.
 
+from builtins import str
+from builtins import bytes
 try:
     import base64
     import os
@@ -21,7 +23,7 @@ try:
 
     from optparse import Option, OptionParser
     from gppylib.gpparseopts import OptParser, OptChecker
-except ImportError, e:
+except ImportError as e:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 _help = ["""This enables one to add, get and remove postgresql.conf configuration parameters.
@@ -110,9 +112,9 @@ def add_parameter(filename, name, value):
         for line in lines:
             outfile.write(line)
             new_lines = new_lines + 1
-        outfile.write(bytes(name) + '=' +
-                      bytes(pickle.loads(base64.urlsafe_b64decode(value))) +
-                      os.linesep)
+        outfile.write(bytes(name, 'utf-8') + '=' +
+                      bytes(pickle.loads(base64.urlsafe_b64decode(value)), 'utf-8') +
+                      bytes(os.linesep, 'utf-8'))
         new_lines = new_lines + 1
 
     if new_lines == len(lines) + 1:

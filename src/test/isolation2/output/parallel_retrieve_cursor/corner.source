@@ -368,9 +368,9 @@ ROLLBACK
 (0 rows)
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test5: if conflict with normal cursors
 1: BEGIN;
@@ -549,9 +549,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test6: select order by limit
 1: BEGIN;
@@ -621,9 +621,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test7: select order by limit 0
 1: BEGIN;
@@ -688,9 +688,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test8: select empty table
 1: BEGIN;
@@ -765,9 +765,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test9: select table with text column
 1: BEGIN;
@@ -852,9 +852,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test10: select empty table with text column
 1: BEGIN;
@@ -929,9 +929,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test11: endpoints on one segment.
 1: BEGIN;
@@ -1155,9 +1155,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test16: PARALLEL RETRIEVE CURSOR for the count of two tables' join;
 1: BEGIN;
@@ -1502,9 +1502,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test18: re-execute a PARALLEL RETRIEVE CURSOR and retrieve in different sessions.
 1: BEGIN;
@@ -1822,9 +1822,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test19: PARALLEL RETRIEVE CURSOR and savepoint
 1: BEGIN;
@@ -1891,9 +1891,9 @@ DECLARE
 COMMIT
 1q: ... <quitting>
 *Rq: Sessions not started cannot be quit
-Sessions not started cannot be quit
-Sessions not started cannot be quit
-Sessions not started cannot be quit
+ Sessions not started cannot be quit
+ Sessions not started cannot be quit
+ Sessions not started cannot be quit
 
 -- Test22: UDF plan should be able to run on entry db.
 1: BEGIN;
@@ -1965,9 +1965,9 @@ ROLLBACK
 -1Rq: ... <quitting>
 -- cleanup retrieve connections
 *Rq: Sessions not started cannot be quit
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test23: Catalog scan plan should be able to run on entry db.
 1: BEGIN;
@@ -2028,9 +2028,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test24: endpoint name is too long and will be truncated.
 1: BEGIN;
@@ -2132,9 +2132,9 @@ DECLARE
 ROLLBACK
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test25: cursor name is too long and will be truncated.
 1: BEGIN;
@@ -2246,9 +2246,9 @@ DECLARE
 (1 row)
 -- cleanup retrieve connections
 *Rq: ... <quitting>
-... <quitting>
-... <quitting>
-... <quitting>
+ ... <quitting>
+ ... <quitting>
+ ... <quitting>
 
 -- Test28: Parallel retrieve cursor should run on the dispatcher only.
 -1U: BEGIN;

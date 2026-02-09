@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+#from builtins import str
 import os
 import tarfile
 import shutil
@@ -49,7 +50,7 @@ class MuckWithInternalsTestCase(GppkgTestCase):
 
         try:
             self.remove(self.alpha_spec.get_filename())
-        except ExecutionError, e:
+        except ExecutionError as e:
             shutil.copy(gppkg_file, os.path.join(ARCHIVE_PATH, gppkg_file))
             self.fail("Execution Error %s" % e)
 
@@ -107,7 +108,7 @@ class MuckWithInternalsTestCase(GppkgTestCase):
       
         try: 
             self.remove(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             run_command("rpm -e %s --dbpath %s" % (self.A_spec.get_package_name(), RPM_DATABASE))
             os.remove(self.A_spec.get_filename())
             self.fail("ExecutionError %s" % e)
@@ -131,7 +132,7 @@ class MuckWithInternalsTestCase(GppkgTestCase):
 
         try:
             self.install(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             Scp(name = "copy gppkg to segment",
                 srcFile = gppkg_file, 
                 dstFile = archive_file, 
@@ -158,7 +159,7 @@ class MuckWithInternalsTestCase(GppkgTestCase):
 
         try:
             self.remove(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             GpScp(source_path = gppkg_file,
                   target_path = archive_file,
                   host_list = segment_host_list).run()
@@ -183,7 +184,7 @@ class MuckWithInternalsTestCase(GppkgTestCase):
 
         try:
             self.install(gppkg_file) 
-        except ExecutionError, e:
+        except ExecutionError as e:
             #Install the rpm 
             with closing(tarfile.open(self.alpha_spec.get_filename())) as tf:
                 tf.extract(self.A_spec.get_filename())
@@ -265,7 +266,7 @@ class MuckWithInternalsTestCase(GppkgTestCase):
 
         try:
             self.remove(gppkg_file)
-        except ExecutionError, e:
+        except ExecutionError as e:
             self.uninstall_rpm_remotely(self.A_spec.get_filename(), host)
             os.remove(self.A_spec.get_filename())
             RemoveRemoteFile(self.A_spec.get_filename(), host).run()

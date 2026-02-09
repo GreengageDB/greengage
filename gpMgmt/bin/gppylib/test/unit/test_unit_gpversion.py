@@ -5,6 +5,7 @@
 """ 
 Unit testing for gpversion module
 """
+#from builtins import str
 import unittest
 
 from gpversion import *
@@ -110,9 +111,9 @@ class GpVersionTestCase(unittest.TestCase):
 
     def test_lshift_negative(self):
         v = GpVersion('3.2')
-        with self.assertRaisesRegexp(StandardError, 'invalid version shift'):
+        with self.assertRaisesRegexp(Exception, 'invalid version shift'):
             v << -1
-        with self.assertRaisesRegexp(StandardError, 'invalid version shift'):
+        with self.assertRaisesRegexp(Exception, 'invalid version shift'):
             v << 1
 
 

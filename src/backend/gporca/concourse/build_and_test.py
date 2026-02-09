@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+from __future__ import print_function
+from builtins import str
 import optparse
 import os
 import shutil
@@ -48,7 +50,7 @@ def cmake_configure(src_dir, build_type, output_dir, cxx_compiler = None, cxxfla
 
     cmake_args.append("../" + src_dir)
     cmake_command = " ".join(cmake_args)
-    print cmake_command
+    print(cmake_command)
     return subprocess.call(cmake_command, cwd="build", shell=True)
 
 def make():

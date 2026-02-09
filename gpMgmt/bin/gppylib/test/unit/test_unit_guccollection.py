@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 from mock import *
-from gp_unittest import *
+from .gp_unittest import *
 from gpconfig_modules.database_segment_guc import DatabaseSegmentGuc
 from gpconfig_modules.file_segment_guc import FileSegmentGuc
 from gpconfig_modules.guc_collection import GucCollection
@@ -260,4 +261,4 @@ class GucCollectionTest(GpTestCase):
                           "[context: 1] [dbid: dbid5] [name: guc_name] [value: value | file: value]", self.subject.report())
 
     def test_values_succeeds(self):
-        self.assertEquals([self.db_seg_guc_1, self.db_seg_guc_2], self.subject.values())
+        self.assertEquals([self.db_seg_guc_1, self.db_seg_guc_2], list(self.subject.values()))

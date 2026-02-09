@@ -142,7 +142,7 @@ cmake --build . --config Release --target INSTALL
 
 4. Build pygresql, needed by gpload
 ```
-cd <path\to\gpdb>\gpMgmt\bin\pythonSrc\PyGreSQL-4.0
+cd <path\to\gpdb>\gpMgmt\bin\pythonSrc\PyGreSQL-5.2.5
 mkdir build
 cd build
 cmake -DCMAKE_PREFIX_PATH=C:\greengage-db-devel -DCMAKE_INSTALL_PREFIX:PATH=C:\greengage-db-devel -G "Visual Studio 15 2017 Win64" ..

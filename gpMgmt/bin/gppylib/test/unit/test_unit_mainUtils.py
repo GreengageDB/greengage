@@ -1,6 +1,8 @@
+from __future__ import absolute_import
+#from builtins import str
 import os
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.mainUtils import PIDLockFile, PIDLockHeld
 from gppylib.mainUtils import parseStatusLine
 

@@ -80,8 +80,9 @@ jobs:
       - name: Install dependencies and abi-dumper
         run: |
           sudo gpdb_src/README.ubuntu.bash
-          sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl abi-dumper
+          sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl abi-dumper python-pip
           sudo ln -fs python2 /usr/bin/python
+          sudo python -m pip install future
 
       - name: Build Greengage
         run: |

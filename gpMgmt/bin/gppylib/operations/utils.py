@@ -1,3 +1,6 @@
+from __future__ import print_function
+from __future__ import absolute_import
+#from builtins import str
 import os
 import sys
 import pickle
@@ -106,6 +109,6 @@ class MasterOperation(Operation):
 
 if __name__ == "__main__":
     import sys 
-    from unix import CheckFile, CheckRemoteFile
-    print RemoteOperation(CheckFile(sys.argv[1]), "localhost").run()
-    print CheckRemoteFile(sys.argv[1], "localhost").run()
+    from .unix import CheckFile, CheckRemoteFile
+    print(RemoteOperation(CheckFile(sys.argv[1]), "localhost").run())
+    print(CheckRemoteFile(sys.argv[1], "localhost").run())

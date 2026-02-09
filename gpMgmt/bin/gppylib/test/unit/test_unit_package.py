@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 from mock import *
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.operations.package import IsVersionCompatible, ListPackages, MigratePackages, AlreadyInstalledError, \
     ARCHIVE_PATH, SyncPackages, CleanGppkg
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded

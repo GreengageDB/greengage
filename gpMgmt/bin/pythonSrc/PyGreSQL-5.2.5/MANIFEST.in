@@ -1,0 +1,24 @@
+
+include *.c
+include *.h
+include *.py
+
+include README.rst
+include LICENSE.txt
+
+include tox.ini
+
+recursive-include tests *.py
+exclude tests/LOCAL_PyGreSQL.py
+
+include docs/Makefile
+include docs/make.bat
+include docs/*.py
+include docs/*.rst
+include docs/*.txt
+exclude docs/index.rst
+recursive-include docs/community *.rst
+recursive-include docs/contents *.rst
+recursive-include docs/download *.rst
+recursive-include docs/_static *.css_t *.ico *.png
+recursive-include docs/_templates *.html

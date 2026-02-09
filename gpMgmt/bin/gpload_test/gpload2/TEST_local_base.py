@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+#from builtins import str
+from builtins import range
+from builtins import object
 import unittest
 import sys
 import os
@@ -11,6 +15,7 @@ import platform
 import re
 import pytest
 import io
+import six
 
 # from gppylib.commands.gp import get_coordinatordatadir
 
@@ -39,7 +44,7 @@ def get_port_from_conf():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
     if os.path.isfile(file):
         with open(file) as f:
-            for line in f.xreadlines():
+            for line in f:
                 match = re.search(r'port=\d+',line)
                 if match:
                     match1 = re.search(r'\d+', match.group())
@@ -219,7 +224,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
     if port_range:
         f.write(u"\n         PORT_RANGE: "+port_range)
     f.write("\n         FILE:")
-    if(isinstance(file,str)):
+    if(isinstance(file,six.string_types)):
         f.write("\n            - "+mkpath(file))
     if (isinstance(file,list)):
         for ff in file:
@@ -284,7 +289,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
         f.write("\n    - UPDATE_CONDITION: "+update_condition)
     if mapping:
         f.write("\n    - MAPPING:")
-        for key, val in mapping.items():
+        for key, val in list(mapping.items()):
             f.write("\n           "+key+": "+val)
 
     if preload:
@@ -499,7 +504,7 @@ class PSQLError(Exception):
     '''
     pass
 
-class AnsFile():
+class AnsFile(object):
     def __init__(self, path):
         self.path = path
     def __eq__(self, other):
