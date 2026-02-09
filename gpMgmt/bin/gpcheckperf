@@ -44,7 +44,6 @@ import datetime
 import os
 import sys
 from functools import reduce
-import six
 
 sys.path.append(sys.path[0] + '/lib')
 try:
@@ -474,7 +473,7 @@ def copyExecOver(fname):
 
 def parseMultiDDResult(out):
     # parse output of "time -p"
-    out = io.StringIO(six.u(out))
+    out = io.StringIO(out.decode('utf-8'))
     result = {}
     bytes = 0
     for line in out:
@@ -550,7 +549,7 @@ def runStreamTest():
     (ok, out) = gpssh(cmd, GV.opt['-V'])
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
-    out = io.StringIO(six.u(out))
+    out = io.StringIO(out.decode('utf-8'))
     result = {}
     for line in out:
         i = line.find(']')
@@ -646,7 +645,7 @@ def reapNetperfTest(proc, x, y):
         print('[Warning] netperf failed on %s -> %s' % (x, y))
         return []
 
-    for line in io.StringIO(six.u(out)):
+    for line in io.StringIO(out.decode('utf-8')):
         line = line.split()
         if len(line) != 5:
             continue
