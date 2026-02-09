@@ -49,10 +49,6 @@ apt-get install -y \
   zlib1g-dev
 
 if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "24.04" ]; then
-  USE_PYTHON3_ONLY=1
-fi
-
-if [[ -n "$USE_PYTHON3_ONLY" ]]; then
   apt-get install -y \
     python3-pip \
     python-is-python3;
