@@ -12,7 +12,10 @@ namespace gpopt
 class CDistributionSpecHashedNoOp : public CDistributionSpecHashed
 {
 public:
-	CDistributionSpecHashedNoOp(CExpressionArray *pdrgpexr);
+	// explicitly pass opfamilies or NULL, since the default ones are not
+	// populated by parent ctor for NoOp cases.
+	CDistributionSpecHashedNoOp(CExpressionArray *pdrgpexr,
+								IMdIdArray *opfamilies);
 
 	virtual EDistributionType Edt() const;
 
