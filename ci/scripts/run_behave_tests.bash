@@ -56,9 +56,16 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
+  if [[ ${CI,,} == "true" ]]; then
+    for node in cdw sdw1 sdw2 sdw3; do
+      docker compose -p $project -f ci/docker-compose.yaml exec -T \
+        $node /bin/bash -s "$feature" < ./ci/scripts/behave_collect_logs.bash
+    done
+  fi
+
   docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
 
-  if [[ $status > 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
+  if [[ $status -gt 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
   exit $status
 }
 
