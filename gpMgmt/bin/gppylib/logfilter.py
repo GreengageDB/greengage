@@ -219,6 +219,8 @@ def FilterLogEntries(iterable,
 
     # Pull filtered lines out of the pipeline and yield them to caller
     for line in iterable:
+        if line is None:
+            break
         yield line
 
     # Display statistics if requested
@@ -353,9 +355,9 @@ class TimestampSpy(object):
     def __next__(self):
         try:
             item = next(self.source)
-        except StopIteration as e:
+        except StopIteration:
             self.eod = True
-            raise e
+            return None
         self.items += 1
 
         if isinstance(item, basestring):     # ungrouped input
@@ -380,12 +382,12 @@ class TimestampSpy(object):
         return item
 
     def str_range(self):
-        if self.maxstamp == '':
+        if len(self.maxstamp) == 0:
             return None
         return (self.minstamp, self.maxstamp)
 
     def datetime_range(self):
-        if self.maxstamp == '':
+        if len(self.maxstamp) == 0:
             return None
         minstruct = time.strptime(self.minstamp, '%Y-%m-%d %H:%M:%S')[:6]
         maxstruct = time.strptime(self.maxstamp, '%Y-%m-%d %H:%M:%S')[:6]
@@ -559,6 +561,8 @@ def TimestampInBounds(iterable, begin, end):
     # Fetch first item from input stream.
     source = iter(iterable)
     item = next(source)
+    if item is None:
+        return
 
     # If first item is a string, assume input consists of individual lines.
     # Yield lines which start with a timestamp within the given bounds, plus

@@ -3,6 +3,7 @@ import fnmatch
 import pickle
 import shutil
 import errno
+import base64
 
 from gppylib.commands.base import Command, REMOTE, WorkerPool
 from gppylib.operations import Operation
@@ -42,14 +43,19 @@ class RawRemoteOperation(Operation):
                       remoteHost = self.host)
         cmd.run(validateAfter=True)
         # TODO! If exception is raised remotely, there's no stdout, thereby causing a pickling error.
-        return pickle.loads(cmd.get_results().stdout)
+        return pickle.loads(base64.urlsafe_b64decode(cmd.get_results().stdout))
     def __str__(self): 
         return "Raw(%s, %s)" % (self.cmd_str, self.host)
 
 class ListRemoteFiles(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(ListRemoteFiles, self).__init__(""" python -c "import os, pickle; print pickle.dumps(os.listdir('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import os, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(os.listdir('%s'))).decode('ascii'), end='')
+        """ % path
+        super(ListRemoteFiles, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "ListRemoteFiles(%s, %s)" % (self.path, self.host)
 
@@ -64,7 +70,12 @@ class ListFiles(Operation):
 class ListRemoteFilesByPattern(RawRemoteOperation):
     def __init__(self, path, pattern, host):
         self.path, self.pattern, self.host = path, pattern, host
-        super(ListRemoteFilesByPattern, self).__init__(""" python -c "import os, fnmatch, pickle; print pickle.dumps(fnmatch.filter(os.listdir('%s'), '%s'))" """ % (path, pattern), host)
+        py_code = """
+from __future__ import print_function;
+import os, fnmatch, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(fnmatch.filter(os.listdir('%s'), '%s'))).decode('ascii'), end='')
+        """ % (path, pattern)
+        super(ListRemoteFilesByPattern, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "ListRemoteFilesByPattern(%s, %s, %s)" % (self.path, self.pattern, self.host)
 
@@ -79,7 +90,12 @@ class ListFilesByPattern(Operation):
 class CheckRemoteDir(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(CheckRemoteDir, self).__init__(""" python -c "import os, pickle; print pickle.dumps(os.path.isdir('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import os, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(os.path.isdir('%s'))).decode('ascii'), end='')
+        """ % path
+        super(CheckRemoteDir, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "CheckRemoteDir(%s, %s)" % (self.path, self.host)
 
@@ -94,7 +110,12 @@ class CheckDir(Operation):
 class MakeRemoteDir(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(MakeRemoteDir, self).__init__(""" python -c "import os, pickle; print pickle.dumps(os.makedirs('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import os, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(os.makedirs('%s'))).decode('ascii'), end='')
+        """ % path
+        super(MakeRemoteDir, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "MakeRemoteDir(%s, %s)" % (self.path, self.host)
 
@@ -113,14 +134,24 @@ class MakeDir(Operation):
 class CheckRemoteFile(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(CheckRemoteFile, self).__init__(""" python -c "import os, pickle; print pickle.dumps(os.path.isfile('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import os, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(os.path.isfile('%s'))).decode('ascii'), end='')
+        """ % path
+        super(CheckRemoteFile, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "CheckRemoteFile(%s, %s)" % (self.path, self.host)
 
 class CheckRemotePath(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(CheckRemotePath, self).__init__(""" python -c "import os, pickle; print pickle.dumps(os.path.exists('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import os, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(os.path.exists('%s'))).decode('ascii'), end='')
+        """ % path
+        super(CheckRemotePath, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "CheckRemotePath(%s, %s)" % (self.path, self.host)
 
@@ -135,7 +166,12 @@ class CheckFile(Operation):
 class RemoveRemoteFile(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(RemoveRemoteFile, self).__init__(""" python -c "import os, pickle; print pickle.dumps(os.remove('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import os, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(os.remove('%s'))).decode('ascii'), end='')
+        """ % path
+        super(RemoveRemoteFile, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "RemoveRemoteFile(%s, %s)" % (self.path, self.host)
 
@@ -150,7 +186,12 @@ class RemoveFile(Operation):
 class RemoveRemoteTree(RawRemoteOperation):
     def __init__(self, path, host):
         self.path, self.host = path, host
-        super(RemoveRemoteTree, self).__init__(""" python -c "import shutil, pickle; print pickle.dumps(shutil.rmtree('%s'))" """ % path, host)
+        py_code = """
+from __future__ import print_function;
+import shutil, pickle, base64;
+print(base64.urlsafe_b64encode(pickle.dumps(shutil.rmtree('%s'))).decode('ascii'), end='')
+        """ % path
+        super(RemoveRemoteTree, self).__init__(""" python -c "%s" """ % py_code, host)
     def __str__(self):
         return "RemoveRemoteTree(%s, %s)" % (self.path, self.host)
 

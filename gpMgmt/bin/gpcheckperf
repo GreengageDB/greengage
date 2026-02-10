@@ -60,7 +60,7 @@ if GPHOME is None:
     sys.exit('Please set GPHOME environment variable')
 
 USER = os.getenv('USER')
-if USER is None or USER is ' ':
+if USER is None or USER == ' ':
     sys.exit('Please set USER environment variable')
 
 _SCP_ENABLED = True

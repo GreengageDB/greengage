@@ -550,6 +550,12 @@ class GPCatalogTable(object):
     def __cmp__(self, other):
         return cmp(other, self._name)
 
+    def __eq__(self, other):
+        return self._name == other
+
+    def __lt__(self, other):
+        return self._name < other._name
+
     def _setMasterOnly(self, value=True):
         self._master = value
 

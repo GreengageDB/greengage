@@ -13,7 +13,7 @@ from test.behave_utils.utils import (
 )
 
 
-from .mirrors_mgmt_utils import (add_three_mirrors)
+from mirrors_mgmt_utils import (add_three_mirrors)
 
 
 def assert_successful_command(context):

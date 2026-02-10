@@ -171,7 +171,7 @@ class RecoveryBaseTestCase(GpTestCase):
     def test_valid_cmd_default_options_passes(self, mock_workerpool):
         mock_workerpool.return_value = Mock()
         cmd1 = Command('testcmd', 'testcmdstr')
-        cmd1.set_results(CommandResult(0, b'', b'', True, False))
+        cmd1.set_results(CommandResult(0, '', '', True, False))
         mock_workerpool.return_value.getCompletedItems = Mock(return_value=[cmd1, cmd1])
         sys.argv = ['recovery_base',  '-l', '/tmp/logdir', '-c {}'.format(self.confinfo)]
         stderr_buf, ex = self.run_recovery_base_get_stderr()
@@ -184,7 +184,7 @@ class RecoveryBaseTestCase(GpTestCase):
     def test_valid_cmd_non_default_options_passes(self, mock_workerpool):
         mock_workerpool.return_value = Mock()
         cmd1 = Command('testcmd', 'testcmdstr')
-        cmd1.set_results(CommandResult(0, b'', b'', True, False))
+        cmd1.set_results(CommandResult(0, '', '', True, False))
         mock_workerpool.return_value.getCompletedItems = Mock(return_value=[cmd1, cmd1])
         sys.argv = ['recovery_base', '-l', '/tmp/logdir',
                     '-c {}'.format(self.confinfo),

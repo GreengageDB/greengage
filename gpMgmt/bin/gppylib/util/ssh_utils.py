@@ -229,7 +229,7 @@ class Session(cmd.Cmd):
                         print('[ERROR] unable to login to %s' % hostname)
                         if type(e) is pxssh.ExceptionPxssh:
                             print(e)
-                        elif type(e) is pxssh.EOF:
+                        elif type(e) == pxssh.EOF:
                             print('Could not acquire connection.')
                             print(e)
                         else:
@@ -303,7 +303,7 @@ class Session(cmd.Cmd):
         for s in self.pxssh_list:
             # Split the output into an array of lines so that we can add text to the beginning of
             #    each line
-            output = s.before.split('\n')
+            output = s.before.decode('utf-8').split('\n')
             output = output[1:-1]
 
             commandoutput.append(output)

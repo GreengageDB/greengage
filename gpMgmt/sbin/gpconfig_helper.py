@@ -94,9 +94,9 @@ def comment_parameter(filename, name):
     new_lines = 0
     with open(os.path.abspath(temp_conf_path), 'wb') as outfile:
         for line in lines:
-            potential_match = line.split("=", 1)[0]
+            potential_match = line.split(b"=", 1)[0]
             if potential_match.strip() == name:
-                outfile.write('#')
+                outfile.write(b'#')
             outfile.write(line)
             new_lines = new_lines + 1
 
@@ -112,7 +112,7 @@ def add_parameter(filename, name, value):
         for line in lines:
             outfile.write(line)
             new_lines = new_lines + 1
-        outfile.write(bytes(name, 'utf-8') + '=' +
+        outfile.write(bytes(name, 'utf-8') + b'=' +
                       bytes(pickle.loads(base64.urlsafe_b64decode(value)), 'utf-8') +
                       bytes(os.linesep, 'utf-8'))
         new_lines = new_lines + 1

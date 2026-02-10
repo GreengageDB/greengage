@@ -482,7 +482,7 @@ class SQLIsolationExecutor(object):
                     if col is None:
                         col = ""
                     width = len(str(col))
-                    if type(col) is bool:
+                    if type(col) == bool:
                         width = 1
                     widths[colno] = max(widths[colno], width)
                     colno = colno + 1
@@ -514,11 +514,11 @@ class SQLIsolationExecutor(object):
                         result += "|"
                     if col is None:
                         col = ""
-                    if type(col) is bool:
+                    if type(col) == bool:
                         col = 't' if col else 'f'
-                    if type(col) is list:
+                    if type(col) == list:
                         for i, elem in enumerate(col):
-                            if type(elem) is bool:
+                            if type(elem) == bool:
                                 col[i] = elem = 't' if elem else 'f'
                         col = "{" + ",".join([str(elem) for elem in col]) + "}"
 

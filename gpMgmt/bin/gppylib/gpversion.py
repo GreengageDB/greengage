@@ -16,10 +16,11 @@ from builtins import object
 import sys, os, re
 import six
 
-# Python version 2.6.2 is expected, must be between 2.5-3.0
-if sys.version_info < (2, 5, 0) or sys.version_info >= (3, 0, 0):
-    sys.stderr.write("Error: %s is supported on Python versions 2.5 or greater\n" 
-                     "Please upgrade python installed on this machine." 
+# Python version 2.7.5 (CentOS 7) or 3.12.3 (Ubuntu 24.04) is expected,
+# must be between 2.7-3.0 or 3.5+
+if sys.version_info < (2, 7, 0) or ((3, 0, 0) <= sys.version_info < (3, 5, 0)) :
+    sys.stderr.write("Error: %s is supported on Python versions 2.7 or 3.5+\n"
+                     "Please upgrade python installed on this machine."
                      % os.path.split(__file__)[-1])
     sys.exit(1)
 
@@ -188,17 +189,37 @@ class GpVersion(object):
                                 (str(version), str(e)))
 
     #------------------------------------------------------------
-    def __cmp__(self, other):
-        '''
-        One of the main reasons for this class is so that we can safely compare
-        versions with each other.  This needs to be pairwise integer comparison
-        of the tuples, not a string comparison, which is why we maintain the
-        internal version as a list.       
-        '''
+    # One of the main reasons for this class is so that we can safely compare
+    # versions with each other.  This needs to be pairwise integer comparison
+    # of the tuples, not a string comparison, which is why we maintain the
+    # internal version as a list.
+    #
+    # The following functions overload all comparison operators for GpVersion,
+    # as per PEP 207 -- Rich Comparisons.
+
+    @staticmethod
+    def __get_version(other):
         if isinstance(other, GpVersion):
-            return cmp(self.version, other.version)
-        else:
-            return cmp(self, GpVersion(other))
+            return other.version
+        return GpVersion(other).version
+
+    def __lt__(self, other):
+        return self.version < GpVersion.__get_version(other)
+
+    def __le__(self, other):
+        return self.version <= GpVersion.__get_version(other)
+
+    def __gt__(self, other):
+        return self.version > GpVersion.__get_version(other)
+
+    def __ge__(self, other):
+        return self.version >= GpVersion.__get_version(other)
+
+    def __eq__(self, other):
+        return self.version == GpVersion.__get_version(other)
+
+    def __ne__(self, other):
+        return self.version != GpVersion.__get_version(other)
     
     #------------------------------------------------------------
     def __str__(self):

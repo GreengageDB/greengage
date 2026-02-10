@@ -16,9 +16,8 @@ for executing this set of commands.
 
 """
 
-# from future import standard_library
-# standard_library.install_aliases()
-# from builtins import str
+from future import standard_library
+standard_library.install_aliases()
 from builtins import range
 from builtins import object
 from queue import Queue, Empty
@@ -463,9 +462,11 @@ class LocalExecutionContext(ExecutionContext):
         cmd.pid = self.proc.pid
         if wait:
             (rc, stdout_value, stderr_value) = self.proc.communicate2(input=self.stdin)
+            assert isinstance(stdout_value, bytes)
+            assert isinstance(stderr_value, bytes)
             self.completed = True
             cmd.set_results(CommandResult(
-                rc, "".join(stdout_value), "".join(stderr_value), self.completed, self.halt))
+                rc, str(stdout_value.decode('utf-8')), str(stderr_value.decode('utf-8')), self.completed, self.halt))
 
     def cancel(self):
         if self.proc:

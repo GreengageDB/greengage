@@ -121,7 +121,7 @@ class ConfExpSegCmd(Command):
                     self.set_results(CommandResult(1, '', msg, True, False))
                     raise
                 except Exception as e:
-                    self.set_results(CommandResult(1, '', e, True, False))
+                    self.set_results(CommandResult(1, '', str(e), True, False))
                     raise
 
                 if self.validationOnly:
@@ -153,7 +153,7 @@ class ConfExpSegCmd(Command):
                         if shouldDeleteProgressFile:
                             os.remove(self.progressFile)
                     except Exception as e:
-                        self.set_results(CommandResult(1,'',e,True,False))
+                        self.set_results(CommandResult(1,'',str(e),True,False))
                         raise
 
                     logger.info("Successfully ran pg_basebackup: %s" % cmd.cmdStr)
@@ -163,7 +163,7 @@ class ConfExpSegCmd(Command):
                 try:
                     self.makeOrUpdatePathAsNeeded(self.datadir)
                 except Exception as e:
-                    self.set_results(CommandResult(1,'',e,True,False))
+                    self.set_results(CommandResult(1,'',str(e),True,False))
                     raise
 
                 if self.tarfile:
@@ -217,7 +217,7 @@ class ConfExpSegCmd(Command):
                 try:
                     self.makeOrUpdatePathAsNeeded(os.path.join(self.datadir, "pg_log"))
                 except Exception as e:
-                    self.set_results(CommandResult(1,'',e,True,False))
+                    self.set_results(CommandResult(1,'',str(e),True,False))
                     raise
 
                 logger.info("Updating %s/postgresql.conf" % self.datadir)
@@ -258,7 +258,7 @@ class ConfExpSegCmd(Command):
                     pass
 
         except Exception as e:
-            self.set_results(CommandResult(1, '', e, True, False))
+            self.set_results(CommandResult(1, '', str(e), True, False))
             if self.verbose:
                 logger.exception(e)
             return
@@ -320,7 +320,7 @@ def parseargs():
             raise Exception('Invalid configuration value: %s' % conf_vals)
         if conf_vals[0] == '':
             raise Exception('Missing data directory in: %s' % conf_vals)
-        if not canStringBeParsedAsInt(conf_vals[1]) or conf_vals[1] < 1024:
+        if not canStringBeParsedAsInt(conf_vals[1]) or int(conf_vals[1]) < 1024:
             raise Exception('Invalid port in: %s' % conf_vals)
         if conf_vals[2] != 'true' and conf_vals[2] != 'false':
             raise Exception('Invalid isPrimary option in: %s' % conf_vals)
@@ -341,6 +341,7 @@ def parseargs():
 
     return options, args, seg_info
 
+pool = None
 try:
     (options, args, seg_info) = parseargs()
 

@@ -129,8 +129,8 @@ def set_recovery_cmd_results(run_func):
                                                               recovery_cmd.recovery_info.target_datadir,
                                                               recovery_cmd.recovery_info.target_port,
                                                               recovery_cmd.recovery_info.progress_file))
-            recovery_cmd.set_results(CommandResult(1, b'', serialized_error.encode(), True, False))
+            recovery_cmd.set_results(CommandResult(1, '', serialized_error, True, False))
         else:
-            recovery_cmd.set_results(CommandResult(0, b'', b'', True, False))
+            recovery_cmd.set_results(CommandResult(0, '', '', True, False))
 
     return run_and_set_output

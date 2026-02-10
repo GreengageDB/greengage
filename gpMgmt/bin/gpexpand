@@ -1617,7 +1617,7 @@ class gpexpand(object):
             if dbname == 'template0':
                 continue
             self.logger.info('Populating gpexpand.status_detail with data from database %s' % (
-                dbname.decode('utf-8')))
+                dbname))
             self._populate_regular_tables(dbname)
             self._populate_partitioned_tables(dbname)
             inject_fault('gpexpand MPP-14620 fault injection')
@@ -2121,8 +2121,8 @@ class ExpandTable(object):
                            self.rank, self.external_writable, self.status,
                            self.expansion_started, self.expansion_finished,
                            self.source_bytes, self.rel_storage)
-        logger.info('Added table %s.%s' % (self.dbname.decode('utf-8'), self.fq_name.decode('utf-8')))
-        logger.debug(insertSQL.decode('utf-8'))
+        logger.info('Added table %s.%s' % (self.dbname, self.fq_name))
+        logger.debug(insertSQL)
         dbconn.execSQL(conn, insertSQL)
 
     def mark_started(self, status_conn, table_conn, start_time, cancel_flag):
@@ -2132,7 +2132,7 @@ class ExpandTable(object):
         cursor = dbconn.execSQL(table_conn, sql)
         row = cursor.fetchone()
         src_bytes = int(row[0])
-        logger.debug(" Table: %s has %d bytes" % (self.fq_name.decode('utf-8'), src_bytes))
+        logger.debug(" Table: %s has %d bytes" % (self.fq_name, src_bytes))
 
         sql = """UPDATE gpexpand.status_detail
                   SET status = '%s', expansion_started='%s',
@@ -2142,7 +2142,7 @@ class ExpandTable(object):
                                                   src_bytes, self.dbname.replace("'", "''"),
                                                   self.table_oid)
 
-        logger.debug("Mark Started: " + sql.decode('utf-8'))
+        logger.debug("Mark Started: " + sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2153,7 +2153,7 @@ class ExpandTable(object):
                  AND table_oid = %s """ % (undone_status,
                                            self.dbname.replace("'", "''"), self.table_oid)
 
-        logger.debug('Resetting detailed_status: %s' % sql.decode('utf-8'))
+        logger.debug('Resetting detailed_status: %s' % sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2175,8 +2175,8 @@ class ExpandTable(object):
             external_str = "EXTERNAL" if self.external_writable else ""
             sql = 'ALTER %s TABLE ONLY %s EXPAND TABLE' % (external_str, self.fq_name)
 
-        logger.info('Expanding %s.%s' % (self.dbname.decode('utf-8'), self.fq_name.decode('utf-8')))
-        logger.debug("Expand SQL: %s" % sql.decode('utf-8'))
+        logger.info('Expanding %s.%s' % (self.dbname, self.fq_name))
+        logger.debug("Expand SQL: %s" % sql)
 
         # check is atomic in python
         if not cancel_flag:
@@ -2195,7 +2195,7 @@ class ExpandTable(object):
                 table_conn.commit()
             if self.options.analyze:
                 sql = 'ANALYZE %s' % (self.fq_name)
-                logger.info('Analyzing %s' % (self.fq_name.decode('utf-8')))
+                logger.info('Analyzing %s' % (self.fq_name))
                 dbconn.execSQL(table_conn, sql)
                 table_conn.commit()
 
@@ -2210,7 +2210,7 @@ class ExpandTable(object):
                   WHERE dbname = '%s'
                   AND table_oid = %s """ % (done_status, start_time, finish_time,
                                             self.dbname.replace("'", "''"), self.table_oid)
-        logger.debug(sql.decode('utf-8'))
+        logger.debug(sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2220,7 +2220,7 @@ class ExpandTable(object):
                   WHERE dbname = '%s'
                   AND table_oid = %s """ % (does_not_exist_status, finish_time,
                                             self.dbname.replace("'", "''"), self.table_oid)
-        logger.debug(sql.decode('utf-8'))
+        logger.debug(sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2333,8 +2333,8 @@ class ExpandCommand(SQLCommand):
             cursor = dbconn.execSQL(table_conn, sql)
 
             if cursor.rowcount == 0:
-                logger.info('%s no longer exists in database %s' % (self.table.fq_name.decode('utf-8'),
-                                                                       self.table.dbname.decode('utf-8')))
+                logger.info('%s no longer exists in database %s' % (self.table.fq_name,
+                                                                       self.table.dbname))
 
                 self.table.mark_does_not_exist(status_conn, datetime.datetime.now())
                 status_conn.close()
@@ -2354,22 +2354,22 @@ class ExpandCommand(SQLCommand):
                 self.table_expand_error = True
                 if self.options.verbose:
                     logger.exception(ex)
-                logger.error('Table %s.%s failed to expand: %s' % (self.table.dbname.decode('utf-8'),
-                                                                   self.table.fq_name.decode('utf-8'),
+                logger.error('Table %s.%s failed to expand: %s' % (self.table.dbname,
+                                                                   self.table.fq_name,
                                                                    ex.__str__().strip()))
             else:
                 logger.info('ALTER TABLE of %s.%s canceled' % (
-                    self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                    self.table.dbname, self.table.fq_name))
 
         if table_exp_success:
             end_time = datetime.datetime.now()
             # update metadata
             logger.info(
-                "Finished expanding %s.%s" % (self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                "Finished expanding %s.%s" % (self.table.dbname, self.table.fq_name))
             self.table.mark_finished(status_conn, start_time, end_time)
         elif not self.options.simple_progress:
             logger.info("Resetting status_detail for %s.%s" % (
-                self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                self.table.dbname, self.table.fq_name))
             self.table.reset_started(status_conn)
 
         # disconnect

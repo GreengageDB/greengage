@@ -5,10 +5,21 @@ from builtins import object
 import sys
 import pickle
 import traceback
+import six
+import base64
 
+if six.PY2:
+    stdin = sys.stdin
+    stdout = sys.stdout
+else:
+    stdin = sys.stdin.buffer
+    stdout = sys.stdout.buffer
 
 class NullDevice(object):
     def write(self, s):
+        pass
+    
+    def flush(self):
         pass
 
 
@@ -23,11 +34,11 @@ from gppylib.commands import unix
 
 hostname = unix.getLocalHostname()
 username = unix.getUserName()
-execname = pickle.load(sys.stdin)
+execname = pickle.load(stdin)
 gplog.setup_tool_logging(execname, hostname, username)
 logger = gplog.get_default_logger()
 
-operation = pickle.load(sys.stdin)
+operation = pickle.load(stdin)
 
 try:
     ret = operation.run()
@@ -57,5 +68,9 @@ else:
     pickled_ret = pickle.dumps(ret)  # Pickle return data for stdout transmission
 
 sys.stdout = old_stdout
-print(pickled_ret)
+if six.PY2:
+    print(base64.urlsafe_b64encode(pickled_ret))
+else:
+    sys.stdout.buffer.write(base64.urlsafe_b64encode(pickled_ret))
+# print(base64.urlsafe_b64encode(pickled_ret))
 sys.exit(0)

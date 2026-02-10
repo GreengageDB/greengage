@@ -57,9 +57,6 @@ class GpMirrorBuildCalculator(object):
         self.__nextDbId = max([seg.getSegmentDbId() for seg in gpArray.getDbList()]) + 1
         self.__minPrimaryPortOverall = min([seg.getSegmentPort() for seg in self.__primaries])
 
-        def comparePorts(left, right):
-            return cmp(left.getSegmentPort(), right.getSegmentPort())
-
         self.__mirrorsAddedByHost = {}  # map hostname to the # of mirrors that have been added to that host
         self.__primariesUpdatedToHaveMirrorsByHost = {}  # map hostname to the # of primaries that have been attached to mirrors for that host
         self.__primaryPortBaseByHost = {}  # map hostname to the lowest port number in-use by a primary on that host
@@ -67,7 +64,7 @@ class GpMirrorBuildCalculator(object):
             self.__primaryPortBaseByHost[hostName] = min([seg.getSegmentPort() for seg in segments])
             self.__mirrorsAddedByHost[hostName] = 0
             self.__primariesUpdatedToHaveMirrorsByHost[hostName] = 0
-            segments.sort(comparePorts)
+            segments.sort(key=lambda seg: seg.getSegmentPort())
 
         self.__mirrorPortOffset = options.mirrorOffset
         self.__mirrorDataDirs = mirrorDataDirs

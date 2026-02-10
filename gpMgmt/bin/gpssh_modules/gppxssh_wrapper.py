@@ -36,7 +36,7 @@ class PxsshWrapper(pxssh.pxssh):
         num_retries = self.sync_retries
         retry_attempt = 0
         success = False
-        while (not success) and retry_attempt <= num_retries:
+        while (not success) and num_retries and retry_attempt <= num_retries:
             # each retry will get an exponentially longer timeout interval
             sync_multiplier_for_this_retry = sync_multiplier * (RETRY_EXPONENT ** retry_attempt)
             start = time.time()

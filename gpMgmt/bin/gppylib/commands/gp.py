@@ -873,7 +873,7 @@ class GpCleanSegmentDirectories(Command):
        files the user has placed there
     """
     def __init__(self, name, segmentsToClean, ctxt, remoteHost):
-        pickledSegmentsStr = base64.urlsafe_b64encode(pickle.dumps(segmentsToClean))
+        pickledSegmentsStr = base64.urlsafe_b64encode(pickle.dumps(segmentsToClean)).decode('ascii')
         cmdStr = "$GPHOME/sbin/gpcleansegmentdir.py -p %s" % pickledSegmentsStr
         Command.__init__(self, name, cmdStr, ctxt, remoteHost)
 
@@ -1097,7 +1097,7 @@ class GpConfigHelper(Command):
 
         addParameter = (not getParameter) and (not removeParameter)
         if addParameter:
-            args = '--add-parameter %s --value %s ' % (name, base64.urlsafe_b64encode(pickle.dumps(value)))
+            args = '--add-parameter %s --value %s ' % (name, base64.urlsafe_b64encode(pickle.dumps(value)).decode('ascii'))
         if getParameter:
             args = '--get-parameter %s' % name
         if removeParameter:
@@ -1413,8 +1413,9 @@ def start_standbymaster(host, datadir, port, era=None,
         pid = getPostmasterPID(host, datadir)
         cmd = Command("get pids",
                       ("python -c "
-                       "'from gppylib.commands import unix; "
-                       "print unix.getDescendentProcesses({0})'".format(pid)),
+                       "'from __future__ import print_function;"
+                       "from gppylib.commands import unix; "
+                       "print(unix.getDescendentProcesses({0}), end=\"\")'".format(pid)),
                       ctxt=REMOTE, remoteHost=host)
         cmd.run()
         logger.debug(str(cmd))
@@ -1677,7 +1678,9 @@ class IfAddrs(object):
             args = cmd
 
         result = subprocess.check_output(args)
-        return result.split('START_CMD_OUTPUT\n')[1].splitlines()
+        ip_list = result.split(b'START_CMD_OUTPUT\n')[1].splitlines()
+        ip_list = [ip.decode('utf-8') for ip in ip_list]
+        return ip_list
 
 if __name__ == '__main__':
 
