@@ -4897,6 +4897,7 @@ CUtils::PexprMatchEqualityOrINDF(
 		CExpression *pexprPred = (*pdrgpexpr)[ul];
 		CExpression *pexprPredOuter, *pexprPredInner;
 
+
 		if (CPredicateUtils::IsEqualityOp(pexprPred))
 		{
 			pexprPredOuter = (*pexprPred)[0];
@@ -4931,7 +4932,6 @@ CUtils::PexprMatchEqualityOrINDF(
 		//
 		// For the time being, just don't return such expressions,
 		// but it doesn't seem that this logic belongs here.
-		// TODO: check if refactoring it is possible.
 		if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
 			(!mdidOpfamilyInner || !mdidOpfamilyOuter))
 		{
@@ -4941,9 +4941,6 @@ CUtils::PexprMatchEqualityOrINDF(
 		// Note that we need to manually remove binary coercible casts here,
 		// while for other join types this is done when they are being constructed
 		// (see CPhysicalJoin::AlignJoinKeyOuterInner).
-		//
-		// TODO: It is not immediately clear why this difference exists, and maybe
-		// it can be simplified?
 		CExpression *pexprOuterToMatch =
 			CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprPredOuter);
 		CExpression *pexprInnerToMatch =
