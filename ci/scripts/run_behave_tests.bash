@@ -8,6 +8,8 @@ behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
 clusters="~concourse_cluster"
 
+docker_compose_path="ci/docker-compose.yaml"
+
 if [ $# -eq 0 ]
 then
   # TODO cross_subnet and gpssh tests are excluded
@@ -47,7 +49,7 @@ run_feature() {
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
-  docker compose -p $project -f ci/docker-compose.yaml exec -T \
+  docker compose -p $project -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
@@ -57,13 +59,14 @@ run_feature() {
   status=$?
 
   if [[ ${CI,,} == "true" ]]; then
-    for node in cdw sdw1 sdw2 sdw3; do
-      docker compose -p $project -f ci/docker-compose.yaml exec -T \
-        $node /bin/bash -s "$feature" < ./ci/scripts/behave_collect_logs.bash
+    local services=$(docker compose -p $project -f "$docker_compose_path" config --services | tr '\n' ' ')
+    for service in $services; do
+      docker compose -p $project -f "$docker_compose_path" exec -T \
+        $service /bin/bash -s "$feature" < ./ci/scripts/behave_collect_logs.bash
     done
   fi
 
-  docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
+  docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down -v
 
   if [[ $status -gt 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
   exit $status
