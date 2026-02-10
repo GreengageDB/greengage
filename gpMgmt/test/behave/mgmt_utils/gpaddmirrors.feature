@@ -325,10 +325,10 @@ Feature: Tests for gpaddmirrors
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
         And with HBA_HOSTNAMES "0" a cluster is created with no mirrors on "cdw" and "sdw1, sdw2"
-        And pg_hba file "/tmp/gpaddmirrors/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses
+        And pg_hba file "/tmp/gpaddmirrors/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses
         And gpaddmirrors adds mirrors
-        And pg_hba file "/tmp/gpaddmirrors/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses
-        And pg_hba file "/tmp/gpaddmirrors/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "samehost"
+        And pg_hba file "/tmp/gpaddmirrors/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses
+        And pg_hba file "/tmp/gpaddmirrors/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "samehost"
         And verify that the file "pg_hba.conf" in each segment data directory has "no" line starting with "host.*replication.*\(127.0.0\|::1\).*trust"
         Then verify the database has mirrors
 
@@ -363,9 +363,9 @@ Feature: Tests for gpaddmirrors
         Given a working directory of the test as '/tmp/gpaddmirrors'
         And the database is not running
         And with HBA_HOSTNAMES "1" a cluster is created with no mirrors on "cdw" and "sdw1, sdw2"
-        And pg_hba file "/tmp/gpaddmirrors/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "cdw, sdw1"
+        And pg_hba file "/tmp/gpaddmirrors/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "cdw, sdw1"
         And gpaddmirrors adds mirrors with options "--hba-hostnames"
-        And pg_hba file "/tmp/gpaddmirrors/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "cdw, sdw1, sdw2, samehost"
+        And pg_hba file "/tmp/gpaddmirrors/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "cdw, sdw1, sdw2, samehost"
         Then verify the database has mirrors
 
         When the mirror on content 0 is stopped with the immediate flag

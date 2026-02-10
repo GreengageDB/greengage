@@ -36,9 +36,9 @@ class TestCluster(object):
         if hosts:
             self.hosts = hosts
 
-        self.port_base = '20500'
+        self.port_base = '20000'
         self.master_port = os.environ.get('PGPORT', '10300')
-        self.mirror_port_base = '21500'
+        self.mirror_port_base = '21000'
 
         self.gpinitconfig_template = local_path('configs/gpinitconfig_template')
         self.gpinitconfig_mirror_template = local_path('configs/gpinitconfig_mirror_template')
@@ -50,9 +50,9 @@ class TestCluster(object):
         self.hosts_file = os.path.join(self.base_dir, 'hosts')
         self.gpexpand_file = os.path.join(self.base_dir, 'gpexpand_input')
 
-        self.primary_dir = os.path.join(self.base_dir, 'data/primary')
-        self.mirror_dir = os.path.join(self.base_dir, 'data/mirror')
-        self.master_dir = os.path.join(self.base_dir, 'data/master')
+        self.primary_dir = os.path.join(self.base_dir, 'primary')
+        self.mirror_dir = os.path.join(self.base_dir, 'mirror')
+        self.master_dir = os.path.join(self.base_dir, 'master')
 
         # Test metadata
         # Whether to do gpinitsystem or not
@@ -171,9 +171,9 @@ def run_shell_command(cmdstr, cmdname = 'shell command', results={'rc':0, 'stdou
 
 def reset_hosts(hosts, test_base_dir):
 
-    primary_dir = os.path.join(test_base_dir, 'data', 'primary')
-    mirror_dir = os.path.join(test_base_dir, 'data', 'mirror')
-    master_dir = os.path.join(test_base_dir, 'data', 'master')
+    primary_dir = os.path.join(test_base_dir, 'primary')
+    mirror_dir = os.path.join(test_base_dir, 'mirror')
+    master_dir = os.path.join(test_base_dir, 'master')
 
     host_args = " ".join(["-h %s" % x for x in hosts])
     reset_primary_dirs_cmd = "gpssh %s -e 'rm -rf %s; mkdir -p %s'" % (host_args, primary_dir, primary_dir)

@@ -4,7 +4,7 @@ Feature: Tests for gpcheckperf
   @concourse_cluster
   Scenario: gpcheckperf runs disk and memory tests
     Given the database is running
-    When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r ds"
+    When  the user runs "gpcheckperf -h cdw -h sdw1 -d /data/gpdata/ -r ds -S 16GB"
     Then  gpcheckperf should return a return code of 0
     And   gpcheckperf should print "disk write tot bytes" to stdout
 

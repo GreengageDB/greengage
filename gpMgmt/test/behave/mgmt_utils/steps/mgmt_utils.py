@@ -3135,8 +3135,9 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
         segment_host_list = segment_host_list.split(",")
 
     global master_data_dir
-    master_data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1')
+    master_data_dir = os.path.join(context.working_directory, 'master/gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+    os.environ['PGPORT'] = '10300'
 
     try:
         with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
@@ -3317,13 +3318,13 @@ sdw1|sdw1|21502|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
 @given('the master pid has been saved')
 def impl(context):
     data_dir = os.path.join(context.working_directory,
-                            'data/master/gpseg-1')
+                            'master/gpseg-1')
     context.master_pid = gp.get_postmaster_pid_locally(data_dir)
 
 @then('verify that the master pid has not been changed')
 def impl(context):
     data_dir = os.path.join(context.working_directory,
-                            'data/master/gpseg-1')
+                            'master/gpseg-1')
     current_master_pid = gp.get_postmaster_pid_locally(data_dir)
     if context.master_pid == current_master_pid:
         return
@@ -4431,13 +4432,13 @@ arguments="\$@"
 # Insert data into table and run checkpoint just before syncing pg_control
 if [[ "\$arguments" == *"pg_xlog"* ]]
 then
-    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p 5432 -h cdw"
+    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p {port} -h cdw"
     # run checkpoint
-    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c "CHECKPOINT" -d postgres -p 5432 -h cdw"
+    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'CHECKPOINT' -d postgres -p {port} -h cdw"
 fi
 /usr/bin/rsync \$arguments
 EOL
-"""
+""".format(port=os.environ.get("PGPORT"))
     clear_cmd_cache_script = """
 cat >/tmp/clear_cmd_cache.py <<EOL
 #!/usr/bin/env python

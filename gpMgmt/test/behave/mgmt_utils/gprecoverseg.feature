@@ -1,4 +1,5 @@
 @gprecoverseg
+@concourse_cluster_2
 Feature: gprecoverseg tests
 
   @demo_cluster
