@@ -43,10 +43,18 @@ apt-get install -y \
   openssh-server \
   pkg-config \
   protobuf-compiler \
-  python-pip \
-  python2 \
-  python2-dev \
   python3-dev \
   rsync \
   sudo \
   zlib1g-dev
+
+if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; then
+  apt-get install -y \
+    python-pip \
+    python2 \
+    python2-dev
+else
+  apt-get install -y \
+    python3-pip \
+    python-is-python3;
+fi
