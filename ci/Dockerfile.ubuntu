@@ -43,7 +43,7 @@ ENV TARGET_OS=ubuntu \
 
 # Compile with running mocking tests
 RUN if [ "$(lsb_release -sr)" == "22.04" ]; then \
-# Use python3.9 to compile into GPDB's plpython3u
+# Use python3 to compile into GPDB's plpython3u
         export PYTHON3=python3; \
     fi; \
     gpdb_src/concourse/scripts/compile_gpdb.bash
