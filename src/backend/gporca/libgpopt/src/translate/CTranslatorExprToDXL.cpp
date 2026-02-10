@@ -3949,10 +3949,18 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 	// If bar is a very small table, ORCA generates a CorrelatedInnerNLJoin with
 	// a Const true join filter and condition 10 > bar.b is added as a filter
 	// to the scan of bar.
+	// But, we should not create a Boolean subplan, if output columns are needed
+	// somewhere on upper levels, as filter will block them from projecting.
 	// For the other cases function BuildSubplans generates another sublink type
 	// for correct type of join condition.
+	CColRefSet *pcrsRequired =
+		GPOS_NEW(m_mp) CColRefSet(m_mp, *pexpr->Prpp()->PcrsRequired());
+	CColRefSet *pcrsOutput = GPOS_NEW(m_mp)
+		CColRefSet(m_mp, *pexprInnerChild->DeriveOutputColumns());
+	pcrsRequired->Intersection(pcrsOutput);
 	if (CUtils::FScalarConstTrue(pexprScalar) &&
-		COperator::EopPhysicalCorrelatedInnerNLJoin == op_id)
+		COperator::EopPhysicalCorrelatedInnerNLJoin == op_id &&
+		0 == pcrsRequired->Size())
 	{
 		// translate relational inner child expression
 		CDXLNode *pdxlnInnerChild =
@@ -3973,6 +3981,8 @@ CTranslatorExprToDXL::PdxlnCorrelatedNLJoin(
 		BuildSubplans(pexpr, dxl_colref_array, &pdxlnCond, pdrgpdsBaseTables,
 					  pulNonGatherMotions, pfDML);
 	}
+	pcrsRequired->Release();
+	pcrsOutput->Release();
 
 	// extract dxl properties from correlated join
 	CDXLPhysicalProperties *dxl_properties = GetProperties(pexpr);
