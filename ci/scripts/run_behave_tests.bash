@@ -75,7 +75,7 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  if [[ ${CI,,} == "true" ]]; then
+  if [ -n "$CI" ]; then
     for service in $services; do
       docker compose -p $project -f "$docker_compose_path" exec -T \
         $service /bin/bash -s "$feature" < ./ci/scripts/behave_collect_logs.bash
