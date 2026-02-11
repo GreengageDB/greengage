@@ -404,8 +404,7 @@ except that:
 """
 
 import sys
-if sys.version_info[0] != 2:
-    raise ImportError("subprocess32 should only be used with Python 2")
+assert sys.version_info[0] == 2, "subprocess32 should only be used with Python 2"
 
 mswindows = (sys.platform == "win32")
 
