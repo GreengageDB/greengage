@@ -3,7 +3,7 @@ set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
-clusters="~demo_cluster,concourse_cluster ~concourse_cluster,demo_cluster"
+clusters="concourse_cluster ~concourse_cluster"
 
 docker_compose_path="ci/docker-compose.yaml"
 
@@ -38,7 +38,11 @@ fi
 run_feature() {
   local feature=$1
   local cluster=$2
-  local project="${feature}_$cluster"
+  if [ $cluster = "concourse_cluster" ]; then
+    local project="${feature}_concourse"
+  else
+    local project="${feature}_demo"
+  fi
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
