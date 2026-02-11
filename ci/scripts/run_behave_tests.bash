@@ -3,7 +3,7 @@ set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
-clusters="~concourse_cluster,demo_cluster concourse_cluster"
+clusters="~demo_cluster,concourse_cluster ~concourse_cluster,demo_cluster"
 
 docker_compose_path="ci/docker-compose.yaml"
 
