@@ -1063,6 +1063,7 @@ check_input(char *path)
 {
 	struct stat statbuf;
 
+	errno = 0;
 	if (stat(path, &statbuf) != 0)
 	{
 		if (errno == ENOENT)
@@ -1181,6 +1182,7 @@ choose_dsm_implementation(void)
 
 		handle = random();
 		snprintf(name, 64, "/PostgreSQL.%u", handle);
+		errno = 0;
 		if ((fd = shm_open(name, O_CREAT | O_RDWR | O_EXCL, 0600)) != -1)
 		{
 			close(fd);
@@ -2274,7 +2276,7 @@ setup_cdb_schema(void)
 
 	/* Collect all files with .sql suffix in array. */
 	nscripts = 0;
-	while ((file = readdir(dir)) != NULL)
+	while (errno = 0, (file = readdir(dir)) != NULL)
 	{
 		int			namelen = strlen(file->d_name);
 

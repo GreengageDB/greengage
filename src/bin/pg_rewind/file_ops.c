@@ -348,6 +348,7 @@ slurpFile(const char *datadir, const char *path, size_t *filesize)
 
 	buffer = pg_malloc(len + 1);
 
+	errno = 0;
 	if (read(fd, buffer, len) != len)
 		pg_fatal("could not read file \"%s\": %s\n",
 				 fullpath, strerror(errno));
