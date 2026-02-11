@@ -11,7 +11,7 @@ function gen_env(){
 
 		function look4diffs() {
 
-            echo '******** IT'S TRAP *********'
+            echo "******** IT'S TRAP *********"
             echo "I'm here \$(pwd)"
             ls .. -lah
 
