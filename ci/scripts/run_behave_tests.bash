@@ -7,6 +7,8 @@ clusters="~demo_cluster,concourse_cluster ~concourse_cluster,demo_cluster"
 
 docker_compose_path="ci/docker-compose.yaml"
 
+docker_compose_path="ci/docker-compose.yaml"
+
 if [ $# -eq 0 ]
 then
   # TODO cross_subnet and gpssh tests are excluded

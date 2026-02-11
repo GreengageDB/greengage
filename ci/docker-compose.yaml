@@ -19,6 +19,27 @@ services:
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
       - ${PWD}/logs_cdw:/logs
+x-common-service: &common-service
+  image: "${IMAGE}"
+  privileged: true
+  sysctls:
+    kernel.sem: 500 1024000 200 4096
+  init: true
+  ulimits:
+    nofile: 65535
+  entrypoint: >
+    sleep infinity
+
+services:
+  cdw:
+    <<: *common-service
+    working_dir: /home/gpadmin
+    hostname: cdw
+    volumes:
+      - ${PWD}/allure-results:/tmp/allure-results
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PWD}/logs_cdw:/logs
   sdw1:
     <<: *common-service
     hostname: sdw1
