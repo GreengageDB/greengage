@@ -55,7 +55,7 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  if [[ -n "$CI" ]]; then
+  if [ -n "$CI" ]; then
     local services=$(docker compose -p $project -f "$docker_compose_path" config --services | tr '\n' ' ')
     for service in $services; do
       docker compose -p $project -f "$docker_compose_path" exec -T \
