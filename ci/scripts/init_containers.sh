@@ -27,6 +27,6 @@ do
     # Add host keys to known_hosts after containers setup
     ssh-keyscan ${services/$service/} >> /home/gpadmin/.ssh/known_hosts;
     # Add ip and host to /etc/hosts
-    for HOST in cdw sdw1 sdw2 sdw3 sdw4 sdw5 sdw6; do echo \"\$(host \"\$HOST\" | grep 'has address' | head -n 1 | cut -d ' ' -f 4) \$HOST\" >>/etc/hosts; done" &
+    for HOST in $services; do echo \"\$(host \"\$HOST\" | grep 'has address' | head -n 1 | cut -d ' ' -f 4) \$HOST\" >>/etc/hosts; done" &
 done
 wait
