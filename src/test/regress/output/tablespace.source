@@ -331,5 +331,3 @@ SELECT gp_inject_fault('bg_buffer_sync_default_logic', 'reset', dbid) FROM gp_se
  Success:
  Success:
 (3 rows)
-
-DROP TABLESPACE testspace;

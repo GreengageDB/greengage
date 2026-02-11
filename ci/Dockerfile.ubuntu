@@ -37,7 +37,7 @@ ENV TARGET_OS=ubuntu \
     PYTHON3=python3
 
 # Compile with running mocking tests
-RUN gpdb_src/concourse/scripts/compile_gpdb.bash
+RUN SKIP_UNITTESTS=true gpdb_src/concourse/scripts/compile_gpdb.bash
 
 FROM base AS code
 # Use --exclude, when it will be available in stable syntax.
