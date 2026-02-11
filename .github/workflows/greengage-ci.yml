@@ -1,4 +1,3 @@
-# .github/workflows/greengage-ci.yml
 # Main CI pipeline orchestrating build, test, and upload stages
 name: Greengage CI
 
@@ -42,7 +41,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v14
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v15
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -60,7 +59,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v16
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v9
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
@@ -114,7 +113,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@GG-127-simple
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v9
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
