@@ -404,8 +404,8 @@ Feature: expand the cluster by adding more segments
         Then gpexpand should return a return code of 0
         And verify that the cluster has 2 new segments
         And all the segments are running
-        And table "test" exists in "gptest" on specified segment sdw1:20502
-        And table "test" exists in "gptest" on specified segment sdw1:20503
+        And table "test" exists in "gptest" on specified segment sdw1:20002
+        And table "test" exists in "gptest" on specified segment sdw1:20003
         And verify that the master pid has not been changed
 
     @gpexpand_no_mirrors
