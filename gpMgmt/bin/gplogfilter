@@ -245,7 +245,7 @@ def openInputFile(ifn, options):
             zname = zname[0:-3]
             if os.path.splitext(zname)[1] == '':
                 zname += '.log'
-        fileIn = open(ifn, (unzip and 'rb') or 'rU' if sys.version_info[0] == 2 else 'r')
+        fileIn = open(ifn, (unzip and 'rb') or OPEN_READ_MODE)
         filesToClose.append(fileIn)
 
     # Set up input decompression

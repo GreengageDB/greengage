@@ -404,6 +404,9 @@ except that:
 """
 
 import sys
+if sys.version_info[0] != 2:
+    raise ImportError("subprocess32 should only be used with Python 2")
+
 mswindows = (sys.platform == "win32")
 
 import os
@@ -800,12 +803,12 @@ class Popen(object):
             self.stdin = os.fdopen(p2cwrite, 'wb', bufsize)
         if c2pread != -1:
             if universal_newlines:
-                self.stdout = os.fdopen(c2pread, 'rU' if sys.version_info[0] == 2 else 'r', bufsize)
+                self.stdout = os.fdopen(c2pread, 'rU', bufsize)
             else:
                 self.stdout = os.fdopen(c2pread, 'rb', bufsize)
         if errread != -1:
             if universal_newlines:
-                self.stderr = os.fdopen(errread, 'rU' if sys.version_info[0] == 2 else 'r', bufsize)
+                self.stderr = os.fdopen(errread, 'rU', bufsize)
             else:
                 self.stderr = os.fdopen(errread, 'rb', bufsize)
 
