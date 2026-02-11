@@ -1,6 +1,6 @@
-ARG UBUNTU_VERSION=22.04
+ARG OS_VERSION=22.04
 
-FROM ubuntu:${UBUNTU_VERSION} AS base
+FROM ubuntu:${OS_VERSION} AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /home/gpadmin
 
