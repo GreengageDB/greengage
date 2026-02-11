@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys, time
 
 GPMONDIR = 'gpperfmon/data'
@@ -49,4 +50,4 @@ for line in open(os.path.join(GPMONDIR, "queries_now.dat")):
         line[-3] = '"' + appname + '"'
         line[-2] = '"' + rsqname + '"'
         line[-1] = '"' + priority + '"'
-    print '|'.join(line).strip()
+    print('|'.join(line).strip())

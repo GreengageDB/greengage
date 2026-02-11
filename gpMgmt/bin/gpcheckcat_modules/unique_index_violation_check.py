@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-class UniqueIndexViolationCheck:
+from builtins import object
+class UniqueIndexViolationCheck(object):
     unique_indexes_query = """
         select table_oid, index_name, table_name, array_agg(attname) as column_names
         from pg_attribute, (

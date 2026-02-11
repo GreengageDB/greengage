@@ -10,6 +10,7 @@ This file defines the interface that can be used to
    as well as the data object returned by the
 
 """
+from builtins import object
 import os
 
 from gppylib.gplog import *
@@ -21,7 +22,7 @@ logger = get_default_logger()
 # An implementation of GpFileSystemProvider will provide functionality
 #   to do filesystem operations (like iterating directories or writing temp files)
 #
-class GpFileSystemProvider :
+class GpFileSystemProvider(object) :
     def __init__(self):
         pass
 

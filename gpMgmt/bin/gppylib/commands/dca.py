@@ -6,10 +6,11 @@
 """
 Module for commands that are DCA specific
 """
+from __future__ import absolute_import
 
 import os 
 from gppylib.gplog import get_default_logger
-from base import Command, LOCAL, REMOTE
+from .base import Command, LOCAL, REMOTE
 
 logger = get_default_logger()
 
@@ -34,7 +35,7 @@ class DcaGpdbInitialized(Command):
         try:
             cmd=DcaGpdbInitialized('dcainit')
             cmd.run(validateAfter=True)
-        except Exception, e:
+        except Exception as e:
             logger.error(e.__str__())
             logger.error("Exception running dca initialization")
         except:
@@ -51,7 +52,7 @@ class DcaGpdbStopped(Command):
         try:
             cmd=DcaGpdbStopped('dcastop')
             cmd.run(validateAfter=True)
-        except Exception, e:
+        except Exception as e:
             logger.error(e.__str__())
             logger.error("Exception running dca de-initialization")
         except:

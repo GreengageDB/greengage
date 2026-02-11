@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import unittest
 import sys
 import os
@@ -28,7 +29,7 @@ if UPD not in sys.path:
 def ensure_env(name):
     v = os.environ.get(name)
     if v is None:
-        print "Environment variable " + name + " is required"
+        print("Environment variable " + name + " is required")
         sys.exit(1)
     return v
 
@@ -283,9 +284,9 @@ def get_table_name():
                   ,host='localhost'
                   ,port=int(PGPORT)
                   )
-    except Exception,e:
+    except Exception as e:
         errorMessage = str(e)
-        print 'could not connect to database: ' + errorMessage
+        print('could not connect to database: ' + errorMessage)
     queryString = """SELECT tablename
                      from pg_tables
                      WHERE tablename
@@ -301,9 +302,9 @@ def drop_tables():
                   ,host='localhost'
                   ,port=int(PGPORT)
                   )
-    except Exception,e:
+    except Exception as e:
         errorMessage = str(e)
-        print 'could not connect to database: ' + errorMessage
+        print('could not connect to database: ' + errorMessage)
 
     list = get_table_name()
     for i in list:

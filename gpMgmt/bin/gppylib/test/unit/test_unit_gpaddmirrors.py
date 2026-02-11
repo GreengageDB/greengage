@@ -1,9 +1,11 @@
+from __future__ import absolute_import
 import os
 import sys
+import six
 
-import StringIO
+import io
 from mock import *
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.programs.clsAddMirrors import GpAddMirrorsProgram, ProgramArgumentValidationException
 from gparray import Segment, GpArray
 from gppylib.system.environment import GpMasterEnvironment
@@ -32,7 +34,7 @@ class GpAddMirrorsTest(GpTestCase):
             patch('gppylib.gparray.GpArray.getSegmentsByHostName', return_value=self.gparray_get_segments_by_hostname),
 
         ])
-        self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
+        # self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
         self.mock_logger = self.get_mock_from_apply_patch('logger')
         self.gpMasterEnvironmentMock = self.get_mock_from_apply_patch("GpMasterEnvironment")
         self.gpMasterEnvironmentMock.return_value.getMasterPort.return_value = 123456
@@ -87,7 +89,7 @@ class GpAddMirrorsTest(GpTestCase):
         with self.assertRaises(ProgramArgumentValidationException):
             self.subject.run()
 
-    @patch('sys.stdout', new_callable=StringIO.StringIO)
+    @patch('sys.stdout', new_callable=six.StringIO)
     def test_option_version(self, mock_stdout):
         sys.argv = ['gpaddmirrors', '--version']
         with self.assertRaises(SystemExit) as cm:
@@ -124,8 +126,9 @@ class GpAddMirrorsTest(GpTestCase):
 
         self.assertIn("45000", result[0])
 
-    def test_datadir_interview(self):
-        self.raw_input_mock.side_effect = ["/tmp/datadirs/mirror1", "/tmp/datadirs/mirror2", "/tmp/datadirs/mirror3"]
+    @patch('gppylib.programs.clsAddMirrors.input', side_effect=["/tmp/datadirs/mirror1", "/tmp/datadirs/mirror2", "/tmp/datadirs/mirror3"])
+    def test_datadir_interview(self, mock1):
+        # self.raw_input_mock.side_effect = ["/tmp/datadirs/mirror1", "/tmp/datadirs/mirror2", "/tmp/datadirs/mirror3"]
         sys.argv = ['gpaddmirrors', '-p', '5000']
         options, _ = self.parser.parse_args()
         self.config_provider_mock.loadSystemConfig.return_value = GpArray([self.master, self.primary0, self.primary1])

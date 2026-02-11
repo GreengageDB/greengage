@@ -1,8 +1,9 @@
+from __future__ import absolute_import
 import os
 
 import sys
 
-from gp_unittest import *
+from .gp_unittest import *
 from gpconfig_modules.parse_guc_metadata import ParseGuc
 
 

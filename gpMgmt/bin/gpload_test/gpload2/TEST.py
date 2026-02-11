@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from builtins import range
 import unittest
 import sys
 import os
@@ -19,7 +21,7 @@ def get_port_from_conf():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
     if os.path.isfile(file):
         with open(file) as f:
-            for line in f.xreadlines():
+            for line in f:
                 match = re.search('port=\d+',line)
                 if match:
                     match1 = re.search('\d+', match.group())
@@ -376,7 +378,7 @@ def modify_sql_file(num):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file,inplace=1):
             line = line.replace("gpload.py ","gpload ")
-            print str(re.sub('\n','',line))
+            print(str(re.sub('\n','',line)))
 
 def copy_data(source='',target=''):
     cmd = 'cp '+ mkpath('data/' + source) + ' ' + mkpath(target)
@@ -392,9 +394,9 @@ def get_table_name():
                   ,host='localhost'
                   ,port=int(PGPORT)
                   )
-    except Exception,e:
+    except Exception as e:
         errorMessage = str(e)
-        print 'could not connect to database: ' + errorMessage
+        print('could not connect to database: ' + errorMessage)
     queryString = """SELECT tablename
                      from pg_tables
                      WHERE tablename
@@ -410,9 +412,9 @@ def drop_tables():
                   ,host='localhost'
                   ,port=int(PGPORT)
                   )
-    except Exception,e:
+    except Exception as e:
         errorMessage = str(e)
-        print 'could not connect to database: ' + errorMessage
+        print('could not connect to database: ' + errorMessage)
 
     list = get_table_name()
     for i in list:

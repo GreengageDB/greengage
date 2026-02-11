@@ -7,11 +7,13 @@
 
 """ Unittesting for gplog module
 """
+from __future__ import absolute_import
+from builtins import range
 import os
 
 from gppylib.gparray import GpArray, Segment, createSegmentRows, get_gparray_from_config
 from gppylib import gplog
-from gp_unittest import *
+from .gp_unittest import *
 from mock import patch, Mock
 from gppylib.system.configurationInterface import GpConfigurationProvider
 
@@ -226,7 +228,7 @@ class GpArrayTestCase(GpTestCase):
             
         expected_count = portdict[lastport]
             
-        for count in portdict.values():
+        for count in list(portdict.values()):
             self.assertEquals(expected_count, count)
 
     def _validate_get_segment_list(self, gparray, hostlist, expansion_hosts, primary_list):

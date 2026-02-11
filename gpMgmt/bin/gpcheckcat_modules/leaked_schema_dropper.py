@@ -1,6 +1,7 @@
+from builtins import object
 from gppylib.utils import escapeDoubleQuoteInSQLString
 
-class LeakedSchemaDropper:
+class LeakedSchemaDropper(object):
 
     # This query does a union of all the leaked temp schemas on the master as well as all the segments.
     # The first part of the query uses gp_dist_random which gets the leaked schemas from only the segments

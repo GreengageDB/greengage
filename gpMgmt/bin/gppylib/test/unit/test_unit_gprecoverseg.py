@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from builtins import object
 import os
 import shutil
 import sys
@@ -5,7 +7,7 @@ import tempfile
 
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.gparray import GpArray, Segment
 from gppylib.heapchecksum import HeapChecksum
 from gppylib.operations.buildMirrorSegments import GpMirrorToBuild, GpMirrorListToBuild
@@ -17,7 +19,7 @@ from gppylib.utils import TableLogger
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 
 
-class Options:
+class Options(object):
     def __init__(self):
         self.newRecoverHosts = None
         self.spareDataDirectoryFile = ""

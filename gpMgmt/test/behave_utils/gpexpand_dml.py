@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from __future__ import division
+from builtins import range
+from past.utils import old_div
 import threading
 import time
 from gppylib.db import dbconn
@@ -70,7 +74,7 @@ class TestDML(threading.Thread):
             self.maxtime = max(self.maxtime, ts - timestamp)
             timestamp = ts
         endtime = time.time()
-        self.avgtime = (endtime - starttime) / self.counter
+        self.avgtime = old_div((endtime - starttime), self.counter)
 
     def loop_step(self):
         return 'select 1'
@@ -179,7 +183,7 @@ if __name__ == '__main__':
 
     for dml, job in jobs:
         code, message = job.stop()
-        print '{dml}: {code}, message={message}, avgtime={avgtime}, maxtime={maxtime}'.format(
+        print('{dml}: {code}, message={message}, avgtime={avgtime}, maxtime={maxtime}'.format(
             dml=dml, code=code, message=message,
             avgtime=job.avgtime, maxtime=job.maxtime
-        )
+        ))

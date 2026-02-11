@@ -16,6 +16,7 @@
 #
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
+from builtins import object
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
@@ -45,7 +46,7 @@ from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsFactory
 logger = gplog.get_default_logger()
 
 
-class GpRecoverSegmentProgram:
+class GpRecoverSegmentProgram(object):
     #
     # Constructor:
     #
@@ -307,7 +308,7 @@ class GpRecoverSegmentProgram:
                     if h.strip() not in uniqueHosts:
                         uniqueHosts.append(h.strip())
                 self.__options.newRecoverHosts = uniqueHosts
-            except Exception, ex:
+            except Exception as ex:
                 raise ProgramArgumentValidationException( \
                     "Invalid value for recover hosts: %s" % ex)
 

@@ -15,7 +15,11 @@ Usage: multidd {-i infile} {-o outfile} [-B blocksz] [-S filesz]
 
 	e.g. multidd -i /dev/zero -o /dbfast1/ddtest -B 8kb -S 2gb
 """
+from __future__ import print_function
+from __future__ import division
 
+from builtins import range
+from past.utils import old_div
 import getopt
 import math
 import os
@@ -130,7 +134,7 @@ if opt['-S'] < opt['-B']:
 cmd = []
 pfile = []
 blocksz = opt['-B']
-cnt = int(math.ceil(opt['-S'] / blocksz))
+cnt = int(math.ceil(old_div(opt['-S'], blocksz)))
 totalBytes = 0
 for i in range(len(opt['-i'])):
     ifile = opt['-i'][i]

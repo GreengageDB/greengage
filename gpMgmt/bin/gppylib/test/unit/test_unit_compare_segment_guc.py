@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 from mock import *
-from gp_unittest import *
+from .gp_unittest import *
 from gpconfig_modules.compare_segment_guc import MultiValueGuc
 from gpconfig_modules.database_segment_guc import DatabaseSegmentGuc
 from gpconfig_modules.file_segment_guc import FileSegmentGuc

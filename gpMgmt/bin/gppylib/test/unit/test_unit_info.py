@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.system.info import *
 
 

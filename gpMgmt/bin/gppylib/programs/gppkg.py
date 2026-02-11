@@ -1,6 +1,7 @@
 # Line too long - pylint: disable=C0301
 # Copyright (c) Greenplum Inc 2011. All Rights Reserved.
 
+from builtins import object
 from optparse import OptionGroup
 import os
 import sys
@@ -20,12 +21,12 @@ try:
     from gppylib.operations.unix import ListFilesByPattern
 
     import platform
-except ImportError, ex:
+except ImportError as ex:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(ex))
 
 logger = gplog.get_default_logger()
 
-class GpPkgProgram:
+class GpPkgProgram(object):
     """ This is the CLI entry point to package management code.  """
     def __init__(self, options, args):
         self.master_datadir = options.masterDataDirectory
@@ -194,7 +195,7 @@ class GpPkgProgram:
                 cmd.run(validateAfter=True)
                 cmd = Command(name='Check for fakeroot', cmdStr='fakeroot --version')
                 cmd.run(validateAfter=True)
-            except Exception, ex:
+            except Exception as ex:
                 raise ExceptionNoStackTraceNeeded('fakeroot and dpkg are both required by gppkg')
         else:
             try:
@@ -206,7 +207,7 @@ class GpPkgProgram:
                 if not rpm_version_string.startswith('4.'):
                     raise ExceptionNoStackTraceNeeded('gppkg requires rpm version 4.x')
 
-            except ExecutionError, ex:
+            except ExecutionError as ex:
                 results = ex.cmd.get_results().stderr.strip()
                 if len(results) != 0 and 'not found' in results:
                     raise ExceptionNoStackTraceNeeded('gppkg requires RPM to be available in PATH')

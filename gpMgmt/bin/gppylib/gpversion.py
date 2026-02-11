@@ -9,7 +9,11 @@
 """
 
 # ===========================================================
+from past.builtins import cmp
+from builtins import map
+from builtins import object
 import sys, os, re
+import six
 
 # Python version 2.6.2 is expected, must be between 2.5-3.0
 if sys.version_info < (2, 5, 0) or sys.version_info >= (3, 0, 0):
@@ -22,7 +26,7 @@ MAIN_VERSION = [6,99,99]    # version number for main
 
 
 #============================================================
-class GpVersion:
+class GpVersion(object):
     '''
     The gpversion class is an abstraction of a given Greengage release 
     version.  It exists in order to facilitate version comparisons,
@@ -78,7 +82,7 @@ class GpVersion:
 
             # if version isn't a type we recognise then convert to a string
             # first
-            if not (isinstance(v, str) or
+            if not (isinstance(v, six.string_types) or
                     isinstance(v, list) or
                     isinstance(v, tuple)):
                 v = str(v)
@@ -97,7 +101,7 @@ class GpVersion:
             #    "<VERSION>"
             #    "<VERSION> <BUILD>"
             #
-            if isinstance(v, str):
+            if isinstance(v, six.string_types):
                 # See if it matches one of the two the long formats
                 regex = r"\(Green\w+ Database\)? ([^ ]+) build ([^ )]+)"
                 m = re.search(regex, v)
@@ -115,7 +119,7 @@ class GpVersion:
                 elif len(vlist) == 3 and vlist[1] == 'build':
                     (v, _, self.build) = vlist
                 elif len(vlist) > 2:
-                    raise StandardError("too many tokens in version")
+                    raise Exception("too many tokens in version")
                 
                 # We should now just have "<VERSION>"
                 if v == 'main' or v.endswith('_MAIN'):
@@ -140,7 +144,7 @@ class GpVersion:
                 regex = r"[0123456789.]*\d"
                 m = re.search(regex, v)
                 if not m:
-                    raise StandardError("unable to coerce to version")
+                    raise Exception("unable to coerce to version")
                 if m.end() < len(v):
                     self.build = v[m.end()+1:]
                 v = v[m.start():m.end()]
@@ -156,18 +160,18 @@ class GpVersion:
 
             # Any input we received should have been 
             if not isinstance(v, list):
-                raise StandardError("Internal coding error")
+                raise Exception("Internal coding error")
 
             # As of GPDB 5, version strings moved from four digits (4.3.X.X) to three (5.X.X)
             minlen = 2 if int(v[0]) <= 4 else 1
             maxlen = 4 if int(v[0]) <= 4 else 3
             if len(v) < minlen:
-                raise StandardError("Version too short")
+                raise Exception("Version too short")
             elif len(v) > maxlen:
-                raise StandardError("Version too long")
+                raise Exception("Version too long")
             elif len(v) < maxlen:
                 v.extend([99,99])
-            v = map(int, v)  # Convert to integers
+            v = list(map(int, v))  # Convert to integers
             if v[0] <= 4:
                 self.version = v[:4]
             else:
@@ -179,7 +183,7 @@ class GpVersion:
 
         # If part of the conversion process above failed, throw an error,
         except Exception as e:
-            raise StandardError("Unrecognised Greengage Version '%s' due to %s" %
+            raise Exception("Unrecognised Greengage Version '%s' due to %s" %
                                 (str(version), str(e)))
 
     #------------------------------------------------------------
@@ -223,7 +227,7 @@ class GpVersion:
         i = self.history.index(self.getVersionRelease())
         i -= num
         if i < 0 or num < 0:
-            raise StandardError('invalid version shift')
+            raise Exception('invalid version shift')
         return GpVersion(self.history[i] + ".0.0")
 
     #------------------------------------------------------------

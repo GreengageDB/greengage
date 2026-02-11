@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from builtins import range
 import os, sys
 
 PATH, EXECNAME = os.path.split(os.path.abspath(sys.argv[0]))
@@ -20,7 +22,7 @@ try:
     from gppylib import gplog
     from multiprocessing import Process
     from gppylib.commands import unix
-except Exception, e:
+except Exception as e:
     sys.exit('Cannot import modules. Please check that you have sourced greengage_path.sh. Detail: ' + str(e))
 
 def parseargs( help=False ):
@@ -52,8 +54,8 @@ def parseargs( help=False ):
         if options.concurrency <= 0:
             parser.print_help()
             raise Exception("\nERROR: You must provide a positive integer for concurrency\n\n")
-    except Exception, e:
-        print e
+    except Exception as e:
+        print(e)
         sys.exit(-1)
 
     if help:

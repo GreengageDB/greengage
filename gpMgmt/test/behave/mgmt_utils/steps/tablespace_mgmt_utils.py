@@ -1,3 +1,4 @@
+from builtins import object
 import pipes
 import tempfile
 import os
@@ -12,7 +13,7 @@ from gppylib.commands.base import Command, REMOTE
 from gppylib.commands.unix import get_remote_link_path
 from contextlib import closing
 
-class Tablespace:
+class Tablespace(object):
     def __init__(self, name, with_desc=False):
         self.name = name
         self.path = tempfile.mkdtemp()
@@ -251,12 +252,12 @@ def impl(context):
 
 @then('the tablespace is valid after gpexpand')
 def impl(context):
-    for _, tbs in context.tablespaces.items():
+    for _, tbs in list(context.tablespaces.items()):
         tbs.verify_for_gpexpand()
 
 @then('all tablespaces are dropped')
 def impl(context):
-    for tablespace in context.tablespaces.values():
+    for tablespace in list(context.tablespaces.values()):
         tablespace.cleanup()
     context.tablespaces = {}
 
