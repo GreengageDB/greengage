@@ -38,11 +38,7 @@ fi
 run_feature() {
   local feature=$1
   local cluster=$2
-  if [ $cluster = "concourse_cluster" ]; then
-    local project="${feature}_concourse"
-  else
-    local project="${feature}_demo"
-  fi
+  local project="${feature}_$cluster"
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
