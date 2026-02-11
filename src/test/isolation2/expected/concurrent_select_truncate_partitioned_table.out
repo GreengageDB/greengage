@@ -4,9 +4,7 @@
 -- case). Without locks TRUNCATE on leaf partition could break the atomicity of
 -- SELECT.
 create table t_part (a int, b int, c text) distributed by (a) partition by list(b) (partition part1 values (1));
-CREATE
 insert into t_part select g, 1, g || 'line' from generate_series(1, 10) g;
-INSERT 10
 
 -- Wait for some time on 2 segments to give the way to TRUNCATE.
 1: select gp_inject_fault('locks_check_at_select_portal_create', 'sleep', '', '', '', 1, 1, 10, dbid) from gp_segment_configuration c where role='p' and (content=0 or content=2);
@@ -29,7 +27,6 @@ select pg_sleep(2);
           
 (1 row)
 truncate t_part_1_prt_part1;
-TRUNCATE
 
 1: select gp_inject_fault('locks_check_at_select_portal_create', 'reset', c.dbid) from gp_segment_configuration c where role='p' and (content=0 or content=2);
  gp_inject_fault 
@@ -45,4 +42,3 @@ TRUNCATE
 (1 row)
 
 drop table t_part;
-DROP

@@ -11,6 +11,10 @@ function gen_env(){
 
 		function look4diffs() {
 
+            echo '******** IT'S TRAP *********'
+            echo "I'm here \$(pwd)"
+            ls .. -lah
+
 		    diff_files=\`find .. -name regression.diffs\`
 
 		    for diff_file in \${diff_files}; do
