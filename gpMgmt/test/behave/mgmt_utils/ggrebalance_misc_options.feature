@@ -340,3 +340,141 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And the user reset the walsender on the primary on content 0
          And the user waits until saved async process is completed
          And verify that mirror on content 0 is up
+
+    Scenario: test 15. Check '--log-dir' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -l "/tmp/ggrebalance_logs" -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And gpAdminLogs directory has no "ggrebalance*" files
+         And gpAdminLogs directory has no "gpmovemirrors*" files
+         And gpAdminLogs directory has no "gprecoverseg*" files
+         And "/tmp/ggrebalance_logs" directory has "ggrebalance*" files
+         And "/tmp/ggrebalance_logs" directory has "gpmovemirrors*" files
+         And "/tmp/ggrebalance_logs" directory has "gprecoverseg*" files
+         And all files in "/tmp/ggrebalance_logs" directory are deleted
+        When the user runs "ggrebalance -c"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --log-dir "/tmp/ggrebalance logs" -x 6 --add-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And gpAdminLogs directory has no "ggrebalance*" files
+         And gpAdminLogs directory has no "gpmovemirrors*" files
+         And gpAdminLogs directory has no "gprecoverseg*" files
+         And "/tmp/ggrebalance logs" directory has "ggrebalance*" files
+         And "/tmp/ggrebalance logs" directory has "gpmovemirrors*" files
+         And "/tmp/ggrebalance logs" directory has "gprecoverseg*" files
+         And all files in "/tmp/ggrebalance logs" directory are deleted
+
+    Scenario: test 16.1. Check without '--analyze' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_2" in "test_db_1" with "100" rows
+         And all files in gpAdminLogs directory are deleted
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS not_analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  not_analyzed_tables_cnt  |
+          |  2                        |
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NOT NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  analyzed_tables_cnt  |
+          |  0                    |
+        When the user runs "ggrebalance -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS not_analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  not_analyzed_tables_cnt  |
+          |  2                        |
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NOT NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  analyzed_tables_cnt  |
+          |  0                    |
+
+    Scenario: test 16.2. Check with '--analyze' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_2" in "test_db_1" with "100" rows
+         And all files in gpAdminLogs directory are deleted
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS not_analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  not_analyzed_tables_cnt  |
+          |  2                        |
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NOT NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  analyzed_tables_cnt  |
+          |  0                    |
+        When the user runs "ggrebalance --analyze -x 3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS not_analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  not_analyzed_tables_cnt  |
+          |  0                        |
+        When execute following sql in db "test_db_1" and store result in the context
+            """
+            SELECT COUNT(1) AS analyzed_tables_cnt FROM pg_stat_all_tables WHERE last_analyze IS NOT NULL AND relname IN ('test_table_1', 'test_table_2');
+            """
+        Then validate that following rows are in the stored rows
+          |  analyzed_tables_cnt  |
+          |  2                    |
+
+    Scenario: test 17. Check '--replay-lag' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --replay-lag 0 -x 6 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 1
+         And gprecoverseg should print "0 bytes of wal is still to be replayed on mirror with dbid.*, let mirror catchup on replay then trigger rebalance" regex to logfile
+         And all files in gpAdminLogs directory are deleted
+
+    Scenario: test 18-1. Check '--hba-hostnames' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance --hba-hostnames -x 2 --add-hosts sdw2 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And pg_hba file "/data/gpdata/ggrebalance/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains entries for "sdw2"
+
+    Scenario: test 18-2. Check without '--hba-hostnames' option.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And all files in gpAdminLogs directory are deleted
+        When the user runs "ggrebalance -x 2 --add-hosts sdw2 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And pg_hba file "/data/gpdata/ggrebalance/data/primary/gpseg0/pg_hba.conf" on host "sdw1" contains only cidr addresses

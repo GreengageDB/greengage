@@ -84,6 +84,15 @@ def parseargs():
                       help='Hosts that user wants to remove from a cluster. One host per line')
     parser.add_option('--skip-resource-estimation', dest='skip_resource_estimation', metavar='<skip_resource_estimation>',
                       action='store_true', default=False, help='Skip resource estimation (storage)')
+    parser.add_option('-l', '--log-dir', dest='logfile_directory', metavar='<logfile_directory>',
+                      help='The directory to write the log files. The default location is ~/gpAdminLogs.')
+    parser.add_option('-a', '--analyze', dest="analyze", action='store_true', default=False,
+                      help='Run ANALYZE after rebalance tables redistribution.' +
+                           'Ignored if no shrink or expand had been performed.')
+    parser.add_option('--hba-hostnames', dest="hba_hostnames", action='store_true', default=False,
+                      help='Use host names when updating the pg_hba.conf file.')
+    parser.add_option('--replay-lag', dest="replay_lag", type="float",
+                      help='Replay lag(in GBs) allowed on mirror when rebalancing the segments.')
     parser.add_option('-v', '--verbose', action='store_true', default=False,
                       help='debug output.')
 
@@ -142,7 +151,7 @@ def validate_options(options, args, parser):
             'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
-            'skip_resource_estimation'
+            'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames'
         ]),
 
         ('rollback_required', [
@@ -258,7 +267,7 @@ def sig_handler(sig, arg):
             cmd_recoverseg.cancel()
         sys.exit(1)
 
-def check_down_segments(logger: Any, dburl: dbconn.DbURL):
+def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
     # check if some of the segments are down - it can happen if we're recovering from an
     # interrupted state, and such segments are left by the interrupted gprecoverseg
     conn = dbconn.connect(dburl, encoding='UTF8', allowSystemTableMods=True)
@@ -273,6 +282,8 @@ def check_down_segments(logger: Any, dburl: dbconn.DbURL):
     if cnt_mirrors_down != 0:
         logger.info("Some mirrors are down, trying to recover them, it may take some time...")
         recoverseg_options = "-a -F"
+        if options.logfile_directory is not None:
+            recoverseg_options = recoverseg_options + f' -l "{str(options.logfile_directory)}"'
         global cmd_recoverseg
         try:
             cmd_recoverseg = GpRecoverSeg("Running gprecoverseg", options=recoverseg_options)
@@ -292,7 +303,7 @@ def main(options, args, parser):
         signal.signal(signal.SIGINT, sig_handler)
 
         logger = get_default_logger()
-        setup_tool_logging(EXECNAME, getLocalHostname(), getUserName())
+        setup_tool_logging(EXECNAME, getLocalHostname(), getUserName(), options.logfile_directory)
 
         options, args = validate_options(options, args, parser)
 
@@ -317,7 +328,7 @@ def main(options, args, parser):
 
         gparray_dump_filename = options.coordinator_data_directory + '/gparraydump'
 
-        check_down_segments(logger, dburl)
+        check_down_segments(logger, options, dburl)
 
         logger.info('Init gparray from catalog')
         try:

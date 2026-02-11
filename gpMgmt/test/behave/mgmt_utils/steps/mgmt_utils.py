@@ -2678,7 +2678,15 @@ def impl(context, location):
 @when('all files in gpAdminLogs directory are deleted')
 @then('all files in gpAdminLogs directory are deleted')
 def impl(context):
-    log_dir = _get_gpAdminLogs_directory()
+    remove_all_logfiles(_get_gpAdminLogs_directory())
+
+@given('all files in "{log_dir}" directory are deleted')
+@when('all files in "{log_dir}" directory are deleted')
+@then('all files in "{log_dir}" directory are deleted')
+def impl(context, log_dir):
+    remove_all_logfiles(log_dir)
+
+def remove_all_logfiles(log_dir):
     files_found = glob.glob('%s/*' % (log_dir))
     for file in files_found:
         os.remove(file)
@@ -2719,7 +2727,15 @@ def impl(context):
 
 @then('gpAdminLogs directory {has} "{expected_file}" files')
 def impl(context, has, expected_file):
-    log_dir = _get_gpAdminLogs_directory()
+    check_logs_directory(_get_gpAdminLogs_directory(), has, expected_file)
+
+
+@then('"{log_dir}" directory {has} "{expected_file}" files')
+def impl(context, log_dir, has, expected_file):
+    check_logs_directory(log_dir, has, expected_file)
+
+
+def check_logs_directory(log_dir, has, expected_file):
     files_found = glob.glob('%s/%s' % (log_dir, expected_file))
     if files_found and (has == 'has no'):
         raise Exception("expected no %s files in %s, but found %s" % (expected_file, log_dir, files_found))

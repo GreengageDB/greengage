@@ -614,6 +614,9 @@ class GGShrink:
                                f'''ALTER TABLE "{self.schema_name}"."{self.rel_name}"
                                REBALANCE {self.target_segment_count}''')
                 self.shrink.rebalance_schema.setStatusForTableToRebalance(self.db_name, self.schema_name, self.rel_name, self.table_status_after_rebalance)
+                if self.shrink.options.analyze:
+                    dbconn.execSQL(conn,
+                               f'''ANALYZE "{self.schema_name}"."{self.rel_name}"''')
                 dbconn.execSQL(conn, 'COMMIT')
             self.shrink.logger.info(f'Complete table rebalance for "{self.db_name}"."{self.schema_name}"."{self.rel_name}"')
             self.set_results(CommandResult(0, b'', b'', True, False))

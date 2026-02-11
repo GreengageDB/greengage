@@ -26,6 +26,9 @@ Feature: ggrebalance behave tests
           | -c --mirror-mode grouped                                    | Can't use together options '--clean-required' and '--mirror-mode'       | stub     |
           | -c --skip-rebalance                                         | Can't use together options '--clean-required' and '--skip-rebalance'    | stub     |
           | -c --show-plan                                              | Can't use together options '--clean-required' and '--show-plan'         | stub     |
+          | -c --analyze                                                | Can't use together options '--clean-required' and '--analyze'           | stub     |
+          | -c --replay-lag 1                                           | Can't use together options '--clean-required' and '--replay-lag'        | stub     |
+          | -c --hba-hostnames                                          | Can't use together options '--clean-required' and '--hba-hostnames'     | stub     |
           | -c --skip-resource-estimation                               | Can't use together options '--clean-required' and '--skip-resource-estimation' |  the database is not running |
 
     Scenario: test 2. ggrebalance simple scenarios

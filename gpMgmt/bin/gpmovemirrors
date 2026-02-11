@@ -400,7 +400,7 @@ try:
     recoversegOptions = "-i " + newConfig.inputFile + " -B " + str(options.batch_size) + \
                         " -b " + str(options.segment_batch_size) + " -v -a -d " + options.coordinator_data_directory
     if options.logfile_directory != None:
-        recoversegOptions = recoversegOptions + " -l " + str(options.logfile_directory)
+        recoversegOptions = recoversegOptions + f' -l "{str(options.logfile_directory)}"'
     logger.info('About to run gprecoverseg with options: ' + recoversegOptions)
     cmd = GpRecoverSeg("Running gprecoverseg", options=recoversegOptions)
     cmd.run(validateAfter=True)

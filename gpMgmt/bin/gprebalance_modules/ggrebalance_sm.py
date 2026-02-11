@@ -20,7 +20,8 @@ class RebalanceSM:
 
     states_not_logged = [
         'STATE_REBALANCE_INIT',
-        'STATE_CHECK_PREVIOUS_RUN'
+        'STATE_CHECK_PREVIOUS_RUN',
+        'STATE_ERROR'
     ]
 
     states_main_rebalance_flow = [
@@ -85,6 +86,11 @@ class RebalanceSM:
             'trigger': 'move_to_STATE_REBALANCE_DONE',
             'source': 'STATE_REBALANCE_EXECUTION_DONE',
             'dest': 'STATE_REBALANCE_DONE'
+        },
+        {
+            'trigger': 'move_to_STATE_ERROR',
+            'source': '*',
+            'dest': 'STATE_ERROR'
         }
     ]
 
@@ -147,7 +153,10 @@ class RebalanceSM:
             if batch_size > MAX_COORDINATOR_NUM_WORKERS:
                 batch_size = MAX_COORDINATOR_NUM_WORKERS
             gpmovemirrors_options += f' -B {batch_size}'
-
+            if self.options.hba_hostnames:
+                gpmovemirrors_options = gpmovemirrors_options + ' --hba-hostnames'
+            if self.options.logfile_directory is not None:
+                gpmovemirrors_options = gpmovemirrors_options + f' -l "{str(self.options.logfile_directory)}"'
         try:
             self.cmd = GpMoveMirrors("Running gpmovemirrors", options=gpmovemirrors_options)
             self.cmd.run(validateAfter=True)
@@ -249,7 +258,10 @@ class RebalanceSM:
                 if batch_size > MAX_COORDINATOR_NUM_WORKERS:
                     batch_size = MAX_COORDINATOR_NUM_WORKERS
                 recoverseg_options += f' -B {batch_size}'
-
+                if self.options.replay_lag is not None:
+                    recoverseg_options = recoverseg_options + f' --replay-lag {self.options.replay_lag}'
+                if self.options.logfile_directory is not None:
+                    recoverseg_options = recoverseg_options + f' -l "{str(self.options.logfile_directory)}"'
             try:
                 self.cmd = GpRecoverSeg("Running gprecoverseg", options=recoverseg_options)
                 self.cmd.run(validateAfter=True)
@@ -500,5 +512,9 @@ class RebalanceSM:
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
         pass
+
+    @wrap_state_func_with_faults
+    def on_enter_STATE_ERROR(self) -> None:
+        raise Exception('Rebalance execution entered STATE_ERROR')
 
     # state callbacks end here
