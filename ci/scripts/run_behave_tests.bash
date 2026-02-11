@@ -3,7 +3,7 @@ set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
-clusters="~concourse_cluster,demo_cluster concourse_cluster"
+clusters="~demo_cluster,concourse_cluster ~concourse_cluster,demo_cluster"
 
 docker_compose_path="ci/docker-compose.yaml"
 
@@ -55,7 +55,7 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  if [[ -n "$CI" ]]; then
+  if [ -n "$CI" ]; then
     local services=$(docker compose -p $project -f "$docker_compose_path" config --services | tr '\n' ' ')
     for service in $services; do
       docker compose -p $project -f "$docker_compose_path" exec -T \
