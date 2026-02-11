@@ -38,7 +38,7 @@ fi
 run_feature() {
   local feature=$1
   local cluster=$2
-  local project="${feature}_$cluster"
+  local project="${feature}_$(echo "$cluster" | sed -e 's/~/not_/g' -e 's/\,/_or_/g')"
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
