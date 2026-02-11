@@ -1,0 +1,1543 @@
+
+1: CREATE OR REPLACE FUNCTION get_files (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8) RETURNS SETOF record AS $$ SELECT (SELECT a.oid = f.user_id FROM pg_authid a WHERE a.rolname = current_user) user_id_ok, (SELECT s.setting::int = f.sess_id FROM pg_settings s WHERE name = 'gp_session_id') cur_sess_id, content, size FROM tts_get_seg_files() f; -- $$ LANGUAGE SQL;
+CREATE
+
+1: ! mkdir -p /tmp/tts_tblspace;
+
+1: CREATE TABLESPACE tts_tblspace LOCATION '/tmp/tts_tblspace';
+CREATE
+
+-- No tables, the files list is empty
+1: SELECT * FROM tts_get_seg_files();
+ user_id | sess_id | path | content | size 
+---------+---------+------+---------+------
+(0 rows)
+
+--
+-- Ordinary heap tables
+
+-- We can see tables created in the current session
+1: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | t           | 0       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 2       | 0    
+(3 rows)
+1: CREATE TEMP TABLE ts(i INT) TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t2(i INT) DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t3(i INT) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+(12 rows)
+1: DROP TABLE ts;
+DROP
+
+-- We can see tables created in other sessions
+2: CREATE TEMP TABLE t1(i INT) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | f           | 0       | 0    
+(12 rows)
+2: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | t           | 2       | 0    
+(12 rows)
+3: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+(12 rows)
+
+-- Dropped tables are removed from the list in all sessions
+1: DROP TABLE t2;
+DROP
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 9     
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 9     
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 9     
+(1 row)
+2: DROP TABLE t1;
+DROP
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 6     
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 6     
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 6     
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+--
+-- Heap tables, on commit drop
+
+-- We can see tables created in the current session
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE t1(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | t           | 1       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 0       | 0    
+(3 rows)
+1: CREATE TEMP TABLE ts(i INT) ON COMMIT DROP TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t2(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t3(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+(12 rows)
+
+-- We can see tables created in other sessions
+2: BEGIN;
+BEGIN
+2: CREATE TEMP TABLE t1(i INT) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | t           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | f           | 0       | 0    
+(15 rows)
+2: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | t           | 2       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | t           | 0       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | t           | 1       | 0    
+(15 rows)
+3: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size 
+------------+-------------+---------+------
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 1       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 2       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+ t          | f           | 0       | 0    
+(15 rows)
+
+-- Dropped tables are removed from the list in all sessions
+1: ROLLBACK;
+ROLLBACK
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 3     
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 3     
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 3     
+(1 row)
+2: COMMIT;
+COMMIT
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+--
+-- Ordinary AO tables
+-- 4 files per AO table: data file, pg_aoseg, pg_aovisimap, pg_aovisimap_index
+
+-- We can see tables created in the current session
+1: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(12 rows)
+1: CREATE TEMP TABLE ts(i INT) WITH (APPENDOPTIMIZED = TRUE) TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(48 rows)
+1: DROP TABLE ts;
+DROP
+
+
+-- We can see tables created in other sessions
+2: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+(48 rows)
+2: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+(48 rows)
+3: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+(48 rows)
+
+-- Dropped tables are removed from the list in all sessions
+1: DROP TABLE t2;
+DROP
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 36    
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 36    
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 36    
+(1 row)
+2: DROP TABLE t1;
+DROP
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 24    
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 24    
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 24    
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+--
+-- AO tables, on commit drop
+
+-- We can see tables created in the current session
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(12 rows)
+1: CREATE TEMP TABLE ts(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t2(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t3(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(48 rows)
+
+-- We can see tables created in other sessions
+2: BEGIN;
+BEGIN
+2: CREATE TEMP TABLE t1(i INT) WITH (APPENDOPTIMIZED = TRUE) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+(60 rows)
+2: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+(60 rows)
+3: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+(60 rows)
+
+-- Dropped tables are removed from the list in all sessions
+1: ROLLBACK;
+ROLLBACK
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 12    
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 12    
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 12    
+(1 row)
+2: COMMIT;
+COMMIT
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+--
+-- Ordinary AOCO tables
+-- 4 files per AOCO table: data file, pg_aocsseg, pg_aovisimap, pg_aovisimap_index
+
+-- We can see tables created in the current session
+1: CREATE TEMP TABLE t1(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(12 rows)
+1: CREATE TEMP TABLE ts(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t2(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t3(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+(48 rows)
+1: DROP TABLE ts;
+DROP
+
+-- We can see tables created in other sessions
+2: CREATE TEMP TABLE t1(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+(48 rows)
+2: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+(48 rows)
+3: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+(48 rows)
+
+-- Dropped tables are removed from the list in all sessions
+1: DROP TABLE t2;
+DROP
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 36    
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 36    
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 36    
+(1 row)
+2: DROP TABLE t1;
+DROP
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 24    
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 24    
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 24    
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+
+--
+-- AOCO tables, on commit drop
+
+-- We can see tables created in the current session
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE t1(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+(12 rows)
+1: CREATE TEMP TABLE ts(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP TABLESPACE tts_tblspace DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t2(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: CREATE TEMP TABLE t3(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+(48 rows)
+
+-- We can see tables created in other sessions
+2: BEGIN;
+BEGIN
+2: CREATE TEMP TABLE t1(i INT, j INT) WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) ON COMMIT DROP DISTRIBUTED BY (i);
+CREATE
+1: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+(60 rows)
+2: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 0     
+ t          | t           | 1       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 0     
+ t          | t           | 0       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 0     
+ t          | t           | 2       | 32768 
+(60 rows)
+3: SELECT * FROM get_files();
+ user_id_ok | cur_sess_id | content | size  
+------------+-------------+---------+-------
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 0     
+ t          | f           | 2       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 0     
+ t          | f           | 0       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 0     
+ t          | f           | 1       | 32768 
+(60 rows)
+
+-- Dropped tables are removed from the list in all sessions
+1: ROLLBACK;
+ROLLBACK
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 12    
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 12    
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 12    
+(1 row)
+2: COMMIT;
+COMMIT
+1: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+3: SELECT COUNT(*) FROM tts_get_seg_files();
+ count 
+-------
+ 0     
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+--
+-- Check that files size calculation takes into account all the forks
+CREATE TEMP TABLE t1 WITH (APPENDOPTIMIZED = TRUE, ORIENTATION = COLUMN) AS SELECT i, i j FROM generate_series(1, 100) i DISTRIBUTED BY (i);
+CREATE 100
+-- t1 consists of two colums. Both column files are taken into account
+SELECT content, size FROM tts_get_seg_files();
+ content | size  
+---------+-------
+ 2       | 288   
+ 2       | 32768 
+ 2       | 0     
+ 2       | 32768 
+ 0       | 384   
+ 0       | 32768 
+ 0       | 0     
+ 0       | 32768 
+ 1       | 384   
+ 1       | 32768 
+ 1       | 0     
+ 1       | 32768 
+(12 rows)
+-- Vaccum adds FSM and VM
+VACUUM t1;
+VACUUM
+SELECT content, size FROM tts_get_seg_files();
+ content | size   
+---------+--------
+ 1       | 384    
+ 1       | 163840 
+ 1       | 0      
+ 1       | 32768  
+ 2       | 288    
+ 2       | 163840 
+ 2       | 0      
+ 2       | 32768  
+ 0       | 384    
+ 0       | 163840 
+ 0       | 0      
+ 0       | 32768  
+(12 rows)
+
+--
+-- Cleanup
+DROP TABLESPACE tts_tblspace;
+DROP
+DROP FUNCTION get_files (OUT user_id_ok bool, OUT cur_sess_id bool, OUT content int2, OUT size int8);
+DROP
+
+DROP EXTENSION temp_tables_stat;
+DROP
+
