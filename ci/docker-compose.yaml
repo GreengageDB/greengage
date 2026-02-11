@@ -40,3 +40,10 @@ services:
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
       - ${PWD}/logs_sdw3:/logs
+  sdw4:
+    <<: *common-service
+    hostname: sdw4
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PWD}/logs_sdw4:/logs
