@@ -39,13 +39,7 @@ jobs:
           echo "=================================================================="
 
       - name: Move Docker storage to /mnt/docker
-        run: |
-          sudo bash -c '
-            systemctl stop docker
-            mv /var/lib/docker /mnt/docker
-            echo "{ \"data-root\": \"/mnt/docker\" }" > /etc/docker/daemon.json
-            systemctl start docker
-          '
+        uses: greengagedb/greengage-ci/.github/actions/move-docker/action.yml@feat/mv-docker
 
       - name: Determine version from branch
         id: version
