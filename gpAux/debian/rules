@@ -10,8 +10,14 @@ LSB_SR := $(shell lsb_release -sr)
 
 ifeq ($(LSB_SI),Ubuntu)
   ifeq ($(LSB_SR),22.04)
-    DEPS = python2.7
+    DEPS = python2,python2.7
+    CONFLICTS = python-is-python3
+  else
+    DEPS = python3
   endif
+else
+  DEPS = python2,python2.7
+  CONFLICTS = python-is-python3
 endif
 
 %:
@@ -37,4 +43,4 @@ override_dh_auto_install:
 
 override_dh_gencontrol:
 	@echo "=== GENCONTROL GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME) ==="
-	dh_gencontrol -p$(PACKAGE_NAME) -- -VpythonRequires="$(DEPS)"
+	dh_gencontrol -p$(PACKAGE_NAME) -- -VpythonRequires="$(DEPS)" -VpythonConflicts="$(CONFLICTS)"

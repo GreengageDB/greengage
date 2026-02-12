@@ -43,10 +43,20 @@ apt-get install -y \
   openssh-server \
   pkg-config \
   protobuf-compiler \
-  python-pip \
-  python2 \
-  python2-dev \
   python3-dev \
   rsync \
   sudo \
   zlib1g-dev
+
+if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; then
+  apt-get install -y \
+    python-pip \
+    python2 \
+    python2-dev
+  python2 -m pip install future==0.16
+else
+  apt-get install -y \
+    python3-pip \
+    python-is-python3;
+  python -m pip install future==1.0.0
+fi
