@@ -42,9 +42,8 @@ jobs:
         run: |
           sudo bash -c '
             systemctl stop docker
-            mkdir -p /mnt/docker
-            rsync -a /var/lib/docker/ /mnt/docker
-            chown -R docker:docker /mnt/docker
+            rsync -a --inplace --no-compress /var/lib/docker /mnt/
+            rm /var/lib/docker -rf
             echo "{ \"data-root\": \"/mnt/docker\" }" > /etc/docker/daemon.json
             systemctl start docker
           '
