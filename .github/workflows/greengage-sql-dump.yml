@@ -39,7 +39,7 @@ jobs:
           echo "=================================================================="
 
       - name: Move Docker storage to /mnt/docker
-        uses: greengagedb/greengage-ci/.github/actions/move-docker/action.yml@feat/mv-docker
+        uses: greengagedb/greengage-ci/.github/actions/move-docker@feat/mv-docker
 
       - name: Determine version from branch
         id: version
