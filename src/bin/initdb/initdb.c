@@ -1063,7 +1063,6 @@ check_input(char *path)
 {
 	struct stat statbuf;
 
-	errno = 0;
 	if (stat(path, &statbuf) != 0)
 	{
 		if (errno == ENOENT)
@@ -1182,7 +1181,6 @@ choose_dsm_implementation(void)
 
 		handle = random();
 		snprintf(name, 64, "/PostgreSQL.%u", handle);
-		errno = 0;
 		if ((fd = shm_open(name, O_CREAT | O_RDWR | O_EXCL, 0600)) != -1)
 		{
 			close(fd);
