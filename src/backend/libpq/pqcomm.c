@@ -998,6 +998,13 @@ pq_waitForDataUsingSelect(void)
 			errno = 0;
 			numSockets = select(sock+1, &toRead, NULL /* toWrite */, &haveError, NULL );
 
+			/*
+			 * Here numSockets < 0 should be technically checked first for
+			 * proper error handling. However, this function wasn't modified
+			 * since it isn't using in our code. Changing it would be risky
+			 * due to the lack of coverage, and the external extensions might
+			 * still rely on it.
+			 */
 			if ( errno == EINTR)
 			{
 				return false;
