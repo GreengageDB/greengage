@@ -2296,9 +2296,7 @@ setup_cdb_schema(void)
 		errno = 0;
 #endif
 
-	closedir(dir);
-
-	if (errno != 0)
+	if (errno)
 	{
 		/* some kind of I/O error? */
 		printf(_("error while reading cdb_init.d directory: %s\n"),
@@ -2306,6 +2304,8 @@ setup_cdb_schema(void)
 		fflush(stdout);
 		exit_nicely();
 	}
+
+	closedir(dir);
 
 	/*
 	 * Sort the array. This allows simple dependencies between scripts, by
