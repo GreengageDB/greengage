@@ -998,13 +998,16 @@ pq_waitForDataUsingSelect(void)
 			errno = 0;
 			numSockets = select(sock+1, &toRead, NULL /* toWrite */, &haveError, NULL );
 
-			if ( errno == EINTR)
+			if (numSockets < 0)
 			{
-				return false;
-			}
-			else if (errno != 0 )
-			{
-				elog(FATAL, "select failed: %m");
+				if (errno == EINTR)
+				{
+					return false;
+				}
+				else
+				{
+					elog(FATAL, "select failed: %m");
+				}
 			}
 			else if ( numSockets > 0 )
 			{
