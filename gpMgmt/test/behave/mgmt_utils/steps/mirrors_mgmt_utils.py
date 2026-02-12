@@ -257,13 +257,13 @@ def impl(context):
 def impl(context):
     context.expected_segs = []
 
-    context.expected_segs.append("sdw1-1|21500|/tmp/gpmovemirrors/data/mirror/gpseg2_moved")
-    context.expected_segs.append("sdw1-2|22501|/tmp/gpmovemirrors/data/mirror/gpseg3")
+    context.expected_segs.append("sdw1-1|21500|/tmp/gpmovemirrors/mirror/gpseg2_moved")
+    context.expected_segs.append("sdw1-2|22501|/tmp/gpmovemirrors/mirror/gpseg3")
 
     input_filename = "/tmp/gpmovemirrors_input_cross_subnet"
     with open(input_filename, "w") as fd:
-        fd.write("sdw1-1|21500|/tmp/gpmovemirrors/data/mirror/gpseg2 %s\n" % context.expected_segs[0])
-        fd.write("sdw1-1|21501|/tmp/gpmovemirrors/data/mirror/gpseg3 %s" % context.expected_segs[1])
+        fd.write("sdw1-1|21500|/tmp/gpmovemirrors/mirror/gpseg2 %s\n" % context.expected_segs[0])
+        fd.write("sdw1-1|21501|/tmp/gpmovemirrors/mirror/gpseg3 %s" % context.expected_segs[1])
 
 
 @then('verify that mirror segments are in new cross_subnet configuration')
