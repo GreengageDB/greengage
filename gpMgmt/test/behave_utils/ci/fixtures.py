@@ -10,9 +10,9 @@ def init_cluster(context):
             And a standard local demo cluster is created
         """)
     else:
-        if "concourse_cluster_4" in set(context.feature.tags):
+        if "concourse_cluster_4" in context.feature.tags:
             segments = 4
-        elif "concourse_cluster_2" in set(context.feature.tags):
+        elif "concourse_cluster_2" in context.feature.tags:
             segments = 2
         else:
             segments = 3
