@@ -18,7 +18,6 @@ for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
     $service bash -c "mkdir -p /data/gpdata && chmod -R 777 /data &&
-      chmod g+w /dev/stdout && chmod g+w /dev/stderr &&
       source gpdb_src/concourse/scripts/common.bash && install_gpdb &&
       ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash" &
 done
