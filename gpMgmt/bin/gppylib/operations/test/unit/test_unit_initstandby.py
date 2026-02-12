@@ -7,6 +7,7 @@ import unittest
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.initstandby import get_standby_pg_hba_info, update_pg_hba, update_pg_hba_conf_on_segments
 from mock import MagicMock, Mock, mock_open, patch
+import six
 
 class InitStandbyTestCase(unittest.TestCase):
 
@@ -23,7 +24,13 @@ class InitStandbyTestCase(unittest.TestCase):
         expected = [file_contents + pg_hba_info, file_contents + pg_hba_info]
         m = MagicMock()
         m.return_value.__enter__.return_value.read.side_effect = [file_contents, file_contents]
-        with patch('__builtin__.open', m, create=True):
+
+        if six.PY2:
+            builtin = '__builtin__'
+        else:
+            builtin = 'builtins'
+
+        with patch(builtin + '.open', m, create=True):
             self.assertEqual(expected, update_pg_hba(pg_hba_info, data_dirs))
 
     def test_update_pg_hba_duplicate(self):
@@ -34,7 +41,13 @@ class InitStandbyTestCase(unittest.TestCase):
         expected = [file_contents + pg_hba_info]
         m = MagicMock()
         m.return_value.__enter__.return_value.read.side_effect = [file_contents, file_contents + duplicate_entry]
-        with patch('__builtin__.open', m, create=True):
+
+        if six.PY2:
+            builtin = '__builtin__'
+        else:
+            builtin = 'builtins'
+
+        with patch(builtin + '.open', m, create=True):
             res = update_pg_hba(pg_hba_info, data_dirs)
             self.assertEqual(expected, res) 
 

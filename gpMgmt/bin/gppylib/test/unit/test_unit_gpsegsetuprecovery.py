@@ -52,7 +52,7 @@ class ValidationForFullRecoveryTestCase(GpTestCase):
     def _assert_failed(self, expected_error):
         self.assertEqual(1, self.validation_recovery_cmd.get_results().rc)
         self.assertEqual('', self.validation_recovery_cmd.get_results().stdout)
-        self.assertItemsEqual(json.loads(expected_error), json.loads(self.validation_recovery_cmd.get_results().stderr))
+        self.assertEqual(json.loads(expected_error), json.loads(self.validation_recovery_cmd.get_results().stderr))
         self.assertEqual(False, self.validation_recovery_cmd.get_results().wasSuccessful())
 
     def test_forceoverwrite_True(self):
@@ -351,8 +351,8 @@ class SegSetupRecoveryTestCase(GpTestCase):
                             '-c {}'.format(mix_confinfo)]
                 SegSetupRecovery().main()
 
-        self.assertItemsEqual('[{"error_type": "validation", "error_msg": "connect failed", "dbid": 4, "datadir": "target_data_dir4", '
-                         '"port": 5004, "progress_file": "/tmp/progress_file4"}]', buf.getvalue().strip())
+        self.assertEqual([{"error_type": "validation", "error_msg": "connect failed", "dbid": 4, "datadir": "target_data_dir4",
+                         "port": 5004, "progress_file": "/tmp/progress_file4"}], json.loads(buf.getvalue().strip()))
 
         self.assertEqual(1, ex.exception.code)
         mock_validate_datadir.assert_called_once()

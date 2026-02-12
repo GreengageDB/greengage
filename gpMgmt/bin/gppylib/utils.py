@@ -561,3 +561,13 @@ def validateHostnameAddress(hostname, address):
                 address, hostname, resolved_address_list))
         return False
     return True
+
+def get_dist_families():
+    with open('/etc/os-release') as f:
+        for line in f:
+            if "ID_LIKE" in line:
+                family = line.split('=')[1].lower()
+                if family[0] == '\"':
+                    family = family[1:-1]
+                return family
+    raise Exception("Wrong /etc/os-release format")

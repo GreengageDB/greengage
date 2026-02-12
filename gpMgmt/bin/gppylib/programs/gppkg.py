@@ -19,21 +19,11 @@ try:
     from gppylib.operations.package import MigratePackages, InstallPackage, UninstallPackage, QueryPackage, BuildGppkg, UpdatePackage, CleanGppkg, Gppkg, GPPKG_EXTENSION, GPPKG_ARCHIVE_PATH
     from gppylib.userinput import ask_yesno
     from gppylib.operations.unix import ListFilesByPattern
+    from gppylib.utils import get_dist_families
 except ImportError as ex:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(ex))
 
 logger = gplog.get_default_logger()
-
-def get_dist_family():
-    with open('/etc/os-release') as f:
-        for line in f:
-            if "ID_LIKE" in line:
-                family = line.split('=')[1].lower()
-                if family[0] == '\"':
-                    family = family[1:-1]
-                return family
-    raise Exception("Wrong /etc/os-release format")
-    
 
 class GpPkgProgram(object):
     """ This is the CLI entry point to package management code.  """
@@ -198,7 +188,7 @@ class GpPkgProgram(object):
                 BuildGppkg(self.build, None).run()
             return
 
-        if "debian" in get_dist_family():
+        if "debian" in get_dist_families():
             try:
                 cmd = Command(name='Check for dpkg', cmdStr='dpkg --version')
                 cmd.run(validateAfter=True)

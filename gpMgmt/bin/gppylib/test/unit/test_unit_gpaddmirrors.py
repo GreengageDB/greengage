@@ -10,6 +10,7 @@ from gppylib.programs.clsAddMirrors import GpAddMirrorsProgram, ProgramArgumentV
 from gparray import Segment, GpArray
 from gppylib.system.environment import GpMasterEnvironment
 from gppylib.system.configurationInterface import GpConfigurationProvider
+import six
 
 
 class GpAddMirrorsTest(GpTestCase):
@@ -22,8 +23,14 @@ class GpAddMirrorsTest(GpTestCase):
         self.subject = GpAddMirrorsProgram(None)
         self.gparrayMock = self._createGpArrayWith2Primary2Mirrors()
         self.gparray_get_segments_by_hostname = dict(sdw1=[self.primary0])
+
+        if six.PY2:
+            input_patch = patch('__builtin__.raw_input')
+        else:
+            input_patch = patch('builtins.input')
+
         self.apply_patches([
-            patch('__builtin__.raw_input'),
+            input_patch,
             patch('gppylib.programs.clsAddMirrors.base.WorkerPool'),
             patch('gppylib.programs.clsAddMirrors.logger', return_value=Mock(spec=['log', 'info', 'debug', 'error'])),
             patch('gppylib.programs.clsAddMirrors.log_to_file_only', return_value=Mock()),
@@ -34,7 +41,7 @@ class GpAddMirrorsTest(GpTestCase):
             patch('gppylib.gparray.GpArray.getSegmentsByHostName', return_value=self.gparray_get_segments_by_hostname),
 
         ])
-        # self.raw_input_mock = self.get_mock_from_apply_patch("raw_input")
+
         self.mock_logger = self.get_mock_from_apply_patch('logger')
         self.gpMasterEnvironmentMock = self.get_mock_from_apply_patch("GpMasterEnvironment")
         self.gpMasterEnvironmentMock.return_value.getMasterPort.return_value = 123456
@@ -55,6 +62,8 @@ class GpAddMirrorsTest(GpTestCase):
             self.mdd = "/Users/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1"
             os.environ["MASTER_DATA_DIRECTORY"] = self.mdd
 
+        if six.PY3:
+            self.gpMasterEnvironmentMock.return_value.getMasterDataDir.return_value = self.mdd
         self.parser = GpAddMirrorsProgram.createParser()
 
     def tearDown(self):

@@ -1332,8 +1332,6 @@ class gpload(object):
             str = '|'.join(
                        [datetime.datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
                         self.elevel2str(level), a]) + '\n'
-
-            str = str.encode('utf-8')
         except Exception as e:
             # log even if contains non-utf8 data and pass this exception
             self.logfile.write("\nWarning: Log() threw an exception: %s \n" % (e))
@@ -2414,8 +2412,8 @@ class gpload(object):
             self.formatOpts += "null '' "
             self.reuse_tbl_Opts += "null '' "
         else:
-            self.formatOpts += "%snull%s%s " % (self.custom_contan_pre, self.custom_contan, quote_no_slash("\N"))
-            self.reuse_tbl_Opts += "null %s " % (quote_no_slash("\N"))
+            self.formatOpts += "%snull%s%s " % (self.custom_contan_pre, self.custom_contan, quote_no_slash("\\N"))
+            self.reuse_tbl_Opts += "null %s " % (quote_no_slash("\\N"))
 
         esc = self.getconfig('gpload:input:escape', None, None)
         if esc:

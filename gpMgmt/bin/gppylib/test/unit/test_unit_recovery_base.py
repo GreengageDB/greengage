@@ -76,7 +76,7 @@ class RecoveryBaseTestCase(GpTestCase):
         stderr_buf.seek(0)
         stderr_lines = stderr_buf.readlines()
         self.assertEqual(3, len(stderr_lines))
-        self.assertEqual(expected_stderr_message, stderr_lines[2])
+        self.assertTrue(re.match(expected_stderr_message, stderr_lines[2]))
         self.assertEqual(2, ex.exception.code)
         self.assertEqual(0, self.mock_logger.error.call_count)
 
@@ -96,7 +96,7 @@ class RecoveryBaseTestCase(GpTestCase):
         sys.argv = ['recovery_base', '-c']
         stderr_buf, ex = self.run_recovery_base_get_stderr()
         self._assert_exception_from_parseargs(ex, stderr_buf,
-                                             'recovery_base: error: -c option requires an argument\n')
+                                             'recovery_base: error: -c option requires (1|an) argument\n')
 
     def test_invalid_option_fails(self):
         sys.argv = ['recovery_base', '-z']
@@ -303,7 +303,7 @@ class SetCmdResultsTestCase(GpTestCase):
     def _assert_cmd_failed(self, cmd, expected_stderr):
         self.assertEqual(1, cmd.get_results().rc)
         self.assertEqual('', cmd.get_results().stdout)
-        self.assertItemsEqual(json.loads(expected_stderr), json.loads(cmd.get_results().stderr))
+        self.assertEqual(json.loads(expected_stderr), json.loads(cmd.get_results().stderr))
         self.assertEqual(True, cmd.get_results().completed)
         self.assertEqual(False, cmd.get_results().halt)
         self.assertEqual(False, cmd.get_results().wasSuccessful())

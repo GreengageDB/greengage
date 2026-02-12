@@ -40,7 +40,7 @@ class GpDeleteSystemTestCase(GpTestCase):
         with self.assertRaises(self.subject.GpDeleteSystemException) as context:
             self.subject.delete_cluster(self.options)
 
-        self.assertTrue('Backup files exist' in context.exception)
+        self.assertTrue('Backup files exist' in str(context.exception))
 
     def test_delete_cluster_dumps_exist_noforce_fails(self):
         setattr(self.options, 'force', '')
@@ -48,7 +48,7 @@ class GpDeleteSystemTestCase(GpTestCase):
         with self.assertRaises(self.subject.GpDeleteSystemException) as context:
             self.subject.delete_cluster(self.options)
 
-        self.assertTrue('Backup files exist' in context.exception)
+        self.assertTrue('Backup files exist' in str(context.exception))
 
     def test_delete_cluster_force_failed_to_get_gparray(self):
         setattr(self.options, 'force', True)
@@ -58,4 +58,4 @@ class GpDeleteSystemTestCase(GpTestCase):
         with self.assertRaises(self.subject.GpDeleteSystemException) as context:
             self.subject.delete_cluster(self.options)
 
-        self.assertTrue('Failed to get database configuration' in context.exception.message)
+        self.assertTrue('Failed to get database configuration' in str(context.exception))

@@ -4,10 +4,11 @@ from .gp_unittest import *
 from gppylib.operations.package import IsVersionCompatible, ListPackages, MigratePackages, AlreadyInstalledError, \
     ARCHIVE_PATH, SyncPackages, CleanGppkg
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
+from gppylib.utils import get_dist_families
 
 import os
 import pickle
-import platform
+import base64
 
 
 class IsVersionCompatibleTestCase(GpTestCase):
@@ -101,7 +102,7 @@ class MigratePackagesTestCase(GpTestCase):
             patch('gppylib.operations.package.logger', return_value=Mock(spec=['log', 'info', 'debug', 'error'])),
         ])
 
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if "debian" in get_dist_families():
             self.mock_install_package_locally = self.get_mock_from_apply_patch('InstallDebPackageLocally')
         else:
             self.mock_install_package_locally = self.get_mock_from_apply_patch('InstallPackageLocally')
@@ -209,7 +210,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['synced.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = pickle.dumps(['synced.gppkg'])
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['synced.gppkg']))
 
         subject = SyncPackages('localhost')
         subject.execute()
@@ -224,7 +225,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['foo.gppkg', 'bar.gppkg', 'zing.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = pickle.dumps(['foo.gppkg'])
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['foo.gppkg']))
 
         hostname = 'localhost'
         subject = SyncPackages(hostname)
@@ -241,9 +242,9 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['ba.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = pickle.dumps(['ba.gppkg',
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['ba.gppkg',
                                                                                        'zing.gppkg',
-                                                                                       'ga.gppkg'])
+                                                                                       'ga.gppkg']))
         hostname = 'localhost'
         subject = SyncPackages(hostname)
         subject.execute()
@@ -251,7 +252,14 @@ class SyncPackagesTestCase(GpTestCase):
         self.assertEqual(self.make_remote_dir_mock.call_count, 1)
 
         log_messages = [args[1][0] for args in self.mock_logger.method_calls]
-        self.assertIn('The following packages will be uninstalled on localhost: zing.gppkg, ga.gppkg', log_messages)
+        found = False
+        for message in log_messages:
+            if "The following packages will be uninstalled on localhost" in message:
+                self.assertIn('zing.gppkg', message)
+                self.assertIn('ga.gppkg', message)
+                found = True
+                break
+        self.assertTrue(found)
         self.assertNotIn('The packages on %s are consistent.' % hostname, log_messages)
 
 

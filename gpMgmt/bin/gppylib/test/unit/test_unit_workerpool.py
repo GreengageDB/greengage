@@ -303,7 +303,7 @@ class WorkerPoolTest(unittest.TestCase):
         cmd.run.side_effect = wait_for_duration
         self.pool.addCommand(cmd)
 
-        stdout = mock.Mock(spec=file)
+        stdout = mock.Mock(io.StringIO())
         join_and_indicate_progress(self.pool, stdout, interval=(old_div(duration, 5)))
 
         for i, call in enumerate(stdout.mock_calls):

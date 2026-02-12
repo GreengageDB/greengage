@@ -32,8 +32,9 @@ class MainUtilsTestCase(GpTestCase):
 
     def test_exceptionPIDLockHeld_if_same_pid(self):
         with self.lock:
-            with self.assertRaises(PIDLockHeld, message="PIDLock already held at %s" % (self.lockfile)):
+            with self.assertRaises(PIDLockHeld) as cm:
                 self.lock.acquire()
+        self.assertEqual("PIDLock already held at %s" % self.lockfile, cm.exception.message)
 
     def test_child_can_read_lock_owner(self):
         with self.lock as l:
@@ -49,8 +50,12 @@ class MainUtilsTestCase(GpTestCase):
         pid = os.fork()
         # if child, os.fork() == 0
         if pid == 0:
-            with self.assertRaises(PIDLockHeld, message="PIDLock already held at %s" % (self.lockfile)):
+            try:
                 self.lock.acquire()
+            except PIDLockHeld as e:
+                self.assertEquals("PIDLock already held at %s" % self.lockfile, e.message)
+            except:
+                self.fail("Unexpected exception while acquiring PIDLockHeld")
             os._exit(0)
         else:
             os.wait()
