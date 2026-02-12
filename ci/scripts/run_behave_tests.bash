@@ -52,7 +52,7 @@ run_feature() {
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
       -o /tmp/allure-results \
-      -f pretty -o /dev/stdout" \
+      -f pretty" \
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
