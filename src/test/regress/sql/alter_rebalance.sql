@@ -449,3 +449,45 @@ select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id or
 alter table table_distr_hashed rebalance 3;
 
 drop table table_distr_hashed;
+
+-- Check rebalance of materialized view
+-- start_ignore
+drop materialized view if exists mv_test_table;
+drop table if exists test_table;
+-- end_ignore
+
+create table test_table(a int) distributed by (a);
+insert into test_table select generate_series(1, 10);
+
+create materialized view mv_test_table as select a from test_table distributed by (a);
+
+alter table test_table rebalance 1;
+alter materialized view mv_test_table rebalance 1;
+refresh materialized view mv_test_table;
+
+select count(1), gp_segment_id from test_table group by gp_segment_id;
+select count(1), gp_segment_id from mv_test_table group by gp_segment_id;
+
+drop materialized view mv_test_table;
+drop table test_table;
+
+-- Check rollback of the rebalance of materialized view
+create table test_table(a int) distributed by (a);
+insert into test_table select generate_series(1, 10);
+
+create materialized view mv_test_table as select a from test_table distributed by (a);
+
+select count(1), gp_segment_id from test_table group by gp_segment_id order by gp_segment_id;
+select count(1), gp_segment_id from mv_test_table group by gp_segment_id order by gp_segment_id;
+
+begin;
+alter table test_table rebalance 1;
+alter materialized view mv_test_table rebalance 1;
+refresh materialized view mv_test_table;
+rollback;
+
+select count(1), gp_segment_id from test_table group by gp_segment_id order by gp_segment_id;
+select count(1), gp_segment_id from mv_test_table group by gp_segment_id order by gp_segment_id;
+
+drop materialized view mv_test_table;
+drop table test_table;

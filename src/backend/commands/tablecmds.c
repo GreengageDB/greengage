@@ -17847,6 +17847,11 @@ ATExecRebalanceTable(List **wqueue, Relation rel, AlterTableCmd *cmd)
 		 * child partitions.
 		 */
 	}
+	else if (rel->rd_rel->relkind == RELKIND_MATVIEW)
+	{
+		ereport((Gp_role == GP_ROLE_EXECUTE) ? DEBUG1 : NOTICE,
+				(errmsg("Materialized view requires REFRESH after rebalance")));
+	}
 	else if (rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
 	{
 		if (rel_is_external_table(relid))
