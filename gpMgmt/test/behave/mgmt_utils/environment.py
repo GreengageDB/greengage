@@ -164,8 +164,9 @@ def after_scenario(context, scenario):
         restore_bashrc()
 
     # NOTE: gpconfig after_scenario cleanup is in the step `the gpconfig context is setup`
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpinitstandby', 'gpconfig',
-                    'gpstop', 'gpinitsystem', 'cross_subnet', 'gplogfilter']
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpinitstandby',
+                    'gpconfig', 'gpstop', 'gpinitsystem', 'cross_subnet',
+                    'gplogfilter']
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
