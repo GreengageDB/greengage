@@ -278,7 +278,7 @@ class GpStop(object):
             cluster_hosts.add(self.gparray.standbyMaster.getSegmentHostName())
 
         for host in cluster_hosts:
-            cmd = Command('Check if gpsmon is running', cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \$2}'",
+            cmd = Command('Check if gpsmon is running', cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \\$2}'",
                           ctxt=REMOTE, remoteHost=host)
             self.pool.addCommand(cmd)
         self.pool.join()
@@ -298,7 +298,7 @@ class GpStop(object):
 
         for host in valid_hosts:
             cmd = Command('kill all the gpsmon processes',
-                          cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \$2}' | xargs kill -9",
+                          cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \\$2}' | xargs kill -9",
                           ctxt=REMOTE, remoteHost=host)
             self.pool.addCommand(cmd)
         self.pool.join()

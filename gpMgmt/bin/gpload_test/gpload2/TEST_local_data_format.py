@@ -459,7 +459,7 @@ def test_262_gpload_tabel_distributed_key():
                       file='data_file.txt', 
                       table='testdk1')
     f = open(mkpath('query262.sql'),'a')
-    f.write("""\\! psql -d reuse_gptest -c '\d staging_gpload_*'""")
+    f.write("""\\! psql -d reuse_gptest -c '\\d staging_gpload_*'""")
     f.close()
 
 
@@ -478,7 +478,7 @@ def test_263_gpload_tabel_distributed_key():
                       file='data_file.txt', 
                       table='testdk2')
     f = open(mkpath('query263.sql'),'a')
-    f.write("""\\! psql -d reuse_gptest -c '\d staging_gpload_*'""")
+    f.write("""\\! psql -d reuse_gptest -c '\\d staging_gpload_*'""")
     f.close()
 
 
@@ -498,6 +498,6 @@ def test_264_gpload_tabel_distributed_key():
                       file='data_file.txt', 
                       table='testdk3')
     f = open(mkpath('query264.sql'),'a')
-    f.write("""\\! psql -d reuse_gptest -c '\d staging_gpload_*'""")
+    f.write("""\\! psql -d reuse_gptest -c '\\d staging_gpload_*'""")
     f.close()
 

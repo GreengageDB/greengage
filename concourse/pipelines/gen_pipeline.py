@@ -85,7 +85,7 @@ def suggested_git_branch():
 
 def is_a_base_branch(branch):
     # best effort in matching a base branch (5X_STABLE, 6X_STABLE, etc.)
-    matched = re.match("\d+X_STABLE", branch)
+    matched = re.match(r"\d+X_STABLE", branch)
     return matched is not None
 
 
