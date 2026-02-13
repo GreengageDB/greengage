@@ -238,7 +238,7 @@ class FuncSignature(object):
         if body:
             return body
 
-        subscript = re.compile('\[\d*\]$')
+        subscript = re.compile(r'\[\d*\]$')
         # otherwise, general method
         buf = []
         # emit check_expected()

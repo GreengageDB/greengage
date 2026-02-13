@@ -356,7 +356,7 @@ def select_version(conn):
     rows = curs.fetchall()
     for row in rows:
         log_output(row[0])
-        glob_gpdb_major_version = int(re.sub("([0-9]*)\..*", "\\1", row[0]))
+        glob_gpdb_major_version = int(re.sub(r"([0-9]*)\..*", "\\1", row[0]))
         log_output("GPDB major version is %d" % glob_gpdb_major_version)
 
     log_output("Backend pid:")
