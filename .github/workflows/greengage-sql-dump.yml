@@ -1,0 +1,81 @@
+# .github/workflows/greengage-sql-dump.yml
+name: Greengage SQL Dump
+
+on:
+  workflow_run:
+    workflows: ["Greengage CI"]
+    types: [completed]
+    branches:
+      - main
+      - 7.x
+
+jobs:
+  create-sql-dump-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    if: |
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      !startsWith(github.event.workflow_run.head_branch, 'refs/tags/')
+    strategy:
+      fail-fast: true
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for cache and artifact upload
+    steps:
+      - name: Display trigger information
+        run: |
+          echo ""
+          echo "================== Workflow Trigger Information =================="
+          echo "Triggered by:   ${{ github.event.workflow_run.name }} (#${{ github.event.workflow_run.id }})"
+          echo "Target branch:  ${{ github.event.workflow_run.head_branch }}"
+          echo "Source commit:  ${{ github.event.workflow_run.head_sha }}"
+          echo "Commit message: ${{ github.event.workflow_run.head_commit.message }}"
+          echo ""
+          echo "Author: ${{ github.event.workflow_run.head_commit.author.name }}"
+          echo "=================================================================="
+
+      - name: Move Docker storage to /mnt/docker
+        run: |
+          sudo bash -c '
+            systemctl stop docker
+            mv /var/lib/docker /mnt/docker
+            echo "{ \"data-root\": \"/mnt/docker\" }" > /etc/docker/daemon.json
+            systemctl start docker
+          '
+
+      - name: Determine version from branch
+        id: version
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          case "$BRANCH" in
+            main)
+              echo "version=6" >> $GITHUB_OUTPUT
+              ;;
+            7.x)
+              echo "version=7" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "Unsupported branch: $BRANCH"
+              exit 1
+              ;;
+          esac
+
+      - name: Create SQL Dump via regression tests
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
+        with:
+          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}:${{ github.event.workflow_run.head_sha }}
+          optimizer: postgres
+          target_os: ${{ matrix.target_os }}
+          dump_db: "true"
+
+      - name: Upload SQL Dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
+          path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
+          if-no-files-found: error
