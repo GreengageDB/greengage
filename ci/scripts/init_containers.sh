@@ -31,7 +31,7 @@ do
 done
 wait
 
-# Add ip and host to /etc/hosts
+# Add ip and host names of all cluster nodes to /etc/hosts
 for service in $services
 do
   docker compose -p $project -f ci/docker-compose.yaml exec -T \
