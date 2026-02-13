@@ -291,6 +291,7 @@ SimpleXLogPageRead(XLogReaderState *xlogreader, XLogRecPtr targetPagePtr,
 		return -1;
 	}
 
+	errno = 0;
 	if (read(xlogreadfd, readBuf, XLOG_BLCKSZ) != XLOG_BLCKSZ)
 	{
 		printf(_("could not read from file \"%s\": %s\n"), xlogfpath,

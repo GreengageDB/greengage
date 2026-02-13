@@ -4697,6 +4697,7 @@ static int gpfdist_socket_send(const request_t *r, const void *buf, const size_t
  */
 static int gpfdist_SSL_send(const request_t *r, const void *buf, const size_t buflen)
 {
+	errno = 0;
 
 	/* Write the data to socket */
 	int n = BIO_write(r->io, buf, buflen);
