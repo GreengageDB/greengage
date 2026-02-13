@@ -67,6 +67,9 @@ Load the greengage environment into your current shell:
 source ~/build/greengage-db-devel/greengage_path.sh
 ```
 
+By default, the installation directory is `greengage-db-devel`. You can override this directory name by setting the `GPDIR` option.
+For example: `make GPROOT=/usr/local GPDIR=gpdb dist -C gpAux`.
+
 Start demo cluster:
 
 ```
