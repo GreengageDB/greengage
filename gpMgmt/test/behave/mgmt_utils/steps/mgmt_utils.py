@@ -59,7 +59,7 @@ def show_all_installed(gphome):
     x = platform.linux_distribution()
     name = x[0].lower()
     if 'ubuntu' in name:
-        return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \$1}'" % gphome
+        return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \\$1}'" % gphome
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
     else:
@@ -715,7 +715,7 @@ def impl(context):
     command = """timeout 10m
     bash -c "while sleep 0.1;
     do if ps ux | grep [g]pcreateseg ;
-    then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \$2}' | xargs kill ;
+    then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \\$2}' | xargs kill ;
     break 2; fi; done" """
     run_async_command(context, command)
 
@@ -934,7 +934,7 @@ def impl(context, command, num):
     matches = lines_matching_both(context.stdout_message, workerPool_out, command)
 
     for matched_line in matches:
-        iw_re = re.search('initialized with (\d+) workers', matched_line)
+        iw_re = re.search(r'initialized with (\d+) workers', matched_line)
         init_workers = int(iw_re.group(1))
         if init_workers > int(num):
             raise Exception("Expected Workerpool for %s to be initialized with %d workers. Found %d. \n %s"
@@ -1671,7 +1671,7 @@ def impl(context, seg):
     elif seg == "master":
         hostname = get_master_hostname()[0][0]
 
-    cmd = Command(name="get bg pid", cmdStr="ps ux | grep pid_background_script.py | grep -v grep | awk '{print \$2}'",
+    cmd = Command(name="get bg pid", cmdStr="ps ux | grep pid_background_script.py | grep -v grep | awk '{print \\$2}'",
                   remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
     pids = cmd.get_stdout().splitlines()
@@ -1764,7 +1764,7 @@ def impl(context, seg):
     # This pid is no longer associated with a
     # running process and won't be recycled for long enough that tests
     # have finished.
-    cmd = Command(name="get non-existing pid", cmdStr="echo \$\$", remoteHost=hostname, ctxt=REMOTE)
+    cmd = Command(name="get non-existing pid", cmdStr="echo \\$\\$", remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
     pid = cmd.get_results().stdout.strip()
 
@@ -2039,7 +2039,7 @@ def impl(context, filename, some, output):
         valuesShouldExist = False
     else:
         raise Exception("only 'some' and 'no' are valid inputs")
-    regexStr = "%s%s" % ("^[\s]*", output)
+    regexStr = "%s%s" % (r"^[\s]*", output)
     pat = re.compile(regexStr)
     file_path = os.path.join(master_data_dir, filename)
     with open(file_path) as fr:
@@ -2258,7 +2258,7 @@ def imp(context):
 @then('validate and run gpcheckcat repair')
 def impl(context):
     context.execute_steps(u'''
-        Then gpcheckcat should print "repair script\(s\) generated in dir gpcheckcat.repair.*" to stdout
+        Then gpcheckcat should print "repair script\\(s\\) generated in dir gpcheckcat.repair.*" to stdout
         Then the path "gpcheckcat.repair.*" is found in cwd "1" times
         Then run all the repair scripts in the dir "gpcheckcat.repair.*"
         And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -3617,12 +3617,12 @@ def step_impl(context, options):
     elif '-Q' in options:
         for stdout_line in context.stdout_message.split('\n'):
             if 'up segments, from configuration table' in stdout_line:
-                segments_up = int(re.match(".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_up = int(re.match(r".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_up <= 1:
                     raise Exception("gpstate -Q output does not match expectations of more than one segment up")
 
             if 'down segments, from configuration table' in stdout_line:
-                segments_down = int(re.match(".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_down = int(re.match(r".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_down != 0:
                     raise Exception("gpstate -Q output does not match expectations of all segments up")
                 break ## down segments comes after up segments, so we can break here
@@ -4309,7 +4309,7 @@ def impl(context):
 
      # Update hostfile location
      cmd = Command(name='update master hostname in config file',
-                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\/tmp\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
+                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\\/tmp\\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
      cmd.run(validateAfter=True)
 
 

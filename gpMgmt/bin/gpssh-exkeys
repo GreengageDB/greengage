@@ -749,7 +749,7 @@ try:
         # MPP-13617
         def canonicalize(s):
             if ':' not in s: return s
-            return '\[' + s + '\]'
+            return r'\[' + s + r'\]'
 
 
         for h in GV.newHosts:

@@ -29,7 +29,7 @@ class FileSegmentGucTest(GpTestCase):
 
     def test_init_with_insufficient_file_values_raises(self):
         row = ['contentid', 'guc_name', 'value_from_file']
-        with self.assertRaisesRegexp(Exception, "must provide \['context', 'guc name', 'value', 'dbid'\]"):
+        with self.assertRaisesRegexp(Exception, r"must provide \['context', 'guc name', 'value', 'dbid'\]"):
             FileSegmentGuc(row)
 
     def test_when_master_when_integer_dbid_report_success_format_file(self):

@@ -2806,7 +2806,7 @@ class gpload(object):
             #
             update_condition = ' ' + update_condition + ' '
             for name, type, mapto, seq in self.into_columns:
-                regexp = '(?<=[^\w])%s(?=[^\w])' % name
+                regexp = r'(?<=[^\w])%s(?=[^\w])' % name
                 self.log(self.DEBUG, 'update_condition re: ' + regexp)
                 temp_update_condition = update_condition
                 updateConditionList = splitIntoLiteralsAndNonLiterals(update_condition)
@@ -2820,7 +2820,7 @@ class gpload(object):
                 if update_condition == temp_update_condition:
                    # see if column can be undelimited, and try again.
                    if len(name) > 2 and name[1:-1] == name[1:-1].lower():
-                      regexp = '(?<=[^\w])%s(?=[^\w])' % name[1:-1]
+                      regexp = r'(?<=[^\w])%s(?=[^\w])' % name[1:-1]
                       self.log(self.DEBUG, 'update_condition undelimited re: ' + regexp)
                       update_condition = re.sub( regexp
                                                , self.fix_update_cond

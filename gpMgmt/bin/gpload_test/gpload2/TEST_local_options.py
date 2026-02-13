@@ -24,8 +24,8 @@ def test_302_gpload_header():
     write_config_file(mode='insert',reuse_tables=True,fast_match=False, file='data_file.txt',config='config/config_file1', table='testheaderreuse', delimiter="','", format='csv', quote="'\x22'", encoding='LATIN1', log_errors=True, error_limit='1000', header=True, truncate=True, match_columns=False)
     write_config_file(mode='insert',reuse_tables=True,fast_match=False, file='data_file.txt',config='config/config_file2', table='testheaderreuse', delimiter="','", format='csv', quote="'\x22'", encoding='LATIN1', log_errors=True, error_limit='1000', truncate=True, match_columns=False)
     f = open(mkpath('query302.sql'),'w')
-    f.write("\! gpload -f "+mkpath('config/config_file1')+ " -d reuse_gptest\n")
-    f.write("\! gpload -f "+mkpath('config/config_file2')+ " -d reuse_gptest\n")
+    f.write("\\! gpload -f "+mkpath('config/config_file1')+ " -d reuse_gptest\n")
+    f.write("\\! gpload -f "+mkpath('config/config_file2')+ " -d reuse_gptest\n")
     f.close()
 
 @pytest.mark.order(310)

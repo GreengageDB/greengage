@@ -24,6 +24,6 @@ class DatabaseSegmentGucTest(GpTestCase):
 
     def test_init_with_insufficient_database_values_raises(self):
         row = ['contentid', 'guc_name']
-        with self.assertRaisesRegexp(Exception, "must provide \['context', 'guc name', 'value'\]"):
+        with self.assertRaisesRegexp(Exception, r"must provide \['context', 'guc name', 'value'\]"):
             DatabaseSegmentGuc(row)
 
