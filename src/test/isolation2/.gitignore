@@ -33,3 +33,8 @@ sql/resgroup/resgroup_views.sql
 
 # Generated subdirectories
 /results/
+/parallelretrcursor/
+/resgroup/
+/ic_tcp/
+/ic_proxy/
+/resqueue/
