@@ -757,6 +757,7 @@ XLogRead(char *buf, int segsize, TimeLineID tli, XLogRecPtr startptr,
 			segbytes = nbytes;
 
 		pgstat_report_wait_start(WAIT_EVENT_WAL_READ);
+		errno = 0;
 		readbytes = read(sendFile, p, segbytes);
 		pgstat_report_wait_end();
 		if (readbytes <= 0)

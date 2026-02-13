@@ -1401,6 +1401,7 @@ static int local_send(request_t *r, const char* buf, int buflen)
 				gdebug(r, "gpfdist_send failed - due to (%d: %s), should try again", e, strerror(e));
 			}
 		}
+		errno = e;
 		return ok ? 0 : -1;
 	}
 
@@ -2154,8 +2155,8 @@ static int send_proto_head(request_t *r)
 			if (n < 0)
 			{
 				/*
-				 * TODO: It is not safe to check errno here, should check and
-				 * return special value in local_send()
+				 * local_send must restore errno value before return negative
+				 * value
 				 */
 				if (errno == EPIPE || errno == ECONNRESET)
 					r->outblock.bot = r->outblock.top;
@@ -4730,6 +4731,7 @@ static int gpfdist_socket_send(const request_t *r, const void *buf, const size_t
  */
 static int gpfdist_SSL_send(const request_t *r, const void *buf, const size_t buflen)
 {
+	errno = 0;
 
 	/* Write the data to socket */
 	int n = BIO_write(r->io, buf, buflen);

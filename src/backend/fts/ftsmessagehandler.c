@@ -104,6 +104,7 @@ checkIODataDirectory(void)
 			break;
 		}
 
+		errno = 0;
 		int len = read(fd, dataAligned, BLCKSZ);
 		if (len != BLCKSZ)
 		{
