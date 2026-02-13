@@ -470,7 +470,7 @@ retry:
 		{
 			if (primaryFileBytesRead != BLCKSZ)
 			{
-				elog(NOTICE, "short read of %d bytes from file \"%s\", block %u: %m", primaryFileBytesRead, primaryfilepath, blockno);
+				elog(NOTICE, "short read of %d bytes from file \"%s\", block %u", primaryFileBytesRead, primaryfilepath, blockno);
 				goto retry;
 			}
 			/*

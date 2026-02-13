@@ -73,8 +73,12 @@ checkIODataDirectory(void)
 				else
 				{
 					strncpy(dataAligned, FTS_PROBE_MAGIC_STRING, magic_len);
+					errno = 0;
 					if (write(fd, dataAligned, BLCKSZ) != BLCKSZ)
 					{
+						/* if write didn't set errno, assume problem is no disk space */
+						if (errno == 0)
+							errno = ENOSPC;
 						ereport(LOG, (errcode_for_file_access(),
 									  errmsg("FTS: could not write file \"%s\" : %m",
 											 FTS_PROBE_FILE_NAME)));
@@ -105,11 +109,19 @@ checkIODataDirectory(void)
 		}
 
 		int len = read(fd, dataAligned, BLCKSZ);
-		if (len != BLCKSZ)
+		if (len < 0)
 		{
 			ereport(LOG, (errcode_for_file_access(),
+					errmsg("FTS: could not read file \"%s\": %m",
+						FTS_PROBE_FILE_NAME)));
+			failure = true;
+			break;
+		}
+		else if (len != BLCKSZ)
+		{
+			ereport(LOG, (errcode(ERRCODE_DATA_CORRUPTED),
 					errmsg("FTS: could not read file \"%s\" "
-						"(actual bytes read %d, required: %d): %m",
+						"(actual bytes read %d, required: %d)",
 						FTS_PROBE_FILE_NAME, len, BLCKSZ)));
 			failure = true;
 			break;
@@ -134,8 +146,12 @@ checkIODataDirectory(void)
 		/*
 		 * Read worked, lets overwrite what we read, to check if can write also
 		 */
+		errno = 0;
 		if (write(fd, dataAligned, BLCKSZ) != BLCKSZ)
 		{
+			/* if write didn't set errno, assume problem is no disk space */
+			if (errno == 0)
+				errno = ENOSPC;
 			ereport(LOG, (errcode_for_file_access(),
 					errmsg("FTS: could not write file \"%s\" : %m",
 					FTS_PROBE_FILE_NAME)));
