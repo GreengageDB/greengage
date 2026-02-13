@@ -48,7 +48,7 @@ def run_command(cmd, verbose=False):
         cmdstr = "%s >& /dev/null" % cmdstr
     # hide password
     if bool(re.search('CREATE ROLE.*ENCRYPTED PASSWORD',cmdstr)):
-        regex = re.compile('ENCRYPTED\sPASSWORD\s\'(.*)\'')
+        regex = re.compile(r"ENCRYPTED\sPASSWORD\s'(.*)'")
         logger.info(regex.sub('ENCRYPTED PASSWORD \'********\'',cmdstr))
     elif bool(re.search('echo.*:gpperfmon:gpmon:',cmdstr)):
         regex = re.compile(':gpperfmon:gpmon:(.*)\"')

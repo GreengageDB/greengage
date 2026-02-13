@@ -70,7 +70,7 @@ class GpPkgProgramTestCase(GpTestCase):
         options, args = parser.parse_args()
         self.subject = GpPkgProgram(options, args)
         with self.assertRaisesRegexp(Exception, "Remove request 'sampl' too broad. "
-                                                "Multiple packages match remove request: \( sample.gppkg, sample2.gppkg \)."):
+                                                r"Multiple packages match remove request: \( sample.gppkg, sample2.gppkg \)."):
             self.subject.run()
 
         self.assertFalse(self.mock_uninstall_package.run.called)

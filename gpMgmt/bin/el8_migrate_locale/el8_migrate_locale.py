@@ -44,9 +44,9 @@ class connection(object):
             if os.path.isfile(file):
                 with open(file) as f:
                     for line in f:
-                        match = re.search('port=\d+',line)
+                        match = re.search(r'port=\d+',line)
                         if match:
-                            match1 = re.search('\d+', match.group())
+                            match1 = re.search(r'\d+', match.group())
                             if match1:
                                 return match1.group()
 
@@ -116,7 +116,7 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
         # print all catalog indexes that might be affected.
         cindex = self.get_affected_catalog_indexes()
         if cindex:
-            print("\c ", self.dbname, file=f)
+            print("\\c ", self.dbname, file=f)
         for indexrelid, indexname, tablename, collname, indexdef in cindex:
             print("-- catalog indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef, file=f)
             print(self.handle_one_index(indexname), file=f)
@@ -126,7 +126,7 @@ WHERE collname != 'C' and collname != 'POSIX' and indexrelid < 16384;
         for dbname in dblist:
             index = self.get_affected_user_indexes(dbname)
             if index:
-                print("\c ", dbname, file=f)
+                print("\\c ", dbname, file=f)
             for indexrelid, indexname, tablename, collname, indexdef in index:
                 print("-- indexrelid:", indexrelid, "| index name:", indexname, "| table name:", tablename, "| collname:", collname, "| indexdef: ", indexdef, file=f)
                 print(self.handle_one_index(indexname), file=f)
@@ -323,7 +323,7 @@ class CheckTables(connection):
             # dump the table info to the specified output file
             if table_info:
                 print("-- order table by size in %s order " % 'ascending' if self.order_size_ascend else '-- order table by size in descending order', file=f)
-                print("\c ", dbname, file=f)
+                print("\\c ", dbname, file=f)
                 print(file=f)
 
                 # sort the tables by size
@@ -464,8 +464,8 @@ class migrate(connection):
         with open(self.script_file) as f:
             for line in f:
                 sql = line.strip()
-                if sql.startswith("\c"):
-                    db_name = sql.split("\c")[1].strip()
+                if sql.startswith("\\c"):
+                    db_name = sql.split("\\c")[1].strip()
                 if (sql.startswith("reindex") and sql.endswith(";") and sql.count(";") == 1):
                     self.dbdict[db_name].append(sql)
                 if (sql.startswith("begin;") and sql.endswith("commit;")):
