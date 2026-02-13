@@ -8,6 +8,7 @@
 
 # import Python standard library modules
 from __future__ import print_function
+from gppylib.mainUtils import OPEN_READ_MODE
 import csv
 import gzip
 import locale
