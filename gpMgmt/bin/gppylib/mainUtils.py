@@ -25,6 +25,9 @@ if sys.version_info < (2, 5, 0):
         '''Error: %s is supported on Python versions 2.5 or greater
         Please upgrade python installed on this machine.''' % gProgramName)
 
+IS_PYTHON2 = sys.version_info[0] == 2
+OPEN_READ_MODE = 'rU' if IS_PYTHON2 else 'r'
+
 from gppylib import gplog
 from gppylib.commands import gp, unix
 from gppylib.commands.base import ExecutionError, Command

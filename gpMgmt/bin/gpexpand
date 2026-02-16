@@ -2183,9 +2183,9 @@ class ExpandTable(object):
                 try:
                     dbconn.execSQL(table_conn, sql)
                 except DatabaseError as e:
-                    if re.search('DETAIL:\s*table has already been expanded', str(e)):
+                    if re.search(r'DETAIL:\s*table has already been expanded', str(e)):
                         logger.info('Table %s.%s seems to be already expanded, marking as done' % (self.dbname, self.fq_name))
-                    elif re.search('\s*relation not found (OID \d+ )?', str(e)):
+                    elif re.search(r'\s*relation not found (OID \d+ )?', str(e)):
                         logger.warning('Encountered unexpected issue when expanding table %s.%s, skipping' % (self.dbname, self.fq_name))
                         table_conn.rollback()
                         return False

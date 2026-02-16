@@ -14,13 +14,11 @@ Depends: ${shlibs:Depends},
 	 openssh-client,
 	 openssh-server,
 	 openssl,
-	 python2,
 	 rsync,
 	 zip,
 	 net-tools,
 	 ${pythonRequires}
-Conflicts: greengage-loaders,
-	 python-is-python3
+Conflicts: greengage-loaders, ${pythonConflicts}
 Description: Greengage MPP database engine
 	Greengage Database (GPDB) is an advanced, fully featured, open
 	source data warehouse, based on PostgreSQL. It provides powerful and
