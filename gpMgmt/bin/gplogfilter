@@ -8,6 +8,7 @@
 
 # import Python standard library modules
 from __future__ import print_function
+from gppylib.mainUtils import OPEN_READ_MODE
 import csv
 import gzip
 import locale
@@ -245,7 +246,7 @@ def openInputFile(ifn, options):
             zname = zname[0:-3]
             if os.path.splitext(zname)[1] == '':
                 zname += '.log'
-        fileIn = open(ifn, (unzip and 'rb') or 'rU')
+        fileIn = open(ifn, (unzip and 'rb') or OPEN_READ_MODE)
         filesToClose.append(fileIn)
 
     # Set up input decompression
