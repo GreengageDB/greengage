@@ -13,7 +13,7 @@
   ./README.Rhel-Rocky.bash
   ```
 
-- Build and install zstd static library, e.g.
+- Build and install zstd with static library, e.g.:
   ```bash
   cd /tmp
   curl -LO https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz

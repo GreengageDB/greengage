@@ -26,7 +26,6 @@ sudo dnf -y install\
     libxml2-devel \
     libxslt-devel \
     libyaml-devel \
-    libzstd-devel \
     net-tools \
     openldap-devel \
     openssl \
