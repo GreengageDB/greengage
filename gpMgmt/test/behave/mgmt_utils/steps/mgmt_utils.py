@@ -51,14 +51,14 @@ from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 from gppylib.parseutils import canonicalize_address
+from gppylib.utils import get_dist_families
 
 default_locale = None
 master_data_dir = None
 
 def show_all_installed(gphome):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_families()
+    if 'debian' in name:
         return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \$1}'" % gphome
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
@@ -66,9 +66,8 @@ def show_all_installed(gphome):
         raise Exception('UNKNOWN platform: %s' % str(x))
 
 def remove_native_package_command(gphome, full_gppkg_name):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_families()
+    if 'debian' in name:
         return 'fakeroot dpkg --force-not-root --log=/dev/null --instdir=%s --admindir=%s/share/packages/database/deb -r %s' % (gphome, gphome, full_gppkg_name)
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return 'rpm -e %s --dbpath %s/share/packages/database' % (full_gppkg_name, gphome)
@@ -4100,7 +4099,7 @@ def impl(context, command, input):
     if input == "no mode but presses enter":
         input = os.linesep
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate(input=input)
+    stdout, stderr = p.communicate(input=input.encode('utf-8'))
 
     p.stdin.close()
 
@@ -4120,9 +4119,8 @@ def impl(context, command, input):
 
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_families()
+    if 'debian' in name:
         primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
         mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
     else:

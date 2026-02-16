@@ -7,6 +7,8 @@
 TODO: docs!
 """
 from __future__ import absolute_import
+
+import sys
 from builtins import range
 from builtins import object
 import os, pickle, base64, time
@@ -549,7 +551,7 @@ class GpGetSegmentStatusValues(Command):
         for line in self.get_results().stdout.split('\n'):
             if line.startswith("STATUS_RESULTS:"):
                 toDecode = line[len("STATUS_RESULTS:"):]
-                outputFromCmd = pickle.loads(base64.urlsafe_b64decode(toDecode))
+                outputFromCmd = pickle.loads(base64.urlsafe_b64decode(str(toDecode)))
                 break
         if outputFromCmd is None:
             return ("No status output provided from host %s" % self.remoteHost, None)
@@ -1111,7 +1113,7 @@ class GpConfigHelper(Command):
     # FIXME: figure out how callers of this can handle exceptions here
     def get_value(self):
         raw_value = self.get_results().stdout
-        return pickle.loads(base64.urlsafe_b64decode(raw_value))
+        return pickle.loads(base64.urlsafe_b64decode(str(raw_value)))
 
 
 #-----------------------------------------------

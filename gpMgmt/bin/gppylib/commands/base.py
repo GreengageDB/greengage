@@ -464,7 +464,7 @@ class LocalExecutionContext(ExecutionContext):
             assert isinstance(stderr_value, bytes)
             self.completed = True
             cmd.set_results(CommandResult(
-                rc, str(stdout_value.decode('utf-8')), str(stderr_value.decode('utf-8')), self.completed, self.halt))
+                rc, stdout_value.decode('utf-8'), stderr_value.decode('utf-8'), self.completed, self.halt))
 
     def cancel(self):
         if self.proc:

@@ -133,6 +133,8 @@ class Segment(object):
             )
 
     def __equal(self, other, ignoreAttr=[]):
+        if other is None:
+            return False
         if not isinstance(other, Segment):
             return NotImplemented
         for key in list(vars(other)):
