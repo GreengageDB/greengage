@@ -406,7 +406,7 @@
         <dxl:LogicalCTEConsumer CTEId="3" Columns="35,36,37"/>
       </dxl:LogicalCTEAnchor>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="118530030">
+    <dxl:Plan Id="0" SpaceSize="147544050">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="3017.006007" Rows="1.000000" Width="267"/>
