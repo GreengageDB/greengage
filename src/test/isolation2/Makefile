@@ -67,7 +67,20 @@ clean distclean:
 	rm -f data
 	rm -rf $(pg_regress_clean_files)
 
-install: all gpdiff.pl gpstringsubs.pl
+install: all installdirs gpdiff.pl gpstringsubs.pl
+	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
+	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
+	$(INSTALL_PROGRAM) gpdiff.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	$(INSTALL_PROGRAM) gpstringsubs.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
+
+installdirs:
+	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
+
+uninstall:
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
 
 installcheck: install installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule
