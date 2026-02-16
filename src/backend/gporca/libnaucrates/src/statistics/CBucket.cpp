@@ -455,7 +455,6 @@ CBucket::MakeBucketCopy(CMemoryPool *mp)
 BOOL
 CBucket::Equals(const CBucket *bucket)
 {
-	GPOS_ASSERT(this != NULL);
 	GPOS_ASSERT(bucket != NULL);
 	if (this->GetLowerBound()->Equals(bucket->GetLowerBound()) &&
 		this->IsLowerClosed() == bucket->IsLowerClosed() &&

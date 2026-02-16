@@ -46,9 +46,7 @@ from gppylib import pgconf
 from gppylib.parseutils import canonicalize_address
 
 default_locale = None
-master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
-if master_data_dir is None:
-    raise Exception('Please set MASTER_DATA_DIRECTORY in environment')
+master_data_dir = None
 
 def show_all_installed(gphome):
     x = platform.linux_distribution()
@@ -80,15 +78,24 @@ def create_local_demo_cluster(context, extra_config='', with_mirrors='true', wit
         num_primaries = os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3)
 
     os.environ['PGPORT'] = '15432'
+    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+    global master_data_dir
+    master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+    os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+
     cmd = """
         cd ../gpAux/gpdemo &&
         export DEMO_PORT_BASE={port_base} &&
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} &&
+        export PGPORT={pgport} &&
+        export MASTER_DATA_DIRECTORY={master_data_dir} &&
         export WITH_STANDBY={with_standby} &&
         export WITH_MIRRORS={with_mirrors} &&
         ./demo_cluster.sh -d && ./demo_cluster.sh -c &&
         {extra_config} ./demo_cluster.sh
     """.format(port_base=os.getenv('PORT_BASE', 15432),
+               pgport=os.getenv('PGPORT', 15432),
+               master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                num_primary_mirror_pairs=num_primaries,
                with_mirrors=with_mirrors,
                with_standby=with_standby,
@@ -150,10 +157,6 @@ def impl(context, checksum_toggle):
 
 @given('the cluster is generated with "{num_primaries}" primaries only')
 def impl(context, num_primaries):
-    os.environ['PGPORT'] = '15432'
-    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
-    os.environ['MASTER_DATA_DIRECTORY'] = "%s/datadirs/qddir/demoDataDir-1" % demoDir
-
     create_local_demo_cluster(context, with_mirrors='false', with_standby='false', num_primaries=num_primaries)
 
     context.gpexpand_mirrors_enabled = False
@@ -283,19 +286,27 @@ def impl(context, checksum_toggle):
             is_ok = False
 
     if not is_ok:
-        stop_database(context)
+        stop_database_if_started(context)
 
         os.environ['PGPORT'] = '15432'
         port_base = os.getenv('PORT_BASE', 15432)
+        demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+        global master_data_dir
+        master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+        os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
 
         cmd = """
         cd ../gpAux/gpdemo; \
             export DEMO_PORT_BASE={port_base} && \
             export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
+            export PGPORT={pgport} &&
+            export MASTER_DATA_DIRECTORY={master_data_dir} &&
             export WITH_MIRRORS={with_mirrors} && \
             ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
             env EXTRA_CONFIG="HEAP_CHECKSUM={checksum_toggle}" ./demo_cluster.sh
         """.format(port_base=port_base,
+                   pgport=os.getenv('PGPORT', 15432),
+                   master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                    num_primary_mirror_pairs=os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3),
                    with_mirrors='true',
                    checksum_toggle=checksum_toggle)
@@ -3117,6 +3128,7 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
     global master_data_dir
     master_data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+    os.environ['PGPORT'] = '10300'
 
     try:
         with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
@@ -4551,6 +4563,15 @@ def impl(context, logdir, stage):
         if attempt == num_retries:
             raise Exception('Timed out after {} retries'.format(num_retries))
 
+@when('add {seconds} seconds sleep after first table expand')
+def impl(context, seconds):
+    create_fault_query = "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"
+    execute_sql(context.dbname, create_fault_query)
+    # We use the reindex_relation fault injector to simulate a long table
+    # expansion time because during the expansion of the table, we reindex
+    # the relation files.
+    inject_fault_query = "SELECT gp_inject_fault('reindex_relation', 'sleep', '', '', '', 1, 1, {}, 2);".format(seconds)
+    execute_sql(context.dbname, inject_fault_query)
 
 def verify_elements_in_file(filename, elements):
     with open(filename, 'r') as file:
