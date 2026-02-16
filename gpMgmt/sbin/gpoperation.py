@@ -71,5 +71,4 @@ if six.PY2:
     print(base64.urlsafe_b64encode(pickled_ret))
 else:
     sys.stdout.buffer.write(base64.urlsafe_b64encode(pickled_ret))
-# print(base64.urlsafe_b64encode(pickled_ret))
 sys.exit(0)
