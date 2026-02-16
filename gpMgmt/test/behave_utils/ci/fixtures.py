@@ -3,13 +3,7 @@ from behave import fixture
 
 @fixture
 def init_cluster(context):
-    if "concourse_cluster" not in context.config.tags:
-        context.execute_steps(u"""
-            Given the database is not running
-            And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
-            And a standard local demo cluster is created
-        """)
-    else:
+    if "concourse_cluster" in context.config.tags:
         if "concourse_cluster_4" in context.feature.tags:
             segments = 4
         elif "concourse_cluster_2" in context.feature.tags:
@@ -23,3 +17,9 @@ def init_cluster(context):
             And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
             And a cluster is created with mirrors on "cdw" and "{}"
         """.format(segments_str))
+    else:
+        context.execute_steps(u"""
+            Given the database is not running
+            And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
+            And a standard local demo cluster is created
+        """)
