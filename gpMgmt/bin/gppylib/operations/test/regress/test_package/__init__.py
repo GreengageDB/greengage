@@ -31,7 +31,6 @@ def get_dist_version():
     raise Exception("Wrong /etc/os-release format")
 
 def get_os():
-    # dist, release, _ = platform.dist()
     dist_family = get_dist_families()
     major_release = get_dist_version().partition('.')[0]
 
