@@ -495,7 +495,7 @@
     <dxl:Plan Id="0" SpaceSize="31">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1324038.333745" Rows="1.000000" Width="4"/>
+          <dxl:Cost StartupCost="0" TotalCost="1324038.333614" Rows="1.000000" Width="4"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="23" Alias="p_partkey">
@@ -506,7 +506,7 @@
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="true" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1324038.333730" Rows="1.000000" Width="4"/>
+            <dxl:Cost StartupCost="0" TotalCost="1324038.333599" Rows="1.000000" Width="4"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="23" Alias="p_partkey">
@@ -517,9 +517,9 @@
           <dxl:JoinFilter>
             <dxl:ConstValue TypeMdid="0.16.1.0" Value="true"/>
           </dxl:JoinFilter>
-          <dxl:BroadcastMotion InputSegments="0,1,2" OutputSegments="0,1,2">
+          <dxl:RedistributeMotion InputSegments="0,1,2" OutputSegments="0,1,2">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1324032.333425" Rows="3.000000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="1324032.333295" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="1" Alias="l_partkey">
@@ -528,6 +528,11 @@
             </dxl:ProjList>
             <dxl:Filter/>
             <dxl:SortingColumnList/>
+            <dxl:HashExprList>
+              <dxl:HashExpr>
+                <dxl:Ident ColId="1" ColName="l_partkey" TypeMdid="0.20.1.0"/>
+              </dxl:HashExpr>
+            </dxl:HashExprList>
             <dxl:NestedLoopJoin JoinType="Inner" IndexNestedLoopJoin="false" OuterRefAsParam="false">
               <dxl:Properties>
                 <dxl:Cost StartupCost="0" TotalCost="1324032.333282" Rows="1.000000" Width="8"/>
@@ -618,7 +623,7 @@
                 </dxl:BroadcastMotion>
               </dxl:Materialize>
             </dxl:NestedLoopJoin>
-          </dxl:BroadcastMotion>
+          </dxl:RedistributeMotion>
           <dxl:IndexOnlyScan IndexScanDirection="Forward">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="6.000293" Rows="1.000000" Width="4"/>
