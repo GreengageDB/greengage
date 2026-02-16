@@ -793,6 +793,7 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 		/* Error logged in pgfnames */
 		exit(2);
 
+	/* also create the output directory if not present */
 	if (!directory_exists(outdir))
 		make_directory(outdir);
 
