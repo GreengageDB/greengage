@@ -2,14 +2,14 @@
 set -eox pipefail
 
 project="resgroup"
-
+docker_compose_path="ci/docker-compose.yaml"
 # Exit status file for cloud-init environments where exit codes aren't propagated.
 # Parent processes can read this file to determine script success/failure.
 logdir="$PWD/logs"
 logfile=".exitcode"
 
 function cleanup {
-  docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down
+  docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down
 }
 
 mkdir ssh_keys "$logdir" -p
@@ -26,7 +26,7 @@ bash ci/scripts/init_containers.sh $project cdw sdw1
 for service in 'cdw' 'sdw1'
 do
   #grant access rights to group controllers
-  docker compose -p $project -f ci/docker-compose.yaml exec -T $service bash -c "
+  docker compose -p $project -f "$docker_compose_path" exec -T $service bash -c "
     chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset} &&
     mkdir /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb &&
     chmod -R 777 /sys/fs/cgroup/{memory,cpu,cpuset}/gpdb &&
@@ -34,13 +34,18 @@ do
 done
 
 #create cluster
-docker compose -p $project -f ci/docker-compose.yaml exec -T cdw \
+docker compose -p $project -f "$docker_compose_path" exec -T cdw \
  bash -c "source gpdb_src/concourse/scripts/common.bash && HOSTS_LIST='sdw1' make_cluster"
+
+for service in 'cdw' 'sdw1'; do
+ docker compose -p $project -f "$docker_compose_path" exec -T \
+   $service bash -c "nohup /bin/bash gpdb_src/ci/scripts/resgroup_collect_logs.bash"
+done
 
 #disable exit on error to allow log collection regardless of return code
 set +e
 #run tests
-docker compose -p $project -f ci/docker-compose.yaml exec -Tu gpadmin cdw bash -ex <<EOF
+docker compose -p $project -f "$docker_compose_path" exec -Tu gpadmin cdw bash -ex <<EOF
         source /usr/local/greengage-db-devel/greengage_path.sh
         source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
         export LDFLAGS="-L\${GPHOME}/lib"
@@ -76,31 +81,13 @@ EOF1
         )
 EOF
 
+docker compose -p $project -f "$docker_compose_path" exec -T cdw \
+  bash -c 'LOG_SYNC_MODE=once gpdb_src/ci/scripts/resgroup_collect_logs.bash'
+docker compose -p $project -f "$docker_compose_path" exec -T sdw1 \
+  bash -c 'LOG_SYNC_MODE=once gpdb_src/ci/scripts/resgroup_collect_logs.bash'
+
 # Cloud-init monitors will check for this file's existence and content.
 # Missing file or invalid content will be interpreted as script failure.
 exitcode=$?
 echo "$exitcode" > "$logdir/$logfile"
-
-docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
-  cd /home/gpadmin
-  tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
-  tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
-  tar -czf /logs/pg_log.tar.gz gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_log/ gpdb_src/gpAux/gpdemo/datadirs/standby/pg_log
-  #regression.diffs may not exist if tests were successful
-  tar --ignore-failed-read -czf /logs/results.tar.gz gpdb_src/src/test/isolation2/results/resgroup/ gpdb_src/src/test/isolation2/regression.diffs
-EOF
-
-docker compose -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
-  cd /home/gpadmin
-  tar -czf /logs/gpAdminLogs.tar.gz gpAdminLogs/
-  tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
-  tar -czf /logs/pg_log.tar.gz \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast1/demoDataDir0/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast2/demoDataDir1/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast3/demoDataDir2/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror1/demoDataDir0/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror2/demoDataDir1/pg_log \
-    gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror3/demoDataDir2/pg_log
-EOF
-
 exit "$exitcode"
