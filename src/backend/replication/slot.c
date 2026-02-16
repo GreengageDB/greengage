@@ -1326,6 +1326,7 @@ RestoreSlotFromDisk(const char *name)
 	END_CRIT_SECTION();
 
 	/* read part of statefile that's guaranteed to be version independent */
+	errno = 0;
 	readBytes = read(fd, &cp, ReplicationSlotOnDiskConstantSize);
 	if (readBytes != ReplicationSlotOnDiskConstantSize)
 	{

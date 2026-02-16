@@ -1,0 +1,5 @@
+# temp_tables_stat extension
+comment = 'Collect and show statistics on temporary tables'
+default_version = '0.1'
+module_pathname = '$libdir/temp_tables_stat'
+relocatable = true

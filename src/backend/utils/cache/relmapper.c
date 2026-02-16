@@ -656,6 +656,7 @@ load_relmap_file(bool shared)
 	 * look, the sinval signaling mechanism will make us re-read it before we
 	 * are able to access any relation that's affected by the change.
 	 */
+	errno = 0;
 	if (read(fd, map, sizeof(RelMapFile)) != sizeof(RelMapFile))
 		ereport(FATAL,
 				(errcode_for_file_access(),

@@ -39,7 +39,13 @@ jobs:
           echo "=================================================================="
 
       - name: Move Docker storage to /mnt/docker
-        uses: greengagedb/greengage-ci/.github/actions/move-docker@feat/mv-docker
+        run: |
+          sudo bash -c '
+            systemctl stop docker
+            mv /var/lib/docker /mnt/docker
+            echo "{ \"data-root\": \"/mnt/docker\" }" > /etc/docker/daemon.json
+            systemctl start docker
+          '
 
       - name: Determine version from branch
         id: version
@@ -73,11 +79,3 @@ jobs:
           name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
           path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
           if-no-files-found: error
-
-      - name: Upload diffs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diffs_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
-          path: /mnt/logs/${{ matrix.target_os }}_postgres_regression.diffs.tar
-          if-no-files-found: ignore

@@ -16,6 +16,7 @@
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
+#include "gpopt/exception.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CExpressionPreprocessor.h"
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
@@ -40,7 +41,8 @@ using namespace gpopt;
 //---------------------------------------------------------------------------
 CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 												 BOOL fNullsColocated,
-												 IMdIdArray *opfamilies)
+												 IMdIdArray *opfamilies,
+												 BOOL noOp)
 	: m_pdrgpexpr(pdrgpexpr),
 	  m_opfamilies(opfamilies),
 	  m_fNullsColocated(fNullsColocated),
@@ -50,7 +52,7 @@ CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 	GPOS_ASSERT(NULL != pdrgpexpr);
 	GPOS_ASSERT(0 < pdrgpexpr->Size());
 	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
-		NULL == opfamilies)
+		NULL == opfamilies && !noOp)
 	{
 		PopulateDefaultOpfamilies();
 	}
@@ -68,7 +70,7 @@ CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 //---------------------------------------------------------------------------
 CDistributionSpecHashed::CDistributionSpecHashed(
 	CExpressionArray *pdrgpexpr, BOOL fNullsColocated,
-	CDistributionSpecHashed *pdshashedEquiv, IMdIdArray *opfamilies)
+	CDistributionSpecHashed *pdshashedEquiv, IMdIdArray *opfamilies, BOOL noOp)
 	: m_pdrgpexpr(pdrgpexpr),
 	  m_opfamilies(opfamilies),
 	  m_fNullsColocated(fNullsColocated),
@@ -78,7 +80,7 @@ CDistributionSpecHashed::CDistributionSpecHashed(
 	GPOS_ASSERT(NULL != pdrgpexpr);
 	GPOS_ASSERT(0 < pdrgpexpr->Size());
 	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
-		NULL == opfamilies)
+		NULL == opfamilies && !noOp)
 	{
 		PopulateDefaultOpfamilies();
 	}
@@ -119,8 +121,9 @@ CDistributionSpecHashed::PopulateDefaultOpfamilies()
 			// For a data type the retrieved opfamily can be 'InvalidOid'.
 			// Eg - For 'json', the distribution opfamily is 'InvalidOid'.
 			// Using an InvalidOid can lead to crash.
-			m_opfamilies->Release();
-			m_opfamilies = NULL;
+			GPOS_RAISE(
+				gpopt::ExmaGPOPT, gpdxl::ExmiUnexpectedOp,
+				GPOS_WSZ_LIT(": opfamily must exist for each hash expr"));
 			return;
 		}
 		mdid_opfamily->AddRef();
