@@ -4,7 +4,7 @@ from test.behave_utils.utils import is_concourse_cluster
 
 @fixture
 def init_cluster(context):
-    if is_concourse_cluster(context.config, context.feature):
+    if is_concourse_cluster(context):
         if "concourse_cluster_4" in context.feature.tags:
             segment_hosts_in_cluster = 4
         elif "concourse_cluster_2" in context.feature.tags:

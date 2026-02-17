@@ -22,7 +22,7 @@ def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
     tags_to_skip = ['gpexpand', 'gpaddmirrors',
                     'gpssh-exkeys', 'gpinitsystem', 'cross_subnet']
-    if not is_concourse_cluster(context.config, feature):
+    if not is_concourse_cluster(context):
         tags_to_skip.append('gpstate')
     if set(context.feature.tags).intersection(tags_to_skip):
         return
@@ -110,7 +110,7 @@ def before_scenario(context, scenario):
 
     if "concourse_cluster" in scenario.effective_tags and \
         "demo_cluster" not in scenario.effective_tags and \
-        not is_concourse_cluster(context.config, context.feature):
+        not is_concourse_cluster(context):
         raise Exception("This test can only be run under concourse cluster.")
 
     if 'gpmovemirrors' in context.feature.tags:

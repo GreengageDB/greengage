@@ -879,5 +879,5 @@ def wait_for_database_dropped(dbname, remaining_attempt = 3000):
         time.sleep(0.1)
 
 
-def is_concourse_cluster(config, feature):
-    return config.tag_expression.check(feature.tags + ["concourse_cluster"])
+def is_concourse_cluster(context):
+    return context.config.tag_expression.check(context.feature.tags + ["concourse_cluster"])
