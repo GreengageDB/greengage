@@ -3167,7 +3167,7 @@ def impl(context, master_host, segment_host_list):
 
 @given('a cluster is created with mirrors on "{master_host}" and "{segment_host_list}" from fixture')
 def impl(context, master_host, segment_host_list):
-    _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', fixture=True)
+    _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', from_fixture=True)
 
 @given('a cluster is created with "{mirroring_configuration}" segment mirroring on "{master_host}" and "{segment_host_list}"')
 def impl(context, mirroring_configuration, master_host, segment_host_list):
