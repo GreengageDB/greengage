@@ -8,7 +8,7 @@ HOST_LOG_DIR="/logs"
 BASE_DIR="/home/gpadmin"
 GPDB_SRC_DIR="gpdb_src"
 
-mkdir -p $HOST_LOG_DIR
+mkdir -p "$HOST_LOG_DIR"
 
 LOG_DIRS=(
   "${BASE_DIR}/gpAdminLogs"
