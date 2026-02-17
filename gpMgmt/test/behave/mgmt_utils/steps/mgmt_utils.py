@@ -3126,7 +3126,7 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
         segment_host_list = segment_host_list.split(",")
 
     global master_data_dir
-    master_data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1' if not from_fixture else 'master/gpseg-1')
+    master_data_dir = os.path.join(context.working_directory, '' if from_fixture else 'data', 'master', 'gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
     os.environ['PGPORT'] = '10300'
     context.from_fixture = from_fixture
@@ -3313,12 +3313,14 @@ sdw1|sdw1|21502|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
 
 @given('the master pid has been saved')
 def impl(context):
-    data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1' if not context.from_fixture else 'master/gpseg-1')
+    data_dir = os.path.join(context.working_directory,
+                            '' if from_fixture else 'data', 'master', 'gpseg-1')
     context.master_pid = gp.get_postmaster_pid_locally(data_dir)
 
 @then('verify that the master pid has not been changed')
 def impl(context):
-    data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1' if not context.from_fixture else 'master/gpseg-1')
+    data_dir = os.path.join(context.working_directory,
+                            '' if from_fixture else 'data', 'master', 'gpseg-1')
     current_master_pid = gp.get_postmaster_pid_locally(data_dir)
     if context.master_pid == current_master_pid:
         return
