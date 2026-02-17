@@ -22,7 +22,7 @@ def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
     tags_to_skip = ['gpexpand', 'gpaddmirrors',
                     'gpssh-exkeys', 'gpinitsystem', 'cross_subnet']
-    if not context.config.tag_expression.check(feature.tags +["concourse_cluster"]):
+    if not context.config.tag_expression.check(feature.tags + ["concourse_cluster"]):
         tags_to_skip.append('gpstate')
     if set(context.feature.tags).intersection(tags_to_skip):
         return
