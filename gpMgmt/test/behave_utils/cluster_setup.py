@@ -20,7 +20,7 @@ class GpDeleteSystem(Command):
 
 
 class TestCluster:
-    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0'):
+    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', from_fixture=False):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
         base_dir: cluster directory
@@ -33,9 +33,9 @@ class TestCluster:
         if hosts:
             self.hosts = hosts
 
-        self.port_base = '20000'
+        self.port_base = '20500' if not from_fixture else '20000'
         self.master_port = os.environ.get('PGPORT', '10300')
-        self.mirror_port_base = '21000'
+        self.mirror_port_base = '21500' if not from_fixture else '21000'
 
         self.gpinitconfig_template = local_path('configs/gpinitconfig_template')
         self.gpinitconfig_mirror_template = local_path('configs/gpinitconfig_mirror_template')
@@ -47,9 +47,9 @@ class TestCluster:
         self.hosts_file = os.path.join(self.base_dir, 'hosts')
         self.gpexpand_file = os.path.join(self.base_dir, 'gpexpand_input')
 
-        self.primary_dir = os.path.join(self.base_dir, 'primary')
-        self.mirror_dir = os.path.join(self.base_dir, 'mirror')
-        self.master_dir = os.path.join(self.base_dir, 'master')
+        self.primary_dir = os.path.join(self.base_dir, 'data/primary' if not from_fixture else 'primary')
+        self.mirror_dir = os.path.join(self.base_dir, 'data/mirror' if not from_fixture else 'mirror')
+        self.master_dir = os.path.join(self.base_dir, 'data/master' if not from_fixture else 'master')
 
         # Test metadata
         # Whether to do gpinitsystem or not
@@ -168,9 +168,9 @@ def run_shell_command(cmdstr, cmdname = 'shell command', results={'rc':0, 'stdou
 
 def reset_hosts(hosts, test_base_dir):
 
-    primary_dir = os.path.join(test_base_dir, 'primary')
-    mirror_dir = os.path.join(test_base_dir, 'mirror')
-    master_dir = os.path.join(test_base_dir, 'master')
+    primary_dir = os.path.join(test_base_dir, 'data/primary' if not from_fixture else 'primary')
+    mirror_dir = os.path.join(test_base_dir, 'data/mirror' if not from_fixture else 'mirror')
+    master_dir = os.path.join(test_base_dir, 'data/master' if not from_fixture else 'master')
 
     host_args = " ".join(map(lambda x: "-h %s" % x, hosts))
     reset_primary_dirs_cmd = "gpssh %s -e 'rm -rf %s; mkdir -p %s'" % (host_args, primary_dir, primary_dir)

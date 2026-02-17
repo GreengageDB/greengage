@@ -18,7 +18,7 @@ def init_cluster(context):
             Given the database is not running
             And a working directory of the test as '/data/gpdata'
             And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
-            And a cluster is created with mirrors on "cdw" and "{}"
+            And a cluster is created with mirrors on "cdw" and "{}" from fixture
         """.format(','.join('sdw{}'.format(i + 1) for i in range(segment_hosts_in_cluster))))
     else:
         context.execute_steps(u"""
