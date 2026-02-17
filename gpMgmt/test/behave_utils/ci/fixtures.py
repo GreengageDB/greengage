@@ -3,7 +3,7 @@ from behave import fixture
 
 @fixture
 def init_cluster(context):
-    if context.config.tag_expression.check(["concourse_cluster"]):
+    if context.config.tag_expression.check(context.feature.tags + ["concourse_cluster"]):
         if "concourse_cluster_4" in context.feature.tags:
             segment_hosts_in_cluster = 4
         elif "concourse_cluster_2" in context.feature.tags:
