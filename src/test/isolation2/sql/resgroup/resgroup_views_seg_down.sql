@@ -18,6 +18,8 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- Reset FTS probe interval.
 SELECT gp_request_fts_probe_scan();
 
+select 'ERROR' as error;
+
 -- Make a successfull query to allocate query executer backends on the segments.
 1:SELECT count(1) FROM gp_toolkit.gp_resgroup_status_per_segment WHERE groupname = 'admin_group';
 

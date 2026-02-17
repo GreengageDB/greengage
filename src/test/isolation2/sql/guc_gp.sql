@@ -3,6 +3,8 @@ create table data_correctness_detect(a int, b int);
 create table data_correctness_detect_randomly(a int, b int) distributed randomly;
 create table data_correctness_detect_replicated(a int, b int) distributed replicated;
 
+select 'ERROR' as error;
+
 set gp_detect_data_correctness = on;
 -- should no data insert
 insert into data_correctness_detect select i, i from generate_series(1, 100) i;
