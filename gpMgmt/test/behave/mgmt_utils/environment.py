@@ -13,6 +13,7 @@ from steps.gpssh_exkeys_mgmt_utils import GpsshExkeysMgmtContext
 from steps.mgmt_utils import backup_bashrc, restore_bashrc
 from gppylib.db import dbconn
 from gppylib.commands.base import Command, REMOTE
+from test.behave_utils.ci.fixtures import init_cluster
 
 def before_all(context):
     if map(int, behave.__version__.split('.')) < [1,2,6]:
@@ -20,17 +21,12 @@ def before_all(context):
 
 def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
-    tags_to_skip = ['gpexpand', 'gpaddmirrors',
+    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate',
                     'ggssh-exkeys', 'gpinitsystem', 'cross_subnet']
-    if "concourse_cluster" not in context.config.tags:
-        tags_to_skip.append('gpstate')
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
-    if not hasattr(context, "cluster_created"):
-        context.cluster_created = True
-        from test.behave_utils.ci.fixtures import init_cluster
-        use_fixture(init_cluster, context)
+    use_fixture(init_cluster, context)
 
     drop_database_if_exists(context, 'testdb')
     drop_database_if_exists(context, 'bkdb')
@@ -107,11 +103,6 @@ def before_scenario(context, scenario):
     if "skip" in scenario.effective_tags:
         scenario.skip("skipping scenario tagged with @skip")
         return
-
-    if "concourse_cluster" in scenario.effective_tags and \
-        "demo_cluster" not in scenario.effective_tags and \
-        "concourse_cluster" not in context.config.tags:
-        raise Exception("This test can only be run under concourse cluster.")
 
     if 'gpmovemirrors' in context.feature.tags:
         context.mirror_context = MirrorMgmtContext()
