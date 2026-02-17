@@ -26,7 +26,7 @@ LOG_DIRS=(
 )
 
 sync_logs(){
-  rsync -av --relative --inplace --whole-file \
+  rsync -a --relative --inplace --whole-file \
     --ignore-missing-args \
     "${LOG_DIRS[@]}" \
     "$HOST_LOG_DIR/" 2>/dev/null || true
