@@ -29,6 +29,7 @@ class TestCluster:
         master_host = 'localhost'
         segments_host = socket.gethostname()
         self.hosts = [master_host, segments_host]
+        self.from_fixture = from_fixture
 
         if hosts:
             self.hosts = hosts
@@ -93,7 +94,7 @@ class TestCluster:
         substitute_strings_in_file(config_template, self.init_file, transforms)
 
     def reset_cluster(self):
-        reset_hosts(self.hosts, test_base_dir = self.base_dir)
+        reset_hosts(self.hosts, test_base_dir = self.base_dir, from_fixture=self.from_fixture)
 
     def create_cluster(self, with_mirrors=False, mirroring_configuration='group'):
         # Generate the config files to initialize the cluster
@@ -166,7 +167,7 @@ def run_shell_command(cmdstr, cmdname = 'shell command', results={'rc':0, 'stdou
             print "command error: %s" % results['stderr']
     return results
 
-def reset_hosts(hosts, test_base_dir):
+def reset_hosts(hosts, test_base_dir, from_fixture=False):
 
     primary_dir = os.path.join(test_base_dir, 'data/primary' if not from_fixture else 'primary')
     mirror_dir = os.path.join(test_base_dir, 'data/mirror' if not from_fixture else 'mirror')
