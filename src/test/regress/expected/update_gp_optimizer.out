@@ -129,18 +129,18 @@ WHERE t1.user_vie_project_code_pk = keo1.user_vie_project_code_pk;
          ->  Split
                ->  Result
                      ->  Hash Join
-                           Hash Cond: ((a.user_vie_project_code_pk)::text = (b.projects_pk)::text)
+                           Hash Cond: ((keo1_1.user_vie_project_code_pk)::text = (keo2.projects_pk)::text)
                            ->  Redistribute Motion 3:3  (slice6; segments: 3)
                                  Hash Key: keo1.user_vie_project_code_pk
                                  ->  Hash Join
-                                       Hash Cond: ((keo1.user_vie_project_code_pk)::text = (a.user_vie_project_code_pk)::text)
+                                       Hash Cond: ((keo1.user_vie_project_code_pk)::text = (keo1_1.user_vie_project_code_pk)::text)
                                        ->  Seq Scan on keo1
                                        ->  Hash
                                              ->  Broadcast Motion 1:3  (slice5; segments: 1)
                                                    ->  Hash Join
-                                                         Hash Cond: ((a.user_vie_fiscal_year_period_sk)::text = (max((keo3.sky_per)::text)))
+                                                         Hash Cond: ((keo1_1.user_vie_fiscal_year_period_sk)::text = (max((keo3.sky_per)::text)))
                                                          ->  Gather Motion 3:1  (slice1; segments: 3)
-                                                               ->  Seq Scan on keo1 a
+                                                               ->  Seq Scan on keo1 keo1_1
                                                          ->  Hash
                                                                ->  Aggregate
                                                                      ->  Hash Join
@@ -161,8 +161,8 @@ WHERE t1.user_vie_project_code_pk = keo1.user_vie_project_code_pk;
                                                                                                                      ->  Seq Scan on keo4 keo4_1
                            ->  Hash
                                  ->  Redistribute Motion 3:3  (slice7; segments: 3)
-                                       Hash Key: b.projects_pk
-                                       ->  Seq Scan on keo2 b
+                                       Hash Key: keo2.projects_pk
+                                       ->  Seq Scan on keo2
  Optimizer: Pivotal Optimizer (GPORCA)
 (40 rows)
 
