@@ -3129,6 +3129,7 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
     master_data_dir = os.path.join(context.working_directory, datadir_prefix, 'master', 'gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
     os.environ['PGPORT'] = '10300'
+    context.datadir_prefix = datadir_prefix
 
     try:
         with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
@@ -3534,9 +3535,9 @@ def make_temp_dir(context, tmp_base_dir, mode=''):
 def impl(context, hostnames):
     hosts = hostnames.split(',')
     if hasattr(context, "working_directory"):
-        reset_hosts(hosts, context.working_directory, master_data_dir)
+        reset_hosts(hosts, context.working_directory, context.datadir_prefix)
     if hasattr(context, "temp_base_dir"):
-        reset_hosts(hosts, context.temp_base_dir, master_data_dir)
+        reset_hosts(hosts, context.temp_base_dir, context.datadir_prefix)
 
 
 @given('user has created expansiontest tables')
