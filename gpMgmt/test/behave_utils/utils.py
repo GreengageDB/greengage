@@ -877,3 +877,7 @@ def wait_for_database_dropped(dbname, remaining_attempt = 3000):
         if remaining_attempt == 0:
             raise Exception('Unable to drop the database %s !!!') % dbname
         time.sleep(0.1)
+
+
+def is_concourse_cluster(config, feature):
+    return config.tag_expression.check(feature.tags + ["concourse_cluster"])

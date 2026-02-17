@@ -1,9 +1,10 @@
 from behave import fixture
+from test.behave_utils.utils import is_concourse_cluster
 
 
 @fixture
 def init_cluster(context):
-    if context.config.tag_expression.check(context.feature.tags + ["concourse_cluster"]):
+    if is_concourse_cluster(context.config, context.feature):
         if "concourse_cluster_4" in context.feature.tags:
             segment_hosts_in_cluster = 4
         elif "concourse_cluster_2" in context.feature.tags:
