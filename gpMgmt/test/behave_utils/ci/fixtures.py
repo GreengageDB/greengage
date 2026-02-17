@@ -5,18 +5,20 @@ from behave import fixture
 def init_cluster(context):
     if "concourse_cluster" in context.config.tags:
         if "concourse_cluster_4" in context.feature.tags:
-            segments = 4
+            segment_hosts_in_cluster = 4
         elif "concourse_cluster_2" in context.feature.tags:
-            segments = 2
+            segment_hosts_in_cluster = 2
         else:
-            segments = 3
-        segments_str = ','.join('sdw{}'.format(i) for i in range(1, segments+1))
+            segment_hosts_in_cluster = 3
+    else:
+        segment_hosts_in_cluster = 0
+    if segment_hosts_in_cluster > 0:
         context.execute_steps(u"""
             Given the database is not running
             And a working directory of the test as '/data/gpdata'
             And the user runs command "rm -rf ~/gpAdminLogs/gpinitsystem*"
             And a cluster is created with mirrors on "cdw" and "{}"
-        """.format(segments_str))
+        """.format(','.join('sdw{}'.format(i + 1) for i in range(segment_hosts_in_cluster))))
     else:
         context.execute_steps(u"""
             Given the database is not running
