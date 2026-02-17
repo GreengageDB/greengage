@@ -20,7 +20,7 @@ class GpDeleteSystem(Command):
 
 
 class TestCluster:
-    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base=20500, mirror_port_base=21500):
+    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
         base_dir: cluster directory

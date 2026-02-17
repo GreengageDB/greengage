@@ -3119,7 +3119,7 @@ def _create_working_directory(context, working_directory, mode=''):
         os.mkdir(context.working_directory)
 
 
-def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group', datadir_prefix='data', port_base=20500, mirror_port_base=21500):
+def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
     if segment_host_list == "":
         segment_host_list = []
     else:
@@ -3166,7 +3166,7 @@ def impl(context, master_host, segment_host_list):
 
 @given('a cluster is created with mirrors on "{master_host}" and "{segment_host_list}" from fixture')
 def impl(context, master_host, segment_host_list):
-    _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', datadir_prefix='', port_base=20000, mirror_port_base=21000)
+    _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', datadir_prefix='', port_base='20000', mirror_port_base='21000')
 
 @given('a cluster is created with "{mirroring_configuration}" segment mirroring on "{master_host}" and "{segment_host_list}"')
 def impl(context, mirroring_configuration, master_host, segment_host_list):
