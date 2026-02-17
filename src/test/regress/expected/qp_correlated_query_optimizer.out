@@ -1489,6 +1489,7 @@ explain select * from B where not exists (select * from C,A where C.i in (select
                                  Filter: ((i <> 10) AND ((i < 10) OR (i > 10)))
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
+
 select * from B where not exists (select * from C,A where C.i in (select C.i from C where C.i = A.i and C.i != 10) AND B.i = C.i);
  i  | j  
 ----+----
