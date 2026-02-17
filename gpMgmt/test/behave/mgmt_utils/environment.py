@@ -13,7 +13,6 @@ from steps.gpssh_exkeys_mgmt_utils import GpsshExkeysMgmtContext
 from steps.mgmt_utils import backup_bashrc, restore_bashrc
 from gppylib.db import dbconn
 from gppylib.commands.base import Command, REMOTE
-from test.behave_utils.ci.fixtures import init_cluster
 
 def before_all(context):
     if map(int, behave.__version__.split('.')) < [1,2,6]:
@@ -21,12 +20,17 @@ def before_all(context):
 
 def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate',
+    tags_to_skip = ['gpexpand', 'gpaddmirrors',
                     'gpssh-exkeys', 'gpinitsystem', 'cross_subnet']
+    if not context.config.tag_expression.check(["concourse_cluster"]):
+        tags_to_skip.append('gpstate')
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
-    use_fixture(init_cluster, context)
+    if not hasattr(context, "cluster_created"):
+        context.cluster_created = True
+        from test.behave_utils.ci.fixtures import init_cluster
+        use_fixture(init_cluster, context)
 
     drop_database_if_exists(context, 'testdb')
     drop_database_if_exists(context, 'bkdb')
