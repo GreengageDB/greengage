@@ -20,7 +20,7 @@ class GpDeleteSystem(Command):
 
 
 class TestCluster:
-    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base=20500, mirrror_port_base=21500):
+    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base=20500, mirror_port_base=21500):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
         base_dir: cluster directory
@@ -48,9 +48,9 @@ class TestCluster:
         self.hosts_file = os.path.join(self.base_dir, 'hosts')
         self.gpexpand_file = os.path.join(self.base_dir, 'gpexpand_input')
 
-        self.primary_dir = os.path.join(self.base_dir, datadir_prefix, 'primary')
-        self.mirror_dir = os.path.join(self.base_dir, datadir_prefix, 'mirror')
-        self.master_dir = os.path.join(self.base_dir, datadir_prefix, 'master')
+        self.primary_dir = os.path.join(self.base_dir, self.datadir_prefix, 'primary')
+        self.mirror_dir = os.path.join(self.base_dir, self.datadir_prefix, 'mirror')
+        self.master_dir = os.path.join(self.base_dir, self.datadir_prefix, 'master')
 
         # Test metadata
         # Whether to do gpinitsystem or not
