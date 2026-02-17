@@ -3314,13 +3314,13 @@ sdw1|sdw1|21502|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
 @given('the master pid has been saved')
 def impl(context):
     data_dir = os.path.join(context.working_directory,
-                            '' if from_fixture else 'data', 'master', 'gpseg-1')
+                            '' if context.from_fixture else 'data', 'master', 'gpseg-1')
     context.master_pid = gp.get_postmaster_pid_locally(data_dir)
 
 @then('verify that the master pid has not been changed')
 def impl(context):
     data_dir = os.path.join(context.working_directory,
-                            '' if from_fixture else 'data', 'master', 'gpseg-1')
+                            '' if context.from_fixture else 'data', 'master', 'gpseg-1')
     current_master_pid = gp.get_postmaster_pid_locally(data_dir)
     if context.master_pid == current_master_pid:
         return
