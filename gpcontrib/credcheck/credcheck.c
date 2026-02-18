@@ -1501,9 +1501,20 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				DefElem    *dvalidUntil = NULL;
 				DefElem    *dpassword = NULL;
 
-				/* When current_user is used rolename is null */
-				if (stmt->role->rolename == NULL)
-					stmt->role->rolename = GetUserNameFromId(GetSessionUserId(), false);
+				/*
+				 * Protect against attacks via ALTER ROLE current_role.
+				 *
+				 * The current user may later be switched to
+				 * BOOTSTRAP_SUPERUSERID, so we must ensure we do not
+				 * accidentally change the bootstrap superuser's password.
+				 * It is achived by making sure that roletype is always set to
+				 * ROLESPEC_CSTRING.
+				 */
+				if (stmt->role->roletype != ROLESPEC_CSTRING)
+				{
+					stmt->role->rolename = get_rolespec_name(stmt->role);
+					stmt->role->roletype = ROLESPEC_CSTRING;
+				}
 
 				/* verify if the user in whitelisted or not */
 				if (is_in_whitelist(stmt->role->rolename, username_whitelist))
@@ -1577,9 +1588,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					 * 	on role "..." may alter this role.
 					 * force use of the superuser privilege to modify the password user.
 					 */
-					if (!superuser() &&
-							strcmp(stmt->role->rolename,
-								GetUserNameFromId(GetSessionUserId(), false)) == 0)
+					if (!superuser() && get_rolespec_oid(stmt->role, false) == GetUserId())
 						use_superuser_priv = true;
 				}
 
