@@ -60,7 +60,7 @@ jobs:
           esac
 
       - name: Create SQL Dump via regression tests
-        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@feat/collect-logs
         with:
           image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}:${{ github.event.workflow_run.head_sha }}
           optimizer: postgres
