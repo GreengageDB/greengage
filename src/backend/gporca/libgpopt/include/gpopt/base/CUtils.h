@@ -445,13 +445,22 @@ public:
 	static CExpressionArray *PdrgpexprDedup(CMemoryPool *mp,
 											CExpressionArray *pdrgpexpr);
 
+	// common handler for direct expression comparison CUtils::Equals
+	// and distribution matching CUtils::EqualDistributions.
+	static BOOL Equals(const CExpression *pexprLeft,
+					   const CExpression *pexprRight, bool fMatchDistribution);
+
 	// deep equality of expression trees
 	static BOOL Equals(const CExpression *pexprLeft,
 					   const CExpression *pexprRight);
 
+	static BOOL EqualDistributions(const CExpression *pexprLeft,
+								   const CExpression *pexprRight);
+
 	// compare expression against an array of expressions
 	static BOOL FEqualAny(const CExpression *pexpr,
-						  const CExpressionArray *pdrgpexpr);
+						  const CExpressionArray *pdrgpexpr,
+						  BOOL fMatchDistribution);
 
 	// deep equality of expression arrays
 	static BOOL Equals(const CExpressionArray *pdrgpexprLeft,
@@ -459,7 +468,11 @@ public:
 
 	// check if first expression array contains all expressions in second array
 	static BOOL Contains(const CExpressionArray *pdrgpexprFst,
-						 const CExpressionArray *pdrgpexprSnd);
+						 const CExpressionArray *pdrgpexprSnd,
+						 bool fMatchDistribution);
+
+	static BOOL ContainsDistributions(const CExpressionArray *pdrgpexprFst,
+									  const CExpressionArray *pdrgpexprSnd);
 
 	// return the number of occurrences of the given expression in the given
 	// array of expressions
@@ -1002,7 +1015,10 @@ public:
 													 CExpression *join_expr);
 
 	static BOOL Contains(const CExpressionArray *exprs,
-						 CExpression *expr_to_match);
+						 CExpression *expr_to_match, BOOL fMatchDistribution);
+
+	static BOOL ContainsDistribution(const CExpressionArray *exprs,
+									 CExpression *expr_to_match);
 
 	static BOOL Equals(const CExpressionArrays *exprs_arr,
 					   const CExpressionArrays *other_exprs_arr);
