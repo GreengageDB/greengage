@@ -785,6 +785,7 @@ lo_export(PGconn *conn, Oid lobjId, const char *filename)
 	 */
 	while ((nbytes = lo_read(conn, lobj, buf, LO_BUFSIZE)) > 0)
 	{
+		errno = 0;
 		tmp = write(fd, buf, nbytes);
 		if (tmp != nbytes)
 		{

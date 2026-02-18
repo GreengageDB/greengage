@@ -531,6 +531,7 @@ static int retry_read(int fd, char *buf, int rsize)
 	Assert(rsize > 0);
 
 read_retry:
+	errno = 0;
 	sz = read(fd, buf, rsize);
 	if (sz > 0)
 		return sz;
@@ -549,6 +550,7 @@ static int retry_write(int fd, char *buf, int wsize)
 	Assert(wsize > 0);
 
 write_retry:
+	errno = 0;
 	sz = write(fd, buf, wsize);
 	if(sz > 0)
 		return sz;
