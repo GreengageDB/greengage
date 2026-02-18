@@ -85,6 +85,7 @@ function _main() {
     fi
 
     if [ "${DUMP_DB}" == "true" ]; then
+        [ -d sqldump ] && chmod 777 sqldump || true
         su gpadmin -c ./gpdb_src/concourse/scripts/dumpdb.bash
     fi
 }
