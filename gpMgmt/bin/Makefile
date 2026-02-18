@@ -80,7 +80,7 @@ pygresql:
 		unset LIBPATH; \
 		./generate-greengage-path.sh > $(DESTDIR)$(prefix)/greengage_path.sh ; \
 	fi
-	PATH=$(bindir):$$PATH && \
+	PATH=$(DESTDIR)/$(bindir):$$PATH && \
 	if [ `uname -s` = 'OpenBSD' ]; then \
 	    cd $(PYLIB_SRC)/$(PYGRESQL_DIR) && DESTDIR="$(DESTDIR)" CC=cc python setup.py build; \
 	else \
