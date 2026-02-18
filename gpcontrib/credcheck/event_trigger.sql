@@ -13,7 +13,7 @@ BEGIN
 		INTO warn_days
 		FROM pg_catalog.pg_shadow WHERE usename = SESSION_USER ;
 	
-	IF ( warn_days <= current_setting('credcheck.password_valid_warning', true)::integer ) THEN
+	IF (warn_days >= 0 AND warn_days <= current_setting('credcheck.password_valid_warning', true)::integer ) THEN
 		RAISE WARNING 'your password will expire in % days, please renew your password!', warn_days;
 	END IF;
 END;
