@@ -764,6 +764,7 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 {
 	char		testtablespace[MAXPGPATH];
 	char		indir[MAXPGPATH];
+	char		outdir[MAXPGPATH];
 	char		cgroup_mnt_point[MAXPGPATH];
 	replacements repls;
 	struct stat st;
@@ -774,6 +775,7 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 	char *errstr;
 
 	snprintf(indir, MAXPGPATH, "%s/%s", inputdir, source_subdir);
+	snprintf(outdir, MAXPGPATH, "%s/%s", dest_dir, dest_subdir);
 
 	/* Check that indir actually exists and is a directory */
 	ret = stat(indir, &st);
@@ -792,8 +794,8 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 		exit(2);
 
 	/* also create the output directory if not present */
-	if (!directory_exists(dest_subdir))
-		make_directory(dest_subdir);
+	if (!directory_exists(outdir))
+		make_directory(outdir);
 
 	snprintf(testtablespace, MAXPGPATH, "%s/testtablespace", tablespacedir);
 
