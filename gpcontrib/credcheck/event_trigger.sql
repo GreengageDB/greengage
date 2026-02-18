@@ -11,9 +11,12 @@ DECLARE
 BEGIN
 	SELECT ((extract(epoch from valuntil) - extract(epoch from current_timestamp))/86400)::integer
 		INTO warn_days
-		FROM pg_catalog.pg_shadow WHERE usename = SESSION_USER ;
+		FROM pg_catalog.pg_shadow
+		WHERE usename = SESSION_USER
+			AND valuntil IS NOT NULL
+			AND valuntil > current_timestamp;
 	
-	IF (warn_days >= 0 AND warn_days <= current_setting('credcheck.password_valid_warning', true)::integer ) THEN
+	IF (warn_days IS NOT NULL AND warn_days <= current_setting('credcheck.password_valid_warning', true)::integer ) THEN
 		RAISE WARNING 'your password will expire in % days, please renew your password!', warn_days;
 	END IF;
 END;
