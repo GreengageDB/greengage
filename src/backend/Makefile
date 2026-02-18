@@ -56,6 +56,11 @@ LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))
 # Greengage uses threads in the backend
 LIBS := $(LIBS) -lpthread
 
+# Greengage topology file support requires YAML library
+ifeq ($(have_yaml),yes)
+LIBS := $(LIBS) -lyaml
+endif
+
 ##########################################################################
 
 all: submake-libpgport submake-schemapg postgres $(POSTGRES_IMP)

@@ -13,7 +13,6 @@ override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
 SUBDIRS := motion dispatcher endpoint
 
-
 OBJS = cdbappendonlystorageformat.o \
        cdbappendonlystorageread.o cdbappendonlystoragewrite.o \
 	   cdbbufferedappend.o cdbbufferedread.o \
@@ -39,6 +38,7 @@ OBJS = cdbappendonlystorageformat.o \
 	   cdbtargeteddispatch.o cdbthreadlog.o \
 	   cdbtimer.o \
 	   cdbtm.o cdbtmutils.o \
+	   cdb_topology.o \
 	   cdbutil.o \
 	   cdbvars.o cdbvarblock.o \
 	   partitionselection.o cdbdtxrecovery.o

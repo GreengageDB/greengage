@@ -58,6 +58,7 @@
 #include "catalog/namespace.h"
 #include "utils/gpexpand.h"
 #include "access/xact.h"
+#include "cdb/cdb_topology.h"
 
 #define MAX_CACHED_1_GANGS 1
 
@@ -215,7 +216,7 @@ writeGpSegConfigToFTSFiles(void)
 	if (!fd)
 		elog(ERROR, "could not create tmp file: %s: %m", GPSEGCONFIGDUMPFILETMP);
 
-	configs = readGpSegConfigFromCatalog(&total_dbs); 
+	configs = readGpSegConfigFromCatalog(&total_dbs);
 
 	for (idx = 0; idx < total_dbs; idx++)
 	{
@@ -236,6 +237,12 @@ writeGpSegConfigToFTSFiles(void)
 	if (rename(GPSEGCONFIGDUMPFILETMP, GPSEGCONFIGDUMPFILE) != 0)
 		elog(ERROR, "could not rename file %s to file %s: %m",
 			 GPSEGCONFIGDUMPFILETMP, GPSEGCONFIGDUMPFILE);
+	
+	/* Also update the topology YAML file if it exists */
+	if (topology_file_exists())
+	{
+		writeGpSegConfigToTopologyFile();
+	}
 }
 
 static GpSegConfigEntry *
@@ -364,10 +371,28 @@ getCdbComponentInfo(void)
 
 	HTAB	   *hostSegsHash = hostSegsHashTableInit();
 
-	if (IsTransactionState())
-		configs = readGpSegConfigFromCatalog(&total_dbs);
+	/* Check if topology file exists and use it if available */
+	if (topology_file_exists())
+	{
+		/* Try to read from topology file first */
+		configs = readGpSegConfigFromTopologyFile(&total_dbs);
+		if (configs == NULL)
+		{
+			/* If reading from topology file failed, fall back to catalog */
+			if (IsTransactionState())
+				configs = readGpSegConfigFromCatalog(&total_dbs);
+			else
+				configs = readGpSegConfigFromFTSFiles(&total_dbs);
+		}
+	}
 	else
-		configs = readGpSegConfigFromFTSFiles(&total_dbs);
+	{
+		/* Use traditional methods if topology file doesn't exist */
+		if (IsTransactionState())
+			configs = readGpSegConfigFromCatalog(&total_dbs);
+		else
+			configs = readGpSegConfigFromFTSFiles(&total_dbs);
+	}
 
 	component_databases = palloc0(sizeof(CdbComponentDatabases));
 

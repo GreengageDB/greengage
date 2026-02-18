@@ -45,6 +45,7 @@
 
 #include "catalog/gp_configuration_history.h"
 #include "catalog/gp_segment_config.h"
+#include "cdb/cdb_topology.h"
 
 #include "tcop/tcopprot.h" /* quickdie() */
 
@@ -148,6 +149,9 @@ FtsProbeMain(Datum main_arg)
 
 	/* Connect to our database */
 	BackgroundWorkerInitializeConnection(DB_FOR_COMMON_ACCESS, NULL);
+	
+	/* Load topology from file if it exists */
+	load_topology_from_file_if_exists();
 
 	/* main loop */
 	FtsLoop();

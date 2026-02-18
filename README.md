@@ -220,3 +220,112 @@ throughout the codebase, but a few larger additions worth noting:
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md)
+
+
+### Greengagedb Topology File Feature
+
+This project implements external storage of cluster topology into a `gg_topology.yml` file in the master's datadir.
+
+### Feature Overview
+
+The implementation adds support for storing and loading cluster topology information in YAML format:
+
+1. **Startup Behavior**:
+   - If `gg_topology.yml` exists in the master's datadir, it's loaded on startup
+   - If not, the file is created from the current `gp_segment_configuration` table
+
+2. **Synchronization**:
+   - Changes to `gp_segment_configuration` are reflected in `gg_topology.yml` when it exists
+   - Both files remain synchronized during cluster operations
+
+3. **YAML Format**:
+   ```yaml
+   %YAML 1.1
+   ---
+   version: 1
+   topology:
+     - dbid: 1
+       content: -1
+       role: 'p'
+       preferred_role: 'p'
+       mode: 'n'
+       status: 'u'
+       port: 5432
+       hostname: "master-host"
+       address: "127.0.0.1"
+       datadir: "/data/master/gpseg-1"
+   ```
+
+## Building the Project
+
+1. Make sure you have the required build dependencies installed:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install build-essential gcc gdb flex bison libreadline-dev \
+       zlib1g-dev libssl-dev libxml2-dev libperl-dev pkg-config \
+       libldap2-dev libcurl4-gnutls-dev libedit-dev llvm clang libicu-dev \
+       python3-dev python3-pip python3-setuptools python3-wheel \
+       libkrb5-dev libpam0g-dev libevent-dev libtool autoconf automake \
+       cmake git openssh-server rsync net-tools iputils-ping vim wget curl
+   ```
+
+2. Run the build script:
+   ```bash
+   chmod +x build_project.sh
+   ./build_project.sh
+   ```
+
+3. Install the built binaries:
+   ```bash
+   sudo make install
+   ```
+
+## Docker Setup
+
+To run the cluster in Docker:
+
+1. Build the Docker images:
+   ```bash
+   docker-compose build
+   ```
+
+2. Start the cluster:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Access the master node:
+   ```bash
+   docker exec -it gpcc_master bash
+   ```
+
+## Testing the Feature
+
+Once the cluster is running:
+
+1. Check if the topology file is created:
+   ```bash
+   ls -la $MASTER_DATA_DIRECTORY/gg_topology.yml
+   ```
+
+2. View the topology file:
+   ```bash
+   cat $MASTER_DATA_DIRECTORY/gg_topology.yml
+   ```
+
+3. Verify the cluster is operational:
+   ```bash
+   psql -c "SELECT * FROM gp_segment_configuration;"
+   ```
+
+## Files Added
+
+- `src/include/cdb/cdb_topology.h` - Header file for topology functionality
+- `src/backend/cdb/cdb_topology.c` - Implementation of topology file operations
+- Modifications to `src/backend/cdb/cdbutil.c` and `src/backend/fts/fts.c` to integrate the feature
+
+## Key Integration Points
+
+- The topology file is loaded during FTS (Fault Tolerance System) startup
+- Synchronization occurs when `gp_segment_configuration` is updated via FTS
+- Automatic creation happens if the file doesn't exist on startup
