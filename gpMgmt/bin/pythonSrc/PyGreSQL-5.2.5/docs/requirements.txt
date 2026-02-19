@@ -1,2 +1,0 @@
-sphinx>=4.4,<5
-cloud_sptheme>=1.10,<2
