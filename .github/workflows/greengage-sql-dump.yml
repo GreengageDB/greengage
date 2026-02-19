@@ -67,6 +67,10 @@ jobs:
           target_os: ${{ matrix.target_os }}
           dump_db: "true"
 
+      - name: Collect logs optimizer ${{ matrix.optimizer }}
+        if: always()
+        uses: greengagedb/greengage-ci/.github/actions/collect-logs@feat/collect-logs
+
       - name: Upload SQL Dump
         uses: actions/upload-artifact@v4
         with:
