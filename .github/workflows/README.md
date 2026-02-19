@@ -39,7 +39,7 @@ operating systems:
 
 ## Release Workflow
 
-A separate workflow, `Greengage release`, handles the uploading of Debian packages
+A separate workflow `Greengage release` handles the uploading of Debian package
 to GitHub releases. It is triggered when a release is published and uses a
 composite action to manage package deployment.
 
@@ -71,6 +71,47 @@ release.
 
 The release workflow is designed to be robust and provide clear feedback when
 issues occur, ensuring that releases are always consistent and reliable.
+
+## SQL Dump Workflow
+
+A separate workflow `Greengage SQL Dump` is responsible for generating SQL dump
+artifacts after the main CI process completes successfully. It is triggered
+automatically upon the completion of the `Greengage CI` workflow.
+
+### Key Features
+
+- **Triggers:** `workflow_run: workflows: ["Greengage CI"], types: [completed]`
+- **Branch Targeting:** Runs only for the `main` and `7.x` branches.
+- **Version Detection:** Automatically determines the database version (6 or 7)
+based on the triggering branch.
+- **Artifact Creation:** Executes regression tests with the `dump_db: "true"`
+parameter to generate a SQL dump archive, which is then uploaded as a workflow
+artifact.
+- **Controlled Execution:** Since the main CI workflow runs on `main` and `7.x`
+branches only for push events (which occur after final merge of a PR), SQL dump
+are generated exclusively for verified, approved patches after they are merged
+into the main branches.
+- **Artifact Retention:** The generated SQL dump artifact is retained 90 days
+after the last download. Each new run of the `behave tests gpexpand` workflow
+(which consumes this artifact as a consumer) resets this retention period to
+90 days when it downloads the artifact.
+
+### Behavior
+
+1. **Triggering:** Automatically starts after the `Greengage CI` workflow
+finishes on the `main` or `7.x` branch.
+2. **Preparation:** Configures Docker storage on the runner to utilize
+`/mnt/docker` for increased disk space.
+3. **Version Mapping:** Maps the branch name (`main` -> version 6, `7.x` ->
+version 7) to select the correct Docker image for testing.
+4. **Dump Generation:** Runs the regression test suite using the reusable
+action with the `dump_db` option enabled, which creates a
+`*_postgres_sqldump.tar` file.
+5. **Artifact Upload:** Uploads the generated SQL dump archive as a named
+artifact (e.g., `sqldump_ggdb7_ubuntu`) to the workflow run.
+
+This workflow ensures that a current database schema dump is available as an
+artifact following successful CI runs on the primary branches `main` and `7.x`.
 
 ## Configuration
 

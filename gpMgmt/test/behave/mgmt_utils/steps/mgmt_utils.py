@@ -3119,16 +3119,17 @@ def _create_working_directory(context, working_directory, mode=''):
         os.mkdir(context.working_directory)
 
 
-def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group'):
+def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
     if segment_host_list == "":
         segment_host_list = []
     else:
         segment_host_list = segment_host_list.split(",")
 
     global master_data_dir
-    master_data_dir = os.path.join(context.working_directory, 'master/gpseg-1')
+    master_data_dir = os.path.join(context.working_directory, datadir_prefix, 'master', 'gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
     os.environ['PGPORT'] = '10300'
+    context.datadir_prefix = datadir_prefix
 
     try:
         with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
@@ -3143,7 +3144,7 @@ def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', 
     except:
         pass
 
-    testcluster = TestCluster(hosts=[master_host]+segment_host_list, base_dir=context.working_directory,hba_hostnames=hba_hostnames)
+    testcluster = TestCluster(hosts=[master_host]+segment_host_list, base_dir=context.working_directory, hba_hostnames=hba_hostnames, datadir_prefix=datadir_prefix, port_base=port_base, mirror_port_base=mirror_port_base)
     testcluster.reset_cluster()
     testcluster.create_cluster(with_mirrors=with_mirrors, mirroring_configuration=mirroring_configuration)
     context.gpexpand_mirrors_enabled = with_mirrors
@@ -3163,6 +3164,10 @@ def impl(context, master_host, segment_host_list, hba_hostnames):
 @given('a cluster is created with mirrors on "{master_host}" and "{segment_host_list}"')
 def impl(context, master_host, segment_host_list):
     _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group')
+
+@given('a cluster is created with mirrors on "{master_host}" and "{segment_host_list}" from fixture')
+def impl(context, master_host, segment_host_list):
+    _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', datadir_prefix='', port_base='20000', mirror_port_base='21000')
 
 @given('a cluster is created with "{mirroring_configuration}" segment mirroring on "{master_host}" and "{segment_host_list}"')
 def impl(context, mirroring_configuration, master_host, segment_host_list):
@@ -3264,10 +3269,10 @@ def step_impl(context, segment_id):
 @given('the user runs gpexpand with a static inputfile for a two-node cluster with mirrors')
 def impl(context):
     inputfile_contents = """
-sdw1|sdw1|20002|/tmp/gpexpand_behave/two_nodes/primary/gpseg2|6|2|p
-sdw2|sdw2|21002|/tmp/gpexpand_behave/two_nodes/mirror/gpseg2|8|2|m
-sdw2|sdw2|20003|/tmp/gpexpand_behave/two_nodes/primary/gpseg3|7|3|p
-sdw1|sdw1|21003|/tmp/gpexpand_behave/two_nodes/mirror/gpseg3|9|3|m"""
+sdw1|sdw1|20502|/tmp/gpexpand_behave/two_nodes/data/primary/gpseg2|6|2|p
+sdw2|sdw2|21502|/tmp/gpexpand_behave/two_nodes/data/mirror/gpseg2|8|2|m
+sdw2|sdw2|20503|/tmp/gpexpand_behave/two_nodes/data/primary/gpseg3|7|3|p
+sdw1|sdw1|21503|/tmp/gpexpand_behave/two_nodes/data/mirror/gpseg3|9|3|m"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     inputfile_name = "%s/gpexpand_inputfile_%s" % (context.working_directory, timestamp)
     with open(inputfile_name, 'w') as fd:
@@ -3280,10 +3285,10 @@ sdw1|sdw1|21003|/tmp/gpexpand_behave/two_nodes/mirror/gpseg3|9|3|m"""
 
 @when('the user runs gpexpand with a static inputfile for a single-node cluster with mirrors')
 def impl(context):
-    inputfile_contents = """sdw1|sdw1|20002|/tmp/gpexpand_behave/primary/gpseg2|6|2|p
-sdw1|sdw1|21002|/tmp/gpexpand_behave/mirror/gpseg2|8|2|m
-sdw1|sdw1|20003|/tmp/gpexpand_behave/primary/gpseg3|7|3|p
-sdw1|sdw1|21003|/tmp/gpexpand_behave/mirror/gpseg3|9|3|m"""
+    inputfile_contents = """sdw1|sdw1|20502|/tmp/gpexpand_behave/data/primary/gpseg2|6|2|p
+sdw1|sdw1|21502|/tmp/gpexpand_behave/data/mirror/gpseg2|8|2|m
+sdw1|sdw1|20503|/tmp/gpexpand_behave/data/primary/gpseg3|7|3|p
+sdw1|sdw1|21503|/tmp/gpexpand_behave/data/mirror/gpseg3|9|3|m"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     inputfile_name = "%s/gpexpand_inputfile_%s" % (context.working_directory, timestamp)
     with open(inputfile_name, 'w') as fd:
@@ -3296,8 +3301,8 @@ sdw1|sdw1|21003|/tmp/gpexpand_behave/mirror/gpseg3|9|3|m"""
 
 @when('the user runs gpexpand with a static inputfile for a single-node cluster with mirrors without ret code check')
 def impl(context):
-    inputfile_contents = """sdw1|sdw1|20002|/data/gpdata/gpexpand/primary/gpseg2|7|2|p
-sdw1|sdw1|21002|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
+    inputfile_contents = """sdw1|sdw1|20502|/data/gpdata/gpexpand/data/primary/gpseg2|7|2|p
+sdw1|sdw1|21502|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     inputfile_name = "%s/gpexpand_inputfile_%s" % (context.working_directory, timestamp)
     with open(inputfile_name, 'w') as fd:
@@ -3308,13 +3313,11 @@ sdw1|sdw1|21002|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
 
 @given('the master pid has been saved')
 def impl(context):
-    data_dir = os.path.join(context.working_directory, 'master/gpseg-1')
-    context.master_pid = gp.get_postmaster_pid_locally(data_dir)
+    context.master_pid = gp.get_postmaster_pid_locally(master_data_dir)
 
 @then('verify that the master pid has not been changed')
 def impl(context):
-    data_dir = os.path.join(context.working_directory, 'master/gpseg-1')
-    current_master_pid = gp.get_postmaster_pid_locally(data_dir)
+    current_master_pid = gp.get_postmaster_pid_locally(master_data_dir)
     if context.master_pid == current_master_pid:
         return
 
@@ -3532,9 +3535,9 @@ def make_temp_dir(context, tmp_base_dir, mode=''):
 def impl(context, hostnames):
     hosts = hostnames.split(',')
     if hasattr(context, "working_directory"):
-        reset_hosts(hosts, context.working_directory)
+        reset_hosts(hosts, context.working_directory, context.datadir_prefix)
     if hasattr(context, "temp_base_dir"):
-        reset_hosts(hosts, context.temp_base_dir)
+        reset_hosts(hosts, context.temp_base_dir, context.datadir_prefix)
 
 
 @given('user has created expansiontest tables')
