@@ -13166,21 +13166,22 @@ from foo l1 where b in (select ab
 -- 16 group by columns are not a superset of the distribution columns - no index scan
 explain (costs off)
 select * from foo join (select b, count(*) as cnt from tbtree group by b) grby on foo.a=grby.cnt;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          Join Filter: (foo.a = (count()))
-         ->  Broadcast Motion 3:3  (slice3; segments: 3)
-               ->  Seq Scan on foo
+         ->  Seq Scan on foo
          ->  Materialize
-               ->  HashAggregate
-                     Group Key: tbtree.b
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: tbtree.b
-                           ->  Seq Scan on tbtree
- Optimizer: Pivotal Optimizer (GPORCA)
-(12 rows)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: (count())
+                     ->  HashAggregate
+                           Group Key: tbtree.b
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: tbtree.b
+                                 ->  Seq Scan on tbtree
+ Optimizer: GPORCA
+(13 rows)
 
 -- 17 group by columns don't intersect - no index scan
 explain (costs off)

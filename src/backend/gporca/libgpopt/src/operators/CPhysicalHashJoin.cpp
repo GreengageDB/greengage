@@ -641,13 +641,13 @@ CPhysicalHashJoin::PdshashedMatching(
 		if (GPOPT_INVALID_OPT_REQUEST != ulOptReq && ulSourceSize > ulOptReq)
 		{
 			CExpression *source_expr = (*pdrgpexprSource)[ulOptReq];
-			BOOL fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
+			BOOL fSuccess = CUtils::EqualDistributions(pexprDlvrd, source_expr);
 			if (!fSuccess)
 			{
 				// if failed to find a equal match in the source distribution expr
 				// array, check the equivalent exprs to find a match
-				fSuccess =
-					CUtils::Contains(equiv_distribution_exprs, source_expr);
+				fSuccess = CUtils::ContainsDistribution(
+					equiv_distribution_exprs, source_expr);
 			}
 			if (fSuccess)
 			{
@@ -677,13 +677,13 @@ CPhysicalHashJoin::PdshashedMatching(
 
 			BOOL fSuccess = false;
 			CExpression *source_expr = (*pdrgpexprSource)[idx];
-			fSuccess = CUtils::Equals(pexprDlvrd, source_expr);
+			fSuccess = CUtils::EqualDistributions(pexprDlvrd, source_expr);
 			if (!fSuccess)
 			{
 				// if failed to find a equal match in the source distribution expr
 				// array, check the equivalent exprs to find a match
-				fSuccess =
-					CUtils::Contains(equiv_distribution_exprs, source_expr);
+				fSuccess = CUtils::ContainsDistribution(
+					equiv_distribution_exprs, source_expr);
 			}
 			if (fSuccess)
 			{

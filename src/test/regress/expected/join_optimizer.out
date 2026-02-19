@@ -4092,8 +4092,8 @@ select t1.* from
   on (t1.f1 = b1.d1)
   left join int4_tbl i4
   on (i8.q2 = i4.f1);
-                                       QUERY PLAN                                       
-----------------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.f1
    ->  Hash Left Join
@@ -4101,6 +4101,7 @@ select t1.* from
          Hash Cond: (i8.q2 = (i4.f1)::bigint)
          ->  Redistribute Motion 1:3  (slice2)
                Output: t1.f1, i8.q2
+               Hash Key: i8.q2
                ->  Hash Right Join
                      Output: t1.f1, i8.q2
                      Hash Cond: (('***'::text) = t1.f1)
@@ -4134,12 +4135,10 @@ select t1.* from
                                        Output: t1.f1
          ->  Hash
                Output: i4.f1
-               ->  Broadcast Motion 3:3  (slice6; segments: 3)
+               ->  Seq Scan on public.int4_tbl i4
                      Output: i4.f1
-                     ->  Seq Scan on public.int4_tbl i4
-                           Output: i4.f1
- Optimizer: Pivotal Optimizer (GPORCA)
-(45 rows)
+ Optimizer: GPORCA
+(44 rows)
 
 select t1.* from
   text_tbl t1
@@ -4177,6 +4176,7 @@ select t1.* from
          Hash Cond: (i8.q2 = (i4.f1)::bigint)
          ->  Redistribute Motion 1:3  (slice2)
                Output: t1.f1, i8.q2
+               Hash Key: i8.q2
                ->  Hash Right Join
                      Output: t1.f1, i8.q2
                      Hash Cond: (('***'::text) = t1.f1)
@@ -4216,12 +4216,10 @@ select t1.* from
                                        Output: t1.f1
          ->  Hash
                Output: i4.f1
-               ->  Broadcast Motion 3:3  (slice7; segments: 3)
+               ->  Seq Scan on public.int4_tbl i4
                      Output: i4.f1
-                     ->  Seq Scan on public.int4_tbl i4
-                           Output: i4.f1
- Optimizer: Pivotal Optimizer (GPORCA)
-(51 rows)
+ Optimizer: GPORCA
+(50 rows)
 
 select t1.* from
   text_tbl t1
@@ -4251,8 +4249,8 @@ select t1.* from
   on (t1.f1 = b1.d1)
   left join int4_tbl i4
   on (i8.q2 = i4.f1);
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t1.f1
    ->  Hash Left Join
@@ -4260,6 +4258,7 @@ select t1.* from
          Hash Cond: (i8.q2 = (i4.f1)::bigint)
          ->  Redistribute Motion 1:3  (slice2)
                Output: t1.f1, i8.q2
+               Hash Key: i8.q2
                ->  Hash Right Join
                      Output: t1.f1, i8.q2
                      Hash Cond: (('***'::text) = t1.f1)
@@ -4282,32 +4281,28 @@ select t1.* from
                                                          Output: i8b2.q1
                                                    ->  Hash
                                                          Output: i4b2.f1
-                                                         ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                                         ->  Seq Scan on public.int4_tbl i4b2
                                                                Output: i4b2.f1
-                                                               ->  Seq Scan on public.int4_tbl i4b2
-                                                                     Output: i4b2.f1
                            ->  Hash
                                  Output: ('***'::text), i8b1.q2
                                  ->  Result
                                        Output: '***'::text, i8b1.q2
-                                       ->  Gather Motion 3:1  (slice5; segments: 3)
+                                       ->  Gather Motion 3:1  (slice4; segments: 3)
                                              Output: i8b1.q2
                                              ->  Seq Scan on public.int8_tbl i8b1
                                                    Output: i8b1.q2
                      ->  Hash
                            Output: t1.f1
-                           ->  Gather Motion 3:1  (slice6; segments: 3)
+                           ->  Gather Motion 3:1  (slice5; segments: 3)
                                  Output: t1.f1
                                  ->  Seq Scan on public.text_tbl t1
                                        Output: t1.f1
          ->  Hash
                Output: i4.f1
-               ->  Broadcast Motion 3:3  (slice7; segments: 3)
+               ->  Seq Scan on public.int4_tbl i4
                      Output: i4.f1
-                     ->  Seq Scan on public.int4_tbl i4
-                           Output: i4.f1
- Optimizer: Pivotal Optimizer (GPORCA)
-(54 rows)
+ Optimizer: GPORCA
+(51 rows)
 
 select t1.* from
   text_tbl t1
