@@ -3,10 +3,7 @@ set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
-# TODO concourse_cluster tests are not stable
-# clusters="concourse_cluster ~concourse_cluster,demo_cluster"
-
-clusters="~concourse_cluster"
+clusters="concourse_cluster ~concourse_cluster"
 
 docker_compose_path="ci/docker-compose.yaml"
 
@@ -15,7 +12,7 @@ then
   # TODO cross_subnet and gpssh tests are excluded
   # FIXME! sigar is requred for gpperfmon tests
   # FIXME! /home/gpadmin/sqldump/dump.sql is required for gpexpand tests
-  features=`ls $behave_tests_dir -1 | grep feature | grep -v -E "cross_subnet|gpssh|gpperfmon|gpexpand" | sed 's/\.feature$//'`
+  features=`ls $behave_tests_dir -1 | grep feature | sed 's/\.feature$//'`
 else
   for feature in $@
   do
@@ -54,7 +51,8 @@ run_feature() {
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
-      -o /tmp/allure-results"  \
+      -o /tmp/allure-results \
+      -f pretty" \
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 

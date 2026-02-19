@@ -40,3 +40,24 @@ services:
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
       - ${PWD}/logs_sdw3:/logs
+  sdw4:
+    <<: *common-service
+    hostname: sdw4
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PWD}/logs_sdw4:/logs
+  sdw5:
+    <<: *common-service
+    hostname: sdw5
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PWD}/logs_sdw5:/logs
+  sdw6:
+    <<: *common-service
+    hostname: sdw6
+    volumes:
+      - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
+      - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
+      - ${PWD}/logs_sdw6:/logs

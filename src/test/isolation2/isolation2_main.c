@@ -15,6 +15,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+static char sql_isolation_testcase[MAXPGPATH];
+
 /*
  * start a Python isolation tester process for specified file (including
  * redirection), and return process ID
@@ -107,7 +109,8 @@ isolation_start_test(const char *testname,
 						   "%s ", launcher);
 
 	snprintf(psql_cmd + offset, sizeof(psql_cmd) - offset,
-			 "python ./sql_isolation_testcase.py --dbname=\"%s\" --initfile_prefix=\"%s\" < \"%s\" > \"%s\" 2>&1",
+			 "python %s --dbname=\"%s\" --initfile_prefix=\"%s\" < \"%s\" > \"%s\" 2>&1",
+			 sql_isolation_testcase,
 			 dblist->str,
 			 outfile,
 			 infile,
@@ -130,6 +133,23 @@ isolation_init(int argc, char **argv)
 {
 	/* set default regression database name */
 	add_stringlist_item(&dblist, "isolation2test");
+
+	/* find python script to run */
+	if (find_other_exec(argv[0], "sql_isolation_testcase.py",
+		NULL, sql_isolation_testcase) != 0)
+	{
+		char		full_path[MAXPGPATH];
+		const char *progname = get_progname(argv[0]);
+
+		if (find_my_exec(argv[0], full_path) < 0)
+			strlcpy(full_path, progname, sizeof(full_path));
+
+		fprintf(stderr,
+				_("The program \"sql_isolation_testcase.py\" is needed by %s "
+				  "but was not found in the same directory as \"%s\".\n"),
+				progname, full_path);
+		exit(1);
+	}
 }
 
 int

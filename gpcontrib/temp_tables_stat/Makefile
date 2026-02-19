@@ -20,10 +20,9 @@ include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
 installcheck:
-	cd ../../src/test/isolation2/ && \
-	make install && \
-	./pg_isolation2_regress \
+	$(MAKE) -C $(top_srcdir)/src/test/isolation2 install
+	$(top_srcdir)/src/test/isolation2/pg_isolation2_regress \
 		$(EXTRA_REGRESS_OPTS) \
-		--inputdir=${CURDIR} \
+		--inputdir=$(srcdir) \
 		--dbname=temp_tables_stat_isolation \
 		temp_tables_stat
