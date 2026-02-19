@@ -1,3 +1,20 @@
+2026-02-19 - Version 4.6.0
+
+This is a maintenance release to fix a security issues introduced in
+previous release.
+
+  - Fix security issue with ALTER ROLE current_role the allow to change
+    superusers password. Thanks to Alexander Kukushkin for the patch.
+  - Fix event trigger for password expiration warning when time diff are
+    negative values.
+  - Disable the login event trigger when credcheck.password_valid_warning
+    is not defined or set to 0.
+
+Users of the v4.5 release must upgrade immediately.
+
+If you are using the password expiration warning feature you should
+execute the event_trigger.sql in each database where it is defined.
+
 2026-01-27 - Version 4.5.0
 
 This is a maintenance release to fix issues reported by users since last release.
