@@ -89,7 +89,9 @@ It required to add `gpMgmt/tests` directory to `PYTHONPATH`.
 
 Greengage cluster in Docker containers has its own peculiarities in preparing a cluster for tests.
 All tests are run in one way or another on the demo cluster, wherever possible. 
-For example, cross_subnet tests or tests with tag `concourse_cluster` currently not worked because of too complex cluster preconditions.
+For example, cross_subnet tests currently not worked because of too complex cluster preconditions.
+Behave tests run either on the concourse cluster (cluster on several hosts) or on the demo (cluster on single host),
+while tests with both tags (concourse and demo) run only on the concourse cluster to avoid running the same test twice.
 
 Tests in a `docker compose` cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
 

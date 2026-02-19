@@ -20,7 +20,7 @@ class GpDeleteSystem(Command):
 
 
 class TestCluster:
-    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0'):
+    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
         base_dir: cluster directory
@@ -29,13 +29,14 @@ class TestCluster:
         master_host = 'localhost'
         segments_host = socket.gethostname()
         self.hosts = [master_host, segments_host]
+        self.datadir_prefix = datadir_prefix
 
         if hosts:
             self.hosts = hosts
 
-        self.port_base = '20500'
+        self.port_base = port_base
         self.master_port = os.environ.get('PGPORT', '10300')
-        self.mirror_port_base = '21500'
+        self.mirror_port_base = mirror_port_base
 
         self.gpinitconfig_template = local_path('configs/gpinitconfig_template')
         self.gpinitconfig_mirror_template = local_path('configs/gpinitconfig_mirror_template')
@@ -47,9 +48,9 @@ class TestCluster:
         self.hosts_file = os.path.join(self.base_dir, 'hosts')
         self.gpexpand_file = os.path.join(self.base_dir, 'gpexpand_input')
 
-        self.primary_dir = os.path.join(self.base_dir, 'data/primary')
-        self.mirror_dir = os.path.join(self.base_dir, 'data/mirror')
-        self.master_dir = os.path.join(self.base_dir, 'data/master')
+        self.primary_dir = os.path.join(self.base_dir, self.datadir_prefix, 'primary')
+        self.mirror_dir = os.path.join(self.base_dir, self.datadir_prefix, 'mirror')
+        self.master_dir = os.path.join(self.base_dir, self.datadir_prefix, 'master')
 
         # Test metadata
         # Whether to do gpinitsystem or not
@@ -93,7 +94,7 @@ class TestCluster:
         substitute_strings_in_file(config_template, self.init_file, transforms)
 
     def reset_cluster(self):
-        reset_hosts(self.hosts, test_base_dir = self.base_dir)
+        reset_hosts(self.hosts, self.base_dir, self.datadir_prefix)
 
     def create_cluster(self, with_mirrors=False, mirroring_configuration='group'):
         # Generate the config files to initialize the cluster
@@ -166,11 +167,11 @@ def run_shell_command(cmdstr, cmdname = 'shell command', results={'rc':0, 'stdou
             print "command error: %s" % results['stderr']
     return results
 
-def reset_hosts(hosts, test_base_dir):
+def reset_hosts(hosts, test_base_dir, datadir_prefix):
 
-    primary_dir = os.path.join(test_base_dir, 'data', 'primary')
-    mirror_dir = os.path.join(test_base_dir, 'data', 'mirror')
-    master_dir = os.path.join(test_base_dir, 'data', 'master')
+    primary_dir = os.path.join(test_base_dir, datadir_prefix, 'primary')
+    mirror_dir = os.path.join(test_base_dir, datadir_prefix, 'mirror')
+    master_dir = os.path.join(test_base_dir, datadir_prefix, 'master')
 
     host_args = " ".join(map(lambda x: "-h %s" % x, hosts))
     reset_primary_dirs_cmd = "gpssh %s -e 'rm -rf %s; mkdir -p %s'" % (host_args, primary_dir, primary_dir)
