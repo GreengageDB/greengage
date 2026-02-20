@@ -281,7 +281,7 @@ def main():
                                'Please review output file to ensure it is within corporate policy to transport the output file.\n'])
     except pgdb.DatabaseError as err:  # catch *all* exceptions
         sys.stderr.write('Error while dumping statistics:\n')
-        sys.stderr.write(err.message)
+        sys.stderr.write(str(err))
         sys.exit(1)
 
 
