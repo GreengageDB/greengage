@@ -28,4 +28,4 @@ done
 
 mkdir -p sqldump
 pg_dumpall -f ./sqldump/dump.sql
-[ -z "${CI:-}" ] && xz -z ./sqldump/dump.sql
+[ -z "${CI:-}" ] && xz -z ./sqldump/dump.sql || true
