@@ -8,8 +8,9 @@ Unit testing for gpversion module
 import unittest
 
 from gpversion import *
+from .gp_unittest import GpTestCase
 
-class GpVersionTestCase(unittest.TestCase):
+class GpVersionTestCase(GpTestCase):
     def setUp(self):
         pass
         
@@ -110,9 +111,9 @@ class GpVersionTestCase(unittest.TestCase):
 
     def test_lshift_negative(self):
         v = GpVersion('3.2')
-        with self.assertRaisesRegexp(Exception, 'invalid version shift'):
+        with self.assertRaisesRe(Exception, 'invalid version shift'):
             v << -1
-        with self.assertRaisesRegexp(Exception, 'invalid version shift'):
+        with self.assertRaisesRe(Exception, 'invalid version shift'):
             v << 1
 
 

@@ -54,7 +54,7 @@ class CleanSharedMemTestCase(GpTestCase):
         m = MagicMock()
         m.return_value.__enter__.return_value.readlines.return_value = file_contents
         with patch(self.builtin + '.open', m, create=True):
-            with self.assertRaisesRegexp(Exception, 'Unable to clean up shared memory for segment'):
+            with self.assertRaisesRe(Exception, 'Unable to clean up shared memory for segment'):
                 c.run()
 
     @patch('os.path.isfile', return_value=True)
@@ -67,7 +67,7 @@ class CleanSharedMemTestCase(GpTestCase):
         m = MagicMock()
         m.return_value.__enter__.return_value.readlines.return_value = file_contents
         with patch(self.builtin + '.open', m, create=True):
-            with self.assertRaisesRegexp(Exception, 'Unable to clean up shared memory'):
+            with self.assertRaisesRe(Exception, 'Unable to clean up shared memory'):
                 c.run()
 
 

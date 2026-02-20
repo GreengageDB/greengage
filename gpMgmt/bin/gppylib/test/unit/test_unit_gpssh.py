@@ -1,12 +1,11 @@
 from __future__ import absolute_import
-import imp
 import os
 import io
 
 import sys
 from mock import patch
 
-from .gp_unittest import GpTestCase
+from .gp_unittest import GpTestCase, load_module
 import six
 
 
@@ -17,7 +16,7 @@ class GpSshTestCase(GpTestCase):
         #   import gpssh
         #   self.subject = gpssh
         gpssh_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpssh")
-        self.subject = imp.load_source('gpssh', gpssh_file)
+        self.subject = load_module('gpssh', gpssh_file)
 
         self.old_sys_argv = sys.argv
         sys.argv = []
@@ -30,7 +29,7 @@ class GpSshTestCase(GpTestCase):
         sys_exit_mock.side_effect = Exception("on purpose")
         # GOOD_MOCK_EXAMPLE of stdout
         with patch('sys.stdout', new=six.StringIO()) as mock_stdout:
-            with self.assertRaisesRegexp(Exception, "on purpose"):
+            with self.assertRaisesRe(Exception, "on purpose"):
                 self.subject.main()
         self.assertIn('gpssh -- ssh access to multiple hosts at once', mock_stdout.getvalue())
 

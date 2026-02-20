@@ -52,12 +52,12 @@ class SshUtilsTestCase(unittest.TestCase):
         test that delaybeforesend is changed properly
         '''
         p1 = pxssh.pxssh()
-        self.assertEquals(p1.delaybeforesend, 0.05)
+        self.assertEqual(p1.delaybeforesend, 0.05)
 
         p2 = pxssh.pxssh(delaybeforesend=3.0,
                         options={"StrictHostKeyChecking": "no",
                                  "BatchMode": "yes"})
-        self.assertEquals(p2.delaybeforesend, 3.0)
+        self.assertEqual(p2.delaybeforesend, 3.0)
 
     def test03_pxssh_sync_multiplier(self):
         '''

@@ -16,18 +16,18 @@ class MainUtilsTestCase(GpTestCase):
 
     def test_release_removes_lock(self):
         self.lock.acquire()
-        self.assertEquals(True,os.path.exists(self.lockfile))
+        self.assertEqual(True,os.path.exists(self.lockfile))
         self.lock.release()
-        self.assertEquals(False, os.path.exists(self.lockfile))
+        self.assertEqual(False, os.path.exists(self.lockfile))
 
     def test_with_block_removes_lock(self):
         with self.lock:
-            self.assertEquals(True,os.path.exists(self.lockfile))
-        self.assertEquals(False, os.path.exists(self.lockfile))
+            self.assertEqual(True,os.path.exists(self.lockfile))
+        self.assertEqual(False, os.path.exists(self.lockfile))
 
     def test_lock_owned_by_parent(self):
         with self.lock as l:
-            self.assertEquals(l.read_pid(), self.ppid)
+            self.assertEqual(l.read_pid(), self.ppid)
 
 
     def test_exceptionPIDLockHeld_if_same_pid(self):
@@ -40,7 +40,7 @@ class MainUtilsTestCase(GpTestCase):
         with self.lock as l:
             pid = os.fork()
             if pid == 0:
-                self.assertEquals(l.read_pid(), self.ppid)
+                self.assertEqual(l.read_pid(), self.ppid)
                 os._exit(0)
             else:
                 os.wait()
@@ -53,7 +53,7 @@ class MainUtilsTestCase(GpTestCase):
             try:
                 self.lock.acquire()
             except PIDLockHeld as e:
-                self.assertEquals("PIDLock already held at %s" % self.lockfile, e.message)
+                self.assertEqual("PIDLock already held at %s" % self.lockfile, e.message)
             except:
                 self.fail("Unexpected exception while acquiring PIDLockHeld")
             os._exit(0)
@@ -96,7 +96,7 @@ class MainUtilsTestCase(GpTestCase):
                 # we expect the the acquire to fail
                 except:
                     pass
-                self.assertEquals(True, os.path.exists(self.lockfile))
+                self.assertEqual(True, os.path.exists(self.lockfile))
                 os._exit(0)
             else:
                 os.wait()

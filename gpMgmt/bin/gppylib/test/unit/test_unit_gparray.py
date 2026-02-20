@@ -171,7 +171,7 @@ class GpArrayTestCase(GpTestCase):
 
         gpArray = get_gparray_from_config()
 
-        self.assertEquals(gpArray.hasMirrors, False)
+        self.assertEqual(gpArray.hasMirrors, False)
         gpMasterEnvironmentMock.assert_called_once_with("MY_TEST_DIR", False)
         getConfigProviderFunctionMock.assert_any_call()
         configProviderMock.initializeProvider.assert_called_once_with(123456)
@@ -229,7 +229,7 @@ class GpArrayTestCase(GpTestCase):
         expected_count = portdict[lastport]
             
         for count in list(portdict.values()):
-            self.assertEquals(expected_count, count)
+            self.assertEqual(expected_count, count)
 
     def _validate_get_segment_list(self, gparray, hostlist, expansion_hosts, primary_list):
         hostlist.extend(expansion_hosts)
@@ -245,17 +245,17 @@ class GpArrayTestCase(GpTestCase):
             primary = segment.primaryDB
             datadir = primary.datadir[0:primary.datadir.rindex("/")] # strip off the "/gpseg##" portion of the primary name for comparison
             actual.append("host %s, primary %s" % (primary.hostname, datadir))
-        self.assertEquals(len(expected), len(actual))
+        self.assertEqual(len(expected), len(actual))
 
         expected = sorted(expected)
         actual = sorted(actual)
         for i in range(len(expected)):
-            self.assertEquals(expected[i], actual[i])
+            self.assertEqual(expected[i], actual[i])
 
     @patch('gppylib.db.dbconn.execSQL', return_value=[['PostgreSQL 8.3.23 (Greenplum Database 5.0.0 build dev) on x86_64-pc-linux-gnu, compiled by GCC gcc (GCC) 4.4.7 20120313 (Red Hat 4.4.7-17) compiled on Feb  9 2017 23:06:31']])
     @patch('gppylib.db.dbconn.connect', autospec=True)
     def test_initFromCatalog_mismatched_versions(self, mock_connect, mock_execSQL):
-        with self.assertRaisesRegexp(Exception, 'Cannot connect to GPDB version 5 from installed version 6'):
+        with self.assertRaisesRe(Exception, 'Cannot connect to GPDB version 5 from installed version 6'):
             GpArray.initFromCatalog(None)
 
     def test_get_min_primary_port_when_cluster_balanced(self):
@@ -321,7 +321,7 @@ class GpArrayTestCase(GpTestCase):
     def test_get_primary_port_list_len_exception(self):
         self.gpArray = self._createBalancedGpArrayWith2Primary2Mirrors()
         self.gpArray.segmentPairs = []
-        with self.assertRaisesRegexp(Exception, 'No primary ports found in array.'):
+        with self.assertRaisesRe(Exception, 'No primary ports found in array.'):
             GpArray.get_primary_port_list(self.gpArray)
 
     def test_get_mirror_port_list_when_cluster_balanced(self):
@@ -339,14 +339,14 @@ class GpArrayTestCase(GpTestCase):
     @patch('gppylib.gparray.GpArray.get_mirroring_enabled', return_value=False)
     def test_get_mirror_port_list_no_mirror_exception(self,mock1):
         self.gpArray = self._createBalancedGpArrayWith2Primary2Mirrors()
-        with self.assertRaisesRegexp(Exception, 'Mirroring is not enabled'):
+        with self.assertRaisesRe(Exception, 'Mirroring is not enabled'):
             GpArray.get_mirror_port_list(self.gpArray)
 
     @patch('gppylib.gparray.GpArray.get_mirroring_enabled', return_value=True)
     def test_get_mirror_port_list_len_exception(self, mock1):
         self.gpArray = self._createBalancedGpArrayWith2Primary2Mirrors()
         self.gpArray.segmentPairs = []
-        with self.assertRaisesRegexp(Exception, 'No mirror ports found in array.'):
+        with self.assertRaisesRe(Exception, 'No mirror ports found in array.'):
             GpArray.get_mirror_port_list(self.gpArray)
 
     def _createBalancedGpArrayWith2Primary2Mirrors(self):

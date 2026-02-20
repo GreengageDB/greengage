@@ -438,7 +438,7 @@ class BuildMirrorsTestCase(GpTestCase):
             local_gp_array = GpArray([self.master, test["failed"]])
             expected_error = "failed segment should not be in the new configuration if failing over to"
             with SubTest.subTest(test["name"]):
-                with self.assertRaisesRegexp(Exception, expected_error):
+                with self.assertRaisesRe(Exception, expected_error):
                     build_mirrors_obj.recover_mirrors(self.gpEnv, local_gp_array)
 
     def test_clean_up_failed_segments(self):
@@ -477,7 +477,11 @@ class BuildMirrorsTestCase(GpTestCase):
         build_mirrors_obj._clean_up_failed_segments()
 
         self.mock_get_segments_by_hostname.assert_called_once_with([failed1, failed3])
-        self.mock_logger.info.called_once_with('"Cleaning files from 3 segment(s)')
+        # FIXME It seems that the author of the next line made a typo and used
+        #  called_once_with instead of assert_called_once_with, and because of
+        #  this, there is no actual verification. The info is currently is
+        #  called with 'Cleaning files from 2 segment(s)'
+        # self.mock_logger.info.called_once_with('"Cleaning files from 3 segment(s)')
 
     def test_clean_up_failed_segments_no_segs_to_cleanup(self):
         failed2 = self._create_primary(dbid='3', status='d')
@@ -794,7 +798,7 @@ class BuildMirrorsTestCase(GpTestCase):
         recovery_results = RecoveryResult(self.default_action_name, [host1_recovery_output],
                                           self.mock_logger)
 
-        with self.assertRaisesRegexp(Exception, "running backout query failed"):
+        with self.assertRaisesRe(Exception, "running backout query failed"):
             self.default_build_mirrors_obj._revert_config_update(recovery_results, self.test_backout_map)
 
 
@@ -838,7 +842,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
         toBuild = []
         expected_output = []
         segs = self.buildMirrorSegs._get_running_postgres_segments(toBuild)
-        self.assertEquals(segs, expected_output)
+        self.assertEqual(segs, expected_output)
 
     @patch('gppylib.operations.buildMirrorSegments.get_pid_from_remotehost')
     @patch('gppylib.operations.buildMirrorSegments.is_pid_postmaster', return_value=True)
@@ -846,7 +850,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
     def test_get_running_postgres_segments_all_pid_postmaster(self, mock1, mock2, mock3):
         mock_segs = [Mock(), Mock()]
         segs = self.buildMirrorSegs._get_running_postgres_segments(mock_segs)
-        self.assertEquals(segs, mock_segs)
+        self.assertEqual(segs, mock_segs)
 
     @patch('gppylib.operations.buildMirrorSegments.get_pid_from_remotehost')
     @patch('gppylib.operations.buildMirrorSegments.is_pid_postmaster', side_effect=[True, False])
@@ -856,7 +860,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
         expected_output = []
         expected_output.append(mock_segs[0])
         segs = self.buildMirrorSegs._get_running_postgres_segments(mock_segs)
-        self.assertEquals(segs, expected_output)
+        self.assertEqual(segs, expected_output)
 
     @patch('gppylib.operations.buildMirrorSegments.get_pid_from_remotehost')
     @patch('gppylib.operations.buildMirrorSegments.is_pid_postmaster', side_effect=[True, False])
@@ -866,7 +870,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
         expected_output = []
         expected_output.append(mock_segs[0])
         segs = self.buildMirrorSegs._get_running_postgres_segments(mock_segs)
-        self.assertEquals(segs, expected_output)
+        self.assertEqual(segs, expected_output)
 
     @patch('gppylib.operations.buildMirrorSegments.get_pid_from_remotehost')
     @patch('gppylib.operations.buildMirrorSegments.is_pid_postmaster', side_effect=[False, False])
@@ -875,7 +879,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
         mock_segs = [Mock(), Mock()]
         expected_output = []
         segs = self.buildMirrorSegs._get_running_postgres_segments(mock_segs)
-        self.assertEquals(segs, expected_output)
+        self.assertEqual(segs, expected_output)
 
     @patch('gppylib.operations.buildMirrorSegments.get_pid_from_remotehost')
     @patch('gppylib.operations.buildMirrorSegments.is_pid_postmaster', side_effect=[False, False])
@@ -884,7 +888,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
         mock_segs = [Mock(), Mock()]
         expected_output = []
         segs = self.buildMirrorSegs._get_running_postgres_segments(mock_segs)
-        self.assertEquals(segs, expected_output)
+        self.assertEqual(segs, expected_output)
 
     @patch('gppylib.commands.base.Command.run')
     @patch('gppylib.commands.base.Command.get_results', return_value=base.CommandResult(rc=0, stdout='/tmp/seg0', stderr='', completed=True, halt=False))
@@ -903,16 +907,16 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
 
     def test_ensureSharedMemCleaned_no_segments(self):
         self.buildMirrorSegs._GpMirrorListToBuild__ensureSharedMemCleaned([])
-        self.assertEquals(self.mock_logger.info.call_count, 0)
-        self.assertEquals(self.mock_logger.warning.call_count, 0)
+        self.assertEqual(self.mock_logger.info.call_count, 0)
+        self.assertEqual(self.mock_logger.warning.call_count, 0)
 
     @patch('gppylib.operations.utils.ParallelOperation.run')
     @patch('gppylib.gparray.Segment.getSegmentHostName', side_effect=['foo1', 'foo2'])
     def test_ensureSharedMemCleaned(self, mock_getSegmentHostName, mock_run):
         self.buildMirrorSegs._GpMirrorListToBuild__ensureSharedMemCleaned([Mock(), Mock()])
         self.mock_logger.info.assert_any_call('Ensuring that shared memory is cleaned up for stopped segments')
-        self.assertEquals(self.mock_logger.warning.call_count, 0)
-        self.assertEquals(mock_run.call_count, 1)
+        self.assertEqual(self.mock_logger.warning.call_count, 0)
+        self.assertEqual(mock_run.call_count, 1)
 
     def _createGpArrayWith2Primary2Mirrors(self):
         self.master = Segment.initFromString(
@@ -937,7 +941,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
 
         gpArray = GpArray([self.master, self.primary])
 
-        with self.assertRaisesRegexp(Exception, r"Segment dbid's 2 and 1 on host samehost cannot have the same port 1111"):
+        with self.assertRaisesRe(Exception, r"Segment dbid's 2 and 1 on host samehost cannot have the same port 1111"):
             self.buildMirrorSegs.checkForPortAndDirectoryConflicts(gpArray)
 
     def test_checkForPortAndDirectoryConflicts__given_the_same_host_checks_data_directories_differ(self):
@@ -949,7 +953,7 @@ class BuildMirrorSegmentsTestCase(GpTestCase):
 
         gpArray = GpArray([self.master, self.primary])
 
-        with self.assertRaisesRegexp(Exception, r"Segment dbid's 2 and 1 on host samehost cannot have the same data directory '/data'"):
+        with self.assertRaisesRe(Exception, r"Segment dbid's 2 and 1 on host samehost cannot have the same data directory '/data'"):
             self.buildMirrorSegs.checkForPortAndDirectoryConflicts(gpArray)
 
 class SegmentProgressTestCase(GpTestCase):
@@ -1112,7 +1116,7 @@ class SegmentProgressTestCase(GpTestCase):
 
         outfile = six.StringIO()
         self.pool.join.return_value = True
-        with self.assertRaisesRegexp(Exception, "Some exception1"):
+        with self.assertRaisesRe(Exception, "Some exception1"):
             self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
         self.mock_os_remove.assert_called_once_with(self.combined_progress_file)
 

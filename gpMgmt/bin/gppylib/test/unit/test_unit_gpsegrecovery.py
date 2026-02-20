@@ -311,7 +311,7 @@ class SegRecoveryTestCase(GpTestCase):
         self.assertEqual(1, mock_pgrewind_init.call_count)
         self.assertEqual(1, mock_pgbasebackup_run.call_count)
         self.assertEqual(1, mock_pgbasebackup_init.call_count)
-        self.assertRegexpMatches(gplog.get_logfile(), r'/gpsegrecovery.pyc?_\d+\.log')
+        self.assertReMatch(gplog.get_logfile(), r'/gpsegrecovery.pyc?_\d+\.log')
 
     @patch('gppylib.commands.pg.PgRewind.__init__', return_value=None)
     @patch('gppylib.commands.pg.PgRewind.run')
@@ -339,7 +339,7 @@ class SegRecoveryTestCase(GpTestCase):
         self.assertEqual(1, mock_pgrewind_init.call_count)
         self.assertEqual(1, mock_pgbasebackup_run.call_count)
         self.assertEqual(1, mock_pgbasebackup_init.call_count)
-        self.assertRegexpMatches(gplog.get_logfile(), r'/gpsegrecovery.pyc?_\d+\.log')
+        self.assertReMatch(gplog.get_logfile(), r'/gpsegrecovery.pyc?_\d+\.log')
 
     @patch('recovery_base.gplog.setup_tool_logging')
     @patch('recovery_base.RecoveryBase.main')
@@ -780,7 +780,6 @@ class DifferentialRecoveryRunTestCase(GpTestCase):
         self.assertEqual([expected_init_args], self.mock_pgbasebackup_init.call_args_list)
         self.assertEqual(1, self.mock_pgbasebackup_run.call_count)
         self.assertEqual([call(validateAfter=True)], self.mock_pgbasebackup_run.call_args_list)
-        self.mock_logger.info.any_call('Running pg_basebackup failed: backup failed once')
         self.assertEqual(0, gpsegrecovery.start_segment.call_count)
         self.assertEqual(2, self.mock_logger.debug.call_count)
         self.assertEqual([call('Writing recovery.conf and internal.auto.conf files for dbid 2'),

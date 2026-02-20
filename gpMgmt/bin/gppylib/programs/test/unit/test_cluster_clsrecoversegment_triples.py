@@ -707,7 +707,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 self.assertTrue(test["expected"].strip() != "")
                 # TODO it is possible to match partial strings with regex that might be a typo. Should we instead not
                 #  use Regex and type out the exact error message ?
-                with self.assertRaisesRegexp(Exception, test["expected"]):
+                with self.assertRaisesRe(Exception, test["expected"]):
                     fn_to_test(test)
 
     @patch('gppylib.db.dbconn.connect', side_effect=Exception())
@@ -1152,7 +1152,7 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
                 # make sure test does not pass trivially("" will pass assertRaisesRegex)
                 self.assertTrue(test["expected"].strip() != "")
 
-                with self.assertRaisesRegexp(Exception, test["expected"]):
+                with self.assertRaisesRe(Exception, test["expected"]):
                     self.run_single_parser_test(test)
 
     @staticmethod

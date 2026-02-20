@@ -88,7 +88,7 @@ class GpAddMirrorsTest(GpTestCase):
         sys.argv = ['gpaddmirrors', '-a']
         options, args = self.parser.parse_args()
         command_obj = self.subject.createProgram(options, args)
-        with self.assertRaisesRegexp(Exception, 'Segments have heap_checksum set inconsistently to master'):
+        with self.assertRaisesRe(Exception, 'Segments have heap_checksum set inconsistently to master'):
             command_obj.run()
 
     def test_option_batch_of_size_0_will_raise(self):
@@ -105,7 +105,7 @@ class GpAddMirrorsTest(GpTestCase):
             options, _ = self.parser.parse_args()
 
         self.assertIn("gpaddmirrors version $Revision$", mock_stdout.getvalue())
-        self.assertEquals(cm.exception.code, 0)
+        self.assertEqual(cm.exception.code, 0)
 
     def test_generated_file_contains_default_port_offsets(self):
         datadir_config = _write_datadir_config(self.mdd)
