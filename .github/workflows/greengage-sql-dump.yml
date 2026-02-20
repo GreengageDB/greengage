@@ -37,7 +37,7 @@ jobs:
         run: |
           cat << EOF
           ================== Workflow Trigger Information ==================
-          Triggered by:   ${TRIGGER_NAME} (#${TRIGGER_ID})
+          Triggered by:   ${GITHUB_WORKFLOW} (#${GITHUB_RUN_ID})
           Target branch:  ${TARGET_BRANCH}
           Source commit:  ${SOURCE_SHA}
           Commit message: ${COMMIT_MESSAGE}
