@@ -68,16 +68,16 @@ jobs:
           esac
 
       - name: Create SQL Dump via regression tests
-        uses: greengagedb/greengage-ci/.github/actions/tests/regression@feat/collect-logs
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
         with:
           image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}:${{ github.event.workflow_run.head_sha }}
           optimizer: postgres
           target_os: ${{ matrix.target_os }}
           dump_db: "true"
 
-      - name: Collect logs optimizer ${{ matrix.optimizer }}
-        if: always()
-        uses: greengagedb/greengage-ci/.github/actions/collect-logs@feat/collect-logs
+      # - name: Collect logs optimizer ${{ matrix.optimizer }}
+      #   if: always()
+      #   uses: greengagedb/greengage-ci/.github/actions/collect-logs@feat/collect-logs
 
       - name: Upload SQL Dump
         uses: actions/upload-artifact@v4
