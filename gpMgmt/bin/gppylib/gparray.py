@@ -150,9 +150,6 @@ class Segment(object):
     def __ne__(self, other):
         return not self.__equal(other)
 
-    def __hash__(self):
-        return hash(self.dbid)
-
     #
     # Moved here from system/configurationImplGpdb.py
     #

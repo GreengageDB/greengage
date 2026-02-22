@@ -1765,7 +1765,7 @@ def impl(context, seg):
     # have finished.
     cmd = Command(name="get non-existing pid", cmdStr="echo \\$\\$", remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
-    pid = cmd.get_results().stdout
+    pid = cmd.get_results().stdout.strip()
 
     with open('/tmp/postmaster.pid', 'r') as fr:
         lines = fr.readlines()
