@@ -1725,7 +1725,7 @@ class gpload(object):
                 readLock.acquire()
                 line = a.stdout.readline()
                 readLock.release()
-                if len(line) == 0:
+                if not line:
                     self.log(self.ERROR,'failed to start gpfdist: ' +
                              'gpfdist command line: ' + ' '.join(popenList))
 

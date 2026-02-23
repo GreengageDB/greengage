@@ -2051,7 +2051,7 @@ def which(filename):
     # Special case where filename contains an explicit path.
     if os.path.dirname(filename) != '' and is_executable_file(filename):
         return filename
-    if 'PATH' not in os.environ or len(os.environ['PATH']) == 0:
+    if 'PATH' not in os.environ or not os.environ['PATH']:
         p = os.defpath
     else:
         p = os.environ['PATH']

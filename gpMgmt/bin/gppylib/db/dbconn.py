@@ -122,7 +122,7 @@ class DbURL(object):
             if self.pguser is None:
                 # fall back to /usr/bin/id
                 self.pguser = UserId.local('Get uid')
-            if self.pguser is None or len(self.pguser) == 0:
+            if self.pguser is None or not self.pguser:
                 raise Exception('Both $PGUSER and $USER env variables are not set!')
         else:
             self.pguser = username

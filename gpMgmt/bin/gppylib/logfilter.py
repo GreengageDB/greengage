@@ -380,12 +380,12 @@ class TimestampSpy(object):
         return item
 
     def str_range(self):
-        if len(self.maxstamp) == 0:
+        if not self.maxstamp:
             return None
         return (self.minstamp, self.maxstamp)
 
     def datetime_range(self):
-        if len(self.maxstamp) == 0:
+        if not self.maxstamp:
             return None
         minstruct = time.strptime(self.minstamp, '%Y-%m-%d %H:%M:%S')[:6]
         maxstruct = time.strptime(self.maxstamp, '%Y-%m-%d %H:%M:%S')[:6]
