@@ -8,8 +8,7 @@ from mock import patch, mock_open
 
 from gppylib.commands.gp import is_pid_postmaster, get_postmaster_pid_locally, get_postgres_segment_processes, is_gprecoverseg_running
 from test.unit.gp_unittest import GpTestCase, run_tests
-import six
-
+import sys
 
 class GpCommandTestCase(GpTestCase):
 
@@ -188,7 +187,7 @@ class GpCommandTestCase(GpTestCase):
     @patch('gppylib.commands.gp.check_pid', return_value=True)
     @patch('gppylib.commands.gp.get_masterdatadir', return_value='/')
     def test_is_gprecoverseg_running_succeeds(self, mock_file, mock1):
-        if six.PY2:
+        if sys.version_info[0] == 2:
             builtin = "__builtin__"
         else:
             builtin = "builtins"

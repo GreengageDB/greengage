@@ -14,7 +14,10 @@ import platform
 import re
 import pytest
 import io
-import six
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 # from gppylib.commands.gp import get_coordinatordatadir
 
@@ -223,7 +226,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
     if port_range:
         f.write(u"\n         PORT_RANGE: "+port_range)
     f.write("\n         FILE:")
-    if(isinstance(file,six.string_types)):
+    if(isinstance(file, string_types)):
         f.write("\n            - "+mkpath(file))
     if (isinstance(file,list)):
         for ff in file:

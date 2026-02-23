@@ -3,7 +3,6 @@ import contextlib
 from io import StringIO, BytesIO
 from os.path import abspath as _abspath
 import sys
-import six
 
 __path__[0] = _abspath(__path__[0])
 
@@ -23,7 +22,7 @@ def setup_fake_gparray():
 @contextlib.contextmanager
 def redirect_stderr():
     original_stderr = sys.stderr
-    if six.PY2:
+    if sys.version_info[0] == 2:
         sys.stderr = BytesIO()
     else:
         sys.stderr = StringIO()

@@ -6,7 +6,12 @@ import sys
 from mock import patch
 
 from .gp_unittest import GpTestCase, load_module
-import six
+
+if sys.version_info[0] == 3:
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 
 class GpSshTestCase(GpTestCase):
@@ -28,7 +33,7 @@ class GpSshTestCase(GpTestCase):
     def test_when_run_without_args_prints_help_text(self, sys_exit_mock):
         sys_exit_mock.side_effect = Exception("on purpose")
         # GOOD_MOCK_EXAMPLE of stdout
-        with patch('sys.stdout', new=six.StringIO()) as mock_stdout:
+        with patch('sys.stdout', new=StringIO()) as mock_stdout:
             with self.assertRaisesRe(Exception, "on purpose"):
                 self.subject.main()
         self.assertIn('gpssh -- ssh access to multiple hosts at once', mock_stdout.getvalue())

@@ -10,7 +10,14 @@ import io
 import shutil
 import tempfile
 from datetime import datetime
-import six
+import sys
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 
 from mock import ANY, call, patch, Mock, mock_open
@@ -998,7 +1005,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd2 = self.create_command('host2', 4, './pg_basebackup.234324', "string 2\n")
         cmd3 = self.create_command('host3', 5, './rsync.234324', "string 3\n")
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
 
@@ -1012,7 +1019,7 @@ class SegmentProgressTestCase(GpTestCase):
     def test_recovery_pattern_returned_matches_recovery_result(self):
         cmd = self.create_command('localhost', 2, './pg_basebackup.23432', "1164848/1371715 kB (84%)\n")
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
         self.buildMirrorSegs._join_and_show_segment_progress([cmd], outfile=outfile)
 
@@ -1026,7 +1033,7 @@ class SegmentProgressTestCase(GpTestCase):
     def test_recovery_pattern_returned_not_matches_recovery_result(self):
         cmd = self.create_command('localhost', 2, './pg_basebackup.23432', "1164848/1371715 kB (84%)\n")
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
         self.buildMirrorSegs._join_and_show_segment_progress([cmd], outfile=outfile)
 
@@ -1042,7 +1049,7 @@ class SegmentProgressTestCase(GpTestCase):
 
         cmd.get_results.side_effect = [Mock(stdout="string 1"), Mock(stdout="string 2")]
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.side_effect = [False, True]
         self.buildMirrorSegs._join_and_show_segment_progress([cmd], outfile=outfile)
 
@@ -1060,7 +1067,7 @@ class SegmentProgressTestCase(GpTestCase):
 
         cmd2.get_results.side_effect = [Mock(stdout="string 3"), Mock(stdout="string 4")]
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.side_effect = [False, True]
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2], inplace=True, outfile=outfile)
 
@@ -1082,7 +1089,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd2.run.side_effect = base.ExecutionError("Some exception", cmd2)
         cmd3.run.side_effect = base.ExecutionError("Some exception", cmd3)
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
 
@@ -1099,7 +1106,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd3 = self.create_command('host3', 2, './rsync.23432', "117480 64% 8.34kB/s\n")
 
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
         self.mock_os_remove.assert_called_once_with(self.combined_progress_file)
@@ -1114,7 +1121,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd3.run.side_effect = Exception("Some exception3")
 
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
         with self.assertRaisesRe(Exception, "Some exception1"):
             self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
@@ -1126,7 +1133,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd2 = self.create_command('host2', 2, './pg_rewind.23432', "1164858/1371715 kB (90%)\n")
         cmd3 = self.create_command('host3', 3, './rsync.23432', "117480 64% 8.34kB/s\n")
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
 
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
@@ -1146,7 +1153,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd2 = self.create_command('host2', 2, './pg_rewind.23432', "1164858/1371715 kB (90%)\n")
         cmd3 = self.create_command('host3', 3, './rsync.23432', "117480 64% 8.34kB/s\n")
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
 
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
@@ -1180,7 +1187,7 @@ class SegmentProgressTestCase(GpTestCase):
             cmd3 = self.create_command('host3', 3, './rsync.23432', "string 3\n")
 
 
-            outfile = six.StringIO()
+            outfile = StringIO()
             self.pool.join.return_value = True
             self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)
 
@@ -1195,7 +1202,7 @@ class SegmentProgressTestCase(GpTestCase):
         cmd2 = self.create_command('host2', 2, './pg_rewind.23432', "")
         cmd3 = self.create_command('host3', 3, './rsync.23432', "")
 
-        outfile = six.StringIO()
+        outfile = StringIO()
         self.pool.join.return_value = True
 
         self.buildMirrorSegs._join_and_show_segment_progress([cmd1, cmd2, cmd3], outfile=outfile)

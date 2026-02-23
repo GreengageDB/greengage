@@ -13,7 +13,11 @@ from past.builtins import cmp
 from builtins import map
 from builtins import object
 import sys, os, re
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 # Python version 2.7.5 (CentOS 7) or 3.12.3 (Ubuntu 24.04) is expected,
 # must be between 2.7-3.0 or 3.5+
@@ -83,7 +87,7 @@ class GpVersion(object):
 
             # if version isn't a type we recognise then convert to a string
             # first
-            if not (isinstance(v, six.string_types) or
+            if not (isinstance(v, string_types) or
                     isinstance(v, list) or
                     isinstance(v, tuple)):
                 v = str(v)
@@ -102,7 +106,7 @@ class GpVersion(object):
             #    "<VERSION>"
             #    "<VERSION> <BUILD>"
             #
-            if isinstance(v, six.string_types):
+            if isinstance(v, string_types):
                 # See if it matches one of the two the long formats
                 regex = r"\(Green\w+ Database\)? ([^ ]+) build ([^ )]+)"
                 m = re.search(regex, v)

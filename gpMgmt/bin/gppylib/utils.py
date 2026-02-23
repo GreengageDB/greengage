@@ -14,7 +14,6 @@ from xml.dom import Node
 
 from gppylib.gplog import *
 from socket import gethostbyaddr
-import six
 
 logger = get_default_logger()
 
@@ -160,7 +159,7 @@ def openAnything(source):
     
     # treat source as string
     import io
-    return io.StringIO(six.u(source))
+    return io.StringIO(source)
 def getOs():
     dist=None
     fdesc = None

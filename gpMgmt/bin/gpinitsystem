@@ -560,10 +560,7 @@ CHK_MULTI_HOME () {
 
 read -d '' HOSTNAME_SORTER <<"END_PYTHON_CODE"
 from __future__ import print_function
-try:
-    from functools import cmp_to_key
-except ImportError:
-    from six import cmp_to_key
+from functools import cmp_to_key
 import sys, re
 
 standard_host_re = re.compile(r'([a-zA-Z]+)((\\d+)(-(\\d+))?)')

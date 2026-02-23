@@ -8,12 +8,11 @@ from gppylib.operations.unix import CleanSharedMem
 from mock import Mock, MagicMock, patch
 
 from test.unit.gp_unittest import GpTestCase, run_tests
-import six
-
+import sys
 
 class CleanSharedMemTestCase(GpTestCase):
     def setUp(self):
-        if six.PY2:
+        if sys.version_info[0] == 2:
             self.builtin = "__builtin__"
         else:
             self.builtin = "builtins"

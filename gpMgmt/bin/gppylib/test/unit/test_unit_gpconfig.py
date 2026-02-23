@@ -13,8 +13,13 @@ from gpconfig_modules.parse_guc_metadata import ParseGuc
 from .gp_unittest import *
 from mock import *
 from pygresql.pg import DatabaseError
-from io import StringIO
-import six
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 db_singleton_side_effect_list = []
 
@@ -120,7 +125,7 @@ class GpConfig(GpTestCase):
         del self.os_env["MASTER_DATA_DIRECTORY"]
         self.subject.parseargs()
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_show_with_port_will_succeed(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "port"]
 
@@ -167,7 +172,7 @@ class GpConfig(GpTestCase):
             self.subject.parseargs()
         self.subject.LOGGER.error.assert_called_once_with("--file option requires that MASTER_DATA_DIRECTORY be set")
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_f_will_report_presence_of_setting(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "my_property_name", "--file"]
 
@@ -181,7 +186,7 @@ class GpConfig(GpTestCase):
         self.assertEqual(self.subject.LOGGER.error.call_count, 0)
         self.assertIn("Master  value: foo\nSegment value: foo", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_f_will_report_absence_of_setting_on_master(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "my_property_name", "--file"]
         self.master_file.get_value.return_value = None
@@ -192,7 +197,7 @@ class GpConfig(GpTestCase):
         self.assertEqual(self.subject.LOGGER.error.call_count, 0)
         self.assertIn("No value is set on master\nSegment value: seg_value", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_f_will_report_absence_of_setting_on_segment(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "my_property_name", "--file"]
         self.master_file.get_value.return_value = "master_value"
@@ -203,7 +208,7 @@ class GpConfig(GpTestCase):
         self.assertEqual(self.subject.LOGGER.error.call_count, 0)
         self.assertIn("Master  value: master_value\nNo value is set on segments", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_f_will_report_absence_of_setting_on_both(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "my_property_name", "--file"]
         self.master_file.get_value.return_value = None
@@ -214,7 +219,7 @@ class GpConfig(GpTestCase):
         self.assertEqual(self.subject.LOGGER.error.call_count, 0)
         self.assertIn("No value is set on master\nNo value is set on segments", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_f_will_report_difference_segments_out_of_sync(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "my_property_name", "--file"]
 
@@ -237,7 +242,7 @@ class GpConfig(GpTestCase):
         self.assertIn("bar", mock_stdout.getvalue())
         self.assertIn("[name: my_property_name] [value: baz]", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_f_will_report_difference_segments_out_of_sync_when_unset(self, mock_stdout):
         sys.argv = ["gpconfig", "--show", "my_property_name", "--file"]
 
@@ -336,7 +341,7 @@ class GpConfig(GpTestCase):
                                                           "changed under normal conditions. "
                                                           "Please refer to gpconfig documentation.")
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_file_compare_returns_same_value(self, mock_stdout):
         sys.argv = ["gpconfig", "-s", "my_property_name", "--file-compare"]
 
@@ -359,7 +364,7 @@ class GpConfig(GpTestCase):
         self.assertIn("Segment value: foo | file: foo", mock_stdout.getvalue())
         self.assertIn("Values on all segments are consistent", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_file_compare_works_with_unset_values(self, mock_stdout):
         sys.argv = ["gpconfig", "-s", "my_property_name", "--file-compare"]
 
@@ -385,7 +390,7 @@ class GpConfig(GpTestCase):
         self.assertIn("Segment value: foo | not set in file", mock_stdout.getvalue())
         self.assertIn("Values on all segments are consistent", mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_file_compare_returns_different_value(self, mock_stdout):
         sys.argv = ["gpconfig", "-s", "my_property_name", "--file-compare"]
 
@@ -412,7 +417,7 @@ class GpConfig(GpTestCase):
         self.assertIn("[context: 1] [dbid: 2] [name: my_property_name] [value: foo | file: bar]",
                       mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_file_compare_with_unset_values_on_some_segments(self, mock_stdout):
         sys.argv = ["gpconfig", "-s", "my_property_name", "--file-compare"]
 
@@ -439,7 +444,7 @@ class GpConfig(GpTestCase):
         self.assertIn("[context: 1] [dbid: 2] [name: my_property_name] [value: foo | not set in file]",
                       mock_stdout.getvalue())
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_file_compare_with_standby_master_with_different_file_value_will_report_failure(self, mock_stdout):
         sys.argv = ["gpconfig", "-s", "my_property_name", "--file-compare"]
 

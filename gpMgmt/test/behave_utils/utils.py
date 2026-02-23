@@ -10,8 +10,14 @@ import stat
 import time
 import glob
 import shutil
+import sys
 
-import six
+if sys.version_info[0] == 3:
+    string_types = str
+    binary_type = bytes
+else:
+    string_types = basestring
+    binary_type = str
 
 try:
     import subprocess32 as subprocess
@@ -142,7 +148,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, six.string_types) and isinstance(actual, six.binary_type):
+    if isinstance(msg, string_types) and isinstance(actual, binary_type):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):

@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 import os
 import sys
-import six
 
 import io
 from mock import *
@@ -10,8 +9,12 @@ from gppylib.programs.clsAddMirrors import GpAddMirrorsProgram, ProgramArgumentV
 from gparray import Segment, GpArray
 from gppylib.system.environment import GpMasterEnvironment
 from gppylib.system.configurationInterface import GpConfigurationProvider
-import six
 
+if sys.version_info[0] == 3:
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 class GpAddMirrorsTest(GpTestCase):
     def setUp(self):
@@ -24,7 +27,7 @@ class GpAddMirrorsTest(GpTestCase):
         self.gparrayMock = self._createGpArrayWith2Primary2Mirrors()
         self.gparray_get_segments_by_hostname = dict(sdw1=[self.primary0])
 
-        if six.PY2:
+        if sys.version_info[0] == 2:
             input_patch = patch('__builtin__.raw_input')
         else:
             input_patch = patch('builtins.input')
@@ -62,7 +65,7 @@ class GpAddMirrorsTest(GpTestCase):
             self.mdd = "/Users/pivotal/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1"
             os.environ["MASTER_DATA_DIRECTORY"] = self.mdd
 
-        if six.PY3:
+        if sys.version_info[0] == 3:
             self.gpMasterEnvironmentMock.return_value.getMasterDataDir.return_value = self.mdd
         self.parser = GpAddMirrorsProgram.createParser()
 
@@ -98,7 +101,7 @@ class GpAddMirrorsTest(GpTestCase):
         with self.assertRaises(ProgramArgumentValidationException):
             self.subject.run()
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test_option_version(self, mock_stdout):
         sys.argv = ['gpaddmirrors', '--version']
         with self.assertRaises(SystemExit) as cm:

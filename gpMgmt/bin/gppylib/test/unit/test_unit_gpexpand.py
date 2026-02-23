@@ -12,7 +12,12 @@ from gppylib.system.environment import GpMasterEnvironment
 from gppylib.db import dbconn
 import io
 import sys
-import six
+
+if sys.version_info[0] == 3:
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 class GpExpand(GpTestCase):
     def setUp(self):
@@ -37,7 +42,7 @@ class GpExpand(GpTestCase):
         open_mock = mock_open()
         open_mock.return_value.encoding = 'utf-8'
 
-        if six.PY2:
+        if sys.version_info[0] == 2:
             builtin = "__builtin__"
             input_patch = patch(builtin + '.raw_input')
         else:
@@ -134,7 +139,7 @@ class GpExpand(GpTestCase):
     @patch('gppylib.userinput.input', side_effect=['Y', 'N'])
     def test_nonstandard_gpArray_user_aborts(self, mock1):
         self.gparray.isStandardArray = Mock(return_value=(False, ""))
-        with patch('sys.stdout', new=six.StringIO()) as mock_stdout:
+        with patch('sys.stdout', new=StringIO()) as mock_stdout:
             with self.assertRaises(SystemExit):
                 self.subject.interview_setup(self.gparray, self.options)
             self.assertIn('The current system appears to be non-standard.', mock_stdout.getvalue())

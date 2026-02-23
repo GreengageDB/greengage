@@ -5,9 +5,8 @@ import unittest
 
 from mock import MagicMock, Mock
 import sys
-import six
 
-if six.PY2:
+if sys.version_info[0] == 2:
     import imp
 else:
     import importlib.util
@@ -67,19 +66,19 @@ class GpTestCase(unittest.TestCase):
                                                                      cls.tear_down_counter))
 
     def assertRaisesRe(self, exc, regex, *args, **kwargs):
-        if six.PY2:
+        if sys.version_info[0] == 2:
             return self.assertRaisesRegexp(exc, regex, *args, **kwargs)
         else:
             return self.assertRaisesRegex(exc, regex, *args, **kwargs)
 
     def assertReMatch(self, text, regex, msg=None):
-        if six.PY2:
+        if sys.version_info[0] == 2:
             return self.assertRegexpMatches(text, regex, msg)
         else:
             return self.assertRegex(text, regex, msg)
 
     def assertReNotMatch(self, text, regex, msg=None):
-        if six.PY2:
+        if sys.version_info[0] == 2:
             return self.assertNotRegexpMatches(text, regex, msg)
         else:
             return self.assertNotRegex(text, regex, msg)
@@ -142,7 +141,7 @@ class SubTest(object):
         self.name = name
 
 def load_module(name, path):
-    if six.PY2:
+    if sys.version_info[0] == 2:
         return imp.load_source(name, path)
     else:
         loader = importlib.machinery.SourceFileLoader(name, path)

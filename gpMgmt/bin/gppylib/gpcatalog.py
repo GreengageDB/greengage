@@ -17,7 +17,12 @@ import os
 import json
 from gppylib import gplog
 from gppylib.gpversion import GpVersion
-import six
+import sys
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 logger = gplog.get_default_logger()
 
@@ -459,7 +464,7 @@ class GPCatalogTable(object):
         assert(name != None)
      
         # Split string input
-        if isinstance(pkey, six.string_types):    
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         self._parent    = parent
@@ -563,7 +568,7 @@ class GPCatalogTable(object):
 
     def _setPrimaryKey(self, pkey=None):
         # Split string input
-        if isinstance(pkey, six.string_types):
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         # Check that the specified keys are real columns
@@ -584,7 +589,7 @@ class GPCatalogTable(object):
 
     def _setKnownDifferences(self, diffs):
         # Split string input
-        if isinstance(diffs, six.string_types):    
+        if isinstance(diffs, string_types):
             diffs = diffs.split()
         self._excluding = set(diffs or [])
 
@@ -640,7 +645,7 @@ class GPCatalogTableForeignKey(object):
         assert(pktablename != None)
      
         # Split string input
-        if isinstance(pkey, six.string_types):    
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         self._tname       = tname

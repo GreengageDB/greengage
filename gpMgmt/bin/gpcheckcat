@@ -34,9 +34,13 @@ import logging
 import re
 import sys
 import time
-import six
 from contextlib import closing
 from functools import reduce
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 try:
     from gppylib import gplog
@@ -83,7 +87,7 @@ def parse_int(val):
 ###############################
 def quote_value(name):
     """Add surrounding single quote, double interior single quote."""
-    assert isinstance(name, six.string_types)
+    assert isinstance(name, string_types)
     return "'" + "''".join(name.split("'")) + "'"
 
 

@@ -4,10 +4,9 @@ from builtins import object
 import sys
 import pickle
 import traceback
-import six
 import base64
 
-if six.PY2:
+if sys.version_info[0] == 2:
     stdin = sys.stdin
     stdout = sys.stdout
 else:
@@ -67,7 +66,7 @@ else:
     pickled_ret = pickle.dumps(ret)  # Pickle return data for stdout transmission
 
 sys.stdout = old_stdout
-if six.PY2:
+if sys.version_info[0] == 2:
     print(base64.urlsafe_b64encode(pickled_ret))
 else:
     sys.stdout.buffer.write(base64.urlsafe_b64encode(pickled_ret))
