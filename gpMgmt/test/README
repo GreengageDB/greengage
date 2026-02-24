@@ -22,6 +22,14 @@ integration tests.
 # this will run all tests tagged with smoke
 make -f Makefile.behave behave tags=smoke
 
+# this will run all tests not tagged with concourse_cluster
+# (on demo cluster, i.e. cluster on single host)
+make -f Makefile.behave behave flags="--tags ~concourse_cluster"
+
+# this will run all tests tagged with concourse_cluster
+# (on concourse cluster, i.e. cluster on several hosts)
+make -f Makefile.behave behave flags="--tags concourse_cluster"
+
 # this will run all tests tagged with smoke AND mirrors
 make -f Makefile.behave behave flags="--tags smoke --tags mirrors"
 
