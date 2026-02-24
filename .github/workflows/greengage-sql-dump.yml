@@ -32,17 +32,17 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_HEAD_HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
-          RUN_HEAD_HEAD_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
+          RUN_HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+          RUN_HEAD_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
         run: |
           cat << EOF
           ================== Workflow Trigger Information ==================
           Triggered by:   ${RUN_NAME} (#${RUN_ID})
           Target branch:  ${RUN_HEAD_BRANCH}
           Source commit:  ${RUN_HEAD_SHA}
-          Commit message: ${RUN_HEAD_HEAD_COMMIT_MESSAGE}
+          Commit message: ${RUN_HEAD_COMMIT_MESSAGE}
 
-          Author: ${RUN_HEAD_HEAD_COMMIT_AUTHOR}
+          Author: ${RUN_HEAD_COMMIT_AUTHOR}
           ==================================================================
           EOF
 
