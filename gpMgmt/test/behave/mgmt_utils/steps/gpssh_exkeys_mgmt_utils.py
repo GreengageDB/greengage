@@ -57,6 +57,8 @@ def run_exkeys(hosts, capture=False):
         subprocess.check_call(args)
         return
 
+    if os.path.exists('/.dockerenv'):
+        return run_cmd(' '.join(args))
     # Capture stdout/err for later use, while routing it through tee(1) so that
     # developers can still see the live stream output.
     #

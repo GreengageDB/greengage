@@ -5,7 +5,7 @@ import behave
 from behave import use_fixture
 
 from test.behave_utils.utils import drop_database_if_exists, start_database_if_not_started,\
-                                            create_database, \
+                                            create_database, is_concourse_cluster, \
                                             run_command, check_user_permissions, run_gpcommand, execute_sql
 from steps.mirrors_mgmt_utils import MirrorMgmtContext
 from steps.gpconfig_mgmt_utils import GpConfigContext
@@ -20,8 +20,10 @@ def before_all(context):
 
 def before_feature(context, feature):
     # we should be able to run gpexpand without having a cluster initialized
-    tags_to_skip = ['gpexpand', 'gpaddmirrors', 'gpstate',
+    tags_to_skip = ['gpexpand', 'gpaddmirrors',
                     'gpssh-exkeys', 'gpinitsystem', 'cross_subnet']
+    if not is_concourse_cluster(context):
+        tags_to_skip.append('gpstate')
     if set(context.feature.tags).intersection(tags_to_skip):
         return
 
@@ -105,6 +107,11 @@ def before_scenario(context, scenario):
     if "skip" in scenario.effective_tags:
         scenario.skip("skipping scenario tagged with @skip")
         return
+
+    if "concourse_cluster" in scenario.effective_tags and \
+        "demo_cluster" not in scenario.effective_tags and \
+        not is_concourse_cluster(context):
+        raise Exception("This test can only be run under concourse cluster.")
 
     if 'gpmovemirrors' in context.feature.tags:
         context.mirror_context = MirrorMgmtContext()

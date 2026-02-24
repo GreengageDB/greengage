@@ -1,4 +1,5 @@
 @gprecoverseg_newhost
+@concourse_cluster_4
 Feature: gprecoverseg tests involving migrating to a new host
 
 ########################### @concourse_cluster tests ###########################
