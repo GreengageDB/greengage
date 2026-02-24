@@ -6,7 +6,7 @@ from gppylib.commands import gp
 from gppylib.gparray import Segment
 from gppylib.operations.buildMirrorSegments import GpMirrorToBuild
 from gppylib.recoveryinfo import build_recovery_info, RecoveryInfo, RecoveryResult
-import six
+import sys
 
 
 class BuildRecoveryInfoTestCase(GpTestCase):
@@ -508,12 +508,8 @@ class RecoveryResultTestCase(GpTestCase):
                 else:
                     r.print_setup_recovery_errors()
 
-                if six.PY2:
-                    self.assertItemsEqual(test['expected_info_msgs'], mock_logger.info.call_args_list)
-                    self.assertItemsEqual(test['expected_error_msgs'], mock_logger.error.call_args_list)
-                else:
-                    self.assertCountEqual(test['expected_info_msgs'], mock_logger.info.call_args_list)
-                    self.assertCountEqual(test['expected_error_msgs'], mock_logger.error.call_args_list)
+                self.assertEqualUnordered(test['expected_info_msgs'], mock_logger.info.call_args_list)
+                self.assertEqualUnordered(test['expected_error_msgs'], mock_logger.error.call_args_list)
 
                 dbids_that_failed_bb_rewind = test.get("dbids_that_failed_bb_rewind", [])
                 for failed_dbid in dbids_that_failed_bb_rewind:

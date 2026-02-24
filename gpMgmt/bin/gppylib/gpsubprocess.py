@@ -138,7 +138,7 @@ class Popen(subprocess.Popen):
             (rset,wset,eset) = self.__select([self.stdout],[],[], timeout)
             while (self.stdout in rset):
                 buffer = os.read(self.stdout.fileno(), 8192)
-                if len(buffer) == 0:
+                if not buffer:
                     break
                 else:
                     output.append(buffer)
@@ -151,7 +151,7 @@ class Popen(subprocess.Popen):
             (rset,wset,eset) = self.__select([self.stderr],[],[], timeout)    
             while (self.stderr in rset):
                 buffer = os.read(self.stderr.fileno(), 8192)
-                if len(buffer) == 0:
+                if not buffer:
                     break
                 else:
                     error.append(buffer)

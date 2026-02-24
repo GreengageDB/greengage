@@ -28,7 +28,11 @@ from builtins import map
 from builtins import range
 from builtins import object
 import sys
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 if sys.hexversion<0x2040400:
     sys.stderr.write("gpload needs python 2.4.4 or higher\n")
@@ -1287,7 +1291,7 @@ class gpload(object):
                 (e.problem, e.problem_mark.line))
         except yaml.reader.ReaderError as e:
             es = ""
-            if isinstance(e.character, six.string_types):
+            if isinstance(e.character, string_types):
                 es = "'%s' codec can't decode byte #x%02x: %s position %d" % \
                         (e.encoding, ord(e.character), e.reason,
                          e.position)
@@ -1725,7 +1729,7 @@ class gpload(object):
                 readLock.acquire()
                 line = a.stdout.readline()
                 readLock.release()
-                if len(line) == 0:
+                if not line:
                     self.log(self.ERROR,'failed to start gpfdist: ' +
                              'gpfdist command line: ' + ' '.join(popenList))
 

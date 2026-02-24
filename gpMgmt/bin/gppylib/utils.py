@@ -14,7 +14,6 @@ from xml.dom import Node
 
 from gppylib.gplog import *
 from socket import gethostbyaddr
-import six
 
 logger = get_default_logger()
 
@@ -160,7 +159,7 @@ def openAnything(source):
     
     # treat source as string
     import io
-    return io.StringIO(six.u(source))
+    return io.StringIO(source)
 def getOs():
     dist=None
     fdesc = None
@@ -562,12 +561,40 @@ def validateHostnameAddress(hostname, address):
         return False
     return True
 
-def get_dist_families():
+def get_dist_info():
+    result = dict()
     with open('/etc/os-release') as f:
         for line in f:
-            if "ID_LIKE" in line:
-                family = line.split('=')[1].lower()
-                if family[0] == '\"':
-                    family = family[1:-1]
-                return family
-    raise Exception("Wrong /etc/os-release format")
+            key, value = line.split('=')
+            value = value.strip(' \"')
+            result[key] = value
+    return result
+
+def get_dist_families():
+    info = get_dist_info()
+    if "ID_LIKE" in info:
+        return info["ID_LIKE"]
+    if "ID" in info:
+        return info["ID"]
+    return "Unknown"
+
+def get_dist_version():
+    info = get_dist_info()
+
+    if "VERSION_ID" in info:
+        version = info["VERSION_ID"]
+    elif "VERSION" in info:
+        version = info["VERSION"]
+    else:
+        version = None
+
+    if version:
+        groups = re.search(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?", version)
+        if groups.lastindex == 3:
+            return int(groups.group(1)), int(groups.group(2)), int(groups.group(3))
+        if groups.lastindex == 2:
+            return int(groups.group(1)), int(groups.group(2)), -1
+        if groups.lastindex == 1:
+            return int(groups.group(1)), -1, -1
+
+    return -1, -1, -1

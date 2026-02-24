@@ -1,8 +1,12 @@
 #!/bin/bash
 
-# Install needed packages. Please add to this list if you discover additional prerequisites.
-sudo yum install -y epel-release
-sudo yum install -y \
+sudo dnf -y update
+sudo dnf -y install epel-release
+sudo dnf -y install 'dnf-command(config-manager)'
+sudo dnf config-manager --set-enabled devel
+sudo dnf makecache
+
+sudo dnf -y install\
     apr-devel \
     bison \
     bzip2-devel \
@@ -10,9 +14,11 @@ sudo yum install -y \
     flex \
     gcc \
     gcc-c++ \
+    iproute \
     krb5-devel \
     libcurl-devel \
     libevent-devel \
+    libicu \
     libkadm5 \
     libtool \
     libuuid-devel \
@@ -20,8 +26,6 @@ sudo yum install -y \
     libxml2-devel \
     libxslt-devel \
     libyaml-devel \
-    libzstd-devel \
-    libzstd-static \
     net-tools \
     openldap-devel \
     openssl \
@@ -29,8 +33,13 @@ sudo yum install -y \
     pam-devel \
     perl-Env \
     perl-ExtUtils-Embed \
-    python-devel \
-    python-pip \
+    perl-IPC-Run \
+    perl-JSON \
+    perl-Test-Base \
+    procps-ng \
+    python2-devel \
+    python2-pip \
     readline-devel \
+    snappy-devel \
     xerces-c-devel \
     zlib-devel

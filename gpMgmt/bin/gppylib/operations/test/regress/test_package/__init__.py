@@ -18,21 +18,11 @@ from gppylib.operations import Operation
 from gppylib.operations.unix import CheckFile, CheckRemoteFile, RemoveRemoteFile
 from gppylib.operations.package import dereference_symlink, GpScp
 from gppylib.commands.base import Command, REMOTE
-from gppylib.utils import get_dist_families
-
-def get_dist_version():
-    with open('/etc/os-release') as f:
-        for line in f:
-            if "VERSION_ID" in line:
-                version = line.split("=")[1].strip()
-                if version[0] == '\"' or version[0] == '\'':
-                    version = version[1:-1]
-                return version
-    raise Exception("Wrong /etc/os-release format")
+from gppylib.utils import get_dist_families, get_dist_version
 
 def get_os():
     dist_family = get_dist_families()
-    major_release = get_dist_version().partition('.')[0]
+    major_release = get_dist_version()[0]
 
     os_string = ''
     if 'rhel' in dist_family:
@@ -472,7 +462,7 @@ class GppkgTestCase(unittest.TestCase):
         @param rpm_package_name: Name of rpm package of the form <name>-<version>-<release>
         @type rpm_package_name: str
         """
-        with self.assertRaisesRegexp(ExecutionError, "%s is not installed" % rpm_package_name):
+        with self.assertRaisesRe(ExecutionError, "%s is not installed" % rpm_package_name):
             run_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE))
 
     def check_remote_rpm_install(self, rpm_package_name, host):
@@ -496,7 +486,7 @@ class GppkgTestCase(unittest.TestCase):
         @param host: Remote host
         @type host: str
         """
-        with self.assertRaisesRegexp(ExecutionError, "%s is not installed" % rpm_package_name):
+        with self.assertRaisesRe(ExecutionError, "%s is not installed" % rpm_package_name):
             results = run_remote_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE), host)
 
     def install_rpm(self, rpm_filename, rpm_database = RPM_DATABASE, installation_prefix = GPHOME):

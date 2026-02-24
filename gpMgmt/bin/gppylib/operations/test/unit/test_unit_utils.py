@@ -13,7 +13,7 @@ from gppylib.operations.test_utils_helper import TestOperation, RaiseOperation, 
 from operations.unix import ListFiles
 from test.unit.gp_unittest import GpTestCase, run_tests
 import base64
-import six
+import sys
 
 class UtilsTestCase(GpTestCase):
     """
@@ -45,10 +45,13 @@ class UtilsTestCase(GpTestCase):
         except Exception as e:
             self.fail(
                 "A PicklingError should have been caused remotely, because RaiseOperation_Nested is not at the global-level. But get: %s" % str(e))
+        else:
+            self.fail(
+                "A PicklingError should have been caused remotely, because RaiseOperation_Nested is not at the global-level. But no expedition was thrown.")
 
     def test_unsafe_exceptions_with_args(self):
         # Not applicable to Python 3
-        if six.PY3:
+        if sys.version_info[0] == 3:
             return
 
         try:

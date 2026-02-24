@@ -137,7 +137,7 @@ class RepairTestCase(GpTestCase):
         with open(file_path) as f:
             file_contents = f.readlines()
 
-        self.assertEqual(sorted(file_contents), sorted(contents))
+        self.assertEqualUnordered(file_contents, contents)
 
     def tearDown(self):
         shutil.rmtree(self.repair_dir_path)

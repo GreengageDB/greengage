@@ -1,13 +1,17 @@
 from __future__ import absolute_import
-import imp
 import os
 import io
 
 import sys
 from mock import patch
 
-from .gp_unittest import GpTestCase
-import six
+from .gp_unittest import GpTestCase, load_module
+
+if sys.version_info[0] == 3:
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 
 class GpSshTestCase(GpTestCase):
@@ -17,7 +21,7 @@ class GpSshTestCase(GpTestCase):
         #   import gpssh
         #   self.subject = gpssh
         gpssh_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpssh")
-        self.subject = imp.load_source('gpssh', gpssh_file)
+        self.subject = load_module('gpssh', gpssh_file)
 
         self.old_sys_argv = sys.argv
         sys.argv = []
@@ -29,8 +33,8 @@ class GpSshTestCase(GpTestCase):
     def test_when_run_without_args_prints_help_text(self, sys_exit_mock):
         sys_exit_mock.side_effect = Exception("on purpose")
         # GOOD_MOCK_EXAMPLE of stdout
-        with patch('sys.stdout', new=six.StringIO()) as mock_stdout:
-            with self.assertRaisesRegexp(Exception, "on purpose"):
+        with patch('sys.stdout', new=StringIO()) as mock_stdout:
+            with self.assertRaisesRe(Exception, "on purpose"):
                 self.subject.main()
         self.assertIn('gpssh -- ssh access to multiple hosts at once', mock_stdout.getvalue())
 

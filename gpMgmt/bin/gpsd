@@ -14,7 +14,11 @@ from contextlib import closing
 from distutils.version import LooseVersion
 from optparse import OptionParser
 from pygresql import pgdb
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 gpsd_version = '%prog 1.0'
 
@@ -161,7 +165,7 @@ def dumpStats(cur, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, six.string_types) and val[0] == '{':
+            elif isinstance(val, string_types) and val[0] == '{':
                 val = val.replace("'", "''").replace('\\', '\\\\')
                 val = "E'" + val + "'"
             if i == 25 and hll == True:
@@ -281,7 +285,7 @@ def main():
                                'Please review output file to ensure it is within corporate policy to transport the output file.\n'])
     except pgdb.DatabaseError as err:  # catch *all* exceptions
         sys.stderr.write('Error while dumping statistics:\n')
-        sys.stderr.write(err.message)
+        sys.stderr.write(str(err))
         sys.exit(1)
 
 

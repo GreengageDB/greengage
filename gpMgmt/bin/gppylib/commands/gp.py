@@ -1414,9 +1414,8 @@ def start_standbymaster(host, datadir, port, era=None,
         pid = getPostmasterPID(host, datadir)
         cmd = Command("get pids",
                       ("python -c "
-                       "'from __future__ import print_function;"
-                       "from gppylib.commands import unix; "
-                       "print(unix.getDescendentProcesses({0}), end=\"\")'".format(pid)),
+                       "'from gppylib.commands import unix; "
+                       "print(unix.getDescendentProcesses({0}))'".format(pid)),
                       ctxt=REMOTE, remoteHost=host)
         cmd.run()
         logger.debug(str(cmd))
@@ -1678,10 +1677,8 @@ class IfAddrs(object):
         else:
             args = cmd
 
-        result = subprocess.check_output(args)
-        ip_list = result.split(b'START_CMD_OUTPUT\n')[1].splitlines()
-        ip_list = [ip.decode('utf-8') for ip in ip_list]
-        return ip_list
+        result = subprocess.check_output(args).decode('utf-8')
+        return result.split('START_CMD_OUTPUT\n')[1].splitlines()
 
 if __name__ == '__main__':
 

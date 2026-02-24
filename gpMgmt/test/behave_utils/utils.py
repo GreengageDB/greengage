@@ -10,8 +10,14 @@ import stat
 import time
 import glob
 import shutil
+import sys
 
-import six
+if sys.version_info[0] == 3:
+    string_types = str
+    binary_type = bytes
+else:
+    string_types = basestring
+    binary_type = str
 
 try:
     import subprocess32 as subprocess
@@ -142,7 +148,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, six.string_types) and isinstance(actual, six.binary_type):
+    if isinstance(msg, string_types) and isinstance(actual, binary_type):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):
@@ -162,7 +168,7 @@ def check_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) == bytes:
+    if isinstance(actual, binary_type):
         actual = actual.decode()
     if not pat.search(actual):
         err_str = "Expected error string '%s' and found: '%s'" % (err_msg, actual)
@@ -887,3 +893,7 @@ def wait_for_database_dropped(dbname, remaining_attempt = 3000):
         if remaining_attempt == 0:
             raise Exception('Unable to drop the database %s !!!') % dbname
         time.sleep(0.1)
+
+
+def is_concourse_cluster(context):
+    return context.config.tag_expression.check(context.feature.tags + ["concourse_cluster"])

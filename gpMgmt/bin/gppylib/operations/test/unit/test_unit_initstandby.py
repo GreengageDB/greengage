@@ -3,11 +3,12 @@
 from builtins import range
 import os
 import unittest
+import sys
 
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 from gppylib.operations.initstandby import get_standby_pg_hba_info, update_pg_hba, update_pg_hba_conf_on_segments
 from mock import MagicMock, Mock, mock_open, patch
-import six
+
 
 class InitStandbyTestCase(unittest.TestCase):
 
@@ -25,7 +26,7 @@ class InitStandbyTestCase(unittest.TestCase):
         m = MagicMock()
         m.return_value.__enter__.return_value.read.side_effect = [file_contents, file_contents]
 
-        if six.PY2:
+        if sys.version_info[0] == 2:
             builtin = '__builtin__'
         else:
             builtin = 'builtins'
@@ -42,7 +43,7 @@ class InitStandbyTestCase(unittest.TestCase):
         m = MagicMock()
         m.return_value.__enter__.return_value.read.side_effect = [file_contents, file_contents + duplicate_entry]
 
-        if six.PY2:
+        if sys.version_info[0] == 2:
             builtin = '__builtin__'
         else:
             builtin = 'builtins'

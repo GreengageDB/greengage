@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import imp, os
+import os
 from optparse import Values
 import tempfile
 import shutil
@@ -13,7 +13,7 @@ class GpDeleteSystemTestCase(GpTestCase):
         #   import gpdeletesystem
         #   self.subject = gpdeletesystem
         gpdeletesystem_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpdeletesystem")
-        self.subject = imp.load_source('gpdeletesystem', gpdeletesystem_file)
+        self.subject = load_module('gpdeletesystem', gpdeletesystem_file)
         self.tmpDir = tempfile.mkdtemp()
         os.chmod(self.tmpDir, 0o777)
         self.options = Values()
@@ -24,15 +24,15 @@ class GpDeleteSystemTestCase(GpTestCase):
 
     def test_check_dump_files_exist(self):
         os.mkdir(os.path.join(self.tmpDir, 'db_dumps'))
-        self.assertEquals(self.subject.check_for_dump_files(self.options), True)
+        self.assertEqual(self.subject.check_for_dump_files(self.options), True)
 
     def test_check_no_dump_files(self):
         os.mkdir(os.path.join(self.tmpDir, 'doesntmatch'))
-        self.assertEquals(self.subject.check_for_dump_files(self.options), False)
+        self.assertEqual(self.subject.check_for_dump_files(self.options), False)
 
     def test_check_backup_files_exist(self):
         os.mkdir(os.path.join(self.tmpDir, 'backups'))
-        self.assertEquals(self.subject.check_for_dump_files(self.options), True)
+        self.assertEqual(self.subject.check_for_dump_files(self.options), True)
 
     def test_delete_cluster_backups_exist_noforce_fails(self):
         setattr(self.options, 'force', '')

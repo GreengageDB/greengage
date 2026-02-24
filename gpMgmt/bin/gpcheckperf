@@ -42,7 +42,6 @@ import os
 import sys
 from functools import reduce
 import re
-import six
 
 sys.path.append(sys.path[0] + '/lib')
 try:
@@ -632,7 +631,7 @@ def reapNetperfTest(proc, x, y):
         finally:
             proc = None
 
-    if GV.opt['-v'] and out and len(out) != 0:
+    if GV.opt['-v'] and out:
         print('[Info]', out)
     if out and out.find('Permission denied') >= 0 and out.find('publickey') >= 0:
         if not GV.opt['-v']:

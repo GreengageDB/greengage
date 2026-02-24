@@ -60,7 +60,7 @@ class RecoveryBaseTestCase(GpTestCase):
 
     def _asserts_for_failing_tests(self, ex, stderr_buf, expected_message, info_count=1):
         self.assertEqual(1, ex.exception.code)
-        self.assertRegexpMatches(expected_message, stderr_buf.getvalue().strip())
+        self.assertReMatch(expected_message, stderr_buf.getvalue().strip())
         self.assertTrue(
             any(re.search(expected_message, call_args[0]) for call_args, _ in self.mock_logger.error.call_args_list))
         self.assertEqual(info_count, self.mock_logger.info.call_count)
