@@ -4424,15 +4424,15 @@ def impl(context):
     rsync_script = """
 cat >/usr/local/bin/rsync <<EOL
 #!/usr/bin/env bash
-arguments="\$@"
+arguments="\\$@"
 # Insert data into table and run checkpoint just before syncing pg_control
-if [[ "\$arguments" == *"pg_xlog"* ]]
+if [[ "\\$arguments" == *"pg_xlog"* ]]
 then
     ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p {port} -h cdw"
     # run checkpoint
     ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'CHECKPOINT' -d postgres -p {port} -h cdw"
 fi
-/usr/bin/rsync \$arguments
+/usr/bin/rsync \\$arguments
 EOL
 """.format(port=os.environ.get("PGPORT"))
     clear_cmd_cache_script = """
