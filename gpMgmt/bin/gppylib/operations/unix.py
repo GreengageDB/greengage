@@ -43,7 +43,7 @@ class RawRemoteOperation(Operation):
                       remoteHost = self.host)
         cmd.run(validateAfter=True)
         # TODO! If exception is raised remotely, there's no stdout, thereby causing a pickling error.
-        return pickle.loads(base64.urlsafe_b64decode(cmd.get_results().stdout))
+        return pickle.loads(base64.urlsafe_b64decode(str(cmd.get_results().stdout)))
     def __str__(self): 
         return "Raw(%s, %s)" % (self.cmd_str, self.host)
 

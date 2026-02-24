@@ -94,7 +94,8 @@ def _read_from_file_and_get_empty_tempfile(filename):
 
 def comment_parameter(filename, name):
     lines, temp_conf_path = _read_from_file_and_get_empty_tempfile(filename)
-    if sys.version_info[0] == 3:
+    # In Python 2 it's already bytes
+    if sys.version_info[0] == 3 and isinstance(name, str):
         name = name.encode('utf-8')
     new_lines = 0
     with open(os.path.abspath(temp_conf_path), 'wb') as outfile:
@@ -119,7 +120,7 @@ def add_parameter(filename, name, value):
             new_lines = new_lines + 1
         bytes_value = pickle.loads(base64.urlsafe_b64decode(value))
         # In Python 2 it's already bytes
-        if sys.version_info[0] == 3:
+        if sys.version_info[0] == 3 and isinstance(bytes_value, str):
             bytes_value = bytes_value.encode('utf-8')
         assert (isinstance(bytes_value, bytes))
 
