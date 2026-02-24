@@ -463,7 +463,6 @@ create materialized view mv_test_table as select a from test_table distributed b
 
 alter table test_table rebalance 1;
 alter materialized view mv_test_table rebalance 1;
-refresh materialized view mv_test_table;
 
 select count(1), gp_segment_id from test_table group by gp_segment_id;
 select count(1), gp_segment_id from mv_test_table group by gp_segment_id;
@@ -483,7 +482,6 @@ select count(1), gp_segment_id from mv_test_table group by gp_segment_id order b
 begin;
 alter table test_table rebalance 1;
 alter materialized view mv_test_table rebalance 1;
-refresh materialized view mv_test_table;
 rollback;
 
 select count(1), gp_segment_id from test_table group by gp_segment_id order by gp_segment_id;

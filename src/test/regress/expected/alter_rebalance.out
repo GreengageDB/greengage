@@ -3561,8 +3561,6 @@ insert into test_table select generate_series(1, 10);
 create materialized view mv_test_table as select a from test_table distributed by (a);
 alter table test_table rebalance 1;
 alter materialized view mv_test_table rebalance 1;
-NOTICE:  Materialized view requires REFRESH after rebalance
-refresh materialized view mv_test_table;
 select count(1), gp_segment_id from test_table group by gp_segment_id;
  count | gp_segment_id 
 -------+---------------
@@ -3600,8 +3598,6 @@ select count(1), gp_segment_id from mv_test_table group by gp_segment_id order b
 begin;
 alter table test_table rebalance 1;
 alter materialized view mv_test_table rebalance 1;
-NOTICE:  Materialized view requires REFRESH after rebalance
-refresh materialized view mv_test_table;
 rollback;
 select count(1), gp_segment_id from test_table group by gp_segment_id order by gp_segment_id;
  count | gp_segment_id 
