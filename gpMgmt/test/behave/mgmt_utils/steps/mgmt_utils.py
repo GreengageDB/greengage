@@ -63,7 +63,7 @@ def show_all_installed(gphome):
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
     else:
-        raise Exception('UNKNOWN platform: %s' % str(x))
+        raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_native_package_command(gphome, full_gppkg_name):
     name = get_dist_families()
@@ -72,7 +72,7 @@ def remove_native_package_command(gphome, full_gppkg_name):
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return 'rpm -e %s --dbpath %s/share/packages/database' % (full_gppkg_name, gphome)
     else:
-        raise Exception('UNKNOWN platform: %s' % str(x))
+        raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_gppkg_archive_command(gphome, gppkg_name):
     return 'rm -f %s/share/packages/archive/%s.gppkg' % (gphome, gppkg_name)
