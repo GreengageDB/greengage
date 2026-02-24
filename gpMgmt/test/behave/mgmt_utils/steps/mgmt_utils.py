@@ -59,7 +59,7 @@ master_data_dir = None
 def show_all_installed(gphome):
     name = get_dist_families()
     if 'debian' in name:
-        return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \$1}'" % gphome
+        return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \\$1}'" % gphome
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
     else:
