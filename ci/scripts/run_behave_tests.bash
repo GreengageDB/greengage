@@ -3,17 +3,16 @@ set -x -o pipefail
 
 behave_tests_dir="gpMgmt/test/behave/mgmt_utils"
 
-# TODO concourse_cluster tests are not stable
-# clusters="concourse_cluster ~concourse_cluster,demo_cluster"
+clusters="concourse_cluster ~concourse_cluster"
 
-clusters="~concourse_cluster"
+docker_compose_path="ci/docker-compose.yaml"
 
 if [ $# -eq 0 ]
 then
   # TODO cross_subnet and gpssh tests are excluded
   # FIXME! sigar is requred for gpperfmon tests
   # FIXME! /home/gpadmin/sqldump/dump.sql is required for gpexpand tests
-  features=`ls $behave_tests_dir -1 | grep feature | grep -v -E "cross_subnet|gpssh|gpperfmon|gpexpand" | sed 's/\.feature$//'`
+  features=`ls $behave_tests_dir -1 | grep feature | sed 's/\.feature$//'`
 else
   for feature in $@
   do
@@ -47,18 +46,27 @@ run_feature() {
   echo "Started $feature behave tests on cluster $cluster and project $project"
   bash ci/scripts/init_containers.sh $project
 
-  docker compose -p $project -f ci/docker-compose.yaml exec -T \
+  docker compose -p $project -f "$docker_compose_path" exec -T \
     -e FEATURE="$feature" -e BEHAVE_FLAGS="--tags $feature --tags=$cluster \
       -f behave_utils.ci.formatter:CustomFormatter \
       -o non-existed-output \
       -f allure_behave.formatter:AllureFormatter \
-      -o /tmp/allure-results"  \
+      -o /tmp/allure-results \
+      -f pretty" \
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
-  docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
+  if [ -n "$CI" ]; then
+    local services=$(docker compose -p $project -f "$docker_compose_path" config --services | tr '\n' ' ')
+    for service in $services; do
+      docker compose -p $project -f "$docker_compose_path" exec -T \
+        $service /bin/bash -s "$feature" < ./ci/scripts/behave_collect_logs.bash
+    done
+  fi
 
-  if [[ $status > 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
+  docker compose -p $project -f "$docker_compose_path" --env-file ci/.env down -v
+
+  if [[ $status -gt 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
   exit $status
 }
 

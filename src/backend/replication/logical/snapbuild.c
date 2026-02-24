@@ -1684,6 +1684,7 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 
 
 	/* read statically sized portion of snapshot */
+	errno = 0;
 	readBytes = read(fd, &ondisk, SnapBuildOnDiskConstantSize);
 	if (readBytes != SnapBuildOnDiskConstantSize)
 	{

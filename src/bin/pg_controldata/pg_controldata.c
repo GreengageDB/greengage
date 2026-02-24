@@ -146,6 +146,7 @@ main(int argc, char *argv[])
 		exit(2);
 	}
 
+	errno = 0;
 	if (read(fd, &ControlFile, sizeof(ControlFileData)) != sizeof(ControlFileData))
 	{
 		fprintf(stderr, _("%s: could not read file \"%s\": %s\n"),
