@@ -1,61 +1,33 @@
-## For CentOS:
+## For CentOS 7:
 
-- Install Dependencies
-
+- Install dependencies using README.CentOS.bash script:
   ```bash
   ./README.CentOS.bash
   ```
+  Note: CentOS 7 is EOL — configure `yum` to use a valid repo (e.g., `vault.centos.org`) before installing dependencies.
 
-- If you want to link cmake3 to cmake, run:
+## For RHEL/Rocky 8:
 
+- Install dependencies using README.Rhel-Rocky.bash script:
   ```bash
-  sudo ln -sf /usr/bin/cmake3 /usr/local/bin/cmake
+  ./README.Rhel-Rocky.bash
   ```
 
-- Make sure that you add `/usr/local/lib` and `/usr/local/lib64` to
-`/etc/ld.so.conf`, then run command `ldconfig`.
-
-- If you want to install and use gcc-6 by default, run:
-
+- Build and install zstd with static library, e.g.:
   ```bash
-  sudo yum install -y centos-release-scl
-  sudo yum install -y devtoolset-6-toolchain
-  echo 'source scl_source enable devtoolset-6' >> ~/.bashrc
+  cd /tmp
+  curl -LO https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz
+  tar -xf zstd-1.4.4.tar.gz
+  cd zstd-1.4.4
+  make -j$(nproc)
+  sudo make install PREFIX=/usr/local
   ```
 
-## For RHEL:
+- Create symbolic link to Python 2 in `/usr/bin`:
 
-- Install Development Tools.
-  - For RHEL 8: Install `Development Tools`:
-
-    ```bash
-    sudo yum group install -y "Development Tools"
-    ```
-
-  - For RHEL versions (< 8.0): Install `devtoolset-7`:
-
-    ```bash
-    sudo yum-config-manager --enable rhui-REGION-rhel-server-rhscl
-    sudo yum install -y devtoolset-7-toolchain
-    ```
-
-- Install dependencies using README.CentOS.bash script.
-  - For RHEL 8: Execute additional steps before running README.CentOS.bash script.
-
-    Note: Make sure installation of `Development Tools` includes `git` and `make` else install these tools manually.
-
-    ```bash
-    sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
-    sed -i -e 's/python-devel /python2-devel /' -e 's/python-pip/python2-pip/' -e 's/sudo pip/sudo pip2/' README.CentOS.bash
-    sed -i '/xerces-c-devel/d' README.CentOS.bash
-    sudo ln -s /usr/bin/python2.7 /usr/bin/python
-    ```
-
-  - Install dependencies using README.CentOS.bash script.
-
-    ```bash
-    ./README.CentOS.bash
-    ```
+  ```bash
+  sudo ln -s python2 /usr/bin/python
+  ```
 
 ## For Ubuntu (22.04):
 

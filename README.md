@@ -54,6 +54,11 @@ To create optimized release build, use the following:
 ```
 make GPROOT=~/build PARALLEL_MAKE_OPTS=-j8 dist -C gpAux
 ```
+where `GPROOT` defines the base installation directory.
+
+By default, the target installation directory is `greengage-db-devel`.
+You can override this directory name by setting the `GPDIR` option.
+For example, to install into `/usr/local/gpdb`: `make GPROOT=/usr/local GPDIR=gpdb dist -C gpAux`.
 
 To run regression tests, a debug build with debug extensions is required. It can be built using the following command:
 

@@ -114,7 +114,7 @@ def impl(context, action, env):
     else:
         cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/sshd_config".format("AcceptEnv", env)
 
-    cmds = [cmdstr, "sudo systemctl restart sshd.service"]
+    cmds = [cmdstr, "sudo service ssh restart"]
 
     hosts = GpArray.initFromCatalog(dbconn.DbURL()).getHostList()
     for host in hosts:

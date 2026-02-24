@@ -56,7 +56,7 @@ private:
 
 	// compute a distribution matching the distribution delivered by given child
 	CDistributionSpec *PdsMatch(CMemoryPool *mp, CDistributionSpec *pds,
-								ULONG ulSourceChildIndex) const;
+								ULONG ulSourceChildIndex, ULONG ulOptReq) const;
 
 protected:
 	// compute required hashed distribution from the n-th child
@@ -96,7 +96,7 @@ protected:
 	// helper for computing a hashed distribution matching the given distribution
 	CDistributionSpecHashed *PdshashedMatching(
 		CMemoryPool *mp, CDistributionSpecHashed *pdshashed,
-		ULONG ulSourceChild) const;
+		ULONG ulSourceChild, ULONG ulOptReq) const;
 
 	// create (singleton, singleton) optimization request
 	CDistributionSpec *PdsRequiredSingleton(CMemoryPool *mp,
@@ -220,7 +220,6 @@ public:
 
 		return dynamic_cast<CPhysicalHashJoin *>(pop);
 	}
-
 };	// class CPhysicalHashJoin
 
 }  // namespace gpopt
