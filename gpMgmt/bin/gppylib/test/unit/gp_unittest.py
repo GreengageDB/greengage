@@ -82,6 +82,11 @@ class GpTestCase(unittest.TestCase):
             return self.assertNotRegexpMatches(text, regex, msg)
         else:
             return self.assertNotRegex(text, regex, msg)
+    def assertEqualUnordered(self, first, second):
+        if sys.version_info[0] == 2:
+            self.assertItemsEqual(first, second)
+        else:
+            self.assertCountEqual(first, second)
 
 
 def add_setup(setup=None, teardown=None):
