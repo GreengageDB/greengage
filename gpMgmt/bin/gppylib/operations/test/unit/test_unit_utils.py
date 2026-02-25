@@ -47,7 +47,7 @@ class UtilsTestCase(GpTestCase):
                 "A PicklingError should have been caused remotely, because RaiseOperation_Nested is not at the global-level. But get: %s" % str(e))
         else:
             self.fail(
-                "A PicklingError should have been caused remotely, because RaiseOperation_Nested is not at the global-level. But no expedition was thrown.")
+                "A PicklingError should have been caused remotely, because RaiseOperation_Nested is not at the global-level. But no exception was thrown.")
 
     def test_unsafe_exceptions_with_args(self):
         # Not applicable to Python 3
