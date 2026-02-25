@@ -27,16 +27,24 @@ jobs:
       actions: write  # Required for cache and artifact upload
     steps:
       - name: Display trigger information
+        env:
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+          RUN_HEAD_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
         run: |
-          echo ""
-          echo "================== Workflow Trigger Information =================="
-          echo "Triggered by:   ${{ github.event.workflow_run.name }} (#${{ github.event.workflow_run.id }})"
-          echo "Target branch:  ${{ github.event.workflow_run.head_branch }}"
-          echo "Source commit:  ${{ github.event.workflow_run.head_sha }}"
-          echo "Commit message: ${{ github.event.workflow_run.head_commit.message }}"
-          echo ""
-          echo "Author: ${{ github.event.workflow_run.head_commit.author.name }}"
-          echo "=================================================================="
+          cat << EOF
+          ================== Workflow Trigger Information ==================
+          Triggered by:   ${RUN_NAME} (#${RUN_ID})
+          Target branch:  ${RUN_HEAD_BRANCH}
+          Source commit:  ${RUN_HEAD_SHA}
+          Commit message: ${RUN_HEAD_COMMIT_MESSAGE}
+
+          Author: ${RUN_HEAD_COMMIT_AUTHOR}
+          ==================================================================
+          EOF
 
       - name: Maximize disk space
         uses: greengagedb/greengage-ci/.github/actions/maximize-disk-space@v19
