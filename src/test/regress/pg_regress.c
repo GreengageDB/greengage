@@ -755,6 +755,7 @@ convert_sourcefiles_in(char *source_subdir, char *dest_dir, char *dest_subdir, c
 {
 	char		testtablespace[MAXPGPATH];
 	char		indir[MAXPGPATH];
+	char		outdir[MAXPGPATH];
 	char		cgroup_mnt_point[MAXPGPATH];
 	replacements repls;
 	struct stat st;
@@ -765,6 +766,7 @@ convert_sourcefiles_in(char *source_subdir, char *dest_dir, char *dest_subdir, c
 	char *errstr;
 
 	snprintf(indir, MAXPGPATH, "%s/%s", inputdir, source_subdir);
+	snprintf(outdir, MAXPGPATH, "%s/%s", dest_dir, dest_subdir);
 
 	/* Check that indir actually exists and is a directory */
 	ret = stat(indir, &st);
@@ -783,8 +785,8 @@ convert_sourcefiles_in(char *source_subdir, char *dest_dir, char *dest_subdir, c
 		exit(2);
 
 	/* also create the output directory if not present */
-	if (!directory_exists(dest_subdir))
-		make_directory(dest_subdir);
+	if (!directory_exists(outdir))
+		make_directory(outdir);
 
 	snprintf(testtablespace, MAXPGPATH, "%s/testtablespace", outputdir);
 
@@ -2560,6 +2562,10 @@ open_result_files(void)
 {
 	char		file[MAXPGPATH];
 	FILE	   *difffile;
+
+	/* create outputdir directory if not present */
+	if (!directory_exists(outputdir))
+		make_directory(outputdir);
 
 	/* create the log file (copy of running status output) */
 	snprintf(file, sizeof(file), "%s/regression.out", outputdir);

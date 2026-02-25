@@ -55,7 +55,7 @@ docker compose -p $project -f ci/docker-compose.yaml exec -Tu gpadmin cdw bash -
             ${CONFIGURE_FLAGS}
 
         make -C /home/gpadmin/gpdb_src/src/test/regress
-        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/{regress,isolation2} </dev/null
+        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/{regress,isolation2/resgroup} </dev/null
         scp /home/gpadmin/gpdb_src/src/test/regress/regress.so \
             gpadmin@sdw1:/home/gpadmin/gpdb_src/src/test/regress/
 
@@ -87,7 +87,7 @@ docker compose -p $project -f ci/docker-compose.yaml exec -T cdw bash -ex <<EOF
   tar -czf /logs/gpAux.tar.gz gpdb_src/gpAux/gpdemo/datadirs/gpAdminLogs/
   tar -czf /logs/pg_log.tar.gz gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1/pg_log/ gpdb_src/gpAux/gpdemo/datadirs/standby/pg_log
   #regression.diffs may not exist if tests were successful
-  tar --ignore-failed-read -czf /logs/results.tar.gz gpdb_src/src/test/isolation2/results/resgroup/ gpdb_src/src/test/isolation2/regression.diffs
+  tar --ignore-failed-read -czf /logs/results.tar.gz gpdb_src/src/test/isolation2/resgroup/results/resgroup/ gpdb_src/src/test/isolation2/resgroup/regression.diffs
 EOF
 
 docker compose -p $project -f ci/docker-compose.yaml exec -T sdw1 bash -ex <<EOF
