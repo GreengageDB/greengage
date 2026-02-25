@@ -14,6 +14,12 @@ class UtilsTestCase(GpTestCase):
         else:
             self.open_patch = 'builtins.open'
 
+    @staticmethod
+    def create_open_mock(data):
+        m = mock_open(read_data=data)
+        m.return_value.__iter__.return_value = iter(data.splitlines())
+        return m
+
     def test_get_dist_info_valid_real(self):
         valid_data_ubuntu24 = """
 NAME="Ubuntu"
@@ -63,13 +69,13 @@ REDHAT_SUPPORT_PRODUCT="centos"
 REDHAT_SUPPORT_PRODUCT_VERSION="7"
 """
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_ubuntu24):
+        with patch(self.open_patch, self.create_open_mock(valid_data_ubuntu24)):
             self.assertEqual(('debian', 24), get_dist_info())
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_ubuntu22):
+        with patch(self.open_patch, self.create_open_mock(valid_data_ubuntu22)):
             self.assertEqual(('debian', 22), get_dist_info())
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_centos7):
+        with patch(self.open_patch, self.create_open_mock(valid_data_centos7)):
             self.assertEqual(('rhel fedora', 7), get_dist_info())
 
     def test_get_dist_valid_edge_cases(self):
@@ -83,10 +89,10 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
 ID_LIKE=debian
         """
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=no_id_like):
+        with patch(self.open_patch, self.create_open_mock(no_id_like)):
             self.assertEqual(('ubuntu', 24), get_dist_info())
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=no_id_version_id):
+        with patch(self.open_patch, self.create_open_mock(no_id_version_id)):
             self.assertEqual(('debian', 22), get_dist_info())
 
     def test_get_dist_invalid(self):
@@ -95,13 +101,13 @@ ID_LIKE=debian
         no_number_in_version = "VERSION_ID=test"
 
         # empty file
-        with patch(self.open_patch, new_callable=mock_open, read_data=""):
+        with patch(self.open_patch, self.create_open_mock("")):
             self.assertEqual((None, None), get_dist_info())
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=invalid_id_line):
+        with patch(self.open_patch, self.create_open_mock(invalid_id_line)):
             self.assertEqual((None, None), get_dist_info())
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=no_number_in_version):
+        with patch(self.open_patch, self.create_open_mock(no_number_in_version)):
             self.assertEqual((None, None), get_dist_info())
 
 
