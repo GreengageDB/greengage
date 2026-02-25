@@ -51,13 +51,13 @@ from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 from gppylib.parseutils import canonicalize_address
-from gppylib.utils import get_dist_families
+from gppylib.utils import get_dist_info
 
 default_locale = None
 master_data_dir = None
 
 def show_all_installed(gphome):
-    name = get_dist_families()
+    name = get_dist_info()[0]
     if 'debian' in name:
         return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \\$1}'" % gphome
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
@@ -66,7 +66,7 @@ def show_all_installed(gphome):
         raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_native_package_command(gphome, full_gppkg_name):
-    name = get_dist_families()
+    name = get_dist_info()[0]
     if 'debian' in name:
         return 'fakeroot dpkg --force-not-root --log=/dev/null --instdir=%s --admindir=%s/share/packages/database/deb -r %s' % (gphome, gphome, full_gppkg_name)
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
@@ -4121,7 +4121,7 @@ def impl(context, command, input):
 
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
-    name = get_dist_families()
+    name = get_dist_info()[0]
     if 'debian' in name:
         primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
         mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
