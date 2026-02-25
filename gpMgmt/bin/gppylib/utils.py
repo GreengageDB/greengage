@@ -562,39 +562,34 @@ def validateHostnameAddress(hostname, address):
     return True
 
 def get_dist_info():
-    result = dict()
+    dist_family = None
+    major_version = None
+
+    def get_value(line):
+        line_info = line.split("=")
+        if len(line_info) == 2:
+            return line_info[1].strip(' "\n')
+        return None
+
+    def get_major_version(line):
+        value = get_value(line)
+        if value is None:
+            return None
+        # match first number as major version
+        groups = re.match(r"(\d+)", value)
+        if groups and groups.lastindex >= 1:
+            return int(groups.group(1))
+        else:
+            return None
+
     with open('/etc/os-release') as f:
         for line in f:
-            key, value = line.split('=')
-            value = value.strip(' \"')
-            result[key] = value
-    return result
-
-def get_dist_families():
-    info = get_dist_info()
-    if "ID_LIKE" in info:
-        return info["ID_LIKE"]
-    if "ID" in info:
-        return info["ID"]
-    return "Unknown"
-
-def get_dist_version():
-    info = get_dist_info()
-
-    if "VERSION_ID" in info:
-        version = info["VERSION_ID"]
-    elif "VERSION" in info:
-        version = info["VERSION"]
-    else:
-        version = None
-
-    if version:
-        groups = re.search(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?", version)
-        if groups.lastindex == 3:
-            return int(groups.group(1)), int(groups.group(2)), int(groups.group(3))
-        if groups.lastindex == 2:
-            return int(groups.group(1)), int(groups.group(2)), None
-        if groups.lastindex == 1:
-            return int(groups.group(1)), None, None
-
-    return None, None, None
+            if line.startswith("ID=") and dist_family is None:
+                dist_family = get_value(line)
+            elif line.startswith("ID_LIKE="):
+                dist_family = get_value(line)
+            elif line.startswith("VERSION=") and major_version is None:
+                major_version = get_major_version(line)
+            elif line.startswith("VERSION_ID="):
+                major_version = get_major_version(line)
+    return dist_family, major_version

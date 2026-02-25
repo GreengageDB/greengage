@@ -4,7 +4,7 @@ from .gp_unittest import *
 from gppylib.operations.package import IsVersionCompatible, ListPackages, MigratePackages, AlreadyInstalledError, \
     ARCHIVE_PATH, SyncPackages, CleanGppkg
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
-from gppylib.utils import get_dist_families
+from gppylib.utils import get_dist_info
 
 import os
 import pickle
@@ -102,7 +102,7 @@ class MigratePackagesTestCase(GpTestCase):
             patch('gppylib.operations.package.logger', return_value=Mock(spec=['log', 'info', 'debug', 'error'])),
         ])
 
-        if "debian" in get_dist_families():
+        if "debian" in get_dist_info()[0]:
             self.mock_install_package_locally = self.get_mock_from_apply_patch('InstallDebPackageLocally')
         else:
             self.mock_install_package_locally = self.get_mock_from_apply_patch('InstallPackageLocally')

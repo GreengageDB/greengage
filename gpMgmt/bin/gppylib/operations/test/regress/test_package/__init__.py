@@ -18,11 +18,10 @@ from gppylib.operations import Operation
 from gppylib.operations.unix import CheckFile, CheckRemoteFile, RemoveRemoteFile
 from gppylib.operations.package import dereference_symlink, GpScp
 from gppylib.commands.base import Command, REMOTE
-from gppylib.utils import get_dist_families, get_dist_version
+from gppylib.utils import get_dist_info
 
 def get_os():
-    dist_family = get_dist_families()
-    major_release = get_dist_version()[0]
+    dist_family, major_release = get_dist_info()
 
     os_string = ''
     if 'rhel' in dist_family:
