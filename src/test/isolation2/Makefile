@@ -20,7 +20,7 @@ endif
 override CPPFLAGS := -I$(srcdir) -I$(libpq_srcdir) -I$(srcdir)/../regress $(CPPFLAGS)
 override LDLIBS := $(libpq_pgport) $(LDLIBS)
 
-all: test_python pg_isolation2_regress$(X) all-lib data scan_flaky_fault_injectors test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
+all: pg_isolation2_regress$(X) all-lib data scan_flaky_fault_injectors test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
 
 test_python:
 	python helpers_test.py
@@ -88,7 +88,7 @@ uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
-installcheck: install installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
+installcheck: install test_python installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule
 
 installcheck-resgroup: install
