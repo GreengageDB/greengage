@@ -210,7 +210,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['synced.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['synced.gppkg']))
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['synced.gppkg'])).decode('ascii')
 
         subject = SyncPackages('localhost')
         subject.execute()
@@ -225,7 +225,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.check_remote_dir_mock.return_value.run.return_value = False
         self.make_dir_mock.return_value.run.return_value = None
         self.mock_listdir.return_value = ['foo.gppkg', 'bar.gppkg', 'zing.gppkg']
-        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['foo.gppkg']))
+        self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['foo.gppkg'])).decode('ascii')
 
         hostname = 'localhost'
         subject = SyncPackages(hostname)
@@ -244,7 +244,7 @@ class SyncPackagesTestCase(GpTestCase):
         self.mock_listdir.return_value = ['ba.gppkg']
         self.mock_command.return_value.get_results.return_value.stdout = base64.urlsafe_b64encode(pickle.dumps(['ba.gppkg',
                                                                                        'zing.gppkg',
-                                                                                       'ga.gppkg']))
+                                                                                       'ga.gppkg'])).decode('ascii')
         hostname = 'localhost'
         subject = SyncPackages(hostname)
         subject.execute()

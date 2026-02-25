@@ -593,8 +593,8 @@ def get_dist_version():
         if groups.lastindex == 3:
             return int(groups.group(1)), int(groups.group(2)), int(groups.group(3))
         if groups.lastindex == 2:
-            return int(groups.group(1)), int(groups.group(2)), -1
+            return int(groups.group(1)), int(groups.group(2)), None
         if groups.lastindex == 1:
-            return int(groups.group(1)), -1, -1
+            return int(groups.group(1)), None, None
 
-    return -1, -1, -1
+    return None, None, None

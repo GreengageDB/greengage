@@ -29,8 +29,10 @@ def get_os():
         os_string += 'rhel'
     elif 'suse' in dist_family:
         os_string += 'suse'
+    elif 'debian' in dist_family:
+        os_string += 'debian'
 
-    os_string += major_release
+    os_string += str(major_release)
 
     return os_string
 
