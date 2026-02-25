@@ -1,4 +1,4 @@
-@minirepro @skip
+@minirepro
 Feature: Dump minimum database objects that is related to the query
 
     @minirepro_UI
