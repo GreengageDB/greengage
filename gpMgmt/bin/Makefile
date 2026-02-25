@@ -171,8 +171,12 @@ pylint:
 	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/logilab/__init__.py
 
 mockinstall:
-	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
-	python -m pip install $(PYLIB_SRC_EXT)/$(MOCK_DIR).tar.gz; \
+	# Use mock from pip for Python 3.
+	@if [ `python -c 'import sys; print(sys.version_info[0])'` = 2 ]; then \
+			echo "--- mock for platform $(UBUNTU_PLATFORM)" \
+			python -m pip install $(PYLIB_SRC_EXT)/$(MOCK_DIR).tar.gz; \
+	  fi
+
 
 PYTHON_FILES=`grep -l --exclude=Makefile --exclude=gplogfilter "/bin/env python" *`\
 			 `grep -l "/bin/env python" $(SRC)/../sbin/*`\
