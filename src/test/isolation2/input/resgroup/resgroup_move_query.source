@@ -12,7 +12,7 @@
 -- end_matchsubs
 
 CREATE OR REPLACE FUNCTION resGroupPalloc(float) RETURNS int AS
-'@abs_builddir@/../regress/regress@DLSUFFIX@', 'resGroupPalloc'
+'@abs_builddir@/../../regress/regress@DLSUFFIX@', 'resGroupPalloc'
 LANGUAGE C READS SQL DATA;
 
 CREATE OR REPLACE FUNCTION hold_memory_by_percent(int, float) RETURNS int AS $$
