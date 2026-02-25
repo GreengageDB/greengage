@@ -7,9 +7,17 @@ import signal
 
 GPMGMT_FAULT_POINT = 'GPMGMT_FAULT_POINT'
 GPMGMT_FAULT_DELAY_MS = 'GPMGMT_FAULT_DELAY_MS'
+GPMGMT_FAULT_TYPE = 'GPMGMT_FAULT_TYPE'
+GPMGMT_FAULT_FILE_FLAG = 'GPMGMT_FAULT_FILE_FLAG'
+
+GPMGMT_FAULT_TYPE_SYSPEND = 'suspend'
 
 def inject_fault(fault_point):
     if GPMGMT_FAULT_POINT in os.environ and fault_point == os.environ[GPMGMT_FAULT_POINT]:
+        if GPMGMT_FAULT_TYPE in os.environ and os.environ[GPMGMT_FAULT_TYPE] == GPMGMT_FAULT_TYPE_SYSPEND:
+            while GPMGMT_FAULT_FILE_FLAG in os.environ and os.path.exists(os.environ[GPMGMT_FAULT_FILE_FLAG]):
+                time.sleep(0.1)
+            return
         if GPMGMT_FAULT_DELAY_MS in os.environ and int(os.environ[GPMGMT_FAULT_DELAY_MS]) > 0:
             delay_ms = int(os.environ[GPMGMT_FAULT_DELAY_MS])
 

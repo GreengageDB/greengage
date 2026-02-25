@@ -39,6 +39,7 @@ from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 from gppylib.commands.gp import get_coordinatordatadir
 from gppylib.parseutils import canonicalize_address
+from gppylib import fault_injection
 
 coordinator_data_dir = gp.get_coordinatordatadir()
 if coordinator_data_dir is None:
@@ -156,6 +157,8 @@ def impl(context, query, db, contentids):
 
 
 @given('the user connects to "{dbname}" with named connection "{cname}"')
+@when('the user connects to "{dbname}" with named connection "{cname}"')
+@then('the user connects to "{dbname}" with named connection "{cname}"')
 def impl(context, dbname, cname):
     if not hasattr(context, 'named_conns'):
         context.named_conns = {}
@@ -197,11 +200,14 @@ def impl(conetxt, tabname):
 
 
 @given('the user executes "{sql}" with named connection "{cname}"')
+@when('the user executes "{sql}" with named connection "{cname}"')
+@then('the user executes "{sql}" with named connection "{cname}"')
 def impl(context, cname, sql):
     conn = context.named_conns[cname]
     dbconn.execSQL(conn, sql)
 
 
+@when('the user drops the named connection "{cname}"')
 @then('the user drops the named connection "{cname}"')
 def impl(context, cname):
     if cname in context.named_conns:
@@ -659,6 +665,31 @@ def impl(context, kill_process_name, log_msg, logfile_name):
               "then ps ux | grep bin/%s |awk '{print $2}' | xargs kill -2 ;break 2; " \
               "fi; done" % (log_msg, logfile_name, kill_process_name)
     run_async_command(context, command)
+
+@given('the user waits till {process_name} prints "{log_msg}" in the logs (with timeout of "{timeout}" sec)')
+@when('the user waits till {process_name} prints "{log_msg}" in the logs (with timeout of "{timeout}" sec)')
+@then('the user waits till {process_name} prints "{log_msg}" in the logs (with timeout of "{timeout}" sec)')
+def impl(context, process_name, log_msg, timeout):
+    poll_period = 0.1
+    max_iteration_cnt = int(int(timeout) / poll_period)
+    command = f"""
+    ITERATION=0
+    MAX_ITERATION_CNT={max_iteration_cnt}
+    while sleep {poll_period}; do
+        if grep -E --quiet '{log_msg}'  ~/gpAdminLogs/{process_name}*log ;
+            then break 2;
+        fi;
+
+        ITERATION=$((ITERATION + 1))
+        if [ $ITERATION -ge $MAX_ITERATION_CNT ]; then
+            echo "Timeout after {timeout} seconds waiting for '{log_msg}' in {process_name} logs" >&2
+            exit 1
+        fi
+    done
+    """
+    rc, _, error = run_cmd(command)
+    if rc:
+        raise Exception(error)
 
 @given('the user asynchronously sets up to end {process_name} process with {signal_name}')
 @when('the user asynchronously sets up to end {process_name} process with {signal_name}')
@@ -1573,6 +1604,11 @@ def get_opened_files(filename, pidfile):
 def impl(context, tablename, dbname):
     drop_table_if_exists(context, table_name=tablename, dbname=dbname)
 
+@when('materialized view "{viewname}" is dropped in "{dbname}"')
+@then('materialized view "{viewname}" is dropped in "{dbname}"')
+@given('materialized view "{viewname}" is dropped in "{dbname}"')
+def impl(context, viewname, dbname):
+    drop_materialized_view_if_exists(context, view_name=viewname, dbname=dbname)
 
 @given('all the segments are running')
 @when('all the segments are running')
@@ -2350,6 +2386,11 @@ def impl(context):
 def impl(context, tabletype, tablename, dbname, numrows):
     populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, rowcount=int(numrows))
 
+@given('there is an unlogged "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@then('there is an unlogged "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@when('there is an unlogged "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+def impl(context, tabletype, tablename, dbname, numrows):
+    populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, rowcount=int(numrows), unlogged=True)
 
 @given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
 @then('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
@@ -2369,6 +2410,12 @@ def impl(context, tabletype, tablename, dbname):
 @when('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with data')
 def impl(context, tabletype, table_name, dbname):
     create_partition(context, tablename=table_name, storage_type=tabletype, dbname=dbname, with_data=True)
+
+@given('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with "{numrows}" rows')
+@then('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with "{numrows}" rows')
+@when('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with "{numrows}" rows')
+def impl(context, tabletype, table_name, dbname, numrows):
+    create_partition(context, tablename=table_name, storage_type=tabletype, dbname=dbname, with_data=True, rowcount=int(numrows))
 
 @given('there is a view without columns in "{dbname}"')
 @then('there is a view without columns in "{dbname}"')
@@ -4520,25 +4567,39 @@ def step_impl(context, address):
 @then('set fault inject "{fault}"')
 @when('set fault inject "{fault}"')
 def impl(context, fault):
-    os.environ['GPMGMT_FAULT_POINT'] = fault
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = fault
 
 @given('unset fault inject')
 @then('unset fault inject')
 @when('unset fault inject')
 def impl(context):
-    os.environ['GPMGMT_FAULT_POINT'] = ""
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = ""
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = ""
+    os.environ[fault_injection.GPMGMT_FAULT_FILE_FLAG] = ""
+    if hasattr(context, 'fault_flag_filename') and os.path.exists(context.fault_flag_filename):
+        os.remove(context.fault_flag_filename)
 
 @given('set fault inject delay {delay} ms')
 @then('set fault inject delay {delay} ms')
 @when('set fault inject delay {delay} ms')
 def impl(context, delay):
-    os.environ['GPMGMT_FAULT_DELAY_MS'] = delay
+    os.environ[fault_injection.GPMGMT_FAULT_DELAY_MS] = delay
+
+@given('set fault inject type to suspend')
+@then('set fault inject type to suspend')
+@when('set fault inject type to suspend')
+def impl(context):
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = fault_injection.GPMGMT_FAULT_TYPE_SYSPEND
+    context.fault_flag_filename = "/tmp/ggrebalance_fault_suspend_flag"
+    with open(context.fault_flag_filename, "w"):
+        pass
+    os.environ[fault_injection.GPMGMT_FAULT_FILE_FLAG] = context.fault_flag_filename
 
 @given('unset fault inject delay')
 @then('unset fault inject delay')
 @when('unset fault inject delay')
 def impl(context):
-    os.environ['GPMGMT_FAULT_DELAY_MS'] = ""
+    os.environ[fault_injection.GPMGMT_FAULT_DELAY_MS] = ""
 
 @given('stub')
 def impl(context):
