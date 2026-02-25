@@ -17,6 +17,8 @@ class UtilsTestCase(GpTestCase):
     @staticmethod
     def create_open_mock(data):
         m = mock_open(read_data=data)
+        # Bundled mock does not support iterating over a mocked file.
+        # Let's make it possible.
         m.return_value.__iter__.return_value = iter(data.splitlines())
         return m
 
