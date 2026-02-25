@@ -21,8 +21,4 @@ endif
 
 installcheck:
 	$(MAKE) -C $(top_srcdir)/src/test/isolation2 install
-	$(top_srcdir)/src/test/isolation2/pg_isolation2_regress \
-		$(EXTRA_REGRESS_OPTS) \
-		--inputdir=$(srcdir) \
-		--dbname=temp_tables_stat_isolation \
-		temp_tables_stat
+	$(pg_isolation2_regress_installcheck) --dbname=temp_tables_stat_isolation temp_tables_stat
