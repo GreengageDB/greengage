@@ -454,7 +454,7 @@ def connect2run(qry, col=None):
         thread = execThread(c, db, qry)
         thread.start()
         logger.debug('launching query thread %s for dbid %i' %
-                     (thread.getName(), dbid))
+                     (thread.name, dbid))
         threads.append(thread)
 
         # we don't want too much going on at once
@@ -2540,7 +2540,7 @@ def checkAOSegVpinfo():
         thread = checkAOSegVpinfoThread(cfg, db_connection)
         thread.start()
         logger.debug('launching check thread %s for dbid %i' %
-                     (thread.getName(), dbid))
+                     (thread.name, dbid))
         threads.append(thread)
 
         if (i % GV.opt['-B']) == 0:

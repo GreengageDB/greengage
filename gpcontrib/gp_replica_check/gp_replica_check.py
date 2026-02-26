@@ -62,7 +62,7 @@ class ReplicaCheck(threading.Thread):
     def __str__(self):
         return '(%s) Host: %s, Port: %s, Database: %s\n\
 Primary Data Directory Location: %s\n\
-Mirror Data Directory Location: %s' % (self.getName(), self.host, self.port, self.datname,
+Mirror Data Directory Location: %s' % (self.name, self.host, self.port, self.datname,
                                           self.ploc, self.mloc)
 
     def run(self):
