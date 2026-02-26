@@ -6,7 +6,7 @@ DROP RESOURCE GROUP rg2_memory_test;
 -- end_ignore
 
 CREATE OR REPLACE FUNCTION repeatPalloc(int, int) RETURNS int AS
-'@abs_builddir@/../regress/regress@DLSUFFIX@', 'repeatPalloc'
+'@abs_builddir@/../../regress/regress@DLSUFFIX@', 'repeatPalloc'
 LANGUAGE C READS SQL DATA;
 
 CREATE OR REPLACE FUNCTION hold_memory(int, int) RETURNS int AS $$

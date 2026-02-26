@@ -62,6 +62,7 @@ from __future__ import print_function
 
 from builtins import zip
 from builtins import object
+import pwd
 import os, sys, re, json, platform, subprocess
 from optparse import OptionParser
 from pygresql import pgdb
@@ -335,7 +336,7 @@ def main():
     envOpts = os.environ
     db = args[0]
     host = options.host or platform.node()
-    user = options.user or ('PGUSER' in envOpts and envOpts['PGUSER']) or os.getlogin()
+    user = options.user or ('PGUSER' in envOpts and envOpts['PGUSER']) or pwd.getpwuid(os.geteuid())[0]
     port = options.port or ('PGPORT' in envOpts and envOpts['PGPORT']) or '5432'
     query_file = options.query_file
     output_file = options.output_file

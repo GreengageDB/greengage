@@ -9,7 +9,7 @@ DROP RESOURCE GROUP rg2_memory_test;
 ERROR:  resource group "rg2_memory_test" does not exist
 -- end_ignore
 
-CREATE OR REPLACE FUNCTION repeatPalloc(int, int) RETURNS int AS '@abs_builddir@/../regress/regress@DLSUFFIX@', 'repeatPalloc' LANGUAGE C READS SQL DATA;
+CREATE OR REPLACE FUNCTION repeatPalloc(int, int) RETURNS int AS '@abs_builddir@/../../regress/regress@DLSUFFIX@', 'repeatPalloc' LANGUAGE C READS SQL DATA;
 CREATE
 
 CREATE OR REPLACE FUNCTION hold_memory(int, int) RETURNS int AS $$ SELECT * FROM repeatPalloc(1, $2) $$ LANGUAGE sql;
