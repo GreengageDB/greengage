@@ -70,24 +70,24 @@ uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
-installcheck: install test_python installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
+installcheck: test_python installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule
 
-installcheck-resgroup: install
+installcheck-resgroup:
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_resgroup --dbname=isolation2resgrouptest --outputdir=resgroup --schedule=$(srcdir)/isolation2_resgroup_schedule
 
-installcheck-parallel-retrieve-cursor: install
+installcheck-parallel-retrieve-cursor:
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_parallel_retrieve_cursor --dbname=isolation2parallelretrcursor --outputdir=parallelretrcursor --load-extension=gp_inject_fault --schedule=$(srcdir)/parallel_retrieve_cursor_schedule
 
-installcheck-mirrorless: install
+installcheck-mirrorless:
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/mirrorless_schedule --outputdir=mirrorless --dbname=isolation2-mirrorless --load-extension=gp_inject_fault
 
-installcheck-ic-tcp: install
+installcheck-ic-tcp:
 ifeq ($(findstring gp_interconnect_type=tcp,$(PGOPTIONS)),gp_interconnect_type=tcp)
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --outputdir=ic_tcp --load-extension=gp_inject_fault --schedule=$(srcdir)/isolation2_ic_tcp_schedule
 endif
 
-installcheck-ic-proxy: install
+installcheck-ic-proxy:
 ifeq ($(findstring gp_interconnect_type=proxy,$(PGOPTIONS)),gp_interconnect_type=proxy)
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --outputdir=ic_proxy --load-extension=gp_inject_fault --schedule=$(srcdir)/isolation2_ic_proxy_schedule
 endif
