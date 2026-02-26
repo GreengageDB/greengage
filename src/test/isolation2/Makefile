@@ -54,11 +54,11 @@ clean distclean:
 install: all installdirs
 	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
 	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
-	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/gpdiff.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
-	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/gpstringsubs.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
-	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/GPTest.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
-	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/atmsort.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
-	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/explain.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
+	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/gpdiff.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/gpstringsubs.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
+	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/GPTest.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
+	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/atmsort.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
+	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/explain.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
