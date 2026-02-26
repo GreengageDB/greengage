@@ -76,7 +76,7 @@ installcheck: test_python installcheck-parallel-retrieve-cursor installcheck-ic-
 installcheck-resgroup:
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_resgroup --dbname=isolation2resgrouptest --outputdir=resgroup --schedule=$(srcdir)/isolation2_resgroup_schedule
 
-installcheck-parallel-retrieve-cursor:
+installcheck-parallel-retrieve-cursor: test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_parallel_retrieve_cursor --dbname=isolation2parallelretrcursor --outputdir=parallelretrcursor --load-extension=gp_inject_fault --schedule=$(srcdir)/parallel_retrieve_cursor_schedule
 
 installcheck-mirrorless:
