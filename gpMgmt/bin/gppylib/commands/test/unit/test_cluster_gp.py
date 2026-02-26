@@ -18,11 +18,11 @@ class GpCommandTestCase(unittest.TestCase):
             result = dbconn.execSQL(
                 conn,
                 "SELECT port, datadir FROM gp_segment_configuration"
-                ).fetchall()
+            ).fetchall()
 
         for port, datadir in result:
             try:
-                print(os.kill(port, 0))
+                os.kill(port, 0)
             except OSError:
                 # Process with PID as port number doesn't exists
                 # use it for test
