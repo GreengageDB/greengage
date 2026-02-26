@@ -16,7 +16,7 @@ from gppylib.commands.base import CommandResult, Command
 class RecoveryBaseTestCase(GpTestCase):
     def setUp(self):
         self.maxDiff = None
-        self.mock_logger = Mock(spec=['log', 'info', 'debug', 'error', 'warn', 'exception'])
+        self.mock_logger = Mock(spec=['log', 'info', 'debug', 'error', 'warning', 'exception'])
         self.apply_patches([
             patch('recovery_base.gplog.setup_tool_logging', return_value=self.mock_logger),
             patch('recovery_base.gplog.enable_verbose_logging'),
@@ -55,7 +55,7 @@ class RecoveryBaseTestCase(GpTestCase):
         self.assertEqual(enable_verbose_count, self.mock_enable_verbose_logging.call_count)
         self.assertEqual(1, self.mock_logger.info.call_count)
         self.assertEqual(0, self.mock_logger.error.call_count)
-        self.assertEqual(warn_count, self.mock_logger.warn.call_count)
+        self.assertEqual(warn_count, self.mock_logger.warning.call_count)
         self.assertEqual(0, self.mock_logger.exception.call_count)
 
     def _asserts_for_failing_tests(self, ex, stderr_buf, expected_message, info_count=1):
@@ -149,7 +149,7 @@ class RecoveryBaseTestCase(GpTestCase):
                     '-b -1']
         stderr_buf, ex = self.run_recovery_base_get_stderr()
         self._asserts_for_passing_tests(stderr_buf, ex, warn_count=1)
-        self.mock_logger.warn.assert_called_once_with(
+        self.mock_logger.warning.assert_called_once_with(
             'batch_size was less than zero.  Setting to 1.')
         self.assertEqual(call(numWorkers=1), mock_workerpool.call_args)
 
