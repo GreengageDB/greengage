@@ -38,8 +38,12 @@ except:
     import subprocess
 import threading
 import queue
-import pipes  # for shell-quoting, pipes.quote()
 import time
+
+if sys.version_info[0] == 3:
+    from shlex import quote
+else:
+    from pipes import quote
 
 class ReplicaCheck(threading.Thread):
     def __init__(self, segrow, datname, relation_types):
@@ -65,12 +69,12 @@ Mirror Data Directory Location: %s' % (self.getName(), self.host, self.port, sel
         cmd = '''PGOPTIONS='-c gp_session_role=utility' psql -h %s -p %s -c "select * from gp_replica_check('%s', '%s', '%s')" %s''' % (self.host, self.port,
                                                                                                                                         self.ploc, self.mloc,
                                                                                                                                         self.relation_types,
-                                                                                                                                        pipes.quote(self.datname))
+                                                                                                                                        quote(self.datname))
         if self.primary_status.strip() == 'd':
             print("Primary segment for content %d is down" % self.content)
         else:
             try:
-                res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+                res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8')
                 self.result = True if res.strip().split('\n')[-2].strip() == 't' else False
                 with self.lock:
                     print(self)
@@ -90,7 +94,7 @@ def create_restartpoint_on_ckpt_record_replay(set):
         cmd = "gpconfig -r create_restartpoint_on_ckpt_record_replay --skipvalidation && gpstop -u"
     print(cmd)
     try:
-        res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        res = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode('utf-8')
         print(res)
     except subprocess.CalledProcessError as e:
         print('returncode: (%s), cmd: (%s), output: (%s)' % (e.returncode, e.cmd, e.output))
@@ -110,10 +114,10 @@ def install_extension(databases):
 
     database_list = list(map(str.strip, databases.split(',')))
     print("Creating gp_replica_check extension on databases if needed:")
-    datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
+    datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
     for datname in datnames:
         if len(datname) >= 1 and (datname.strip() in database_list or 'all' in database_list):
-            print(subprocess.check_output('psql %s -t -c "%s"' % (pipes.quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True))
+            print(subprocess.check_output('psql %s -t -c "%s"' % (quote(datname), create_ext_sql), stderr=subprocess.STDOUT, shell=True).decode('utf-8'))
 
 # Get the primary and mirror servers, for each content ID.
 def get_segments():
@@ -125,7 +129,7 @@ WHERE gscp.content = gscm.content
       AND gscp.role = 'p'
       AND gscm.role = 'm'
 '''
-    seglist = subprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
+    seglist = subprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
     segmap = {}
     for segrow in seglist:
         segelements = list(map(str.strip, segrow.split('|')))
@@ -146,7 +150,7 @@ SELECT datname FROM pg_catalog.pg_database WHERE datname != 'template0'
 
     database_list = list(map(str.strip, databases.split(',')))
 
-    dbrawlist = subprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).split('\n')
+    dbrawlist = subprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
     dblist = []
     for dbrow in dbrawlist:
         dbname = dbrow
