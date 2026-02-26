@@ -35,21 +35,6 @@ pg_regress.o:
 	$(MAKE) -C $(top_builddir)/src/test/regress pg_regress.o
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/pg_regress.o .
 
-gpstringsubs.pl:
-	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/gpstringsubs.pl
-
-gpdiff.pl: atmsort.pm explain.pm GPTest.pm
-	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/gpdiff.pl
-
-GPTest.pm:
-	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/GPTest.pm
-
-atmsort.pm:
-	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/atmsort.pm
-
-explain.pm:
-	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/explain.pm
-
 data:
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/data
 
@@ -63,18 +48,17 @@ pg_isolation2_regress$(X): isolation2_main.o pg_regress.o submake-libpgport subm
 clean distclean:
 	rm -f pg_isolation2_regress$(X) $(OBJS) isolation2_main.o isolation2_regress.so
 	rm -f pg_regress.o test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
-	rm -f gpstringsubs.pl gpdiff.pl atmsort.pm explain.pm
 	rm -f data
 	rm -rf $(pg_regress_clean_files)
 
-install: all installdirs gpdiff.pl gpstringsubs.pl
+install: all installdirs
 	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
 	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
-	$(INSTALL_PROGRAM) gpdiff.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
-	$(INSTALL_PROGRAM) gpstringsubs.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
-	$(INSTALL_PROGRAM) GPTest.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
-	$(INSTALL_PROGRAM) atmsort.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
-	$(INSTALL_PROGRAM) explain.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
+	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/gpdiff.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/gpstringsubs.pl '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
+	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/GPTest.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
+	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/atmsort.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
+	$(INSTALL_PROGRAM) $(top_builddir)/src/test/regress/explain.pm '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
