@@ -1663,8 +1663,8 @@ def checkPartitionRegularity():
     logger.info('Checking pg_partition/pg_constraint regularity ...')
 
     if not okayToRun:
-        logger.warn('unable to run pg_partition/pg_constraint regularity checks')
-        logger.warn('prerequisite tests failed or not run')
+        logger.warning('unable to run pg_partition/pg_constraint regularity checks')
+        logger.warning('prerequisite tests failed or not run')
         return
 
     db = connect()
@@ -1733,9 +1733,9 @@ def checkPartitionRegularity():
     checkname = 'unenforced unique constraints on partitioned tables'
 
     if irregular:
-        logger.warn('skipping check %s due to constraint irregularities' % checkname)
+        logger.warning('skipping check %s due to constraint irregularities' % checkname)
     elif GV.Remove:
-        logger.warn('skipping check %s due to required removals' % checkname)
+        logger.warning('skipping check %s due to required removals' % checkname)
     else:
         qry = partitionRegularityChecks['unenforced_constraint_info']
         err = []
@@ -2420,7 +2420,7 @@ def checkTableMissingEntry(cat):
 
     # Skip catalogs without primary key
     if len(pkey) == 0:
-        logger.warn("[WARN] Skipped missing/extra entry check for %s" % catname)
+        logger.warning("[WARN] Skipped missing/extra entry check for %s" % catname)
         return
 
     castedPkey = cat.getPrimaryKey()
@@ -2655,7 +2655,7 @@ def checkTableInconsistentEntry(cat):
 
     # Skip catalogs without primary key
     if pkey == []:
-        logger.warn("[WARN] Skipped cross consistency check for %s" %
+        logger.warning("[WARN] Skipped cross consistency check for %s" %
                     catname)
         return
 
@@ -2801,7 +2801,7 @@ def checkTableDuplicateEntry(cat):
 
     # Skip catalogs without primary key
     if pkey == []:
-        logger.warn("[WARN] Skipped duplicate check for %s" %
+        logger.warning("[WARN] Skipped duplicate check for %s" %
                     catname)
         return
 
@@ -3418,7 +3418,7 @@ def runAllChecks(run_tests):
         print_repair_issues(repair_dir_path)
 
     if GV.retcode >= ERROR_NOREPAIR:
-        logger.warn('[WARN]: unable to generate repairs for some issues')
+        logger.warning('[WARN]: unable to generate repairs for some issues')
     logger.info("Check complete")
 
 

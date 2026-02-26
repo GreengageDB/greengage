@@ -54,7 +54,7 @@ class RecoveryBase(object):
                                           logdir=self.options.logfileDirectory)
 
         if self.options.batch_size <= 0:
-            self.logger.warn('batch_size was less than zero.  Setting to 1.')
+            self.logger.warning('batch_size was less than zero.  Setting to 1.')
             self.options.batch_size = 1
 
         if self.options.verbose:

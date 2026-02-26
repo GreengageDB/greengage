@@ -561,7 +561,7 @@ class GpStop(object):
                         for user_conn in user_connections:
                             warn_text += "  %s" % user_conn
 
-                    logger.warn(warn_text)
+                    logger.warning(warn_text)
                     logger.info("Continue waiting in smart mode, stop in fast mode, or stop in immediate mode.")
                     mode_selection = userinput.ask_string("Your_choice",
                                                           "['(s)mart_mode', '(f)ast_mode', '(i)mmediate_mode']",

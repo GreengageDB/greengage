@@ -344,7 +344,7 @@ def parseKeyColonValueLines(str):
             continue
         colon = line.find(":")
         if colon == -1:
-            logger.warn("Error parsing data, no colon on line %s" % line)
+            logger.warning("Error parsing data, no colon on line %s" % line)
             return None
         key = line[:colon]
         value = line[colon+1:]

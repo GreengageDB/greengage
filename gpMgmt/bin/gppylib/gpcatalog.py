@@ -265,7 +265,7 @@ class GPCatalog(object):
         except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
-            logger.warn("GPCatalogTable: "+ str(e))
+            logger.warning("GPCatalogTable: "+ str(e))
 
     def _setForeignKeys(self):
         """
@@ -286,7 +286,7 @@ class GPCatalog(object):
         except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
-            logger.warn("GPCatalogTable: "+ str(e))
+            logger.warning("GPCatalogTable: "+ str(e))
 
 
     def _setKnownDifferences(self):
@@ -375,7 +375,7 @@ class GPCatalog(object):
             if self._tables[relname].isMasterOnly():
                 continue
             if self._tables[relname].getPrimaryKey() == []:
-                logger.warn("GPCatalogTable: unable to derive primary key for %s"
+                logger.warning("GPCatalogTable: unable to derive primary key for %s"
                             % str(relname))
 
 

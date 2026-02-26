@@ -69,10 +69,10 @@ class GpMirrorBuildCalculator(object):
 
         standard, message = self.__gpArray.isStandardArray()
         if standard == False:
-            logger.warn('The current system appears to be non-standard.')
-            logger.warn(message)
-            logger.warn('gpaddmirrors will not be able to symmetrically distribute the new mirrors.')
-            logger.warn('It is recommended that you specify your own input file with appropriate values.')
+            logger.warning('The current system appears to be non-standard.')
+            logger.warning(message)
+            logger.warning('gpaddmirrors will not be able to symmetrically distribute the new mirrors.')
+            logger.warning('It is recommended that you specify your own input file with appropriate values.')
             if self.__options.interactive and not ask_yesno('', "Are you sure you want to continue with this gpaddmirrors session?", 'N'):
                 logger.info("User Aborted. Exiting...")
                 sys.exit(0)
