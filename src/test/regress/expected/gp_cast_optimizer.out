@@ -9,9 +9,10 @@
 -- s/DETAIL:  CTranslatorQueryToDXL.cpp:\d+: Failed assertion/DETAIL:  CTranslatorQueryToDXL.cpp:###: Failed assertion/
 -- end_matchsubs
 set optimizer_enable_mergejoin = false;
--- We'd like to disable nested loop join, but there no such guc in greengage 6.
--- It shouldn't be a problem though, because ORCA tends to prioritize hashjoin anyway.
--- set optimizer_enable_nljoin = false;
+-- We want to specifically test hashjoins for several queries below.
+-- Nested loop joins are not constructed for these queries at the time,
+-- and probably never will be, but let's make them additionally unlikely just in case.
+set optimizer_nestloop_factor = 100;
 set enable_mergejoin = false;
 set enable_nestloop = false;
 set optimizer_trace_fallback = true;
@@ -30,8 +31,8 @@ create table cst_int4_int8 as (select gen::int4 as a, gen::int8 as b from genera
 --    ORCA doesn't support such operations, but it knows when a cast doesn't change a distribution.
 set optimizer_join_order = query;
 explain (verbose, costs off) select * from cst_int2 join cst_int4 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int4.a
    ->  Hash Join
@@ -44,7 +45,7 @@ explain (verbose, costs off) select * from cst_int2 join cst_int4 using(a);
                ->  Seq Scan on public.cst_int4
                      Output: cst_int4.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2 join cst_int4 using(a);
@@ -59,8 +60,8 @@ select * from cst_int2 join cst_int4 using(a);
 (6 rows)
 
 explain (verbose, costs off) select * from cst_int2 join cst_int8 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int8.a
    ->  Hash Join
@@ -73,7 +74,7 @@ explain (verbose, costs off) select * from cst_int2 join cst_int8 using(a);
                ->  Seq Scan on public.cst_int8
                      Output: cst_int8.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2 join cst_int8 using(a);
@@ -83,8 +84,8 @@ select * from cst_int2 join cst_int8 using(a);
 (1 row)
 
 explain (verbose, costs off) select * from cst_int4 join cst_int8 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int8.a
    ->  Hash Join
@@ -97,7 +98,7 @@ explain (verbose, costs off) select * from cst_int4 join cst_int8 using(a);
                ->  Seq Scan on public.cst_int8
                      Output: cst_int8.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int4 join cst_int8 using(a);
@@ -112,8 +113,8 @@ select * from cst_int4 join cst_int8 using(a);
 (6 rows)
 
 explain (verbose, costs off) select * from cst_float4 join cst_float8 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_float8.a
    ->  Hash Join
@@ -126,7 +127,7 @@ explain (verbose, costs off) select * from cst_float4 join cst_float8 using(a);
                ->  Seq Scan on public.cst_float8
                      Output: cst_float8.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_float4 join cst_float8 using(a);
@@ -147,8 +148,8 @@ select * from cst_float4 join cst_float8 using(a);
 
 -- Same thing with the sides swapped
 explain (verbose, costs off) select * from cst_int4 join cst_int2 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int4.a
    ->  Hash Join
@@ -161,7 +162,7 @@ explain (verbose, costs off) select * from cst_int4 join cst_int2 using(a);
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int4 join cst_int2 using(a);
@@ -176,8 +177,8 @@ select * from cst_int4 join cst_int2 using(a);
 (6 rows)
 
 explain (verbose, costs off) select * from cst_int8 join cst_int2 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int8.a
    ->  Hash Join
@@ -190,7 +191,7 @@ explain (verbose, costs off) select * from cst_int8 join cst_int2 using(a);
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int8 join cst_int2 using(a);
@@ -200,8 +201,8 @@ select * from cst_int8 join cst_int2 using(a);
 (1 row)
 
 explain (verbose, costs off) select * from cst_int8 join cst_int4 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int8.a
    ->  Hash Join
@@ -214,7 +215,7 @@ explain (verbose, costs off) select * from cst_int8 join cst_int4 using(a);
                ->  Seq Scan on public.cst_int4
                      Output: cst_int4.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int8 join cst_int4 using(a);
@@ -229,8 +230,8 @@ select * from cst_int8 join cst_int4 using(a);
 (6 rows)
 
 explain (verbose, costs off) select * from cst_float8 join cst_float4 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_float8.a
    ->  Hash Join
@@ -243,7 +244,7 @@ explain (verbose, costs off) select * from cst_float8 join cst_float4 using(a);
                ->  Seq Scan on public.cst_float4
                      Output: cst_float4.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_float8 join cst_float4 using(a);
@@ -267,8 +268,8 @@ explain (verbose, costs off)
 select * from cst_int2
     join cst_int8 using(a)
     join cst_int4 using(a);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int8.a
    ->  Hash Join
@@ -288,7 +289,7 @@ select * from cst_int2
                ->  Seq Scan on public.cst_int4
                      Output: cst_int4.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (20 rows)
 
 select * from cst_int2
@@ -305,8 +306,8 @@ reset optimizer_join_order;
 explain (verbose, costs off) select * from cst_int2 left join cst_int4 using(a);
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  CTranslatorQueryToDXL.cpp:3970: Failed assertion: ((((const Node*)(join_alias_node))->type) == T_Var) || ((((const Node*)(join_alias_node))->type) == T_CoalesceExpr) || ((((const Node*)(join_alias_node))->type) == T_RelabelType)
-                     QUERY PLAN                      
------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: ((cst_int2.a)::integer)
    ->  Hash Left Join
@@ -319,7 +320,7 @@ DETAIL:  CTranslatorQueryToDXL.cpp:3970: Failed assertion: ((((const Node*)(join
                ->  Seq Scan on public.cst_int4
                      Output: cst_int4.a
  Optimizer: Postgres query optimizer
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2 left join cst_int4 using(a);
@@ -341,8 +342,8 @@ DETAIL:  CTranslatorQueryToDXL.cpp:3970: Failed assertion: ((((const Node*)(join
 (11 rows)
 
 explain (verbose, costs off) select * from cst_int2 right join cst_int4 using(a);
-                       QUERY PLAN                        
----------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int4.a
    ->  Hash Left Join
@@ -355,7 +356,7 @@ explain (verbose, costs off) select * from cst_int2 right join cst_int4 using(a)
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2 right join cst_int4 using(a);
@@ -379,8 +380,8 @@ select * from cst_int4
 where exists (select *
               from cst_int2
               where cst_int4.a = cst_int2.a);
-                       QUERY PLAN                        
----------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int4.a
    ->  Hash Semi Join
@@ -394,7 +395,7 @@ where exists (select *
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (14 rows)
 
 select * from cst_int4
@@ -416,8 +417,8 @@ select * from cst_int4
 where not exists (select *
                   from cst_int2
                   where cst_int4.a = cst_int2.a);
-                       QUERY PLAN                        
----------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int4.a
    ->  Hash Anti Join
@@ -430,7 +431,7 @@ where not exists (select *
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int4
@@ -449,8 +450,8 @@ where not exists (select *
 explain (verbose, costs off)
 select * from cst_int4
 where cst_int4.a not in (select * from cst_int2);
-                          QUERY PLAN                           
----------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    Output: cst_int4.a
    ->  Hash Left Anti Semi (Not-In) Join
@@ -465,7 +466,7 @@ where cst_int4.a not in (select * from cst_int2);
                      ->  Seq Scan on public.cst_int2
                            Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (15 rows)
 
 select * from cst_int4
@@ -481,8 +482,8 @@ where cst_int4.a not in (select * from cst_int2);
 
 explain (verbose, costs off)
 select * from cst_int2 natural join cst_int4;
-                       QUERY PLAN                        
----------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int4.a
    ->  Hash Join
@@ -495,7 +496,7 @@ select * from cst_int2 natural join cst_int4;
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2 natural join cst_int4;
@@ -514,8 +515,8 @@ select * from cst_int2 natural join cst_int4;
 --    distribution of the cst_int2 table is not directly equal to the left-hand side of the expression.
 --    ORCA, on the other hand, can see that redistribution is unnecessary in this case.
 explain (verbose, costs off) select * from cst_int2 join cst_int4 on cst_int2.a::int4 = cst_int4.a;
-                       QUERY PLAN                        
----------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_int2.a, cst_int4.a
    ->  Hash Join
@@ -528,7 +529,7 @@ explain (verbose, costs off) select * from cst_int2 join cst_int4 on cst_int2.a:
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2 join cst_int4 on cst_int2.a::int4 = cst_int4.a;
@@ -546,8 +547,8 @@ select * from cst_int2 join cst_int4 on cst_int2.a::int4 = cst_int4.a;
 -- Because the first cast tends to be converted directly to a conversion function,
 -- ORCA shouldn't be able to detect the first coercion and should require a redistribution.
 explain (verbose, costs off) select * from cst_float4 as cst_float4_f join cst_float4 as cst_float4_s on cst_float4_f.a::int::float4 = cst_float4_s.a;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    Output: cst_float4.a, cst_float4_1.a
    ->  Hash Join
@@ -563,7 +564,7 @@ explain (verbose, costs off) select * from cst_float4 as cst_float4_f join cst_f
                ->  Seq Scan on public.cst_float4 cst_float4_1
                      Output: cst_float4_1.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (16 rows)
 
 select * from cst_float4 as cst_float4_f join cst_float4 as cst_float4_s on cst_float4_f.a::int::float4 = cst_float4_s.a;
@@ -584,8 +585,8 @@ select * from cst_float4 as cst_float4_f join cst_float4 as cst_float4_s on cst_
 
 -- Check that binary coercible casts are ruled out
 explain (verbose, costs off) select * from cst_varchar as foo join cst_varchar as bar using(a);
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_varchar.a
    ->  Hash Join
@@ -598,7 +599,7 @@ explain (verbose, costs off) select * from cst_varchar as foo join cst_varchar a
                ->  Seq Scan on public.cst_varchar cst_varchar_1
                      Output: cst_varchar_1.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_varchar as foo join cst_varchar as bar using(a);
@@ -618,8 +619,8 @@ select * from cst_varchar as foo join cst_varchar as bar using(a);
 (11 rows)
 
 explain (verbose, costs off) select * from cst_varchar join cst_text using(a);
-                       QUERY PLAN                        
----------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: cst_varchar.a
    ->  Hash Join
@@ -632,7 +633,7 @@ explain (verbose, costs off) select * from cst_varchar join cst_text using(a);
                ->  Seq Scan on public.cst_text
                      Output: cst_text.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_varchar join cst_text using(a);
@@ -671,7 +672,7 @@ explain (verbose, costs off) select * from cst_float4 join cst_int4 using(a);
                      ->  Seq Scan on public.cst_int4
                            Output: cst_int4.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (16 rows)
 
 select * from cst_float4 join cst_int4 using(a);
@@ -691,8 +692,8 @@ select * from cst_float4 join cst_int4 using(a);
 (11 rows)
 
 explain (verbose, costs off) select * from cst_int4 join cst_text on cst_int4.a = cst_text.a::int4;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    Output: cst_int4.a, cst_text.a
    ->  Hash Join
@@ -708,7 +709,7 @@ explain (verbose, costs off) select * from cst_int4 join cst_text on cst_int4.a 
                      ->  Seq Scan on public.cst_text
                            Output: cst_text.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (16 rows)
 
 select * from cst_int4 join cst_text on cst_int4.a = cst_text.a::int4;
@@ -732,8 +733,8 @@ explain (verbose, costs off)
 with int8_cte as (select * from cst_int8)
 select * from (cst_int2 join int8_cte as cte_1 using(a))
     join (int8_cte as cte_2 join cst_int4 using(a)) using(a);
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: share0_ref2.a
    ->  Sequence
@@ -768,7 +769,7 @@ select * from (cst_int2 join int8_cte as cte_1 using(a))
                      ->  Seq Scan on public.cst_int4
                            Output: cst_int4.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (35 rows)
 
 with int8_cte as (select * from cst_int8)
@@ -819,7 +820,7 @@ select * from (cst_int2 join int8_cte as cte_1 using(a))
                                  ->  Seq Scan on public.cst_int2
                                        Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (35 rows)
 
 with int8_cte as (select * from cst_int8)
@@ -847,7 +848,7 @@ select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.a and t
                ->  Seq Scan on public.cst_int2_int4
                      Output: cst_int2_int4.a, cst_int2_int4.b
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (13 rows)
 
 select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.a and t1.b = t2.b);
@@ -884,7 +885,7 @@ select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.b and t
                ->  Seq Scan on public.cst_int2_int4
                      Output: cst_int2_int4.a, cst_int2_int4.b
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (16 rows)
 
 select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.b and t1.b = t2.a);
@@ -904,8 +905,8 @@ select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.b and t
 
 explain (verbose, costs off)
 select * from cst_int2_int4 as t1 join cst_int2 as t2 on (t1.a = t2.a);
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    Output: cst_int2_int4.a, cst_int2_int4.b, cst_int2.a
    ->  Hash Join
@@ -921,7 +922,7 @@ select * from cst_int2_int4 as t1 join cst_int2 as t2 on (t1.a = t2.a);
                ->  Seq Scan on public.cst_int2
                      Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=100
 (16 rows)
 
 select * from cst_int2_int4 as t1 join cst_int2 as t2 on (t1.a = t2.a);
@@ -966,7 +967,7 @@ select * from cst_int2_int4
                ->  Seq Scan on public.cst_int2_int4 cst_int2_int4_1
                      Output: cst_int2_int4_1.a, cst_int2_int4_1.b
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_join_order=query, optimizer_nestloop_factor=100
 (20 rows)
 
 with cst_int2_int4_copy as (select * from cst_int2_int4)
@@ -988,7 +989,7 @@ select * from cst_int2_int4
 (10 rows)
 
 -- Test several queries with nested-loop join
--- set optimizer_enable_nljoin = true;
+reset optimizer_nestloop_factor;
 set enable_nestloop = true;
 set optimizer_enable_hashjoin = false;
 set enable_hashjoin = false;
@@ -1112,7 +1113,7 @@ select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.a and t
                Index Cond: (cst_int4_int8.b = cst_int2_int4.b)
                Filter: (cst_int2_int4.a = cst_int4_int8.a)
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_hashjoin=off, enable_mergejoin=off, enable_nestloop=on, optimizer=on
+ Settings: enable_hashjoin=off, enable_mergejoin=off, enable_nestloop=on
 (13 rows)
 
 select * from cst_int2_int4 as t1 join cst_int4_int8 as t2 on (t1.a = t2.a and t1.b = t2.b);
@@ -1145,7 +1146,7 @@ explain (verbose, costs off) select * from cst_varchar as foo join cst_varchar a
          ->  Seq Scan on public.cst_varchar
                Output: cst_varchar.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_hashjoin=off, enable_mergejoin=off, enable_nestloop=on, optimizer=on
+ Settings: enable_hashjoin=off, enable_mergejoin=off, enable_nestloop=on
 (11 rows)
 
 select * from cst_varchar as foo join cst_varchar as bar using(a);
@@ -1210,5 +1211,5 @@ reset enable_hashjoin;
 reset enable_nestloop;
 reset enable_mergejoin;
 reset optimizer_enable_hashjoin;
--- reset optimizer_enable_nljoin;
+reset optimizer_nestloop_factor;
 reset optimizer_enable_mergejoin;

@@ -11,9 +11,10 @@
 -- end_matchsubs
 
 set optimizer_enable_mergejoin = false;
--- We'd like to disable nested loop join, but there no such guc in greengage 6.
--- It shouldn't be a problem though, because ORCA tends to prioritize hashjoin anyway.
--- set optimizer_enable_nljoin = false;
+-- We want to specifically test hashjoins for several queries below.
+-- Nested loop joins are not constructed for these queries at the time,
+-- and probably never will be, but let's make them additionally unlikely just in case.
+set optimizer_nestloop_factor = 100;
 set enable_mergejoin = false;
 set enable_nestloop = false;
 set optimizer_trace_fallback = true;
@@ -203,7 +204,7 @@ select * from cst_int2_int4
 
 
 -- Test several queries with nested-loop join
--- set optimizer_enable_nljoin = true;
+reset optimizer_nestloop_factor;
 set enable_nestloop = true;
 set optimizer_enable_hashjoin = false;
 set enable_hashjoin = false;
@@ -266,5 +267,5 @@ reset enable_hashjoin;
 reset enable_nestloop;
 reset enable_mergejoin;
 reset optimizer_enable_hashjoin;
--- reset optimizer_enable_nljoin;
+reset optimizer_nestloop_factor;
 reset optimizer_enable_mergejoin;

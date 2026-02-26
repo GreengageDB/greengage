@@ -3798,7 +3798,7 @@ select t1.* from
                      ->  Seq Scan on public.int4_tbl
                            Output: int4_tbl.f1
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: optimizer=on
+ Settings: enable_seqscan=on, optimizer=on
 (48 rows)
 
 select t1.* from

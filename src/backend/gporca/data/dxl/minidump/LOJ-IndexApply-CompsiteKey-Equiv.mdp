@@ -17,6 +17,7 @@ analyze bar;
 create index bar_idx_ab on bar(b,a);
 create index zoo_idx_ab on zoo(b,a);
 set optimizer_enable_hashjoin=off;
+
 explain select * from foo left join bar on foo.a = bar.a and foo.b = bar.b left join zoo on zoo.a=foo.a and zoo.b=foo.b;
                                         QUERY PLAN
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..922.61 rows=10 width=30)
