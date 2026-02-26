@@ -16,6 +16,7 @@ services:
     hostname: cdw
     volumes:
       - ${PWD}/allure-results:/tmp/allure-results
+      - ${PWD}/sqldump/dump.sql:/home/gpadmin/sqldump/dump.sql
       - ${PWD}/ssh_keys/id_rsa.pub:/home/gpadmin/.ssh/id_rsa.pub
       - ${PWD}/ssh_keys/id_rsa:/home/gpadmin/.ssh/id_rsa
       - ${PWD}/logs_cdw:/logs
