@@ -51,7 +51,8 @@ clean distclean:
 	rm -f data
 	rm -rf $(pg_regress_clean_files)
 
-install: all installdirs
+install: all
+	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
 	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
 	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
 	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/gpdiff.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
@@ -59,9 +60,6 @@ install: all installdirs
 	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/GPTest.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
 	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/atmsort.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
 	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/explain.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
-
-installdirs:
-	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
 
 uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
