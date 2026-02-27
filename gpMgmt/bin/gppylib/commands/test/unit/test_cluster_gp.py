@@ -23,13 +23,13 @@ class GpCommandTestCase(unittest.TestCase):
 
         for port, datadir in result:
             if not psutil.pid_exists(port):
-                # Process with PID as port number doesn't exists
+                # Process with PID as port number doesn't exist
                 # use it for test
                 self.port = port
                 self.datadir = datadir
                 break
         else:
-            # Unexpectidly all postmaster's ports have corresponding PIDs
+            # Unexpectedly all postmaster's ports have corresponding PIDs
             self.port = -1
             self.pid = -1
             self.datadir = ""
@@ -47,7 +47,7 @@ class GpCommandTestCase(unittest.TestCase):
 
     def test_get_postmaster_pid_locally_nonexistent_pid(self):
         if self.port == -1:
-            self.skipTest("Unexpectidly all postmaster's ports have corresponding PIDs")
+            self.skipTest("Unexpectedly all postmaster's ports have corresponding PIDs")
 
         temp_dir = tempfile.mkdtemp()
         temp_file_path = os.path.join(temp_dir, "postmaster.pid")
@@ -61,7 +61,7 @@ class GpCommandTestCase(unittest.TestCase):
 
     def test_get_getPostmasterPID_nonexistent_pid(self):
         if self.port == -1:
-            self.skipTest("Unexpectidly all postmaster's ports have corresponding PIDs")
+            self.skipTest("Unexpectedly all postmaster's ports have corresponding PIDs")
 
         temp_dir = tempfile.mkdtemp()
         temp_file_path = os.path.join(temp_dir, "postmaster.pid")
