@@ -8,11 +8,12 @@ import time
 import unittest
 
 import mock
+from .gp_unittest import GpTestCase
 
 from gppylib.commands.base import Command, ExecutionError, WorkerPool, \
                                   join_and_indicate_progress
 
-class WorkerPoolTest(unittest.TestCase):
+class WorkerPoolTest(GpTestCase):
     def setUp(self):
         self.pool = WorkerPool(numWorkers=1, logger=mock.Mock())
 
@@ -286,7 +287,7 @@ class WorkerPoolTest(unittest.TestCase):
             # newline. (tmain() closes the write end of the pipe so that this
             # read() will complete.)
             remaining = read_end.read()
-            self.assertRegexpMatches(remaining, r'^[.]*\n$')
+            self.assertReMatch(remaining, r'^[.]*\n$')
 
         finally:
             # Make sure that we unblock and join all threads, even on a test
@@ -303,7 +304,7 @@ class WorkerPoolTest(unittest.TestCase):
         cmd.run.side_effect = wait_for_duration
         self.pool.addCommand(cmd)
 
-        stdout = mock.Mock(spec=file)
+        stdout = mock.Mock(io.StringIO())
         join_and_indicate_progress(self.pool, stdout, interval=(old_div(duration, 5)))
 
         for i, call in enumerate(stdout.mock_calls):

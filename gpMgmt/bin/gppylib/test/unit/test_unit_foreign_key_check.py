@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import imp
 import os
 import sys
 from gpcheckcat_modules.foreign_key_check import ForeignKeyCheck
@@ -63,7 +62,7 @@ class GpCheckCatTestCase(GpTestCase):
               """
 
         result_query = self.subject.get_fk_query_left_join("catname", "pkcatname", "fkeystr", "pkeystr", ["pkeys-1", "pkeys-2"], ["cat1pkeys-1", "cat1pkeys-2"])
-        self.assertEquals(expected_query, result_query)
+        self.assertEqual(expected_query, result_query)
 
     def test_get_fk_query_full_join_returns_the_correct_query(self):
         expected_query = """
@@ -96,14 +95,14 @@ class GpCheckCatTestCase(GpTestCase):
               GROUP BY pkeys-1, pkeys-2, pkcatname_pkeystr, missing_catalog, present_key
               """
         result_query = self.subject.get_fk_query_full_join("catname", "pkcatname", "fkeystr", "pkeystr", ["pkeys-1", "pkeys-2"], ["cat1pkeys-1", "cat1pkeys-2"], "filter")
-        self.assertEquals(expected_query, result_query)
+        self.assertEqual(expected_query, result_query)
 
     @patch('gpcheckcat_modules.foreign_key_check.ForeignKeyCheck.checkTableForeignKey')
     def test_runCheck(self, mock):
         tables = [self._get_mock_for_catalog_table("table1"), self._get_mock_for_catalog_table("table2")]
         self.subject.runCheck(tables)
 
-        self.assertEquals(len(self.subject.checkTableForeignKey.call_args_list), len(tables))
+        self.assertEqual(len(self.subject.checkTableForeignKey.call_args_list), len(tables))
 
         for table in tables:
             self.assertIn(call(table), self.subject.checkTableForeignKey.call_args_list)
@@ -125,10 +124,10 @@ class GpCheckCatTestCase(GpTestCase):
 
             issue_list = self.subject.checkTableForeignKey(catalog_table_mock)
 
-            self.assertEquals(len(issue_list) , 2)
-            self.assertEquals(issue_list[0], ('pg_class', ['pkey1', 'pkey2'], [('r1', 'r2'), ('r3', 'r4')]))
-            self.assertEquals(issue_list[1], ('arbitrary_catalog_table', ['pkey1', 'pkey2'], [('r1', 'r2'), ('r3', 'r4')]))
-            self.assertEquals(self.db_connection.query.call_count, 2)
+            self.assertEqual(len(issue_list) , 2)
+            self.assertEqual(issue_list[0], ('pg_class', ['pkey1', 'pkey2'], [('r1', 'r2'), ('r3', 'r4')]))
+            self.assertEqual(issue_list[1], ('arbitrary_catalog_table', ['pkey1', 'pkey2'], [('r1', 'r2'), ('r3', 'r4')]))
+            self.assertEqual(self.db_connection.query.call_count, 2)
 
             def __generate_pg_class_call(table, primary_key_cat_name, col_type, with_filter=True):
                 if with_filter:
@@ -158,15 +157,15 @@ class GpCheckCatTestCase(GpTestCase):
                 foreign_key_mock_calls_left.append(pg_class_call)
 
             if table_name in self.full_join_cat_tables:
-                self.assertEquals(fk_query_full_join_mock.call_count, 1)
-                self.assertEquals(fk_query_left_join_mock.call_count, 1)
+                self.assertEqual(fk_query_full_join_mock.call_count, 1)
+                self.assertEqual(fk_query_left_join_mock.call_count, 1)
                 fk_query_full_join_mock.assert_has_calls(foreign_key_mock_calls, any_order=False)
             else:
                 arbitrary_catalog_table_call = __generate_pg_class_call(table_name, 'arbitrary_catalog_table', col_type, with_filter=False)
                 foreign_key_mock_calls_left.append(arbitrary_catalog_table_call)
 
-                self.assertEquals(fk_query_left_join_mock.call_count, 2)
-                self.assertEquals(fk_query_full_join_mock.call_count, 0)
+                self.assertEqual(fk_query_left_join_mock.call_count, 2)
+                self.assertEqual(fk_query_full_join_mock.call_count, 0)
                 fk_query_left_join_mock.assert_has_calls(foreign_key_mock_calls_left, any_order=False)
 
             self.db_connection.query.call_count = 0

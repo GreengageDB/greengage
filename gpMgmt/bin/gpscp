@@ -25,7 +25,7 @@ warnings.simplefilter('ignore', DeprecationWarning)
 import os
 import sys
 import getopt
-import popen2
+import subprocess
 from gppylib.util import ssh_utils
 from gppylib.gpparseopts import OptParser
 from gppylib.parseutils import canonicalize_address
@@ -108,10 +108,14 @@ def parseCommandLine():
 #############
 def run(cmd, peer):
     if GV.opt['-v']: print('[INFO]', cmd)
-    p = popen2.Popen4(cmd)
+    p = subprocess.Popen(cmd,
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT,
+                         shell=True)
     p.x_cmd = cmd
     p.x_peer = peer
-    p.tochild.close()
+    p.stdin.close()
     return p
 
 
@@ -146,8 +150,8 @@ try:
 
     errmsg = None
     for p in proc:
-        for out in p.fromchild:
-            print('[OUT %s] %s' % (p.x_peer, out))
+        for out in p.stdout:
+            print('[OUT %s] %s' % (p.x_peer, out.decode('utf-8')))
         status = p.wait()
         if status:
             errmsg = '[ERROR %s] exit %d, cmd - %s' % (p.x_peer, status, p.x_cmd)

@@ -117,7 +117,7 @@ def getProcWithParent(host,targetParentPID,procname):
     lines=sout.split('\n')
         
     for line in lines:
-        if line == '':
+        if not line:
             continue
         fields=line.lstrip(' ').split()
         if len(fields) < 3:

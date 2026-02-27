@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import os
 import sys
 import pickle
+import base64
 
 from gppylib import gplog
 from gppylib.commands.base import OperationWorkerPool, Command, REMOTE
@@ -54,7 +55,7 @@ class RemoteOperation(Operation):
         if self.msg_ctx:
             msg = "Output for %s on host %s: %s" % (self.msg_ctx, self.host, cmd.get_results().stdout)
         logger.debug(msg)
-        ret = self.operation.ret = pickle.loads(cmd.get_results().stdout.split('START_CMD_OUTPUT\n')[1])
+        ret = self.operation.ret = pickle.loads(base64.urlsafe_b64decode(cmd.get_results().stdout.split('START_CMD_OUTPUT\n')[1].encode('ascii')))
         if isinstance(ret, Exception):
             raise ret
         return ret

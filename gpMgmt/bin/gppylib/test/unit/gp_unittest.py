@@ -4,6 +4,13 @@ from contextlib import contextmanager
 import unittest
 
 from mock import MagicMock, Mock
+import sys
+
+if sys.version_info[0] == 2:
+    import imp
+else:
+    import importlib.util
+    import importlib.machinery
 
 class Contains(str):
     """
@@ -57,6 +64,29 @@ class GpTestCase(unittest.TestCase):
                             "You probably need to add a super(<child class>, "
                             "self).tearDown() in your tearDown()" % (cls.apply_patches_counter,
                                                                      cls.tear_down_counter))
+
+    def assertRaisesRe(self, exc, regex, *args, **kwargs):
+        if sys.version_info[0] == 2:
+            return self.assertRaisesRegexp(exc, regex, *args, **kwargs)
+        else:
+            return self.assertRaisesRegex(exc, regex, *args, **kwargs)
+
+    def assertReMatch(self, text, regex, msg=None):
+        if sys.version_info[0] == 2:
+            return self.assertRegexpMatches(text, regex, msg)
+        else:
+            return self.assertRegex(text, regex, msg)
+
+    def assertReNotMatch(self, text, regex, msg=None):
+        if sys.version_info[0] == 2:
+            return self.assertNotRegexpMatches(text, regex, msg)
+        else:
+            return self.assertNotRegex(text, regex, msg)
+    def assertEqualUnordered(self, first, second):
+        if sys.version_info[0] == 2:
+            self.assertItemsEqual(first, second)
+        else:
+            self.assertCountEqual(first, second)
 
 
 def add_setup(setup=None, teardown=None):
@@ -114,3 +144,15 @@ class SubTest(object):
 
     def __init__(self, name):
         self.name = name
+
+def load_module(name, path):
+    if sys.version_info[0] == 2:
+        return imp.load_source(name, path)
+    else:
+        loader = importlib.machinery.SourceFileLoader(name, path)
+        spec = importlib.util.spec_from_file_location(name, path,
+                                                      loader=loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        return module

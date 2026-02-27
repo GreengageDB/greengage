@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 
-import imp
 import os
 import unittest
 from gppylib.db import dbconn
+from .gp_unittest import load_module
 
 
 class GpCheckCatColumnsTestCase(unittest.TestCase):
     def test_TableMainColumn_tablenames_exist(self):
         gpcheckcat_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpcheckcat")
-        subject = imp.load_source('gpcheckcat', gpcheckcat_file)
+        subject = load_module('gpcheckcat', gpcheckcat_file)
 
         dburl = dbconn.DbURL(hostname=os.getenv('HOSTNAME', 'localhost'), port=os.getenv('PGPORT', 5432),
                              dbname=os.getenv('PGDATABASE', 'postgres'))

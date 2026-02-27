@@ -195,7 +195,7 @@ class FuncSignature(object):
     def parse_args(self, arg_string):
         args = []
         arg_string = re.sub(r'\s+', ' ', arg_string)
-        if arg_string == 'void' or arg_string == '':
+        if arg_string == 'void' or not arg_string:
             return args
 
         for (i, arg) in enumerate(arg_string.split(',')):

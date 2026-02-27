@@ -30,7 +30,10 @@ import atexit
 import signal
 import pexpect
 import time
-import configparser
+if sys.version_info[0] == 3:
+    import configparser as ConfigParser
+else:
+    import ConfigParser
 from gppylib.util import ssh_utils
 from gppylib.gpparseopts import OptParser
 
@@ -109,7 +112,7 @@ def parseConfigFile():
         return
 
     try:
-        config = configparser.RawConfigParser()
+        config = ConfigParser.RawConfigParser()
         config.read(os.environ.get('MASTER_DATA_DIRECTORY') + '/gpssh.conf')
         if GV.DELAY_BEFORE_SEND is None:
             GV.DELAY_BEFORE_SEND = config.getfloat('gpssh', 'delaybeforesend')

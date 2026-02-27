@@ -130,11 +130,11 @@ def impl(context, new_hosts):
 
     with old_host_file, new_host_file:
         for h in old_hosts:
-            old_host_file.write(h + '\n')
+            old_host_file.write(h.encode('utf-8') + b'\n')
         old_host_file.flush()
 
         for h in new_hosts:
-            new_host_file.write(h + '\n')
+            new_host_file.write(h.encode('utf-8') + b'\n')
         new_host_file.flush()
 
         subprocess.check_call([
@@ -148,7 +148,7 @@ def impl(context, new_hosts):
 def impl(context):
     with tempfile.NamedTemporaryFile() as host_file:
         for h in context.gpssh_exkeys_context.allHosts():
-            host_file.write(h + '\n')
+            host_file.write(h.encode('utf-8') + b'\n')
         host_file.flush()
 
         subprocess.check_call([

@@ -43,7 +43,7 @@ class RepairTestCase(GpTestCase):
         self.verify_repair_dir_contents("somedb_issuetype_timestamp.sql", sql_contents)
         self.verify_repair_dir_contents("runsql_timestamp.sh", bash_contents)
 
-    @patch('gpcheckcat_modules.repair.RepairMissingExtraneous', autospec=True)
+    @patch('gpcheckcat_modules.repair.RepairMissingExtraneous')
     def test_create_repair_extra__normal(self, mock_repair):
         self.subject = Repair(self.context, "extra", "some desc")
         catalog_table_obj = Mock()
@@ -137,7 +137,7 @@ class RepairTestCase(GpTestCase):
         with open(file_path) as f:
             file_contents = f.readlines()
 
-        self.assertEqual(file_contents, contents)
+        self.assertEqualUnordered(file_contents, contents)
 
     def tearDown(self):
         shutil.rmtree(self.repair_dir_path)

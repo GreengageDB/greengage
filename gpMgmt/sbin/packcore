@@ -30,7 +30,7 @@ def _getPlatformInfo():
 
 def _getFileInfo(coreFile):
     cmd = Popen(['/usr/bin/file', '--version'], stdout=PIPE, stderr=STDOUT)
-    fileVersion = cmd.communicate()[0].split()[0].strip()
+    fileVersion = cmd.communicate()[0].split()[0].strip().decode('utf-8')
     # file allow setting parameters from command line from version 5.21, refer:
     # https://github.com/file/file/commit/6ce24f35cd4a43c4bdd249e8e0c4952c1f8eac67
     # Set ELF program sections processed for core files to suppres "too many
@@ -40,28 +40,28 @@ def _getFileInfo(coreFile):
         opts += ['-P', 'elf_phnum=2048']
     opts += [coreFile]
     cmd = Popen(opts, stdout=PIPE)
-    return cmd.communicate()[0]
+    return cmd.communicate()[0].decode('utf-8')
 
 
 def _isCore(fileCmdOutput):
-    if fileCmdOutput.find('LSB core file') is -1:
+    if fileCmdOutput.find('LSB core file') == -1:
         return False
     return True
 
 
 def _findBinary(fileCmdOutput):
     # execfn: '/path/to/postgres'
-    field = string.find(fileCmdOutput, 'execfn')
+    field = str.find(fileCmdOutput, 'execfn')
     # if 'execfn' field is not found, search for 'from' field instead
     if field < 0:
         # from: /path/to/postgres
         # from: postgres: 5432, ...
-        field = string.find(fileCmdOutput, 'from')
+        field = str.find(fileCmdOutput, 'from')
     # if 'from' field is still missing, search for any single-quoted string
     if field < 0:
         field = 0
-    start = string.find(fileCmdOutput, "'", field) + 1
-    end = string.find(fileCmdOutput, "'", start)
+    start = str.find(fileCmdOutput, "'", field) + 1
+    end = str.find(fileCmdOutput, "'", start)
     if start <= 0 or end < 0:
         return None
     cmd = fileCmdOutput[start:end]
@@ -71,7 +71,7 @@ def _findBinary(fileCmdOutput):
         return cmd
     # otherwise try to search with the process name, punctuations like ':'
     # should be removed
-    cmd = cmd.split()[0].translate(None, string.punctuation)
+    cmd = ''.join([char for char in cmd.split()[0] if char not in string.punctuation])
     return which(cmd)
 
 
@@ -105,7 +105,7 @@ def _getLibraryListWithLDD(binary):
 
     ldd_output = Popen(args + [binary], stdout=PIPE)
     for line in ldd_output.stdout:
-        match = re.search(r'(\S+) \(0x', line)
+        match = re.search(r'(\S+) \(0x', line.decode('utf-8'))
         if match and match.group(1):
             libraries.append(match.group(1).strip())
     return libraries
@@ -147,6 +147,7 @@ def _getLibraryListWithGDB(coreFile, binary):
     # path strings in following lines.
     header = False
     for line in result.splitlines():
+        line = line.decode('utf-8')
         if header:
             begin = line.find(os.path.sep)
             if begin >= 0:
@@ -159,7 +160,7 @@ def _getLibraryListWithGDB(coreFile, binary):
 
 def _copyFilePath(src, dst):
     srcDir = os.path.dirname(src)
-    if srcDir.find('/') is 0:
+    if srcDir.find('/') == 0:
         srcDir = srcDir[1:]
     dstDir = os.path.join(dst, srcDir)
     if not os.path.exists(dstDir):
@@ -260,7 +261,7 @@ def packCoreFile(coreFile, binary):
 
         libraries = _getLibraryListWithGDB(coreFile, binary)
 
-        if libraries is False:
+        if not libraries:
             libraries = _getLibraryListWithLDD(binary)
 
         for lib in libraries:

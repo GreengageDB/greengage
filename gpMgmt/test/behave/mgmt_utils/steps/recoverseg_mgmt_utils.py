@@ -555,12 +555,12 @@ def impl(context, before, after):
         raise Exception("before_array or after_array has no expected array...")
 
     with tempfile.NamedTemporaryFile() as f:
-        f.write(expected[before])
+        f.write(expected[before].encode('utf-8'))
         f.flush()
         expected_before_gparray = GpArray.initFromFile(f.name)
 
     with tempfile.NamedTemporaryFile() as f:
-        f.write(expected[after])
+        f.write(expected[after].encode('utf-8'))
         f.flush()
         expected_after_gparray = GpArray.initFromFile(f.name)
 

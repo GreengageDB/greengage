@@ -34,9 +34,13 @@ import logging
 import re
 import sys
 import time
-import six
 from contextlib import closing
 from functools import reduce
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 try:
     from gppylib import gplog
@@ -83,7 +87,7 @@ def parse_int(val):
 ###############################
 def quote_value(name):
     """Add surrounding single quote, double interior single quote."""
-    assert isinstance(name, six.string_types)
+    assert isinstance(name, string_types)
     return "'" + "''".join(name.split("'")) + "'"
 
 
@@ -351,6 +355,7 @@ def connect(user=None, password=None, host=None, port=None,
         logger.debug('connecting to %s:%s %s' % (host, port, database))
         db = pg.connect(host=host, port=port, user=user,
                         passwd=password, dbname=database, opt=options)
+        db.set_notice_receiver(lambda _: None)
 
     except pg.InternalError as ex:
         logger.fatal('could not connect to %s: "%s"' %
@@ -420,7 +425,7 @@ class execThread(Thread):
 def processThread(threads):
     batch = []
     for th in threads:
-        logger.debug('waiting on thread %s' % th.getName())
+        logger.debug('waiting on thread %s' % th.name)
         th.join()
         if th.error:
             setError(ERROR_NOREPAIR)
@@ -450,7 +455,7 @@ def connect2run(qry, col=None):
         thread = execThread(c, db, qry)
         thread.start()
         logger.debug('launching query thread %s for dbid %i' %
-                     (thread.getName(), dbid))
+                     (thread.name, dbid))
         threads.append(thread)
 
         # we don't want too much going on at once
@@ -1659,8 +1664,8 @@ def checkPartitionRegularity():
     logger.info('Checking pg_partition/pg_constraint regularity ...')
 
     if not okayToRun:
-        logger.warn('unable to run pg_partition/pg_constraint regularity checks')
-        logger.warn('prerequisite tests failed or not run')
+        logger.warning('unable to run pg_partition/pg_constraint regularity checks')
+        logger.warning('prerequisite tests failed or not run')
         return
 
     db = connect()
@@ -1729,9 +1734,9 @@ def checkPartitionRegularity():
     checkname = 'unenforced unique constraints on partitioned tables'
 
     if irregular:
-        logger.warn('skipping check %s due to constraint irregularities' % checkname)
+        logger.warning('skipping check %s due to constraint irregularities' % checkname)
     elif GV.Remove:
-        logger.warn('skipping check %s due to required removals' % checkname)
+        logger.warning('skipping check %s due to required removals' % checkname)
     else:
         qry = partitionRegularityChecks['unenforced_constraint_info']
         err = []
@@ -2247,7 +2252,7 @@ def checkACL():
     # looks up information in the catalog:
     tables = GV.catalog.getCatalogTables()
 
-    for cat in sorted(tables):
+    for cat in sorted(tables, key=lambda table: table.getTableName()):
         checkTableACL(cat)
 # -------------------------------------------------------------------------------
 
@@ -2382,7 +2387,7 @@ def checkMissingEntry():
 def _checkAllTablesForMissingEntries():
     catalog_issues = {}
     tables = GV.catalog.getCatalogTables()
-    for catalog_table_obj in sorted(tables):
+    for catalog_table_obj in sorted(tables, key=lambda table: table.getTableName()):
         catalog_name = catalog_table_obj.getTableName()
         if catalog_name == "pg_description" or catalog_name == "pg_shdescription":
             continue
@@ -2416,7 +2421,7 @@ def checkTableMissingEntry(cat):
 
     # Skip catalogs without primary key
     if len(pkey) == 0:
-        logger.warn("[WARN] Skipped missing/extra entry check for %s" % catname)
+        logger.warning("[WARN] Skipped missing/extra entry check for %s" % catname)
         return
 
     castedPkey = cat.getPrimaryKey()
@@ -2536,7 +2541,7 @@ def checkAOSegVpinfo():
         thread = checkAOSegVpinfoThread(cfg, db_connection)
         thread.start()
         logger.debug('launching check thread %s for dbid %i' %
-                     (thread.getName(), dbid))
+                     (thread.name, dbid))
         threads.append(thread)
 
         if (i % GV.opt['-B']) == 0:
@@ -2625,7 +2630,7 @@ def checkInconsistentEntry():
     # looks up information in the catalog:
     tables = GV.catalog.getCatalogTables()
 
-    for cat in sorted(tables):
+    for cat in sorted(tables, key=lambda table: table.getTableName()):
         checkTableInconsistentEntry(cat)
 
 
@@ -2651,7 +2656,7 @@ def checkTableInconsistentEntry(cat):
 
     # Skip catalogs without primary key
     if pkey == []:
-        logger.warn("[WARN] Skipped cross consistency check for %s" %
+        logger.warning("[WARN] Skipped cross consistency check for %s" %
                     catname)
         return
 
@@ -2768,7 +2773,7 @@ def checkDuplicateEntry():
     # looks up information in the catalog:
     tables = GV.catalog.getCatalogTables()
 
-    for cat in sorted(tables):
+    for cat in sorted(tables, key=lambda table: table.getTableName()):
         ## pg_depend does not care about duplicates at the moment
         if cat == 'pg_depend':
             continue
@@ -2797,7 +2802,7 @@ def checkTableDuplicateEntry(cat):
 
     # Skip catalogs without primary key
     if pkey == []:
-        logger.warn("[WARN] Skipped duplicate check for %s" %
+        logger.warning("[WARN] Skipped duplicate check for %s" %
                     catname)
         return
 
@@ -3414,7 +3419,7 @@ def runAllChecks(run_tests):
         print_repair_issues(repair_dir_path)
 
     if GV.retcode >= ERROR_NOREPAIR:
-        logger.warn('[WARN]: unable to generate repairs for some issues')
+        logger.warning('[WARN]: unable to generate repairs for some issues')
     logger.info("Check complete")
 
 
@@ -4484,7 +4489,7 @@ def checkcatReport():
         par.reportAllIssues()
         if par not in graph:
             return
-        for child in sorted(graph[par]):
+        for child in sorted(graph[par], key=lambda obj: (obj.oid, obj.catname)):
             reportAllIssuesRecursive(child, graph)
 
     buildGraph()
@@ -4512,7 +4517,7 @@ def checkcatReport():
         else:
             myprint('Found a total of %d issue(s)' % total)
 
-        for par in sorted(GPObjectGraph):
+        for par in sorted(GPObjectGraph, key=lambda obj: (obj.oid, obj.catname)):
             if par.isTopLevel():
                 reportAllIssuesRecursive(par, GPObjectGraph)
         myprint('')

@@ -201,7 +201,7 @@ class GpRecoverSegmentProgram(object):
 
     def __displayRecoveryWarnings(self, mirrorBuilder):
         for warning in self._getRecoveryWarnings(mirrorBuilder):
-            self.logger.warn(warning)
+            self.logger.warning(warning)
 
     def _getRecoveryWarnings(self, mirrorBuilder):
         """
@@ -334,8 +334,8 @@ class GpRecoverSegmentProgram(object):
                 self.displayRecovery(mirrorBuilder, gpArray)
 
                 if self.__options.interactive:
-                    self.logger.warn("This operation will cancel queries that are currently executing.")
-                    self.logger.warn("Connections to the database however will not be interrupted.")
+                    self.logger.warning("This operation will cancel queries that are currently executing.")
+                    self.logger.warning("Connections to the database however will not be interrupted.")
                     if not userinput.ask_yesno(None, "\nContinue with segment rebalance procedure", 'N'):
                         raise UserAbortedException()
 

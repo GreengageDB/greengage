@@ -46,12 +46,18 @@ from __future__ import print_function
 from builtins import next
 from past.builtins import basestring
 from builtins import object
-import io
 import csv
 from datetime import date, datetime
 import re
 import sys
 import time
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 csvDelimeter = '|'
 
@@ -217,6 +223,8 @@ def FilterLogEntries(iterable,
 
     # Pull filtered lines out of the pipeline and yield them to caller
     for line in iterable:
+        if line is None:
+            break
         yield line
 
     # Display statistics if requested
@@ -280,7 +288,7 @@ class CsvFlatten(object):
 
     def __init__(self,iterable):
         self.source = iter(iterable)
-        self.buffer = io.StringIO()
+        self.buffer = StringIO()
         self.writer = csv.writer(self.buffer, delimiter=csvDelimeter, quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
     def __iter__(self):
@@ -351,9 +359,9 @@ class TimestampSpy(object):
     def __next__(self):
         try:
             item = next(self.source)
-        except StopIteration as e:
+        except StopIteration:
             self.eod = True
-            raise e
+            return None
         self.items += 1
 
         if isinstance(item, basestring):     # ungrouped input
@@ -378,12 +386,12 @@ class TimestampSpy(object):
         return item
 
     def str_range(self):
-        if self.maxstamp == '':
+        if not self.maxstamp:
             return None
         return (self.minstamp, self.maxstamp)
 
     def datetime_range(self):
-        if self.maxstamp == '':
+        if not self.maxstamp:
             return None
         minstruct = time.strptime(self.minstamp, '%Y-%m-%d %H:%M:%S')[:6]
         maxstruct = time.strptime(self.maxstamp, '%Y-%m-%d %H:%M:%S')[:6]
@@ -557,6 +565,8 @@ def TimestampInBounds(iterable, begin, end):
     # Fetch first item from input stream.
     source = iter(iterable)
     item = next(source)
+    if item is None:
+        return
 
     # If first item is a string, assume input consists of individual lines.
     # Yield lines which start with a timestamp within the given bounds, plus

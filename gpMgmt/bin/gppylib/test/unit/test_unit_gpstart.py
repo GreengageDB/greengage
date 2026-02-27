@@ -1,4 +1,3 @@
-import imp
 import os
 import sys
 
@@ -6,7 +5,7 @@ from mock import Mock, patch, call
 
 from gppylib.gparray import Segment, GpArray
 from gppylib.operations.startSegments import StartSegmentsResult
-from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
+from gppylib.test.unit.gp_unittest import GpTestCase, run_tests, load_module
 from gppylib.commands import gp
 from gppylib.commands.base import ExecutionError
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded, UserAbortedException
@@ -20,7 +19,7 @@ class GpStart(GpTestCase):
         #   import gpstart
         #   self.subject = gpstart
         gpstart_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpstart")
-        self.subject = imp.load_source('gpstart', gpstart_file)
+        self.subject = load_module('gpstart', gpstart_file)
         self.subject.logger = Mock(
             spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal', 'warning_to_file_only'])
 
@@ -238,7 +237,7 @@ class GpStart(GpTestCase):
         self.subject.logger.info.assert_any_call('Starting Master instance in admin mode')
         self.subject.logger.info.assert_any_call('Master Started...')
 
-        self.assertEquals(self.mock_gplog_log_to_file_only.call_count, 0)
+        self.assertEqual(self.mock_gplog_log_to_file_only.call_count, 0)
 
     def test_skip_checksum_validation_succeeds(self):
         sys.argv = ["gpstart", "-a", "--skip-heap-checksum-validation"]
@@ -302,8 +301,8 @@ class GpStart(GpTestCase):
         up, down = gpstart._prepare_segment_start()
 
         # The master and standby should not be accounted for in these lists.
-        self.assertItemsEqual(up, [primary1, mirror0])
-        self.assertItemsEqual(down, [primary0, mirror1])
+        self.assertEqualUnordered(up, [primary1, mirror0])
+        self.assertEqualUnordered(down, [primary0, mirror1])
 
     @patch("gppylib.commands.pg.PgControlData.run")
     @patch("gppylib.commands.pg.PgControlData.get_value", return_value="2")

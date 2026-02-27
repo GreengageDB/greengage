@@ -97,7 +97,7 @@ def runPSProcess(sleepInt=60):
         outfile = gzip.open(ps_file, 'w')
         open_files.append(outfile)
         while True:
-            outfile.write(datetime.now().strftime("\n\n>>>%y:%m:%d:%H:%M:%S<<<\n"))
+            outfile.write(datetime.now().strftime("\n\n>>>%y:%m:%d:%H:%M:%S<<<\n").encode('utf-8'))
             cmd = subprocess.Popen(ps_cmd, shell=True, stdout=subprocess.PIPE)
             outfile.writelines(cmd.stdout)
             outfile.flush()

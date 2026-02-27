@@ -24,7 +24,7 @@ RUN set -eux; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Install allure-behave for behave tests
-    python -m pip install --no-cache-dir allure-behave==2.4.0 && \
+    python -m pip install --no-cache-dir allure-behave==2.4.0 mock==3.0.5 && \
 # Install pytest for gpload test
     python -m pip install --no-cache-dir -r pytest_requirement.txt && \
     rm pytest_requirement.txt && \

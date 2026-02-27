@@ -198,7 +198,7 @@ class GpSegStatusProgram(object):
                     
                 outputThisSeg[statusRequest] = data
 
-        status = '\nSTATUS_RESULTS:' + base64.urlsafe_b64encode(pickle.dumps(output))
+        status = '\nSTATUS_RESULTS:' + base64.urlsafe_b64encode(pickle.dumps(output)).decode('ascii')
         logger.info(status)
 
     def cleanup(self):

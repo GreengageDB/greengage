@@ -209,7 +209,7 @@ def run(cmd):
             valid for the second parameter of open().
     """
     p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    out = p.communicate()[0]
+    out = p.communicate()[0].decode('utf-8')
     ret = []
     ret.append(out)
     rc = False if p.wait() else True
