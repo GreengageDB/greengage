@@ -237,7 +237,6 @@ def main():
 
     # setup the connection info tuple with options
     connectionInfo = (host, port, user, db)
-    connectionString = ':'.join([host, port, db, user, '', pgoptions, ''])
 
     num_segments = 0
     with closing(pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions)) as connection:
