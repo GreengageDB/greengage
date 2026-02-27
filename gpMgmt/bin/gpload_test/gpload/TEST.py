@@ -215,7 +215,7 @@ def read_diff(ifile, outputPath):
         return diff.read()
 
 def write_config_file(database='gptest',user='',host='localhost',port='',table='lineitem',file='lineitem.tbl.small'):
-    if (not user or user == '') and (not os.environ.get('PGUSER') or os.environ.get('PGUSER') == ''):
+    if (not user) and (not os.environ.get('PGUSER')):
         user = os.environ.get('USER')
 
     f = open(configPath + '/config_file','w')

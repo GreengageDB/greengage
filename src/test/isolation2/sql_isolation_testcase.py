@@ -20,7 +20,6 @@ from __future__ import print_function
 
 from builtins import range
 from builtins import object
-import six
 
 import pygresql.pg
 import pty
@@ -38,6 +37,12 @@ import socket
 from optparse import OptionParser
 import traceback
 import select
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
+
 
 def is_digit(n):
     try:
@@ -542,7 +547,7 @@ class SQLIsolationExecutor(object):
             """
             try:
                 r = self.con.query(command)
-                if r and isinstance(r, six.string_types):
+                if r and isinstance(r, string_types):
                     echo_content = command[:-1].partition(" ")[0].upper()
                     return "%s %s" % (echo_content, r)
                 elif r is not None:

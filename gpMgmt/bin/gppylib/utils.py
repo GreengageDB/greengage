@@ -451,7 +451,7 @@ class TableLogger(object):
                 msg = "".join(outLine)
 
                 if doWarn:
-                    self.logger.warn(msg)
+                    self.logger.warning(msg)
                 else:
                     self.logger.info("   " + msg) # add 3 so that lines will line up even with the INFO and WARNING stuff on front
 

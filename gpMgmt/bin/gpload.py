@@ -776,7 +776,7 @@ class CatThread(threading.Thread):
                     # Windows select does not support select on non-file fd's, so we can use the lock fix. Deadlock is possible here.
                     # We need to look into the Python windows module to see if there is another way to do this in Windows.
                     line = self.fd.readline()
-                    if line=='':
+                    if not line:
                         break
                     self.gpload.log(self.gpload.DEBUG, 'gpfdist: ' + line.strip('\n'))
             else:
@@ -792,7 +792,7 @@ class CatThread(threading.Thread):
                         self.theLock.release()
                     else:
                         continue
-                    if line=='':
+                    if not line:
                         break
                     self.gpload.log(self.gpload.DEBUG, 'gpfdist: ' + line.strip('\n'))
         except Exception as e:

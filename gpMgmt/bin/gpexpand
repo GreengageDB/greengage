@@ -1970,9 +1970,9 @@ class gpexpand(object):
 
             c.close()
 
-            self.logger.warn(unexpanded_tables_text)
-            self.logger.warn('These tables will have to be expanded manually by setting')
-            self.logger.warn('the distribution policy using the ALTER TABLE command.')
+            self.logger.warning(unexpanded_tables_text)
+            self.logger.warning('These tables will have to be expanded manually by setting')
+            self.logger.warning('the distribution policy using the ALTER TABLE command.')
             if not ask_yesno('', "Are you sure you want to drop the expansion schema?", 'N'):
                 logger.info("User Aborted. Exiting...")
                 sys.exit(0)
