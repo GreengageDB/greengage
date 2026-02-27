@@ -14,8 +14,11 @@ so that it can be integrated with Pulse.
 __unittest = True
 
 import unittest
-from unittest.main import USAGE_AS_MAIN
 from gppylib import gpMgmttest
+import sys
 
-unittest.TestProgram.USAGE = USAGE_AS_MAIN
+if sys.version_info[0] == 2:
+    from unittest.main import USAGE_AS_MAIN
+    unittest.TestProgram.USAGE = USAGE_AS_MAIN
+
 unittest.TestProgram(module=None, testRunner=gpMgmttest.GpMgmtTestRunner)

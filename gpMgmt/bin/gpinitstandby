@@ -412,7 +412,7 @@ def create_standby(options):
         # the operation.
         logger.error('Failed to create standby')
         if g_init_standby_state != INIT_STANDBY_STATE_NOT_STARTED:
-            logger.warn('Trying to rollback changes that have been made...')
+            logger.warning('Trying to rollback changes that have been made...')
 
         if g_init_standby_state == INIT_STANDBY_STATE_UPDATE_CATALOG:
 

@@ -44,7 +44,7 @@ def _getFileInfo(coreFile):
 
 
 def _isCore(fileCmdOutput):
-    if fileCmdOutput.find('LSB core file') is -1:
+    if fileCmdOutput.find('LSB core file') == -1:
         return False
     return True
 
@@ -159,7 +159,7 @@ def _getLibraryListWithGDB(coreFile, binary):
 
 def _copyFilePath(src, dst):
     srcDir = os.path.dirname(src)
-    if srcDir.find('/') is 0:
+    if srcDir.find('/') == 0:
         srcDir = srcDir[1:]
     dstDir = os.path.join(dst, srcDir)
     if not os.path.exists(dstDir):
@@ -260,7 +260,7 @@ def packCoreFile(coreFile, binary):
 
         libraries = _getLibraryListWithGDB(coreFile, binary)
 
-        if libraries is False:
+        if not libraries:
             libraries = _getLibraryListWithLDD(binary)
 
         for lib in libraries:

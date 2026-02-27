@@ -28,7 +28,11 @@ from builtins import map
 from builtins import range
 from builtins import object
 import sys
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 if sys.hexversion<0x2040400:
     sys.stderr.write("gpload needs python 2.4.4 or higher\n")
@@ -794,8 +798,8 @@ class CatThread(threading.Thread):
         except Exception as e:
             # close fd so that not block the worker thread because of stdout/stderr pipe not finish/closed.
             self.fd.close()
-            sys.stderr.write("\n\nWarning: gpfdist log halt because Log Thread '%s' got an exception: %s \n" % (self.getName(), str(e)))
-            self.gpload.log(self.gpload.WARN, "gpfdist log halt because Log Thread '%s' got an exception: %s" % (self.getName(), str(e)))
+            sys.stderr.write("\n\nWarning: gpfdist log halt because Log Thread '%s' got an exception: %s \n" % (self.name, str(e)))
+            self.gpload.log(self.gpload.WARN, "gpfdist log halt because Log Thread '%s' got an exception: %s" % (self.name, str(e)))
             raise
 
 class Progress(threading.Thread):
@@ -1287,7 +1291,7 @@ class gpload(object):
                 (e.problem, e.problem_mark.line))
         except yaml.reader.ReaderError as e:
             es = ""
-            if isinstance(e.character, six.string_types):
+            if isinstance(e.character, string_types):
                 es = "'%s' codec can't decode byte #x%02x: %s position %d" % \
                         (e.encoding, ord(e.character), e.reason,
                          e.position)
@@ -1332,8 +1336,6 @@ class gpload(object):
             str = '|'.join(
                        [datetime.datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
                         self.elevel2str(level), a]) + '\n'
-
-            str = str.encode('utf-8')
         except Exception as e:
             # log even if contains non-utf8 data and pass this exception
             self.logfile.write("\nWarning: Log() threw an exception: %s \n" % (e))
@@ -1727,7 +1729,7 @@ class gpload(object):
                 readLock.acquire()
                 line = a.stdout.readline()
                 readLock.release()
-                if line=='':
+                if not line:
                     self.log(self.ERROR,'failed to start gpfdist: ' +
                              'gpfdist command line: ' + ' '.join(popenList))
 
@@ -2414,8 +2416,8 @@ class gpload(object):
             self.formatOpts += "null '' "
             self.reuse_tbl_Opts += "null '' "
         else:
-            self.formatOpts += "%snull%s%s " % (self.custom_contan_pre, self.custom_contan, quote_no_slash("\N"))
-            self.reuse_tbl_Opts += "null %s " % (quote_no_slash("\N"))
+            self.formatOpts += "%snull%s%s " % (self.custom_contan_pre, self.custom_contan, quote_no_slash("\\N"))
+            self.reuse_tbl_Opts += "null %s " % (quote_no_slash("\\N"))
 
         esc = self.getconfig('gpload:input:escape', None, None)
         if esc:

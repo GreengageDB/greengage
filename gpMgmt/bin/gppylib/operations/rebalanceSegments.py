@@ -123,10 +123,10 @@ class GpSegmentRebalanceOperation(object):
             allSegmentsStopped = (failed_count == 0)
 
             if not allSegmentsStopped:
-                self.logger.warn("%d segments failed to stop.  A full rebalance of the")
-                self.logger.warn("system is not possible at this time.  Please check the")
-                self.logger.warn("log files, correct the problem, and run gprecoverseg -r")
-                self.logger.warn("again.")
+                self.logger.warning("%d segments failed to stop.  A full rebalance of the")
+                self.logger.warning("system is not possible at this time.  Please check the")
+                self.logger.warning("log files, correct the problem, and run gprecoverseg -r")
+                self.logger.warning("again.")
                 self.logger.info("gprecoverseg will continue with a partial rebalance.")
 
             pool.empty_completed_items()

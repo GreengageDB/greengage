@@ -55,9 +55,6 @@ class GpMirrorBuildCalculator(object):
         self.__nextDbId = max([seg.getSegmentDbId() for seg in gpArray.getDbList()]) + 1
         self.__minPrimaryPortOverall = min([seg.getSegmentPort() for seg in self.__primaries])
 
-        def comparePorts(left, right):
-            return cmp(left.getSegmentPort(), right.getSegmentPort())
-
         self.__mirrorsAddedByHost = {}  # map hostname to the # of mirrors that have been added to that host
         self.__primariesUpdatedToHaveMirrorsByHost = {}  # map hostname to the # of primaries that have been attached to mirrors for that host
         self.__primaryPortBaseByHost = {}  # map hostname to the lowest port number in-use by a primary on that host
@@ -65,17 +62,17 @@ class GpMirrorBuildCalculator(object):
             self.__primaryPortBaseByHost[hostName] = min([seg.getSegmentPort() for seg in segments])
             self.__mirrorsAddedByHost[hostName] = 0
             self.__primariesUpdatedToHaveMirrorsByHost[hostName] = 0
-            segments.sort(comparePorts)
+            segments.sort(key=lambda seg: seg.getSegmentPort())
 
         self.__mirrorPortOffset = options.mirrorOffset
         self.__mirrorDataDirs = mirrorDataDirs
 
         standard, message = self.__gpArray.isStandardArray()
         if standard == False:
-            logger.warn('The current system appears to be non-standard.')
-            logger.warn(message)
-            logger.warn('gpaddmirrors will not be able to symmetrically distribute the new mirrors.')
-            logger.warn('It is recommended that you specify your own input file with appropriate values.')
+            logger.warning('The current system appears to be non-standard.')
+            logger.warning(message)
+            logger.warning('gpaddmirrors will not be able to symmetrically distribute the new mirrors.')
+            logger.warning('It is recommended that you specify your own input file with appropriate values.')
             if self.__options.interactive and not ask_yesno('', "Are you sure you want to continue with this gpaddmirrors session?", 'N'):
                 logger.info("User Aborted. Exiting...")
                 sys.exit(0)

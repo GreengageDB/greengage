@@ -106,7 +106,7 @@ def impl(context, view_name, table_name):
 def impl(context, qualified_table):
     found, filename = table_found_in_state_file(context.dbname, qualified_table)
     if not found:
-        if filename == '':
+        if not filename:
             assert False, "no state files found for database %s" % context.dbname
         else:
             assert False, "table %s not found in state file %s" % (qualified_table, os.path.basename(filename))
@@ -135,7 +135,7 @@ def impl(context, expected_result, dbname):
 def impl(context, col_name_list, qualified_table):
     found, column, filename = column_found_in_state_file(context.dbname, qualified_table, col_name_list)
     if not found:
-        if filename == '':
+        if not filename:
             assert False, "no column state file found for database %s" % context.dbname
         else:
             assert False, "column(s) %s of table %s not found in state file %s" % (
@@ -147,7 +147,7 @@ def impl(context, col_name_list, qualified_table):
 def impl(context, col_name, qualified_table):
     found, column, filename = column_found_in_state_file(context.dbname, qualified_table, col_name)
     if found:
-        if filename == '':
+        if not filename:
             assert False, "no column state file found for database %s" % context.dbname
         else:
             assert False, "unexpected column %s of table %s found in state file %s" % (

@@ -251,7 +251,7 @@ class Configuration(object):
                                 % (oldAddress, str(oldPort), oldDataDirectory))
                     inPlace = (oldAddress == newAddress and oldDataDirectory == newDataDirectory)
                     if inPlace and oldPort == newPort:
-                        logger.warn("input file %s contained request to move a mirror with identical attributes (%s, %s, %s)"
+                        logger.warning("input file %s contained request to move a mirror with identical attributes (%s, %s, %s)"
                                     % (inputFile, newAddress, str(newPort), newDataDirectory))
                     oldMirror = Mirror(address=oldAddress
                                        , port=oldPort

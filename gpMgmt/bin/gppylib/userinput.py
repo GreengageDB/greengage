@@ -13,7 +13,7 @@ logger=gplog.get_default_logger()
 
 #################
 def validate_yesno( input,default ):
-    if input == '':
+    if not input:
         return True if default.upper() == 'Y' else False
     elif input.upper().rstrip() in ('Y', 'YES'):
         return True
@@ -28,7 +28,7 @@ def ask_yesno(bg_info,msg,default):
 
 #################
 def validate_list(input,default):
-    if input == '':
+    if not input:
         return default
     return input.split(',')
     
@@ -39,7 +39,7 @@ def ask_list(bg_info,msg,default):
  
 #################
 def validate_int(input,default,min,max):
-    if input == '':
+    if not input:
         return default    
     numval=int(input)
     
@@ -53,7 +53,7 @@ def ask_int(bg_info,msg,help,default,min,max):
 
 #################     
 def validate_string(input,default,listVals):
-    if input == '':
+    if not input:
         return default    
     
     for val in listVals:

@@ -14,7 +14,6 @@ from xml.dom import Node
 
 from gppylib.gplog import *
 from socket import gethostbyaddr
-import six
 
 logger = get_default_logger()
 
@@ -160,7 +159,7 @@ def openAnything(source):
     
     # treat source as string
     import io
-    return io.StringIO(six.u(source))
+    return io.StringIO(source)
 def getOs():
     dist=None
     fdesc = None
@@ -345,7 +344,7 @@ def parseKeyColonValueLines(str):
             continue
         colon = line.find(":")
         if colon == -1:
-            logger.warn("Error parsing data, no colon on line %s" % line)
+            logger.warning("Error parsing data, no colon on line %s" % line)
             return None
         key = line[:colon]
         value = line[colon+1:]
@@ -561,3 +560,36 @@ def validateHostnameAddress(hostname, address):
                 address, hostname, resolved_address_list))
         return False
     return True
+
+def get_dist_info():
+    dist_family = None
+    major_version = None
+
+    def get_value(line):
+        line_info = line.split("=")
+        if len(line_info) == 2:
+            return line_info[1].strip(' "\n')
+        return None
+
+    def get_major_version(line):
+        value = get_value(line)
+        if value is None:
+            return None
+        # match first number as major version
+        groups = re.match(r"(\d+)", value)
+        if groups and groups.lastindex >= 1:
+            return int(groups.group(1))
+        else:
+            return None
+
+    with open('/etc/os-release') as f:
+        for line in f:
+            if line.startswith("ID=") and dist_family is None:
+                dist_family = get_value(line)
+            elif line.startswith("ID_LIKE="):
+                dist_family = get_value(line)
+            elif line.startswith("VERSION=") and major_version is None:
+                major_version = get_major_version(line)
+            elif line.startswith("VERSION_ID="):
+                major_version = get_major_version(line)
+    return dist_family, major_version
