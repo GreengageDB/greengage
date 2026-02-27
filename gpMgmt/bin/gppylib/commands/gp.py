@@ -60,7 +60,7 @@ RECOVERY_REWIND_APPNAME = '__gprecoverseg_pg_rewind__'
 PGDATABASE_FOR_COMMON_USE= 'postgres'
 
 def get_postmaster_pid_locally(datadir):
-    cmdStr = "ps -p ""$(head -1 %s/postmaster.pid)"" -o comm= -o pid=" % (datadir)
+    cmdStr = "ps -p \"$(head -1 %s/postmaster.pid)\" -o comm= -o pid=" % (datadir)
     name = "get postmaster"
     cmd = Command(name, cmdStr)
     try:
@@ -72,7 +72,7 @@ def get_postmaster_pid_locally(datadir):
         return -1
 
 def getPostmasterPID(hostname, datadir):
-    cmdStr="echo 'START_CMD_OUTPUT';ps -p ""\\$(head -1 %s/postmaster.pid)"" -o comm= -o pid=" % (datadir)
+    cmdStr="echo 'START_CMD_OUTPUT';ps -p \"\\$(head -1 %s/postmaster.pid)\" -o comm= -o pid=" % (datadir)
     name="get postmaster pid"
     cmd=Command(name,cmdStr,ctxt=REMOTE,remoteHost=hostname)
     try:
