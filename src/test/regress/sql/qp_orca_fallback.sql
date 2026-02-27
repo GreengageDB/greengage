@@ -131,3 +131,17 @@ reset optimizer_enable_orderedagg;
 
 -- Orca should fallback if a function in 'from' clause uses 'WITH ORDINALITY'
 SELECT * FROM jsonb_array_elements('["b", "a"]'::jsonb) WITH ORDINALITY;
+
+-- Orca should fallback if a hash distribution expression does not have an opfamily.
+-- (array types does not have legacy opfamilies)
+-- create table with legacy hash distr.
+-- start_ignore
+DROP TABLE IF EXISTS t_legacy;
+-- end_ignore
+SET gp_use_legacy_hashops=1;
+CREATE TABLE t_legacy (i INT, arr INT[]) DISTRIBUTED BY (i);
+
+EXPLAIN (COSTS OFF) SELECT * FROM t_legacy INTERSECT ALL (SELECT * FROM t_legacy);
+
+DROP TABLE t_legacy;
+RESET gp_use_legacy_hashops;
