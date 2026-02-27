@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import psutil
 import shutil
 import tempfile
 import unittest
@@ -21,9 +22,7 @@ class GpCommandTestCase(unittest.TestCase):
             ).fetchall()
 
         for port, datadir in result:
-            try:
-                os.kill(port, 0)
-            except OSError:
+            if not psutil.pid_exists(port):
                 # Process with PID as port number doesn't exists
                 # use it for test
                 self.port = port
