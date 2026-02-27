@@ -364,9 +364,9 @@ class GpSystemStateProgram(object):
 
             logger.info("-------------------------------------------------------------" )
             if numMirrorsActingAsPrimaries > 0:
-                logger.warn( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
+                logger.warning( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
             if numUnsynchronized > 0:
-                logger.warn("%s primary segment(s) are not synchronized" % numUnsynchronized)
+                logger.warning("%s primary segment(s) are not synchronized" % numUnsynchronized)
 
         else:
             logger.info("-------------------------------------------------------------" )
@@ -433,16 +433,16 @@ class GpSystemStateProgram(object):
 
             logger.info("-------------------------------------------------------------" )
             if numMirrorsActingAsPrimaries > 0:
-                logger.warn( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
+                logger.warning( "%s segment(s) configured as mirror(s) are acting as primaries" % numMirrorsActingAsPrimaries )
             if numFailedMirrors > 0:
-                logger.warn( "%s segment(s) configured as mirror(s) have failed" % numFailedMirrors )
+                logger.warning( "%s segment(s) configured as mirror(s) have failed" % numFailedMirrors )
             if numUnsynchronizedMirrors > 0:
-                logger.warn( "%s mirror segment(s) acting as primaries are not synchronized" % numUnsynchronizedMirrors)
+                logger.warning( "%s mirror segment(s) acting as primaries are not synchronized" % numUnsynchronizedMirrors)
 
         else:
-            logger.warn("-------------------------------------------------------------" )
-            logger.warn( "Mirror not used")
-            logger.warn("-------------------------------------------------------------" )
+            logger.warning("-------------------------------------------------------------" )
+            logger.warning( "Mirror not used")
+            logger.warning("-------------------------------------------------------------" )
 
         return exitCode
 
@@ -714,10 +714,10 @@ class GpSystemStateProgram(object):
 
     def __addClusterDownWarning(self, gpArray, gpStateData):
         if gpStateData.isClusterProbablyDown(gpArray):
-            logger.warn("*****************************************************" )
-            logger.warn("DATABASE IS PROBABLY UNAVAILABLE" )
-            logger.warn("Review Instance Status in log file or screen output for more information" )
-            logger.warn("*****************************************************" )
+            logger.warning("*****************************************************" )
+            logger.warning("DATABASE IS PROBABLY UNAVAILABLE" )
+            logger.warning("Review Instance Status in log file or screen output for more information" )
+            logger.warning("*****************************************************" )
 
     def __getSegmentStatusColumns(self):
         return [
@@ -962,10 +962,10 @@ class GpSystemStateProgram(object):
         self.__addClusterDownWarning(gpArray, data)
 
         if hasWarnings:
-            logger.warn("*****************************************************" )
-            logger.warn("Warnings have been generated during status processing" )
-            logger.warn("Check log file or review screen output" )
-            logger.warn("*****************************************************" )
+            logger.warning("*****************************************************" )
+            logger.warning("Warnings have been generated during status processing" )
+            logger.warning("Check log file or review screen output" )
+            logger.warning("*****************************************************" )
 
         return 1 if hasWarnings else 0
 
@@ -1485,7 +1485,7 @@ class GpSystemStateProgram(object):
                         dbIdToVersion[seg.getSegmentDbId()] = version
                         uniqueVersions[version] = True
             else:
-                logger.warn(warning)
+                logger.warning(warning)
 
         # print the list of all segments and warnings about trouble
         tabLog = TableLogger().setWarnWithArrows(True)
@@ -1502,11 +1502,11 @@ class GpSystemStateProgram(object):
         tabLog.outputTable()
 
         if len(uniqueVersions) > 1:
-            logger.warn("Versions for some segments do not match.  Review table above for details.")
+            logger.warning("Versions for some segments do not match.  Review table above for details.")
 
         hadFailures = len(dbIdToVersion) != len(segmentsAndMaster)
         if hadFailures:
-            logger.warn("Unable to retrieve version data from all segments.  Review table above for details.")
+            logger.warning("Unable to retrieve version data from all segments.  Review table above for details.")
 
         if len(uniqueVersions) == 1 and not hadFailures:
             # if we got data from all segments then we are confident they are all the same version

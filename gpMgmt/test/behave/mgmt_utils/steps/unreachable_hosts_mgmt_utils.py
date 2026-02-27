@@ -76,7 +76,7 @@ def _blackhole_route_helper(disconnect_host, hosts, disconnect=False):
     cmd = "cat /etc/hosts | grep {} | head -1 ".format(disconnect_host)
     cmd += "| awk '{print $1}'"
     disconnect_addr = subprocess.check_output(["bash", "-c", cmd])
-    disconnect_addr = disconnect_addr.strip()
+    disconnect_addr = disconnect_addr.decode('utf-8').strip()
 
     for host in hosts:
         if host == disconnect_host:
@@ -114,13 +114,7 @@ def impl(context, action, env):
     else:
         cmdstr = "echo '{} {}' | sudo tee -a /etc/ssh/sshd_config".format("AcceptEnv", env)
 
-    # if it is a centos6 machine, use service command to restart sshd
-    os, version, _ = platform.linux_distribution()
-    major_version = version.split('.')[0].strip()
-    if 'centos' in os.lower() and '6' == major_version:
-            cmds = [cmdstr, "sudo service sshd restart"]
-    else:
-        cmds = [cmdstr, "sudo service ssh restart"]
+    cmds = [cmdstr, "sudo service ssh restart"]
 
     hosts = GpArray.initFromCatalog(dbconn.DbURL()).getHostList()
     for host in hosts:

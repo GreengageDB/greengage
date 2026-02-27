@@ -162,7 +162,7 @@ class Guc(object):
 
         elif self.name == 'unix_socket_permissions':
             if newval[0] != '0':
-                LOGGER.warn(
+                LOGGER.warning(
                     'Permission not entered in octal format.It was interpreted as Decimal.  %s in Octal = 0%s' % (
                         newval, int(newval, 8)))
         elif self.name == "gp_default_storage_options":
@@ -550,5 +550,5 @@ if __name__ == '__main__':
     try:
         do_main()
     except Exception as err:
-        print(err.message)
+        print(str(err))
         sys.exit(1)

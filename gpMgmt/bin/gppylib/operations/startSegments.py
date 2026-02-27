@@ -245,5 +245,5 @@ class StartSegmentsOperation(object):
 
             hostData["dbsByPort"][db.getSegmentPort()] = dbData
 
-        return base64.urlsafe_b64encode(pickle.dumps(hostData))
+        return base64.urlsafe_b64encode(pickle.dumps(hostData)).decode('ascii')
 

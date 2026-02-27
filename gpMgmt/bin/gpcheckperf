@@ -58,7 +58,7 @@ if GPHOME is None:
     sys.exit('Please set GPHOME environment variable')
 
 USER = os.getenv('USER')
-if USER is None or USER is ' ':
+if USER is None or USER == ' ':
     sys.exit('Please set USER environment variable')
 
 _SCP_ENABLED = True
@@ -129,7 +129,7 @@ def gpscp(src, dst):
     if GV.opt['-v']:
         print('[Info]', strcmd(c))
     p = subprocess.Popen(c, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    out = p.stdout.read(-1)
+    out = p.stdout.read(-1).decode('utf-8')
     rc = p.wait()
     if rc:
         sys.exit('[Error] command failed: gpscp {0} =:{1} with output: {2}'.format(src, dst, out))
@@ -166,7 +166,7 @@ def gpsync(src, dst):
 
     for p in proc:
         for line in p.stdout.readlines():
-            print('[Out {0}] {1}' .format(p.x_peer, line))
+            print('[Out {0}] {1}' .format(p.x_peer, line.decode('utf-8')))
         rc = p.wait()
         if rc:
             sys.exit('[Error] command failed for host:{0} cmd:{1} with status:{2} error: "{3}"'
@@ -353,7 +353,7 @@ def run(cmd):
         if GV.opt['-v']:
             print('[Info]', cmd)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-        out = p.stdout.read(-1)
+        out = p.stdout.read(-1).decode('utf-8')
         ok = p.wait()
     except KeyboardInterrupt:
         raise
@@ -471,7 +471,7 @@ def copyExecOver(fname):
 
 def parseMultiDDResult(out):
     # parse output of "time -p"
-    out = io.StringIO(out.decode('utf-8'))
+    out = io.StringIO(out)
     result = {}
     bytes = 0
     for line in out:
@@ -547,7 +547,7 @@ def runStreamTest():
     (ok, out) = gpssh(cmd, GV.opt['-V'])
     if not ok:
         sys.exit('[Error] command failed: %s with output: %s' % (cmd, out))
-    out = io.StringIO(out.decode('utf-8'))
+    out = io.StringIO(out)
     result = {}
     for line in out:
         i = line.find(']')
@@ -621,7 +621,7 @@ def reapNetperfTest(proc, x, y):
     if proc:
         try:
             rc = proc.wait()
-            out = proc.stdout.read(-1)
+            out = proc.stdout.read(-1).decode('utf-8')
             ok = not killProc(proc)
             proc = None
         except KeyboardInterrupt as ki:
@@ -631,7 +631,7 @@ def reapNetperfTest(proc, x, y):
         finally:
             proc = None
 
-    if GV.opt['-v'] and out and out != '':
+    if GV.opt['-v'] and out:
         print('[Info]', out)
     if out and out.find('Permission denied') >= 0 and out.find('publickey') >= 0:
         if not GV.opt['-v']:
@@ -643,7 +643,7 @@ def reapNetperfTest(proc, x, y):
         print('[Warning] netperf failed on %s -> %s' % (x, y))
         return []
 
-    for line in io.StringIO(out.decode('utf-8')):
+    for line in io.StringIO(out):
         line = line.split()
         if len(line) != 5:
             continue
@@ -828,7 +828,7 @@ def get_host_map(hostlist):
         try:
             if GV.opt['-v']: print('[Info]', strcmd(cmd))
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            out = proc.stdout.read(-1)
+            out = proc.stdout.read(-1).decode('utf-8')
             rc = proc.wait()
             if rc:
                 raise Exception('ssh error with the following command:\n%s with output: %s' % (cmd, out))

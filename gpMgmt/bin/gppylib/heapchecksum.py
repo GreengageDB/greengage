@@ -122,4 +122,4 @@ class HeapChecksum(object):
         logger: log only if a logger is provided
         """
         if self.logger:
-            self.logger.warn(message)
+            self.logger.warning(message)

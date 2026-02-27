@@ -32,7 +32,7 @@ class GpPkgProgramTestCase(GpTestCase):
 
         parser = GpPkgProgram.create_parser()
         options, args = parser.parse_args()
-        with self.assertRaisesRegexp(Exception, "Package sample has not been installed"):
+        with self.assertRaisesRe(Exception, "Package sample has not been installed"):
             self.subject = GpPkgProgram(options, args)
             self.subject.run()
 
@@ -69,7 +69,7 @@ class GpPkgProgramTestCase(GpTestCase):
         parser = GpPkgProgram.create_parser()
         options, args = parser.parse_args()
         self.subject = GpPkgProgram(options, args)
-        with self.assertRaisesRegexp(Exception, "Remove request 'sampl' too broad. "
+        with self.assertRaisesRe(Exception, "Remove request 'sampl' too broad. "
                                                 r"Multiple packages match remove request: \( sample.gppkg, sample2.gppkg \)."):
             self.subject.run()
 

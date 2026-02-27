@@ -10,6 +10,15 @@ import stat
 import time
 import glob
 import shutil
+import sys
+
+if sys.version_info[0] == 3:
+    string_types = str
+    binary_type = bytes
+else:
+    string_types = basestring
+    binary_type = str
+
 try:
     import subprocess32 as subprocess
 except:
@@ -139,7 +148,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, str):
+    if isinstance(msg, string_types) and isinstance(actual, binary_type):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):
@@ -159,7 +168,7 @@ def check_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) is bytes:
+    if isinstance(actual, binary_type):
         actual = actual.decode()
     if not pat.search(actual):
         err_str = "Expected error string '%s' and found: '%s'" % (err_msg, actual)
@@ -171,7 +180,7 @@ def check_string_not_present_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) is bytes:
+    if type(actual) == bytes:
         actual = actual.decode()
     if pat.search(actual):
         err_str = "Did not expect error string '%s' but found: '%s'" % (err_msg, actual)

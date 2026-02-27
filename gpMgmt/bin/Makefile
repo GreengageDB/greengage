@@ -143,8 +143,6 @@ LOGILAB_ASTNG_DIR=logilab-astng-$(LOGILAB_ASTNG_VERSION)
 LOGILAB_COMMON_VERSION=0.50.1
 LOGILAB_COMMON_DIR=logilab-common-$(LOGILAB_COMMON_VERSION)
 PYLINT_PYTHONPATH=$(PYLIB_DIR):$(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/
-MOCK_VERSION=1.0.1
-MOCK_DIR=mock-$(MOCK_VERSION)
 SETUP_TOOLS_VERSION=36.6.0
 PARSE_VERSION=1.8.2
 ARG_PARSE_VERSION=1.2.1
@@ -170,9 +168,6 @@ pylint:
 	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/__init__.py
 	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/logilab/__init__.py
 
-mockinstall:
-	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
-	python -m pip install $(PYLIB_SRC_EXT)/$(MOCK_DIR).tar.gz; \
 
 PYTHON_FILES=`grep -l --exclude=Makefile --exclude=gplogfilter "/bin/env python" *`\
 			 `grep -l "/bin/env python" $(SRC)/../sbin/*`\
@@ -190,16 +185,16 @@ check-regress:
 	@PYTHONPATH=$(SRC):$(SRC)/ext:$(PYTHONPATH) \
 	gppylib/gpunit discover --verbose -s gppylib -p "test_regress*.py" 2> $(SRC)/../gpMgmt_testregress_results.log 1> $(SRC)/../gpMgmt_testregress_output.log
 
-check: mockinstall
+check:
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
-	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
+	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
-	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
+	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
 
 unitdevel:
 	@echo "Running pure unit tests..."
-	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
+	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	    python -m unittest discover --verbose -s $(SRC)/gppylib -p "test_unit*.py"
 
 

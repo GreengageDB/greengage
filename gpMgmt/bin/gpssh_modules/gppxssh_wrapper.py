@@ -36,7 +36,7 @@ class PxsshWrapper(pxssh.pxssh):
         num_retries = self.sync_retries
         retry_attempt = 0
         success = False
-        while (not success) and retry_attempt <= num_retries:
+        while (not success) and num_retries and retry_attempt <= num_retries:
             # each retry will get an exponentially longer timeout interval
             sync_multiplier_for_this_retry = sync_multiplier * (RETRY_EXPONENT ** retry_attempt)
             start = time.time()
@@ -84,7 +84,7 @@ class PxsshWrapper(pxssh.pxssh):
             try:
                 prompt = self.read_nonblocking(size=1, timeout=0.01)
                 if DEBUG_VERBOSE_PRINTING:
-                    sys.stderr.write(prompt)
+                    sys.stderr.write(prompt.decode())
             except TIMEOUT:
                 break
         if DEBUG_VERBOSE_PRINTING:
@@ -106,7 +106,7 @@ class PxsshWrapper(pxssh.pxssh):
             sys.stderr.write('\nFinished wait_for_any_response() at %s\n' % datetime.now())
 
     def is_prompt_bad(self, prompt_output):
-        return len(prompt_output) == 0 or prompt_output == CRNL
+        return len(prompt_output) == 0 or prompt_output == CRNL.encode()
 
     def are_prompts_similar(self, prompt_one, prompt_two):
         if self.is_prompt_bad(prompt_one) or self.is_prompt_bad(prompt_two):

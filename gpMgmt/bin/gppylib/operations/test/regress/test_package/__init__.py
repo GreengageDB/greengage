@@ -18,18 +18,20 @@ from gppylib.operations import Operation
 from gppylib.operations.unix import CheckFile, CheckRemoteFile, RemoveRemoteFile
 from gppylib.operations.package import dereference_symlink, GpScp
 from gppylib.commands.base import Command, REMOTE
+from gppylib.utils import get_dist_info
 
 def get_os():
-    dist, release, _ = platform.dist()
-    major_release = release.partition('.')[0]
+    dist_family, major_release = get_dist_info()
 
     os_string = ''
-    if dist.lower() == 'redhat':
+    if 'rhel' in dist_family:
         os_string += 'rhel'
-    elif dist.lower() == 'suse':
+    elif 'suse' in dist_family:
         os_string += 'suse'
+    elif 'debian' in dist_family:
+        os_string += 'debian'
 
-    os_string += major_release
+    os_string += str(major_release)
 
     return os_string
 
@@ -461,7 +463,7 @@ class GppkgTestCase(unittest.TestCase):
         @param rpm_package_name: Name of rpm package of the form <name>-<version>-<release>
         @type rpm_package_name: str
         """
-        with self.assertRaisesRegexp(ExecutionError, "%s is not installed" % rpm_package_name):
+        with self.assertRaisesRe(ExecutionError, "%s is not installed" % rpm_package_name):
             run_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE))
 
     def check_remote_rpm_install(self, rpm_package_name, host):
@@ -485,7 +487,7 @@ class GppkgTestCase(unittest.TestCase):
         @param host: Remote host
         @type host: str
         """
-        with self.assertRaisesRegexp(ExecutionError, "%s is not installed" % rpm_package_name):
+        with self.assertRaisesRe(ExecutionError, "%s is not installed" % rpm_package_name):
             results = run_remote_command("rpm -q %s --dbpath %s" % (rpm_package_name, RPM_DATABASE), host)
 
     def install_rpm(self, rpm_filename, rpm_database = RPM_DATABASE, installation_prefix = GPHOME):

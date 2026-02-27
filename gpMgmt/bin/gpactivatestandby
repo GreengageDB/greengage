@@ -212,7 +212,7 @@ def check_original_master_status(options):
 
     recovery_conf_file_location = os.path.join(options.master_data_dir, GP_RECOVERY_CONF_FILE) 
     if not os.path.exists(recovery_conf_file_location):
-        logger.warn('Please make sure the command gpactivatestandby is executed on current Standby host')
+        logger.warning('Please make sure the command gpactivatestandby is executed on current Standby host')
         raise GpActivateStandbyException('Critical required file on standby \"%s\" is not present.' % recovery_conf_file_location)
 
     with open(recovery_conf_file_location) as read_file:
@@ -229,11 +229,11 @@ def check_original_master_status(options):
     cmd = pg.ReadPostmasterTempFile.remote('Read postmaster file', original_master_port, original_master_hostname)
     (file_exists, _, _) = cmd.getResults()
     if file_exists:
-        logger.warn('Appears that there is an active postgres process on %s port=%d' % (original_master_hostname, original_master_port))
-        logger.warn('Need to stop current master before activating the standby.')
-        logger.warn('Rare possibility is just /tmp/.s.PGSQL.%d and /tmp/.s.PGSQL.%d.* files exist on %s.' % (original_master_port, original_master_port, original_master_hostname))
-        logger.warn('Need to delete these files')
-        logger.warn('Then call this utility again.')
+        logger.warning('Appears that there is an active postgres process on %s port=%d' % (original_master_hostname, original_master_port))
+        logger.warning('Need to stop current master before activating the standby.')
+        logger.warning('Rare possibility is just /tmp/.s.PGSQL.%d and /tmp/.s.PGSQL.%d.* files exist on %s.' % (original_master_port, original_master_port, original_master_hostname))
+        logger.warning('Need to delete these files')
+        logger.warning('Then call this utility again.')
         raise GpActivateStandbyException('Active postgres process on master')
  
 #-------------------------------------------------------------------------

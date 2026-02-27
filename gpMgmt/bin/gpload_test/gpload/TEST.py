@@ -150,7 +150,7 @@ def run(cmd):
             valid for the second parameter of open().
     """
     p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    out = p.communicate()[0]
+    out = p.communicate()[0].decode('utf-8')
     ret = []
     ret.append(out)
     rc = False if p.wait() else True
@@ -215,7 +215,7 @@ def read_diff(ifile, outputPath):
         return diff.read()
 
 def write_config_file(database='gptest',user='',host='localhost',port='',table='lineitem',file='lineitem.tbl.small'):
-    if (not user or user == '') and (not os.environ.get('PGUSER') or os.environ.get('PGUSER') == ''):
+    if (not user) and (not os.environ.get('PGUSER')):
         user = os.environ.get('USER')
 
     f = open(configPath + '/config_file','w')

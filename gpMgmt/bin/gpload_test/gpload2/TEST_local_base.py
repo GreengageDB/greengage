@@ -14,7 +14,10 @@ import platform
 import re
 import pytest
 import io
-import six
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 # from gppylib.commands.gp import get_coordinatordatadir
 
@@ -84,7 +87,7 @@ def run(cmd):
             valid for the second parameter of open().
     """
     p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    out = p.communicate()[0]
+    out = p.communicate()[0].decode('utf-8')
     ret = []
     ret.append(out)
     rc = False if p.wait() else True
@@ -223,7 +226,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
     if port_range:
         f.write(u"\n         PORT_RANGE: "+port_range)
     f.write("\n         FILE:")
-    if(isinstance(file,six.string_types)):
+    if(isinstance(file, string_types)):
         f.write("\n            - "+mkpath(file))
     if (isinstance(file,list)):
         for ff in file:
@@ -387,7 +390,11 @@ def changeExtFile( fname, ext = ".diff", outputPath = "" ):
 
 def gpdbAnsFile(fname):
     ext = '.ans'
-    return os.path.splitext(fname)[0] + ext
+    filename = os.path.splitext(fname)[0]
+    if sys.version_info[0] == 3:
+        if os.path.isfile(filename + "_py3" + ext):
+            filename += "_py3"
+    return filename + ext
 
 def isFileEqual( f1, f2, optionalFlags = "", outputPath = "", myinitfile = ""):
     LMYD = os.path.abspath(os.path.dirname(__file__))
@@ -396,6 +403,7 @@ def isFileEqual( f1, f2, optionalFlags = "", outputPath = "", myinitfile = ""):
     if not os.access( f2, os.R_OK ):
         raise Exception( 'Error: cannot find file %s' % f2 )
     dfile = diffFile( f1, outputPath = outputPath )
+    dfile = dfile.replace("_py3", "")
     # Gets the suitePath name to add init_file
     suitePath = f1[0:f1.rindex( "/" )]
 
@@ -443,7 +451,8 @@ def copy_data(source='',target=''):
     cmd = 'cp '+ mkpath('data/' + source) + ' ' + mkpath(target)
     p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     _, err = p.communicate()
-    if err != '':
+    err = err.decode('utf-8')
+    if err:
         sys.stderr.write(str(err))
         sys.exit(2)
 

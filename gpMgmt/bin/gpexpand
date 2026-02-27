@@ -196,13 +196,13 @@ def validate_options(options, args, parser):
         parser.exit()
 
     if options.end and options.duration:
-        logger.warn('Both end and duration options were given.')
+        logger.warning('Both end and duration options were given.')
         # Both a duration and an end time were given.
         if options.end > datetime.datetime.now() + options.duration:
-            logger.warn('The duration argument will be used for the expansion end time.')
+            logger.warning('The duration argument will be used for the expansion end time.')
             options.end = datetime.datetime.now() + options.duration
         else:
-            logger.warn('The end argument will be used for the expansion end time.')
+            logger.warning('The end argument will be used for the expansion end time.')
     elif options.duration:
         options.end = datetime.datetime.now() + options.duration
 
@@ -1616,7 +1616,7 @@ class gpexpand(object):
             if dbname == 'template0':
                 continue
             self.logger.info('Populating gpexpand.status_detail with data from database %s' % (
-                dbname.decode('utf-8')))
+                dbname))
             self._populate_regular_tables(dbname)
             self._populate_partitioned_tables(dbname)
             inject_fault('gpexpand MPP-14620 fault injection')
@@ -1899,11 +1899,11 @@ class gpexpand(object):
             self.conn.commit()
             logger.info('You can resume expansion by running gpexpand again')
         elif table_expand_error:
-            logger.warn('**************************************************')
-            logger.warn('One or more tables failed to expand successfully.')
-            logger.warn('Please check the log file, correct the problem and')
-            logger.warn('run gpexpand again to finish the expansion process')
-            logger.warn('**************************************************')
+            logger.warning('**************************************************')
+            logger.warning('One or more tables failed to expand successfully.')
+            logger.warning('Please check the log file, correct the problem and')
+            logger.warning('run gpexpand again to finish the expansion process')
+            logger.warning('**************************************************')
             # We'll try to update the status, but if the errors were caused by
             # going into read only mode, this will fail.  That's ok though as
             # gpexpand will resume next run
@@ -1961,8 +1961,8 @@ class gpexpand(object):
         # drop schema
         if gpexpand_db_status != 'EXPANSION COMPLETE':
             c = dbconn.connect(self.dburl, encoding='UTF8')
-            self.logger.warn('Expansion has not yet completed.  Removing the expansion')
-            self.logger.warn('schema now will leave the following tables unexpanded:')
+            self.logger.warning('Expansion has not yet completed.  Removing the expansion')
+            self.logger.warning('schema now will leave the following tables unexpanded:')
             unexpanded_tables_sql = "SELECT fq_name FROM gpexpand.status_detail WHERE status = 'NOT STARTED' ORDER BY rank"
 
             cursor = dbconn.execSQL(c, unexpanded_tables_sql)
@@ -1970,9 +1970,9 @@ class gpexpand(object):
 
             c.close()
 
-            self.logger.warn(unexpanded_tables_text)
-            self.logger.warn('These tables will have to be expanded manually by setting')
-            self.logger.warn('the distribution policy using the ALTER TABLE command.')
+            self.logger.warning(unexpanded_tables_text)
+            self.logger.warning('These tables will have to be expanded manually by setting')
+            self.logger.warning('the distribution policy using the ALTER TABLE command.')
             if not ask_yesno('', "Are you sure you want to drop the expansion schema?", 'N'):
                 logger.info("User Aborted. Exiting...")
                 sys.exit(0)
@@ -2120,8 +2120,8 @@ class ExpandTable(object):
                            self.rank, self.external_writable, self.status,
                            self.expansion_started, self.expansion_finished,
                            self.source_bytes, self.rel_storage)
-        logger.info('Added table %s.%s' % (self.dbname.decode('utf-8'), self.fq_name.decode('utf-8')))
-        logger.debug(insertSQL.decode('utf-8'))
+        logger.info('Added table %s.%s' % (self.dbname, self.fq_name))
+        logger.debug(insertSQL)
         dbconn.execSQL(conn, insertSQL)
 
     def mark_started(self, status_conn, table_conn, start_time, cancel_flag):
@@ -2131,7 +2131,7 @@ class ExpandTable(object):
         cursor = dbconn.execSQL(table_conn, sql)
         row = cursor.fetchone()
         src_bytes = int(row[0])
-        logger.debug(" Table: %s has %d bytes" % (self.fq_name.decode('utf-8'), src_bytes))
+        logger.debug(" Table: %s has %d bytes" % (self.fq_name, src_bytes))
 
         sql = """UPDATE gpexpand.status_detail
                   SET status = '%s', expansion_started='%s',
@@ -2141,7 +2141,7 @@ class ExpandTable(object):
                                                   src_bytes, self.dbname.replace("'", "''"),
                                                   self.table_oid)
 
-        logger.debug("Mark Started: " + sql.decode('utf-8'))
+        logger.debug("Mark Started: " + sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2152,7 +2152,7 @@ class ExpandTable(object):
                  AND table_oid = %s """ % (undone_status,
                                            self.dbname.replace("'", "''"), self.table_oid)
 
-        logger.debug('Resetting detailed_status: %s' % sql.decode('utf-8'))
+        logger.debug('Resetting detailed_status: %s' % sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2174,8 +2174,8 @@ class ExpandTable(object):
             external_str = "EXTERNAL" if self.external_writable else ""
             sql = 'ALTER %s TABLE ONLY %s EXPAND TABLE' % (external_str, self.fq_name)
 
-        logger.info('Expanding %s.%s' % (self.dbname.decode('utf-8'), self.fq_name.decode('utf-8')))
-        logger.debug("Expand SQL: %s" % sql.decode('utf-8'))
+        logger.info('Expanding %s.%s' % (self.dbname, self.fq_name))
+        logger.debug("Expand SQL: %s" % sql)
 
         # check is atomic in python
         if not cancel_flag:
@@ -2194,7 +2194,7 @@ class ExpandTable(object):
                 table_conn.commit()
             if self.options.analyze:
                 sql = 'ANALYZE %s' % (self.fq_name)
-                logger.info('Analyzing %s' % (self.fq_name.decode('utf-8')))
+                logger.info('Analyzing %s' % (self.fq_name))
                 dbconn.execSQL(table_conn, sql)
                 table_conn.commit()
 
@@ -2209,7 +2209,7 @@ class ExpandTable(object):
                   WHERE dbname = '%s'
                   AND table_oid = %s """ % (done_status, start_time, finish_time,
                                             self.dbname.replace("'", "''"), self.table_oid)
-        logger.debug(sql.decode('utf-8'))
+        logger.debug(sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2219,7 +2219,7 @@ class ExpandTable(object):
                   WHERE dbname = '%s'
                   AND table_oid = %s """ % (does_not_exist_status, finish_time,
                                             self.dbname.replace("'", "''"), self.table_oid)
-        logger.debug(sql.decode('utf-8'))
+        logger.debug(sql)
         dbconn.execSQL(status_conn, sql)
         status_conn.commit()
 
@@ -2332,8 +2332,8 @@ class ExpandCommand(SQLCommand):
             cursor = dbconn.execSQL(table_conn, sql)
 
             if cursor.rowcount == 0:
-                logger.info('%s no longer exists in database %s' % (self.table.fq_name.decode('utf-8'),
-                                                                       self.table.dbname.decode('utf-8')))
+                logger.info('%s no longer exists in database %s' % (self.table.fq_name,
+                                                                       self.table.dbname))
 
                 self.table.mark_does_not_exist(status_conn, datetime.datetime.now())
                 status_conn.close()
@@ -2353,22 +2353,22 @@ class ExpandCommand(SQLCommand):
                 self.table_expand_error = True
                 if self.options.verbose:
                     logger.exception(ex)
-                logger.error('Table %s.%s failed to expand: %s' % (self.table.dbname.decode('utf-8'),
-                                                                   self.table.fq_name.decode('utf-8'),
+                logger.error('Table %s.%s failed to expand: %s' % (self.table.dbname,
+                                                                   self.table.fq_name,
                                                                    ex.__str__().strip()))
             else:
                 logger.info('ALTER TABLE of %s.%s canceled' % (
-                    self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                    self.table.dbname, self.table.fq_name))
 
         if table_exp_success:
             end_time = datetime.datetime.now()
             # update metadata
             logger.info(
-                "Finished expanding %s.%s" % (self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                "Finished expanding %s.%s" % (self.table.dbname, self.table.fq_name))
             self.table.mark_finished(status_conn, start_time, end_time)
         elif not self.options.simple_progress:
             logger.info("Resetting status_detail for %s.%s" % (
-                self.table.dbname.decode('utf-8'), self.table.fq_name.decode('utf-8')))
+                self.table.dbname, self.table.fq_name))
             self.table.reset_started(status_conn)
 
         # disconnect
@@ -2690,9 +2690,9 @@ def main(options, args, parser):
             gpexpand cannot rollback if new segments are online and catalog lock has been released in phase1
             So if gpexpand fails after releasing catalog lock in phase1, it must retry the failing work
             """
-            logger.warn('The last gpexpand setup did not complete successfully.')
-            logger.warn('But you can not rollback to the original state, for new segments have been online.')
-            logger.warn('So retry the failing work again in gpexpand setup.')
+            logger.warning('The last gpexpand setup did not complete successfully.')
+            logger.warning('But you can not rollback to the original state, for new segments have been online.')
+            logger.warning('So retry the failing work again in gpexpand setup.')
 
             """Clean the schema first"""
             conn = dbconn.connect(_gp_expand.dburl, encoding='UTF8')

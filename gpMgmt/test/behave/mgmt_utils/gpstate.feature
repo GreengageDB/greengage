@@ -618,7 +618,7 @@ Feature: gpstate tests
             | Total number postmaster processes missing         = 0                                 |
             | Total number postmaster processes found           = 3                                 |
             | Mirror Segment Status                                                                 |
-            | Mirrors not configured on this array
+            | Mirrors not configured on this array                                                  |
          And "MASTER_DATA_DIRECTORY" environment variable should be restored
 
     Scenario: gpstate priorities given master data directory over env option
@@ -643,7 +643,7 @@ Feature: gpstate tests
             | Total number postmaster processes missing         = 0                                 |
             | Total number postmaster processes found           = 3                                 |
             | Mirror Segment Status                                                                 |
-            | Mirrors not configured on this array
+            | Mirrors not configured on this array                                                  |
         And "MASTER_DATA_DIRECTORY" environment variable should be restored
 
 ########################### @concourse_cluster tests ###########################

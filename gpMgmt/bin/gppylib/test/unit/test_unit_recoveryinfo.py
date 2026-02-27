@@ -6,6 +6,7 @@ from gppylib.commands import gp
 from gppylib.gparray import Segment
 from gppylib.operations.buildMirrorSegments import GpMirrorToBuild
 from gppylib.recoveryinfo import build_recovery_info, RecoveryInfo, RecoveryResult
+import sys
 
 
 class BuildRecoveryInfoTestCase(GpTestCase):
@@ -483,13 +484,13 @@ class RecoveryResultTestCase(GpTestCase):
         for test in tests:
             with SubTest.subTest(test["name"]):
                 if test["host1_error"] is None:
-                    host1_result = CommandResult(0, b"", b"", True, False)
+                    host1_result = CommandResult(0, "", "", True, False)
                 else:
-                    host1_result = CommandResult(1, 'failed 1'.encode(), test["host1_error"].encode(), True, False)
+                    host1_result = CommandResult(1, 'failed 1', test["host1_error"], True, False)
                 if test["host2_error"] is None:
-                    host2_result = CommandResult(0, b"", b"", True, False)
+                    host2_result = CommandResult(0, "", "", True, False)
                 else:
-                    host2_result = CommandResult(1, 'failed 2'.encode(), test["host2_error"].encode(), True, False)
+                    host2_result = CommandResult(1, 'failed 2', test["host2_error"], True, False)
 
                 host1_recovery_output = gp.GpSegRecovery(None, "test confinfo", "test logdir", False, 1, 'host1', None, True)
                 host2_recovery_output = gp.GpSegRecovery(None, "test confinfo", "test logdir", False, 1, 'host2', None, True)
@@ -507,8 +508,8 @@ class RecoveryResultTestCase(GpTestCase):
                 else:
                     r.print_setup_recovery_errors()
 
-                self.assertItemsEqual(test['expected_info_msgs'], mock_logger.info.call_args_list)
-                self.assertItemsEqual(test['expected_error_msgs'], mock_logger.error.call_args_list)
+                self.assertEqualUnordered(test['expected_info_msgs'], mock_logger.info.call_args_list)
+                self.assertEqualUnordered(test['expected_error_msgs'], mock_logger.error.call_args_list)
 
                 dbids_that_failed_bb_rewind = test.get("dbids_that_failed_bb_rewind", [])
                 for failed_dbid in dbids_that_failed_bb_rewind:

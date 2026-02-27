@@ -4,9 +4,14 @@ from __future__ import print_function
 import mock
 import sys, os, pwd
 import unittest
-from io import StringIO
 from mock import patch, call
-import six
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 try:
     gphome = os.environ.get('GPHOME')
@@ -52,12 +57,12 @@ class SshUtilsTestCase(unittest.TestCase):
         test that delaybeforesend is changed properly
         '''
         p1 = pxssh.pxssh()
-        self.assertEquals(p1.delaybeforesend, 0.05)
+        self.assertEqual(p1.delaybeforesend, 0.05)
 
         p2 = pxssh.pxssh(delaybeforesend=3.0,
                         options={"StrictHostKeyChecking": "no",
                                  "BatchMode": "yes"})
-        self.assertEquals(p2.delaybeforesend, 3.0)
+        self.assertEqual(p2.delaybeforesend, 3.0)
 
     def test03_pxssh_sync_multiplier(self):
         '''
@@ -72,7 +77,7 @@ class SshUtilsTestCase(unittest.TestCase):
             session2.login(['localhost'], 'gpadmin', 1.0, 4.0)
             mock_login.assert_called_with('localhost', 'gpadmin', sync_multiplier=4.0)
 
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test04_exceptions(self, mock_stdout):
         '''
         Test pxssh.login() exceptions
@@ -81,12 +86,14 @@ class SshUtilsTestCase(unittest.TestCase):
             session1 = Session()
             session1.login(['localhost'], 'gpadmin', 0.05, 1.0)
             self.assertEqual(mock_stdout.getvalue(), '[ERROR] unable to login to localhost\nfoo\n')
+            mock_stdout.seek(0)
             mock_stdout.truncate(0)
 
         with mock.patch.object(pxssh.pxssh, 'login', side_effect=pxssh.EOF('foo')) as mock_login:
             session2 = Session()
             session2.login(['localhost'], 'gpadmin', 0.05, 1.0)
             self.assertEqual(mock_stdout.getvalue(), '[ERROR] unable to login to localhost\nCould not acquire connection.\nfoo\n')
+            mock_stdout.seek(0)
             mock_stdout.truncate(0)
 
         with mock.patch.object(pxssh.pxssh, 'login', side_effect=Exception('foo')) as mock_login:
@@ -96,7 +103,7 @@ class SshUtilsTestCase(unittest.TestCase):
 
     @patch('os.getenv', return_value="term")
     @patch('os.putenv')
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test05_login_retry_when_term_variable_is_set(self, mock_stdout, mock_putenv, mock_getenv):
         '''
         Test pxssh.login() retry when there is an exception and TERM env variable is set
@@ -112,7 +119,7 @@ class SshUtilsTestCase(unittest.TestCase):
 
     @patch('os.getenv', return_value=None)
     @patch('os.putenv')
-    @patch('sys.stdout', new_callable=six.StringIO)
+    @patch('sys.stdout', new_callable=StringIO)
     def test06_login_does_not_retry_when_term_variable_is_not_set(self, mock_stdout, mock_putenv, mock_getenv):
         '''
         Test pxssh.login() does not retry when there is an exception and TERM env variable is not set
