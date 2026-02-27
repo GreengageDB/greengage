@@ -4601,6 +4601,17 @@ def impl(context):
 def impl(context):
     os.environ[fault_injection.GPMGMT_FAULT_DELAY_MS] = ""
 
+@given('user will answer "{answer}" to the prompt "{prompt}"')
+@then('user will answer "{answer}" to the prompt "{prompt}"')
+@when('user will answer "{answer}" to the prompt "{prompt}"')
+def impl(context, answer, prompt):
+    assert answer == 'yes' or answer == 'no'
+    #TODO: change to defines
+    if 'GPMGMT_FAULT_POINT' in os.environ and os.environ['GPMGMT_FAULT_POINT'] != "":
+        raise Exception('Need to unset fault injection before using this step')
+    fault = prompt + answer
+    os.environ['GPMGMT_FAULT_POINT'] = fault
+
 @given('stub')
 def impl(context):
     pass

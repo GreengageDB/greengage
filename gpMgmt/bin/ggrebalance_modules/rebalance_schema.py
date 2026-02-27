@@ -171,7 +171,8 @@ class RebalanceSchema:
 
     def allExecutionStepsAreDone(self) -> bool:
         row = dbconn.queryRow(self.conn,
-                              f"SELECT count(1) FROM {self.schema_name}.{self.segment_move_steps} WHERE status <> '{RebalanceStep.Status.DONE.name}'")
+                              f"SELECT count(1) FROM {self.schema_name}.{self.segment_move_steps} "
+                              f"WHERE status NOT IN ('{RebalanceStep.Status.DONE.name}', '{RebalanceStep.Status.CANCELLED.name}')")
         not_done_count = int(row[0])
         return not_done_count == 0
 

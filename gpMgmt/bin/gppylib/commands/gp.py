@@ -325,6 +325,28 @@ class PgCtlStopArgs(CmdArgs):
         self.append("stop")
 
 
+class PgCtlStatusArgs(CmdArgs):
+    """
+    Used by CoordinatorStop, SegmentStop to format the pg_ctl command
+    to stop a backend postmaster
+
+    >>> str(PgCtlStatusArgs("/data1/coordinator/gpseg-1"))
+    '$GPHOME/bin/pg_ctl -D /data1/coordinator/gpseg-1 status'
+
+    """
+
+    def __init__(self, datadir):
+        """
+        @param datadir: database data directory
+        """
+        CmdArgs.__init__(self, [
+            "$GPHOME/bin/pg_ctl",
+            "-D", str(datadir),
+        ])
+        self.append("status")
+
+
+
 class CoordinatorStart(Command):
     def __init__(self, name, dataDir, port, era,
                  wrapper, wrapper_args, specialMode=None, restrictedMode=False, timeout=SEGMENT_TIMEOUT_DEFAULT,
@@ -439,6 +461,25 @@ class SegmentStop(Command):
     def remote(name, hostname, dataDir, mode='smart'):
         cmd=SegmentStop(name, dataDir, mode, ctxt=REMOTE, remoteHost=hostname)
         cmd.run(validateAfter=True)
+        return cmd
+
+#-----------------------------------------------
+class SegmentStatus(Command):
+    def __init__(self, name, dataDir, ctxt=LOCAL, remoteHost=None):
+
+        self.cmdStr = str( PgCtlStatusArgs(dataDir) )
+        Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
+
+    @staticmethod
+    def local(name, dataDir):
+        cmd=SegmentStatus(name, dataDir)
+        cmd.run(validateAfter=False)
+        return cmd
+
+    @staticmethod
+    def remote(name, hostname, dataDir):
+        cmd=SegmentStatus(name, dataDir, ctxt=REMOTE, remoteHost=hostname)
+        cmd.run(validateAfter=False)
         return cmd
 
 #-----------------------------------------------

@@ -279,6 +279,7 @@ def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
     if cnt_primaries_down != 0:
         raise Exception('Detected some primary segments are down, please recover manually')
 
+    """
     if cnt_mirrors_down != 0:
         logger.info("Some mirrors are down, trying to recover them, it may take some time...")
         recoverseg_options = "-a -F"
@@ -294,6 +295,7 @@ def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
             raise Exception(error_msg)
         finally:
             cmd_recoverseg = None
+    """
 
 def main(options, args, parser):
     conn = None

@@ -19,6 +19,7 @@ class RebalanceStep:
         self.move_order = -1
         self.move = move
         self.status = self.Status.PLANNED
+        self.rollback = False
 
     def __str__(self):
         return (
@@ -39,9 +40,16 @@ class RebalanceStep:
 
     def setStatus(self, status: Status):
         self.status = status
+        if self.status == self.Status.ROLLBACK_PLANNED:
+            #For a step, when it is planned to rollback,
+            #there is no turning back.
+            self.rollback = True
 
     def serializeStep(self) -> bytes:
         return pickle.dumps(self)
+
+    def isRollback(self) -> bool:
+        return self.rollback
 
 class RebalanceStepMoveMirror(RebalanceStep):
     def __init__(self, move: LogicalMove):
