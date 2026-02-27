@@ -17,7 +17,12 @@ import os
 import json
 from gppylib import gplog
 from gppylib.gpversion import GpVersion
-import six
+import sys
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 logger = gplog.get_default_logger()
 
@@ -260,7 +265,7 @@ class GPCatalog(object):
         except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
-            logger.warn("GPCatalogTable: "+ str(e))
+            logger.warning("GPCatalogTable: "+ str(e))
 
     def _setForeignKeys(self):
         """
@@ -281,7 +286,7 @@ class GPCatalog(object):
         except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
-            logger.warn("GPCatalogTable: "+ str(e))
+            logger.warning("GPCatalogTable: "+ str(e))
 
 
     def _setKnownDifferences(self):
@@ -370,7 +375,7 @@ class GPCatalog(object):
             if self._tables[relname].isMasterOnly():
                 continue
             if self._tables[relname].getPrimaryKey() == []:
-                logger.warn("GPCatalogTable: unable to derive primary key for %s"
+                logger.warning("GPCatalogTable: unable to derive primary key for %s"
                             % str(relname))
 
 
@@ -459,7 +464,7 @@ class GPCatalogTable(object):
         assert(name != None)
      
         # Split string input
-        if isinstance(pkey, six.string_types):    
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         self._parent    = parent
@@ -549,6 +554,12 @@ class GPCatalogTable(object):
     def __cmp__(self, other):
         return cmp(other, self._name)
 
+    def __eq__(self, other):
+        return self._name == other
+
+    def __lt__(self, other):
+        return self._name < other._name
+
     def _setMasterOnly(self, value=True):
         self._master = value
 
@@ -557,7 +568,7 @@ class GPCatalogTable(object):
 
     def _setPrimaryKey(self, pkey=None):
         # Split string input
-        if isinstance(pkey, six.string_types):
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         # Check that the specified keys are real columns
@@ -578,7 +589,7 @@ class GPCatalogTable(object):
 
     def _setKnownDifferences(self, diffs):
         # Split string input
-        if isinstance(diffs, six.string_types):    
+        if isinstance(diffs, string_types):
             diffs = diffs.split()
         self._excluding = set(diffs or [])
 
@@ -634,7 +645,7 @@ class GPCatalogTableForeignKey(object):
         assert(pktablename != None)
      
         # Split string input
-        if isinstance(pkey, six.string_types):    
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         self._tname       = tname

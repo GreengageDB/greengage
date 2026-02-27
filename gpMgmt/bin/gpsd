@@ -10,19 +10,20 @@ import os
 import platform
 import pwd
 import sys
-import re
 from contextlib import closing
-from distutils.version import LooseVersion
 from optparse import OptionParser
 from pygresql import pgdb
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 gpsd_version = '%prog 1.0'
 
 sysnslist = "('pg_toast', 'pg_bitmapindex', 'pg_temp_1', 'pg_catalog', 'information_schema')"
-orca = False
 # make search path safe
-pgoptions = '-c gp_session_role=utility -c search_path='
+pgoptions = '-c gp_session_role=utility -c search_path= -c optimizer=off'
 
 
 def ResultIter(cursor, arraysize=1000):
@@ -37,10 +38,10 @@ def ResultIter(cursor, arraysize=1000):
 
 def getVersion(envOpts):
     cmd = subprocess.Popen('psql --pset footer -Atqc "select version()" template1', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=envOpts)
-    if cmd.wait() is not 0:
-        sys.stderr.write('\nError while trying to find GPDB version.\n\n' + cmd.communicate()[1] + '\n\n')
+    if cmd.wait() != 0:
+        sys.stderr.write('\nError while trying to find GPDB version.\n\n' + cmd.communicate()[1].decode('utf-8') + '\n\n')
         sys.exit(1)
-    return cmd.communicate()[0]
+    return cmd.communicate()[0].decode('utf-8')
 
 def get_num_segments(cursor):
     query = "select count(*) from gp_segment_configuration where role='p' and content >=0;"
@@ -55,19 +56,16 @@ def get_num_segments(cursor):
 def dumpSchema(connectionInfo, envOpts):
     dmp_cmd = 'pg_dump -h %s -p %s -U %s -s -x --gp-syntax -O %s' % connectionInfo
     p = subprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
-    if p.wait() is not 0:
-        sys.stderr.write('\nError while dumping schema.\n\n' + p.communicate()[1] + '\n\n')
+    if p.wait() != 0:
+        sys.stderr.write('\nError while dumping schema.\n\n' + p.communicate()[1].decode('utf-8') + '\n\n')
         sys.exit(1)
 
 
 def dumpGlobals(connectionInfo, envOpts):
-    if orca:
-        dmp_cmd = 'pg_dumpall -h %s -p %s -U %s -l %s -g --no-gp-syntax' % connectionInfo
-    else:
-        dmp_cmd = 'pg_dumpall -h %s -p %s -U %s -l %s -g --gp-syntax' % connectionInfo
+    dmp_cmd = 'pg_dumpall -h %s -p %s -U %s -l %s -g --no-gp-syntax' % connectionInfo
     p = subprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
-    if p.wait() is not 0:
-        sys.stderr.write('\nError while dumping globals.\n\n' + p.communicate()[1] + '\n\n')
+    if p.wait() != 0:
+        sys.stderr.write('\nError while dumping globals.\n\n' + p.communicate()[1].decode('utf-8') + '\n\n')
         sys.exit(1)
 
 
@@ -162,7 +160,7 @@ def dumpStats(cur, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, six.string_types) and val[0] == '{':
+            elif isinstance(val, string_types) and val[0] == '{':
                 val = val.replace("'", "''").replace('\\', '\\\\')
                 val = "E'" + val + "'"
             if i == 25 and hll == True:
@@ -191,16 +189,6 @@ def parseCmdLine():
                  default=False, help='Include HLL stats')
     return p
 
-def isOrcaPresent(versionString):
-    if 'HAWQ' in versionString:
-        return True
-    match = re.search(r'(Green\w+) Database ([\d.]+)', versionString)
-    if match and len(match.group()):
-        return LooseVersion(match.groups()[1]) >= LooseVersion('4.3')
-    # No HAWQ and we can't find the GPDB Version
-    sys.stderr.write('Cannot determine HAWQ/GPDB version.  Exiting.\n')
-    sys.exit(1)
-
 
 def main():
     parser = parseCmdLine()
@@ -221,13 +209,6 @@ def main():
     envOpts['PGOPTIONS'] = pgoptions
 
     version = getVersion(envOpts)
-
-    # Let's update the global variable so we can tell if we're using ORCA aware or not
-    global orca
-    orca = isOrcaPresent(version)
-
-    if orca:
-        envOpts['PGOPTIONS'] = pgoptions + ' -c optimizer=off'
 
     timestamp = datetime.datetime.today()
 
@@ -281,7 +262,7 @@ def main():
                                'Please review output file to ensure it is within corporate policy to transport the output file.\n'])
     except pgdb.DatabaseError as err:  # catch *all* exceptions
         sys.stderr.write('Error while dumping statistics:\n')
-        sys.stderr.write(err.message)
+        sys.stderr.write(str(err))
         sys.exit(1)
 
 

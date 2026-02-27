@@ -8,7 +8,7 @@ from mock import patch, mock_open
 
 from gppylib.commands.gp import is_pid_postmaster, get_postmaster_pid_locally, get_postgres_segment_processes, is_gprecoverseg_running
 from test.unit.gp_unittest import GpTestCase, run_tests
-
+import sys
 
 class GpCommandTestCase(GpTestCase):
 
@@ -185,11 +185,16 @@ class GpCommandTestCase(GpTestCase):
         self.assertEqual(result, [1234])
 
     @patch('gppylib.commands.gp.check_pid', return_value=True)
-    @patch('gppylib.commands.gp.get_masterdatadir')
-    @patch("__builtin__.open", new_callable=mock_open, read_data="123")
-    def test_is_gprecoverseg_running_succeeds(self, mock_file, mock1, mock2):
-        result = is_gprecoverseg_running()
-        mock2.assert_called_once_with('123')
+    @patch('gppylib.commands.gp.get_masterdatadir', return_value='/')
+    def test_is_gprecoverseg_running_succeeds(self, mock_file, mock1):
+        if sys.version_info[0] == 2:
+            builtin = "__builtin__"
+        else:
+            builtin = "builtins"
+
+        with patch(builtin + '.open', new_callable=mock_open, read_data="123") as mock_file:
+            result = is_gprecoverseg_running()
+            mock_file.assert_called_once_with('/gprecoverseg.lock/PID')
         self.assertTrue(result)
 
     @patch('gppylib.commands.gp.check_pid')

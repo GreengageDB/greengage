@@ -378,11 +378,11 @@ def parsePSOutput(psLines):
 
 
 def getNextSample(file, start, end):
-    line = file.readline()
+    line = file.readline().decode('utf-8')
     if not line:
         return None
     while line == '\n':
-        line = file.readline()
+        line = file.readline().decode('utf-8')
     print(line)
     if not line.startswith('>>>'):
         raise Exception("Processing file failed - did not find timestamp where expected")
@@ -390,10 +390,11 @@ def getNextSample(file, start, end):
 
     process_this_listing = (start is None or timestamp >= start) and (end is None or timestamp <= end)
 
-    header = file.readline().split()
+    header = file.readline().decode('utf-8').split()
     n_cols = len(header)
     rows = []
     for line in file:
+        line = line.decode('utf-8')
         if line == '\n':
             break
         if process_this_listing:

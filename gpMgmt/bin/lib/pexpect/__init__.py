@@ -1362,9 +1362,9 @@ class spawn(object):
             if isinstance(p, self.allowed_string_types):
                 p = self._coerce_expect_string(p)
                 compiled_pattern_list.append(re.compile(p, compile_flags))
-            elif p is EOF:
+            elif p == EOF:
                 compiled_pattern_list.append(EOF)
-            elif p is TIMEOUT:
+            elif p == TIMEOUT:
                 compiled_pattern_list.append(TIMEOUT)
             elif isinstance(p, type(re.compile(''))):
                 compiled_pattern_list.append(p)
@@ -1832,10 +1832,10 @@ class searcher_string(object):
         self.timeout_index = -1
         self._strings = []
         for n, s in enumerate(strings):
-            if s is EOF:
+            if s == EOF:
                 self.eof_index = n
                 continue
-            if s is TIMEOUT:
+            if s == TIMEOUT:
                 self.timeout_index = n
                 continue
             self._strings.append((n, s))
@@ -1932,10 +1932,10 @@ class searcher_re(object):
         self.timeout_index = -1
         self._searches = []
         for n, s in zip(list(range(len(patterns))), patterns):
-            if s is EOF:
+            if s == EOF:
                 self.eof_index = n
                 continue
-            if s is TIMEOUT:
+            if s == TIMEOUT:
                 self.timeout_index = n
                 continue
             self._searches.append((n, s))
@@ -2051,7 +2051,7 @@ def which(filename):
     # Special case where filename contains an explicit path.
     if os.path.dirname(filename) != '' and is_executable_file(filename):
         return filename
-    if 'PATH' not in os.environ or os.environ['PATH'] == '':
+    if 'PATH' not in os.environ or not os.environ['PATH']:
         p = os.defpath
     else:
         p = os.environ['PATH']

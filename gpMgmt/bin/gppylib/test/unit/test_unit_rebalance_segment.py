@@ -58,7 +58,7 @@ class RebalanceSegmentsTestCase(GpTestCase):
         self.pool.getCompletedItems.return_value = [self.failure_command_mock]
         self.mock_gp_recover_segment_prog.run.side_effect = SystemExit(1)
 
-        with self.assertRaisesRegexp(Exception, "Error synchronizing."):
+        with self.assertRaisesRe(Exception, "Error synchronizing."):
             self.subject.rebalance()
 
     def test_rebalance_returns_failure(self):

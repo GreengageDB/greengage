@@ -40,7 +40,7 @@ class ForeignKeyCheck(object):
 
     def runCheck(self, tables):
         foreign_key_issues = dict()
-        for cat in sorted(tables):
+        for cat in sorted(tables, key=lambda table: table.getTableName()):
 
             issues = self.checkTableForeignKey(cat)
             if issues:

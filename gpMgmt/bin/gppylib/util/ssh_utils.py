@@ -228,7 +228,7 @@ class Session(cmd.Cmd):
                         print('[ERROR] unable to login to %s' % hostname)
                         if type(e) is pxssh.ExceptionPxssh:
                             print(e)
-                        elif type(e) is pxssh.EOF:
+                        elif type(e) == pxssh.EOF:
                             print('Could not acquire connection.')
                             print(e)
                         else:

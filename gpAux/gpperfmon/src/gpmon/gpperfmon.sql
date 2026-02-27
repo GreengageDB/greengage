@@ -148,7 +148,7 @@ create external web table public._database_tail (
 
 
 create external web table public.master_data_dir (hostname text, dir text)
-execute E'python -c "import socket, os; print socket.gethostname() + \\"|\\" + os.getcwd()"' on master
+execute E'python -c "import socket, os; print(socket.gethostname() + \\"|\\" + os.getcwd())"' on master
 format 'csv' (delimiter '|');
 
 
