@@ -239,7 +239,7 @@ def main():
     connectionInfo = (host, port, user, db)
 
     num_segments = 0
-    with closing(pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions)) as connection:
+    with pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions) as connection:
         with closing(connection.cursor()) as cursor:
             num_segments = get_num_segments(cursor)
 
@@ -275,7 +275,7 @@ def main():
     sys.stdout.flush()
 
     try:
-        with closing(pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions)) as connection:
+        with pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions) as connection:
             with closing(connection.cursor()) as cursor:
                 dumpTupleCount(cursor)
                 dumpStats(cursor, inclHLL)
