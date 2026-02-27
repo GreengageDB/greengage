@@ -112,7 +112,7 @@ def install_extension(databases):
     get_datname_sql = ''' SELECT datname FROM pg_database WHERE datname != 'template0' '''
     create_ext_sql = ''' CREATE EXTENSION IF NOT EXISTS gp_replica_check '''
 
-    database_list = list(map(str.strip, databases.split(',')))
+    database_list = [s.strip() for s in databases.split(',')]
     print("Creating gp_replica_check extension on databases if needed:")
     datnames = subprocess.check_output('psql postgres -t -A -c "%s"' % get_datname_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
     for datname in datnames:
@@ -132,7 +132,7 @@ WHERE gscp.content = gscm.content
     seglist = subprocess.check_output('psql postgres -t -c "%s"' % seglist_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
     segmap = {}
     for segrow in seglist:
-        segelements = list(map(str.strip, segrow.split('|')))
+        segelements = [s.strip() for s in segrow.split('|')]
         if len(segelements) > 1:
             segmap.setdefault(segelements[2], []).append(segelements)
 
@@ -148,7 +148,7 @@ def get_databases(databases):
 SELECT datname FROM pg_catalog.pg_database WHERE datname != 'template0'
 '''
 
-    database_list = list(map(str.strip, databases.split(',')))
+    database_list = [s.strip() for s in databases.split(',')]
 
     dbrawlist = subprocess.check_output('psql postgres -t -A -c "%s"' % dblist_sql, stderr=subprocess.STDOUT, shell=True).decode('utf-8').split('\n')
     dblist = []
