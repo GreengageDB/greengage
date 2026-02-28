@@ -102,7 +102,9 @@ There is also the `credcheck.whitelist` GUC that can be used to set a comma sepa
 ```
 credcheck.whitelist = 'admin,supuser'
 ```
-will disable any credcheck policy for the user named `admin` and  `supuser`.
+will disable any credcheck policy for password change of users named `admin` or `supuser`.
+
+To disable password policy checks for changes done by a superuser, enable GUC `credcheck.superuser_nocheck`.
 
 ### [Examples](#examples)
 

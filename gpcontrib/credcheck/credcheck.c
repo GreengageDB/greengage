@@ -249,6 +249,7 @@ static int auth_delay_milliseconds = 0;
 static bool password_change_first_login = false;
 static bool force_change_password = false;
 static bool disallow_change_password = false;
+static bool superuser_nocheck = false;
 
 #if PG_VERSION_NUM >= 120000
 /*
@@ -594,6 +595,13 @@ static void password_check(const char *username, const char *password)
 	Assert(username != NULL);
 	Assert(password != NULL);
 
+	/*
+	 * no passowrd check at all if the user is superuser
+	 * and superuser_nocheck is enabled
+	 */
+	if (superuser() && superuser_nocheck)
+		return;
+
 	/* checks has to be done by ignoring case */
 	if (password_ignore_case)
 	{
@@ -874,6 +882,11 @@ password_guc()
 	DefineCustomBoolVariable("credcheck.disallow_change_password",
 				gettext_noop("prevent users to change their password"),
 				NULL, &disallow_change_password, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.superuser_nocheck",
+				gettext_noop("don't do password check if the logged user is a superuser"),
+				NULL, &superuser_nocheck, false, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
 }
@@ -1295,6 +1308,7 @@ check_password(const char *username, const char *password,
 #ifdef USE_CRACKLIB
 			const char *reason;
 #endif
+			/* don't do any password check if the role is whitelisted */
 			if (is_in_whitelist((char *)username, username_whitelist))
 				break;
 
