@@ -248,6 +248,7 @@ static int password_valid_max = 0;
 static int auth_delay_milliseconds = 0;
 static bool password_change_first_login = false;
 static bool force_change_password = false;
+static bool disallow_change_password = false;
 
 #if PG_VERSION_NUM >= 120000
 /*
@@ -870,6 +871,11 @@ password_guc()
 				NULL, &force_change_password, false, PGC_SUSET, 0,
 				NULL, NULL, NULL);
 
+	DefineCustomBoolVariable("credcheck.disallow_change_password",
+				gettext_noop("prevent users to change their password"),
+				NULL, &disallow_change_password, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
 }
 
 #if PG_VERSION_NUM >= 120000
@@ -1451,15 +1457,23 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	{
 		Node *parsetree = pstmt->utilityStmt;
 
-		/* at first login we don't allow anything else than password change */
-		/*
-		 * When first login we don't allow anything else than password change.
-		 * Command \password issue a "show password_encryption" query after
-		 * change password prompts, allow it. The \password command will be
-		 * rejected anyway because it uses encrypted password.
-		 */
 		if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
 		{
+			/*
+			 * When disallow_change_password is enable we return
+			 * an error to any usertrying to change his password.
+			 */
+			if (nodeTag(parsetree) == T_AlterRoleStmt && disallow_change_password)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("you are not allowed to change your password."))));
+
+			/*
+			 * When first login we don't allow anything else than password change.
+			 * Command \password issue a "show password_encryption" query after
+			 * change password prompts, allow it. The \password command will be
+			 * rejected anyway because it uses encrypted password.
+			 */
 			if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
 				&& strcmp(debug_query_string, "show password_encryption") != 0)
 				ereport(ERROR,

@@ -8,6 +8,7 @@
 	- [Authentication failure ban](#authentication-failure-ban)
 	- [Authentication delay](#authentication-delay)
 	- [Force password change](#force-password-change)
+	- [Disallow password change](#disallow-password-change)
 	- [Warning before password expire](#warning-before-password-expire)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
@@ -465,6 +466,19 @@ You can also force any user to change his password at any time using:
 ```
 ALTER USER user1 SET credcheck_internal.force_change_password = true;
 ```
+
+### [Disallow password change](#disallow-password-change)
+
+This feature disallow users to change their password. This behavior is enabled by setting `credcheck.disallow_password_change` to `true`. For example:
+
+```
+$ psql -h localhost -d test -U user1
+psql (17.5 (Ubuntu 17.5-1.pgdg24.04+1))
+SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off, ALPN: postgresql)
+Type "help" for help.
+
+test=> ALTER ROLE 'user1' PASSWORD 'My-New-Pass#123';
+ERROR:  you are not allowed to change your password.
 
 ### [Warning before password expire](#warning-before-password-expire)
 
