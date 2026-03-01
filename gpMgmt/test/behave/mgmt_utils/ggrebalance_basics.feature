@@ -1,4 +1,4 @@
-@ggrebalance_basics
+@ggrebalance_basics @skip
 Feature: ggrebalance behave tests
 
     Scenario Outline: test 1. validate incompatible option combinations

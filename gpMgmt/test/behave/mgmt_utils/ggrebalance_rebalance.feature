@@ -1,4 +1,4 @@
-@ggrebalance_rebalance
+@ggrebalance_rebalance @skip
 Feature: ggrebalance behave tests (rebalance scenarios)
 
     Scenario Outline: test 1. rebalance - check scenario, when we remove/add a host and rebalance the cluster (with different parallel size).

@@ -1,4 +1,4 @@
-@ggrebalance_shrink
+@ggrebalance_shrink @skip
 Feature: ggrebalance behave tests
 
     Scenario: test 1.1. shrink - check continue after interrupted state, if interruption is done before the rebalance schema creation

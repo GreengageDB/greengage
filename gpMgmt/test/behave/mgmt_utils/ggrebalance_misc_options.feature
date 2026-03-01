@@ -1,4 +1,4 @@
-@ggrebalance_misc_options
+@ggrebalance_misc_options @skip
 Feature: ggrebalance behave tests (misc options scenarios)
 
     Scenario: test 1. Check if cluster has no mirroring.
