@@ -9,9 +9,9 @@ try:
     from gppylib.gplog import *
     from gppylib.commands.gp import GpMoveMirrors
     from gppylib.system.environment import *
-    from gprebalance_modules.planner import *
-    from gprebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
-    from gprebalance_modules.rebalance_step import *
+    from ggrebalance_modules.planner import *
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
+    from ggrebalance_modules.rebalance_step import *
     from gppylib.fault_injection import *
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))

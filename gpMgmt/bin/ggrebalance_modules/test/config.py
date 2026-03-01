@@ -1,7 +1,7 @@
 import os
 
 from gppylib.gparray import Segment, GpArray
-from gprebalance_modules.planner import ConfigurationEncoder, Planner, HostResolver
+from ggrebalance_modules.planner import ConfigurationEncoder, Planner, HostResolver
 
 
 def initGparrayFromFile(basename):

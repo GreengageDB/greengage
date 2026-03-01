@@ -10,8 +10,8 @@ from copy import deepcopy
 
 from gppylib.db import dbconn
 import gppylib.gparray as gparray
-from gprebalance_modules.rebalance_commons import *
-from gprebalance_modules.solver import GreedySolver, HostId, SolverConfig
+from ggrebalance_modules.rebalance_commons import *
+from ggrebalance_modules.solver import GreedySolver, HostId, SolverConfig
 from gppylib.commands.unix import PortIsAvailable
 
 class PlanningError(Exception):

@@ -3,8 +3,8 @@
 from psycopg2.extensions import cursor
 from gppylib.db import dbconn
 from typing import List
-from gprebalance_modules.planner import Plan, deserializePlan
-from gprebalance_modules.rebalance_step import *
+from ggrebalance_modules.planner import Plan, deserializePlan
+from ggrebalance_modules.rebalance_step import *
 
 STATE_NOT_DEFINED = 'not defined'
 

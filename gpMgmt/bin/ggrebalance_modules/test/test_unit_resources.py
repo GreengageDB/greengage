@@ -1,11 +1,11 @@
 from gppylib.test.unit.gp_unittest import *
 from mock import *
 
-from gprebalance_modules.planner import ResourceEstimator, ResourceError, LogicalMove, Planner, PortAllocator, PlanningError
+from ggrebalance_modules.planner import ResourceEstimator, ResourceError, LogicalMove, Planner, PortAllocator, PlanningError
 from gppylib.db.dbconn import DbURL
 from gppylib import gparray
-from gprebalance_modules.test.config import initGparrayFromFile
-from gprebalance_modules.rebalance_commons import (
+from ggrebalance_modules.test.config import initGparrayFromFile
+from ggrebalance_modules.rebalance_commons import (
     SegmentSize, 
     DiskSpaceChecker, 
     DiskSpaceInfo,
@@ -25,8 +25,8 @@ class TestDiskSpaceChecker(GpTestCase):
         self.logger = Mock()
         self.checker = DiskSpaceChecker(self.logger, batch_size=4)
     
-    @patch('gprebalance_modules.rebalance_commons.WorkerPool')
-    @patch('gprebalance_modules.rebalance_commons.DiskUsage')
+    @patch('ggrebalance_modules.rebalance_commons.WorkerPool')
+    @patch('ggrebalance_modules.rebalance_commons.DiskUsage')
     def test_get_disk_usage_success(self, mock_disk_usage_class, mock_pool_class):
         """Test successful disk usage retrieval"""
         # Setup mock pool
@@ -61,7 +61,7 @@ class TestDiskSpaceChecker(GpTestCase):
         mock_pool.haltWork.assert_called_once()
         mock_pool.joinWorkers.assert_called_once()
     
-    @patch('gprebalance_modules.rebalance_commons.WorkerPool')
+    @patch('ggrebalance_modules.rebalance_commons.WorkerPool')
     def test_get_disk_usage_empty_list(self, mock_pool_class):
         """Test disk usage with empty directory list"""
         result = self.checker.get_disk_usage('sdw1', [])
@@ -69,8 +69,8 @@ class TestDiskSpaceChecker(GpTestCase):
         self.assertEqual(result, {})
         mock_pool_class.assert_not_called()
     
-    @patch('gprebalance_modules.rebalance_commons.WorkerPool')
-    @patch('gprebalance_modules.rebalance_commons.DiskUsage')
+    @patch('ggrebalance_modules.rebalance_commons.WorkerPool')
+    @patch('ggrebalance_modules.rebalance_commons.DiskUsage')
     def test_get_disk_usage_command_failure(self, mock_disk_usage_class, mock_pool_class):
         """Test disk usage command failure"""
         mock_pool = Mock()
@@ -87,10 +87,10 @@ class TestDiskSpaceChecker(GpTestCase):
         
         self.assertIn("Unable to check disk usage", str(context.exception))
     
-    @patch('gprebalance_modules.rebalance_commons.WorkerPool')
-    @patch('gprebalance_modules.rebalance_commons.DiskFree')
-    @patch('gprebalance_modules.rebalance_commons.pickle')
-    @patch('gprebalance_modules.rebalance_commons.base64')
+    @patch('ggrebalance_modules.rebalance_commons.WorkerPool')
+    @patch('ggrebalance_modules.rebalance_commons.DiskFree')
+    @patch('ggrebalance_modules.rebalance_commons.pickle')
+    @patch('ggrebalance_modules.rebalance_commons.base64')
     def test_get_available_space_success(self, mock_base64, mock_pickle, 
                                          mock_disk_free_class, mock_pool_class):
         """Test successful available space retrieval"""
@@ -133,7 +133,7 @@ class TestDiskSpaceChecker(GpTestCase):
         self.assertEqual(result['/data1/primary/gpseg0'].available_kb, 10485760)
         self.assertEqual(result['/data1/primary/gpseg0'].available_gb, 10.0)
     
-    @patch('gprebalance_modules.rebalance_commons.DiskFree')
+    @patch('ggrebalance_modules.rebalance_commons.DiskFree')
     def test_get_available_space_command_failure(self, mock_disk_free_class):
         """Test available space command failure"""
         
@@ -180,7 +180,7 @@ class TestResourceEstimator(GpTestCase):
         self.options.skip_resource_estimation = False
         self.options.batch_size = 16
     
-    @patch('gprebalance_modules.planner.dbconn')
+    @patch('ggrebalance_modules.planner.dbconn')
     def test_estimate_segment_sizes_from_unbalanced_cluster(self, mock_dbconn):
         """Test segment size estimation from unbalanced cluster"""
         # Create a realistic move: move primary seg0 from sdw1 to sdw2
@@ -228,7 +228,7 @@ class TestResourceEstimator(GpTestCase):
             ['/data/primary0']
         )
     
-    @patch('gprebalance_modules.planner.dbconn')
+    @patch('ggrebalance_modules.planner.dbconn')
     def test_estimate_multiple_segments_same_host(self, mock_dbconn):
         """
         Test estimating multiple segments from same source host
@@ -293,7 +293,7 @@ class TestResourceEstimator(GpTestCase):
         self.assertEqual(call_args[0], '172.20.0.6')
         self.assertEqual(set(call_args[1]), {'/data/primary0', '/data/primary1', '/data/primary2'})
     
-    @patch('gprebalance_modules.planner.dbconn')
+    @patch('ggrebalance_modules.planner.dbconn')
     def test_estimate_with_tablespaces(self, mock_dbconn):
         # Get primary seg0 from sdw1
         seg0 = None
@@ -1021,13 +1021,13 @@ class TestResourceEstimator(GpTestCase):
         except ResourceError:
             self.fail("ResourceError raised - segment was double-counted!")
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
-    @patch('gprebalance_modules.planner.DiskSpaceChecker')
-    @patch('gprebalance_modules.planner.HostResolver.resolve_hostname')
-    @patch('gprebalance_modules.planner.HostResolver.get_address')
-    @patch('gprebalance_modules.planner.GreedySolver')
-    @patch('gprebalance_modules.rebalance_schema.dbconn.queryRow', side_effect=check_query)
-    @patch('gprebalance_modules.planner.dbconn')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.DiskSpaceChecker')
+    @patch('ggrebalance_modules.planner.HostResolver.resolve_hostname')
+    @patch('ggrebalance_modules.planner.HostResolver.get_address')
+    @patch('ggrebalance_modules.planner.GreedySolver')
+    @patch('ggrebalance_modules.rebalance_schema.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance_modules.planner.dbconn')
     def test_planner_with_resource_estimation(self, mock_dbconn, mock_schema, mock_solver, 
                                                mock_get_address, mock_resolve, mock_disk_check, mock_port):
         """Test Planner integration with resource estimation"""
@@ -1112,10 +1112,10 @@ class TestResourceEstimator(GpTestCase):
             self.assertIsNotNone(move.segment_size, 
                                 f"Segment size not set for move: {move}")
     
-    @patch('gprebalance_modules.planner.dbconn')
-    @patch('gprebalance_modules.rebalance_schema.dbconn.queryRow', side_effect=check_query)
-    @patch('gprebalance_modules.planner.HostResolver.resolve_hostname')
-    @patch('gprebalance_modules.planner.HostResolver.get_address')
+    @patch('ggrebalance_modules.planner.dbconn')
+    @patch('ggrebalance_modules.rebalance_schema.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance_modules.planner.HostResolver.resolve_hostname')
+    @patch('ggrebalance_modules.planner.HostResolver.get_address')
     def test_planner_skips_resource_estimation_when_requested(self, mock_get_address, 
                                                               mock_resolve, mock_schema, mock_conn):
         """Test Planner skips resource estimation when skip_resource_estimation=True"""
@@ -1388,7 +1388,7 @@ class TestPortAllocator(GpTestCase):
         allocator.planned_ports_by_host['host1'].add(6001)
         self.assertFalse(allocator._is_port_available('host1', 6001))
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_check_port_on_host_available(self, mock_port_is_available):
         """Test actual port verification on host when port is available"""
         segments = []
@@ -1406,7 +1406,7 @@ class TestPortAllocator(GpTestCase):
         self.assertTrue(result)
         mock_cmd.run.assert_called_once()
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_check_port_on_host_in_use(self, mock_port_is_available):
         """Test actual port verification when port is in use"""
         segments = []
@@ -1423,7 +1423,7 @@ class TestPortAllocator(GpTestCase):
         
         self.assertFalse(result)
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_check_port_on_host_verification_disabled(self, mock_port_is_available):
         """Test that verification is skipped when disabled"""
         segments = []
@@ -1437,7 +1437,7 @@ class TestPortAllocator(GpTestCase):
         self.assertTrue(result)
         mock_port_is_available.assert_not_called()
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_verify_and_allocate_port_preferred_available(self, mock_port_is_available):
         """Test verify_and_allocate when preferred port is available"""
         segments = []
@@ -1454,7 +1454,7 @@ class TestPortAllocator(GpTestCase):
         
         self.assertEqual(allocated, 6000)
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_verify_and_allocate_port_preferred_in_use(self, mock_port_is_available):
         """
         Test verify_and_allocate when preferred port is in use

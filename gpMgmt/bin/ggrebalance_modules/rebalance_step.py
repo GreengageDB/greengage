@@ -2,7 +2,7 @@
 
 from enum import Enum
 import pickle
-from gprebalance_modules.planner import *
+from ggrebalance_modules.planner import *
 
 class RebalanceStep:
     class Status(Enum):

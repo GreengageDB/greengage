@@ -4,7 +4,7 @@ import tempfile
 
 from gppylib.test.unit.gp_unittest import *
 from mock import *
-from gprebalance_modules.rebalance_commons import HostResolver, TemplateParser, ValidationError, is_ip_address
+from ggrebalance_modules.rebalance_commons import HostResolver, TemplateParser, ValidationError, is_ip_address
 
 class TestHostResolver(GpTestCase):
     """
@@ -109,7 +109,7 @@ class TestHostResolver(GpTestCase):
         self.assertEqual(result, '192.168.1.100')
         mock_getaddrinfo.assert_not_called()
         
-    @patch('gprebalance_modules.rebalance_commons.Hostname')
+    @patch('ggrebalance_modules.rebalance_commons.Hostname')
     def test_resolve_ip_success(self, mock_hostname_class):
         # Mock the Hostname command
         mock_cmd = MagicMock()
@@ -127,7 +127,7 @@ class TestHostResolver(GpTestCase):
         # Check forward mapping was also created
         self.assertIn('192.168.1.10', self.resolver._hostname_to_ips['testhost'])
     
-    @patch('gprebalance_modules.rebalance_commons.Hostname')
+    @patch('ggrebalance_modules.rebalance_commons.Hostname')
     def test_resolve_ip_cached(self, mock_hostname_class):
         self.resolver._ip_to_hostname['192.168.1.100'] = 'cached'
         
@@ -136,14 +136,14 @@ class TestHostResolver(GpTestCase):
         self.assertEqual(result, 'cached')
         mock_hostname_class.assert_not_called()
     
-    @patch('gprebalance_modules.rebalance_commons.Hostname')
+    @patch('ggrebalance_modules.rebalance_commons.Hostname')
     def test_resolve_ip_invalid_ip(self, mock_hostname_class):
         result = self.resolver.resolve_ip('not-an-ip')
         
         self.assertIsNone(result)
         mock_hostname_class.assert_not_called()
     
-    @patch('gprebalance_modules.rebalance_commons.Hostname')
+    @patch('ggrebalance_modules.rebalance_commons.Hostname')
     def test_resolve_ip_command_failure(self, mock_hostname_class):
         mock_cmd = MagicMock()
         mock_cmd.was_successful.return_value = False
@@ -153,7 +153,7 @@ class TestHostResolver(GpTestCase):
         
         self.assertIsNone(result)
     
-    @patch('gprebalance_modules.rebalance_commons.Hostname')
+    @patch('ggrebalance_modules.rebalance_commons.Hostname')
     def test_resolve_ip_exception(self, mock_hostname_class):
         mock_cmd = MagicMock()
         mock_cmd.run.side_effect = Exception('Resolution failed')
@@ -163,7 +163,7 @@ class TestHostResolver(GpTestCase):
         
         self.assertIsNone(result)
     
-    @patch('gprebalance_modules.rebalance_commons.Hostname')
+    @patch('ggrebalance_modules.rebalance_commons.Hostname')
     def test_resolve_ip_ipv6(self, mock_hostname_class):
         mock_cmd = MagicMock()
         mock_cmd.was_successful.return_value = True

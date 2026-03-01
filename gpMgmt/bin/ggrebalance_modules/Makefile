@@ -1,4 +1,4 @@
-# gpMgmt/bin/gprebalance_modules/Makefile
+# gpMgmt/bin/ggrebalance_modules/Makefile
 
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
@@ -11,16 +11,16 @@ solver.py ggrebalance_sm.py \
 ggrebalance_main_sm.py rebalance_step.py
 
 installdirs:
-	$(MKDIR_P) '$(DESTDIR)$(bindir)/gprebalance_modules'
+	$(MKDIR_P) '$(DESTDIR)$(bindir)/ggrebalance_modules'
 
 install: installdirs
 	for file in $(PROGRAMS); do \
-		$(INSTALL_SCRIPT) $$file '$(DESTDIR)$(bindir)/gprebalance_modules/'$$file ; \
+		$(INSTALL_SCRIPT) $$file '$(DESTDIR)$(bindir)/ggrebalance_modules/'$$file ; \
 	done
 
 uninstall:
 	for file in $(PROGRAMS); do \
-		rm -f '$(DESTDIR)$(bindir)/gprebalance_modules/'$$file ; \
+		rm -f '$(DESTDIR)$(bindir)/ggrebalance_modules/'$$file ; \
 	done
 
 clean distclean:

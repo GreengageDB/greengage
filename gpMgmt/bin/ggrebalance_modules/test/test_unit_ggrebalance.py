@@ -10,9 +10,9 @@ from gppylib.gplog import *
 from gppylib.system.configurationInterface import GpConfigurationProvider
 from gppylib.system.environment import GpCoordinatorEnvironment
 
-from gprebalance_modules.test.config import initGparrayFromFile
-from gprebalance_modules.planner import Planner
-from gprebalance_modules.rebalance_commons import Host, HostStatus, ValidationError
+from ggrebalance_modules.test.config import initGparrayFromFile
+from ggrebalance_modules.planner import Planner
+from ggrebalance_modules.rebalance_commons import Host, HostStatus, ValidationError
 
 def rebalance_only(numsegs):
     def inner(func):
@@ -166,7 +166,7 @@ class TestHostsOptions(GpTestCase):
                             options=self.options)
         self.assertIn("must not contain IP adress and hostname simultaniously", str(ctx.exception))
     
-    @patch('gprebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value='sdw1')
+    @patch('ggrebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value='sdw1')
     def test_add_hosts_existing(self, MockResolver):
         gparray = initGparrayFromFile('balanced_grouped_6')
         self.options.add_hosts = "sdw1"
@@ -177,8 +177,8 @@ class TestHostsOptions(GpTestCase):
                             options=self.options)
         self.assertIn("--add-hosts: Host 'sdw1' already exists in cluster as 'sdw1'", str(ctx.exception))
     
-    @patch('gprebalance_modules.planner.HostResolver.resolve_ip', return_value='sdw1')
-    @patch('gprebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value='sdw1')
+    @patch('ggrebalance_modules.planner.HostResolver.resolve_ip', return_value='sdw1')
+    @patch('ggrebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value='sdw1')
     def test_add_hosts_existing_ip(self, MockResolver, mock_ip):
         gparray = initGparrayFromFile('balanced_grouped_6')
         self.options.add_hosts = "172.20.0.6"
@@ -189,7 +189,7 @@ class TestHostsOptions(GpTestCase):
                             options=self.options)
         self.assertIn("--add-hosts: Host '172.20.0.6' already exists in cluster as 'sdw1'", str(ctx.exception))
     
-    @patch('gprebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value=None)
+    @patch('ggrebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value=None)
     def test_remove_hosts_unexisting(self, MockResolver):
         gparray = initGparrayFromFile('balanced_grouped_6')
         self.options.remove_hosts = "sdw3"
@@ -200,8 +200,8 @@ class TestHostsOptions(GpTestCase):
                             options=self.options)
         self.assertIn("--remove-hosts: Host 'sdw3' does not exist in cluster", str(ctx.exception))
     
-    @patch('gprebalance_modules.planner.HostResolver.resolve_ip', return_value='sdw3')
-    @patch('gprebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value=None)
+    @patch('ggrebalance_modules.planner.HostResolver.resolve_ip', return_value='sdw3')
+    @patch('ggrebalance_modules.rebalance_commons.HostResolver.find_matching_hostname', return_value=None)
     def test_remove_hosts_unexisting_ip(self, MockResolver, mock_ip):
         gparray = initGparrayFromFile('balanced_grouped_6')
         self.options.remove_hosts = "172.20.0.9"
@@ -243,7 +243,7 @@ class TestHostsOptions(GpTestCase):
         self.assertTrue(planner.target_hosts == [Host('sdw1', '172.20.0.6'), Host('sdw3', '172.20.0.8'), Host('sdw2', '172.20.0.7')])
         self.assertTrue(planner.target_hosts[1].status == HostStatus.DECOMMISSIONED)
     
-    @patch('gprebalance_modules.planner.HostResolver')
+    @patch('ggrebalance_modules.planner.HostResolver')
     def test_target_hosts_ip(self, mockHostResolver):
         gparray = initGparrayFromFile('unbalanced_9_ip')
         self.options.target_hosts = "172.20.0.7, 172.20.0.8, 172.20.0.9"

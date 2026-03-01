@@ -7,11 +7,11 @@ try:
     from gppylib.commands.gp import *
     from gppylib.gplog import *
     from gppylib.system.environment import *
-    from gprebalance_modules.planner import *
-    from gprebalance_modules.rebalance_schema import RebalanceSchema
+    from ggrebalance_modules.planner import *
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema
     from gppylib.fault_injection import *
-    from gprebalance_modules.shrink import GGShrink
-    from gprebalance_modules.ggrebalance_sm import RebalanceSM
+    from ggrebalance_modules.shrink import GGShrink
+    from ggrebalance_modules.ggrebalance_sm import RebalanceSM
 except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greenplum_path.sh.  Detail: ' + str(e))
 
