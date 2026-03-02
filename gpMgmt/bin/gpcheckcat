@@ -424,7 +424,7 @@ class execThread(Thread):
 def processThread(threads):
     batch = []
     for th in threads:
-        logger.debug('waiting on thread %s' % th.getName())
+        logger.debug('waiting on thread %s' % th.name)
         th.join()
         if th.error:
             setError(ERROR_NOREPAIR)
