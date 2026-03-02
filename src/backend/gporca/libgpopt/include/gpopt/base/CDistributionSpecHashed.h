@@ -73,12 +73,14 @@ public:
 
 	// ctor
 	CDistributionSpecHashed(CExpressionArray *pdrgpexpr, BOOL fNullsColocated,
-							IMdIdArray *opfamilies = nullptr);
+							IMdIdArray *opfamilies = nullptr,
+							BOOL noOp = false);
 
 	// ctor
 	CDistributionSpecHashed(CExpressionArray *pdrgpexpr, BOOL fNullsColocated,
 							CDistributionSpecHashed *pdshashedEquiv,
-							IMdIdArray *opfamilies = nullptr);
+							IMdIdArray *opfamilies = nullptr,
+							BOOL noOp = false);
 
 	static CDistributionSpecHashed *MakeHashedDistrSpec(
 		CMemoryPool *mp, CExpressionArray *pdrgpexpr, BOOL fNullsColocated,
