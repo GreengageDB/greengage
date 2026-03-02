@@ -31,3 +31,8 @@ sql/idle_gang_cleaner.sql
 
 # Generated subdirectories
 /results/
+/parallelretrcursor/
+/resgroup/
+/ic_tcp/
+/ic_proxy/
+/mirrorless/
