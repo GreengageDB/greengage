@@ -36,6 +36,13 @@ class RebalanceSM:
         'STATE_REBALANCE_DONE'
     ]
 
+    states_rollback_rebalance_flow = [
+        'STATE_REBALANCE_ROLLBACK_STARTED',
+        'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
+        'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'
+        # TODO: Add schema drop state???
+    ]
+
     transitions = [
         {
             'trigger': 'start',
@@ -59,7 +66,10 @@ class RebalanceSM:
         },
         {
             'trigger': 'move_to_STATE_REBALANCE_EXECUTION_STARTED',
-            'source': ['STATE_REBALANCE_PREPARE_MOVES_DONE', 'STATE_REBALANCE_MOVES_SUCCEEDED', 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'],
+            'source': ['STATE_REBALANCE_PREPARE_MOVES_DONE',
+                       'STATE_REBALANCE_MOVES_SUCCEEDED',
+                       'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE',
+                       'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'],
             'dest': 'STATE_REBALANCE_EXECUTION_STARTED'
         },
         {
@@ -81,6 +91,21 @@ class RebalanceSM:
             'trigger': 'move_to_STATE_REBALANCE_EXECUTION_DONE',
             'source': 'STATE_REBALANCE_EXECUTION_STARTED',
             'dest': 'STATE_REBALANCE_EXECUTION_DONE'
+        },
+        {
+            'trigger': 'rollback',
+            'source': 'STATE_REBALANCE_INIT',
+            'dest': 'STATE_REBALANCE_ROLLBACK_STARTED'
+        },
+        {
+            'trigger': 'move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
+            'source': 'STATE_REBALANCE_ROLLBACK_STARTED',
+            'dest': 'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED'
+        },
+        {
+            'trigger': 'move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE',
+            'source': 'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
+            'dest': 'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'
         },
         {
             'trigger': 'move_to_STATE_REBALANCE_DONE',
@@ -106,10 +131,11 @@ class RebalanceSM:
         self.conn = conn
         self.rebalance_schema = schema
         self.cmd = None
+        self.is_rebalance_flow = False
 
         self.machine = Machine(model = self,
                                queued=True,
-                               states = self.states_main_rebalance_flow + self.states_not_logged,
+                               states = self.states_main_rebalance_flow + self.states_not_logged + self.states_rollback_rebalance_flow,
                                transitions = self.transitions,
                                initial = 'STATE_REBALANCE_INIT',
                                before_state_change = 'on_every_state')
@@ -119,7 +145,7 @@ class RebalanceSM:
             self.logger.info('Rebalance was interrupted')
             raise Exception('Rebalance was interrupted')
 
-        if self.state in self.states_main_rebalance_flow:
+        if self.state in self.states_main_rebalance_flow + self.states_rollback_rebalance_flow:
             self.rebalance_schema.storeRebalanceState(self.state)
 
     def run(self, plan: Plan) -> None:
@@ -139,11 +165,17 @@ class RebalanceSM:
 
         self.trigger('start')
 
-    def process_moves(self, moves: List[LogicalMove]):
-        if len(moves) == 0:
+    def rollback(self) -> None:
+        if self.rebalance_schema.schemaExists():
+            self.trigger('rollback')
+        else:
+            self.logger.info("Rebalance schema doesn't exist. Can't perform rollback.")
+
+    def process_moves(self, steps: List[RebalanceStepMoveMirror]):
+        if len(steps) == 0:
             return
 
-        filename = self.create_config_file(moves)
+        filename = self.create_config_file(steps)
         gpmovemirrors_options = f'-a -i {filename}'
 
         if self.options.parallel is not None:
@@ -281,16 +313,24 @@ class RebalanceSM:
                 return True
         return False
 
-    def create_config_file(self, moves: List[LogicalMove]) -> str:
+    def create_config_file(self, steps: List[RebalanceStepMoveMirror]) -> str:
         filename = f'/tmp/ggrebalance_move_config_pid{os.getpid()}'
         with open(filename, 'w') as fp:
-            for move in moves:
-                segment_current_info = move.seg
-                if not self.lookup_seg(segment_current_info):
-                    self.logger.info(f'Skip segment for gpmovemirrors: {str(segment_current_info)}')
-                    continue
-                cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
-                cfg_line += f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir}\n'
+            for step in steps:
+                assert isinstance(step, RebalanceStepMoveMirror)
+                move = step.getMove()
+                if step.isRollback():
+                    segment_current_info = move.seg
+                    # TODO: check lookup_seg here
+                    cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
+                    cfg_line += f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()}\n'
+                else:
+                    segment_current_info = move.seg
+                    if not self.lookup_seg(segment_current_info):
+                        self.logger.info(f'Skip segment for gpmovemirrors: {str(segment_current_info)}')
+                        continue
+                    cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
+                    cfg_line += f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir}\n'
                 fp.write(cfg_line)
         return filename
 
@@ -303,6 +343,7 @@ class RebalanceSM:
         return state == self.states_main_rebalance_flow[-1]
 
     def get_state_after_interrupt(self, prev_state) -> str:
+        # TODO: rollback
         if (prev_state == 'STATE_REBALANCE_EXECUTION_STARTED' or
             prev_state == 'STATE_REBALANCE_MOVES_SUCCEEDED' or
             prev_state == 'STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE'):
@@ -315,7 +356,7 @@ class RebalanceSM:
     def reset_in_progress_execution_steps(self) -> None:
         in_progress_steps = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.IN_PROGRESS])
         for step in in_progress_steps:
-            step.setStatus(RebalanceStep.Status.ERROR)
+            step.setStatus(RebalanceStep.Status.ERROR, step.isRollback())
             self.rebalance_schema.updateExecutionStep(step)
 
     def process_error_execution_steps(self) -> None:
@@ -356,6 +397,7 @@ class RebalanceSM:
                             catalog_segment_info = self.get_catalog_gp_segment_configuration_for_dbid(dbid)
                             if catalog_segment_info.isSegmentUp() and catalog_segment_info.isSegmentModeSynchronized():
                                 self.logger.info('The step is complete, mark it as done')
+                                #TODO: rollback handling
                                 step.setStatus(RebalanceStep.Status.DONE)
                                 self.rebalance_schema.updateExecutionStep(step)
                                 return
@@ -368,7 +410,7 @@ class RebalanceSM:
                 if not gp_segment_configuration_updated and self.interactive_check(f'Retry step?'):
                     if step.isRollback():
                         self.logger.info('Plan to retry rollback step')
-                        step.setStatus(RebalanceStep.Status.ROLLBACK_PLANNED)
+                        step.setStatus(RebalanceStep.Status.PLANNED, True)
                     else:
                         self.logger.info('Plan to retry step')
                         step.setStatus(RebalanceStep.Status.PLANNED)
@@ -377,7 +419,7 @@ class RebalanceSM:
 
                 if not step.isRollback() and self.interactive_check('Rollback step?'):
                     self.logger.info('Plan to rollback step')
-                    step.setStatus(RebalanceStep.Status.ROLLBACK_PLANNED)
+                    step.setStatus(RebalanceStep.Status.PLANNED, True)
                 else:
                     # TODO: need to cancel all dependent steps
                     self.logger.info('Cancel step')
@@ -386,15 +428,15 @@ class RebalanceSM:
                 self.rebalance_schema.updateExecutionStep(step)
 
             # Mark dependent steps accordingly
-            # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already ROLLED_BACK
+            # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already rolled back
             for step in error_steps:
-                if step.getStatus() == RebalanceStep.Status.ROLLBACK_PLANNED:
+                if step.getStatus() == RebalanceStep.Status.PLANNED and step.isRollback():
                     content_id = step.getMove().seg.getSegmentContentId()
                     # TODO: DOUBLE check the full rollback flow here!!!!!!!!!!!
                     for step_todo in steps_left_todo:
                         if step_todo.getMove().seg.getSegmentContentId() == content_id:
-                            self.logger.info(f'Mark as already ROLLED_BACK the dependent step {step_todo}')
-                            step_todo.setStatus(RebalanceStep.Status.ROLLED_BACK)
+                            self.logger.info(f'Mark as already rolled back the dependent step {step_todo}')
+                            step_todo.setStatus(RebalanceStep.Status.DONE, True)
                             self.rebalance_schema.updateExecutionStep(step_todo)
             # 2. If there are any cancelled steps - we need to:
             #  a. cancel all not yet done steps of the same dbid,
@@ -504,6 +546,9 @@ class RebalanceSM:
     @wrap_state_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
         state_from_prev_run = self.rebalance_schema.getRebalanceStateFromPreviousRun()
+        self.is_rebalance_flow = self.rebalance_schema.isRollbackRebalanceFlow(self.states_rollback_rebalance_flow[0])
+        if self.is_rebalance_flow:
+            self.logger.info('Continue rebalance rollback.')
 
         if state_from_prev_run == STATE_NOT_DEFINED:
             self.trigger('move_to_STATE_REBALANCE_STARTED')
@@ -552,7 +597,6 @@ class RebalanceSM:
 
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_STARTED(self) -> None:
-
         if self.rebalance_schema.allExecutionStepsAreDone():
             self.trigger('move_to_STATE_REBALANCE_EXECUTION_DONE')
             return
@@ -581,16 +625,15 @@ class RebalanceSM:
                     (len(current_batch) > 0 and (type(current_batch[0]) is not type(step)))):
                     break
 
-                step.setStatus(RebalanceStep.Status.IN_PROGRESS)
+                step.setStatus(RebalanceStep.Status.IN_PROGRESS, step.isRollback())
                 self.rebalance_schema.updateExecutionStep(step)
                 current_batch.append(step)
 
             if isinstance(current_batch[0], RebalanceStepMoveMirror):
                 self.logger.info('Rebalance - start moving segments:')
-                moves = [step.getMove() for step in current_batch]
-                for move in moves:
-                    self.logger.info(str(move))
-                self.process_moves(moves)
+                for step in current_batch:
+                    self.logger.info(str(step))
+                self.process_moves(current_batch)
                 self.logger.info('Rebalance - end moving segments')
             else:
                 direction = self.RoleSwapDirection.PRIMARY_TO_MIRROR
@@ -605,7 +648,7 @@ class RebalanceSM:
 
             for step in steps_to_execute:
                 if step.getStatus() == RebalanceStep.Status.IN_PROGRESS:
-                    step.setStatus(RebalanceStep.Status.DONE)
+                    step.setStatus(RebalanceStep.Status.DONE, step.isRollback())
                     self.rebalance_schema.updateExecutionStep(step)
 
         self.trigger('move_to_STATE_REBALANCE_MOVES_SUCCEEDED')
@@ -632,7 +675,7 @@ class RebalanceSM:
             # TODO: we'll need to add logic here to get approval from the user in the interactive mode,
             # once we start implementing the interactive mode.
             # In non-interactive mode we assume that the switchover is always approved.
-            step.setStatus(RebalanceStep.Status.PLANNED)
+            step.setStatus(RebalanceStep.Status.PLANNED, step.isRollback())
             self.rebalance_schema.updateExecutionStep(step)
 
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE')
@@ -642,8 +685,74 @@ class RebalanceSM:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
     @wrap_state_func_with_faults
+    def on_enter_STATE_REBALANCE_ROLLBACK_STARTED(self) -> None:
+        self.is_rebalance_flow = True
+        self.logger.info('Starting rebalance rollback.')
+        self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED')
+
+    @wrap_state_func_with_faults
+    def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED(self) -> None:
+
+        actual_rollback_steps_cnt = 0
+        rollback_steps = self.rebalance_schema.getExecutionSteps([])
+
+        if len(rollback_steps) > 0:
+            move_order = rollback_steps[-1].getMoveOrder()
+
+            for i, step in enumerate(rollback_steps):
+                # reverse the move order
+                step.setMoveOrder(move_order)
+                move_order -= 1
+                if step.isRollback():
+                    continue
+
+                # convert not yet executed steps as already rolled back
+                if step.getStatus() in [RebalanceStep.Status.APPROVE_REQUIRED, RebalanceStep.Status.PLANNED]:
+                    step.setStatus(RebalanceStep.Status.DONE, True)
+                    actual_rollback_steps_cnt += 1
+                elif step.getStatus() in [RebalanceStep.Status.IN_PROGRESS, RebalanceStep.Status.DONE]:
+                    step.setStatus(RebalanceStep.Status.PLANNED, True)
+                    actual_rollback_steps_cnt += 1
+                # TODO: what about errored or cancelled steps
+
+                rollback_step_for_switchover = None
+
+                # Revert type of switchover
+                if isinstance(step, RebalanceStepSwitchoverToMirror):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToPrimary(step.getMove())
+                elif isinstance(step, RebalanceStepSwitchoverToPrimary):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToMirror(step.getMove())
+
+                if rollback_step_for_switchover:
+                    rollback_step_for_switchover.setMoveOrder(step.getMoveOrder())
+                    rollback_step_for_switchover.setStatus(step.getStatus(), True)
+                    if step.getStatus() == RebalanceStep.Status.PLANNED:
+                        rollback_step_for_switchover.setStatus(RebalanceStep.Status.APPROVE_REQUIRED, True)
+                    rollback_steps[i] = rollback_step_for_switchover
+
+            rollback_steps.sort(key=lambda x: x.getMoveOrder())
+
+        if actual_rollback_steps_cnt > 0:
+            self.logger.info('Saving following rollback rebalance execution steps:')
+            for step in rollback_steps:
+                self.logger.info(str(step))
+            self.rebalance_schema.saveExecutionSteps(rollback_steps)
+            self.logger.info('Saved rollback rebalance execution steps.')
+        else:
+            self.logger.info('No steps to rollback found for rebalance')
+
+        self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE')
+
+    @wrap_state_func_with_faults
+    def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE(self) -> None:
+        self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
+
+    @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
-        pass
+        if self.is_rebalance_flow:
+            self.logger.info('Rebalance rollback is complete')
+        else:
+            self.logger.info('Rebalance is complete')
 
     @wrap_state_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:

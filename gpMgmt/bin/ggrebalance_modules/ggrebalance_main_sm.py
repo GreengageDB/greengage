@@ -191,9 +191,16 @@ class GGRebalanceMainSM:
 
     @wrap_state_func_with_faults
     def on_enter_STATE_ROLLBACK(self) -> None:
-        self.plan = self.rebalance_schema.retrieveSavedPlan()
-        self.gg_shrink.rollback(self.plan)
-        self.trigger('move_to_STATE_END')
+        try:
+            self.plan = self.rebalance_schema.retrieveSavedPlan()
+            if isinstance(self.plan, ShrinkPlan):
+                shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
+                if not self.gg_shrink.state_is_final(shrink_state_from_prev_run):
+                    self.gg_shrink.rollback(self.plan)
+                    return
+            self.gg_rebalance.rollback()
+        finally:
+            self.trigger('move_to_STATE_END')
 
     @wrap_state_func_with_faults
     def on_enter_STATE_PLANNING_STARTED(self) -> None:
@@ -281,7 +288,6 @@ class GGRebalanceMainSM:
     def on_enter_STATE_REBALANCE_STARTED(self) -> None:
         if self.plan is not None and self.plan.getMoves() is not None:
             self.gg_rebalance.run(self.plan)
-            self.logger.info('Rebalance is complete')
 
         self.trigger('move_to_STATE_REBALANCE_DONE')
 
