@@ -14,7 +14,7 @@ set optimizer_enable_mergejoin = false;
 -- We want to specifically test hashjoins for several queries below.
 -- Nested loop joins are not constructed for these queries at the time,
 -- and probably never will be, but let's make them additionally unlikely just in case.
-set optimizer_nestloop_factor = 100;
+set optimizer_nestloop_factor = 102400;
 set enable_mergejoin = false;
 set enable_nestloop = false;
 set optimizer_trace_fallback = true;
