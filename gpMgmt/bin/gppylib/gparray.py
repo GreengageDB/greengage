@@ -132,16 +132,23 @@ class Segment(object):
             self.status
             )
 
-    #
-    # Note that this is not an ideal comparison -- it uses the string representation
-    #   for comparison
-    #
-    def __cmp__(self,other):
-        left = repr(self)
-        right = repr(other)
-        if left < right: return -1
-        elif left > right: return 1
-        else: return 0
+    def __equal(self, other, ignoreAttr=[]):
+        if other is None:
+            return False
+        if not isinstance(other, Segment):
+            return NotImplemented
+        for key in list(vars(other)):
+            if key in ignoreAttr:
+                continue
+            if vars(other)[key] != vars(self)[key]:
+                return False
+        return True
+
+    def __eq__(self, other):
+        return self.__equal(other)
+
+    def __ne__(self, other):
+        return not self.__equal(other)
 
     #
     # Moved here from system/configurationImplGpdb.py
@@ -1578,8 +1585,8 @@ class GpArray(object):
             if expect_all_segments_to_have_mirror:
                 valid_content.append((i, False))
 
-        valid_content.sort(lambda x,y: cmp(x[0], y[0]) or cmp(x[1], y[1]))
-        content.sort(lambda x,y: cmp(x[0], y[0]) or cmp(x[1], y[1]))
+        valid_content.sort(key=lambda x: (x[0], x[1]))
+        content.sort(key=lambda x: (x[0], x[1]))
 
         if valid_content != content:
             raise Exception('Invalid content ids')
@@ -1710,7 +1717,7 @@ class GpArray(object):
 
         mirror_dict = {}
         # must be sorted by isprimary, then hostname
-        rows.sort(lambda a,b: (cmp(b.isprimary, a.isprimary) or cmp(a.host,b.host)))
+        rows.sort(key=lambda a: (not a.isprimary, a.host))
         current_host = rows[0].host
         curr_dbid = self.get_max_dbid(True) + 1
         curr_content = self.get_max_contentid(True) + 1

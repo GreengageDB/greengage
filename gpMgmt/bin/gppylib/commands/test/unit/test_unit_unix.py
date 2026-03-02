@@ -56,10 +56,10 @@ class UnixCommandTestCase(GpTestCase):
     def test_kill_9_segment_processes_kill_error(self):
         self.mock_check_pid.return_value = True
         mc = self.mock_cmd.return_value
-        mc.get_results.side_effect = [CommandResult(0, b"", b"", True, False),
-                                                                     CommandResult(0, b"", b"", True, False),
-                                                                     CommandResult(1, b"", b"Kill Error", False, False),
-                                                                     CommandResult(1, b"", b"Kill Error", False, False)]
+        mc.get_results.side_effect = [CommandResult(0, "", "", True, False),
+                                                                     CommandResult(0, "", "", True, False),
+                                                                     CommandResult(1, "", "Kill Error", False, False),
+                                                                     CommandResult(1, "", "Kill Error", False, False)]
         self.subject.kill_9_segment_processes('/data/primary/gpseg0', [123, 456, 789], 'sdw1')
 
         self.subject.logger.info.assert_called_once_with('Terminating processes for segment /data/primary/gpseg0')

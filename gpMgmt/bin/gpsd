@@ -8,13 +8,18 @@ import datetime
 import subprocess
 import os
 import platform
+import pwd
 import sys
 import re
 from contextlib import closing
 from distutils.version import LooseVersion
 from optparse import OptionParser
 from pygresql import pgdb
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 gpsd_version = '%prog 1.0'
 
@@ -161,7 +166,7 @@ def dumpStats(cur, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, six.string_types) and val[0] == '{':
+            elif isinstance(val, string_types) and val[0] == '{':
                 val = val.replace("'", "''").replace('\\', '\\\\')
                 val = "E'" + val + "'"
             if i == 25 and hll == True:
@@ -211,7 +216,7 @@ def main():
     # OK - now let's setup all the arguments & options
     db = args[0]
     host = options.host or platform.node()
-    user = options.user or os.getlogin()
+    user = options.user or pwd.getpwuid(os.geteuid())[0]
     port = options.port or '5432'
     inclSchema = options.dumpSchema
     inclHLL = options.dumpHLL
@@ -232,10 +237,9 @@ def main():
 
     # setup the connection info tuple with options
     connectionInfo = (host, port, user, db)
-    connectionString = ':'.join([host, port, db, user, '', pgoptions, ''])
 
     num_segments = 0
-    with closing(pgdb.connect(connectionString)) as connection:
+    with pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions) as connection:
         with closing(connection.cursor()) as cursor:
             num_segments = get_num_segments(cursor)
 
@@ -271,7 +275,7 @@ def main():
     sys.stdout.flush()
 
     try:
-        with closing(pgdb.connect(connectionString)) as connection:
+        with pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions) as connection:
             with closing(connection.cursor()) as cursor:
                 dumpTupleCount(cursor)
                 dumpStats(cursor, inclHLL)
@@ -281,7 +285,7 @@ def main():
                                'Please review output file to ensure it is within corporate policy to transport the output file.\n'])
     except pgdb.DatabaseError as err:  # catch *all* exceptions
         sys.stderr.write('Error while dumping statistics:\n')
-        sys.stderr.write(err.message)
+        sys.stderr.write(str(err))
         sys.exit(1)
 
 

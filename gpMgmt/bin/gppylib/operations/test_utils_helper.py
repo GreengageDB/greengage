@@ -18,8 +18,8 @@ class RaiseOperation(Operation):
 # They cannot be pickled for reasons inherent to python. See utils.py
 class RaiseOperation_Nested(Operation):
     def execute(self):
-        raise RaiseOperation_Nested.MyException2()
-    class MyException2(Exception): pass
+        class MyException2(Exception): pass
+        raise MyException2()
 
 # Exceptions with args must follow a strange idiom! http://bugs.python.org/issue1692335
 class RaiseOperation_Unsafe(Operation):

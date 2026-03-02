@@ -22,7 +22,7 @@ try:
     from gppylib.operations.utils import RemoteOperation, ParallelOperation
     from gppylib.operations.unix import CheckFile, CheckDir, MakeDir, RemoveFile, RemoveRemoteTree, RemoveRemoteFile, \
         CheckRemoteDir, MakeRemoteDir, CheckRemoteFile, ListRemoteFilesByPattern, ListFiles, ListFilesByPattern
-    from gppylib.utils import TableLogger
+    from gppylib.utils import TableLogger, get_dist_info
 
     import yaml
     from yaml.scanner import ScannerError
@@ -264,7 +264,7 @@ class Gppkg(object):
         pkg['abspath'] = pkg_path
 
         # store all the dependencies of the gppkg
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             for cur_file in archive_list:
                 if cur_file.find('deps/') != -1 and cur_file.endswith('.deb'):
                     pkg['dependencies'].append(cur_file[cur_file.rfind('/') + 1:])
@@ -1064,7 +1064,7 @@ class SyncPackages(Operation):
                     srcFile=os.path.join(GPPKG_ARCHIVE_PATH, package),
                     dstFile=dstFile,
                     dstHost=self.host).run(validateAfter=True)
-                if platform.linux_distribution()[0] == 'Ubuntu':
+                if 'debian' in get_dist_info()[0]:
                     RemoteOperation(InstallDebPackageLocally(dstFile), self.host).run()
                 else:
                     RemoteOperation(InstallPackageLocally(dstFile), self.host).run()
@@ -1074,7 +1074,7 @@ class SyncPackages(Operation):
             logger.info(
                 'The following packages will be uninstalled on %s: %s' % (self.host, ', '.join(uninstall_package_set)))
             for package in uninstall_package_set:
-                if platform.linux_distribution()[0] == 'Ubuntu':
+                if 'debian' in get_dist_info()[0]:
                     RemoteOperation(UninstallDebPackageLocally(package), self.host).run()
                 else:
                     RemoteOperation(UninstallPackageLocally(package), self.host).run()
@@ -1095,7 +1095,7 @@ class InstallPackage(Operation):
 
         # TODO: AK: MPP-15736 - precheck package state on master
         ExtractPackage(self.gppkg).run()
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             ValidateInstallDebPackage(self.gppkg).run()
         else:
             ValidateInstallPackage(self.gppkg).run()
@@ -1110,7 +1110,7 @@ class InstallPackage(Operation):
         srcFile = self.gppkg.abspath
         dstFile = os.path.join(GPHOME, self.gppkg.pkg)
 
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             # install package on segments
             if self.segment_host_list:
                 GpScp(srcFile, dstFile, self.segment_host_list).run()
@@ -1214,7 +1214,7 @@ class UninstallPackage(Operation):
         # TODO: AK: MPP-15736 - precheck package state on master
         ExtractPackage(self.gppkg).run()
 
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             ValidateUninstallDebPackage(self.gppkg).run()
         else:
             ValidateUninstallPackage(self.gppkg).run()
@@ -1226,7 +1226,7 @@ class UninstallPackage(Operation):
                      segment_host_list=self.segment_host_list).run()
 
         # uninstall on segments
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             HostOperation(UninstallDebPackageLocally(self.gppkg.pkg), self.segment_host_list).run()
 
             if self.standby_host:
@@ -1441,7 +1441,7 @@ class UpdatePackage(Operation):
         logger.info('Updating package %s' % self.gppkg.pkg)
 
         ExtractPackage(self.gppkg).run()
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             ValidateInstallDebPackage(self.gppkg, is_update=True).run()
         else:
             ValidateInstallPackage(self.gppkg, is_update=True).run()
@@ -1488,7 +1488,7 @@ class UpdatePackageLocally(Operation):
         self.package_path = package_path
 
     def execute(self):
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if 'debian' in get_dist_info()[0]:
             InstallDebPackageLocally(self.package_path, is_update=True).run()
         else:
             InstallPackageLocally(self.package_path, is_update=True).run()
@@ -1579,7 +1579,7 @@ class MigratePackages(Operation):
         for package in packages:
             package_path = os.path.join(old_archive_path, package)
             try:
-                if platform.linux_distribution()[0] == 'Ubuntu':
+                if 'debian' in get_dist_info()[0]:
                     InstallDebPackageLocally(package_path).run()
                 else:
                     InstallPackageLocally(package_path).run()

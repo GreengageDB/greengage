@@ -19,8 +19,7 @@ try:
     from gppylib.operations.package import MigratePackages, InstallPackage, UninstallPackage, QueryPackage, BuildGppkg, UpdatePackage, CleanGppkg, Gppkg, GPPKG_EXTENSION, GPPKG_ARCHIVE_PATH
     from gppylib.userinput import ask_yesno
     from gppylib.operations.unix import ListFilesByPattern
-
-    import platform
+    from gppylib.utils import get_dist_info
 except ImportError as ex:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(ex))
 
@@ -189,7 +188,7 @@ class GpPkgProgram(object):
                 BuildGppkg(self.build, None).run()
             return
 
-        if platform.linux_distribution()[0] == 'Ubuntu':
+        if "debian" in get_dist_info()[0]:
             try:
                 cmd = Command(name='Check for dpkg', cmdStr='dpkg --version')
                 cmd.run(validateAfter=True)

@@ -51,29 +51,28 @@ from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 from gppylib.parseutils import canonicalize_address
+from gppylib.utils import get_dist_info
 
 default_locale = None
 master_data_dir = None
 
 def show_all_installed(gphome):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_info()[0]
+    if 'debian' in name:
         return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \\$1}'" % gphome
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
     else:
-        raise Exception('UNKNOWN platform: %s' % str(x))
+        raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_native_package_command(gphome, full_gppkg_name):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_info()[0]
+    if 'debian' in name:
         return 'fakeroot dpkg --force-not-root --log=/dev/null --instdir=%s --admindir=%s/share/packages/database/deb -r %s' % (gphome, gphome, full_gppkg_name)
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return 'rpm -e %s --dbpath %s/share/packages/database' % (full_gppkg_name, gphome)
     else:
-        raise Exception('UNKNOWN platform: %s' % str(x))
+        raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_gppkg_archive_command(gphome, gppkg_name):
     return 'rm -f %s/share/packages/archive/%s.gppkg' % (gphome, gppkg_name)
@@ -875,7 +874,7 @@ def impl(context, command, out_msg, num):
 
     match_count = len(re.findall(out_msg, context.stdout_message))
     if match_count != int(num):
-        raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, count, msg_list))
+        raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, match_count, msg_list))
 
 @given('the user records the current timestamp in log_timestamp table')
 @when('the user records the current timestamp in log_timestamp table')
@@ -925,7 +924,7 @@ def impl(context, command, called_command, num, args):
 
     if len(matches) != int(num):
         raise Exception("Expected %s to occur with %s args %s times. Found %d. \n %s"
-                        % (called_command, args, num, len(matches), context.stdout_message))
+                        % (called_command, args, int(num), len(matches), context.stdout_message))
 
 
 @then('{command} should only spawn up to {num} workers in WorkerPool')
@@ -938,7 +937,7 @@ def impl(context, command, num):
         init_workers = int(iw_re.group(1))
         if init_workers > int(num):
             raise Exception("Expected Workerpool for %s to be initialized with %d workers. Found %d. \n %s"
-                            % (command, num, init_workers, context.stdout_message))
+                            % (command, int(num), init_workers, context.stdout_message))
 
 
 @given('{command} should return a return code of {ret_code}')
@@ -2120,7 +2119,7 @@ def impl(context, filename, contain, output):
         cmd = Command(name='Running remote command: %s' % cmd_str, cmdStr=cmd_str)
         cmd.run(validateAfter=True)
 
-        actual = cmd.get_stdout().decode('utf-8')
+        actual = cmd.get_stdout()
         if valuesShouldExist and (output not in actual):
                 raise Exception('File %s on host %s does not contain "%s"' % (filepath, host, output))
         if (not valuesShouldExist) and (output in actual):
@@ -3813,7 +3812,7 @@ def impl(context, table_name, dbname):
     current_row_count = _get_row_count_per_segment(table_name, dbname)
 
     if saved_row_count != current_row_count:
-        raise Exception("%s table in %s has %d rows, expected %d rows." % (table_name, dbname, current_row_count, saved_row_count))
+        raise Exception("%s table in %s has %d rows, expected %d rows." % (table_name, dbname, sum(current_row_count), sum(saved_row_count)))
 
 
 @then('distribution information from table "{table1}" and "{table2}" in "{dbname}" are the same')
@@ -4102,7 +4101,7 @@ def impl(context, command, input):
     if input == "no mode but presses enter":
         input = os.linesep
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate(input=input)
+    stdout, stderr = p.communicate(input=input.encode('utf-8'))
 
     p.stdin.close()
 
@@ -4122,9 +4121,8 @@ def impl(context, command, input):
 
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_info()[0]
+    if 'debian' in name:
         primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
         mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
     else:
@@ -4426,15 +4424,15 @@ def impl(context):
     rsync_script = """
 cat >/usr/local/bin/rsync <<EOL
 #!/usr/bin/env bash
-arguments="\$@"
+arguments="\\$@"
 # Insert data into table and run checkpoint just before syncing pg_control
-if [[ "\$arguments" == *"pg_xlog"* ]]
+if [[ "\\$arguments" == *"pg_xlog"* ]]
 then
     ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p {port} -h cdw"
     # run checkpoint
     ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'CHECKPOINT' -d postgres -p {port} -h cdw"
 fi
-/usr/bin/rsync \$arguments
+/usr/bin/rsync \\$arguments
 EOL
 """.format(port=os.environ.get("PGPORT"))
     clear_cmd_cache_script = """

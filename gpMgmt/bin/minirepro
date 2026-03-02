@@ -62,11 +62,16 @@ from __future__ import print_function
 
 from builtins import zip
 from builtins import object
+import pwd
 import os, sys, re, json, platform, subprocess
 from optparse import OptionParser
 from pygresql import pgdb
 from datetime import datetime
-import six
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 version = '1.13'
 PATH_PREFIX = '/tmp/'
@@ -152,7 +157,7 @@ def dump_query(connectionInfo, query_file):
 
     p = subprocess.Popen(query_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ)
 
-    if p.wait() is not 0:
+    if p.wait() != 0:
         errormsg = p.communicate()[1]
         sys.stderr.writelines('\nError when executing function gp_dump_query_oids.\n\n' + errormsg + '\n\n')
         sys.exit(1)
@@ -199,7 +204,7 @@ def pg_dump_object(mr_query, connectionInfo, envOpts):
         (dmp_cmd, mr_query.relids, mr_query.funcids, E(out_file))
     print(dmp_cmd)
     p = subprocess.Popen(dmp_cmd, shell=True, stderr=subprocess.PIPE, env=envOpts)
-    if p.wait() is not 0:
+    if p.wait() != 0:
         sys.stderr.write('\nError while dumping schema.\n\n' + p.communicate()[1] + '\n\n')
         sys.exit(1)
 
@@ -302,7 +307,7 @@ def dump_stats(cur, oid_str, f_out, inclHLL):
 
             if val is None:
                 val = 'NULL'
-            elif isinstance(val, six.string_types) and val[0] == '{':
+            elif isinstance(val, string_types) and val[0] == '{':
                 # use an Escape string for array constants and also add one
                 # more layer of backslash escape symbols, since the string
                 # will go through two layers of escape processing
@@ -335,7 +340,7 @@ def main():
     envOpts = os.environ
     db = args[0]
     host = options.host or platform.node()
-    user = options.user or ('PGUSER' in envOpts and envOpts['PGUSER']) or os.getlogin()
+    user = options.user or ('PGUSER' in envOpts and envOpts['PGUSER']) or pwd.getpwuid(os.geteuid())[0]
     port = options.port or ('PGPORT' in envOpts and envOpts['PGPORT']) or '5432'
     query_file = options.query_file
     output_file = options.output_file
@@ -364,9 +369,8 @@ def main():
 
     # setup the connection info tuple with options
     connectionInfo = (host, port, user, db)
-    connectionString = ':'.join([host, port, db, user, '', pgoptions, ''])
     print("Connecting to database: host=%s, port=%s, user=%s, db=%s ..." % connectionInfo)
-    conn = pgdb.connect(connectionString)
+    conn = pgdb.connect(host="%s:%s" % (host, port), database=db, user=user, options=pgoptions)
     cursor = conn.cursor()
 
     # get server version, which is dumped to minirepro output file
@@ -419,7 +423,7 @@ def main():
     # write relation and function DDLs
     print("Writing relation and function DDLs ...")
     with open(PATH_PREFIX + PGDUMP_FILE, 'r') as f_pgdump:
-	f_out.writelines(f_pgdump)
+        f_out.writelines(f_pgdump)
 
     # explicitly allow editing of these pg_class & pg_statistic tables
     f_out.writelines(['\n-- ',

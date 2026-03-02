@@ -6,6 +6,7 @@ import shutil
 import time
 from datetime import datetime, timedelta
 from gppylib.db import dbconn
+from contextlib import closing
 from test.behave_utils.utils import check_schema_exists, check_table_exists, drop_table_if_exists
 from behave import given, when, then
 
@@ -105,7 +106,7 @@ def impl(context, view_name, table_name):
 def impl(context, qualified_table):
     found, filename = table_found_in_state_file(context.dbname, qualified_table)
     if not found:
-        if filename == '':
+        if not filename:
             assert False, "no state files found for database %s" % context.dbname
         else:
             assert False, "table %s not found in state file %s" % (qualified_table, os.path.basename(filename))
@@ -134,7 +135,7 @@ def impl(context, expected_result, dbname):
 def impl(context, col_name_list, qualified_table):
     found, column, filename = column_found_in_state_file(context.dbname, qualified_table, col_name_list)
     if not found:
-        if filename == '':
+        if not filename:
             assert False, "no column state file found for database %s" % context.dbname
         else:
             assert False, "column(s) %s of table %s not found in state file %s" % (
@@ -146,7 +147,7 @@ def impl(context, col_name_list, qualified_table):
 def impl(context, col_name, qualified_table):
     found, column, filename = column_found_in_state_file(context.dbname, qualified_table, col_name)
     if found:
-        if filename == '':
+        if not filename:
             assert False, "no column state file found for database %s" % context.dbname
         else:
             assert False, "unexpected column %s of table %s found in state file %s" % (
@@ -198,7 +199,8 @@ def impl(context, qualified_table):
 @then('{num_rows} rows are inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
 @when('{num_rows} rows are inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
 def impl(context, num_rows, tablename, schemaname, column_type_list):
-    insert_data_into_table(context.conn, schemaname, tablename, column_type_list, num_rows)
+    with closing(dbconn.connect(dbconn.DbURL(dbname=context.dbname))) as conn:
+        insert_data_into_table(conn, schemaname, tablename, column_type_list, num_rows)
 
 @given('some data is inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')
 @when('some data is inserted into table "{tablename}" in schema "{schemaname}" with column type list "{column_type_list}"')

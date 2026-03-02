@@ -27,6 +27,12 @@ except ImportError as e:
 _help = ["""This enables one to add, get and remove postgresql.conf configuration parameters.
 The absolute path to the postgresql.conf file is required."""]
 
+if sys.version_info[0] == 2:
+    stdout = sys.stdout
+    stderr = sys.stderr
+else:
+    stdout = sys.stdout.buffer
+    stderr = sys.stderr.buffer
 
 def parseargs():
     parser = OptParser(option_class=OptChecker)
@@ -48,28 +54,28 @@ def parseargs():
 
 def validate_args(options):
     if not options.file:
-        sys.stderr.write("--file required")
+        stderr.write("--file required")
         sys.exit(1)
 
     if options.add_parameter and not options.value:
-        sys.stderr.write("Missing --value <value> when adding parameter '%s'." % options.add_parameter)
+        stderr.write("Missing --value <value> when adding parameter '%s'." % options.add_parameter)
         sys.exit(1)
 
     if options.add_parameter and options.value:
         try:
             pickle.loads(base64.urlsafe_b64decode(options.value))
         except Exception:
-            sys.stderr.write("Expected value to be a pickled base64 encoded value.")
+            stderr.write("Expected value to be a pickled base64 encoded value.")
             sys.exit(1)
 
     if (options.get_parameter or options.remove_parameter) and options.value:
-        sys.stderr.write("Cannot specify --value when using --get-parameter or --remove-parameter")
+        stderr.write("Cannot specify --value when using --get-parameter or --remove-parameter")
         sys.exit(1)
 
     if (options.add_parameter and options.get_parameter) or \
             (options.add_parameter and options.remove_parameter) or \
             (options.get_parameter and options.remove_parameter):
-        sys.stderr.write("Can only specify one of --add-parameter, --get-parameter, or --remove-parameter")
+        stderr.write("Can only specify one of --add-parameter, --get-parameter, or --remove-parameter")
         sys.exit(1)
 
     return options
@@ -88,13 +94,15 @@ def _read_from_file_and_get_empty_tempfile(filename):
 
 def comment_parameter(filename, name):
     lines, temp_conf_path = _read_from_file_and_get_empty_tempfile(filename)
-
+    # In Python 2 it's already bytes
+    if sys.version_info[0] == 3 and isinstance(name, str):
+        name = name.encode('utf-8')
     new_lines = 0
     with open(os.path.abspath(temp_conf_path), 'wb') as outfile:
         for line in lines:
-            potential_match = line.split("=", 1)[0]
+            potential_match = line.split(b"=", 1)[0]
             if potential_match.strip() == name:
-                outfile.write('#')
+                outfile.write(b'#')
             outfile.write(line)
             new_lines = new_lines + 1
 
@@ -110,8 +118,14 @@ def add_parameter(filename, name, value):
         for line in lines:
             outfile.write(line)
             new_lines = new_lines + 1
+        bytes_value = pickle.loads(base64.urlsafe_b64decode(value))
+        # In Python 2 it's already bytes
+        if sys.version_info[0] == 3 and isinstance(bytes_value, str):
+            bytes_value = bytes_value.encode('utf-8')
+        assert (isinstance(bytes_value, bytes))
+
         outfile.write(name.encode() + b'=' +
-                      pickle.loads(base64.urlsafe_b64decode(value)).encode() +
+                      bytes_value +
                       os.linesep.encode())
         new_lines = new_lines + 1
 
@@ -123,6 +137,8 @@ def add_parameter(filename, name, value):
 def get_parameter(filename, name):
     with open(filename, 'rb') as f:
         for line in reversed(f.readlines()):
+            if sys.version_info[0] == 3:
+                line = line.decode('utf-8')
             parts = line.split("=", 1)
             if len(parts) > 1 and parts[0].lstrip().startswith(name):
                 return parts[1].strip()
@@ -133,11 +149,11 @@ def main():
     if options.get_parameter:
         try:
             value = get_parameter(options.file, options.get_parameter)
-            sys.stdout.write(base64.urlsafe_b64encode(pickle.dumps(value)))
+            stdout.write(base64.urlsafe_b64encode(pickle.dumps(value)))
             return
         except Exception as err:
-            sys.stderr.write("Failed to get value for parameter '%s' in file %s due to: %s" % (
-                options.get_parameter, options.file, err.message))
+            stderr.write("Failed to get value for parameter '%s' in file %s due to: %s" % (
+                options.get_parameter, options.file, str(err)))
             sys.exit(1)
 
     if options.remove_parameter:
@@ -145,8 +161,8 @@ def main():
             comment_parameter(options.file, options.remove_parameter)
             return
         except Exception as err:
-            sys.stderr.write("Failed to remove parameter '%s' in file %s due to: %s" %
-                             (options.remove_parameter, options.file, err.message))
+            stderr.write("Failed to remove parameter '%s' in file %s due to: %s" %
+                             (options.remove_parameter, options.file, str(err)))
             sys.exit(1)
 
     if options.add_parameter:
@@ -155,8 +171,8 @@ def main():
             add_parameter(options.file, options.add_parameter, options.value)
             return
         except Exception as err:
-            sys.stderr.write("Failed to add parameter '%s' in file %s due to: %s" %
-                             (options.add_parameter, options.file, err.message))
+            stderr.write("Failed to add parameter '%s' in file %s due to: %s" %
+                             (options.add_parameter, options.file, str(err)))
             sys.exit(1)
 
 
