@@ -19,6 +19,8 @@ RUN set -eux; \
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Install allure-behave for behave tests
     pip2 install --no-cache-dir allure-behave==2.4.0 && \
+# Install pytest for gpload test
+    pip2 install --no-cache-dir -r pytest_requirement.txt && \
 # Cleanup to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/man/
