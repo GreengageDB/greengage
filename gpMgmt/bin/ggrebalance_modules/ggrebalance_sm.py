@@ -412,15 +412,18 @@ class RebalanceSM:
                         catalog_segment_info = self.get_catalog_gp_segment_configuration_for_dbid(dbid)
                         if catalog_segment_info.isSegmentUp() and catalog_segment_info.isSegmentModeSynchronized():
                             self.logger.info('The step is complete, mark it as done')
-                            #TODO: rollback handling
-                            step.setStatus(RebalanceStep.Status.DONE)
+                            step.setStatus(RebalanceStep.Status.DONE, step.isRollback())
                             self.rebalance_schema.updateExecutionStep(step)
-                            continue
+                            break
 
                     time.sleep(SLEEP_PERIOD_SEC)
                     time_waited = time_waited + SLEEP_PERIOD_SEC
-                    if self.interactive_check('Timeout waiting for segment start, wait again?'):
+                    if time_waited >= TIMEOUT_SEC and self.interactive_check('Timeout waiting for segment start, wait again?'):
                         time_waited = 0
+
+            # Continue with the next step, if we already marked this one
+            if step.getStatus() == RebalanceStep.Status.DONE:
+                continue
 
             if not gp_segment_configuration_updated and self.interactive_check(f'Retry step?'):
                 if step.isRollback():

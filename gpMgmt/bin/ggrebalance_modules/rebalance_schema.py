@@ -124,6 +124,11 @@ class RebalanceSchema:
                            f'''ALTER TABLE "{self.schema_name}"."{self.saved_plan}"
                            REBALANCE {target_segment_count}''')
 
+        if get_table_distr_segment_count(self.conn, self.schema_name, self.segment_move_steps) > target_segment_count:
+            dbconn.execSQL(self.conn,
+                           f'''ALTER TABLE "{self.schema_name}"."{self.segment_move_steps}"
+                           REBALANCE {target_segment_count}''')
+
     def storeState(self, state: str, state_category: str) -> None:
         if self.schemaExists():
             dbconn.execSQL(self.conn,
