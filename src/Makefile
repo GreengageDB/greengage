@@ -32,6 +32,7 @@ SUBDIRS = \
 	makefiles \
 	test/regress \
 	test/isolation \
+	test/isolation2 \
 	test/perl
 
 ifeq ($(with_llvm), yes)

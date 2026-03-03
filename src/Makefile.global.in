@@ -756,7 +756,7 @@ pg_regress_check = \
     $(pg_regress_locale_flags) $(EXTRA_REGRESS_OPTS) $(FAULTINJECTOR_OPTS)
 pg_regress_installcheck = \
     $(faultinjector_prep) \
-    $(top_builddir)/src/test/regress/pg_regress \
+    $(pgxsdir)/src/test/regress/pg_regress \
     --inputdir=$(srcdir) \
     --bindir='$(bindir)' \
     $(pg_regress_locale_flags) $(EXTRA_REGRESS_OPTS) $(FAULTINJECTOR_OPTS)
@@ -779,7 +779,7 @@ pg_isolation_regress_installcheck = \
 
 pg_isolation2_regress_installcheck = \
     $(faultinjector_prep) \
-    $(top_builddir)/src/test/isolation2/pg_isolation2_regress \
+    $(pgxsdir)/src/test/isolation2/pg_isolation2_regress \
     --inputdir=$(srcdir) \
     --bindir='$(bindir)' \
     $(pg_regress_locale_flags) $(EXTRA_REGRESS_OPTS) $(FAULTINJECTOR_OPTS)
