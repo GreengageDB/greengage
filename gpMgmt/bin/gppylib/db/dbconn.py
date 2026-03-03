@@ -180,27 +180,33 @@ def connect(dburl, utility=False, verbose=False,
     dbuser   = dburl.pguser
     dbpasswd = dburl.pgpass
     timeout  = dburl.timeout
-    conn_info = "Connecting to dbname='%s'" % dbbase
-    args = {}
+    cnx      = None
+
+    # All quotation and escaping here are to handle database name containing
+    # special characters like ' and \ and white spaces.
+
+    # Need to escape backslashes and single quote in db name
+    # Also single quoted the connection string for dbname
+    dbbase = dbbase.replace('\\', '\\\\')
+    dbbase = dbbase.replace('\'', '\\\'')
 
     # MPP-14121, use specified connection timeout
     # Single quote the connection string for dbbase name
     if timeout is not None:
-        args["connect_timeout"] = timeout
+        cstr    = "dbname='%s' connect_timeout=%s" % (dbbase, timeout)
         retries = dburl.retries
-        conn_info += " connect_timeout=%d" % timeout
     else:
+        cstr    = "dbname='%s'" % dbbase
         retries = 1
 
     # This flag helps to avoid logging the connection string in some special
     # situations as requested
     if (logConn == True):
-        (logger.info if timeout is not None else logger.debug)(conn_info)
+        (logger.info if timeout is not None else logger.debug)("Connecting to %s" % cstr)
 
-    conn = None
     for i in range(retries):
         try:
-            conn = pgdb.connect(host="%s:%d" % (dbhost, dbport), database=dbbase, user=dbuser, password=dbpasswd, options=dbopt, **args)
+            cnx  = pgdb._connect(cstr, dbhost, dbport, dbopt, dbuser, dbpasswd)
             break
 
         except pgdb.InternalError as e:
@@ -209,8 +215,11 @@ def connect(dburl, utility=False, verbose=False,
                 continue
             raise
 
-    if conn is None:
+    if cnx is None:
         raise ConnectionError('Failed to connect to %s' % dbbase)
+
+    # NOTE: the code to set ALWAYS_SECURE_SEARCH_PATH_SQL below assumes it is not part of an existing transaction
+    conn = pgdb.Connection(cnx)
 
     # NOTE: the code to set ALWAYS_SECURE_SEARCH_PATH_SQL below assumes it is not part of an existing transaction
     #by default, libpq will print WARNINGS to stdout
