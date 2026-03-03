@@ -38,6 +38,8 @@ pg_regress.o:
 data:
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/data
 
+isolation2_regress.o: submake-libpgport
+
 .PHONY: scan_flaky_fault_injectors
 scan_flaky_fault_injectors:
 	$(top_builddir)/src/test/regress/scan_flaky_fault_injectors.sh
