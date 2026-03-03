@@ -273,29 +273,10 @@ def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
     conn = dbconn.connect(dburl, encoding='UTF8', allowSystemTableMods=True)
     dbconn.execSQL(conn, "SELECT gp_request_fts_probe_scan()")
     cnt_primaries_down = int(dbconn.queryRow(conn, f"SELECT COUNT(1) FROM gp_segment_configuration WHERE role = 'p' AND status = 'd'")[0])
-    cnt_mirrors_down = int(dbconn.queryRow(conn, f"SELECT COUNT(1) FROM gp_segment_configuration WHERE role = 'm' AND status = 'd'")[0])
     conn.close()
 
     if cnt_primaries_down != 0:
         raise Exception('Detected some primary segments are down, please recover manually')
-
-    """
-    if cnt_mirrors_down != 0:
-        logger.info("Some mirrors are down, trying to recover them, it may take some time...")
-        recoverseg_options = "-a -F"
-        if options.logfile_directory is not None:
-            recoverseg_options = recoverseg_options + f' -l "{str(options.logfile_directory)}"'
-        global cmd_recoverseg
-        try:
-            cmd_recoverseg = GpRecoverSeg("Running gprecoverseg", options=recoverseg_options)
-            cmd_recoverseg.run(validateAfter=True)
-        except Exception as e:
-            logger.error(str(e))
-            error_msg = f"Failed to execute 'gprecoverseg {recoverseg_options}'"
-            raise Exception(error_msg)
-        finally:
-            cmd_recoverseg = None
-    """
 
 def main(options, args, parser):
     conn = None
