@@ -131,7 +131,7 @@ class RebalanceSM:
         self.conn = conn
         self.rebalance_schema = schema
         self.cmd = None
-        self.is_rebalance_flow = False
+        self.is_rollback_flow = False
 
         self.machine = Machine(model = self,
                                queued=True,
@@ -376,13 +376,10 @@ class RebalanceSM:
                 self.process_error_execution_steps_mirror_moves(error_steps)
             else:
                 self.process_error_execution_steps_switchovers(error_steps)
-
         finally:
             dbconn.execSQL(self.conn, "COMMIT")
 
     def process_error_execution_steps_mirror_moves(self, error_steps: List[RebalanceStep]) -> None:
-        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
-        any_step_cancelled = False
         self.logger.info('Process failed segment moves...')
         for step in error_steps:
             self.logger.info(f'Checking error status for step: {str(step)}')
@@ -418,7 +415,7 @@ class RebalanceSM:
                             #TODO: rollback handling
                             step.setStatus(RebalanceStep.Status.DONE)
                             self.rebalance_schema.updateExecutionStep(step)
-                            return
+                            continue
 
                     time.sleep(SLEEP_PERIOD_SEC)
                     time_waited = time_waited + SLEEP_PERIOD_SEC
@@ -433,7 +430,7 @@ class RebalanceSM:
                     self.logger.info('Plan to retry step')
                     step.setStatus(RebalanceStep.Status.PLANNED)
                 self.rebalance_schema.updateExecutionStep(step)
-                return
+                continue
 
             if not step.isRollback() and self.interactive_check('Rollback step?'):
                 self.logger.info('Plan to rollback step')
@@ -441,40 +438,61 @@ class RebalanceSM:
             else:
                 self.logger.info('Cancel step')
                 step.setStatus(RebalanceStep.Status.CANCELLED)
-                any_step_cancelled = True
             self.rebalance_schema.updateExecutionStep(step)
 
         # Mark dependent steps accordingly
-        # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already rolled back
+        self.mark_dependent_steps_on_error(error_steps)
+
+    def process_error_execution_steps_switchovers(self, error_steps: List[RebalanceStep]) -> None:
+        self.logger.info('Process failed switchovers...')
         for step in error_steps:
-            if step.getStatus() == RebalanceStep.Status.PLANNED and step.isRollback():
-                content_id = step.getMove().seg.getSegmentContentId()
-                # TODO: DOUBLE check the full rollback flow here!!!!!!!!!!!
-                for step_todo in steps_left_todo:
-                    if step_todo.getMove().seg.getSegmentContentId() == content_id:
-                        self.logger.info(f'Mark as already rolled back the dependent step {step_todo}')
-                        step_todo.setStatus(RebalanceStep.Status.DONE, True)
-                        self.rebalance_schema.updateExecutionStep(step_todo)
+            # TODO: add comments and update the log below
+            self.logger.info(f'Checking error status for step: {str(step)}')
+            if self.interactive_check(f'Retry step?'):
+                if step.isRollback():
+                    self.logger.info('Plan to retry rollback step')
+                    step.setStatus(RebalanceStep.Status.PLANNED, True)
+                else:
+                    self.logger.info('Plan to retry step')
+                    step.setStatus(RebalanceStep.Status.PLANNED)
+                self.rebalance_schema.updateExecutionStep(step)
+                continue
+
+            if not step.isRollback() and self.interactive_check('Rollback step?'):
+                self.logger.info('Plan to rollback step')
+                step.setStatus(RebalanceStep.Status.PLANNED, True)
+            else:
+                self.logger.info('Cancel step')
+                step.setStatus(RebalanceStep.Status.CANCELLED)
+            self.rebalance_schema.updateExecutionStep(step)
+
+        # Mark dependent steps accordingly
+        self.mark_dependent_steps_on_error(error_steps)
+
+    def mark_dependent_steps_on_error(self, error_steps: List[RebalanceStep]) -> None:
+        # Mark dependent steps accordingly
+        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
+        # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already rolled back
+        if not self.is_rollback_flow:
+            for step in error_steps:
+                if step.getStatus() == RebalanceStep.Status.PLANNED and step.isRollback():
+                    content_id = step.getMove().seg.getSegmentContentId()
+                    for step_todo in steps_left_todo:
+                        if step_todo.getMove().seg.getSegmentContentId() == content_id:
+                            self.logger.info(f'Mark as already rolled back the dependent step {step_todo}')
+                            step_todo.setStatus(RebalanceStep.Status.DONE, True)
+                            self.rebalance_schema.updateExecutionStep(step_todo)
         # 2. If there are any cancelled steps - we need to:
         #  a. cancel all not yet done steps of the same dbid,
         #  b. and *ALL* switchovers,
         #  c. and do cancelation recursively.
         # But, actually, it means that we need to cancel everything besides steps revived from the ERROR state just above,
         # as left todo steps didn't get into this ERRORed batch, meaning they must have different step type (meaning switchover).
-        if any_step_cancelled:
+        if any(step.getStatus() == RebalanceStep.Status.CANCELLED for step in error_steps):
             for step_todo in steps_left_todo:
                 self.logger.info(f'Mark as CANCELLED the step {step_todo}')
-                step_todo.setStatus(RebalanceStep.Status.CANCELLED)
+                step_todo.setStatus(RebalanceStep.Status.CANCELLED, step_todo.isRollback())
                 self.rebalance_schema.updateExecutionStep(step_todo)
-
-    def process_error_execution_steps_switchovers(self, error_steps: List[RebalanceStep]) -> None:
-        self.logger.info('Process failed switchovers...')
-        # TODO: proper error handling?
-        for step in error_steps:
-            self.logger.info(f'Checking error status for step: {str(step)}')
-            self.logger.info('Plan to retry step')
-            step.setStatus(RebalanceStep.Status.PLANNED, step.isRollback())
-            self.rebalance_schema.updateExecutionStep(step)
 
     def get_catalog_gp_segment_configuration_for_dbid(self, dbid: int) -> Segment:
         row = dbconn.queryRow(self.conn,
@@ -569,7 +587,7 @@ class RebalanceSM:
     @wrap_state_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
         state_from_prev_run = self.rebalance_schema.getRebalanceStateFromPreviousRun()
-        self.is_rebalance_flow = self.rebalance_schema.isRollbackRebalanceFlow(self.states_rollback_rebalance_flow[0])
+        self.is_rollback_flow = self.rebalance_schema.isRollbackRebalanceFlow(self.states_rollback_rebalance_flow[0])
 
 
         if state_from_prev_run == STATE_NOT_DEFINED:
@@ -577,7 +595,7 @@ class RebalanceSM:
         elif self.state_is_final(state_from_prev_run):
             self.logger.info('Cluster is already rebalanced...')
         else:
-            if self.is_rebalance_flow:
+            if self.is_rollback_flow:
                 self.logger.info('Continue interrupted rebalance rollback operation...')
             else:
                 self.logger.info('Continue interrupted rebalance operation...')
@@ -711,7 +729,7 @@ class RebalanceSM:
 
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_ROLLBACK_STARTED(self) -> None:
-        self.is_rebalance_flow = True
+        self.is_rollback_flow = True
         self.logger.info('Starting rebalance rollback')
         self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED')
 
@@ -774,7 +792,7 @@ class RebalanceSM:
 
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
-        if self.is_rebalance_flow:
+        if self.is_rollback_flow:
             self.logger.info('Rebalance rollback is complete')
         else:
             self.logger.info('Rebalance is complete')

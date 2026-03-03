@@ -282,6 +282,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Port is updated: False" to logfile with latest timestamp
          And ggrebalance should print "Plan to retry step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And unset fault inject
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw1' and content > -1 and role = 'm' and status = 'u'"
          And the cluster configuration has 3 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
@@ -333,6 +334,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And ggrebalance should print "Port is updated: False" to logfile with latest timestamp
          And ggrebalance should print "Cancel step" to logfile with latest timestamp
          And ggrebalance should print "Rebalance is complete" to logfile with latest timestamp
+         And unset fault inject
          # some mirrors are definitely down, so do not check them
          And the cluster configuration has 2 segments where "hostname='sdw1' and content > -1 and role = 'p' and status = 'u'"
          And the cluster configuration has 2 segments where "hostname='sdw2' and content > -1 and role = 'p' and status = 'u'"
@@ -468,10 +470,12 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
-        When the user runs "ggrebalance"
+        When user will answer "yes" to the prompt "Retry step?"
+         And the user runs "ggrebalance"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Rebalance rollback is complete" to logfile with latest timestamp
          And verify the gp_segment_configuration has been restored
+         And unset fault inject
          And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_1.test_table_2" with data in "test_db_1" is equal to segment count = 6, row count = 100
          And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 6, row count = 100
