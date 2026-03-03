@@ -146,7 +146,7 @@ class GpCommandTestCase(GpTestCase):
         self.assertTrue(is_pid_postmaster(datadir, pid, remoteHost=remoteHost))
 
     @patch('gppylib.commands.gp.Command.run')
-    @patch('gppylib.commands.gp.Command.get_results', return_value=CommandResult(0, "1234", "", True, False))
+    @patch('gppylib.commands.gp.Command.get_results', return_value=CommandResult(0, "postgres        1234", "", True, False))
     def test_get_postmaster_pid_locally(self, mock1, mock2):
         self.assertEqual(get_postmaster_pid_locally('/tmp'), 1234)
 
