@@ -559,6 +559,8 @@ CHK_MULTI_HOME () {
 	# so we'll use a little command line python script.
 
 read -d '' HOSTNAME_SORTER <<"END_PYTHON_CODE"
+from __future__ import print_function
+from functools import cmp_to_key
 import sys, re
 
 standard_host_re = re.compile(r'([a-zA-Z]+)((\\d+)(-(\\d+))?)')
@@ -586,8 +588,8 @@ def standard_host_cmp(h1, h2):
 			return 1
 
 hl = sys.stdin.readlines()
-for h in sorted(hl,cmp=standard_host_cmp):
-        print h,
+for h in sorted(hl,key=cmp_to_key(standard_host_cmp)):
+        print(h),
 END_PYTHON_CODE
 
 	MACHINE_LIST=(`$CAT $MACHINE_LIST_FILE|python -c "$HOSTNAME_SORTER"`)

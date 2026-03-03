@@ -1,5 +1,9 @@
 #! /usr/local/bin/python
 
+from __future__ import print_function
+from __future__ import division
+from builtins import object
+from past.utils import old_div
 import sys
 import datetime
 
@@ -39,9 +43,9 @@ def date_triple(p1, p2, scale, transform, basedate):
 
 def time_offset_by_minutes(t, d):
     x = t.hour * 60 + t.minute + d
-    h = x / 60
+    h = old_div(x, 60)
     m = x - 60 * h
-    h = h - 24 * (h / 24)
+    h = h - 24 * (old_div(h, 24))
     return datetime.time(hour = h, minute = m)
 
 def time_triple(p1, p2, scale, transform, basetime):
@@ -141,7 +145,7 @@ oid_base = 6072
 
 def ordered_types():
     """List of types in canonical order of OID assignment."""
-    keys = type_dict.keys()
+    keys = list(type_dict.keys())
     ordered_keys = [None for k in keys]
     for key in keys:
         pos = type_dict[key][3]
@@ -214,8 +218,8 @@ def basic_tests(abscissa_type, ordinate_type, verbose):
     if verbose:
         lst = [
             '',
-            '\qecho',
-            '\qecho Check interpolation correctness: %s --> %s' % (abscissa_type, ordinate_type),
+            '\\qecho',
+            '\\qecho Check interpolation correctness: %s --> %s' % (abscissa_type, ordinate_type),
             ]
         prolog = []
     else:
@@ -375,7 +379,7 @@ def main():
         'pg_proc' : pg_proc_declarations,
         'upgrade' : upgrade_declarations
         }
-    efmt = 'argument must be one of (%s), not "%s"' % (', '.join(argmap.keys()), "%s")
+    efmt = 'argument must be one of (%s), not "%s"' % (', '.join(list(argmap.keys())), "%s")
 
     if len(sys.argv) == 1:
         fn = argmap['readable']
@@ -384,7 +388,7 @@ def main():
     else:
         sys.exit(efmt % ' '.join(sys.argv[1:]))
     
-    print fn()
+    print(fn())
        
 if __name__ == '__main__':
     main()

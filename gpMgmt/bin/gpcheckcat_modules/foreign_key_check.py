@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+from builtins import map
+from builtins import object
 from gppylib.gplog import *
 from gppylib.gpcatalog import *
 import re
 
-class ForeignKeyCheck:
+class ForeignKeyCheck(object):
     """
     PURPOSE: detect differences between foreign key and reference key values among catalogs
     """
@@ -38,7 +40,7 @@ class ForeignKeyCheck:
 
     def runCheck(self, tables):
         foreign_key_issues = dict()
-        for cat in sorted(tables):
+        for cat in sorted(tables, key=lambda table: table.getTableName()):
 
             issues = self.checkTableForeignKey(cat)
             if issues:
@@ -114,7 +116,7 @@ class ForeignKeyCheck:
             # are foreign keys--using a very specific filtering condition, since the full join would otherwise contain
             # unwanted entries from pg_class.
             #
-            can_use_full_join = self.query_filters.has_key(catname_filter) and pkcatname == 'pg_class'
+            can_use_full_join = catname_filter in self.query_filters and pkcatname == 'pg_class'
             if can_use_full_join:
                 qry = self.get_fk_query_full_join(catname, pkcatname, fkeystr, pkeystr,
                                                   pkey_aliases, cat1pkeys=cat1_pkeys_column_rename, filter=self.query_filters[catname_filter])

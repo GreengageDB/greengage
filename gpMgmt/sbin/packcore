@@ -2,6 +2,7 @@
 # Copyright Pivotal 2014
 
 
+from __future__ import print_function
 import glob
 import os
 import re
@@ -43,7 +44,7 @@ def _getFileInfo(coreFile):
 
 
 def _isCore(fileCmdOutput):
-    if fileCmdOutput.find('LSB core file') is -1:
+    if fileCmdOutput.find('LSB core file') == -1:
         return False
     return True
 
@@ -158,7 +159,7 @@ def _getLibraryListWithGDB(coreFile, binary):
 
 def _copyFilePath(src, dst):
     srcDir = os.path.dirname(src)
-    if srcDir.find('/') is 0:
+    if srcDir.find('/') == 0:
         srcDir = srcDir[1:]
     dstDir = os.path.join(dst, srcDir)
     if not os.path.exists(dstDir):
@@ -168,7 +169,7 @@ def _copyFilePath(src, dst):
 
 def _generateGDBScript(b, c):
     with open('runGDB.sh', 'w') as f1:
-        print >>f1, '''\
+        print('''\
 #!/bin/bash
 unset PYTHONHOME
 unset PYTHONPATH
@@ -178,8 +179,8 @@ curDIR=`pwd`
     --eval-command="core {core}" \\
     {binary} \\
     "$@"
-'''.format(core=c, binary=b)
-    os.chmod('runGDB.sh', 0755)
+'''.format(core=c, binary=b), file=f1)
+    os.chmod('runGDB.sh', 0o755)
 
 
 # This is taken from Python 3.3:
@@ -259,7 +260,7 @@ def packCoreFile(coreFile, binary):
 
         libraries = _getLibraryListWithGDB(coreFile, binary)
 
-        if libraries is False:
+        if not libraries:
             libraries = _getLibraryListWithLDD(binary)
 
         for lib in libraries:

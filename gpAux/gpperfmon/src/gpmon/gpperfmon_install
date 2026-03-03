@@ -18,7 +18,9 @@ USAGE:   gpperfmon_install --port GPDB_PORT [--enable --password GPMON_PASSWORD]
         --gpperfmonport sets the guc 'gpperfmon_port' for gpperfmon communication (default is 8888)
         --verbose will show output from sub-commands
 '''
+from __future__ import print_function
 
+from builtins import object
 import os, sys, time, re
 from subprocess import Popen
 
@@ -28,12 +30,12 @@ try:
     from gppylib.userinput import ask_input
     from gppylib.gplog import get_default_logger, setup_tool_logging
     from gppylib.commands.unix import getLocalHostname, getUserName
-except ImportError, e:
+except ImportError as e:
     sys.exit('Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 EXECNAME = os.path.split(__file__)[-1]
 
-class Command:
+class Command(object):
     def __init__(self, cmdstr, showOutput=False):
         self.cmd = cmdstr
         self.verbose = showOutput
@@ -46,7 +48,7 @@ def run_command(cmd, verbose=False):
         cmdstr = "%s >& /dev/null" % cmdstr
     # hide password
     if bool(re.search('CREATE ROLE.*ENCRYPTED PASSWORD',cmdstr)):
-        regex = re.compile('ENCRYPTED\sPASSWORD\s\'(.*)\'')
+        regex = re.compile(r"ENCRYPTED\sPASSWORD\s'(.*)'")
         logger.info(regex.sub('ENCRYPTED PASSWORD \'********\'',cmdstr))
     elif bool(re.search('echo.*:gpperfmon:gpmon:',cmdstr)):
         regex = re.compile(':gpperfmon:gpmon:(.*)\"')
@@ -79,7 +81,7 @@ def cli_help():
 
 
 def usage():
-    print cli_help() or __doc__
+    print(cli_help() or __doc__)
 
 
 ###### main()

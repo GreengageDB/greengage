@@ -1,3 +1,4 @@
+import json
 import unittest
 from . import redirect_stderr
 from mock import call, Mock, patch, ANY
@@ -59,7 +60,7 @@ class RecoveryBaseTestCase(GpTestCase):
 
     def _asserts_for_failing_tests(self, ex, stderr_buf, expected_message, info_count=1):
         self.assertEqual(1, ex.exception.code)
-        self.assertRegexpMatches(expected_message, stderr_buf.getvalue().strip())
+        self.assertReMatch(expected_message, stderr_buf.getvalue().strip())
         self.assertTrue(
             any(re.search(expected_message, call_args[0]) for call_args, _ in self.mock_logger.error.call_args_list))
         self.assertEqual(info_count, self.mock_logger.info.call_count)
@@ -75,7 +76,7 @@ class RecoveryBaseTestCase(GpTestCase):
         stderr_buf.seek(0)
         stderr_lines = stderr_buf.readlines()
         self.assertEqual(3, len(stderr_lines))
-        self.assertEqual(expected_stderr_message, stderr_lines[2])
+        self.assertTrue(re.match(expected_stderr_message, stderr_lines[2]))
         self.assertEqual(2, ex.exception.code)
         self.assertEqual(0, self.mock_logger.error.call_count)
 
@@ -95,7 +96,7 @@ class RecoveryBaseTestCase(GpTestCase):
         sys.argv = ['recovery_base', '-c']
         stderr_buf, ex = self.run_recovery_base_get_stderr()
         self._assert_exception_from_parseargs(ex, stderr_buf,
-                                             'recovery_base: error: -c option requires an argument\n')
+                                             'recovery_base: error: -c option requires (1|an) argument\n')
 
     def test_invalid_option_fails(self):
         sys.argv = ['recovery_base', '-z']
@@ -170,7 +171,7 @@ class RecoveryBaseTestCase(GpTestCase):
     def test_valid_cmd_default_options_passes(self, mock_workerpool):
         mock_workerpool.return_value = Mock()
         cmd1 = Command('testcmd', 'testcmdstr')
-        cmd1.set_results(CommandResult(0, b'', b'', True, False))
+        cmd1.set_results(CommandResult(0, '', '', True, False))
         mock_workerpool.return_value.getCompletedItems = Mock(return_value=[cmd1, cmd1])
         sys.argv = ['recovery_base',  '-l', '/tmp/logdir', '-c {}'.format(self.confinfo)]
         stderr_buf, ex = self.run_recovery_base_get_stderr()
@@ -183,7 +184,7 @@ class RecoveryBaseTestCase(GpTestCase):
     def test_valid_cmd_non_default_options_passes(self, mock_workerpool):
         mock_workerpool.return_value = Mock()
         cmd1 = Command('testcmd', 'testcmdstr')
-        cmd1.set_results(CommandResult(0, b'', b'', True, False))
+        cmd1.set_results(CommandResult(0, '', '', True, False))
         mock_workerpool.return_value.getCompletedItems = Mock(return_value=[cmd1, cmd1])
         sys.argv = ['recovery_base', '-l', '/tmp/logdir',
                     '-c {}'.format(self.confinfo),
@@ -302,7 +303,7 @@ class SetCmdResultsTestCase(GpTestCase):
     def _assert_cmd_failed(self, cmd, expected_stderr):
         self.assertEqual(1, cmd.get_results().rc)
         self.assertEqual('', cmd.get_results().stdout)
-        self.assertItemsEqual(expected_stderr, cmd.get_results().stderr)
+        self.assertEqual(json.loads(expected_stderr), json.loads(cmd.get_results().stderr))
         self.assertEqual(True, cmd.get_results().completed)
         self.assertEqual(False, cmd.get_results().halt)
         self.assertEqual(False, cmd.get_results().wasSuccessful())

@@ -1,6 +1,6 @@
+from __future__ import absolute_import
 import base64
 import errno
-import imp
 import os
 import pickle
 import shutil
@@ -10,10 +10,16 @@ import tempfile
 from gppylib.gparray import Segment, GpArray, SegmentPair
 from gpconfig_modules.parse_guc_metadata import ParseGuc
 
-from gp_unittest import *
+from .gp_unittest import *
 from mock import *
 from pygresql.pg import DatabaseError
-from StringIO import StringIO
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 db_singleton_side_effect_list = []
 
@@ -40,7 +46,7 @@ class GpConfig(GpTestCase):
         #   import gpconfig
         #   self.subject = gpconfig
         gpconfig_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpconfig")
-        self.subject = imp.load_source('gpconfig', gpconfig_file)
+        self.subject = load_module('gpconfig', gpconfig_file)
         self.subject.LOGGER = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
         self.subject.check_gpexpand = lambda : (True, "")
 
@@ -87,7 +93,7 @@ class GpConfig(GpTestCase):
         self.guc.vartype = "string"
 
         shared_dir = os.path.join(self.temp_dir, ParseGuc.DESTINATION_DIR)
-        _mkdir_p(shared_dir, 0755)
+        _mkdir_p(shared_dir, 0o755)
         self.guc_disallowed_readonly_file = os.path.abspath(os.path.join(shared_dir, ParseGuc.DESTINATION_FILENAME))
         with open(self.guc_disallowed_readonly_file, 'w') as f:
             f.writelines("x\ny\n")
@@ -98,7 +104,7 @@ class GpConfig(GpTestCase):
         del db_singleton_side_effect_list[:]
 
     def test_when_no_options_prints_and_raises(self):
-        with self.assertRaisesRegexp(Exception, "No action specified.  See the --help info."):
+        with self.assertRaisesRe(Exception, "No action specified.  See the --help info."):
             self.subject.do_main()
         self.subject.LOGGER.error.assert_called_once_with("No action specified.  See the --help info.")
 
@@ -106,11 +112,11 @@ class GpConfig(GpTestCase):
         sys.argv = ["gpconfig", "--list"]
         options = self.subject.parseargs()
 
-        self.assertEquals(options.list, True)
+        self.assertEqual(options.list, True)
 
     def test_option_value_must_accompany_option_change_raise(self):
         sys.argv = ["gpconfig", "--change", "statement_mem"]
-        with self.assertRaisesRegexp(Exception, "change requested but value not specified"):
+        with self.assertRaisesRe(Exception, "change requested but value not specified"):
             self.subject.parseargs()
         self.subject.LOGGER.error.assert_called_once_with("change requested but value not specified")
 
@@ -138,31 +144,31 @@ class GpConfig(GpTestCase):
         sys.argv = ["gpconfig", "--file", "--show", "statement_mem"]
         options = self.subject.parseargs()
 
-        self.assertEquals(options.show, "statement_mem")
-        self.assertEquals(options.file, True)
+        self.assertEqual(options.show, "statement_mem")
+        self.assertEqual(options.file, True)
 
     def test_option_file_with_option_change_will_raise(self):
         sys.argv = ["gpconfig", "--file", "--change", "statement_mem"]
-        with self.assertRaisesRegexp(Exception, "'--file' option must accompany '--show' option"):
+        with self.assertRaisesRe(Exception, "'--file' option must accompany '--show' option"):
             self.subject.parseargs()
         self.subject.LOGGER.error.assert_called_once_with("'--file' option must accompany '--show' option")
 
     def test_option_file_compare_with_file_will_raise(self):
         sys.argv = ["gpconfig", "--file", "--show", "statement_mem", "--file-compare", ]
-        with self.assertRaisesRegexp(Exception, "'--file' option and '--file-compare' option cannot be used together"):
+        with self.assertRaisesRe(Exception, "'--file' option and '--file-compare' option cannot be used together"):
             self.subject.parseargs()
         self.subject.LOGGER.error.assert_called_once_with("'--file' option and '--file-compare' option cannot be used together")
 
     def test_option_file_with_option_list_will_raise(self):
         sys.argv = ["gpconfig", "--file", "--list", "statement_mem"]
-        with self.assertRaisesRegexp(Exception, "'--file' option must accompany '--show' option"):
+        with self.assertRaisesRe(Exception, "'--file' option must accompany '--show' option"):
             self.subject.parseargs()
         self.subject.LOGGER.error.assert_called_once_with("'--file' option must accompany '--show' option")
 
     def test_option_file_without_master_data_dir_will_raise(self):
         sys.argv = ["gpconfig", "--file", "--show", "statement_mem"]
         del self.os_env["MASTER_DATA_DIRECTORY"]
-        with self.assertRaisesRegexp(Exception, "--file option requires that MASTER_DATA_DIRECTORY be set"):
+        with self.assertRaisesRe(Exception, "--file option requires that MASTER_DATA_DIRECTORY be set"):
             self.subject.parseargs()
         self.subject.LOGGER.error.assert_called_once_with("--file option requires that MASTER_DATA_DIRECTORY be set")
 
@@ -275,11 +281,11 @@ class GpConfig(GpTestCase):
         self.assertEqual(self.pool.addCommand.call_count, 5)
         segment_command = self.pool.addCommand.call_args_list[0][0][0]
         self.assertTrue("my_property_name" in segment_command.cmdStr)
-        value = base64.urlsafe_b64encode(pickle.dumps("100"))
+        value = base64.urlsafe_b64encode(pickle.dumps("100")).decode('ascii')
         self.assertTrue(value in segment_command.cmdStr)
         master_command = self.pool.addCommand.call_args_list[4][0][0]
         self.assertTrue("my_property_name" in master_command.cmdStr)
-        value = base64.urlsafe_b64encode(pickle.dumps("20"))
+        value = base64.urlsafe_b64encode(pickle.dumps("20")).decode('ascii')
         self.assertTrue(value in master_command.cmdStr)
 
     def test_option_change_value_masteronly_succeed(self):
@@ -298,13 +304,13 @@ class GpConfig(GpTestCase):
         self.assertEqual(self.pool.addCommand.call_count, 1)
         master_command = self.pool.addCommand.call_args_list[0][0][0]
         self.assertTrue(("my_property_name") in master_command.cmdStr)
-        value = base64.urlsafe_b64encode(pickle.dumps("100"))
+        value = base64.urlsafe_b64encode(pickle.dumps("100")).decode('ascii')
         self.assertTrue(value in master_command.cmdStr)
 
     def test_option_change_value_master_separate_fail_not_valid_guc(self):
         db_singleton_side_effect_list.append("DatabaseError")
 
-        with self.assertRaisesRegexp(Exception, "not a valid GUC: my_property_name"):
+        with self.assertRaisesRe(Exception, "not a valid GUC: my_property_name"):
             sys.argv = ["gpconfig", "-c", "my_property_name", "-v", "100", "-m", "20"]
             self.subject.do_main()
 
@@ -320,13 +326,13 @@ class GpConfig(GpTestCase):
         self.assertTrue("my_hidden_guc_name" in segment_command.cmdStr)
         master_command = self.pool.addCommand.call_args_list[4][0][0]
         self.assertTrue("my_hidden_guc_name" in master_command.cmdStr)
-        value = base64.urlsafe_b64encode(pickle.dumps("100"))
+        value = base64.urlsafe_b64encode(pickle.dumps("100")).decode('ascii')
         self.assertTrue(value in master_command.cmdStr)
 
     def test_option_change_value_hidden_guc_without_skipvalidation(self):
         db_singleton_side_effect_list.append("my happy result")
 
-        with self.assertRaisesRegexp(Exception, "GUC Validation Failed: my_hidden_guc_name cannot be changed under "
+        with self.assertRaisesRe(Exception, "GUC Validation Failed: my_hidden_guc_name cannot be changed under "
                                                 "normal conditions. Please refer to gpconfig documentation."):
             sys.argv = ["gpconfig", "-c", "my_hidden_guc_name", "-v", "100"]
             self.subject.do_main()
@@ -464,7 +470,7 @@ class GpConfig(GpTestCase):
     def test_setting_guc_when_guc_is_readonly_will_fail(self):
         self.subject.read_only_gucs.add("is_superuser")
         sys.argv = ["gpconfig", "-c", "is_superuser", "-v", "on"]
-        with self.assertRaisesRegexp(Exception, "not a modifiable GUC: 'is_superuser'"):
+        with self.assertRaisesRe(Exception, "not a modifiable GUC: 'is_superuser'"):
             self.subject.do_main()
 
     def test_change_will_populate_read_only_gucs_set(self):
@@ -526,7 +532,7 @@ class GpConfig(GpTestCase):
             # In this case, we have an object as an argument to poo.addCommand
             # call_obj[1] returns a dict for all named arguments -> {key='arg3', key2='arg4'}
             gp_add_config_script_obj = call[0][0]
-            value = base64.urlsafe_b64encode(pickle.dumps(expected_value))
+            value = base64.urlsafe_b64encode(pickle.dumps(expected_value)).decode('ascii')
             try:
                 self.assertTrue(value in gp_add_config_script_obj.cmdStr)
             except AssertionError as e:
@@ -580,7 +586,7 @@ class GpConfig(GpTestCase):
         self.os_env['GPHOME'] = None
         sys.argv = ["gpconfig", "-c", 'my_property_name', "-v", "100", "--masteronly"]
 
-        with self.assertRaisesRegexp(Exception, "GPHOME environment variable must be set"):
+        with self.assertRaisesRe(Exception, "GPHOME environment variable must be set"):
             self.subject.do_main()
 
     def test_gpconfig_logs_successful_guc_change(self):

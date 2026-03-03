@@ -8,6 +8,12 @@ Change directory to gpdb sources destination. Make sure that directry doesn't co
 docker build -t gpdb6_regress:latest -f ci/Dockerfile.ubuntu .
 ```
 
+To build an image based on Ubuntu 24.04, specify the version in build args:
+
+```bash
+docker build -t gpdb6_regress:latest --build-arg OS_VERSION=24.04 -f ci/Dockerfile.ubuntu .
+```
+
 
 ## Full regression tests suite run
 

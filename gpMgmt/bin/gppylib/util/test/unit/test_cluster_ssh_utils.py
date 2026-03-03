@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import mock
 import sys, os, pwd
 import unittest
-from StringIO import StringIO
+from io import StringIO
 from mock import patch, call
+
+if sys.version_info[0] == 3:
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 try:
     gphome = os.environ.get('GPHOME')
@@ -14,8 +21,8 @@ try:
     sys.path.append(location)
     from gppylib.util.ssh_utils import HostList, Session, pxssh
 except Exception as e:
-    print "PYTHON PATH: %s" % ":".join(sys.path)
-    print str(e)
+    print("PYTHON PATH: %s" % ":".join(sys.path))
+    print(str(e))
     raise
 
 class SshUtilsTestCase(unittest.TestCase):
@@ -50,12 +57,12 @@ class SshUtilsTestCase(unittest.TestCase):
         test that delaybeforesend is changed properly
         '''
         p1 = pxssh.pxssh()
-        self.assertEquals(p1.delaybeforesend, 0.05)
+        self.assertEqual(p1.delaybeforesend, 0.05)
 
         p2 = pxssh.pxssh(delaybeforesend=3.0,
                         options={"StrictHostKeyChecking": "no",
                                  "BatchMode": "yes"})
-        self.assertEquals(p2.delaybeforesend, 3.0)
+        self.assertEqual(p2.delaybeforesend, 3.0)
 
     def test03_pxssh_sync_multiplier(self):
         '''

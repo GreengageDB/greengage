@@ -1,3 +1,5 @@
+from __future__ import print_function
+from builtins import object
 import errno
 import os
 import re
@@ -9,7 +11,7 @@ import sys
 GUCS_DISALLOWED_IN_FILE_REGEX = r"\"(\w+)\"[^}]+GUC_DISALLOW_IN_FILE"
 
 
-class ParseGuc:
+class ParseGuc(object):
     """
     metadata about gucs, like GUC_DISALLOW_IN_FILE, is not available via
 sql. Work around that by parsing the C code that defines this metadata, and store
@@ -52,7 +54,7 @@ change a GUC.  The Makefile in gpMgmt/bin will use this parser to
             sys.exit(1)
         prefix = sys.argv[1]
         dir_path = os.path.join(prefix, self.DESTINATION_DIR)
-        _mkdir_p(dir_path, 0755)
+        _mkdir_p(dir_path, 0o755)
         output_file = os.path.join(dir_path, self.DESTINATION_FILENAME)
         self.write_gucs_to_file(output_file)
 

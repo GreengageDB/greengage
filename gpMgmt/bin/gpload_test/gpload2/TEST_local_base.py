@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from builtins import range
+from builtins import object
 import unittest
 import sys
 import os
@@ -11,6 +14,10 @@ import platform
 import re
 import pytest
 import io
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 # from gppylib.commands.gp import get_coordinatordatadir
 
@@ -39,10 +46,10 @@ def get_port_from_conf():
     file = os.environ.get('MASTER_DATA_DIRECTORY')+'/postgresql.conf'
     if os.path.isfile(file):
         with open(file) as f:
-            for line in f.xreadlines():
-                match = re.search('port=\d+',line)
+            for line in f:
+                match = re.search(r'port=\d+',line)
                 if match:
-                    match1 = re.search('\d+', match.group())
+                    match1 = re.search(r'\d+', match.group())
                     if match1:
                         return match1.group()
 
@@ -86,7 +93,7 @@ def run(cmd):
     rc = False if p.wait() else True
     return (rc,ret)
 
-'''
+r'''
 def getPortCoordinatorOnly(host = 'localhost',coordinator_value = None,
                       user = os.environ.get('USER'),gphome = os.environ['GPHOME'],
                       cdd=get_coordinatordatadir(),port = os.environ['PGPORT']):
@@ -166,7 +173,7 @@ def getPortMasterOnly(host = 'localhost',master_value = None,
                       user = os.environ.get('USER'),gphome = os.environ['GPHOME'],
                       mdd=os.environ['MASTER_DATA_DIRECTORY'],port = os.environ['PGPORT']):
 
-    master_pattern = "Context:\s*-1\s*Value:\s*\d+"
+    master_pattern = r"Context:\s*-1\s*Value:\s*\d+"
     command = "gpconfig -s %s" % ( "port" )
 
     cmd = "source %s/greengage_path.sh; export MASTER_DATA_DIRECTORY=%s; export PGPORT=%s; %s" \
@@ -219,7 +226,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
     if port_range:
         f.write(u"\n         PORT_RANGE: "+port_range)
     f.write("\n         FILE:")
-    if(isinstance(file,str)):
+    if(isinstance(file, string_types)):
         f.write("\n            - "+mkpath(file))
     if (isinstance(file,list)):
         for ff in file:
@@ -284,7 +291,7 @@ def write_config_file(version='1.0.0.1', database='reuse_gptest', user=os.enviro
         f.write("\n    - UPDATE_CONDITION: "+update_condition)
     if mapping:
         f.write("\n    - MAPPING:")
-        for key, val in mapping.items():
+        for key, val in list(mapping.items()):
             f.write("\n           "+key+": "+val)
 
     if preload:
@@ -499,7 +506,7 @@ class PSQLError(Exception):
     '''
     pass
 
-class AnsFile():
+class AnsFile(object):
     def __init__(self, path):
         self.path = path
     def __eq__(self, other):

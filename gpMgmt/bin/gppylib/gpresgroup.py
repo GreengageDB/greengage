@@ -3,6 +3,7 @@
 # Copyright (c) 2017, Pivotal Software Inc.
 #
 
+from builtins import object
 from gppylib.commands import base
 from gppylib.commands.unix import *
 from gppylib.commands.gp import *

@@ -14,6 +14,9 @@
 """
 
 # ============================================================================
+from past.builtins import cmp
+from builtins import range
+from builtins import object
 from datetime import date
 import copy
 import traceback
@@ -80,7 +83,7 @@ class InvalidSegmentConfiguration(Exception):
 
 # ============================================================================
 # ============================================================================
-class Segment:
+class Segment(object):
     """
     Segment class representing configuration information for a single dbid
     within a Greengage Array.
@@ -129,16 +132,23 @@ class Segment:
             self.status
             )
 
-    #
-    # Note that this is not an ideal comparison -- it uses the string representation
-    #   for comparison
-    #
-    def __cmp__(self,other):
-        left = repr(self)
-        right = repr(other)
-        if left < right: return -1
-        elif left > right: return 1
-        else: return 0
+    def __equal(self, other, ignoreAttr=[]):
+        if other is None:
+            return False
+        if not isinstance(other, Segment):
+            return NotImplemented
+        for key in list(vars(other)):
+            if key in ignoreAttr:
+                continue
+            if vars(other)[key] != vars(self)[key]:
+                return False
+        return True
+
+    def __eq__(self, other):
+        return self.__equal(other)
+
+    def __ne__(self, other):
+        return not self.__equal(other)
 
     #
     # Moved here from system/configurationImplGpdb.py
@@ -405,7 +415,7 @@ class Segment:
 
 
 # ============================================================================
-class SegmentPair:
+class SegmentPair(object):
     """
     Used to represent all of the SegmentDBs with the same contentID.  Today this
     can be at most a primary SegDB and a single mirror SegDB. Future plans to
@@ -482,7 +492,7 @@ class SegmentPair:
 
 # --------------------------------------------------------------------
 # --------------------------------------------------------------------
-class SegmentRow():
+class SegmentRow(object):
 
     def __init__(self, content, isprimary, dbid, host, address, port, fulldir):
         self.content         = content
@@ -524,7 +534,7 @@ def createSegmentRows( hostlist
     content = 0
 
     for host in hostlist:
-        isprimary='t'
+        isprimary=True
         port=primary_portbase
         index = 0
         for pdir in primary_list:
@@ -555,7 +565,7 @@ def createSegmentRows( hostlist
         #      this is a general problem for GPDB these days.
         #      best to have the interface mapping stuff 1st.
         content=0
-        isprimary='f'
+        isprimary=False
         num_hosts = len(hostlist)
         num_dirs=len(primary_list)
         if num_hosts <= num_dirs:
@@ -581,7 +591,7 @@ def createSegmentRows( hostlist
                 else:
                     address = mirror_host
 
-                if not mirror_port.has_key(mirror_host):
+                if mirror_host not in mirror_port:
                     mirror_port[mirror_host] = mirror_portbase
 
                 rows.append( SegmentRow( content = content
@@ -610,7 +620,7 @@ def createSegmentRows( hostlist
         #we'll pick our mirror host to be 1 host "ahead" of the primary.
         mirror_host_offset = 1
 
-        isprimary='f'
+        isprimary=False
         for host in hostlist:
             mirror_host = hostlist[mirror_host_offset % num_hosts]
             mirror_host_offset += 1
@@ -661,7 +671,7 @@ def createSegmentRowsFromSegmentList( newHostlist
     interfaceDict = {}
 
     for host in newHostlist:
-        isprimary='t'
+        isprimary=True
         port=primary_portbase
         index = 0
         for pSeg in primary_segment_list:
@@ -690,7 +700,7 @@ def createSegmentRowsFromSegmentList( newHostlist
         return rows
     elif mirror_type.lower().strip() == 'spread':
         content=0
-        isprimary='f'
+        isprimary=False
         num_hosts = len(newHostlist)
         num_dirs=len(primary_segment_list)
         if num_hosts <= num_dirs:
@@ -715,7 +725,7 @@ def createSegmentRowsFromSegmentList( newHostlist
                 else:
                     address = mirror_host
 
-                if not mirror_port.has_key(mirror_host):
+                if mirror_host not in mirror_port:
                     mirror_port[mirror_host] = mirror_portbase
 
                 rows.append( SegmentRow( content = content
@@ -743,7 +753,7 @@ def createSegmentRowsFromSegmentList( newHostlist
         #we'll pick our mirror host to be 1 host "ahead" of the primary.
         mirror_host_offset = 1
 
-        isprimary='f'
+        isprimary=False
         for host in newHostlist:
             mirror_host = newHostlist[mirror_host_offset % num_hosts]
             mirror_host_offset += 1
@@ -776,7 +786,7 @@ def createSegmentRowsFromSegmentList( newHostlist
 
 
 # ============================================================================
-class GpArray:
+class GpArray(object):
     """
     GpArray is a python class that describes a Greengage array.
 
@@ -937,7 +947,7 @@ class GpArray:
                 first = False
                 if suffixList != firstSuffixList:
                     raise Exception("The address list for %s doesn't not have the same pattern as %s." % (str(suffixList), str(firstSuffixList)))
-        except Exception, e:
+        except Exception as e:
             # Assume any exception implies a non-standard array
             return False, str(e)
 
@@ -952,44 +962,44 @@ class GpArray:
         """
 
         hasMirrors = False
-        conn = dbconn.connect(dbURL, utility)
+        with dbconn.connect(dbURL, utility) as conn:
 
-        # Get the version from the database:
-        version_str = None
-        for row in dbconn.execSQL(conn, "SELECT version()"):
-            version_str = row[0]
-        version = GpVersion(version_str)
-        if not version.isVersionCurrentRelease():
-            raise Exception("Cannot connect to GPDB version %s from installed version %s"%(version.getVersionRelease(), MAIN_VERSION[0]))
+            # Get the version from the database:
+            version_str = None
+            for row in dbconn.execSQL(conn, "SELECT version()"):
+                version_str = row[0]
+            version = GpVersion(version_str)
+            if not version.isVersionCurrentRelease():
+                raise Exception("Cannot connect to GPDB version %s from installed version %s"%(version.getVersionRelease(), MAIN_VERSION[0]))
 
-        config_rows = dbconn.execSQL(conn, '''
-        SELECT dbid, content, role, preferred_role, mode, status,
-        hostname, address, port, datadir
-        FROM pg_catalog.gp_segment_configuration
-        ORDER BY content, preferred_role DESC
-        ''')
+            config_rows = dbconn.execSQL(conn, '''
+            SELECT dbid, content, role, preferred_role, mode, status,
+            hostname, address, port, datadir
+            FROM pg_catalog.gp_segment_configuration
+            ORDER BY content, preferred_role DESC
+            ''')
 
-        recoveredSegmentDbids = []
-        segments = []
-        seg = None
-        for row in config_rows:
+            recoveredSegmentDbids = []
+            segments = []
+            seg = None
+            for row in config_rows:
 
-            # Extract fields from the row
-            (dbid, content, role, preferred_role, mode, status, hostname,
-             address, port, datadir) = row
+                # Extract fields from the row
+                (dbid, content, role, preferred_role, mode, status, hostname,
+                 address, port, datadir) = row
 
-            # Check if segment mirrors exist
-            if preferred_role == ROLE_MIRROR and content != -1:
-                hasMirrors = True
+                # Check if segment mirrors exist
+                if preferred_role == ROLE_MIRROR and content != -1:
+                    hasMirrors = True
 
-            # If we have segments which have recovered, record them.
-            if preferred_role != role and content >= 0:
-                if mode == MODE_SYNCHRONIZED and status == STATUS_UP:
-                    recoveredSegmentDbids.append(dbid)
+                # If we have segments which have recovered, record them.
+                if preferred_role != role and content >= 0:
+                    if mode == MODE_SYNCHRONIZED and status == STATUS_UP:
+                        recoveredSegmentDbids.append(dbid)
 
-            seg = Segment(content, preferred_role, dbid, role, mode, status,
-                              hostname, address, port, datadir)
-            segments.append(seg)
+                seg = Segment(content, preferred_role, dbid, role, mode, status,
+                                  hostname, address, port, datadir)
+                segments.append(seg)
 
         origSegments = [seg.copy() for seg in segments]
 
@@ -1091,7 +1101,7 @@ class GpArray:
             arr.append(seg)
 
         result = {}
-        for contentId, arr in contentIdToSegments.iteritems():
+        for contentId, arr in contentIdToSegments.items():
             if len(arr) == 1:
                 pass
             elif len(arr) != 2:
@@ -1575,8 +1585,8 @@ class GpArray:
             if expect_all_segments_to_have_mirror:
                 valid_content.append((i, False))
 
-        valid_content.sort(lambda x,y: cmp(x[0], y[0]) or cmp(x[1], y[1]))
-        content.sort(lambda x,y: cmp(x[0], y[0]) or cmp(x[1], y[1]))
+        valid_content.sort(key=lambda x: (x[0], x[1]))
+        content.sort(key=lambda x: (x[0], x[1]))
 
         if valid_content != content:
             raise Exception('Invalid content ids')
@@ -1589,7 +1599,7 @@ class GpArray:
             datadir = db.getSegmentDataDirectory()
             hostname = db.getSegmentHostName()
             port = db.getSegmentPort()
-            if datadirs.has_key(hostname):
+            if hostname in datadirs:
                 if datadir in datadirs[hostname]:
                     raise Exception('Data directory %s used multiple times on host %s' % (datadir, hostname))
                 else:
@@ -1599,7 +1609,7 @@ class GpArray:
                 datadirs[hostname].append(datadir)
 
             # Check ports
-            if used_ports.has_key(hostname):
+            if hostname in used_ports:
                 if db.port in used_ports[hostname]:
                     raise Exception('Port %d is used multiple times on host %s' % (port, hostname))
                 else:
@@ -1707,7 +1717,7 @@ class GpArray:
 
         mirror_dict = {}
         # must be sorted by isprimary, then hostname
-        rows.sort(lambda a,b: (cmp(b.isprimary, a.isprimary) or cmp(a.host,b.host)))
+        rows.sort(key=lambda a: (not a.isprimary, a.host))
         current_host = rows[0].host
         curr_dbid = self.get_max_dbid(True) + 1
         curr_content = self.get_max_contentid(True) + 1
@@ -1719,7 +1729,7 @@ class GpArray:
             # Add the new segment to the expansion segments array
             # Remove the content id off of the datadir
             new_datadir = row.fulldir[:row.fulldir.rfind(str(row.content))]
-            if row.isprimary == 't':
+            if row.isprimary:
                 new_datadir += ('%d' % curr_content)
                 self.addExpansionSeg(curr_content, ROLE_PRIMARY, curr_dbid,
                                         ROLE_PRIMARY, hostname, address, int(row.port), new_datadir)
@@ -1824,7 +1834,7 @@ def get_segment_hosts(master_port):
     """
     gparray = GpArray.initFromCatalog( dbconn.DbURL(port=master_port), utility=True )
     segments = GpArray.getSegmentsByHostName( gparray.getDbList() )
-    return segments.keys()
+    return list(segments.keys())
 
 
 def get_session_ids(master_port):

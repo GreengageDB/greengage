@@ -1,15 +1,19 @@
+from __future__ import division
+from builtins import range
+from past.utils import old_div
 import os
-import StringIO
+import io
 import threading
 import time
 import unittest
 
 import mock
+from .gp_unittest import GpTestCase
 
 from gppylib.commands.base import Command, ExecutionError, WorkerPool, \
                                   join_and_indicate_progress
 
-class WorkerPoolTest(unittest.TestCase):
+class WorkerPoolTest(GpTestCase):
     def setUp(self):
         self.pool = WorkerPool(numWorkers=1, logger=mock.Mock())
 
@@ -240,7 +244,7 @@ class WorkerPoolTest(unittest.TestCase):
         self.assertEqual(self.pool.assigned, 0)
 
     def test_join_and_indicate_progress_prints_nothing_if_pool_is_done(self):
-        stdout = StringIO.StringIO()
+        stdout = io.StringIO()
         join_and_indicate_progress(self.pool, stdout)
 
         self.assertEqual(stdout.getvalue(), '')
@@ -283,7 +287,7 @@ class WorkerPoolTest(unittest.TestCase):
             # newline. (tmain() closes the write end of the pipe so that this
             # read() will complete.)
             remaining = read_end.read()
-            self.assertRegexpMatches(remaining, r'^[.]*\n$')
+            self.assertReMatch(remaining, r'^[.]*\n$')
 
         finally:
             # Make sure that we unblock and join all threads, even on a test
@@ -300,8 +304,8 @@ class WorkerPoolTest(unittest.TestCase):
         cmd.run.side_effect = wait_for_duration
         self.pool.addCommand(cmd)
 
-        stdout = mock.Mock(spec=file)
-        join_and_indicate_progress(self.pool, stdout, interval=(duration / 5))
+        stdout = mock.Mock(io.StringIO())
+        join_and_indicate_progress(self.pool, stdout, interval=(old_div(duration, 5)))
 
         for i, call in enumerate(stdout.mock_calls):
             # Every written dot should be followed by a flush().

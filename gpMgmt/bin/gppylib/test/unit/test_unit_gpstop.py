@@ -1,4 +1,5 @@
-import imp
+from __future__ import division
+from past.utils import old_div
 import logging
 import os
 import signal
@@ -9,7 +10,7 @@ import unittest
 from mock import Mock, call, patch
 
 from gppylib.gparray import Segment, GpArray, SegmentPair
-from gppylib.test.unit.gp_unittest import GpTestCase, run_tests
+from gppylib.test.unit.gp_unittest import GpTestCase, run_tests, load_module
 from gppylib.commands import base
 from gppylib.commands.base import Command, WorkerPool, CommandResult
 from gppylib.commands.gp import GpSegStopCmd
@@ -29,7 +30,7 @@ class GpStop(GpTestCase):
         #   import gpstop
         #   self.subject = gpstop
         gpstop_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpstop")
-        self.subject = imp.load_source('gpstop', gpstop_file)
+        self.subject = load_module('gpstop', gpstop_file)
         self.subject.logger = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
 
         self.mock_gp = Mock()
@@ -145,14 +146,14 @@ class GpStop(GpTestCase):
 
     def test_host_missing_from_config(self):
         sys.argv = ["gpstop", "-a", "--host", "nothere"]
-        host_names = self.gparray.getSegmentsByHostName(self.gparray.getDbList()).keys()
+        host_names = list(self.gparray.getSegmentsByHostName(self.gparray.getDbList()).keys())
 
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
         gpstop = self.subject.GpStop.createProgram(options, args)
         with self.assertRaises(SystemExit) as cm:
             gpstop.run()
-        self.assertEquals(cm.exception.code, 1)
+        self.assertEqual(cm.exception.code, 1)
         error_msgs = self.get_error_messages()
         self.assertIn("host 'nothere' is not found in gp_segment_configuration", error_msgs)
         self.assertIn("hosts in cluster config: %s" % host_names, error_msgs)
@@ -169,7 +170,7 @@ class GpStop(GpTestCase):
         log_messages = self.get_info_messages()
 
         # two calls per host, first for primaries then for mirrors
-        self.assertEquals(2, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(2, self.mock_GpSegStopCmdInit.call_count)
         self.assertIn("Targeting dbid %s for shutdown" % [self.primary0.getSegmentDbId(),
                                                                    self.primary1.getSegmentDbId(),
                                                                    self.mirror2.getSegmentDbId(),
@@ -178,17 +179,17 @@ class GpStop(GpTestCase):
         # call_obj[0] returns all unnamed arguments -> ['arg1', 'arg2']
         # In this case, we have an object as an argument to pool.addCommand
         # call_obj[1] returns a dict for all named arguments -> {key='arg3', key2='arg4'}
-        self.assertEquals(self.mock_GpSegStopCmdInit.call_args_list[0][1]['dbs'][0], self.primary0)
-        self.assertEquals(self.mock_GpSegStopCmdInit.call_args_list[0][1]['dbs'][1], self.primary1)
-        self.assertEquals(self.mock_GpSegStopCmdInit.call_args_list[1][1]['dbs'][0], self.mirror2)
-        self.assertEquals(self.mock_GpSegStopCmdInit.call_args_list[1][1]['dbs'][1], self.mirror3)
+        self.assertEqual(self.mock_GpSegStopCmdInit.call_args_list[0][1]['dbs'][0], self.primary0)
+        self.assertEqual(self.mock_GpSegStopCmdInit.call_args_list[0][1]['dbs'][1], self.primary1)
+        self.assertEqual(self.mock_GpSegStopCmdInit.call_args_list[1][1]['dbs'][0], self.mirror2)
+        self.assertEqual(self.mock_GpSegStopCmdInit.call_args_list[1][1]['dbs'][1], self.mirror3)
         self.assertIn("   sdw1   /data/primary0   40000   u", log_messages)
         self.assertIn("   sdw1   /data/primary1   40001   u", log_messages)
         self.assertIn("   sdw1   /data/mirror2    50002   u", log_messages)
         self.assertIn("   sdw1   /data/mirror3    50003   u", log_messages)
 
         for line in log_messages:
-            self.assertNotRegexpMatches(line, "sdw2")
+            self.assertReNotMatch(line, "sdw2")
 
         self.assertIn("Successfully shutdown 4 of 8 segment instances ", log_messages)
 
@@ -209,9 +210,9 @@ class GpStop(GpTestCase):
 
         gpstop = self.subject.GpStop.createProgram(options, args)
 
-        with self.assertRaisesRegexp(Exception,"Segment '%s' not synchronized. Aborting." % self.primary0):
+        with self.assertRaisesRe(Exception,"Segment '%s' not synchronized. Aborting." % self.primary0):
             gpstop.run()
-        self.assertEquals(0, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(0, self.mock_GpSegStopCmdInit.call_count)
 
     def test_host_option_segment_in_resynchronizing_mode_fails(self):
         sys.argv = ["gpstop", "-a", "--host", "sdw1"]
@@ -230,9 +231,9 @@ class GpStop(GpTestCase):
 
         gpstop = self.subject.GpStop.createProgram(options, args)
 
-        with self.assertRaisesRegexp(Exception,"Segment '%s' not synchronized. Aborting." % self.primary0):
+        with self.assertRaisesRe(Exception,"Segment '%s' not synchronized. Aborting." % self.primary0):
             gpstop.run()
-        self.assertEquals(0, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(0, self.mock_GpSegStopCmdInit.call_count)
 
     def test_host_option_segment_down_is_skipped_succeeds(self):
         sys.argv = ["gpstop", "-a", "--host", "sdw1"]
@@ -253,7 +254,7 @@ class GpStop(GpTestCase):
         gpstop.run()
         log_messages = self.get_info_messages()
 
-        self.assertEquals(2, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(2, self.mock_GpSegStopCmdInit.call_count)
         self.assertIn("Targeting dbid %s for shutdown" % [self.primary1.getSegmentDbId(),
                                                                    self.mirror2.getSegmentDbId(),
                                                                    self.mirror3.getSegmentDbId()], log_messages)
@@ -275,9 +276,9 @@ class GpStop(GpTestCase):
 
         gpstop = self.subject.GpStop.createProgram(options, args)
 
-        with self.assertRaisesRegexp(Exception,"Segment host '%s' has both of corresponding primary '%s' and mirror '%s'. Aborting." % (self.primary0.getSegmentHostName(), self.primary0, self.mirror0)):
+        with self.assertRaisesRe(Exception,"Segment host '%s' has both of corresponding primary '%s' and mirror '%s'. Aborting." % (self.primary0.getSegmentHostName(), self.primary0, self.mirror0)):
             gpstop.run()
-        self.assertEquals(0, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(0, self.mock_GpSegStopCmdInit.call_count)
 
     def test_host_option_if_master_running_on_the_host_fails(self):
         sys.argv = ["gpstop", "-a", "--host", "mdw"]
@@ -294,10 +295,10 @@ class GpStop(GpTestCase):
 
         gpstop = self.subject.GpStop.createProgram(options, args)
 
-        with self.assertRaisesRegexp(Exception,"Specified host '%s' has the master or standby master on it. This node can only be stopped as part of a full-cluster gpstop, without '--host'." %
+        with self.assertRaisesRe(Exception,"Specified host '%s' has the master or standby master on it. This node can only be stopped as part of a full-cluster gpstop, without '--host'." %
                                      self.master.getSegmentHostName()):
             gpstop.run()
-        self.assertEquals(0, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(0, self.mock_GpSegStopCmdInit.call_count)
 
     def test_host_option_if_standby_running_on_the_host_fails(self):
         sys.argv = ["gpstop", "-a", "--host", "sdw1"]
@@ -316,10 +317,10 @@ class GpStop(GpTestCase):
 
         gpstop = self.subject.GpStop.createProgram(options, args)
 
-        with self.assertRaisesRegexp(Exception,"Specified host '%s' has the master or standby master on it. This node can only be stopped as part of a full-cluster gpstop, without '--host'." %
+        with self.assertRaisesRe(Exception,"Specified host '%s' has the master or standby master on it. This node can only be stopped as part of a full-cluster gpstop, without '--host'." %
                                      self.standby.getSegmentHostName()):
             gpstop.run()
-        self.assertEquals(0, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(0, self.mock_GpSegStopCmdInit.call_count)
 
     def test_host_option_if_no_mirrors_fails(self):
         sys.argv = ["gpstop", "-a", "--host", "sdw2"]
@@ -338,16 +339,16 @@ class GpStop(GpTestCase):
 
         gpstop = self.subject.GpStop.createProgram(options, args)
 
-        with self.assertRaisesRegexp(Exception,"Cannot perform host-specific gpstop on a cluster without segment mirroring."):
+        with self.assertRaisesRe(Exception,"Cannot perform host-specific gpstop on a cluster without segment mirroring."):
             gpstop.run()
-        self.assertEquals(0, self.mock_GpSegStopCmdInit.call_count)
+        self.assertEqual(0, self.mock_GpSegStopCmdInit.call_count)
 
     def test_host_option_with_master_option_fails(self):
         sys.argv = ["gpstop", "--host", "sdw1", "-m"]
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
 
-        with self.assertRaisesRegexp(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
+        with self.assertRaisesRe(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
                                                                          "option with '-m' for master-only."):
             self.subject.GpStop.createProgram(options, args)
 
@@ -356,7 +357,7 @@ class GpStop(GpTestCase):
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
 
-        with self.assertRaisesRegexp(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
+        with self.assertRaisesRe(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
                                                                          "option with '-r' for restart."):
             self.subject.GpStop.createProgram(options, args)
 
@@ -369,17 +370,17 @@ class GpStop(GpTestCase):
         gpstop = self.subject.GpStop.createProgram(options, args)
         gpstop.gparray = GpArray([self.master, self.primary0, self.primary1])
         gpstop._sighup_cluster()
-        self.assertEquals(3, self.mock_workerpool.addCommand.call_count)
-        self.assertEquals(None, self.mock_workerpool.addCommand.call_args_list[0][0][0].remoteHost)
-        self.assertEquals("sdw1", self.mock_workerpool.addCommand.call_args_list[1][0][0].remoteHost)
-        self.assertEquals("sdw1", self.mock_workerpool.addCommand.call_args_list[2][0][0].remoteHost)
+        self.assertEqual(3, self.mock_workerpool.addCommand.call_count)
+        self.assertEqual(None, self.mock_workerpool.addCommand.call_args_list[0][0][0].remoteHost)
+        self.assertEqual("sdw1", self.mock_workerpool.addCommand.call_args_list[1][0][0].remoteHost)
+        self.assertEqual("sdw1", self.mock_workerpool.addCommand.call_args_list[2][0][0].remoteHost)
 
     def test_host_option_with_request_sighup_option_fails(self):
         sys.argv = ["gpstop", "--host", "sdw1", "-u"]
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
 
-        with self.assertRaisesRegexp(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
+        with self.assertRaisesRe(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
                                                                          "option with '-u' for config reload."):
             self.subject.GpStop.createProgram(options, args)
 
@@ -388,7 +389,7 @@ class GpStop(GpTestCase):
         parser = self.subject.GpStop.createParser()
         options, args = parser.parse_args()
 
-        with self.assertRaisesRegexp(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
+        with self.assertRaisesRe(ProgramArgumentValidationException, "Incompatible flags. Cannot mix '--host' "
                                                                          "option with '-y' for skipping standby."):
             self.subject.GpStop.createProgram(options, args)
 
@@ -464,7 +465,7 @@ class GpStop(GpTestCase):
         mockGpstart.return_value = self.mock_cmd
 
         gpstop = self.subject.GpStop.createProgram(options, args)
-        with self.assertRaisesRegexp(Exception, 'Unable to start the cluster in master_only mode: error'):
+        with self.assertRaisesRe(Exception, 'Unable to start the cluster in master_only mode: error'):
             gpstop.run()
 
     @patch('gpstop.gp.MasterStop')
@@ -479,7 +480,7 @@ class GpStop(GpTestCase):
         mockMasterStop.return_value = self.mock_cmd
 
         gpstop = self.subject.GpStop.createProgram(options, args)
-        with self.assertRaisesRegexp(Exception, 'Unable to stop the master: error'):
+        with self.assertRaisesRe(Exception, 'Unable to stop the master: error'):
             gpstop.run()
 
     def test_gpstop_sighup_option_after_interrupt(self):
@@ -506,13 +507,13 @@ class GpStop(GpTestCase):
         mock_initFromCatalog.side_effect = [Exception('unexpected exception')]
 
         gpstop = self.subject.GpStop.createProgram(options, args)
-        with self.assertRaisesRegexp(Exception, 'unexpected exception'):
+        with self.assertRaisesRe(Exception, 'unexpected exception'):
             gpstop.run()
 
 
 # Perform an 'import gpstop', as above.
 _gpstop_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpstop")
-gpstop = imp.load_source('gpstop', _gpstop_file)
+gpstop = load_module('gpstop', _gpstop_file)
 
 
 class GpStopPrintProgressTestCase(unittest.TestCase):
@@ -549,7 +550,7 @@ class GpStopPrintProgressTestCase(unittest.TestCase):
 
         # We run a command for ten milliseconds, printing progress every
         # millisecond, so at some point we should transition from 50% to 100%.
-        gpstop.print_progress(self.pool, interval=(duration / 10))
+        gpstop.print_progress(self.pool, interval=(old_div(duration, 10)))
         self.logger.info.assert_has_calls([
             call('50.00% of jobs completed'),
             call('100.00% of jobs completed'),
@@ -587,7 +588,8 @@ class GpStopSmartModeTestCase(unittest.TestCase):
 
         subprocess_call.side_effect = _call
 
-    def test_stop_master_smart_issues_pg_ctl_stop(self, subprocess_call, dbconn_connect):
+    @patch('gppylib.db.dbconn.GgdbCursor', side_effect=lambda conn: conn.cursor())
+    def test_stop_master_smart_issues_pg_ctl_stop(self, cursor, subprocess_call, dbconn_connect):
         self._setup_subprocess(subprocess_call)
 
         self.gpstop.master_datadir = 'datadir'
@@ -601,7 +603,8 @@ class GpStopSmartModeTestCase(unittest.TestCase):
         with self.assertRaises(Exception):
             self.gpstop._stop_master_smart()
 
-    def test_stop_master_smart_calls_pg_ctl_status_until_server_stops(self, subprocess_call, dbconn_connect):
+    @patch('gppylib.db.dbconn.GgdbCursor', side_effect=lambda conn: conn.cursor())
+    def test_stop_master_smart_calls_pg_ctl_status_until_server_stops(self, cursor, subprocess_call, dbconn_connect):
         self._setup_subprocess(subprocess_call)
         self.gpstop.conn = dbconn_connect
 

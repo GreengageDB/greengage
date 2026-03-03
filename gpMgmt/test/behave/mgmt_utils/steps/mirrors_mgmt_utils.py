@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from builtins import next
+from builtins import range
+from builtins import object
 from collections import defaultdict
 import os
 from os import path
@@ -15,7 +19,7 @@ from mgmt_utils import *
 
 # This class is intended to store per-Scenario state that is built up over
 # a series of steps.
-class MirrorMgmtContext:
+class MirrorMgmtContext(object):
     def __init__(self):
         self.working_directory = None
         self.input_file = None
@@ -247,7 +251,7 @@ def impl(context):
     if len(curr_content_to_host) != len(old_content_to_host):
         raise Exception("Number of mirrors doesn't match between old and new clusters")
 
-    for key in old_content_to_host.keys():
+    for key in list(old_content_to_host.keys()):
         if curr_content_to_host[key] != old_content_to_host[key]:
             raise Exception("Mirror host doesn't match for content %s (old host=%s) (new host=%s)"
             % (key, old_content_to_host[key], curr_content_to_host[key]))
@@ -465,7 +469,7 @@ def impl(context, content_ids):
 @when("the mode of all the created data directories is changed to 0700")
 @then("the mode of all the created data directories is changed to 0700")
 def impl(context):
-    for hostname, data_dirs in context.data_dirs_created.items():
+    for hostname, data_dirs in list(context.data_dirs_created.items()):
         for data_dir in data_dirs:
             command = 'ssh {} "chmod -R 700 {}"'.format(hostname, data_dir)
             run_command(context, command)
@@ -594,10 +598,10 @@ def impl(context, content_id, recovery_host):
 @then("a temporary directory with mode '{mode}' is created under data_dir of primary with content {content}")
 def impl(context, mode, content):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    primary_segment = list(filter(lambda seg: seg.getSegmentRole() == ROLE_PRIMARY and
-                                  seg.getSegmentContentId() == int(content), all_segments))[0]
-    mirror_segment = list(filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                             seg.getSegmentContentId() == int(content), all_segments))[0]
+    primary_segment = list([seg for seg in all_segments if seg.getSegmentRole() == ROLE_PRIMARY and
+                                  seg.getSegmentContentId() == int(content)])[0]
+    mirror_segment = list([seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                             seg.getSegmentContentId() == int(content)])[0]
     make_temp_dir(context, primary_segment.getSegmentDataDirectory(), mode=mode)
     context.mirror_datadir = mirror_segment.getSegmentDataDirectory()
 
@@ -638,8 +642,8 @@ def impl(context, content_ids):
     if content_ids == 'None':
         return
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')], all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')]]
     for seg in segments:
         expected_config = context.mirror_new_location[seg.getSegmentContentId()]
         actual_config = '{}|{}|{}'.format(seg.getSegmentHostName(), seg.getSegmentPort(), seg.getSegmentDataDirectory())
@@ -654,7 +658,7 @@ def impl(context, content_ids):
         return
 
     all_segments_actual = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments_to_test = filter(lambda seg: seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')], all_segments_actual)
+    segments_to_test = [seg for seg in all_segments_actual if seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')]]
 
     for seg in segments_to_test:
         original_seg = context.original_seg_info['{}_{}'.format(seg.getSegmentContentId(), seg.getSegmentPreferredRole())]
@@ -807,8 +811,8 @@ def impl(context, mirror_config):
                 new_port = group_port_map[content]
                 new_address = group_address_map[content]
 
-            mirrors = map(lambda segmentPair: segmentPair.mirrorDB, gparray.getSegmentList())
-            mirror = next(iter(filter(lambda mirror: mirror.getSegmentContentId() == content, mirrors)), None)
+            mirrors = [segmentPair.mirrorDB for segmentPair in gparray.getSegmentList()]
+            mirror = next(iter([mirror for mirror in mirrors if mirror.getSegmentContentId() == content]), None)
 
             old_directory = mirror.getSegmentDataDirectory()
             new_directory = '%s_moved' % old_directory

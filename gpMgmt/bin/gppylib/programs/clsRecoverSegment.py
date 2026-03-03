@@ -16,6 +16,7 @@
 #
 # import mainUtils FIRST to get python version check
 # THIS IMPORT SHOULD COME FIRST
+from builtins import object
 from gppylib.mainUtils import *
 
 from optparse import OptionGroup
@@ -45,7 +46,7 @@ from gppylib.programs.clsRecoverSegment_triples import RecoveryTripletsFactory
 logger = gplog.get_default_logger()
 
 
-class GpRecoverSegmentProgram:
+class GpRecoverSegmentProgram(object):
     #
     # Constructor:
     #
@@ -230,7 +231,7 @@ class GpRecoverSegmentProgram:
         # template0 does not accept any connections so we exclude it
         with dbconn.connect(dbconn.DbURL()) as conn:
             res = dbconn.execSQL(conn, "SELECT datname FROM PG_DATABASE WHERE datname != 'template0'")
-        return res.fetchall()
+            return res.fetchall()
 
     def run(self):
         if self.__options.parallelDegree < 1 or self.__options.parallelDegree > gp.MAX_MASTER_NUM_WORKERS:
@@ -307,7 +308,7 @@ class GpRecoverSegmentProgram:
                     if h.strip() not in uniqueHosts:
                         uniqueHosts.append(h.strip())
                 self.__options.newRecoverHosts = uniqueHosts
-            except Exception, ex:
+            except Exception as ex:
                 raise ProgramArgumentValidationException( \
                     "Invalid value for recover hosts: %s" % ex)
 

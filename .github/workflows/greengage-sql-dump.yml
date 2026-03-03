@@ -20,7 +20,11 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target_os: [ubuntu]
+        include:
+          - target_os: ubuntu
+            target_os_version: "22.04"
+          - target_os: ubuntu
+            target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -68,16 +72,17 @@ jobs:
           esac
 
       - name: Create SQL Dump via regression tests
-        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@CI-5242
         with:
-          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}:${{ github.event.workflow_run.head_sha }}
+          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}${{ matrix.target_os_version }}:${{ github.event.workflow_run.head_sha }}
           optimizer: postgres
           target_os: ${{ matrix.target_os }}
+          target_os_version: ${{ matrix.target_os_version }}
           dump_db: "true"
 
       - name: Upload SQL Dump
         uses: actions/upload-artifact@v4
         with:
-          name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
+          name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}${{ matrix.target_os_version }}
           path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
           if-no-files-found: error

@@ -8,9 +8,15 @@ from gppylib.operations.unix import CleanSharedMem
 from mock import Mock, MagicMock, patch
 
 from test.unit.gp_unittest import GpTestCase, run_tests
-
+import sys
 
 class CleanSharedMemTestCase(GpTestCase):
+    def setUp(self):
+        if sys.version_info[0] == 2:
+            self.builtin = "__builtin__"
+        else:
+            self.builtin = "builtins"
+
     def _get_mock_segment(self, name, datadir, port, hostname, address):
         m = Mock()
         m.name = name
@@ -28,7 +34,7 @@ class CleanSharedMemTestCase(GpTestCase):
         file_contents = 'asdfads\nasdfsd asdfadsf\n12345 23456'.split()
         m = MagicMock()
         m.return_value.__enter__.return_value.readlines.return_value = file_contents
-        with patch('__builtin__.open', m, create=True):
+        with patch(self.builtin + '.open', m, create=True):
             c.run()
 
     @patch('os.path.isfile', return_value=False)
@@ -46,8 +52,8 @@ class CleanSharedMemTestCase(GpTestCase):
         file_contents = 'asdfadsasdfasdf'.split()
         m = MagicMock()
         m.return_value.__enter__.return_value.readlines.return_value = file_contents
-        with patch('__builtin__.open', m, create=True):
-            with self.assertRaisesRegexp(Exception, 'Unable to clean up shared memory for segment'):
+        with patch(self.builtin + '.open', m, create=True):
+            with self.assertRaisesRe(Exception, 'Unable to clean up shared memory for segment'):
                 c.run()
 
     @patch('os.path.isfile', return_value=True)
@@ -59,8 +65,8 @@ class CleanSharedMemTestCase(GpTestCase):
         file_contents = 'asdfads\nasdfsd asdfadsf\n12345 23456'.split()
         m = MagicMock()
         m.return_value.__enter__.return_value.readlines.return_value = file_contents
-        with patch('__builtin__.open', m, create=True):
-            with self.assertRaisesRegexp(Exception, 'Unable to clean up shared memory'):
+        with patch(self.builtin + '.open', m, create=True):
+            with self.assertRaisesRe(Exception, 'Unable to clean up shared memory'):
                 c.run()
 
 

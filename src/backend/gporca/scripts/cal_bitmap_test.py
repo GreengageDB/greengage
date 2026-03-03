@@ -21,6 +21,10 @@
 # See comment "How to add a test" below in the program for how to
 # extend this program.
 
+from __future__ import print_function
+from __future__ import division
+from builtins import range
+from past.utils import old_div
 import argparse
 import time
 import re
@@ -30,7 +34,7 @@ import sys
 
 try:
     from gppylib.db import dbconn
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 # constants
@@ -352,7 +356,7 @@ def select_version(conn):
     rows = curs.fetchall()
     for row in rows:
         log_output(row[0])
-        glob_gpdb_major_version = int(re.sub("([0-9]*)\..*", "\\1", row[0]))
+        glob_gpdb_major_version = int(re.sub(r"([0-9]*)\..*", "\\1", row[0]))
         log_output("GPDB major version is %d" % glob_gpdb_major_version)
 
     log_output("Backend pid:")
@@ -436,12 +440,12 @@ def timed_execute_n_times(conn, sqlStr, exec_n_times):
             log_output("Query %s exceeded the timeout of %d seconds" % (sqlStr, glob_exe_timeout))
 
     # compute mean and standard deviation of the execution times
-    mean = sum_exec_times / act_num_exes
+    mean = old_div(sum_exec_times, act_num_exes)
     if exec_n_times == 1:
         # be safe, avoid any rounding errors
         variance = 0.0
     else:
-        variance = sum_square_exec_times / act_num_exes - mean * mean
+        variance = old_div(sum_square_exec_times, act_num_exes) - mean * mean
     return (round(mean, 3), round(math.sqrt(variance), 3), act_num_exes, num_rows)
 
 
@@ -598,7 +602,7 @@ def find_crossover(conn, lowParamValue, highParamLimit, setup, parameterizeMetho
     reset_method(conn)
 
     # determine the increment
-    incParamValue = (highParamLimit - lowParamValue) / 10
+    incParamValue = old_div((highParamLimit - lowParamValue), 10)
     if incParamValue == 0:
         incParamValue = 1
     elif highParamLimit <= lowParamValue:
@@ -691,7 +695,7 @@ def checkForOptimizerErrors(paramValue, chosenPlan, plan_ids, execDict):
                 # The execution times tend to be fairly unreliable. Try to avoid false positives by
                 # requiring a significantly better alternative, measured in standard deviations.
                 if altExeTime + glob_sigma_diff * max(defaultStdDev, altStdDev) < defaultExeTime:
-                    optimizerError = 100.0 * (defaultExeTime - altExeTime) / defaultExeTime
+                    optimizerError = old_div(100.0 * (defaultExeTime - altExeTime), defaultExeTime)
                     # yes, plan pl is significantly better than the optimizer default choice
                     return (pl, round(optimizerError, 1))
     elif chosenPlan == FALLBACK_PLAN:
@@ -773,7 +777,7 @@ def print_results(testTitle, explainDict, execDict, errMessages, plan_ids, execu
                 # now add the standard deviations to the end of resultList
                 resultList.extend(stddevList)
             # finally, the selectivity in percent
-            resultList.append(str((100.0 * num_rows) / glob_rowcount))
+            resultList.append(str(old_div((100.0 * num_rows), glob_rowcount)))
 
         # print a comma-separated list of result values (CSV)
         print(", ".join(resultList))
@@ -1303,7 +1307,7 @@ def run_btree_ao_index_scan_tests(conn, execute_n_times):
     run_one_bitmap_scan_test(conn,
                              "Btree Scan Test; unique; selectivity_pct=100*parameter_value/%d; count(*)" % glob_rowcount,
                              0,
-                             glob_rowcount/10, # 10% is the max allowed selectivity for a btree scan on an AO table
+                             old_div(glob_rowcount,10), # 10% is the max allowed selectivity for a btree scan on an AO table
                              noSetupRequired,
                              parameterize_btree_index_unique_narrow,
                              execute_n_times)
@@ -1311,7 +1315,7 @@ def run_btree_ao_index_scan_tests(conn, execute_n_times):
     run_one_bitmap_scan_test(conn,
                              "Btree Scan Test; unique; selectivity_pct=100*parameter_value/%d; max(txt)" % glob_rowcount,
                              0,
-                             glob_rowcount/20,
+                             old_div(glob_rowcount,20),
                              noSetupRequired,
                              parameterize_btree_index_unique_wide,
                              execute_n_times)
@@ -1498,7 +1502,7 @@ def smoothStatisticsForOneCol(conn, table_name, attnum, row_count, ndv):
         stakind = 2
         stavalues.append(str(1))
         for j in range(1,num_values+1):
-            stavalues.append(str((j*ndv)/num_values))
+            stavalues.append(str(old_div((j*ndv),num_values)))
 
     stavalues_txt = "'{ " + ", ".join(stavalues) + " }'::int[]"
     execute_sql(conn, _update_pg_stats % (stadistinct, stakind, stanumbers_txt, stavalues_txt, corr, table_name, attnum))
