@@ -50,13 +50,15 @@ explain.pm:
 data:
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/data
 
+isolation2_regress.o: submake-libpgport
+
 pg_isolation2_regress$(X): isolation2_main.o pg_regress.o submake-libpq submake-libpgport
 	$(CC) $(CFLAGS) $(filter %.o,$^) $(libpq_pgport) $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@
 
 clean distclean:
 	rm -f pg_isolation2_regress$(X) $(OBJS) isolation2_main.o isolation2_regress.so
 	rm -f pg_regress.o test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
-	rm -f gpstringsubs.pl gpdiff.pl atmsort.pm explain.pm
+	rm -f gpstringsubs.pl gpdiff.pl GPTest.pm atmsort.pm explain.pm
 	rm -f data
 	rm -rf $(pg_regress_clean_files)
 
@@ -64,35 +66,52 @@ clean distclean:
 install-tests:
 	$(MAKE) -C $(top_builddir)/contrib/tsm_system_rows install
 
-install: all gpdiff.pl gpstringsubs.pl install-tests
+install: all install-tests gpdiff.pl gpstringsubs.pl
+	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
+	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
+	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
+	$(LN_S) -f '../regress/gpdiff.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	$(LN_S) -f '../regress/gpstringsubs.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
+	$(LN_S) -f '../regress/GPTest.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
+	$(LN_S) -f '../regress/atmsort.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
+	$(LN_S) -f '../regress/explain.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
-installcheck: install installcheck-resource-queue installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy
+uninstall:
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
+	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
+
+installcheck: installcheck-resource-queue installcheck-parallel-retrieve-cursor installcheck-ic-tcp installcheck-ic-proxy extended_protocol_test
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/isolation2_schedule
 
-installcheck-resgroup: install
+installcheck-resgroup: all-lib data
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_resgroup --dbname=isolation2resgrouptest --outputdir=resgroup --schedule=$(srcdir)/isolation2_resgroup_v1_schedule
 
-installcheck-resgroup-v2: install
+installcheck-resgroup-v2: all-lib data
 	$(pg_isolation2_regress_installcheck) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_resgroup --dbname=isolation2resgrouptest --outputdir=resgroup --schedule=$(srcdir)/isolation2_resgroup_v2_schedule
 
-installcheck-parallel-retrieve-cursor: install
+installcheck-parallel-retrieve-cursor: all-lib data test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
 	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_parallel_retrieve_cursor --bindir='$(bindir)' --inputdir=$(srcdir) --dbname=isolation2parallelretrcursor --outputdir=parallelretrcursor --schedule=$(srcdir)/parallel_retrieve_cursor_schedule
 
-installcheck-mirrorless: install
+installcheck-mirrorless: all-lib data
 	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/mirrorless_schedule --outputdir=mirrorless --dbname=isolation2-mirrorless
 
-installcheck-hot-standby: install
+installcheck-hot-standby: all-lib data
 	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --schedule=$(srcdir)/hot_standby_schedule --outputdir=hot_standby --dbname=isolation2-hot-standby
 
-installcheck-ic-tcp: install
+installcheck-ic-tcp: all-lib data
 ifeq ($(findstring gp_interconnect_type=tcp,$(PGOPTIONS)),gp_interconnect_type=tcp)
 	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --bindir='$(bindir)' --inputdir=$(srcdir) --outputdir=ic_tcp --schedule=$(srcdir)/isolation2_ic_tcp_schedule
 endif
 
-installcheck-ic-proxy: install
+installcheck-ic-proxy: all-lib data
 ifeq ($(findstring gp_interconnect_type=proxy,$(PGOPTIONS)),gp_interconnect_type=proxy)
 	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2 --bindir='$(bindir)' --inputdir=$(srcdir) --outputdir=ic_proxy --schedule=$(srcdir)/isolation2_ic_proxy_schedule
 endif
 
-installcheck-resource-queue: install
+installcheck-resource-queue: all-lib data
 	$(pg_isolation2_regress_installcheck) $(EXTRA_REGRESS_OPTS) --init-file=$(top_builddir)/src/test/regress/init_file --init-file=./init_file_isolation2  --bindir='$(bindir)' --inputdir=$(srcdir) --dbname=isolation2resourcequeue --outputdir=resqueue --schedule=$(srcdir)/isolation2_resqueue_schedule
