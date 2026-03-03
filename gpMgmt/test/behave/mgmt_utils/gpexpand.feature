@@ -363,7 +363,6 @@ Feature: expand the cluster by adding more segments
         When the user runs gpexpand to redistribute
         Then the numsegments of table "ext_test" is 4
 
-    @skip
     @gpexpand_icw_db_concourse
     Scenario: Use a dump of the ICW database for expansion
         Given the database is not running
