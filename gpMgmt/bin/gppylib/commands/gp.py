@@ -60,24 +60,26 @@ RECOVERY_REWIND_APPNAME = '__gprecoverseg_pg_rewind__'
 PGDATABASE_FOR_COMMON_USE= 'postgres'
 
 def get_postmaster_pid_locally(datadir):
-    cmdStr = "ps -ef | grep postgres | grep -v grep | awk '{print $2}' | grep `cat %s/postmaster.pid | head -1` || echo -1" % (datadir)
+    cmdStr = "ps -p \"$(head -1 %s/postmaster.pid)\" -o comm= -o pid=" % (datadir)
     name = "get postmaster"
     cmd = Command(name, cmdStr)
     try:
         cmd.run(validateAfter=True)
         sout = cmd.get_results().stdout.lstrip(' ')
-        return int(sout.split()[0])
+        comm, pid = sout.split()
+        return int(pid if comm == "postgres" else -1)
     except:
         return -1
 
 def getPostmasterPID(hostname, datadir):
-    cmdStr="echo 'START_CMD_OUTPUT';ps -ef | grep postgres | grep -v grep | awk '{print $2}' | grep \\`cat %s/postmaster.pid | head -1\\` || echo -1" % (datadir)
+    cmdStr="echo 'START_CMD_OUTPUT';ps -p \"\\$(head -1 %s/postmaster.pid)\" -o comm= -o pid=" % (datadir)
     name="get postmaster pid"
     cmd=Command(name,cmdStr,ctxt=REMOTE,remoteHost=hostname)
     try:
         cmd.run(validateAfter=True)
-        sout=cmd.get_results().stdout.lstrip(' ')
-        return int(sout.split('START_CMD_OUTPUT\n')[1].split()[1])
+        sout=cmd.get_results().stdout.lstrip(' ').split('START_CMD_OUTPUT\n')[1]
+        comm, pid = sout.split()
+        return int(pid if comm == "postgres" else -1)
     except:
         return -1
 
