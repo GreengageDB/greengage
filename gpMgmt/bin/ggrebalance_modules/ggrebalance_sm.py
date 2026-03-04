@@ -320,8 +320,10 @@ class RebalanceSM:
                 move = step.getMove()
                 if step.isRollback():
                     segment_current_info = move.seg
-                    # TODO: check lookup_seg here
-                    cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
+                    if self.lookup_seg(segment_current_info):
+                        cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
+                    else:
+                        cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
                     cfg_line += f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()}\n'
                 else:
                     segment_current_info = move.seg
@@ -380,6 +382,7 @@ class RebalanceSM:
 
     def process_error_execution_steps_mirror_moves(self, error_steps: List[RebalanceStep]) -> None:
         self.logger.info('Process failed segment moves...')
+        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
         for step in error_steps:
             self.logger.info(f'Checking error status for step: {str(step)}')
             dbid = step.getMove().seg.getSegmentDbId()
@@ -443,12 +446,12 @@ class RebalanceSM:
             self.rebalance_schema.updateExecutionStep(step)
 
         # Mark dependent steps accordingly
-        self.mark_dependent_steps_on_error(error_steps)
+        self.mark_dependent_steps_on_error(error_steps, steps_left_todo)
 
     def process_error_execution_steps_switchovers(self, error_steps: List[RebalanceStep]) -> None:
         self.logger.info('Process failed switchovers...')
+        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
         for step in error_steps:
-            # TODO: add comments and update the log below
             self.logger.info(f'Processing error status for switchover step: {str(step)}')
             if self.interactive_check(f'Retry step?'):
                 if step.isRollback():
@@ -469,11 +472,10 @@ class RebalanceSM:
             self.rebalance_schema.updateExecutionStep(step)
 
         # Mark dependent steps accordingly
-        self.mark_dependent_steps_on_error(error_steps)
+        self.mark_dependent_steps_on_error(error_steps, steps_left_todo)
 
-    def mark_dependent_steps_on_error(self, error_steps: List[RebalanceStep]) -> None:
+    def mark_dependent_steps_on_error(self, error_steps: List[RebalanceStep], steps_left_todo: List[RebalanceStep]) -> None:
         # Mark dependent steps accordingly
-        steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
         # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already rolled back
         if not self.is_rollback_flow:
             for step in error_steps:
@@ -523,10 +525,16 @@ class RebalanceSM:
     # decorator to TODO: add comments
     def wrap_interactive_check_with_faults(fun):
         def func_with_faults(self, msg: str):
-            if inject_fault_check(msg + 'yes'):
-                return True
-            if inject_fault_check(msg + 'no'):
-                return False
+            try:
+                inject_value = inject_fault_get_value()
+                injected_answers = json.loads(inject_value)
+                self.logger.info(f'[RELOG DBG] injected value = "{inject_value}"')
+                if injected_answers.get(msg, '') == 'yes':
+                    return True
+                if injected_answers.get(msg, '') == 'no':
+                    return False
+            except:
+                pass
             return fun(self, msg)
         return func_with_faults
 

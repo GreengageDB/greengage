@@ -11,6 +11,7 @@ GPMGMT_FAULT_TYPE = 'GPMGMT_FAULT_TYPE'
 GPMGMT_FAULT_FILE_FLAG = 'GPMGMT_FAULT_FILE_FLAG'
 
 GPMGMT_FAULT_TYPE_SYSPEND = 'suspend'
+GPMGMT_FAULT_TYPE_VALUE = 'value'
 
 def inject_fault(fault_point):
     if GPMGMT_FAULT_POINT in os.environ and fault_point == os.environ[GPMGMT_FAULT_POINT]:
@@ -32,11 +33,11 @@ def inject_fault(fault_point):
         else:
             raise Exception('Fault Injection %s' % os.environ[GPMGMT_FAULT_POINT])
 
-def inject_fault_check(fault_point) -> bool:
-    if GPMGMT_FAULT_POINT in os.environ and fault_point == os.environ[GPMGMT_FAULT_POINT]:
-        return True
-    else:
-        return False
+def inject_fault_get_value() -> str:
+    if GPMGMT_FAULT_TYPE in os.environ and os.environ[GPMGMT_FAULT_TYPE] == GPMGMT_FAULT_TYPE_VALUE:
+        if GPMGMT_FAULT_POINT in os.environ:
+            return os.environ[GPMGMT_FAULT_POINT]
+    return ''
 
 # decorator for test purposes
 def wrap_state_func_with_faults(func):

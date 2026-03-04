@@ -4606,10 +4606,19 @@ def impl(context):
 @when('user will answer "{answer}" to the prompt "{prompt}"')
 def impl(context, answer, prompt):
     assert answer == 'yes' or answer == 'no'
-    if fault_injection.GPMGMT_FAULT_POINT in os.environ and os.environ[fault_injection.GPMGMT_FAULT_POINT] != "":
-        raise Exception('Need to unset fault injection before using this step')
-    fault = prompt + answer
-    os.environ[fault_injection.GPMGMT_FAULT_POINT] = fault
+    if not hasattr(context, 'fault_injected_answers'):
+        context.fault_injected_answers = {}
+    context.fault_injected_answers[prompt] = answer
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = fault_injection.GPMGMT_FAULT_TYPE_VALUE
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = json.dumps(context.fault_injected_answers)
+
+@given("clear user's answers")
+@then("clear user's answers")
+@when("clear user's answers")
+def impl(context):
+    context.fault_injected_answers = {}
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = ''
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = ''
 
 @given('stub')
 def impl(context):
