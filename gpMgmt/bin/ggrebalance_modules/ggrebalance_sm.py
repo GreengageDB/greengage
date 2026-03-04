@@ -761,10 +761,10 @@ class RebalanceSM:
                 if step.getStatus() in [RebalanceStep.Status.APPROVE_REQUIRED, RebalanceStep.Status.PLANNED]:
                     step.setStatus(RebalanceStep.Status.DONE, True)
                     actual_rollback_steps_cnt += 1
-                elif step.getStatus() in [RebalanceStep.Status.IN_PROGRESS, RebalanceStep.Status.DONE]:
+                elif step.getStatus() in [RebalanceStep.Status.IN_PROGRESS, RebalanceStep.Status.DONE, RebalanceStep.Status.ERROR]:
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
                     actual_rollback_steps_cnt += 1
-                # TODO: what about errored or cancelled steps
+                # We do nothing for CANCELLED steps - for now they can be processed only if run ggrebalance from scratch.
 
                 rollback_step_for_switchover = None
 
