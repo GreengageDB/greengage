@@ -481,6 +481,7 @@ Type "help" for help.
 
 test=> ALTER ROLE 'user1' PASSWORD 'My-New-Pass#123';
 ERROR:  you are not allowed to change your password.
+```
 
 ### [Warning before password expire](#warning-before-password-expire)
 
