@@ -6,20 +6,28 @@ For Developers
 ==============
 
 If you'd like to run the python scripts directly from this 
-directory you will need to modify your PYTHONPATH variable to add the "ext" 
-directory.  so something like:
+directory you will need to modify your PYTHONPATH variable to use the libraries
+in this path:
 
-	export PYTHONPATH=~/dev/cdb2/gpMgmt/bin/ext
+```
+PYTHONPATH="\$GPHOME/lib/python:${PYTHONPATH}"
+```
 
-should do the trick.
-
+This will be set automatically with a `source $GPHOME/greengage_path.sh`
 
 Python Version
 --------------
 
-* The current utilities bundle python 2.5.1.  We are planning on moving 
-  forward to 2.6.1 in the near future.
+* Supported Python versions: 2.7 or 3.9 to 3.12.
 
+* To switch the Python version used during the build, change the `python`
+  command to point to the desired version. For example:
+
+```
+sudo ln -sf python3 /usr/bin/python
+```
+
+After changing the Python version, clean the build directory and recompile.
 
 Where Things Go
 ---------------

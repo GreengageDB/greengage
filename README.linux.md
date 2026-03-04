@@ -29,18 +29,21 @@
   sudo ln -s python2 /usr/bin/python
   ```
 
-## For Ubuntu (22.04):
+## For Ubuntu (versions 22.04 or 24.04):
 
 - Install dependencies using README.ubuntu.bash script:
   ```bash
   sudo ./README.ubuntu.bash
   ```
 
-- Create symbolic link to Python 2 in `/usr/bin`:
+- For Ubuntu 22.04, create symbolic link to Python 2 in `/usr/bin`:
 
   ```bash
   sudo ln -s python2 /usr/bin/python
   ```
+  Note: Supported Python versions: 2.7 or 3.9 to 3.12. The version is selected
+  by the `python` command. For Ubuntu 24.04, Python3 is already configured
+  in `README.ubuntu.bash`. For Ubuntu 22.04, we recommend using Python2.
 
 - Ensure that your system supports American English with an internationally compatible character encoding scheme. To do this, run:
   ```bash
