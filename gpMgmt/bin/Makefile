@@ -56,7 +56,6 @@ LIB_DIR=$(SRC)/lib
 PYLIB_DIR=$(SRC)/ext
 
 core: pygresql subprocess32 future
-	PYTHONPATH=$(PYTHONPATH):$(PYLIB_DIR)/future \
 	python gpconfig_modules/parse_guc_metadata.py $(DESTDIR)$(prefix)
 
 ifeq ($(with_pythonsrc_ext), yes)
