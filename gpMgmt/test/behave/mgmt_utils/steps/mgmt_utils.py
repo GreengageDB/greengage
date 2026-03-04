@@ -4579,6 +4579,31 @@ def impl(context):
     if hasattr(context, 'fault_flag_filename') and os.path.exists(context.fault_flag_filename):
         os.remove(context.fault_flag_filename)
 
+@given('on host "{host}" set fault inject "{fault}"')
+@then('on host "{host}" set fault inject "{fault}"')
+@when('on host "{host}" set fault inject "{fault}"')
+def impl(context, fault, host):
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = fault
+    cmd = f"""
+    ssh {host} "
+        echo 'export {fault_injection.GPMGMT_FAULT_POINT}={fault}' >> ~/.bashrc"
+        export {fault_injection.GPMGMT_FAULT_POINT}={fault}
+    """
+    #print(f'RELOG = {cmd.strip()}')
+    run_command(context, cmd.strip())
+
+@given('on host "{host}" unset fault inject')
+@then('on host "{host}" unset fault inject')
+@when('on host "{host}" unset fault inject')
+def impl(context, host):
+    cmd = f"""
+    ssh {host} "
+        sed -i '/{fault_injection.GPMGMT_FAULT_POINT}=/d' ~/.bashrc
+        unset {fault_injection.GPMGMT_FAULT_POINT}
+    "
+    """
+    run_command(context, cmd.strip())
+
 @given('set fault inject delay {delay} ms')
 @then('set fault inject delay {delay} ms')
 @when('set fault inject delay {delay} ms')

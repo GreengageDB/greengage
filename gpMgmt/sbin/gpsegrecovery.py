@@ -18,6 +18,7 @@ from gppylib.operations.get_segments_in_recovery import is_seg_in_backup_mode
 from gppylib.operations.segment_tablespace_locations import get_segment_tablespace_oid_locations
 from gppylib.commands.unix import terminate_proc_tree
 from gppylib.commands.unix import get_remote_link_path
+from gppylib.fault_injection import *
 
 
 class FullRecovery(Command):
@@ -343,6 +344,7 @@ class DifferentialRecovery(Command):
             os.symlink(targetPath, targetOidPath)
 
 
+@wrap_state_func_with_faults
 def start_segment(recovery_info, logger, era):
     seg = Segment(None, None, None, None, None, None, None, None,
                   recovery_info.target_port, recovery_info.target_datadir)
