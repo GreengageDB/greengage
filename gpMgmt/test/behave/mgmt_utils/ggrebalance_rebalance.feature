@@ -243,7 +243,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 4, row count = 100
 
-    Scenario Outline: 3.10 rebalance - interrupt (with retry) and continue.
+    Scenario Outline: 6.1. rebalance - interrupt during mirror move before gp_segment_configuration update, continue and retry failed step.
         Given the database is not running
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast'"
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
@@ -295,7 +295,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | _wait_fts_to_mark_down_segments_end                                           |
         | _update_config_begin                                                          |
 
-    Scenario Outline: 3.10.1 rebalance - interrupt (with retry) and continue.
+    Scenario Outline: 6.2. rebalance - interrupt during switchover step (before invocation of 'gprecoverseg'), continue and retry failed step.
         Given the database is not running
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast'"
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
@@ -342,7 +342,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | FAULT_BEFORE_GPRECOVERSEG_PRIMARY_TO_MIRROR                                   |
         | FAULT_BEFORE_GPRECOVERSEG_MIRROR_TO_PRIMARY                                   |
 
-    Scenario Outline: 3.11 rebalance - interrupt (with cancel) and continue.
+    Scenario Outline: 6.3. rebalance - interrupt during mirror move after gp_segment_configuration update, but before port update, continue and cancel failed step.
         Given the database is not running
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast'"
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
@@ -389,7 +389,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | _update_config_end                                                            |
 
 
-    Scenario Outline: 3.12 rebalance - interrupt (when the mirror is actually started) and continue.
+    Scenario Outline: 6.4. rebalance - interrupt during mirror move after before port update (when the mirror is actually started), and continue.
         Given the database is not running
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast'"
          And the user runs command "gpssh -h sdw1 -h sdw2 -h sdw3 -e 'rm -rf /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'"
@@ -436,7 +436,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | fault_name                                                                    |
         | _do_recovery_end                                                              |
 
-    Scenario Outline: 4.1 rebalance - interrupt and rollback.
+    Scenario Outline: 7.1. rebalance - rebalance interrupt and full rollback.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
@@ -480,7 +480,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | FAULT_BEFORE_GPRECOVERSEG_MIRROR_TO_PRIMARY                                   |
         | on_enter_STATE_REBALANCE_DONE_begin                                           |
 
-    Scenario Outline: 4.2 rebalance - interrupt, rollback (and interrupt again) and continue.
+    Scenario Outline: 7.2. rebalance - rebalance interrupt, rollback (and interrupt again) and continue.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
@@ -542,7 +542,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | on_enter_STATE_REBALANCE_DONE_begin                                           |
         | on_enter_STATE_REBALANCE_DONE_end                                             |
 
-    Scenario: test 4.3. rebalance - interrupt during shrink, and rollback.
+    Scenario: test 7.3. rebalance - interrupt during shrink, and full rollback.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
@@ -572,7 +572,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 6, row count = 100
 
-    Scenario: test 4.4. rebalance - shrink, rebalance (and interrupt during it) and rollback.
+    Scenario: test 7.4. rebalance - shrink, rebalance (and interrupt during it) and full rollback.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
