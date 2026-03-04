@@ -23,6 +23,7 @@
 #include "gpopt/operators/CScalarCmp.h"
 #include "gpopt/operators/CScalarIsDistinctFrom.h"
 #include "naucrates/md/IMDScalarOp.h"
+#include "naucrates/traceflags/traceflags.h"
 
 using namespace gpopt;
 
@@ -400,6 +401,23 @@ CPhysicalJoin::PedInnerHashedFromOuterHashed(
 				IMDId *mdidOpfamilyOuter =
 					mdAccessor->RetrieveType(pmdidTypeOuter)
 						->GetDistrOpfamilyMdid();
+
+				// We may get here with null hashfamilies if we join on integer types
+				// (or other 'non-generic' types)
+				// with EopttraceConsiderOpfamiliesForDistribution is set to off.
+				// This is not the common case, because this flag is on by default.
+				//
+				// If a type has no dedicated subclass (i.e., it is CMDTypeGenericGPDB),
+				// hashfamilies are non-null most of the time, since they are set
+				// regardless of the flag.
+				// But even in such case the distribution can be missing if
+				// a type doesn't have one in the first place.
+				// For example, a type can be created this way by a user.
+				if (!mdidOpfamilyInner || !mdidOpfamilyOuter)
+				{
+					fSuccess = false;
+					continue;
+				}
 
 				if (mdidOpfamilyOuter->Equals(mdidOpfamilyInner) &&
 					mdAccessor->RetrieveType(pmdidTypeInner)->IsHashable())
