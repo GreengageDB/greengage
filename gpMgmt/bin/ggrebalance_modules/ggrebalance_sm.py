@@ -175,7 +175,7 @@ class RebalanceSM:
             return
 
         filename = self.create_config_file(steps)
-        gpmovemirrors_options = f'-a -i {filename}'
+        gpmovemirrors_options = f'--skip-resource-estimation -a -i {filename}'
 
         if self.options.parallel is not None:
             batch_size = self.options.parallel
