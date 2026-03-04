@@ -40,7 +40,6 @@ class RebalanceSM:
         'STATE_REBALANCE_ROLLBACK_STARTED',
         'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED',
         'STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE'
-        # TODO: Add schema drop state???
     ]
 
     transitions = [
@@ -450,7 +449,7 @@ class RebalanceSM:
         self.logger.info('Process failed switchovers...')
         for step in error_steps:
             # TODO: add comments and update the log below
-            self.logger.info(f'Checking error status for step: {str(step)}')
+            self.logger.info(f'Processing error status for switchover step: {str(step)}')
             if self.interactive_check(f'Retry step?'):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
@@ -504,7 +503,6 @@ class RebalanceSM:
         return Segment.initFromString(row[0])
 
     def get_postgresql_conf_port(self, hostname: str, datadir: str) -> int:
-        #TODO: recheck cmd
         cmd = Command(
             name="get_postgresql_conf_port",
             cmdStr=f"grep -E '^port\\s*=' {datadir}/postgresql.conf | sed -E 's/^port\\s*=\\s*([0-9]+).*/\\1/'",
@@ -796,6 +794,7 @@ class RebalanceSM:
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
         if self.is_rollback_flow:
+            self.rebalance_schema.dropSchema()
             self.logger.info('Rebalance rollback is complete')
         else:
             self.logger.info('Rebalance is complete')
