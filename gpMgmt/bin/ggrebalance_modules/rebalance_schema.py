@@ -46,9 +46,12 @@ class RebalanceSchema:
                        (plan BYTEA)
                        DISTRIBUTED REPLICATED''')
 
-        self.savePlan(plan)
+        dbconn.execSQL(self.conn,
+                       f'''CREATE TABLE {self.schema_name}.{self.segment_move_steps}
+                       (move_order INT NOT NULL UNIQUE, status TEXT, is_rollback BOOL, step BYTEA)
+                       DISTRIBUTED REPLICATED''')
 
-        self.recreateExecutionStepsTable()
+        self.savePlan(plan)
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
@@ -163,19 +166,10 @@ class RebalanceSchema:
         return dbconn.query(self.conn, f"""SELECT db_name, schema_name, rel_name FROM
                             {self.schema_name}.{self.table_rebalance_status_detail} WHERE status = '{status}'""")
 
-    def recreateExecutionStepsTable(self) -> None:
-        dbconn.execSQL(self.conn, f'DROP TABLE IF EXISTS {self.schema_name}.{self.segment_move_steps}')
-
-        dbconn.execSQL(self.conn,
-                       f'''CREATE TABLE {self.schema_name}.{self.segment_move_steps}
-                       (move_order INT NOT NULL UNIQUE, status TEXT, is_rollback BOOL, step BYTEA)
-                       DISTRIBUTED REPLICATED''')
-
     def saveExecutionSteps(self, steps: List[RebalanceStep]) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
 
-        # TODO: just truncate here?
-        self.recreateExecutionStepsTable()
+        dbconn.execSQL(self.conn, f'TRUNCATE TABLE {self.schema_name}.{self.segment_move_steps}')
         
         for step in steps:
             dbconn.execSQL(self.conn,
