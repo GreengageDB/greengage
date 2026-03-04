@@ -4589,7 +4589,6 @@ def impl(context, fault, host):
         echo 'export {fault_injection.GPMGMT_FAULT_POINT}={fault}' >> ~/.bashrc"
         export {fault_injection.GPMGMT_FAULT_POINT}={fault}
     """
-    #print(f'RELOG = {cmd.strip()}')
     run_command(context, cmd.strip())
 
 @given('on host "{host}" unset fault inject')

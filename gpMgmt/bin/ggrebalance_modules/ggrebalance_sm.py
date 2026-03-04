@@ -475,7 +475,6 @@ class RebalanceSM:
         self.mark_dependent_steps_on_error(error_steps, steps_left_todo)
 
     def mark_dependent_steps_on_error(self, error_steps: List[RebalanceStep], steps_left_todo: List[RebalanceStep]) -> None:
-        # Mark dependent steps accordingly
         # 1. If there are steps planned for ROLLBACK - we mark all left todo steps for the same content as already rolled back
         if not self.is_rollback_flow:
             for step in error_steps:
@@ -522,13 +521,13 @@ class RebalanceSM:
 
         return int(output)
 
-    # decorator to TODO: add comments
+    # Decorator to overwrite the logic of interactive_check()
+    # during tests execution.
     def wrap_interactive_check_with_faults(fun):
         def func_with_faults(self, msg: str):
             try:
                 inject_value = inject_fault_get_value()
                 injected_answers = json.loads(inject_value)
-                self.logger.info(f'[RELOG DBG] injected value = "{inject_value}"')
                 if injected_answers.get(msg, '') == 'yes':
                     return True
                 if injected_answers.get(msg, '') == 'no':
@@ -540,7 +539,7 @@ class RebalanceSM:
 
     @wrap_interactive_check_with_faults
     def interactive_check(self, msg: str) -> bool:
-        #Currently only a stub
+        # TODO: add logic here when implementing interactive mode
         return False
 
     @staticmethod
