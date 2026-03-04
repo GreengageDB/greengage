@@ -103,7 +103,7 @@ future:
 	@echo "--- future"
 	cd $(PYLIB_SRC)/$(FUTURE_DIR) && CC="$(CC)" python setup.py build
 	mkdir -p $(PYLIB_DIR)/future
-	cp -r $(PYLIB_SRC)/$(FUTURE_DIR)/build/lib/* $(PYLIB_DIR)/future
+	cp -r $(PYLIB_SRC)/$(FUTURE_DIR)/build/lib*/* $(PYLIB_DIR)/future
 
 
 #
