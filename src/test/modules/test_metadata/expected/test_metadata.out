@@ -1,0 +1,59 @@
+create extension if not exists test_metadata;
+-- Test on all segments
+SELECT gp_segment_id, test_send_metadata(150) 
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |                150
+             1 |                150
+             2 |                150
+(3 rows)
+
+-- Read metadata collected on coordinator
+SELECT test_check_metadata();
+WARNING:  Custom metadata received, len=150
+WARNING:  Custom metadata received, len=150
+WARNING:  Custom metadata received, len=150
+ test_check_metadata 
+---------------------
+                   3
+(1 row)
+
+-- Clean metadata on coordinator
+SELECT test_clean_metadata();
+ test_clean_metadata 
+---------------------
+                   0
+(1 row)
+
+-- Check that metadata has been cleaned on coordinator
+SELECT test_check_metadata();
+ test_check_metadata 
+---------------------
+                   0
+(1 row)
+
+-- Test longer metadata
+SELECT gp_segment_id, test_send_metadata(150000) 
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |             150000
+             1 |             150000
+             2 |             150000
+(3 rows)
+
+-- Read metadata collected on coordinator
+SELECT test_check_metadata();
+WARNING:  Custom metadata received, len=150000
+WARNING:  Custom metadata received, len=150000
+WARNING:  Custom metadata received, len=150000
+ test_check_metadata 
+---------------------
+                   3
+(1 row)
+

@@ -197,6 +197,15 @@ typedef struct
 	void	   *noticeProcArg;
 } PGNoticeHooks;
 
+/* Fields needed for metadata handling */
+typedef struct
+{
+	PQmetadataReceiver metadataRec; /* notice message receiver */
+	void	   *metadataRecArg;
+	PQmetadataProcessor metadataProc;
+	void       *metadataProcArg;
+} PGMetadataHooks;
+
 typedef struct PGEvent
 {
 	PGEventProc proc;			/* the function to call on events */
@@ -277,6 +286,7 @@ struct pg_result
 	PQaoRelTupCount *aotupcounts;
 	int		nWaits;
 	int		*waitGxids;
+
 };
 
 /* PGAsyncStatusType defines the state of the query-execution state machine */
@@ -409,6 +419,9 @@ struct pg_conn
 
 	/* Callback procedures for notice message processing */
 	PGNoticeHooks noticeHooks;
+
+	/* Callback procedures for metadata message processing */
+	PGMetadataHooks metadataHooks;
 
 	/* Event procs registered via PQregisterEventProc */
 	PGEvent    *events;			/* expandable array of event data */

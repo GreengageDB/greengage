@@ -1,0 +1,20 @@
+-- test_metadata--1.0.sql
+CREATE FUNCTION test_send_metadata(IN len int4)
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION test_send_empty_metadata()
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION test_check_metadata()
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION test_clean_metadata()
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;

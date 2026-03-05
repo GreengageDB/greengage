@@ -36,6 +36,7 @@ static uint32 cdbconn_get_motion_listener_port(PGconn *conn);
 static void cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc);
 
 static void MPPnoticeReceiver(void *arg, const PGresult *res);
+static void MPPmetadataReceiver(void *arg, ggMetadataChunk *);
 
 static const char *
 transStatusToString(PGTransactionStatusType status)
@@ -287,6 +288,7 @@ void
 cdbconn_doConnectComplete(SegmentDatabaseDescriptor *segdbDesc)
 {
 	PQsetNoticeReceiver(segdbDesc->conn, &MPPnoticeReceiver, segdbDesc);
+	PQsetMetadataReceiver(segdbDesc->conn, &MPPmetadataReceiver, segdbDesc);
 
 	/*
 	 * Command the QE to initialize its motion layer. Wait for it to respond
@@ -869,4 +871,53 @@ forwardQENotices(void)
 	}
 	if (hasNotices)
 		pq_flush();
+}
+
+static ggMetadataChunk *ggMetadataList = NULL;
+
+static void
+MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk)
+{
+	metadata_chunk->next = ggMetadataList;
+	ggMetadataList = metadata_chunk;
+}
+
+ggMetadataChunkIterator
+PQMetadataWalk(void)
+{
+	return ggMetadataList;
+}
+
+ggMetadataChunkIterator
+PQgetNextMetadata(ggMetadataChunkIterator it)
+{
+	if (!it)
+		return NULL;
+
+	ggMetadataChunk *chunk = (ggMetadataChunk *)it;
+	return chunk->next;
+}
+
+void
+PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data)
+{
+	ggMetadataChunk *chunk = ggMetadataList;
+	if (length)
+		*length = chunk->metadataLen;
+
+	if (data)
+		*data = chunk->payload;
+}
+
+void
+PQCleanMetadata(void)
+{
+	ggMetadataChunk *chunk = ggMetadataList;
+	while (chunk)
+	{
+		ggMetadataChunkIterator next = chunk->next;
+		free(chunk);
+		chunk = next;
+	}
+	ggMetadataList = NULL;
 }

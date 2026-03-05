@@ -75,4 +75,17 @@ extern void secure_close(Port *port);
 extern ssize_t secure_read(Port *port, void *ptr, size_t len);
 extern ssize_t secure_write(Port *port, void *ptr, size_t len);
 
+/*
+ * Send custom metadata to frontend
+ */
+extern void pq_metadatasend(const void *data, size_t len);
+
+typedef void *ggMetadataChunkIterator;
+
+extern ggMetadataChunkIterator PQMetadataWalk(void);
+extern ggMetadataChunkIterator PQgetNextMetadata(ggMetadataChunkIterator it);
+extern void PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data);
+extern void PQCleanMetadata(void);
+
+
 #endif   /* LIBPQ_H */
