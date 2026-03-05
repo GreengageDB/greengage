@@ -168,7 +168,7 @@ class GGRebalanceMainSM:
 
     # state callbacks start here
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_OPTIONS_VALIDATION(self) -> None:
         if self.options.clean_required:
             self.trigger('move_to_STATE_CLEANUP')
@@ -177,7 +177,7 @@ class GGRebalanceMainSM:
         else:
             self.trigger('move_to_STATE_PLANNING_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_CLEANUP(self) -> None:
         if not self.rebalance_schema.schemaExists():
             self.logger.info(f"Rebalance schema doesn't exist. Cleanup is not required.")
@@ -189,7 +189,7 @@ class GGRebalanceMainSM:
             self.logger.info('Cleanup is complete')
         self.trigger('move_to_STATE_END')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_ROLLBACK(self) -> None:
         try:
             self.plan = self.rebalance_schema.retrieveSavedPlan()
@@ -202,7 +202,7 @@ class GGRebalanceMainSM:
         finally:
             self.trigger('move_to_STATE_END')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_PLANNING_STARTED(self) -> None:
         if self.options.target_segment_count != None:
             self.plan = Planner(self.logger, self.dburl, self.gparray, self.options).plan()
@@ -212,11 +212,11 @@ class GGRebalanceMainSM:
 
         self.trigger('move_to_STATE_PLANNING_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_PLANNING_DONE(self) -> None:
         self.trigger('move_to_STATE_CHECK_PREVIOUS_RUN')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
         if not self.rebalance_schema.schemaExists():
             if self.plan == None:
@@ -250,19 +250,19 @@ class GGRebalanceMainSM:
 
             self.trigger('move_to_STATE_EXECUTOR_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SETUP_SCHEMA_STARTED(self) -> None:
         # Create schema and status tables.
         # It will also save plan in order to use it for recovering after interruption
         self.rebalance_schema.createSchema(self.plan)
         self.trigger('move_to_STATE_SETUP_SCHEMA_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SETUP_SCHEMA_DONE(self) -> None:
         self.logger.info(f'Created "{self.rebalance_schema.getSchemaName()}" schema')
         self.trigger('move_to_STATE_EXECUTOR_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_EXECUTOR_STARTED(self) -> None:
         if isinstance(self.plan, ShrinkPlan):
             shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
@@ -271,35 +271,35 @@ class GGRebalanceMainSM:
                 return
         self.trigger('move_to_STATE_REBALANCE_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_EXECUTOR_DONE(self) -> None:
         self.trigger('move_to_STATE_END')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_STARTED(self) -> None:
         self.gg_shrink.run(self.plan)
         self.trigger('move_to_STATE_SHRINK_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_STARTED(self) -> None:
         if self.plan is not None and self.plan.getMoves() is not None:
             self.gg_rebalance.run(self.plan)
 
         self.trigger('move_to_STATE_REBALANCE_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
         self.trigger('move_to_STATE_EXECUTOR_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_END(self) -> None:
         pass
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:
         raise Exception('Main SM entered STATE_ERROR')
 

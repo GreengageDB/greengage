@@ -344,7 +344,7 @@ class DifferentialRecovery(Command):
             os.symlink(targetPath, targetOidPath)
 
 
-@wrap_state_func_with_faults
+@wrap_func_with_faults
 def start_segment(recovery_info, logger, era):
     seg = Segment(None, None, None, None, None, None, None, None,
                   recovery_info.target_port, recovery_info.target_datadir)

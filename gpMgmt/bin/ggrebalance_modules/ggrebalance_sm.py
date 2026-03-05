@@ -592,7 +592,7 @@ class RebalanceSM:
 
     # state callbacks start here
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
         state_from_prev_run = self.rebalance_schema.getRebalanceStateFromPreviousRun()
         self.is_rollback_flow = self.rebalance_schema.isRollbackRebalanceFlow(self.states_rollback_rebalance_flow[0])
@@ -617,11 +617,11 @@ class RebalanceSM:
             # use auto to_«state» method to recover
             self.trigger(f'to_{next_state}')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_STARTED(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_PREPARE_MOVES_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_PREPARE_MOVES_STARTED(self) -> None:
         if not self.rebalance_plan.getMoves():
             raise Exception('Rebalance executor was launched with a plan without segment movements')
@@ -642,11 +642,11 @@ class RebalanceSM:
 
         self.trigger('move_to_STATE_REBALANCE_PREPARE_MOVES_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_PREPARE_MOVES_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_STARTED(self) -> None:
         if self.rebalance_schema.allExecutionStepsAreDone():
             self.trigger('move_to_STATE_REBALANCE_EXECUTION_DONE')
@@ -704,15 +704,15 @@ class RebalanceSM:
 
         self.trigger('move_to_STATE_REBALANCE_MOVES_SUCCEEDED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_MOVES_SUCCEEDED(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_STARTED(self) -> None:
 
         # Approve all consequent steps that require approval
@@ -731,17 +731,17 @@ class RebalanceSM:
 
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_EXECUTION_AWAITING_SWITCHOVER_APPROVE_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_ROLLBACK_STARTED(self) -> None:
         self.is_rollback_flow = True
         self.logger.info('Starting rebalance rollback')
         self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED(self) -> None:
 
         self.logger.info('Start preparing steps for rollback...')
@@ -798,11 +798,11 @@ class RebalanceSM:
 
         self.trigger('move_to_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_DONE(self) -> None:
         self.trigger('move_to_STATE_REBALANCE_EXECUTION_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_REBALANCE_DONE(self) -> None:
         if self.is_rollback_flow:
             self.rebalance_schema.dropSchema()
@@ -810,7 +810,7 @@ class RebalanceSM:
         else:
             self.logger.info('Rebalance is complete')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:
         raise Exception('Rebalance execution entered STATE_ERROR')
 

@@ -326,7 +326,7 @@ class GGShrink:
 
     # state callbacks start here
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_CHECK_PREVIOUS_RUN(self) -> None:
         assert self.rebalance_schema.schemaExists()
         # check whether we can get the state where we stopped in previous run
@@ -369,7 +369,7 @@ class GGShrink:
             # use auto to_«state» method to recover
             self.trigger(f'to_{next_state}')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_STARTED(self) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
         dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
@@ -385,34 +385,34 @@ class GGShrink:
 
         self.trigger('move_to_STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_DONE(self) -> None:
         self.logger.info(f'Updated target segment count to {self.shrink_plan.getTargetSegmentCount()}')
         self.trigger('move_to_STATE_PREPARE_SHRINK_SCHEMA_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_PREPARE_SHRINK_SCHEMA_STARTED(self) -> None:
         self.prepare_shrink_schema(False)
         self.trigger('move_to_STATE_PREPARE_SHRINK_SCHEMA_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_PREPARE_SHRINK_SCHEMA_DONE(self) -> None:
         self.logger.info(f'Initiated list of tables to rebalance')
         self.trigger('move_to_STATE_SHRINK_TABLES_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_TABLES_STARTED(self) -> None:
         self.logger.info('Start tables rebalance for shrink')
         # perform 'ALTER TABLE REBALANCE' for all not yet processed tables
         self.rebalance_tables('none', 'done', self.shrink_plan.getTargetSegmentCount())
         self.trigger('move_to_STATE_SHRINK_TABLES_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_TABLES_DONE(self) -> None:
         self.logger.info('Tables rebalance complete')
         self.trigger('move_to_STATE_SHRINK_CATALOG_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_CATALOG_STARTED(self) -> None:
         self.logger.info('Start catalog shrink')
 
@@ -427,12 +427,12 @@ class GGShrink:
 
         self.trigger('move_to_STATE_SHRINK_CATALOG_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_CATALOG_DONE(self) -> None:
         self.logger.info('Catalog shrink complete')
         self.trigger('move_to_STATE_SHRINK_SEGMENTS_STOP_STARTED')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_SEGMENTS_STOP_STARTED(self) -> None:
         self.logger.info('Stopping shrinked segments...')
 
@@ -469,18 +469,18 @@ class GGShrink:
 
         self.trigger('move_to_STATE_SHRINK_SEGMENTS_STOP_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_SEGMENTS_STOP_DONE(self) -> None:
         self.logger.info('Shrinked segments were stopped')
         self.trigger('move_to_STATE_SHRINK_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_DONE(self) -> None:
         os.remove(self.gparray_dump_file)
         self.logger.info('Shrink is complete')
         self.trigger('move_to_STATE_END')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_START(self) -> None:
         dbconn.execSQL(self.conn, 'BEGIN')
         dbconn.execSQL(self.conn, 'SELECT gp_expand_lock_catalog()')
@@ -492,51 +492,51 @@ class GGShrink:
 
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE(self) -> None:
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START(self) -> None:
         self.prepare_shrink_schema(True)
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE(self) -> None:
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START(self) -> None:
         self.logger.info('Start tables rebalance for rollback')
         # perform 'ALTER TABLE REBALANCE' for all not yet processed tables
         self.rebalance_tables('done', 'none', self.gparray.get_segment_count())
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE(self) -> None:
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START(self) -> None:
         if os.path.exists(self.gparray_dump_file):
             os.remove(self.gparray_dump_file)
         self.rebalance_schema.dropSchema()
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_DONE')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_DONE(self) -> None:
         self.logger.info('Rollback is complete.')
         self.trigger('move_to_STATE_END_FROM_ROLLBACK')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_END_FROM_ROLLBACK(self) -> None:
         self.trigger('move_to_STATE_END')
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_END(self) -> None:
         pass
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def on_enter_STATE_ERROR(self) -> None:
         raise Exception('Shrink entered STATE_ERROR')
 

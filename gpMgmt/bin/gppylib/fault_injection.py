@@ -40,7 +40,7 @@ def inject_fault_get_value() -> str:
     return ''
 
 # decorator for test purposes
-def wrap_state_func_with_faults(func):
+def wrap_func_with_faults(func):
     def func_with_faults(*args):
         inject_fault(f'{func.__name__}_begin')
         result = func(*args)

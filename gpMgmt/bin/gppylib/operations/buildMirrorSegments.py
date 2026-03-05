@@ -314,7 +314,7 @@ class GpMirrorListToBuild:
             dbconn.execSQL(conn,"SELECT gp_request_fts_probe_scan()")
         conn.close()
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def _update_config(self, recovery_info_by_host, gpArray):
         # should use mainUtils.getProgramName but I can't make it work!
         programName = os.path.split(sys.argv[0])[-1]
@@ -589,7 +589,7 @@ class GpMirrorListToBuild:
         self._remove_progress_files(recovery_info_by_host, recovery_results)
         return recovery_results
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def _do_recovery(self, recovery_info_by_host, gpEnv):
         """
         # Recover and start segments using gpsegrecovery, which will internally call either
@@ -690,7 +690,7 @@ class GpMirrorListToBuild:
                     failed_reachable_segments.append(failed)
         return failed_reachable_segments
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def _stop_failed_segments(self, gpEnv):
         failed_reachable_segments = self._get_failed_reachable_segments()
         if len(failed_reachable_segments) == 0:
@@ -719,7 +719,7 @@ class GpMirrorListToBuild:
         #
         self.__runWaitAndCheckWorkerPoolForErrorsAndClear(cmds, suppressErrorCheck=True)
 
-    @wrap_state_func_with_faults
+    @wrap_func_with_faults
     def _wait_fts_to_mark_down_segments(self, gpEnv, segments_to_mark_down):
         """Waits for FTS prober to mark segments as down"""
 
