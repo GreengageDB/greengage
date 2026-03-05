@@ -116,6 +116,15 @@ class GpVersionTestCase(GpTestCase):
         with self.assertRaisesRe(Exception, 'invalid version shift'):
             v << 1
 
+    # A test that we can use GpVersion not only for ggdb versions.
+    def test_generic(self):
+        v1 = GpVersion("8.9.1")
+        v2 = GpVersion("11.5.0")
+
+        self.assertGreater(v2, v1)
+        self.assertLess(v1, v2)
+        self.assertEqual(tuple(v1.version), (8, 9, 1))
+
 
 #------------------------------- Mainline --------------------------------
 if __name__ == '__main__':

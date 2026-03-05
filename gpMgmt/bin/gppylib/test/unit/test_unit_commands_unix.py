@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 import os
-import io
 
 from mock import patch
 
@@ -9,6 +8,7 @@ from .gp_unittest import *
 from gppylib.commands.base import CommandResult
 import sys
 if sys.version_info[0] == 3:
+    import io
     StringIO = io.StringIO
 else:
     import StringIO

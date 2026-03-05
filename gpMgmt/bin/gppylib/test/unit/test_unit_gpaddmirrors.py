@@ -2,7 +2,6 @@ from __future__ import absolute_import
 import os
 import sys
 
-import io
 from mock import *
 from .gp_unittest import *
 from gppylib.programs.clsAddMirrors import GpAddMirrorsProgram, ProgramArgumentValidationException
@@ -11,6 +10,7 @@ from gppylib.system.environment import GpMasterEnvironment
 from gppylib.system.configurationInterface import GpConfigurationProvider
 
 if sys.version_info[0] == 3:
+    import io
     StringIO = io.StringIO
 else:
     import StringIO

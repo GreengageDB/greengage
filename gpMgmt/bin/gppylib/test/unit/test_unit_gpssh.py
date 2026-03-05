@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 import os
-import io
 
 import sys
 from mock import patch
@@ -8,6 +7,7 @@ from mock import patch
 from .gp_unittest import GpTestCase, load_module
 
 if sys.version_info[0] == 3:
+    import io
     StringIO = io.StringIO
 else:
     import StringIO

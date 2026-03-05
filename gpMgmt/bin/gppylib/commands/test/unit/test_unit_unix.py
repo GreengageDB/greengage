@@ -67,18 +67,16 @@ class UnixCommandTestCase(GpTestCase):
 
 
     @patch('gppylib.commands.unix.get_rsync_version', return_value='rsync version 3.2.7')
-    @patch('gppylib.commands.unix.LooseVersion', side_effect=['3.2.7', '3.1.0'])
-    def test_compare_rsync_version(self, mock_parse_version, mock_get_cmd_version):
+    def test_compare_rsync_version(self, mock_get_cmd_version):
 
         result = self.subject.validate_rsync_version("3.2.7")
         self.assertTrue(result)
 
 
     @patch('gppylib.commands.unix.get_rsync_version', return_value='rsync version 2.6.9')
-    @patch('gppylib.commands.unix.LooseVersion', side_effect=['2.6.9', '3.1.0'])
-    def test_validate_rsync_version_false(self, mock_parse_version, mock_get_cmd_version):
+    def test_validate_rsync_version_false(self, mock_get_cmd_version):
 
-        result =self.subject.validate_rsync_version("2.6.9")
+        result =self.subject.validate_rsync_version("3.2.7")
         self.assertFalse(result)
 
 if __name__ == '__main__':

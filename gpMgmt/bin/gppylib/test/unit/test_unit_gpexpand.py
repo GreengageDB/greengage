@@ -10,10 +10,10 @@ from gppylib.gplog import *
 from gppylib.system.configurationInterface import GpConfigurationProvider
 from gppylib.system.environment import GpMasterEnvironment
 from gppylib.db import dbconn
-import io
 import sys
 
 if sys.version_info[0] == 3:
+    import io
     StringIO = io.StringIO
 else:
     import StringIO
