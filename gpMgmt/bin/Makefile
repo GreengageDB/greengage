@@ -55,11 +55,11 @@ SERVER_SBIN=$(SERVER_SRC)/../sbin
 LIB_DIR=$(SRC)/lib
 PYLIB_DIR=$(SRC)/ext
 
-core: pygresql subprocess32
+core: pygresql subprocess32 future
 	python gpconfig_modules/parse_guc_metadata.py $(DESTDIR)$(prefix)
 
 ifeq ($(with_pythonsrc_ext), yes)
-install: installdirs installprograms core psutil pygresql pyyaml
+install: installdirs installprograms core psutil pygresql pyyaml future
 else
 install: installdirs installprograms core
 endif
@@ -95,6 +95,16 @@ pygresql:
 	  cp -r $(PYLIB_SRC)/$(PYGRESQL_DIR)/build/lib.linux*/* $(PYLIB_DIR)/pygresql; \
 	fi
 	touch $(PYLIB_DIR)/__init__.py
+
+FUTURE_VERSION=1.0.0
+FUTURE_DIR=python-future-$(FUTURE_VERSION)
+
+future:
+	@echo "--- future"
+	cd $(PYLIB_SRC)/$(FUTURE_DIR) && CC="$(CC)" python setup.py build
+	mkdir -p $(PYLIB_DIR)/future
+	cp -r $(PYLIB_SRC)/$(FUTURE_DIR)/build/lib*/* $(PYLIB_DIR)/future
+
 
 #
 # subprocess32
@@ -212,7 +222,9 @@ clean distclean:
 	rm -rf $(PYLIB_SRC_EXT)/$(LOGILAB_COMMON_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(LOGILAB_ASTNG_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC_EXT)/$(FUTURE_DIR)/build
 	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC)/$(FUTURE_DIR)/build
 	rm -rf $(PYLIB_SRC)/subprocess32/build
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
