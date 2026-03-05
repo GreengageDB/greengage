@@ -6032,7 +6032,7 @@ PQsetMetadataProcessor(PQmetadataProcessor proc, void *arg)
 		metadataProcessorArg = arg;
 	}
 
-	return NULL;
+	return old;
 }
 
 /*

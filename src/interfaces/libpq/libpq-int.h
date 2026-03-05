@@ -420,9 +420,6 @@ struct pg_conn
 	/* Callback procedures for notice message processing */
 	PGNoticeHooks noticeHooks;
 
-	/* Callback procedures for metadata message processing */
-	PGMetadataHooks metadataHooks;
-
 	/* Event procs registered via PQregisterEventProc */
 	PGEvent    *events;			/* expandable array of event data */
 	int			nEvents;		/* number of active events */
@@ -551,6 +548,9 @@ struct pg_conn
 	/* Buffer for receiving various parts of messages */
 	PQExpBufferData workBuffer; /* expansible string */
 	char       *diffoptions;  /* MPP: transfer changed GUCs(require sync) from QD to QEs */
+
+	/* Callback procedures for metadata message processing */
+	PGMetadataHooks metadataHooks;
 };
 
 /* PGcancel stores all data necessary to cancel a connection. A copy of this
