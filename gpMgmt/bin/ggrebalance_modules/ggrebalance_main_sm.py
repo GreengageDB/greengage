@@ -182,9 +182,12 @@ class GGRebalanceMainSM:
         if not self.rebalance_schema.schemaExists():
             self.logger.info(f"Rebalance schema doesn't exist. Cleanup is not required.")
         else:
-            prev_run_was_complete = (self.main_state_from_prev_run == 'STATE_EXECUTOR_DONE' or
-                                     self.main_state_from_prev_run == 'STATE_ROLLBACK')
-            self.gg_shrink.cleanup(prev_run_was_complete)
+            self.plan = self.rebalance_schema.retrieveSavedPlan()
+            prev_shrink_run_was_complete = True
+            if isinstance(self.plan, ShrinkPlan):
+                shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
+                prev_shrink_run_was_complete = self.gg_shrink.state_is_final(shrink_state_from_prev_run)
+            self.gg_shrink.cleanup(prev_shrink_run_was_complete)
             self.rebalance_schema.dropSchema()
             self.logger.info('Cleanup is complete')
         self.trigger('move_to_STATE_END')
@@ -192,6 +195,9 @@ class GGRebalanceMainSM:
     @wrap_func_with_faults
     def on_enter_STATE_ROLLBACK(self) -> None:
         try:
+            if self.main_state_from_prev_run == 'STATE_EXECUTOR_DONE':
+                self.logger.info("Previous run was completed successfully. Can't perform rollback.")
+                return
             self.plan = self.rebalance_schema.retrieveSavedPlan()
             if isinstance(self.plan, ShrinkPlan):
                 shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
