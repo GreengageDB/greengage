@@ -150,8 +150,8 @@ try:
 
     errmsg = None
     for p in proc:
-        for out in p.stdout.decode('utf-8'):
-            print('[OUT %s] %s' % (p.x_peer, out))
+        for out in p.stdout:
+            print('[OUT %s] %s' % (p.x_peer, out.decode('utf-8')))
         status = p.wait()
         if status:
             errmsg = '[ERROR %s] exit %d, cmd - %s' % (p.x_peer, status, p.x_cmd)
