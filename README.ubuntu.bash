@@ -66,5 +66,6 @@ else
   ln -s python3.9 /usr/bin/python
   curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python
 
+  python -m pip uninstall -y importlib-metadata
   python -m pip install -U pip setuptools wheel
 fi
