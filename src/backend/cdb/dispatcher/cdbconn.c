@@ -901,7 +901,7 @@ PQgetNextMetadata(ggMetadataChunkIterator it)
 void
 PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data)
 {
-	ggMetadataChunk *chunk = ggMetadataList;
+	ggMetadataChunk *chunk = (ggMetadataChunk *)it;
 	if (length)
 		*length = chunk->metadataLen;
 

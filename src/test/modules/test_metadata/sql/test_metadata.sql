@@ -18,5 +18,21 @@ SELECT test_check_metadata();
 SELECT gp_segment_id, test_send_metadata(150000) 
     FROM gp_dist_random('gp_id');
 
+SELECT gp_segment_id, test_send_metadata(1500000)
+    FROM gp_dist_random('gp_id');
+
+SELECT gp_segment_id, test_send_metadata(15000000)
+    FROM gp_dist_random('gp_id');
+
+SELECT gp_segment_id, test_send_metadata(150000000)
+    FROM gp_dist_random('gp_id');
+
+SELECT gp_segment_id, test_send_empty_metadata()
+    FROM gp_dist_random('gp_id');
+
 -- Read metadata collected on coordinator
+SELECT test_check_metadata();
+
+SELECT test_clean_metadata();
+
 SELECT test_check_metadata();
