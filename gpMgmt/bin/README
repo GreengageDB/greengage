@@ -6,14 +6,13 @@ For Developers
 ==============
 
 If you'd like to run the python scripts directly from this 
-directory you will need to modify your PYTHONPATH variable to use the libraries
-in this path:
+directory you will need to modify your PYTHONPATH variable to add the "ext" 
+directory.  so something like:
 
-```
-PYTHONPATH="\$GPHOME/lib/python:${PYTHONPATH}"
-```
+	export PYTHONPATH=~/dev/cdb2/gpMgmt/bin/ext
 
-This will be set automatically with a `source $GPHOME/greengage_path.sh`
+should do the trick.
+
 
 Python Version
 --------------
