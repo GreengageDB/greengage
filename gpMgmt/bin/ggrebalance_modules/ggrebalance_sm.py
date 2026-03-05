@@ -744,6 +744,7 @@ class RebalanceSM:
     @wrap_state_func_with_faults
     def on_enter_STATE_REBALANCE_ROLLBACK_PREPARE_MOVES_STARTED(self) -> None:
 
+        self.logger.info('Start preparing steps for rollback...')
         actual_rollback_steps_cnt = 0
         rollback_steps = self.rebalance_schema.getExecutionSteps([])
 
@@ -764,7 +765,10 @@ class RebalanceSM:
                 elif step.getStatus() in [RebalanceStep.Status.IN_PROGRESS, RebalanceStep.Status.DONE, RebalanceStep.Status.ERROR]:
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
                     actual_rollback_steps_cnt += 1
-                # We do nothing for CANCELLED steps - for now they can be processed only if run ggrebalance from scratch.
+                elif step.getStatus() == RebalanceStep.Status.CANCELLED:
+                    # We do nothing for CANCELLED steps - for now they can be processed only if run ggrebalance from scratch.
+                    self.logger.warning(f'Step {str(step)} is marked as CANCELLED, and skipped during ROLLBACK processing.')
+                    continue
 
                 rollback_step_for_switchover = None
 
@@ -788,7 +792,7 @@ class RebalanceSM:
             for step in rollback_steps:
                 self.logger.info(str(step))
             self.rebalance_schema.saveExecutionSteps(rollback_steps)
-            self.logger.info('Saved rollback rebalance execution steps.')
+            self.logger.info('Saved rollback rebalance execution steps')
         else:
             self.logger.info('No steps to rollback found for rebalance')
 
