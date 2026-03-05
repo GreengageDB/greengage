@@ -17,7 +17,6 @@ import signal
 import uuid
 import pipes
 import re
-from distutils.version import LooseVersion
 
 from gppylib.gplog import get_default_logger
 from gppylib.commands.base import *
