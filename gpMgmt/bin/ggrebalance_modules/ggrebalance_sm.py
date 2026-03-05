@@ -466,6 +466,18 @@ class RebalanceSM:
             if not step.isRollback() and self.interactive_check('Rollback step?'):
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
+
+                # Revert type of switchover
+                rollback_step_for_switchover = None
+                if isinstance(step, RebalanceStepSwitchoverToMirror):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToPrimary(step.getMove())
+                elif isinstance(step, RebalanceStepSwitchoverToPrimary):
+                    rollback_step_for_switchover = RebalanceStepSwitchoverToMirror(step.getMove())
+
+                if rollback_step_for_switchover:
+                    rollback_step_for_switchover.setMoveOrder(step.getMoveOrder())
+                    rollback_step_for_switchover.setStatus(step.getStatus(), True)
+                    step = rollback_step_for_switchover
             else:
                 self.logger.info('Cancel step')
                 step.setStatus(RebalanceStep.Status.CANCELLED)
