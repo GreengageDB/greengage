@@ -7,3 +7,6 @@
 [submodule "gpMgmt/bin/pythonSrc/PyGreSQL-5.2.5"]
 	path = gpMgmt/bin/pythonSrc/PyGreSQL-5.2.5
 	url = https://github.com/PyGreSQL/PyGreSQL.git
+[submodule "gpMgmt/bin/pythonSrc/python-future-1.0.0"]
+	path = gpMgmt/bin/pythonSrc/python-future-1.0.0
+	url = https://github.com/PythonCharmers/python-future.git
