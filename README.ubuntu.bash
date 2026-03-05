@@ -58,11 +58,11 @@ else
   add-apt-repository ppa:deadsnakes/ppa
   apt-get update
   apt-get install -y \
-    python3.9 \
-    python3.9-dev \
-    python3.9-distutils \
+    python3.11 \
+    python3.11-dev \
+    python3.11-distutils \
     curl;
 
-  ln -s python3.9 /usr/bin/python
+  ln -s python3.11 /usr/bin/python
   curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python
 fi
