@@ -89,6 +89,9 @@ def impl(context, cmd):
     )
 
     context.stdout_message, context.stderr_message = p.communicate()
+    context.stdout_message = context.stdout_message.decode('utf-8')
+    context.stderr_message = context.stderr_message.decode('utf-8')
+
     context.ret_code = p.returncode
 
 @given('the host for the {seg_type} on content {content} is made unreachable')
