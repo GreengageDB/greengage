@@ -439,6 +439,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         | fault_name                                                                    |
         | FAULT_BEFORE_GPRECOVERSEG_PRIMARY_TO_MIRROR                                   |
         | FAULT_BEFORE_GPRECOVERSEG_MIRROR_TO_PRIMARY                                   |
+        | GpSegmentRebalanceOperation_rebalance_at_seg_stop                             |
 
     Scenario Outline: 6.3.1. rebalance - interrupt during mirror move after gp_segment_configuration update, but before port update, continue and cancel failed step.
         Given the database is not running

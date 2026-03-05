@@ -305,13 +305,13 @@ def main(options, args, parser):
 
         dburl = dbconn.DbURL(dbname=DBNAME, port=gpenv.getCoordinatorPort())
 
+        check_down_segments(logger, options, dburl)
+
         check_running_gputils(dburl, options.coordinator_data_directory)
 
         create_pid_file(options.coordinator_data_directory)
 
         gparray_dump_filename = options.coordinator_data_directory + '/gparraydump'
-
-        check_down_segments(logger, options, dburl)
 
         logger.info('Init gparray from catalog')
         try:
