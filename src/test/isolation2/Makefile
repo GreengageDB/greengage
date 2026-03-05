@@ -69,7 +69,7 @@ clean distclean:
 	rm -f data
 	rm -rf $(pg_regress_clean_files)
 
-install: all
+install: all gpdiff.pl gpstringsubs.pl
 	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
 	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
 	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
