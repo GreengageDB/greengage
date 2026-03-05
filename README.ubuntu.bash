@@ -54,7 +54,17 @@ if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; 
     python2 \
     python2-dev
 else
+  apt-get install -y software-properties-common
+  add-apt-repository ppa:deadsnakes/ppa
+  apt-get update
   apt-get install -y \
-    python3-pip \
-    python-is-python3;
+    python3.9 \
+    python3.9-dev \
+    python3.9-distutils \
+    curl;
+
+  ln -s python3.9 /usr/bin/python
+  curl -sS https://bootstrap.pypa.io/get-pip.py | sudo python
+
+  python -m pip install -U pip setuptools wheel
 fi
