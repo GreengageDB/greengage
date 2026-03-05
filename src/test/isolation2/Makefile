@@ -35,6 +35,21 @@ pg_regress.o:
 	$(MAKE) -C $(top_builddir)/src/test/regress pg_regress.o
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/pg_regress.o .
 
+gpstringsubs.pl:
+	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/gpstringsubs.pl
+
+gpdiff.pl: atmsort.pm explain.pm GPTest.pm
+	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/gpdiff.pl
+
+GPTest.pm:
+	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/GPTest.pm
+
+atmsort.pm:
+	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/atmsort.pm
+
+explain.pm:
+	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/explain.pm
+
 data:
 	rm -f $@ && $(LN_S) $(top_builddir)/src/test/regress/data
 
@@ -50,6 +65,7 @@ pg_isolation2_regress$(X): isolation2_main.o pg_regress.o submake-libpgport subm
 clean distclean:
 	rm -f pg_isolation2_regress$(X) $(OBJS) isolation2_main.o isolation2_regress.so
 	rm -f pg_regress.o test_parallel_retrieve_cursor_extended_query test_parallel_retrieve_cursor_extended_query_error
+	rm -f gpstringsubs.pl gpdiff.pl GPTest.pm atmsort.pm explain.pm
 	rm -f data
 	rm -rf $(pg_regress_clean_files)
 
