@@ -324,6 +324,9 @@ class GGShrink:
     def state_is_final(self, state: str) -> bool:
         return state == self.states_main_shrink_flow[-1]
 
+    def state_is_from_rollback_flow(self, state: str) -> bool:
+        return state in self.states_rollback_flow
+
     # state callbacks start here
 
     @wrap_func_with_faults
@@ -338,7 +341,7 @@ class GGShrink:
                 self.logger.info(f"Previous run was completed successfully. Can't perform rollback.")
                 self.trigger('move_to_STATE_END_FROM_ROLLBACK')
         else:
-            if state_from_prev_run in self.states_rollback_flow:
+            if self.state_is_from_rollback_flow(state_from_prev_run):
                 self.logger.info('Continue interrupted shrink rollback operation...')
                 self.logger.info(f"Previous run stopped after state '{state_from_prev_run}', trying to continue from the next state...")
                 try:
@@ -520,7 +523,8 @@ class GGShrink:
     def on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START(self) -> None:
         if os.path.exists(self.gparray_dump_file):
             os.remove(self.gparray_dump_file)
-        self.rebalance_schema.dropSchema()
+        if self.options.skip_rebalance:
+            self.rebalance_schema.dropSchema()
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_DONE')
 
     @wrap_func_with_faults
