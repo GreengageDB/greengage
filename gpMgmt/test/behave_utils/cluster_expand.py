@@ -65,7 +65,7 @@ class Gpexpand(object):
             if mirror:
                 p1.stdin.write(("%s\n" % mirror).encode('utf-8'))
 
-        output, err = p1.communicate()
+        output = p1.communicate()[0].decode('utf-8')
 
         return output, p1.wait()
 

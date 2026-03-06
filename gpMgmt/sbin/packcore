@@ -30,7 +30,7 @@ def _getPlatformInfo():
 
 def _getFileInfo(coreFile):
     cmd = Popen(['/usr/bin/file', '--version'], stdout=PIPE, stderr=STDOUT)
-    fileVersion = cmd.communicate()[0].split()[0].strip()
+    fileVersion = cmd.communicate()[0].split()[0].strip().decode('utf-8')
     # file allow setting parameters from command line from version 5.21, refer:
     # https://github.com/file/file/commit/6ce24f35cd4a43c4bdd249e8e0c4952c1f8eac67
     # Set ELF program sections processed for core files to suppres "too many
@@ -40,7 +40,7 @@ def _getFileInfo(coreFile):
         opts += ['-P', 'elf_phnum=2048']
     opts += [coreFile]
     cmd = Popen(opts, stdout=PIPE)
-    return cmd.communicate()[0]
+    return cmd.communicate()[0].decode('utf-8')
 
 
 def _isCore(fileCmdOutput):
