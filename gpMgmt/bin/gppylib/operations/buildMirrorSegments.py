@@ -690,7 +690,6 @@ class GpMirrorListToBuild:
                     failed_reachable_segments.append(failed)
         return failed_reachable_segments
 
-    @wrap_func_with_faults
     def _stop_failed_segments(self, gpEnv):
         failed_reachable_segments = self._get_failed_reachable_segments()
         if len(failed_reachable_segments) == 0:
@@ -719,7 +718,6 @@ class GpMirrorListToBuild:
         #
         self.__runWaitAndCheckWorkerPoolForErrorsAndClear(cmds, suppressErrorCheck=True)
 
-    @wrap_func_with_faults
     def _wait_fts_to_mark_down_segments(self, gpEnv, segments_to_mark_down):
         """Waits for FTS prober to mark segments as down"""
 
