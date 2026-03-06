@@ -25,6 +25,7 @@ SUBDIRS = \
 	pl \
 	makefiles \
 	test/regress \
+	test/isolation2 \
 	test/perl
 
 # There are too many interdependencies between the subdirectories, so

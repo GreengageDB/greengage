@@ -20,5 +20,4 @@ include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
 installcheck:
-	$(MAKE) -C $(top_srcdir)/src/test/isolation2 install
 	$(pg_isolation2_regress_installcheck) --dbname=temp_tables_stat_isolation temp_tables_stat

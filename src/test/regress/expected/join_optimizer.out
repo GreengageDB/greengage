@@ -3914,14 +3914,14 @@ select t1.* from
   on (t1.f1 = b1.d1)
   left join int4_tbl i4
   on (i8.q2 = i4.f1);
-                                              QUERY PLAN                                              
-------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice8; segments: 3)
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice6; segments: 3)
    Output: text_tbl.f1
    ->  Hash Left Join
          Output: text_tbl.f1
          Hash Cond: (int8_tbl.q2 = (int4_tbl_1.f1)::bigint)
-         ->  Redistribute Motion 1:3  (slice6)
+         ->  Redistribute Motion 1:3  (slice4)
                Output: text_tbl.f1, int8_tbl.q2
                ->  Hash Right Join
                      Output: text_tbl.f1, int8_tbl.q2
@@ -3929,27 +3929,23 @@ select t1.* from
                      ->  Hash Right Join
                            Output: "outer".d1, int8_tbl.q2
                            Hash Cond: (("outer".d2)::bigint = int8_tbl_2.q2)
-                           ->  Hash Left Join
+                           ->  Gather Motion 3:1  (slice1; segments: 3)
                                  Output: int8_tbl.q2, "outer".d2
-                                 Hash Cond: (int8_tbl.q1 = int8_tbl_1.q1)
-                                 ->  Gather Motion 3:1  (slice1; segments: 3)
-                                       Output: int8_tbl.q1, int8_tbl.q2
+                                 ->  Hash Left Join
+                                       Output: int8_tbl.q2, "outer".d2
+                                       Hash Cond: (int8_tbl.q1 = int8_tbl_1.q1)
                                        ->  Seq Scan on public.int8_tbl
                                              Output: int8_tbl.q1, int8_tbl.q2
-                                 ->  Hash
-                                       Output: "outer".d2, int8_tbl_1.q1
-                                       ->  Result
-                                             Output: NULL::integer, int8_tbl_1.q1
-                                             ->  Hash Join
-                                                   Output: int8_tbl_1.q1
-                                                   Hash Cond: (int8_tbl_1.q1 = (int4_tbl.f1)::bigint)
-                                                   ->  Gather Motion 3:1  (slice2; segments: 3)
+                                       ->  Hash
+                                             Output: "outer".d2, int8_tbl_1.q1
+                                             ->  Result
+                                                   Output: NULL::integer, int8_tbl_1.q1
+                                                   ->  Hash Join
                                                          Output: int8_tbl_1.q1
+                                                         Hash Cond: (int8_tbl_1.q1 = (int4_tbl.f1)::bigint)
                                                          ->  Seq Scan on public.int8_tbl int8_tbl_1
                                                                Output: int8_tbl_1.q1
-                                                   ->  Hash
-                                                         Output: int4_tbl.f1
-                                                         ->  Gather Motion 3:1  (slice3; segments: 3)
+                                                         ->  Hash
                                                                Output: int4_tbl.f1
                                                                ->  Seq Scan on public.int4_tbl
                                                                      Output: int4_tbl.f1
@@ -3957,25 +3953,25 @@ select t1.* from
                                  Output: "outer".d1, int8_tbl_2.q2
                                  ->  Result
                                        Output: '***'::text, int8_tbl_2.q2
-                                       ->  Gather Motion 3:1  (slice4; segments: 3)
+                                       ->  Gather Motion 3:1  (slice2; segments: 3)
                                              Output: int8_tbl_2.q2
                                              ->  Seq Scan on public.int8_tbl int8_tbl_2
                                                    Output: int8_tbl_2.q2
                      ->  Hash
                            Output: text_tbl.f1
-                           ->  Gather Motion 3:1  (slice5; segments: 3)
+                           ->  Gather Motion 3:1  (slice3; segments: 3)
                                  Output: text_tbl.f1
                                  ->  Seq Scan on public.text_tbl
                                        Output: text_tbl.f1
          ->  Hash
                Output: int4_tbl_1.f1
-               ->  Broadcast Motion 3:3  (slice7; segments: 3)
+               ->  Broadcast Motion 3:3  (slice5; segments: 3)
                      Output: int4_tbl_1.f1
                      ->  Seq Scan on public.int4_tbl int4_tbl_1
                            Output: int4_tbl_1.f1
  Optimizer: Pivotal Optimizer (GPORCA)
  Settings: enable_seqscan=on, optimizer=on
-(59 rows)
+(55 rows)
 
 select t1.* from
   text_tbl t1

@@ -1474,9 +1474,40 @@ CUtils::Equals(const CExpressionArray *pdrgpexprLeft,
 	return fEqual;
 }
 
-// deep equality of expression trees
+// helper for CUtils::Equals, practically useless on its own
+static const CExpression *
+SkipCastWithinOpfamilyIfPossible(const CExpression *pexpr)
+{
+	if (pexpr->Pop()->Eopid() != COperator::EopScalarCast)
+	{
+		return pexpr;
+	}
+
+	const CExpression *pexprChild = (*pexpr)[0];
+	CScalar *popChild = CScalar::PopConvert(pexprChild->Pop());
+	CScalarCast *popCast = CScalarCast::PopConvert(pexpr->Pop());
+	IMDId *mdidSource = popChild->MdidType();
+	IMDId *mdidDest = popCast->MdidType();
+
+	CMDAccessor *mda = COptCtxt::PoctxtFromTLS()->Pmda();
+	const IMDType *mdtSourceType = mda->RetrieveType(mdidSource);
+	const IMDType *mdtDestType = mda->RetrieveType(mdidDest);
+
+	IMDId *mdidSourceOpfamily = mdtSourceType->GetDistrOpfamilyMdid();
+	IMDId *mdidTargetOpfamily = mdtDestType->GetDistrOpfamilyMdid();
+	if (!CUtils::Equals(mdidSourceOpfamily, mdidTargetOpfamily))
+	{
+		return pexpr;
+	}
+
+	return pexprChild;
+}
+
+// common handler for direct expression comparation CUtils::Equals
+// and distribution matching CUtils::EqualDistributions
 BOOL
-CUtils::Equals(const CExpression *pexprLeft, const CExpression *pexprRight)
+CUtils::Equals(const CExpression *pexprLeft, const CExpression *pexprRight,
+			   bool fMatchDistribution)
 {
 	GPOS_CHECK_STACK_SIZE;
 
@@ -1490,6 +1521,34 @@ CUtils::Equals(const CExpression *pexprLeft, const CExpression *pexprRight)
 	if (pexprLeft == pexprRight)
 	{
 		return true;
+	}
+	// Allow an expression and the same expression
+	// casted to a different type within the same distribution opfamily
+	// be considered equal.
+	// E.g., let's suppose we have a table with a column of a type
+	// int2 named int2_column, then it would be considered equal
+	// to int2_column::int4 or int2_column::int8.
+	// This logic applies even if both expressions are converted
+	// to different types, e.g., int2_column::int4 = int2_column::int8
+	//
+	// In this case, presence of the cast doesn't change how the value is
+	// distributed, meaning that redistribution motion is not required.
+	//
+	// Note that this check is not quite permissive, because distribution
+	// might not be changed even if there are multiple casts in a row,
+	// e.g. int2_column::int4::int8.
+	// But, as the time of writing this, the first cast will be turned into
+	// hard-to-detect coercion function anyway, so there is no need
+	// to perform this check recursively.
+	//
+	// Also, when using legacy hashfamilies, it is not guaranteed that
+	// different types within the same opfamily have the same hashfunction,
+	// so the logic above is not applicable.
+	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
+		fMatchDistribution)
+	{
+		pexprLeft = SkipCastWithinOpfamilyIfPossible(pexprLeft);
+		pexprRight = SkipCastWithinOpfamilyIfPossible(pexprRight);
 	}
 
 	// compare number of children and root operators
@@ -1505,6 +1564,20 @@ CUtils::Equals(const CExpression *pexprLeft, const CExpression *pexprRight)
 	}
 
 	return FMatchChildrenUnordered(pexprLeft, pexprRight);
+}
+
+// deep equality of expression trees
+BOOL
+CUtils::Equals(const CExpression *pexprLeft, const CExpression *pexprRight)
+{
+	return Equals(pexprLeft, pexprRight, false);
+}
+
+BOOL
+CUtils::EqualDistributions(const CExpression *pexprLeft,
+						   const CExpression *pexprRight)
+{
+	return Equals(pexprLeft, pexprRight, true);
 }
 
 // check if two expressions have the same children in any order
@@ -1565,7 +1638,8 @@ CUtils::UlOccurrences(const CExpression *pexpr, CExpressionArray *pdrgpexpr)
 
 // compare expression against an array of expressions
 BOOL
-CUtils::FEqualAny(const CExpression *pexpr, const CExpressionArray *pdrgpexpr)
+CUtils::FEqualAny(const CExpression *pexpr, const CExpressionArray *pdrgpexpr,
+				  BOOL fMatchDistribution)
 {
 	GPOS_ASSERT(NULL != pexpr);
 
@@ -1573,7 +1647,7 @@ CUtils::FEqualAny(const CExpression *pexpr, const CExpressionArray *pdrgpexpr)
 	BOOL fEqual = false;
 	for (ULONG ul = 0; !fEqual && ul < size; ul++)
 	{
-		fEqual = Equals(pexpr, (*pdrgpexpr)[ul]);
+		fEqual = Equals(pexpr, (*pdrgpexpr)[ul], fMatchDistribution);
 	}
 
 	return fEqual;
@@ -1582,7 +1656,7 @@ CUtils::FEqualAny(const CExpression *pexpr, const CExpressionArray *pdrgpexpr)
 // check if first expression array contains all expressions in second array
 BOOL
 CUtils::Contains(const CExpressionArray *pdrgpexprFst,
-				 const CExpressionArray *pdrgpexprSnd)
+				 const CExpressionArray *pdrgpexprSnd, BOOL fMatchDistribution)
 {
 	GPOS_ASSERT(NULL != pdrgpexprFst);
 	GPOS_ASSERT(NULL != pdrgpexprSnd);
@@ -1601,10 +1675,18 @@ CUtils::Contains(const CExpressionArray *pdrgpexprFst,
 	BOOL fContains = true;
 	for (ULONG ul = 0; fContains && ul < size; ul++)
 	{
-		fContains = FEqualAny((*pdrgpexprSnd)[ul], pdrgpexprFst);
+		fContains =
+			FEqualAny((*pdrgpexprSnd)[ul], pdrgpexprFst, fMatchDistribution);
 	}
 
 	return fContains;
+}
+
+BOOL
+CUtils::ContainsDistributions(const CExpressionArray *pdrgpexprFst,
+							  const CExpressionArray *pdrgpexprSnd)
+{
+	return CUtils::Contains(pdrgpexprFst, pdrgpexprSnd, true);
 }
 
 // generate a Not expression on top of the given expression
@@ -4907,33 +4989,53 @@ CUtils::PexprMatchEqualityOrINDF(
 			CScalar::PopConvert(pexprPredOuter->Pop())->MdidType();
 		IMDId *pmdidTypeInner =
 			CScalar::PopConvert(pexprPredInner->Pop())->MdidType();
-		if (!pmdidTypeOuter->Equals(pmdidTypeInner))
+
+		CMDAccessor *mdAccessor = COptCtxt::PoctxtFromTLS()->Pmda();
+
+		IMDId *mdidOpfamilyInner =
+			mdAccessor->RetrieveType(pmdidTypeInner)->GetDistrOpfamilyMdid();
+
+		IMDId *mdidOpfamilyOuter =
+			mdAccessor->RetrieveType(pmdidTypeOuter)->GetDistrOpfamilyMdid();
+
+		// Callers of this function expect that they can distribute by the
+		// expression returned, and there were no guarantees
+		// about it before this call.
+		//
+		// For the time being, just don't return such expressions,
+		// but it doesn't seem that this logic belongs here.
+		if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
+			(!mdidOpfamilyInner || !mdidOpfamilyOuter))
 		{
-			// only consider equality of identical types
 			continue;
 		}
 
+		// Note that we need to manually remove binary coercible casts here,
+		// while for other join types this is done when they are being constructed
+		// (see CPhysicalJoin::AlignJoinKeyOuterInner).
+		CExpression *pexprOuterToMatch =
+			CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprPredOuter);
+		CExpression *pexprInnerToMatch =
+			CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprPredInner);
 		pexprToMatch =
 			CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprToMatch);
-		if (CUtils::Equals(
-				CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprPredOuter),
-				pexprToMatch))
+
+		if (CUtils::EqualDistributions(pexprOuterToMatch, pexprToMatch))
 		{
 			pexprMatching = pexprPredInner;
-			break;
 		}
-
-		if (CUtils::Equals(
-				CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprPredInner),
-				pexprToMatch))
+		if (CUtils::EqualDistributions(pexprInnerToMatch, pexprToMatch))
 		{
 			pexprMatching = pexprPredOuter;
+		}
+		if (pexprMatching)
+		{
+			pexprMatching =
+				CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprMatching);
 			break;
 		}
 	}
 
-	if (NULL != pexprMatching)
-		return CCastUtils::PexprWithoutBinaryCoercibleCasts(pexprMatching);
 	return pexprMatching;
 }
 
@@ -4966,7 +5068,8 @@ CUtils::MakeJoinWithoutInferredPreds(CMemoryPool *mp, CExpression *join_expr)
 
 // check if the input expr array contains the expr
 BOOL
-CUtils::Contains(const CExpressionArray *exprs, CExpression *expr_to_match)
+CUtils::Contains(const CExpressionArray *exprs, CExpression *expr_to_match,
+				 BOOL fMatchDistribution)
 {
 	if (NULL == exprs)
 	{
@@ -4977,9 +5080,16 @@ CUtils::Contains(const CExpressionArray *exprs, CExpression *expr_to_match)
 	for (ULONG ul = 0; ul < exprs->Size() && !contains; ul++)
 	{
 		CExpression *expr = (*exprs)[ul];
-		contains = CUtils::Equals(expr, expr_to_match);
+		contains = CUtils::Equals(expr, expr_to_match, fMatchDistribution);
 	}
 	return contains;
+}
+
+BOOL
+CUtils::ContainsDistribution(const CExpressionArray *exprs,
+							 CExpression *expr_to_match)
+{
+	return Contains(exprs, expr_to_match, true);
 }
 
 BOOL
