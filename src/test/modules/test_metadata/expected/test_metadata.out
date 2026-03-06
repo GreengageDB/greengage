@@ -36,7 +36,7 @@ SELECT test_check_metadata();
 (1 row)
 
 -- Test longer metadata
-SELECT gp_segment_id, test_send_metadata(150000) 
+SELECT gp_segment_id, test_send_metadata(150000)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -47,7 +47,7 @@ WARNING:  Custom metadata sent!
              2 |             150000
 (3 rows)
 
-SELECT gp_segment_id, test_send_metadata(1500000) 
+SELECT gp_segment_id, test_send_metadata(1500000)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -58,7 +58,7 @@ WARNING:  Custom metadata sent!
              2 |            1500000
 (3 rows)
 
-SELECT gp_segment_id, test_send_metadata(15000000) 
+SELECT gp_segment_id, test_send_metadata(15000000)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -69,7 +69,7 @@ WARNING:  Custom metadata sent!
              2 |           15000000
 (3 rows)
 
-SELECT gp_segment_id, test_send_metadata(150000000) 
+SELECT gp_segment_id, test_send_metadata(150000000)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!

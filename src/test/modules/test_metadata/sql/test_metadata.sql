@@ -15,7 +15,7 @@ SELECT test_clean_metadata();
 SELECT test_check_metadata();
 
 -- Test longer metadata
-SELECT gp_segment_id, test_send_metadata(150000) 
+SELECT gp_segment_id, test_send_metadata(150000)
     FROM gp_dist_random('gp_id');
 
 SELECT gp_segment_id, test_send_metadata(1500000)
