@@ -15,7 +15,7 @@ function gen_env(){
 
 		if [[ ${FEATURE} == "gpexpand" ]]; then
 			mkdir -p /home/gpadmin/sqldump
-			wget -nv https://rt.adsw.io/artifactory/common/dump.sql.xz -O /home/gpadmin/sqldump/dump.sql.xz
+			wget -nv https://downloads.adsw.io/misc/dump.sql.xz -O /home/gpadmin/sqldump/dump.sql.xz
 
 			xz -d /home/gpadmin/sqldump/dump.sql.xz
 		fi
