@@ -523,8 +523,7 @@ class GGShrink:
     def on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START(self) -> None:
         if os.path.exists(self.gparray_dump_file):
             os.remove(self.gparray_dump_file)
-        if self.options.skip_rebalance:
-            self.rebalance_schema.dropSchema()
+        self.rebalance_schema.dropSchema()
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_DONE')
 
     @wrap_func_with_faults

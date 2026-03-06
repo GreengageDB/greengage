@@ -144,7 +144,11 @@ class GGRebalanceMainSM:
 
         self.plan = None
         self.main_state_from_prev_run = self.rebalance_schema.getMainStateFromPreviousRun()
-        self.is_shrink_rollback_in_progress = False
+
+        self.shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
+        self.is_shrink_rollback_in_progress = self.gg_shrink.state_is_from_rollback_flow(self.shrink_state_from_prev_run)
+        self.prev_shrink_run_was_complete = self.gg_shrink.state_is_final(self.shrink_state_from_prev_run)
+
 
     def on_every_state(self) -> None:
         if self.state in self.states_logged:
@@ -184,11 +188,8 @@ class GGRebalanceMainSM:
             self.logger.info(f"Rebalance schema doesn't exist. Cleanup is not required.")
         else:
             self.plan = self.rebalance_schema.retrieveSavedPlan()
-            prev_shrink_run_was_complete = True
             if isinstance(self.plan, ShrinkPlan):
-                shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
-                prev_shrink_run_was_complete = self.gg_shrink.state_is_final(shrink_state_from_prev_run)
-            self.gg_shrink.cleanup(prev_shrink_run_was_complete)
+                self.gg_shrink.cleanup(self.prev_shrink_run_was_complete)
             self.rebalance_schema.dropSchema()
             self.logger.info('Cleanup is complete')
         self.trigger('move_to_STATE_END')
@@ -201,11 +202,10 @@ class GGRebalanceMainSM:
                 return
             self.plan = self.rebalance_schema.retrieveSavedPlan()
             if isinstance(self.plan, ShrinkPlan):
-                shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
-                if self.gg_shrink.state_is_from_rollback_flow(shrink_state_from_prev_run):
+                if self.is_shrink_rollback_in_progress:
                     self.logger.info("Rollback is already in progress, and was interrupted. Execute 'ggrebalance' without '-r' flag.")
                     return
-                if not self.gg_shrink.state_is_final(shrink_state_from_prev_run):
+                if not self.prev_shrink_run_was_complete:
                     self.gg_shrink.rollback(self.plan)
                     return
             self.gg_rebalance.rollback()
@@ -275,9 +275,7 @@ class GGRebalanceMainSM:
     @wrap_func_with_faults
     def on_enter_STATE_EXECUTOR_STARTED(self) -> None:
         if isinstance(self.plan, ShrinkPlan):
-            shrink_state_from_prev_run = self.rebalance_schema.getShrinkStateFromPreviousRun()
-            self.is_shrink_rollback_in_progress = self.gg_shrink.state_is_from_rollback_flow(shrink_state_from_prev_run)
-            if not self.gg_shrink.state_is_final(shrink_state_from_prev_run):
+            if not self.prev_shrink_run_was_complete:
                 self.trigger('move_to_STATE_SHRINK_STARTED')
                 return
         self.trigger('move_to_STATE_REBALANCE_STARTED')
