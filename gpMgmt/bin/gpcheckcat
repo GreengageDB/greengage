@@ -355,6 +355,7 @@ def connect(user=None, password=None, host=None, port=None,
         logger.debug('connecting to %s:%s %s' % (host, port, database))
         db = pg.connect(host=host, port=port, user=user,
                         passwd=password, dbname=database, opt=options)
+        db.set_notice_receiver(lambda _: None)
 
     except pg.InternalError as ex:
         logger.fatal('could not connect to %s: "%s"' %

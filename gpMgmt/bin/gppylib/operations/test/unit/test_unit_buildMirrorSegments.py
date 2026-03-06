@@ -6,7 +6,6 @@ import os
 import re
 from collections import OrderedDict
 import logging
-import io
 import shutil
 import tempfile
 from datetime import datetime

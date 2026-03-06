@@ -4,6 +4,7 @@ from builtins import object
 import shutil, filecmp,re
 import os, fcntl, select, getpass, socket
 import stat
+import sys
 try:
     from subprocess32 import *
 except:
@@ -16,6 +17,13 @@ from gppylib.gplog import *
 from socket import gethostbyaddr
 
 logger = get_default_logger()
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 _debug=0
 #############
@@ -158,8 +166,7 @@ def openAnything(source):
         
     
     # treat source as string
-    import io
-    return io.StringIO(source)
+    return StringIO(source)
 def getOs():
     dist=None
     fdesc = None
