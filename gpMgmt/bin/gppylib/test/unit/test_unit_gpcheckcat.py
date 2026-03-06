@@ -20,7 +20,7 @@ class GpCheckCatTestCase(GpTestCase):
         self.subject = load_module('gpcheckcat', gpcheckcat_file)
         self.subject.check_gpexpand = lambda : (True, "")
 
-        self.db_connection = Mock(spec=['close', 'query'])
+        self.db_connection = Mock(spec=['close', 'query', 'set_notice_receiver'])
         self.unique_index_violation_check = Mock(spec=['runCheck'])
         self.foreign_key_check = Mock(spec=['runCheck', 'checkTableForeignKey'])
         self.apply_patches([
