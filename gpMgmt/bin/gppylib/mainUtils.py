@@ -20,9 +20,9 @@ from builtins import object
 import errno, os, sys, shutil
 
 gProgramName = os.path.split(sys.argv[0])[-1]
-if sys.version_info < (2, 5, 0):
+if sys.version_info < (2, 7, 0):
     sys.exit(
-        '''Error: %s is supported on Python versions 2.5 or greater
+        '''Error: %s is supported on Python versions 2.7 or greater
         Please upgrade python installed on this machine.''' % gProgramName)
 
 IS_PYTHON2 = sys.version_info[0] == 2
