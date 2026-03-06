@@ -46,12 +46,18 @@ from __future__ import print_function
 from builtins import next
 from past.builtins import basestring
 from builtins import object
-import io
 import csv
 from datetime import date, datetime
 import re
 import sys
 import time
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 csvDelimeter = '|'
 
@@ -282,7 +288,7 @@ class CsvFlatten(object):
 
     def __init__(self,iterable):
         self.source = iter(iterable)
-        self.buffer = io.StringIO()
+        self.buffer = StringIO()
         self.writer = csv.writer(self.buffer, delimiter=csvDelimeter, quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
     def __iter__(self):

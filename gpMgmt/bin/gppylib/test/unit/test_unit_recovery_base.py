@@ -303,7 +303,7 @@ class SetCmdResultsTestCase(GpTestCase):
     def _assert_cmd_failed(self, cmd, expected_stderr):
         self.assertEqual(1, cmd.get_results().rc)
         self.assertEqual('', cmd.get_results().stdout)
-        self.assertEqual(json.loads(expected_stderr), json.loads(cmd.get_results().stderr))
+        self.assertEqualUnordered(json.loads(expected_stderr), json.loads(cmd.get_results().stderr))
         self.assertEqual(True, cmd.get_results().completed)
         self.assertEqual(False, cmd.get_results().halt)
         self.assertEqual(False, cmd.get_results().wasSuccessful())

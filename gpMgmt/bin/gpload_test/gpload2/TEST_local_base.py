@@ -451,6 +451,7 @@ def copy_data(source='',target=''):
     cmd = 'cp '+ mkpath('data/' + source) + ' ' + mkpath(target)
     p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     _, err = p.communicate()
+    err = err.decode('utf-8')
     if err:
         sys.stderr.write(str(err))
         sys.exit(2)

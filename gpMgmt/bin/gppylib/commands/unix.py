@@ -17,10 +17,10 @@ import signal
 import uuid
 import pipes
 import re
-from distutils.version import LooseVersion
 
 from gppylib.gplog import get_default_logger
 from gppylib.commands.base import *
+from gppylib.gpversion import GpVersion
 
 logger = get_default_logger()
 
@@ -838,7 +838,8 @@ def validate_rsync_version(min_ver):
     pattern = r"version (\d+\.\d+\.\d+)"
     match = re.search(pattern, rsync_version_info)
     current_rsync_version = match.group(1)
-    if LooseVersion(current_rsync_version) < LooseVersion(min_ver):
+    # Use GpVersion as a general class for parsing the version.
+    if GpVersion(current_rsync_version) < GpVersion(min_ver):
         return False
     return True
 
