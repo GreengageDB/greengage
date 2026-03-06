@@ -145,11 +145,11 @@ def launchProcess(host, workdir):
 
     py_string = 'source ' + os.path.join(gphome, 'greengage_path.sh') + '; '
 
-    # Now let's just quick check the host as to whether the python version is >= 2.6
+    # Now let's just quick check the host as to whether the python version is >= 2.7
     try:
-        subprocess.check_call("ssh -T %s '%s python -c \"import sys; sys.exit(1) if sys.hexversion < 0x020600f0 else 0\"'" % (host, py_string), shell=True)
+        subprocess.check_call("ssh -T %s '%s python -c \"import sys; sys.exit(1) if sys.version_info < (2, 7, 0) else 0\"'" % (host, py_string), shell=True)
     except subprocess.CalledProcessError as e:
-        print('Python version on host %s is < 2.6.0.  Aborting' % (host), file=sys.stderr)
+        print('Python version on host %s is < 2.7.  Aborting' % (host), file=sys.stderr)
         sys.exit(1)
 
     try:

@@ -299,8 +299,8 @@ resolve dependancies for extensions.'''
 
 def main():
     # Check python vesion
-    if sys.hexversion < 0x020600f0:
-        sys.stderr.write('packcore requires a minimum python version of 2.6.  Current version is:\n' + sys.version)
+    if sys.version_info < (2, 7, 0):
+        sys.stderr.write('packcore requires a minimum python version of 2.7.  Current version is:\n' + sys.version)
         sys.exit(1)
 
     (options, args) = parseArgs()

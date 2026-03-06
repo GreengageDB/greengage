@@ -35,8 +35,8 @@ if sys.version_info[0] == 3:
 else:
     string_types = basestring
 
-if sys.hexversion<0x2040400:
-    sys.stderr.write("gpload needs python 2.4.4 or higher\n")
+if sys.version_info < (2, 7, 0):
+    sys.stderr.write("gpload needs python 2.7 or higher\n")
     sys.exit(2)
 
 try:
