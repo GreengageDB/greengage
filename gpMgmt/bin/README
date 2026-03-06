@@ -17,9 +17,16 @@ should do the trick.
 Python Version
 --------------
 
-* The current utilities bundle python 2.5.1.  We are planning on moving 
-  forward to 2.6.1 in the near future.
+* Supported Python versions: 2.7 or 3.9 to 3.12.
 
+* To switch the Python version used during the build, change the `python`
+  command to point to the desired version. For example:
+
+```
+sudo ln -sf python3 /usr/bin/python
+```
+
+After changing the Python version, clean the build directory and recompile.
 
 Where Things Go
 ---------------
