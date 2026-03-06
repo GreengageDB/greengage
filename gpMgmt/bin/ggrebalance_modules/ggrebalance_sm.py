@@ -286,7 +286,8 @@ class RebalanceSM:
         with open(filename, 'w') as fp:
             for move in moves:
                 segment_current_info = move.seg
-                if not self.lookup_seg(segment_current_info):
+                is_swap_phase3 = (move.swap_metadata is not None and move.swap_metadata.get('phase') == 3)
+                if not is_swap_phase3 and not self.lookup_seg(segment_current_info):
                     self.logger.info(f'Skip segment for gpmovemirrors: {str(segment_current_info)}')
                     continue
                 cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '

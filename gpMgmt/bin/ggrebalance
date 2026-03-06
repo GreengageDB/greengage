@@ -95,6 +95,8 @@ def parseargs():
                       help='Replay lag(in GBs) allowed on mirror when rebalancing the segments.')
     parser.add_option('-v', '--verbose', action='store_true', default=False,
                       help='debug output.')
+    parser.add_option('--inplace-swap-roles', dest="inplace_swap_roles", action='store_true', default=False,
+                      help='Allows to place primary and mirror at the same host during rebalance.')
 
     # Parse the command line arguments
     options, args = parser.parse_args()
@@ -145,20 +147,20 @@ def validate_options(options, args, parser):
 
         ('target_datadirs', ['target_datadirs_file']),
 
-        ('skip_rebalance', ['mirror_mode']),
+        ('skip_rebalance', ['mirror_mode', 'inplace_swap_roles']),
 
         ('clean_required', [
             'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
-            'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames'
+            'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles'
         ]),
 
         ('rollback_required', [
             'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
             'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
             'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
-            'skip_resource_estimation', 'duration', 'end'
+            'skip_resource_estimation', 'duration', 'end', 'inplace_swap_roles'
         ]),
     ]
 
@@ -194,9 +196,9 @@ def validate_options(options, args, parser):
 def check_running_gputils(dburl: dbconn.DbURL, coordinator_data_directory: str):
     """
     Checks if there are any running instances of
-    gprebalance/gpbackup/gpexpand/gpshrink/gpresize
+    ggrebalance/gpbackup/gpexpand/gpshrink/gpresize
     """
-    for util in ('ggrebalance', 'gprebalance', 'gpexpand', 'gpshrink', 'gpresize'):
+    for util in ('ggrebalance', 'gpexpand', 'gpshrink', 'gpresize'):
         try:
             with open(f'{coordinator_data_directory}/{util}.pid', 'r') as fp:
                 pid = int(fp.readline().strip())
@@ -249,7 +251,7 @@ def create_pid_file(coordinator_data_directory: str):
 
 def remove_pid_file(coordinator_data_directory: str):
     """
-    Removes gprebalance pid file
+    Removes ggrebalance pid file
     """
     try:
         os.unlink(coordinator_data_directory + '/ggrebalance.pid')
@@ -337,7 +339,7 @@ def main(options, args, parser):
             logger.error("Failed to connect to database.  Make sure the"
                          " Greengage instance you wish to expand is running"
                          " and that your environment is correct, then rerun"
-                         " gprebalance" + ' '.join(sys.argv[1:]))
+                         " ggrebalance" + ' '.join(sys.argv[1:]))
             sys.exit(1)
         except ConnectionError as ex:
             logger.error(f"{str(ex)}")

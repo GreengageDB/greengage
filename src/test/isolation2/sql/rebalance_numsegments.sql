@@ -1,5 +1,5 @@
 -- Test setting numsegments value for table creation during rebalance operation
--- Test error throwing when catalog is not locked by gprebalance
+-- Test error throwing when catalog is not locked by ggrebalance
 select gp_toolkit.gp_set_rebalance_numsegments(2);
 select gp_toolkit.gp_get_rebalance_numsegments();
 select gp_toolkit.gp_reset_rebalance_numsegments();
