@@ -10,8 +10,6 @@ docker_compose_path="ci/docker-compose.yaml"
 if [ $# -eq 0 ]
 then
   # TODO cross_subnet and gpssh tests are excluded
-  # FIXME! sigar is requred for gpperfmon tests
-  # FIXME! /home/gpadmin/sqldump/dump.sql is required for gpexpand tests
   features=`ls $behave_tests_dir -1 | grep feature | sed 's/\.feature$//'`
 else
   for feature in $@

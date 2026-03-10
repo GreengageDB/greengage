@@ -1,0 +1,6 @@
+# isolation tests list
+test: setup
+test: recovery_failover
+test: track_concurrent
+# Must run last
+test: teardown

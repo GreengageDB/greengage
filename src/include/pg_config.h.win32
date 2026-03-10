@@ -652,10 +652,10 @@
 #define PACKAGE_BUGREPORT "support@greengagedb.org"
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "Greengage Database"
+#define PACKAGE_NAME "Greenplum Database"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Greengage Database 6.0.0-alpha"
+#define PACKAGE_STRING "Greenplum Database 6.0.0-alpha"
 
 /* Define to the version of this package. */
 #define PACKAGE_VERSION "9.4.26"

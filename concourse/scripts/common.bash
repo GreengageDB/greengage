@@ -57,6 +57,7 @@ function build_arch() {
 function install_gpdb() {
 	[ ! -d /usr/local/greengage-db-devel ] && mkdir -p /usr/local/greengage-db-devel
 	tar -xzf bin_gpdb/bin_gpdb.tar.gz -C /usr/local/greengage-db-devel
+	ln -sf /usr/local/greengage-db-devel /usr/local/greenplum-db-devel
 }
 
 function setup_configure_vars() {

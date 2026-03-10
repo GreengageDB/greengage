@@ -1781,7 +1781,7 @@ syncTargetDirectory(const char *argv0)
 
 	/* locate initdb binary */
 	if ((ret = find_other_exec(argv0, "initdb",
-							   "initdb (Greengage Database) " PG_VERSION "\n",
+							   "initdb (Greenplum Database) " PG_VERSION "\n",
 							   exec_path)) < 0)
 	{
 		char        full_path[MAXPGPATH];

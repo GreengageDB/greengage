@@ -5734,7 +5734,7 @@ bool is_builtin_true_equality_between_same_type(int opno)
  *   because of type conversion or something.  I'm not 100% sure on that.
  */
 bool
-is_builtin_greengage_hashable_equality_between_same_type(int opno)
+is_builtin_greenplum_hashable_equality_between_same_type(int opno)
 {
     switch(opno)
     {

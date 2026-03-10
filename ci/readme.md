@@ -14,6 +14,20 @@ To build an image based on Ubuntu 24.04, specify the version in build args:
 docker build -t gpdb6_regress:latest --build-arg OS_VERSION=24.04 -f ci/Dockerfile.ubuntu .
 ```
 
+There are two additional options in [Dockerfile](./Dockerfile) to passthrough urls for [sigar](https://github.com/hyperic/sigar) packages:
+
+* `--build-arg sigar=https://path_to_sigar.rpm` for package with sigar library
+* `--build-arg sigar_headers=https://path_to_sigar_headers.rpm` for package with sigar headers files
+
+These options may be useful to build image on different platforms.
+
+CI pushes docker images to the internal registry for each branch. We can pull it with usage of:
+
+* branch name as tag (latest for `adb-6.x` branch)
+* commit hash:
+  ```bash
+  docker pull hub.adsw.io/library/gpdb6_regress:1353d81 
+  ```
 
 ## Full regression tests suite run
 
