@@ -3,12 +3,15 @@
 #include "libpq/pqcomm.h"
 #include "utils/builtins.h"
 #include "libpq/libpq.h"
+#include "cdb/cdbvars.h"
+#include "cdb/cdbutil.h"
 
 PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(test_send_empty_metadata);
 PG_FUNCTION_INFO_V1(test_send_metadata);
 PG_FUNCTION_INFO_V1(test_check_metadata);
+PG_FUNCTION_INFO_V1(test_count_metadata);
 PG_FUNCTION_INFO_V1(test_clean_metadata);
 
 
@@ -25,12 +28,18 @@ Datum
 test_send_metadata(PG_FUNCTION_ARGS)
 {
     uint32		len = PG_GETARG_UINT32(0);
+    uint32		id = PG_GETARG_UINT32(1);
     
     char *metadata = palloc(len);
 
-    for (int i = 0; i < len; i++) 
+    if (len > sizeof(uint32))
     {
-        metadata[i] = (len - i) % 255;
+        metadata[0] = id % 256;
+
+        for (int i = 1; i < len; i++) 
+        {
+            metadata[i] = (len + id - i) % 255;
+        }
     }
     
     /* Send custom metadata */
@@ -46,27 +55,52 @@ test_send_metadata(PG_FUNCTION_ARGS)
 
 Datum test_check_metadata(PG_FUNCTION_ARGS)
 {
-    ggMetadataChunkIterator it = PQMetadataWalk();
+    Assert(Gp_role == GP_ROLE_DISPATCH);
+
+    // Metadata records are unordered for the each query, so to make predictable
+    // records, make them in few passes
+
+    int numsegments = getgpsegmentCount();
     int count = 0;
 
-    void *metadata;
-    int length;
-
-    for (; it; it = PQgetNextMetadata(it))
+    for (int seg_id = -1; seg_id < numsegments; seg_id++)
     {
-        PQgetMetadata(it, &length, &metadata);
+        ggMetadataChunkIterator it = PQMetadataWalk();        
+        void *metadata;
+        int length;
 
-        elog(WARNING, "Custom metadata received, len=%d", length);
-        for (int i = 0; i < length; i++)
+        for (; it; it = PQgetNextMetadata(it))
         {
-            char expected = (length - i) % 255;
+            int32 id = -1;
+            PQgetMetadata(it, &length, &metadata);
 
-            if (((char *)metadata)[i] != expected) 
-                elog(ERROR, "Metadata is BAD");
+            if (length > 0)
+            {
+                id = ((char *)metadata)[0];
+            
+                for (int i = 1; (id == seg_id) && (i < length); i++)
+                {
+                    char expected = (length + id - i) % 255;
+
+                    if (((char *)metadata)[i] != expected) 
+                        elog(ERROR, "Metadata is BAD");
+                }
+            }
+
+            if (seg_id == id)
+            {   
+                elog(WARNING, "Custom metadata received, len=%d, id=%d", length, id);
+                count++;
+            }
         }
-
-        count++;
+    
     }
+   PG_RETURN_INT32(count);
+}
+
+Datum test_count_metadata(PG_FUNCTION_ARGS)
+{
+    int count = PQgetMetadataCount();
     PG_RETURN_INT32(count);
 }
 

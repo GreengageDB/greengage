@@ -2,7 +2,7 @@
 create extension if not exists test_metadata;
 
 -- Test on all segments
-SELECT gp_segment_id, test_send_metadata(150) 
+SELECT gp_segment_id, test_send_metadata(150, gp_segment_id)
     FROM gp_dist_random('gp_id');
 
 -- Read metadata collected on coordinator
@@ -15,16 +15,16 @@ SELECT test_clean_metadata();
 SELECT test_check_metadata();
 
 -- Test longer metadata
-SELECT gp_segment_id, test_send_metadata(150000)
+SELECT gp_segment_id, test_send_metadata(150000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 
-SELECT gp_segment_id, test_send_metadata(1500000)
+SELECT gp_segment_id, test_send_metadata(1500000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 
-SELECT gp_segment_id, test_send_metadata(15000000)
+SELECT gp_segment_id, test_send_metadata(15000000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 
-SELECT gp_segment_id, test_send_metadata(150000000)
+SELECT gp_segment_id, test_send_metadata(150000000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 
 SELECT gp_segment_id, test_send_empty_metadata()
@@ -33,6 +33,10 @@ SELECT gp_segment_id, test_send_empty_metadata()
 -- Read metadata collected on coordinator
 SELECT test_check_metadata();
 
+SELECT test_count_metadata();
+
 SELECT test_clean_metadata();
 
 SELECT test_check_metadata();
+
+SELECT test_count_metadata();

@@ -1,5 +1,5 @@
 -- test_metadata--1.0.sql
-CREATE FUNCTION test_send_metadata(IN len int4)
+CREATE FUNCTION test_send_metadata(IN len int4, IN gp_id int4)
 RETURNS integer
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
@@ -10,6 +10,11 @@ AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
 CREATE FUNCTION test_check_metadata()
+RETURNS integer
+AS 'MODULE_PATHNAME'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION test_count_metadata()
 RETURNS integer
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;

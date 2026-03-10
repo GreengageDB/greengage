@@ -85,6 +85,7 @@ typedef void *ggMetadataChunkIterator;
 extern ggMetadataChunkIterator PQMetadataWalk(void);
 extern ggMetadataChunkIterator PQgetNextMetadata(ggMetadataChunkIterator it);
 extern void PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data);
+extern int PQgetMetadataCount(void);
 extern void PQCleanMetadata(void);
 
 

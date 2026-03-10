@@ -1,6 +1,6 @@
 create extension if not exists test_metadata;
 -- Test on all segments
-SELECT gp_segment_id, test_send_metadata(150) 
+SELECT gp_segment_id, test_send_metadata(150, gp_segment_id)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -13,9 +13,9 @@ WARNING:  Custom metadata sent!
 
 -- Read metadata collected on coordinator
 SELECT test_check_metadata();
-WARNING:  Custom metadata received, len=150
-WARNING:  Custom metadata received, len=150
-WARNING:  Custom metadata received, len=150
+WARNING:  Custom metadata received, len=150, id=0
+WARNING:  Custom metadata received, len=150, id=1
+WARNING:  Custom metadata received, len=150, id=2
  test_check_metadata 
 ---------------------
                    3
@@ -36,7 +36,7 @@ SELECT test_check_metadata();
 (1 row)
 
 -- Test longer metadata
-SELECT gp_segment_id, test_send_metadata(150000)
+SELECT gp_segment_id, test_send_metadata(150000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -47,7 +47,7 @@ WARNING:  Custom metadata sent!
              2 |             150000
 (3 rows)
 
-SELECT gp_segment_id, test_send_metadata(1500000)
+SELECT gp_segment_id, test_send_metadata(1500000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -58,7 +58,7 @@ WARNING:  Custom metadata sent!
              2 |            1500000
 (3 rows)
 
-SELECT gp_segment_id, test_send_metadata(15000000)
+SELECT gp_segment_id, test_send_metadata(15000000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -69,7 +69,7 @@ WARNING:  Custom metadata sent!
              2 |           15000000
 (3 rows)
 
-SELECT gp_segment_id, test_send_metadata(150000000)
+SELECT gp_segment_id, test_send_metadata(150000000, gp_segment_id)
     FROM gp_dist_random('gp_id');
 WARNING:  Sending custom metadata...
 WARNING:  Custom metadata sent!
@@ -93,22 +93,28 @@ WARNING:  Empty metadata sent!
 
 -- Read metadata collected on coordinator
 SELECT test_check_metadata();
-WARNING:  Custom metadata received, len=0
-WARNING:  Custom metadata received, len=0
-WARNING:  Custom metadata received, len=0
-WARNING:  Custom metadata received, len=150000000
-WARNING:  Custom metadata received, len=150000000
-WARNING:  Custom metadata received, len=150000000
-WARNING:  Custom metadata received, len=15000000
-WARNING:  Custom metadata received, len=15000000
-WARNING:  Custom metadata received, len=15000000
-WARNING:  Custom metadata received, len=1500000
-WARNING:  Custom metadata received, len=1500000
-WARNING:  Custom metadata received, len=1500000
-WARNING:  Custom metadata received, len=150000
-WARNING:  Custom metadata received, len=150000
-WARNING:  Custom metadata received, len=150000
+WARNING:  Custom metadata received, len=0, id=-1
+WARNING:  Custom metadata received, len=0, id=-1
+WARNING:  Custom metadata received, len=0, id=-1
+WARNING:  Custom metadata received, len=150000000, id=0
+WARNING:  Custom metadata received, len=15000000, id=0
+WARNING:  Custom metadata received, len=1500000, id=0
+WARNING:  Custom metadata received, len=150000, id=0
+WARNING:  Custom metadata received, len=150000000, id=1
+WARNING:  Custom metadata received, len=15000000, id=1
+WARNING:  Custom metadata received, len=1500000, id=1
+WARNING:  Custom metadata received, len=150000, id=1
+WARNING:  Custom metadata received, len=150000000, id=2
+WARNING:  Custom metadata received, len=15000000, id=2
+WARNING:  Custom metadata received, len=1500000, id=2
+WARNING:  Custom metadata received, len=150000, id=2
  test_check_metadata 
+---------------------
+                  15
+(1 row)
+
+SELECT test_count_metadata();
+ test_count_metadata 
 ---------------------
                   15
 (1 row)
@@ -121,6 +127,12 @@ SELECT test_clean_metadata();
 
 SELECT test_check_metadata();
  test_check_metadata 
+---------------------
+                   0
+(1 row)
+
+SELECT test_count_metadata();
+ test_count_metadata 
 ---------------------
                    0
 (1 row)

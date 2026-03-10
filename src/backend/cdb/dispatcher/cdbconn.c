@@ -874,12 +874,14 @@ forwardQENotices(void)
 }
 
 static ggMetadataChunk *ggMetadataList = NULL;
+static int ggMetadataCount = 0;
 
 static void
 MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk)
 {
 	metadata_chunk->next = ggMetadataList;
 	ggMetadataList = metadata_chunk;
+	ggMetadataCount++;
 }
 
 ggMetadataChunkIterator
@@ -901,12 +903,20 @@ PQgetNextMetadata(ggMetadataChunkIterator it)
 void
 PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data)
 {
+	Assert(it != NULL);
+
 	ggMetadataChunk *chunk = (ggMetadataChunk *)it;
 	if (length)
 		*length = chunk->metadataLen;
 
 	if (data)
 		*data = chunk->payload;
+}
+
+int 
+PQgetMetadataCount(void)
+{
+	return ggMetadataCount;
 }
 
 void
@@ -920,4 +930,5 @@ PQCleanMetadata(void)
 		chunk = next;
 	}
 	ggMetadataList = NULL;
+	ggMetadataCount = 0;
 }

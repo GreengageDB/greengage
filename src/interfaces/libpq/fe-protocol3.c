@@ -289,7 +289,8 @@ pqParseInput3(PGconn *conn)
 					conn->asyncStatus = PGASYNC_READY;
 					break;
 				case 'M':       /* CDB: backend sends metadata 'M' message */
-					pgGetMetadataMessage(conn, msgLength);
+					if (pgGetMetadataMessage(conn, msgLength))
+						return;
 					break;
 				break;
 				case 'Z':		/* backend is ready for new query */
@@ -2391,7 +2392,11 @@ pgGetMetadataMessage(PGconn *conn, int length)
 	chunk->metadataLen = length;
 
 	if (pqGetnchar(chunk->payload, length, conn))
+	{
+		free(chunk);
 		return 1;
+	}
+		
 
 	if (conn->metadataHooks.metadataRec)
 		/* pass ownership of the link too the handler */
