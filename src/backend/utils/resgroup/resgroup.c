@@ -930,7 +930,7 @@ ResGroupGetStat(Oid groupId, ResGroupStatType type)
 			 * justify_interval() if she wants.
 			 */
 			interval = (Interval *) palloc(sizeof(Interval));
-			interval->time = group->totalQueuedTimeMs * 1000;
+			interval->time = group->totalQueuedTimeMs;
 			interval->day = 0;
 			interval->month = 0;
 			result = IntervalPGetDatum(interval);
