@@ -29,9 +29,6 @@ install: generate_greengage_path_file
 	        mv -f "$$sofile" "$(DESTDIR)$(prefix)/lib/python/"; \
 	    fi; \
 	fi
-	if [ -e bin/ext/future ]; then \
-	    cp -rp bin/ext/future/* $(DESTDIR)$(prefix)/lib/python ; \
-	fi
 	if [ -e bin/ext/yaml ]; then \
 	    cp -rp bin/ext/yaml $(DESTDIR)$(prefix)/lib/python ; \
 	fi

@@ -161,7 +161,7 @@ Testing Management Scripts
 --------------------------
 
 This directory contains the unit tests for the management scripts. These tests
-require the following Python modules to be installed: mock, pygresql and future.
+require the following Python modules to be installed: mock and pygresql.
 These modules can be installed by running "make install" in gpMgmt/bin.
 
 If you installed the dependencies using the command above, you can run the tests with
