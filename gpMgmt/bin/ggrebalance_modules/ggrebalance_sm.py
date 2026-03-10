@@ -318,19 +318,14 @@ class RebalanceSM:
             for step in steps:
                 assert isinstance(step, RebalanceStepMoveMirror)
                 move = step.getMove()
+                segment_current_info = move.seg
+                if self.lookup_seg(segment_current_info):
+                    cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
+                else:
+                    cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
                 if step.isRollback():
-                    segment_current_info = move.seg
-                    if self.lookup_seg(segment_current_info):
-                        cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
-                    else:
-                        cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '
                     cfg_line += f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()}\n'
                 else:
-                    segment_current_info = move.seg
-                    if not self.lookup_seg(segment_current_info):
-                        self.logger.info(f'Skip segment for gpmovemirrors: {str(segment_current_info)}')
-                        continue
-                    cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
                     cfg_line += f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir}\n'
                 fp.write(cfg_line)
         return filename
@@ -427,7 +422,11 @@ class RebalanceSM:
             if step.getStatus() == RebalanceStep.Status.DONE:
                 continue
 
-            if not gp_segment_configuration_updated and self.interactive_check(f'Retry step?'):
+            allow_retry = True
+            if port_updated:
+                allow_retry = step.isRetryAllowed()
+
+            if allow_retry and self.interactive_check(f'Retry step?'):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)

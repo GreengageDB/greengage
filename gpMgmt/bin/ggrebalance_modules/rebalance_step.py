@@ -5,6 +5,9 @@ import pickle
 from ggrebalance_modules.planner import *
 
 class RebalanceStep:
+
+    MAX_RETRY_COUNT = 2
+
     class Status(Enum):
         APPROVE_REQUIRED = 1
         PLANNED = 2
@@ -18,6 +21,7 @@ class RebalanceStep:
         self.move = move
         self.status = self.Status.PLANNED
         self.rollback = False
+        self.retry_attempt_count = 0
 
     def __str__(self) -> str:
         rollback_label = ''
@@ -41,7 +45,14 @@ class RebalanceStep:
 
     def setStatus(self, status: Status, rollback: bool = False) -> None:
         self.status = status
+        if self.rollback != rollback:
+            self.retry_attempt_count = 0
+        elif status == self.Status.IN_PROGRESS:
+            self.retry_attempt_count += 1
         self.rollback = rollback
+
+    def isRetryAllowed(self):
+        return self.retry_attempt_count < self.MAX_RETRY_COUNT
 
     def serializeStep(self) -> bytes:
         return pickle.dumps(self)
