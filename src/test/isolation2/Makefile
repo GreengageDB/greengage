@@ -73,11 +73,11 @@ install: all gpdiff.pl gpstringsubs.pl
 	$(MKDIR_P) '$(DESTDIR)$(pgxsdir)/$(subdir)'
 	$(INSTALL_PROGRAM) pg_isolation2_regress$(X) '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
 	$(INSTALL_PROGRAM) sql_isolation_testcase.py '$(DESTDIR)$(pgxsdir)/$(subdir)/sql_isolation_testcase.py'
-	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/gpdiff.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
-	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/gpstringsubs.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
-	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/GPTest.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
-	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/atmsort.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
-	$(LN_S) -f '$(DESTDIR)$(pgxsdir)/src/test/regress/explain.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
+	$(LN_S) -f '../regress/gpdiff.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpdiff.pl'
+	$(LN_S) -f '../regress/gpstringsubs.pl' '$(DESTDIR)$(pgxsdir)/$(subdir)/gpstringsubs.pl'
+	$(LN_S) -f '../regress/GPTest.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/GPTest.pm'
+	$(LN_S) -f '../regress/atmsort.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/atmsort.pm'
+	$(LN_S) -f '../regress/explain.pm' '$(DESTDIR)$(pgxsdir)/$(subdir)/explain.pm'
 
 uninstall:
 	rm -f '$(DESTDIR)$(pgxsdir)/$(subdir)/pg_isolation2_regress$(X)'
