@@ -2377,7 +2377,10 @@ static int
 pgGetMetadataMessage(PGconn *conn, int length)
 {
 	if (conn->metadataHooks.metadataRec == NULL)
-		return 0;
+	{
+		if (pqSkipnchar(length, conn))
+			return 1;
+	}
 
 	/*
 	 * Since the metadata might be pretty long, we create an own buffer
