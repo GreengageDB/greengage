@@ -1352,7 +1352,7 @@ class TestPortAllocator(GpTestCase):
         self.assertTrue(result)
         mock_cmd.run.assert_called_once()
     
-    @patch('gprebalance_modules.planner.PortIsAvailable')
+    @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_check_port_on_host_in_use(self, mock_port_is_available):
         """Test actual port verification when port is in use"""
         segments = []
