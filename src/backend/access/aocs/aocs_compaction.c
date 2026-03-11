@@ -108,16 +108,24 @@ AOCSSegmentFileTruncateToEOF(Relation aorel,
 
 	segno = fsinfo->segno;
 
-	for (j = 0; j < fsinfo->vpinfo.nEntry; ++j)
+	/*
+	 * We try to truncate all segment files beyond
+	 * `vpinfo.nEntry`, as we may have non-empty segment files
+	 * left by ADD COLUMN, which was rolled back. It is similar to logic in
+	 * ao_foreach_extent_file().
+	 */
+	for (j = 0; ; ++j)
 	{
-		int64		segeof;
+		int64		segeof = 0;
 		char		filenamepath[MAXPGPATH];
-		AOCSVPInfoEntry *entry;
 		File		fd;
 		int32		fileSegNo;
 
-		entry = getAOCSVPEntry(fsinfo, j);
-		segeof = entry->eof;
+		if (j < fsinfo->vpinfo.nEntry)
+		{
+			AOCSVPInfoEntry *entry = getAOCSVPEntry(fsinfo, j);
+			segeof = entry->eof;
+		}
 
 		/* Open and truncate the relation segfile to its eof */
 		MakeAOSegmentFileName(aorel, segno, j, &fileSegNo, filenamepath);
@@ -162,6 +170,9 @@ AOCSSegmentFileTruncateToEOF(Relation aorel,
 				   segno,
 				   fileSegNo,
 				   segeof);
+
+			if (j >= fsinfo->vpinfo.nEntry)
+				break;
 		}
 	}
 }

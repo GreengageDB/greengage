@@ -24,6 +24,12 @@
 # https://community.pivotal.io/s/article/how-to-interpret-the-memwatcher-output-memreport?language=en_US
 #------------------------------------------------------------------------
 
+from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import gzip
 import itertools
 import os
@@ -54,7 +60,7 @@ class ProcessListing(object):
     @classmethod
     def process(cls, ps_dictionary):
         cmd = ps_dictionary['COMMAND']
-        if re.match('^\S*postgres\S*\s', cmd) is not None:
+        if re.match(r'^\S*postgres\S*\s', cmd) is not None:
             if cmd.startswith('postgres:'):
                 if re.search(r'con\d+', cmd):
                     return GPDBQueryProcess(ps_dictionary)
@@ -72,21 +78,21 @@ class ProcessListing(object):
 
     @classmethod
     def report(cls, rpt_file):
-        print >> rpt_file, 'NODE SUMMARY'
-        print >> rpt_file, '============\n'
+        print('NODE SUMMARY', file=rpt_file)
+        print('============\n', file=rpt_file)
         rows = cls._reportRows()
         for row in rows:
             fmt = row[0]
             for data in row[1]:
-                print >> rpt_file, fmt.format(*data)
+                print(fmt.format(*data), file=rpt_file)
 
     @classmethod
     def _reportRows(cls):
-        report = [('{0:<50}{1:<}', [('Total Number of Processes:', len(cls.all_procs.values()))])]
-        report.append(('{0:<50}{1:<10.4f}', [('Total Memory used (MB)', sum(float(p.res_size) for p in cls.all_procs.values()) / 1024)]))
+        report = [('{0:<50}{1:<}', [('Total Number of Processes:', len(list(cls.all_procs.values())))])]
+        report.append(('{0:<50}{1:<10.4f}', [('Total Memory used (MB)', old_div(sum(float(p.res_size) for p in list(cls.all_procs.values())), 1024))]))
 
         #Now let's see if we have any zobmie or uninterruptible sleep
-        trouble = [x for x in cls.all_procs.values() if x.isZombie()]
+        trouble = [x for x in list(cls.all_procs.values()) if x.isZombie()]
         if trouble:
             rows = []
             report.append(('\n\n{0}\n', [('Zombie processes\n----------------',)]))
@@ -95,7 +101,7 @@ class ProcessListing(object):
             rows = rows + [(x.pid, x.command.rstrip()) for x in trouble]
             report.append((fmt, rows))
 
-        trouble = [x for x in cls.all_procs.values() if x.isIOSleep()]
+        trouble = [x for x in list(cls.all_procs.values()) if x.isIOSleep()]
         if trouble:
             rows = []
             report.append(('\n\n{0}\n', [('I/O sleep processes\n-------------------',)]))
@@ -105,7 +111,7 @@ class ProcessListing(object):
             report.append((fmt, rows))
 
         #Now for high CPU processes (high being > 50%)
-        trouble = [x for x in cls.all_procs.values() if x.pcpu() >= 50]
+        trouble = [x for x in list(cls.all_procs.values()) if x.pcpu() >= 50]
         if trouble:
             report.append(('\n\n{0}\n', [('Processes with CPU > 50%\n------------------------------',)]))
             rows = []
@@ -115,7 +121,7 @@ class ProcessListing(object):
             report.append((fmt, rows))
 
         #and finally where %MEM > 5%
-        trouble = [x for x in cls.all_procs.values() if x.pmem() >= 5]
+        trouble = [x for x in list(cls.all_procs.values()) if x.pmem() >= 5]
         if trouble:
             report.append(('\n\n{0}\n', [('Processes with %MEM > 5%\n--------------------',)]))
             rows = []
@@ -180,17 +186,17 @@ class PostmasterProcessListing(ProcessListing):
         GPDBQueryProcess.linkWithSegmentProcsess()
         GPDBBackgroundProcess.linkWithSegmentProcsess()
 
-        print >> rpt_file, '\n\nSEGMENT SUMMARY'
-        print >> rpt_file, '===============\n'
+        print('\n\nSEGMENT SUMMARY', file=rpt_file)
+        print('===============\n', file=rpt_file)
 
-        segs = sorted(PostmasterProcessListing.segments.values(), key=(lambda x: x.segID))
+        segs = sorted(list(PostmasterProcessListing.segments.values()), key=(lambda x: x.segID))
 
         report_rows = [x._reportRow() for x in segs]
-        print >> rpt_file, '{0:<15}{1:>15}{2:>15}{3:>20}{4:>15}{5:>15}'.format('Segment', 'Total (MB)', 'Session (MB)', 'Background (MB)', '# Active', '# Idle')
+        print('{0:<15}{1:>15}{2:>15}{3:>20}{4:>15}{5:>15}'.format('Segment', 'Total (MB)', 'Session (MB)', 'Background (MB)', '# Active', '# Idle'), file=rpt_file)
 
         fmt = '{0:<15}{1:>15.2f}{2:>15.2f}{3:>20.2f}{4:>15}{5:>15}'
         for r in report_rows:
-            print >> rpt_file, fmt.format(*r)
+            print(fmt.format(*r), file=rpt_file)
 
         query_values = {}
         for (index, x) in enumerate(segs):
@@ -199,23 +205,23 @@ class PostmasterProcessListing(ProcessListing):
                     query_values[pair[0]] = [0.0] * len(segs)
                 query_values[pair[0]][index] += pair[1]
 
-        print >> rpt_file, '\n\n'
+        print('\n\n', file=rpt_file)
         fmt = '{0:20}'
-        for x in xrange(1, len(segs) + 1):
+        for x in range(1, len(segs) + 1):
             fmt += '{%d:>10}' % (x)
-        print >> rpt_file, fmt.format('', *['seg' + str(x.segID) for x in segs])
-        print >> rpt_file, '-' * (30 + (10 * len(segs)))
+        print(fmt.format('', *['seg' + str(x.segID) for x in segs]), file=rpt_file)
+        print('-' * (30 + (10 * len(segs))), file=rpt_file)
         fmt = '{0:20}'
-        for x in xrange(1, len(segs) + 2):
+        for x in range(1, len(segs) + 2):
             fmt += '{%d:10.2f}' % (x)
-        for sess, totals in query_values.items():
+        for sess, totals in list(query_values.items()):
             val = [sess]
             val.extend(totals)
             val.append(sum(totals))
-            print >> rpt_file, fmt.format(*val)
+            print(fmt.format(*val), file=rpt_file)
 
     def _getQueryReport(self):
-        return [(sess, sum(float(p.res_size) for p in procs) / 1024) for sess, procs in self.queries.items()]
+        return [(sess, old_div(sum(float(p.res_size) for p in procs), 1024)) for sess, procs in list(self.queries.items())]
 
     def _addChildProcess(self, procListing):
         if procListing.procType() == 'QUERY':
@@ -223,7 +229,7 @@ class PostmasterProcessListing(ProcessListing):
         elif procListing.procType() == 'BG':
             self.addBGProcess(procListing)
         else:
-            print procListing.procType()
+            print(procListing.procType())
 
     def addQueryProcess(self, qProc):
         key = qProc.sessionKey()
@@ -233,9 +239,9 @@ class PostmasterProcessListing(ProcessListing):
         self.bgProcs.append(bProc)
 
     def _reportRow(self):
-        all_queries = list(itertools.chain(*self.queries.values()))
-        sess_mem = sum(float(q.res_size) for q in all_queries) / 1024
-        bg_mem = float(sum(float(q.res_size) for q in self.bgProcs) / 1024)
+        all_queries = list(itertools.chain(*list(self.queries.values())))
+        sess_mem = old_div(sum(float(q.res_size) for q in all_queries), 1024)
+        bg_mem = float(old_div(sum(float(q.res_size) for q in self.bgProcs), 1024))
         total = float(self.res_size) / 1024 + sess_mem + bg_mem
         num_idle = len([x for x in all_queries if x.isIdle()])
         num_active = sum(not x.isIdle() for x in all_queries)
@@ -248,7 +254,7 @@ class GPDBQueryProcess(ProcessListing):
 
     def __init__(self, ps_dictionary):
         if 'COMMAND' not in ps_dictionary:
-            print ps_dictionary
+            print(ps_dictionary)
         super(GPDBQueryProcess, self).__init__(ps_dictionary)
         session_pattern = re.compile(r'con\d+')
         self.session = session_pattern.search(ps_dictionary['COMMAND']).group()
@@ -277,7 +283,7 @@ class GPDBQueryProcess(ProcessListing):
                 proc.addQueryProcess(p)
                 p.segment = proc.segID
             except KeyError as e:
-                print "Unable to find postmaster proces for line:\n\tPID: {0}\n\tPPID: {1}\n\tCMD: {2} error: {3}".format(p.pid, p.ppid, p.command, str(e))
+                print("Unable to find postmaster proces for line:\n\tPID: {0}\n\tPPID: {1}\n\tCMD: {2} error: {3}".format(p.pid, p.ppid, p.command, str(e)))
                 continue
 
     def sessionKey(self):
@@ -310,7 +316,7 @@ class GPDBBackgroundProcess(ProcessListing):
                     proc = ProcessListing.all_procs[proc.ppid]
                 proc.addBGProcess(p)
             except KeyError as e:
-                print "Unable to find postmaster proces for line:\n\tPID: {0}\n\tPPID: {1}\n\tCMD: {2} error: {3}".format(p.pid, p.ppid, p.command, str(e))
+                print("Unable to find postmaster proces for line:\n\tPID: {0}\n\tPPID: {1}\n\tCMD: {2} error: {3}".format(p.pid, p.ppid, p.command, str(e)))
                 continue
 
     def procType(self):
@@ -340,8 +346,8 @@ class GPDBSession(object):
 
     @classmethod
     def report(cls):
-        print "\n\nGPDB SESSION REPORT"
-        print cls.sessions.keys()
+        print("\n\nGPDB SESSION REPORT")
+        print(list(cls.sessions.keys()))
         for k in sorted(cls.sessions.keys()):
             cls.sessions[k]._report()
 
@@ -351,14 +357,14 @@ class GPDBSession(object):
     def _report(self):
         total_mem = 0
         seg_mem = defaultdict(int)
-        for seg, proc in self.queryProcesses.iteritems():
+        for seg, proc in self.queryProcesses.items():
             total_mem += sum(int(p.res_size) for p in proc)
             seg_mem[seg] += sum(int(p.res_size)for p in proc)
 
-        print "Memory usage for " + self.sessionID
-        print "    Total Memory: " + str(total_mem)
-        for key in seg_mem.keys():
-            print "        seg %s: %d" % (key, seg_mem[key])
+        print("Memory usage for " + self.sessionID)
+        print("    Total Memory: " + str(total_mem))
+        for key in list(seg_mem.keys()):
+            print("        seg %s: %d" % (key, seg_mem[key]))
 
 
 def parsePSOutput(psLines):
@@ -367,31 +373,32 @@ def parsePSOutput(psLines):
     num_columns = len(header)
     for line in psLines[1:]:
         vals = line.split(None, num_columns - 1)
-        result.append(dict(zip(header, vals)))
+        result.append(dict(list(zip(header, vals))))
     return result
 
 
 def getNextSample(file, start, end):
-    line = file.readline()
+    line = file.readline().decode('utf-8')
     if not line:
         return None
     while line == '\n':
-        line = file.readline()
-    print line
+        line = file.readline().decode('utf-8')
+    print(line)
     if not line.startswith('>>>'):
         raise Exception("Processing file failed - did not find timestamp where expected")
     timestamp = datetime.strptime(line, timestamp_string)
 
     process_this_listing = (start is None or timestamp >= start) and (end is None or timestamp <= end)
 
-    header = file.readline().split()
+    header = file.readline().decode('utf-8').split()
     n_cols = len(header)
     rows = []
     for line in file:
+        line = line.decode('utf-8')
         if line == '\n':
             break
         if process_this_listing:
-            rows.append(dict(zip(header, line.rstrip().split(None, n_cols - 1))))
+            rows.append(dict(list(zip(header, line.rstrip().split(None, n_cols - 1)))))
     return (timestamp, rows)
 
 
@@ -400,7 +407,7 @@ def writeFile(directory, timestamp, entries):
     for e in entries:
         ProcessListing.process(e)
     with open(report_name, 'w') as f:
-        print >> f, '{0:20}{1}\n'.format('Polling Timestamp:', timestamp.isoformat())
+        print('{0:20}{1}\n'.format('Polling Timestamp:', timestamp.isoformat()), file=f)
         ProcessListing.report(f)
         PostmasterProcessListing.report(f)
     ProcessListing.reset()

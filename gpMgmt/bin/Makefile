@@ -71,7 +71,7 @@ endif
 #
 # PyGreSQL
 #
-PYGRESQL_VERSION=4.0
+PYGRESQL_VERSION=5.2.5
 PYGRESQL_DIR=PyGreSQL-$(PYGRESQL_VERSION)
 
 pygresql:
@@ -80,7 +80,7 @@ pygresql:
 		unset LIBPATH; \
 		./generate-greengage-path.sh > $(DESTDIR)$(prefix)/greengage_path.sh ; \
 	fi
-	PATH=$(bindir):$$PATH && \
+	PATH=$(DESTDIR)/$(bindir):$$PATH && \
 	if [ `uname -s` = 'OpenBSD' ]; then \
 	    cd $(PYLIB_SRC)/$(PYGRESQL_DIR) && DESTDIR="$(DESTDIR)" CC=cc python setup.py build; \
 	else \
@@ -143,8 +143,6 @@ LOGILAB_ASTNG_DIR=logilab-astng-$(LOGILAB_ASTNG_VERSION)
 LOGILAB_COMMON_VERSION=0.50.1
 LOGILAB_COMMON_DIR=logilab-common-$(LOGILAB_COMMON_VERSION)
 PYLINT_PYTHONPATH=$(PYLIB_DIR):$(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/
-MOCK_VERSION=1.0.1
-MOCK_DIR=mock-$(MOCK_VERSION)
 SETUP_TOOLS_VERSION=36.6.0
 PARSE_VERSION=1.8.2
 ARG_PARSE_VERSION=1.2.1
@@ -155,8 +153,6 @@ PYTHONSRC_INSTALL=$(PYLIB_SRC_EXT)/install
 PYTHON_VERSION=$(shell python -c "import sys; print ('%s.%s' % (sys.version_info[0:2]))")
 PYTHONSRC_INSTALL_SITE=$(PYLIB_SRC_EXT)/install/lib/python$(PYTHON_VERSION)/site-packages
 PYTHONSRC_INSTALL_PYTHON_PATH=$(PYTHONPATH):$(PYTHONSRC_INSTALL_SITE)
-# TODO: mock-1.0.1-py2.6.egg package should be updated.
-MOCK_BIN=$(PYTHONSRC_INSTALL)/lib/python$(PYTHON_VERSION)/site-packages/mock-1.0.1-py2.6.egg
 UBUNTU_PLATFORM=$(shell if lsb_release -a 2>/dev/null | grep -q 'Ubuntu' ; then echo "Ubuntu"; fi)
 
 pylint:
@@ -172,18 +168,6 @@ pylint:
 	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/__init__.py
 	@touch $(PYLIB_SRC_EXT)/$(PYLINT_DIR)/build/lib/logilab/__init__.py
 
-$(MOCK_BIN):
-	@echo "--- mock for platform $(UBUNTU_PLATFORM)"
-	@if [ $(UBUNTU_PLATFORM) = "Ubuntu" ]; then\
-		wget https://bootstrap.pypa.io/pip/2.7/get-pip.py && \
-		python2 get-pip.py && \
-		pip install mock==1.0.1;\
-     else\
-       mkdir -p $(PYTHONSRC_INSTALL_SITE) && \
-	   cd $(PYLIB_SRC_EXT)/ && tar xzf $(MOCK_DIR).tar.gz && \
-	   cd $(PYLIB_SRC_EXT)/$(MOCK_DIR)/ && \
-	   PYTHONPATH=$(PYTHONSRC_INSTALL_PYTHON_PATH) python setup.py install --prefix $(PYTHONSRC_INSTALL) ; \
-	 fi;
 
 PYTHON_FILES=`grep -l --exclude=Makefile --exclude=gplogfilter "/bin/env python" *`\
 			 `grep -l "/bin/env python" $(SRC)/../sbin/*`\
@@ -201,16 +185,16 @@ check-regress:
 	@PYTHONPATH=$(SRC):$(SRC)/ext:$(PYTHONPATH) \
 	gppylib/gpunit discover --verbose -s gppylib -p "test_regress*.py" 2> $(SRC)/../gpMgmt_testregress_results.log 1> $(SRC)/../gpMgmt_testregress_output.log
 
-check: $(MOCK_BIN)
+check:
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
-	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
-	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log
-	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
-	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log
+	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
+	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
+	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
+	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
 
 unitdevel:
 	@echo "Running pure unit tests..."
-	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
+	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	    python -m unittest discover --verbose -s $(SRC)/gppylib -p "test_unit*.py"
 
 
@@ -220,7 +204,7 @@ installcheck-bash:
 	./test/suite.bash
 
 .PHONY: installcheck
-installcheck: installcheck-bash
+installcheck: check installcheck-bash
 	$(MAKE) -C gpload_test $@
 
 clean distclean:

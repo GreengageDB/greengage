@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 #include "cdb/cdbvars.h"
+#include "cdb/cdbendpoint.h"
 #include "cdb/memquota.h"
 #include "executor/spi.h"
 #include "postmaster/fts.h"
@@ -63,11 +64,9 @@ InitResManager(void)
 
 		InitResQueues();
 	}
-	else if  (IsResGroupEnabled() &&
-			 (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE) &&
-			 IsUnderPostmaster &&
-			 !amAuxiliaryBgWorker() &&
-			 !am_walsender && !am_ftshandler && !am_faulthandler)
+	else if (IsResGroupEnabled() && IsResGroupRoleAllowed() &&
+			 IsUnderPostmaster && !amAuxiliaryBgWorker() && !am_walsender &&
+			 !am_ftshandler && !am_faulthandler)
 	{
 		/*
 		 * InitResManager() is called under PostgresMain(), so resource group is not
@@ -98,8 +97,8 @@ InitResManager(void)
 		SPI_InitMemoryReservation();
 	}
 
-	if (MySessionState &&
-		!IsBackgroundWorker &&
-		(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE))
+	if (MySessionState && !IsBackgroundWorker && IsResGroupRoleAllowed())
+	{
 		GPMemoryProtect_TrackStartupMemory();
+	}
 }

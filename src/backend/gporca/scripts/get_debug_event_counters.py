@@ -1,5 +1,6 @@
 #!/usr/local/bin/python
 
+from __future__ import print_function
 import sys
 import subprocess
 import re
@@ -27,7 +28,7 @@ CDebugCounter class, see file ../libgpos/include/gpos/common/CDebugCounter.h
 
 try:
 	from gppylib.db import dbconn
-except ImportError, e:
+except ImportError as e:
 	sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh to set PYTHONPATH. '
 			 'Detail: ' + str(e))
 

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from builtins import object
 import os
 import shutil
 import sys
@@ -5,7 +7,7 @@ import tempfile
 
 from mock import *
 
-from gp_unittest import *
+from .gp_unittest import *
 from gppylib.gparray import GpArray, Segment
 from gppylib.heapchecksum import HeapChecksum
 from gppylib.operations.buildMirrorSegments import GpMirrorToBuild, GpMirrorListToBuild
@@ -17,7 +19,7 @@ from gppylib.utils import TableLogger
 from gppylib.mainUtils import ExceptionNoStackTraceNeeded
 
 
-class Options:
+class Options(object):
     def __init__(self):
         self.newRecoverHosts = None
         self.spareDataDirectoryFile = ""
@@ -142,7 +144,7 @@ class GpRecoversegTestCase(GpTestCase):
         self.mock_get_mirrors_to_build.side_effect = self._get_test_mirrors
         self.assertTrue(self.gparray.master.isSegmentMaster(True))
 
-        with self.assertRaisesRegexp(Exception, "Heap checksum setting differences reported on segments"):
+        with self.assertRaisesRe(Exception, "Heap checksum setting differences reported on segments"):
             self.subject.run()
 
         self.mock_get_segments_checksum_settings.assert_called_with([self.primary0, self.mirror0])
@@ -157,7 +159,7 @@ class GpRecoversegTestCase(GpTestCase):
         self.mock_get_mirrors_to_build.side_effect = self._get_test_mirrors
         self.return_one = True
         self.assertTrue(self.gparray.master.isSegmentMaster(True))
-        with self.assertRaisesRegexp(Exception, "No segments responded to ssh query for heap checksum validation."):
+        with self.assertRaisesRe(Exception, "No segments responded to ssh query for heap checksum validation."):
             self.subject.run()
 
         self.mock_get_segments_checksum_settings.assert_called_with([self.primary0, self.mirror0])
@@ -270,7 +272,7 @@ class GpRecoversegTestCase(GpTestCase):
 
     def test_gprecoverseg_with_mirrorless(self):
         self.gpArrayMock.hasMirrors = False
-        with self.assertRaisesRegexp(ExceptionNoStackTraceNeeded,
+        with self.assertRaisesRe(ExceptionNoStackTraceNeeded,
                                     "GPDB Mirroring replication is not configured for this Greengage Database instance."):
             self.subject.run()
 

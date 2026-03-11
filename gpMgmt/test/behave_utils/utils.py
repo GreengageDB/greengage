@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import print_function
+from builtins import range
 import fileinput
 import os
 import pipes
@@ -8,6 +10,15 @@ import stat
 import time
 import glob
 import shutil
+import sys
+
+if sys.version_info[0] == 3:
+    string_types = str
+    binary_type = bytes
+else:
+    string_types = basestring
+    binary_type = str
+
 try:
     import subprocess32 as subprocess
 except:
@@ -25,16 +36,18 @@ from pygresql import pg
 PARTITION_START_DATE = '2010-01-01'
 PARTITION_END_DATE = '2013-01-01'
 
-master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
-if master_data_dir is None:
-    raise Exception('MASTER_DATA_DIRECTORY is not set')
+master_data_dir = None
 
 
 def execute_sql(dbname, sql):
-    result = None
-
     with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
-        result = dbconn.execSQL(conn, sql)
+        dbconn.execSQL(conn, sql)
+        conn.commit()
+
+def query_sql(dbname, sql):
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        cursor = dbconn.execSQL(conn, sql)
+        result = cursor.fetchall()
         conn.commit()
 
     return result
@@ -64,7 +77,7 @@ def run_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -78,7 +91,7 @@ def run_async_command(context, command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         proc = cmd.runNoWait()
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
     context.async_proc = proc
 
@@ -87,8 +100,8 @@ def run_cmd(command):
     cmd = Command(name='run %s' % command, cmdStr='%s' % command)
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
-        print 'caught exception %s' % e
+    except ExecutionError as e:
+        print('caught exception %s' % e)
 
     result = cmd.get_results()
     return (result.rc, result.stdout, result.stderr)
@@ -111,7 +124,7 @@ def run_gpcommand(context, command, cmd_prefix=''):
         cmd = Command(name='run %s' % command, cmdStr='%s;$GPHOME/bin/%s' % (cmd_prefix, command))
     try:
         cmd.run(validateAfter=True)
-    except ExecutionError, e:
+    except ExecutionError as e:
         context.exception = e
 
     result = cmd.get_results()
@@ -135,7 +148,7 @@ def check_stdout_msg(context, msg, escapeStr = False):
     pat = re.compile(msg)
 
     actual = context.stdout_message
-    if isinstance(msg, unicode):
+    if isinstance(msg, string_types) and isinstance(actual, binary_type):
         actual = actual.decode('utf-8')
 
     if not pat.search(actual):
@@ -155,7 +168,7 @@ def check_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) is bytes:
+    if isinstance(actual, binary_type):
         actual = actual.decode()
     if not pat.search(actual):
         err_str = "Expected error string '%s' and found: '%s'" % (err_msg, actual)
@@ -167,7 +180,7 @@ def check_string_not_present_err_msg(context, err_msg):
         raise Exception('An exception was not raised and it was expected')
     pat = re.compile(err_msg)
     actual = context.error_message
-    if type(actual) is bytes:
+    if type(actual) == bytes:
         actual = actual.decode()
     if pat.search(actual):
         err_str = "Did not expect error string '%s' but found: '%s'" % (err_msg, actual)
@@ -185,10 +198,12 @@ def check_return_code(context, ret_code):
 
 
 def check_database_is_running(context):
-    if not 'PGPORT' in os.environ:
-        raise Exception('PGPORT should be set')
+    if not 'PGPORT' in os.environ or not 'MASTER_DATA_DIRECTORY' in os.environ:
+        return False
 
     pgport = int(os.environ['PGPORT'])
+    global master_data_dir
+    master_data_dir = os.environ['MASTER_DATA_DIRECTORY']
 
     running_status = chk_local_db_running(os.environ.get('MASTER_DATA_DIRECTORY'), pgport)
     gpdb_running = running_status[0] and running_status[1] and running_status[2] and running_status[3]
@@ -272,7 +287,6 @@ def create_database_if_not_exists(context, dbname, host=None, port=0, user=None)
     if not check_db_exists(dbname, host, port, user):
         create_database(context, dbname, host, port, user)
     context.dbname = dbname
-    context.conn = dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)
 
 def create_database(context, dbname=None, host=None, port=0, user=None):
     LOOPS = 10
@@ -700,7 +714,7 @@ def are_segments_running():
     result = True
     for seg in segments:
         if seg.status != 'u':
-            print "segment is not up - %s" % seg
+            print("segment is not up - %s" % seg)
             result = False
     return result
 
@@ -717,8 +731,8 @@ def modify_sql_file(file, hostport):
     if os.path.isfile(file):
         for line in fileinput.FileInput(file, inplace=1):
             if line.find("gpfdist") >= 0:
-                line = re.sub('(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
-            print str(re.sub('\n', '', line))
+                line = re.sub(r'(\d+)\.(\d+)\.(\d+)\.(\d+)\:(\d+)', hostport, line)
+            print(str(re.sub('\n', '', line)))
 
 
 def remove_dir(host, directory):
@@ -877,3 +891,7 @@ def wait_for_database_dropped(dbname, remaining_attempt = 3000):
         if remaining_attempt == 0:
             raise Exception('Unable to drop the database %s !!!') % dbname
         time.sleep(0.1)
+
+
+def is_concourse_cluster(context):
+    return context.config.tag_expression.check(context.feature.tags + ["concourse_cluster"])

@@ -1,0 +1,83 @@
+# .github/workflows/greengage-sql-dump.yml
+name: Greengage SQL Dump
+
+on:
+  workflow_run:
+    workflows: ["Greengage CI"]
+    types: [completed]
+    branches:
+      - main
+      - 7.x
+
+jobs:
+  create-sql-dump-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    if: |
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      !startsWith(github.event.workflow_run.head_branch, 'refs/tags/')
+    strategy:
+      fail-fast: true
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for cache and artifact upload
+    steps:
+      - name: Display trigger information
+        env:
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_HEAD_COMMIT_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+          RUN_HEAD_COMMIT_AUTHOR: ${{ github.event.workflow_run.head_commit.author.name }}
+        run: |
+          cat << EOF
+          ================== Workflow Trigger Information ==================
+          Triggered by:   ${RUN_NAME} (#${RUN_ID})
+          Target branch:  ${RUN_HEAD_BRANCH}
+          Source commit:  ${RUN_HEAD_SHA}
+          Commit message: ${RUN_HEAD_COMMIT_MESSAGE}
+
+          Author: ${RUN_HEAD_COMMIT_AUTHOR}
+          ==================================================================
+          EOF
+
+      - name: Maximize disk space
+        uses: greengagedb/greengage-ci/.github/actions/maximize-disk-space@v19
+
+      - name: Determine version from branch
+        id: version
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          case "$BRANCH" in
+            main)
+              echo "version=6" >> $GITHUB_OUTPUT
+              ;;
+            7.x)
+              echo "version=7" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "Unsupported branch: $BRANCH"
+              exit 1
+              ;;
+          esac
+
+      - name: Create SQL Dump via regression tests
+        uses: greengagedb/greengage-ci/.github/actions/tests/regression@v16
+        with:
+          image: ghcr.io/${{ github.repository }}/ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}:${{ github.event.workflow_run.head_sha }}
+          optimizer: postgres
+          target_os: ${{ matrix.target_os }}
+          dump_db: "true"
+
+      - name: Upload SQL Dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqldump_ggdb${{ steps.version.outputs.version }}_${{ matrix.target_os }}
+          path: /mnt/logs/${{ matrix.target_os }}_postgres_sqldump.tar
+          if-no-files-found: error

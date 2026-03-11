@@ -658,7 +658,6 @@ INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL cont
 -- the tests will fail.
 drop table if exists bar_randDistr;
 NOTICE:  table "bar_randdistr" does not exist, skipping
-INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to ALL contents: 0 1 2
 create table bar_randDistr(col1 int, col2 int) distributed randomly;
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2

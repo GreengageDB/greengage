@@ -17,9 +17,16 @@ should do the trick.
 Python Version
 --------------
 
-* The current utilities bundle python 2.5.1.  We are planning on moving 
-  forward to 2.6.1 in the near future.
+* Supported Python versions: 2.7 or 3.9 to 3.12.
 
+* To switch the Python version used during the build, change the `python`
+  command to point to the desired version. For example:
+
+```
+sudo ln -sf python3 /usr/bin/python
+```
+
+After changing the Python version, clean the build directory and recompile.
 
 Where Things Go
 ---------------
@@ -155,10 +162,9 @@ Testing Management Scripts
 
 This directory contains the unit tests for the management scripts. These tests
 require the following Python modules to be installed: mock and pygresql.
-These modules can be installed by running "git submodule update --init --recursive"
-if they are not already installed on your machine.
+These modules can be installed by running "make install" in gpMgmt/bin.
 
-If you installed the dependencies using the above git command, you can run the tests with
+If you installed the dependencies using the command above, you can run the tests with
 make, using the following commands in the current directory:
 
 "make check" will run all of the unit tests, some of which require a GPDB cluster to

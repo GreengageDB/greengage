@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-class UniqueIndexViolationCheck:
+from builtins import object
+class UniqueIndexViolationCheck(object):
     unique_indexes_query = """
         select table_oid, index_name, table_name, array_agg(attname) as column_names
         from pg_attribute, (
@@ -39,7 +40,7 @@ class UniqueIndexViolationCheck:
         violations = []
 
         for (table_oid, index_name, table_name, column_names) in unique_indexes:
-            column_names = column_names[1:-1]
+            column_names = ",".join(column_names)
             sql = self.get_violated_segments_query(table_name, column_names)
             violated_segments = db_connection.query(sql).getresult()
             if violated_segments:

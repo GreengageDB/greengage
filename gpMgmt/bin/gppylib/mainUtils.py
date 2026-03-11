@@ -16,13 +16,17 @@ extend common functions of our gp utilities.  Please keep this in mind
 and try to avoid placing logic for a specific utility here.
 """
 
+from builtins import object
 import errno, os, sys, shutil
 
 gProgramName = os.path.split(sys.argv[0])[-1]
-if sys.version_info < (2, 5, 0):
+if sys.version_info < (2, 7, 0):
     sys.exit(
-        '''Error: %s is supported on Python versions 2.5 or greater
+        '''Error: %s is supported on Python versions 2.7 or greater
         Please upgrade python installed on this machine.''' % gProgramName)
+
+IS_PYTHON2 = sys.version_info[0] == 2
+OPEN_READ_MODE = 'rU' if IS_PYTHON2 else 'r'
 
 from gppylib import gplog
 from gppylib.commands import gp, unix
@@ -45,7 +49,7 @@ class PIDLockHeld(Exception):
         self.message = message
         self.path = path
 
-class PIDLockFile:
+class PIDLockFile(object):
     """
     Create a lock, utilizing the atomic nature of mkdir on Unix
     Inside of this directory, a file named PID contains exactly the PID, with
@@ -128,7 +132,7 @@ class PIDLockFile:
         self.release()
 
 
-class SimpleMainLock:
+class SimpleMainLock(object):
     """
     Tools like gprecoverseg prohibit running multiple instances at the same time
     via a simple lock file created in the MASTER_DATA_DIRECTORY.  This class takes
@@ -362,24 +366,24 @@ def simple_main_locked(parser, parserOptions, parserArgs, createCommandFn, mainO
         exitCode = commandObject.run()
         exit_status = exitCode
 
-    except ProgramArgumentValidationException, e:
+    except ProgramArgumentValidationException as e:
         if e.shouldPrintHelp():
             parser.print_help()
         logger.error("%s: error: %s" % (gProgramName, e.getMessage()))
         exit_status = 2
-    except ExceptionNoStackTraceNeeded, e:
+    except ExceptionNoStackTraceNeeded as e:
         logger.error("%s error: %s" % (gProgramName, e))
         exit_status = 2
-    except UserAbortedException, e:
+    except UserAbortedException as e:
         logger.info("User abort requested, Exiting...")
         exit_status = 4
-    except ExecutionError, e:
+    except ExecutionError as e:
         logger.fatal("Error occurred: %s\n Command was: '%s'\n"
                      "rc=%d, stdout='%s', stderr='%s'" % \
                      (e.summary, e.cmd.cmdStr, e.cmd.results.rc, e.cmd.results.stdout,
                       e.cmd.results.stderr))
         exit_status = 2
-    except Exception, e:
+    except Exception as e:
         if parserOptions is None:
             logger.exception("%s failed.  exiting...", gProgramName)
         else:

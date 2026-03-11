@@ -6,6 +6,7 @@
 # THIS IMPORT MUST COME FIRST
 #
 # import mainUtils FIRST to get python version check
+from builtins import object
 from gppylib.mainUtils import *
 
 import os, sys
@@ -36,7 +37,7 @@ try:
     from gppylib.operations.rebalanceSegments import ReconfigDetectionSQLQueryCommand
     from gppylib.operations.detect_unreachable_hosts import get_unreachable_segment_hosts
     from contextlib import closing
-except ImportError, e:
+except ImportError as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
 
 DEFAULT_NUM_WORKERS = 64
@@ -48,7 +49,7 @@ PG_CTL_STATUS_SLEEP_INTERVAL = 1.0  # number of seconds to sleep before issuing 
 
 
 # ---------------------------------------------------------------
-class SegStopStatus:
+class SegStopStatus(object):
     """Tracks result of trying to stop an individual segment database"""
 
     def __init__(self, db, stopped=False, reason=None, failedCmd=None, timedOut=False):
@@ -89,7 +90,7 @@ def print_progress(pool, interval=10):
 
 
 # ---------------------------------------------------------------
-class GpStop:
+class GpStop(object):
     ######
     def __init__(self, mode, master_datadir=None,
                  parallel=DEFAULT_NUM_WORKERS, quiet=False, masteronly=False, sighup=False,
@@ -277,7 +278,7 @@ class GpStop:
             cluster_hosts.add(self.gparray.standbyMaster.getSegmentHostName())
 
         for host in cluster_hosts:
-            cmd = Command('Check if gpsmon is running', cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \$2}'",
+            cmd = Command('Check if gpsmon is running', cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \\$2}'",
                           ctxt=REMOTE, remoteHost=host)
             self.pool.addCommand(cmd)
         self.pool.join()
@@ -297,7 +298,7 @@ class GpStop:
 
         for host in valid_hosts:
             cmd = Command('kill all the gpsmon processes',
-                          cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \$2}' | xargs kill -9",
+                          cmdStr="ps -ef | grep '[g]psmon -m' | awk '{print \\$2}' | xargs kill -9",
                           ctxt=REMOTE, remoteHost=host)
             self.pool.addCommand(cmd)
         self.pool.join()
@@ -378,7 +379,7 @@ class GpStop:
     ######
     def _is_hostname_valid(self):
         segments = self.gparray.getSegmentsByHostName( self.gparray.getDbList())
-        host_names = segments.keys()
+        host_names = list(segments.keys())
         if self.onlyThisHost not in host_names:
             logger.error("host '%s' is not found in gp_segment_configuration" % self.onlyThisHost)
             logger.error("hosts in cluster config: %s" % host_names)
@@ -560,7 +561,7 @@ class GpStop:
                         for user_conn in user_connections:
                             warn_text += "  %s" % user_conn
 
-                    logger.warn(warn_text)
+                    logger.warning(warn_text)
                     logger.info("Continue waiting in smart mode, stop in fast mode, or stop in immediate mode.")
                     mode_selection = userinput.ask_string("Your_choice",
                                                           "['(s)mart_mode', '(f)ast_mode', '(i)mmediate_mode']",
@@ -656,7 +657,7 @@ class GpStop:
                                      ctxt=base.REMOTE,
                                      remoteHost=standby.hostname)
                 cmd.run(validateAfter=True)
-            except base.ExecutionError, e:
+            except base.ExecutionError as e:
                 logger.warning("Error occured while stopping the standby master: %s" % e)
 
             if not pg.DbStatus.remote('checking status of standby master instance', standby, standby.hostname):
@@ -669,7 +670,7 @@ class GpStop:
                                          timeout=self.timeout,
                                          ctxt=base.REMOTE, remoteHost=standby.hostname)
                     cmd.run(validateAfter=True)
-                except base.ExecutionError, e:
+                except base.ExecutionError as e:
                     logger.warning("Error occured while stopping the standby master: %s" % e)
 
                 if not pg.DbStatus.remote('checking status of standby master instance', standby, standby.hostname):
@@ -736,12 +737,12 @@ class GpStop:
     def _stopseg_cmds(self, includePrimaries, includeMirrors, segs):
         host_segs_map = {}
         for seg in segs:
-            if seg.getSegmentHostName() in host_segs_map.keys():
+            if seg.getSegmentHostName() in list(host_segs_map.keys()):
                 host_segs_map[seg.getSegmentHostName()].append(seg)
             else:
                 host_segs_map[seg.getSegmentHostName()] = [seg]
 
-        for hostname, gpdb_objs in host_segs_map.iteritems():
+        for hostname, gpdb_objs in host_segs_map.items():
             dbs = []
             for db in gpdb_objs:
                 role = db.getSegmentRole()

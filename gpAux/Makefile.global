@@ -48,8 +48,11 @@ rhel7_x86_64_BLD_CFLAGS=-m64
 rhel8_x86_64_BLD_CFLAGS=-m64
 rhel7_ppc64le_BLD_CFLAGS=-m64 -fasynchronous-unwind-tables -fsigned-char
 altlinux8.4_x86_64_BLD_CFLAGS=-m64
+altlinux10.2_x86_64_BLD_CFLAGS=-m64
 astra1.7_x86_64_BLD_CFLAGS=-m64
+astra1.8_x86_64_BLD_CFLAGS=-m64
 ubuntu22.04_x86_64_BLD_CFLAGS=-m64
+ubuntu24.04_x86_64_BLD_CFLAGS=-m64
 redos7.3_x86_64_BLD_CFLAGS=-m64
 BLD_CFLAGS=$($(BLD_ARCH)_BLD_CFLAGS)
 

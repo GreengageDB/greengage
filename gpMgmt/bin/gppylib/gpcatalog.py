@@ -11,10 +11,18 @@
        CatalogTable - metadata about a single tables
 """
 # ============================================================================
+from past.builtins import cmp
+from builtins import object
 import os
 import json
 from gppylib import gplog
 from gppylib.gpversion import GpVersion
+import sys
+
+if sys.version_info[0] == 3:
+    string_types = str
+else:
+    string_types = basestring
 
 logger = gplog.get_default_logger()
 
@@ -64,7 +72,7 @@ DEPENDENCY_EXCLUSION = [
     ]
 
 # ============================================================================
-class GPCatalog():
+class GPCatalog(object):
     """
     Catalog is a container class that contains dictionary of CatalogTable 
     objects.
@@ -102,7 +110,7 @@ class GPCatalog():
         """
         getCatalogTables() => Returns a list of CatalogTable
         """
-        return self._tables.values()
+        return list(self._tables.values())
 
     def getCatalogVersion(self):
         """
@@ -141,14 +149,14 @@ class GPCatalog():
         # Read the catalog version from the database
         try:
             curs = self._query(version_query)
-        except Exception, e:
+        except Exception as e:
             raise GPCatalogException("Error reading database version: " + str(e))
         self._version = GpVersion(curs.getresult()[0][0])
 
         # Read the list of catalog tables from the database
         try:
             curs = self._query(catalog_query)
-        except Exception, e:
+        except Exception as e:
             raise GPCatalogException("Error reading catalog: " + str(e))
 
         # Construct our internal representation of the catalog
@@ -156,7 +164,7 @@ class GPCatalog():
         for [relname, relisshared] in curs.getresult():
             self._tables[relname] = GPCatalogTable(self, relname)
             # Note: stupid API returns t/f for boolean value
-            self._tables[relname]._setShared(relisshared is 't')
+            self._tables[relname]._setShared(relisshared)
         
         # The tidycat.pl utility has been used to generate a json file 
         # describing aspects of the catalog that we can not currently
@@ -254,10 +262,10 @@ class GPCatalog():
                 del d["__info"]
             infil.close()
             self._tidycat = d
-        except Exception, e:
+        except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
-            logger.warn("GPCatalogTable: "+ str(e))
+            logger.warning("GPCatalogTable: "+ str(e))
 
     def _setForeignKeys(self):
         """
@@ -266,7 +274,7 @@ class GPCatalog():
         information is not derivable from the catalog.
         """
         try:
-            for tname, tdef in self._tidycat.iteritems():
+            for tname, tdef in self._tidycat.items():
                 if "foreign_keys" not in tdef:
                     continue
                 for fkdef in tdef["foreign_keys"]:
@@ -275,10 +283,10 @@ class GPCatalog():
                                                    fkdef[1], 
                                                    fkdef[2])
                     self._tables[tname]._addForeignKey(fk2)
-        except Exception, e:
+        except Exception as e:
             # older versions of product will not have tidycat defs --
             # need to handle this case
-            logger.warn("GPCatalogTable: "+ str(e))
+            logger.warning("GPCatalogTable: "+ str(e))
 
 
     def _setKnownDifferences(self):
@@ -367,12 +375,12 @@ class GPCatalog():
             if self._tables[relname].isMasterOnly():
                 continue
             if self._tables[relname].getPrimaryKey() == []:
-                logger.warn("GPCatalogTable: unable to derive primary key for %s"
+                logger.warning("GPCatalogTable: unable to derive primary key for %s"
                             % str(relname))
 
 
 # ============================================================================
-class GPCatalogTable():
+class GPCatalogTable(object):
 
     # --------------------------------------------------------------------
     # Public API functions:
@@ -456,7 +464,7 @@ class GPCatalogTable():
         assert(name != None)
      
         # Split string input
-        if isinstance(pkey, str):    
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         self._parent    = parent
@@ -546,6 +554,12 @@ class GPCatalogTable():
     def __cmp__(self, other):
         return cmp(other, self._name)
 
+    def __eq__(self, other):
+        return self._name == other
+
+    def __lt__(self, other):
+        return self._name < other._name
+
     def _setMasterOnly(self, value=True):
         self._master = value
 
@@ -554,7 +568,7 @@ class GPCatalogTable():
 
     def _setPrimaryKey(self, pkey=None):
         # Split string input
-        if isinstance(pkey, str):
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         # Check that the specified keys are real columns
@@ -575,14 +589,14 @@ class GPCatalogTable():
 
     def _setKnownDifferences(self, diffs):
         # Split string input
-        if isinstance(diffs, str):    
+        if isinstance(diffs, string_types):
             diffs = diffs.split()
         self._excluding = set(diffs or [])
 
 
 
 # ============================================================================
-class GPCatalogTableForeignKey():
+class GPCatalogTableForeignKey(object):
     """
     GPCatalogTableForeignKey is a container for a single instance of a
     postgres catalog primary key/foreign key relationship.  The
@@ -631,7 +645,7 @@ class GPCatalogTableForeignKey():
         assert(pktablename != None)
      
         # Split string input
-        if isinstance(pkey, str):    
+        if isinstance(pkey, string_types):
             pkey = pkey.split()
 
         self._tname       = tname

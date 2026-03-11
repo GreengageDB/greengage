@@ -8,13 +8,13 @@ drop resource group rg2;
 
 create extension if not exists gp_inject_fault;
 
-create or replace function resGroupPalloc(float) returns int as '@abs_builddir@/../regress/regress@DLSUFFIX@', 'resGroupPalloc' language C reads sql data;
+create or replace function resGroupPalloc(float) returns int as '@abs_builddir@/../../regress/regress@DLSUFFIX@', 'resGroupPalloc' language C reads sql data;
 create or replace function hold_memory_by_percent_on_qe(float) returns int as $$
 select resGroupPalloc($1) from gp_dist_random('gp_id')
 $$ language sql;
 
 create or replace function repeatPalloc(int, int) returns int as
-'@abs_builddir@/../regress/regress@DLSUFFIX@', 'repeatPalloc'
+'@abs_builddir@/../../regress/regress@DLSUFFIX@', 'repeatPalloc'
     language C reads sql data;
 
 -- In the next test, we need to be able to allocate 100% of the available

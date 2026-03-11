@@ -13,6 +13,7 @@ failed.  Will promote the standby, update the system catalog
 tables to make the standby master instance as the new master.
 """
 
+from builtins import range
 import os
 import sys
 import signal
@@ -31,7 +32,7 @@ try:
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging, get_logger_if_verbose
     from gppylib import gparray
     from gppylib.userinput import ask_yesno
-except ImportError, e_:
+except ImportError as e_:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
              'have sourced greengage_path.sh.  Detail: ' + str(e_))
 
@@ -211,7 +212,7 @@ def check_original_master_status(options):
 
     recovery_conf_file_location = os.path.join(options.master_data_dir, GP_RECOVERY_CONF_FILE) 
     if not os.path.exists(recovery_conf_file_location):
-        logger.warn('Please make sure the command gpactivatestandby is executed on current Standby host')
+        logger.warning('Please make sure the command gpactivatestandby is executed on current Standby host')
         raise GpActivateStandbyException('Critical required file on standby \"%s\" is not present.' % recovery_conf_file_location)
 
     with open(recovery_conf_file_location) as read_file:
@@ -228,11 +229,11 @@ def check_original_master_status(options):
     cmd = pg.ReadPostmasterTempFile.remote('Read postmaster file', original_master_port, original_master_hostname)
     (file_exists, _, _) = cmd.getResults()
     if file_exists:
-        logger.warn('Appears that there is an active postgres process on %s port=%d' % (original_master_hostname, original_master_port))
-        logger.warn('Need to stop current master before activating the standby.')
-        logger.warn('Rare possibility is just /tmp/.s.PGSQL.%d and /tmp/.s.PGSQL.%d.* files exist on %s.' % (original_master_port, original_master_port, original_master_hostname))
-        logger.warn('Need to delete these files')
-        logger.warn('Then call this utility again.')
+        logger.warning('Appears that there is an active postgres process on %s port=%d' % (original_master_hostname, original_master_port))
+        logger.warning('Need to stop current master before activating the standby.')
+        logger.warning('Rare possibility is just /tmp/.s.PGSQL.%d and /tmp/.s.PGSQL.%d.* files exist on %s.' % (original_master_port, original_master_port, original_master_hostname))
+        logger.warning('Need to delete these files')
+        logger.warning('Then call this utility again.')
         raise GpActivateStandbyException('Active postgres process on master')
  
 #-------------------------------------------------------------------------
@@ -321,7 +322,7 @@ def promote_standby(master_data_dir):
     cmd.run(validateAfter=True)
 
     logger.debug('Waiting for connection...')
-    for i in xrange(600):
+    for i in range(600):
         try:
             dburl = dbconn.DbURL()
             with dbconn.connect(dburl, utility=True, logConn=False) as conn:
@@ -331,7 +332,7 @@ def promote_standby(master_data_dir):
                 dbconn.execSQL(conn, 'CHECKPOINT')
             logger.info('Standby master is promoted')
             return True
-        except pygresql.InternalError, e:
+        except pygresql.InternalError as e:
             pass
         time.sleep(1)
 
@@ -393,7 +394,7 @@ try:
     else:
         sys.exit(0)
     
-except Exception, e_:
+except Exception as e_:
     logger.fatal('Error activating standby master: %s' % str(e_))
     sys.exit(2)
 

@@ -71,10 +71,10 @@ def impl(context, recovery_types, contents):
         hostname = seg_to_display.getSegmentHostName()
         port = seg_to_display.getSegmentPort()
         if recovery_types[index] == "differential":
-            expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+(.+?)[ \t]+([\d,]+)[ \t]+[0-9]+\%".format(hostname, port,
+            expected_msg = r"{}[ \t]+{}[ \t]+{}[ \t]+(.+?)[ \t]+([\d,]+)[ \t]+[0-9]+\%".format(hostname, port,
                                                                                               recovery_types[index])
         else:
-            expected_msg = "{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\%".format(hostname, port,
+            expected_msg = r"{}[ \t]+{}[ \t]+{}[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+\%".format(hostname, port,
                                                                                              recovery_types[index])
         check_stdout_msg(context, expected_msg)
 
@@ -92,7 +92,7 @@ def impl(context):
     # Check that every row exists in the standard out in the specified order.
     # We accept any amount of horizontal whitespace in between columns.
     def check_row(row):
-        split_row = map(lambda str: str.strip(), ''.join(row).split('='))
+        split_row = [str.strip() for str in ''.join(row).split('=')]
         row_pattern = r'[ \t]+=[ \t]+'.join(split_row)
         check_stdout_msg_in_order(context, row_pattern)
 

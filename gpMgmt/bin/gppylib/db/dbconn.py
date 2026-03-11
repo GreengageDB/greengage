@@ -5,6 +5,10 @@
 """
 TODO: module docs
 """
+from __future__ import print_function
+from builtins import oct
+from builtins import range
+from builtins import object
 import sys
 import os
 import stat
@@ -13,7 +17,7 @@ try:
     from pygresql import pgdb
     from gppylib.commands.unix import UserId
 
-except ImportError, e:
+except ImportError as e:
     sys.exit('Error: unable to import module: ' + str(e))
 
 from gppylib import gplog
@@ -21,9 +25,9 @@ from gppylib import gplog
 logger = gplog.get_default_logger()
 
 
-class ConnectionError(StandardError): pass
+class ConnectionError(Exception): pass
 
-class Pgpass():
+class Pgpass(object):
     """ Class for handling .pgpass file.
     """
     entries = []
@@ -37,10 +41,10 @@ class Pgpass():
             return
 
         st_info = os.stat(PGPASSFILE)
-        mode = str(oct(st_info[stat.ST_MODE] & 0777))
+        mode = str(oct(st_info[stat.ST_MODE] & 0o777))
 
-        if mode != "0600":
-            print 'WARNING: password file "%s" has group or world access; permissions should be u=rw (0600) or less' % PGPASSFILE
+        if mode != "0600" and mode != "0o600":
+            print('WARNING: password file "%s" has group or world access; permissions should be u=rw (0600) or less' % PGPASSFILE)
             self.valid_pgpass = False
             return
 
@@ -61,7 +65,7 @@ class Pgpass():
                                  'password': password }
                         self.entries.append(entry)
                     except:
-                        print 'Invalid line in .pgpass file.  Line number %d' % lineno
+                        print('Invalid line in .pgpass file.  Line number %d' % lineno)
                     lineno += 1
             except IOError:
                 pass
@@ -83,7 +87,7 @@ class Pgpass():
     def pgpass_valid(self):
         return self.valid_pgpass
 
-class DbURL:
+class DbURL(object):
     """ DbURL is used to store all of the data required to get at a PG
         or GP database.
 
@@ -103,7 +107,7 @@ class DbURL:
         else:
             self.pghost = hostname
 
-        if port is 0:
+        if port == 0:
             self.pgport = int(os.environ.get('PGPORT', '5432'))
         else:
             self.pgport = int(port)
@@ -118,7 +122,7 @@ class DbURL:
             if self.pguser is None:
                 # fall back to /usr/bin/id
                 self.pguser = UserId.local('Get uid')
-            if self.pguser is None or self.pguser == '':
+            if self.pguser is None or not self.pguser:
                 raise Exception('Both $PGUSER and $USER env variables are not set!')
         else:
             self.pguser = username
@@ -173,7 +177,6 @@ def connect(dburl, utility=False, verbose=False,
     dbhost   = dburl.pghost
     dbport   = int(dburl.pgport)
     dbopt    = options
-    dbtty    = "1"
     dbuser   = dburl.pguser
     dbpasswd = dburl.pgpass
     timeout  = dburl.timeout
@@ -203,10 +206,10 @@ def connect(dburl, utility=False, verbose=False,
 
     for i in range(retries):
         try:
-            cnx  = pgdb._connect_(cstr, dbhost, dbport, dbopt, dbtty, dbuser, dbpasswd)
+            cnx  = pgdb._connect(cstr, dbhost, dbport, dbopt, dbuser, dbpasswd)
             break
 
-        except pgdb.InternalError, e:
+        except pgdb.InternalError as e:
             if 'timeout expired' in str(e):
                 logger.warning('Timeout expired connecting to %s, attempt %d/%d' % (dbbase, i+1, retries))
                 continue
@@ -216,26 +219,20 @@ def connect(dburl, utility=False, verbose=False,
         raise ConnectionError('Failed to connect to %s' % dbbase)
 
     # NOTE: the code to set ALWAYS_SECURE_SEARCH_PATH_SQL below assumes it is not part of an existing transaction
-    conn = pgdb.pgdbCnx(cnx)
+    conn = pgdb.Connection(cnx)
 
+    # NOTE: the code to set ALWAYS_SECURE_SEARCH_PATH_SQL below assumes it is not part of an existing transaction
     #by default, libpq will print WARNINGS to stdout
     if not verbose:
-        cursor=conn.cursor()
-        cursor.execute("SET CLIENT_MIN_MESSAGES='ERROR'")
-        conn.commit()
-        cursor.close()
+        execSQLCloseConnectionOnError(conn, "SET CLIENT_MIN_MESSAGES='ERROR'")
 
     # set client encoding if needed
     if encoding:
-        cursor=conn.cursor()
-        cursor.execute("SET CLIENT_ENCODING='%s'" % encoding)
-        conn.commit()
-        cursor.close()
+        execSQLCloseConnectionOnError(conn, "SET CLIENT_ENCODING='%s'" % encoding)
 
     # unset search path due to CVE-2018-1058
     if unsetSearchPath:
-        ALWAYS_SECURE_SEARCH_PATH_SQL = "SELECT pg_catalog.set_config('search_path', '', false)"
-        execSQL(conn, ALWAYS_SECURE_SEARCH_PATH_SQL).close()
+        execSQLCloseConnectionOnError(conn, "SELECT pg_catalog.set_config('search_path', '', false)")
 
     def __enter__(self):
         return self
@@ -244,6 +241,10 @@ def connect(dburl, utility=False, verbose=False,
     conn.__class__.__enter__, conn.__class__.__exit__ = __enter__, __exit__
     return conn
 
+class GgdbCursor(pgdb.Cursor):
+    # Do not process rows for compatibility with PyGreSQL 4
+    def row_factory(self, row):
+        return row
 
 def execSQL(conn,sql):
     """
@@ -251,7 +252,7 @@ def execSQL(conn,sql):
     Do *NOT* violate that API here without considering
     the existing callers of this function.
     """
-    cursor=conn.cursor()
+    cursor = GgdbCursor(conn)
     cursor.execute(sql)
     return cursor
 
@@ -300,3 +301,12 @@ def executeUpdateOrInsert(conn, sql, expectedRowUpdatesOrInserts):
         raise Exception("SQL affected %s rows but %s were expected:\n%s" % \
                         (cursor.rowcount, expectedRowUpdatesOrInserts, sql))
     return cursor
+
+def execSQLCloseConnectionOnError(conn, sql):
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql)
+            conn.commit()
+    except Exception as e:
+        conn.close()
+        raise e

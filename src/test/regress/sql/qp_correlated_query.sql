@@ -833,7 +833,118 @@ DROP TABLE skip_correlated_t3;
 DROP TABLE skip_correlated_t4;
 reset optimizer_join_order;
 reset optimizer_trace_fallback;
+--------------------------------------------------------------------------------
+-- ORCA should be able to plan and execute correctly skip-level queries, but not
+-- with master-only. Postgres Legacy planner should give an error to skip-level 
+-- query involving distributed or replicated tables.
+--------------------------------------------------------------------------------
+--start_ignore
+DROP TABLE IF EXISTS skip_correlated_distributed;
+DROP TABLE IF EXISTS skip_correlated_random;
+DROP TABLE IF EXISTS skip_correlated_replicated;
+--end_ignore
+CREATE TABLE skip_correlated_distributed (
+    a INT
+) DISTRIBUTED BY (a);
+INSERT INTO skip_correlated_distributed VALUES (1), (2), (3);
 
+CREATE TABLE skip_correlated_random (
+    b INT
+) DISTRIBUTED RANDOMLY;
+INSERT INTO skip_correlated_random VALUES (1), (2), (3);
+
+CREATE TABLE skip_correlated_replicated (
+    c INT
+) DISTRIBUTED REPLICATED;
+INSERT INTO skip_correlated_replicated VALUES(1), (2), (3);
+
+-- easy cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_distributed WHERE a = c
+    )
+) FROM skip_correlated_replicated;
+SELECT (
+    SELECT (
+        SELECT a FROM skip_correlated_distributed WHERE a = c
+    )
+) FROM skip_correlated_replicated ORDER BY a;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_distributed;
+SELECT (
+    SELECT (
+        SELECT b FROM skip_correlated_random WHERE b = a
+    )
+) FROM skip_correlated_distributed ORDER BY b;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_distributed;
+SELECT (
+    SELECT (
+        SELECT c FROM skip_correlated_replicated WHERE c = a
+    )
+) FROM skip_correlated_distributed ORDER BY c;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = a
+    )
+) FROM skip_correlated_distributed;
+
+-- hard cases
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c
+        ) 
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+
+EXPLAIN (COSTS OFF)
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+SELECT (
+    SELECT (
+        SELECT (
+            SELECT a FROM skip_correlated_distributed WHERE a = c and a = b
+        ) as l3 FROM skip_correlated_random ORDER BY l3 LIMIT 1
+    )
+) AS l1 FROM skip_correlated_replicated ORDER BY l1;
+
+EXPLAIN (COSTS OFF)
+SELECT (                                  
+    SELECT (
+        SELECT dbid FROM gp_segment_configuration WHERE dbid = numsegments LIMIT 1
+    )                                                        
+) FROM gp_distribution_policy;
+
+DROP TABLE skip_correlated_distributed;
+DROP TABLE skip_correlated_random;
+DROP TABLE skip_correlated_replicated;
 --------------------------------------------------------------------------------
 -- Ensure ORCA generates the correct plan with the exists clause
 -- for the partitioned table.
@@ -868,6 +979,32 @@ SELECT id FROM offers WHERE EXISTS (
 RESET optimizer_enforce_subplans;
 DROP TABLE offers;
 DROP TABLE contacts;
+--------------------------------------------------------------------------------
+-- Test: ORCA-specific behavior related to distribution requests.
+-- If a join condition has an 'AND' clause and multiple subexpressions that have
+-- the same right-hand side, distribution requests to the outer table
+-- can be lost, making it erroneously require a redistribute motion.
+-- For more info, please refer to the comments inside
+-- CPhysicalJoin::PdshashedMatching
+--------------------------------------------------------------------------------
+EXPLAIN
+SELECT *
+FROM a
+WHERE NOT EXISTS (
+    SELECT *
+    FROM B
+    WHERE (a.j = b.i AND a.i = b.i)
+);
+
+SELECT *
+FROM a
+WHERE NOT EXISTS (
+    SELECT *
+    FROM B
+    WHERE (a.j = b.i AND a.i = b.i)
+);
+
+
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------

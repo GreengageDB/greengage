@@ -2956,6 +2956,8 @@ pgstat_report_resgroup(TimestampTz queueStart, Oid groupid)
 	beentry->st_rsgid = groupid;
 	beentry->st_changecount++;
 	Assert((beentry->st_changecount & 1) == 0);
+
+	elog(DEBUG1, "Reported resource group ID of %d", groupid);
 }
 
 /*

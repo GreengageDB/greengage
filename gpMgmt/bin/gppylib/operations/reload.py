@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from builtins import object
 import os
 import time
 
@@ -12,7 +13,7 @@ from gppylib.userinput import ask_yesno
 
 logger = gplog.get_default_logger()
 
-class GpReload:
+class GpReload(object):
     def __init__(self, options, args):
         self.table_file = options.table_file
         self.port = options.port

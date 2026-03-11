@@ -1,4 +1,5 @@
 @gprecoverseg
+@concourse_cluster_2
 Feature: gprecoverseg tests
 
   @demo_cluster
@@ -736,6 +737,8 @@ Feature: gprecoverseg tests
       And user can start transactions
       And the user runs "gprecoverseg -a"
       Then gprecoverseg should return a return code of 0
+      And the segments are synchronized
+      And the cluster is rebalanced
       And the "primary" segment pg_log directory content preserved
 
 

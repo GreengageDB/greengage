@@ -306,7 +306,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                                5|3|p|p|s|u|sdw2|sdw2|20001|/primary/gpseg3""",
                 "config": "sdw1|20000|/primary/gpseg0 new_1|20000|/primary/gpseg0",
                 "unreachable_hosts": ['new_1'],
-                "expected": "The recovery target segment new_1 \(content 0\) is unreachable."
+                "expected": r"The recovery target segment new_1 \(content 0\) is unreachable."
             },
             {
                 "name": "invalid_failed_hostname_with_4_parameter",
@@ -613,14 +613,14 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 "gparray": self.three_failedover_segs_gparray_str,
                 "new_hosts": ['new_1', 'new_2'],
                 "unreachable_hosts": ['new_1', 'new_2'],
-                "expected": "Cannot recover. The following recovery target hosts are unreachable: \['new_1', 'new_2'\]"
+                "expected": r"Cannot recover. The following recovery target hosts are unreachable: \['new_1', 'new_2'\]"
             },
             {
                 "name": "some_hosts_unreachable",
                 "gparray": self.three_failedover_segs_gparray_str,
                 "new_hosts": ['new_1', 'new_2'],
                 "unreachable_hosts": ['new_2'],
-                "expected": "Cannot recover. The following recovery target hosts are unreachable: \['new_2'\]"
+                "expected": r"Cannot recover. The following recovery target hosts are unreachable: \['new_2'\]"
             },
             {
                 "name": "no_peer_for_failed_seg",
@@ -649,7 +649,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 "gparray": self.three_failedover_segs_gparray_str,
                 "new_hosts": ['new_1','new_2'],
                 "unreachable_existing_hosts": ['sdw2'],
-                "expected": "The recovery source segment sdw2 \(content 0\) is unreachable"
+                "expected": r"The recovery source segment sdw2 \(content 0\) is unreachable"
             },
             {
             "name": "failed_and_live_same_dbid",
@@ -678,7 +678,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                        5|3|p|p|s|u|sdw2|sdw2|20001|/primary/gpseg3""",
             "new_hosts": ['new_1'],
             "unreachable_hosts": ['new_1'],
-            "expected": "Cannot recover. The following recovery target hosts are unreachable: \['new_1'\]"
+            "expected": r"Cannot recover. The following recovery target hosts are unreachable: \['new_1'\]"
             }
         ]
         self.run_fail_tests(tests, self.run_single_GpArray_test)
@@ -707,7 +707,7 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
                 self.assertTrue(test["expected"].strip() != "")
                 # TODO it is possible to match partial strings with regex that might be a typo. Should we instead not
                 #  use Regex and type out the exact error message ?
-                with self.assertRaisesRegexp(Exception, test["expected"]):
+                with self.assertRaisesRe(Exception, test["expected"]):
                     fn_to_test(test)
 
     @patch('gppylib.db.dbconn.connect', side_effect=Exception())
@@ -924,10 +924,10 @@ class RecoveryTripletsFactoryTestCase(GpTestCase):
         segMap = gparray.getSegDbMap()
         gparray_str = io.BytesIO()
         for dbid in sorted(segMap.keys()):
-            gparray_str.write(repr(segMap[dbid]))
+            gparray_str.write(repr(segMap[dbid]).encode('utf-8'))
             #TODO gparray's repr function does not include the unreachable property, so we have to add it explicitly heres
-            gparray_str.write(":unreachable=%s" % segMap[dbid].unreachable)
-            gparray_str.write('\n')
+            gparray_str.write(b":unreachable=%s" % str(segMap[dbid].unreachable).encode('utf-8'))
+            gparray_str.write(b'\n')
 
         return gparray_str.getvalue()
 
@@ -1152,7 +1152,7 @@ class RecoveryTripletsUserConfigFileParserTestCase(GpTestCase):
                 # make sure test does not pass trivially("" will pass assertRaisesRegex)
                 self.assertTrue(test["expected"].strip() != "")
 
-                with self.assertRaisesRegexp(Exception, test["expected"]):
+                with self.assertRaisesRe(Exception, test["expected"]):
                     self.run_single_parser_test(test)
 
     @staticmethod

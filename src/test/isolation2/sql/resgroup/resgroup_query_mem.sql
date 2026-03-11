@@ -29,15 +29,20 @@ sql = ("select memory_available m from "
 qd_mem = int(plpy.execute(sql % -1)[0]["m"])
 qe_mem = int(plpy.execute(sql % 0)[0]["m"])
 ratio1 = int(round(float(qd_mem) / qe_mem))
+notices = []
 
 # 2. use notice to get qe operator mem
 dbname = plpy.execute("select current_database() db")[0]["db"]
 db = DB(dbname=dbname)
+
+def notice_callback(notice):
+    notices.append(notice.message)
+db.set_notice_receiver(notice_callback)
 db.query("set gp_resource_group_enable_recalculate_query_mem = on;")
 
 sql = "select * from t_qmem order by 1"
 db.query(sql)
-qe_opmem_info = db.notices()
+qe_opmem_info = notices
 qe_opmem = int(re.findall(r"op_mem=(\d+)", qe_opmem_info[0])[0])
 
 # 3. get qd operator mem

@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import print_function
+from builtins import object
 import os
 import socket
 import inspect
@@ -13,14 +15,14 @@ class GpDeleteSystem(Command):
         Command.__init__(self, 'run gpdeletesystem', cmd_str)
 
     def run(self, validate=True):
-        print "Running delete system: %s" % self
+        print("Running delete system: %s" % self)
         Command.run(self, validateAfter=validate)
         result = self.get_results()
         return result
 
 
-class TestCluster:
-    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0'):
+class TestCluster(object):
+    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
         """
         hosts: lists of cluster hosts. master host will be assumed to be the first element.
         base_dir: cluster directory
@@ -29,13 +31,14 @@ class TestCluster:
         master_host = 'localhost'
         segments_host = socket.gethostname()
         self.hosts = [master_host, segments_host]
+        self.datadir_prefix = datadir_prefix
 
         if hosts:
             self.hosts = hosts
 
-        self.port_base = '20500'
+        self.port_base = port_base
         self.master_port = os.environ.get('PGPORT', '10300')
-        self.mirror_port_base = '21500'
+        self.mirror_port_base = mirror_port_base
 
         self.gpinitconfig_template = local_path('configs/gpinitconfig_template')
         self.gpinitconfig_mirror_template = local_path('configs/gpinitconfig_mirror_template')
@@ -47,9 +50,9 @@ class TestCluster:
         self.hosts_file = os.path.join(self.base_dir, 'hosts')
         self.gpexpand_file = os.path.join(self.base_dir, 'gpexpand_input')
 
-        self.primary_dir = os.path.join(self.base_dir, 'data/primary')
-        self.mirror_dir = os.path.join(self.base_dir, 'data/mirror')
-        self.master_dir = os.path.join(self.base_dir, 'data/master')
+        self.primary_dir = os.path.join(self.base_dir, self.datadir_prefix, 'primary')
+        self.mirror_dir = os.path.join(self.base_dir, self.datadir_prefix, 'mirror')
+        self.master_dir = os.path.join(self.base_dir, self.datadir_prefix, 'master')
 
         # Test metadata
         # Whether to do gpinitsystem or not
@@ -93,7 +96,7 @@ class TestCluster:
         substitute_strings_in_file(config_template, self.init_file, transforms)
 
     def reset_cluster(self):
-        reset_hosts(self.hosts, test_base_dir = self.base_dir)
+        reset_hosts(self.hosts, self.base_dir, self.datadir_prefix)
 
     def create_cluster(self, with_mirrors=False, mirroring_configuration='group'):
         # Generate the config files to initialize the cluster
@@ -130,18 +133,18 @@ def substitute_strings_in_file(input_file, output_file, sub_dictionary):
     @param output_file: Absolute path of the file to create.
 
     @type sub_dictionary: dictionary @param sub_dictionary: Dictionary that specifies substitution. Key will be replaced with Value.  @rtype bool @returns True if there is at least one substitution made , False otherwise """
-    print "input_file: %s ; output_file: %s ; sub_dictionary: %s" % (input_file, output_file, str(sub_dictionary))
+    print("input_file: %s ; output_file: %s ; sub_dictionary: %s" % (input_file, output_file, str(sub_dictionary)))
     substituted = False
     with open(output_file, 'w') as output_file_object:
         with open(input_file, 'r') as input_file_object:
             for each_line in input_file_object:
                 new_line = each_line
-                for key,value in sub_dictionary.items():
+                for key,value in list(sub_dictionary.items()):
                     new_line = new_line.replace(key, value)
                 if not each_line == new_line:
                     substituted = True
                 output_file_object.write(new_line)
-    print "Substituted: %s" % str(substituted)
+    print("Substituted: %s" % str(substituted))
     return substituted
 
 def local_path(filename):
@@ -160,19 +163,19 @@ def run_shell_command(cmdstr, cmdname = 'shell command', results={'rc':0, 'stdou
     results['stderr'] = result.stderr
 
     if verbose:
-        print "command output: %s" % results['stdout']
+        print("command output: %s" % results['stdout'])
     if results['rc'] != 0:
         if verbose:
-            print "command error: %s" % results['stderr']
+            print("command error: %s" % results['stderr'])
     return results
 
-def reset_hosts(hosts, test_base_dir):
+def reset_hosts(hosts, test_base_dir, datadir_prefix):
 
-    primary_dir = os.path.join(test_base_dir, 'data', 'primary')
-    mirror_dir = os.path.join(test_base_dir, 'data', 'mirror')
-    master_dir = os.path.join(test_base_dir, 'data', 'master')
+    primary_dir = os.path.join(test_base_dir, datadir_prefix, 'primary')
+    mirror_dir = os.path.join(test_base_dir, datadir_prefix, 'mirror')
+    master_dir = os.path.join(test_base_dir, datadir_prefix, 'master')
 
-    host_args = " ".join(map(lambda x: "-h %s" % x, hosts))
+    host_args = " ".join(["-h %s" % x for x in hosts])
     reset_primary_dirs_cmd = "gpssh %s -e 'rm -rf %s; mkdir -p %s'" % (host_args, primary_dir, primary_dir)
     res = run_shell_command(reset_primary_dirs_cmd, 'reset segment dirs', verbose=True)
     if res['rc'] > 0:

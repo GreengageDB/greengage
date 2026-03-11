@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from builtins import object
 import logging
 import optparse
 import os
@@ -83,7 +85,7 @@ class CFile(object):
                 if content[m.end()+1:].startswith('#endif'):
                     return self.skip_func_body(content, m.end())
             return m.end()
-        raise StandardError('unexpected syntax')
+        raise Exception('unexpected syntax')
 
     def to_mock(self):
         """Mock up this file.  The basic idea is to replace function body
@@ -193,7 +195,7 @@ class FuncSignature(object):
     def parse_args(self, arg_string):
         args = []
         arg_string = re.sub(r'\s+', ' ', arg_string)
-        if arg_string == 'void' or arg_string == '':
+        if arg_string == 'void' or not arg_string:
             return args
 
         for (i, arg) in enumerate(arg_string.split(',')):
@@ -212,7 +214,7 @@ class FuncSignature(object):
             # general case
             m = FuncSignature.arg_pat.match(arg.strip())
             if not m:
-                print '%s %s(%s)' % (self.rettype, self.funcname, arg_string)
+                print('%s %s(%s)' % (self.rettype, self.funcname, arg_string))
             argtype = m.group(1)
             argname = m.group(2) if m.group(2) else 'arg' + str(i)
             args.append((argtype.strip(), argname.strip()))
@@ -236,7 +238,7 @@ class FuncSignature(object):
         if body:
             return body
 
-        subscript = re.compile('\[\d*\]$')
+        subscript = re.compile(r'\[\d*\]$')
         # otherwise, general method
         buf = []
         # emit check_expected()

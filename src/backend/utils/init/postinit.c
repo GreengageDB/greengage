@@ -1154,6 +1154,19 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("retrieve connection was not authenticated for unknown reason")));
 		InitRetrieveCtl();
+
+		if (IsResGroupEnabled())
+		{
+			/*
+			 * Initialize now-empty SessionState and apply resource group
+			 * limits.
+			 */
+
+			gp_session_id = RetrieveSessionId();
+
+			SessionState_Init();
+			GPMemoryProtect_Init();
+		}
 	}
 
 	/*

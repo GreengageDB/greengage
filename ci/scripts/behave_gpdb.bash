@@ -11,8 +11,6 @@ function gen_env(){
 
 		source /usr/local/greengage-db-devel/greengage_path.sh
 
-		source gpdb_src/gpAux/gpdemo/gpdemo-env.sh
-
 		if [[ ${FEATURE} == "gpexpand" ]]; then
 			mkdir -p /home/gpadmin/sqldump
 			wget -nv https://downloads.adsw.io/misc/dump.sql.xz -O /home/gpadmin/sqldump/dump.sql.xz
@@ -39,10 +37,6 @@ function _main() {
 				echo "FATAL: BEHAVE_TAGS or BEHAVE_FLAGS not set"
 				exit 1
 		fi
-
-		# Run inside a subshell so it does not pollute the environment after
-		# sourcing greengage_path
-		time (make_cluster)
 
 		time gen_env
 

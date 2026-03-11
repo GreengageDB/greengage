@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+from __future__ import division
+from builtins import range
+from past.utils import old_div
 import threading
 import time
 from gppylib.db import dbconn
@@ -29,12 +33,10 @@ class TestDML(threading.Thread):
         self.prepare()
 
     def run(self):
-        conn = dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False)
-
-        self.loop(conn)
-        self.verify(conn)
-
-        conn.commit()
+        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+            self.loop(conn)
+            self.verify(conn)
+            conn.commit()
 
     def prepare(self):
         sql = '''
@@ -46,12 +48,12 @@ class TestDML(threading.Thread):
             ) DISTRIBUTED BY (c1);
         '''.format(tablename=self.tablename)
 
-        conn = dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False)
-        dbconn.execSQL(conn, sql)
+        with dbconn.connect(dbconn.DbURL(dbname=self.dbname), unsetSearchPath=False) as conn:
+            dbconn.execSQL(conn, sql)
 
-        self.prepare_extra(conn)
+            self.prepare_extra(conn)
 
-        conn.commit()
+            conn.commit()
 
     def prepare_extra(self, conn):
         pass
@@ -72,7 +74,7 @@ class TestDML(threading.Thread):
             self.maxtime = max(self.maxtime, ts - timestamp)
             timestamp = ts
         endtime = time.time()
-        self.avgtime = (endtime - starttime) / self.counter
+        self.avgtime = old_div((endtime - starttime), self.counter)
 
     def loop_step(self):
         return 'select 1'
@@ -85,7 +87,7 @@ class TestDML(threading.Thread):
 
         return self.retval, self.retmsg
 
-    def verify(self):
+    def verify(self, conn):
         pass
 
     def stop(self):
@@ -181,7 +183,7 @@ if __name__ == '__main__':
 
     for dml, job in jobs:
         code, message = job.stop()
-        print '{dml}: {code}, message={message}, avgtime={avgtime}, maxtime={maxtime}'.format(
+        print('{dml}: {code}, message={message}, avgtime={avgtime}, maxtime={maxtime}'.format(
             dml=dml, code=code, message=message,
             avgtime=job.avgtime, maxtime=job.maxtime
-        )
+        ))

@@ -26,6 +26,7 @@ ifeq "$(enable_debug_extensions)" "yes"
                gp_error_handling \
                gp_subtransaction_overflow \
                gp_check_functions \
+               temp_tables_stat \
 			   arenadata_toolkit
 else
 	recurse_targets = gp_sparse_vector \
@@ -39,6 +40,7 @@ else
                gp_error_handling \
                gp_subtransaction_overflow \
                gp_check_functions \
+               temp_tables_stat \
 			   arenadata_toolkit
 endif
 
@@ -104,6 +106,7 @@ installcheck:
 	$(MAKE) -C gp_percentile_agg installcheck
 	$(MAKE) -C gp_subtransaction_overflow installcheck
 	$(MAKE) -C gp_check_functions installcheck
+	$(MAKE) -C temp_tables_stat installcheck
 	$(MAKE) -C arenadata_toolkit installcheck
 	$(MAKE) -C arenadata_toolkit/isolation2 installcheck
 

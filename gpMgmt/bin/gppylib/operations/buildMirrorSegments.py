@@ -1,3 +1,6 @@
+from __future__ import print_function
+from builtins import range
+from builtins import object
 from contextlib import closing
 import os
 import pipes
@@ -97,7 +100,7 @@ def get_recovery_type(file_basename):
 #   liveSegment = segment to recover "from" (in order to restore the failed segment)
 #   failoverSegment = segment to recover "to"
 # In other words, we are recovering the failedSegment to the failoverSegment using the liveSegment.
-class GpMirrorToBuild:
+class GpMirrorToBuild(object):
     def __init__(self, failedSegment, liveSegment, failoverSegment, forceFullSynchronization, differentialSynchronization, recoveryType=None):
         checkNotNone("forceFullSynchronization", forceFullSynchronization)
 
@@ -168,13 +171,13 @@ class GpMirrorToBuild:
         return self.__differentialSynchronization
 
 
-class GpMirrorListToBuild:
-    class Progress:
+class GpMirrorListToBuild(object):
+    class Progress(object):
         NONE = 0
         INPLACE = 1
         SEQUENTIAL = 2
 
-    class Action:
+    class Action(object):
         ADDMIRRORS='add'
         RECOVERMIRRORS='recover'
 
@@ -259,7 +262,7 @@ class GpMirrorListToBuild:
     # Remove any existing progress file of segments that will be recovered by current gprecoverseg execution.
     def remove_existing_progress_files(self, recovery_info_by_host):
         remove_progress_file_cmds = []
-        for hostName, recovery_info_list in recovery_info_by_host.items():
+        for hostName, recovery_info_list in list(recovery_info_by_host.items()):
             for ri in recovery_info_list:
                 remove_progress_file_cmds.append(self._get_remove_cmd("*dbid{}.out".format(ri.target_segment_dbid),
                                                                       hostName))
@@ -313,13 +316,14 @@ class GpMirrorListToBuild:
         self.__logger.info('Triggering FTS probe')
         with dbconn.connect(dbconn.DbURL(port=port)) as conn:
             res = dbconn.execSQL(conn, "SELECT gp_request_fts_probe_scan()")
-        return res.fetchall()
+            return res.fetchall()
+
     def _update_config(self, recovery_info_by_host, gpArray):
         # should use mainUtils.getProgramName but I can't make it work!
         programName = os.path.split(sys.argv[0])[-1]
 
         full_recovery_dbids = {}
-        for host_name, recovery_info_list in recovery_info_by_host.items():
+        for host_name, recovery_info_list in list(recovery_info_by_host.items()):
             for ri in recovery_info_list:
                 if ri.is_full_recovery:
                     full_recovery_dbids[ri.target_segment_dbid] = True
@@ -341,7 +345,7 @@ class GpMirrorListToBuild:
         finally:
             # Reenable Ctrl-C
             signal.signal(signal.SIGINT, signal.default_int_handler)
-            return backout_map
+        return backout_map
 
     def _revert_config_update(self, recovery_results, backout_map):
         if len(backout_map) == 0:
@@ -388,7 +392,7 @@ class GpMirrorListToBuild:
         A detected problem causes an Exception to be raised
         """
 
-        for hostName, segmentArr in GpArray.getSegmentsByHostName(gpArray.getDbList()).iteritems():
+        for hostName, segmentArr in GpArray.getSegmentsByHostName(gpArray.getDbList()).items():
             usedPorts = {}
             usedDataDirectories = {}
             for segment in segmentArr:
@@ -588,7 +592,7 @@ class GpMirrorListToBuild:
         cmds = []
         progress_cmds = []
         era = read_era(gpEnv.getMasterDataDir(), logger=self.__logger)
-        for hostName, recovery_info_list in recovery_info_by_host.items():
+        for hostName, recovery_info_list in list(recovery_info_by_host.items()):
             for ri in recovery_info_list:
                 progressCmd = self._get_progress_cmd(ri.progress_file, ri.target_segment_dbid, hostName, ri.is_differential_recovery)
                 if progressCmd:
@@ -609,7 +613,7 @@ class GpMirrorListToBuild:
     def _do_setup_for_recovery(self, recovery_info_by_host):
         self.__logger.info('Setting up the required segments for recovery')
         cmds = []
-        for host_name, recovery_info_list in recovery_info_by_host.items():
+        for host_name, recovery_info_list in list(recovery_info_by_host.items()):
             cmds.append(gp.GpSegSetupRecovery('Run validation checks and setup data directories for recovery',
                                               recoveryinfo.serialize_list(recovery_info_list),
                                               gplog.get_logger_dir(),
@@ -671,7 +675,7 @@ class GpMirrorListToBuild:
 
         num_workers = min(len(segmentsByHost), self.__parallelDegree)
         operation_list = [RemoteOperation(CleanSharedMem(segments), host=hostName) for hostName, segments in
-                          segmentsByHost.items()]
+                          list(segmentsByHost.items())]
 
         ParallelOperation(operation_list, num_workers).run()
         for operation in operation_list:
@@ -702,7 +706,7 @@ class GpMirrorListToBuild:
         segmentByHost = GpArray.getSegmentsByHostName(segments)
 
         cmds = []
-        for hostName, segments in segmentByHost.iteritems():
+        for hostName, segments in segmentByHost.items():
             cmd = gp.GpSegStopCmd("remote segment stop on host '%s'" % hostName,
                                   gpEnv.getGpHome(), gpEnv.getGpVersion(),
                                   mode='fast', dbs=segments, verbose=gplog.logging_is_verbose(),
@@ -757,7 +761,7 @@ class GpMirrorListToBuild:
                 break
             else:
                 if last_seg_up_count != seg_up_count:
-                    print "\n",
+                    print("\n", end='')
                     #TODO fix - this message prints negative values
                     self.__logger.info("%d of %d segments have been marked down." %
                                        (initial_seg_up_count - seg_up_count, initial_seg_up_count))
@@ -771,7 +775,7 @@ class GpMirrorListToBuild:
                 time_elapsed += 5
 
         if seg_up_count == 0:
-            print "\n",
+            print("\n", end='')
             self.__logger.info("%d of %d segments have been marked down." %
                                (initial_seg_up_count, initial_seg_up_count))
         else:
@@ -791,7 +795,7 @@ class GpMirrorListToBuild:
         segments_to_clean_up_by_host = GpArray.getSegmentsByHostName(segments_to_clean_up)
 
         cmds = []
-        for hostName, segments_to_clean_up in segments_to_clean_up_by_host.iteritems():
+        for hostName, segments_to_clean_up in segments_to_clean_up_by_host.items():
             cmds.append(gp.GpCleanSegmentDirectories("clean segment directories on %s" % hostName,
                                                      segments_to_clean_up, gp.REMOTE, hostName))
 
@@ -827,7 +831,7 @@ class GpMirrorListToBuild:
     #     self.__runWaitAndCheckWorkerPoolForErrorsAndClear(cmds)
 
 
-class GpCleanupSegmentDirectoryDirective:
+class GpCleanupSegmentDirectoryDirective(object):
     def __init__(self, segment):
         checkNotNone("segment", segment)
         self.__segment = segment
@@ -836,7 +840,7 @@ class GpCleanupSegmentDirectoryDirective:
         return self.__segment
 
 
-class GpStopSegmentDirectoryDirective:
+class GpStopSegmentDirectoryDirective(object):
     def __init__(self, segment):
         checkNotNone("segment", segment)
         self.__segment = segment
@@ -845,7 +849,7 @@ class GpStopSegmentDirectoryDirective:
         return self.__segment
 
 
-class GpCopySegmentDirectoryDirective:
+class GpCopySegmentDirectoryDirective(object):
     def __init__(self, source, dest, isTargetReusedLocation):
         """
         @param isTargetReusedLocation if True then the dest location is a cleaned-up location

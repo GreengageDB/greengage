@@ -14,17 +14,23 @@ sudo yum install -y \
     libcurl-devel \
     libevent-devel \
     libkadm5 \
-    libyaml-devel \
+    libtool \
+    libuuid-devel \
+    libuv-devel \
     libxml2-devel \
+    libxslt-devel \
+    libyaml-devel \
     libzstd-devel \
+    libzstd-static \
+    net-tools \
+    openldap-devel \
+    openssl \
     openssl-devel \
+    pam-devel \
+    perl-Env \
     perl-ExtUtils-Embed \
     python-devel \
     python-pip \
     readline-devel \
     xerces-c-devel \
     zlib-devel
-
-sudo pip install conan
-sudo pip install -r python-dependencies.txt
-sudo pip install -r python-developer-dependencies.txt

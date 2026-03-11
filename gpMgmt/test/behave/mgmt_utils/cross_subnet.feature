@@ -1,4 +1,4 @@
-@cross_subnet
+@cross_subnet @skip
 Feature: Tests for a cross_subnet cluster
 
     Scenario: gpinitsystem works across subnets

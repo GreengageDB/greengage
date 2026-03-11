@@ -19,10 +19,7 @@ GPTest.pm:
 
 .PHONY: installcheck
 	
-ifeq "$(findstring ubuntu, $(TEST_OS))" "ubuntu"
-installcheck: gpdiff.pl gpstringsubs.pl
-	@echo "skip gpload test for ubuntu"
-else ifeq "$(findstring CentOS release 6., $(OS))" "CentOS release 6."
+ifeq "$(findstring CentOS release 6., $(OS))" "CentOS release 6."
 installcheck: gpdiff.pl gpstringsubs.pl
 	@echo "skip gpload test for centos6"
 else ifeq "$(findstring CentOS Linux release 7., $(OS))" "CentOS Linux release 7."
@@ -33,15 +30,8 @@ installcheck: gpdiff.pl gpstringsubs.pl
 	@echo "skip gpload test for Red Hat"
 else
 installcheck: gpdiff.pl gpstringsubs.pl
-	# install pytest for python2 and gpload test
-	python2 -m ensurepip --upgrade
-	python2 -m pip install -r pytest_requirement.txt
-	python2 -m pip install pytest-order==0.11.0
-	python2 -m pip install lxml
-
 	@cd gpload && ./TEST.py
-	@export PYTHONPATH=$PYTHONPATH:/usr/lib/python2.7/site-packages/:/usr/lib64/python2.7/site-packages/:/usr/local/greengage-db-devel/lib/python\
-	&& cd gpload2 && python2 -m pytest TEST_local_*
+	@cd gpload2 && python -m pytest TEST_local_*
 endif
 
 clean distclean:

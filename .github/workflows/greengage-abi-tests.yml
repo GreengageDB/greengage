@@ -8,22 +8,7 @@ concurrency:
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - 'concourse/scripts/**'
-      - 'src/**'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '.abi-check/**'
-
-  push:
-    branches:
-      - 6X_STABLE
-    paths:
-      - 'concourse/scripts/**'
-      - 'src/**'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-      - '.abi-check/**'
+    branches: ['**']
 
 env:
   # workaround required for checkout@v3, https://github.com/actions/checkout/issues/1590
@@ -95,8 +80,9 @@ jobs:
       - name: Install dependencies and abi-dumper
         run: |
           sudo gpdb_src/README.ubuntu.bash
-          sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl abi-dumper
+          sudo apt install -y libuv1-dev libpam0g-dev libldap-dev libipc-run-perl abi-dumper python-pip
           sudo ln -fs python2 /usr/bin/python
+          sudo python -m pip install future
 
       - name: Build Greengage
         run: |

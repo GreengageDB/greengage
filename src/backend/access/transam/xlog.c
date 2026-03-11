@@ -12100,6 +12100,7 @@ retry:
 		goto next_record_is_invalid;
 	}
 
+	errno = 0;
 	if (read(readFile, readBuf, XLOG_BLCKSZ) != XLOG_BLCKSZ)
 	{
 		char		fname[MAXFNAMELEN];

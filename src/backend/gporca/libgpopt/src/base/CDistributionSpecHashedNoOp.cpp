@@ -3,14 +3,15 @@
 
 #include "gpopt/base/CDistributionSpecHashedNoOp.h"
 
+#include "gpopt/exception.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CPhysicalMotionHashDistribute.h"
 
 using namespace gpopt;
 
 CDistributionSpecHashedNoOp::CDistributionSpecHashedNoOp(
-	CExpressionArray *pdrgpexpr)
-	: CDistributionSpecHashed(pdrgpexpr, true)
+	CExpressionArray *pdrgpexpr, IMdIdArray *opfamilies)
+	: CDistributionSpecHashed(pdrgpexpr, true, opfamilies, true)
 {
 }
 
@@ -46,8 +47,21 @@ CDistributionSpecHashedNoOp::AppendEnforcers(CMemoryPool *mp,
 	CExpressionArray *pdrgpexprNoOpRedistributionColumns =
 		pdsChildHashed->Pdrgpexpr();
 	pdrgpexprNoOpRedistributionColumns->AddRef();
-	CDistributionSpecHashedNoOp *pdsNoOp = GPOS_NEW(mp)
-		CDistributionSpecHashedNoOp(pdrgpexprNoOpRedistributionColumns);
+
+	IMdIdArray *opfamilies = pdsChildHashed->Opfamilies();
+
+	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution))
+	{
+		if (NULL == opfamilies)
+			GPOS_RAISE(
+				gpopt::ExmaGPOPT, gpdxl::ExmiUnexpectedOp,
+				GPOS_WSZ_LIT(": opfamily must exist for each hash expr"));
+		opfamilies->AddRef();
+	}
+
+	CDistributionSpecHashedNoOp *pdsNoOp =
+		GPOS_NEW(mp) CDistributionSpecHashedNoOp(
+			pdrgpexprNoOpRedistributionColumns, opfamilies);
 	pexpr->AddRef();
 	CExpression *pexprMotion = GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CPhysicalMotionHashDistribute(mp, pdsNoOp), pexpr);

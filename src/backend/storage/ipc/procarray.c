@@ -52,6 +52,7 @@
 #include "access/xact.h"
 #include "access/twophase.h"
 #include "catalog/catalog.h"
+#include "cdb/cdbendpoint.h"
 #include "miscadmin.h"
 #include "port/atomics.h"
 #include "storage/proc.h"
@@ -4880,7 +4881,7 @@ LocalXidGetDistributedXid(TransactionId xid)
 	{
 		DistributedLog_GetDistributedXid(xid, &tstamp, &gxid);
 		AssertImply(gxid != InvalidDistributedTransactionId,
-					tstamp == MyTmGxact->distribTimeStamp);
+					(tstamp == MyTmGxact->distribTimeStamp || MyTmGxact->distribTimeStamp == 0));
 	}
 
 	return gxid;
@@ -4951,8 +4952,12 @@ ResGroupMoveSignalTarget(int sessionId, void *slot, Oid groupId,
 	{
 		PGPROC	   *proc = &allProcs[arrayP->pgprocnos[i]];
 
-		if (proc->mppSessionId != sessionId)
+		/* Retrieve sessions are in utility mode. Grab them too. */
+		if (proc->mppSessionId != sessionId &&
+			!sharedEndpointsContain(proc->pid, sessionId))
+		{
 			continue;
+		}
 
 		/*
 		 * Before, we didn't distinguish entrydb processes from main target

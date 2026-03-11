@@ -146,7 +146,7 @@ function export_gpdb() {
 	tar -czf "${TARBALL}" ./*
 	popd
 
-	cp "${TARBALL}" "${server_build}"
+	ln "${TARBALL}" "${server_build}"
 }
 
 function export_gpdb_extensions() {

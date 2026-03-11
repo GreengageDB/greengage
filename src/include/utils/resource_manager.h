@@ -37,6 +37,10 @@
 #define IsResGroupActivated() \
 	(ResGroupActivated)
 
+#define IsResGroupRoleAllowed() \
+	(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_EXECUTE || \
+	 am_cursor_retrieve_handler)
+
 typedef enum
 {
 	RESOURCE_MANAGER_POLICY_QUEUE,

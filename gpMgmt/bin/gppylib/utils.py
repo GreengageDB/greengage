@@ -1,6 +1,10 @@
+from __future__ import print_function
+from builtins import range
+from builtins import object
 import shutil, filecmp,re
 import os, fcntl, select, getpass, socket
 import stat
+import sys
 try:
     from subprocess32 import *
 except:
@@ -13,6 +17,13 @@ from gppylib.gplog import *
 from socket import gethostbyaddr
 
 logger = get_default_logger()
+
+if sys.version_info[0] == 3:
+    import io
+    StringIO = io.StringIO
+else:
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
 
 _debug=0
 #############
@@ -141,22 +152,21 @@ def openAnything(source):
         return sys.stdin
 
     # try to open with urllib (if source is http, ftp, or file URL)
-    import urllib                         
+    import urllib.request, urllib.parse, urllib.error                         
     try:                                  
-        return urllib.urlopen(source)     
+        return urllib.request.urlopen(source)     
     except (IOError, OSError):            
         pass                              
     
     # try to open with native open function (if source is pathname)
     try:                                  
         return open(source)               
-    except Exception, e: 
+    except Exception as e: 
         print ("Exception occurred opening file %s Error: %s"  % (source, str(e)))                             
         
     
     # treat source as string
-    import StringIO                       
-    return StringIO.StringIO(str(source)) 
+    return StringIO(source)
 def getOs():
     dist=None
     fdesc = None
@@ -188,7 +198,7 @@ def getOs():
             fdesc.close()
     return dist
 def factory(aClass, *args):
-    return apply(aClass,args)
+    return aClass(*args)
 
 def addDicts(a,b):
     c = dict(a)
@@ -201,7 +211,7 @@ def joinPath(a,b,parm=""):
 
 def debug(varname, o):
     if _debug == 1:
-        print "Debug: %s -> %s" %(varname, o)
+        print("Debug: %s -> %s" %(varname, o))
 
 def loadXmlElement(config,elementName):
     fdesc = openAnything(config)
@@ -222,7 +232,7 @@ def docIter(node):
         #have no set order. The values() call
         #gets a list of actual attribute node objects
         #from the dictionary
-        for attr in node.attributes.values():
+        for attr in list(node.attributes.values()):
             yield attr
     for child in node.childNodes:
         #Create a generator for each child,
@@ -290,17 +300,17 @@ def deleteBlock(fileName,beginPattern, endPattern):
                 fdesc.close()
                 os.rename(fileNameTmp,fileName)
         except IOError:
-            print("IOERROR", IOError)
+            print(("IOERROR", IOError))
             sys.exit()
     else:
-        print "***********%s  file does not exits"%(fileName)
+        print("***********%s  file does not exits"%(fileName))
 
 def make_inf_hosts(hp, hstart, hend, istart, iend, hf=None):
     hfArr = []
     inf_hosts=[]
     if None != hf:
         hfArr=hf.split('-')
-    print hfArr 
+    print(hfArr) 
     for h in range(int(hstart), int(hend)+1):
         host = '%s%d' % (hp, h)
         for i in range(int(istart), int(iend)+1):
@@ -324,7 +334,7 @@ def copyFile(srcDir,srcFile, destDir, destFile):
             result=pipe.read().strip()
             #debug ("result",result)
         else:
-            print "no such file or directory " + filePath
+            print("no such file or directory " + filePath)
     except OSError:
         print ("OS Error occurred")
     return result
@@ -341,7 +351,7 @@ def parseKeyColonValueLines(str):
             continue
         colon = line.find(":")
         if colon == -1:
-            logger.warn("Error parsing data, no colon on line %s" % line)
+            logger.warning("Error parsing data, no colon on line %s" % line)
             return None
         key = line[:colon]
         value = line[colon+1:]
@@ -353,7 +363,7 @@ def sortedDictByKey(di):
     return  [ (k,di[k]) for k in sorted(di.keys())]
 
 
-class TableLogger:
+class TableLogger(object):
 
     """
     Use this by constructing it, then calling warn, info, and infoOrWarn with arrays of columns, then outputTable
@@ -448,7 +458,7 @@ class TableLogger:
                 msg = "".join(outLine)
 
                 if doWarn:
-                    self.logger.warn(msg)
+                    self.logger.warning(msg)
                 else:
                     self.logger.info("   " + msg) # add 3 so that lines will line up even with the INFO and WARNING stuff on front
 
@@ -557,3 +567,36 @@ def validateHostnameAddress(hostname, address):
                 address, hostname, resolved_address_list))
         return False
     return True
+
+def get_dist_info():
+    dist_family = None
+    major_version = None
+
+    def get_value(line):
+        line_info = line.split("=")
+        if len(line_info) == 2:
+            return line_info[1].strip(' "\n')
+        return None
+
+    def get_major_version(line):
+        value = get_value(line)
+        if value is None:
+            return None
+        # match first number as major version
+        groups = re.match(r"(\d+)", value)
+        if groups and groups.lastindex >= 1:
+            return int(groups.group(1))
+        else:
+            return None
+
+    with open('/etc/os-release') as f:
+        for line in f:
+            if line.startswith("ID=") and dist_family is None:
+                dist_family = get_value(line)
+            elif line.startswith("ID_LIKE="):
+                dist_family = get_value(line)
+            elif line.startswith("VERSION=") and major_version is None:
+                major_version = get_major_version(line)
+            elif line.startswith("VERSION_ID="):
+                major_version = get_major_version(line)
+    return dist_family, major_version

@@ -17,6 +17,7 @@ Output:
 
 	e.g. linux 1073741824
 """
+from __future__ import print_function
 
 import sys, os, getopt
 
@@ -30,34 +31,34 @@ opt['-p'] = False
 def usage(exitarg):
     help_path = os.path.join(sys.path[0], '..', 'docs', 'cli_help', script_name + '_help');
     try:
-	f = open(help_path);
-	for line in f: 
-	    print line,
+        f = open(help_path);
+        for line in f: 
+            print(line, end=' ')
     except:
-        print __doc__
+        print(__doc__)
     sys.exit(exitarg)
 
 #############
 def print_version():
-    print '%s version $Revision$' % script_name
+    print('%s version $Revision$' % script_name)
     sys.exit(0)
 
 ################
 def parseCommandLine():
     global opt
     try:
-	(options, args) = getopt.getopt(sys.argv[1:], '?amp', ['version'])
-    except Exception, e:
-	usage('Error: ' + str(e))
+        (options, args) = getopt.getopt(sys.argv[1:], '?amp', ['version'])
+    except Exception as e:
+        usage('Error: ' + str(e))
 
     for (switch, val) in options:
-	if (switch == '-?'): usage(0)
-	elif switch == '--version': print_version()
-	else: opt[switch] = True
+        if (switch == '-?'): usage(0)
+        elif switch == '--version': print_version()
+        else: opt[switch] = True
 
     val = False
     for k in opt: 
-	val = val or opt[k]
+        val = val or opt[k]
     if not val: opt['-a'] = True
 
 
@@ -67,12 +68,12 @@ def run(cmd):
     ok = False
     out = None
     try:
-	f = os.popen(cmd)
-	out = f.read()
-	ok = not f.close()
+        f = os.popen(cmd)
+        out = f.read()
+        ok = not f.close()
     except:
-	f.close()
-	ok = False
+        f.close()
+        ok = False
 
     return (ok, out)
 
@@ -87,29 +88,29 @@ def getPlatform():
 ################
 def getMemory():
     if getPlatform() == 'linux':
-	ok, out = run("sh -c 'cat /proc/meminfo | grep MemTotal'")
-	if not ok: return '?'
-	list = out.strip().split(' ')
-	val = int(list[len(list) - 2])
-	factor = list[len(list) - 1]
-	if factor == 'kB': return val * 1024
-	return '?'
+        ok, out = run("sh -c 'cat /proc/meminfo | grep MemTotal'")
+        if not ok: return '?'
+        list = out.strip().split(' ')
+        val = int(list[len(list) - 2])
+        factor = list[len(list) - 1]
+        if factor == 'kB': return val * 1024
+        return '?'
 
     if getPlatform() == 'darwin':
-	ok, out = run("sysctl hw.memsize")
-	if not ok: return '?'
-	list = out.strip().split(' ')
-	val = int(list[1])
-	return val
-	
+        ok, out = run("sysctl hw.memsize")
+        if not ok: return '?'
+        list = out.strip().split(' ')
+        val = int(list[1])
+        return val
+
     if getPlatform() == 'sunos5':
-	ok, out = run("sh -c \"prtconf | awk '/^Memory/{print}'\"")
-	if not ok: return '?'
-	list = out.strip().split(' ')
-	val = int(list[2])
-	factor = list[3]
-	if factor == 'Megabytes': return val * 1024 * 1024
-	return '?'
+        ok, out = run("sh -c \"prtconf | awk '/^Memory/{print}'\"")
+        if not ok: return '?'
+        list = out.strip().split(' ')
+        val = int(list[2])
+        factor = list[3]
+        if factor == 'Megabytes': return val * 1024 * 1024
+        return '?'
 
     return '?'
 
@@ -118,16 +119,16 @@ def getMemory():
 parseCommandLine()
 if opt['-a'] or opt['-p']:
     try: 
-	v = getPlatform()
+        v = getPlatform()
     except:
-	v = '?'
-    print v,
+        v = '?'
+    print(v, end=' ')
 
 if opt['-a'] or opt['-m']:
     try:
-	v = getMemory()
+        v = getMemory()
     except:
-	v = '?'
-    print v,
+        v = '?'
+    print(v, end=' ')
 
-print
+print()

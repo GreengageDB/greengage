@@ -1,3 +1,4 @@
+from builtins import object
 import sys
 import signal
 from contextlib import closing
@@ -51,7 +52,7 @@ class ReconfigDetectionSQLQueryCommand(base.SQLCommand):
         dbconn.execSQL(self.cancel_conn, self.query)
 
 
-class GpSegmentRebalanceOperation:
+class GpSegmentRebalanceOperation(object):
     def __init__(self, gpEnv, gpArray, batch_size, segment_batch_size, replay_lag):
         self.gpEnv = gpEnv
         self.gpArray = gpArray
@@ -99,7 +100,7 @@ class GpSegmentRebalanceOperation:
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             self.logger.info("Stopping unbalanced primary segments...")
-            for hostname in unbalanced_primary_segs.keys():
+            for hostname in list(unbalanced_primary_segs.keys()):
                 cmd = GpSegStopCmd("stop unbalanced primary segs",
                                    self.gpEnv.getGpHome(),
                                    self.gpEnv.getGpVersion(),
@@ -122,10 +123,10 @@ class GpSegmentRebalanceOperation:
             allSegmentsStopped = (failed_count == 0)
 
             if not allSegmentsStopped:
-                self.logger.warn("%d segments failed to stop.  A full rebalance of the")
-                self.logger.warn("system is not possible at this time.  Please check the")
-                self.logger.warn("log files, correct the problem, and run gprecoverseg -r")
-                self.logger.warn("again.")
+                self.logger.warning("%d segments failed to stop.  A full rebalance of the")
+                self.logger.warning("system is not possible at this time.  Please check the")
+                self.logger.warning("log files, correct the problem, and run gprecoverseg -r")
+                self.logger.warning("again.")
                 self.logger.info("gprecoverseg will continue with a partial rebalance.")
 
             pool.empty_completed_items()
@@ -158,7 +159,7 @@ class GpSegmentRebalanceOperation:
                 sys.argv = original_sys_args
                 self.logger.info("==============================END ANOTHER RECOVER==========================================")
 
-        except Exception, ex:
+        except Exception as ex:
             raise ex
         finally:
             pool.join()

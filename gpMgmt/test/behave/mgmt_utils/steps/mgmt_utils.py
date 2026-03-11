@@ -1,3 +1,10 @@
+from __future__ import print_function
+from __future__ import division
+from builtins import next
+from builtins import filter
+from builtins import map
+from builtins import range
+from past.utils import old_div
 import codecs
 import math
 import fnmatch
@@ -10,14 +17,14 @@ import platform
 import shutil
 import socket
 import tempfile
-import thread
+import _thread
 import time
 from contextlib import closing
 try:
     from subprocess32 import check_output, Popen, PIPE
 except:
     from subprocess import check_output, Popen, PIPE
-import commands
+import subprocess
 from collections import defaultdict
 
 import psutil
@@ -44,31 +51,28 @@ from test.behave_utils.gpexpand_dml import TestDML
 from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 from gppylib.parseutils import canonicalize_address
+from gppylib.utils import get_dist_info
 
 default_locale = None
-master_data_dir = os.environ.get('MASTER_DATA_DIRECTORY')
-if master_data_dir is None:
-    raise Exception('Please set MASTER_DATA_DIRECTORY in environment')
+master_data_dir = None
 
 def show_all_installed(gphome):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
-        return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \$1}'" % gphome
+    name = get_dist_info()[0]
+    if 'debian' in name:
+        return "dpkg --get-selections --admindir=%s/share/packages/database/deb | awk '{print \\$1}'" % gphome
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return "rpm -qa --dbpath %s/share/packages/database" % gphome
     else:
-        raise Exception('UNKNOWN platform: %s' % str(x))
+        raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_native_package_command(gphome, full_gppkg_name):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_info()[0]
+    if 'debian' in name:
         return 'fakeroot dpkg --force-not-root --log=/dev/null --instdir=%s --admindir=%s/share/packages/database/deb -r %s' % (gphome, gphome, full_gppkg_name)
     elif 'centos' in name or 'red hat enterprise linux' in name or 'oracle linux server' in name or 'rocky linux' or 'ol' in name:
         return 'rpm -e %s --dbpath %s/share/packages/database' % (full_gppkg_name, gphome)
     else:
-        raise Exception('UNKNOWN platform: %s' % str(x))
+        raise Exception('UNKNOWN platform: %s' % name)
 
 def remove_gppkg_archive_command(gphome, gppkg_name):
     return 'rm -f %s/share/packages/archive/%s.gppkg' % (gphome, gppkg_name)
@@ -80,15 +84,24 @@ def create_local_demo_cluster(context, extra_config='', with_mirrors='true', wit
         num_primaries = os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3)
 
     os.environ['PGPORT'] = '15432'
+    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+    global master_data_dir
+    master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+    os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+
     cmd = """
         cd ../gpAux/gpdemo &&
         export DEMO_PORT_BASE={port_base} &&
         export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} &&
+        export PGPORT={pgport} &&
+        export MASTER_DATA_DIRECTORY={master_data_dir} &&
         export WITH_STANDBY={with_standby} &&
         export WITH_MIRRORS={with_mirrors} &&
         ./demo_cluster.sh -d && ./demo_cluster.sh -c &&
         {extra_config} ./demo_cluster.sh
     """.format(port_base=os.getenv('PORT_BASE', 15432),
+               pgport=os.getenv('PGPORT', 15432),
+               master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                num_primary_mirror_pairs=num_primaries,
                with_mirrors=with_mirrors,
                with_standby=with_standby,
@@ -150,10 +163,6 @@ def impl(context, checksum_toggle):
 
 @given('the cluster is generated with "{num_primaries}" primaries only')
 def impl(context, num_primaries):
-    os.environ['PGPORT'] = '15432'
-    demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
-    os.environ['MASTER_DATA_DIRECTORY'] = "%s/datadirs/qddir/demoDataDir-1" % demoDir
-
     create_local_demo_cluster(context, with_mirrors='false', with_standby='false', num_primaries=num_primaries)
 
     context.gpexpand_mirrors_enabled = False
@@ -283,19 +292,27 @@ def impl(context, checksum_toggle):
             is_ok = False
 
     if not is_ok:
-        stop_database(context)
+        stop_database_if_started(context)
 
         os.environ['PGPORT'] = '15432'
         port_base = os.getenv('PORT_BASE', 15432)
+        demoDir = os.path.abspath("%s/../gpAux/gpdemo" % os.getcwd())
+        global master_data_dir
+        master_data_dir = "%s/datadirs/qddir/demoDataDir-1" % demoDir
+        os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
 
         cmd = """
         cd ../gpAux/gpdemo; \
             export DEMO_PORT_BASE={port_base} && \
             export NUM_PRIMARY_MIRROR_PAIRS={num_primary_mirror_pairs} && \
+            export PGPORT={pgport} &&
+            export MASTER_DATA_DIRECTORY={master_data_dir} &&
             export WITH_MIRRORS={with_mirrors} && \
             ./demo_cluster.sh -d && ./demo_cluster.sh -c && \
             env EXTRA_CONFIG="HEAP_CHECKSUM={checksum_toggle}" ./demo_cluster.sh
         """.format(port_base=port_base,
+                   pgport=os.getenv('PGPORT', 15432),
+                   master_data_dir=os.getenv('MASTER_DATA_DIRECTORY', master_data_dir),
                    num_primary_mirror_pairs=os.getenv('NUM_PRIMARY_MIRROR_PAIRS', 3),
                    with_mirrors='true',
                    checksum_toggle=checksum_toggle)
@@ -410,8 +427,8 @@ def impl(context, env_var):
 @given('all files in pg_xlog directory are deleted from data directory of preferred primary of content {content_ids}')
 def impl(context, content_ids):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentPreferredRole() == ROLE_PRIMARY and
-                      seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')], all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentPreferredRole() == ROLE_PRIMARY and
+                      seg.getSegmentContentId() in [int(c) for c in content_ids.split(',')]]
     for seg in segments:
         cmd = Command(name="Remove pg_xlog files",
                       cmdStr='rm -rf {}'.format(os.path.join(seg.getSegmentDataDirectory(), 'pg_xlog')),
@@ -697,7 +714,7 @@ def impl(context):
     command = """timeout 10m
     bash -c "while sleep 0.1;
     do if ps ux | grep [g]pcreateseg ;
-    then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \$2}' | xargs kill ;
+    then sleep 1 && ps ux | grep [g]pcreateseg |awk '{print \\$2}' | xargs kill ;
     break 2; fi; done" """
     run_async_command(context, command)
 
@@ -857,7 +874,7 @@ def impl(context, command, out_msg, num):
 
     match_count = len(re.findall(out_msg, context.stdout_message))
     if match_count != int(num):
-        raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, count, msg_list))
+        raise Exception("Expected %s to occur %s times. Found %d. stdout: %s" % (out_msg, num, match_count, msg_list))
 
 @given('the user records the current timestamp in log_timestamp table')
 @when('the user records the current timestamp in log_timestamp table')
@@ -907,7 +924,7 @@ def impl(context, command, called_command, num, args):
 
     if len(matches) != int(num):
         raise Exception("Expected %s to occur with %s args %s times. Found %d. \n %s"
-                        % (called_command, args, num, len(matches), context.stdout_message))
+                        % (called_command, args, int(num), len(matches), context.stdout_message))
 
 
 @then('{command} should only spawn up to {num} workers in WorkerPool')
@@ -916,11 +933,11 @@ def impl(context, command, num):
     matches = lines_matching_both(context.stdout_message, workerPool_out, command)
 
     for matched_line in matches:
-        iw_re = re.search('initialized with (\d+) workers', matched_line)
+        iw_re = re.search(r'initialized with (\d+) workers', matched_line)
         init_workers = int(iw_re.group(1))
         if init_workers > int(num):
             raise Exception("Expected Workerpool for %s to be initialized with %d workers. Found %d. \n %s"
-                            % (command, num, init_workers, context.stdout_message))
+                            % (command, int(num), init_workers, context.stdout_message))
 
 
 @given('{command} should return a return code of {ret_code}')
@@ -1094,7 +1111,7 @@ def impl(context):
                 break
 
         if not found_match:
-            print context.stored_rows
+            print(context.stored_rows)
             raise Exception("'%s' not found in stored rows" % row)
 
 
@@ -1202,11 +1219,11 @@ def impl(context, options):
         query = """select distinct content, hostname from gp_segment_configuration order by content limit 2;"""
         cursor = dbconn.execSQL(conn, query)
 
-    try:
-        _, master_hostname = cursor.fetchone()
-        _, segment_hostname = cursor.fetchone()
-    except:
-        raise Exception("Did not get two rows from query: %s" % query)
+        try:
+            _, master_hostname = cursor.fetchone()
+            _, segment_hostname = cursor.fetchone()
+        except:
+            raise Exception("Did not get two rows from query: %s" % query)
 
     # if we have two hosts, assume we're testing on a multinode cluster
     init_standby(context, master_hostname, options, segment_hostname)
@@ -1327,7 +1344,7 @@ def impl(context, path, perm, host):
 
 @then('rely on environment.py to restore path permissions')
 def impl(context):
-    print "go look in environment.py to see how it uses the path and permissions on context to make sure it's cleaned up"
+    print("go look in environment.py to see how it uses the path and permissions on context to make sure it's cleaned up")
 
 
 @when('the user runs pg_controldata against the standby data directory')
@@ -1409,7 +1426,7 @@ def stop_segments_on_contentID(context, role, contents):
 def stop_segments(context, where_clause):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
 
-    segments = filter(where_clause, gparray.getDbList())
+    segments = list(filter(where_clause, gparray.getDbList()))
     print("Stopping segments: {}".format(segments))
     for seg in segments:
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
@@ -1444,7 +1461,7 @@ def stop_all_primary_or_mirror_segments(context, segment_type):
 def stop_segments_immediate(context, where_clause):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
 
-    segments = filter(where_clause, gparray.getDbList())
+    segments = list(filter(where_clause, gparray.getDbList()))
     for seg in segments:
         # For demo_cluster tests that run on the CI gives the error 'bash: pg_ctl: command not found'
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
@@ -1507,8 +1524,8 @@ def impl(context, message):
             if message in column:
                 return
 
-    print context.stored_rows
-    print message
+    print(context.stored_rows)
+    print(message)
     raise Exception("'%s' not found in stored rows" % message)
 
 
@@ -1531,7 +1548,7 @@ def impl(context, second):
 def get_opened_files(filename, pidfile):
     cmd = "PATH=$PATH:/usr/bin:/usr/sbin lsof -p `cat %s` | grep %s | wc -l" % (
     pidfile, filename)
-    return commands.getstatusoutput(cmd)
+    return subprocess.getstatusoutput(cmd)
 
 
 @when('table "{tablename}" is dropped in "{dbname}"')
@@ -1653,7 +1670,7 @@ def impl(context, seg):
     elif seg == "master":
         hostname = get_master_hostname()[0][0]
 
-    cmd = Command(name="get bg pid", cmdStr="ps ux | grep pid_background_script.py | grep -v grep | awk '{print \$2}'",
+    cmd = Command(name="get bg pid", cmdStr="ps ux | grep pid_background_script.py | grep -v grep | awk '{print \\$2}'",
                   remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
     pids = cmd.get_stdout().splitlines()
@@ -1746,7 +1763,7 @@ def impl(context, seg):
     # This pid is no longer associated with a
     # running process and won't be recycled for long enough that tests
     # have finished.
-    cmd = Command(name="get non-existing pid", cmdStr="echo \$\$", remoteHost=hostname, ctxt=REMOTE)
+    cmd = Command(name="get non-existing pid", cmdStr="echo \\$\\$", remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
     pid = cmd.get_results().stdout.strip()
 
@@ -1923,14 +1940,14 @@ def impl(context, seq_name, last_value, dbname):
 @given('the user runs the command "{cmd}" in the background')
 @when('the user runs the command "{cmd}" in the background')
 def impl(context, cmd):
-    thread.start_new_thread(run_command, (context, cmd))
+    _thread.start_new_thread(run_command, (context, cmd))
     time.sleep(10)
 
 
 @given('the user runs the command "{cmd}" in the background without sleep')
 @when('the user runs the command "{cmd}" in the background without sleep')
 def impl(context, cmd):
-    thread.start_new_thread(run_command, (context, cmd))
+    _thread.start_new_thread(run_command, (context, cmd))
 
 
 # For any pg_hba.conf line with `host ... trust`, its address should only contain FQDN
@@ -1975,7 +1992,7 @@ def impl(context, filename, output):
     with open(filename) as fr:
         for line in fr:
             contents = line.strip()
-    print contents
+    print(contents)
     check_stdout_msg(context, output)
 
 @then('verify that the last line of the file "{filename}" in the master data directory {contain} the string "{output}"')
@@ -2021,7 +2038,7 @@ def impl(context, filename, some, output):
         valuesShouldExist = False
     else:
         raise Exception("only 'some' and 'no' are valid inputs")
-    regexStr = "%s%s" % ("^[\s]*", output)
+    regexStr = "%s%s" % (r"^[\s]*", output)
     pat = re.compile(regexStr)
     file_path = os.path.join(master_data_dir, filename)
     with open(file_path) as fr:
@@ -2102,7 +2119,7 @@ def impl(context, filename, contain, output):
         cmd = Command(name='Running remote command: %s' % cmd_str, cmdStr=cmd_str)
         cmd.run(validateAfter=True)
 
-        actual = cmd.get_stdout().decode('utf-8')
+        actual = cmd.get_stdout()
         if valuesShouldExist and (output not in actual):
                 raise Exception('File %s on host %s does not contain "%s"' % (filepath, host, output))
         if (not valuesShouldExist) and (output in actual):
@@ -2196,6 +2213,29 @@ def impl(context, dbname):
     drop_database_if_exists(context, dbname)
     create_database(context, dbname)
 
+@given('database with special characters "{dbname}" is created if not exists')
+@when('database with special characters "{dbname}" is created if not exists')
+@then('database with special characters "{dbname}" is created if not exists')
+def impl(context, dbname):
+    context.exception = None    
+    if not check_db_exists(dbname.replace("'", "''")):
+        createdb_cmd = 'psql -d postgres -c \'CREATE DATABASE "%s";\'' % dbname.replace('"', '""')
+        run_command(context, createdb_cmd)
+    if context.exception:
+        raise context.exception
+
+@given('database with special characters "{dbname}" is dropped if exists')
+@when('database with special characters "{dbname}" is dropped if exists')
+@then('database with special characters "{dbname}" is dropped if exists')
+def impl(context, dbname):
+    context.exception = None    
+    if check_db_exists(dbname.replace("'", "''")):
+        dropdb_cmd = 'psql -d postgres -c \'DROP DATABASE "%s";\'' % dbname.replace('"', '""')
+        run_command(context, dropdb_cmd)
+    if context.exception:
+        raise context.exception
+
+
 @then('validate gpcheckcat logs contain skipping ACL and Owner tests')
 def imp(context):
     dirname = 'gpAdminLogs'
@@ -2217,7 +2257,7 @@ def imp(context):
 @then('validate and run gpcheckcat repair')
 def impl(context):
     context.execute_steps(u'''
-        Then gpcheckcat should print "repair script\(s\) generated in dir gpcheckcat.repair.*" to stdout
+        Then gpcheckcat should print "repair script\\(s\\) generated in dir gpcheckcat.repair.*" to stdout
         Then the path "gpcheckcat.repair.*" is found in cwd "1" times
         Then run all the repair scripts in the dir "gpcheckcat.repair.*"
         And the path "gpcheckcat.repair.*" is removed from current working directory
@@ -2513,6 +2553,30 @@ def impl(context, sql, boolean):
         if _str2bool(result) != _str2bool(boolean):
             raise Exception("sql output '%s' is not same as '%s'" % (result, boolean))
 
+@then('wait until the history of database with special characters "{dbname}" appears')
+def impl(context, dbname):
+    escape_dbname = dbname.replace('"', '\\"')
+    cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "select count(*) > 0 from queries_history where db=\'%s\';"' % escape_dbname)
+    start_time = current_time = datetime.now()
+    result = None
+    while (current_time - start_time).seconds < 120:
+        cmd.run()
+        if cmd.get_return_code() != 0:
+            break
+        result = cmd.get_stdout()
+        if _str2bool(result):
+            break
+        time.sleep(2)
+        current_time = datetime.now()
+
+    if cmd.get_return_code() != 0:
+        context.ret_code = cmd.get_return_code()
+        context.error_message = 'psql internal error: %s' % cmd.get_stderr()
+        check_return_code(context, 0)
+    else:
+        if not _str2bool(result):
+            raise Exception("history of '%s' did not appear" % (dbname))
+
 @then('check that the result from boolean sql "{sql}" is "{boolean}"')
 def impl(context, sql, boolean):
     cmd = Command(name='psql', cmdStr='psql --tuples-only -d gpperfmon -c "%s"' % sql)
@@ -2634,6 +2698,14 @@ def impl(context):
     raise Exception("File: %s is empty" % gpdb_alert_file_path_src)
 
 
+@given("_queries_tail.dat is not clogged")
+def impl(context):
+    filename = '%s/gpperfmon/data/_queries_tail.dat' % os.getenv("MASTER_DATA_DIRECTORY")
+    with open(filename, 'w') as f:
+        f.truncate()
+    filename = '%s/gpperfmon/data/queries_tail.dat' % os.getenv("MASTER_DATA_DIRECTORY")
+    with open(filename, 'w') as f:
+        f.truncate()
 
 @then('the file with the fake timestamp no longer exists')
 def impl(context):
@@ -2844,8 +2916,8 @@ def impl(context, has, expected_file):
 def impl(context, expected_file, content_ids):
     content_list = [int(c) for c in content_ids.split(',')]
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.content in content_list, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list]
     host_to_seg_dbids = {}
     for seg in segments:
         segHost = seg.getSegmentHostName()
@@ -2854,7 +2926,7 @@ def impl(context, expected_file, content_ids):
         else:
             host_to_seg_dbids[segHost] = ['dbid{}'.format(seg.dbid)]
 
-    for segHost, expected_files_on_host in host_to_seg_dbids.items():
+    for segHost, expected_files_on_host in list(host_to_seg_dbids.items()):
         log_dir = "%s/gpAdminLogs" % os.path.expanduser("~")
         listdir_cmd = Command(name="list logfiles on host",
                               cmdStr="ls -l {}/{}".format(log_dir, expected_file),
@@ -2885,8 +2957,8 @@ def impl(context, expected_file, content_ids):
 def impl(context, content_ids):
     content_list = [int(c) for c in content_ids.split(',')]
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    segments = filter(lambda seg: seg.getSegmentRole() == ROLE_MIRROR and
-                                  seg.content in content_list, all_segments)
+    segments = [seg for seg in all_segments if seg.getSegmentRole() == ROLE_MIRROR and
+                                  seg.content in content_list]
     for seg in segments:
         segHost = seg.getSegmentHostName()
         segDbid = seg.getSegmentDbId()
@@ -2972,7 +3044,6 @@ def impl(context, command, target):
 @then('verify that a role "{role_name}" exists in database "{dbname}"')
 def impl(context, role_name, dbname):
     query = "select rolname from pg_roles where rolname = '%s'" % role_name
-    conn = dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)
     try:
         result = getRows(dbname, query)[0][0]
         if result != role_name:
@@ -3053,30 +3124,32 @@ def _create_working_directory(context, working_directory, mode=''):
         os.mkdir(context.working_directory)
 
 
-def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group'):
+def _create_cluster(context, master_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group', datadir_prefix='data', port_base='20500', mirror_port_base='21500'):
     if segment_host_list == "":
         segment_host_list = []
     else:
         segment_host_list = segment_host_list.split(",")
 
     global master_data_dir
-    master_data_dir = os.path.join(context.working_directory, 'data/master/gpseg-1')
+    master_data_dir = os.path.join(context.working_directory, datadir_prefix, 'master', 'gpseg-1')
     os.environ['MASTER_DATA_DIRECTORY'] = master_data_dir
+    os.environ['PGPORT'] = '10300'
+    context.datadir_prefix = datadir_prefix
 
     try:
         with dbconn.connect(dbconn.DbURL(dbname='template1'), unsetSearchPath=False) as conn:
             curs = dbconn.execSQL(conn, "select count(*) from gp_segment_configuration where role='m';")
             count = curs.fetchall()[0][0]
             if not with_mirrors and count == 0:
-                print "Skipping creating a new cluster since the cluster is primary only already."
+                print("Skipping creating a new cluster since the cluster is primary only already.")
                 return
             elif with_mirrors and count > 0:
-                print "Skipping creating a new cluster since the cluster has mirrors already."
+                print("Skipping creating a new cluster since the cluster has mirrors already.")
                 return
     except:
         pass
 
-    testcluster = TestCluster(hosts=[master_host]+segment_host_list, base_dir=context.working_directory,hba_hostnames=hba_hostnames)
+    testcluster = TestCluster(hosts=[master_host]+segment_host_list, base_dir=context.working_directory, hba_hostnames=hba_hostnames, datadir_prefix=datadir_prefix, port_base=port_base, mirror_port_base=mirror_port_base)
     testcluster.reset_cluster()
     testcluster.create_cluster(with_mirrors=with_mirrors, mirroring_configuration=mirroring_configuration)
     context.gpexpand_mirrors_enabled = with_mirrors
@@ -3096,6 +3169,10 @@ def impl(context, master_host, segment_host_list, hba_hostnames):
 @given('a cluster is created with mirrors on "{master_host}" and "{segment_host_list}"')
 def impl(context, master_host, segment_host_list):
     _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group')
+
+@given('a cluster is created with mirrors on "{master_host}" and "{segment_host_list}" from fixture')
+def impl(context, master_host, segment_host_list):
+    _create_cluster(context, master_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', datadir_prefix='', port_base='20000', mirror_port_base='21000')
 
 @given('a cluster is created with "{mirroring_configuration}" segment mirroring on "{master_host}" and "{segment_host_list}"')
 def impl(context, mirroring_configuration, master_host, segment_host_list):
@@ -3138,7 +3215,7 @@ def impl(context, num_of_segments, num_of_hosts, hostnames):
 
 @given('there are no gpexpand_inputfiles')
 def impl(context):
-    map(os.remove, glob.glob("gpexpand_inputfile*"))
+    list(map(os.remove, glob.glob("gpexpand_inputfile*")))
 
 @given('there are no gpexpand tablespace input configuration files')
 def impl(context):
@@ -3241,15 +3318,11 @@ sdw1|sdw1|21502|/data/gpdata/gpexpand/data/mirror/gpseg2|8|2|m"""
 
 @given('the master pid has been saved')
 def impl(context):
-    data_dir = os.path.join(context.working_directory,
-                            'data/master/gpseg-1')
-    context.master_pid = gp.get_postmaster_pid_locally(data_dir)
+    context.master_pid = gp.get_postmaster_pid_locally(master_data_dir)
 
 @then('verify that the master pid has not been changed')
 def impl(context):
-    data_dir = os.path.join(context.working_directory,
-                            'data/master/gpseg-1')
-    current_master_pid = gp.get_postmaster_pid_locally(data_dir)
+    current_master_pid = gp.get_postmaster_pid_locally(master_data_dir)
     if context.master_pid == current_master_pid:
         return
 
@@ -3393,7 +3466,7 @@ def impl(context, table_name):
     query = """CREATE TABLE %s (a INT)""" % table_name
     try:
         data_result = dbconn.execSQL(conn, query)
-    except Exception, msg:
+    except Exception as msg:
         key_msg = "FATAL:  cluster is expaneded"
         if key_msg not in msg.__str__():
             raise Exception("transaction not abort correctly, errmsg:%s" % msg)
@@ -3414,12 +3487,12 @@ def impl(context, num_of_segments):
             if content > -1 and status == 'u':
                 end_data_segments += 1
 
-    if int(num_of_segments) == int(end_data_segments - context.start_data_segments):
-        return
+        if int(num_of_segments) == int(end_data_segments - context.start_data_segments):
+            return
 
-    raise Exception("Incorrect amount of segments.\nprevious: %s\ncurrent:"
-            "%s\ndump of gp_segment_configuration: %s" %
-            (context.start_data_segments, end_data_segments, rows))
+        raise Exception("Incorrect amount of segments.\nprevious: %s\ncurrent:"
+                "%s\ndump of gp_segment_configuration: %s" %
+                (context.start_data_segments, end_data_segments, rows))
 
 @when('verify that {table_name} catalog table is present on new segments')
 @then('verify that {table_name} catalog table is present on new segments')
@@ -3467,9 +3540,9 @@ def make_temp_dir(context, tmp_base_dir, mode=''):
 def impl(context, hostnames):
     hosts = hostnames.split(',')
     if hasattr(context, "working_directory"):
-        reset_hosts(hosts, context.working_directory)
+        reset_hosts(hosts, context.working_directory, context.datadir_prefix)
     if hasattr(context, "temp_base_dir"):
-        reset_hosts(hosts, context.temp_base_dir)
+        reset_hosts(hosts, context.temp_base_dir, context.datadir_prefix)
 
 
 @given('user has created expansiontest tables')
@@ -3543,12 +3616,12 @@ def step_impl(context, options):
     elif '-Q' in options:
         for stdout_line in context.stdout_message.split('\n'):
             if 'up segments, from configuration table' in stdout_line:
-                segments_up = int(re.match(".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_up = int(re.match(r".*of up segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_up <= 1:
                     raise Exception("gpstate -Q output does not match expectations of more than one segment up")
 
             if 'down segments, from configuration table' in stdout_line:
-                segments_down = int(re.match(".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
+                segments_down = int(re.match(r".*of down segments, from configuration table\s+=\s+([0-9]+)", stdout_line).group(1))
                 if segments_down != 0:
                     raise Exception("gpstate -Q output does not match expectations of all segments up")
                 break ## down segments comes after up segments, so we can break here
@@ -3558,11 +3631,11 @@ def step_impl(context, options):
             query = """select datadir, port from pg_catalog.gp_segment_configuration where role='m' and content <> -1;"""
             cursor = dbconn.execSQL(conn, query)
 
-        for i in range(cursor.rowcount):
-            datadir, port = cursor.fetchone()
-            if datadir not in context.stdout_message or \
-                str(port) not in context.stdout_message:
-                    raise Exception("gpstate -m output missing expected mirror info, datadir %s port %d" %(datadir, port))
+            for i in range(cursor.rowcount):
+                datadir, port = cursor.fetchone()
+                if datadir not in context.stdout_message or \
+                    str(port) not in context.stdout_message:
+                        raise Exception("gpstate -m output missing expected mirror info, datadir %s port %d" %(datadir, port))
     else:
         raise Exception("no verification for gpstate option given")
 
@@ -3672,12 +3745,11 @@ def impl(context):
 @then('verify the dml results again in a new transaction')
 def impl(context):
     dbname = 'gptest'
-    conn = dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)
-
-    for dml, job in context.dml_jobs:
-        code, message = job.reverify(conn)
-        if not code:
-            raise Exception(message)
+    with dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False) as conn:
+        for dml, job in context.dml_jobs:
+            code, message = job.reverify(conn)
+            if not code:
+                raise Exception(message)
 
 
 
@@ -3715,11 +3787,11 @@ def impl(context, table, dbname):
     if sum(pre_distribution_row_count) != sum(post_distribution_row_count):
         raise Exception("Redistributed data does not match pre-redistribution data. Actual: %d, Expected: %d" % (sum(post_distribution_row_count), sum(pre_distribution_row_count)))
 
-    mean = sum(post_distribution_row_count) / len(post_distribution_row_count)
-    variance = sum(pow(row_count - mean, 2) for row_count in post_distribution_row_count) / len(post_distribution_row_count)
+    mean = old_div(sum(post_distribution_row_count), len(post_distribution_row_count))
+    variance = old_div(sum(pow(row_count - mean, 2) for row_count in post_distribution_row_count), len(post_distribution_row_count))
     std_deviation = math.sqrt(variance)
-    std_error = std_deviation / math.sqrt(len(post_distribution_row_count))
-    relative_std_error = std_error / mean
+    std_error = old_div(std_deviation, math.sqrt(len(post_distribution_row_count)))
+    relative_std_error = old_div(std_error, mean)
     tolerance = 0.01
     if relative_std_error > tolerance:
         raise Exception("Unexpected variance for redistributed data in table %s. Relative standard error %f exceeded tolerance factor of %f." %
@@ -3740,7 +3812,7 @@ def impl(context, table_name, dbname):
     current_row_count = _get_row_count_per_segment(table_name, dbname)
 
     if saved_row_count != current_row_count:
-        raise Exception("%s table in %s has %d rows, expected %d rows." % (table_name, dbname, current_row_count, saved_row_count))
+        raise Exception("%s table in %s has %d rows, expected %d rows." % (table_name, dbname, sum(current_row_count), sum(saved_row_count)))
 
 
 @then('distribution information from table "{table1}" and "{table2}" in "{dbname}" are the same')
@@ -3994,8 +4066,8 @@ def impl(context):
     gp_segment_configuration_backup = 'gpexpand.gp_segment_configuration'
 
     query = "select hostname, datadir from gp_segment_configuration where content = -1 order by dbid"
-    conn = dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False)
-    res = dbconn.execSQL(conn, query).fetchall()
+    with dbconn.connect(dbconn.DbURL(dbname='postgres'), unsetSearchPath=False) as conn:
+        res = dbconn.execSQL(conn, query).fetchall()
     master = res[0]
     standby = res[1]
 
@@ -4029,7 +4101,7 @@ def impl(context, command, input):
     if input == "no mode but presses enter":
         input = os.linesep
     p = Popen(command.split(), stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    stdout, stderr = p.communicate(input=input)
+    stdout, stderr = p.communicate(input=input.encode('utf-8'))
 
     p.stdin.close()
 
@@ -4049,9 +4121,8 @@ def impl(context, command, input):
 
 
 def are_on_different_subnets(primary_hostname, mirror_hostname):
-    x = platform.linux_distribution()
-    name = x[0].lower()
-    if 'ubuntu' in name:
+    name = get_dist_info()[0]
+    if 'debian' in name:
         primary_broadcast = check_output(['ssh', '-n', primary_hostname, "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
         mirror_broadcast = check_output(['ssh', '-n', mirror_hostname,  "/sbin/ip addr show ens4 | grep 'inet .* brd' | awk '{ print $4 }'"])
     else:
@@ -4198,7 +4269,7 @@ def impl(context):
      cmd.run(validateAfter=True)
      hostname = cmd.get_stdout()
      # Update entry in current /etc/hosts file to add new host-address
-     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts; sudo cp -f /tmp/hosts /etc/hosts;rm /tmp/hosts"
+     cmd = Command(name='update hostlist with new hostname', cmdStr="sudo sed 's/%s/%s__1 %s/g' </etc/hosts >> /tmp/hosts && sudo cp -f /tmp/hosts /etc/hosts && rm /tmp/hosts"
                                                         %(hostname, hostname, hostname))
      cmd.run(validateAfter=True)
 
@@ -4236,7 +4307,7 @@ def impl(context):
 
      # Update hostfile location
      cmd = Command(name='update master hostname in config file',
-                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\/tmp\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
+                   cmdStr= "sed 's/MACHINE_LIST_FILE=.*/MACHINE_LIST_FILE=\\/tmp\\/hostfile--1/g' -i /tmp/clusterConfigFile-1")
      cmd.run(validateAfter=True)
 
 
@@ -4271,7 +4342,7 @@ def impl(context):
 @then('restore /etc/hosts file and cleanup hostlist file')
 @when('restore /etc/hosts file and cleanup hostlist file')
 def impl(context):
-    cmd = "sudo mv -f /tmp/hosts_orig /etc/hosts; rm -f /tmp/clusterConfigFile-1; rm -f /tmp/hostfile--1"
+    cmd = "sudo cp -f /tmp/hosts_orig /etc/hosts && sudo rm /tmp/hosts_orig && rm -f /tmp/clusterConfigFile-1 && rm -f /tmp/hostfile--1"
     context.execute_steps(u'''Then the user runs command "%s"''' % cmd)
 
 @given('create a gpcheckperf input host file')
@@ -4353,17 +4424,17 @@ def impl(context):
     rsync_script = """
 cat >/usr/local/bin/rsync <<EOL
 #!/usr/bin/env bash
-arguments="\$@"
+arguments="\\$@"
 # Insert data into table and run checkpoint just before syncing pg_control
-if [[ "\$arguments" == *"pg_xlog"* ]]
+if [[ "\\$arguments" == *"pg_xlog"* ]]
 then
-    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p 5432 -h cdw"
+    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'INSERT INTO test_recoverseg SELECT generate_series(1, 1000)' -d postgres -p {port} -h cdw"
     # run checkpoint
-    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c "CHECKPOINT" -d postgres -p 5432 -h cdw"
+    ssh cdw "source /usr/local/greengage-db-devel/greengage_path.sh; psql -c 'CHECKPOINT' -d postgres -p {port} -h cdw"
 fi
-/usr/bin/rsync \$arguments
+/usr/bin/rsync \\$arguments
 EOL
-"""
+""".format(port=os.environ.get("PGPORT"))
     clear_cmd_cache_script = """
 cat >/tmp/clear_cmd_cache.py <<EOL
 #!/usr/bin/env python
@@ -4437,7 +4508,7 @@ def impl(context, output_config_file):
     gparray = GpArray.initFromCatalog(dbconn.DbURL())
     cluster_hosts = gparray.get_hostlist()
     all_segments = gparray.getDbList()
-    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
+    failed_segments = [seg for seg in all_segments if seg.getSegmentStatus() == 'd']
 
     expected_seg_rows = []
     expected_seg_rows.append(
@@ -4472,7 +4543,7 @@ def impl(context, output_config_file):
 @then('the user waits until recovery_progress.file is created in {logdir} and verifies that all dbids progress with {stage} are present')
 def impl(context, logdir, stage):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
-    failed_segments = filter(lambda seg: seg.getSegmentStatus() == 'd', all_segments)
+    failed_segments = [seg for seg in all_segments if seg.getSegmentStatus() == 'd']
     stage_patterns = []
     for seg in failed_segments:
         dbid = seg.getSegmentDbId()
@@ -4496,6 +4567,15 @@ def impl(context, logdir, stage):
         if attempt == num_retries:
             raise Exception('Timed out after {} retries'.format(num_retries))
 
+@when('add {seconds} seconds sleep after first table expand')
+def impl(context, seconds):
+    create_fault_query = "CREATE EXTENSION IF NOT EXISTS gp_inject_fault;"
+    execute_sql(context.dbname, create_fault_query)
+    # We use the reindex_relation fault injector to simulate a long table
+    # expansion time because during the expansion of the table, we reindex
+    # the relation files.
+    inject_fault_query = "SELECT gp_inject_fault('reindex_relation', 'sleep', '', '', '', 1, 1, {}, 2);".format(seconds)
+    execute_sql(context.dbname, inject_fault_query)
 
 def verify_elements_in_file(filename, elements):
     with open(filename, 'r') as file:

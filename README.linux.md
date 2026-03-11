@@ -1,67 +1,26 @@
-## For CentOS:
+## For CentOS 7:
 
-- Install Dependencies
-
+- Install dependencies using README.CentOS.bash script:
   ```bash
   ./README.CentOS.bash
   ```
+  Note: CentOS 7 is EOL — configure `yum` to use a valid repo (e.g., `vault.centos.org`) before installing dependencies.
 
-- If you want to link cmake3 to cmake, run:
+## For RHEL/Rocky 8:
 
+- Install dependencies using README.Rhel-Rocky.bash script:
   ```bash
-  sudo ln -sf /usr/bin/cmake3 /usr/local/bin/cmake
+  ./README.Rhel-Rocky.bash
   ```
 
-- Make sure that you add `/usr/local/lib` and `/usr/local/lib64` to
-`/etc/ld.so.conf`, then run command `ldconfig`.
-
-- If you want to install and use gcc-6 by default, run:
-
+- Build and install zstd with static library, e.g.:
   ```bash
-  sudo yum install -y centos-release-scl
-  sudo yum install -y devtoolset-6-toolchain
-  echo 'source scl_source enable devtoolset-6' >> ~/.bashrc
-  ```
-
-## For RHEL:
-
-- Install Development Tools.
-  - For RHEL 8: Install `Development Tools`:
-
-    ```bash
-    sudo yum group install -y "Development Tools"
-    ```
-
-  - For RHEL versions (< 8.0): Install `devtoolset-7`:
-
-    ```bash
-    sudo yum-config-manager --enable rhui-REGION-rhel-server-rhscl
-    sudo yum install -y devtoolset-7-toolchain
-    ```
-
-- Install dependencies using README.CentOS.bash script.
-  - For RHEL 8: Execute additional steps before running README.CentOS.bash script.
-
-    Note: Make sure installation of `Development Tools` includes `git` and `make` else install these tools manually.
-
-    ```bash
-    sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
-    sed -i -e 's/python-devel /python2-devel /' -e 's/python-pip/python2-pip/' -e 's/sudo pip/sudo pip2/' README.CentOS.bash
-    sed -i '/xerces-c-devel/d' README.CentOS.bash
-    sudo ln -s /usr/bin/python2.7 /usr/bin/python
-    ```
-
-  - Install dependencies using README.CentOS.bash script.
-
-    ```bash
-    ./README.CentOS.bash
-    ```
-
-## For Ubuntu (versions 20.04 or 22.04):
-
-- Install dependencies using README.ubuntu.bash script:
-  ```bash
-  sudo ./README.ubuntu.bash
+  cd /tmp
+  curl -LO https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz
+  tar -xf zstd-1.4.4.tar.gz
+  cd zstd-1.4.4
+  make -j$(nproc)
+  sudo make install PREFIX=/usr/local
   ```
 
 - Create symbolic link to Python 2 in `/usr/bin`:
@@ -69,6 +28,22 @@
   ```bash
   sudo ln -s python2 /usr/bin/python
   ```
+
+## For Ubuntu (versions 22.04 or 24.04):
+
+- Install dependencies using README.ubuntu.bash script:
+  ```bash
+  sudo ./README.ubuntu.bash
+  ```
+
+- For Ubuntu 22.04, create symbolic link to Python 2 in `/usr/bin`:
+
+  ```bash
+  sudo ln -s python2 /usr/bin/python
+  ```
+  Note: Supported Python versions: 2.7 or 3.9 to 3.12. The version is selected
+  by the `python` command. For Ubuntu 24.04, Python3 is already configured
+  in `README.ubuntu.bash`. For Ubuntu 22.04, we recommend using Python2.
 
 - Ensure that your system supports American English with an internationally compatible character encoding scheme. To do this, run:
   ```bash
@@ -85,19 +60,7 @@
 
 ## Common Platform Tasks:
 
-1. Create gpadmin and setup ssh keys
-
-    Either use:
-
-    ```bash
-    # Requires gpdb clone to be named gpdb_src
-    gpdb_src/concourse/scripts/setup_gpadmin_user.bash
-    ```
-    to create the gpadmin user and set up keys,
-
-    OR
-
-    manually create ssh keys so you can do ssh localhost without a password, e.g., 
+1. Setup SSH keys so you can run ssh localhost without a password, e.g., 
    
     ```bash
     ssh-keygen
@@ -108,7 +71,7 @@
 2. Verify that you can ssh to your machine name without a password
 
     ```bash
-    ssh <hostname of your machine>  # e.g., ssh briarwood
+    ssh `hostname`  # e.g., ssh briarwood
     ```
 
 3. Set up your system configuration:
@@ -150,7 +113,3 @@
     su - $USER # Apply settings
     ```
 
-5. Make sure that you download yaml and psutil as submodules. To do this, use `git clone --recurse-submodules` when downloading the source code. If you want to update the submodules, run:
-    ```bash
-    git submodule update --init --recursive --force
-    ```

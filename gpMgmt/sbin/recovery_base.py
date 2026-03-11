@@ -1,3 +1,5 @@
+from __future__ import print_function
+from builtins import object
 import functools
 import json
 import os
@@ -52,7 +54,7 @@ class RecoveryBase(object):
                                           logdir=self.options.logfileDirectory)
 
         if self.options.batch_size <= 0:
-            self.logger.warn('batch_size was less than zero.  Setting to 1.')
+            self.logger.warning('batch_size was less than zero.  Setting to 1.')
             self.options.batch_size = 1
 
         if self.options.verbose:
@@ -80,7 +82,7 @@ class RecoveryBase(object):
     def _write_to_stderr_and_exit(self, e):
         if self.logger:
             self.logger.error(str(e))
-        print >> sys.stderr, e
+        print(e, file=sys.stderr)
         sys.exit(1)
 
     def run_cmd_list(self, cmd_list, logger, options, pool):
@@ -103,7 +105,7 @@ class RecoveryBase(object):
             sys.exit(0)
 
         str_error = recoveryinfo.serialize_list(errors)
-        print >> sys.stderr, str_error
+        print(str_error, file=sys.stderr)
         if options.verbose:
             logger.exception(str_error)
         logger.error(str_error)
@@ -126,8 +128,8 @@ def set_recovery_cmd_results(run_func):
                                                               recovery_cmd.recovery_info.target_datadir,
                                                               recovery_cmd.recovery_info.target_port,
                                                               recovery_cmd.recovery_info.progress_file))
-            recovery_cmd.set_results(CommandResult(1, b'', serialized_error.encode(), True, False))
+            recovery_cmd.set_results(CommandResult(1, '', serialized_error, True, False))
         else:
-            recovery_cmd.set_results(CommandResult(0, b'', b'', True, False))
+            recovery_cmd.set_results(CommandResult(0, '', '', True, False))
 
     return run_and_set_output

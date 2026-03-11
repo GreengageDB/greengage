@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from past.builtins import cmp
+from builtins import object
 import itertools
 
 from collections import defaultdict, namedtuple
@@ -10,7 +12,7 @@ from gpcheckcat_modules.orphan_toast_table_issues import OrphanToastTableIssue, 
 OrphanedTable = namedtuple('OrphanedTable', 'oid catname')
 
 
-class OrphanedToastTablesCheck:
+class OrphanedToastTablesCheck(object):
     def __init__(self):
         self._issues = []
 
@@ -26,7 +28,7 @@ class OrphanedToastTablesCheck:
         # pg_depend back to pg_class, and if the table oids don't match and/or
         # one is missing, the TOAST table is considered to be an orphan.
         # Note: Handles toast tables <pg_toast_temp_*> which is created/used by InitTempTableNamespace().
-        self.orphaned_toast_tables_query = """
+        self.orphaned_toast_tables_query = r"""
 SELECT
     gp_segment_id AS content_id,
     toast_table_oid,
@@ -175,10 +177,10 @@ GROUP BY gp_segment_id, toast_table_oid, toast_table_name, expected_table_oid, e
         def issue_key(issue):
             return (issue.table.oid, type(issue))
 
-        def key_sort(this, that):
-            return cmp(hash(issue_key(this)), hash(issue_key(that)))
+        def key_sort(this):
+            return hash(issue_key(this))
 
-        sorted_issues = sorted(self._issues, key_sort)
+        sorted_issues = sorted(self._issues, key=key_sort)
 
         for _, group in itertools.groupby(sorted_issues, issue_key):
             issues = list(group)
@@ -204,7 +206,7 @@ GROUP BY gp_segment_id, toast_table_oid, toast_table_name, expected_table_oid, e
             if issue.repair_script:
                 content_id_to_segment_map[issue.row['content_id']]['repair_statements'].append(issue.repair_script)
 
-        segments_with_repair_statements = filter(lambda segment: len(segment['repair_statements']) > 0, content_id_to_segment_map.values())
+        segments_with_repair_statements = [segment for segment in list(content_id_to_segment_map.values()) if len(segment['repair_statements']) > 0]
         for segment in segments_with_repair_statements:
             segment['repair_statements'] = ["SET allow_system_table_mods=true;"] + segment['repair_statements']
 
@@ -213,7 +215,7 @@ GROUP BY gp_segment_id, toast_table_oid, toast_table_name, expected_table_oid, e
     @staticmethod
     def _get_content_id_to_segment_map(segments):
         content_id_to_segment = {}
-        for segment in segments.values():
+        for segment in list(segments.values()):
             segment['repair_statements'] = []
             content_id_to_segment[segment['content']] = segment
 

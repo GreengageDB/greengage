@@ -16,6 +16,7 @@
 #include "gpopt/base/CColRefSetIter.h"
 #include "gpopt/base/COptCtxt.h"
 #include "gpopt/base/CUtils.h"
+#include "gpopt/exception.h"
 #include "gpopt/operators/CExpressionHandle.h"
 #include "gpopt/operators/CExpressionPreprocessor.h"
 #include "gpopt/operators/CPhysicalMotionBroadcast.h"
@@ -40,7 +41,8 @@ using namespace gpopt;
 //---------------------------------------------------------------------------
 CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 												 BOOL fNullsColocated,
-												 IMdIdArray *opfamilies)
+												 IMdIdArray *opfamilies,
+												 BOOL noOp)
 	: m_pdrgpexpr(pdrgpexpr),
 	  m_opfamilies(opfamilies),
 	  m_fNullsColocated(fNullsColocated),
@@ -50,7 +52,7 @@ CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 	GPOS_ASSERT(NULL != pdrgpexpr);
 	GPOS_ASSERT(0 < pdrgpexpr->Size());
 	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
-		NULL == opfamilies)
+		NULL == opfamilies && !noOp)
 	{
 		PopulateDefaultOpfamilies();
 	}
@@ -68,7 +70,7 @@ CDistributionSpecHashed::CDistributionSpecHashed(CExpressionArray *pdrgpexpr,
 //---------------------------------------------------------------------------
 CDistributionSpecHashed::CDistributionSpecHashed(
 	CExpressionArray *pdrgpexpr, BOOL fNullsColocated,
-	CDistributionSpecHashed *pdshashedEquiv, IMdIdArray *opfamilies)
+	CDistributionSpecHashed *pdshashedEquiv, IMdIdArray *opfamilies, BOOL noOp)
 	: m_pdrgpexpr(pdrgpexpr),
 	  m_opfamilies(opfamilies),
 	  m_fNullsColocated(fNullsColocated),
@@ -78,7 +80,7 @@ CDistributionSpecHashed::CDistributionSpecHashed(
 	GPOS_ASSERT(NULL != pdrgpexpr);
 	GPOS_ASSERT(0 < pdrgpexpr->Size());
 	if (GPOS_FTRACE(EopttraceConsiderOpfamiliesForDistribution) &&
-		NULL == opfamilies)
+		NULL == opfamilies && !noOp)
 	{
 		PopulateDefaultOpfamilies();
 	}
@@ -119,8 +121,9 @@ CDistributionSpecHashed::PopulateDefaultOpfamilies()
 			// For a data type the retrieved opfamily can be 'InvalidOid'.
 			// Eg - For 'json', the distribution opfamily is 'InvalidOid'.
 			// Using an InvalidOid can lead to crash.
-			m_opfamilies->Release();
-			m_opfamilies = NULL;
+			GPOS_RAISE(
+				gpopt::ExmaGPOPT, gpdxl::ExmiUnexpectedOp,
+				GPOS_WSZ_LIT(": opfamily must exist for each hash expr"));
 			return;
 		}
 		mdid_opfamily->AddRef();
@@ -268,7 +271,7 @@ CDistributionSpecHashed::FMatchSubset(
 				opfamily_other = (*pdsHashed->m_opfamilies)[ulInner];
 			}
 
-			if (CUtils::Equals(pexprOwn, pexprOther) &&
+			if (CUtils::EqualDistributions(pexprOwn, pexprOther) &&
 				CUtils::Equals(opfamily_own, opfamily_other))
 			{
 				fFound = true;
@@ -295,7 +298,8 @@ CDistributionSpecHashed::FMatchSubset(
 				GPOS_ASSERT(false == fFound);
 				CExpressionArray *equiv_distribution_exprs =
 					(*equiv_hash_exprs)[ulInner];
-				if (CUtils::Contains(equiv_distribution_exprs, pexprOwn))
+				if (CUtils::ContainsDistribution(equiv_distribution_exprs,
+												 pexprOwn))
 				{
 					fFound = true;
 					break;
@@ -517,12 +521,13 @@ CDistributionSpecHashed::FMatchHashedDistribution(
 			equiv_distribution_exprs = (*all_equiv_exprs)[ul];
 		CExpression *pexprLeft = (*(pdshashed->m_pdrgpexpr))[ul];
 		CExpression *pexprRight = (*m_pdrgpexpr)[ul];
-		BOOL fSuccess = CUtils::Equals(pexprLeft, pexprRight);
+		BOOL fSuccess = CUtils::EqualDistributions(pexprLeft, pexprRight);
 		if (!fSuccess)
 		{
 			// if failed to find a equal match in the source distribution expr
 			// array, check the equivalent exprs to find a match
-			fSuccess = CUtils::Contains(equiv_distribution_exprs, pexprRight);
+			fSuccess = CUtils::ContainsDistribution(equiv_distribution_exprs,
+													pexprRight);
 		}
 		if (!fSuccess)
 		{
@@ -616,6 +621,17 @@ CDistributionSpecHashed::Equals(const CDistributionSpec *input_spec) const
 	CExpressionArrays *other_spec_equiv_exprs =
 		other_spec->HashSpecEquivExprs();
 
+	// The equality below should probably be strict, without need
+	// for calling CUtils::EqualDistributions,
+	// because the callers of this functions usually require
+	// direct expression matching.
+	//
+	// For example, one of the call chains leads to
+	// CCostContext::Equals and then to СGroupExpression::PccInsert
+	//
+	// But there are a lot of calls to this function, and given how
+	// nuanced ORCA can be, it is not strightforward to confirm this
+	// with certainty.
 	return CUtils::Equals(spec_equiv_exprs, other_spec_equiv_exprs);
 }
 
@@ -662,7 +678,8 @@ CDistributionSpecHashed::IsCoveredBy(
 	const CDistributionSpecHashed *pds = this;
 	while (pds && !covers)
 	{
-		covers = CUtils::Contains(dist_cols_expr_array, pds->Pdrgpexpr());
+		covers = CUtils::ContainsDistributions(dist_cols_expr_array,
+											   pds->Pdrgpexpr());
 		pds = pds->PdshashedEquiv();
 	}
 	return covers;
@@ -753,13 +770,13 @@ CDistributionSpecHashed::ComputeEquivHashExprs(
 					// if the predicate is a = b, and a is the current distribution expr,
 					// then the equivalent expr is b
 					CExpression *equiv_distribution_expr = NULL;
-					if (CUtils::Equals(left_distribution_expr,
-									   distribution_expr))
+					if (CUtils::EqualDistributions(left_distribution_expr,
+												   distribution_expr))
 					{
 						equiv_distribution_expr = right_distribution_expr;
 					}
-					else if (CUtils::Equals(right_distribution_expr,
-											distribution_expr))
+					else if (CUtils::EqualDistributions(right_distribution_expr,
+														distribution_expr))
 					{
 						equiv_distribution_expr = left_distribution_expr;
 					}
