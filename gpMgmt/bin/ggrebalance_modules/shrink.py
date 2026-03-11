@@ -16,6 +16,7 @@ try:
     from gppylib.commands import base
     from gppylib.commands.gp import SEGMENT_STOP_TIMEOUT_DEFAULT, SegmentStop
     from gppylib.system.environment import *
+    from gppylib.utils import escape_string, escapeDoubleQuoteInSQLString
     from ggrebalance_modules.planner import *
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
 except ImportError as e:
@@ -613,13 +614,13 @@ class GGShrink:
             if dbconn.querySingleton(conn, f"""
                 SELECT count(1)
                 FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE c.relname = '{rel_name}' AND n.nspname = '{schema_name}' AND c.relnamespace = n.oid
+                WHERE c.relname = '{escape_string(rel_name)}' AND n.nspname = '{escape_string(schema_name)}' AND c.relnamespace = n.oid
                 """) == 0:
                 return False
             return True
 
         def db_exists(self, conn: dbconn.Connection, db_name: str) -> bool:
-            if dbconn.querySingleton(conn, f"""SELECT count(*) FROM pg_database WHERE datname = '{db_name}'""") == 0:
+            if dbconn.querySingleton(conn, f"""SELECT count(*) FROM pg_database WHERE datname = '{escape_string(db_name)}'""") == 0:
                 return False
             return True
 
@@ -634,11 +635,11 @@ class GGShrink:
                     table_exists = self.table_exists(conn, self.schema_name, self.rel_name)
                     if table_exists:
                         dbconn.execSQL(conn,
-                                    f'''ALTER TABLE "{self.schema_name}"."{self.rel_name}"
+                                    f'''ALTER TABLE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}
                                     REBALANCE {self.target_segment_count}''')
                         if self.shrink.options.analyze:
                             dbconn.execSQL(conn,
-                                           f'''ANALYZE "{self.schema_name}"."{self.rel_name}"''')
+                                           f'''ANALYZE {escapeDoubleQuoteInSQLString(self.schema_name, True)}.{escapeDoubleQuoteInSQLString(self.rel_name, True)}''')
                     else:
                         self.shrink.logger.info(f'''Table "{self.db_name}"."{self.schema_name}"."{self.rel_name}" doesn't exist, skipping actual rebalance''')
 
