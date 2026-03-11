@@ -493,8 +493,13 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 
 							if (target)
 							{
-								Oid			typeOid = exprType((Node *) target->expr);
+								Oid			typeOid = InvalidOid;
 								Oid			opclass = InvalidOid;
+
+								if (target->resjunk)
+									continue;
+
+								typeOid = exprType((Node *) target->expr);
 
 								/*
 								 * Check for a legacy hash operator class if
