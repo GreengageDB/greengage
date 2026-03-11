@@ -2863,8 +2863,14 @@ def impl(context, command, target):
     if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
-@then('{command} should print "{target}" to logfile with latest timestamp')
-def impl(context, command, target):
+@then('{command} should {print} "{target}" to logfile with latest timestamp')
+def impl(context, command, print, target):
+    if print == 'print':
+        valuesShouldExist = True
+    elif print == 'not print':
+        valuesShouldExist = False
+    else:
+        raise Exception("only 'print' and 'not print' are valid inputs")
     log_dir = _get_gpAdminLogs_directory()
     filenames = glob.glob('%s/%s_*.log' % (log_dir, command))
     filename = max(filenames, key=os.path.getctime)
@@ -2872,8 +2878,10 @@ def impl(context, command, target):
     with open(filename) as fr:
         for line in fr:
             contents += line
-    if target not in contents:
+    if valuesShouldExist and target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
+    if not valuesShouldExist and target in contents:
+        raise Exception("found %s in %s" % (target, filename))
 
 
 @then('{command} should print "{target}" regex to logfile')
