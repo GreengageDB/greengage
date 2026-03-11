@@ -2376,6 +2376,9 @@ build_startup_packet(const PGconn *conn, char *packet,
 static int
 pgGetMetadataMessage(PGconn *conn, int length)
 {
+	if (conn->metadataHooks.metadataRec == NULL)
+		return 0;
+
 	/*
 	 * Since the metadata might be pretty long, we create an own buffer
 	 * rather than using conn->workBuffer.  workBuffer is intended
@@ -2395,14 +2398,10 @@ pgGetMetadataMessage(PGconn *conn, int length)
 	{
 		free(chunk);
 		return 1;
-	}
-		
+	}		
 
-	if (conn->metadataHooks.metadataRec)
-		/* pass ownership of the link too the handler */
-		conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk);
-	else
-		free(chunk);
+	/* pass ownership of the link too the handler */
+	conn->metadataHooks.metadataRec(conn->metadataHooks.metadataRecArg, chunk);
 
 	return 0;
 }
