@@ -17740,20 +17740,28 @@ ATExecShrinkTable(Relation rel, GpPolicy *policy)
 		volatile bool connected = false;
 		StringInfoData sqlstmtInsert;
 		initStringInfo(&sqlstmtInsert);
-		char *nsp = get_namespace_name(RelationGetNamespace(rel));
-		char *relname = RelationGetRelationName(rel);
+		const char *nsp = quote_identifier(
+			get_namespace_name(RelationGetNamespace(rel)));
+		const char *relname = quote_identifier(
+			RelationGetRelationName(rel));
+
+		StringInfoData qualified_table_name;
+		initStringInfo(&qualified_table_name);
+		appendStringInfo(&qualified_table_name, "%s.%s", nsp, relname);
 
 		/*
 		 * 'gp_dist_random' will cause fallback to Postgres planner,
 		 * so no need to tweak 'optimizer' value.
 		 */
 		appendStringInfo(&sqlstmtInsert,
-						 "insert into %s.%s select * "
-						 "from gp_dist_random('%s.%s') "
+						 "insert into %s select * "
+						 "from gp_dist_random(%s) "
 						 "where gp_segment_id >= %d",
-						 nsp, relname,
-						 nsp, relname,
+						 qualified_table_name.data,
+						 quote_literal_cstr(qualified_table_name.data),
 						 policy->numsegments);
+
+		pfree(qualified_table_name.data);
 
 		gp_segment_number_for_table_shrink = policy->numsegments;
 
