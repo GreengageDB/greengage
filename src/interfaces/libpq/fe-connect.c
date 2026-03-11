@@ -6018,23 +6018,6 @@ PQsetMetadataReceiver(PGconn *conn, PQmetadataReceiver proc, void *arg)
 	return old;
 }
 
-static PQmetadataProcessor metadataProcessor = NULL;
-static void *metadataProcessorArg = NULL;
-
-PQmetadataProcessor
-PQsetMetadataProcessor(PQmetadataProcessor proc, void *arg)
-{
-	PQmetadataProcessor old = metadataProcessor;
-
-	if (proc)
-	{
-		metadataProcessor = proc;
-		metadataProcessorArg = arg;
-	}
-
-	return old;
-}
-
 /*
  * The default notice message receiver just gets the standard notice text
  * and sends it to the notice processor.  This two-level setup exists

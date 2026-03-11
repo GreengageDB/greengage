@@ -82,9 +82,16 @@ extern void pq_metadatasend(const void *data, size_t len);
 
 typedef void *ggMetadataChunkIterator;
 
+typedef struct ggMetadataDescriptor
+{
+	int metadataLen;
+	int    segindex;        /* source segment */
+	void *data;
+} ggMetadataDescriptor;
+
 extern ggMetadataChunkIterator PQMetadataWalk(void);
 extern ggMetadataChunkIterator PQgetNextMetadata(ggMetadataChunkIterator it);
-extern void PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data);
+extern void PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor *out_desc);
 extern int PQgetMetadataCount(void);
 extern void PQCleanMetadata(void);
 

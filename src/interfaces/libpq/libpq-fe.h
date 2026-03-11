@@ -621,6 +621,7 @@ extern int	pg_valid_server_encoding_id(int encoding);
 typedef struct ggMetadataChunk
 {
 	struct ggMetadataChunk *next;
+	int    segindex;      /* source segment */
 	int    metadataLen;    /* Length of metadata buffer */
 	char   payload[];
 } ggMetadataChunk;

@@ -879,7 +879,10 @@ static int ggMetadataCount = 0;
 static void
 MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk)
 {
+	SegmentDatabaseDescriptor *segdbDesc = (SegmentDatabaseDescriptor *)arg;
+
 	metadata_chunk->next = ggMetadataList;
+	metadata_chunk->segindex = segdbDesc->segindex;
 	ggMetadataList = metadata_chunk;
 	ggMetadataCount++;
 }
@@ -901,16 +904,16 @@ PQgetNextMetadata(ggMetadataChunkIterator it)
 }
 
 void
-PQgetMetadata(ggMetadataChunkIterator it, int *length, void **data)
+PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor *out_desc)
 {
 	Assert(it != NULL);
+	Assert(out_desc != NULL);
 
 	ggMetadataChunk *chunk = (ggMetadataChunk *)it;
-	if (length)
-		*length = chunk->metadataLen;
 
-	if (data)
-		*data = chunk->payload;
+	out_desc->metadataLen= chunk->metadataLen;
+	out_desc->segindex = chunk->segindex;
+	out_desc->data = chunk->payload;
 }
 
 int 
