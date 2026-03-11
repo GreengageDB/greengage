@@ -491,7 +491,7 @@ apply_motion(PlannerInfo *root, Plan *plan, Query *query)
 							TargetEntry *target =
 							get_tle_by_resno(plan->targetlist, i + 1);
 
-							if (target)
+							if (target && !target->resjunk)
 							{
 								Oid			typeOid = exprType((Node *) target->expr);
 								Oid			opclass = InvalidOid;
