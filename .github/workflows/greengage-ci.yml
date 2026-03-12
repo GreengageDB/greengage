@@ -59,7 +59,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v19
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@CI-5283
     with:
       version: 6
       target_os: ${{ matrix.target_os }}
