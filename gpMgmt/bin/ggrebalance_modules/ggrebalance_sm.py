@@ -7,7 +7,7 @@ try:
     from gppylib.commands.unix import *
     from gppylib.commands.gp import *
     from gppylib.gplog import *
-    from gppylib.commands.gp import GpMoveMirrors, SegmentStatus
+    from gppylib.commands.gp import GpMoveMirrors, SegmentStatus, GpConfigHelper
     from gppylib.system.environment import *
     from ggrebalance_modules.planner import *
     from ggrebalance_modules.rebalance_schema import RebalanceSchema, STATE_NOT_DEFINED
@@ -517,18 +517,21 @@ class RebalanceSM:
         return Segment.initFromString(row[0])
 
     def get_postgresql_conf_port(self, hostname: str, datadir: str) -> int:
-        cmd = Command(
-            name="get_postgresql_conf_port",
-            cmdStr=f"grep -E '^port\\s*=' {datadir}/postgresql.conf | sed -E 's/^port\\s*=\\s*([0-9]+).*/\\1/'",
-            ctxt=REMOTE,
-            remoteHost=hostname)
+        cmd = gp.GpConfigHelper(f'get port parameter on host {hostname}',
+                                datadir,
+                                'port',
+                                getParameter=True,
+                                ctxt=gp.REMOTE,
+                                remoteHost=hostname)
         cmd.run()
 
         if not cmd.was_successful():
             self.logger.info(f"Failed to get port from postgresql.conf on {hostname}: {cmd.get_stderr()}")
             return -1
 
-        output = cmd.get_stdout().strip()
+        output = cmd.get_value()
+        output = output if '#' not in output else output[0:output.find('#')]
+        output = output.strip()
         if not output or not output.isdigit():
             return -1
 
