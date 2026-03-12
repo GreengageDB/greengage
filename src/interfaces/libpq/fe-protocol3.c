@@ -2378,8 +2378,7 @@ pgGetMetadataMessage(PGconn *conn, int length)
 {
 	if (conn->metadataHooks.metadataRec == NULL)
 	{
-		if (pqSkipnchar(length, conn))
-			return 1;
+		return pqSkipnchar(length, conn);
 	}
 
 	/*
