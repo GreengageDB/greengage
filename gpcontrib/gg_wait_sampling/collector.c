@@ -5,7 +5,7 @@
  * Copyright (c) 2015-2025, Postgres Professional
  *
  * IDENTIFICATION
- *	  contrib/pg_wait_sampling/pg_wait_sampling.c
+ *	  gpcontrib/gg_wait_sampling/collector.c
  */
 #include "postgres.h"
 
@@ -16,7 +16,9 @@
 #include "pg_wait_sampling.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
+#if PG_VERSION_NUM >= 130000
 #include "postmaster/interrupt.h"
+#endif
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "storage/lock.h"
@@ -33,6 +35,9 @@
 static volatile sig_atomic_t shutdown_requested = false;
 
 static void handle_sigterm(SIGNAL_ARGS);
+#if PG_VERSION_NUM < 130000
+void SignalHandlerForConfigReload(SIGNAL_ARGS);
+#endif
 
 /*
  * Register background worker for collecting waits history.
@@ -48,9 +53,9 @@ pgws_register_wait_collector(void)
 	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 	worker.bgw_restart_time = 1;
 	worker.bgw_notify_pid = 0;
-	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_wait_sampling");
+	snprintf(worker.bgw_library_name, BGW_MAXLEN, "gg_wait_sampling");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, CppAsString(pgws_collector_main));
-	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_wait_sampling collector");
+	snprintf(worker.bgw_name, BGW_MAXLEN, "gg_wait_sampling collector");
 	worker.bgw_main_arg = (Datum) 0;
 	RegisterBackgroundWorker(&worker);
 }
@@ -122,6 +127,17 @@ handle_sigterm(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
+#if PG_VERSION_NUM < 130000
+void
+SignalHandlerForConfigReload(SIGNAL_ARGS)
+{
+	int			save_errno = errno;
+	ConfigReloadPending = true;
+	SetLatch(MyLatch);
+	errno = save_errno;
+}
+#endif
+
 /*
  * Get next item of history with rotation.
  */
@@ -170,9 +186,9 @@ probe_waits(History *observations, HTAB *profile_hash,
 			continue;
 
 		if (pgws_profileQueries)
-			item.queryId = pgws_proc_queryids[i];
+			item.query_item = pgws_proc_query_items[i];
 		else
-			item.queryId = 0;
+			item.query_item = (QueryItem) {0};
 
 		item.ts = ts;
 
@@ -222,7 +238,7 @@ send_history(History *observations, shm_mq_handle *mqh)
 	if (mq_result == SHM_MQ_DETACHED)
 	{
 		ereport(WARNING,
-				(errmsg("pg_wait_sampling collector: "
+				(errmsg("gg_wait_sampling collector: "
 						"receiver of message queue has been detached")));
 		return;
 	}
@@ -236,7 +252,7 @@ send_history(History *observations, shm_mq_handle *mqh)
 		if (mq_result == SHM_MQ_DETACHED)
 		{
 			ereport(WARNING,
-					(errmsg("pg_wait_sampling collector: "
+					(errmsg("gg_wait_sampling collector: "
 							"receiver of message queue has been detached")));
 			return;
 		}
@@ -259,7 +275,7 @@ send_profile(HTAB *profile_hash, shm_mq_handle *mqh)
 	if (mq_result == SHM_MQ_DETACHED)
 	{
 		ereport(WARNING,
-				(errmsg("pg_wait_sampling collector: "
+				(errmsg("gg_wait_sampling collector: "
 						"receiver of message queue has been detached")));
 		return;
 	}
@@ -272,7 +288,7 @@ send_profile(HTAB *profile_hash, shm_mq_handle *mqh)
 		{
 			hash_seq_term(&scan_status);
 			ereport(WARNING,
-					(errmsg("pg_wait_sampling collector: "
+					(errmsg("gg_wait_sampling collector: "
 							"receiver of message queue has been detached")));
 			return;
 		}
@@ -290,7 +306,7 @@ make_profile_hash(void)
 	if (pgws_profileQueries)
 		hash_ctl.keysize = offsetof(ProfileItem, count);
 	else
-		hash_ctl.keysize = offsetof(ProfileItem, queryId);
+		hash_ctl.keysize = offsetof(ProfileItem, query_item);
 
 	hash_ctl.entrysize = sizeof(ProfileItem);
 	return hash_create("Waits profile hash", 1024, &hash_ctl,
@@ -344,19 +360,19 @@ pgws_collector_main(Datum main_arg)
 	SetProcessingMode(NormalProcessing);
 
 	/* Make pg_wait_sampling recognisable in pg_stat_activity */
-	pgstat_report_appname("pg_wait_sampling collector");
+	pgstat_report_appname("gg_wait_sampling collector");
 
 	profile_hash = make_profile_hash();
 	pgws_collector_hdr->latch = &MyProc->procLatch;
 
-	CurrentResourceOwner = ResourceOwnerCreate(NULL, "pg_wait_sampling collector");
+	CurrentResourceOwner = ResourceOwnerCreate(NULL, "gg_wait_sampling collector");
 	collector_context = AllocSetContextCreate(TopMemoryContext,
-											  "pg_wait_sampling context", ALLOCSET_DEFAULT_SIZES);
+											  "gg_wait_sampling context", ALLOCSET_DEFAULT_SIZES);
 	old_context = MemoryContextSwitchTo(collector_context);
 	alloc_history(&observations, pgws_historySize);
 	MemoryContextSwitchTo(old_context);
 
-	ereport(LOG, (errmsg("pg_wait_sampling collector started")));
+	ereport(LOG, (errmsg("gg_wait_sampling collector started")));
 
 	/* Start counting time for history and profile samples */
 	profile_ts = history_ts = GetCurrentTimestamp();
@@ -458,7 +474,7 @@ pgws_collector_main(Datum main_arg)
 						break;
 					case SHM_MQ_DETACHED:
 						ereport(WARNING,
-								(errmsg("pg_wait_sampling collector: "
+								(errmsg("gg_wait_sampling collector: "
 										"receiver of message queue have been "
 										"detached")));
 						break;
@@ -479,6 +495,6 @@ pgws_collector_main(Datum main_arg)
 
 	MemoryContextReset(collector_context);
 
-	ereport(LOG, (errmsg("pg_wait_sampling collector shutting down")));
+	ereport(LOG, (errmsg("gg_wait_sampling collector shutting down")));
 	proc_exit(0);
 }

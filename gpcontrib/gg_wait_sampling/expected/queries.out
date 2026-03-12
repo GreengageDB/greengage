@@ -1,19 +1,19 @@
-CREATE EXTENSION pg_wait_sampling;
-WITH t as (SELECT sum(0) FROM pg_wait_sampling_current)
+CREATE EXTENSION gg_wait_sampling;
+WITH t as (SELECT sum(0) FROM gg_wait_sampling_current)
 	SELECT sum(0) FROM generate_series(1, 2), t;
  sum 
 -----
    0
 (1 row)
 
-WITH t as (SELECT sum(0) FROM pg_wait_sampling_history)
+WITH t as (SELECT sum(0) FROM gg_wait_sampling_history)
 	SELECT sum(0) FROM generate_series(1, 2), t;
  sum 
 -----
    0
 (1 row)
 
-WITH t as (SELECT sum(0) FROM pg_wait_sampling_profile)
+WITH t as (SELECT sum(0) FROM gg_wait_sampling_profile)
 	SELECT sum(0) FROM generate_series(1, 2), t;
  sum 
 -----
@@ -21,28 +21,52 @@ WITH t as (SELECT sum(0) FROM pg_wait_sampling_profile)
 (1 row)
 
 -- Some dummy checks just to be sure that all our functions work and return something.
-SELECT count(*) = 1 as test FROM pg_wait_sampling_get_current(pg_backend_pid());
+SELECT count(*) = 1 as test FROM gg_wait_sampling_get_current_coordinator();
+ test 
+------
+ f
+(1 row)
+
+SELECT count(*) = 1 as test FROM gg_wait_sampling_get_current_segments();
+ test 
+------
+ f
+(1 row)
+
+SELECT count(*) >= 0 as test FROM gg_wait_sampling_get_profile_coordinator();
  test 
 ------
  t
 (1 row)
 
-SELECT count(*) >= 0 as test FROM pg_wait_sampling_get_profile();
+SELECT count(*) >= 0 as test FROM gg_wait_sampling_get_profile_segments();
  test 
 ------
  t
 (1 row)
 
-SELECT count(*) >= 0 as test FROM pg_wait_sampling_get_history();
+SELECT count(*) >= 0 as test FROM gg_wait_sampling_get_history_coordinator();
  test 
 ------
  t
 (1 row)
 
-SELECT pg_wait_sampling_reset_profile();
- pg_wait_sampling_reset_profile 
---------------------------------
- 
+SELECT count(*) >= 0 as test FROM gg_wait_sampling_get_history_segments();
+ test 
+------
+ t
 (1 row)
 
-DROP EXTENSION pg_wait_sampling;
+SELECT count(*) >= 0 as test FROM gg_wait_sampling_reset_profile_coordinator();
+ test 
+------
+ t
+(1 row)
+
+SELECT count(*) >= 0 as test FROM gg_wait_sampling_reset_profile_segments();
+ test 
+------
+ t
+(1 row)
+
+DROP EXTENSION gg_wait_sampling;

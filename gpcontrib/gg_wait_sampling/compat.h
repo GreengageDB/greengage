@@ -5,7 +5,7 @@
  * Copyright (c) 2015-2025, Postgres Professional
  *
  * IDENTIFICATION
- *	  contrib/pg_wait_sampling/compat.h
+ *	  gpcontrib/gg_wait_sampling/compat.h
  */
 #ifndef __COMPAT_H__
 #define __COMPAT_H__

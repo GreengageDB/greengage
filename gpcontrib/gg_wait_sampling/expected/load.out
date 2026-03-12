@@ -1,31 +1,50 @@
-CREATE EXTENSION pg_wait_sampling;
-\d pg_wait_sampling_current
-View "public.pg_wait_sampling_current"
-   Column   |  Type   | Modifiers 
-------------+---------+-----------
- pid        | integer | 
- event_type | text    | 
- event      | text    | 
- queryid    | bigint  | 
+CREATE EXTENSION gg_wait_sampling;
+\d gg_wait_sampling_current
+         View "public.gg_wait_sampling_current"
+    Column    |  Type   | Collation | Nullable | Default 
+--------------+---------+-----------+----------+---------
+ pid          | integer |           |          | 
+ event_type   | text    |           |          | 
+ event        | text    |           |          | 
+ queryid      | bigint  |           |          | 
+ mppsessionid | integer |           |          | 
+ command_id   | integer |           |          | 
+ tmid         | integer |           |          | 
+ segid        | integer |           |          | 
 
-\d pg_wait_sampling_history
-      View "public.pg_wait_sampling_history"
-   Column   |           Type           | Modifiers 
-------------+--------------------------+-----------
- pid        | integer                  | 
- ts         | timestamp with time zone | 
- event_type | text                     | 
- event      | text                     | 
- queryid    | bigint                   | 
+\d gg_wait_sampling_history
+                  View "public.gg_wait_sampling_history"
+    Column    |           Type           | Collation | Nullable | Default 
+--------------+--------------------------+-----------+----------+---------
+ pid          | integer                  |           |          | 
+ ts           | timestamp with time zone |           |          | 
+ event_type   | text                     |           |          | 
+ event        | text                     |           |          | 
+ queryid      | bigint                   |           |          | 
+ mppsessionid | integer                  |           |          | 
+ command_id   | integer                  |           |          | 
+ tmid         | integer                  |           |          | 
+ segid        | integer                  |           |          | 
 
-\d pg_wait_sampling_profile
-View "public.pg_wait_sampling_profile"
-   Column   |  Type   | Modifiers 
-------------+---------+-----------
- pid        | integer | 
- event_type | text    | 
- event      | text    | 
- queryid    | bigint  | 
- count      | bigint  | 
+\d gg_wait_sampling_profile
+         View "public.gg_wait_sampling_profile"
+    Column    |  Type   | Collation | Nullable | Default 
+--------------+---------+-----------+----------+---------
+ pid          | integer |           |          | 
+ event_type   | text    |           |          | 
+ event        | text    |           |          | 
+ queryid      | bigint  |           |          | 
+ count        | bigint  |           |          | 
+ mppsessionid | integer |           |          | 
+ command_id   | integer |           |          | 
+ tmid         | integer |           |          | 
+ segid        | integer |           |          | 
 
-DROP EXTENSION pg_wait_sampling;
+\d gg_wait_sampling_reset_profile
+       View "public.gg_wait_sampling_reset_profile"
+    Column     |  Type   | Collation | Nullable | Default 
+---------------+---------+-----------+----------+---------
+ gp_segment_id | integer |           |          | 
+ done          | boolean |           |          | 
+
+DROP EXTENSION gg_wait_sampling;

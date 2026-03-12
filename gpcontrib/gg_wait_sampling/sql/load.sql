@@ -1,7 +1,8 @@
-CREATE EXTENSION pg_wait_sampling;
+CREATE EXTENSION gg_wait_sampling;
 
-\d pg_wait_sampling_current
-\d pg_wait_sampling_history
-\d pg_wait_sampling_profile
+\d gg_wait_sampling_current
+\d gg_wait_sampling_history
+\d gg_wait_sampling_profile
+\d gg_wait_sampling_reset_profile
 
-DROP EXTENSION pg_wait_sampling;
+DROP EXTENSION gg_wait_sampling;
