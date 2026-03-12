@@ -327,8 +327,8 @@ class PgCtlStopArgs(CmdArgs):
 
 class PgCtlStatusArgs(CmdArgs):
     """
-    Used by CoordinatorStop, SegmentStop to format the pg_ctl command
-    to stop a backend postmaster
+    Used by SegmentStatus to format the pg_ctl command
+    to get status of a backend postmaster
 
     >>> str(PgCtlStatusArgs("/data1/coordinator/gpseg-1"))
     '$GPHOME/bin/pg_ctl -D /data1/coordinator/gpseg-1 status'

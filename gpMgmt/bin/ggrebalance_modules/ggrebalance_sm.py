@@ -428,7 +428,7 @@ class RebalanceSM:
                 if not allow_retry:
                     self.logger.warning("We've run out of retry attempts")
 
-            if allow_retry and self.interactive_check(f'Retry step?'):
+            if allow_retry and self.interactive_check('Retry step?'):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
