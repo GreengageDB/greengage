@@ -930,7 +930,7 @@ ResGroupGetStat(Oid groupId, ResGroupStatType type)
 			 * justify_interval() if she wants.
 			 */
 			interval = (Interval *) palloc(sizeof(Interval));
-			interval->time = group->totalQueuedTimeMs;
+			interval->time = group->totalQueuedTimeMs * 1000;
 			interval->day = 0;
 			interval->month = 0;
 			result = IntervalPGetDatum(interval);
@@ -1386,7 +1386,11 @@ addTotalQueueDuration(ResGroupData *group)
 	if (group == NULL)
 		return;
 
-	group->totalQueuedTimeMs += (groupWaitEnd - groupWaitStart);
+	/*
+	 * Note: groupWaitEnd and groupWaitStart are in microseconds, but
+	 * totalQueuedTimeMs is in milliseconds. We should convert it here.
+	 */
+	group->totalQueuedTimeMs += ((groupWaitEnd - groupWaitStart) / 1000);
 }
 
 /*
