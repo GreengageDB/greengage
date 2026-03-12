@@ -7,6 +7,7 @@ on:
     types: [completed]
     branches:
       - main
+      - 6.x
       - 7.x
 
 jobs:
@@ -58,8 +59,8 @@ jobs:
             main)
               echo "version=6" >> $GITHUB_OUTPUT
               ;;
-            7.x)
-              echo "version=7" >> $GITHUB_OUTPUT
+            [0-9].x)
+              echo "version=${BRANCH%.x}" >> $GITHUB_OUTPUT
               ;;
             *)
               echo "Unsupported branch: $BRANCH"

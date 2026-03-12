@@ -8,6 +8,14 @@ different branches and configurations.
 
 ## ⚠️ Important Notice
 
+**Branch Policy Change:** The `main` branch is deprecated as the default
+development branch and will be transitioned to protected read-only status.
+The `6.x` branch now serves as the primary versioned branch for all
+development activities. The `main` branch is retained solely for backward
+compatibility during the transition period and to prevent accidental feature
+branch creation from unintended `git push origin main` commands. **Do not use
+`main` for new development.**
+
 Whenever the list of **NAMES of required jobs** in the workflow (including any
 **reusable workflows**) is **added, removed, or renamed**, you must contact a
 repository administrator to update the **Branch Protection Rules** accordingly.
@@ -18,8 +26,8 @@ when checking Pull Requests.
 
 The `Greengage CI` workflow triggers on:
 
-- **Push events** to `main` branch (after merged PR) or versioned release tags
-  (`6.*`).
+- **Push events** to `6.x` or `main` branch (after merged PR) or versioned
+  release tags (`6.*`).
 - **Pull requests** to any branch.
 
 It executes the following jobs in a matrix strategy for multiple target
@@ -34,8 +42,8 @@ operating systems:
   - Orca tests
   - Resource group tests
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
-  DockerHub. Runs for push to `main` (retags to `latest`) and tags (uses tag
-  like `6.28.2`) after build.
+  DockerHub. Runs for push to `6.x`/`main` (retags to `latest`) and tags (uses
+  tag like `6.28.2`) after build.
 
 ## Release Workflow
 
@@ -81,37 +89,40 @@ automatically upon the completion of the `Greengage CI` workflow.
 ### Key Features
 
 - **Triggers:** `workflow_run: workflows: ["Greengage CI"], types: [completed]`
-- **Branch Targeting:** Runs only for the `main` and `7.x` branches.
-- **Version Detection:** Automatically determines the database version (6 or 7)
-based on the triggering branch.
+- **Branch Targeting:** Runs only for the `main`, `6.x`, and `7.x` branches.
+- **Version Detection:** Automatically determines the database version based on
+  the triggering branch: `main` → version 6, `<digit>.x` → `<digit>` (e.g.,
+  `6.x` → 6, `7.x` → 7).
 - **Artifact Creation:** Executes regression tests with the `dump_db: "true"`
-parameter to generate a SQL dump archive, which is then uploaded as a workflow
-artifact.
-- **Controlled Execution:** Since the main CI workflow runs on `main` and `7.x`
-branches only for push events (which occur after final merge of a PR), SQL dump
-are generated exclusively for verified, approved patches after they are merged
-into the main branches.
+  parameter to generate a SQL dump archive, which is then uploaded as a workflow
+  artifact.
+- **Controlled Execution:** Since the main CI workflow runs on `main`, `6.x`
+  and `7.x` branches only for push events (which occur after final merge of a
+  PR), SQL dump are generated exclusively for verified, approved patches after
+  they are merged into the main branches.
 - **Artifact Retention:** The generated SQL dump artifact is retained 90 days
-after the last download. Each new run of the `behave tests gpexpand` workflow
-(which consumes this artifact as a consumer) resets this retention period to
-90 days when it downloads the artifact.
+  after the last download. Each new run of the `behave tests gpexpand` workflow
+  (which consumes this artifact as a consumer) resets this retention period to
+  90 days when it downloads the artifact.
 
 ### Behavior
 
 1. **Triggering:** Automatically starts after the `Greengage CI` workflow
-finishes on the `main` or `7.x` branch.
+   finishes on the `main`, `6.x`, or `7.x` branch.
 2. **Preparation:** Configures Docker storage on the runner to utilize
-`/mnt/docker` for increased disk space.
-3. **Version Mapping:** Maps the branch name (`main` -> version 6, `7.x` ->
-version 7) to select the correct Docker image for testing.
+   `/mnt/docker` for increased disk space.
+3. **Version Mapping:** Maps the branch name (`main` → version 6, `6.x` → 6,
+   `7.x` → 7, `<digit>.x` → `<digit>`) to select the correct Docker image for
+   testing.
 4. **Dump Generation:** Runs the regression test suite using the reusable
-action with the `dump_db` option enabled, which creates a
-`*_postgres_sqldump.tar` file.
+   action with the `dump_db` option enabled, which creates a
+   `*_postgres_sqldump.tar` file.
 5. **Artifact Upload:** Uploads the generated SQL dump archive as a named
-artifact (e.g., `sqldump_ggdb7_ubuntu`) to the workflow run.
+   artifact (e.g., `sqldump_ggdb7_ubuntu`) to the workflow run.
 
 This workflow ensures that a current database schema dump is available as an
-artifact following successful CI runs on the primary branches `main` and `7.x`.
+artifact following successful CI runs on the primary branches `main`, `6.x` and
+`7.x`.
 
 ## Configuration
 
