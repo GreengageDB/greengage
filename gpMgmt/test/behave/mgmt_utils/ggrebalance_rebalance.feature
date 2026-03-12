@@ -601,7 +601,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
-        When user will answer "no" to the prompt "Rollback step?"
+        When user will answer "no" to the prompt "Retry step?"
+         And user will answer "no" to the prompt "Rollback step?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
@@ -647,7 +648,8 @@ Feature: ggrebalance behave tests (rebalance scenarios)
          And unset fault inject
          And all files in gpAdminLogs directory are deleted
          And the gprecoverseg lock directory is removed
-        When user will answer "yes" to the prompt "Rollback step?"
+        When user will answer "no" to the prompt "Retry step?"
+         And user will answer "yes" to the prompt "Rollback step?"
          And the user runs "ggrebalance -n 1"
         Then ggrebalance should return a return code of 0
          And ggrebalance should print "Checking error status for step" to logfile with latest timestamp
