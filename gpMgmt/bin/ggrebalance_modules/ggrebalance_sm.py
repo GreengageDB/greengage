@@ -415,20 +415,18 @@ class RebalanceSM:
 
                     time.sleep(SLEEP_PERIOD_SEC)
                     time_waited = time_waited + SLEEP_PERIOD_SEC
-                    if time_waited >= TIMEOUT_SEC and self.interactive_check('Timeout waiting for segment start, wait again?'):
+                    if time_waited >= TIMEOUT_SEC and self.interactive_check('Timeout waiting for segment start, wait again?', default = False):
                         time_waited = 0
 
             # Continue with the next step, if we already marked this one
             if step.getStatus() == RebalanceStep.Status.DONE:
                 continue
 
-            allow_retry = True
-            if port_updated:
-                allow_retry = step.isRetryAllowed()
-                if not allow_retry:
-                    self.logger.warning("We've run out of retry attempts")
+            allow_retry = step.isRetryAllowed()
+            if not allow_retry:
+                self.logger.warning("We've run out of retry attempts")
 
-            if allow_retry and self.interactive_check('Retry step?'):
+            if allow_retry and self.interactive_check('Retry step?', default = True):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
@@ -438,7 +436,7 @@ class RebalanceSM:
                 self.rebalance_schema.updateExecutionStep(step)
                 continue
 
-            if not step.isRollback() and self.interactive_check('Rollback step?'):
+            if not step.isRollback() and self.interactive_check('Rollback step?', default = True):
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
             else:
@@ -454,7 +452,7 @@ class RebalanceSM:
         steps_left_todo = self.rebalance_schema.getExecutionSteps([RebalanceStep.Status.PLANNED, RebalanceStep.Status.APPROVE_REQUIRED])
         for step in error_steps:
             self.logger.info(f'Processing error status for switchover step: {str(step)}')
-            if self.interactive_check(f'Retry step?'):
+            if self.interactive_check(f'Retry step?', default = True):
                 if step.isRollback():
                     self.logger.info('Plan to retry rollback step')
                     step.setStatus(RebalanceStep.Status.PLANNED, True)
@@ -464,7 +462,7 @@ class RebalanceSM:
                 self.rebalance_schema.updateExecutionStep(step)
                 continue
 
-            if not step.isRollback() and self.interactive_check('Rollback step?'):
+            if not step.isRollback() and self.interactive_check('Rollback step?', default = True):
                 self.logger.info('Plan to rollback step')
                 step.setStatus(RebalanceStep.Status.PLANNED, True)
 
@@ -540,7 +538,7 @@ class RebalanceSM:
     # Decorator to overwrite the logic of interactive_check()
     # during tests execution.
     def wrap_interactive_check_with_faults(fun):
-        def func_with_faults(self, msg: str):
+        def func_with_faults(self, msg: str, default: bool):
             try:
                 inject_value = inject_fault_get_value()
                 injected_answers = json.loads(inject_value)
@@ -550,13 +548,13 @@ class RebalanceSM:
                     return False
             except:
                 pass
-            return fun(self, msg)
+            return fun(self, msg, default)
         return func_with_faults
 
     @wrap_interactive_check_with_faults
-    def interactive_check(self, msg: str) -> bool:
+    def interactive_check(self, msg: str, default: bool) -> bool:
         # TODO: add logic here when implementing interactive mode
-        return False
+        return default
 
     @staticmethod
     def convert_moves_to_rebalance_steps(moves: List[LogicalMove]) -> List[RebalanceStep]:
