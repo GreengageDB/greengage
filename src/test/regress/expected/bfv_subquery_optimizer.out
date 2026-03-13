@@ -510,7 +510,7 @@ WITH A AS (
 ---
 (0 rows)
 
-DROP TABLE
+DROP TABLE T;
 --
 -- Test the ctid in Function and Values Scans
 --
