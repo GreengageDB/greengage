@@ -802,3 +802,15 @@ Feature: ggrebalance behave tests
          And distribution information from table "test_schema_1.mv_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 1, row count = 100
          And the numsegments of table "ext_test" is 1
+
+    Scenario: test 7. shrink - check database, schema, table with special character
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And all files in gpAdminLogs directory are deleted
+         And create database schema table with special character
+        When the user runs "ggrebalance --analyze -x 1 --skip-rebalance"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And ggrebalance should not print "doesn't exist, skipping actual rebalance" to logfile with latest timestamp
+
