@@ -1386,7 +1386,11 @@ addTotalQueueDuration(ResGroupData *group)
 	if (group == NULL)
 		return;
 
-	group->totalQueuedTimeMs += (groupWaitEnd - groupWaitStart);
+	/*
+	 * Note: groupWaitEnd and groupWaitStart are in microseconds, but
+	 * totalQueuedTimeMs is in milliseconds. We should convert it here.
+	 */
+	group->totalQueuedTimeMs += ((groupWaitEnd - groupWaitStart) / 1000);
 }
 
 /*
