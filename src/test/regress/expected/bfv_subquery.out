@@ -500,6 +500,21 @@ EXPLAIN SELECT (EXISTS (SELECT UNNEST(X))) AS B FROM A;
 
 DROP TABLE A;
 --
+-- Test if we reattach flow of omitted SubqueryScan to outerplan.
+--
+WITH A AS (
+    SELECT I FROM T
+), B AS (
+    SELECT I, UNNEST(ARRAY[0]) FROM A
+), C AS (
+    SELECT I FROM B
+) SELECT I FROM C JOIN T USING (I) WHERE T.I IN (SELECT T.I FROM C);
+ i 
+---
+(0 rows)
+
+DROP TABLE
+--
 -- Test the ctid in Function and Values Scans
 --
 create table t1(a int) ;
