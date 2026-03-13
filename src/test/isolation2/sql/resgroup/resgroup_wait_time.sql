@@ -60,3 +60,29 @@ from gp_toolkit.gp_resgroup_status where groupname = 'rg_wait_time_test';
 -- clean up
 drop role role_wait_time_test;
 drop resource group rg_wait_time_test;
+
+-- Test to check correctness of value at column "total_queue_duration"
+create resource group rg_wait_time_test with (CONCURRENCY=1, cpu_max_percent=100);
+create role role_wait_time_test resource group rg_wait_time_test;
+
+select total_queue_duration = '00:00:00' waited
+from gp_toolkit.gp_resgroup_status where groupname = 'rg_wait_time_test';
+
+1: set role role_wait_time_test;
+1: begin;
+2: set role role_wait_time_test;
+2&: begin;
+1: select pg_sleep(10);
+1: rollback;
+2<:
+2: rollback;
+
+select total_queue_duration > '00:00:00' AND total_queue_duration < '00:20:00' waited
+from gp_toolkit.gp_resgroup_status where groupname = 'rg_wait_time_test';
+
+1q:
+2q:
+
+-- clean up
+drop role role_wait_time_test;
+drop resource group rg_wait_time_test;

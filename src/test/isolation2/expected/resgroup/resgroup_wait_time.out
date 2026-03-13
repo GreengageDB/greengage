@@ -102,3 +102,49 @@ drop role role_wait_time_test;
 DROP ROLE
 drop resource group rg_wait_time_test;
 DROP RESOURCE GROUP
+
+-- Test to check correctness of value at column "total_queue_duration"
+create resource group rg_wait_time_test with (CONCURRENCY=1, cpu_max_percent=100);
+CREATE RESOURCE GROUP
+create role role_wait_time_test resource group rg_wait_time_test;
+CREATE ROLE
+
+select total_queue_duration = '00:00:00' waited from gp_toolkit.gp_resgroup_status where groupname = 'rg_wait_time_test';
+ waited 
+--------
+ t      
+(1 row)
+
+1: set role role_wait_time_test;
+SET
+1: begin;
+BEGIN
+2: set role role_wait_time_test;
+SET
+2&: begin;  <waiting ...>
+1: select pg_sleep(10);
+ pg_sleep 
+----------
+          
+(1 row)
+1: rollback;
+ROLLBACK
+2<:  <... completed>
+BEGIN
+2: rollback;
+ROLLBACK
+
+select total_queue_duration > '00:00:00' AND total_queue_duration < '00:20:00' waited from gp_toolkit.gp_resgroup_status where groupname = 'rg_wait_time_test';
+ waited 
+--------
+ t      
+(1 row)
+
+1q: ... <quitting>
+2q: ... <quitting>
+
+-- clean up
+drop role role_wait_time_test;
+DROP ROLE
+drop resource group rg_wait_time_test;
+DROP RESOURCE GROUP
