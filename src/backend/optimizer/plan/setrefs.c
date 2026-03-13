@@ -2916,7 +2916,9 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
     Assert(!IsA(plan, Result) &&
            cdb_expr_requires_full_eval((Node *)plan->targetlist));
 
+    /* Unhook the Flow node temporarily.  Caller has already fixed it up. */
     flow = plan->flow;
+	plan->flow = NULL;
 
 	/*
 	 * Build a Result node to take over the targetlist from the given Plan.
@@ -2938,6 +2940,9 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
 
     /* Reattach the Flow node. */
     resultplan->flow = flow;
+	plan->flow = flow;
+	if (resultplan->lefttree && !resultplan->lefttree->flow)
+	resultplan->lefttree->flow = flow;
 
     return resultplan;
 }                               /* cdb_insert_result_node */
