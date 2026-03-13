@@ -86,6 +86,8 @@ def parseargs():
                       help='debug output.')
     parser.add_option('--inplace-swap-roles', dest="inplace_swap_roles", action='store_true', default=False,
                       help='Allows to place primary and mirror at the same host during rebalance.')
+    parser.add_option('-q', '--quiet', action='store_true', default=False,
+                      help='Run in quiet mode.')
 
     # Parse the command line arguments
     options, args = parser.parse_args()
@@ -300,6 +302,8 @@ def main(options, args, parser):
 
         if options.verbose:
             enable_verbose_logging()
+        if options.quiet:
+            quiet_stdout_logging()
 
         gpenv = GpCoordinatorEnvironment(
             options.coordinator_data_directory, True)
