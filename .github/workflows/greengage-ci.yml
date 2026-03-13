@@ -3,7 +3,7 @@ name: Greengage CI
 
 on:
   push:
-    branches: ['main']  # Trigger on push to main (after merged PR)
+    branches: ['6.x', 'main']  # Trigger on push to 6.x/main (after merged PR)
     tags: ['6.*']   # Trigger on tags for versioned releases
   pull_request:
     branches: ['**'] # Trigger on pull requests for all branches
@@ -103,8 +103,8 @@ jobs:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   upload:
-    if: github.event_name == 'push'  # For push to main or tags
-    needs: build  # For push (main or tags)
+    if: github.event_name == 'push'
+    needs: build
     strategy:
       fail-fast: true
       matrix:
@@ -124,7 +124,7 @@ jobs:
 
   # Rebuild prod-redy version without debug extensions and pack it to deb
   package:
-    needs: build  # For push (main or tags)
+    needs: build
     strategy:
       fail-fast: false
       matrix:
