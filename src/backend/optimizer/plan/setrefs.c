@@ -1349,7 +1349,7 @@ set_subqueryscan_references(PlannerInfo *root,
 		}
 
 		/* Honor the flow of the SubqueryScan, by copying it to the subplan. */
-		result->flow = plan->scan.plan.flow;
+		// result->flow = plan->scan.plan.flow;
 	}
 	else
 	{
@@ -2941,8 +2941,8 @@ cdb_insert_result_node(PlannerInfo *root, Plan *plan, int rtoffset)
     /* Reattach the Flow node. */
     resultplan->flow = flow;
 	plan->flow = flow;
-	if (resultplan->lefttree && !resultplan->lefttree->flow)
-	resultplan->lefttree->flow = flow;
+	// if (resultplan->lefttree && !resultplan->lefttree->flow)
+	// resultplan->lefttree->flow = flow;
 
     return resultplan;
 }                               /* cdb_insert_result_node */
