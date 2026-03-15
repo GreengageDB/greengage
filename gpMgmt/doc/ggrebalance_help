@@ -106,7 +106,7 @@ OPTIONS
 
 -d, --target-datadirs "<target_primary_datadir>,<target_mirror_datadir>"
  Set the target segment data directories (primary and mirror) if the cluster is
- expanded or any new hosts are included in the cluster and segment data
+ expanded or if any new hosts are included in the cluster and segment data
  directories should be created on the hosts. Both paths for primary and
  for mirror should be specified.
 
@@ -213,7 +213,7 @@ OPTIONS
 
 -q, --quiet
  Run in quiet mode. Command output is not displayed on
- the screen, but is still written to the log file.
+ the screen, but it is still written to the log file.
 
 -v, --verbose
  Set logging output to verbose.
