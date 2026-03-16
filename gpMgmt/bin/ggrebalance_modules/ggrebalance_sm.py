@@ -122,11 +122,11 @@ class RebalanceSM:
         PRIMARY_TO_MIRROR = 1
         MIRROR_TO_PRIMARY = 2
 
-    def __init__(self, conn: dbconn.Connection, schema: RebalanceSchema, logger: Any, options: Any, gpArray: gparray.GpArray):
+    def __init__(self, conn: dbconn.Connection, schema: RebalanceSchema, logger: Any, options: Any, dburl: dbconn.DbURL):
         self.logger = logger
         self.options = options
         self.shutdown_requested = False
-        self.gparray = gpArray
+        self.dburl = dburl
         self.conn = conn
         self.rebalance_schema = schema
         self.cmd = None
@@ -303,9 +303,9 @@ class RebalanceSM:
             finally:
                 self.cmd = None
 
-    def lookup_seg(self, seg: Segment) -> bool:
+    def lookup_seg(self, gparray: gparray.GpArray, seg: Segment) -> bool:
         """ Look up the segment gpdb by address, port, and dataDirectory """
-        for db in self.gparray.getDbList():
+        for db in gparray.getDbList():
             if (seg.getSegmentHostName() == db.getSegmentHostName() and
                 seg.getSegmentPort() == db.getSegmentPort() and
                 seg.getSegmentDataDirectory() == db.getSegmentDataDirectory()):
@@ -314,12 +314,13 @@ class RebalanceSM:
 
     def create_config_file(self, steps: List[RebalanceStepMoveMirror]) -> str:
         filename = f'/tmp/ggrebalance_move_config_pid{os.getpid()}'
+        gparray = GpArray.initFromCatalog(self.dburl, utility=True)
         with open(filename, 'w') as fp:
             for step in steps:
                 assert isinstance(step, RebalanceStepMoveMirror)
                 move = step.getMove()
                 segment_current_info = move.seg
-                if self.lookup_seg(segment_current_info):
+                if self.lookup_seg(gparray, segment_current_info):
                     cfg_line = f'{segment_current_info.getSegmentHostName()}|{segment_current_info.getSegmentPort()}|{segment_current_info.getSegmentDataDirectory()} '
                 else:
                     cfg_line = f'{move.dstHost.hostname}|{move.target_port}|{move.target_datadir} '

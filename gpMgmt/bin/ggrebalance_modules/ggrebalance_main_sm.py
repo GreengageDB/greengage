@@ -140,7 +140,7 @@ class GGRebalanceMainSM:
                                before_state_change = 'on_every_state')
 
         self.gg_shrink = GGShrink(self.conn, self.rebalance_schema, self.logger, self.options, gpEnv, self.gparray, gpArrayDumpFilename)
-        self.gg_rebalance = RebalanceSM(self.conn, self.rebalance_schema, self.logger, self.options, self.gparray)
+        self.gg_rebalance = RebalanceSM(self.conn, self.rebalance_schema, self.logger, self.options, self.dburl)
 
         self.plan = None
         self.main_state_from_prev_run = self.rebalance_schema.getMainStateFromPreviousRun()

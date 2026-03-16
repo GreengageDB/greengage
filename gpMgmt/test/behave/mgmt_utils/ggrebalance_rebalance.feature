@@ -1270,7 +1270,7 @@ Feature: ggrebalance behave tests (rebalance scenarios)
         When there is a "heap" table "test_schema_1.test_table_3" in "test_db_1" with "100" rows
         Then distribution information from table "test_schema_1.test_table_3" with data in "test_db_1" is equal to segment count = 4, row count = 100
 
-    Scenario: test 9.4. rebalance - shrink, rebalance (and interrupt during it) and full rollback.
+    Scenario: test 9.5. rebalance - shrink, rebalance (and interrupt during it) and full rollback.
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1, sdw2, sdw3"
