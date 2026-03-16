@@ -197,9 +197,6 @@ class GGRebalanceMainSM:
     @wrap_func_with_faults
     def on_enter_STATE_ROLLBACK(self) -> None:
         try:
-            if self.main_state_from_prev_run == 'STATE_EXECUTOR_DONE':
-                self.logger.info("Previous run was completed successfully. Can't perform rollback.")
-                return
             self.plan = self.rebalance_schema.retrieveSavedPlan()
             if isinstance(self.plan, ShrinkPlan):
                 if self.is_shrink_rollback_in_progress:

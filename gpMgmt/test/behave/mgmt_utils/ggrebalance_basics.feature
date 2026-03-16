@@ -62,10 +62,7 @@ Feature: ggrebalance behave tests
          And ggrebalance should print "Previous run was completed successfully. Please execute cleanup before a new run." to logfile with latest timestamp
         When the user runs "ggrebalance -r"
         Then ggrebalance should return a return code of 0
-         And ggrebalance should print "Previous run was completed successfully. Can't perform rollback." to logfile with latest timestamp
-        When the user runs "ggrebalance -c"
-        Then ggrebalance should return a return code of 0
-         And ggrebalance should print "Cleanup is complete" to logfile with latest timestamp
+         And ggrebalance should print "No steps to rollback found for rebalance" to logfile with latest timestamp
 
     Scenario: test 3. check cleanup after the target segment count was updated
         Given the database is not running
