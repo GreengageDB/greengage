@@ -499,6 +499,7 @@ DROP TABLE A;
 --
 -- Test if we reattach flow of omitted SubqueryScan to outerplan.
 --
+EXPLAIN (VERBOSE, COSTS OFF)
 WITH A AS (
     SELECT I FROM T
 ), B AS (
@@ -506,9 +507,42 @@ WITH A AS (
 ), C AS (
     SELECT I FROM B
 ) SELECT I FROM C JOIN T USING (I) WHERE T.I IN (SELECT T.I FROM C);
- i 
----
-(0 rows)
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice2; segments: 3)
+   Output: b.i
+   ->  Hash Join
+         Output: b.i
+         Hash Cond: (t.i = b.i)
+         ->  Seq Scan on public.t
+               Output: t.i
+               Filter: (SubPlan 1)
+               SubPlan 1  (slice2; segments: 3)
+                 ->  Subquery Scan on c
+                       Output: t.i
+                       ->  Subquery Scan on b_1
+                             Output: b_1.i
+                             ->  Result
+                                   Output: t_2.i, unnest('{0}'::integer[])
+                                   ->  Result
+                                         Output: t_2.i
+                                         ->  Materialize
+                                               Output: t_2.i
+                                               ->  Broadcast Motion 3:3  (slice1; segments: 3)
+                                                     Output: t_2.i
+                                                     ->  Seq Scan on public.t t_2
+                                                           Output: t_2.i
+         ->  Hash
+               Output: b.i
+               ->  Subquery Scan on b
+                     Output: b.i
+                     ->  Result
+                           Output: t_1.i, unnest('{0}'::integer[])
+                           ->  Seq Scan on public.t t_1
+                                 Output: t_1.i
+ Optimizer: Postgres query optimizer
+ Settings: optimizer=on
+(33 rows)
 
 DROP TABLE T;
 --
