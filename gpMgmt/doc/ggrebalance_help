@@ -6,7 +6,7 @@ Rebalance a Greengage Database cluster by redistributing segments across hosts.
 Synopsis
 ******************************************************
 
-ggrebalance [-x <segment_count>]
+ggrebalance -x <segment_count>
     [-n <parallel_processes>] [-B <batch_size>]
     [{-H <hostname_1>,<hostname_2>,...,<hostname_N> | --target-hosts-file <filename>} |
      {{-A <hostname_1>,<hostname_2>,...,<hostname_N> | --add-hosts-file <filename>}
