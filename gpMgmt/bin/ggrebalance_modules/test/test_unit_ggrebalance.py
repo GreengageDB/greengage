@@ -31,9 +31,9 @@ def check_query(conn, query):
 
 class TestRebalanceUtilityCLI(GpTestCase):
     def setUp(self):
-        gprebalance_file = os.path.abspath(
+        ggrebalance_file = os.path.abspath(
             os.path.dirname(__file__) + "/../../ggrebalance")
-        self.subject = imp.load_source('ggrebalance', gprebalance_file)
+        self.subject = imp.load_source('ggrebalance', ggrebalance_file)
         self.old_sys_argv = sys.argv
         sys.argv = []
         self.options, self.args, self.parser = self.subject.parseargs()
@@ -78,8 +78,9 @@ class TestRebalanceUtilityCLI(GpTestCase):
            return_value=initGparrayFromFile("balanced_grouped_6"))
     @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
     @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance.check_down_segments')
     @rebalance_only(numsegs = 6)
-    def test_already_balanced_grouped(self, mockCatalog, mockOsPath, mockCursor):
+    def test_already_balanced_grouped(self, mockCatalog, mockOsPath, mockCursor, mock_down):
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.info.assert_any_call(
@@ -89,8 +90,9 @@ class TestRebalanceUtilityCLI(GpTestCase):
            return_value=initGparrayFromFile("seg_down"))
     @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
     @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance.check_down_segments')
     @rebalance_only(numsegs = 4)
-    def test_segment_down(self, mockCatalog, mockOsPath, mockCursor):
+    def test_segment_down(self, mockCatalog, mockOsPath, mockCursor, mock_down):
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.error.assert_any_call(
@@ -100,8 +102,9 @@ class TestRebalanceUtilityCLI(GpTestCase):
            return_value=initGparrayFromFile("balanced_spread_24"))
     @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
     @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance.check_down_segments')
     @rebalance_only(numsegs = 24)
-    def test_invalid_target_datadir(self, mockCatalog, mockOsPath, mockCursor):
+    def test_invalid_target_datadir(self, mockCatalog, mockOsPath, mockCursor, mock_down):
         self.options.target_hosts = "sdw1, sdw2, sdw3"
         self.options.target_datadirs = '/data/primary/gpseg{content}'
         with self.assertRaises(SystemExit):
@@ -115,8 +118,9 @@ class TestRebalanceUtilityCLI(GpTestCase):
            return_value=initGparrayFromFile("role_mismatch"))
     @patch('os.path.exists', side_effect=lambda path: path not in ['/tmp/dirdoesnotexist/gparraydump'])
     @patch('gppylib.db.dbconn.queryRow', side_effect=check_query)
+    @patch('ggrebalance.check_down_segments')
     @rebalance_only(numsegs = 4)
-    def test_role_mistmatch(self, mockCatalog, mockOsPath, mockCursor):
+    def test_role_mistmatch(self, mockCatalog, mockOsPath, mockCursor, mock_down):
         with self.assertRaises(SystemExit):
             self.subject.main(self.options, self.args, self.parser)
         self.subject.logger.error.assert_any_call(

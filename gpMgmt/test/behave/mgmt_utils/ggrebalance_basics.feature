@@ -3,33 +3,48 @@ Feature: ggrebalance behave tests
 
     Scenario Outline: test 1. validate incompatible option combinations
         Given a standard local demo cluster is running
+         And the environment variable "COORDINATOR_DATA_DIRECTORY" is set from output of "echo $(dirname $(pwd))/gpAux/gpdemo/datadirs/qddir/demoDataDir-1"
+         And coordinator data directory is updated
         When the user runs "ggrebalance <options>"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "<error_message>" to stdout
         Given <run_status>
+        Then <restore_env>
+         And coordinator data directory is updated
         
         Examples: Mutually exclusive options
-          | options                                                     | error_message                                                         | run_status |
-          | --target-hosts sdw1,sdw2 --target-hosts-file /tmp/hosts.txt | Can't use together options '--target-hosts' and '--target-hosts-file' |  stub |
-          | --target-hosts sdw1,sdw2 --add-hosts sdw3                   | Can't use together options '--target-hosts' and '--add-hosts'         | stub       |
-          | --target-hosts sdw1,sdw2 --remove-hosts sdw3                | Can't use together options '--target-hosts' and '--remove-hosts'      | stub       |
-          | --add-hosts sdw3 --add-hosts-file /tmp/add.txt              | Can't use together options '--add-hosts' and '--add-hosts-file'       | stub       |
-          | --remove-hosts sdw3 --remove-hosts-file /tmp/rm.txt         | Can't use together options '--remove-hosts' and '--remove-hosts-file' | stub       |
-          | --add-hosts sdw3 --remove-hosts sdw3                        | Can't use together options '--add-hosts' and '--remove-hosts'         | stub       |
-          | --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' --target-datadirs-file /tmp/datadirs.txt | Can't use together options '--target-datadirs' and '--target-datadirs-file' | stub |
-          | --mirror-mode grouped --skip-rebalance                      | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |
-          | -m spread --skip-rebalance                                  | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |
-          | -c --target-hosts sdw1,sdw2                                 | Can't use together options '--clean-required' and '--target-hosts'    | stub       |
-          | -c --add-hosts sdw3                                         | Can't use together options '--clean-required' and '--add-hosts'       | stub       |
-          | -c --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' | Can't use together options '--clean-required' and '--target-datadirs'   | stub    |
-          | -c -x 2                                                     | Can't use together options '--clean-required' and '--target-segment-count' | stub    |
-          | -c --mirror-mode grouped                                    | Can't use together options '--clean-required' and '--mirror-mode'       | stub     |
-          | -c --skip-rebalance                                         | Can't use together options '--clean-required' and '--skip-rebalance'    | stub     |
-          | -c --show-plan                                              | Can't use together options '--clean-required' and '--show-plan'         | stub     |
-          | -c --analyze                                                | Can't use together options '--clean-required' and '--analyze'           | stub     |
-          | -c --replay-lag 1                                           | Can't use together options '--clean-required' and '--replay-lag'        | stub     |
-          | -c --hba-hostnames                                          | Can't use together options '--clean-required' and '--hba-hostnames'     | stub     |
-          | -c --skip-resource-estimation                               | Can't use together options '--clean-required' and '--skip-resource-estimation' |  the database is not running |
+          | options                                                     | error_message                                                         | run_status | restore_env|
+          | --target-hosts sdw1,sdw2 --target-hosts-file /tmp/hosts.txt | Can't use together options '--target-hosts' and '--target-hosts-file' |  stub |stub|
+          | --target-hosts sdw1,sdw2 --add-hosts sdw3                   | Can't use together options '--target-hosts' and '--add-hosts'         | stub       |stub|
+          | --target-hosts sdw1,sdw2 --remove-hosts sdw3                | Can't use together options '--target-hosts' and '--remove-hosts'      | stub       |stub|
+          | --add-hosts sdw3 --add-hosts-file /tmp/add.txt              | Can't use together options '--add-hosts' and '--add-hosts-file'       | stub       |stub|
+          | --remove-hosts sdw3 --remove-hosts-file /tmp/rm.txt         | Can't use together options '--remove-hosts' and '--remove-hosts-file' | stub       |stub|
+          | --add-hosts sdw3 --remove-hosts sdw3                        | Can't use together options '--add-hosts' and '--remove-hosts'         | stub       |stub|
+          | --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' --target-datadirs-file /tmp/datadirs.txt | Can't use together options '--target-datadirs' and '--target-datadirs-file' | stub |stub|
+          | --mirror-mode grouped --skip-rebalance                      | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |stub|
+          | -m spread --skip-rebalance                                  | Can't use together options '--skip-rebalance' and '--mirror-mode'     | stub       |stub|
+          | --skip-rebalance --inplace-swap-roles                       | Can't use together options '--skip-rebalance' and '--inplace-swap-roles'     | stub     |stub|
+          | -c --target-hosts sdw1,sdw2                                 | Can't use together options '--clean-required' and '--target-hosts'    | stub       |stub|
+          | -c --add-hosts sdw3                                         | Can't use together options '--clean-required' and '--add-hosts'       | stub       |stub|
+          | -c --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' | Can't use together options '--clean-required' and '--target-datadirs'   | stub    |stub|
+          | -c -x 2                                                     | Can't use together options '--clean-required' and '--target-segment-count' | stub    |stub|
+          | -c --mirror-mode grouped                                    | Can't use together options '--clean-required' and '--mirror-mode'       | stub     |stub|
+          | -c --skip-rebalance                                         | Can't use together options '--clean-required' and '--skip-rebalance'    | stub     |stub|
+          | -c --show-plan                                              | Can't use together options '--clean-required' and '--show-plan'         | stub     |stub|
+          | -c --analyze                                                | Can't use together options '--clean-required' and '--analyze'           | stub     |stub|
+          | -c --replay-lag 1                                           | Can't use together options '--clean-required' and '--replay-lag'        | stub     |stub|
+          | -c --hba-hostnames                                          | Can't use together options '--clean-required' and '--hba-hostnames'     | stub     |stub|
+          | -c --inplace-swap-roles                                         | Can't use together options '--clean-required' and '--inplace-swap-roles'     | stub     |stub|
+          | -c --skip-resource-estimation                               | Can't use together options '--clean-required' and '--skip-resource-estimation' | stub |stub|
+          | -r --target-hosts sdw1,sdw2                                 | Can't use together options '--rollback-required' and '--target-hosts'    | stub       |stub|
+          | -r --add-hosts sdw3                                         | Can't use together options '--rollback-required' and '--add-hosts'       | stub       |stub|
+          | -r --target-datadirs '/data/p/gpseg{content},/data/m/gpseg{content}' | Can't use together options '--rollback-required' and '--target-datadirs'   | stub    |stub|
+          | -r -x 2                                                     | Can't use together options '--rollback-required' and '--target-segment-count' | stub    |stub|
+          | -r --mirror-mode grouped                                    | Can't use together options '--rollback-required' and '--mirror-mode'       | stub     |stub|
+          | -r --skip-rebalance                                         | Can't use together options '--rollback-required' and '--skip-rebalance'    | stub     |stub|
+          | -r --show-plan                                              | Can't use together options '--rollback-required' and '--show-plan'         | stub     |stub|
+          | -r --inplace-swap-roles                                     | Can't use together options '--rollback-required' and '--inplace-swap-roles'     | stub     |stub|
+          | -r --skip-resource-estimation                               | Can't use together options '--rollback-required' and '--skip-resource-estimation' |the database is not running |"COORDINATOR_DATA_DIRECTORY" environment variable should be restored|
 
     Scenario: test 2. ggrebalance simple scenarios
         Given the database is not running

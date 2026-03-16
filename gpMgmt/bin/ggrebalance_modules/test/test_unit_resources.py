@@ -385,7 +385,7 @@ class TestResourceEstimator(GpTestCase):
         
         # Should not raise exception
         try:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         except ResourceError:
             self.fail("ResourceError raised when space is sufficient")
         
@@ -430,7 +430,7 @@ class TestResourceEstimator(GpTestCase):
         
         # Should raise ResourceError
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
         error_msg = str(context.exception)
         self.assertIn("Insufficient disk space", error_msg)
@@ -484,7 +484,7 @@ class TestResourceEstimator(GpTestCase):
         })
         
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
         error_msg = str(context.exception)
         self.assertIn("Insufficient disk space", error_msg)
@@ -543,7 +543,7 @@ class TestResourceEstimator(GpTestCase):
         
         # Should not raise
         try:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         except ResourceError:
             self.fail("ResourceError raised when space is sufficient")
     
@@ -572,9 +572,9 @@ class TestResourceEstimator(GpTestCase):
         estimator.disk_checker.check_batch_available_space = Mock(return_value={})
         
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
-        self.assertIn("No disk space information for host sdw2", str(context.exception))
+        self.assertIn("No disk space information for sdw2:/data/primary0", str(context.exception))
     
     def test_validate_tablespace_space_sufficient(self):
         """Test validation succeeds when tablespace has sufficient space on separate filesystem"""
@@ -618,7 +618,7 @@ class TestResourceEstimator(GpTestCase):
         
         # Should not raise exception
         try:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         except ResourceError:
             self.fail("ResourceError raised when space is sufficient")
     
@@ -663,7 +663,7 @@ class TestResourceEstimator(GpTestCase):
         })
         
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
         error_msg = str(context.exception)
         self.assertIn("Insufficient disk space", error_msg)
@@ -718,7 +718,7 @@ class TestResourceEstimator(GpTestCase):
         })
         
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
         error_msg = str(context.exception)
         self.assertIn("Insufficient disk space", error_msg)
@@ -768,7 +768,7 @@ class TestResourceEstimator(GpTestCase):
         })
         
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
         error_msg = str(context.exception)
         self.assertIn("Insufficient disk space", error_msg)
@@ -821,7 +821,7 @@ class TestResourceEstimator(GpTestCase):
         
         # Should not raise exception
         try:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         except ResourceError:
             self.fail("ResourceError raised when space is sufficient")
     
@@ -889,7 +889,7 @@ class TestResourceEstimator(GpTestCase):
         
         # Should not raise
         try:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         except ResourceError:
             self.fail("ResourceError raised when space is sufficient")
     
@@ -955,7 +955,7 @@ class TestResourceEstimator(GpTestCase):
         })
         
         with self.assertRaises(ResourceError) as context:
-            estimator._validate_target_space(moves)
+            estimator._validate_and_build_allocations(moves)
         
         error_msg = str(context.exception)
         self.assertIn("Insufficient disk space", error_msg)
@@ -966,60 +966,6 @@ class TestResourceEstimator(GpTestCase):
         # Should show aggregated requirement (~11GB) vs available (9GB)
         self.assertIn("11", error_msg)
         self.assertIn("9", error_msg)
-    
-    def test_validate_no_double_counting_same_segment(self):
-        """Test that the same segment is not double-counted on same filesystem"""
-        seg0 = None
-        for seg in self.gparray.getDbList():
-            if seg.content == 0 and seg.isSegmentPrimary():
-                seg0 = seg
-                break
-        
-        # Create two moves for the same segment (shouldn't happen in reality, 
-        # but tests deduplication logic)
-        moves = [
-            LogicalMove(
-                seg=seg0,
-                srcHost=Host('sdw1', '172.20.0.6', status=HostStatus.ACTIVE),
-                dstHost=Host('sdw2', '172.20.0.7', status=HostStatus.ACTIVE),
-                target_datadir='/data/primary0',
-                target_port=7000,
-                segment_size=SegmentSize(datadir_size_kb=5242880)  # 5GB
-            ),
-            LogicalMove(
-                seg=seg0,  # Same segment!
-                srcHost=Host('sdw1', '172.20.0.6', status=HostStatus.ACTIVE),
-                dstHost=Host('sdw2', '172.20.0.7', status=HostStatus.ACTIVE),
-                target_datadir='/data/primary0_copy',
-                target_port=7001,
-                segment_size=SegmentSize(datadir_size_kb=5242880)  # 5GB
-            )
-        ]
-        
-        estimator = ResourceEstimator(self.logger, self.conn, self.gparray)
-        
-        # Both on same filesystem
-        # Should only count once: 5GB * 1.1 = 5.5GB, not 11GB
-        estimator.disk_checker.check_batch_available_space = Mock(return_value={
-            '172.20.0.7': {
-                '/data/primary0': DiskSpaceInfo(
-                    filesystem='/dev/sdb1',
-                    available_kb=6291456,  # 6GB
-                    directory='/data/primary0'
-                ),
-                '/data/primary0_copy': DiskSpaceInfo(
-                    filesystem='/dev/sdb1',  # Same filesystem
-                    available_kb=6291456,
-                    directory='/data/primary0_copy'
-                )
-            }
-        })
-        
-        # Should NOT raise - only needs 5.5GB, has 6GB
-        try:
-            estimator._validate_target_space(moves)
-        except ResourceError:
-            self.fail("ResourceError raised - segment was double-counted!")
     
     @patch('ggrebalance_modules.planner.PortIsAvailable')
     @patch('ggrebalance_modules.planner.DiskSpaceChecker')

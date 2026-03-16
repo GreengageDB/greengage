@@ -2863,8 +2863,14 @@ def impl(context, command, target):
     if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
-@then('{command} should print "{target}" to logfile with latest timestamp')
-def impl(context, command, target):
+@then('{command} should {print} "{target}" to logfile with latest timestamp')
+def impl(context, command, print, target):
+    if print == 'print':
+        valuesShouldExist = True
+    elif print == 'not print':
+        valuesShouldExist = False
+    else:
+        raise Exception("only 'print' and 'not print' are valid inputs")
     log_dir = _get_gpAdminLogs_directory()
     filenames = glob.glob('%s/%s_*.log' % (log_dir, command))
     filename = max(filenames, key=os.path.getctime)
@@ -2872,8 +2878,10 @@ def impl(context, command, target):
     with open(filename) as fr:
         for line in fr:
             contents += line
-    if target not in contents:
+    if valuesShouldExist and target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
+    if not valuesShouldExist and target in contents:
+        raise Exception("found %s in %s" % (target, filename))
 
 
 @then('{command} should print "{target}" regex to logfile')
@@ -4645,5 +4653,25 @@ def impl(context):
     os.environ[fault_injection.GPMGMT_FAULT_POINT] = ''
 
 @given('stub')
+@then('stub')
+@when('stub')
 def impl(context):
     pass
+
+@given('the temporary file "{filename}" is created with content')
+@then('the temporary file "{filename}" is created  with content')
+@when('the temporary file "{filename}" is created  with content')
+def impl(context, filename):
+    with open(filename, 'w') as f:
+        f.write(context.text + '\n')
+
+@given('the environment variable "{var}" is set from output of "{command}"')
+def impl(context, var, command):
+    run_command(context, command)
+    context.execute_steps(f'Given the environment variable "{var}" is set to "{context.stdout_message.rstrip()}"')
+
+@given('coordinator data directory is updated')
+@then('coordinator data directory is updated')
+def impl(context):
+    global coordinator_data_dir 
+    coordinator_data_dir = os.environ.get('COORDINATOR_DATA_DIRECTORY')

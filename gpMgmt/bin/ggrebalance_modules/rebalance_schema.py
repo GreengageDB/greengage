@@ -2,6 +2,7 @@
 
 from psycopg2.extensions import cursor
 from gppylib.db import dbconn
+from gppylib.utils import escape_string
 from typing import List
 from ggrebalance_modules.planner import Plan, deserializePlan
 from ggrebalance_modules.rebalance_step import *
@@ -13,7 +14,7 @@ def get_table_distr_segment_count(conn: dbconn.Connection, schema_name: str, tab
                           f'''SELECT p.numsegments
                           FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
                           JOIN gp_distribution_policy p ON c.oid = p.localoid
-                          WHERE n.nspname='{schema_name}' AND c.relname='{table_name}';''')
+                          WHERE n.nspname='{escape_string(schema_name)}' AND c.relname='{escape_string(table_name)}';''')
     return int(row[0])
 
 class RebalanceSchema:
@@ -155,12 +156,12 @@ class RebalanceSchema:
     def addTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str) -> None:
         dbconn.execSQL(self.conn,
                        f'''INSERT INTO {self.schema_name}.{self.table_rebalance_status_detail}
-                       VALUES ('{db}', '{schema_name}', '{rel_name}', '{status}')''')
+                       VALUES ('{escape_string(db)}', '{escape_string(schema_name)}', '{escape_string(rel_name)}', '{status}')''')
 
     def setStatusForTableToRebalance(self, db: str, schema_name: str, rel_name: str, status: str) -> None:
         dbconn.execSQL(self.conn,
                        f'''UPDATE {self.schema_name}.{self.table_rebalance_status_detail} SET status = '{status}'
-                       WHERE db_name = '{db}' AND schema_name = '{schema_name}' AND rel_name = '{rel_name}';''')
+                       WHERE db_name = '{escape_string(db)}' AND schema_name = '{escape_string(schema_name)}' AND rel_name = '{escape_string(rel_name)}';''')
 
     def getTablesToRebalanceWithStatus(self, status: str) -> cursor:
         return dbconn.query(self.conn, f"""SELECT db_name, schema_name, rel_name FROM

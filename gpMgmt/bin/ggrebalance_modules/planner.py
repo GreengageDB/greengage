@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
-from contextlib import closing
+import copy
 import os
 import pickle
 from typing import Any, Tuple, List, Dict
-from dataclasses import dataclass
+from contextlib import closing
+from dataclasses import dataclass, field
 from copy import deepcopy
+import math
 
 from gppylib.db import dbconn
 import gppylib.gparray as gparray
@@ -32,6 +34,8 @@ class LogicalMove:
         dst: destination host
         target_datadir: target data directory
         target_port: target port
+        segment_size: segment volume including tablespaces
+        swap_metadata: defines the order of swap moves
     """
     seg: Segment
     srcHost: Host
@@ -39,6 +43,7 @@ class LogicalMove:
     target_datadir: str
     target_port: int
     segment_size: Optional[SegmentSize] = None
+    swap_metadata: Optional[Dict[str, Any]] = None
 
     def __str__(self):
         """Pretty print logical move"""
@@ -604,21 +609,6 @@ class Planner:
 
         if rebalance_moves is None:
             self.logger.info("Cluster is already balanced, no segment moves will be held.")
-        else:
-            if not self.options.skip_resource_estimation:
-                try:
-                    with closing(dbconn.connect(self.dburl, encoding='UTF8')) as conn:
-                        estimator = ResourceEstimator(
-                            self.logger, 
-                            conn, 
-                            self.virtual_gparray,
-                            batch_size=getattr(self.options, 'batch_size', 16)
-                        )
-                        estimator.estimate_and_validate_moves(rebalance_moves)
-                except ResourceError as e:
-                    raise PlanningError(f"Resource validation failed: {e}")
-            else:
-                self.logger.warning("Skipping resource estimation")
 
         plan.setMoves(rebalance_moves)
         plan.setTargetSegmentCount(self.options.target_segment_count)
@@ -789,6 +779,7 @@ class Planner:
         port_allocator = PortAllocator(self.virtual_gparray,
                                        self.logger,
                                        not self.options.skip_resource_estimation)
+        final_moves = []
         moves = []
         for seg in self.virtual_gparray.getSegDbList():
             is_mirror = seg.isSegmentMirror()
@@ -816,8 +807,38 @@ class Planner:
         
         if len(moves) == 0:
             return None
+        
+        resource_estimator = None
 
-        return moves
+        if not self.options.skip_resource_estimation:
+            try:
+                resource_estimator = ResourceEstimator(
+                        self.logger, 
+                        self.dburl, 
+                        self.virtual_gparray,
+                        batch_size=getattr(self.options, 'batch_size', 16)
+                        )
+                resource_estimator.estimate_and_validate_moves(moves)
+            except ResourceError as e:
+                    raise PlanningError(f"Resource validation failed: {e}")
+        else:
+            self.logger.warning("Skipping resource estimation")
+        # Detect swaps
+        swap_pairs = None
+        if not self.options.inplace_swap_roles:
+            swap_pairs = self.detect_swap_pairs(moves)
+        if swap_pairs:
+            self.logger.info(f"Detected {len(swap_pairs)} primary-mirror pairs which just swap hosts")
+            final_moves = self.handle_swaps(swap_pairs, moves, port_allocator, resource_estimator)
+        else:
+            final_moves = moves
+        if resource_estimator:
+            self.logger.info(
+                f"Estimated total data to move: "
+                f"{resource_estimator.total_gb(final_moves):.2f} GB"
+            )
+
+        return final_moves
     
     def already_balanced(self, load: int) -> bool:
         primaries_by_host = defaultdict(int)
@@ -850,6 +871,406 @@ class Planner:
         # use template
         template = datadir_info.mirror_template if is_mirror else datadir_info.primary_template
         return TemplateParser.instantiate_template(template, host.hostname, content_id)
+    
+    def detect_swap_pairs(self, moves: List[LogicalMove]) -> List[Tuple[LogicalMove, LogicalMove]]:
+        """
+        Detect primary-mirror swap scenarios
+        
+        A swap occurs when:
+        - Primary of content N moves from host A to host B
+        - Mirror of content N moves from host B to host A
+        
+        Returns:
+            List of (primary_move, mirror_move) tuples for detected swaps
+        """
+        # Index moves by content
+        moves_by_content = defaultdict(dict)
+        for move in moves:
+            content_id = move.seg.getSegmentContentId()
+            if move.seg.isSegmentPrimary():
+                moves_by_content[content_id]['primary'] = move
+            else:
+                moves_by_content[content_id]['mirror'] = move
+        
+        swap_pairs = []
+        for content_id, seg_moves in moves_by_content.items():
+            # Check if both primary and mirror are moved
+            if 'primary' not in seg_moves or 'mirror' not in seg_moves:
+                continue
+            
+            prim_move = seg_moves['primary']
+            mir_move = seg_moves['mirror']
+            
+            # Check if they're swapping hosts
+            prim_src = prim_move.seg.getSegmentHostName()
+            prim_dst = prim_move.dstHost.hostname
+            mir_src = mir_move.seg.getSegmentHostName()
+            mir_dst = mir_move.dstHost.hostname
+            
+            if (prim_src == mir_dst and 
+                prim_dst == mir_src):
+                swap_pairs.append((prim_move, mir_move))
+                self.logger.debug(
+                    f"Detected swap for content {content_id}: "
+                    f"{prim_src} <-> {prim_dst}"
+                )
+        
+        return swap_pairs
+    
+    def select_intermediate_host(self, 
+                                primary_move: LogicalMove,
+                                mirror_move: LogicalMove,
+                                used_intermediate_hosts: Dict[str, int],
+                                resource_estimator: Optional['ResourceEstimator'] = None
+                                 ) -> Host:
+        """
+        Select an intermediate host for swap operation with basic space validation
+        
+        Naive criteria (since the executor runs all mirror moves before role swap):
+        1. Not involved in this swap (not source or dest for either segment)
+        2. Has sufficient space for the mirror PLUS other planned moves to that host
+        3. Prefer hosts with fewer intermediate segments already assigned
+        
+        Args:
+            primary_move: Primary segment move
+            mirror_move: Mirror segment move
+            used_intermediate_hosts: Dict tracking hostname -> count of intermediates assigned
+            resource_estimator: Optional ResourceEstimator for space validation
+        
+        Returns:
+            Selected intermediate host
+        """
+        content_id = primary_move.seg.getSegmentContentId()
+        
+        # Collect excluded hostnames
+        excluded_hosts = {
+            primary_move.dstHost.hostname,
+            mirror_move.dstHost.hostname
+        }
+        
+        # Find candidate hosts
+        candidates = []
+        for host in self.target_hosts:
+            if host.status not in [HostStatus.ACTIVE, HostStatus.NEW]:
+                continue
+            
+            # Check if excluded
+            if host.hostname in excluded_hosts:
+                continue
+            
+            candidates.append(host)
+        
+        if not candidates:
+            raise PlanningError(
+                f"No intermediate host available for swap of content {content_id}. "
+                f"Need at least 3 hosts to perform swaps safely. Or you may allow "
+                f"primary-mirror coexistence by --inplace-swap-roles."
+            )
+        
+        # Get mirror size for space check
+        mirror_size_kb = 0
+        if mirror_move.segment_size:
+            mirror_size_kb = int(mirror_move.segment_size.total_size_kb * (1 + DISK_SPACE_SAFETY_MARGIN))
+
+        # Score each candidate
+        scored_candidates = []
+        
+        for host in candidates:
+            # Check space if resource estimation is enabled
+            has_space = True
+            available_space_kb = float('inf')
+            filesystems = 'unknown'
+            
+            if resource_estimator:
+                try:
+                    intermediate_datadir = self._get_datadir_for_segment(
+                        host, content_id, is_mirror=True)
+
+                    has_space, available_space_kb, filesystems = \
+                        resource_estimator.check_space(
+                            hostname=host.hostname,
+                            host_address=host.address,
+                            data_directory=intermediate_datadir,
+                            required_size=mirror_move.segment_size
+                            )
+
+                    if not has_space:
+                        self.logger.debug(
+                            f"Host {host.hostname}: insufficient space insufficient space on {filesystems}\n"
+                            f"  Directory: {intermediate_datadir}\n"
+                            f"  (available: {available_space_kb / 1024 / 1024:.2f} GB, "
+                            f"  required: {mirror_size_kb / 1024 / 1024:.2f} GB)"
+                        )
+                        continue
+                    else:
+                        self.logger.debug(
+                            f"Host {host.hostname}: viable candidate\n"
+                            f"  Directory: {intermediate_datadir}\n"
+                            f"  Filesystem: {filesystems}\n"
+                            f"  Available: {available_space_kb / 1024 / 1024:.2f} GB\n"
+                            f"  Required: {mirror_size_kb / 1024 / 1024:.2f} GB"
+                        )
+                except Exception as e:
+                    self.logger.error(f"Could not check space on {host.hostname}: {e}")
+                    has_space = False
+            
+            if not has_space:
+                continue
+            
+            # Calculate score
+            # Factors: available space, intermediate usage
+            if mirror_size_kb <= 0:
+                space_score = 1.0
+            else:
+                ratio = available_space_kb / mirror_size_kb
+                # sigmoid. more sensitive around ratio=1
+                space_score = 1.0 / (1.0 + math.exp(-3.0 * (ratio - 1.0)))
+            
+            # Penalize hosts already used as intermediate
+            intermediate_count = used_intermediate_hosts.get(host.hostname, 0)
+            intermediate_score = math.exp(-1.0 * intermediate_count)
+            
+            # make score lie in [0, 1]
+            score = space_score * 0.7 + intermediate_score * 0.3
+            
+            scored_candidates.append((host, score, available_space_kb, filesystems))
+        
+        if not scored_candidates:
+            raise PlanningError(
+                f"No suitable intermediate host found for swap of content {content_id}. "
+                f"Need at least 3 hosts with sufficient space to perform swaps safely."
+            )
+        
+        # Sort by score (higher is better)
+        scored_candidates.sort(key=lambda x: x[1], reverse=True)
+        
+        selected_host, selected_score, selected_space, selected_fs = scored_candidates[0]
+        
+        # Track usage
+        used_intermediate_hosts[selected_host.hostname] = \
+            used_intermediate_hosts.get(selected_host.hostname, 0) + 1
+        
+        self.logger.info(
+            f"Selected intermediate host {selected_host.hostname} for content {content_id}\n"
+            f"  Score: {selected_score:.1f}\n"
+            f"  Filesystems: {selected_fs}\n"
+            f"  Available: {selected_space / 1024 / 1024:.2f} GB\n"
+            f"  Required: {mirror_size_kb / 1024 / 1024:.2f} GB")
+        
+        if resource_estimator:
+            resource_estimator.reserve_space(
+                hostname=host.hostname,
+                host_address=host.address,
+                data_directory=self._get_datadir_for_segment(host, content_id, is_mirror=True),
+                dbid=mirror_move.seg.dbid,
+                required_size=mirror_move.segment_size
+            )
+        
+        return selected_host
+    
+    def decompose_swap(self,
+                      primary_move: LogicalMove,
+                      mirror_move: LogicalMove,
+                      intermediate_host: Host,
+                      port_allocator: PortAllocator) -> Tuple[LogicalMove, LogicalMove, LogicalMove]:
+        """
+        Decompose a swap into 3 moves through intermediate host
+        
+        Phase 1: Mirror -> Intermediate host
+        Phase 2: Primary -> Mirror's original host (direct move)
+        Phase 3: Mirror (from intermediate) -> Primary's original host
+        
+        Returns:
+            (phase1_move, phase2_move, phase3_move)
+        """
+        content_id = primary_move.seg.getSegmentContentId()
+        
+        # Phase 1: Move mirror to intermediate host
+        intermediate_datadir = self._get_datadir_for_segment(
+            intermediate_host,
+            content_id,
+            is_mirror=True
+        )
+        intermediate_port = port_allocator.allocate_port(
+            host=intermediate_host,
+            current_port=mirror_move.seg.getSegmentPort(),
+            is_mirror=True
+        )
+        
+        phase1_move = LogicalMove(
+            seg=mirror_move.seg,
+            srcHost=mirror_move.srcHost,
+            dstHost=intermediate_host,
+            target_datadir=intermediate_datadir,
+            target_port=intermediate_port,
+            segment_size=mirror_move.segment_size,
+            swap_metadata={
+                'phase': 1,
+                'content_id': content_id,
+                'intermediate_host': intermediate_host.hostname
+            }
+        )
+        
+        # Phase 2: Primary move (direct to final location)
+        # This keeps the original primary move unchanged
+        phase2_move = primary_move
+        phase2_move.swap_metadata = {'phase': 2,
+                                    'content_id': content_id}
+        
+        # Phase 3: Move mirror from intermediate to final location (primary's original host)
+        final_datadir = mirror_move.target_datadir
+        final_port = port_allocator.allocate_port(
+            host=mirror_move.dstHost,
+            current_port=mirror_move.seg.getSegmentPort(),
+            is_mirror=True
+        )
+        
+        # Create a copy of mirror segment with updated location (now on intermediate)
+        intermediate_seg = copy.deepcopy(mirror_move.seg)
+        intermediate_seg.hostname = intermediate_host.hostname
+        intermediate_seg.address = intermediate_host.address
+        intermediate_seg.datadir = intermediate_datadir
+        intermediate_seg.port = intermediate_port
+        
+        phase3_move = LogicalMove(
+            seg=intermediate_seg,
+            srcHost=intermediate_host,
+            dstHost=mirror_move.dstHost,  # Final location (primary's original host)
+            target_datadir=final_datadir,
+            target_port=final_port,
+            segment_size=mirror_move.segment_size,
+            swap_metadata={
+                'phase': 3,
+                'content_id': content_id,
+                'intermediate_host': intermediate_host.hostname
+            }
+        )
+        
+        return phase1_move, phase2_move, phase3_move
+    
+    def handle_swaps(self,
+                     swap_pairs: List[Tuple[LogicalMove, LogicalMove]],
+                     moves: List[LogicalMove],
+                     port_allocator: PortAllocator,
+                     resource_estimator: 'ResourceEstimator'
+                     ) -> List[LogicalMove]:
+        swap_move_ids = set()
+        # Track intermediate host usage for better distribution
+        used_intermediate_hosts = {}
+        # Decompose swaps with intermediate host selection
+        swap_phase1_moves = []
+        swap_phase2_moves = []
+        swap_phase3_moves = []
+
+        for prim_move, mir_move in swap_pairs:
+            swap_move_ids.add(prim_move.seg.getSegmentDbId())
+            swap_move_ids.add(mir_move.seg.getSegmentDbId())
+            try:
+                # Select intermediate host
+                intermediate_host = self.select_intermediate_host(
+                    prim_move, 
+                    mir_move,
+                    used_intermediate_hosts,
+                    resource_estimator  # Pass the estimator with cached filesystem data
+                )
+                # Decompose into 3 phases
+                phase1, phase2, phase3 = self.decompose_swap(
+                    prim_move, 
+                    mir_move,
+                    intermediate_host,
+                    port_allocator
+                )
+                swap_phase1_moves.append(phase1)
+                swap_phase2_moves.append(phase2)
+                swap_phase3_moves.append(phase3)
+            except Exception as e:
+                raise PlanningError(f"Failed to plan swap for content {prim_move.seg.getSegmentContentId()}: {e}")
+        
+        # Collect non-swap moves
+        non_swap_mirror_moves = []
+        non_swap_primary_moves = []
+    
+        for move in moves:
+            if move.seg.getSegmentDbId() not in swap_move_ids:
+                if move.seg.isSegmentPrimary():
+                    non_swap_primary_moves.append(move)
+                else:
+                    non_swap_mirror_moves.append(move)
+
+        moves_with_swap = []
+        # Batch 1: All initial mirror moves (regular + phase1)
+        moves_with_swap.extend(non_swap_mirror_moves)
+        moves_with_swap.extend(swap_phase1_moves)
+
+        # Batch 2: All primary moves (regular + phase2)
+        moves_with_swap.extend(non_swap_primary_moves)
+        moves_with_swap.extend(swap_phase2_moves)
+
+        # Batch 3: Phase 3 mirrors (must execute last)
+        moves_with_swap.extend(swap_phase3_moves)
+
+        return moves_with_swap
+
+@dataclass
+class FilesystemRequirement:
+    """
+    Tracks space requirements and allocations for a single filesystem on a host.
+    """
+    space_info: DiskSpaceInfo
+    required_kb: int = 0
+    # dbids and datadirs, which contribute to this filesystem
+    dbid_datadirs: Dict[int, Tuple[str, int]] = field(default_factory=dict)
+    # dict(dbid, dict(tablespace_base, size_kb)) contributing to this filesystem
+    dbid_tablespaces: Dict[int, Dict[str, int]] = field(default_factory=dict)
+    # tablespace_base/dbid for error msgs
+    tablespace_paths: Set[str] = field(default_factory=set)
+
+    def add_datadir(self, dbid: int, directory: str, size_kb: int) -> None:
+        """
+        Add a datadir contribution.
+        """
+        request = int(size_kb * (1 + DISK_SPACE_SAFETY_MARGIN))
+        self.dbid_datadirs[dbid] = (directory, request)
+        self.required_kb += request
+
+    def add_tablespace(self, dbid: int, tbl_path: str, tbl_base: str, size_kb: int) -> None:
+        """
+        Add a tablespace contribution.
+        """
+        request = int(size_kb * (1 + DISK_SPACE_SAFETY_MARGIN))
+        self.tablespace_paths.add(tbl_path)
+        if dbid not in self.dbid_tablespaces:
+            self.dbid_tablespaces[dbid] = defaultdict(int)
+        self.dbid_tablespaces[dbid][tbl_base] += request
+        self.required_kb += request
+    
+    def remove_datadir(self, dbid: int) -> None:
+        if dbid in self.dbid_datadirs:
+            item = self.dbid_datadirs.pop(dbid)
+            self.required_kb -= item[1]
+
+    def remove_tablespaces(self, dbid: int) -> None:
+        if dbid in self.dbid_tablespaces:
+            tblsps = self.dbid_tablespaces.pop(dbid)
+            for _, size in tblsps.items():
+                self.required_kb -= size
+
+    @property
+    def available_kb(self) -> int:
+        return self.space_info.available_kb
+    
+    @property
+    def datadir_paths(self) -> Set[str]:
+        """for error reporting"""
+        paths = set()
+        for _, item in self.dbid_datadirs.items():
+            paths.add(item[0])
+        return paths
+
+    @property
+    def unique_segment_count(self) -> int:
+        return len(self.dbid_datadirs) + \
+            len(set(self.dbid_tablespaces.keys()) - set(self.dbid_datadirs.keys()))
 
 class ResourceEstimator:
     """
@@ -859,20 +1280,25 @@ class ResourceEstimator:
     using DiskSpaceChecker for invoking remote disk operations.
     """
     
-    def __init__(self, logger: Any, conn: Any, gparray: gparray.GpArray, batch_size: int = 16):
+    def __init__(self, logger: Any, dburl: dbconn.DbURL, gparray: gparray.GpArray, batch_size: int = 16):
         """
         Initialize resource estimator
         
         Args:
             logger: Logger instance
-            conn: Database connection
+            dburl: Database url
             gparray: Current GpArray configuration
             batch_size: Number of parallel operations
         """
         self.logger = logger
-        self.conn = conn
+        self.dburl = dburl
         self.gparray = gparray
         self.disk_checker = DiskSpaceChecker(logger, batch_size)
+        # Cache filesystem allocation data after validation
+        # Maps (hostname, filesystem) -> {required_kb, available_kb, datadir_moves, ...}
+        self.filesystem_allocations: Dict[Tuple[str, str], FilesystemRequirement] = {}
+        # Cache space_info_by_host for reuse
+        self.space_info_by_host: Dict[str, Dict[str, DiskSpaceInfo]] = {}
     
     def estimate_and_validate_moves(self, moves: List['LogicalMove']) -> None:
         """
@@ -887,23 +1313,15 @@ class ResourceEstimator:
             return
         
         self.logger.info(f"Estimating resource requirements for {len(moves)} segment moves...")
-        
-        try:
-            # Step 1: Estimate segment sizes
-            self._estimate_segment_sizes(moves)
-            
-            # Step 2: Validate available space on target hosts
-            self._validate_target_space(moves)
-            
-            # Log summary
-            total_size_kb = sum(move.segment_size.total_size_kb for move in moves if move.segment_size)
-            total_size_gb = total_size_kb / 1024 / 1024
-            self.logger.info(f"Total data to move: {total_size_gb:.2f} GB")
-            self.logger.info("Resource validation completed successfully")
-            
-        except Exception as e:
-            self.logger.error(f"Resource validation failed")
-            raise ResourceError(str(e))
+        # Step 1: Estimate segment sizes
+        self._estimate_segment_sizes(moves)
+        self.logger.info("Validating available disk space on target hosts...")
+        # Step 2: Validate available space on target hosts
+        self._validate_and_build_allocations(moves)
+    
+    def total_gb(self, moves: List[LogicalMove]) -> int:
+        total_size_kb = sum(move.segment_size.total_size_kb for move in moves if move.segment_size)
+        return total_size_kb / 1024 / 1024
     
     def _estimate_segment_sizes(self, moves: List[LogicalMove]) -> None:
         """
@@ -911,36 +1329,25 @@ class ResourceEstimator:
         
         Populates the segment_size attribute on each LogicalMove
         """
-        # Get unique segments to estimate
-        segments_to_estimate = {move.seg.dbid: move.seg for move in moves}
-        
-        # Query for tablespace locations
-        tablespace_map = self._get_tablespace_locations(list(segments_to_estimate.keys()))
-        
-        # Group segments by source host for batch disk usage
-        segments_by_host = defaultdict(list)
+        tablespace_map = self._get_tablespace_locations([m.seg.dbid for m in moves])
+        self._estimate_datadir_sizes(moves)
+        if tablespace_map:
+            self._estimate_tablespace_sizes(moves, tablespace_map)
+
+    def _estimate_datadir_sizes(self, moves: List[LogicalMove]) -> None:
+        moves_by_host: Dict[str, List[LogicalMove]] = defaultdict(list)
         for move in moves:
-            segments_by_host[move.srcHost.address].append(move.seg)
+            moves_by_host[move.srcHost.address].append(move)
         
-        # Estimate datadir sizes
-        for host_addr, host_segments in segments_by_host.items():
-            dirs = [seg.datadir for seg in host_segments]
-            
+        for host_addr, host_moves in moves_by_host.items():
+            dirs = [m.seg.datadir for m in host_moves]
             try:
                 disk_usage = self.disk_checker.get_disk_usage(host_addr, dirs)
-                
-                for seg in host_segments:
-                    size_kb = disk_usage.get(seg.datadir, 0)
-                    # Find all moves for this segment and set size
-                    for move in moves:
-                        if move.seg.dbid == seg.dbid:
-                            move.segment_size = SegmentSize(datadir_size_kb=size_kb)
-                    
+                for move in host_moves:
+                    size_kb = disk_usage.get(move.seg.datadir, 0)
+                    move.segment_size = SegmentSize(datadir_size_kb=size_kb)
             except Exception as e:
                 raise ResourceError(f"Cannot estimate segment sizes on host {host_addr}: {e}")
-        
-        # Estimate tablespace sizes
-        self._estimate_tablespace_sizes(moves, tablespace_map)
     
     def _get_tablespace_locations(self, dbids: List[int]) -> Dict[int, List[str]]:
         """
@@ -949,6 +1356,7 @@ class ResourceEstimator:
         Returns:
             Dict mapping dbid to list of tablespace paths
         """
+
         if not dbids:
             return {}
         
@@ -973,13 +1381,14 @@ class ResourceEstimator:
         """
         
         try:
-            cursor = dbconn.query(self.conn, tablespace_location_sql)
-            tablespaces = defaultdict(list)
-            
-            for dbid, loc in cursor:
-                tablespaces[dbid].append(loc)
-            
-            return tablespaces
+            with closing(dbconn.connect(self.dburl, encoding='UTF8')) as conn:
+                cursor = dbconn.query(conn, tablespace_location_sql)
+                tablespaces = defaultdict(list)
+
+                for dbid, loc in cursor:
+                    tablespaces[dbid].append(loc)
+
+                return tablespaces
         except Exception as e:
             raise ResourceError(f"Failed to query tablespace locations: {e}")
     
@@ -997,10 +1406,8 @@ class ResourceEstimator:
         # Group tablespace directories by host
         tblspace_by_host = defaultdict(list)
         for move in moves:
-            dbid = move.seg.dbid
-            if dbid in tablespace_map:
-                for tblspace_dir in tablespace_map[dbid]:
-                    tblspace_by_host[move.srcHost.address].append((dbid, tblspace_dir))
+            for tbl_dir in tablespace_map.get(move.seg.dbid, []):
+                tblspace_by_host[move.srcHost.address].append((move.seg.dbid, tbl_dir))
         
         # Process each host
         for host_addr, host_tablespaces in tblspace_by_host.items():
@@ -1025,198 +1432,189 @@ class ResourceEstimator:
                 self.logger.warning(f"Failed to get tablespace disk usage for host {host_addr}: {e}")
                 # Continue without tablespace sizes
     
-    def _validate_target_space(self, moves: List[LogicalMove]) -> None:
+    def _validate_and_build_allocations(self, moves: List[LogicalMove]) -> None:
         """
-        Validate that target hosts have sufficient disk space
+        Check that every target filesystem has enough free space.
 
-        Groups all space requirements by filesystem to handle cases where
-        datadirs and tablespaces share the same underlying filesystem.
+        Builds filesystem_allocations as a side effect so that
+        reserve_space() can later account for committed space.
+        Raises ResourceError listing all filesystems with insufficient space.
         """
-        self.logger.info("Validating available disk space on target hosts...")
+        self._fetch_target_space_info(moves)
+        self._build_filesystem_allocations(moves)
+        issues = self._find_space_issues()
 
-        # Collect all directories we need to check
-        dirs_by_host = defaultdict(set)
+        if issues:
+            details = ''.join(self._format_space_issue(i) for i in issues)
+            raise ResourceError(
+                f"Insufficient disk space for rebalance operation:\n{details}"
+                f"\nNote: Estimates include {int(DISK_SPACE_SAFETY_MARGIN * 100)}% safety margin"
+            )
+        self.logger.info("Disk space validation completed successfully")
+    
+    def _fetch_target_space_info(self, moves: List[LogicalMove]) -> None:
+        """
+        Query free space for every target directory referenced by the moves.
+        """
+        dirs_by_host: Dict[str, Set[str]] = defaultdict(set)
+        for move in moves:
+            if not move.segment_size:
+                continue
+            dirs_by_host[move.dstHost.address].add(move.target_datadir)
+            for tbl_path in (move.segment_size.tablespace_usage or {}):
+                dirs_by_host[move.dstHost.address].add(os.path.dirname(tbl_path))
 
-        # Track what each directory is used for (for better error reporting)
-        # (hostname, dir) -> moves in 'datadirs' if dir is datadir
-        # moves moves in 'tablespaces' if dir is tablespace
-        dir_usage = defaultdict(lambda: {'datadirs': [], 'tablespaces': []})
+        try:
+            self.space_info_by_host = self.disk_checker.check_batch_available_space(
+                {host: list(dirs) for host, dirs in dirs_by_host.items()}
+            )
+        except Exception as e:
+            raise ResourceError(f"Failed to check available disk space: {e}")
+    
+    def _build_filesystem_allocations(self, moves: List[LogicalMove]) -> None:
+        """
+        Populate self.filesystem_allocations from the planned moves.
+
+        Each move contributes its datadir size to the filesystem that hosts
+        target_datadir, and each tablespace path to the filesystem that hosts
+        that tablespace.
+        """
+        self.filesystem_allocations = {}
+        self.logger.debug("Aggregating space requirements by filesystem...")
 
         for move in moves:
             if not move.segment_size:
                 continue
 
-            target_host = move.dstHost.hostname
-            target_addr = move.dstHost.address
-            target_datadir = move.target_datadir
+            hostname = move.dstHost.hostname
+            host_address = move.dstHost.address
 
-            # Track datadir
-            dirs_by_host[target_addr].add(target_datadir)
-            dir_usage[(target_host, target_datadir)]['datadirs'].append(move)
+            # datadir
+            datadir_fs = self._require_space_info(hostname, host_address, move.target_datadir)
+            fs_req = self._get_or_create_fs_requirement(hostname, datadir_fs)
+            fs_req.add_datadir(move.seg.dbid, move.target_datadir, move.segment_size.datadir_size_kb)
 
-            # Track tablespace directories
-            if move.segment_size.tablespace_usage:
-                for tblspace_path, _ in move.segment_size.tablespace_usage.items():
-                    # Extract base path (remove /dbid suffix)
-                    base_tblspace_path = os.path.dirname(tblspace_path)
+            # tablespace
+            for tbl_path, size_kb in (move.segment_size.tablespace_usage or {}).items():
+                tbl_base = os.path.dirname(tbl_path)
+                tbl_fs = self._require_space_info(hostname, host_address, tbl_base)
+                fs_req = self._get_or_create_fs_requirement(hostname, tbl_fs)
+                fs_req.add_tablespace(move.seg.dbid, tbl_path, tbl_base, size_kb)
 
-                    dirs_by_host[target_addr].add(base_tblspace_path)
-                    dir_usage[(target_host, base_tblspace_path)]['tablespaces'].append(move)
-
-        # Convert sets to lists for DiskFree
-        dirs_by_host = {host: list(dirs) for host, dirs in dirs_by_host.items()}
-
-        # Check available space in batch
-        try:
-            space_info_by_host = self.disk_checker.check_batch_available_space(dirs_by_host)
-        except Exception as e:
-            raise ResourceError(f"Failed to check available disk space: {e}")
-
-        # Group directories by filesystem and aggregate space requirements
-        self.logger.info("Aggregating space requirements by filesystem...")
-        issues = self._validate_filesystem_requirements(
-            dir_usage=dir_usage,
-            space_info_by_host=space_info_by_host
-        )
-
-        # Report all issues
-        if issues:
-            error_lines = ["Insufficient disk space for rebalance operation:\n"]
-
-            for issue in issues:
-                error_lines.append(self._format_space_issue(issue))
-
-            error_lines.append(
-                f"\nNote: Estimates include {int(DISK_SPACE_SAFETY_MARGIN * 100)}% safety margin"
-            )
-            raise ResourceError(''.join(error_lines))
-
-        self.logger.info("Disk space validation completed successfully")
-
-    def _validate_filesystem_requirements(self,
-                                          dir_usage: Dict[Tuple[str, str], Dict],
-                                          space_info_by_host: Dict[str, Dict[str, DiskSpaceInfo]]) -> List[Dict]:
-        """
-        Validate space requirements aggregated by filesystem
-
-        This correctly handles cases where datadirs and tablespaces share the same filesystem.
-
-        Args:
-            dir_usage: Dict mapping (hostname, directory) -> {'datadirs': [moves], 'tablespaces': [moves]}
-            space_info_by_host: Space information from DiskSpaceChecker
-
-        Returns:
-            List of issue dicts for filesystems with insufficient space
-        """
-        # Group by filesystem
-        filesystem_requirements = defaultdict(lambda: {
-            'required_kb': 0,
-            'datadir_moves': set(),
-            'tablespace_moves': set(),
-            'datadirs': set(),
-            'tablespaces': set(),
-            'space_info': None
-        })
-
-        for (hostname, directory), usage in dir_usage.items():
-            # Find the host address for this hostname
-            host_address = None
-            for moves_list in [usage['datadirs'], usage['tablespaces']]:
-                if moves_list:
-                    host_address = moves_list[0].dstHost.address
-                    break
-                
-            if not host_address:
-                continue
-
-            if host_address not in space_info_by_host:
-                raise ResourceError(f"No disk space information for host {hostname}")
-
-            space_info = space_info_by_host[host_address].get(directory)
-            if not space_info:
-                raise ResourceError(
-                    f"No disk space information for {hostname}:{directory}"
-                )
-
-            # Group by filesystem
-            fs_key = (hostname, space_info.filesystem)
-            fs_data = filesystem_requirements[fs_key]
-            fs_data['space_info'] = space_info
-
-            # Process datadir moves
-            for move in usage['datadirs']:
-                if not move.segment_size:
-                    continue
-
-                # Only count each move once per filesystem
-                if move.seg.dbid not in fs_data['datadir_moves']:
-                    fs_data['datadir_moves'].add(move.seg.dbid)
-                    fs_data['datadirs'].add(directory)
-                    size_kb = move.segment_size.datadir_size_kb
-                    fs_data['required_kb'] += int(size_kb * (1 + DISK_SPACE_SAFETY_MARGIN))
-
-            # Process tablespace moves
-            for move in usage['tablespaces']:
-                if not move.segment_size or not move.segment_size.tablespace_usage:
-                    continue
-                
-                # Extract tablespace sizes that belong to this directory
-                for tbl_path, size_kb in move.segment_size.tablespace_usage.items():
-                    tbl_base_path = os.path.dirname(tbl_path)
-
-                    if tbl_base_path == directory:
-                        # Use a unique key to avoid double-counting the same tablespace
-                        tbl_key = (move.seg.dbid, tbl_path)
-
-                        if tbl_key not in fs_data['tablespace_moves']:
-                            fs_data['tablespace_moves'].add(tbl_key)
-                            fs_data['tablespaces'].add(directory)
-                            fs_data['required_kb'] += int(size_kb * (1 + DISK_SPACE_SAFETY_MARGIN))
-
-        # Validate each filesystem
+    def _find_space_issues(self) -> List[Dict]:
         issues = []
-
-        for (hostname, filesystem), fs_data in filesystem_requirements.items():
-            required_kb = fs_data['required_kb']
-            available_kb = fs_data['space_info'].available_kb
-
-            required_gb = required_kb / 1024 / 1024
-            available_gb = available_kb / 1024 / 1024
-
-            # Count unique segments
-            unique_segments = len(fs_data['datadir_moves']) + len({dbid for dbid, _ in fs_data['tablespace_moves']})
+        for (hostname, filesystem), fs_req in self.filesystem_allocations.items():
+            required_gb = fs_req.required_kb / 1024 / 1024
+            available_gb = fs_req.available_kb / 1024 / 1024
 
             self.logger.debug(
                 f"Filesystem {filesystem} on {hostname}: "
-                f"Required {required_gb:.2f} GB, Available {available_gb:.2f} GB "
-                f"({unique_segments} segments, "
-                f"{len(fs_data['datadirs'])} datadirs, "
-                f"{len(fs_data['tablespaces'])} tablespace dirs)"
-            )
+                f"required {required_gb:.2f} GB, available {available_gb:.2f} GB ")
 
-            if available_kb < required_kb:
-                all_dirs = sorted(fs_data['datadirs'].union(fs_data['tablespaces']))
-
+            if fs_req.available_kb < fs_req.required_kb:
                 issues.append({
-                    'type': 'filesystem',
                     'hostname': hostname,
                     'filesystem': filesystem,
-                    'target_dirs': all_dirs,
-                    'num_datadirs': len(fs_data['datadirs']),
-                    'num_tablespaces': len(fs_data['tablespaces']),
-                    'num_segments': unique_segments,
+                    'target_dirs': sorted(fs_req.datadir_paths | fs_req.tablespace_paths),
+                    'num_datadirs': len(fs_req.datadir_paths),
+                    'num_tablespaces': len(fs_req.tablespace_paths),
+                    'num_segments': fs_req.unique_segment_count,
                     'required_gb': required_gb,
                     'available_gb': available_gb,
                 })
-
         return issues
 
+    def _get_or_create_fs_requirement(self, hostname: str, space_info: DiskSpaceInfo) -> FilesystemRequirement:
+        fs_key = (hostname, space_info.filesystem)
+        if fs_key not in self.filesystem_allocations:
+            self.filesystem_allocations[fs_key] = FilesystemRequirement(space_info=space_info)
+        return self.filesystem_allocations[fs_key]
+
+    def _require_space_info(self, hostname: str, host_address: str, directory: str) -> DiskSpaceInfo:
+        """
+        Return DiskSpaceInfo for directory, raising ResourceError if not found.
+        """
+        info = self._get_or_fetch_space_info(hostname, host_address, directory)
+        if not info:
+            raise ResourceError(f"No disk space information for {hostname}:{directory}")
+        return info
+
+    def _get_or_fetch_space_info(self, hostname: str, host_address: str, directory: str) -> Optional[DiskSpaceInfo]:
+        """
+        Return cached DiskSpaceInfo for directory (or its parent).
+        On a cache miss, query the host and cache the result.
+        """
+        # Check cache
+        host_cache = self.space_info_by_host.get(host_address, {})
+        info = host_cache.get(directory) or host_cache.get(
+            TemplateParser.extract_parent_directory(directory)
+        )
+        if info:
+            return info
+
+        # Cache miss - query the host
+        try:
+            fetched = self.disk_checker.check_batch_available_space(
+                {host_address: [directory]}
+            )
+            info = fetched.get(host_address, {}).get(directory)
+            if info:
+                self.space_info_by_host.setdefault(host_address, {})[directory] = info
+            return info
+        except Exception as e:
+            self.logger.warning(f"Could not check space for {hostname}:{directory}: {e}")
+            return None
+
+    def _reserve_space(self,
+                       fs_key: Tuple[str, str],
+                       space_info: DiskSpaceInfo,
+                       directory: str,
+                       required_kb: int,
+                       dbid: int,
+                       is_tablespace: bool) -> None:
+        hostname, filesystem = fs_key
+        if fs_key not in self.filesystem_allocations:
+            self.filesystem_allocations[fs_key] = FilesystemRequirement(space_info=space_info)
+        if is_tablespace:
+            self.filesystem_allocations[fs_key].add_tablespace(dbid, directory + '/' + str(dbid), directory, required_kb)
+        else:
+             self.filesystem_allocations[fs_key].add_datadir(dbid, directory, required_kb)
+        total_allocated = self.filesystem_allocations[fs_key].required_kb
+        self.logger.debug(
+            f"Reserved {required_kb / 1024 / 1024:.2f} GB on {hostname}:{filesystem} - "
+            f"total allocated: {total_allocated / 1024 / 1024:.2f} GB"
+        )
+    
+    def reserve_space(self,
+                      hostname: str,
+                      host_address: str,
+                      data_directory: str,
+                      dbid: int,
+                      required_size: SegmentSize) -> None:
+        
+        dirs_to_reserve = [(data_directory, required_size.datadir_size_kb)]
+        tablespace_dirs = {os.path.dirname(dir) for dir in (required_size.tablespace_usage or {})}
+        for tbl_dir in tablespace_dirs:
+            # Sum all tablespace paths that live under this dir
+            tbl_size_kb = sum(size_kb
+                for tbl_path, size_kb in required_size.tablespace_usage.items()
+                if os.path.dirname(tbl_path) == tbl_dir)
+            dirs_to_reserve.append((tbl_dir, tbl_size_kb))
+        for directory, size_kb in dirs_to_reserve:
+            space_info = self._get_or_fetch_space_info(hostname, host_address, directory)
+            self._reserve_space(
+                fs_key=(hostname, space_info.filesystem),
+                space_info=space_info,
+                directory=directory,
+                required_kb=size_kb,
+                dbid=dbid,
+                is_tablespace=(directory in tablespace_dirs)
+            )
+        
     def _format_space_issue(self, issue: Dict) -> str:
         """
         Format a space issue for error reporting
         """
-        issue_type = issue.get('type', 'unknown').upper()
-
         # Build directory breakdown
         dir_info = []
         if issue.get('num_datadirs', 0) > 0:
@@ -1227,7 +1625,7 @@ class ResourceEstimator:
         dir_breakdown = ', '.join(dir_info) if dir_info else 'unknown'
 
         return (
-            f"\n  [{issue_type}] Host: {issue['hostname']}\n"
+            f"\n  Host: {issue['hostname']}\n"
             f"    Filesystem: {issue['filesystem']}\n"
             f"    Directories: {dir_breakdown}\n"
             f"    Paths: {', '.join(issue['target_dirs'])}\n"
@@ -1235,3 +1633,72 @@ class ResourceEstimator:
             f"    Required: {issue['required_gb']:.2f} GB\n"
             f"    Available: {issue['available_gb']:.2f} GB\n"
         )
+    
+    def get_allocated_space_for_filesystem(self, hostname: str, filesystem: str) -> int:
+        """
+        Get the space already allocated to a specific filesystem
+            
+        Returns:
+            Allocated space in KB, or 0 if no allocations found
+        """
+        fs_key = (hostname, filesystem)
+        if fs_key in self.filesystem_allocations:
+            return self.filesystem_allocations[fs_key]['required_kb']
+        return 0
+    
+    def check_space(self,
+                    hostname: str,
+                    host_address: str,
+                    data_directory: str,
+                    required_size: SegmentSize) -> Tuple[bool, int, str]:
+        """
+        Check if a data and tablespaces directories have enough space.
+        
+        Args:
+            hostname: Target hostname
+            host_address: Target host address
+            data_directory: Target directory path
+            requied_size: Required space in SegmentSize
+            
+        Returns:
+            (has_space, min_available_kb, comma_separated_filesystems)            
+        """
+        dirs_to_check = [(data_directory, required_size.datadir_size_kb)]
+        tablespace_dirs = {os.path.dirname(dir) for dir in (required_size.tablespace_usage or {})}
+        for tbl_dir in tablespace_dirs:
+            # Sum all tablespace paths that live under this dir
+            tbl_size_kb = sum(size_kb
+                for tbl_path, size_kb in required_size.tablespace_usage.items()
+                if os.path.dirname(tbl_path) == tbl_dir)
+            dirs_to_check.append((tbl_dir, tbl_size_kb))
+        
+        # Resolve each directory to a filesystem and accumulate per-filesystem
+        # requirements.
+        fs_requirements: Dict[str, int] = defaultdict(int)
+        fs_space_info: Dict[str, DiskSpaceInfo] = {}
+
+        for directory, size_kb in dirs_to_check:
+            space_info = self._get_or_fetch_space_info(hostname, host_address, directory)
+            if not space_info:
+                return False, 0, 'unknown'
+            fs = space_info.filesystem
+            fs_requirements[fs] += int(size_kb * (1 + DISK_SPACE_SAFETY_MARGIN))
+            fs_space_info[fs] = space_info
+
+        fs_available: Dict[str, int] = {}
+        for fs, required_kb in fs_requirements.items():
+            fs_key = (hostname, fs)
+            already_allocated_kb = self.filesystem_allocations[fs_key].required_kb \
+                if fs_key in self.filesystem_allocations else 0
+            available_kb = fs_space_info[fs].available_kb - already_allocated_kb
+            fs_available[fs] = available_kb
+
+            if available_kb < required_kb:
+                self.logger.debug(
+                    f"Host {hostname}: insufficient space on {fs}\n"
+                    f"  Available: {available_kb / 1024 / 1024:.2f} GB\n"
+                    f"  Required:  {required_kb / 1024 / 1024:.2f} GB"
+                )
+                return False, min(fs_available.values()), ', '.join(fs_requirements)
+
+        return True, min(fs_available.values()), ', '.join(fs_requirements)
