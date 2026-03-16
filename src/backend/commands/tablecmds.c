@@ -7626,6 +7626,11 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 				 errmsg("cannot add column to a partition")));
 
+	if (colDef->raw_default->type == T_FuncCall)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("tried to add volatile function as default")));	
+				 
 	attrdesc = table_open(AttributeRelationId, RowExclusiveLock);
 
 	/*
