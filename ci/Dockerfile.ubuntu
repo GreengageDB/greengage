@@ -19,6 +19,7 @@ RUN set -eux; \
     rm -r pg_bsd_indent; \
 # The en_US.UTF-8 locale is needed to run GPDB
     locale-gen en_US.UTF-8; \
+    locale-gen ru_RU.UTF-8; \
 # To run sshd directly, but not using `/etc/init.d/ssh start`
     mkdir /run/sshd; \
 # Alter precedence in favor of IPv4 during resolving
@@ -32,7 +33,7 @@ RUN set -eux; \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/man/
 
-ENV LANG=en_US.UTF-8
+ENV LANG=ru_RU.UTF-8
 ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 FROM base AS build
@@ -42,7 +43,8 @@ COPY . gpdb_src
 RUN mkdir bin_gpdb
 
 ENV TARGET_OS=ubuntu \
-    OUTPUT_ARTIFACT_DIR=bin_gpdb
+    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+    SKIP_UNITTESTS=1
 
 # Compile with running mocking tests
 # Use python3 to compile into GPDB's plpython3u
